@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft FPS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+            cursor: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Overlay */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            cursor: pointer;
+        }
+
+        #overlay h1 {
+            color: #4CAF50;
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        #overlay p {
+            color: #fff;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        #overlay .controls {
+            color: #aaa;
+            font-size: 16px;
+            margin-top: 20px;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+
+        /* Hit marker */
+        #hitmarker {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff0000;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 11;
+            pointer-events: none;
+            opacity: 0;
+            user-select: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        /* Kill counter */
+        #kill-counter {
+            position: fixed;
+            top: 20px; right: 20px;
+            color: #fff;
+            font-size: 24px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+
+        /* Health bar */
+        #health-bar-container {
+            position: fixed;
+            bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #555;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #health-bar {
+            width: 100%;
+            height: 100%;
+            background: #4CAF50;
+            transition: width 0.2s;
+        }
+
+        #health-text {
+            position: fixed;
+            bottom: 55px; left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 16px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+
+        /* Damage numbers container */
+        #damage-numbers {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 12;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .damage-number {
+            position: absolute;
+            color: #ffff00;
+            font-size: 22px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+            animation: floatUp 1s ease-out forwards;
+            user-select: none;
+        }
+
+        .damage-number.kill {
+            color: #ff4444;
+            font-size: 28px;
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-80px);
+            }
+        }
+
+        /* Ammo / weapon info */
+        #weapon-info {
+            position: fixed;
+            bottom: 30px; right: 20px;
+            color: #fff;
+            font-size: 18px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+
+        /* Debug info */
+        #debug-info {
+            position: fixed;
+            top: 20px; left: 20px;
+            color: #aaa;
+            font-size: 14px;
+            z-index: 10;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay -->
+    <div id="overlay">
+        <h1>MINECRAFT FPS</h1>
+        <p>Click to Play</p>
+        <div class="controls">
+            WASD - Move | Mouse - Look<br>
+            Space - Jump | Left Click - Shoot<br>
+            H - Toggle Hitbox Debug
+        </div>
+    </div>
+
+    <!-- HUD Elements -->
+    <div id="crosshair">+</div>
+    <div id="hitmarker">✕</div>
+    <div id="kill-counter">Kills: 0</div>
+    <div id="health-text">HP: 100</div>
+    <div id="health-bar-container">
+        <div id="health-bar"></div>
+    </div>
+    <div id="damage-numbers"></div>
+    <div id="weapon-info">Hitscan Rifle</div>
+    <div id="debug-info"></div>
+
+    <!-- Scripts: load order matters -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
+    <script src="js/world.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/enemy.js"></script>
+    <script src="js/hitscan.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
