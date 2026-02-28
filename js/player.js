@@ -39,6 +39,7 @@
 
     // Weapon model
     var weaponGroup = null;
+    var muzzleFlash = null;
 
     // Weapon bob
     var bobTimer = 0;
@@ -90,6 +91,30 @@
         var grip = new THREE.Mesh(gripGeo, stockMat);
         grip.position.set(0, -0.1, 0.05);
         weaponGroup.add(grip);
+
+        // Muzzle flash (small bright box at barrel tip, hidden by default)
+        var flashGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
+        var flashMat = new THREE.MeshBasicMaterial({ color: 0xFFFF88 });
+        muzzleFlash = new THREE.Mesh(flashGeo, flashMat);
+        muzzleFlash.position.set(0, 0.02, -0.62);
+        muzzleFlash.visible = false;
+        weaponGroup.add(muzzleFlash);
+
+        // Minecraft-style arms (skin-colored boxes)
+        var armMat = new THREE.MeshLambertMaterial({ color: 0xD2A77D });
+
+        // Right arm (connects from right side to weapon grip)
+        var rightArmGeo = new THREE.BoxGeometry(0.08, 0.08, 0.28);
+        var rightArm = new THREE.Mesh(rightArmGeo, armMat);
+        rightArm.position.set(0.0, -0.12, -0.05);
+        weaponGroup.add(rightArm);
+
+        // Left arm (support hand on barrel)
+        var leftArmGeo = new THREE.BoxGeometry(0.08, 0.08, 0.22);
+        var leftArm = new THREE.Mesh(leftArmGeo, armMat);
+        leftArm.position.set(-0.06, -0.06, -0.22);
+        leftArm.rotation.y = 0.2;
+        weaponGroup.add(leftArm);
 
         // Position weapon in bottom-right of view
         weaponGroup.position.set(0.25, -0.2, -0.4);
@@ -236,6 +261,14 @@
         // Quick recoil: push weapon back, then it returns naturally
         weaponGroup.position.z = -0.35;
         weaponGroup.rotation.x = -0.08;
+
+        // Show muzzle flash for ~60ms
+        if (muzzleFlash) {
+            muzzleFlash.visible = true;
+            setTimeout(function () {
+                muzzleFlash.visible = false;
+            }, 60);
+        }
 
         // Animate back (will happen in update but we also tween here)
         var startTime = performance.now();

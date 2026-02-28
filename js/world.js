@@ -7,11 +7,15 @@
 
     var GameWorld = {};
 
+    // Array of solid meshes for raycast collision
+    var collidables = [];
+
     /**
      * Create the game world: ground, structures, lighting
      * @param {THREE.Scene} scene
      */
     GameWorld.create = function (scene) {
+        collidables = [];
         // --- Ground plane ---
         var groundGeo = new THREE.PlaneGeometry(50, 50);
         var groundMat = new THREE.MeshLambertMaterial({ color: 0x3a7d3a }); // grass green
@@ -31,7 +35,7 @@
         var stoneMat = new THREE.MeshLambertMaterial({ color: 0x888888 }); // stone
         var brickMat = new THREE.MeshLambertMaterial({ color: 0x994444 }); // brick red
 
-        // Helper: create a block
+        // Helper: create a block (also stores in collidables for raycasting)
         function addBlock(x, y, z, w, h, d, material) {
             var geo = new THREE.BoxGeometry(w, h, d);
             var mesh = new THREE.Mesh(geo, material);
@@ -39,6 +43,7 @@
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             scene.add(mesh);
+            collidables.push(mesh);
             return mesh;
         }
 
@@ -99,6 +104,14 @@
 
         // --- Fog for depth ---
         scene.fog = new THREE.Fog(0x87CEEB, 30, 60);
+    };
+
+    /**
+     * Get array of solid world meshes for raycast collision checks
+     * @returns {THREE.Mesh[]}
+     */
+    GameWorld.getCollidables = function () {
+        return collidables;
     };
 
     window.GameWorld = GameWorld;

@@ -10,6 +10,7 @@
     // DOM references (cached on init)
     var crosshairEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, damageNumbersEl, debugInfoEl;
+    var cooldownBarEl, cooldownStatusEl;
 
     var killCount = 0;
     var hitmarkerTimer = null;
@@ -25,6 +26,8 @@
         healthTextEl = document.getElementById('health-text');
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
+        cooldownBarEl = document.getElementById('cooldown-bar');
+        cooldownStatusEl = document.getElementById('cooldown-status');
         killCount = 0;
         GameUI.updateKillCounter();
     };
@@ -33,23 +36,27 @@
      * Show hit marker briefly
      */
     GameUI.showHitMarker = function () {
+        hitmarkerEl.style.transition = 'none'; // instant show
         hitmarkerEl.style.opacity = '1';
         if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
         hitmarkerTimer = setTimeout(function () {
+            hitmarkerEl.style.transition = 'opacity 0.2s ease-out'; // fade out
             hitmarkerEl.style.opacity = '0';
             hitmarkerTimer = null;
-        }, 150);
+        }, 200);
     };
 
     /**
      * Show hit marker with kill style
      */
     GameUI.showKillMarker = function () {
+        hitmarkerEl.style.transition = 'none'; // instant show
         hitmarkerEl.style.opacity = '1';
         hitmarkerEl.style.color = '#ff4444';
         hitmarkerEl.style.fontSize = '36px';
         if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
         hitmarkerTimer = setTimeout(function () {
+            hitmarkerEl.style.transition = 'opacity 0.25s ease-out'; // fade out
             hitmarkerEl.style.opacity = '0';
             hitmarkerEl.style.color = '#ff0000';
             hitmarkerEl.style.fontSize = '28px';
@@ -134,6 +141,25 @@
      */
     GameUI.setDebugInfo = function (text) {
         debugInfoEl.textContent = text;
+    };
+
+    /**
+     * Update cooldown indicator
+     * @param {boolean} ready - whether weapon is ready to fire
+     * @param {number} pct - cooldown progress 0..1 (1 = ready)
+     */
+    GameUI.updateCooldown = function (ready, pct) {
+        if (!cooldownBarEl || !cooldownStatusEl) return;
+        cooldownBarEl.style.width = (pct * 100) + '%';
+        if (ready) {
+            cooldownBarEl.style.background = '#4CAF50';
+            cooldownStatusEl.textContent = 'READY';
+            cooldownStatusEl.style.color = '#4CAF50';
+        } else {
+            cooldownBarEl.style.background = '#FFC107';
+            cooldownStatusEl.textContent = 'COOLDOWN';
+            cooldownStatusEl.style.color = '#FFC107';
+        }
     };
 
     /**

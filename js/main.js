@@ -18,7 +18,7 @@
     var playerMaxHP = 100;
 
     // --- Enemy count ---
-    var ENEMY_COUNT = 8;
+    var ENEMY_COUNT = 5;
 
     /**
      * Initialize the game
@@ -97,6 +97,11 @@
                 isPlaying = false;
             }
         });
+
+        // Pointer lock error handler
+        document.addEventListener('pointerlockerror', function () {
+            console.warn('Pointer lock request failed. Click the game area to try again.');
+        });
     }
 
     /**
@@ -172,6 +177,13 @@
 
         // Update enemies (AI, flash effects, respawn timers)
         window.GameEnemy.update(dt, scene);
+
+        // Update cooldown indicator
+        var cdRemaining = window.GameHitscan.cooldownRemaining();
+        var cdTotal = window.GameHitscan.getCooldown();
+        var cdReady = cdRemaining <= 0;
+        var cdPct = cdReady ? 1 : (1 - cdRemaining / cdTotal);
+        window.GameUI.updateCooldown(cdReady, cdPct);
 
         // Render
         renderer.render(scene, camera);

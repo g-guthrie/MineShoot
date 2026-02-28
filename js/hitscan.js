@@ -35,14 +35,25 @@
         // Set raycaster from camera center
         raycaster.setFromCamera(screenCenter, camera);
 
-        // Only test against hitbox array!
+        // Test against hitbox array AND world geometry
         var hitboxes = window.GameEnemy.getHitboxArray();
-        var intersects = raycaster.intersectObjects(hitboxes, false);
+        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var allTargets = hitboxes.concat(worldMeshes);
+        var intersects = raycaster.intersectObjects(allTargets, false);
 
         if (intersects.length > 0) {
             var hit = intersects[0];
-            if (onHit) {
-                onHit(hit.object, hit.point, hit.distance);
+            // Check if the closest hit is a hitbox (enemy) or a wall
+            if (hitboxes.indexOf(hit.object) !== -1) {
+                // Hit an enemy (closest intersection is a hitbox)
+                if (onHit) {
+                    onHit(hit.object, hit.point, hit.distance);
+                }
+            } else {
+                // Closest intersection is a wall — shot is blocked
+                if (onMiss) {
+                    onMiss();
+                }
             }
         } else {
             if (onMiss) {
