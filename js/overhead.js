@@ -9,6 +9,7 @@
 
     var container = null;
     var entries = new Map();
+    var projectScratch = new THREE.Vector3();
 
     function ensureContainer() {
         if (container) return;
@@ -130,7 +131,7 @@
             return;
         }
 
-        var p = new THREE.Vector3(desc.worldPos.x, (desc.worldPos.y || 0) + desc.headY, desc.worldPos.z);
+        var p = projectScratch.set(desc.worldPos.x, (desc.worldPos.y || 0) + desc.headY, desc.worldPos.z);
         p.project(camera);
 
         if (p.z < -1 || p.z > 1) {

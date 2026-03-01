@@ -14,6 +14,7 @@
     var cooldownBarEl, cooldownStatusEl;
     var plasmaHeatBarEl, plasmaStatusEl;
     var damageVignetteEl, damageIndicatorEl;
+    var shotgunDots = [];
     var damageTicks = [];
     var damageTickTimers = [];
     var damageFlashLevel = 0;
@@ -60,6 +61,7 @@
         damageTicks = [];
         damageTickTimers = [];
         damageFlashLevel = 0;
+        shotgunDots = [];
 
         if (damageIndicatorEl) {
             damageIndicatorEl.innerHTML = '';
@@ -248,25 +250,26 @@
         shotgunReticleEl.style.width = size + 'px';
         shotgunReticleEl.style.height = size + 'px';
 
-        var dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
         var needed = points.length;
 
-        while (dots.length < needed) {
+        while (shotgunDots.length < needed) {
             var dot = document.createElement('div');
             dot.className = 'pellet-dot';
             shotgunReticleEl.appendChild(dot);
-            dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
+            shotgunDots.push(dot);
         }
-        while (dots.length > needed) {
-            shotgunReticleEl.removeChild(dots[dots.length - 1]);
-            dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
+        while (shotgunDots.length > needed) {
+            var removed = shotgunDots.pop();
+            if (removed && removed.parentNode === shotgunReticleEl) {
+                shotgunReticleEl.removeChild(removed);
+            }
         }
 
         for (var i = 0; i < needed; i++) {
             var x = Math.round((size * 0.5) + (points[i][0] * size * 0.5));
             var y = Math.round((size * 0.5) + (points[i][1] * size * 0.5));
-            dots[i].style.left = x + 'px';
-            dots[i].style.top = y + 'px';
+            shotgunDots[i].style.left = x + 'px';
+            shotgunDots[i].style.top = y + 'px';
         }
     };
 
