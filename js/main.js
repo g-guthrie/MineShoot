@@ -373,6 +373,9 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
+            if (window.GameAudio && window.GameAudio.unlock) {
+                window.GameAudio.unlock();
+            }
             if (window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
                 window.GameDocs.close();
             }
