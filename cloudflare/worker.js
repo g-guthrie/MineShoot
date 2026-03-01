@@ -1,6 +1,15 @@
 import { DurableObject } from 'cloudflare:workers';
+import '../shared/game-primitives.js';
+import '../shared/game-schema.js';
 
-const CLASS_PRESETS = {
+const PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+const SCHEMA = globalThis.__GAME_SCHEMA__ || {};
+const COMBAT_PRIM = PRIM.combat || {};
+const WORLD_PRIM = PRIM.world || {};
+const ENTITY_PRIM = PRIM.entity || {};
+const COORDS_PRIM = PRIM.coords || {};
+
+const CLASS_PRESETS = COMBAT_PRIM.class_presets || {
   ninja: { armorMax: 80, wallhackRadius: 90 },
   jedi: { armorMax: 130, wallhackRadius: 85 },
   magician: { armorMax: 100, wallhackRadius: 100 },
@@ -8,20 +17,43 @@ const CLASS_PRESETS = {
   brawler: { armorMax: 150, wallhackRadius: 75 }
 };
 
-const WEAPON_STATS = {
-  rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
-  pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
-  machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
-  shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
-  sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
-  plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
-};
+const WEAPON_STATS = (() => {
+  const src = COMBAT_PRIM.weapon_stats || {};
+  const keys = Object.keys(src);
+  if (keys.length === 0) {
+    return {
+      rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
+      pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
+      machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
+      shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
+      sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
+      plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
+    };
+  }
+
+  const out = {};
+  for (let i = 0; i < keys.length; i++) {
+    const id = keys[i];
+    const s = src[id];
+    out[id] = {
+      cooldownMs: Number(s.cooldown_ms || 0),
+      bodyDamage: Number(s.body_damage || 0),
+      headDamage: Number(s.head_damage || 0),
+      maxRange: Number(s.max_range || 0)
+    };
+  }
+  return out;
+})();
 
 const ROOM_TICK_MS = 50;
-const MAX_HP = 500;
-const PLASMA_MAX_SUSTAIN_MS = 2500;
-const PLASMA_OVERHEAT_MS = 1600;
-const REMOTE_BEAM_HOLD_MS = 180;
+const MAX_HP = Number(COMBAT_PRIM.max_hp || 500);
+const ARMOR_REGEN_DELAY_MS = Number(COMBAT_PRIM.armor_regen_delay_sec || 6) * 1000;
+const ARMOR_REGEN_PER_SEC = Number(COMBAT_PRIM.armor_regen_per_sec || 12);
+const PLASMA_MAX_SUSTAIN_MS = Number((COMBAT_PRIM.plasma && COMBAT_PRIM.plasma.max_sustain_ms) || 2500);
+const PLASMA_OVERHEAT_MS = Number((COMBAT_PRIM.plasma && COMBAT_PRIM.plasma.overheat_ms) || 1600);
+const REMOTE_BEAM_HOLD_MS = Number((COMBAT_PRIM.plasma && COMBAT_PRIM.plasma.beam_hold_ms) || 180);
+const VALID_ANIM_STATES = new Set(['idle', 'walk', 'run', 'sprint', 'airborne', 'strafe']);
+const VALID_GRIP_MODES = new Set(['one_hand', 'two_hand']);
 
 function nowMs() {
   return Date.now();
@@ -227,7 +259,9 @@ async function handleMe(env, request) {
 
 function distance3(a, b) {
   const dx = a.x - b.x;
-  const dy = (a.y || 0) - (b.y || 0);
+  const ay = ((typeof a.feetY === 'number') ? a.feetY : 0) + ENTITY_EYE_HEIGHT;
+  const by = ((typeof b.feetY === 'number') ? b.feetY : 0) + ENTITY_EYE_HEIGHT;
+  const dy = ay - by;
   const dz = a.z - b.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
@@ -236,22 +270,30 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-const BASE_WORLD_SIZE = 50;
-const WORLD_AREA_SCALE = 5;
-const WORLD_SIZE = Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE));
-const WORLD_MARGIN = 2;
-const WORLD_MIN = WORLD_MARGIN;
-const WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
-const ENTITY_EYE_HEIGHT = 1.6;
-const ENTITY_HEIGHT = 1.7;
-const ENTITY_RADIUS = 0.58;
+function inferGripMode(weaponId) {
+  return weaponId === 'pistol' ? 'one_hand' : 'two_hand';
+}
+
+const BASE_WORLD_SIZE = Number(WORLD_PRIM.base_world_size || 50);
+const WORLD_AREA_SCALE = Number(WORLD_PRIM.area_scale || 5);
+const WORLD_SIZE = Number(WORLD_PRIM.world_size || Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE)));
+const WORLD_MARGIN = Number(WORLD_PRIM.margin || 2);
+const WORLD_MIN = Number(WORLD_PRIM.min || WORLD_MARGIN);
+const WORLD_MAX = Number(WORLD_PRIM.max || (WORLD_SIZE - WORLD_MARGIN));
+const WORLD_CENTER = Number(WORLD_PRIM.center || (WORLD_SIZE * 0.5));
+const WORLD_SEED = String(WORLD_PRIM.seed_default || 'mineshoot-v1');
+const ENTITY_EYE_HEIGHT = Number(COORDS_PRIM.eye_offset_y || 1.6);
+const ENTITY_HEIGHT = Number(ENTITY_PRIM.capsule_height || 1.7);
+const ENTITY_RADIUS = Number(ENTITY_PRIM.capsule_radius || 0.58);
 const COLLISION_EPSILON = 0.001;
 
 function scaleAxis(value) {
+  if (WORLD_PRIM.scale_axis) return WORLD_PRIM.scale_axis(value);
   return (value / BASE_WORLD_SIZE) * WORLD_SIZE;
 }
 
 function scaleSpan(value) {
+  if (WORLD_PRIM.scale_span) return WORLD_PRIM.scale_span(value);
   return Math.max(1, (value / BASE_WORLD_SIZE) * WORLD_SIZE);
 }
 
@@ -265,60 +307,65 @@ function makeAabb(cx, cy, cz, w, h, d) {
   };
 }
 
-function buildServerWorldColliders() {
-  const colliders = [];
-  const add = (x, y, z, w, h, d) => {
-    colliders.push(makeAabb(x, y, z, w, h, d));
+function buildServerWorldSolidSpecs() {
+  const solids = [];
+  const add = (x, y, z, w, h, d, kind) => {
+    solids.push({
+      x: Number(x.toFixed(3)),
+      y: Number(y.toFixed(3)),
+      z: Number(z.toFixed(3)),
+      w: Number(w.toFixed(3)),
+      h: Number(h.toFixed(3)),
+      d: Number(d.toFixed(3)),
+      kind: kind || 'cover'
+    });
   };
   const px = (value) => scaleAxis(value);
   const span = (value) => scaleSpan(value);
 
-  // Core divider/cover geometry mirrored from client world.
-  add(px(25), 1.5, px(25), span(4), 3, span(1));
-  add(px(25), 1.5, px(27), span(1), 3, span(3));
-  add(px(25), 1.5, px(23), span(1), 3, span(3));
-
-  add(px(10), 1, px(10), span(3), 2, span(3));
-  add(px(10), 3, px(10), span(1), 2, span(1));
-  add(px(40), 1, px(10), span(3), 2, span(3));
-  add(px(40), 3, px(10), span(1), 2, span(1));
-  add(px(10), 1, px(40), span(3), 2, span(3));
-  add(px(10), 3, px(40), span(1), 2, span(1));
-  add(px(40), 1, px(40), span(3), 2, span(3));
-  add(px(40), 3, px(40), span(1), 2, span(1));
-
-  add(px(20), 1, px(15), span(6), 2, span(1));
-  add(px(30), 1, px(35), span(6), 2, span(1));
-  add(px(15), 1, px(30), span(1), 2, span(6));
-  add(px(35), 1, px(20), span(1), 2, span(6));
-
-  add(px(8), 0.5, px(25), span(1), 1, span(1));
-  add(px(42), 0.5, px(25), span(1), 1, span(1));
-  add(px(25), 0.5, px(8), span(1), 1, span(1));
-  add(px(25), 0.5, px(42), span(1), 1, span(1));
-
-  add(px(18), 1, px(22), span(2), 2, span(2));
-  add(px(32), 1, px(28), span(2), 2, span(2));
-  add(px(22), 1, px(38), span(2), 2, span(2));
-  add(px(28), 1, px(12), span(2), 2, span(2));
+  // Core divider/cover geometry mirrored from client world primitives.
+  const coverLayout = WORLD_PRIM.core_cover_layout || [];
+  if (coverLayout.length > 0) {
+    for (let i = 0; i < coverLayout.length; i++) {
+      const c = coverLayout[i];
+      add(px(c[0]), c[1], px(c[2]), span(c[3]), c[4], span(c[5]), 'core');
+    }
+  } else {
+    add(px(25), 1.5, px(25), span(4), 3, span(1), 'core');
+    add(px(25), 1.5, px(27), span(1), 3, span(3), 'core');
+    add(px(25), 1.5, px(23), span(1), 3, span(3), 'core');
+  }
 
   const edgeStep = Math.max(2, Math.round(WORLD_SIZE / 30));
   for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
     const northHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0) + ((edge % (edgeStep * 5) === 0) ? 1 : 0);
     const southHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
-    add(edge, northHeight * 0.5, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2);
-    add(edge, southHeight * 0.5, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2);
+    add(edge, northHeight * 0.5, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2, 'barrier');
+    add(edge, southHeight * 0.5, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2, 'barrier');
   }
 
   for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
     const westHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
     const eastHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0);
-    add(WORLD_MIN + 0.8, westHeight * 0.5, edge, 1.2, westHeight, edgeStep * 0.92);
-    add(WORLD_MAX - 0.8, eastHeight * 0.5, edge, 1.2, eastHeight, edgeStep * 0.92);
+    add(WORLD_MIN + 0.8, westHeight * 0.5, edge, 1.2, westHeight, edgeStep * 0.92, 'barrier');
+    add(WORLD_MAX - 0.8, eastHeight * 0.5, edge, 1.2, eastHeight, edgeStep * 0.92, 'barrier');
   }
 
+  return solids;
+}
+
+function buildServerWorldColliders(solids) {
+  const colliders = [];
+  const list = Array.isArray(solids) ? solids : [];
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
+    colliders.push(makeAabb(s.x, s.y, s.z, s.w, s.h, s.d));
+  }
   return colliders;
 }
+
+const SERVER_WORLD_SOLIDS = buildServerWorldSolidSpecs();
+const SERVER_WORLD_COLLIDERS = buildServerWorldColliders(SERVER_WORLD_SOLIDS);
 
 function intersectsXZCircleAabb(x, z, radius, box) {
   const closestX = clamp(x, box.min.x, box.max.x);
@@ -364,10 +411,6 @@ function randomSafeSpawn(colliders, options = {}) {
   };
 }
 
-function eyeToFeetY(eyeY) {
-  return (typeof eyeY === 'number' ? eyeY : ENTITY_EYE_HEIGHT) - ENTITY_EYE_HEIGHT;
-}
-
 export class GlobalArenaRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -381,7 +424,8 @@ export class GlobalArenaRoom extends DurableObject {
     this.roomName = env.ROOM_NAME || 'global';
     this.boundsMin = WORLD_MIN;
     this.boundsMax = WORLD_MAX;
-    this.worldColliders = buildServerWorldColliders();
+    this.worldSolids = SERVER_WORLD_SOLIDS;
+    this.worldColliders = SERVER_WORLD_COLLIDERS;
     this.ensureBots();
   }
 
@@ -395,12 +439,12 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  moveEntityWithCollision(entity, desiredX, desiredZ, desiredEyeY) {
+  moveEntityWithCollision(entity, desiredX, desiredZ, desiredFeetY) {
     if (!entity) return;
     const targetX = clamp(desiredX, this.boundsMin, this.boundsMax);
     const targetZ = clamp(desiredZ, this.boundsMin, this.boundsMax);
-    const targetEyeY = (typeof desiredEyeY === 'number') ? clamp(desiredEyeY, 0, 16) : entity.y;
-    const feetY = eyeToFeetY(targetEyeY);
+    const targetFeetY = (typeof desiredFeetY === 'number') ? clamp(desiredFeetY, 0, 16) : (entity.feetY || 0);
+    const feetY = targetFeetY;
 
     const startX = entity.x;
     const startZ = entity.z;
@@ -426,7 +470,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     entity.x = curX;
     entity.z = curZ;
-    entity.y = targetEyeY;
+    entity.feetY = targetFeetY;
   }
 
   ensureBots() {
@@ -444,7 +488,7 @@ export class GlobalArenaRoom extends DurableObject {
         classId,
         queuedClassId: null,
         x: spawn.x,
-        y: 1.6,
+        feetY: 0,
         z: spawn.z,
         yaw: Math.random() * Math.PI * 2,
         pitch: 0,
@@ -459,6 +503,10 @@ export class GlobalArenaRoom extends DurableObject {
         weaponId: 'rifle',
         moveSpeedNorm: 0,
         sprinting: false,
+        animState: 'idle',
+        animPhase: Math.random() * Math.PI * 2,
+        gripMode: 'two_hand',
+        aimPitch: 0,
         beamTargetId: '',
         beamActiveUntil: 0,
         beamHeat: 0,
@@ -538,6 +586,13 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.players.has(userId)) {
       const p = this.players.get(userId);
       p.username = username || p.username;
+      if (typeof p.feetY !== 'number') {
+        p.feetY = 0;
+      }
+      if (typeof p.animState !== 'string') p.animState = 'idle';
+      if (typeof p.animPhase !== 'number' || !Number.isFinite(p.animPhase)) p.animPhase = 0;
+      if (!VALID_GRIP_MODES.has(p.gripMode)) p.gripMode = inferGripMode(p.weaponId || 'rifle');
+      if (typeof p.aimPitch !== 'number' || !Number.isFinite(p.aimPitch)) p.aimPitch = p.pitch || 0;
       return p;
     }
 
@@ -550,7 +605,7 @@ export class GlobalArenaRoom extends DurableObject {
       classId,
       queuedClassId: null,
       x: spawn.x,
-      y: 1.6,
+      feetY: 0,
       z: spawn.z,
       yaw: 0,
       pitch: 0,
@@ -567,6 +622,10 @@ export class GlobalArenaRoom extends DurableObject {
       weaponId: 'rifle',
       moveSpeedNorm: 0,
       sprinting: false,
+      animState: 'idle',
+      animPhase: Math.random() * Math.PI * 2,
+      gripMode: 'two_hand',
+      aimPitch: 0,
       beamTargetId: '',
       beamActiveUntil: 0,
       beamHeat: 0,
@@ -604,16 +663,36 @@ export class GlobalArenaRoom extends DurableObject {
 
     const desiredX = (typeof msg.x === 'number') ? msg.x : player.x;
     const desiredZ = (typeof msg.z === 'number') ? msg.z : player.z;
-    const desiredY = (typeof msg.y === 'number') ? msg.y : player.y;
-    this.moveEntityWithCollision(player, desiredX, desiredZ, desiredY);
+    const desiredFeetY = (typeof msg.feetY === 'number') ? msg.feetY : player.feetY;
+    this.moveEntityWithCollision(player, desiredX, desiredZ, desiredFeetY);
 
     if (typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
+    if (typeof msg.aimPitch === 'number') player.aimPitch = clamp(msg.aimPitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
-    if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
+    if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) {
+      player.weaponId = msg.weaponId;
+      if (!VALID_GRIP_MODES.has(player.gripMode)) {
+        player.gripMode = inferGripMode(player.weaponId);
+      }
+    }
     if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
     if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
     if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
+    if (typeof msg.animState === 'string' && VALID_ANIM_STATES.has(msg.animState)) {
+      player.animState = msg.animState;
+    }
+    if (typeof msg.animPhase === 'number' && Number.isFinite(msg.animPhase)) {
+      player.animPhase = msg.animPhase;
+    }
+    if (typeof msg.gripMode === 'string' && VALID_GRIP_MODES.has(msg.gripMode)) {
+      player.gripMode = msg.gripMode;
+    } else if (!VALID_GRIP_MODES.has(player.gripMode)) {
+      player.gripMode = inferGripMode(player.weaponId || 'rifle');
+    }
+    if (typeof player.aimPitch !== 'number' || !Number.isFinite(player.aimPitch)) {
+      player.aimPitch = player.pitch;
+    }
   }
 
   getEntityById(entityId) {
@@ -706,6 +785,7 @@ export class GlobalArenaRoom extends DurableObject {
     const weaponId = String(msg.weaponId || '');
     if (!WEAPON_STATS[weaponId]) return;
     player.weaponId = weaponId;
+    player.gripMode = inferGripMode(weaponId);
     if (weaponId !== 'plasma') {
       player.beamTargetId = '';
       player.beamActiveUntil = 0;
@@ -785,6 +865,18 @@ export class GlobalArenaRoom extends DurableObject {
     const msg = safeJsonParse(text);
     if (!msg || typeof msg !== 'object') return;
 
+    if (SCHEMA.validateWsClientMessage) {
+      const checked = SCHEMA.validateWsClientMessage(msg);
+      if (!checked.ok) {
+        this.send(ws, {
+          t: 'error',
+          code: 'bad_message',
+          message: checked.errors[0] || 'Invalid message payload'
+        });
+        return;
+      }
+    }
+
     const meta = this.clients.get(ws) || ws.deserializeAttachment();
     if (!meta || !meta.userId) return;
 
@@ -847,9 +939,9 @@ export class GlobalArenaRoom extends DurableObject {
     if (entity.armor >= entity.armorMax) return;
 
     const sinceDamageMs = nowMs() - (entity.lastDamageAt || 0);
-    if (sinceDamageMs < 6000) return;
+    if (sinceDamageMs < ARMOR_REGEN_DELAY_MS) return;
 
-    entity.armor = Math.min(entity.armorMax, entity.armor + (12 * dtSec));
+    entity.armor = Math.min(entity.armorMax, entity.armor + (ARMOR_REGEN_PER_SEC * dtSec));
   }
 
   tickPlasmaState(entity, dtSec) {
@@ -902,12 +994,17 @@ export class GlobalArenaRoom extends DurableObject {
     const spawn = this.pickSafeSpawn({ padding: 8, tries: 120, feetY: 0, height: ENTITY_HEIGHT, radius: ENTITY_RADIUS });
     entity.x = spawn.x;
     entity.z = spawn.z;
+    entity.feetY = 0;
     entity.beamTargetId = '';
     entity.beamActiveUntil = 0;
     entity.beamHeat = 0;
     entity.beamOverheated = false;
     entity.beamOverheatedUntil = 0;
     entity.lastPlasmaTickAt = 0;
+    entity.animState = 'idle';
+    entity.animPhase = (typeof entity.animPhase === 'number' ? entity.animPhase : 0);
+    entity.gripMode = inferGripMode(entity.weaponId || 'rifle');
+    entity.aimPitch = 0;
   }
 
   tickBots(dtSec) {
@@ -938,12 +1035,16 @@ export class GlobalArenaRoom extends DurableObject {
         bot,
         bot.x + (bot.aiDirX * bot.aiSpeed * dtSec),
         bot.z + (bot.aiDirZ * bot.aiSpeed * dtSec),
-        bot.y
+        bot.feetY
       );
       bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
       bot.pitch = 0;
+      bot.aimPitch = 0;
       bot.moveSpeedNorm = clamp(bot.aiSpeed / 3.2, 0, 1.4);
       bot.sprinting = bot.aiSpeed > 2.5;
+      bot.animState = bot.sprinting ? 'sprint' : (bot.moveSpeedNorm > 0.45 ? 'run' : 'walk');
+      bot.animPhase = (typeof bot.animPhase === 'number' ? bot.animPhase : 0) + (dtSec * (7 + (bot.moveSpeedNorm * 6)));
+      bot.gripMode = inferGripMode(bot.weaponId || 'rifle');
 
       this.regenArmor(bot, dtSec);
       this.tickPlasmaState(bot, dtSec);
@@ -953,6 +1054,14 @@ export class GlobalArenaRoom extends DurableObject {
   tickPlayers(dtSec) {
     for (const player of this.players.values()) {
       this.respawnIfNeeded(player);
+      if (typeof player.animPhase === 'number' && Number.isFinite(player.animPhase)) {
+        if (player.moveSpeedNorm > 0.02) {
+          const baseFreq = player.sprinting ? 14 : (player.moveSpeedNorm > 0.45 ? 11 : 8.2);
+          player.animPhase += dtSec * (baseFreq * (0.32 + player.moveSpeedNorm));
+        }
+      } else {
+        player.animPhase = 0;
+      }
       this.regenArmor(player, dtSec);
       this.tickPlasmaState(player, dtSec);
     }
@@ -966,13 +1075,17 @@ export class GlobalArenaRoom extends DurableObject {
       classId: entity.classId,
       queuedClassId: entity.queuedClassId || null,
       x: Number(entity.x.toFixed(3)),
-      y: Number((entity.y || 1.6).toFixed(3)),
+      feetY: Number((entity.feetY || 0).toFixed(3)),
       z: Number(entity.z.toFixed(3)),
       yaw: Number((entity.yaw || 0).toFixed(4)),
       pitch: Number((entity.pitch || 0).toFixed(4)),
       weaponId: entity.weaponId || 'rifle',
       moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
       sprinting: !!entity.sprinting,
+      animState: VALID_ANIM_STATES.has(entity.animState) ? entity.animState : 'idle',
+      animPhase: Number((entity.animPhase || 0).toFixed(4)),
+      gripMode: VALID_GRIP_MODES.has(entity.gripMode) ? entity.gripMode : inferGripMode(entity.weaponId || 'rifle'),
+      aimPitch: Number((((typeof entity.aimPitch === 'number') ? entity.aimPitch : entity.pitch) || 0).toFixed(4)),
       hp: Number(entity.hp.toFixed(2)),
       hpMax: Number(entity.hpMax.toFixed(2)),
       armor: Number(entity.armor.toFixed(2)),
@@ -992,11 +1105,23 @@ export class GlobalArenaRoom extends DurableObject {
     for (const player of this.players.values()) entities.push(this.toEntityState(player));
     for (const bot of this.bots.values()) entities.push(this.toEntityState(bot));
 
-    this.broadcast({
+    const packet = {
       t: 'snapshot',
       serverTime: nowMs(),
       entities
-    });
+    };
+
+    if (SCHEMA.validateServerSnapshot) {
+      const checked = SCHEMA.validateServerSnapshot(packet);
+      if (!checked.ok) {
+        console.warn('snapshot validation failed:', checked.errors[0]);
+        return;
+      }
+      this.broadcast(checked.value);
+      return;
+    }
+
+    this.broadcast(packet);
   }
 
   tick() {
@@ -1046,6 +1171,23 @@ export default {
 
     if (request.method === 'GET' && url.pathname === '/api/me') {
       return handleMe(env, request);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/world') {
+      return json({
+        ok: true,
+        world: {
+          version: 1,
+          seed: String(env.WORLD_SEED || WORLD_SEED),
+          size: WORLD_SIZE,
+          center: WORLD_CENTER,
+          margin: WORLD_MARGIN,
+          min: WORLD_MIN,
+          max: WORLD_MAX,
+          areaScale: WORLD_AREA_SCALE,
+          solidBoxes: SERVER_WORLD_SOLIDS
+        }
+      });
     }
 
     if (url.pathname === '/api/ws') {

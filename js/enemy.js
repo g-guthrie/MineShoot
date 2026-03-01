@@ -17,7 +17,19 @@
     var ENEMY_HEAD_DAMAGE = 26;
     var ENEMY_FIRE_COOLDOWN_MIN = 0.55;
     var ENEMY_FIRE_COOLDOWN_MAX = 1.25;
-    var DEFAULT_WALLHACK_RADIUS = 90;
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COORDS_PRIM = PRIM.coords || {};
+    var ENTITY_PRIM = PRIM.entity || {};
+    var HITBOX_PRIM = PRIM.hitboxes || {};
+    var COMBAT_PRIM = PRIM.combat || {};
+    var CLASS_PRESETS = COMBAT_PRIM.class_presets || {};
+    var DEFAULT_WALLHACK_RADIUS = (CLASS_PRESETS.sharpshooter && CLASS_PRESETS.sharpshooter.wallhackRadius) || 90;
+    var DEFAULT_ENEMY_ARMOR = (CLASS_PRESETS.sharpshooter && CLASS_PRESETS.sharpshooter.armorMax) || 100;
+    var BODY_HITBOX_OFFSET_Y = Number(COORDS_PRIM.body_hitbox_offset_y || 1.0);
+    var HEAD_HITBOX_OFFSET_Y = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
+    var CORE_OFFSET_Y = Number(COORDS_PRIM.core_anchor_offset_y || 1.0);
+    var ENEMY_CAPSULE_HEIGHT = Number(ENTITY_PRIM.capsule_height || 1.7);
+    var ENEMY_CAPSULE_RADIUS = Number(ENTITY_PRIM.capsule_radius || 0.58);
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -68,8 +80,8 @@
                 padding: 6,
                 tries: 100,
                 feetY: 0,
-                height: 2.2,
-                radius: 0.72
+                height: ENEMY_CAPSULE_HEIGHT,
+                radius: ENEMY_CAPSULE_RADIUS
             });
         }
         if (window.GameWorld && window.GameWorld.getRandomSpawnPoint) {
@@ -86,154 +98,26 @@
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 
-    function applyWeaponToRig(rig, weaponId) {
-        if (!rig || !rig.gun || !rig.gunBody || !rig.gunBarrel) return;
-
-        var pistol = weaponId === 'pistol';
-        rig.twoHanded = !pistol;
-
-        if (pistol) {
-            rig.gun.position.set(0.44, 0.9, 0.22);
-            rig.gun.rotation.set(0.05, 0, 0);
-            rig.gunBody.scale.set(0.78, 0.88, 0.64);
-            rig.gunBarrel.scale.set(0.7, 0.72, 0.64);
-            if (rig.supportHand) rig.supportHand.visible = false;
-            return;
-        }
-
-        rig.gun.position.set(0.24, 0.92, 0.24);
-        rig.gun.rotation.set(0, 0, 0);
-        if (rig.supportHand) rig.supportHand.visible = true;
-
-        if (weaponId === 'shotgun') {
-            rig.gunBody.scale.set(1.22, 1.0, 1.16);
-            rig.gunBarrel.scale.set(1.6, 1.05, 1.3);
-        } else if (weaponId === 'sniper') {
-            rig.gunBody.scale.set(1.05, 0.88, 1.35);
-            rig.gunBarrel.scale.set(1.06, 0.88, 1.88);
-        } else if (weaponId === 'machinegun') {
-            rig.gunBody.scale.set(1.22, 1.02, 1.05);
-            rig.gunBarrel.scale.set(1.16, 1.0, 1.24);
-        } else {
-            rig.gunBody.scale.set(1.0, 1.0, 1.0);
-            rig.gunBarrel.scale.set(1.0, 1.0, 1.0);
-        }
-    }
-
     function createSharedHumanoidModel(color, weaponId) {
-        if (!window.GameAvatarRig || !window.GameAvatarRig.create) return null;
+        if (!window.GameAvatarRig || !window.GameAvatarRig.create) {
+            throw new Error('GameAvatarRig is required for canonical enemy rendering.');
+        }
         var shared = window.GameAvatarRig.create('enemy', {
             bodyColor: color,
             skinColor: 0xd2a77d,
             legColor: 0x333333,
             weaponId: weaponId
         });
-        if (!shared || !shared.root) return null;
+        if (!shared || !shared.root) {
+            throw new Error('Failed to create enemy avatar rig.');
+        }
         return shared;
     }
 
     function createHumanoidModel(color, weaponId, outMeta) {
         var sharedModel = createSharedHumanoidModel(color, weaponId);
-        if (sharedModel) {
-            if (outMeta) outMeta.rigApi = sharedModel;
-            return sharedModel.root;
-        }
-
-        var group = new THREE.Group();
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var darkMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-
-        var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), mat);
-        body.position.y = 0.5;
-        group.add(body);
-
-        var head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
-        head.position.y = 1.25;
-        group.add(head);
-
-        var eyeGeo = new THREE.BoxGeometry(0.12, 0.08, 0.1);
-        var eyeL = new THREE.Mesh(eyeGeo, darkMat);
-        eyeL.position.set(-0.12, 1.3, 0.26);
-        group.add(eyeL);
-
-        var eyeR = new THREE.Mesh(eyeGeo, darkMat);
-        eyeR.position.set(0.12, 1.3, 0.26);
-        group.add(eyeR);
-
-        var armGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25);
-        var armPivotL = new THREE.Group();
-        armPivotL.position.set(-0.52, 0.86, 0);
-        var armL = new THREE.Mesh(armGeo, mat);
-        armL.position.y = -0.4;
-        armPivotL.add(armL);
-        group.add(armPivotL);
-
-        var armPivotR = new THREE.Group();
-        armPivotR.position.set(0.52, 0.86, 0);
-        var armR = new THREE.Mesh(armGeo, mat);
-        armR.position.y = -0.4;
-        armPivotR.add(armR);
-        group.add(armPivotR);
-
-        var legGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
-        var legPivotL = new THREE.Group();
-        legPivotL.position.set(-0.2, 0.02, 0);
-        var legL = new THREE.Mesh(legGeo, darkMat);
-        legL.position.y = -0.4;
-        legPivotL.add(legL);
-        group.add(legPivotL);
-
-        var legPivotR = new THREE.Group();
-        legPivotR.position.set(0.2, 0.02, 0);
-        var legR = new THREE.Mesh(legGeo, darkMat);
-        legR.position.y = -0.4;
-        legPivotR.add(legR);
-        group.add(legPivotR);
-
-        var gun = new THREE.Group();
-        var gunMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-        var gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.55), gunMat);
-        gunBody.position.z = -0.04;
-        gun.add(gunBody);
-
-        var gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.26), gunMat);
-        gunBarrel.position.z = -0.42;
-        gun.add(gunBarrel);
-
-        var supportHand = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.13), mat);
-        supportHand.position.set(-0.12, -0.03, -0.2);
-        gun.add(supportHand);
-
-        var muzzleMat = new THREE.MeshBasicMaterial({ color: 0xffcc66 });
-        var muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), muzzleMat);
-        muzzle.position.set(0, 0, -0.58);
-        muzzle.visible = false;
-        gun.add(muzzle);
-
-        group.add(gun);
-
-        var rig = {
-            armL: armPivotL,
-            armR: armPivotR,
-            legL: legPivotL,
-            legR: legPivotR,
-            supportHand: supportHand,
-            gun: gun,
-            gunBody: gunBody,
-            gunBarrel: gunBarrel,
-            muzzle: muzzle,
-            twoHanded: true,
-            weaponId: weaponId
-        };
-
-        applyWeaponToRig(rig, weaponId);
-
-        group.userData.bodyParts = [body, head, armL, armR, legL, legR];
-        group.userData.originalColor = color;
-        group.userData.weaponMuzzle = muzzle;
-        group.userData.rig = rig;
-
-        return group;
+        if (outMeta) outMeta.rigApi = sharedModel;
+        return sharedModel.root;
     }
 
     function createRevealGhost(visual) {
@@ -263,12 +147,14 @@
 
     function createHitboxMesh(type, index) {
         var geo, color;
+        var bodySize = (HITBOX_PRIM.body && HITBOX_PRIM.body.size) || [2.7, 2.0, 2.7];
+        var headSize = (HITBOX_PRIM.head && HITBOX_PRIM.head.size) || [1.55, 0.95, 1.55];
 
         if (type === 'head') {
-            geo = new THREE.BoxGeometry(1.55, 0.95, 1.55);
+            geo = new THREE.BoxGeometry(headSize[0], headSize[1], headSize[2]);
             color = 0xff4444;
         } else {
-            geo = new THREE.BoxGeometry(2.7, 2.0, 2.7);
+            geo = new THREE.BoxGeometry(bodySize[0], bodySize[1], bodySize[2]);
             color = 0x00aaff;
         }
 
@@ -298,11 +184,11 @@
         var pos = enemy.group.position;
 
         if (enemy.bodyHitbox) {
-            enemy.bodyHitbox.position.set(pos.x, pos.y + 1.0, pos.z);
+            enemy.bodyHitbox.position.set(pos.x, pos.y + BODY_HITBOX_OFFSET_Y, pos.z);
         }
 
         if (enemy.headHitbox) {
-            enemy.headHitbox.position.set(pos.x, pos.y + 2.475, pos.z);
+            enemy.headHitbox.position.set(pos.x, pos.y + HEAD_HITBOX_OFFSET_Y, pos.z);
         }
     }
 
@@ -314,7 +200,11 @@
         var group = new THREE.Group();
 
         var visual = createHumanoidModel(color, weaponId, visualMeta);
-        visual.position.y = 1.0;
+        if (!visual.userData) visual.userData = {};
+        if (typeof visual.userData.originalColor !== 'number') {
+            visual.userData.originalColor = color;
+        }
+        visual.position.y = 0;
         group.add(visual);
 
         var revealGhost = createRevealGhost(visual);
@@ -340,13 +230,12 @@
             headHitbox: headHitbox,
             hp: 500,
             maxHp: 500,
-            armor: 100,
-            armorMax: 100,
+            armor: DEFAULT_ENEMY_ARMOR,
+            armorMax: DEFAULT_ENEMY_ARMOR,
             alive: true,
             index: index,
             color: color,
             weaponType: weaponId,
-            rig: visual.userData.rig || null,
             rigApi: visualMeta.rigApi,
 
             aiState: 'WANDER',
@@ -361,15 +250,26 @@
             respawnTimer: 0,
             armorRegenDelay: 0,
 
-            weaponMuzzle: visual.userData.weaponMuzzle || null,
+            weaponMuzzle: (visualMeta.rigApi && visualMeta.rigApi.rig && visualMeta.rigApi.rig.muzzle) || null,
             muzzleFlashTimer: 0,
             fireCooldown: 0,
+            partBaseColors: [],
 
             animPhase: Math.random() * Math.PI * 2,
+            justFired: false,
             stunTimer: 0,
             slowTimer: 0,
             slowMultiplier: 1
         };
+
+        var baseParts = visual.userData.bodyParts || [];
+        for (var p = 0; p < baseParts.length; p++) {
+            if (baseParts[p] && baseParts[p].material && baseParts[p].material.color) {
+                enemy.partBaseColors.push(baseParts[p].material.color.getHex());
+            } else {
+                enemy.partBaseColors.push(0xffffff);
+            }
+        }
 
         bodyHitbox.userData.enemyRef = enemy;
         headHitbox.userData.enemyRef = enemy;
@@ -419,34 +319,38 @@
     }
 
     function updateEnemyAnimation(enemy, dt, engaging) {
-        if (enemy.rigApi && enemy.rigApi.updateLocomotion) {
-            var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
-            enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
-            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
-            return;
+        if (!enemy.rigApi) return;
+        var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
+        var aiming = !!engaging;
+        var firing = !!enemy.justFired;
+
+        if (enemy.rigApi.setMotionState) {
+            enemy.rigApi.setMotionState({
+                speedNorm: speedNorm,
+                sprinting: speedNorm > 0.85,
+                grounded: true,
+                strafing: false
+            });
         }
-        if (!enemy.rig) return;
-
-        var stride = Math.max(0, Math.min(1, enemy.moveSpeed / 2.2));
-        enemy.animPhase += dt * (4 + enemy.moveSpeed * 4 + (engaging ? 1.5 : 0));
-
-        var legAmplitude = 0.12 + stride * 0.52;
-        var legSwing = Math.sin(enemy.animPhase) * legAmplitude;
-
-        enemy.rig.legL.rotation.x = legSwing;
-        enemy.rig.legR.rotation.x = -legSwing;
-
-        if (enemy.rig.twoHanded) {
-            enemy.rig.armR.rotation.x = -0.36 + Math.sin(enemy.animPhase * 2.1) * 0.03 - (engaging ? 0.03 : 0);
-            enemy.rig.armR.rotation.z = 0.12;
-            enemy.rig.armL.rotation.x = -0.32 + Math.cos(enemy.animPhase * 2.0) * 0.03 - (engaging ? 0.02 : 0);
-            enemy.rig.armL.rotation.z = -0.12;
-        } else {
-            var sideSwing = -legSwing * 0.75;
-            enemy.rig.armR.rotation.x = -0.4 - (engaging ? 0.07 : 0);
-            enemy.rig.armR.rotation.z = 0.14;
-            enemy.rig.armL.rotation.x = sideSwing;
-            enemy.rig.armL.rotation.z = -0.04;
+        if (enemy.rigApi.setActionState) {
+            enemy.rigApi.setActionState({
+                aiming: aiming,
+                firing: firing
+            });
+        }
+        if (enemy.rigApi.updateAimPitch) {
+            enemy.rigApi.updateAimPitch(aiming ? -0.05 : 0);
+        }
+        if (enemy.rigApi.updatePose) {
+            enemy.rigApi.updatePose(dt, enemy.animPhase || 0);
+            if (enemy.rigApi.getAnimState) {
+                var anim = enemy.rigApi.getAnimState();
+                if (anim && typeof anim.animPhase === 'number') {
+                    enemy.animPhase = anim.animPhase;
+                }
+            }
+        } else if (enemy.rigApi.updateLocomotion) {
+            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
         }
     }
 
@@ -512,11 +416,12 @@
     function updateCombat(enemy, dt, playerPos, onPlayerHit) {
         if (!enemy.alive || !playerPos || !onPlayerHit) return false;
         if (enemy.stunTimer > 0) return false;
+        enemy.justFired = false;
 
         enemy.fireCooldown -= dt;
 
         enemyShootOrigin.copy(enemy.group.position);
-        enemyShootOrigin.y += 2.2;
+        enemyShootOrigin.y += HEAD_HITBOX_OFFSET_Y;
 
         enemyShootTarget.copy(playerPos);
         enemyShootTarget.y -= 0.2;
@@ -547,6 +452,7 @@
             onPlayerHit(damage, hitType, enemy);
         }
 
+        enemy.justFired = true;
         if (enemy.weaponMuzzle) {
             enemy.weaponMuzzle.visible = true;
             enemy.muzzleFlashTimer = 0.06;
@@ -557,6 +463,9 @@
     }
 
     function updateRevealGhost(enemy, playerPos, camera, dt) {
+        if (window.GameWallhack && window.GameWallhack.isActive && window.GameWallhack.isActive()) {
+            return;
+        }
         if (!enemy.revealGhost) return;
 
         if (!enemy.alive || !playerPos || !camera) {
@@ -580,7 +489,7 @@
         }
 
         revealTarget.copy(enemy.group.position);
-        revealTarget.y += 2.2;
+        revealTarget.y += HEAD_HITBOX_OFFSET_Y;
 
         revealDir.copy(revealTarget).sub(camera.position);
         var distToTarget = revealDir.length();
@@ -624,11 +533,14 @@
         enemy.flashTimer -= dt;
         if (enemy.flashTimer <= 0) {
             var parts = enemy.visual.userData.bodyParts;
-            var origColor = enemy.visual.userData.originalColor;
             if (parts) {
                 for (var i = 0; i < parts.length; i++) {
-                    parts[i].material.color.setHex(i >= 4 ? 0x333333 : origColor);
-                    parts[i].material.emissive.setHex(0x000000);
+                    if (parts[i].material && parts[i].material.color && enemy.partBaseColors[i] !== undefined) {
+                        parts[i].material.color.setHex(enemy.partBaseColors[i]);
+                    }
+                    if (parts[i].material && parts[i].material.emissive) {
+                        parts[i].material.emissive.setHex(0x000000);
+                    }
                 }
             }
             enemy.isFlashing = false;
@@ -742,8 +654,9 @@
         var parts = enemy.visual.userData.bodyParts;
         if (parts) {
             for (var i = 0; i < parts.length; i++) {
-                parts[i].material.color.setHex(0xff0000);
-                parts[i].material.emissive.setHex(0x440000);
+                if (parts[i].material && parts[i].material.emissive) {
+                    parts[i].material.emissive.setHex(0x440000);
+                }
             }
         }
 
@@ -786,11 +699,14 @@
         enemy.group.visible = true;
 
         var parts = enemy.visual.userData.bodyParts;
-        var origColor = enemy.visual.userData.originalColor;
         if (parts) {
             for (var i = 0; i < parts.length; i++) {
-                parts[i].material.color.setHex(i >= 4 ? 0x333333 : origColor);
-                parts[i].material.emissive.setHex(0x000000);
+                if (parts[i].material && parts[i].material.color && enemy.partBaseColors[i] !== undefined) {
+                    parts[i].material.color.setHex(enemy.partBaseColors[i]);
+                }
+                if (parts[i].material && parts[i].material.emissive) {
+                    parts[i].material.emissive.setHex(0x000000);
+                }
             }
         }
 
@@ -800,6 +716,7 @@
         enemy.stunTimer = 0;
         enemy.slowTimer = 0;
         enemy.slowMultiplier = 1;
+        enemy.justFired = false;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
         resetFireCooldown(enemy);
@@ -830,7 +747,7 @@
                 corePos = enemy.bodyHitbox.position.clone();
             } else if (enemy.group && enemy.group.position) {
                 corePos = enemy.group.position.clone();
-                corePos.y += 1.0;
+                corePos.y += CORE_OFFSET_Y;
             }
             if (!corePos) continue;
 
@@ -839,8 +756,28 @@
                 ownerType: 'enemy',
                 worldPos: corePos,
                 hitbox: enemy.bodyHitbox || null,
+                hitboxes: [enemy.bodyHitbox, enemy.headHitbox],
                 alive: true,
                 enemyRef: enemy
+            });
+        }
+        return out;
+    };
+
+    GameEnemy.getWallhackDescriptors = function () {
+        var out = [];
+        for (var i = 0; i < enemies.length; i++) {
+            var enemy = enemies[i];
+            if (!enemy) continue;
+            out.push({
+                id: 'enemy:' + enemy.index,
+                alive: !!enemy.alive,
+                worldPos: enemy.group ? enemy.group.position : null,
+                headOffsetY: HEAD_HITBOX_OFFSET_Y,
+                visualRoot: enemy.visual || null,
+                revealGhost: enemy.revealGhost || null,
+                attachParent: enemy.group || null,
+                kind: 'enemy'
             });
         }
         return out;

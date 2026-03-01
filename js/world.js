@@ -7,18 +7,21 @@
 
     var GameWorld = {};
 
-    var BASE_WORLD_SIZE = 50;
-    var WORLD_AREA_SCALE = 5; // requested: 5x larger playable area
-    var WORLD_SIZE = Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE));
-    var WORLD_CENTER = WORLD_SIZE * 0.5;
-    var WORLD_MARGIN = 2;
-    var WORLD_MIN = WORLD_MARGIN;
-    var WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
-    var DEFAULT_SPAWN_PADDING = 8;
-    var WORLD_SEED = 'mineshoot-v1';
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var WORLD_PRIM = PRIM.world || {};
+    var ENTITY_PRIM = PRIM.entity || {};
+    var BASE_WORLD_SIZE = Number(WORLD_PRIM.base_world_size || 50);
+    var WORLD_AREA_SCALE = Number(WORLD_PRIM.area_scale || 5);
+    var WORLD_SIZE = Number(WORLD_PRIM.world_size || Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE)));
+    var WORLD_CENTER = Number(WORLD_PRIM.center || (WORLD_SIZE * 0.5));
+    var WORLD_MARGIN = Number(WORLD_PRIM.margin || 2);
+    var WORLD_MIN = Number(WORLD_PRIM.min || WORLD_MARGIN);
+    var WORLD_MAX = Number(WORLD_PRIM.max || (WORLD_SIZE - WORLD_MARGIN));
+    var DEFAULT_SPAWN_PADDING = Number(ENTITY_PRIM.spawn_padding_default || 8);
+    var WORLD_SEED = String(WORLD_PRIM.seed_default || 'mineshoot-v1');
     var rngState = 1;
-    var DEFAULT_ENTITY_RADIUS = 0.58;
-    var DEFAULT_ENTITY_HEIGHT = 1.7;
+    var DEFAULT_ENTITY_RADIUS = Number(ENTITY_PRIM.capsule_radius || 0.58);
+    var DEFAULT_ENTITY_HEIGHT = Number(ENTITY_PRIM.capsule_height || 1.7);
     var EPSILON = 0.001;
 
     // Solid meshes used for movement/raycast collisions.
@@ -57,11 +60,132 @@
     }
 
     function scaleAxis(value) {
+        if (WORLD_PRIM.scale_axis) return WORLD_PRIM.scale_axis(value);
         return (value / BASE_WORLD_SIZE) * WORLD_SIZE;
     }
 
     function scaleSpan(value) {
+        if (WORLD_PRIM.scale_span) return WORLD_PRIM.scale_span(value);
         return Math.max(1, (value / BASE_WORLD_SIZE) * WORLD_SIZE);
+    }
+
+    function applyWorldConfig(manifest) {
+        manifest = (manifest && typeof manifest === 'object') ? manifest : null;
+        if (!manifest) {
+            WORLD_AREA_SCALE = Number(WORLD_PRIM.area_scale || 5);
+            WORLD_SIZE = Number(WORLD_PRIM.world_size || Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE)));
+            WORLD_CENTER = Number(WORLD_PRIM.center || (WORLD_SIZE * 0.5));
+            WORLD_MARGIN = Number(WORLD_PRIM.margin || 2);
+            WORLD_MIN = Number(WORLD_PRIM.min || WORLD_MARGIN);
+            WORLD_MAX = Number(WORLD_PRIM.max || (WORLD_SIZE - WORLD_MARGIN));
+            setSeed(resolveSeedFromLocation());
+            return;
+        }
+
+        WORLD_AREA_SCALE = Number(
+            (typeof manifest.areaScale === 'number' && isFinite(manifest.areaScale))
+                ? manifest.areaScale
+                : (WORLD_PRIM.area_scale || 5)
+        );
+        WORLD_SIZE = Number(
+            (typeof manifest.size === 'number' && isFinite(manifest.size) && manifest.size > 0)
+                ? manifest.size
+                : (WORLD_PRIM.world_size || Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE)))
+        );
+        WORLD_MARGIN = Number(
+            (typeof manifest.margin === 'number' && isFinite(manifest.margin))
+                ? manifest.margin
+                : (WORLD_PRIM.margin || 2)
+        );
+        WORLD_MIN = Number(
+            (typeof manifest.min === 'number' && isFinite(manifest.min))
+                ? manifest.min
+                : WORLD_MARGIN
+        );
+        WORLD_MAX = Number(
+            (typeof manifest.max === 'number' && isFinite(manifest.max))
+                ? manifest.max
+                : (WORLD_SIZE - WORLD_MARGIN)
+        );
+        WORLD_CENTER = Number(
+            (typeof manifest.center === 'number' && isFinite(manifest.center))
+                ? manifest.center
+                : ((WORLD_MIN + WORLD_MAX) * 0.5)
+        );
+
+        setSeed(manifest.seed || resolveSeedFromLocation());
+    }
+
+    function normalizeSolidSpec(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        var x = Number(raw.x);
+        var y = Number(raw.y);
+        var z = Number(raw.z);
+        var w = Number(raw.w);
+        var h = Number(raw.h);
+        var d = Number(raw.d);
+        if (!isFinite(x) || !isFinite(y) || !isFinite(z) || !isFinite(w) || !isFinite(h) || !isFinite(d)) {
+            return null;
+        }
+        if (w <= 0 || h <= 0 || d <= 0) return null;
+        return {
+            x: x,
+            y: y,
+            z: z,
+            w: w,
+            h: h,
+            d: d,
+            kind: String(raw.kind || '')
+        };
+    }
+
+    function normalizeSolidSpecs(rawList) {
+        if (!Array.isArray(rawList)) return [];
+        var out = [];
+        for (var i = 0; i < rawList.length; i++) {
+            var spec = normalizeSolidSpec(rawList[i]);
+            if (spec) out.push(spec);
+        }
+        return out;
+    }
+
+    function buildDefaultSolidSpecs() {
+        var solids = [];
+        function add(x, y, z, w, h, d, kind) {
+            solids.push({ x: x, y: y, z: z, w: w, h: h, d: d, kind: kind || '' });
+        }
+        function px(value) { return scaleAxis(value); }
+        function span(value) { return scaleSpan(value); }
+
+        var coreCoverLayout = WORLD_PRIM.core_cover_layout || [];
+        if (coreCoverLayout.length > 0) {
+            for (var c = 0; c < coreCoverLayout.length; c++) {
+                var cc = coreCoverLayout[c];
+                add(px(cc[0]), cc[1], px(cc[2]), span(cc[3]), cc[4], span(cc[5]), 'core');
+            }
+        } else {
+            add(px(25), 1.5, px(25), span(4), 3, span(1), 'core');
+            add(px(25), 1.5, px(27), span(1), 3, span(3), 'core');
+            add(px(25), 1.5, px(23), span(1), 3, span(3), 'core');
+        }
+
+        var edgeStep = Math.max(2, Math.round(WORLD_SIZE / 30));
+        var edge;
+        for (edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
+            var northHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0) + ((edge % (edgeStep * 5) === 0) ? 1 : 0);
+            var southHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
+            add(edge, northHeight / 2, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2, 'barrier');
+            add(edge, southHeight / 2, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2, 'barrier');
+        }
+
+        for (edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
+            var westHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
+            var eastHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0);
+            add(WORLD_MIN + 0.8, westHeight / 2, edge, 1.2, westHeight, edgeStep * 0.92, 'barrier');
+            add(WORLD_MAX - 0.8, eastHeight / 2, edge, 1.2, eastHeight, edgeStep * 0.92, 'barrier');
+        }
+
+        return solids;
     }
 
     function randRange(min, max) {
@@ -74,6 +198,106 @@
         var dx = x - closestX;
         var dz = z - closestZ;
         return ((dx * dx + dz * dz) < (radius * radius));
+    }
+
+    function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+    }
+
+    function collectCapsuleOverlaps(x, z, feetY, height, radius) {
+        var out = [];
+        if (!collidables || collidables.length === 0) return out;
+
+        feetY = (typeof feetY === 'number') ? feetY : 0;
+        height = (typeof height === 'number') ? height : DEFAULT_ENTITY_HEIGHT;
+        radius = (typeof radius === 'number') ? radius : DEFAULT_ENTITY_RADIUS;
+        var headY = feetY + height;
+
+        for (var i = 0; i < collidables.length; i++) {
+            var mesh = collidables[i];
+            var box = mesh && mesh.userData ? mesh.userData.collisionBox : null;
+            if (!box) continue;
+            if (headY <= box.min.y + EPSILON || feetY >= box.max.y - EPSILON) continue;
+            if (!intersectsXZ(x, z, radius, box)) continue;
+            out.push(box);
+        }
+
+        return out;
+    }
+
+    function separationFromBox(x, z, radius, box) {
+        var closestX = clamp(x, box.min.x, box.max.x);
+        var closestZ = clamp(z, box.min.z, box.max.z);
+        var dx = x - closestX;
+        var dz = z - closestZ;
+        var distSq = dx * dx + dz * dz;
+        var pad = 0.002;
+
+        if (distSq > 1e-8) {
+            var dist = Math.sqrt(distSq);
+            var overlap = (radius - dist) + pad;
+            if (overlap <= 0) return { x: 0, z: 0 };
+            return { x: (dx / dist) * overlap, z: (dz / dist) * overlap };
+        }
+
+        var toMinX = Math.abs(x - box.min.x);
+        var toMaxX = Math.abs(box.max.x - x);
+        var toMinZ = Math.abs(z - box.min.z);
+        var toMaxZ = Math.abs(box.max.z - z);
+
+        var min = toMinX;
+        var axis = 'xMin';
+        if (toMaxX < min) { min = toMaxX; axis = 'xMax'; }
+        if (toMinZ < min) { min = toMinZ; axis = 'zMin'; }
+        if (toMaxZ < min) { min = toMaxZ; axis = 'zMax'; }
+
+        if (axis === 'xMin') return { x: -(radius + toMinX + pad), z: 0 };
+        if (axis === 'xMax') return { x: (radius + toMaxX + pad), z: 0 };
+        if (axis === 'zMin') return { x: 0, z: -(radius + toMinZ + pad) };
+        return { x: 0, z: (radius + toMaxZ + pad) };
+    }
+
+    function resolveCapsulePenetrationState(state, options) {
+        options = options || {};
+        var x = (typeof state.x === 'number') ? state.x : WORLD_CENTER;
+        var z = (typeof state.z === 'number') ? state.z : WORLD_CENTER;
+        var feetY = (typeof state.feetY === 'number') ? state.feetY : 0;
+        var height = (typeof state.height === 'number') ? state.height : DEFAULT_ENTITY_HEIGHT;
+        var radius = (typeof state.radius === 'number') ? state.radius : DEFAULT_ENTITY_RADIUS;
+        var maxIterations = Math.max(1, Math.floor(options.maxIterations || 8));
+        var minBound = WORLD_MIN + radius;
+        var maxBound = WORLD_MAX - radius;
+        var movedDistance = 0;
+
+        var overlaps = collectCapsuleOverlaps(x, z, feetY, height, radius);
+        var hadOverlap = overlaps.length > 0;
+
+        for (var iter = 0; iter < maxIterations && overlaps.length > 0; iter++) {
+            var movedThisIter = 0;
+            for (var i = 0; i < overlaps.length; i++) {
+                var sep = separationFromBox(x, z, radius, overlaps[i]);
+                x += sep.x;
+                z += sep.z;
+                movedThisIter += Math.sqrt((sep.x * sep.x) + (sep.z * sep.z));
+            }
+
+            x = clamp(x, minBound, maxBound);
+            z = clamp(z, minBound, maxBound);
+            movedDistance += movedThisIter;
+            overlaps = collectCapsuleOverlaps(x, z, feetY, height, radius);
+
+            if (movedThisIter <= 0.0001) break;
+        }
+
+        return {
+            x: x,
+            z: z,
+            feetY: feetY,
+            hadOverlap: hadOverlap,
+            resolved: overlaps.length === 0,
+            overlapCount: overlaps.length,
+            movedDistance: movedDistance
+        };
     }
 
     function isCapsuleBlockedAt(x, z, feetY, height, radius) {
@@ -120,9 +344,73 @@
         return fallback;
     }
 
-    GameWorld.create = function (scene) {
-        setSeed(resolveSeedFromLocation());
+    function validateSpawnState(state) {
+        var x = (typeof state.x === 'number') ? state.x : WORLD_CENTER;
+        var z = (typeof state.z === 'number') ? state.z : WORLD_CENTER;
+        var feetY = (typeof state.feetY === 'number') ? state.feetY : 0;
+        var height = (typeof state.height === 'number') ? state.height : DEFAULT_ENTITY_HEIGHT;
+        var radius = (typeof state.radius === 'number') ? state.radius : DEFAULT_ENTITY_RADIUS;
+        var minBound = WORLD_MIN + radius;
+        var maxBound = WORLD_MAX - radius;
+        var overlapCount = collectCapsuleOverlaps(x, z, feetY, height, radius).length;
+
+        return {
+            valid: overlapCount === 0 && x >= minBound && x <= maxBound && z >= minBound && z <= maxBound,
+            overlapCount: overlapCount,
+            inBounds: x >= minBound && x <= maxBound && z >= minBound && z <= maxBound
+        };
+    }
+
+    function safeSpawnPoint(options) {
+        options = options || {};
+        var pad = (typeof options.padding === 'number') ? options.padding : DEFAULT_SPAWN_PADDING;
+        var tries = Math.max(1, Math.floor(options.tries || 60));
+        var feetY = (typeof options.feetY === 'number') ? options.feetY : 0;
+        var height = (typeof options.height === 'number') ? options.height : DEFAULT_ENTITY_HEIGHT;
+        var radius = (typeof options.radius === 'number') ? options.radius : DEFAULT_ENTITY_RADIUS;
+
+        for (var i = 0; i < tries; i++) {
+            var p = randomSpawnPoint(pad);
+            var resolved = resolveCapsulePenetrationState({
+                x: p.x,
+                z: p.z,
+                feetY: feetY,
+                height: height,
+                radius: radius
+            }, { maxIterations: 12 });
+            var check = validateSpawnState({
+                x: resolved.x,
+                z: resolved.z,
+                feetY: feetY,
+                height: height,
+                radius: radius
+            });
+            if (check.valid) {
+                return { x: resolved.x, z: resolved.z };
+            }
+        }
+
+        var fallback = randomSafeSpawnPoint({
+            padding: pad,
+            tries: tries,
+            feetY: feetY,
+            height: height,
+            radius: radius
+        });
+        var resolvedFallback = resolveCapsulePenetrationState({
+            x: fallback.x,
+            z: fallback.z,
+            feetY: feetY,
+            height: height,
+            radius: radius
+        }, { maxIterations: 16 });
+        return { x: resolvedFallback.x, z: resolvedFallback.z };
+    }
+
+    GameWorld.create = function (scene, manifest) {
+        applyWorldConfig(manifest || null);
         collidables = [];
+        var authoritativeSolids = normalizeSolidSpecs(manifest && manifest.solidBoxes);
 
         function markSolid(mesh) {
             mesh.updateMatrixWorld(true);
@@ -150,7 +438,7 @@
 
         function addJungleTree(x, z, trunkHeight, trunkMat, leavesMat, vineMat) {
             var canopyY = trunkHeight + 0.4;
-            addBlock(x, trunkHeight / 2, z, 1, trunkHeight, 1, trunkMat, true);
+            addBlock(x, trunkHeight / 2, z, 1, trunkHeight, 1, trunkMat, false);
             addBlock(x, canopyY, z, 3, 1.2, 3, leavesMat, false);
             addBlock(x, canopyY + 0.85, z, 2, 1, 2, leavesMat, false);
             addBlock(x - 1.1, canopyY - 0.5, z, 0.2, 1.5, 0.2, vineMat, false);
@@ -163,9 +451,9 @@
 
         function addLog(x, z, alongX, logMat) {
             if (alongX) {
-                addBlock(x, 0.35, z, 3, 0.7, 1, logMat, true);
+                addBlock(x, 0.35, z, 3, 0.7, 1, logMat, false);
             } else {
-                addBlock(x, 0.35, z, 1, 0.7, 3, logMat, true);
+                addBlock(x, 0.35, z, 1, 0.7, 3, logMat, false);
             }
         }
 
@@ -224,37 +512,22 @@
         var dirtMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 });
         var cliffMat = new THREE.MeshLambertMaterial({ color: 0x3f3325 });
 
-        // Scale the original cover layout into the larger world.
-        function px(value) { return scaleAxis(value); }
-        function span(value) { return scaleSpan(value); }
-
-        addBlock(px(25), 1.5, px(25), span(4), 3, span(1), stoneMat);
-        addBlock(px(25), 1.5, px(27), span(1), 3, span(3), stoneMat);
-        addBlock(px(25), 1.5, px(23), span(1), 3, span(3), stoneMat);
-
-        addBlock(px(10), 1, px(10), span(3), 2, span(3), blockMat);
-        addBlock(px(10), 3, px(10), span(1), 2, span(1), blockMat);
-        addBlock(px(40), 1, px(10), span(3), 2, span(3), brickMat);
-        addBlock(px(40), 3, px(10), span(1), 2, span(1), brickMat);
-        addBlock(px(10), 1, px(40), span(3), 2, span(3), brickMat);
-        addBlock(px(10), 3, px(40), span(1), 2, span(1), brickMat);
-        addBlock(px(40), 1, px(40), span(3), 2, span(3), blockMat);
-        addBlock(px(40), 3, px(40), span(1), 2, span(1), blockMat);
-
-        addBlock(px(20), 1, px(15), span(6), 2, span(1), stoneMat);
-        addBlock(px(30), 1, px(35), span(6), 2, span(1), stoneMat);
-        addBlock(px(15), 1, px(30), span(1), 2, span(6), blockMat);
-        addBlock(px(35), 1, px(20), span(1), 2, span(6), blockMat);
-
-        addBlock(px(8), 0.5, px(25), span(1), 1, span(1), blockMat);
-        addBlock(px(42), 0.5, px(25), span(1), 1, span(1), blockMat);
-        addBlock(px(25), 0.5, px(8), span(1), 1, span(1), stoneMat);
-        addBlock(px(25), 0.5, px(42), span(1), 1, span(1), stoneMat);
-
-        addBlock(px(18), 1, px(22), span(2), 2, span(2), brickMat);
-        addBlock(px(32), 1, px(28), span(2), 2, span(2), brickMat);
-        addBlock(px(22), 1, px(38), span(2), 2, span(2), stoneMat);
-        addBlock(px(28), 1, px(12), span(2), 2, span(2), stoneMat);
+        // Authoritative solid cover/barrier geometry (server manifest in net mode).
+        var coreMats = [stoneMat, blockMat, brickMat];
+        var manifestSolids = (authoritativeSolids && authoritativeSolids.length > 0)
+            ? authoritativeSolids
+            : buildDefaultSolidSpecs();
+        var coreMatIndex = 0;
+        for (var s = 0; s < manifestSolids.length; s++) {
+            var solid = manifestSolids[s];
+            var solidKind = String(solid.kind || '');
+            var solidMat = dirtMat;
+            if (solidKind === 'core') {
+                solidMat = coreMats[coreMatIndex % coreMats.length];
+                coreMatIndex++;
+            }
+            addBlock(solid.x, solid.y, solid.z, solid.w, solid.h, solid.d, solidMat, true);
+        }
 
         // Edge walls slightly below the arena so the map feels grounded.
         addBlock(WORLD_CENTER, -1.5, 0, WORLD_SIZE, 3, 1, cliffMat, false);
@@ -262,27 +535,11 @@
         addBlock(0, -1.5, WORLD_CENTER, 1, 3, WORLD_SIZE, cliffMat, false);
         addBlock(WORLD_SIZE, -1.5, WORLD_CENTER, 1, 3, WORLD_SIZE, cliffMat, false);
 
-        // Jungle border barriers.
-        var edgeStep = Math.max(2, Math.round(WORLD_SIZE / 30));
-        var edge;
-        for (edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
-            var northHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0) + ((edge % (edgeStep * 5) === 0) ? 1 : 0);
-            var southHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
-            addBlock(edge, northHeight / 2, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2, dirtMat, true);
-            addBlock(edge, southHeight / 2, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2, dirtMat, true);
-        }
-
-        for (edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
-            var westHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
-            var eastHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0);
-            addBlock(WORLD_MIN + 0.8, westHeight / 2, edge, 1.2, westHeight, edgeStep * 0.92, dirtMat, true);
-            addBlock(WORLD_MAX - 0.8, eastHeight / 2, edge, 1.2, eastHeight, edgeStep * 0.92, dirtMat, true);
-        }
-
         // Dense border trees.
         var borderStep = Math.max(7, Math.round(WORLD_SIZE / 12));
         var borderOffset = 2.8;
         var rowToggle = 0;
+        var edge;
         for (edge = WORLD_MIN + 3; edge <= WORLD_MAX - 3; edge += borderStep) {
             addJungleTree(edge, WORLD_MIN + borderOffset + (rowToggle % 2) * 0.8, 3 + (rowToggle % 3), jungleWoodMat, jungleLeafMat, vineMat);
             addJungleTree(edge, WORLD_MAX - borderOffset - (rowToggle % 2) * 0.8, 3 + ((rowToggle + 1) % 3), jungleWoodMat, jungleLeafMat, vineMat);
@@ -387,7 +644,7 @@
     };
 
     GameWorld.getRandomSpawnPointSafe = function (options) {
-        return randomSafeSpawnPoint(options);
+        return safeSpawnPoint(options);
     };
 
     GameWorld.isPointBlocked = function (x, z, options) {
@@ -399,6 +656,18 @@
             (typeof options.height === 'number') ? options.height : DEFAULT_ENTITY_HEIGHT,
             (typeof options.radius === 'number') ? options.radius : DEFAULT_ENTITY_RADIUS
         );
+    };
+
+    GameWorld.resolveCapsulePenetration = function (state, options) {
+        return resolveCapsulePenetrationState(state || {}, options || {});
+    };
+
+    GameWorld.validateSpawn = function (state) {
+        return validateSpawnState(state || {});
+    };
+
+    GameWorld.getSafeSpawn = function (options) {
+        return safeSpawnPoint(options || {});
     };
 
     GameWorld.getRecommendedEnemyCount = function () {

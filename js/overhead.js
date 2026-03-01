@@ -10,6 +10,10 @@
     var container = null;
     var entries = new Map();
     var projectScratch = new THREE.Vector3();
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COORDS_PRIM = PRIM.coords || {};
+    var OVERHEAD_OFFSET_Y = Number(COORDS_PRIM.overhead_bar_offset_y || 2.9);
+    var OVERHEAD_PROXIMITY_UNITS = 22;
 
     function ensureContainer() {
         if (container) return;
@@ -82,7 +86,7 @@
                 armor: typeof e.armor === 'number' ? e.armor : 0,
                 armorMax: typeof e.armorMax === 'number' ? e.armorMax : 100,
                 worldPos: e.group.position,
-                headY: 2.9
+                headY: OVERHEAD_OFFSET_Y
             });
         }
 
@@ -106,7 +110,7 @@
                 armor: e.armor,
                 armorMax: e.armorMax,
                 worldPos: e.worldPos,
-                headY: e.headY || 2.9
+                headY: e.headY || OVERHEAD_OFFSET_Y
             });
         }
 
@@ -120,7 +124,7 @@
         var dx = desc.worldPos.x - playerPos.x;
         var dz = desc.worldPos.z - playerPos.z;
         var d = Math.sqrt(dx * dx + dz * dz);
-        return d <= 22;
+        return d <= OVERHEAD_PROXIMITY_UNITS;
     }
 
     function updateEntry(entry, desc, camera, stamp, playerPos, crosshairTargetId) {

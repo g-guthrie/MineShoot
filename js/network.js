@@ -10,6 +10,7 @@
     var SESSION_ME_URL = '/api/me';
     var SESSION_LOGIN_URL = '/api/auth/login';
     var SESSION_LOGOUT_URL = '/api/auth/logout';
+    var WORLD_MANIFEST_URL = '/api/world';
     var WS_URL = '/api/ws';
 
     var AUTH_COOKIE_HELP = 'Username + 4-digit PIN';
@@ -23,6 +24,7 @@
     var user = null;
     var selfId = '';
     var selfState = null;
+    var worldManifest = null;
 
     var inputSeq = 1;
     var inputSendTimer = 0;
@@ -34,20 +36,34 @@
     var hitboxVisible = true;
     var beamScratchA = new THREE.Vector3();
     var beamScratchB = new THREE.Vector3();
-    var REMOTE_EYE_HEIGHT = 1.6;
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var SCHEMA = globalThis.__GAME_SCHEMA__ || {};
+    var COMBAT_PRIM = PRIM.combat || {};
+    var CLASS_PRESETS = COMBAT_PRIM.class_presets || {};
+    var MAX_HP = Number(COMBAT_PRIM.max_hp || 500);
+    var COORDS_PRIM = PRIM.coords || {};
+    var HITBOX_PRIM = PRIM.hitboxes || {};
+    var BODY_HITBOX_OFFSET_Y = Number(COORDS_PRIM.body_hitbox_offset_y || 1.0);
+    var HEAD_HITBOX_OFFSET_Y = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
+    var OVERHEAD_OFFSET_Y = Number(COORDS_PRIM.overhead_bar_offset_y || 2.9);
+    var CORE_OFFSET_Y = Number(COORDS_PRIM.core_anchor_offset_y || 1.0);
+    var MUZZLE_FALLBACK_OFFSET_Y = Number(COORDS_PRIM.muzzle_fallback_offset_y || 1.45);
 
     var REMOTE_BEAM_HOLD_MS = 180;
 
     var notices = [];
 
     function classStats(classId) {
-        var defs = {
-            ninja: { armorMax: 80, wallhackRadius: 90 },
-            jedi: { armorMax: 130, wallhackRadius: 85 },
-            magician: { armorMax: 100, wallhackRadius: 100 },
-            sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-            brawler: { armorMax: 150, wallhackRadius: 75 }
-        };
+        var defs = CLASS_PRESETS;
+        if (!defs || Object.keys(defs).length === 0) {
+            defs = {
+                ninja: { armorMax: 80, wallhackRadius: 90 },
+                jedi: { armorMax: 130, wallhackRadius: 85 },
+                magician: { armorMax: 100, wallhackRadius: 100 },
+                sharpshooter: { armorMax: 90, wallhackRadius: 115 },
+                brawler: { armorMax: 150, wallhackRadius: 75 }
+            };
+        }
         return defs[classId] || defs.sharpshooter;
     }
 
@@ -79,6 +95,18 @@
         return fetch(url, cfg);
     }
 
+    function fetchWorldManifest() {
+        return apiFetch(WORLD_MANIFEST_URL)
+            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+            .then(function (res) {
+                if (!res.body || !res.body.ok || !res.body.world) {
+                    throw new Error((res.body && res.body.error) || 'world_manifest_unavailable');
+                }
+                worldManifest = res.body.world;
+                return worldManifest;
+            });
+    }
+
     function authOverlay() {
         return document.getElementById('auth-overlay');
     }
@@ -91,6 +119,16 @@
     }
 
     function setAuthVisible(visible) {
+        if (window.GameUIShell) {
+            if (visible && window.GameUIShell.showAuthOverlay) {
+                window.GameUIShell.showAuthOverlay();
+                return;
+            }
+            if (!visible && window.GameUIShell.hideAuthOverlay) {
+                window.GameUIShell.hideAuthOverlay();
+                return;
+            }
+        }
         var overlay = authOverlay();
         if (!overlay) return;
         overlay.style.display = visible ? 'flex' : 'none';
@@ -183,49 +221,24 @@
     }
 
     function createRemoteVisual(entity) {
+        if (!window.GameAvatarRig || !window.GameAvatarRig.create) {
+            throw new Error('GameAvatarRig is required for remote entity rendering.');
+        }
         var group = new THREE.Group();
         var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
-        var rigApi = null;
-        if (window.GameAvatarRig && window.GameAvatarRig.create) {
-            rigApi = window.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
-                bodyColor: color,
-                skinColor: 0xd2a77d,
-                legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
-                weaponId: entity.weaponId || 'rifle'
-            });
-            group.add(rigApi.root);
-        } else {
-            var bodyMat = new THREE.MeshLambertMaterial({ color: color });
-            var limbMat = new THREE.MeshLambertMaterial({ color: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d });
-            var skinMat = new THREE.MeshLambertMaterial({ color: 0xd2a77d });
+        var rigApi = window.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
+            bodyColor: color,
+            skinColor: 0xd2a77d,
+            legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
+            weaponId: entity.weaponId || 'rifle'
+        });
+        group.add(rigApi.root);
 
-            var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
-            body.position.y = 1.0;
-            group.add(body);
-
-            var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
-            head.position.y = 1.8;
-            group.add(head);
-
-            var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-            armL.position.set(-0.45, 1.0, 0);
-            group.add(armL);
-
-            var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-            armR.position.set(0.45, 1.0, 0);
-            group.add(armR);
-
-            var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-            legL.position.set(-0.18, 0.45, 0);
-            group.add(legL);
-
-            var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-            legR.position.set(0.18, 0.45, 0);
-            group.add(legR);
-        }
+        var bodySize = (HITBOX_PRIM.body && HITBOX_PRIM.body.size) || [2.7, 2.0, 2.7];
+        var headSize = (HITBOX_PRIM.head && HITBOX_PRIM.head.size) || [1.55, 0.95, 1.55];
 
         var bodyHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(2.7, 2.0, 2.7),
+            new THREE.BoxGeometry(bodySize[0], bodySize[1], bodySize[2]),
             new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: hitboxVisible ? 0.3 : 0,
@@ -243,7 +256,7 @@
         sceneRef.add(bodyHitbox);
 
         var headHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(1.55, 0.95, 1.55),
+            new THREE.BoxGeometry(headSize[0], headSize[1], headSize[2]),
             new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: hitboxVisible ? 0.3 : 0,
@@ -262,7 +275,7 @@
 
         group.position.set(
             entity.x,
-            ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+            (typeof entity.feetY === 'number' ? entity.feetY : 0),
             entity.z
         );
         group.rotation.y = (entity.yaw || 0) + Math.PI;
@@ -294,8 +307,7 @@
             headHitbox: headHitbox,
             rigApi: rigApi,
             targetX: entity.x,
-            targetY: entity.y || 1.6,
-            targetFootY: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+            targetFeetY: (typeof entity.feetY === 'number' ? entity.feetY : 0),
             targetZ: entity.z,
             targetYaw: (entity.yaw || 0) + Math.PI,
             targetPitch: entity.pitch || 0,
@@ -309,6 +321,10 @@
             wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
+            animState: entity.animState || 'idle',
+            animPhase: (typeof entity.animPhase === 'number') ? entity.animPhase : 0,
+            gripMode: entity.gripMode || 'two_hand',
+            aimPitch: (typeof entity.aimPitch === 'number') ? entity.aimPitch : (entity.pitch || 0),
             weaponId: entity.weaponId || 'rifle',
             beamTargetId: entity.beamTargetId || '',
             beamActiveUntil: entity.beamActiveUntil || 0,
@@ -353,8 +369,7 @@
 
         var r = ensureRemote(entity);
         r.targetX = entity.x;
-        r.targetY = entity.y || 1.6;
-        r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
+        r.targetFeetY = (typeof entity.feetY === 'number' ? entity.feetY : 0);
         r.targetZ = entity.z;
         r.targetYaw = (entity.yaw || 0) + Math.PI;
         r.targetPitch = entity.pitch || 0;
@@ -368,6 +383,10 @@
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
+        r.animState = entity.animState || 'idle';
+        r.animPhase = (typeof entity.animPhase === 'number') ? entity.animPhase : 0;
+        r.gripMode = entity.gripMode || 'two_hand';
+        r.aimPitch = (typeof entity.aimPitch === 'number') ? entity.aimPitch : (entity.pitch || 0);
         r.weaponId = entity.weaponId || 'rifle';
         r.beamTargetId = entity.beamTargetId || '';
         r.beamActiveUntil = entity.beamActiveUntil || 0;
@@ -415,6 +434,15 @@
         }
 
         if (msg.t === 'snapshot') {
+            if (SCHEMA.validateServerSnapshot) {
+                var validated = SCHEMA.validateServerSnapshot(msg);
+                if (!validated.ok) {
+                    pushNotice('Invalid snapshot dropped (' + validated.errors[0] + ')');
+                    return;
+                }
+                applySnapshot(validated.value.entities || []);
+                return;
+            }
             applySnapshot(msg.entities || []);
             return;
         }
@@ -484,6 +512,13 @@
     }
 
     function wsSend(msg) {
+        if (msg && msg.t === 'input' && SCHEMA.validateClientInput) {
+            var checked = SCHEMA.validateClientInput(msg);
+            if (!checked.ok) {
+                if (window.__DEV__) console.warn('[net] invalid input payload:', checked.errors);
+                return false;
+            }
+        }
         if (!ws || ws.readyState !== WebSocket.OPEN) return false;
         ws.send(JSON.stringify(msg));
         return true;
@@ -502,7 +537,7 @@
             return render.rigApi.getCoreWorldPosition(out);
         }
         out.copy(render.group.position);
-        out.y += 1.0;
+        out.y += CORE_OFFSET_Y;
         return out;
     }
 
@@ -513,7 +548,7 @@
             return render.rigApi.getMuzzleWorldPosition(out);
         }
         out.copy(render.group.position);
-        out.y += 1.45;
+        out.y += MUZZLE_FALLBACK_OFFSET_Y;
         return out;
     }
 
@@ -521,10 +556,10 @@
         if (!targetId) return null;
         var out = outVec3 || new THREE.Vector3();
 
-        if (targetId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
-            var selfPos = window.GamePlayer.getPosition();
+        if (targetId === selfId && window.GamePlayer && window.GamePlayer.getFeetPosition) {
+            var selfPos = window.GamePlayer.getFeetPosition();
             out.copy(selfPos);
-            out.y -= 0.6;
+            out.y += CORE_OFFSET_Y;
             return out;
         }
 
@@ -573,6 +608,14 @@
         return user;
     };
 
+    GameNet.fetchWorldManifest = function () {
+        return fetchWorldManifest();
+    };
+
+    GameNet.getWorldManifest = function () {
+        return worldManifest;
+    };
+
     GameNet.init = function (scene) {
         sceneRef = scene;
         active = true;
@@ -596,6 +639,7 @@
         snapshotMap.clear();
         selfState = null;
         selfId = '';
+        worldManifest = null;
     };
 
     GameNet.isActive = function () {
@@ -633,7 +677,7 @@
                 armorMax: r.armorMax,
                 alive: r.alive,
                 worldPos: r.group.position,
-                headY: 2.9,
+                headY: OVERHEAD_OFFSET_Y,
                 targetId: 'net:' + r.id
             });
         });
@@ -645,8 +689,8 @@
             var defaults = classStats(user.classId || 'sharpshooter');
             return {
                 id: user.id,
-                hp: 500,
-                hpMax: 500,
+                hp: MAX_HP,
+                hpMax: MAX_HP,
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
                 classId: user.classId || 'sharpshooter',
@@ -665,22 +709,29 @@
         if (inputSendTimer <= 0) {
             inputSendTimer = INPUT_SEND_INTERVAL;
             if (playerPos && rotation) {
+                var feetPos = (window.GamePlayer && window.GamePlayer.getFeetPosition)
+                    ? window.GamePlayer.getFeetPosition()
+                    : playerPos;
                 var anim = (window.GamePlayer && window.GamePlayer.getAnimNetState)
                     ? window.GamePlayer.getAnimNetState()
                     : null;
                 wsSend({
                     t: 'input',
                     seq: inputSeq++,
-                    x: playerPos.x,
-                    y: playerPos.y,
-                    z: playerPos.z,
+                    x: feetPos.x,
+                    feetY: feetPos.y,
+                    z: feetPos.z,
                     yaw: rotation.yaw || 0,
                     pitch: rotation.pitch || 0,
                     sprint: !!(anim && anim.sprinting),
                     jump: false,
                     weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
                     moveSpeedNorm: anim && typeof anim.moveSpeedNorm === 'number' ? anim.moveSpeedNorm : 0,
-                    sprinting: !!(anim && anim.sprinting)
+                    sprinting: !!(anim && anim.sprinting),
+                    animState: anim && anim.animState ? anim.animState : 'idle',
+                    animPhase: anim && typeof anim.animPhase === 'number' ? anim.animPhase : 0,
+                    gripMode: anim && anim.gripMode ? anim.gripMode : 'two_hand',
+                    aimPitch: anim && typeof anim.aimPitch === 'number' ? anim.aimPitch : (rotation.pitch || 0)
                 });
             }
         }
@@ -688,7 +739,7 @@
         renderMap.forEach(function (r) {
             var lerp = Math.min(1, dt * 10);
             r.group.position.x += (r.targetX - r.group.position.x) * lerp;
-            r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
+            r.group.position.y += ((r.targetFeetY || 0) - r.group.position.y) * lerp;
             r.group.position.z += (r.targetZ - r.group.position.z) * lerp;
 
             var deltaYaw = normalizeAngle(r.targetYaw - r.group.rotation.y);
@@ -696,12 +747,33 @@
 
             if (r.rigApi) {
                 r.rigApi.setWeapon(r.weaponId || 'rifle');
-                r.rigApi.updateAimPitch(r.targetPitch || 0);
-                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
+                if (r.rigApi.setMotionState) {
+                    r.rigApi.setMotionState({
+                        speedNorm: r.moveSpeedNorm || 0,
+                        sprinting: !!r.sprinting,
+                        grounded: (r.animState !== 'airborne'),
+                        strafing: (r.animState === 'strafe'),
+                        animState: r.animState || 'idle'
+                    });
+                }
+                if (r.rigApi.setActionState) {
+                    r.rigApi.setActionState({
+                        aiming: true,
+                        firing: false
+                    });
+                }
+                if (r.rigApi.updateAimPitch) {
+                    r.rigApi.updateAimPitch((typeof r.aimPitch === 'number') ? r.aimPitch : (r.targetPitch || 0));
+                }
+                if (r.rigApi.updatePose) {
+                    r.rigApi.updatePose(dt, r.animPhase || 0);
+                } else if (r.rigApi.updateLocomotion) {
+                    r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
+                }
             }
 
-            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 1.0, r.group.position.z);
-            r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.475, r.group.position.z);
+            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + BODY_HITBOX_OFFSET_Y, r.group.position.z);
+            r.headHitbox.position.set(r.group.position.x, r.group.position.y + HEAD_HITBOX_OFFSET_Y, r.group.position.z);
 
             if (r.beamLine) {
                 var beamActive = !!r.alive && r.beamTargetId && (r.beamActiveUntil || 0) > Date.now();
@@ -768,8 +840,26 @@
                 ownerType: 'net',
                 worldPos: worldPos,
                 hitbox: r.bodyHitbox || null,
+                hitboxes: [r.bodyHitbox, r.headHitbox],
                 alive: true,
                 netEntityId: r.id
+            });
+        });
+        return out;
+    };
+
+    GameNet.getWallhackDescriptors = function () {
+        var out = [];
+        renderMap.forEach(function (r) {
+            out.push({
+                id: 'net:' + r.id,
+                alive: !!r.alive,
+                worldPos: r.group ? r.group.position : null,
+                headOffsetY: HEAD_HITBOX_OFFSET_Y,
+                visualRoot: (r.rigApi && r.rigApi.root) ? r.rigApi.root : r.group,
+                revealGhost: null,
+                attachParent: r.group || null,
+                kind: r.kind || 'player'
             });
         });
         return out;

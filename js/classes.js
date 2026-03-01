@@ -7,7 +7,18 @@
 
     var GameClasses = {};
 
-    var CLASS_ORDER = ['ninja', 'jedi', 'magician', 'sharpshooter', 'brawler'];
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COMBAT_PRIM = PRIM.combat || {};
+    var COORDS_PRIM = PRIM.coords || {};
+    var CLASS_PRESETS = COMBAT_PRIM.class_presets || {};
+    var HEAD_TARGET_OFFSET_Y = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
+    var CLASS_ORDER = (COMBAT_PRIM.class_order || ['ninja', 'jedi', 'magician', 'sharpshooter', 'brawler']).slice();
+    var NINJA_PRESET = CLASS_PRESETS.ninja || { armorMax: 80, wallhackRadius: 90 };
+    var JEDI_PRESET = CLASS_PRESETS.jedi || { armorMax: 130, wallhackRadius: 85 };
+    var MAGICIAN_PRESET = CLASS_PRESETS.magician || { armorMax: 100, wallhackRadius: 100 };
+    var SHARPSHOOTER_PRESET = CLASS_PRESETS.sharpshooter || { armorMax: 90, wallhackRadius: 115 };
+    var BRAWLER_PRESET = CLASS_PRESETS.brawler || { armorMax: 150, wallhackRadius: 75 };
+
     var CLASS_DEFS = {
         ninja: {
             id: 'ninja',
@@ -17,8 +28,8 @@
             abilityCooldown: 6.0,
             ultimateCooldown: 20.0,
             loadoutWeapon: 'pistol',
-            armorMax: 80,
-            wallhackRadius: 90
+            armorMax: NINJA_PRESET.armorMax,
+            wallhackRadius: NINJA_PRESET.wallhackRadius
         },
         jedi: {
             id: 'jedi',
@@ -28,8 +39,8 @@
             abilityCooldown: 8.0,
             ultimateCooldown: 18.0,
             loadoutWeapon: 'shotgun',
-            armorMax: 130,
-            wallhackRadius: 85
+            armorMax: JEDI_PRESET.armorMax,
+            wallhackRadius: JEDI_PRESET.wallhackRadius
         },
         magician: {
             id: 'magician',
@@ -39,8 +50,8 @@
             abilityCooldown: 7.0,
             ultimateCooldown: 20.0,
             loadoutWeapon: 'rifle',
-            armorMax: 100,
-            wallhackRadius: 100
+            armorMax: MAGICIAN_PRESET.armorMax,
+            wallhackRadius: MAGICIAN_PRESET.wallhackRadius
         },
         sharpshooter: {
             id: 'sharpshooter',
@@ -50,8 +61,8 @@
             abilityCooldown: 8.0,
             ultimateCooldown: 22.0,
             loadoutWeapon: 'sniper',
-            armorMax: 90,
-            wallhackRadius: 115
+            armorMax: SHARPSHOOTER_PRESET.armorMax,
+            wallhackRadius: SHARPSHOOTER_PRESET.wallhackRadius
         },
         brawler: {
             id: 'brawler',
@@ -61,8 +72,8 @@
             abilityCooldown: 5.0,
             ultimateCooldown: 20.0,
             loadoutWeapon: 'machinegun',
-            armorMax: 150,
-            wallhackRadius: 75
+            armorMax: BRAWLER_PRESET.armorMax,
+            wallhackRadius: BRAWLER_PRESET.wallhackRadius
         }
     };
 
@@ -207,7 +218,7 @@
 
         camera.getWorldDirection(tmpForward);
         tmpTarget.copy(enemy.group.position);
-        tmpTarget.y += 2.2;
+        tmpTarget.y += HEAD_TARGET_OFFSET_Y;
 
         tmpTo.copy(tmpTarget).sub(camera.position);
         var dist = tmpTo.length();
@@ -525,6 +536,9 @@
             var id = CLASS_ORDER[i];
             var def = CLASS_DEFS[id];
             if (!def) continue;
+            var entitlement = (window.GameRules && window.GameRules.getClassEntitlement)
+                ? window.GameRules.getClassEntitlement(def.id)
+                : null;
             out.push({
                 id: def.id,
                 name: def.name,
@@ -533,6 +547,9 @@
                 abilityCooldown: def.abilityCooldown,
                 ultimateCooldown: def.ultimateCooldown,
                 loadoutWeapon: def.loadoutWeapon,
+                defaultWeapon: entitlement ? entitlement.defaultWeapon : def.loadoutWeapon,
+                recommendedLoadout: entitlement ? entitlement.recommendedLoadout : [def.loadoutWeapon],
+                spellKitPlaceholders: entitlement ? entitlement.spellKitPlaceholders : [],
                 armorMax: def.armorMax,
                 wallhackRadius: def.wallhackRadius
             });
@@ -542,12 +559,18 @@
 
     GameClasses.getCurrentClass = function () {
         var def = getClassDef();
+        var entitlement = (window.GameRules && window.GameRules.getClassEntitlement)
+            ? window.GameRules.getClassEntitlement(def.id)
+            : null;
         return {
             id: def.id,
             name: def.name,
             abilityName: def.abilityName,
             ultimateName: def.ultimateName,
             loadoutWeapon: def.loadoutWeapon,
+            defaultWeapon: entitlement ? entitlement.defaultWeapon : def.loadoutWeapon,
+            recommendedLoadout: entitlement ? entitlement.recommendedLoadout : [def.loadoutWeapon],
+            spellKitPlaceholders: entitlement ? entitlement.spellKitPlaceholders : [],
             armorMax: def.armorMax,
             wallhackRadius: def.wallhackRadius
         };

@@ -199,7 +199,7 @@
             '',
             'Combat',
             '  LMB: Fire',
-            '  1-5 / Wheel: Weapon swap',
+            '  1-5 + T / Wheel: Weapon swap',
             '  G Frag | V Seeker | B Molotov | Q Knife',
             '  E: Class ability   R: Class ultimate',
             '',
@@ -239,10 +239,14 @@
         lines.push('+----------------------------------------------------------+');
         lines.push('CLASS       : ' + String(c.name || '').toUpperCase());
         lines.push('KEY         : ' + classKeyLabel(c.id));
-        lines.push('LOADOUT     : ' + String(c.loadoutWeapon || '--').toUpperCase());
+        lines.push('DEFAULT WPN : ' + String(c.defaultWeapon || c.loadoutWeapon || '--').toUpperCase());
+        lines.push('RECOMMENDED : ' + ((c.recommendedLoadout && c.recommendedLoadout.length) ? c.recommendedLoadout.join(', ').toUpperCase() : '--'));
         lines.push('ARMOR MAX   : ' + fNum(c.armorMax));
         lines.push('WALLHACK R  : ' + fNum(c.wallhackRadius));
         lines.push('ROLE        : ' + (CLASS_ROLE[c.id] || 'Generalist combat package.'));
+        if (c.spellKitPlaceholders && c.spellKitPlaceholders.length) {
+            lines.push('SPELL KIT   : ' + c.spellKitPlaceholders.join(', ').toUpperCase());
+        }
         lines.push('');
         lines.push('PRIMARY (E) : ' + (c.abilityName || '--'));
         lines.push('COOLDOWN    : ' + fSec(c.abilityCooldown));

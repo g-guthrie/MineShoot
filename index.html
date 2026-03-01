@@ -225,7 +225,7 @@
 
         #loadout-panel {
             margin-top: 6px;
-            width: min(90vw, 540px);
+            width: min(92vw, 720px);
             border: 1px solid #417548;
             background: rgba(10, 24, 11, 0.82);
             color: #d8f6dd;
@@ -240,34 +240,59 @@
             color: #b8efc2;
         }
 
-        #loadout-slots {
+        #loadout-columns {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 6px 8px;
+            gap: 10px;
             margin-bottom: 8px;
         }
 
-        .loadout-slot-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .loadout-column {
+            border: 1px solid #345d39;
+            border-radius: 4px;
+            background: rgba(10, 20, 11, 0.74);
+            padding: 8px;
+        }
+
+        .loadout-column-title {
             font-size: 12px;
-            color: #d1f3d6;
+            margin-bottom: 7px;
+            color: #a8efb4;
+            letter-spacing: 0.4px;
         }
 
-        .loadout-slot-row label {
-            width: 58px;
-            flex: 0 0 58px;
+        #loadout-weapon-buttons,
+        #loadout-class-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
         }
 
-        .loadout-slot-row select {
-            flex: 1 1 auto;
+        .loadout-choice-btn {
             border: 1px solid #5b8e63;
             background: rgba(12, 28, 13, 0.95);
             color: #d9fadc;
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            padding: 5px 6px;
+            padding: 7px 8px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .loadout-choice-btn:hover {
+            background: rgba(18, 40, 20, 0.95);
+        }
+
+        .loadout-choice-btn.active {
+            border-color: #84d897;
+            background: rgba(29, 70, 36, 0.96);
+            color: #f2fff2;
+        }
+
+        .loadout-choice-btn.pending {
+            border-color: #9ec4ff;
+            background: rgba(26, 44, 70, 0.95);
+            color: #e8f2ff;
         }
 
         #loadout-plasma-toggle {
@@ -900,6 +925,10 @@
         }
 
         @media (max-width: 840px) {
+            #loadout-columns {
+                grid-template-columns: 1fr;
+            }
+
             #docs-main {
                 grid-template-columns: 1fr;
             }
@@ -949,12 +978,21 @@
         <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
         <div id="loadout-panel">
             <div class="loadout-title">PAUSE LOADOUT CONFIG</div>
-            <div id="loadout-slots"></div>
+            <div id="loadout-columns">
+                <div class="loadout-column">
+                    <div class="loadout-column-title">WEAPON SELECT (APPLY ON RESUME)</div>
+                    <div id="loadout-weapon-buttons"></div>
+                </div>
+                <div class="loadout-column">
+                    <div class="loadout-column-title">CLASS QUEUE (APPLIES ON RESPAWN)</div>
+                    <div id="loadout-class-buttons"></div>
+                </div>
+            </div>
             <div>
                 <button id="loadout-plasma-toggle" type="button">PLASMA: ON</button>
-                <button id="loadout-apply" type="button">APPLY LOADOUT</button>
+                <button id="loadout-apply" type="button">APPLY SLOT ORDER</button>
             </div>
-            <div id="loadout-note">Weapons: keys 1-5 + T for slot 6. Class keys remain 6-0.</div>
+            <div id="loadout-note">Weapons: keys 1-5 + T for slot 6. Class queue keys: 6-0.</div>
         </div>
         <div class="controls">
             WASD - Move | Mouse - Look<br>
@@ -963,7 +1001,7 @@
             6 Ninja | 7 Jedi | 8 Magician | 9 Sharpshooter | 0 Brawler<br>
             E Ability | R Ultimate<br>
             G Frag | V Seeker | B Molotov | Q Knife<br>
-            1-5 / Mouse Wheel - Switch Weapon<br>
+            1-5 + T / Mouse Wheel - Switch Weapon<br>
             H - Toggle Hitbox Debug | I - Toggle Manual
         </div>
     </div>
@@ -1009,14 +1047,20 @@
 
     <!-- Scripts: load order matters -->
     <script src="js/vendor/three.min.js"></script>
+    <script src="shared/game-primitives.js"></script>
+    <script src="shared/game-schema.js"></script>
     <script src="js/world.js"></script>
     <script src="js/avatar-rig.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/ui-shell.js"></script>
+    <script src="js/wallhack.js"></script>
     <script src="js/enemy.js"></script>
     <script src="js/hitscan.js"></script>
     <script src="js/throwables.js"></script>
     <script src="js/classes.js"></script>
+    <script src="js/rules.js"></script>
     <script src="js/player.js"></script>
+    <script src="js/loadout.js"></script>
     <script src="js/network.js"></script>
     <script src="js/overhead.js"></script>
     <script src="js/docs.js"></script>

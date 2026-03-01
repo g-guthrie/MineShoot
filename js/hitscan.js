@@ -10,8 +10,20 @@
     var raycaster = new THREE.Raycaster();
     var losRaycaster = new THREE.Raycaster();
     var screenPoint = new THREE.Vector2(0, 0);
+    var tmpProjected = new THREE.Vector3();
+    var tmpWorld = new THREE.Vector3();
     var plasmaForward = new THREE.Vector3();
     var plasmaMuzzle = new THREE.Vector3();
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COMBAT_PRIM = PRIM.combat || {};
+    var WEAPON_PRIM = COMBAT_PRIM.weapon_stats || {};
+    var PLASMA_PRIM = COMBAT_PRIM.plasma || {};
+
+    function weaponNum(id, key, fallback) {
+        var w = WEAPON_PRIM[id] || {};
+        var v = w[key];
+        return (typeof v === 'number' && isFinite(v)) ? v : fallback;
+    }
 
     // Y is positive-down for UI layout consistency.
     var SHOTGUN_PATTERN = [
@@ -30,78 +42,78 @@
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
 
-    var PLASMA_RANGE = 24;
-    var PLASMA_DAMAGE = 15;
-    var PLASMA_TICK_INTERVAL = 0.1;
-    var PLASMA_MAX_SUSTAIN = 2.5;
-    var PLASMA_OVERHEAT_LOCKOUT = 1.6;
+    var PLASMA_RANGE = weaponNum('plasma', 'max_range', 24);
+    var PLASMA_DAMAGE = weaponNum('plasma', 'body_damage', 15);
+    var PLASMA_TICK_INTERVAL = 1 / Math.max(1, Number(PLASMA_PRIM.tick_hz || 10));
+    var PLASMA_MAX_SUSTAIN = Number(PLASMA_PRIM.max_sustain_ms || 2500) / 1000;
+    var PLASMA_OVERHEAT_LOCKOUT = Number(PLASMA_PRIM.overheat_ms || 1600) / 1000;
 
     for (var i = 0; i < SHOTGUN_PATTERN.length; i++) {
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
     }
 
-    var weaponOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
+    var weaponOrder = (COMBAT_PRIM.weapon_order || ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma']).slice();
     var weapons = {
         rifle: {
             id: 'rifle',
             name: 'Rifle',
             automatic: false,
-            cooldown: 190,
-            bodyDamage: 36,
-            headDamage: 68,
+            cooldown: weaponNum('rifle', 'cooldown_ms', 190),
+            bodyDamage: weaponNum('rifle', 'body_damage', 36),
+            headDamage: weaponNum('rifle', 'head_damage', 68),
             pellets: 1,
             spreadNdc: 0.0018,
-            maxRange: 120
+            maxRange: weaponNum('rifle', 'max_range', 120)
         },
         pistol: {
             id: 'pistol',
             name: 'Pistol',
             automatic: false,
-            cooldown: 280,
-            bodyDamage: 30,
-            headDamage: 56,
+            cooldown: weaponNum('pistol', 'cooldown_ms', 280),
+            bodyDamage: weaponNum('pistol', 'body_damage', 30),
+            headDamage: weaponNum('pistol', 'head_damage', 56),
             pellets: 1,
             spreadNdc: 0.0032,
-            maxRange: 92
+            maxRange: weaponNum('pistol', 'max_range', 92)
         },
         machinegun: {
             id: 'machinegun',
             name: 'Machine Gun',
             automatic: true,
-            cooldown: 80,
-            bodyDamage: 16,
-            headDamage: 30,
+            cooldown: weaponNum('machinegun', 'cooldown_ms', 80),
+            bodyDamage: weaponNum('machinegun', 'body_damage', 16),
+            headDamage: weaponNum('machinegun', 'head_damage', 30),
             pellets: 1,
             spreadNdc: 0.0078,
-            maxRange: 88
+            maxRange: weaponNum('machinegun', 'max_range', 88)
         },
         shotgun: {
             id: 'shotgun',
             name: 'Shotgun',
             automatic: false,
-            cooldown: 820,
-            bodyDamage: 14,
-            headDamage: 22,
-            pellets: 12,
+            cooldown: weaponNum('shotgun', 'cooldown_ms', 820),
+            bodyDamage: weaponNum('shotgun', 'body_damage', 14),
+            headDamage: weaponNum('shotgun', 'head_damage', 22),
+            pellets: weaponNum('shotgun', 'pellets', 12),
             spreadNdc: 0,
-            maxRange: 42
+            maxRange: weaponNum('shotgun', 'max_range', 42)
         },
         sniper: {
             id: 'sniper',
             name: 'Sniper',
             automatic: false,
-            cooldown: 1250,
-            bodyDamage: 120,
-            headDamage: 220,
+            cooldown: weaponNum('sniper', 'cooldown_ms', 1250),
+            bodyDamage: weaponNum('sniper', 'body_damage', 120),
+            headDamage: weaponNum('sniper', 'head_damage', 220),
             pellets: 1,
             spreadNdc: 0.00035,
-            maxRange: 190
+            maxRange: weaponNum('sniper', 'max_range', 190)
         },
         plasma: {
             id: 'plasma',
             name: 'Plasma Cannon',
             automatic: true,
-            cooldown: 100,
+            cooldown: weaponNum('plasma', 'cooldown_ms', 100),
             bodyDamage: PLASMA_DAMAGE,
             headDamage: PLASMA_DAMAGE,
             pellets: 1,
@@ -119,6 +131,10 @@
         overheatedUntil: 0,
         active: false,
         targetId: '',
+        lockReason: 'searching',
+        overlapArea: 0,
+        candidateCount: 0,
+        overlapCount: 0,
         beamStart: new THREE.Vector3(),
         beamEnd: new THREE.Vector3()
     };
@@ -257,33 +273,180 @@
         return losRaycaster.intersectObjects(worldMeshes, false).length === 0;
     }
 
+    function getRectOverlapArea(a, b) {
+        var x0 = Math.max(a.minX, b.minX);
+        var x1 = Math.min(a.maxX, b.maxX);
+        var y0 = Math.max(a.minY, b.minY);
+        var y1 = Math.min(a.maxY, b.maxY);
+        if (x1 <= x0 || y1 <= y0) return 0;
+        return (x1 - x0) * (y1 - y0);
+    }
+
+    function objectToNdcRect(camera, object3d) {
+        if (!camera || !object3d || !object3d.geometry) return null;
+        var geo = object3d.geometry;
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        if (!geo.boundingBox) return null;
+
+        object3d.updateMatrixWorld(true);
+        var min = geo.boundingBox.min;
+        var max = geo.boundingBox.max;
+        var corners = [
+            [min.x, min.y, min.z],
+            [min.x, min.y, max.z],
+            [min.x, max.y, min.z],
+            [min.x, max.y, max.z],
+            [max.x, min.y, min.z],
+            [max.x, min.y, max.z],
+            [max.x, max.y, min.z],
+            [max.x, max.y, max.z]
+        ];
+
+        var anyFront = false;
+        var minX = Infinity;
+        var maxX = -Infinity;
+        var minY = Infinity;
+        var maxY = -Infinity;
+
+        for (var i = 0; i < corners.length; i++) {
+            tmpWorld.set(corners[i][0], corners[i][1], corners[i][2]).applyMatrix4(object3d.matrixWorld);
+            tmpProjected.copy(tmpWorld).project(camera);
+            if (tmpProjected.z > 1.2) continue;
+            anyFront = true;
+            if (tmpProjected.x < minX) minX = tmpProjected.x;
+            if (tmpProjected.x > maxX) maxX = tmpProjected.x;
+            if (tmpProjected.y < minY) minY = tmpProjected.y;
+            if (tmpProjected.y > maxY) maxY = tmpProjected.y;
+        }
+
+        if (!anyFront || minX === Infinity || minY === Infinity) return null;
+        return {
+            minX: minX,
+            maxX: maxX,
+            minY: minY,
+            maxY: maxY
+        };
+    }
+
+    function targetOverlapArea(camera, target, reticleRect) {
+        var area = 0;
+        var hitboxes = [];
+        if (target && Array.isArray(target.hitboxes) && target.hitboxes.length > 0) {
+            hitboxes = target.hitboxes;
+        } else if (target && target.hitbox) {
+            hitboxes = [target.hitbox];
+        }
+
+        for (var i = 0; i < hitboxes.length; i++) {
+            var hb = hitboxes[i];
+            if (!hb) continue;
+            var rect = objectToNdcRect(camera, hb);
+            if (!rect) continue;
+            area += getRectOverlapArea(rect, reticleRect);
+        }
+
+        if (area > 0) return area;
+        if (!target || !target.worldPos) return 0;
+
+        tmpProjected.copy(target.worldPos).project(camera);
+        if (tmpProjected.z < -1 || tmpProjected.z > 1) return 0;
+        if (tmpProjected.x < reticleRect.minX || tmpProjected.x > reticleRect.maxX) return 0;
+        if (tmpProjected.y < reticleRect.minY || tmpProjected.y > reticleRect.maxY) return 0;
+        return 0.000001;
+    }
+
     function selectPlasmaTarget(camera, maxRange, boxSizePx) {
         var targets = getLockTargets();
-        if (!targets || targets.length === 0) return null;
+        if (!targets || targets.length === 0) {
+            return { target: null, reason: 'searching', candidateCount: 0, overlapCount: 0, overlapArea: 0 };
+        }
 
         var halfNdcX = (boxSizePx * 0.5) / (window.innerWidth * 0.5);
         var halfNdcY = (boxSizePx * 0.5) / (window.innerHeight * 0.5);
+        var reticleRect = {
+            minX: -halfNdcX,
+            maxX: halfNdcX,
+            minY: -halfNdcY,
+            maxY: halfNdcY
+        };
+
         var best = null;
+        var bestArea = -1;
         var bestDist = Infinity;
+        var candidateCount = 0;
+        var overlapCount = 0;
+        var anyInRangeOverlap = false;
+        var anyOverlapNoLos = false;
 
         for (var i = 0; i < targets.length; i++) {
             var t = targets[i];
             if (!t || t.alive === false || !t.worldPos) continue;
+            candidateCount++;
 
-            var projected = t.worldPos.clone().project(camera);
-            if (projected.z > 1 || projected.z < -1) continue;
-            if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
-            if (!hasLineOfSight(camera, t.worldPos, maxRange)) continue;
+            var overlapArea = targetOverlapArea(camera, t, reticleRect);
+            if (overlapArea <= 0) continue;
+            overlapCount++;
 
             var dist = camera.position.distanceTo(t.worldPos);
-            if (dist > maxRange) continue;
-            if (dist < bestDist) {
+            if (dist > maxRange) {
+                continue;
+            }
+            anyInRangeOverlap = true;
+            if (!hasLineOfSight(camera, t.worldPos, maxRange)) {
+                anyOverlapNoLos = true;
+                continue;
+            }
+
+            if (overlapArea > bestArea || (Math.abs(overlapArea - bestArea) < 1e-8 && dist < bestDist)) {
+                bestArea = overlapArea;
                 bestDist = dist;
                 best = t;
             }
         }
 
-        return best;
+        if (best) {
+            return {
+                target: best,
+                reason: 'locked',
+                candidateCount: candidateCount,
+                overlapCount: overlapCount,
+                overlapArea: bestArea
+            };
+        }
+        if (overlapCount === 0) {
+            return {
+                target: null,
+                reason: 'searching',
+                candidateCount: candidateCount,
+                overlapCount: 0,
+                overlapArea: 0
+            };
+        }
+        if (!anyInRangeOverlap) {
+            return {
+                target: null,
+                reason: 'out_of_range',
+                candidateCount: candidateCount,
+                overlapCount: overlapCount,
+                overlapArea: 0
+            };
+        }
+        if (anyOverlapNoLos) {
+            return {
+                target: null,
+                reason: 'no_los',
+                candidateCount: candidateCount,
+                overlapCount: overlapCount,
+                overlapArea: 0
+            };
+        }
+        return {
+            target: null,
+            reason: 'searching',
+            candidateCount: candidateCount,
+            overlapCount: overlapCount,
+            overlapArea: 0
+        };
     }
 
     function resolvePlasmaMuzzle(camera) {
@@ -550,6 +713,10 @@
         if (weapon.id !== 'plasma' || !camera) {
             plasmaState.active = false;
             plasmaState.targetId = '';
+            plasmaState.lockReason = 'searching';
+            plasmaState.overlapArea = 0;
+            plasmaState.candidateCount = 0;
+            plasmaState.overlapCount = 0;
             coolPlasma(dt, nowSec);
             return GameHitscan.getPlasmaState();
         }
@@ -558,14 +725,22 @@
         if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) {
             plasmaState.active = false;
             plasmaState.targetId = '';
+            plasmaState.lockReason = 'overheated';
+            plasmaState.overlapArea = 0;
             coolPlasma(dt, nowSec);
             return GameHitscan.getPlasmaState();
         }
 
-        var target = selectPlasmaTarget(camera, PLASMA_RANGE, getPlasmaReticleSizePx());
+        var selection = selectPlasmaTarget(camera, PLASMA_RANGE, getPlasmaReticleSizePx());
+        var target = selection.target;
+        plasmaState.candidateCount = selection.candidateCount || 0;
+        plasmaState.overlapCount = selection.overlapCount || 0;
+        plasmaState.overlapArea = selection.overlapArea || 0;
+
         if (triggerHeld && target) {
             plasmaState.active = true;
             plasmaState.targetId = target.targetId || '';
+            plasmaState.lockReason = 'locked';
             resolvePlasmaMuzzle(camera);
             plasmaState.beamStart.copy(plasmaMuzzle);
             plasmaState.beamEnd.copy(target.worldPos);
@@ -585,6 +760,7 @@
         } else {
             plasmaState.active = false;
             plasmaState.targetId = '';
+            plasmaState.lockReason = triggerHeld ? (selection.reason || 'searching') : 'searching';
             plasmaTickTimer = 0;
             coolPlasma(dt, nowSec);
         }
@@ -603,8 +779,24 @@
             overheatedUntil: plasmaState.overheatedUntil,
             active: plasmaState.active,
             targetId: plasmaState.targetId,
+            lockReason: plasmaState.lockReason || 'searching',
+            overlapArea: plasmaState.overlapArea || 0,
+            candidateCount: plasmaState.candidateCount || 0,
+            overlapCount: plasmaState.overlapCount || 0,
             beamStart: plasmaState.beamStart.clone(),
             beamEnd: plasmaState.beamEnd.clone()
+        };
+    };
+
+    GameHitscan.getPlasmaLockDebugState = function () {
+        return {
+            targetId: plasmaState.targetId || '',
+            lockReason: plasmaState.lockReason || 'searching',
+            overlapArea: plasmaState.overlapArea || 0,
+            candidateCount: plasmaState.candidateCount || 0,
+            overlapCount: plasmaState.overlapCount || 0,
+            active: !!plasmaState.active,
+            overheated: !!plasmaState.overheated
         };
     };
 
