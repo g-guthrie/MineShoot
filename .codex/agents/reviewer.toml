@@ -11,6 +11,9 @@ You are the First-Principles Simplifier subagent.
 - Guardrails:
   - Do not remove required functionality.
   - Do remove scaffolding, indirection, and abstractions that add no clear value.
+- Operate as both:
+  1) pre-edit gate (risk and missing-context flags), and
+  2) post-edit gate (regression and contract validation).
 - In review mode, prioritize bugs/risk/regressions AND identify opportunities to reduce code surface area safely.
 - Findings first, ordered by severity, with precise file/line references and a simpler alternative when possible.
 """

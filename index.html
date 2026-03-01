@@ -234,23 +234,31 @@
             overflow: hidden;
         }
 
-        /* Original h1 hidden — replaced by ASCII art */
-        #overlay > h1 { display: none; }
+        #overlay::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 18% 12%, rgba(32, 221, 88, 0.06), transparent 35%),
+                radial-gradient(circle at 84% 78%, rgba(16, 153, 56, 0.07), transparent 42%);
+            z-index: 1;
+        }
 
         .pipboy-frame {
             position: relative;
-            width: min(96vw, 780px);
-            max-height: min(92vh, 680px);
-            border: 3px solid #004225;
+            width: min(96vw, 860px);
+            max-height: min(92vh, 720px);
+            border: 3px solid #065518;
             background: #030e05;
-            box-shadow: 0 0 40px rgba(0, 66, 37, 0.2), inset 0 0 80px rgba(0, 66, 37, 0.04);
+            box-shadow: 0 0 48px rgba(0, 66, 37, 0.26), inset 0 0 80px rgba(0, 66, 37, 0.08);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             z-index: 3;
+            isolation: isolate;
         }
 
-        /* CRT scanlines */
         .pipboy-frame::before {
             content: '';
             position: absolute;
@@ -266,7 +274,6 @@
             z-index: 10;
         }
 
-        /* CRT vignette */
         .pipboy-frame::after {
             content: '';
             position: absolute;
@@ -277,14 +284,69 @@
         }
 
         .pipboy-header {
-            padding: 10px 16px 6px;
+            padding: 10px 14px 8px;
             border-bottom: 1px solid #004225;
-            color: #0a7728;
+            position: relative;
+            z-index: 5;
+        }
+
+        .pipboy-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .pipboy-brand {
+            color: #30ff70;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 9px rgba(48, 255, 112, 0.45);
+        }
+
+        .pipboy-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pipboy-action-btn {
+            border: 1px solid #004225;
+            background: rgba(0, 66, 37, 0.2);
+            color: #20dd58;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            padding: 7px 11px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+            box-shadow: inset 0 0 0 1px rgba(6, 85, 24, 0.4);
+        }
+
+        .pipboy-action-btn:hover {
+            color: #30ff70;
+            background: rgba(0, 66, 37, 0.38);
+            box-shadow: inset 0 0 0 1px rgba(32, 221, 88, 0.45);
+        }
+
+        .pipboy-subline {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 14px;
+            color: #109938;
             font-size: 11px;
             letter-spacing: 1px;
             text-transform: uppercase;
-            position: relative;
-            z-index: 5;
+            border-top: 1px solid #0a3517;
+            padding-top: 7px;
+        }
+
+        .pipboy-subline .val {
+            color: #20dd58;
+            text-shadow: 0 0 5px rgba(32, 221, 88, 0.35);
         }
 
         .pipboy-tabs {
@@ -323,7 +385,7 @@
 
         .pipboy-body {
             flex: 1;
-            overflow-y: auto;
+            overflow-y: hidden;
             overflow-x: hidden;
             padding: 14px 18px;
             position: relative;
@@ -331,7 +393,13 @@
             min-height: 0;
         }
 
-        .pipboy-page { display: none; }
+        .pipboy-page {
+            display: none;
+            height: 100%;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
         .pipboy-page.active { display: block; }
 
         .pipboy-footer {
@@ -347,12 +415,55 @@
         /* ─── PLAY page ─── */
         .pipboy-ascii-title {
             color: #30ff70;
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.15;
             text-shadow: 0 0 10px rgba(48, 255, 112, 0.4);
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             white-space: pre;
             text-align: center;
+        }
+
+        .pipboy-grid {
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .pipboy-pane {
+            border: 1px solid #004225;
+            background: rgba(0, 20, 8, 0.46);
+            padding: 10px 12px;
+            min-height: 210px;
+        }
+
+        .pipboy-pane-tight {
+            min-height: auto;
+        }
+
+        .pipboy-terminal-line {
+            color: #109938;
+            font-size: 12px;
+            line-height: 1.7;
+            letter-spacing: 0.4px;
+        }
+
+        .pipboy-terminal-line .label {
+            color: #0a7728;
+            min-width: 106px;
+            display: inline-block;
+        }
+
+        .pipboy-terminal-line .val {
+            color: #20dd58;
+            text-shadow: 0 0 4px rgba(32, 221, 88, 0.3);
+        }
+
+        .pipboy-note-block {
+            color: #109938;
+            font-size: 11px;
+            line-height: 1.55;
+            white-space: pre-wrap;
         }
 
         .pipboy-status-line {
@@ -369,14 +480,14 @@
 
         .pipboy-play-btn {
             display: block;
-            margin: 18px auto 10px;
-            padding: 10px 40px;
+            margin: 14px auto 8px;
+            padding: 10px 34px;
             border: 2px solid #004225;
             background: rgba(0, 66, 37, 0.2);
             color: #30ff70;
             font-family: 'Courier New', monospace;
-            font-size: 16px;
-            letter-spacing: 4px;
+            font-size: 15px;
+            letter-spacing: 3px;
             text-transform: uppercase;
             cursor: pointer;
             text-shadow: 0 0 8px rgba(48, 255, 112, 0.4);
@@ -538,7 +649,7 @@
         /* ─── CONTROLS page ─── */
         .pipboy-controls-list {
             font-size: 12px;
-            line-height: 1.9;
+            line-height: 1.65;
             color: #18bb48;
         }
 
@@ -546,7 +657,7 @@
             color: #30ff70;
             text-shadow: 0 0 4px rgba(48, 255, 112, 0.3);
             display: inline-block;
-            min-width: 100px;
+            min-width: 118px;
         }
 
         .pipboy-controls-list .desc {
@@ -1187,6 +1298,15 @@
         }
 
         @media (max-width: 840px) {
+            .pipboy-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pipboy-header-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
             #loadout-columns {
                 grid-template-columns: 1fr;
             }
@@ -1224,12 +1344,9 @@
             to   { opacity: 1; transform: translateY(0); }
         }
 
-        #overlay.menu-entering > h1 { animation: menuTitleReveal 0.6s ease-out both; }
-        #overlay.menu-entering > p { animation: menuFadeSlideIn 0.4s ease-out 0.2s both; }
-        #overlay.menu-entering > #play-btn { animation: menuFadeSlideIn 0.4s ease-out 0.35s both; }
-        #overlay.menu-entering > #open-manual-btn { animation: menuFadeSlideIn 0.4s ease-out 0.45s both; }
-        #overlay.menu-entering > #loadout-panel { animation: menuFadeSlideIn 0.5s ease-out 0.55s both; }
-        #overlay.menu-entering > .controls { animation: menuFadeSlideIn 0.4s ease-out 0.7s both; }
+        #overlay.menu-entering .pipboy-frame { animation: menuFadeSlideIn 0.32s ease-out both; }
+        #overlay.menu-entering .pipboy-ascii-title { animation: menuTitleReveal 0.55s ease-out 0.08s both; }
+        #overlay.menu-entering #play-btn { animation: menuFadeSlideIn 0.32s ease-out 0.12s both; }
 
     </style>
 </head>
@@ -1253,37 +1370,108 @@
     <button id="hud-manual-btn" type="button">MANUAL</button>
     <!-- Overlay -->
     <div id="overlay">
-        <h1 data-text="MINECRAFT FPS">MINECRAFT FPS</h1>
-        <p>Click PLAY to Enter Arena</p>
-        <button id="play-btn" type="button">PLAY</button>
-        <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
-        <div id="loadout-panel">
-            <div class="loadout-title">PAUSE LOADOUT CONFIG</div>
-            <div id="loadout-columns">
-                <div class="loadout-column">
-                    <div class="loadout-column-title">WEAPON SELECT (APPLY ON RESUME)</div>
-                    <div id="loadout-weapon-buttons"></div>
+        <div class="pipboy-frame">
+            <div class="pipboy-header">
+                <div class="pipboy-header-row">
+                    <div class="pipboy-brand">PIP-ARENA MKIV :: MINESHOOT TERMINAL</div>
+                    <div class="pipboy-actions">
+                        <button id="open-manual-btn" class="pipboy-action-btn" type="button">OPEN FIELD MANUAL</button>
+                    </div>
                 </div>
-                <div class="loadout-column">
-                    <div class="loadout-column-title">CLASS QUEUE (APPLIES ON RESPAWN)</div>
-                    <div id="loadout-class-buttons"></div>
+                <div class="pipboy-subline">
+                    <span>SYSTEM: <span id="pipboy-runtime-status" class="val">READY</span></span>
+                    <span>SESSION: <span id="pipboy-session-mode" class="val">LOCAL DEV</span></span>
+                    <span>RUNTIME: <span class="val">AUTHORITY PARITY</span></span>
                 </div>
             </div>
-            <div>
-                <button id="loadout-plasma-toggle" type="button">PLASMA: ON</button>
-                <button id="loadout-apply" type="button">APPLY SLOT ORDER</button>
+            <div class="pipboy-tabs" role="tablist" aria-label="Main Menu Tabs">
+                <button class="pipboy-tab active" data-page="play" type="button">PLAY</button>
+                <button class="pipboy-tab" data-page="loadout" type="button">LOADOUT</button>
+                <button class="pipboy-tab" data-page="controls" type="button">CONTROLS</button>
+                <button class="pipboy-tab" data-page="about" type="button">ABOUT</button>
             </div>
-            <div id="loadout-note">Weapons: keys 1-5 + T for slot 6. Class queue keys: 6-0.</div>
-        </div>
-        <div class="controls">
-            WASD - Move | Mouse - Look<br>
-            Space (hold) - Variable Jump | Shift - Sprint | Left Click - Shoot<br>
-            C / Camera Button - Toggle View<br>
-            6 Ninja | 7 Jedi | 8 Magician | 9 Sharpshooter | 0 Brawler<br>
-            E Ability | R Ultimate<br>
-            G Frag | V Seeker | B Molotov | Q Knife<br>
-            1-5 + T / Mouse Wheel - Switch Weapon<br>
-            H - Toggle Hitbox Debug | I - Toggle Manual
+            <div class="pipboy-body">
+                <section class="pipboy-page active" data-page="play">
+                    <pre class="pipboy-ascii-title"> __  __ ___ _   _ _____ ____  _   _  ___   ___ _____
+|  \/  |_ _| \ | | ____/ ___|| | | |/ _ \ / _ \_   _|
+| |\/| || ||  \| |  _| \___ \| |_| | | | | | | || |
+| |  | || || |\  | |___ ___) |  _  | |_| | |_| || |
+|_|  |_|___|_| \_|_____|____/|_| |_|\___/ \___/ |_| </pre>
+                    <div class="pipboy-grid">
+                        <div class="pipboy-pane">
+                            <div class="pipboy-terminal-line"><span class="label">OPERATION:</span> <span class="val">DROP INTO ARENA</span></div>
+                            <div class="pipboy-terminal-line"><span class="label">TARGET:</span> <span class="val">WARMUP COMBAT LOOP</span></div>
+                            <div class="pipboy-terminal-line"><span class="label">BUILD:</span> <span class="val">PIXEL COMBAT ALPHA</span></div>
+                            <div class="pipboy-terminal-line"><span class="label">START KEY:</span> <span class="val">PLAY BUTTON</span></div>
+                            <hr class="pipboy-divider">
+                            <button id="play-btn" class="pipboy-play-btn" type="button">PLAY</button>
+                            <div class="pipboy-note-block">Tip: if browser pointer lock is blocked, runtime auto-falls back to input capture mode and keeps gameplay live.</div>
+                        </div>
+                        <div class="pipboy-pane pipboy-pane-tight">
+                            <div class="pipboy-section-head">MISSION BRIEF</div>
+                            <div class="pipboy-note-block">Fight bots or live players with class-based combat kits.
+Use loadout tab to queue weapons and class swaps.
+Open Field Manual for live formulas and tuning values.</div>
+                            <div class="pipboy-section-head">ACTIVE SYSTEMS</div>
+                            <div class="pipboy-note-block">[OK] Server-authoritative combat path
+[OK] Chunked world contracts
+[OK] Live class and weapon catalogs</div>
+                        </div>
+                    </div>
+                </section>
+                <section class="pipboy-page" data-page="loadout">
+                    <div id="loadout-panel">
+                        <div class="loadout-title">PAUSE LOADOUT CONFIG</div>
+                        <div id="loadout-columns">
+                            <div class="loadout-column">
+                                <div class="loadout-column-title">WEAPON SELECT (APPLY ON RESUME)</div>
+                                <div id="loadout-weapon-buttons"></div>
+                            </div>
+                            <div class="loadout-column">
+                                <div class="loadout-column-title">CLASS QUEUE (APPLIES ON RESPAWN)</div>
+                                <div id="loadout-class-buttons"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <button id="loadout-plasma-toggle" type="button">PLASMA: ON</button>
+                            <button id="loadout-apply" type="button">APPLY SLOT ORDER</button>
+                        </div>
+                        <div id="loadout-note">Weapons: keys 1-5 + T for slot 6. Class queue keys: 6-0.</div>
+                    </div>
+                </section>
+                <section class="pipboy-page" data-page="controls">
+                    <div class="controls pipboy-controls-list">
+                        <div class="pipboy-section-head">MOTION</div>
+                        <div><span class="key">W A S D</span><span class="desc">Move</span></div>
+                        <div><span class="key">SPACE</span><span class="desc">Variable jump (hold for max)</span></div>
+                        <div><span class="key">SHIFT</span><span class="desc">Sprint</span></div>
+                        <div><span class="key">MOUSE</span><span class="desc">Look / aim</span></div>
+                        <div class="pipboy-section-head">COMBAT</div>
+                        <div><span class="key">LMB</span><span class="desc">Fire weapon</span></div>
+                        <div><span class="key">1-5 + T</span><span class="desc">Weapon slots</span></div>
+                        <div><span class="key">6-0</span><span class="desc">Queue class swap</span></div>
+                        <div><span class="key">G / V / B / Q</span><span class="desc">Frag / Seeker / Molotov / Knife</span></div>
+                        <div><span class="key">E / R</span><span class="desc">Class ability / ultimate</span></div>
+                        <div class="pipboy-section-head">SYSTEM</div>
+                        <div><span class="key">C</span><span class="desc">Toggle first/third person</span></div>
+                        <div><span class="key">H</span><span class="desc">Toggle hitbox debug visuals</span></div>
+                        <div><span class="key">I</span><span class="desc">Toggle field manual</span></div>
+                    </div>
+                </section>
+                <section class="pipboy-page" data-page="about">
+                    <div class="pipboy-pane pipboy-pane-tight">
+                        <div class="pipboy-section-head">PIPELINE NOTES</div>
+                        <div class="pipboy-note-block">- This menu is deterministic and id-based to avoid brittle click wiring.
+- Play/start flow is isolated from tab navigation.
+- Manual and runtime controls use explicit state transitions.</div>
+                        <div class="pipboy-section-head">NEXT</div>
+                        <div class="pipboy-note-block">1) Visual polish pass on character weapon-hold rig.
+2) Scene composition and biome readability polish.
+3) Multiplayer scale validation and performance tuning.</div>
+                    </div>
+                </section>
+            </div>
+            <div id="pipboy-footer-hint" class="pipboy-footer">TABS: PLAY / LOADOUT / CONTROLS / ABOUT   |   ESC to release capture</div>
         </div>
     </div>
 
@@ -1332,6 +1520,7 @@
     <script src="shared/world-layout.js"></script>
     <script src="shared/game-schema.js"></script>
     <script src="shared/aim-parity.js"></script>
+    <script src="shared/beam-lock.js"></script>
     <script src="js/world.js"></script>
     <script src="js/avatar-rig.js"></script>
     <script src="js/ui.js"></script>

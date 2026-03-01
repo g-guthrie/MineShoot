@@ -2,15 +2,19 @@
 multi_agent = true
 
 [agents]
-max_threads = 8
+max_threads = 10
 max_depth = 2
 
+[agents.quarterback]
+description = "Primary orchestrator that enforces explorer-first fan-out, gated nested discovery, and strict writer ownership."
+config_file = "agents/quarterback.toml"
+
 [agents.explorer]
-description = "Context-first investigator: aggressively gathers cross-file context before recommendations."
+description = "Parallel context explorer that maps impacted files, dependencies, and unresolved unknowns."
 config_file = "agents/explorer.toml"
 
 [agents.reviewer]
-description = "First-principles simplifier: questions requirements, removes unnecessary complexity, and enforces concise correctness."
+description = "Read-only risk reviewer used as pre-edit and post-edit quality gate."
 config_file = "agents/reviewer.toml"
 
 [agents.balance_designer]
@@ -18,19 +22,19 @@ description = "Big-picture gameplay architect: validates practical player experi
 config_file = "agents/balance-designer.toml"
 
 [agents.worker]
-description = "Implementation agent that merges context, big-picture intent, and simplification before coding."
+description = "Integrator writer for cross-domain hot files and conflict resolution."
 config_file = "agents/worker.toml"
 
 [agents.worker_visual]
-description = "Implementation agent focused on visual/animation systems while preserving gameplay/network parity."
+description = "Specialized writer for visual, UI, and animation files."
 config_file = "agents/worker-visual.toml"
 
 [agents.worker_authority]
-description = "Implementation agent focused on server authority, net contracts, and combat parity."
+description = "Specialized writer for authority, networking, and shared schema contracts."
 config_file = "agents/worker-authority.toml"
 
 [agents.worker_world]
-description = "Implementation agent focused on world/chunk streaming, collision, and runtime performance."
+description = "Specialized writer for world/runtime systems and frame-time stability."
 config_file = "agents/worker-world.toml"
 
 [agents.monitor]
