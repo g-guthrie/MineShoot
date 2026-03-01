@@ -6,6 +6,8 @@
     'use strict';
 
     var GameLoadout = {};
+    var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COMBAT_PRIM = PRIM.combat || {};
     var slots = [];
     var initialized = false;
     var pendingWeaponId = '';
@@ -18,7 +20,7 @@
         if (window.GameHitscan && window.GameHitscan.getAllWeaponIds) {
             return window.GameHitscan.getAllWeaponIds();
         }
-        return ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
+        return (COMBAT_PRIM.weapon_order || ['rifle']).slice();
     }
 
     function getCurrentClassId() {

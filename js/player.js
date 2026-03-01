@@ -11,6 +11,7 @@
     var yaw = 0;
     var pitch = 0;
     var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var COMBAT_PRIM = PRIM.combat || {};
     var COORDS_PRIM = PRIM.coords || {};
     var ENTITY_PRIM = PRIM.entity || {};
     var WORLD_PRIM = PRIM.world || {};
@@ -84,9 +85,13 @@
     var isMoving = false;
     var sprinting = false;
     var lastMoveSpeedNorm = 0;
-    var loadoutSlots = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
+    var loadoutSlots = (COMBAT_PRIM.weapon_order || ['rifle']).slice();
 
     function hasInputCapture() {
+        if (window.GameRuntime && window.GameRuntime.getState) {
+            var runtimeState = window.GameRuntime.getState();
+            return !!(runtimeState.pointerLocked || runtimeState.fallbackInput);
+        }
         if (window.GameUIShell && window.GameUIShell.hasCapture) {
             return window.GameUIShell.hasCapture();
         }
@@ -94,6 +99,9 @@
     }
 
     function canAcceptGameplayInput() {
+        if (window.GameRuntime && window.GameRuntime.canAcceptGameplayInput) {
+            return window.GameRuntime.canAcceptGameplayInput();
+        }
         if (window.GameUIShell && window.GameUIShell.canAcceptGameplayInput) {
             return window.GameUIShell.canAcceptGameplayInput();
         }
@@ -458,6 +466,7 @@
     function setupInput() {
         document.addEventListener('keydown', function (e) {
             if (shouldIgnoreKeyboardEvent(e)) return;
+            if (!canAcceptGameplayInput()) return;
             switch (e.code) {
                 case 'KeyW': keys.forward = true; break;
                 case 'KeyA': keys.left = true; break;
@@ -475,7 +484,6 @@
         });
 
         document.addEventListener('keyup', function (e) {
-            if (shouldIgnoreKeyboardEvent(e)) return;
             switch (e.code) {
                 case 'KeyW': keys.forward = false; break;
                 case 'KeyA': keys.left = false; break;
@@ -635,7 +643,17 @@
 
     GamePlayer.update = function (dt) {
         if (!camera) return;
-        if (!canAcceptGameplayInput()) return;
+        if (!canAcceptGameplayInput()) {
+            clearMovementKeys();
+            jumpPressedLastFrame = false;
+            lastMoveSpeedNorm = 0;
+            isMoving = false;
+            sprinting = false;
+            updateAvatarPose();
+            updateAvatarAnimation(dt, 0);
+            updateCameraFromPlayer(dt);
+            return;
+        }
 
         var jumpJustPressed = keys.jump && !jumpPressedLastFrame;
         var jumpJustReleased = !keys.jump && jumpPressedLastFrame;
@@ -979,48 +997,26 @@
             var defaultSpawn = getDefaultSpawnPoint();
             return new THREE.Vector2(defaultSpawn.x, defaultSpawn.z);
         }
-
-        var bounds = getWorldBounds();
-        var spawnPadding = (window.GameWorld && window.GameWorld.getSpawnPadding)
-            ? window.GameWorld.getSpawnPadding()
-            : 4;
-        var min = bounds.min + spawnPadding;
-        var max = bounds.max - spawnPadding;
-
-        if (window.GameWorld && window.GameWorld.getRandomSpawnPointSafe) {
-            var safeSpawn = window.GameWorld.getRandomSpawnPointSafe({
-                padding: spawnPadding,
-                tries: 80,
-                feetY: 0,
-                height: PLAYER_HEIGHT,
-                radius: PLAYER_RADIUS
-            });
-            if (safeSpawn && !isBlockedAt(safeSpawn.x, safeSpawn.z, 0)) {
-                setSpawnPosition(safeSpawn.x, safeSpawn.z, 0);
-                return new THREE.Vector2(safeSpawn.x, safeSpawn.z);
-            }
+        var ok = GamePlayer.respawn();
+        if (!ok) {
+            var fallback = getDefaultSpawnPoint();
+            setSpawnPosition(fallback.x, fallback.z, 0);
+            return new THREE.Vector2(fallback.x, fallback.z);
         }
-
-        for (var i = 0; i < 40; i++) {
-            var randomSpawn = (window.GameWorld && window.GameWorld.getRandomSpawnPoint)
-                ? window.GameWorld.getRandomSpawnPoint(spawnPadding)
-                : null;
-            var x = randomSpawn ? randomSpawn.x : (min + Math.random() * (max - min));
-            var z = randomSpawn ? randomSpawn.z : (min + Math.random() * (max - min));
-            if (!isBlockedAt(x, z, 0)) {
-                setSpawnPosition(x, z, 0);
-                return new THREE.Vector2(x, z);
-            }
-        }
-
-        var spawn = getDefaultSpawnPoint();
-        setSpawnPosition(spawn.x, spawn.z, 0);
-        return new THREE.Vector2(spawn.x, spawn.z);
+        return new THREE.Vector2(playerX, playerZ);
     };
 
     GamePlayer.spawnSafe = function () {
         if (!camera) return null;
-        var spawn = getDefaultSpawnPoint();
+        var spawn = window.GameWorld && window.GameWorld.getSafeSpawn
+            ? window.GameWorld.getSafeSpawn({
+                padding: (window.GameWorld.getSpawnPadding ? window.GameWorld.getSpawnPadding() : 8),
+                tries: 120,
+                feetY: 0,
+                height: PLAYER_HEIGHT,
+                radius: PLAYER_RADIUS
+            })
+            : getDefaultSpawnPoint();
         setSpawnPosition(spawn.x, spawn.z, 0);
         return new THREE.Vector2(spawn.x, spawn.z);
     };

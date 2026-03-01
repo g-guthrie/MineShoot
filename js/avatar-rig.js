@@ -380,6 +380,8 @@
         var parentInvQuat = new THREE.Quaternion();
         var armWorldQuat = new THREE.Quaternion();
         var armLocalQuat = new THREE.Quaternion();
+        var parentForward = new THREE.Vector3();
+        var forwardClampWeight = new THREE.Vector3();
 
         function solveArmToGrip(arm, grip, tweak) {
             if (!arm || !grip || !arm.parent) return false;
@@ -391,8 +393,17 @@
             if (lenSq < 1e-8) return false;
             armDir.multiplyScalar(1 / Math.sqrt(lenSq));
 
-            armWorldQuat.setFromUnitVectors(WORLD_DOWN, armDir);
+            // Keep arm IK in a forward hemisphere to avoid behind-back artifacts.
             arm.parent.getWorldQuaternion(parentWorldQuat);
+            parentForward.set(0, 0, -1).applyQuaternion(parentWorldQuat).normalize();
+            var dotForward = armDir.dot(parentForward);
+            if (dotForward < 0.08) {
+                var need = (0.08 - dotForward);
+                forwardClampWeight.copy(parentForward).multiplyScalar(need * 1.45);
+                armDir.add(forwardClampWeight).normalize();
+            }
+
+            armWorldQuat.setFromUnitVectors(WORLD_DOWN, armDir);
             parentInvQuat.copy(parentWorldQuat).invert();
             armLocalQuat.copy(parentInvQuat).multiply(armWorldQuat);
             arm.quaternion.copy(armLocalQuat);
@@ -517,14 +528,14 @@
             root.updateMatrixWorld(true);
 
             if (rig.twoHanded) {
-                var handNoise = Math.sin(rig.gaitPhase * 2.1) * Math.min(0.045, speedNorm * 0.032);
+                var handNoise = Math.sin(rig.gaitPhase * 2.1) * Math.min(0.012, speedNorm * 0.008);
                 solveArmToGrip(rig.armR, rig.primaryGrip, {
-                    x: -0.08 - (aimBias * 0.26) - (recoilKick * 0.42) + handNoise,
+                    x: -0.05 - (aimBias * 0.22) - (recoilKick * 0.34) + handNoise,
                     y: 0.04,
                     z: 0.04
                 });
                 solveArmToGrip(rig.armL, rig.supportGrip, {
-                    x: 0.05 - (aimBias * 0.18) - (recoilKick * 0.24) - handNoise,
+                    x: 0.03 - (aimBias * 0.15) - (recoilKick * 0.18) - handNoise,
                     y: -0.08,
                     z: -0.05
                 });
@@ -535,9 +546,9 @@
                     z: 0.04
                 });
 
-                var offSwing = Math.sin(rig.gaitPhase + Math.PI) * (0.08 + speedNorm * 0.24);
-                if (offSwing > 0.38) offSwing = 0.38;
-                if (offSwing < -0.38) offSwing = -0.38;
+                var offSwing = Math.sin(rig.gaitPhase + Math.PI) * (0.05 + speedNorm * 0.14);
+                if (offSwing > 0.24) offSwing = 0.24;
+                if (offSwing < -0.24) offSwing = -0.24;
                 rig.armL.rotation.x = offSwing * 0.92;
                 rig.armL.rotation.y = -0.02;
                 rig.armL.rotation.z = -0.08;

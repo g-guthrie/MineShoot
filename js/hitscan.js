@@ -14,6 +14,10 @@
     var tmpWorld = new THREE.Vector3();
     var plasmaForward = new THREE.Vector3();
     var plasmaMuzzle = new THREE.Vector3();
+    var combatHitboxBuffer = [];
+    var worldMeshBuffer = [];
+    var rayTargetBuffer = [];
+    var lockTargetBuffer = [];
     var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
     var AIM_PARITY = globalThis.__GAME_AIM_PARITY__ || {};
     var AIM_CONST = AIM_PARITY.constants || {};
@@ -140,16 +144,31 @@
         beamEnd: new THREE.Vector3()
     };
 
-    function getCombatHitboxes() {
-        var out = [];
+    function appendCombatHitboxes(out) {
+        out.length = 0;
+        if (window.GameCombatQuery && window.GameCombatQuery.appendHitboxes) {
+            window.GameCombatQuery.appendHitboxes(out);
+            return out;
+        }
         if (window.GameEnemy && window.GameEnemy.getHitboxArray) {
             var local = window.GameEnemy.getHitboxArray() || [];
-            out = out.concat(local);
+            for (var i = 0; i < local.length; i++) out.push(local[i]);
         }
         if (window.GameNet && window.GameNet.getHitboxArray) {
             var net = window.GameNet.getHitboxArray() || [];
-            out = out.concat(net);
+            for (var j = 0; j < net.length; j++) out.push(net[j]);
         }
+        return out;
+    }
+
+    function appendWorldMeshes(out) {
+        out.length = 0;
+        if (window.GameCombatQuery && window.GameCombatQuery.appendWorldCollidables) {
+            window.GameCombatQuery.appendWorldCollidables(out);
+            return out;
+        }
+        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        for (var i = 0; i < worldMeshes.length; i++) out.push(worldMeshes[i]);
         return out;
     }
 
@@ -216,24 +235,18 @@
 
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
-            if (AIM_PARITY && AIM_PARITY.getShotgunPelletOffsetsNdc) {
-                var mode = getPerspectiveMode();
-                var cameraDistance = getCanonicalCameraDistance(mode);
-                var parityOffsets = AIM_PARITY.getShotgunPelletOffsetsNdc(
+            var mode = getPerspectiveMode();
+            var cameraDistance = getCanonicalCameraDistance(mode);
+            var parityOffsets = (AIM_PARITY && AIM_PARITY.getShotgunPelletOffsetsNdc)
+                ? AIM_PARITY.getShotgunPelletOffsetsNdc(
                     mode,
                     cameraDistance,
                     AIM_VIEWPORT.width,
                     AIM_VIEWPORT.height
-                );
-                var op = parityOffsets[pelletIndex % parityOffsets.length];
-                return { x: op.x, y: op.y };
-            }
-            var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
-            var halfSize = getShotgunReticleSizePx() * 0.5;
-            return {
-                x: (p[0] * halfSize) / (AIM_VIEWPORT.width * 0.5),
-                y: -(p[1] * halfSize) / (AIM_VIEWPORT.height * 0.5)
-            };
+                )
+                : [];
+            var op = parityOffsets[pelletIndex % Math.max(1, parityOffsets.length)] || { x: 0, y: 0 };
+            return { x: op.x, y: op.y };
         }
 
         return {
@@ -243,32 +256,20 @@
     }
 
     function getLockTargets() {
-        var out = [];
-
+        lockTargetBuffer.length = 0;
+        if (window.GameCombatQuery && window.GameCombatQuery.appendLockTargets) {
+            window.GameCombatQuery.appendLockTargets(lockTargetBuffer);
+            return lockTargetBuffer;
+        }
         if (window.GameEnemy && window.GameEnemy.getLockTargets) {
-            out = out.concat(window.GameEnemy.getLockTargets() || []);
+            var local = window.GameEnemy.getLockTargets() || [];
+            for (var i = 0; i < local.length; i++) lockTargetBuffer.push(local[i]);
         }
         if (window.GameNet && window.GameNet.getLockTargets) {
-            out = out.concat(window.GameNet.getLockTargets() || []);
+            var net = window.GameNet.getLockTargets() || [];
+            for (var j = 0; j < net.length; j++) lockTargetBuffer.push(net[j]);
         }
-
-        if (out.length > 0) return out;
-
-        // Fallback to body hitboxes when lock target API is unavailable.
-        var hitboxes = getCombatHitboxes();
-        for (var i = 0; i < hitboxes.length; i++) {
-            var hb = hitboxes[i];
-            if (!hb || !hb.userData || hb.userData.type !== 'body') continue;
-            out.push({
-                targetId: hb.userData.targetId || '',
-                ownerType: hb.userData.ownerType || 'unknown',
-                worldPos: hb.position.clone(),
-                hitbox: hb,
-                alive: true
-            });
-        }
-
-        return out;
+        return lockTargetBuffer;
     }
 
     function hasLineOfSight(camera, targetPos, maxRange) {
@@ -358,14 +359,7 @@
             area += getRectOverlapArea(rect, reticleRect);
         }
 
-        if (area > 0) return area;
-        if (!target || !target.worldPos) return 0;
-
-        tmpProjected.copy(target.worldPos).project(camera);
-        if (tmpProjected.z < -1 || tmpProjected.z > 1) return 0;
-        if (tmpProjected.x < reticleRect.minX || tmpProjected.x > reticleRect.maxX) return 0;
-        if (tmpProjected.y < reticleRect.minY || tmpProjected.y > reticleRect.maxY) return 0;
-        return 0.000001;
+        return area;
     }
 
     function selectPlasmaTarget(camera, maxRange, boxSizePx) {
@@ -498,10 +492,7 @@
         }
     }
 
-    function fireSinglePellet(camera, weapon, pelletIndex, onHit) {
-        var targetsHitboxes = getCombatHitboxes();
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        var allTargets = targetsHitboxes.concat(worldMeshes);
+    function fireSinglePellet(camera, weapon, pelletIndex, targetsHitboxes, allTargets, onHit) {
         var ndcOffset = getPelletNdcOffset(weapon, pelletIndex);
 
         screenPoint.set(ndcOffset.x, ndcOffset.y);
@@ -528,16 +519,18 @@
     }
 
     function castCenter(camera, maxRange) {
-        var hitboxes = getCombatHitboxes();
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        var allTargets = hitboxes.concat(worldMeshes);
-        if (allTargets.length === 0) return null;
+        var hitboxes = appendCombatHitboxes(combatHitboxBuffer);
+        var worldMeshes = appendWorldMeshes(worldMeshBuffer);
+        rayTargetBuffer.length = 0;
+        for (var i = 0; i < hitboxes.length; i++) rayTargetBuffer.push(hitboxes[i]);
+        for (var j = 0; j < worldMeshes.length; j++) rayTargetBuffer.push(worldMeshes[j]);
+        if (rayTargetBuffer.length === 0) return null;
 
         screenPoint.set(0, 0);
         raycaster.setFromCamera(screenPoint, camera);
         raycaster.far = maxRange;
 
-        var hits = raycaster.intersectObjects(allTargets, false);
+        var hits = raycaster.intersectObjects(rayTargetBuffer, false);
         if (hits.length === 0) return null;
 
         for (var i = 0; i < hits.length; i++) {
@@ -578,9 +571,14 @@
         lastFireTime = now;
 
         var pellets = weapon.pellets || 1;
+        var hitboxes = appendCombatHitboxes(combatHitboxBuffer);
+        var worldMeshes = appendWorldMeshes(worldMeshBuffer);
+        rayTargetBuffer.length = 0;
+        for (var h = 0; h < hitboxes.length; h++) rayTargetBuffer.push(hitboxes[h]);
+        for (var w = 0; w < worldMeshes.length; w++) rayTargetBuffer.push(worldMeshes[w]);
         var anyHit = false;
         for (var i = 0; i < pellets; i++) {
-            var hit = fireSinglePellet(camera, weapon, i, onHit);
+            var hit = fireSinglePellet(camera, weapon, i, hitboxes, rayTargetBuffer, onHit);
             anyHit = anyHit || hit;
         }
 

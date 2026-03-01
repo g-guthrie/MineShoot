@@ -55,6 +55,10 @@
     var pendingPlayStart = false;
     var lastStartRequest = 0;
 
+    function runtime() {
+        return window.GameRuntime || null;
+    }
+
     function cameraModeLabel(mode) {
         return mode === 'third' ? 'CAM: THIRD' : 'CAM: FIRST';
     }
@@ -63,8 +67,14 @@
         bootState = nextState;
         if (nextState === 'failed') {
             bootErrorMessage = String(errorMessage || 'unknown_startup_error');
+            if (runtime() && runtime().dispatch) runtime().dispatch('BOOT_FAILED', { reason: bootErrorMessage });
         } else {
             bootErrorMessage = '';
+            if (runtime() && runtime().dispatch) {
+                if (nextState === 'booting') runtime().dispatch('BOOT_BEGIN');
+                else if (nextState === 'ready') runtime().dispatch('BOOT_READY');
+                else if (nextState === 'running') runtime().dispatch('START_SUCCESS');
+            }
         }
     }
 
@@ -91,6 +101,9 @@
     }
 
     function hasInputCapture() {
+        if (runtime() && runtime().canAcceptGameplayInput) {
+            return runtime().canAcceptGameplayInput();
+        }
         if (window.GameUIShell && window.GameUIShell.canAcceptGameplayInput) {
             return window.GameUIShell.canAcceptGameplayInput();
         }
@@ -486,8 +499,14 @@
 
     function enterFallbackStart(debugText) {
         window.__gameNoLockInput = true;
-        if (window.GameUIShell && window.GameUIShell.hideOverlay) window.GameUIShell.hideOverlay();
-        else if (overlay) overlay.style.display = 'none';
+        if (runtime() && runtime().dispatch) {
+            runtime().dispatch('FALLBACK_INPUT_ENABLE');
+            runtime().dispatch('START_SUCCESS');
+        } else if (window.GameUIShell && window.GameUIShell.hideOverlay) {
+            window.GameUIShell.hideOverlay();
+        } else if (overlay) {
+            overlay.style.display = 'none';
+        }
         applyPendingWeaponIfAny();
         isPlaying = true;
         setBootState('running');
@@ -517,13 +536,15 @@
             return;
         }
 
-        enterFallbackStart();
+        if (runtime() && runtime().dispatch) {
+            runtime().dispatch('START_REQUEST');
+        }
 
         var target = renderer && renderer.domElement;
         if (!target) return;
         var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
         if (typeof requestLock !== 'function') {
-            setTransientDebug('Pointer lock API unavailable. Using fallback input mode.', 2200);
+            enterFallbackStart('Pointer lock API unavailable. Using fallback input mode.');
             return;
         }
         try {
@@ -531,12 +552,12 @@
             if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
                 maybePromise.catch(function () {
                     if (!document.pointerLockElement) {
-                        setTransientDebug('Pointer lock denied. Using fallback input mode.', 2200);
+                        enterFallbackStart('Pointer lock denied. Using fallback input mode.');
                     }
                 });
             }
         } catch (err) {
-            setTransientDebug('Pointer lock failed. Using fallback input mode.', 2200);
+            enterFallbackStart('Pointer lock failed. Using fallback input mode.');
         }
     }
 
@@ -556,9 +577,11 @@
             var pointerTarget = renderer && renderer.domElement;
             if (pointerTarget && document.pointerLockElement === pointerTarget) {
                 window.__gameNoLockInput = false;
+                if (runtime() && runtime().dispatch) {
+                    runtime().dispatch('POINTER_LOCK_GAINED');
+                    runtime().dispatch('START_SUCCESS');
+                }
                 closeManualIfOpen();
-                if (window.GameUIShell && window.GameUIShell.hideOverlay) window.GameUIShell.hideOverlay();
-                else if (overlay) overlay.style.display = 'none';
                 applyPendingWeaponIfAny();
                 isPlaying = true;
                 setBootState('running');
@@ -566,8 +589,14 @@
             }
 
             if (!window.__gameNoLockInput) {
-                if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-                else if (overlay) overlay.style.display = 'flex';
+                if (runtime() && runtime().dispatch) {
+                    runtime().dispatch('POINTER_LOCK_LOST');
+                    runtime().dispatch('PAUSE');
+                } else if (window.GameUIShell && window.GameUIShell.showOverlay) {
+                    window.GameUIShell.showOverlay();
+                } else if (overlay) {
+                    overlay.style.display = 'flex';
+                }
                 isPlaying = false;
                 if (bootState === 'running') setBootState('ready');
             }
@@ -583,8 +612,14 @@
             if (shouldIgnoreKeyboardEvent(e)) return;
             if (e.code === 'Escape' && window.__gameNoLockInput) {
                 window.__gameNoLockInput = false;
-                if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-                else if (overlay) overlay.style.display = 'flex';
+                if (runtime() && runtime().dispatch) {
+                    runtime().dispatch('FALLBACK_INPUT_DISABLE');
+                    runtime().dispatch('PAUSE');
+                } else if (window.GameUIShell && window.GameUIShell.showOverlay) {
+                    window.GameUIShell.showOverlay();
+                } else if (overlay) {
+                    overlay.style.display = 'flex';
+                }
                 isPlaying = false;
                 if (bootState === 'running') setBootState('ready');
             }
@@ -594,6 +629,7 @@
     function setupPointerLock() {
         overlay = document.getElementById('overlay');
         window.__gameNoLockInput = false;
+        if (runtime() && runtime().dispatch) runtime().dispatch('FALLBACK_INPUT_DISABLE');
         bindPlayButton();
         bindPointerLockEvents();
     }
@@ -613,7 +649,11 @@
             }
 
             if (e.code === 'Escape' && window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
-                window.GameDocs.close();
+                if (window.GameUIShell && window.GameUIShell.closeManual) {
+                    window.GameUIShell.closeManual();
+                } else {
+                    window.GameDocs.close();
+                }
             }
         });
     }
@@ -1195,21 +1235,11 @@
 
         if (window.GameWallhack && window.GameWallhack.syncEntities && window.GameWallhack.update) {
             wallhackDescriptorBuffer.length = 0;
-            if (window.GameEnemy) {
-                if (window.GameEnemy.appendWallhackDescriptors) {
-                    window.GameEnemy.appendWallhackDescriptors(wallhackDescriptorBuffer);
-                } else if (window.GameEnemy.getWallhackDescriptors) {
-                    var enemyDescriptors = window.GameEnemy.getWallhackDescriptors() || [];
-                    for (var wd = 0; wd < enemyDescriptors.length; wd++) wallhackDescriptorBuffer.push(enemyDescriptors[wd]);
-                }
+            if (window.GameEnemy && window.GameEnemy.appendWallhackDescriptors) {
+                window.GameEnemy.appendWallhackDescriptors(wallhackDescriptorBuffer);
             }
-            if (window.GameNet) {
-                if (window.GameNet.appendWallhackDescriptors) {
-                    window.GameNet.appendWallhackDescriptors(wallhackDescriptorBuffer);
-                } else if (window.GameNet.getWallhackDescriptors) {
-                    var netDescriptors = window.GameNet.getWallhackDescriptors() || [];
-                    for (var nd = 0; nd < netDescriptors.length; nd++) wallhackDescriptorBuffer.push(netDescriptors[nd]);
-                }
+            if (window.GameNet && window.GameNet.appendWallhackDescriptors) {
+                window.GameNet.appendWallhackDescriptors(wallhackDescriptorBuffer);
             }
             window.GameWallhack.syncEntities(wallhackDescriptorBuffer);
             window.GameWallhack.update(camera, playerFeetPos, getCurrentWallhackRadius());
@@ -1306,14 +1336,18 @@
 
     function boot() {
         var runtimeBootCommitted = false;
+        var rt = runtime();
+        if (rt && rt.init) {
+            rt.init({ mode: 'boot' });
+            rt.dispatch('BOOT_BEGIN');
+        }
         setupPointerLock();
         setBootState('booting');
 
         function showFatalBootError(msg, err) {
             var text = String(msg || 'Unknown startup error');
             setBootState('failed', text);
-            if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-            else if (overlay) overlay.style.display = 'flex';
+            if (runtime() && runtime().dispatch) runtime().dispatch('BOOT_FAILED', { reason: text });
             writeDebugInfo('Startup error: ' + text);
             console.error('Startup error:', err || text);
         }
@@ -1321,6 +1355,7 @@
         function onRuntimeReady() {
             if (bootState === 'failed') return;
             setBootState('ready');
+            if (rt && rt.dispatch) rt.dispatch('BOOT_READY');
             if (pendingPlayStart) {
                 pendingPlayStart = false;
                 lastStartRequest = 0;
@@ -1351,6 +1386,7 @@
             if (!authedUser) {
                 bootWorldManifest = null;
                 startupDebugNotice = 'Local dev mode: backend auth/multiplayer disabled.';
+                if (rt && rt.dispatch) rt.dispatch('AUTH_SKIP_LOCAL');
                 initRuntimeOnce();
                 return;
             }
@@ -1375,6 +1411,7 @@
         }
 
         if (!isLocalDevMode() && window.GameNet && window.GameNet.requireAuth) {
+            if (rt && rt.dispatch) rt.dispatch('AUTH_REQUIRED');
             window.GameNet.requireAuth(function (authedUser) {
                 beginRuntime(authedUser || null);
             });

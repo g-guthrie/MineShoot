@@ -13,28 +13,11 @@ const WORLD_PRIM = PRIM.world || {};
 const ENTITY_PRIM = PRIM.entity || {};
 const COORDS_PRIM = PRIM.coords || {};
 
-const CLASS_PRESETS = COMBAT_PRIM.class_presets || {
-  ninja: { armorMax: 80, wallhackRadius: 90 },
-  jedi: { armorMax: 130, wallhackRadius: 85 },
-  magician: { armorMax: 100, wallhackRadius: 100 },
-  sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-  brawler: { armorMax: 150, wallhackRadius: 75 }
-};
+const CLASS_PRESETS = COMBAT_PRIM.class_presets || {};
 
 const WEAPON_STATS = (() => {
   const src = COMBAT_PRIM.weapon_stats || {};
   const keys = Object.keys(src);
-  if (keys.length === 0) {
-    return {
-      rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
-      pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
-      machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
-      shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
-      sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
-      plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
-    };
-  }
-
   const out = {};
   for (let i = 0; i < keys.length; i++) {
     const id = keys[i];
@@ -66,12 +49,6 @@ const HEAD_HITBOX_OFFSET = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
 const AIM_VIEWPORT = (AIM_PARITY && AIM_PARITY.getCanonicalViewport)
   ? AIM_PARITY.getCanonicalViewport()
   : { width: 1920, height: 1080 };
-const FALLBACK_SHOTGUN_PATTERN = [
-  [-0.90, -0.90], [0.00, -0.90], [0.90, -0.90],
-  [-0.90, 0.00], [-0.35, -0.35], [0.35, 0.35], [0.90, 0.00],
-  [-0.90, 0.90], [0.00, 0.90], [0.90, 0.90],
-  [-0.45, 0.45], [0.45, -0.45]
-];
 
 const MOVE_JOG_SPEED = 8;
 const MOVE_RUN_SPEED = 11;
@@ -177,7 +154,11 @@ function parseCookies(cookieHeader) {
 }
 
 function classPreset(classId) {
-  return CLASS_PRESETS[classId] || CLASS_PRESETS.sharpshooter;
+  if (CLASS_PRESETS[classId]) return CLASS_PRESETS[classId];
+  if (CLASS_PRESETS.sharpshooter) return CLASS_PRESETS.sharpshooter;
+  const keys = Object.keys(CLASS_PRESETS);
+  if (keys.length > 0) return CLASS_PRESETS[keys[0]];
+  return { armorMax: 90, wallhackRadius: 90 };
 }
 
 async function getSessionFromRequest(env, request) {
@@ -455,16 +436,7 @@ function getShotgunPelletOffsets(cameraMode, cameraDistance) {
       AIM_VIEWPORT.height
     );
   }
-  const out = [];
-  const halfSize = 300 * 0.5;
-  for (let i = 0; i < FALLBACK_SHOTGUN_PATTERN.length; i++) {
-    const p = FALLBACK_SHOTGUN_PATTERN[i];
-    out.push({
-      x: (p[0] * halfSize) / (AIM_VIEWPORT.width * 0.5),
-      y: -(p[1] * halfSize) / (AIM_VIEWPORT.height * 0.5)
-    });
-  }
-  return out;
+  return [];
 }
 
 function shotgunFalloffDamage(baseDamage, distance) {

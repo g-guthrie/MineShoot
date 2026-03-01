@@ -56,16 +56,8 @@
 
     function classStats(classId) {
         var defs = CLASS_PRESETS;
-        if (!defs || Object.keys(defs).length === 0) {
-            defs = {
-                ninja: { armorMax: 80, wallhackRadius: 90 },
-                jedi: { armorMax: 130, wallhackRadius: 85 },
-                magician: { armorMax: 100, wallhackRadius: 100 },
-                sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-                brawler: { armorMax: 150, wallhackRadius: 75 }
-            };
-        }
-        return defs[classId] || defs.sharpshooter;
+        var fallback = defs.sharpshooter || { armorMax: 90, wallhackRadius: 90 };
+        return defs[classId] || fallback;
     }
 
     function pushNotice(text) {
@@ -128,6 +120,10 @@
     }
 
     function setAuthVisible(visible) {
+        if (window.GameRuntime && window.GameRuntime.dispatch) {
+            window.GameRuntime.dispatch(visible ? 'AUTH_REQUIRED' : 'AUTH_OK');
+            return;
+        }
         if (window.GameUIShell) {
             if (visible && window.GameUIShell.showAuthOverlay) {
                 window.GameUIShell.showAuthOverlay();
@@ -223,6 +219,9 @@
                 lockForm(true);
                 user = null;
                 setAuthStatus('Bypassed login. Starting local mode...', false);
+                if (window.GameRuntime && window.GameRuntime.dispatch) {
+                    window.GameRuntime.dispatch('AUTH_SKIP_LOCAL');
+                }
                 setAuthVisible(false);
                 onAuthed(null);
             });
@@ -339,7 +338,18 @@
             beamActiveUntil: entity.beamActiveUntil || 0,
             beamHeat: entity.beamHeat || 0,
             beamOverheated: !!entity.beamOverheated,
-            beamLine: beamLine
+            beamLine: beamLine,
+            overheadDescriptor: {
+                id: 'net:' + entity.id,
+                targetId: 'net:' + entity.id,
+                name: entity.username || entity.id,
+                hp: entity.hp,
+                hpMax: entity.hpMax,
+                armor: entity.armor,
+                armorMax: entity.armorMax,
+                worldPos: group.position,
+                headY: OVERHEAD_OFFSET_Y
+            }
         };
     }
 
@@ -401,6 +411,14 @@
         r.beamActiveUntil = entity.beamActiveUntil || 0;
         r.beamHeat = entity.beamHeat || 0;
         r.beamOverheated = !!entity.beamOverheated;
+        if (r.overheadDescriptor) {
+            r.overheadDescriptor.name = entity.username || entity.id;
+            r.overheadDescriptor.hp = entity.hp;
+            r.overheadDescriptor.hpMax = entity.hpMax;
+            r.overheadDescriptor.armor = entity.armor;
+            r.overheadDescriptor.armorMax = entity.armorMax;
+            r.overheadDescriptor.worldPos = r.group.position;
+        }
 
         r.group.visible = !!entity.alive;
         r.bodyHitbox.visible = !!entity.alive;
@@ -759,6 +777,12 @@
         return hitboxArray;
     };
 
+    GameNet.appendHitboxes = function (out) {
+        if (!Array.isArray(out)) return out;
+        for (var i = 0; i < hitboxArray.length; i++) out.push(hitboxArray[i]);
+        return out;
+    };
+
     GameNet.setHitboxVisibility = function (visible) {
         hitboxVisible = !!visible;
         renderMap.forEach(function (r) {
@@ -785,6 +809,35 @@
                 headY: OVERHEAD_OFFSET_Y,
                 targetId: 'net:' + r.id
             });
+        });
+        return out;
+    };
+
+    GameNet.appendOverheadDescriptors = function (out) {
+        if (!Array.isArray(out)) return out;
+        renderMap.forEach(function (r) {
+            if (!r || !r.alive || !r.group) return;
+            if (!r.overheadDescriptor) {
+                r.overheadDescriptor = {
+                    id: 'net:' + r.id,
+                    targetId: 'net:' + r.id,
+                    name: r.username || r.id,
+                    hp: r.hp,
+                    hpMax: r.hpMax,
+                    armor: r.armor,
+                    armorMax: r.armorMax,
+                    worldPos: r.group.position,
+                    headY: OVERHEAD_OFFSET_Y
+                };
+            } else {
+                r.overheadDescriptor.name = r.username || r.id;
+                r.overheadDescriptor.hp = r.hp;
+                r.overheadDescriptor.hpMax = r.hpMax;
+                r.overheadDescriptor.armor = r.armor;
+                r.overheadDescriptor.armorMax = r.armorMax;
+                r.overheadDescriptor.worldPos = r.group.position;
+            }
+            out.push(r.overheadDescriptor);
         });
         return out;
     };
@@ -947,11 +1000,12 @@
         return wsSend({ t: 'class_queue', classId: classId });
     };
 
-    GameNet.getLockTargets = function () {
-        var out = [];
+    GameNet.appendLockTargets = function (out) {
+        if (!Array.isArray(out)) return out;
         renderMap.forEach(function (r) {
             if (!r || !r.alive) return;
-            var worldPos = getRenderCoreWorldPosition(r, new THREE.Vector3());
+            if (!r.coreScratch) r.coreScratch = new THREE.Vector3();
+            var worldPos = getRenderCoreWorldPosition(r, r.coreScratch);
             if (!worldPos) return;
             out.push({
                 targetId: 'net:' + r.id,
@@ -963,6 +1017,12 @@
                 netEntityId: r.id
             });
         });
+        return out;
+    };
+
+    GameNet.getLockTargets = function () {
+        var out = [];
+        GameNet.appendLockTargets(out);
         return out;
     };
 

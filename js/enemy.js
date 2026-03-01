@@ -28,6 +28,7 @@
     var BODY_HITBOX_OFFSET_Y = Number(COORDS_PRIM.body_hitbox_offset_y || 1.0);
     var HEAD_HITBOX_OFFSET_Y = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
     var CORE_OFFSET_Y = Number(COORDS_PRIM.core_anchor_offset_y || 1.0);
+    var OVERHEAD_OFFSET_Y = Number(COORDS_PRIM.overhead_bar_offset_y || 2.9);
     var ENEMY_CAPSULE_HEIGHT = Number(ENTITY_PRIM.capsule_height || 1.7);
     var ENEMY_CAPSULE_RADIUS = Number(ENTITY_PRIM.capsule_radius || 0.58);
 
@@ -256,7 +257,18 @@
             justFired: false,
             stunTimer: 0,
             slowTimer: 0,
-            slowMultiplier: 1
+            slowMultiplier: 1,
+            overheadDescriptor: {
+                id: 'enemy:' + index,
+                targetId: 'enemy:' + index,
+                name: 'AI_' + (index + 1),
+                hp: 500,
+                hpMax: 500,
+                armor: DEFAULT_ENEMY_ARMOR,
+                armorMax: DEFAULT_ENEMY_ARMOR,
+                worldPos: group.position,
+                headY: OVERHEAD_OFFSET_Y
+            }
         };
 
         var baseParts = visual.userData.bodyParts || [];
@@ -688,23 +700,63 @@
         return hitboxArray;
     };
 
+    GameEnemy.appendHitboxes = function (out) {
+        if (!Array.isArray(out)) return out;
+        for (var i = 0; i < hitboxArray.length; i++) out.push(hitboxArray[i]);
+        return out;
+    };
+
     GameEnemy.getEnemies = function () {
         return enemies;
     };
 
-    GameEnemy.getLockTargets = function () {
-        var out = [];
+    GameEnemy.appendOverheadDescriptors = function (out) {
+        if (!Array.isArray(out)) return out;
+        for (var i = 0; i < enemies.length; i++) {
+            var e = enemies[i];
+            if (!e || !e.alive || !e.group) continue;
+            var d = e.overheadDescriptor;
+            if (!d) {
+                d = {
+                    id: 'enemy:' + e.index,
+                    targetId: 'enemy:' + e.index,
+                    name: 'AI_' + (e.index + 1),
+                    hp: e.hp,
+                    hpMax: e.maxHp || 500,
+                    armor: (typeof e.armor === 'number' ? e.armor : 0),
+                    armorMax: (typeof e.armorMax === 'number' ? e.armorMax : 100),
+                    worldPos: e.group.position,
+                    headY: OVERHEAD_OFFSET_Y
+                };
+                e.overheadDescriptor = d;
+            } else {
+                d.hp = e.hp;
+                d.hpMax = e.maxHp || 500;
+                d.armor = (typeof e.armor === 'number' ? e.armor : 0);
+                d.armorMax = (typeof e.armorMax === 'number' ? e.armorMax : 100);
+                d.worldPos = e.group.position;
+            }
+            out.push(d);
+        }
+        return out;
+    };
+
+    GameEnemy.appendLockTargets = function (out) {
+        if (!Array.isArray(out)) return out;
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];
             if (!enemy || !enemy.alive) continue;
 
             var corePos = null;
             if (enemy.rigApi && enemy.rigApi.getCoreWorldPosition) {
-                corePos = enemy.rigApi.getCoreWorldPosition(new THREE.Vector3());
+                if (!enemy._coreScratch) enemy._coreScratch = new THREE.Vector3();
+                corePos = enemy.rigApi.getCoreWorldPosition(enemy._coreScratch);
             } else if (enemy.bodyHitbox && enemy.bodyHitbox.position) {
-                corePos = enemy.bodyHitbox.position.clone();
+                if (!enemy._coreScratch) enemy._coreScratch = new THREE.Vector3();
+                corePos = enemy._coreScratch.copy(enemy.bodyHitbox.position);
             } else if (enemy.group && enemy.group.position) {
-                corePos = enemy.group.position.clone();
+                if (!enemy._coreScratch) enemy._coreScratch = new THREE.Vector3();
+                corePos = enemy._coreScratch.copy(enemy.group.position);
                 corePos.y += CORE_OFFSET_Y;
             }
             if (!corePos) continue;
@@ -719,6 +771,12 @@
                 enemyRef: enemy
             });
         }
+        return out;
+    };
+
+    GameEnemy.getLockTargets = function () {
+        var out = [];
+        GameEnemy.appendLockTargets(out);
         return out;
     };
 

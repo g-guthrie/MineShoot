@@ -514,7 +514,11 @@
             closeBtnEl.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                closePanel();
+                if (window.GameUIShell && window.GameUIShell.closeManual) {
+                    window.GameUIShell.closeManual();
+                } else {
+                    closePanel();
+                }
             });
         }
 
@@ -522,7 +526,11 @@
             pauseOpenBtnEl.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                GameDocs.toggle();
+                if (window.GameUIShell && window.GameUIShell.toggleManual) {
+                    window.GameUIShell.toggleManual();
+                } else {
+                    GameDocs.toggle();
+                }
             });
         }
 
@@ -530,7 +538,11 @@
             hudOpenBtnEl.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                GameDocs.toggle();
+                if (window.GameUIShell && window.GameUIShell.toggleManual) {
+                    window.GameUIShell.toggleManual();
+                } else {
+                    GameDocs.toggle();
+                }
             });
         }
 

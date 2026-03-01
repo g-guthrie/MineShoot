@@ -102,6 +102,9 @@
     var tmpForward = new THREE.Vector3();
     var tmpTo = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
+    var classHitboxBuffer = [];
+    var classWorldBuffer = [];
+    var classRayTargetBuffer = [];
 
     function getClassDef() {
         return CLASS_DEFS[currentClassId] || CLASS_DEFS.sharpshooter;
@@ -265,12 +268,50 @@
         return out;
     }
 
+    function appendCombatHitboxes(out) {
+        out.length = 0;
+        if (window.GameCombatQuery && window.GameCombatQuery.appendHitboxes) {
+            window.GameCombatQuery.appendHitboxes(out);
+            return out;
+        }
+        if (window.GameEnemy && window.GameEnemy.getHitboxArray) {
+            var local = window.GameEnemy.getHitboxArray() || [];
+            for (var i = 0; i < local.length; i++) out.push(local[i]);
+        }
+        return out;
+    }
+
+    function appendWorldMeshes(out) {
+        out.length = 0;
+        if (window.GameCombatQuery && window.GameCombatQuery.appendWorldCollidables) {
+            window.GameCombatQuery.appendWorldCollidables(out);
+            return out;
+        }
+        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        for (var i = 0; i < worldMeshes.length; i++) out.push(worldMeshes[i]);
+        return out;
+    }
+
+    function buildRayTargets() {
+        var hitboxes = appendCombatHitboxes(classHitboxBuffer);
+        var worldMeshes = appendWorldMeshes(classWorldBuffer);
+        classRayTargetBuffer.length = 0;
+        for (var i = 0; i < hitboxes.length; i++) classRayTargetBuffer.push(hitboxes[i]);
+        for (var j = 0; j < worldMeshes.length; j++) classRayTargetBuffer.push(worldMeshes[j]);
+        return {
+            hitboxes: hitboxes,
+            worldMeshes: worldMeshes,
+            all: classRayTargetBuffer
+        };
+    }
+
     function castEnemyHitboxFromCenter(camera, maxRange) {
         if (!camera || !window.GameEnemy || !window.GameEnemy.getHitboxArray) return null;
 
-        var hitboxes = window.GameEnemy.getHitboxArray() || [];
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        var allTargets = hitboxes.concat(worldMeshes);
+        var rayTargets = buildRayTargets();
+        var hitboxes = rayTargets.hitboxes;
+        var worldMeshes = rayTargets.worldMeshes;
+        var allTargets = rayTargets.all;
         if (allTargets.length === 0) return null;
 
         raycaster.setFromCamera(centerPoint, camera);
@@ -298,9 +339,8 @@
     function getAimPoint(camera, maxDistance) {
         if (!camera) return null;
 
-        var hitboxes = window.GameEnemy && window.GameEnemy.getHitboxArray ? (window.GameEnemy.getHitboxArray() || []) : [];
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        var allTargets = hitboxes.concat(worldMeshes);
+        var rayTargets = buildRayTargets();
+        var allTargets = rayTargets.all;
 
         raycaster.setFromCamera(centerPoint, camera);
         raycaster.far = maxDistance;

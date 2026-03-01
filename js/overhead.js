@@ -10,6 +10,7 @@
     var container = null;
     var entries = new Map();
     var projectScratch = new THREE.Vector3();
+    var descriptorBuffer = [];
     var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
     var COORDS_PRIM = PRIM.coords || {};
     var OVERHEAD_OFFSET_Y = Number(COORDS_PRIM.overhead_bar_offset_y || 2.9);
@@ -68,11 +69,16 @@
         return '#ff6f6f';
     }
 
-    function getLocalEnemyDescriptors() {
-        if (!window.GameEnemy || !window.GameEnemy.getEnemies) return [];
+    function appendLocalEnemyDescriptors(out) {
+        if (!Array.isArray(out)) return out;
+        if (!window.GameEnemy) return out;
+        if (window.GameEnemy.appendOverheadDescriptors) {
+            window.GameEnemy.appendOverheadDescriptors(out);
+            return out;
+        }
+        if (!window.GameEnemy.getEnemies) return out;
 
         var enemies = window.GameEnemy.getEnemies();
-        var out = [];
 
         for (var i = 0; i < enemies.length; i++) {
             var e = enemies[i];
@@ -93,10 +99,15 @@
         return out;
     }
 
-    function getNetworkDescriptors() {
-        if (!window.GameNet || !window.GameNet.getEntityStateList) return [];
+    function appendNetworkDescriptors(out) {
+        if (!Array.isArray(out)) return out;
+        if (!window.GameNet) return out;
+        if (window.GameNet.appendOverheadDescriptors) {
+            window.GameNet.appendOverheadDescriptors(out);
+            return out;
+        }
+        if (!window.GameNet.getEntityStateList) return out;
         var list = window.GameNet.getEntityStateList();
-        var out = [];
 
         for (var i = 0; i < list.length; i++) {
             var e = list[i];
@@ -183,10 +194,12 @@
         ensureContainer();
 
         var stamp = performance.now();
-        var descriptors = getLocalEnemyDescriptors().concat(getNetworkDescriptors());
+        descriptorBuffer.length = 0;
+        appendLocalEnemyDescriptors(descriptorBuffer);
+        appendNetworkDescriptors(descriptorBuffer);
 
-        for (var i = 0; i < descriptors.length; i++) {
-            var desc = descriptors[i];
+        for (var i = 0; i < descriptorBuffer.length; i++) {
+            var desc = descriptorBuffer[i];
             var entry = entries.get(desc.id);
             if (!entry) {
                 entry = makeEntry(desc.id);

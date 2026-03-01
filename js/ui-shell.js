@@ -10,15 +10,39 @@
     var overlayEl = null;
     var authOverlayEl = null;
     var initialized = false;
+    var unsubRuntime = null;
+    var lastOverlayVisible = false;
+    var lastMode = '';
+
+    function runtime() {
+        return window.GameRuntime || null;
+    }
 
     function ensureInit() {
         if (initialized) return;
         initialized = true;
         overlayEl = document.getElementById('overlay');
         authOverlayEl = document.getElementById('auth-overlay');
+
+        var rt = runtime();
+        if (rt && rt.subscribe) {
+            unsubRuntime = rt.subscribe(renderFromRuntime);
+        } else {
+            renderStandalone();
+        }
+    }
+
+    function renderStandalone() {
+        if (overlayEl) overlayEl.style.display = 'flex';
+        if (authOverlayEl) authOverlayEl.style.display = 'none';
     }
 
     function hasCapture() {
+        var rt = runtime();
+        if (rt && rt.getState) {
+            var s = rt.getState();
+            return !!(s.pointerLocked || s.fallbackInput);
+        }
         return !!document.pointerLockElement || !!window.__gameNoLockInput;
     }
 
@@ -42,48 +66,87 @@
     };
 
     GameUIShell.canAcceptGameplayInput = function () {
+        var rt = runtime();
+        if (rt && rt.canAcceptGameplayInput) return rt.canAcceptGameplayInput();
         return hasCapture() && !GameUIShell.isTextInputFocused();
     };
 
+    function renderFromRuntime(snapshot) {
+        if (!snapshot || !initialized) return;
+
+        var overlayVisible = !!snapshot.overlayVisible;
+        if (overlayEl) {
+            overlayEl.style.display = overlayVisible ? 'flex' : 'none';
+            if (overlayVisible && (!lastOverlayVisible || snapshot.mode !== lastMode)) {
+                overlayEl.classList.remove('menu-entering');
+                void overlayEl.offsetWidth;
+                overlayEl.classList.add('menu-entering');
+            }
+        }
+
+        if (authOverlayEl) {
+            authOverlayEl.style.display = snapshot.authVisible ? 'flex' : 'none';
+        }
+
+        var docs = window.GameDocs;
+        if (docs && docs.isOpen && docs.open && docs.close) {
+            var docsOpen = docs.isOpen();
+            if (snapshot.manualOpen && !docsOpen) docs.open();
+            if (!snapshot.manualOpen && docsOpen) docs.close();
+        }
+
+        lastOverlayVisible = overlayVisible;
+        lastMode = snapshot.mode || '';
+    }
+
+    function dispatch(intent, payload) {
+        var rt = runtime();
+        if (rt && rt.dispatch) return rt.dispatch(intent, payload);
+        return null;
+    }
+
     GameUIShell.showOverlay = function () {
         ensureInit();
-        if (overlayEl) {
-            overlayEl.style.display = 'flex';
-            overlayEl.classList.remove('menu-entering');
-            void overlayEl.offsetWidth;
-            overlayEl.classList.add('menu-entering');
-        }
+        var s = runtime() && runtime().getState ? runtime().getState() : null;
+        if (s && s.mode === 'running') dispatch('PAUSE');
+        else dispatch('FORCE_MENU');
     };
 
     GameUIShell.hideOverlay = function () {
         ensureInit();
-        if (overlayEl) overlayEl.style.display = 'none';
+        dispatch('START_SUCCESS');
     };
 
     GameUIShell.showAuthOverlay = function () {
         ensureInit();
-        if (authOverlayEl) authOverlayEl.style.display = 'flex';
+        dispatch('AUTH_REQUIRED');
     };
 
     GameUIShell.hideAuthOverlay = function () {
         ensureInit();
-        if (authOverlayEl) authOverlayEl.style.display = 'none';
+        dispatch('AUTH_OK');
     };
 
     GameUIShell.isManualOpen = function () {
+        var rt = runtime();
+        if (rt && rt.getState) {
+            var s = rt.getState();
+            return s.mode === 'manual';
+        }
         return !!(window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen());
     };
 
     GameUIShell.openManual = function () {
-        if (window.GameDocs && window.GameDocs.open) window.GameDocs.open();
+        dispatch('MANUAL_OPEN');
     };
 
     GameUIShell.closeManual = function () {
-        if (window.GameDocs && window.GameDocs.close) window.GameDocs.close();
+        dispatch('MANUAL_CLOSE');
     };
 
     GameUIShell.toggleManual = function () {
-        if (window.GameDocs && window.GameDocs.toggle) window.GameDocs.toggle();
+        var open = GameUIShell.isManualOpen();
+        dispatch(open ? 'MANUAL_CLOSE' : 'MANUAL_OPEN');
     };
 
     window.GameUIShell = GameUIShell;
