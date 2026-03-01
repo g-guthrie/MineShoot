@@ -165,15 +165,6 @@
         }
     }
 
-    function setBeamLinePoints(line, start, end) {
-        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
-        var arr = line.geometry.attributes.position.array;
-        arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
-        arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
-        line.geometry.attributes.position.needsUpdate = true;
-        line.geometry.computeBoundingSphere();
-    }
-
     function applyDebugVisuals(visible) {
         wallhackRingVisible = !!visible;
         if (wallhackRing) wallhackRing.visible = wallhackRingVisible;
