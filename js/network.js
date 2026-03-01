@@ -34,6 +34,7 @@
     var hitboxVisible = true;
     var beamScratchA = new THREE.Vector3();
     var beamScratchB = new THREE.Vector3();
+    var REMOTE_EYE_HEIGHT = 1.6;
 
     var REMOTE_BEAM_HOLD_MS = 180;
 
@@ -259,8 +260,12 @@
         };
         sceneRef.add(headHitbox);
 
-        group.position.set(entity.x, 0, entity.z);
-        group.rotation.y = entity.yaw || 0;
+        group.position.set(
+            entity.x,
+            ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+            entity.z
+        );
+        group.rotation.y = (entity.yaw || 0) + Math.PI;
 
         sceneRef.add(group);
         hitboxArray.push(bodyHitbox);
@@ -290,8 +295,9 @@
             rigApi: rigApi,
             targetX: entity.x,
             targetY: entity.y || 1.6,
+            targetFootY: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
             targetZ: entity.z,
-            targetYaw: entity.yaw || 0,
+            targetYaw: (entity.yaw || 0) + Math.PI,
             targetPitch: entity.pitch || 0,
             hp: entity.hp,
             hpMax: entity.hpMax,
@@ -348,8 +354,9 @@
         var r = ensureRemote(entity);
         r.targetX = entity.x;
         r.targetY = entity.y || 1.6;
+        r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
         r.targetZ = entity.z;
-        r.targetYaw = entity.yaw || 0;
+        r.targetYaw = (entity.yaw || 0) + Math.PI;
         r.targetPitch = entity.pitch || 0;
         r.hp = entity.hp;
         r.hpMax = entity.hpMax;
@@ -681,7 +688,7 @@
         renderMap.forEach(function (r) {
             var lerp = Math.min(1, dt * 10);
             r.group.position.x += (r.targetX - r.group.position.x) * lerp;
-            r.group.position.y += ((0) - r.group.position.y) * lerp;
+            r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
             r.group.position.z += (r.targetZ - r.group.position.z) * lerp;
 
             var deltaYaw = normalizeAngle(r.targetYaw - r.group.rotation.y);
@@ -693,8 +700,8 @@
                 r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
             }
 
-            r.bodyHitbox.position.set(r.group.position.x, 1.0, r.group.position.z);
-            r.headHitbox.position.set(r.group.position.x, 2.475, r.group.position.z);
+            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 1.0, r.group.position.z);
+            r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.475, r.group.position.z);
 
             if (r.beamLine) {
                 var beamActive = !!r.alive && r.beamTargetId && (r.beamActiveUntil || 0) > Date.now();
