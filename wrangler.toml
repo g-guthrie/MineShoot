@@ -3,11 +3,18 @@ main = "cloudflare/worker.js"
 compatibility_date = "2025-01-01"
 workers_dev = true
 
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [vars]
 SESSION_COOKIE_NAME = "mfa_session"
 SESSION_DAYS = "30"
 ROOM_NAME = "global"
 BOT_COUNT = "6"
+AUTH_THROTTLE_WINDOW_SEC = "300"
+AUTH_THROTTLE_MAX_FAILS = "5"
+AUTH_THROTTLE_BLOCK_SEC = "900"
 
 [[durable_objects.bindings]]
 name = "GLOBAL_ARENA"
@@ -19,5 +26,71 @@ new_sqlite_classes = ["GlobalArenaRoom"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "minecraft-fps-db"
-database_id = "replace-with-your-d1-id"
+database_name = "minecraft-fps-db-prod"
+database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"
+
+[env.local]
+name = "minecraft-fps-arena-local"
+workers_dev = true
+
+[env.local.vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+BOT_COUNT = "6"
+AUTH_THROTTLE_WINDOW_SEC = "300"
+AUTH_THROTTLE_MAX_FAILS = "5"
+AUTH_THROTTLE_BLOCK_SEC = "900"
+
+[[env.local.durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[env.local.d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db-local"
+database_id = "42b50c47-a772-47ac-8660-708afcdaade9"
+
+[env.staging]
+name = "minecraft-fps-arena-staging"
+workers_dev = true
+
+[env.staging.vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+BOT_COUNT = "6"
+AUTH_THROTTLE_WINDOW_SEC = "300"
+AUTH_THROTTLE_MAX_FAILS = "5"
+AUTH_THROTTLE_BLOCK_SEC = "900"
+
+[[env.staging.durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db-staging"
+database_id = "replace-with-staging-d1-id"
+
+[env.production]
+name = "minecraft-fps-arena-prod"
+workers_dev = true
+
+[env.production.vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+BOT_COUNT = "6"
+AUTH_THROTTLE_WINDOW_SEC = "300"
+AUTH_THROTTLE_MAX_FAILS = "5"
+AUTH_THROTTLE_BLOCK_SEC = "900"
+
+[[env.production.durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db-prod"
+database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"

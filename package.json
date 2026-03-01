@@ -1,0 +1,51 @@
+{
+  "name": "minecraft-fps-rewrite",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "assets:sync": "./scripts/sync-public-assets.sh",
+    "cf:dev": "./scripts/dev-ground-truth.sh",
+    "cf:migrate:prod": "npx wrangler d1 execute minecraft-fps-db-prod --file=./migrations/0001_init.sql --env production --remote && npx wrangler d1 execute minecraft-fps-db-prod --file=./migrations/0002_auth_security.sql --env production --remote",
+    "cf:deploy:prod": "npm run assets:sync && npx wrangler deploy --env production",
+    "build:rewrite": "tsc -p tsconfig.json",
+    "parity:harness": "node scripts/parity-harness.js",
+    "smoke:enemy": "node scripts/local-enemy-smoke.js",
+    "rewrite:discover": "node scripts/rewrite/discover-targets.mjs --write",
+    "rewrite:contract:seed": "node scripts/rewrite/seed-behavior-contract.mjs",
+    "rewrite:contract:verify": "node scripts/rewrite/verify-behavior-contract.mjs",
+    "rewrite:phase0": "npm run parity:harness && npm run smoke:enemy",
+    "rewrite:phase1": "npm run rewrite:discover && npm run rewrite:contract:verify",
+    "test:parity:movement": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-movement.cjs",
+    "test:parity:collision": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-collision.cjs",
+    "test:parity:spawn": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-spawn.cjs",
+    "test:parity:weapons": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-weapons.cjs",
+    "test:parity:throwables": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-throwables.cjs",
+    "test:parity:classes": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-classes.cjs",
+    "test:parity:damage": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-damage.cjs",
+    "test:parity:anim-state": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-anim-state.cjs",
+    "test:parity:skeleton-debug": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-skeleton-debug.cjs",
+    "test:parity:enemy-visual": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-enemy-visual.cjs",
+    "test:parity:ui-mode": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-ui-mode.cjs",
+    "test:parity:pointer-lock": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-pointer-lock.cjs",
+    "test:parity:manual": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-manual.cjs",
+    "test:parity:net-snapshot": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-net-snapshot.cjs",
+    "test:parity:reconcile": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-reconcile.cjs",
+    "test:parity:server-authority": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-server-authority.cjs",
+    "test:parity:auth-flow": "npm run build:rewrite --silent && node scripts/rewrite/tests/parity-auth-flow.cjs",
+    "rewrite:phase2": "npm run test:parity:movement && npm run test:parity:collision && npm run test:parity:spawn",
+    "rewrite:phase3": "npm run test:parity:weapons && npm run test:parity:throwables && npm run test:parity:classes && npm run test:parity:damage",
+    "rewrite:phase4": "npm run test:parity:anim-state && npm run test:parity:skeleton-debug && npm run test:parity:enemy-visual",
+    "rewrite:phase5": "npm run test:parity:ui-mode && npm run test:parity:pointer-lock && npm run test:parity:manual",
+    "rewrite:phase6": "npm run test:parity:net-snapshot && npm run test:parity:reconcile && npm run test:parity:server-authority && npm run test:parity:auth-flow",
+    "rewrite:phase7": "npm run build:rewrite && node scripts/rewrite/cutover-checklist.mjs",
+    "rewrite:matrix": "npm run rewrite:phase0 && npm run rewrite:phase1 && npm run rewrite:phase2 && npm run rewrite:phase3 && npm run rewrite:phase4 && npm run rewrite:phase5 && npm run rewrite:phase6 && npm run rewrite:phase7",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

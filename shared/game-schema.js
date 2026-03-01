@@ -1,0 +1,177 @@
+! function(global) {
+    "use strict";
+    if (!global.__GAME_SCHEMA__) {
+        var schema = {
+            validateCameraMode: validateCameraMode,
+            validateClientInput: validateClientInput,
+            validateServerSnapshot: validateServerEntitySnapshot,
+            validateServerEntitySnapshot: validateServerEntitySnapshot,
+            validateServerReconcile: function(msg) {
+                var errors = [];
+                return isObject(msg) || errors.push("server_reconcile must be an object"), errors.length || "server_reconcile" === msg.t || errors.push('server_reconcile.t must be "server_reconcile"'), errors.length || isFiniteNumber(msg.x) || errors.push("server_reconcile.x must be a finite number"), errors.length || isFiniteNumber(msg.feetY) || errors.push("server_reconcile.feetY must be a finite number"), errors.length || isFiniteNumber(msg.z) || errors.push("server_reconcile.z must be a finite number"), errors.length || isFiniteNumber(msg.velY) || errors.push("server_reconcile.velY must be a finite number"), errors.length || isBoolean(msg.grounded) || errors.push("server_reconcile.grounded must be a boolean"), errors.length || isFiniteNumber(msg.yaw) || errors.push("server_reconcile.yaw must be a finite number"), errors.length || isFiniteNumber(msg.pitch) || errors.push("server_reconcile.pitch must be a finite number"), errors.length || void 0 === msg.seq || isFiniteNumber(msg.seq) || errors.push("server_reconcile.seq must be a finite number"), errors.length ? failResult(errors) : okResult(msg)
+            },
+            validateChunkSnapshot: function(msg) {
+                var errors = [];
+                if (isObject(msg) || errors.push("chunk_snapshot must be an object"), errors.length || "chunk_snapshot" === msg.t || errors.push('chunk_snapshot.t must be "chunk_snapshot"'), errors.length || isObject(msg.chunk) || errors.push("chunk_snapshot.chunk must be an object"), !errors.length) {
+                    var chunk = msg.chunk;
+                    isString(chunk.key) && chunk.key || errors.push("chunk_snapshot.chunk.key must be a non-empty string"), isFiniteNumber(chunk.version) || errors.push("chunk_snapshot.chunk.version must be a finite number"), Array.isArray(chunk.solids) || errors.push("chunk_snapshot.chunk.solids must be an array")
+                }
+                return errors.length ? failResult(errors) : okResult(msg)
+            },
+            validateChunkDelta: function(msg) {
+                var errors = [];
+                return isObject(msg) || errors.push("chunk_delta must be an object"), errors.length || "chunk_delta" === msg.t || errors.push('chunk_delta.t must be "chunk_delta"'), errors.length || isString(msg.key) || errors.push("chunk_delta.key must be a string"), errors.length || isFiniteNumber(msg.version) || errors.push("chunk_delta.version must be a finite number"), errors.length || void 0 === msg.op || isString(msg.op) || errors.push("chunk_delta.op must be a string when provided"), errors.length ? failResult(errors) : okResult(msg)
+            },
+            validateThrowableSnapshot: function(msg) {
+                var errors = [];
+                if (isObject(msg) || errors.push("throwable_snapshot must be an object"), errors.length || "throwable_snapshot" === msg.t || errors.push('throwable_snapshot.t must be "throwable_snapshot"'), errors.length || isFiniteNumber(msg.serverTime) || errors.push("throwable_snapshot.serverTime must be a finite number"), errors.length || Array.isArray(msg.throwables) || errors.push("throwable_snapshot.throwables must be an array"), errors.length || Array.isArray(msg.zones) || errors.push("throwable_snapshot.zones must be an array"), !errors.length) {
+                    for (var i = 0; i < msg.throwables.length; i++) {
+                        var t = msg.throwables[i],
+                            tp = "throwable_snapshot.throwables[" + i + "]";
+                        isObject(t) ? (isString(t.id) && t.id || errors.push(tp + ".id must be a non-empty string"), isString(t.type) && t.type || errors.push(tp + ".type must be a non-empty string"), isFiniteNumber(t.x) || errors.push(tp + ".x must be a finite number"), isFiniteNumber(t.y) || errors.push(tp + ".y must be a finite number"), isFiniteNumber(t.z) || errors.push(tp + ".z must be a finite number"), isFiniteNumber(t.vx) || errors.push(tp + ".vx must be a finite number"), isFiniteNumber(t.vy) || errors.push(tp + ".vy must be a finite number"), isFiniteNumber(t.vz) || errors.push(tp + ".vz must be a finite number"), void 0 === t.fuse || isFiniteNumber(t.fuse) || errors.push(tp + ".fuse must be a finite number"), void 0 === t.ownerId || isString(t.ownerId) || errors.push(tp + ".ownerId must be a string"), void 0 === t.state || isString(t.state) || errors.push(tp + ".state must be a string")) : errors.push(tp + " must be an object")
+                    }
+                    for (var j = 0; j < msg.zones.length; j++) {
+                        var z = msg.zones[j],
+                            zp = "throwable_snapshot.zones[" + j + "]";
+                        isObject(z) ? (isString(z.id) && z.id || errors.push(zp + ".id must be a non-empty string"), isFiniteNumber(z.x) || errors.push(zp + ".x must be a finite number"), isFiniteNumber(z.z) || errors.push(zp + ".z must be a finite number"), isFiniteNumber(z.radius) || errors.push(zp + ".radius must be a finite number"), isFiniteNumber(z.lifeLeft) || errors.push(zp + ".lifeLeft must be a finite number"), void 0 === z.type || isString(z.type) || errors.push(zp + ".type must be a string")) : errors.push(zp + " must be an object")
+                    }
+                }
+                return errors.length ? failResult(errors) : okResult(msg)
+            },
+            validateThrowableEvent: function(msg) {
+                var errors = [];
+                return isObject(msg) || errors.push("throwable_event must be an object"), errors.length || "throwable_event" === msg.t || errors.push('throwable_event.t must be "throwable_event"'), errors.length || isString(msg.eventType) || errors.push("throwable_event.eventType must be a string"), errors.length || isString(msg.id) || errors.push("throwable_event.id must be a string"), errors.length || void 0 === msg.type || isString(msg.type) || errors.push("throwable_event.type must be a string"), errors.length || void 0 === msg.x || isFiniteNumber(msg.x) || errors.push("throwable_event.x must be a finite number"), errors.length || void 0 === msg.y || isFiniteNumber(msg.y) || errors.push("throwable_event.y must be a finite number"), errors.length || void 0 === msg.z || isFiniteNumber(msg.z) || errors.push("throwable_event.z must be a finite number"), errors.length || void 0 === msg.radius || isFiniteNumber(msg.radius) || errors.push("throwable_event.radius must be a finite number"), errors.length || void 0 === msg.ttlMs || isFiniteNumber(msg.ttlMs) || errors.push("throwable_event.ttlMs must be a finite number"), errors.length ? failResult(errors) : okResult(msg)
+            },
+            validateFireIntent: validateFireIntent,
+            validateBeamIntent: validateBeamIntent,
+            validateThrowIntent: validateThrowIntent,
+            validateChunkSubscribe: validateChunkSubscribe,
+            validateLoadout: function(dto, allowedIds) {
+                var errors = [];
+                if (isObject(dto) || errors.push("loadout must be an object"), errors.length || Array.isArray(dto.slots) || errors.push("loadout.slots must be an array"), errors.length) return failResult(errors);
+                var allowedMap = null;
+                if (Array.isArray(allowedIds)) {
+                    allowedMap = {};
+                    for (var a = 0; a < allowedIds.length; a++) allowedMap[String(allowedIds[a])] = !0
+                }
+                for (var seen = {}, outSlots = [], i = 0; i < dto.slots.length; i++) {
+                    var id = String(dto.slots[i] || "");
+                    id && (seen[id] || (!allowedMap || allowedMap[id] ? (seen[id] = !0, outSlots.push(id)) : errors.push("loadout.slots[" + i + '] "' + id + '" is not in allowed ids')))
+                }
+                return 0 === outSlots.length && errors.push("loadout must contain at least one slot id"), errors.length ? failResult(errors) : okResult({
+                    slots: outSlots
+                })
+            },
+            validateWsClientMessage: function(msg) {
+                return isObject(msg) ? isString(msg.t) && msg.t ? "join_room" === msg.t || "ping" === msg.t ? okResult(msg) : "input" === msg.t ? validateClientInput(msg) : "fire_intent" === msg.t ? validateFireIntent(msg) : "beam_intent" === msg.t ? validateBeamIntent(msg) : "throw_intent" === msg.t ? validateThrowIntent(msg) : "chunk_subscribe" === msg.t ? validateChunkSubscribe(msg) : "equip_weapon" === msg.t ? isString(msg.weaponId) && msg.weaponId ? okResult(msg) : failResult(["equip_weapon.weaponId must be a non-empty string"]) : "class_queue" === msg.t ? isString(msg.classId) && msg.classId ? okResult(msg) : failResult(["class_queue.classId must be a non-empty string"]) : failResult(["unknown ws message type: " + msg.t]) : failResult(['ws message must include string "t"']) : failResult(["ws message must be an object"])
+            }
+        };
+        global.__GAME_SCHEMA__ = function deepFreeze(value) {
+            if (!value || "object" != typeof value || Object.isFrozen(value)) return value;
+            Object.freeze(value);
+            for (var keys = Object.keys(value), i = 0; i < keys.length; i++) deepFreeze(value[keys[i]]);
+            return value
+        }(schema)
+    }
+
+    function isObject(value) {
+        return !!value && "object" == typeof value && !Array.isArray(value)
+    }
+
+    function isFiniteNumber(value) {
+        return "number" == typeof value && isFinite(value)
+    }
+
+    function isBoolean(value) {
+        return "boolean" == typeof value
+    }
+
+    function isString(value) {
+        return "string" == typeof value
+    }
+
+    function validateCameraMode(value, fieldName) {
+        var label = fieldName || "cameraMode";
+        return isString(value) ? "first" !== value && "third" !== value ? [label + ' must be "first" or "third"'] : [] : [label + " must be a string"]
+    }
+
+    function okResult(value) {
+        return {
+            ok: !0,
+            errors: [],
+            value: value
+        }
+    }
+
+    function failResult(errors) {
+        return {
+            ok: !1,
+            errors: errors.slice()
+        }
+    }
+
+    function validateClientInput(msg) {
+        var errors = [];
+        return isObject(msg) || errors.push("input must be an object"), errors.length || "input" === msg.t || errors.push('input.t must be "input"'), errors.length || isFiniteNumber(msg.moveX) || errors.push("input.moveX must be a finite number"), errors.length || isFiniteNumber(msg.moveZ) || errors.push("input.moveZ must be a finite number"), errors.length || isBoolean(msg.jumpHeld) || errors.push("input.jumpHeld must be a boolean"), errors.length || isBoolean(msg.sprint) || errors.push("input.sprint must be a boolean"), errors.length || isFiniteNumber(msg.yaw) || errors.push("input.yaw must be a finite number"), errors.length || isFiniteNumber(msg.pitch) || errors.push("input.pitch must be a finite number"), errors.length || void 0 === msg.seq || isFiniteNumber(msg.seq) || errors.push("input.seq must be a finite number"), errors.length || void 0 === msg.cameraMode || (errors = errors.concat(validateCameraMode(msg.cameraMode, "input.cameraMode"))), errors.length || (errors = errors.concat(function(actions) {
+            if (void 0 === actions) return [];
+            if (!Array.isArray(actions)) return ["input.actions must be an array when provided"];
+            for (var errors = [], i = 0; i < actions.length; i++) {
+                var action = actions[i];
+                isString(action) && action || errors.push("input.actions[" + i + "] must be a non-empty string")
+            }
+            return errors
+        }(msg.actions))), errors.length ? failResult(errors) : okResult(msg)
+    }
+
+    function validateEntityState(entity, index) {
+        var errors = [],
+            prefix = "entities[" + index + "]";
+        return isObject(entity) ? (isString(entity.id) && entity.id || errors.push(prefix + ".id must be a non-empty string"), (!isString(entity.kind) || "player" !== entity.kind && "bot" !== entity.kind) && errors.push(prefix + '.kind must be "player" or "bot"'), isString(entity.classId) && entity.classId || errors.push(prefix + ".classId must be a non-empty string"), isFiniteNumber(entity.x) || errors.push(prefix + ".x must be a finite number"), isFiniteNumber(entity.feetY) || errors.push(prefix + ".feetY must be a finite number"), isFiniteNumber(entity.z) || errors.push(prefix + ".z must be a finite number"), isFiniteNumber(entity.yaw) || errors.push(prefix + ".yaw must be a finite number"), isFiniteNumber(entity.pitch) || errors.push(prefix + ".pitch must be a finite number"), void 0 === entity.velY || isFiniteNumber(entity.velY) || errors.push(prefix + ".velY must be a finite number"), void 0 === entity.grounded || isBoolean(entity.grounded) || errors.push(prefix + ".grounded must be a boolean"), isFiniteNumber(entity.hp) || errors.push(prefix + ".hp must be a finite number"), isFiniteNumber(entity.hpMax) || errors.push(prefix + ".hpMax must be a finite number"), isFiniteNumber(entity.armor) || errors.push(prefix + ".armor must be a finite number"), isFiniteNumber(entity.armorMax) || errors.push(prefix + ".armorMax must be a finite number"), isBoolean(entity.alive) || errors.push(prefix + ".alive must be a boolean"), void 0 === entity.weaponId || isString(entity.weaponId) || errors.push(prefix + ".weaponId must be a string"), void 0 === entity.moveSpeedNorm || isFiniteNumber(entity.moveSpeedNorm) || errors.push(prefix + ".moveSpeedNorm must be a finite number"), void 0 === entity.sprinting || isBoolean(entity.sprinting) || errors.push(prefix + ".sprinting must be a boolean"), void 0 === entity.animState || isString(entity.animState) || errors.push(prefix + ".animState must be a string"), void 0 === entity.animPhase || isFiniteNumber(entity.animPhase) || errors.push(prefix + ".animPhase must be a finite number"), void 0 === entity.gripMode || isString(entity.gripMode) || errors.push(prefix + ".gripMode must be a string"), void 0 === entity.aimPitch || isFiniteNumber(entity.aimPitch) || errors.push(prefix + ".aimPitch must be a finite number"), errors) : (errors.push(prefix + " must be an object"), errors)
+    }
+
+    function validateServerEntitySnapshot(msg) {
+        var errors = [],
+            validEntities = [];
+        if (isObject(msg) || errors.push("entity_snapshot must be an object"), errors.length || "entity_snapshot" === msg.t || errors.push('entity_snapshot.t must be "entity_snapshot"'), errors.length || isFiniteNumber(msg.serverTime) || errors.push("entity_snapshot.serverTime must be a finite number"), errors.length || Array.isArray(msg.entities) || errors.push("entity_snapshot.entities must be an array"), !errors.length)
+            for (var i = 0; i < msg.entities.length; i++) {
+                var entity = msg.entities[i],
+                    entityErrors = validateEntityState(entity, i);
+                entityErrors.length > 0 ? errors = errors.concat(entityErrors) : validEntities.push(entity)
+            }
+        return errors.length ? {
+            ok: !1,
+            errors: errors,
+            droppedCount: msg && msg.entities && msg.entities.length ? msg.entities.length - validEntities.length : 0,
+            value: null
+        } : {
+            ok: !0,
+            errors: [],
+            droppedCount: 0,
+            value: {
+                t: "entity_snapshot",
+                serverTime: msg.serverTime,
+                entities: validEntities
+            }
+        }
+    }
+
+    function validateFireIntent(msg) {
+        var errors = [];
+        return isObject(msg) || errors.push("fire_intent must be an object"), errors.length || "fire_intent" === msg.t || errors.push('fire_intent.t must be "fire_intent"'), errors.length || isString(msg.weaponId) || errors.push("fire_intent.weaponId must be a string"), errors.length || void 0 === msg.seq || isFiniteNumber(msg.seq) || errors.push("fire_intent.seq must be a finite number"), errors.length || void 0 === msg.fireMode || isString(msg.fireMode) || errors.push("fire_intent.fireMode must be a string when provided"), errors.length ? failResult(errors) : okResult(msg)
+    }
+
+    function validateBeamIntent(msg) {
+        var errors = [];
+        return isObject(msg) || errors.push("beam_intent must be an object"), errors.length || "beam_intent" === msg.t || errors.push('beam_intent.t must be "beam_intent"'), errors.length || isString(msg.weaponId) || errors.push("beam_intent.weaponId must be a string"), errors.length || isBoolean(msg.active) || errors.push("beam_intent.active must be a boolean"), errors.length || void 0 === msg.seq || isFiniteNumber(msg.seq) || errors.push("beam_intent.seq must be a finite number"), errors.length ? failResult(errors) : okResult(msg)
+    }
+
+    function validateThrowIntent(msg) {
+        var errors = [];
+        return isObject(msg) || errors.push("throw_intent must be an object"), errors.length || "throw_intent" === msg.t || errors.push('throw_intent.t must be "throw_intent"'), errors.length || isString(msg.throwableId) || errors.push("throw_intent.throwableId must be a string"), errors.length || void 0 === msg.seq || isFiniteNumber(msg.seq) || errors.push("throw_intent.seq must be a finite number"), errors.length ? failResult(errors) : okResult(msg)
+    }
+
+    function validateChunkSubscribe(msg) {
+        var errors = [];
+        return isObject(msg) || errors.push("chunk_subscribe must be an object"), errors.length || "chunk_subscribe" === msg.t || errors.push('chunk_subscribe.t must be "chunk_subscribe"'), errors.length || isFiniteNumber(msg.centerChunkX) || errors.push("chunk_subscribe.centerChunkX must be a finite number"), errors.length || isFiniteNumber(msg.centerChunkZ) || errors.push("chunk_subscribe.centerChunkZ must be a finite number"), errors.length ? failResult(errors) : okResult(msg)
+    }
+}("undefined" != typeof globalThis ? globalThis : this);
