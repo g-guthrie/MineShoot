@@ -34,3 +34,22 @@ Use adaptive-medium first-wave explorer fan-out:
 For each major cycle, include:
 - `Dispatch Plan`: phase, launched roles, ownership map, gates.
 - `Fanout Telemetry`: launched roles, concurrent peak, active writers, nested explorers used, ownership conflicts.
+
+## Cursor Cloud specific instructions
+
+### Project overview
+Minecraft-style browser FPS ("MINESHOOT") — zero-dependency, no-build vanilla JS + Three.js (vendored). No `package.json`, no npm install, no build step.
+
+### Running the game locally
+- **Static server**: `python3 -m http.server 8080` (from repo root), then open `http://localhost:8080/`.
+- The game auto-detects local mode via the HTTP origin. Click **"Bypass Login (Local Dev)"** on the auth overlay to skip multiplayer auth.
+- Multiplayer requires Cloudflare Workers (`npx wrangler dev`), which needs Cloudflare credentials — not needed for local single-player dev/testing.
+
+### Tests
+- **Parity harness**: `node scripts/parity-harness.js` — validates spawn safety and schema parity using only Node.js built-ins. This is the only automated test.
+
+### Gotchas
+- There is no linter or TypeScript configured; the codebase is vanilla JS with no tooling.
+- The `cloudflare/worker.js` uses ES module imports from `../shared/`; do not add CommonJS to shared modules.
+- Three.js is vendored at `js/vendor/three.min.js` — do not add it as an npm dependency.
+- Pointer lock may not engage in headless/automated browser contexts; the game gracefully falls back to "input capture mode" so gameplay still works.
