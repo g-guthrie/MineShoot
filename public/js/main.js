@@ -435,7 +435,13 @@
             playBtn.addEventListener('pointerup', requestPlayStart);
             playBtn.addEventListener('mousedown', requestPlayStart);
             playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+            playBtn.style.display = 'none';
+            playBtn.setAttribute('aria-hidden', 'true');
+            playBtn.tabIndex = -1;
         }
+
+        // Force gameplay start on load and bypass the menu gate completely.
+        enterFallbackStart();
 
         document.addEventListener('pointerlockchange', function () {
             if (document.pointerLockElement === renderer.domElement) {
@@ -443,18 +449,20 @@
                 if (window.GameDocs && window.GameDocs.close) {
                     window.GameDocs.close();
                 }
-                overlay.style.display = 'none';
+                if (overlay) overlay.style.display = 'none';
                 isPlaying = true;
                 if (window.GameAudio && window.GameAudio.setGameplayActive) {
                     window.GameAudio.setGameplayActive(true);
                 }
             } else {
                 if (!window.__gameNoLockInput) {
-                    overlay.style.display = 'flex';
-                    isPlaying = false;
+                    window.__gameNoLockInput = true;
+                    if (overlay) overlay.style.display = 'none';
+                    isPlaying = true;
                     if (window.GameAudio && window.GameAudio.setGameplayActive) {
-                        window.GameAudio.setGameplayActive(false);
+                        window.GameAudio.setGameplayActive(true);
                     }
+                    setTransientDebug('Pointer lock released. Using fallback input. Press Esc for menu.', 2600);
                 }
             }
         });
@@ -467,12 +475,10 @@
 
         document.addEventListener('keydown', function (e) {
             if (e.code === 'Escape' && window.__gameNoLockInput) {
-                window.__gameNoLockInput = false;
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                if (window.GameAudio && window.GameAudio.setGameplayActive) {
-                    window.GameAudio.setGameplayActive(false);
-                }
+                e.preventDefault();
+                if (overlay) overlay.style.display = 'none';
+                isPlaying = true;
+                setTransientDebug('Menu bypass active. Gameplay remains live.', 1200);
             }
         });
     }
