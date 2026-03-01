@@ -56,37 +56,13 @@ function makeAabb(cx, cy, cz, w, h, d) {
   };
 }
 
-function buildColliders(prim) {
-  const world = prim.world;
+function buildColliders(layout, config) {
+  const solids = layout.buildSolidSpecs(config);
   const out = [];
-
-  const scaleAxis = world.scale_axis || ((value) => (value / world.base_world_size) * world.world_size);
-  const scaleSpan = world.scale_span || ((value) => Math.max(1, (value / world.base_world_size) * world.world_size));
-  const add = (x, y, z, w, h, d) => out.push(makeAabb(x, y, z, w, h, d));
-
-  const core = world.core_cover_layout || [];
-  for (const c of core) {
-    add(scaleAxis(c[0]), c[1], scaleAxis(c[2]), scaleSpan(c[3]), c[4], scaleSpan(c[5]));
+  for (const s of solids) {
+    if (!s) continue;
+    out.push(makeAabb(s.x, s.y, s.z, s.w, s.h, s.d));
   }
-
-  const WORLD_MIN = world.min;
-  const WORLD_MAX = world.max;
-  const WORLD_SIZE = world.world_size;
-  const edgeStep = Math.max(2, Math.round(WORLD_SIZE / 30));
-
-  for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
-    const northHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0) + ((edge % (edgeStep * 5) === 0) ? 1 : 0);
-    const southHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
-    add(edge, northHeight * 0.5, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2);
-    add(edge, southHeight * 0.5, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2);
-  }
-  for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
-    const westHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
-    const eastHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0);
-    add(WORLD_MIN + 0.8, westHeight * 0.5, edge, 1.2, westHeight, edgeStep * 0.92);
-    add(WORLD_MAX - 0.8, eastHeight * 0.5, edge, 1.2, eastHeight, edgeStep * 0.92);
-  }
-
   return out;
 }
 
@@ -177,10 +153,10 @@ function randomSpawn(rng, world, padding) {
   };
 }
 
-function runSpawnSafety(prim) {
-  const colliders = buildColliders(prim);
-  const world = prim.world;
-  const entity = prim.entity;
+function runSpawnSafety(prim, layout) {
+  const world = layout.getConfig({});
+  const entity = prim.entity || {};
+  const colliders = buildColliders(layout, world);
   const seeds = ['mineshoot-v1', 'mineshoot-v2', 'arena-a', 'arena-b', 'arena-c', 'arena-d', 'arena-e', 'arena-f', 'arena-g', 'arena-h'];
   let overlaps = 0;
   let total = 0;
@@ -212,14 +188,21 @@ function runSpawnSafety(prim) {
 function runSchemaChecks(schema) {
   const checks = [];
   checks.push(schema.validateClientInput({
-    t: 'input', seq: 1, x: 10, feetY: 0, z: 12, yaw: 0.1, pitch: 0.2,
-    sprint: false, jump: false, weaponId: 'rifle', moveSpeedNorm: 0.4, sprinting: false
+    t: 'input',
+    seq: 1,
+    moveX: 0.25,
+    moveZ: -1,
+    jumpHeld: false,
+    sprint: false,
+    yaw: 0.1,
+    pitch: 0.2,
+    actions: ['fire']
   }).ok);
   checks.push(!schema.validateClientInput({ t: 'input', x: 'bad' }).ok);
   checks.push(schema.validateLoadout({ slots: ['rifle', 'shotgun'] }, ['rifle', 'shotgun', 'sniper']).ok);
   checks.push(!schema.validateLoadout({ slots: ['invalid'] }, ['rifle']).ok);
-  checks.push(schema.validateServerSnapshot({
-    t: 'snapshot',
+  checks.push(schema.validateServerEntitySnapshot({
+    t: 'entity_snapshot',
     serverTime: Date.now(),
     entities: [{
       id: 'p1', kind: 'player', classId: 'sharpshooter',
@@ -228,18 +211,25 @@ function runSchemaChecks(schema) {
       weaponId: 'rifle', moveSpeedNorm: 0, sprinting: false
     }]
   }).ok);
+  checks.push(schema.validateFireIntent({ t: 'fire_intent', weaponId: 'rifle', seq: 2, fireMode: 'single' }).ok);
+  checks.push(schema.validateThrowIntent({ t: 'throw_intent', throwableId: 'frag', seq: 3 }).ok);
+  checks.push(schema.validateChunkSubscribe({ t: 'chunk_subscribe', centerChunkX: 0, centerChunkZ: 0 }).ok);
+  checks.push(schema.validateWsClientMessage({ t: 'equip_weapon', weaponId: 'shotgun' }).ok);
+  checks.push(schema.validateWsClientMessage({ t: 'class_queue', classId: 'ninja' }).ok);
   return checks.every(Boolean);
 }
 
 function run() {
   const context = makeContext();
   loadSideEffectModule('shared/game-primitives.js', context);
+  loadSideEffectModule('shared/world-layout.js', context);
   loadSideEffectModule('shared/game-schema.js', context);
 
   const prim = context.__GAME_PRIMITIVES__;
+  const layout = context.__GAME_WORLD_LAYOUT__;
   const schema = context.__GAME_SCHEMA__;
 
-  const spawn = runSpawnSafety(prim);
+  const spawn = runSpawnSafety(prim, layout);
   const schemaOk = runSchemaChecks(schema);
 
   const lines = [];

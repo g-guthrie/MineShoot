@@ -130,6 +130,8 @@
             area_scale: 5,
             margin: 2,
             seed_default: 'mineshoot-v1',
+            chunk_size: 16,
+            interest_radius_chunks: 2,
             core_cover_layout: [
                 [25, 1.5, 25, 4, 3, 1],
                 [25, 1.5, 27, 1, 3, 3],

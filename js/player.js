@@ -36,6 +36,7 @@
     var THIRD_HEIGHT = 0.7;
     var THIRD_SHOULDER = 1.35;
     var THIRD_SMOOTH = 12;
+    var RECONCILE_SNAP_DIST = 1.6;
 
     // Logical player state (camera derives from this)
     var playerX = 25;
@@ -979,6 +980,38 @@
                 sprint: !!keys.sprint
             }
         };
+    };
+
+    GamePlayer.applyServerReconcile = function (state) {
+        if (!state || typeof state !== 'object') return;
+        if (!camera) return;
+
+        var sx = (typeof state.x === 'number') ? state.x : playerX;
+        var sy = (typeof state.feetY === 'number') ? state.feetY : feetY;
+        var sz = (typeof state.z === 'number') ? state.z : playerZ;
+        var dx = sx - playerX;
+        var dz = sz - playerZ;
+        var horizontalError = Math.sqrt((dx * dx) + (dz * dz));
+
+        if (horizontalError > RECONCILE_SNAP_DIST) {
+            playerX = sx;
+            playerZ = sz;
+            feetY = sy;
+        } else {
+            var blend = 0.55;
+            playerX += dx * blend;
+            playerZ += dz * blend;
+            feetY += (sy - feetY) * blend;
+        }
+
+        if (typeof state.velY === 'number') velocityY = state.velY;
+        if (typeof state.grounded === 'boolean') isGrounded = state.grounded;
+        if (typeof state.yaw === 'number') yaw = state.yaw;
+        if (typeof state.pitch === 'number') pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, state.pitch));
+
+        recoverFromOverlap(4);
+        updateAvatarPose();
+        updateCameraFromPlayer(0.016);
     };
 
     GamePlayer.setCollisionDebugVisible = function (visible) {

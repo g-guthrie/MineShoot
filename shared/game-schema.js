@@ -37,46 +37,36 @@
         return { ok: false, errors: errors.slice() };
     }
 
+    function validateActions(actions) {
+        if (actions === undefined) return [];
+        if (!Array.isArray(actions)) return ['input.actions must be an array when provided'];
+        var errors = [];
+        for (var i = 0; i < actions.length; i++) {
+            var action = actions[i];
+            if (!isString(action) || !action) {
+                errors.push('input.actions[' + i + '] must be a non-empty string');
+            }
+        }
+        return errors;
+    }
+
     function validateClientInput(msg) {
         var errors = [];
         if (!isObject(msg)) errors.push('input must be an object');
         if (!errors.length && msg.t !== 'input') errors.push('input.t must be "input"');
 
-        if (!errors.length && !isFiniteNumber(msg.x)) errors.push('input.x must be a finite number');
-        if (!errors.length && !isFiniteNumber(msg.z)) errors.push('input.z must be a finite number');
-        if (!errors.length && !isFiniteNumber(msg.feetY)) errors.push('input.feetY must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.moveX)) errors.push('input.moveX must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.moveZ)) errors.push('input.moveZ must be a finite number');
+        if (!errors.length && !isBoolean(msg.jumpHeld)) errors.push('input.jumpHeld must be a boolean');
+        if (!errors.length && !isBoolean(msg.sprint)) errors.push('input.sprint must be a boolean');
         if (!errors.length && !isFiniteNumber(msg.yaw)) errors.push('input.yaw must be a finite number');
         if (!errors.length && !isFiniteNumber(msg.pitch)) errors.push('input.pitch must be a finite number');
 
         if (!errors.length && msg.seq !== undefined && !isFiniteNumber(msg.seq)) {
             errors.push('input.seq must be a finite number');
         }
-        if (!errors.length && msg.weaponId !== undefined && !isString(msg.weaponId)) {
-            errors.push('input.weaponId must be a string');
-        }
-        if (!errors.length && msg.moveSpeedNorm !== undefined && !isFiniteNumber(msg.moveSpeedNorm)) {
-            errors.push('input.moveSpeedNorm must be a finite number');
-        }
-        if (!errors.length && msg.sprinting !== undefined && !isBoolean(msg.sprinting)) {
-            errors.push('input.sprinting must be a boolean');
-        }
-        if (!errors.length && msg.sprint !== undefined && !isBoolean(msg.sprint)) {
-            errors.push('input.sprint must be a boolean');
-        }
-        if (!errors.length && msg.jump !== undefined && !isBoolean(msg.jump)) {
-            errors.push('input.jump must be a boolean');
-        }
-        if (!errors.length && msg.animState !== undefined && !isString(msg.animState)) {
-            errors.push('input.animState must be a string');
-        }
-        if (!errors.length && msg.animPhase !== undefined && !isFiniteNumber(msg.animPhase)) {
-            errors.push('input.animPhase must be a finite number');
-        }
-        if (!errors.length && msg.gripMode !== undefined && !isString(msg.gripMode)) {
-            errors.push('input.gripMode must be a string');
-        }
-        if (!errors.length && msg.aimPitch !== undefined && !isFiniteNumber(msg.aimPitch)) {
-            errors.push('input.aimPitch must be a finite number');
+        if (!errors.length) {
+            errors = errors.concat(validateActions(msg.actions));
         }
 
         if (errors.length) return failResult(errors);
@@ -102,6 +92,8 @@
         if (!isFiniteNumber(entity.z)) errors.push(prefix + '.z must be a finite number');
         if (!isFiniteNumber(entity.yaw)) errors.push(prefix + '.yaw must be a finite number');
         if (!isFiniteNumber(entity.pitch)) errors.push(prefix + '.pitch must be a finite number');
+        if (entity.velY !== undefined && !isFiniteNumber(entity.velY)) errors.push(prefix + '.velY must be a finite number');
+        if (entity.grounded !== undefined && !isBoolean(entity.grounded)) errors.push(prefix + '.grounded must be a boolean');
         if (!isFiniteNumber(entity.hp)) errors.push(prefix + '.hp must be a finite number');
         if (!isFiniteNumber(entity.hpMax)) errors.push(prefix + '.hpMax must be a finite number');
         if (!isFiniteNumber(entity.armor)) errors.push(prefix + '.armor must be a finite number');
@@ -133,14 +125,14 @@
         return errors;
     }
 
-    function validateServerSnapshot(msg) {
+    function validateServerEntitySnapshot(msg) {
         var errors = [];
         var validEntities = [];
 
-        if (!isObject(msg)) errors.push('snapshot must be an object');
-        if (!errors.length && msg.t !== 'snapshot') errors.push('snapshot.t must be "snapshot"');
-        if (!errors.length && !isFiniteNumber(msg.serverTime)) errors.push('snapshot.serverTime must be a finite number');
-        if (!errors.length && !Array.isArray(msg.entities)) errors.push('snapshot.entities must be an array');
+        if (!isObject(msg)) errors.push('entity_snapshot must be an object');
+        if (!errors.length && msg.t !== 'entity_snapshot') errors.push('entity_snapshot.t must be "entity_snapshot"');
+        if (!errors.length && !isFiniteNumber(msg.serverTime)) errors.push('entity_snapshot.serverTime must be a finite number');
+        if (!errors.length && !Array.isArray(msg.entities)) errors.push('entity_snapshot.entities must be an array');
 
         if (!errors.length) {
             for (var i = 0; i < msg.entities.length; i++) {
@@ -168,11 +160,86 @@
             errors: [],
             droppedCount: 0,
             value: {
-                t: 'snapshot',
+                t: 'entity_snapshot',
                 serverTime: msg.serverTime,
                 entities: validEntities
             }
         };
+    }
+
+    function validateServerReconcile(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('server_reconcile must be an object');
+        if (!errors.length && msg.t !== 'server_reconcile') errors.push('server_reconcile.t must be "server_reconcile"');
+        if (!errors.length && !isFiniteNumber(msg.x)) errors.push('server_reconcile.x must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.feetY)) errors.push('server_reconcile.feetY must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.z)) errors.push('server_reconcile.z must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.velY)) errors.push('server_reconcile.velY must be a finite number');
+        if (!errors.length && !isBoolean(msg.grounded)) errors.push('server_reconcile.grounded must be a boolean');
+        if (!errors.length && !isFiniteNumber(msg.yaw)) errors.push('server_reconcile.yaw must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.pitch)) errors.push('server_reconcile.pitch must be a finite number');
+        if (!errors.length && msg.seq !== undefined && !isFiniteNumber(msg.seq)) errors.push('server_reconcile.seq must be a finite number');
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateChunkSnapshot(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('chunk_snapshot must be an object');
+        if (!errors.length && msg.t !== 'chunk_snapshot') errors.push('chunk_snapshot.t must be "chunk_snapshot"');
+        if (!errors.length && !isObject(msg.chunk)) errors.push('chunk_snapshot.chunk must be an object');
+        if (!errors.length) {
+            var chunk = msg.chunk;
+            if (!isString(chunk.key) || !chunk.key) errors.push('chunk_snapshot.chunk.key must be a non-empty string');
+            if (!isFiniteNumber(chunk.version)) errors.push('chunk_snapshot.chunk.version must be a finite number');
+            if (!Array.isArray(chunk.solids)) errors.push('chunk_snapshot.chunk.solids must be an array');
+        }
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateChunkDelta(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('chunk_delta must be an object');
+        if (!errors.length && msg.t !== 'chunk_delta') errors.push('chunk_delta.t must be "chunk_delta"');
+        if (!errors.length && !isString(msg.key)) errors.push('chunk_delta.key must be a string');
+        if (!errors.length && !isFiniteNumber(msg.version)) errors.push('chunk_delta.version must be a finite number');
+        if (!errors.length && msg.op !== undefined && !isString(msg.op)) errors.push('chunk_delta.op must be a string when provided');
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateFireIntent(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('fire_intent must be an object');
+        if (!errors.length && msg.t !== 'fire_intent') errors.push('fire_intent.t must be "fire_intent"');
+        if (!errors.length && !isString(msg.weaponId)) errors.push('fire_intent.weaponId must be a string');
+        if (!errors.length && msg.seq !== undefined && !isFiniteNumber(msg.seq)) errors.push('fire_intent.seq must be a finite number');
+        if (!errors.length && msg.fireMode !== undefined && !isString(msg.fireMode)) {
+            errors.push('fire_intent.fireMode must be a string when provided');
+        }
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateThrowIntent(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('throw_intent must be an object');
+        if (!errors.length && msg.t !== 'throw_intent') errors.push('throw_intent.t must be "throw_intent"');
+        if (!errors.length && !isString(msg.throwableId)) errors.push('throw_intent.throwableId must be a string');
+        if (!errors.length && msg.seq !== undefined && !isFiniteNumber(msg.seq)) errors.push('throw_intent.seq must be a finite number');
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateChunkSubscribe(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('chunk_subscribe must be an object');
+        if (!errors.length && msg.t !== 'chunk_subscribe') errors.push('chunk_subscribe.t must be "chunk_subscribe"');
+        if (!errors.length && !isFiniteNumber(msg.centerChunkX)) errors.push('chunk_subscribe.centerChunkX must be a finite number');
+        if (!errors.length && !isFiniteNumber(msg.centerChunkZ)) errors.push('chunk_subscribe.centerChunkZ must be a finite number');
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
     }
 
     function validateLoadout(dto, allowedIds) {
@@ -214,26 +281,13 @@
 
         if (msg.t === 'join_room' || msg.t === 'ping') return okResult(msg);
         if (msg.t === 'input') return validateClientInput(msg);
+        if (msg.t === 'fire_intent') return validateFireIntent(msg);
+        if (msg.t === 'throw_intent') return validateThrowIntent(msg);
+        if (msg.t === 'chunk_subscribe') return validateChunkSubscribe(msg);
 
         if (msg.t === 'equip_weapon') {
             if (!isString(msg.weaponId) || !msg.weaponId) {
                 return failResult(['equip_weapon.weaponId must be a non-empty string']);
-            }
-            return okResult(msg);
-        }
-
-        if (msg.t === 'fire') {
-            var fireErrors = [];
-            if (!isString(msg.targetId) || !msg.targetId) fireErrors.push('fire.targetId must be a non-empty string');
-            if (!isString(msg.weaponId) || !msg.weaponId) fireErrors.push('fire.weaponId must be a non-empty string');
-            if (msg.hitType !== 'body' && msg.hitType !== 'head') fireErrors.push('fire.hitType must be "body" or "head"');
-            if (fireErrors.length) return failResult(fireErrors);
-            return okResult(msg);
-        }
-
-        if (msg.t === 'plasma_tick') {
-            if (!isString(msg.targetId) || !msg.targetId) {
-                return failResult(['plasma_tick.targetId must be a non-empty string']);
             }
             return okResult(msg);
         }
@@ -250,7 +304,14 @@
 
     var schema = {
         validateClientInput: validateClientInput,
-        validateServerSnapshot: validateServerSnapshot,
+        validateServerSnapshot: validateServerEntitySnapshot,
+        validateServerEntitySnapshot: validateServerEntitySnapshot,
+        validateServerReconcile: validateServerReconcile,
+        validateChunkSnapshot: validateChunkSnapshot,
+        validateChunkDelta: validateChunkDelta,
+        validateFireIntent: validateFireIntent,
+        validateThrowIntent: validateThrowIntent,
+        validateChunkSubscribe: validateChunkSubscribe,
         validateLoadout: validateLoadout,
         validateWsClientMessage: validateWsClientMessage
     };

@@ -8,6 +8,7 @@
     var GameWorld = {};
 
     var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var WORLD_LAYOUT = globalThis.__GAME_WORLD_LAYOUT__ || null;
     var WORLD_PRIM = PRIM.world || {};
     var ENTITY_PRIM = PRIM.entity || {};
     var BASE_WORLD_SIZE = Number(WORLD_PRIM.base_world_size || 50);
@@ -26,6 +27,13 @@
 
     // Solid meshes used for movement/raycast collisions.
     var collidables = [];
+    var chunkStore = new Map();
+    var sceneRef = null;
+    var worldConfigRef = null;
+    var chunkStreamingEnabled = false;
+    var chunkSize = Math.max(4, Math.floor(Number(WORLD_PRIM.chunk_size || 16)));
+    var interestRadiusChunks = Math.max(1, Math.floor(Number(WORLD_PRIM.interest_radius_chunks || 2)));
+    var chunkMaterialPalette = null;
 
     function hashSeed(seedText) {
         var str = String(seedText || 'mineshoot-v1');
@@ -71,6 +79,31 @@
 
     function applyWorldConfig(manifest) {
         manifest = (manifest && typeof manifest === 'object') ? manifest : null;
+        if (WORLD_LAYOUT && WORLD_LAYOUT.getConfig) {
+            var cfg = WORLD_LAYOUT.getConfig({
+                areaScale: manifest ? manifest.areaScale : undefined,
+                worldSize: manifest ? manifest.size : undefined,
+                margin: manifest ? manifest.margin : undefined,
+                min: manifest ? manifest.min : undefined,
+                max: manifest ? manifest.max : undefined,
+                center: manifest ? manifest.center : undefined,
+                seed: manifest ? manifest.seed : resolveSeedFromLocation(),
+                chunkSize: manifest ? manifest.chunkSize : undefined,
+                interestRadiusChunks: manifest ? manifest.interestRadiusChunks : undefined
+            });
+            worldConfigRef = cfg;
+            WORLD_AREA_SCALE = Number(cfg.areaScale);
+            WORLD_SIZE = Number(cfg.worldSize);
+            WORLD_CENTER = Number(cfg.center);
+            WORLD_MARGIN = Number(cfg.margin);
+            WORLD_MIN = Number(cfg.min);
+            WORLD_MAX = Number(cfg.max);
+            chunkSize = Math.max(4, Math.floor(Number(cfg.chunkSize || chunkSize)));
+            interestRadiusChunks = Math.max(1, Math.floor(Number(cfg.interestRadiusChunks || interestRadiusChunks)));
+            setSeed(cfg.seed || resolveSeedFromLocation());
+            return;
+        }
+
         if (!manifest) {
             WORLD_AREA_SCALE = Number(WORLD_PRIM.area_scale || 5);
             WORLD_SIZE = Number(WORLD_PRIM.world_size || Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE)));
@@ -97,22 +130,11 @@
                 ? manifest.margin
                 : (WORLD_PRIM.margin || 2)
         );
-        WORLD_MIN = Number(
-            (typeof manifest.min === 'number' && isFinite(manifest.min))
-                ? manifest.min
-                : WORLD_MARGIN
-        );
-        WORLD_MAX = Number(
-            (typeof manifest.max === 'number' && isFinite(manifest.max))
-                ? manifest.max
-                : (WORLD_SIZE - WORLD_MARGIN)
-        );
-        WORLD_CENTER = Number(
-            (typeof manifest.center === 'number' && isFinite(manifest.center))
-                ? manifest.center
-                : ((WORLD_MIN + WORLD_MAX) * 0.5)
-        );
-
+        WORLD_MIN = Number((typeof manifest.min === 'number' && isFinite(manifest.min)) ? manifest.min : WORLD_MARGIN);
+        WORLD_MAX = Number((typeof manifest.max === 'number' && isFinite(manifest.max)) ? manifest.max : (WORLD_SIZE - WORLD_MARGIN));
+        WORLD_CENTER = Number((typeof manifest.center === 'number' && isFinite(manifest.center)) ? manifest.center : ((WORLD_MIN + WORLD_MAX) * 0.5));
+        chunkSize = Math.max(4, Math.floor(Number(manifest.chunkSize || WORLD_PRIM.chunk_size || chunkSize)));
+        interestRadiusChunks = Math.max(1, Math.floor(Number(manifest.interestRadiusChunks || WORLD_PRIM.interest_radius_chunks || interestRadiusChunks)));
         setSeed(manifest.seed || resolveSeedFromLocation());
     }
 
@@ -150,6 +172,20 @@
     }
 
     function buildDefaultSolidSpecs() {
+        if (WORLD_LAYOUT && WORLD_LAYOUT.buildSolidSpecs) {
+            return WORLD_LAYOUT.buildSolidSpecs({
+                areaScale: WORLD_AREA_SCALE,
+                worldSize: WORLD_SIZE,
+                margin: WORLD_MARGIN,
+                min: WORLD_MIN,
+                max: WORLD_MAX,
+                center: WORLD_CENTER,
+                seed: WORLD_SEED,
+                chunkSize: chunkSize,
+                interestRadiusChunks: interestRadiusChunks
+            });
+        }
+
         var solids = [];
         function add(x, y, z, w, h, d, kind) {
             solids.push({ x: x, y: y, z: z, w: w, h: h, d: d, kind: kind || '' });
@@ -419,16 +455,113 @@
             min: WORLD_MIN,
             max: WORLD_MAX,
             areaScale: WORLD_AREA_SCALE,
+            chunkSize: chunkSize,
+            interestRadiusChunks: interestRadiusChunks,
+            chunkStreaming: false,
             solidBoxes: solids
         };
     }
 
+    function removeCollidableMesh(mesh) {
+        for (var i = collidables.length - 1; i >= 0; i--) {
+            if (collidables[i] === mesh) {
+                collidables.splice(i, 1);
+            }
+        }
+    }
+
+    function removeChunkByKey(key) {
+        var entry = chunkStore.get(key);
+        if (!entry) return;
+        var meshes = entry.meshes || [];
+        for (var i = 0; i < meshes.length; i++) {
+            var mesh = meshes[i];
+            if (mesh && mesh.parent) mesh.parent.remove(mesh);
+            removeCollidableMesh(mesh);
+        }
+        chunkStore.delete(key);
+    }
+
+    function solidMaterialForKind(kind) {
+        if (!chunkMaterialPalette) {
+            return new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+        }
+        if (kind === 'core') {
+            var coreMats = chunkMaterialPalette.core || [];
+            if (coreMats.length > 0) {
+                var idx = Number(chunkMaterialPalette._coreMatCursor || 0) % coreMats.length;
+                chunkMaterialPalette._coreMatCursor = idx + 1;
+                return coreMats[idx];
+            }
+        }
+        if (kind === 'barrier' && chunkMaterialPalette.barrier) return chunkMaterialPalette.barrier;
+        if (chunkMaterialPalette.cover) return chunkMaterialPalette.cover;
+        return chunkMaterialPalette.defaultMat || new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+    }
+
+    function createSolidMesh(spec, scene) {
+        var geo = new THREE.BoxGeometry(spec.w, spec.h, spec.d);
+        var mesh = new THREE.Mesh(geo, solidMaterialForKind(String(spec.kind || '')));
+        mesh.position.set(spec.x, spec.y, spec.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        mesh.updateMatrixWorld(true);
+        mesh.userData.collisionBox = new THREE.Box3().setFromObject(mesh);
+        collidables.push(mesh);
+        return mesh;
+    }
+
+    function normalizeChunkSnapshot(rawChunk) {
+        if (!rawChunk || typeof rawChunk !== 'object') return null;
+        var key = String(rawChunk.key || '');
+        if (!key) return null;
+        var version = Number(rawChunk.version || 1);
+        if (!isFinite(version)) version = 1;
+        var solids = normalizeSolidSpecs(rawChunk.solids || []);
+        return {
+            key: key,
+            version: version,
+            solids: solids,
+            decor: Array.isArray(rawChunk.decor) ? rawChunk.decor.slice() : [],
+            blockers: Array.isArray(rawChunk.blockers) ? rawChunk.blockers.slice() : [],
+            nav: Array.isArray(rawChunk.nav) ? rawChunk.nav.slice() : []
+        };
+    }
+
+    function applyChunkSnapshotInternal(rawChunk) {
+        if (!sceneRef) return false;
+        var chunk = normalizeChunkSnapshot(rawChunk);
+        if (!chunk) return false;
+
+        removeChunkByKey(chunk.key);
+        var meshes = [];
+        for (var i = 0; i < chunk.solids.length; i++) {
+            meshes.push(createSolidMesh(chunk.solids[i], sceneRef));
+        }
+        chunkStore.set(chunk.key, {
+            key: chunk.key,
+            version: chunk.version,
+            meshes: meshes
+        });
+        return true;
+    }
+
     GameWorld.create = function (scene, manifest) {
-        if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.solidBoxes)) {
+        if (!manifest || typeof manifest !== 'object') {
             throw new Error('World manifest is required.');
         }
         applyWorldConfig(manifest);
+        sceneRef = scene;
         collidables = [];
+        chunkStore.clear();
+        chunkStreamingEnabled = !!manifest.chunkStreaming;
+        if (typeof manifest.chunkSize === 'number' && isFinite(manifest.chunkSize)) {
+            chunkSize = Math.max(4, Math.floor(manifest.chunkSize));
+        }
+        if (typeof manifest.interestRadiusChunks === 'number' && isFinite(manifest.interestRadiusChunks)) {
+            interestRadiusChunks = Math.max(1, Math.floor(manifest.interestRadiusChunks));
+        }
         var authoritativeSolids = normalizeSolidSpecs(manifest.solidBoxes);
 
         function markSolid(mesh) {
@@ -530,23 +663,37 @@
         var vineMat = new THREE.MeshLambertMaterial({ color: 0x2a7d3f });
         var dirtMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 });
         var cliffMat = new THREE.MeshLambertMaterial({ color: 0x3f3325 });
+        chunkMaterialPalette = {
+            core: [stoneMat, blockMat, brickMat],
+            barrier: dirtMat,
+            cover: dirtMat,
+            defaultMat: blockMat,
+            _coreMatCursor: 0
+        };
 
         // Authoritative solid cover/barrier geometry (server manifest in net mode).
         var coreMats = [stoneMat, blockMat, brickMat];
-        if (!authoritativeSolids || authoritativeSolids.length === 0) {
-            throw new Error('World manifest has no solid geometry.');
-        }
         var manifestSolids = authoritativeSolids;
         var coreMatIndex = 0;
-        for (var s = 0; s < manifestSolids.length; s++) {
-            var solid = manifestSolids[s];
-            var solidKind = String(solid.kind || '');
-            var solidMat = dirtMat;
-            if (solidKind === 'core') {
-                solidMat = coreMats[coreMatIndex % coreMats.length];
-                coreMatIndex++;
+        if (chunkStreamingEnabled) {
+            var initialChunks = Array.isArray(manifest.initialChunks) ? manifest.initialChunks : [];
+            for (var c = 0; c < initialChunks.length; c++) {
+                applyChunkSnapshotInternal(initialChunks[c]);
             }
-            addBlock(solid.x, solid.y, solid.z, solid.w, solid.h, solid.d, solidMat, true);
+        } else {
+            if (!manifestSolids || manifestSolids.length === 0) {
+                throw new Error('World manifest has no solid geometry.');
+            }
+            for (var s = 0; s < manifestSolids.length; s++) {
+                var solid = manifestSolids[s];
+                var solidKind = String(solid.kind || '');
+                var solidMat = dirtMat;
+                if (solidKind === 'core') {
+                    solidMat = coreMats[coreMatIndex % coreMats.length];
+                    coreMatIndex++;
+                }
+                addBlock(solid.x, solid.y, solid.z, solid.w, solid.h, solid.d, solidMat, true);
+            }
         }
 
         // Edge walls slightly below the arena so the map feels grounded.
@@ -628,6 +775,43 @@
 
         scene.background = new THREE.Color(0x87CEEB);
         scene.fog = new THREE.Fog(0x87CEEB, WORLD_SIZE * 0.6, WORLD_SIZE * 1.6);
+    };
+
+    GameWorld.isChunkStreaming = function () {
+        return !!chunkStreamingEnabled;
+    };
+
+    GameWorld.getChunkConfig = function () {
+        return {
+            chunkSize: chunkSize,
+            interestRadiusChunks: interestRadiusChunks
+        };
+    };
+
+    GameWorld.applyChunkSnapshot = function (chunkSnapshot) {
+        if (!chunkStreamingEnabled) return false;
+        return applyChunkSnapshotInternal(chunkSnapshot);
+    };
+
+    GameWorld.applyChunkDelta = function (delta) {
+        if (!chunkStreamingEnabled || !delta || typeof delta !== 'object') return false;
+        var key = String(delta.key || '');
+        if (!key) return false;
+        if (delta.op === 'remove') {
+            removeChunkByKey(key);
+            return true;
+        }
+        if (delta.chunk && typeof delta.chunk === 'object') {
+            return applyChunkSnapshotInternal(delta.chunk);
+        }
+        if (Array.isArray(delta.solids)) {
+            return applyChunkSnapshotInternal({
+                key: key,
+                version: Number(delta.version || 1),
+                solids: delta.solids
+            });
+        }
+        return false;
     };
 
     GameWorld.getCollidables = function () {

@@ -383,10 +383,7 @@
                 }
 
                 if (multiplayerMode && hitboxMesh && hitboxMesh.userData && hitboxMesh.userData.ownerType === 'net') {
-                    if (window.GameNet && window.GameNet.sendFire) {
-                        window.GameNet.sendFire(hitboxMesh, weapon ? weapon.id : 'rifle', hitType);
-                        window.GameUI.showHitMarker();
-                    }
+                    // Online damage is server-authoritative; local hit feedback comes from damage events.
                     return;
                 }
 
@@ -398,6 +395,12 @@
         );
 
         if (fired) {
+            if (multiplayerMode && window.GameNet && window.GameNet.sendFireIntent) {
+                var firedWeapon = window.GameHitscan.getCurrentWeapon();
+                if (firedWeapon && firedWeapon.id !== 'plasma') {
+                    window.GameNet.sendFireIntent(firedWeapon.id, firedWeapon.automatic ? 'auto' : 'single');
+                }
+            }
             window.GamePlayer.fireAnimation();
         }
     }
@@ -471,8 +474,6 @@
 
         if (playBtn) {
             playBtn.addEventListener('click', requestPlayStart);
-            playBtn.addEventListener('pointerup', requestPlayStart);
-            playBtn.addEventListener('mousedown', requestPlayStart);
             playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
         }
 
@@ -745,7 +746,10 @@
         if (!hasInputCapture()) return;
 
         if (multiplayerMode) {
-            setTransientDebug('Throwables are temporarily disabled in net mode.', 900);
+            if (window.GameNet && window.GameNet.sendThrowIntent) {
+                var sent = window.GameNet.sendThrowIntent(type);
+                if (!sent) setTransientDebug('Throwable send failed (network unavailable).', 900);
+            }
             return;
         }
 
@@ -965,9 +969,9 @@
                 handleEnemyHit(hitPoint, damage, 'body', result);
             },
             onNetTick: function (targetId) {
-                if (!multiplayerMode || !window.GameNet || !window.GameNet.sendPlasmaTick) return;
-                if (typeof targetId !== 'string' || targetId.indexOf('net:') !== 0) return;
-                window.GameNet.sendPlasmaTick(targetId.slice(4));
+                if (!multiplayerMode || !window.GameNet || !window.GameNet.sendFireIntent) return;
+                if (!targetId) return;
+                window.GameNet.sendFireIntent('plasma', 'hold');
             }
         });
         window.GameUI.updatePlasmaState(plasmaState);

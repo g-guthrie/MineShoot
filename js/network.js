@@ -10,7 +10,7 @@
     var SESSION_ME_URL = '/api/me';
     var SESSION_LOGIN_URL = '/api/auth/login';
     var SESSION_LOGOUT_URL = '/api/auth/logout';
-    var WORLD_MANIFEST_URL = '/api/world';
+    var WORLD_BOOTSTRAP_URL = '/api/world/bootstrap';
     var WS_URL = '/api/ws';
 
     var AUTH_COOKIE_HELP = 'Username + 4-digit PIN';
@@ -29,6 +29,7 @@
     var inputSeq = 1;
     var inputSendTimer = 0;
     var INPUT_SEND_INTERVAL = 0.05;
+    var lastChunkKey = '';
 
     var snapshotMap = new Map();
     var renderMap = new Map();
@@ -96,13 +97,21 @@
     }
 
     function fetchWorldManifest() {
-        return apiFetch(WORLD_MANIFEST_URL)
+        return apiFetch(WORLD_BOOTSTRAP_URL)
             .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
             .then(function (res) {
-                if (!res.body || !res.body.ok || !res.body.world) {
-                    throw new Error((res.body && res.body.error) || 'world_manifest_unavailable');
+                if (!res.body || !res.body.ok) {
+                    throw new Error((res.body && res.body.error) || 'world_bootstrap_unavailable');
+                }
+                if (!res.body.world || typeof res.body.world !== 'object') {
+                    throw new Error('world_bootstrap_missing_manifest');
                 }
                 worldManifest = res.body.world;
+                if (typeof res.body.chunkSize === 'number') worldManifest.chunkSize = res.body.chunkSize;
+                if (typeof res.body.interestRadiusChunks === 'number') worldManifest.interestRadiusChunks = res.body.interestRadiusChunks;
+                if (Array.isArray(res.body.initialChunks) && !Array.isArray(worldManifest.initialChunks)) {
+                    worldManifest.initialChunks = res.body.initialChunks;
+                }
                 return worldManifest;
             });
     }
@@ -429,21 +438,67 @@
         if (msg.t === 'welcome') {
             connected = true;
             selfId = msg.selfId || selfId;
+            if (worldManifest) {
+                if (typeof msg.chunkSize === 'number') worldManifest.chunkSize = msg.chunkSize;
+                if (typeof msg.interestRadiusChunks === 'number') worldManifest.interestRadiusChunks = msg.interestRadiusChunks;
+            }
             pushNotice('Joined room ' + (msg.roomId || 'global'));
             return;
         }
 
-        if (msg.t === 'snapshot') {
-            if (SCHEMA.validateServerSnapshot) {
-                var validated = SCHEMA.validateServerSnapshot(msg);
+        if (msg.t === 'entity_snapshot') {
+            if (SCHEMA.validateServerEntitySnapshot) {
+                var validated = SCHEMA.validateServerEntitySnapshot(msg);
                 if (!validated.ok) {
-                    pushNotice('Invalid snapshot dropped (' + validated.errors[0] + ')');
+                    pushNotice('Invalid entity snapshot dropped (' + validated.errors[0] + ')');
                     return;
                 }
                 applySnapshot(validated.value.entities || []);
                 return;
             }
             applySnapshot(msg.entities || []);
+            return;
+        }
+
+        if (msg.t === 'chunk_snapshot') {
+            if (SCHEMA.validateChunkSnapshot) {
+                var chunkValidated = SCHEMA.validateChunkSnapshot(msg);
+                if (!chunkValidated.ok) {
+                    pushNotice('Invalid chunk snapshot dropped (' + chunkValidated.errors[0] + ')');
+                    return;
+                }
+            }
+            if (window.GameWorld && window.GameWorld.applyChunkSnapshot && msg.chunk) {
+                window.GameWorld.applyChunkSnapshot(msg.chunk);
+            }
+            return;
+        }
+
+        if (msg.t === 'chunk_delta') {
+            if (SCHEMA.validateChunkDelta) {
+                var deltaValidated = SCHEMA.validateChunkDelta(msg);
+                if (!deltaValidated.ok) {
+                    pushNotice('Invalid chunk delta dropped (' + deltaValidated.errors[0] + ')');
+                    return;
+                }
+            }
+            if (window.GameWorld && window.GameWorld.applyChunkDelta) {
+                window.GameWorld.applyChunkDelta(msg);
+            }
+            return;
+        }
+
+        if (msg.t === 'server_reconcile') {
+            if (SCHEMA.validateServerReconcile) {
+                var recValidated = SCHEMA.validateServerReconcile(msg);
+                if (!recValidated.ok) {
+                    pushNotice('Invalid reconcile dropped (' + recValidated.errors[0] + ')');
+                    return;
+                }
+            }
+            if (window.GamePlayer && window.GamePlayer.applyServerReconcile) {
+                window.GamePlayer.applyServerReconcile(msg);
+            }
             return;
         }
 
@@ -456,8 +511,8 @@
         }
 
         if (msg.t === 'death_respawn') {
-            if (msg.entityId === selfId && window.GamePlayer && window.GamePlayer.respawnRandom) {
-                window.GamePlayer.respawnRandom();
+            if (msg.entityId === selfId) {
+                pushNotice('Respawning...');
             }
             return;
         }
@@ -512,10 +567,10 @@
     }
 
     function wsSend(msg) {
-        if (msg && msg.t === 'input' && SCHEMA.validateClientInput) {
-            var checked = SCHEMA.validateClientInput(msg);
+        if (msg && SCHEMA.validateWsClientMessage) {
+            var checked = SCHEMA.validateWsClientMessage(msg);
             if (!checked.ok) {
-                if (window.__DEV__) console.warn('[net] invalid input payload:', checked.errors);
+                if (window.__DEV__) console.warn('[net] invalid payload:', checked.errors);
                 return false;
             }
         }
@@ -528,6 +583,27 @@
         while (rad > Math.PI) rad -= Math.PI * 2;
         while (rad < -Math.PI) rad += Math.PI * 2;
         return rad;
+    }
+
+    function chunkSizeValue() {
+        if (worldManifest && typeof worldManifest.chunkSize === 'number' && isFinite(worldManifest.chunkSize)) {
+            return Math.max(4, Math.floor(worldManifest.chunkSize));
+        }
+        if (window.GameWorld && window.GameWorld.getChunkConfig) {
+            var cfg = window.GameWorld.getChunkConfig();
+            if (cfg && typeof cfg.chunkSize === 'number' && isFinite(cfg.chunkSize)) {
+                return Math.max(4, Math.floor(cfg.chunkSize));
+            }
+        }
+        return 16;
+    }
+
+    function chunkCoordsForPosition(pos) {
+        var size = chunkSizeValue();
+        return {
+            cx: Math.floor((pos && typeof pos.x === 'number' ? pos.x : 0) / size),
+            cz: Math.floor((pos && typeof pos.z === 'number' ? pos.z : 0) / size)
+        };
     }
 
     function getRenderCoreWorldPosition(render, outVec3) {
@@ -640,6 +716,7 @@
         selfState = null;
         selfId = '';
         worldManifest = null;
+        lastChunkKey = '';
     };
 
     GameNet.isActive = function () {
@@ -712,27 +789,43 @@
                 var feetPos = (window.GamePlayer && window.GamePlayer.getFeetPosition)
                     ? window.GamePlayer.getFeetPosition()
                     : playerPos;
-                var anim = (window.GamePlayer && window.GamePlayer.getAnimNetState)
-                    ? window.GamePlayer.getAnimNetState()
+                var inputDebug = (window.GamePlayer && window.GamePlayer.getInputStateDebug)
+                    ? window.GamePlayer.getInputStateDebug()
                     : null;
+                var keys = (inputDebug && inputDebug.keys) ? inputDebug.keys : {};
+                var moveX = 0;
+                var moveZ = 0;
+                if (keys.left) moveX -= 1;
+                if (keys.right) moveX += 1;
+                if (keys.forward) moveZ += 1;
+                if (keys.backward) moveZ -= 1;
+                var len = Math.sqrt((moveX * moveX) + (moveZ * moveZ));
+                if (len > 0.001) {
+                    moveX /= len;
+                    moveZ /= len;
+                }
                 wsSend({
                     t: 'input',
                     seq: inputSeq++,
-                    x: feetPos.x,
-                    feetY: feetPos.y,
-                    z: feetPos.z,
+                    moveX: moveX,
+                    moveZ: moveZ,
+                    jumpHeld: !!keys.jump,
+                    sprint: !!keys.sprint,
                     yaw: rotation.yaw || 0,
                     pitch: rotation.pitch || 0,
-                    sprint: !!(anim && anim.sprinting),
-                    jump: false,
-                    weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
-                    moveSpeedNorm: anim && typeof anim.moveSpeedNorm === 'number' ? anim.moveSpeedNorm : 0,
-                    sprinting: !!(anim && anim.sprinting),
-                    animState: anim && anim.animState ? anim.animState : 'idle',
-                    animPhase: anim && typeof anim.animPhase === 'number' ? anim.animPhase : 0,
-                    gripMode: anim && anim.gripMode ? anim.gripMode : 'two_hand',
-                    aimPitch: anim && typeof anim.aimPitch === 'number' ? anim.aimPitch : (rotation.pitch || 0)
+                    actions: []
                 });
+
+                var chunk = chunkCoordsForPosition(feetPos);
+                var chunkKey = String(chunk.cx) + ':' + String(chunk.cz);
+                if (chunkKey !== lastChunkKey) {
+                    lastChunkKey = chunkKey;
+                    wsSend({
+                        t: 'chunk_subscribe',
+                        centerChunkX: chunk.cx,
+                        centerChunkZ: chunk.cz
+                    });
+                }
             }
         }
 
@@ -794,13 +887,13 @@
         });
     };
 
-    GameNet.sendFire = function (hitbox, weaponId, hitType) {
-        if (!hitbox || !hitbox.userData || !hitbox.userData.netEntityId) return false;
+    GameNet.sendFireIntent = function (weaponId, fireMode) {
+        if (!weaponId) return false;
         return wsSend({
-            t: 'fire',
-            targetId: hitbox.userData.netEntityId,
-            weaponId: weaponId,
-            hitType: hitType === 'head' ? 'head' : 'body'
+            t: 'fire_intent',
+            seq: inputSeq++,
+            weaponId: String(weaponId),
+            fireMode: String(fireMode || 'single')
         });
     };
 
@@ -812,12 +905,12 @@
         });
     };
 
-    GameNet.sendPlasmaTick = function (targetId) {
-        if (!targetId) return false;
+    GameNet.sendThrowIntent = function (throwableId) {
+        if (!throwableId) return false;
         return wsSend({
-            t: 'plasma_tick',
+            t: 'throw_intent',
             seq: inputSeq++,
-            targetId: String(targetId)
+            throwableId: String(throwableId)
         });
     };
 
