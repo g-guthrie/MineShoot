@@ -305,7 +305,9 @@
         var group = new THREE.Group();
 
         var visual = createHumanoidModel(color, weaponId, visualMeta);
-        visual.position.y = 1.0;
+        // Shared rig is already built around the same world anchor as hitboxes.
+        // Keep legacy fallback offset only for non-shared model path.
+        visual.position.y = visualMeta.rigApi ? 0 : 1.0;
         group.add(visual);
 
         var revealGhost = createRevealGhost(visual);
