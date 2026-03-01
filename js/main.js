@@ -1341,6 +1341,9 @@
             rt.init({ mode: 'boot' });
             rt.dispatch('BOOT_BEGIN');
         }
+        if (window.GameUIShell && window.GameUIShell.init) {
+            window.GameUIShell.init();
+        }
         setupPointerLock();
         setBootState('booting');
 
