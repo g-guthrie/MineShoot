@@ -1,0 +1,23 @@
+name = "minecraft-fps-arena"
+main = "cloudflare/worker.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+BOT_COUNT = "6"
+
+[[durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GlobalArenaRoom"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db"
+database_id = "replace-with-your-d1-id"
