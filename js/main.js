@@ -31,6 +31,7 @@
     var currentAimTargetId = '';
     var multiplayerMode = false;
     var startupDebugNotice = '';
+    var lastPlasmaActive = false;
 
     function cameraModeLabel(mode) {
         return mode === 'third' ? 'CAM: THIRD' : 'CAM: FIRST';
@@ -230,7 +231,9 @@
 
     function handleEnemyHit(hitPoint, damage, hitType, result) {
         if (!result) return;
-
+        if (window.GameAudio && window.GameAudio.play) {
+            window.GameAudio.play('enemyHit', { killed: !!result.killed });
+        }
         if (result.killed) {
             window.GameUI.showKillMarker();
             window.GameUI.addKill();
@@ -259,6 +262,9 @@
 
         if (damage > 0) {
             playerHP -= damage;
+            if (window.GameAudio && window.GameAudio.play) {
+                window.GameAudio.play('playerHit');
+            }
         }
 
         if (attackerEnemy && attackerEnemy.group && attackerEnemy.group.position) {
@@ -336,6 +342,10 @@
 
         if (fired) {
             window.GamePlayer.fireAnimation();
+            if (window.GameAudio && window.GameAudio.play) {
+                var w = window.GameHitscan.getCurrentWeapon();
+                window.GameAudio.play('fire', { weapon: w && w.id ? w.id : 'rifle' });
+            }
         }
     }
 
@@ -619,6 +629,9 @@
 
         var outcome = window.GameThrowables.throw(type, camera);
         window.GameUI.updateThrowableInfo(outcome.state);
+        if (outcome.ok && window.GameAudio && window.GameAudio.play) {
+            window.GameAudio.play('throw');
+        }
         if (!outcome.ok && outcome.reason === 'cooldown') {
             setTransientDebug(type + ' is recharging.', 600);
         }
@@ -817,6 +830,10 @@
                 window.GameNet.sendPlasmaTick(targetId.slice(4));
             }
         });
+        if (plasmaState.active && !lastPlasmaActive && window.GameAudio && window.GameAudio.play) {
+            window.GameAudio.play('plasma');
+        }
+        lastPlasmaActive = !!plasmaState.active;
         window.GameUI.updatePlasmaState(plasmaState);
         if (plasmaBeamLine) {
             if (plasmaState && plasmaState.active) {

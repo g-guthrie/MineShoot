@@ -296,6 +296,9 @@
     }
 
     function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
+        if (window.GameAudio && window.GameAudio.play) {
+            window.GameAudio.play('explosion');
+        }
         spawnFlash(position, 0xffaa22, 0.2, 0.18);
 
         var enemies = window.GameEnemy.getEnemies ? window.GameEnemy.getEnemies() : [];
@@ -342,6 +345,9 @@
             tickTimer: 0
         });
 
+        if (window.GameAudio && window.GameAudio.play) {
+            window.GameAudio.play('explosion');
+        }
         spawnFlash(position, 0xff6622, 0.25, 0.2);
     }
 
