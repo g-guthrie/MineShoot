@@ -28,9 +28,9 @@
     var PLAYER_HEIGHT = 1.7;
     var EPSILON = 0.001;
 
-    var THIRD_DIST = 4.6;
+    var THIRD_DIST = 4.4;
     var THIRD_HEIGHT = 0.7;
-    var THIRD_SHOULDER = 0.8;
+    var THIRD_SHOULDER = 1.35;
     var THIRD_SMOOTH = 12;
 
     // Logical player state (camera derives from this)
@@ -48,6 +48,7 @@
     var viewDesired = new THREE.Vector3();
     var viewTarget = new THREE.Vector3();
     var viewDir = new THREE.Vector3();
+    var plasmaForwardDir = new THREE.Vector3();
     var viewRay = new THREE.Raycaster();
 
     var keys = {
@@ -66,13 +67,33 @@
 
     var avatarGroup = null;
     var avatarRig = null;
+    var avatarRigApi = null;
 
     var bobTimer = 0;
     var isMoving = false;
     var sprinting = false;
+    var lastMoveSpeedNorm = 0;
     var gaitPhase = 0;
+    var loadoutSlots = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
+
+    function hasInputCapture() {
+        return !!document.pointerLockElement || !!window.__gameNoLockInput;
+    }
 
     function createAvatarModel() {
+        if (window.GameAvatarRig && window.GameAvatarRig.create) {
+            var shared = window.GameAvatarRig.create('player', {
+                bodyColor: 0x4a7fc1,
+                skinColor: 0xd2a77d,
+                legColor: 0x2f2f2f,
+                weaponId: currentWeaponId
+            });
+            return {
+                model: shared.root,
+                rigApi: shared
+            };
+        }
+
         var group = new THREE.Group();
         var bodyMat = new THREE.MeshLambertMaterial({ color: 0x4a7fc1 });
         var skinMat = new THREE.MeshLambertMaterial({ color: 0xd2a77d });
@@ -156,10 +177,18 @@
             twoHanded: true
         };
 
-        return group;
+        return {
+            model: group,
+            rigApi: null
+        };
     }
 
     function applyAvatarWeaponPose() {
+        if (avatarRigApi && avatarRigApi.setWeapon) {
+            avatarRigApi.setWeapon(currentWeaponId);
+            avatarRig = avatarRigApi.rig || avatarRig;
+            return;
+        }
         if (!avatarRig) return;
 
         var isPistol = currentWeaponId === 'pistol';
@@ -192,6 +221,12 @@
     }
 
     function updateAvatarAnimation(dt, speed) {
+        if (avatarRigApi && avatarRigApi.updateLocomotion) {
+            var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
+            avatarRigApi.updateAimPitch(pitch);
+            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt);
+            return;
+        }
         if (!avatarRig) return;
 
         var stride = Math.max(0, speed / RUN_SPEED);
@@ -282,6 +317,16 @@
                 pumpVisible: false,
                 drumVisible: false,
                 muzzle: [0, 0.02, -1.03]
+            },
+            plasma: {
+                body:  { p: [0, 0.0, -0.12], s: [1.2, 1.1, 1.32], c: 0x1d4f57 },
+                barrel:{ p: [0, 0.03, -0.5], s: [0.92, 0.92, 1.35], c: 0x4bd6f3 },
+                stock: { p: [0, -0.02, 0.15], s: [1.08, 1.0, 1.0], c: 0x2d4b58 },
+                grip:  { p: [0, -0.1, 0.02], s: [1.0, 1.0, 1.0], c: 0x2d4b58 },
+                scopeVisible: true,
+                pumpVisible: false,
+                drumVisible: true,
+                muzzle: [0, 0.04, -0.79]
             }
         };
 
@@ -512,7 +557,7 @@
         });
 
         document.addEventListener('mousemove', function (e) {
-            if (!document.pointerLockElement) return;
+            if (!hasInputCapture()) return;
             yaw -= (e.movementX || 0) * MOUSE_SENSITIVITY;
             pitch -= (e.movementY || 0) * MOUSE_SENSITIVITY;
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
@@ -607,8 +652,10 @@
         weaponGroup.position.set(0.25, -0.2, -0.4);
         camera.add(weaponGroup);
 
-        avatarGroup = createAvatarModel();
+        var avatarModel = createAvatarModel();
+        avatarGroup = avatarModel.model;
         avatarRig = avatarGroup.userData.rig || null;
+        avatarRigApi = avatarModel.rigApi || null;
         scene.add(avatarGroup);
 
         applyWeaponStyle('rifle');
@@ -621,7 +668,7 @@
 
     GamePlayer.update = function (dt) {
         if (!camera) return;
-        if (!document.pointerLockElement) return;
+        if (!hasInputCapture()) return;
 
         var jumpJustPressed = keys.jump && !jumpPressedLastFrame;
         var jumpJustReleased = !keys.jump && jumpPressedLastFrame;
@@ -667,6 +714,7 @@
         var movedX = playerX - startX;
         var movedZ = playerZ - startZ;
         var horizontalSpeed = Math.sqrt(movedX * movedX + movedZ * movedZ) / Math.max(dt, 0.0001);
+        lastMoveSpeedNorm = Math.max(0, Math.min(1.4, horizontalSpeed / RUN_SPEED));
         isMoving = horizontalSpeed > 0.06;
         sprinting = isMoving && keys.sprint;
 
@@ -741,7 +789,8 @@
             rifle: { z: -0.35, x: -0.08, returnMs: 150 },
             machinegun: { z: -0.365, x: -0.06, returnMs: 95 },
             shotgun: { z: -0.33, x: -0.12, returnMs: 230 },
-            sniper: { z: -0.31, x: -0.13, returnMs: 280 }
+            sniper: { z: -0.31, x: -0.13, returnMs: 280 },
+            plasma: { z: -0.36, x: -0.03, returnMs: 80 }
         };
         var recoil = recoilByWeapon[currentWeaponId] || recoilByWeapon.rifle;
         var defaultZ = -0.4;
@@ -800,6 +849,68 @@
 
     GamePlayer.getRotation = function () {
         return { yaw: yaw, pitch: pitch };
+    };
+
+    GamePlayer.getMuzzleWorldPosition = function () {
+        if (perspectiveMode === 'third' && avatarRigApi && avatarRigApi.getMuzzleWorldPosition) {
+            return avatarRigApi.getMuzzleWorldPosition();
+        }
+        if (!camera) return null;
+        camera.getWorldDirection(plasmaForwardDir);
+        return camera.position.clone().addScaledVector(plasmaForwardDir, 0.65);
+    };
+
+    GamePlayer.getEquippedWeaponId = function () {
+        return currentWeaponId;
+    };
+
+    GamePlayer.getAnimNetState = function () {
+        return {
+            moveSpeedNorm: lastMoveSpeedNorm,
+            sprinting: !!sprinting,
+            aimPitch: pitch,
+            equippedWeaponId: currentWeaponId
+        };
+    };
+
+    GamePlayer.setLoadout = function (loadoutConfig) {
+        if (!loadoutConfig || !Array.isArray(loadoutConfig.slots)) {
+            return { slots: loadoutSlots.slice() };
+        }
+
+        var allowed = {};
+        var hasAllowed = false;
+        if (window.GameHitscan && window.GameHitscan.getAllWeaponIds) {
+            var ids = window.GameHitscan.getAllWeaponIds();
+            for (var n = 0; n < ids.length; n++) {
+                allowed[ids[n]] = true;
+                hasAllowed = true;
+            }
+        }
+
+        var next = [];
+        var seen = {};
+        for (var i = 0; i < loadoutConfig.slots.length; i++) {
+            var id = String(loadoutConfig.slots[i] || '');
+            if (!id || seen[id]) continue;
+            if (hasAllowed && !allowed[id]) continue;
+            seen[id] = true;
+            next.push(id);
+        }
+        if (next.length > 0) {
+            loadoutSlots = next;
+        }
+        return { slots: loadoutSlots.slice() };
+    };
+
+    GamePlayer.getLoadout = function () {
+        return { slots: loadoutSlots.slice() };
+    };
+
+    GamePlayer.equipSlot = function (slotIndex) {
+        var idx = Math.max(0, Math.floor(slotIndex || 0));
+        if (idx >= loadoutSlots.length) return null;
+        return loadoutSlots[idx];
     };
 
     GamePlayer.respawn = function (x, z) {

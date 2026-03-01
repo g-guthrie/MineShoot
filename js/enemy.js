@@ -28,7 +28,7 @@
     var revealDir = new THREE.Vector3();
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
-    var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
+    var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
 
     function getCurrentWallhackRadius() {
         if (window.GameNet && window.GameNet.isActive && window.GameNet.isActive() && window.GameNet.getSelfState) {
@@ -111,7 +111,25 @@
         }
     }
 
-    function createHumanoidModel(color, weaponId) {
+    function createSharedHumanoidModel(color, weaponId) {
+        if (!window.GameAvatarRig || !window.GameAvatarRig.create) return null;
+        var shared = window.GameAvatarRig.create('enemy', {
+            bodyColor: color,
+            skinColor: 0xd2a77d,
+            legColor: 0x333333,
+            weaponId: weaponId
+        });
+        if (!shared || !shared.root) return null;
+        return shared;
+    }
+
+    function createHumanoidModel(color, weaponId, outMeta) {
+        var sharedModel = createSharedHumanoidModel(color, weaponId);
+        if (sharedModel) {
+            if (outMeta) outMeta.rigApi = sharedModel;
+            return sharedModel.root;
+        }
+
         var group = new THREE.Group();
         var mat = new THREE.MeshLambertMaterial({ color: color });
         var darkMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
@@ -282,10 +300,11 @@
     function createEnemy(scene, index) {
         var color = skinColors[index % skinColors.length];
         var weaponId = randomEnemyWeapon();
+        var visualMeta = { rigApi: null };
 
         var group = new THREE.Group();
 
-        var visual = createHumanoidModel(color, weaponId);
+        var visual = createHumanoidModel(color, weaponId, visualMeta);
         visual.position.y = 1.0;
         group.add(visual);
 
@@ -319,6 +338,7 @@
             color: color,
             weaponType: weaponId,
             rig: visual.userData.rig || null,
+            rigApi: visualMeta.rigApi,
 
             aiState: 'WANDER',
             aiTimer: 0,
@@ -390,6 +410,12 @@
     }
 
     function updateEnemyAnimation(enemy, dt, engaging) {
+        if (enemy.rigApi && enemy.rigApi.updateLocomotion) {
+            var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
+            enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
+            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
+            return;
+        }
         if (!enemy.rig) return;
 
         var stride = Math.max(0, Math.min(1, enemy.moveSpeed / 2.2));
@@ -780,6 +806,35 @@
 
     GameEnemy.getEnemies = function () {
         return enemies;
+    };
+
+    GameEnemy.getLockTargets = function () {
+        var out = [];
+        for (var i = 0; i < enemies.length; i++) {
+            var enemy = enemies[i];
+            if (!enemy || !enemy.alive) continue;
+
+            var corePos = null;
+            if (enemy.rigApi && enemy.rigApi.getCoreWorldPosition) {
+                corePos = enemy.rigApi.getCoreWorldPosition(new THREE.Vector3());
+            } else if (enemy.bodyHitbox && enemy.bodyHitbox.position) {
+                corePos = enemy.bodyHitbox.position.clone();
+            } else if (enemy.group && enemy.group.position) {
+                corePos = enemy.group.position.clone();
+                corePos.y += 1.0;
+            }
+            if (!corePos) continue;
+
+            out.push({
+                targetId: (enemy.bodyHitbox && enemy.bodyHitbox.userData && enemy.bodyHitbox.userData.targetId) || ('enemy:' + enemy.index),
+                ownerType: 'enemy',
+                worldPos: corePos,
+                hitbox: enemy.bodyHitbox || null,
+                alive: true,
+                enemyRef: enemy
+            });
+        }
+        return out;
     };
 
     GameEnemy.applyStun = function (enemy, duration) {

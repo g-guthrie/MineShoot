@@ -524,6 +524,34 @@
         return throwableOrder.slice();
     };
 
+    GameThrowables.getCatalog = function () {
+        var out = [];
+        for (var i = 0; i < throwableOrder.length; i++) {
+            var id = throwableOrder[i];
+            var def = defs[id];
+            if (!def) continue;
+            out.push({
+                id: def.id,
+                label: def.label,
+                speed: def.speed,
+                upward: def.upward,
+                gravity: def.gravity,
+                fuse: def.fuse,
+                radius: def.radius,
+                damage: def.damage,
+                fireRadius: def.fireRadius,
+                fireDuration: def.fireDuration,
+                fireTickDamage: def.fireTickDamage,
+                fireTickRate: def.fireTickRate,
+                life: def.life,
+                bodyDamage: def.bodyDamage,
+                headDamage: def.headDamage,
+                regen: def.regen
+            });
+        }
+        return out;
+    };
+
     GameThrowables.getState = function () {
         return getThrowableState();
     };

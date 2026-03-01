@@ -15,9 +15,43 @@
     var WORLD_MIN = WORLD_MARGIN;
     var WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
     var DEFAULT_SPAWN_PADDING = 8;
+    var WORLD_SEED = 'mineshoot-v1';
+    var rngState = 1;
 
     // Solid meshes used for movement/raycast collisions.
     var collidables = [];
+
+    function hashSeed(seedText) {
+        var str = String(seedText || 'mineshoot-v1');
+        var hash = 2166136261 >>> 0;
+        for (var i = 0; i < str.length; i++) {
+            hash ^= str.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0) || 1;
+    }
+
+    function setSeed(seedText) {
+        WORLD_SEED = String(seedText || 'mineshoot-v1');
+        rngState = hashSeed(WORLD_SEED);
+    }
+
+    function random01() {
+        // xorshift32 deterministic PRNG.
+        rngState ^= (rngState << 13);
+        rngState ^= (rngState >>> 17);
+        rngState ^= (rngState << 5);
+        return ((rngState >>> 0) / 4294967295);
+    }
+
+    function resolveSeedFromLocation() {
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            return params.get('seed') || WORLD_SEED;
+        } catch (err) {
+            return WORLD_SEED;
+        }
+    }
 
     function scaleAxis(value) {
         return (value / BASE_WORLD_SIZE) * WORLD_SIZE;
@@ -28,7 +62,7 @@
     }
 
     function randRange(min, max) {
-        return min + Math.random() * (max - min);
+        return min + random01() * (max - min);
     }
 
     function randomSpawnPoint(padding) {
@@ -42,6 +76,7 @@
     }
 
     GameWorld.create = function (scene) {
+        setSeed(resolveSeedFromLocation());
         collidables = [];
 
         function markSolid(mesh) {
@@ -308,6 +343,15 @@
 
     GameWorld.getRecommendedEnemyCount = function () {
         return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE)));
+    };
+
+    GameWorld.getSeed = function () {
+        return WORLD_SEED;
+    };
+
+    GameWorld.setSeed = function (seedText) {
+        setSeed(seedText);
+        return WORLD_SEED;
     };
 
     window.GameWorld = GameWorld;

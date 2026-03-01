@@ -519,6 +519,27 @@
         return CLASS_ORDER.slice();
     };
 
+    GameClasses.getCatalog = function () {
+        var out = [];
+        for (var i = 0; i < CLASS_ORDER.length; i++) {
+            var id = CLASS_ORDER[i];
+            var def = CLASS_DEFS[id];
+            if (!def) continue;
+            out.push({
+                id: def.id,
+                name: def.name,
+                abilityName: def.abilityName,
+                ultimateName: def.ultimateName,
+                abilityCooldown: def.abilityCooldown,
+                ultimateCooldown: def.ultimateCooldown,
+                loadoutWeapon: def.loadoutWeapon,
+                armorMax: def.armorMax,
+                wallhackRadius: def.wallhackRadius
+            });
+        }
+        return out;
+    };
+
     GameClasses.getCurrentClass = function () {
         var def = getClassDef();
         return {

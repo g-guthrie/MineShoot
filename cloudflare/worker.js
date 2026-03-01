@@ -13,11 +13,15 @@ const WEAPON_STATS = {
   pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
   machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
   shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
-  sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 }
+  sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
+  plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
 };
 
 const ROOM_TICK_MS = 50;
 const MAX_HP = 500;
+const PLASMA_MAX_SUSTAIN_MS = 2500;
+const PLASMA_OVERHEAT_MS = 1600;
+const REMOTE_BEAM_HOLD_MS = 180;
 
 function nowMs() {
   return Date.now();
@@ -274,6 +278,15 @@ export class GlobalArenaRoom extends DurableObject {
         alive: true,
         respawnAt: 0,
         lastDamageAt: 0,
+        weaponId: 'rifle',
+        moveSpeedNorm: 0,
+        sprinting: false,
+        beamTargetId: '',
+        beamActiveUntil: 0,
+        beamHeat: 0,
+        beamOverheated: false,
+        beamOverheatedUntil: 0,
+        lastPlasmaTickAt: 0,
         aiDirX: Math.cos(Math.random() * Math.PI * 2),
         aiDirZ: Math.sin(Math.random() * Math.PI * 2),
         aiSpeed: 2.2,
@@ -371,7 +384,16 @@ export class GlobalArenaRoom extends DurableObject {
       respawnAt: 0,
       lastDamageAt: 0,
       seq: 0,
-      lastShotAt: {}
+      lastShotAt: {},
+      weaponId: 'rifle',
+      moveSpeedNorm: 0,
+      sprinting: false,
+      beamTargetId: '',
+      beamActiveUntil: 0,
+      beamHeat: 0,
+      beamOverheated: false,
+      beamOverheatedUntil: 0,
+      lastPlasmaTickAt: 0
     };
 
     this.players.set(userId, p);
@@ -407,6 +429,10 @@ export class GlobalArenaRoom extends DurableObject {
     if (typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
+    if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
+    if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
+    if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
+    if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
   }
 
   getEntityById(entityId) {
@@ -453,6 +479,8 @@ export class GlobalArenaRoom extends DurableObject {
     const weaponId = String(msg.weaponId || 'rifle');
     const stats = WEAPON_STATS[weaponId];
     if (!stats) return;
+    if (weaponId === 'plasma') return;
+    player.weaponId = weaponId;
 
     const now = nowMs();
     const prev = player.lastShotAt[weaponId] || 0;
@@ -489,6 +517,72 @@ export class GlobalArenaRoom extends DurableObject {
         respawnAt: target.respawnAt,
         classApplied: target.classId
       });
+    }
+  }
+
+  handleEquipWeapon(player, msg) {
+    if (!player) return;
+    const weaponId = String(msg.weaponId || '');
+    if (!WEAPON_STATS[weaponId]) return;
+    player.weaponId = weaponId;
+    if (weaponId !== 'plasma') {
+      player.beamTargetId = '';
+      player.beamActiveUntil = 0;
+    }
+  }
+
+  handlePlasmaTick(player, msg) {
+    if (!player || !player.alive) return;
+    if (player.weaponId !== 'plasma') return;
+
+    const now = nowMs();
+    if (player.beamOverheated && now < (player.beamOverheatedUntil || 0)) return;
+
+    const stats = WEAPON_STATS.plasma;
+    const prev = player.lastPlasmaTickAt || 0;
+    if ((now - prev) < stats.cooldownMs) return;
+    player.lastPlasmaTickAt = now;
+
+    const targetId = String(msg.targetId || '');
+    if (!targetId) return;
+
+    const target = this.getEntityById(targetId);
+    if (!target || !target.alive || target.id === player.id) return;
+
+    const dist = distance3(player, target);
+    if (dist > stats.maxRange) return;
+
+    player.beamTargetId = target.id;
+    player.beamActiveUntil = now + REMOTE_BEAM_HOLD_MS;
+
+    const out = this.applyDamage(target, stats.bodyDamage);
+    if (!out) return;
+
+    this.broadcast({
+      t: 'damage_event',
+      targetId: target.id,
+      sourceId: player.id,
+      health: out.hp,
+      armor: out.armor,
+      hitType: 'body'
+    });
+
+    if (out.killed) {
+      this.broadcast({
+        t: 'death_respawn',
+        entityId: target.id,
+        respawnAt: target.respawnAt,
+        classApplied: target.classId
+      });
+    }
+
+    player.beamHeat = clamp((player.beamHeat || 0) + (stats.cooldownMs / PLASMA_MAX_SUSTAIN_MS), 0, 1);
+    if (player.beamHeat >= 1) {
+      player.beamHeat = 1;
+      player.beamOverheated = true;
+      player.beamOverheatedUntil = now + PLASMA_OVERHEAT_MS;
+      player.beamTargetId = '';
+      player.beamActiveUntil = 0;
     }
   }
 
@@ -534,6 +628,14 @@ export class GlobalArenaRoom extends DurableObject {
       this.handleFire(player, msg);
       return;
     }
+    if (type === 'equip_weapon') {
+      this.handleEquipWeapon(player, msg);
+      return;
+    }
+    if (type === 'plasma_tick') {
+      this.handlePlasmaTick(player, msg);
+      return;
+    }
     if (type === 'throw') {
       this.handleThrow(player, msg);
       return;
@@ -569,6 +671,32 @@ export class GlobalArenaRoom extends DurableObject {
     entity.armor = Math.min(entity.armorMax, entity.armor + (12 * dtSec));
   }
 
+  tickPlasmaState(entity, dtSec) {
+    if (!entity) return;
+    if (!entity.alive) {
+      entity.beamTargetId = '';
+      entity.beamActiveUntil = 0;
+      return;
+    }
+    const now = nowMs();
+
+    if ((entity.beamActiveUntil || 0) <= now) {
+      entity.beamActiveUntil = 0;
+      entity.beamTargetId = '';
+    }
+
+    const active = !!entity.beamTargetId && (entity.beamActiveUntil || 0) > now;
+    const coolRate = entity.beamOverheated ? 0.35 : 0.55;
+    if (!active) {
+      entity.beamHeat = Math.max(0, (entity.beamHeat || 0) - (coolRate * dtSec));
+    }
+
+    if (entity.beamOverheated && now >= (entity.beamOverheatedUntil || 0) && entity.beamHeat <= 0.95) {
+      entity.beamOverheated = false;
+      entity.beamOverheatedUntil = 0;
+    }
+  }
+
   applyQueuedClassIfNeeded(entity) {
     if (!entity.queuedClassId) return;
     entity.classId = entity.queuedClassId;
@@ -592,6 +720,12 @@ export class GlobalArenaRoom extends DurableObject {
     entity.lastDamageAt = 0;
     entity.x = 10 + Math.random() * 90;
     entity.z = 10 + Math.random() * 90;
+    entity.beamTargetId = '';
+    entity.beamActiveUntil = 0;
+    entity.beamHeat = 0;
+    entity.beamOverheated = false;
+    entity.beamOverheatedUntil = 0;
+    entity.lastPlasmaTickAt = 0;
   }
 
   tickBots(dtSec) {
@@ -622,8 +756,11 @@ export class GlobalArenaRoom extends DurableObject {
       bot.z = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * dtSec, this.boundsMin, this.boundsMax);
       bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
       bot.pitch = 0;
+      bot.moveSpeedNorm = clamp(bot.aiSpeed / 3.2, 0, 1.4);
+      bot.sprinting = bot.aiSpeed > 2.5;
 
       this.regenArmor(bot, dtSec);
+      this.tickPlasmaState(bot, dtSec);
     }
   }
 
@@ -631,6 +768,7 @@ export class GlobalArenaRoom extends DurableObject {
     for (const player of this.players.values()) {
       this.respawnIfNeeded(player);
       this.regenArmor(player, dtSec);
+      this.tickPlasmaState(player, dtSec);
     }
   }
 
@@ -646,12 +784,19 @@ export class GlobalArenaRoom extends DurableObject {
       z: Number(entity.z.toFixed(3)),
       yaw: Number((entity.yaw || 0).toFixed(4)),
       pitch: Number((entity.pitch || 0).toFixed(4)),
+      weaponId: entity.weaponId || 'rifle',
+      moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
+      sprinting: !!entity.sprinting,
       hp: Number(entity.hp.toFixed(2)),
       hpMax: Number(entity.hpMax.toFixed(2)),
       armor: Number(entity.armor.toFixed(2)),
       armorMax: Number(entity.armorMax.toFixed(2)),
       wallhackRadius: entity.wallhackRadius,
       alive: !!entity.alive,
+      beamTargetId: entity.beamTargetId || '',
+      beamActiveUntil: entity.beamActiveUntil || 0,
+      beamHeat: Number((entity.beamHeat || 0).toFixed(3)),
+      beamOverheated: !!entity.beamOverheated,
       visibleWallhack: true
     };
   }

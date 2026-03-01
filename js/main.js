@@ -22,6 +22,7 @@
     var wallhackRing = null;
     var wallhackRingRadius = 0;
     var wallhackRingVisible = true;
+    var plasmaBeamLine = null;
 
     var DEFAULT_ENEMY_COUNT = 5;
     var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
@@ -29,6 +30,7 @@
 
     var currentAimTargetId = '';
     var multiplayerMode = false;
+    var startupDebugNotice = '';
 
     function cameraModeLabel(mode) {
         return mode === 'third' ? 'CAM: THIRD' : 'CAM: FIRST';
@@ -45,6 +47,10 @@
             window.GameUI.setDebugInfo('');
             debugTimer = null;
         }, ms || 1000);
+    }
+
+    function hasInputCapture() {
+        return !!document.pointerLockElement || !!window.__gameNoLockInput;
     }
 
     function getCurrentWallhackRadius() {
@@ -103,6 +109,15 @@
         }
     }
 
+    function setBeamLinePoints(line, start, end) {
+        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
+        var arr = line.geometry.attributes.position.array;
+        arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
+        arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
+        line.geometry.attributes.position.needsUpdate = true;
+        line.geometry.computeBoundingSphere();
+    }
+
     function applyDebugVisuals(visible) {
         wallhackRingVisible = !!visible;
         if (wallhackRing) wallhackRing.visible = wallhackRingVisible;
@@ -140,6 +155,12 @@
         window.GameUI.updateWeaponInfo(weapon);
         window.GamePlayer.setWeaponModel(weapon.id);
         syncReticleWithWeapon(weapon);
+        if (multiplayerMode && window.GameNet && window.GameNet.sendEquipWeapon) {
+            window.GameNet.sendEquipWeapon(weapon.id);
+        }
+        if (window.GameDocs && window.GameDocs.refresh) {
+            window.GameDocs.refresh();
+        }
         setTransientDebug('Weapon: ' + weapon.name, 950);
     }
 
@@ -155,6 +176,9 @@
         applyArmorProfile(selected.armorMax || playerArmorMax);
         window.GameUI.updateClassInfo(window.GameClasses.getHudState());
         syncWallhackRingRadius();
+        if (window.GameDocs && window.GameDocs.refresh) {
+            window.GameDocs.refresh();
+        }
 
         return selected;
     }
@@ -168,6 +192,9 @@
         }
 
         window.GameUI.updateClassInfo(window.GameClasses.getHudState());
+        if (window.GameDocs && window.GameDocs.refresh) {
+            window.GameDocs.refresh();
+        }
         setTransientDebug('Queued class: ' + queued.name + ' (applies on death)', 1300);
     }
 
@@ -314,24 +341,108 @@
 
     function setupPointerLock() {
         overlay = document.getElementById('overlay');
+        var playBtn = document.getElementById('play-btn');
+        var lastStartRequest = 0;
+        window.__gameNoLockInput = false;
 
-        overlay.addEventListener('click', function () {
-            renderer.domElement.requestPointerLock();
-        });
-
-        renderer.domElement.addEventListener('click', function () {
-            if (!document.pointerLockElement) {
-                renderer.domElement.requestPointerLock();
+        function enterFallbackStart(debugText) {
+            window.__gameNoLockInput = true;
+            if (overlay) overlay.style.display = 'none';
+            isPlaying = true;
+            if (debugText) {
+                setTransientDebug(debugText, 2200);
             }
-        });
+        }
+
+        function requestPlayStart(e) {
+            var now = performance.now();
+            if (now - lastStartRequest < 140) return;
+            lastStartRequest = now;
+            if (e) {
+                if (typeof e.button === 'number' && e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            if (window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
+                window.GameDocs.close();
+            }
+
+            // Enter gameplay immediately; pointer lock is best-effort.
+            enterFallbackStart();
+
+            var target = renderer && renderer.domElement;
+            if (!target) {
+                return;
+            }
+            var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
+            if (typeof requestLock !== 'function') {
+                setTransientDebug('Pointer lock API unavailable. Using fallback input mode.', 2200);
+                return;
+            }
+            try {
+                var maybePromise = requestLock.call(target);
+                if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
+                    maybePromise.catch(function () {
+                        if (!document.pointerLockElement) {
+                            setTransientDebug('Pointer lock denied. Using fallback input mode.', 2200);
+                        }
+                    });
+                }
+            } catch (err) {
+                setTransientDebug('Pointer lock failed. Using fallback input mode.', 2200);
+            }
+        }
+
+        if (playBtn) {
+            playBtn.addEventListener('click', requestPlayStart);
+            playBtn.addEventListener('pointerup', requestPlayStart);
+            playBtn.addEventListener('mousedown', requestPlayStart);
+            playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+        }
 
         document.addEventListener('pointerlockchange', function () {
             if (document.pointerLockElement === renderer.domElement) {
+                window.__gameNoLockInput = false;
+                if (window.GameDocs && window.GameDocs.close) {
+                    window.GameDocs.close();
+                }
                 overlay.style.display = 'none';
                 isPlaying = true;
             } else {
-                overlay.style.display = 'flex';
+                if (!window.__gameNoLockInput) {
+                    overlay.style.display = 'flex';
+                    isPlaying = false;
+                }
+            }
+        });
+
+        document.addEventListener('pointerlockerror', function () {
+            if (!document.pointerLockElement) {
+                enterFallbackStart('Pointer lock error. Using fallback input mode.');
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.code === 'Escape' && window.__gameNoLockInput) {
+                window.__gameNoLockInput = false;
+                if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
+            }
+        });
+    }
+
+    function setupDocsControls() {
+        document.addEventListener('keydown', function (e) {
+            if (e.code === 'KeyI') {
+                if (window.GameDocs && window.GameDocs.toggle) {
+                    e.preventDefault();
+                    window.GameDocs.toggle();
+                }
+                return;
+            }
+
+            if (e.code === 'Escape' && window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
+                window.GameDocs.close();
             }
         });
     }
@@ -339,7 +450,7 @@
     function setupShooting() {
         document.addEventListener('mousedown', function (e) {
             if (e.button !== 0) return;
-            if (!document.pointerLockElement) return;
+            if (!hasInputCapture()) return;
             triggerHeld = true;
             tryPlayerFire();
         });
@@ -355,26 +466,150 @@
     }
 
     function setupWeaponControls() {
-        var weaponOrder = window.GameHitscan.getWeaponOrder();
-
         document.addEventListener('keydown', function (e) {
             if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4' || e.code === 'Digit5') {
+                var weaponOrder = window.GameHitscan.getWeaponOrder();
                 var idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
                 if (idx >= 0 && idx < weaponOrder.length) {
                     applyWeapon(window.GameHitscan.setWeapon(weaponOrder[idx]));
+                }
+                return;
+            }
+
+            if (e.code === 'KeyT') {
+                var loadoutOrder = window.GameHitscan.getWeaponOrder();
+                if (loadoutOrder.length > 5) {
+                    applyWeapon(window.GameHitscan.setWeapon(loadoutOrder[5]));
                 }
             }
         });
 
         document.addEventListener('wheel', function (e) {
-            if (!document.pointerLockElement) return;
+            if (!hasInputCapture()) return;
             e.preventDefault();
             applyWeapon(window.GameHitscan.cycleWeapon(e.deltaY > 0 ? 1 : -1));
         }, { passive: false });
     }
 
+    function setupLoadoutControls() {
+        var slotsWrap = document.getElementById('loadout-slots');
+        var applyBtn = document.getElementById('loadout-apply');
+        var plasmaToggleBtn = document.getElementById('loadout-plasma-toggle');
+        if (!slotsWrap || !applyBtn || !plasmaToggleBtn) return;
+
+        function getCatalogMap() {
+            var catalog = window.GameHitscan.getWeaponCatalog ? window.GameHitscan.getWeaponCatalog() : [];
+            var map = {};
+            for (var i = 0; i < catalog.length; i++) {
+                map[catalog[i].id] = catalog[i];
+            }
+            return map;
+        }
+
+        var catalogMap = getCatalogMap();
+        var includePlasma = true;
+        var currentLoadout = (window.GamePlayer.getLoadout && window.GamePlayer.getLoadout().slots) || window.GameHitscan.getWeaponOrder();
+        if (currentLoadout.indexOf('plasma') === -1) includePlasma = false;
+
+        function getWeaponOptions() {
+            var all = window.GameHitscan.getAllWeaponIds ? window.GameHitscan.getAllWeaponIds() : window.GameHitscan.getWeaponOrder();
+            var out = [];
+            for (var i = 0; i < all.length; i++) {
+                var id = all[i];
+                if (!includePlasma && id === 'plasma') continue;
+                out.push(id);
+            }
+            return out;
+        }
+
+        function normalizeLoadout(list) {
+            var seen = {};
+            var out = [];
+            for (var i = 0; i < list.length; i++) {
+                var id = String(list[i] || '');
+                if (!id || seen[id]) continue;
+                if (!includePlasma && id === 'plasma') continue;
+                if (!catalogMap[id]) continue;
+                seen[id] = true;
+                out.push(id);
+            }
+            if (out.length === 0) out.push('rifle');
+            return out;
+        }
+
+        function renderSlots() {
+            currentLoadout = normalizeLoadout(currentLoadout);
+            plasmaToggleBtn.textContent = includePlasma ? 'PLASMA: ENABLED' : 'PLASMA: DISABLED';
+
+            slotsWrap.innerHTML = '';
+            var options = getWeaponOptions();
+            var slotCount = Math.min(6, Math.max(3, currentLoadout.length));
+
+            for (var i = 0; i < slotCount; i++) {
+                var row = document.createElement('div');
+                row.className = 'loadout-slot-row';
+
+                var label = document.createElement('label');
+                label.textContent = 'Slot ' + (i + 1);
+                row.appendChild(label);
+
+                var select = document.createElement('select');
+                select.dataset.slotIndex = String(i);
+
+                for (var j = 0; j < options.length; j++) {
+                    var id = options[j];
+                    var option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = catalogMap[id] ? catalogMap[id].name : id;
+                    select.appendChild(option);
+                }
+
+                select.value = currentLoadout[i] || options[0];
+                row.appendChild(select);
+                slotsWrap.appendChild(row);
+            }
+        }
+
+        plasmaToggleBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            includePlasma = !includePlasma;
+            currentLoadout = normalizeLoadout(currentLoadout);
+            renderSlots();
+        });
+
+        applyBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var selects = slotsWrap.querySelectorAll('select');
+            var next = [];
+            for (var i = 0; i < selects.length; i++) {
+                next.push(selects[i].value);
+            }
+            next = normalizeLoadout(next);
+            currentLoadout = next.slice();
+
+            var applied = window.GamePlayer.setLoadout({ slots: next });
+            var finalSlots = (applied && applied.slots) ? applied.slots.slice() : next.slice();
+            finalSlots = normalizeLoadout(finalSlots);
+
+            window.GameHitscan.setWeaponOrder(finalSlots);
+
+            var currentWeapon = window.GameHitscan.getCurrentWeapon();
+            if (finalSlots.indexOf(currentWeapon.id) === -1) {
+                currentWeapon = window.GameHitscan.setWeapon(finalSlots[0]);
+            }
+            applyWeapon(currentWeapon);
+            renderSlots();
+            setTransientDebug('Loadout applied: ' + finalSlots.join(', '), 1300);
+        });
+
+        renderSlots();
+    }
+
     function tryThrow(type) {
-        if (!document.pointerLockElement) return;
+        if (!hasInputCapture()) return;
 
         if (multiplayerMode && window.GameNet && window.GameNet.sendThrow) {
             window.GameNet.sendThrow(type);
@@ -416,7 +651,7 @@
                 return;
             }
 
-            if (!document.pointerLockElement) return;
+            if (!hasInputCapture()) return;
 
             var playerPos = window.GamePlayer.getPosition();
             var rot = window.GamePlayer.getRotation();
@@ -471,7 +706,30 @@
 
         window.GameWorld.create(scene);
         window.GameUI.init();
+        if (window.GameDocs && window.GameDocs.init) {
+            window.GameDocs.init();
+        }
         window.GameOverhead.init();
+
+        var plasmaBeamGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(),
+            new THREE.Vector3()
+        ]);
+        var plasmaBeamMaterial = new THREE.LineBasicMaterial({
+            color: 0x66ddff,
+            transparent: true,
+            opacity: 0.9,
+            depthTest: false
+        });
+        plasmaBeamLine = new THREE.Line(plasmaBeamGeometry, plasmaBeamMaterial);
+        plasmaBeamLine.visible = false;
+        plasmaBeamLine.renderOrder = 24;
+        scene.add(plasmaBeamLine);
+
+        if (startupDebugNotice) {
+            setTransientDebug(startupDebugNotice, 1800);
+            startupDebugNotice = '';
+        }
 
         camera = window.GamePlayer.init(scene);
 
@@ -514,6 +772,8 @@
         setupThrowableControls();
         setupClassControls();
         setupPerspectiveControls();
+        setupLoadoutControls();
+        setupDocsControls();
         setupDebugKeys();
 
         window.addEventListener('resize', function () {
@@ -532,12 +792,40 @@
         window.GamePlayer.update(dt);
 
         var currentWeapon = window.GameHitscan.getCurrentWeapon();
-        if (currentWeapon && currentWeapon.id === 'shotgun') {
+        if (currentWeapon && (currentWeapon.id === 'shotgun' || currentWeapon.id === 'plasma')) {
             syncReticleWithWeapon(currentWeapon);
         }
 
-        if (triggerHeld && document.pointerLockElement && currentWeapon && currentWeapon.automatic) {
+        if (triggerHeld && hasInputCapture() && currentWeapon && currentWeapon.automatic && currentWeapon.id !== 'plasma') {
             tryPlayerFire();
+        }
+
+        var plasmaState = window.GameHitscan.updatePlasmaBeam(dt, camera, {
+            triggerHeld: triggerHeld && hasInputCapture(),
+            onLocalTick: function (target, damage) {
+                if (multiplayerMode) return;
+                if (!target || target.ownerType !== 'enemy' || !target.hitbox) return;
+                if (!window.GameEnemy || !window.GameEnemy.damage) return;
+                var result = window.GameEnemy.damage(target.hitbox, damage);
+                if (!result) return;
+                var hitPoint = target.worldPos ? target.worldPos.clone() : target.hitbox.position.clone();
+                handleEnemyHit(hitPoint, damage, 'body', result);
+            },
+            onNetTick: function (targetId) {
+                if (!multiplayerMode || !window.GameNet || !window.GameNet.sendPlasmaTick) return;
+                if (typeof targetId !== 'string' || targetId.indexOf('net:') !== 0) return;
+                window.GameNet.sendPlasmaTick(targetId.slice(4));
+            }
+        });
+        window.GameUI.updatePlasmaState(plasmaState);
+        if (plasmaBeamLine) {
+            if (plasmaState && plasmaState.active) {
+                setBeamLinePoints(plasmaBeamLine, plasmaState.beamStart, plasmaState.beamEnd);
+                plasmaBeamLine.visible = true;
+                plasmaBeamLine.material.opacity = plasmaState.overheated ? 0.2 : 0.9;
+            } else {
+                plasmaBeamLine.visible = false;
+            }
         }
 
         if (respawnInvulnTimer > 0) {
@@ -632,14 +920,39 @@
         renderer.render(scene, camera);
     }
 
+    function isLocalDevMode() {
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            if (params.get('local') === '1' || params.get('offline') === '1') return true;
+            if (params.get('net') === '1') return false;
+        } catch (err) {
+            // URL parsing failed; continue with protocol fallback.
+        }
+        return window.location.protocol === 'file:';
+    }
+
     function boot() {
-        if (window.GameNet && window.GameNet.requireAuth) {
-            window.GameNet.requireAuth(function () {
+        function safeInit() {
+            try {
                 initGame();
+            } catch (err) {
+                var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
+                var overlayEl = document.getElementById('overlay');
+                if (overlayEl) overlayEl.style.display = 'flex';
+                var dbg = document.getElementById('debug-info');
+                if (dbg) dbg.textContent = 'Startup error: ' + msg;
+                console.error('Startup error:', err);
+            }
+        }
+
+        if (!isLocalDevMode() && window.GameNet && window.GameNet.requireAuth) {
+            window.GameNet.requireAuth(function () {
+                safeInit();
             });
             return;
         }
-        initGame();
+        startupDebugNotice = 'Local dev mode: backend auth/multiplayer disabled.';
+        safeInit();
     }
 
     if (document.readyState === 'loading') {

@@ -37,6 +37,25 @@
             background: rgba(40, 40, 40, 0.92);
         }
 
+        #hud-manual-btn {
+            position: fixed;
+            top: 16px;
+            left: 132px;
+            z-index: 121;
+            border: 1px solid #5f8f61;
+            background: rgba(14, 42, 16, 0.84);
+            color: #cbf5d2;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            padding: 6px 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #hud-manual-btn:hover {
+            background: rgba(19, 54, 21, 0.93);
+        }
+
         canvas {
             display: block;
         }
@@ -127,6 +146,22 @@
             background: rgba(75, 45, 45, 0.95);
         }
 
+        #auth-local-btn {
+            margin-top: 8px;
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #5d6d58;
+            background: rgba(40, 60, 36, 0.92);
+            color: #e6ffd9;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        #auth-local-btn:hover {
+            background: rgba(54, 76, 48, 0.95);
+        }
+
         /* Overlay */
         #overlay {
             position: fixed;
@@ -138,7 +173,7 @@
             justify-content: center;
             align-items: center;
             z-index: 100;
-            cursor: pointer;
+            cursor: default;
         }
 
         #overlay h1 {
@@ -154,12 +189,305 @@
             margin-bottom: 10px;
         }
 
+        #play-btn {
+            margin-top: 4px;
+            margin-bottom: 10px;
+            padding: 10px 24px;
+            border: 2px solid #8dd59f;
+            border-radius: 4px;
+            background: rgba(20, 70, 28, 0.86);
+            color: #e7ffe9;
+            font-size: 18px;
+            letter-spacing: 1px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        #play-btn:hover {
+            background: rgba(33, 92, 42, 0.93);
+        }
+
+        #open-manual-btn {
+            margin-bottom: 18px;
+            padding: 8px 16px;
+            border: 1px solid #63a070;
+            border-radius: 4px;
+            background: rgba(18, 40, 20, 0.82);
+            color: #c9f7d0;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+        }
+
+        #open-manual-btn:hover {
+            background: rgba(27, 55, 31, 0.9);
+        }
+
+        #loadout-panel {
+            margin-top: 6px;
+            width: min(90vw, 540px);
+            border: 1px solid #417548;
+            background: rgba(10, 24, 11, 0.82);
+            color: #d8f6dd;
+            padding: 10px 12px;
+            border-radius: 5px;
+        }
+
+        .loadout-title {
+            font-size: 13px;
+            letter-spacing: 0.7px;
+            margin-bottom: 8px;
+            color: #b8efc2;
+        }
+
+        #loadout-slots {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px 8px;
+            margin-bottom: 8px;
+        }
+
+        .loadout-slot-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #d1f3d6;
+        }
+
+        .loadout-slot-row label {
+            width: 58px;
+            flex: 0 0 58px;
+        }
+
+        .loadout-slot-row select {
+            flex: 1 1 auto;
+            border: 1px solid #5b8e63;
+            background: rgba(12, 28, 13, 0.95);
+            color: #d9fadc;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 5px 6px;
+        }
+
+        #loadout-plasma-toggle {
+            border: 1px solid #5f8f61;
+            background: rgba(14, 42, 16, 0.84);
+            color: #cbf5d2;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 6px 10px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+
+        #loadout-apply {
+            border: 1px solid #7aa77d;
+            background: rgba(26, 66, 29, 0.88);
+            color: #e8ffe9;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        #loadout-note {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #9cc4a4;
+        }
+
         #overlay .controls {
             color: #aaa;
             font-size: 16px;
             margin-top: 20px;
             text-align: center;
             line-height: 1.8;
+        }
+
+        #docs-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 180;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 7, 0, 0.65);
+            padding: 20px;
+            cursor: default;
+        }
+
+        #docs-terminal {
+            position: relative;
+            width: min(980px, 96vw);
+            max-height: min(88vh, 760px);
+            border: 2px solid #2e8a46;
+            background: #061108;
+            box-shadow: 0 0 26px rgba(28, 169, 65, 0.22), inset 0 0 30px rgba(22, 122, 44, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #docs-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #1d5d2f;
+            color: #95f3ac;
+            font-size: 13px;
+            letter-spacing: 0.3px;
+            background: rgba(8, 28, 11, 0.95);
+            text-shadow: 0 0 6px rgba(82, 255, 126, 0.3);
+            position: relative;
+            z-index: 2;
+        }
+
+        #docs-close-btn {
+            border: 1px solid #4b9e5f;
+            background: rgba(11, 37, 14, 0.9);
+            color: #caffd4;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        #docs-close-btn:hover {
+            background: rgba(17, 52, 20, 0.95);
+        }
+
+        #docs-nav {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #1c4b27;
+            background: rgba(6, 20, 8, 0.86);
+        }
+
+        .docs-tab {
+            border: 1px solid #2e6f3f;
+            background: rgba(10, 33, 14, 0.94);
+            color: #8ff0a8;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 0.7px;
+            padding: 5px 8px;
+            cursor: pointer;
+        }
+
+        .docs-tab:hover {
+            background: rgba(13, 43, 18, 0.97);
+        }
+
+        .docs-tab.active {
+            background: rgba(44, 107, 56, 0.7);
+            color: #e8ffe9;
+            border-color: #77cb8a;
+        }
+
+        #docs-main {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            min-height: 0;
+            flex: 1;
+        }
+
+        #docs-main.no-subnav {
+            grid-template-columns: 1fr;
+        }
+
+        #docs-subnav {
+            border-right: 1px solid #1c4b27;
+            background: rgba(5, 16, 7, 0.78);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 9px;
+            overflow: auto;
+        }
+
+        .docs-subitem {
+            border: 1px solid #245a32;
+            background: rgba(10, 32, 13, 0.9);
+            color: #89eaa1;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            text-align: left;
+            padding: 6px 7px;
+            cursor: pointer;
+        }
+
+        .docs-subitem:hover {
+            background: rgba(15, 42, 19, 0.95);
+        }
+
+        .docs-subitem.active {
+            background: rgba(44, 107, 56, 0.66);
+            color: #eefff0;
+            border-color: #71c685;
+        }
+
+        #docs-content {
+            margin: 0;
+            padding: 14px 16px 18px;
+            color: #84f49d;
+            text-shadow: 0 0 6px rgba(77, 232, 114, 0.18);
+            font-size: 13px;
+            line-height: 1.26;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow: auto;
+            background: transparent;
+        }
+
+        #docs-hint {
+            position: relative;
+            z-index: 2;
+            border-top: 1px solid #1c4b27;
+            padding: 6px 12px 8px;
+            color: #70c184;
+            font-size: 11px;
+            background: rgba(6, 18, 8, 0.88);
+        }
+
+        #docs-terminal::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(24, 80, 34, 0.08) 0px,
+                rgba(24, 80, 34, 0.08) 1px,
+                rgba(0, 0, 0, 0) 3px,
+                rgba(0, 0, 0, 0) 5px
+            );
+            opacity: 0.6;
+            z-index: 1;
+        }
+
+        #docs-terminal::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 0%, rgba(138, 255, 166, 0.08), rgba(0, 0, 0, 0) 62%);
+            animation: crtFlicker 0.12s steps(2, end) infinite;
+            opacity: 0.14;
+            z-index: 1;
+        }
+
+        @keyframes crtFlicker {
+            0% { opacity: 0.1; }
+            100% { opacity: 0.17; }
         }
 
         /* Crosshair */
@@ -199,6 +527,44 @@
             background: #fff;
             transform: translate(-50%, -50%);
             box-shadow: 0 0 3px rgba(0, 0, 0, 0.75);
+        }
+
+        #plasma-reticle {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 220px;
+            height: 220px;
+            border: 2px solid rgba(102, 221, 255, 0.9);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45) inset, 0 0 18px rgba(102, 221, 255, 0.35);
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+
+        #plasma-reticle::before,
+        #plasma-reticle::after {
+            content: '';
+            position: absolute;
+            background: rgba(102, 221, 255, 0.9);
+            box-shadow: 0 0 10px rgba(102, 221, 255, 0.45);
+        }
+
+        #plasma-reticle::before {
+            width: 2px;
+            height: 36px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #plasma-reticle::after {
+            width: 36px;
+            height: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
 
         /* Hit marker */
@@ -400,6 +766,37 @@
             user-select: none;
         }
 
+        #plasma-heat-wrap {
+            position: fixed;
+            bottom: 30px;
+            right: 20px;
+            width: 120px;
+            height: 8px;
+            border: 1px solid #3f7483;
+            background: rgba(0, 10, 16, 0.58);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #plasma-heat-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #55e9ff, #ffb347, #ff5a5a);
+            transition: width 0.05s linear;
+        }
+
+        #plasma-status {
+            position: fixed;
+            bottom: 42px;
+            right: 20px;
+            color: #7edbff;
+            font-size: 11px;
+            z-index: 10;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            user-select: none;
+        }
+
         #damage-vignette {
             position: fixed;
             top: 0;
@@ -501,6 +898,29 @@
             width: 100%;
             background: linear-gradient(90deg, #d3dae2, #a7b2bd);
         }
+
+        @media (max-width: 840px) {
+            #docs-main {
+                grid-template-columns: 1fr;
+            }
+
+            #docs-subnav {
+                border-right: none;
+                border-bottom: 1px solid #1c4b27;
+                max-height: 130px;
+            }
+
+            #docs-content {
+                font-size: 11px;
+                line-height: 1.24;
+                padding: 12px;
+            }
+
+            #hud-manual-btn {
+                left: 16px;
+                top: 56px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -515,14 +935,27 @@
             </form>
             <div id="auth-status"></div>
             <button id="auth-logout-btn" type="button">Logout</button>
+            <button id="auth-local-btn" type="button">Bypass Login (Local Dev)</button>
         </div>
     </div>
 
     <button id="camera-toggle" type="button">CAM: FIRST</button>
+    <button id="hud-manual-btn" type="button">MANUAL</button>
     <!-- Overlay -->
     <div id="overlay">
         <h1>MINECRAFT FPS</h1>
-        <p>Click to Play</p>
+        <p>Click PLAY to Enter Arena</p>
+        <button id="play-btn" type="button">PLAY</button>
+        <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
+        <div id="loadout-panel">
+            <div class="loadout-title">PAUSE LOADOUT CONFIG</div>
+            <div id="loadout-slots"></div>
+            <div>
+                <button id="loadout-plasma-toggle" type="button">PLASMA: ON</button>
+                <button id="loadout-apply" type="button">APPLY LOADOUT</button>
+            </div>
+            <div id="loadout-note">Weapons: keys 1-5 + T for slot 6. Class keys remain 6-0.</div>
+        </div>
         <div class="controls">
             WASD - Move | Mouse - Look<br>
             Space (hold) - Variable Jump | Shift - Sprint | Left Click - Shoot<br>
@@ -531,13 +964,29 @@
             E Ability | R Ultimate<br>
             G Frag | V Seeker | B Molotov | Q Knife<br>
             1-5 / Mouse Wheel - Switch Weapon<br>
-            H - Toggle Hitbox Debug
+            H - Toggle Hitbox Debug | I - Toggle Manual
+        </div>
+    </div>
+
+    <div id="docs-panel" aria-hidden="true">
+        <div id="docs-terminal">
+            <div id="docs-header">
+                <span id="docs-title">MINECRAFT FPS :: OPEN FIELD MANUAL</span>
+                <button id="docs-close-btn" type="button">CLOSE</button>
+            </div>
+            <div id="docs-nav"></div>
+            <div id="docs-main">
+                <div id="docs-subnav"></div>
+                <pre id="docs-content">LOADING MANUAL...</pre>
+            </div>
+            <div id="docs-hint">TAB pages, choose class/weapon from the left list.</div>
         </div>
     </div>
 
     <!-- HUD Elements -->
     <div id="crosshair">+</div>
     <div id="shotgun-reticle"></div>
+    <div id="plasma-reticle"></div>
     <div id="hitmarker">✕</div>
     <div id="kill-counter">Kills: 0</div>
     <div id="health-text">HP: 500</div>
@@ -552,13 +1001,16 @@
     <div id="class-info">Sharpshooter | E Focus: READY | R Deadeye: READY</div>
     <div id="throwable-info">G Frag: 1<br>V Seeker: 1<br>B Molotov: 1<br>Q Knife: 1</div>
     <div id="weapon-info">Rifle | SEMI | 36/68 DMG</div>
+    <div id="plasma-status">PLASMA READY</div>
+    <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>
     <div id="cooldown-status">READY</div>
     <div id="cooldown-container"><div id="cooldown-bar"></div></div>
     <div id="debug-info"></div>
 
     <!-- Scripts: load order matters -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="js/vendor/three.min.js"></script>
     <script src="js/world.js"></script>
+    <script src="js/avatar-rig.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/enemy.js"></script>
     <script src="js/hitscan.js"></script>
@@ -567,6 +1019,7 @@
     <script src="js/player.js"></script>
     <script src="js/network.js"></script>
     <script src="js/overhead.js"></script>
+    <script src="js/docs.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>

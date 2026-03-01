@@ -32,6 +32,10 @@
     var renderMap = new Map();
     var hitboxArray = [];
     var hitboxVisible = true;
+    var beamScratchA = new THREE.Vector3();
+    var beamScratchB = new THREE.Vector3();
+
+    var REMOTE_BEAM_HOLD_MS = 180;
 
     var notices = [];
 
@@ -102,12 +106,14 @@
         var pinInput = document.getElementById('auth-pin');
         var playBtn = document.getElementById('auth-play-btn');
         var logoutBtn = document.getElementById('auth-logout-btn');
+        var localBtn = document.getElementById('auth-local-btn');
 
         function lockForm(lock) {
             if (usernameInput) usernameInput.disabled = lock;
             if (pinInput) pinInput.disabled = lock;
             if (playBtn) playBtn.disabled = lock;
             if (logoutBtn) logoutBtn.disabled = lock;
+            if (localBtn) localBtn.disabled = lock;
         }
 
         function login(username, pin) {
@@ -163,39 +169,59 @@
                     });
             });
         }
+
+        if (localBtn) {
+            localBtn.addEventListener('click', function () {
+                lockForm(true);
+                user = null;
+                setAuthStatus('Bypassed login. Starting local mode...', false);
+                setAuthVisible(false);
+                onAuthed(null);
+            });
+        }
     }
 
     function createRemoteVisual(entity) {
         var group = new THREE.Group();
-
         var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
-        var bodyMat = new THREE.MeshLambertMaterial({ color: color });
-        var limbMat = new THREE.MeshLambertMaterial({ color: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d });
-        var skinMat = new THREE.MeshLambertMaterial({ color: 0xd2a77d });
+        var rigApi = null;
+        if (window.GameAvatarRig && window.GameAvatarRig.create) {
+            rigApi = window.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
+                bodyColor: color,
+                skinColor: 0xd2a77d,
+                legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
+                weaponId: entity.weaponId || 'rifle'
+            });
+            group.add(rigApi.root);
+        } else {
+            var bodyMat = new THREE.MeshLambertMaterial({ color: color });
+            var limbMat = new THREE.MeshLambertMaterial({ color: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d });
+            var skinMat = new THREE.MeshLambertMaterial({ color: 0xd2a77d });
 
-        var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
-        body.position.y = 1.0;
-        group.add(body);
+            var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
+            body.position.y = 1.0;
+            group.add(body);
 
-        var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
-        head.position.y = 1.8;
-        group.add(head);
+            var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
+            head.position.y = 1.8;
+            group.add(head);
 
-        var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-        armL.position.set(-0.45, 1.0, 0);
-        group.add(armL);
+            var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
+            armL.position.set(-0.45, 1.0, 0);
+            group.add(armL);
 
-        var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-        armR.position.set(0.45, 1.0, 0);
-        group.add(armR);
+            var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
+            armR.position.set(0.45, 1.0, 0);
+            group.add(armR);
 
-        var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-        legL.position.set(-0.18, 0.45, 0);
-        group.add(legL);
+            var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
+            legL.position.set(-0.18, 0.45, 0);
+            group.add(legL);
 
-        var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-        legR.position.set(0.18, 0.45, 0);
-        group.add(legR);
+            var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
+            legR.position.set(0.18, 0.45, 0);
+            group.add(legR);
+        }
 
         var bodyHitbox = new THREE.Mesh(
             new THREE.BoxGeometry(2.7, 2.0, 2.7),
@@ -240,16 +266,33 @@
         hitboxArray.push(bodyHitbox);
         hitboxArray.push(headHitbox);
 
+        var beamGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(),
+            new THREE.Vector3()
+        ]);
+        var beamMat = new THREE.LineBasicMaterial({
+            color: 0x66ddff,
+            transparent: true,
+            opacity: 0.85,
+            depthTest: false
+        });
+        var beamLine = new THREE.Line(beamGeom, beamMat);
+        beamLine.visible = false;
+        beamLine.renderOrder = 25;
+        sceneRef.add(beamLine);
+
         return {
             id: entity.id,
             kind: entity.kind,
             group: group,
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
+            rigApi: rigApi,
             targetX: entity.x,
             targetY: entity.y || 1.6,
             targetZ: entity.z,
             targetYaw: entity.yaw || 0,
+            targetPitch: entity.pitch || 0,
             hp: entity.hp,
             hpMax: entity.hpMax,
             armor: entity.armor,
@@ -257,7 +300,15 @@
             classId: entity.classId,
             username: entity.username,
             alive: entity.alive,
-            wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius
+            wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
+            moveSpeedNorm: entity.moveSpeedNorm || 0,
+            sprinting: !!entity.sprinting,
+            weaponId: entity.weaponId || 'rifle',
+            beamTargetId: entity.beamTargetId || '',
+            beamActiveUntil: entity.beamActiveUntil || 0,
+            beamHeat: entity.beamHeat || 0,
+            beamOverheated: !!entity.beamOverheated,
+            beamLine: beamLine
         };
     }
 
@@ -268,6 +319,7 @@
         if (r.group && r.group.parent) r.group.parent.remove(r.group);
         if (r.bodyHitbox && r.bodyHitbox.parent) r.bodyHitbox.parent.remove(r.bodyHitbox);
         if (r.headHitbox && r.headHitbox.parent) r.headHitbox.parent.remove(r.headHitbox);
+        if (r.beamLine && r.beamLine.parent) r.beamLine.parent.remove(r.beamLine);
 
         var next = [];
         for (var i = 0; i < hitboxArray.length; i++) {
@@ -298,6 +350,7 @@
         r.targetY = entity.y || 1.6;
         r.targetZ = entity.z;
         r.targetYaw = entity.yaw || 0;
+        r.targetPitch = entity.pitch || 0;
         r.hp = entity.hp;
         r.hpMax = entity.hpMax;
         r.armor = entity.armor;
@@ -306,6 +359,13 @@
         r.username = entity.username;
         r.alive = entity.alive;
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
+        r.moveSpeedNorm = entity.moveSpeedNorm || 0;
+        r.sprinting = !!entity.sprinting;
+        r.weaponId = entity.weaponId || 'rifle';
+        r.beamTargetId = entity.beamTargetId || '';
+        r.beamActiveUntil = entity.beamActiveUntil || 0;
+        r.beamHeat = entity.beamHeat || 0;
+        r.beamOverheated = !!entity.beamOverheated;
 
         r.group.visible = !!entity.alive;
         r.bodyHitbox.visible = !!entity.alive;
@@ -426,6 +486,53 @@
         while (rad > Math.PI) rad -= Math.PI * 2;
         while (rad < -Math.PI) rad += Math.PI * 2;
         return rad;
+    }
+
+    function getRenderCoreWorldPosition(render, outVec3) {
+        if (!render) return null;
+        var out = outVec3 || new THREE.Vector3();
+        if (render.rigApi && render.rigApi.getCoreWorldPosition) {
+            return render.rigApi.getCoreWorldPosition(out);
+        }
+        out.copy(render.group.position);
+        out.y += 1.0;
+        return out;
+    }
+
+    function getRenderMuzzleWorldPosition(render, outVec3) {
+        if (!render) return null;
+        var out = outVec3 || new THREE.Vector3();
+        if (render.rigApi && render.rigApi.getMuzzleWorldPosition) {
+            return render.rigApi.getMuzzleWorldPosition(out);
+        }
+        out.copy(render.group.position);
+        out.y += 1.45;
+        return out;
+    }
+
+    function resolveBeamTargetPosition(targetId, outVec3) {
+        if (!targetId) return null;
+        var out = outVec3 || new THREE.Vector3();
+
+        if (targetId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
+            var selfPos = window.GamePlayer.getPosition();
+            out.copy(selfPos);
+            out.y -= 0.6;
+            return out;
+        }
+
+        var render = renderMap.get(targetId);
+        if (!render) return null;
+        return getRenderCoreWorldPosition(render, out);
+    }
+
+    function setBeamPoints(line, start, end) {
+        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
+        var arr = line.geometry.attributes.position.array;
+        arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
+        arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
+        line.geometry.attributes.position.needsUpdate = true;
+        line.geometry.computeBoundingSphere();
     }
 
     GameNet.requireAuth = function (onAuthed) {
@@ -551,6 +658,9 @@
         if (inputSendTimer <= 0) {
             inputSendTimer = INPUT_SEND_INTERVAL;
             if (playerPos && rotation) {
+                var anim = (window.GamePlayer && window.GamePlayer.getAnimNetState)
+                    ? window.GamePlayer.getAnimNetState()
+                    : null;
                 wsSend({
                     t: 'input',
                     seq: inputSeq++,
@@ -559,8 +669,11 @@
                     z: playerPos.z,
                     yaw: rotation.yaw || 0,
                     pitch: rotation.pitch || 0,
-                    sprint: false,
-                    jump: false
+                    sprint: !!(anim && anim.sprinting),
+                    jump: false,
+                    weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
+                    moveSpeedNorm: anim && typeof anim.moveSpeedNorm === 'number' ? anim.moveSpeedNorm : 0,
+                    sprinting: !!(anim && anim.sprinting)
                 });
             }
         }
@@ -574,8 +687,31 @@
             var deltaYaw = normalizeAngle(r.targetYaw - r.group.rotation.y);
             r.group.rotation.y += deltaYaw * lerp;
 
+            if (r.rigApi) {
+                r.rigApi.setWeapon(r.weaponId || 'rifle');
+                r.rigApi.updateAimPitch(r.targetPitch || 0);
+                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
+            }
+
             r.bodyHitbox.position.set(r.group.position.x, 1.0, r.group.position.z);
             r.headHitbox.position.set(r.group.position.x, 2.475, r.group.position.z);
+
+            if (r.beamLine) {
+                var beamActive = !!r.alive && r.beamTargetId && (r.beamActiveUntil || 0) > Date.now();
+                if (beamActive) {
+                    var beamStart = getRenderMuzzleWorldPosition(r, beamScratchA);
+                    var beamEnd = resolveBeamTargetPosition(r.beamTargetId, beamScratchB);
+                    if (beamStart && beamEnd) {
+                        setBeamPoints(r.beamLine, beamStart, beamEnd);
+                        r.beamLine.visible = true;
+                        r.beamLine.material.opacity = r.beamOverheated ? 0.2 : 0.85;
+                    } else {
+                        r.beamLine.visible = false;
+                    }
+                } else {
+                    r.beamLine.visible = false;
+                }
+            }
         });
     };
 
@@ -589,12 +725,47 @@
         });
     };
 
+    GameNet.sendEquipWeapon = function (weaponId) {
+        if (!weaponId) return false;
+        return wsSend({
+            t: 'equip_weapon',
+            weaponId: String(weaponId)
+        });
+    };
+
+    GameNet.sendPlasmaTick = function (targetId) {
+        if (!targetId) return false;
+        return wsSend({
+            t: 'plasma_tick',
+            seq: inputSeq++,
+            targetId: String(targetId)
+        });
+    };
+
     GameNet.sendThrow = function (throwableId) {
         return wsSend({ t: 'throw', throwableId: throwableId });
     };
 
     GameNet.queueClassChange = function (classId) {
         return wsSend({ t: 'class_queue', classId: classId });
+    };
+
+    GameNet.getLockTargets = function () {
+        var out = [];
+        renderMap.forEach(function (r) {
+            if (!r || !r.alive) return;
+            var worldPos = getRenderCoreWorldPosition(r, new THREE.Vector3());
+            if (!worldPos) return;
+            out.push({
+                targetId: 'net:' + r.id,
+                ownerType: 'net',
+                worldPos: worldPos,
+                hitbox: r.bodyHitbox || null,
+                alive: true,
+                netEntityId: r.id
+            });
+        });
+        return out;
     };
 
     GameNet.consumeNotice = function () {
