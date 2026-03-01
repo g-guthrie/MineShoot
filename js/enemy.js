@@ -63,6 +63,15 @@
         var min = bounds.min + 4;
         var max = bounds.max - 4;
 
+        if (window.GameWorld && window.GameWorld.getRandomSpawnPointSafe) {
+            return window.GameWorld.getRandomSpawnPointSafe({
+                padding: 6,
+                tries: 100,
+                feetY: 0,
+                height: 2.2,
+                radius: 0.72
+            });
+        }
         if (window.GameWorld && window.GameWorld.getRandomSpawnPoint) {
             return window.GameWorld.getRandomSpawnPoint(6);
         }

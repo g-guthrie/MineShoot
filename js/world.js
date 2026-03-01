@@ -17,6 +17,9 @@
     var DEFAULT_SPAWN_PADDING = 8;
     var WORLD_SEED = 'mineshoot-v1';
     var rngState = 1;
+    var DEFAULT_ENTITY_RADIUS = 0.58;
+    var DEFAULT_ENTITY_HEIGHT = 1.7;
+    var EPSILON = 0.001;
 
     // Solid meshes used for movement/raycast collisions.
     var collidables = [];
@@ -65,6 +68,31 @@
         return min + random01() * (max - min);
     }
 
+    function intersectsXZ(x, z, radius, box) {
+        var closestX = Math.max(box.min.x, Math.min(x, box.max.x));
+        var closestZ = Math.max(box.min.z, Math.min(z, box.max.z));
+        var dx = x - closestX;
+        var dz = z - closestZ;
+        return ((dx * dx + dz * dz) < (radius * radius));
+    }
+
+    function isCapsuleBlockedAt(x, z, feetY, height, radius) {
+        if (!collidables || collidables.length === 0) return false;
+        feetY = (typeof feetY === 'number') ? feetY : 0;
+        height = (typeof height === 'number') ? height : DEFAULT_ENTITY_HEIGHT;
+        radius = (typeof radius === 'number') ? radius : DEFAULT_ENTITY_RADIUS;
+        var headY = feetY + height;
+
+        for (var i = 0; i < collidables.length; i++) {
+            var mesh = collidables[i];
+            var box = mesh && mesh.userData ? mesh.userData.collisionBox : null;
+            if (!box) continue;
+            if (headY <= box.min.y + EPSILON || feetY >= box.max.y - EPSILON) continue;
+            if (intersectsXZ(x, z, radius, box)) return true;
+        }
+        return false;
+    }
+
     function randomSpawnPoint(padding) {
         var pad = (typeof padding === 'number') ? padding : DEFAULT_SPAWN_PADDING;
         var min = WORLD_MIN + pad;
@@ -73,6 +101,23 @@
             x: randRange(min, max),
             z: randRange(min, max)
         };
+    }
+
+    function randomSafeSpawnPoint(options) {
+        options = options || {};
+        var tries = Math.max(1, Math.floor(options.tries || 60));
+        var pad = (typeof options.padding === 'number') ? options.padding : DEFAULT_SPAWN_PADDING;
+        var feetY = (typeof options.feetY === 'number') ? options.feetY : 0;
+        var height = (typeof options.height === 'number') ? options.height : DEFAULT_ENTITY_HEIGHT;
+        var radius = (typeof options.radius === 'number') ? options.radius : DEFAULT_ENTITY_RADIUS;
+
+        for (var i = 0; i < tries; i++) {
+            var p = randomSpawnPoint(pad);
+            if (!isCapsuleBlockedAt(p.x, p.z, feetY, height, radius)) return p;
+        }
+
+        var fallback = randomSpawnPoint(pad);
+        return fallback;
     }
 
     GameWorld.create = function (scene) {
@@ -339,6 +384,21 @@
 
     GameWorld.getRandomSpawnPoint = function (padding) {
         return randomSpawnPoint(padding);
+    };
+
+    GameWorld.getRandomSpawnPointSafe = function (options) {
+        return randomSafeSpawnPoint(options);
+    };
+
+    GameWorld.isPointBlocked = function (x, z, options) {
+        options = options || {};
+        return isCapsuleBlockedAt(
+            x,
+            z,
+            (typeof options.feetY === 'number') ? options.feetY : 0,
+            (typeof options.height === 'number') ? options.height : DEFAULT_ENTITY_HEIGHT,
+            (typeof options.radius === 'number') ? options.radius : DEFAULT_ENTITY_RADIUS
+        );
     };
 
     GameWorld.getRecommendedEnemyCount = function () {

@@ -931,6 +931,20 @@
         var min = bounds.min + spawnPadding;
         var max = bounds.max - spawnPadding;
 
+        if (window.GameWorld && window.GameWorld.getRandomSpawnPointSafe) {
+            var safeSpawn = window.GameWorld.getRandomSpawnPointSafe({
+                padding: spawnPadding,
+                tries: 80,
+                feetY: 0,
+                height: PLAYER_HEIGHT,
+                radius: PLAYER_RADIUS
+            });
+            if (safeSpawn && !isBlockedAt(safeSpawn.x, safeSpawn.z, 0)) {
+                setSpawnPosition(safeSpawn.x, safeSpawn.z, 0);
+                return new THREE.Vector2(safeSpawn.x, safeSpawn.z);
+            }
+        }
+
         for (var i = 0; i < 40; i++) {
             var randomSpawn = (window.GameWorld && window.GameWorld.getRandomSpawnPoint)
                 ? window.GameWorld.getRandomSpawnPoint(spawnPadding)

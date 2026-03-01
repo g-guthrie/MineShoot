@@ -236,6 +236,138 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+const BASE_WORLD_SIZE = 50;
+const WORLD_AREA_SCALE = 5;
+const WORLD_SIZE = Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE));
+const WORLD_MARGIN = 2;
+const WORLD_MIN = WORLD_MARGIN;
+const WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
+const ENTITY_EYE_HEIGHT = 1.6;
+const ENTITY_HEIGHT = 1.7;
+const ENTITY_RADIUS = 0.58;
+const COLLISION_EPSILON = 0.001;
+
+function scaleAxis(value) {
+  return (value / BASE_WORLD_SIZE) * WORLD_SIZE;
+}
+
+function scaleSpan(value) {
+  return Math.max(1, (value / BASE_WORLD_SIZE) * WORLD_SIZE);
+}
+
+function makeAabb(cx, cy, cz, w, h, d) {
+  const hw = w * 0.5;
+  const hh = h * 0.5;
+  const hd = d * 0.5;
+  return {
+    min: { x: cx - hw, y: cy - hh, z: cz - hd },
+    max: { x: cx + hw, y: cy + hh, z: cz + hd }
+  };
+}
+
+function buildServerWorldColliders() {
+  const colliders = [];
+  const add = (x, y, z, w, h, d) => {
+    colliders.push(makeAabb(x, y, z, w, h, d));
+  };
+  const px = (value) => scaleAxis(value);
+  const span = (value) => scaleSpan(value);
+
+  // Core divider/cover geometry mirrored from client world.
+  add(px(25), 1.5, px(25), span(4), 3, span(1));
+  add(px(25), 1.5, px(27), span(1), 3, span(3));
+  add(px(25), 1.5, px(23), span(1), 3, span(3));
+
+  add(px(10), 1, px(10), span(3), 2, span(3));
+  add(px(10), 3, px(10), span(1), 2, span(1));
+  add(px(40), 1, px(10), span(3), 2, span(3));
+  add(px(40), 3, px(10), span(1), 2, span(1));
+  add(px(10), 1, px(40), span(3), 2, span(3));
+  add(px(10), 3, px(40), span(1), 2, span(1));
+  add(px(40), 1, px(40), span(3), 2, span(3));
+  add(px(40), 3, px(40), span(1), 2, span(1));
+
+  add(px(20), 1, px(15), span(6), 2, span(1));
+  add(px(30), 1, px(35), span(6), 2, span(1));
+  add(px(15), 1, px(30), span(1), 2, span(6));
+  add(px(35), 1, px(20), span(1), 2, span(6));
+
+  add(px(8), 0.5, px(25), span(1), 1, span(1));
+  add(px(42), 0.5, px(25), span(1), 1, span(1));
+  add(px(25), 0.5, px(8), span(1), 1, span(1));
+  add(px(25), 0.5, px(42), span(1), 1, span(1));
+
+  add(px(18), 1, px(22), span(2), 2, span(2));
+  add(px(32), 1, px(28), span(2), 2, span(2));
+  add(px(22), 1, px(38), span(2), 2, span(2));
+  add(px(28), 1, px(12), span(2), 2, span(2));
+
+  const edgeStep = Math.max(2, Math.round(WORLD_SIZE / 30));
+  for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
+    const northHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0) + ((edge % (edgeStep * 5) === 0) ? 1 : 0);
+    const southHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
+    add(edge, northHeight * 0.5, WORLD_MIN + 0.8, edgeStep * 0.92, northHeight, 1.2);
+    add(edge, southHeight * 0.5, WORLD_MAX - 0.8, edgeStep * 0.92, southHeight, 1.2);
+  }
+
+  for (let edge = WORLD_MIN + 1; edge <= WORLD_MAX - 1; edge += edgeStep) {
+    const westHeight = 2 + ((edge % (edgeStep * 4) === 0) ? 1 : 0);
+    const eastHeight = 2 + ((edge % (edgeStep * 3) === 0) ? 1 : 0);
+    add(WORLD_MIN + 0.8, westHeight * 0.5, edge, 1.2, westHeight, edgeStep * 0.92);
+    add(WORLD_MAX - 0.8, eastHeight * 0.5, edge, 1.2, eastHeight, edgeStep * 0.92);
+  }
+
+  return colliders;
+}
+
+function intersectsXZCircleAabb(x, z, radius, box) {
+  const closestX = clamp(x, box.min.x, box.max.x);
+  const closestZ = clamp(z, box.min.z, box.max.z);
+  const dx = x - closestX;
+  const dz = z - closestZ;
+  return ((dx * dx + dz * dz) < (radius * radius));
+}
+
+function isBlockedAt(colliders, x, z, feetY, height = ENTITY_HEIGHT, radius = ENTITY_RADIUS) {
+  if (!colliders || colliders.length === 0) return false;
+  const headY = feetY + height;
+
+  for (let i = 0; i < colliders.length; i++) {
+    const box = colliders[i];
+    if (!box) continue;
+    if (headY <= box.min.y + COLLISION_EPSILON || feetY >= box.max.y - COLLISION_EPSILON) continue;
+    if (intersectsXZCircleAabb(x, z, radius, box)) return true;
+  }
+  return false;
+}
+
+function randomSafeSpawn(colliders, options = {}) {
+  const padding = (typeof options.padding === 'number') ? options.padding : 8;
+  const tries = Math.max(1, Math.floor(options.tries || 80));
+  const feetY = (typeof options.feetY === 'number') ? options.feetY : 0;
+  const height = (typeof options.height === 'number') ? options.height : ENTITY_HEIGHT;
+  const radius = (typeof options.radius === 'number') ? options.radius : ENTITY_RADIUS;
+  const min = WORLD_MIN + padding;
+  const max = WORLD_MAX - padding;
+
+  for (let i = 0; i < tries; i++) {
+    const x = min + Math.random() * (max - min);
+    const z = min + Math.random() * (max - min);
+    if (!isBlockedAt(colliders, x, z, feetY, height, radius)) {
+      return { x, z };
+    }
+  }
+
+  return {
+    x: min + Math.random() * (max - min),
+    z: min + Math.random() * (max - min)
+  };
+}
+
+function eyeToFeetY(eyeY) {
+  return (typeof eyeY === 'number' ? eyeY : ENTITY_EYE_HEIGHT) - ENTITY_EYE_HEIGHT;
+}
+
 export class GlobalArenaRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -247,9 +379,54 @@ export class GlobalArenaRoom extends DurableObject {
     this.tickHandle = null;
     this.lastTickAt = nowMs();
     this.roomName = env.ROOM_NAME || 'global';
-    this.boundsMin = 2;
-    this.boundsMax = 110;
+    this.boundsMin = WORLD_MIN;
+    this.boundsMax = WORLD_MAX;
+    this.worldColliders = buildServerWorldColliders();
     this.ensureBots();
+  }
+
+  pickSafeSpawn(options = {}) {
+    return randomSafeSpawn(this.worldColliders, {
+      padding: (typeof options.padding === 'number') ? options.padding : 8,
+      tries: (typeof options.tries === 'number') ? options.tries : 90,
+      feetY: (typeof options.feetY === 'number') ? options.feetY : 0,
+      height: (typeof options.height === 'number') ? options.height : ENTITY_HEIGHT,
+      radius: (typeof options.radius === 'number') ? options.radius : ENTITY_RADIUS
+    });
+  }
+
+  moveEntityWithCollision(entity, desiredX, desiredZ, desiredEyeY) {
+    if (!entity) return;
+    const targetX = clamp(desiredX, this.boundsMin, this.boundsMax);
+    const targetZ = clamp(desiredZ, this.boundsMin, this.boundsMax);
+    const targetEyeY = (typeof desiredEyeY === 'number') ? clamp(desiredEyeY, 0, 16) : entity.y;
+    const feetY = eyeToFeetY(targetEyeY);
+
+    const startX = entity.x;
+    const startZ = entity.z;
+    const dx = targetX - startX;
+    const dz = targetZ - startZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    const steps = Math.max(1, Math.ceil(dist / 0.6));
+    let curX = startX;
+    let curZ = startZ;
+
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const nextX = startX + (dx * t);
+      const nextZ = startZ + (dz * t);
+
+      if (!isBlockedAt(this.worldColliders, nextX, curZ, feetY, ENTITY_HEIGHT, ENTITY_RADIUS)) {
+        curX = nextX;
+      }
+      if (!isBlockedAt(this.worldColliders, curX, nextZ, feetY, ENTITY_HEIGHT, ENTITY_RADIUS)) {
+        curZ = nextZ;
+      }
+    }
+
+    entity.x = curX;
+    entity.z = curZ;
+    entity.y = targetEyeY;
   }
 
   ensureBots() {
@@ -259,15 +436,16 @@ export class GlobalArenaRoom extends DurableObject {
       if (this.bots.has(id)) continue;
       const classId = 'sharpshooter';
       const preset = classPreset(classId);
+      const spawn = this.pickSafeSpawn({ padding: 8, tries: 120, feetY: 0, height: ENTITY_HEIGHT, radius: ENTITY_RADIUS });
       this.bots.set(id, {
         id,
         kind: 'bot',
         username: `BOT_${i + 1}`,
         classId,
         queuedClassId: null,
-        x: 10 + Math.random() * 90,
+        x: spawn.x,
         y: 1.6,
-        z: 10 + Math.random() * 90,
+        z: spawn.z,
         yaw: Math.random() * Math.PI * 2,
         pitch: 0,
         hp: MAX_HP,
@@ -364,15 +542,16 @@ export class GlobalArenaRoom extends DurableObject {
     }
 
     const preset = classPreset(classId);
+    const spawn = this.pickSafeSpawn({ padding: 8, tries: 120, feetY: 0, height: ENTITY_HEIGHT, radius: ENTITY_RADIUS });
     const p = {
       id: userId,
       kind: 'player',
       username,
       classId,
       queuedClassId: null,
-      x: 15 + Math.random() * 80,
+      x: spawn.x,
       y: 1.6,
-      z: 15 + Math.random() * 80,
+      z: spawn.z,
       yaw: 0,
       pitch: 0,
       hp: MAX_HP,
@@ -423,9 +602,11 @@ export class GlobalArenaRoom extends DurableObject {
   handleInput(player, msg) {
     if (!player || !player.alive) return;
 
-    if (typeof msg.x === 'number') player.x = clamp(msg.x, this.boundsMin, this.boundsMax);
-    if (typeof msg.z === 'number') player.z = clamp(msg.z, this.boundsMin, this.boundsMax);
-    if (typeof msg.y === 'number') player.y = clamp(msg.y, 0, 16);
+    const desiredX = (typeof msg.x === 'number') ? msg.x : player.x;
+    const desiredZ = (typeof msg.z === 'number') ? msg.z : player.z;
+    const desiredY = (typeof msg.y === 'number') ? msg.y : player.y;
+    this.moveEntityWithCollision(player, desiredX, desiredZ, desiredY);
+
     if (typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
@@ -718,8 +899,9 @@ export class GlobalArenaRoom extends DurableObject {
     entity.alive = true;
     entity.respawnAt = 0;
     entity.lastDamageAt = 0;
-    entity.x = 10 + Math.random() * 90;
-    entity.z = 10 + Math.random() * 90;
+    const spawn = this.pickSafeSpawn({ padding: 8, tries: 120, feetY: 0, height: ENTITY_HEIGHT, radius: ENTITY_RADIUS });
+    entity.x = spawn.x;
+    entity.z = spawn.z;
     entity.beamTargetId = '';
     entity.beamActiveUntil = 0;
     entity.beamHeat = 0;
@@ -752,8 +934,12 @@ export class GlobalArenaRoom extends DurableObject {
         bot.aiDirZ = dz / len;
       }
 
-      bot.x = clamp(bot.x + bot.aiDirX * bot.aiSpeed * dtSec, this.boundsMin, this.boundsMax);
-      bot.z = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * dtSec, this.boundsMin, this.boundsMax);
+      this.moveEntityWithCollision(
+        bot,
+        bot.x + (bot.aiDirX * bot.aiSpeed * dtSec),
+        bot.z + (bot.aiDirZ * bot.aiSpeed * dtSec),
+        bot.y
+      );
       bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
       bot.pitch = 0;
       bot.moveSpeedNorm = clamp(bot.aiSpeed / 3.2, 0, 1.4);
