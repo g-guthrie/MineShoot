@@ -47,7 +47,12 @@
 
     GameUIShell.showOverlay = function () {
         ensureInit();
-        if (overlayEl) overlayEl.style.display = 'flex';
+        if (overlayEl) {
+            overlayEl.style.display = 'flex';
+            overlayEl.classList.remove('menu-entering');
+            void overlayEl.offsetWidth;
+            overlayEl.classList.add('menu-entering');
+        }
     };
 
     GameUIShell.hideOverlay = function () {

@@ -2,10 +2,12 @@ import { DurableObject } from 'cloudflare:workers';
 import '../shared/game-primitives.js';
 import '../shared/world-layout.js';
 import '../shared/game-schema.js';
+import '../shared/aim-parity.js';
 
 const PRIM = globalThis.__GAME_PRIMITIVES__ || {};
 const WORLD_LAYOUT = globalThis.__GAME_WORLD_LAYOUT__ || {};
 const SCHEMA = globalThis.__GAME_SCHEMA__ || {};
+const AIM_PARITY = globalThis.__GAME_AIM_PARITY__ || {};
 const COMBAT_PRIM = PRIM.combat || {};
 const WORLD_PRIM = PRIM.world || {};
 const ENTITY_PRIM = PRIM.entity || {};
@@ -61,6 +63,15 @@ const BODY_HITBOX_SIZE = (HITBOX_PRIM.body && HITBOX_PRIM.body.size) || [2.7, 2.
 const HEAD_HITBOX_SIZE = (HITBOX_PRIM.head && HITBOX_PRIM.head.size) || [1.55, 0.95, 1.55];
 const BODY_HITBOX_OFFSET = Number(COORDS_PRIM.body_hitbox_offset_y || 1.0);
 const HEAD_HITBOX_OFFSET = Number(COORDS_PRIM.head_hitbox_offset_y || 2.475);
+const AIM_VIEWPORT = (AIM_PARITY && AIM_PARITY.getCanonicalViewport)
+  ? AIM_PARITY.getCanonicalViewport()
+  : { width: 1920, height: 1080 };
+const FALLBACK_SHOTGUN_PATTERN = [
+  [-0.90, -0.90], [0.00, -0.90], [0.90, -0.90],
+  [-0.90, 0.00], [-0.35, -0.35], [0.35, 0.35], [0.90, 0.00],
+  [-0.90, 0.90], [0.00, 0.90], [0.90, 0.90],
+  [-0.45, 0.45], [0.45, -0.45]
+];
 
 const MOVE_JOG_SPEED = 8;
 const MOVE_RUN_SPEED = 11;
@@ -328,6 +339,10 @@ function normalizeVec3(v) {
   return { x: v.x / len, y: v.y / len, z: v.z / len };
 }
 
+function resolveCameraMode(cameraMode) {
+  return cameraMode === 'third' ? 'third' : 'first';
+}
+
 function directionFromYawPitch(yaw, pitch) {
   const cy = Math.cos(yaw || 0);
   const sy = Math.sin(yaw || 0);
@@ -386,6 +401,78 @@ function rayIntersectAabb(origin, dir, box, maxDistance) {
 
   if (tmin < 0 || tmin > maxDistance) return null;
   return tmin;
+}
+
+function toPoint3(x, y, z) {
+  return { x: x || 0, y: y || 0, z: z || 0 };
+}
+
+function pointDistance(a, b) {
+  const dx = (a.x || 0) - (b.x || 0);
+  const dy = (a.y || 0) - (b.y || 0);
+  const dz = (a.z || 0) - (b.z || 0);
+  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+}
+
+function getCameraStateForEntity(entity) {
+  const cameraMode = resolveCameraMode(entity && entity.cameraMode);
+  if (AIM_PARITY && AIM_PARITY.getCameraState) {
+    return AIM_PARITY.getCameraState({
+      cameraMode,
+      x: (entity && entity.x) || 0,
+      z: (entity && entity.z) || 0,
+      feetY: (entity && entity.feetY) || 0,
+      yaw: (entity && entity.yaw) || 0,
+      pitch: (entity && entity.pitch) || 0
+    });
+  }
+  return {
+    mode: cameraMode,
+    cameraDistance: (cameraMode === 'third') ? 4.4 : 0,
+    position: {
+      x: (entity && entity.x) || 0,
+      y: ((entity && entity.feetY) || 0) + ENTITY_EYE_HEIGHT,
+      z: (entity && entity.z) || 0
+    },
+    basis: null
+  };
+}
+
+function getReticleSizePx(kind, cameraMode, cameraDistance) {
+  if (AIM_PARITY && AIM_PARITY.getReticleSizePx) {
+    return Number(AIM_PARITY.getReticleSizePx(kind, cameraMode, cameraDistance) || 0);
+  }
+  if (kind === 'plasma') return 220;
+  return 300;
+}
+
+function getShotgunPelletOffsets(cameraMode, cameraDistance) {
+  if (AIM_PARITY && AIM_PARITY.getShotgunPelletOffsetsNdc) {
+    return AIM_PARITY.getShotgunPelletOffsetsNdc(
+      cameraMode,
+      cameraDistance,
+      AIM_VIEWPORT.width,
+      AIM_VIEWPORT.height
+    );
+  }
+  const out = [];
+  const halfSize = 300 * 0.5;
+  for (let i = 0; i < FALLBACK_SHOTGUN_PATTERN.length; i++) {
+    const p = FALLBACK_SHOTGUN_PATTERN[i];
+    out.push({
+      x: (p[0] * halfSize) / (AIM_VIEWPORT.width * 0.5),
+      y: -(p[1] * halfSize) / (AIM_VIEWPORT.height * 0.5)
+    });
+  }
+  return out;
+}
+
+function shotgunFalloffDamage(baseDamage, distance) {
+  if (distance <= 8) return baseDamage;
+  if (distance >= 24) return Math.max(3, Math.round(baseDamage * 0.25));
+  const t = (distance - 8) / 16;
+  const scale = 1 - (t * 0.75);
+  return Math.max(3, Math.round(baseDamage * scale));
 }
 
 function makeEntityBodyAabb(entity) {
@@ -558,6 +645,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.throwables = new Map();
     this.molotovZones = new Map();
     this.nextThrowableId = 1;
+    this.hadThrowablesLastTick = false;
     this.tickHandle = null;
     this.lastTickAt = nowMs();
     this.roomName = env.ROOM_NAME || 'global';
@@ -729,6 +817,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player.lastThrowAt || typeof player.lastThrowAt !== 'object') player.lastThrowAt = {};
     if (!player.lastShotAt || typeof player.lastShotAt !== 'object') player.lastShotAt = {};
     if (!player.chunkSubs) player.chunkSubs = new Set();
+    player.cameraMode = resolveCameraMode(player.cameraMode);
   }
 
   simulatePlayerMovement(player, dtSec) {
@@ -834,6 +923,7 @@ export class GlobalArenaRoom extends DurableObject {
         z: spawn.z,
         yaw: Math.random() * Math.PI * 2,
         pitch: 0,
+        cameraMode: 'first',
         velY: 0,
         grounded: true,
         hp: MAX_HP,
@@ -917,6 +1007,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.sendWelcome(server, player);
     this.updateChunkInterest(player, true);
     this.broadcastEntitySnapshot();
+    this.broadcastThrowableSnapshot(true);
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -958,6 +1049,7 @@ export class GlobalArenaRoom extends DurableObject {
       z: spawn.z,
       yaw: 0,
       pitch: 0,
+      cameraMode: 'first',
       velY: 0,
       grounded: true,
       hp: MAX_HP,
@@ -1032,6 +1124,7 @@ export class GlobalArenaRoom extends DurableObject {
     player.intent.jumpHeld = !!msg.jumpHeld;
     player.intent.sprint = !!msg.sprint;
     player.intent.actions = Array.isArray(msg.actions) ? msg.actions.slice(0, 16) : [];
+    player.cameraMode = resolveCameraMode(msg.cameraMode);
     if (!VALID_GRIP_MODES.has(player.gripMode)) player.gripMode = inferGripMode(player.weaponId || 'rifle');
   }
 
@@ -1083,28 +1176,140 @@ export class GlobalArenaRoom extends DurableObject {
     return best;
   }
 
-  selectPlasmaTarget(shooter, origin, dir, maxRange) {
+  hasWorldLineOfSight(origin, targetPos, maxRange) {
+    if (!origin || !targetPos) return false;
+    const delta = {
+      x: targetPos.x - origin.x,
+      y: targetPos.y - origin.y,
+      z: targetPos.z - origin.z
+    };
+    const dist = Math.sqrt((delta.x * delta.x) + (delta.y * delta.y) + (delta.z * delta.z)) || 0;
+    if (dist <= 0.001) return false;
+    if (typeof maxRange === 'number' && dist > maxRange) return false;
+    const dir = {
+      x: delta.x / dist,
+      y: delta.y / dist,
+      z: delta.z / dist
+    };
+    const blocker = this.raycastWorldDistance(origin, dir, Math.max(0, dist - 0.15));
+    return blocker === Infinity;
+  }
+
+  overlapAreaWithReticle(cameraState, reticleRect, entity) {
+    if (!AIM_PARITY || !AIM_PARITY.projectAabbToNdcRect || !AIM_PARITY.rectOverlapArea) return 0;
+    let area = 0;
+    const bodyRect = AIM_PARITY.projectAabbToNdcRect(cameraState, makeEntityBodyAabb(entity));
+    if (bodyRect) area += AIM_PARITY.rectOverlapArea(bodyRect, reticleRect);
+    const headRect = AIM_PARITY.projectAabbToNdcRect(cameraState, makeEntityHeadAabb(entity));
+    if (headRect) area += AIM_PARITY.rectOverlapArea(headRect, reticleRect);
+    return area;
+  }
+
+  selectPlasmaTarget(shooter, maxRange) {
+    const cameraState = getCameraStateForEntity(shooter);
+    const cameraMode = resolveCameraMode(shooter && shooter.cameraMode);
+    const reticleSizePx = getReticleSizePx('plasma', cameraMode, cameraState.cameraDistance || 0);
+    const reticleRect = (AIM_PARITY && AIM_PARITY.buildReticleRectNdc)
+      ? AIM_PARITY.buildReticleRectNdc(reticleSizePx, AIM_VIEWPORT.width, AIM_VIEWPORT.height)
+      : {
+          minX: -0.12,
+          maxX: 0.12,
+          minY: -0.12,
+          maxY: 0.12
+        };
+
     let best = null;
-    const minDot = Math.cos(0.28);
+    let bestArea = -1;
+    let bestDist = Infinity;
+    let candidateCount = 0;
+    let overlapCount = 0;
+    let anyInRangeOverlap = false;
+    let anyOverlapNoLos = false;
+
     this.eachCombatEntity((target) => {
       if (!target || !target.alive || target.id === shooter.id) return;
-      const tx = target.x - origin.x;
-      const ty = ((target.feetY || 0) + BODY_HITBOX_OFFSET) - origin.y;
-      const tz = target.z - origin.z;
-      const dist = Math.sqrt((tx * tx) + (ty * ty) + (tz * tz)) || 0.0001;
+      candidateCount++;
+
+      const overlapArea = this.overlapAreaWithReticle(cameraState, reticleRect, target);
+      if (overlapArea <= 0) return;
+      overlapCount++;
+
+      const corePos = toPoint3(
+        target.x,
+        (target.feetY || 0) + BODY_HITBOX_OFFSET,
+        target.z
+      );
+      const dist = pointDistance(cameraState.position, corePos);
       if (dist > maxRange) return;
-      const nx = tx / dist;
-      const ny = ty / dist;
-      const nz = tz / dist;
-      const dot = (nx * dir.x) + (ny * dir.y) + (nz * dir.z);
-      if (dot < minDot) return;
-      const blocker = this.raycastWorldDistance(origin, { x: nx, y: ny, z: nz }, dist - 0.15);
-      if (blocker !== Infinity) return;
-      if (!best || dot > best.dot || (Math.abs(dot - best.dot) < 1e-8 && dist < best.distance)) {
-        best = { target, distance: dist, dot };
+      anyInRangeOverlap = true;
+
+      if (!this.hasWorldLineOfSight(cameraState.position, corePos, maxRange)) {
+        anyOverlapNoLos = true;
+        return;
+      }
+
+      if (overlapArea > bestArea || (Math.abs(overlapArea - bestArea) < 1e-8 && dist < bestDist)) {
+        best = target;
+        bestArea = overlapArea;
+        bestDist = dist;
       }
     });
-    return best ? best.target : null;
+
+    if (best) {
+      return {
+        target: best,
+        reason: 'locked',
+        overlapArea: bestArea,
+        candidateCount,
+        overlapCount
+      };
+    }
+    if (overlapCount === 0) {
+      return {
+        target: null,
+        reason: 'searching',
+        overlapArea: 0,
+        candidateCount,
+        overlapCount
+      };
+    }
+    if (!anyInRangeOverlap) {
+      return {
+        target: null,
+        reason: 'out_of_range',
+        overlapArea: 0,
+        candidateCount,
+        overlapCount
+      };
+    }
+    if (anyOverlapNoLos) {
+      return {
+        target: null,
+        reason: 'no_los',
+        overlapArea: 0,
+        candidateCount,
+        overlapCount
+      };
+    }
+    return {
+      target: null,
+      reason: 'searching',
+      overlapArea: 0,
+      candidateCount,
+      overlapCount
+    };
+  }
+
+  getAimDirection(cameraState, yaw, pitch, ndcX, ndcY) {
+    if (AIM_PARITY && AIM_PARITY.ndcOffsetToWorldDir) {
+      return AIM_PARITY.ndcOffsetToWorldDir(
+        cameraState,
+        Number(ndcX || 0),
+        Number(ndcY || 0)
+      );
+    }
+    if (!ndcX && !ndcY) return directionFromYawPitch(yaw || 0, pitch || 0);
+    return directionFromYawPitch((yaw || 0) - (ndcX * 0.08), (pitch || 0) + (ndcY * 0.08));
   }
 
   applyDamage(target, damage) {
@@ -1167,16 +1372,18 @@ export class GlobalArenaRoom extends DurableObject {
     if ((now - prev) < stats.cooldownMs) return;
     player.lastShotAt[weaponId] = now;
 
-    const origin = {
+    const cameraState = getCameraStateForEntity(player);
+    const origin = cameraState.position || {
       x: player.x,
       y: (player.feetY || 0) + ENTITY_EYE_HEIGHT,
       z: player.z
     };
-    const dir = directionFromYawPitch(player.yaw || 0, player.pitch || 0);
+    const centerDir = this.getAimDirection(cameraState, player.yaw || 0, player.pitch || 0, 0, 0);
 
     if (weaponId === 'plasma') {
       if (player.beamOverheated && now < (player.beamOverheatedUntil || 0)) return;
-      const target = this.selectPlasmaTarget(player, origin, dir, stats.maxRange);
+      const selection = this.selectPlasmaTarget(player, stats.maxRange);
+      const target = selection && selection.target ? selection.target : null;
       if (!target) {
         player.beamTargetId = '';
         player.beamActiveUntil = 0;
@@ -1197,9 +1404,27 @@ export class GlobalArenaRoom extends DurableObject {
       return;
     }
 
-    const entityHit = this.raycastEntityHit(player, origin, dir, stats.maxRange);
+    if (weaponId === 'shotgun') {
+      const cameraMode = resolveCameraMode(player.cameraMode);
+      const pelletOffsets = getShotgunPelletOffsets(cameraMode, cameraState.cameraDistance || 0);
+      for (let i = 0; i < pelletOffsets.length; i++) {
+        const p = pelletOffsets[i];
+        const pelletDir = this.getAimDirection(cameraState, player.yaw || 0, player.pitch || 0, p.x, p.y);
+        const entityHit = this.raycastEntityHit(player, origin, pelletDir, stats.maxRange);
+        if (!entityHit || !entityHit.target) continue;
+        const worldBlocker = this.raycastWorldDistance(origin, pelletDir, stats.maxRange);
+        if (worldBlocker !== Infinity && worldBlocker < entityHit.distance - 0.03) continue;
+        const baseDamage = entityHit.hitType === 'head' ? stats.headDamage : stats.bodyDamage;
+        const pelletDamage = shotgunFalloffDamage(baseDamage, entityHit.distance);
+        const out = this.applyDamage(entityHit.target, pelletDamage);
+        if (out) this.emitDamage(player.id, entityHit.target, out, entityHit.hitType);
+      }
+      return;
+    }
+
+    const entityHit = this.raycastEntityHit(player, origin, centerDir, stats.maxRange);
     if (!entityHit || !entityHit.target) return;
-    const worldBlocker = this.raycastWorldDistance(origin, dir, stats.maxRange);
+    const worldBlocker = this.raycastWorldDistance(origin, centerDir, stats.maxRange);
     if (worldBlocker !== Infinity && worldBlocker < entityHit.distance - 0.03) return;
     const damage = entityHit.hitType === 'head' ? stats.headDamage : stats.bodyDamage;
     const out = this.applyDamage(entityHit.target, damage);
@@ -1244,6 +1469,13 @@ export class GlobalArenaRoom extends DurableObject {
       state: 'flying'
     };
     this.throwables.set(id, throwable);
+    this.broadcastThrowableEvent('spawn', {
+      id,
+      type: throwableId,
+      x: throwable.x,
+      y: throwable.y,
+      z: throwable.z
+    });
     return throwable;
   }
 
@@ -1506,6 +1738,15 @@ export class GlobalArenaRoom extends DurableObject {
 
   explodeThrowable(throwable, def) {
     if (!throwable || !def) return;
+    this.broadcastThrowableEvent('explode', {
+      id: throwable.id,
+      type: throwable.type,
+      x: throwable.x,
+      y: throwable.y,
+      z: throwable.z,
+      radius: Number(def.radius || 0),
+      ttlMs: 220
+    });
     if (throwable.type === 'molotov') {
       this.molotovZones.set(`mz_${throwable.id}`, {
         id: `mz_${throwable.id}`,
@@ -1515,6 +1756,15 @@ export class GlobalArenaRoom extends DurableObject {
         radius: def.radius,
         lifeLeft: def.zoneDuration,
         tickTimer: 0
+      });
+      this.broadcastThrowableEvent('zone_create', {
+        id: `mz_${throwable.id}`,
+        type: 'molotov',
+        x: throwable.x,
+        y: 0,
+        z: throwable.z,
+        radius: Number(def.radius || 0),
+        ttlMs: Math.max(0, Math.floor(Number(def.zoneDuration || 0) * 1000))
       });
     }
     const radius = Number(def.radius || 0);
@@ -1598,6 +1848,14 @@ export class GlobalArenaRoom extends DurableObject {
     for (const zone of this.molotovZones.values()) {
       zone.lifeLeft -= dtSec;
       if (zone.lifeLeft <= 0) {
+        this.broadcastThrowableEvent('zone_end', {
+          id: zone.id,
+          type: 'molotov',
+          x: zone.x,
+          y: 0,
+          z: zone.z,
+          radius: zone.radius
+        });
         zonesToDelete.push(zone.id);
         continue;
       }
@@ -1653,6 +1911,84 @@ export class GlobalArenaRoom extends DurableObject {
     };
   }
 
+  toThrowableState(throwable) {
+    const def = THROWABLE_DEFS[throwable.type] || {};
+    return {
+      id: throwable.id,
+      ownerId: throwable.ownerId || '',
+      type: throwable.type,
+      x: Number((throwable.x || 0).toFixed(3)),
+      y: Number((throwable.y || 0).toFixed(3)),
+      z: Number((throwable.z || 0).toFixed(3)),
+      vx: Number((throwable.vx || 0).toFixed(3)),
+      vy: Number((throwable.vy || 0).toFixed(3)),
+      vz: Number((throwable.vz || 0).toFixed(3)),
+      fuse: Number((Math.max(0, Number(def.fuseSec || 0) - Number(throwable.age || 0))).toFixed(3)),
+      state: 'flying'
+    };
+  }
+
+  toZoneState(zone) {
+    return {
+      id: zone.id,
+      type: 'molotov',
+      x: Number((zone.x || 0).toFixed(3)),
+      z: Number((zone.z || 0).toFixed(3)),
+      radius: Number((zone.radius || 0).toFixed(3)),
+      lifeLeft: Number((zone.lifeLeft || 0).toFixed(3))
+    };
+  }
+
+  broadcastThrowableEvent(eventType, payload = {}) {
+    const packet = {
+      t: 'throwable_event',
+      eventType: String(eventType || ''),
+      id: String(payload.id || ''),
+      type: payload.type !== undefined ? String(payload.type) : undefined,
+      x: (typeof payload.x === 'number' && Number.isFinite(payload.x)) ? Number(payload.x.toFixed(3)) : undefined,
+      y: (typeof payload.y === 'number' && Number.isFinite(payload.y)) ? Number(payload.y.toFixed(3)) : undefined,
+      z: (typeof payload.z === 'number' && Number.isFinite(payload.z)) ? Number(payload.z.toFixed(3)) : undefined,
+      radius: (typeof payload.radius === 'number' && Number.isFinite(payload.radius)) ? Number(payload.radius.toFixed(3)) : undefined,
+      ttlMs: (typeof payload.ttlMs === 'number' && Number.isFinite(payload.ttlMs)) ? Math.max(0, Math.floor(payload.ttlMs)) : undefined
+    };
+    if (SCHEMA.validateThrowableEvent) {
+      const checked = SCHEMA.validateThrowableEvent(packet);
+      if (!checked.ok) return;
+      this.broadcast(checked.value);
+      return;
+    }
+    this.broadcast(packet);
+  }
+
+  broadcastThrowableSnapshot(force) {
+    const throwables = [];
+    const zones = [];
+    for (const throwable of this.throwables.values()) {
+      throwables.push(this.toThrowableState(throwable));
+    }
+    for (const zone of this.molotovZones.values()) {
+      zones.push(this.toZoneState(zone));
+    }
+
+    const hasActive = (throwables.length > 0 || zones.length > 0);
+    if (!force && !hasActive && !this.hadThrowablesLastTick) return;
+    this.hadThrowablesLastTick = hasActive;
+
+    const packet = {
+      t: 'throwable_snapshot',
+      serverTime: nowMs(),
+      throwables,
+      zones
+    };
+    if (SCHEMA.validateThrowableSnapshot) {
+      const checked = SCHEMA.validateThrowableSnapshot(packet);
+      if (!checked.ok) return;
+      this.broadcast(checked.value);
+      return;
+    }
+    this.broadcast(packet);
+  }
+
   broadcastEntitySnapshot() {
     const entities = [];
     for (const player of this.players.values()) entities.push(this.toEntityState(player));
@@ -1705,6 +2041,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.tickBots(dtSec);
     this.tickThrowables(dtSec);
     this.broadcastEntitySnapshot();
+    this.broadcastThrowableSnapshot(false);
     for (const player of this.players.values()) this.sendReconcile(player);
   }
 }

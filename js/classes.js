@@ -146,6 +146,20 @@
             maxLife: life,
             maxScale: scale * 3.2
         });
+
+        // Scatter particles matching ability color
+        if (window.GameParticles && window.GameParticles.burst) {
+            window.GameParticles.burst(position, 10, {
+                color: [color],
+                speedRange: [3, 7],
+                scaleRange: [0.04, 0.1],
+                lifeRange: [0.2, 0.45],
+                gravity: 0.3,
+                upBias: 1,
+                drag: 0.2,
+                scaleEnd: 0.01
+            });
+        }
     }
 
     function updateEffects(dt) {

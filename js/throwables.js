@@ -11,6 +11,11 @@
     var projectiles = [];
     var fireZones = [];
     var impactFlashes = [];
+    var flashPool = [];
+    var flashGeometry = null;
+    var simulationMode = 'local';
+    var networkProjectiles = new Map();
+    var networkZones = new Map();
 
     var raycaster = new THREE.Raycaster();
     var tmpForward = new THREE.Vector3();
@@ -186,16 +191,158 @@
         return knife;
     }
 
-    function spawnFlash(position, color, baseScale, life) {
-        if (!sceneRef) return;
-        var flash = new THREE.Mesh(
-            new THREE.SphereGeometry(0.4, 8, 8),
+    function createNetworkZoneMesh(radius) {
+        var r = Math.max(0.4, Number(radius || defs.molotov.fireRadius || 3.2));
+        return new THREE.Mesh(
+            new THREE.CylinderGeometry(r, r, 0.08, 18),
             new THREE.MeshBasicMaterial({
-                color: color,
+                color: 0xff7733,
                 transparent: true,
-                opacity: 0.85
+                opacity: 0.35,
+                depthWrite: false
             })
         );
+    }
+
+    function ensureFlashGeometry() {
+        if (!flashGeometry) flashGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+        return flashGeometry;
+    }
+
+    function acquireFlashMesh() {
+        if (flashPool.length > 0) return flashPool.pop();
+        return new THREE.Mesh(
+            ensureFlashGeometry(),
+            new THREE.MeshBasicMaterial({
+                color: 0xffaa22,
+                transparent: true,
+                opacity: 0.85,
+                depthWrite: false
+            })
+        );
+    }
+
+    function releaseFlashMesh(mesh) {
+        if (!mesh) return;
+        mesh.visible = false;
+        if (mesh.parent) mesh.parent.remove(mesh);
+        flashPool.push(mesh);
+    }
+
+    function clearImpactFlashes() {
+        for (var i = 0; i < impactFlashes.length; i++) {
+            var flash = impactFlashes[i];
+            if (flash && flash.mesh) releaseFlashMesh(flash.mesh);
+        }
+        impactFlashes = [];
+    }
+
+    function clearLocalSimulation() {
+        for (var i = 0; i < projectiles.length; i++) {
+            var p = projectiles[i];
+            if (p && p.mesh && p.mesh.parent) p.mesh.parent.remove(p.mesh);
+        }
+        projectiles = [];
+        for (i = 0; i < fireZones.length; i++) {
+            var z = fireZones[i];
+            if (z && z.mesh && z.mesh.parent) z.mesh.parent.remove(z.mesh);
+        }
+        fireZones = [];
+        clearImpactFlashes();
+    }
+
+    function clearNetworkSimulation() {
+        networkProjectiles.forEach(function (entry) {
+            if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+        });
+        networkProjectiles.clear();
+        networkZones.forEach(function (entry) {
+            if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+        });
+        networkZones.clear();
+        clearImpactFlashes();
+    }
+
+    function ensureNetworkProjectile(t) {
+        var id = String(t.id || '');
+        if (!id) return null;
+        var entry = networkProjectiles.get(id);
+        if (!entry) {
+            var mesh = createThrowableMesh(t.type);
+            mesh.position.set(t.x || 0, t.y || 0, t.z || 0);
+            if (sceneRef) sceneRef.add(mesh);
+            entry = {
+                id: id,
+                type: t.type,
+                mesh: mesh,
+                x: t.x || 0,
+                y: t.y || 0,
+                z: t.z || 0,
+                targetX: t.x || 0,
+                targetY: t.y || 0,
+                targetZ: t.z || 0
+            };
+            networkProjectiles.set(id, entry);
+        }
+        entry.type = t.type || entry.type;
+        entry.targetX = t.x || 0;
+        entry.targetY = t.y || 0;
+        entry.targetZ = t.z || 0;
+        return entry;
+    }
+
+    function ensureNetworkZone(z) {
+        var id = String(z.id || '');
+        if (!id) return null;
+        var entry = networkZones.get(id);
+        if (!entry) {
+            var mesh = createNetworkZoneMesh(z.radius);
+            mesh.position.set(z.x || 0, 0.04, z.z || 0);
+            if (sceneRef) sceneRef.add(mesh);
+            entry = {
+                id: id,
+                mesh: mesh,
+                x: z.x || 0,
+                z: z.z || 0,
+                targetX: z.x || 0,
+                targetZ: z.z || 0,
+                radius: z.radius || 0,
+                lifeLeft: z.lifeLeft || 0
+            };
+            networkZones.set(id, entry);
+        }
+        entry.targetX = z.x || 0;
+        entry.targetZ = z.z || 0;
+        entry.radius = z.radius || entry.radius;
+        entry.lifeLeft = z.lifeLeft || 0;
+        return entry;
+    }
+
+    function updateNetworkVisuals(dt) {
+        var lerp = Math.min(1, Math.max(0.05, dt * 14));
+        networkProjectiles.forEach(function (entry) {
+            if (!entry || !entry.mesh) return;
+            entry.x += (entry.targetX - entry.x) * lerp;
+            entry.y += (entry.targetY - entry.y) * lerp;
+            entry.z += (entry.targetZ - entry.z) * lerp;
+            entry.mesh.position.set(entry.x, entry.y, entry.z);
+        });
+
+        networkZones.forEach(function (entry) {
+            if (!entry || !entry.mesh) return;
+            entry.x += (entry.targetX - entry.x) * lerp;
+            entry.z += (entry.targetZ - entry.z) * lerp;
+            entry.mesh.position.set(entry.x, 0.04, entry.z);
+            entry.mesh.material.opacity = Math.max(0.12, Math.min(0.45, 0.18 + Math.min(1, entry.lifeLeft / 4.5) * 0.27));
+        });
+    }
+
+    function spawnFlash(position, color, baseScale, life, explosionType) {
+        if (!sceneRef) return;
+        var flash = acquireFlashMesh();
+        flash.material.color.setHex(color);
+        flash.material.opacity = 0.85;
+        flash.visible = true;
         flash.position.copy(position);
         flash.scale.set(baseScale, baseScale, baseScale);
         sceneRef.add(flash);
@@ -204,6 +351,106 @@
             life: life,
             maxLife: life
         });
+
+        // Particle effects via GameParticles
+        if (!window.GameParticles || !window.GameParticles.burst) return;
+        var type = explosionType || 'small';
+
+        if (type === 'frag') {
+            // Fireball
+            window.GameParticles.burst(position, 18, {
+                color: [0xff6622, 0xff8822, 0xffaa33, 0xff4411],
+                speedRange: [3, 8],
+                scaleRange: [0.12, 0.3],
+                lifeRange: [0.25, 0.55],
+                gravity: 0.4,
+                upBias: 2,
+                drag: 0.15,
+                scaleEnd: 0.05
+            });
+            // Sparks
+            window.GameParticles.burst(position, 10, {
+                color: [0xffdd44, 0xffffff, 0xffee88],
+                speedRange: [8, 16],
+                scaleRange: [0.03, 0.07],
+                lifeRange: [0.1, 0.22],
+                gravity: 1.5,
+                drag: 0.1
+            });
+            // Smoke
+            window.GameParticles.burst(position, 8, {
+                color: [0x444444, 0x555555, 0x666666, 0x777777],
+                speedRange: [1, 3],
+                scaleRange: [0.15, 0.3],
+                lifeRange: [0.5, 0.9],
+                gravity: -0.3,
+                upBias: 1.5,
+                drag: 0.4,
+                scaleEnd: 0.5
+            });
+        } else if (type === 'molotov') {
+            // More fire, longer smoke
+            window.GameParticles.burst(position, 22, {
+                color: [0xff5500, 0xff7722, 0xff3300, 0xffaa22],
+                speedRange: [2, 6],
+                scaleRange: [0.1, 0.25],
+                lifeRange: [0.3, 0.7],
+                gravity: 0.2,
+                upBias: 3,
+                drag: 0.2,
+                scaleEnd: 0.08
+            });
+            window.GameParticles.burst(position, 10, {
+                color: [0x333333, 0x444444, 0x555555],
+                speedRange: [1, 2.5],
+                scaleRange: [0.2, 0.4],
+                lifeRange: [0.6, 1.0],
+                gravity: -0.4,
+                upBias: 2,
+                drag: 0.5,
+                scaleEnd: 0.6
+            });
+        } else if (type === 'missile') {
+            // Bright flash + cyan-tinted fire + lots of sparks
+            window.GameParticles.burst(position, 15, {
+                color: [0x44ddff, 0x88eeff, 0xff8844, 0xffaa44],
+                speedRange: [4, 10],
+                scaleRange: [0.1, 0.25],
+                lifeRange: [0.2, 0.5],
+                gravity: 0.5,
+                upBias: 2,
+                drag: 0.15,
+                scaleEnd: 0.03
+            });
+            window.GameParticles.burst(position, 12, {
+                color: [0xffffff, 0xffee88, 0x88eeff],
+                speedRange: [10, 18],
+                scaleRange: [0.03, 0.06],
+                lifeRange: [0.08, 0.18],
+                gravity: 1,
+                drag: 0.1
+            });
+        } else if (type === 'knife') {
+            // Small spark burst only
+            window.GameParticles.burst(position, 4, {
+                color: [0xffffff, 0xcccccc, 0xffffaa],
+                speedRange: [3, 7],
+                scaleRange: [0.02, 0.04],
+                lifeRange: [0.06, 0.12],
+                gravity: 1,
+                drag: 0.2
+            });
+        } else {
+            // Generic small impact
+            window.GameParticles.burst(position, 5, {
+                color: [0xffdd44, 0xffffff, 0xffaa22],
+                speedRange: [2, 5],
+                scaleRange: [0.03, 0.06],
+                lifeRange: [0.08, 0.15],
+                gravity: 1,
+                drag: 0.2
+            });
+        }
     }
 
     function spawnProjectile(type, camera) {
@@ -296,7 +543,8 @@
     }
 
     function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
-        spawnFlash(position, 0xffaa22, 0.2, 0.18);
+        var flashType = source === 'seeker' ? 'missile' : 'frag';
+        spawnFlash(position, 0xffaa22, 0.2, 0.18, flashType);
 
         var enemies = window.GameEnemy.getEnemies ? window.GameEnemy.getEnemies() : [];
         for (var i = 0; i < enemies.length; i++) {
@@ -342,7 +590,7 @@
             tickTimer: 0
         });
 
-        spawnFlash(position, 0xff6622, 0.25, 0.2);
+        spawnFlash(position, 0xff6622, 0.25, 0.2, 'molotov');
     }
 
     function removeProjectile(index) {
@@ -389,7 +637,7 @@
                     }
 
                     reportHit(onEnemyHit, hit.point, damage, hitType, result, p.type, special);
-                    spawnFlash(hit.point, hitType === 'head' ? 0xffd14a : 0xffffff, 0.12, 0.1);
+                    spawnFlash(hit.point, hitType === 'head' ? 0xffd14a : 0xffffff, 0.12, 0.1, 'knife');
                     removeProjectile(index);
                     return;
                 }
@@ -407,7 +655,7 @@
 
             // World collision
             if (p.type === 'knife') {
-                spawnFlash(hit.point, 0xffffff, 0.08, 0.08);
+                spawnFlash(hit.point, 0xffffff, 0.08, 0.08, 'knife');
                 removeProjectile(index);
                 return;
             }
@@ -501,7 +749,7 @@
             flash.life -= dt;
 
             if (flash.life <= 0) {
-                if (flash.mesh && flash.mesh.parent) flash.mesh.parent.remove(flash.mesh);
+                releaseFlashMesh(flash.mesh);
                 impactFlashes.splice(i, 1);
                 continue;
             }
@@ -513,11 +761,83 @@
     }
 
     GameThrowables.init = function (scene) {
+        clearLocalSimulation();
+        clearNetworkSimulation();
         sceneRef = scene;
         projectiles = [];
         fireZones = [];
-        impactFlashes = [];
+        networkProjectiles = new Map();
+        networkZones = new Map();
+        simulationMode = 'local';
         resetInventory();
+    };
+
+    GameThrowables.setMode = function (mode) {
+        var next = (mode === 'network') ? 'network' : 'local';
+        if (next === simulationMode) return simulationMode;
+        if (next === 'network') {
+            clearLocalSimulation();
+            clearNetworkSimulation();
+        } else {
+            clearNetworkSimulation();
+        }
+        simulationMode = next;
+        return simulationMode;
+    };
+
+    GameThrowables.applyAuthoritativeSnapshot = function (snapshot) {
+        if (simulationMode !== 'network') return;
+        if (!snapshot || !Array.isArray(snapshot.throwables) || !Array.isArray(snapshot.zones)) return;
+
+        var seenProjectiles = {};
+        for (var i = 0; i < snapshot.throwables.length; i++) {
+            var t = snapshot.throwables[i];
+            if (!t || !t.id) continue;
+            seenProjectiles[t.id] = true;
+            ensureNetworkProjectile(t);
+        }
+
+        networkProjectiles.forEach(function (entry, id) {
+            if (seenProjectiles[id]) return;
+            if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+            networkProjectiles.delete(id);
+        });
+
+        var seenZones = {};
+        for (var j = 0; j < snapshot.zones.length; j++) {
+            var z = snapshot.zones[j];
+            if (!z || !z.id) continue;
+            seenZones[z.id] = true;
+            ensureNetworkZone(z);
+        }
+
+        networkZones.forEach(function (entry, id) {
+            if (seenZones[id]) return;
+            if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+            networkZones.delete(id);
+        });
+    };
+
+    GameThrowables.applyAuthoritativeEvent = function (event) {
+        if (!event || simulationMode !== 'network') return;
+        var eventType = String(event.eventType || '');
+        if (eventType === 'explode' || eventType === 'impact') {
+            spawnFlash(
+                new THREE.Vector3(event.x || 0, event.y || 0, event.z || 0),
+                0xffaa22,
+                0.2,
+                0.16,
+                (event.type === 'molotov') ? 'molotov' : 'frag'
+            );
+            return;
+        }
+        if (eventType === 'zone_end' && event.id) {
+            var zone = networkZones.get(String(event.id));
+            if (zone) {
+                if (zone.mesh && zone.mesh.parent) zone.mesh.parent.remove(zone.mesh);
+                networkZones.delete(String(event.id));
+            }
+        }
     };
 
     GameThrowables.getTypes = function () {
@@ -563,6 +883,9 @@
      * @returns {Object} { ok, reason, state }
      */
     GameThrowables.throw = function (type, camera) {
+        if (simulationMode === 'network') {
+            return { ok: false, reason: 'network_authoritative', state: getThrowableState() };
+        }
         if (!defs[type]) {
             return { ok: false, reason: 'unknown', state: getThrowableState() };
         }
@@ -586,6 +909,12 @@
      */
     GameThrowables.update = function (dt, onEnemyHit) {
         regenCharges(dt);
+
+        if (simulationMode === 'network') {
+            updateNetworkVisuals(dt);
+            updateFlashes(dt);
+            return;
+        }
 
         for (var i = projectiles.length - 1; i >= 0; i--) {
             updateProjectile(i, dt, onEnemyHit);

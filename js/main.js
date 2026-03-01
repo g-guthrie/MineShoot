@@ -28,7 +28,15 @@
     var wallhackRing = null;
     var wallhackRingRadius = 0;
     var wallhackRingVisible = true;
-    var plasmaBeamLine = null;
+    var plasmaBeamCore = null;
+    var plasmaBeamGlow = null;
+    var plasmaBeamHaze = null;
+    var plasmaBeamGroup = null;
+    var plasmaBeamTmpStart = new THREE.Vector3();
+    var plasmaBeamTmpEnd = new THREE.Vector3();
+    var plasmaBeamTmpMid = new THREE.Vector3();
+    var plasmaBeamTmpDir = new THREE.Vector3();
+    var wallhackDescriptorBuffer = [];
 
     var DEFAULT_ENEMY_COUNT = 5;
     var DEFAULT_ARMOR_REGEN_DELAY = ARMOR_REGEN_DELAY_SEC;
@@ -37,20 +45,47 @@
     var multiplayerMode = false;
     var startupDebugNotice = '';
     var bootWorldManifest = null;
+    var bootState = 'booting'; // booting | ready | initializing | running | failed
+    var bootErrorMessage = '';
+    var initPromise = null;
+    var controlsBound = false;
+    var animationStarted = false;
+    var resizeBound = false;
+    var pointerLockBindingsReady = false;
+    var pendingPlayStart = false;
+    var lastStartRequest = 0;
 
     function cameraModeLabel(mode) {
         return mode === 'third' ? 'CAM: THIRD' : 'CAM: FIRST';
     }
 
+    function setBootState(nextState, errorMessage) {
+        bootState = nextState;
+        if (nextState === 'failed') {
+            bootErrorMessage = String(errorMessage || 'unknown_startup_error');
+        } else {
+            bootErrorMessage = '';
+        }
+    }
+
+    function writeDebugInfo(text) {
+        if (window.GameUI && window.GameUI.setDebugInfo) {
+            window.GameUI.setDebugInfo(text || '');
+            return;
+        }
+        var debugEl = document.getElementById('debug-info');
+        if (debugEl) debugEl.textContent = text || '';
+    }
+
     function setTransientDebug(text, ms) {
-        window.GameUI.setDebugInfo(text || '');
+        writeDebugInfo(text || '');
         if (debugTimer) clearTimeout(debugTimer);
         if (!text) {
             debugTimer = null;
             return;
         }
         debugTimer = setTimeout(function () {
-            window.GameUI.setDebugInfo('');
+            writeDebugInfo('');
             debugTimer = null;
         }, ms || 1000);
     }
@@ -374,6 +409,39 @@
         syncWallhackRingRadius();
     }
 
+    var tracerTmpDir = new THREE.Vector3();
+    var tracerTmpPos = new THREE.Vector3();
+
+    function spawnTracer(weapon) {
+        if (!window.GameParticles || !window.GameParticles.spawn) return;
+        if (!weapon || weapon.id === 'plasma') return;
+
+        var muzzlePos = window.GamePlayer.getMuzzleWorldPos
+            ? window.GamePlayer.getMuzzleWorldPos()
+            : null;
+        if (!muzzlePos) return;
+
+        camera.getWorldDirection(tracerTmpDir);
+        var tracerCount = weapon.id === 'shotgun' ? 4 : 1;
+        var tracerColors = [0xffffcc, 0xffeeaa, 0xffffff];
+
+        for (var i = 0; i < tracerCount; i++) {
+            var spread = weapon.id === 'shotgun' ? 0.06 : 0.005;
+            var dx = tracerTmpDir.x + (Math.random() - 0.5) * spread;
+            var dy = tracerTmpDir.y + (Math.random() - 0.5) * spread;
+            var dz = tracerTmpDir.z + (Math.random() - 0.5) * spread;
+            var speed = 80 + Math.random() * 40;
+            tracerTmpPos.set(dx * speed, dy * speed, dz * speed);
+
+            window.GameParticles.spawn(
+                muzzlePos, tracerTmpPos,
+                tracerColors[Math.floor(Math.random() * tracerColors.length)],
+                0.03, 0.08,
+                { gravity: 0, drag: 0, scaleEnd: 0.01 }
+            );
+        }
+    }
+
     function tryPlayerFire() {
         var fired = window.GameHitscan.fire(
             camera,
@@ -402,96 +470,115 @@
                 }
             }
             window.GamePlayer.fireAnimation();
+            spawnTracer(window.GameHitscan.getCurrentWeapon());
         }
     }
 
-    function setupPointerLock() {
-        overlay = document.getElementById('overlay');
+    function applyPendingWeaponIfAny() {
+        if (!window.GameLoadout || !window.GameLoadout.applyPendingWeaponOnResume) return;
+        var pendingWeapon = window.GameLoadout.applyPendingWeaponOnResume();
+        if (pendingWeapon) {
+            applyWeapon(pendingWeapon);
+            setTransientDebug('Equipped on resume: ' + pendingWeapon.name, 900);
+        }
+    }
+
+    function closeManualIfOpen() {
+        if (window.GameUIShell && window.GameUIShell.isManualOpen && window.GameUIShell.isManualOpen()) {
+            window.GameUIShell.closeManual();
+            return;
+        }
+        if (window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
+            window.GameDocs.close();
+        }
+    }
+
+    function enterFallbackStart(debugText) {
+        window.__gameNoLockInput = true;
+        if (window.GameUIShell && window.GameUIShell.hideOverlay) window.GameUIShell.hideOverlay();
+        else if (overlay) overlay.style.display = 'none';
+        applyPendingWeaponIfAny();
+        isPlaying = true;
+        setBootState('running');
+        if (debugText) setTransientDebug(debugText, 2200);
+    }
+
+    function requestPlayStart(e) {
+        var now = performance.now();
+        if (now - lastStartRequest < 140) return;
+        lastStartRequest = now;
+        if (e) {
+            if (typeof e.button === 'number' && e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        closeManualIfOpen();
+
+        if (bootState === 'failed') {
+            setTransientDebug('Startup failed: ' + (bootErrorMessage || 'unknown error'), 2600);
+            return;
+        }
+
+        if (bootState !== 'ready' && bootState !== 'running') {
+            pendingPlayStart = true;
+            setTransientDebug('Initializing runtime...', 1000);
+            return;
+        }
+
+        enterFallbackStart();
+
+        var target = renderer && renderer.domElement;
+        if (!target) return;
+        var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
+        if (typeof requestLock !== 'function') {
+            setTransientDebug('Pointer lock API unavailable. Using fallback input mode.', 2200);
+            return;
+        }
+        try {
+            var maybePromise = requestLock.call(target);
+            if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
+                maybePromise.catch(function () {
+                    if (!document.pointerLockElement) {
+                        setTransientDebug('Pointer lock denied. Using fallback input mode.', 2200);
+                    }
+                });
+            }
+        } catch (err) {
+            setTransientDebug('Pointer lock failed. Using fallback input mode.', 2200);
+        }
+    }
+
+    function bindPlayButton() {
         var playBtn = document.getElementById('play-btn');
-        var lastStartRequest = 0;
-        window.__gameNoLockInput = false;
+        if (!playBtn || playBtn.__playBound) return;
+        playBtn.__playBound = true;
+        playBtn.addEventListener('click', requestPlayStart);
+        playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+    }
 
-        function applyPendingWeaponIfAny() {
-            if (!window.GameLoadout || !window.GameLoadout.applyPendingWeaponOnResume) return;
-            var pendingWeapon = window.GameLoadout.applyPendingWeaponOnResume();
-            if (pendingWeapon) {
-                applyWeapon(pendingWeapon);
-                setTransientDebug('Equipped on resume: ' + pendingWeapon.name, 900);
-            }
-        }
-
-        function enterFallbackStart(debugText) {
-            window.__gameNoLockInput = true;
-            if (window.GameUIShell && window.GameUIShell.hideOverlay) window.GameUIShell.hideOverlay();
-            else if (overlay) overlay.style.display = 'none';
-            applyPendingWeaponIfAny();
-            isPlaying = true;
-            if (debugText) {
-                setTransientDebug(debugText, 2200);
-            }
-        }
-
-        function requestPlayStart(e) {
-            var now = performance.now();
-            if (now - lastStartRequest < 140) return;
-            lastStartRequest = now;
-            if (e) {
-                if (typeof e.button === 'number' && e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            if (window.GameUIShell && window.GameUIShell.isManualOpen && window.GameUIShell.isManualOpen()) {
-                window.GameUIShell.closeManual();
-            } else if (window.GameDocs && window.GameDocs.isOpen && window.GameDocs.isOpen()) {
-                window.GameDocs.close();
-            }
-
-            // Enter gameplay immediately; pointer lock is best-effort.
-            enterFallbackStart();
-
-            var target = renderer && renderer.domElement;
-            if (!target) {
-                return;
-            }
-            var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
-            if (typeof requestLock !== 'function') {
-                setTransientDebug('Pointer lock API unavailable. Using fallback input mode.', 2200);
-                return;
-            }
-            try {
-                var maybePromise = requestLock.call(target);
-                if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
-                    maybePromise.catch(function () {
-                        if (!document.pointerLockElement) {
-                            setTransientDebug('Pointer lock denied. Using fallback input mode.', 2200);
-                        }
-                    });
-                }
-            } catch (err) {
-                setTransientDebug('Pointer lock failed. Using fallback input mode.', 2200);
-            }
-        }
-
-        if (playBtn) {
-            playBtn.addEventListener('click', requestPlayStart);
-            playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
-        }
+    function bindPointerLockEvents() {
+        if (pointerLockBindingsReady) return;
+        pointerLockBindingsReady = true;
 
         document.addEventListener('pointerlockchange', function () {
-            if (document.pointerLockElement === renderer.domElement) {
+            var pointerTarget = renderer && renderer.domElement;
+            if (pointerTarget && document.pointerLockElement === pointerTarget) {
                 window.__gameNoLockInput = false;
-                if (window.GameUIShell && window.GameUIShell.closeManual) window.GameUIShell.closeManual();
-                else if (window.GameDocs && window.GameDocs.close) window.GameDocs.close();
+                closeManualIfOpen();
                 if (window.GameUIShell && window.GameUIShell.hideOverlay) window.GameUIShell.hideOverlay();
                 else if (overlay) overlay.style.display = 'none';
                 applyPendingWeaponIfAny();
                 isPlaying = true;
-            } else {
-                if (!window.__gameNoLockInput) {
-                    if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-                    else if (overlay) overlay.style.display = 'flex';
-                    isPlaying = false;
-                }
+                setBootState('running');
+                return;
+            }
+
+            if (!window.__gameNoLockInput) {
+                if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
+                else if (overlay) overlay.style.display = 'flex';
+                isPlaying = false;
+                if (bootState === 'running') setBootState('ready');
             }
         });
 
@@ -508,8 +595,16 @@
                 if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
                 else if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
+                if (bootState === 'running') setBootState('ready');
             }
         });
+    }
+
+    function setupPointerLock() {
+        overlay = document.getElementById('overlay');
+        window.__gameNoLockInput = false;
+        bindPlayButton();
+        bindPointerLockEvents();
     }
 
     function setupDocsControls() {
@@ -834,6 +929,38 @@
         });
     }
 
+    function bindGameplayControlsOnce() {
+        if (controlsBound) return;
+        controlsBound = true;
+        setupShooting();
+        setupWeaponControls();
+        setupThrowableControls();
+        setupClassControls();
+        setupPerspectiveControls();
+        setupLoadoutControls();
+        setupDocsControls();
+        setupDebugKeys();
+    }
+
+    function bindResizeOnce() {
+        if (resizeBound) return;
+        resizeBound = true;
+        window.addEventListener('resize', function () {
+            if (!renderer || !camera) return;
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (camera.isPerspectiveCamera) {
+                camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+                camera.updateProjectionMatrix();
+            }
+        });
+    }
+
+    function startAnimationLoopOnce() {
+        if (animationStarted) return;
+        animationStarted = true;
+        animate();
+    }
+
     function initGame() {
         if (window.GameUIShell && window.GameUIShell.init) {
             window.GameUIShell.init();
@@ -855,6 +982,9 @@
             worldManifest = window.GameWorld.getLocalManifest();
         }
         window.GameWorld.create(scene, worldManifest || null);
+        if (window.GameParticles && window.GameParticles.init) {
+            window.GameParticles.init(scene);
+        }
         window.GameUI.init();
         if (window.GameDocs && window.GameDocs.init) {
             window.GameDocs.init();
@@ -865,20 +995,30 @@
             window.GameWallhack.setEnabled(true);
         }
 
-        var plasmaBeamGeometry = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(),
-            new THREE.Vector3()
-        ]);
-        var plasmaBeamMaterial = new THREE.LineBasicMaterial({
-            color: 0x66ddff,
-            transparent: true,
-            opacity: 0.9,
-            depthTest: false
-        });
-        plasmaBeamLine = new THREE.Line(plasmaBeamGeometry, plasmaBeamMaterial);
-        plasmaBeamLine.visible = false;
-        plasmaBeamLine.renderOrder = 24;
-        scene.add(plasmaBeamLine);
+        // Multi-layer plasma beam
+        plasmaBeamGroup = new THREE.Group();
+        plasmaBeamGroup.visible = false;
+        plasmaBeamGroup.renderOrder = 24;
+
+        var coreCyl = new THREE.CylinderGeometry(0.03, 0.03, 1, 6, 1);
+        plasmaBeamCore = new THREE.Mesh(coreCyl, new THREE.MeshBasicMaterial({
+            color: 0xeeffff, transparent: true, opacity: 1, depthWrite: false
+        }));
+
+        var glowCyl = new THREE.CylinderGeometry(0.08, 0.08, 1, 6, 1);
+        plasmaBeamGlow = new THREE.Mesh(glowCyl, new THREE.MeshBasicMaterial({
+            color: 0x66ddff, transparent: true, opacity: 0.4, depthWrite: false
+        }));
+
+        var hazeCyl = new THREE.CylinderGeometry(0.18, 0.18, 1, 6, 1);
+        plasmaBeamHaze = new THREE.Mesh(hazeCyl, new THREE.MeshBasicMaterial({
+            color: 0x44bbee, transparent: true, opacity: 0.12, depthWrite: false
+        }));
+
+        plasmaBeamGroup.add(plasmaBeamCore);
+        plasmaBeamGroup.add(plasmaBeamGlow);
+        plasmaBeamGroup.add(plasmaBeamHaze);
+        scene.add(plasmaBeamGroup);
 
         if (startupDebugNotice) {
             setTransientDebug(startupDebugNotice, 1800);
@@ -889,13 +1029,17 @@
 
         multiplayerMode = !!(window.GameNet && window.GameNet.getCurrentUser && window.GameNet.getCurrentUser());
 
+        window.GameThrowables.init(scene);
+        if (window.GameThrowables.setMode) {
+            window.GameThrowables.setMode(multiplayerMode ? 'network' : 'local');
+        }
+        window.GameUI.updateThrowableInfo(window.GameThrowables.getState());
+
         if (multiplayerMode) {
             window.GameNet.init(scene);
         } else {
             var enemyCount = window.GameWorld.getRecommendedEnemyCount ? window.GameWorld.getRecommendedEnemyCount() : DEFAULT_ENEMY_COUNT;
             window.GameEnemy.init(scene, enemyCount);
-            window.GameThrowables.init(scene);
-            window.GameUI.updateThrowableInfo(window.GameThrowables.getState());
         }
 
         window.GameClasses.init(scene);
@@ -923,21 +1067,9 @@
 
         applyWeapon(window.GameHitscan.getCurrentWeapon());
 
-        setupPointerLock();
-        setupShooting();
-        setupWeaponControls();
-        setupThrowableControls();
-        setupClassControls();
-        setupPerspectiveControls();
-        setupLoadoutControls();
-        setupDocsControls();
-        setupDebugKeys();
-
-        window.addEventListener('resize', function () {
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        animate();
+        bindGameplayControlsOnce();
+        bindResizeOnce();
+        startAnimationLoopOnce();
     }
 
     function animate() {
@@ -975,13 +1107,73 @@
             }
         });
         window.GameUI.updatePlasmaState(plasmaState);
-        if (plasmaBeamLine) {
+        if (plasmaBeamGroup) {
             if (plasmaState && plasmaState.active) {
-                setBeamLinePoints(plasmaBeamLine, plasmaState.beamStart, plasmaState.beamEnd);
-                plasmaBeamLine.visible = true;
-                plasmaBeamLine.material.opacity = plasmaState.overheated ? 0.2 : 0.9;
+                plasmaBeamTmpStart.copy(plasmaState.beamStart);
+                plasmaBeamTmpEnd.copy(plasmaState.beamEnd);
+                plasmaBeamTmpDir.copy(plasmaBeamTmpEnd).sub(plasmaBeamTmpStart);
+                var beamLen = plasmaBeamTmpDir.length();
+                if (beamLen < 0.01) beamLen = 0.01;
+                plasmaBeamTmpDir.divideScalar(beamLen);
+
+                plasmaBeamTmpMid.copy(plasmaBeamTmpStart).add(plasmaBeamTmpEnd).multiplyScalar(0.5);
+
+                plasmaBeamGroup.position.copy(plasmaBeamTmpMid);
+                plasmaBeamGroup.lookAt(plasmaBeamTmpEnd);
+                plasmaBeamGroup.rotateX(Math.PI / 2);
+
+                plasmaBeamCore.scale.set(1, beamLen, 1);
+                plasmaBeamGlow.scale.set(1, beamLen, 1);
+                plasmaBeamHaze.scale.set(1, beamLen, 1);
+
+                // Flicker effect
+                var flicker = 0.85 + Math.random() * 0.15;
+                var overheated = plasmaState.overheated;
+                plasmaBeamCore.material.opacity = overheated ? 0.15 : flicker;
+                plasmaBeamGlow.material.opacity = overheated ? 0.08 : 0.35 * flicker;
+                plasmaBeamHaze.material.opacity = overheated ? 0.04 : 0.1 * flicker;
+
+                if (overheated) {
+                    plasmaBeamGlow.material.color.setHex(0xff8844);
+                    plasmaBeamHaze.material.color.setHex(0xcc6622);
+                } else {
+                    plasmaBeamGlow.material.color.setHex(0x66ddff);
+                    plasmaBeamHaze.material.color.setHex(0x44bbee);
+                }
+
+                plasmaBeamGroup.visible = true;
+
+                // Beam particles along the path + impact sparks
+                if (window.GameParticles && window.GameParticles.spawn) {
+                    // 2-3 along-beam particles per frame
+                    for (var bp = 0; bp < 2 + Math.floor(Math.random() * 2); bp++) {
+                        var bpT = Math.random();
+                        plasmaBeamTmpMid.copy(plasmaBeamTmpStart).lerp(plasmaBeamTmpEnd, bpT);
+                        plasmaBeamTmpMid.x += (Math.random() - 0.5) * 0.08;
+                        plasmaBeamTmpMid.y += (Math.random() - 0.5) * 0.08;
+                        plasmaBeamTmpMid.z += (Math.random() - 0.5) * 0.08;
+                        window.GameParticles.spawn(
+                            plasmaBeamTmpMid,
+                            { x: (Math.random() - 0.5) * 0.5, y: (Math.random() - 0.5) * 0.5, z: (Math.random() - 0.5) * 0.5 },
+                            overheated ? 0xff8844 : 0x88eeff,
+                            0.03 + Math.random() * 0.02, 0.08 + Math.random() * 0.06,
+                            { gravity: 0, drag: 0.5, scaleEnd: 0 }
+                        );
+                    }
+                    // Impact sparks at beam end
+                    if (Math.random() < 0.6) {
+                        window.GameParticles.burst(plasmaBeamTmpEnd, 1 + Math.floor(Math.random() * 2), {
+                            color: overheated ? [0xff6622, 0xff8844] : [0x88eeff, 0xaaf4ff, 0xffffff],
+                            speedRange: [1, 4],
+                            scaleRange: [0.02, 0.04],
+                            lifeRange: [0.05, 0.12],
+                            gravity: 0.5,
+                            drag: 0.3
+                        });
+                    }
+                }
             } else {
-                plasmaBeamLine.visible = false;
+                plasmaBeamGroup.visible = false;
             }
         }
 
@@ -1011,19 +1203,31 @@
         }
 
         if (window.GameWallhack && window.GameWallhack.syncEntities && window.GameWallhack.update) {
-            var wallhackDescriptors = [];
-            if (window.GameEnemy && window.GameEnemy.getWallhackDescriptors) {
-                wallhackDescriptors = wallhackDescriptors.concat(window.GameEnemy.getWallhackDescriptors());
+            wallhackDescriptorBuffer.length = 0;
+            if (window.GameEnemy) {
+                if (window.GameEnemy.appendWallhackDescriptors) {
+                    window.GameEnemy.appendWallhackDescriptors(wallhackDescriptorBuffer);
+                } else if (window.GameEnemy.getWallhackDescriptors) {
+                    var enemyDescriptors = window.GameEnemy.getWallhackDescriptors() || [];
+                    for (var wd = 0; wd < enemyDescriptors.length; wd++) wallhackDescriptorBuffer.push(enemyDescriptors[wd]);
+                }
             }
-            if (window.GameNet && window.GameNet.getWallhackDescriptors) {
-                wallhackDescriptors = wallhackDescriptors.concat(window.GameNet.getWallhackDescriptors());
+            if (window.GameNet) {
+                if (window.GameNet.appendWallhackDescriptors) {
+                    window.GameNet.appendWallhackDescriptors(wallhackDescriptorBuffer);
+                } else if (window.GameNet.getWallhackDescriptors) {
+                    var netDescriptors = window.GameNet.getWallhackDescriptors() || [];
+                    for (var nd = 0; nd < netDescriptors.length; nd++) wallhackDescriptorBuffer.push(netDescriptors[nd]);
+                }
             }
-            window.GameWallhack.syncEntities(wallhackDescriptors);
+            window.GameWallhack.syncEntities(wallhackDescriptorBuffer);
             window.GameWallhack.update(camera, playerFeetPos, getCurrentWallhackRadius());
         }
 
         if (multiplayerMode) {
             window.GameNet.update(dt, playerFeetPos, window.GamePlayer.getRotation());
+            window.GameThrowables.update(dt, function () {});
+            window.GameUI.updateThrowableInfo(window.GameThrowables.getState());
             var selfState = window.GameNet.getSelfState();
             if (selfState) {
                 var currentClass = window.GameClasses.getCurrentClass();
@@ -1091,6 +1295,10 @@
         window.GameUI.updateDamageEffects(dt);
         window.GameUI.updateClassInfo(window.GameClasses.getHudState());
 
+        if (window.GameParticles && window.GameParticles.update) {
+            window.GameParticles.update(dt);
+        }
+
         renderer.render(scene, camera);
     }
 
@@ -1106,62 +1314,83 @@
     }
 
     function boot() {
-        function showFatalBootError(msg) {
-            var overlayEl = document.getElementById('overlay');
+        var runtimeBootCommitted = false;
+        setupPointerLock();
+        setBootState('booting');
+
+        function showFatalBootError(msg, err) {
+            var text = String(msg || 'Unknown startup error');
+            setBootState('failed', text);
             if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-            else if (overlayEl) overlayEl.style.display = 'flex';
-            var dbg = document.getElementById('debug-info');
-            if (dbg) dbg.textContent = 'Startup error: ' + msg;
-            console.error('Startup error:', msg);
+            else if (overlay) overlay.style.display = 'flex';
+            writeDebugInfo('Startup error: ' + text);
+            console.error('Startup error:', err || text);
         }
 
-        function safeInit() {
-            try {
-                initGame();
-            } catch (err) {
-                var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
-                var overlayEl = document.getElementById('overlay');
-                if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
-                else if (overlayEl) overlayEl.style.display = 'flex';
-                var dbg = document.getElementById('debug-info');
-                if (dbg) dbg.textContent = 'Startup error: ' + msg;
-                console.error('Startup error:', err);
+        function onRuntimeReady() {
+            if (bootState === 'failed') return;
+            setBootState('ready');
+            if (pendingPlayStart) {
+                pendingPlayStart = false;
+                lastStartRequest = 0;
+                requestPlayStart();
             }
+        }
+
+        function initRuntimeOnce() {
+            if (initPromise) return initPromise;
+            setBootState('initializing');
+            initPromise = Promise.resolve()
+                .then(function () {
+                    initGame();
+                    onRuntimeReady();
+                })
+                .catch(function (err) {
+                    var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
+                    showFatalBootError(msg, err);
+                    throw err;
+                });
+            return initPromise;
+        }
+
+        function beginRuntime(authedUser) {
+            if (runtimeBootCommitted) return;
+            runtimeBootCommitted = true;
+
+            if (!authedUser) {
+                bootWorldManifest = null;
+                startupDebugNotice = 'Local dev mode: backend auth/multiplayer disabled.';
+                initRuntimeOnce();
+                return;
+            }
+
+            startupDebugNotice = '';
+            if (!window.GameNet || !window.GameNet.fetchWorldManifest) {
+                showFatalBootError('Cannot start multiplayer: world manifest API is unavailable.');
+                return;
+            }
+
+            window.GameNet.fetchWorldManifest()
+                .then(function (manifest) {
+                    if (!manifest) throw new Error('world_manifest_missing');
+                    bootWorldManifest = manifest;
+                    return initRuntimeOnce();
+                })
+                .catch(function (err) {
+                    bootWorldManifest = null;
+                    var reason = (err && err.message) ? err.message : 'unknown';
+                    showFatalBootError('Cannot start multiplayer: world manifest unavailable (' + reason + ').', err);
+                });
         }
 
         if (!isLocalDevMode() && window.GameNet && window.GameNet.requireAuth) {
             window.GameNet.requireAuth(function (authedUser) {
-                if (!authedUser) {
-                    bootWorldManifest = null;
-                    safeInit();
-                    return;
-                }
-
-                if (window.GameNet.fetchWorldManifest) {
-                    window.GameNet.fetchWorldManifest()
-                        .then(function (manifest) {
-                            bootWorldManifest = manifest || null;
-                        })
-                        .catch(function (err) {
-                            bootWorldManifest = null;
-                            var msg = (err && err.message) ? err.message : 'unknown';
-                            showFatalBootError('Cannot start multiplayer: world manifest unavailable (' + msg + ').');
-                        })
-                        .finally(function () {
-                            if (bootWorldManifest) {
-                                safeInit();
-                            }
-                        });
-                    return;
-                }
-
-                showFatalBootError('Cannot start multiplayer: world manifest API is unavailable.');
+                beginRuntime(authedUser || null);
             });
             return;
         }
-        bootWorldManifest = null;
-        startupDebugNotice = 'Local dev mode: backend auth/multiplayer disabled.';
-        safeInit();
+
+        beginRuntime(null);
     }
 
     if (document.readyState === 'loading') {

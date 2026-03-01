@@ -587,6 +587,11 @@
             enemy.hp -= incoming;
         }
 
+        // Hit reaction twitch
+        if (enemy.rigApi && enemy.rigApi.setHitReaction) {
+            enemy.rigApi.setHitReaction();
+        }
+
         enemy.isFlashing = true;
         enemy.flashTimer = 0.15;
         var parts = enemy.visual.userData.bodyParts;
@@ -616,12 +621,22 @@
 
     GameEnemy.kill = function (enemy) {
         enemy.alive = false;
-        enemy.group.visible = false;
         enemy.muzzleFlashTimer = 0;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
 
         removeHitboxes(enemy);
+
+        // Trigger death animation if rig supports it
+        if (enemy.rigApi && enemy.rigApi.triggerDeath) {
+            enemy.rigApi.triggerDeath();
+            // Hide after animation completes
+            setTimeout(function () {
+                enemy.group.visible = false;
+            }, 850);
+        } else {
+            enemy.group.visible = false;
+        }
 
         enemy.respawnTimer = 5.0;
     };
@@ -631,6 +646,11 @@
         enemy.hp = enemy.maxHp;
         enemy.armor = enemy.armorMax;
         enemy.armorRegenDelay = 0;
+
+        // Reset death animation
+        if (enemy.rigApi && enemy.rigApi.resetDeath) {
+            enemy.rigApi.resetDeath();
+        }
 
         var spawn = getEnemySpawnPoint();
         enemy.group.position.set(spawn.x, 0, spawn.z);
@@ -702,8 +722,8 @@
         return out;
     };
 
-    GameEnemy.getWallhackDescriptors = function () {
-        var out = [];
+    GameEnemy.appendWallhackDescriptors = function (out) {
+        if (!Array.isArray(out)) return out;
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];
             if (!enemy) continue;
@@ -718,6 +738,12 @@
                 kind: 'enemy'
             });
         }
+        return out;
+    };
+
+    GameEnemy.getWallhackDescriptors = function () {
+        var out = [];
+        GameEnemy.appendWallhackDescriptors(out);
         return out;
     };
 

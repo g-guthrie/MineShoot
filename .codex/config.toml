@@ -2,7 +2,7 @@
 multi_agent = true
 
 [agents]
-max_threads = 6
+max_threads = 8
 max_depth = 2
 
 [agents.explorer]
@@ -20,6 +20,18 @@ config_file = "agents/balance-designer.toml"
 [agents.worker]
 description = "Implementation agent that merges context, big-picture intent, and simplification before coding."
 config_file = "agents/worker.toml"
+
+[agents.worker_visual]
+description = "Implementation agent focused on visual/animation systems while preserving gameplay/network parity."
+config_file = "agents/worker-visual.toml"
+
+[agents.worker_authority]
+description = "Implementation agent focused on server authority, net contracts, and combat parity."
+config_file = "agents/worker-authority.toml"
+
+[agents.worker_world]
+description = "Implementation agent focused on world/chunk streaming, collision, and runtime performance."
+config_file = "agents/worker-world.toml"
 
 [agents.monitor]
 description = "Monitoring-focused agent for long-running checks, polling, and status tracking."

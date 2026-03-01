@@ -484,7 +484,7 @@
 
     function solidMaterialForKind(kind) {
         if (!chunkMaterialPalette) {
-            return new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+            return new THREE.MeshLambertMaterial({ color: 0xa08050 });
         }
         if (kind === 'core') {
             var coreMats = chunkMaterialPalette.core || [];
@@ -496,7 +496,7 @@
         }
         if (kind === 'barrier' && chunkMaterialPalette.barrier) return chunkMaterialPalette.barrier;
         if (chunkMaterialPalette.cover) return chunkMaterialPalette.cover;
-        return chunkMaterialPalette.defaultMat || new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+        return chunkMaterialPalette.defaultMat || new THREE.MeshLambertMaterial({ color: 0xa08050 });
     }
 
     function createSolidMesh(spec, scene) {
@@ -624,7 +624,7 @@
 
         // --- Ground ---
         var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE);
-        var groundMat = new THREE.MeshLambertMaterial({ color: 0x3a7d3a });
+        var groundMat = new THREE.MeshLambertMaterial({ color: 0x4a9e3a });
         var ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
         ground.position.set(WORLD_CENTER, 0, WORLD_CENTER);
@@ -634,7 +634,7 @@
         // Lower terrain skirt to avoid floating-square look at large scale.
         var lowerSize = WORLD_SIZE * 3;
         var lowerGroundGeo = new THREE.PlaneGeometry(lowerSize, lowerSize);
-        var lowerGroundMat = new THREE.MeshLambertMaterial({ color: 0x1c2f1c });
+        var lowerGroundMat = new THREE.MeshLambertMaterial({ color: 0x2a5c22 });
         var lowerGround = new THREE.Mesh(lowerGroundGeo, lowerGroundMat);
         lowerGround.rotation.x = -Math.PI / 2;
         lowerGround.position.set(WORLD_CENTER, -6, WORLD_CENTER);
@@ -643,26 +643,26 @@
 
         // Large biome tint patches as a first pass on multi-biome readability.
         var quarter = WORLD_SIZE * 0.25;
-        addPatch(quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xdcecff);               // ice
-        addPatch(WORLD_SIZE - quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x8a8f95);   // urban
-        addPatch(quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xd9c58d);   // beach
-        addPatch(WORLD_SIZE - quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x2e6a2f); // jungle
-        addPatch(WORLD_CENTER, WORLD_CENTER, WORLD_SIZE * 0.28, WORLD_SIZE * 0.28, 0x2f7a3b);      // rainforest
+        addPatch(quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xc8e8ff);               // ice - cooler blue-white
+        addPatch(WORLD_SIZE - quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x9a9590);   // urban - warm stone grey
+        addPatch(quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xe8d490);   // beach - golden sand
+        addPatch(WORLD_SIZE - quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x1e8830); // jungle - deep vivid green
+        addPatch(WORLD_CENTER, WORLD_CENTER, WORLD_SIZE * 0.28, WORLD_SIZE * 0.28, 0x35a045);      // rainforest - rich emerald
 
         var gridSegments = Math.max(40, Math.round(WORLD_SIZE));
-        var gridHelper = new THREE.GridHelper(WORLD_SIZE, gridSegments, 0x2a5d2a, 0x2a5d2a);
+        var gridHelper = new THREE.GridHelper(WORLD_SIZE, gridSegments, 0x358835, 0x358835);
         gridHelper.position.set(WORLD_CENTER, 0.01, WORLD_CENTER);
         scene.add(gridHelper);
 
         // --- Structure materials ---
-        var blockMat = new THREE.MeshLambertMaterial({ color: 0x8b7355 });
-        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
-        var brickMat = new THREE.MeshLambertMaterial({ color: 0x994444 });
-        var jungleWoodMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2e });
-        var jungleLeafMat = new THREE.MeshLambertMaterial({ color: 0x2f6f2f });
-        var vineMat = new THREE.MeshLambertMaterial({ color: 0x2a7d3f });
-        var dirtMat = new THREE.MeshLambertMaterial({ color: 0x5a4028 });
-        var cliffMat = new THREE.MeshLambertMaterial({ color: 0x3f3325 });
+        var blockMat = new THREE.MeshLambertMaterial({ color: 0xa08050 });
+        var stoneMat = new THREE.MeshLambertMaterial({ color: 0x9a9898 });
+        var brickMat = new THREE.MeshLambertMaterial({ color: 0xb85540 });
+        var jungleWoodMat = new THREE.MeshLambertMaterial({ color: 0x8a6038 });
+        var jungleLeafMat = new THREE.MeshLambertMaterial({ color: 0x2da835 });
+        var vineMat = new THREE.MeshLambertMaterial({ color: 0x30a848 });
+        var dirtMat = new THREE.MeshLambertMaterial({ color: 0x7a5530 });
+        var cliffMat = new THREE.MeshLambertMaterial({ color: 0x5a483a });
         chunkMaterialPalette = {
             core: [stoneMat, blockMat, brickMat],
             barrier: dirtMat,
@@ -764,17 +764,17 @@
         }
 
         // --- Lighting ---
-        scene.add(new THREE.AmbientLight(0x606060, 1.0));
+        scene.add(new THREE.AmbientLight(0x707080, 0.9));
 
-        var dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        dirLight.position.set(WORLD_CENTER + WORLD_SIZE * 0.1, WORLD_SIZE, WORLD_CENTER + WORLD_SIZE * 0.1);
+        var dirLight = new THREE.DirectionalLight(0xfff4e0, 1.4);
+        dirLight.position.set(WORLD_CENTER + WORLD_SIZE * 0.15, WORLD_SIZE, WORLD_CENTER + WORLD_SIZE * 0.1);
         dirLight.castShadow = false;
         scene.add(dirLight);
 
-        scene.add(new THREE.HemisphereLight(0x87CEEB, 0x3a7d3a, 0.5));
+        scene.add(new THREE.HemisphereLight(0x88d0f0, 0x4a9e3a, 0.55));
 
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, WORLD_SIZE * 0.6, WORLD_SIZE * 1.6);
+        scene.background = new THREE.Color(0x7ec8e8);
+        scene.fog = new THREE.Fog(0x7ec8e8, WORLD_SIZE * 0.6, WORLD_SIZE * 1.6);
     };
 
     GameWorld.isChunkStreaming = function () {

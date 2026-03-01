@@ -460,6 +460,34 @@
             return;
         }
 
+        if (msg.t === 'throwable_snapshot') {
+            if (SCHEMA.validateThrowableSnapshot) {
+                var throwableSnapValidated = SCHEMA.validateThrowableSnapshot(msg);
+                if (!throwableSnapValidated.ok) {
+                    pushNotice('Invalid throwable snapshot dropped (' + throwableSnapValidated.errors[0] + ')');
+                    return;
+                }
+            }
+            if (window.GameThrowables && window.GameThrowables.applyAuthoritativeSnapshot) {
+                window.GameThrowables.applyAuthoritativeSnapshot(msg);
+            }
+            return;
+        }
+
+        if (msg.t === 'throwable_event') {
+            if (SCHEMA.validateThrowableEvent) {
+                var throwableEventValidated = SCHEMA.validateThrowableEvent(msg);
+                if (!throwableEventValidated.ok) {
+                    pushNotice('Invalid throwable event dropped (' + throwableEventValidated.errors[0] + ')');
+                    return;
+                }
+            }
+            if (window.GameThrowables && window.GameThrowables.applyAuthoritativeEvent) {
+                window.GameThrowables.applyAuthoritativeEvent(msg);
+            }
+            return;
+        }
+
         if (msg.t === 'chunk_snapshot') {
             if (SCHEMA.validateChunkSnapshot) {
                 var chunkValidated = SCHEMA.validateChunkSnapshot(msg);
@@ -813,6 +841,7 @@
                     sprint: !!keys.sprint,
                     yaw: rotation.yaw || 0,
                     pitch: rotation.pitch || 0,
+                    cameraMode: (window.GamePlayer && window.GamePlayer.getPerspective && window.GamePlayer.getPerspective() === 'third') ? 'third' : 'first',
                     actions: []
                 });
 
@@ -939,6 +968,12 @@
 
     GameNet.getWallhackDescriptors = function () {
         var out = [];
+        GameNet.appendWallhackDescriptors(out);
+        return out;
+    };
+
+    GameNet.appendWallhackDescriptors = function (out) {
+        if (!Array.isArray(out)) return out;
         renderMap.forEach(function (r) {
             out.push({
                 id: 'net:' + r.id,

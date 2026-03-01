@@ -68,7 +68,10 @@
     var weaponGroup = null;
     var weaponParts = {};
     var muzzleFlash = null;
+    var muzzleLight = null;
+    var muzzleLightTimer = 0;
     var currentWeaponId = 'rifle';
+    var tmpMuzzleWorldPos = null;
 
     var avatarGroup = null;
     var avatarRigApi = null;
@@ -569,10 +572,16 @@
         weaponParts.drum.visible = false;
 
         muzzleFlash = new THREE.Mesh(
-            new THREE.BoxGeometry(0.06, 0.06, 0.06),
-            new THREE.MeshBasicMaterial({ color: 0xFFFF88 })
+            new THREE.SphereGeometry(0.06, 4, 4),
+            new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 1 })
         );
         muzzleFlash.visible = false;
+
+        muzzleLight = new THREE.PointLight(0xffcc66, 0, 4);
+        muzzleLight.position.copy(muzzleFlash.position);
+        weaponGroup.add(muzzleLight);
+
+        tmpMuzzleWorldPos = new THREE.Vector3();
 
         weaponGroup.add(weaponParts.body);
         weaponGroup.add(weaponParts.barrel);
@@ -742,6 +751,17 @@
                 weaponGroup.position.x += (0.25 - weaponGroup.position.x) * dt * 5;
             }
         }
+
+        // Decay muzzle point light
+        if (muzzleLight && muzzleLightTimer > 0) {
+            muzzleLightTimer -= dt;
+            if (muzzleLightTimer <= 0) {
+                muzzleLightTimer = 0;
+                muzzleLight.intensity = 0;
+            } else {
+                muzzleLight.intensity = 2.5 * (muzzleLightTimer / 0.06);
+            }
+        }
     };
 
     GamePlayer.fireAnimation = function () {
@@ -765,9 +785,47 @@
 
         if (muzzleFlash) {
             muzzleFlash.visible = true;
-            setTimeout(function () {
-                muzzleFlash.visible = false;
-            }, currentWeaponId === 'sniper' ? 90 : 60);
+            muzzleFlash.scale.set(1, 1, 1);
+            muzzleFlash.material.opacity = 1;
+
+            // Point light burst
+            if (muzzleLight) {
+                muzzleLight.intensity = 2.5;
+                muzzleLight.position.copy(muzzleFlash.position);
+                muzzleLightTimer = 0.06;
+            }
+
+            // Spawn muzzle spark particles
+            if (window.GameParticles && window.GameParticles.spawn) {
+                muzzleFlash.getWorldPosition(tmpMuzzleWorldPos);
+                var sparkCount = currentWeaponId === 'shotgun' ? 6 : 4;
+                var sparkColors = [0xffdd44, 0xffaa22, 0xffcc66, 0xffffff];
+                window.GameParticles.burst(tmpMuzzleWorldPos, sparkCount, {
+                    color: sparkColors,
+                    speedRange: [3, 8],
+                    scaleRange: [0.02, 0.05],
+                    lifeRange: [0.05, 0.12],
+                    gravity: 0.3,
+                    drag: 0.2
+                });
+            }
+
+            var flashDur = currentWeaponId === 'sniper' ? 90 : 60;
+            var flashStart = performance.now();
+            function flashFade() {
+                var elapsed = performance.now() - flashStart;
+                var t = Math.min(1, elapsed / flashDur);
+                muzzleFlash.scale.setScalar(1 + t * 1.5);
+                muzzleFlash.material.opacity = 1 - t;
+                if (t < 1) {
+                    requestAnimationFrame(flashFade);
+                } else {
+                    muzzleFlash.visible = false;
+                    muzzleFlash.scale.set(1, 1, 1);
+                    muzzleFlash.material.opacity = 1;
+                }
+            }
+            requestAnimationFrame(flashFade);
         }
 
         var startTime = performance.now();
@@ -822,6 +880,13 @@
 
     GamePlayer.getRotation = function () {
         return { yaw: yaw, pitch: pitch };
+    };
+
+    GamePlayer.getMuzzleWorldPos = function () {
+        if (!muzzleFlash) return null;
+        if (!tmpMuzzleWorldPos) tmpMuzzleWorldPos = new THREE.Vector3();
+        muzzleFlash.getWorldPosition(tmpMuzzleWorldPos);
+        return tmpMuzzleWorldPos;
     };
 
     GamePlayer.getMuzzleWorldPosition = function () {

@@ -1,0 +1,14 @@
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+You are the Worker-Visual subagent.
+- Own visual and animation implementation details only:
+  avatar rig posing, weapon-hold coherence, camera presentation, HUD readability, and rendering parity.
+- Keep combat/network contracts unchanged unless explicitly required for parity.
+- Before edits, verify shared primitives/contracts to avoid drift:
+  shared/game-primitives.js, shared/aim-parity.js, shared/game-schema.js.
+- Prefer single-path rendering logic (no fallback branches).
+- Keep code concise and deterministic; avoid style-only complexity.
+- Validate with quick runtime sanity checks:
+  third-person hold pose, local-vs-remote parity, and no input/pointer-lock regressions.
+"""

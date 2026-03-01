@@ -276,6 +276,9 @@
             coil: coil,
             muzzle: muzzle,
             coreAnchor: coreAnchor,
+            body: body,
+            head: head,
+            root: root,
             twoHanded: true,
             weaponId: 'rifle',
             gaitPhase: Math.random() * Math.PI * 2,
@@ -293,7 +296,14 @@
                 firing: false,
                 recoil: 0
             },
-            baseGunRotX: 0
+            baseGunRotX: 0,
+            // Animation layers
+            prevGrounded: true,
+            landSquash: 0,
+            hitReactionTimer: 0,
+            hitReactionAxis: 0,
+            deathTimer: -1,
+            deathDir: 1
         };
 
         var styles = WEAPON_STYLES;
@@ -436,6 +446,73 @@
             var bob = Math.sin(rig.gaitPhase * 2.0) * Math.min(0.03, speedNorm * 0.04);
             rig.gun.rotation.x = rig.baseGunRotX + bob - (recoilKick * 0.4);
 
+            // Head bob - subtle vertical oscillation at half leg frequency
+            var headBob = Math.sin(rig.gaitPhase) * Math.min(0.02, speedNorm * 0.025);
+            head.position.y = headOffset[1] + headBob;
+
+            // Body lean on strafe
+            if (m.animState === 'strafe') {
+                body.rotation.z += (-0.05 - body.rotation.z) * Math.min(1, dt * 8);
+            } else {
+                body.rotation.z += (0 - body.rotation.z) * Math.min(1, dt * 6);
+            }
+
+            // Sprint forward lean
+            if (m.animState === 'sprint') {
+                body.rotation.x += (0.08 - body.rotation.x) * Math.min(1, dt * 6);
+            } else {
+                body.rotation.x += (0 - body.rotation.x) * Math.min(1, dt * 5);
+            }
+
+            // Landing squash
+            if (m.grounded && !rig.prevGrounded) {
+                rig.landSquash = 1;
+            }
+            rig.prevGrounded = m.grounded;
+            if (rig.landSquash > 0) {
+                rig.landSquash -= dt * 7;
+                if (rig.landSquash < 0) rig.landSquash = 0;
+                var squash = 1 - rig.landSquash * 0.15;
+                rig.legL.scale.y = squash;
+                rig.legR.scale.y = squash;
+                body.position.y = bodyOffset[1] - rig.landSquash * 0.06;
+            } else {
+                rig.legL.scale.y = 1;
+                rig.legR.scale.y = 1;
+                body.position.y = bodyOffset[1];
+            }
+
+            // Hit reaction twitch
+            if (rig.hitReactionTimer > 0) {
+                rig.hitReactionTimer -= dt;
+                if (rig.hitReactionTimer < 0) rig.hitReactionTimer = 0;
+                var hitT = rig.hitReactionTimer / 0.1;
+                body.rotation.y += Math.sin(hitT * Math.PI) * 0.1 * rig.hitReactionAxis;
+            }
+
+            // Death animation
+            if (rig.deathTimer >= 0) {
+                rig.deathTimer += dt;
+                var dT = Math.min(1, rig.deathTimer / 0.8);
+                // Tip forward/backward
+                root.rotation.x = rig.deathDir * dT * 1.2;
+                // Legs splay
+                rig.legL.rotation.z = -dT * 0.4;
+                rig.legR.rotation.z = dT * 0.4;
+                // Arms go limp
+                rig.armL.rotation.x = dT * 0.6;
+                rig.armR.rotation.x = dT * 0.6;
+                // Drop + fade
+                root.position.y = -dT * 0.5;
+                root.traverse(function (child) {
+                    if (child.material && child.material.opacity !== undefined) {
+                        child.material.transparent = true;
+                        child.material.opacity = 1 - dT * 0.8;
+                    }
+                });
+                return; // Skip normal arm IK during death
+            }
+
             // Solve both shoulder poses against weapon grip anchors for stable gun hold.
             root.updateMatrixWorld(true);
 
@@ -509,6 +586,27 @@
         setActionState({ aiming: true, firing: false });
         updatePose(0);
 
+        function setHitReaction() {
+            rig.hitReactionTimer = 0.1;
+            rig.hitReactionAxis = Math.random() > 0.5 ? 1 : -1;
+        }
+
+        function triggerDeath() {
+            rig.deathTimer = 0;
+            rig.deathDir = Math.random() > 0.5 ? 1 : -1;
+        }
+
+        function resetDeath() {
+            rig.deathTimer = -1;
+            root.rotation.x = 0;
+            root.position.y = 0;
+            root.traverse(function (child) {
+                if (child.material && child.material.opacity !== undefined) {
+                    child.material.opacity = 1;
+                }
+            });
+        }
+
         return {
             root: root,
             rig: rig,
@@ -521,6 +619,9 @@
             getCoreWorldPosition: getCoreWorldPosition,
             getMuzzleWorldPosition: getMuzzleWorldPosition,
             setMuzzleVisible: setMuzzleVisible,
+            setHitReaction: setHitReaction,
+            triggerDeath: triggerDeath,
+            resetDeath: resetDeath,
             getWeaponId: function () { return rig.weaponId; },
             getAnimState: function () {
                 return {

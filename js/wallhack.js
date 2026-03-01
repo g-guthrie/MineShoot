@@ -12,9 +12,6 @@
     var initialized = false;
     var descriptorsById = new Map();
     var ghostById = new Map();
-    var revealRaycaster = new THREE.Raycaster();
-    var revealTarget = new THREE.Vector3();
-    var revealDir = new THREE.Vector3();
 
     function createGhostFromVisual(visualRoot) {
         if (!visualRoot) return null;
@@ -140,9 +137,8 @@
     };
 
     GameWallhack.update = function (camera, playerPos, radius) {
-        if (!initialized || !camera || !playerPos) return;
+        if (!initialized || !playerPos) return;
         radius = Math.max(0, Number(radius || 0));
-        var worldMeshes = window.GameWorld && window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
 
         descriptorsById.forEach(function (descriptor, id) {
             var entry = ghostById.get(id);
@@ -163,28 +159,8 @@
                 ghost.visible = false;
                 return;
             }
-
-            revealTarget.copy(descriptor.worldPos);
-            revealTarget.y += (typeof descriptor.headOffsetY === 'number') ? descriptor.headOffsetY : 2.0;
-            revealDir.copy(revealTarget).sub(camera.position);
-            var distToTarget = revealDir.length();
-            if (distToTarget <= 0.001) {
-                ghost.visible = false;
-                return;
-            }
-            revealDir.divideScalar(distToTarget);
-
-            var blocked = false;
-            if (worldMeshes && worldMeshes.length > 0) {
-                revealRaycaster.set(camera.position, revealDir);
-                revealRaycaster.far = Math.max(0, distToTarget - 0.2);
-                blocked = revealRaycaster.intersectObjects(worldMeshes, false).length > 0;
-            }
-
-            ghost.visible = blocked;
-            if (blocked) {
-                updateGhostOpacity(ghost, id.length);
-            }
+            ghost.visible = true;
+            updateGhostOpacity(ghost, id.length);
         });
     };
 

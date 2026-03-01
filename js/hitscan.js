@@ -15,6 +15,11 @@
     var plasmaForward = new THREE.Vector3();
     var plasmaMuzzle = new THREE.Vector3();
     var PRIM = globalThis.__GAME_PRIMITIVES__ || {};
+    var AIM_PARITY = globalThis.__GAME_AIM_PARITY__ || {};
+    var AIM_CONST = AIM_PARITY.constants || {};
+    var AIM_VIEWPORT = (AIM_PARITY && AIM_PARITY.getCanonicalViewport)
+        ? AIM_PARITY.getCanonicalViewport()
+        : { width: 1920, height: 1080 };
     var COMBAT_PRIM = PRIM.combat || {};
     var WEAPON_PRIM = COMBAT_PRIM.weapon_stats || {};
     var PLASMA_PRIM = COMBAT_PRIM.plasma || {};
@@ -26,21 +31,17 @@
     }
 
     // Y is positive-down for UI layout consistency.
-    var SHOTGUN_PATTERN = [
-        [-0.90, -0.90], [0.00, -0.90], [0.90, -0.90],
-        [-0.90,  0.00], [-0.35, -0.35], [0.35, 0.35], [0.90, 0.00],
-        [-0.90,  0.90], [0.00,  0.90], [0.90, 0.90],
-        [-0.45,  0.45], [0.45, -0.45]
-    ];
-    var SHOTGUN_RETICLE_SIZE_PX = 300;
-    var SHOTGUN_RETICLE_REF_DISTANCE = 14;
-    var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
-    var SHOTGUN_RETICLE_THIRD_MAX_SCALE = 0.96;
+    var SHOTGUN_PATTERN = (AIM_CONST.shotgun && Array.isArray(AIM_CONST.shotgun.pattern))
+        ? AIM_CONST.shotgun.pattern.slice()
+        : [
+            [-0.90, -0.90], [0.00, -0.90], [0.90, -0.90],
+            [-0.90,  0.00], [-0.35, -0.35], [0.35, 0.35], [0.90, 0.00],
+            [-0.90,  0.90], [0.00,  0.90], [0.90, 0.90],
+            [-0.45,  0.45], [0.45, -0.45]
+        ];
+    var SHOTGUN_RETICLE_SIZE_PX = ((AIM_CONST.shotgun && AIM_CONST.shotgun.reticle && AIM_CONST.shotgun.reticle.basePx) || 300);
     var SHOTGUN_RETICLE_POINTS = [];
-    var PLASMA_RETICLE_SIZE_PX = 220;
-    var PLASMA_RETICLE_REF_DISTANCE = 14;
-    var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
-    var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
+    var PLASMA_RETICLE_SIZE_PX = ((AIM_CONST.plasma && AIM_CONST.plasma.reticle && AIM_CONST.plasma.reticle.basePx) || 220);
 
     var PLASMA_RANGE = weaponNum('plasma', 'max_range', 24);
     var PLASMA_DAMAGE = weaponNum('plasma', 'body_damage', 15);
@@ -176,50 +177,62 @@
         return window.GamePlayer.getPerspective();
     }
 
-    function getThirdPersonCameraDistance() {
-        if (!window.GamePlayer || !window.GamePlayer.getCamera || !window.GamePlayer.getPosition) return null;
-        var camera = window.GamePlayer.getCamera();
-        var playerPos = window.GamePlayer.getPosition();
-        if (!camera || !playerPos || !camera.position || !camera.position.distanceTo) return null;
-        return camera.position.distanceTo(playerPos);
+    function getCanonicalCameraDistance(mode) {
+        var cameraMode = mode === 'third' ? 'third' : 'first';
+        if (cameraMode !== 'third') return 0;
+        if (AIM_PARITY && AIM_PARITY.getCameraState) {
+            var state = AIM_PARITY.getCameraState({
+                cameraMode: cameraMode,
+                x: 0,
+                z: 0,
+                feetY: 0,
+                yaw: 0,
+                pitch: 0
+            });
+            if (state && typeof state.cameraDistance === 'number' && isFinite(state.cameraDistance)) {
+                return state.cameraDistance;
+            }
+        }
+        return 4.4;
     }
 
     function getShotgunReticleSizePx() {
-        var size = SHOTGUN_RETICLE_SIZE_PX;
-        if (getPerspectiveMode() !== 'third') return size;
-
-        var cameraDistance = getThirdPersonCameraDistance();
-        if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
-            return size * 0.78;
+        var mode = getPerspectiveMode();
+        var cameraDistance = getCanonicalCameraDistance(mode);
+        if (AIM_PARITY && AIM_PARITY.getReticleSizePx) {
+            return AIM_PARITY.getReticleSizePx('shotgun', mode, cameraDistance);
         }
-
-        // Keep spread feel consistent relative to the player, not just camera distance.
-        var scale = SHOTGUN_RETICLE_REF_DISTANCE / (SHOTGUN_RETICLE_REF_DISTANCE + cameraDistance);
-        scale = Math.max(SHOTGUN_RETICLE_THIRD_MIN_SCALE, Math.min(SHOTGUN_RETICLE_THIRD_MAX_SCALE, scale));
-        return size * scale;
+        return SHOTGUN_RETICLE_SIZE_PX;
     }
 
     function getPlasmaReticleSizePx() {
-        var size = PLASMA_RETICLE_SIZE_PX;
-        if (getPerspectiveMode() !== 'third') return size;
-
-        var cameraDistance = getThirdPersonCameraDistance();
-        if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
-            return size * 0.78;
+        var mode = getPerspectiveMode();
+        var cameraDistance = getCanonicalCameraDistance(mode);
+        if (AIM_PARITY && AIM_PARITY.getReticleSizePx) {
+            return AIM_PARITY.getReticleSizePx('plasma', mode, cameraDistance);
         }
-
-        var scale = PLASMA_RETICLE_REF_DISTANCE / (PLASMA_RETICLE_REF_DISTANCE + cameraDistance);
-        scale = Math.max(PLASMA_RETICLE_THIRD_MIN_SCALE, Math.min(PLASMA_RETICLE_THIRD_MAX_SCALE, scale));
-        return size * scale;
+        return PLASMA_RETICLE_SIZE_PX;
     }
 
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
+            if (AIM_PARITY && AIM_PARITY.getShotgunPelletOffsetsNdc) {
+                var mode = getPerspectiveMode();
+                var cameraDistance = getCanonicalCameraDistance(mode);
+                var parityOffsets = AIM_PARITY.getShotgunPelletOffsetsNdc(
+                    mode,
+                    cameraDistance,
+                    AIM_VIEWPORT.width,
+                    AIM_VIEWPORT.height
+                );
+                var op = parityOffsets[pelletIndex % parityOffsets.length];
+                return { x: op.x, y: op.y };
+            }
             var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
             var halfSize = getShotgunReticleSizePx() * 0.5;
             return {
-                x: (p[0] * halfSize) / (window.innerWidth * 0.5),
-                y: -(p[1] * halfSize) / (window.innerHeight * 0.5)
+                x: (p[0] * halfSize) / (AIM_VIEWPORT.width * 0.5),
+                y: -(p[1] * halfSize) / (AIM_VIEWPORT.height * 0.5)
             };
         }
 
@@ -361,8 +374,8 @@
             return { target: null, reason: 'searching', candidateCount: 0, overlapCount: 0, overlapArea: 0 };
         }
 
-        var halfNdcX = (boxSizePx * 0.5) / (window.innerWidth * 0.5);
-        var halfNdcY = (boxSizePx * 0.5) / (window.innerHeight * 0.5);
+        var halfNdcX = (boxSizePx * 0.5) / (AIM_VIEWPORT.width * 0.5);
+        var halfNdcY = (boxSizePx * 0.5) / (AIM_VIEWPORT.height * 0.5);
         var reticleRect = {
             minX: -halfNdcX,
             maxX: halfNdcX,

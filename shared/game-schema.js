@@ -29,6 +29,15 @@
         return typeof value === 'string';
     }
 
+    function validateCameraMode(value, fieldName) {
+        var label = fieldName || 'cameraMode';
+        if (!isString(value)) return [label + ' must be a string'];
+        if (value !== 'first' && value !== 'third') {
+            return [label + ' must be "first" or "third"'];
+        }
+        return [];
+    }
+
     function okResult(value) {
         return { ok: true, errors: [], value: value };
     }
@@ -64,6 +73,9 @@
 
         if (!errors.length && msg.seq !== undefined && !isFiniteNumber(msg.seq)) {
             errors.push('input.seq must be a finite number');
+        }
+        if (!errors.length && msg.cameraMode !== undefined) {
+            errors = errors.concat(validateCameraMode(msg.cameraMode, 'input.cameraMode'));
         }
         if (!errors.length) {
             errors = errors.concat(validateActions(msg.actions));
@@ -209,6 +221,70 @@
         return okResult(msg);
     }
 
+    function validateThrowableSnapshot(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('throwable_snapshot must be an object');
+        if (!errors.length && msg.t !== 'throwable_snapshot') errors.push('throwable_snapshot.t must be "throwable_snapshot"');
+        if (!errors.length && !isFiniteNumber(msg.serverTime)) errors.push('throwable_snapshot.serverTime must be a finite number');
+        if (!errors.length && !Array.isArray(msg.throwables)) errors.push('throwable_snapshot.throwables must be an array');
+        if (!errors.length && !Array.isArray(msg.zones)) errors.push('throwable_snapshot.zones must be an array');
+
+        if (!errors.length) {
+            for (var i = 0; i < msg.throwables.length; i++) {
+                var t = msg.throwables[i];
+                var tp = 'throwable_snapshot.throwables[' + i + ']';
+                if (!isObject(t)) {
+                    errors.push(tp + ' must be an object');
+                    continue;
+                }
+                if (!isString(t.id) || !t.id) errors.push(tp + '.id must be a non-empty string');
+                if (!isString(t.type) || !t.type) errors.push(tp + '.type must be a non-empty string');
+                if (!isFiniteNumber(t.x)) errors.push(tp + '.x must be a finite number');
+                if (!isFiniteNumber(t.y)) errors.push(tp + '.y must be a finite number');
+                if (!isFiniteNumber(t.z)) errors.push(tp + '.z must be a finite number');
+                if (!isFiniteNumber(t.vx)) errors.push(tp + '.vx must be a finite number');
+                if (!isFiniteNumber(t.vy)) errors.push(tp + '.vy must be a finite number');
+                if (!isFiniteNumber(t.vz)) errors.push(tp + '.vz must be a finite number');
+                if (t.fuse !== undefined && !isFiniteNumber(t.fuse)) errors.push(tp + '.fuse must be a finite number');
+                if (t.ownerId !== undefined && !isString(t.ownerId)) errors.push(tp + '.ownerId must be a string');
+                if (t.state !== undefined && !isString(t.state)) errors.push(tp + '.state must be a string');
+            }
+            for (var j = 0; j < msg.zones.length; j++) {
+                var z = msg.zones[j];
+                var zp = 'throwable_snapshot.zones[' + j + ']';
+                if (!isObject(z)) {
+                    errors.push(zp + ' must be an object');
+                    continue;
+                }
+                if (!isString(z.id) || !z.id) errors.push(zp + '.id must be a non-empty string');
+                if (!isFiniteNumber(z.x)) errors.push(zp + '.x must be a finite number');
+                if (!isFiniteNumber(z.z)) errors.push(zp + '.z must be a finite number');
+                if (!isFiniteNumber(z.radius)) errors.push(zp + '.radius must be a finite number');
+                if (!isFiniteNumber(z.lifeLeft)) errors.push(zp + '.lifeLeft must be a finite number');
+                if (z.type !== undefined && !isString(z.type)) errors.push(zp + '.type must be a string');
+            }
+        }
+
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
+    function validateThrowableEvent(msg) {
+        var errors = [];
+        if (!isObject(msg)) errors.push('throwable_event must be an object');
+        if (!errors.length && msg.t !== 'throwable_event') errors.push('throwable_event.t must be "throwable_event"');
+        if (!errors.length && !isString(msg.eventType)) errors.push('throwable_event.eventType must be a string');
+        if (!errors.length && !isString(msg.id)) errors.push('throwable_event.id must be a string');
+        if (!errors.length && msg.type !== undefined && !isString(msg.type)) errors.push('throwable_event.type must be a string');
+        if (!errors.length && msg.x !== undefined && !isFiniteNumber(msg.x)) errors.push('throwable_event.x must be a finite number');
+        if (!errors.length && msg.y !== undefined && !isFiniteNumber(msg.y)) errors.push('throwable_event.y must be a finite number');
+        if (!errors.length && msg.z !== undefined && !isFiniteNumber(msg.z)) errors.push('throwable_event.z must be a finite number');
+        if (!errors.length && msg.radius !== undefined && !isFiniteNumber(msg.radius)) errors.push('throwable_event.radius must be a finite number');
+        if (!errors.length && msg.ttlMs !== undefined && !isFiniteNumber(msg.ttlMs)) errors.push('throwable_event.ttlMs must be a finite number');
+        if (errors.length) return failResult(errors);
+        return okResult(msg);
+    }
+
     function validateFireIntent(msg) {
         var errors = [];
         if (!isObject(msg)) errors.push('fire_intent must be an object');
@@ -303,12 +379,15 @@
     }
 
     var schema = {
+        validateCameraMode: validateCameraMode,
         validateClientInput: validateClientInput,
         validateServerSnapshot: validateServerEntitySnapshot,
         validateServerEntitySnapshot: validateServerEntitySnapshot,
         validateServerReconcile: validateServerReconcile,
         validateChunkSnapshot: validateChunkSnapshot,
         validateChunkDelta: validateChunkDelta,
+        validateThrowableSnapshot: validateThrowableSnapshot,
+        validateThrowableEvent: validateThrowableEvent,
         validateFireIntent: validateFireIntent,
         validateThrowIntent: validateThrowIntent,
         validateChunkSubscribe: validateChunkSubscribe,
