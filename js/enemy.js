@@ -32,12 +32,9 @@
     var ENEMY_CAPSULE_RADIUS = Number(ENTITY_PRIM.capsule_radius || 0.58);
 
     var combatRaycaster = new THREE.Raycaster();
-    var revealRaycaster = new THREE.Raycaster();
     var enemyShootOrigin = new THREE.Vector3();
     var enemyShootTarget = new THREE.Vector3();
     var enemyShootDir = new THREE.Vector3();
-    var revealTarget = new THREE.Vector3();
-    var revealDir = new THREE.Vector3();
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
     var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
@@ -462,61 +459,6 @@
         return true;
     }
 
-    function updateRevealGhost(enemy, playerPos, camera, dt) {
-        if (window.GameWallhack && window.GameWallhack.isActive && window.GameWallhack.isActive()) {
-            return;
-        }
-        if (!enemy.revealGhost) return;
-
-        if (!enemy.alive || !playerPos || !camera) {
-            enemy.revealGhost.visible = false;
-            return;
-        }
-
-        var horizontalDist = Math.hypot(
-            enemy.group.position.x - playerPos.x,
-            enemy.group.position.z - playerPos.z
-        );
-        if (horizontalDist > getCurrentWallhackRadius()) {
-            enemy.revealGhost.visible = false;
-            return;
-        }
-
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        if (!worldMeshes || worldMeshes.length === 0) {
-            enemy.revealGhost.visible = false;
-            return;
-        }
-
-        revealTarget.copy(enemy.group.position);
-        revealTarget.y += HEAD_HITBOX_OFFSET_Y;
-
-        revealDir.copy(revealTarget).sub(camera.position);
-        var distToTarget = revealDir.length();
-        if (distToTarget <= 0.001) {
-            enemy.revealGhost.visible = false;
-            return;
-        }
-
-        revealDir.divideScalar(distToTarget);
-        revealRaycaster.set(camera.position, revealDir);
-        revealRaycaster.far = distToTarget - 0.2;
-
-        var blocked = revealRaycaster.intersectObjects(worldMeshes, false).length > 0;
-        enemy.revealGhost.visible = blocked;
-
-        if (blocked && enemy.revealGhost.userData.revealMaterials) {
-            var pulse = 0.04 * Math.sin(performance.now() * 0.012 + enemy.index);
-            var opacity = enemy.revealGhost.userData.baseOpacity + pulse;
-            var mats = enemy.revealGhost.userData.revealMaterials;
-            for (var i = 0; i < mats.length; i++) {
-                mats[i].opacity = opacity;
-            }
-        }
-
-        enemy.revealGhost.position.copy(enemy.visual.position);
-    }
-
     function updateMuzzleFlash(enemy, dt) {
         if (!enemy.weaponMuzzle || enemy.muzzleFlashTimer <= 0) return;
 
@@ -596,17 +538,14 @@
     /**
      * @param {number} dt
      * @param {THREE.Vector3} playerPos
-     * @param {THREE.Camera|Function} cameraOrCallback
+     * @param {THREE.Camera|Function} _cameraOrCallback
      * @param {Function=} maybeOnPlayerHit
      */
-    GameEnemy.update = function (dt, playerPos, cameraOrCallback, maybeOnPlayerHit) {
-        var camera = null;
+    GameEnemy.update = function (dt, playerPos, _cameraOrCallback, maybeOnPlayerHit) {
         var onPlayerHit = maybeOnPlayerHit;
 
-        if (typeof cameraOrCallback === 'function') {
-            onPlayerHit = cameraOrCallback;
-        } else {
-            camera = cameraOrCallback;
+        if (typeof _cameraOrCallback === 'function') {
+            onPlayerHit = _cameraOrCallback;
         }
 
         for (var i = 0; i < enemies.length; i++) {
@@ -617,7 +556,6 @@
                 updateAI(enemy, dt);
                 var engaging = updateCombat(enemy, dt, playerPos, onPlayerHit);
                 updateEnemyAnimation(enemy, dt, engaging);
-                updateRevealGhost(enemy, playerPos, camera, dt);
                 updateFlash(enemy, dt);
                 updateMuzzleFlash(enemy, dt);
                 syncHitboxPositions(enemy);

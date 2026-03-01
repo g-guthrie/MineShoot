@@ -856,10 +856,6 @@ export class GlobalArenaRoom extends DurableObject {
     this.send(ws, { t: 'class_queued', classId });
   }
 
-  handleThrow(_player, _msg) {
-    // v1 placeholder: type accepted and ignored; dedicated throwable simulation comes next.
-  }
-
   webSocketMessage(ws, message) {
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
     const msg = safeJsonParse(text);
@@ -907,10 +903,6 @@ export class GlobalArenaRoom extends DurableObject {
     }
     if (type === 'plasma_tick') {
       this.handlePlasmaTick(player, msg);
-      return;
-    }
-    if (type === 'throw') {
-      this.handleThrow(player, msg);
       return;
     }
     if (type === 'class_queue') {

@@ -744,9 +744,8 @@
     function tryThrow(type) {
         if (!hasInputCapture()) return;
 
-        if (multiplayerMode && window.GameNet && window.GameNet.sendThrow) {
-            window.GameNet.sendThrow(type);
-            setTransientDebug('Throw sent: ' + type, 650);
+        if (multiplayerMode) {
+            setTransientDebug('Throwables are temporarily disabled in net mode.', 900);
             return;
         }
 
@@ -847,6 +846,9 @@
         var worldManifest = bootWorldManifest;
         if (!worldManifest && window.GameNet && window.GameNet.getWorldManifest) {
             worldManifest = window.GameNet.getWorldManifest();
+        }
+        if (!worldManifest && window.GameWorld && window.GameWorld.getLocalManifest) {
+            worldManifest = window.GameWorld.getLocalManifest();
         }
         window.GameWorld.create(scene, worldManifest || null);
         window.GameUI.init();
@@ -1100,6 +1102,15 @@
     }
 
     function boot() {
+        function showFatalBootError(msg) {
+            var overlayEl = document.getElementById('overlay');
+            if (window.GameUIShell && window.GameUIShell.showOverlay) window.GameUIShell.showOverlay();
+            else if (overlayEl) overlayEl.style.display = 'flex';
+            var dbg = document.getElementById('debug-info');
+            if (dbg) dbg.textContent = 'Startup error: ' + msg;
+            console.error('Startup error:', msg);
+        }
+
         function safeInit() {
             try {
                 initGame();
@@ -1116,7 +1127,13 @@
 
         if (!isLocalDevMode() && window.GameNet && window.GameNet.requireAuth) {
             window.GameNet.requireAuth(function (authedUser) {
-                if (authedUser && window.GameNet.fetchWorldManifest) {
+                if (!authedUser) {
+                    bootWorldManifest = null;
+                    safeInit();
+                    return;
+                }
+
+                if (window.GameNet.fetchWorldManifest) {
                     window.GameNet.fetchWorldManifest()
                         .then(function (manifest) {
                             bootWorldManifest = manifest || null;
@@ -1124,15 +1141,17 @@
                         .catch(function (err) {
                             bootWorldManifest = null;
                             var msg = (err && err.message) ? err.message : 'unknown';
-                            startupDebugNotice = 'World manifest unavailable; using local fallback (' + msg + ').';
+                            showFatalBootError('Cannot start multiplayer: world manifest unavailable (' + msg + ').');
                         })
                         .finally(function () {
-                            safeInit();
+                            if (bootWorldManifest) {
+                                safeInit();
+                            }
                         });
                     return;
                 }
-                bootWorldManifest = null;
-                safeInit();
+
+                showFatalBootError('Cannot start multiplayer: world manifest API is unavailable.');
             });
             return;
         }

@@ -407,10 +407,29 @@
         return { x: resolvedFallback.x, z: resolvedFallback.z };
     }
 
+    function createLocalManifest() {
+        applyWorldConfig(null);
+        var solids = buildDefaultSolidSpecs();
+        return {
+            version: 1,
+            seed: WORLD_SEED,
+            size: WORLD_SIZE,
+            center: WORLD_CENTER,
+            margin: WORLD_MARGIN,
+            min: WORLD_MIN,
+            max: WORLD_MAX,
+            areaScale: WORLD_AREA_SCALE,
+            solidBoxes: solids
+        };
+    }
+
     GameWorld.create = function (scene, manifest) {
-        applyWorldConfig(manifest || null);
+        if (!manifest || typeof manifest !== 'object' || !Array.isArray(manifest.solidBoxes)) {
+            throw new Error('World manifest is required.');
+        }
+        applyWorldConfig(manifest);
         collidables = [];
-        var authoritativeSolids = normalizeSolidSpecs(manifest && manifest.solidBoxes);
+        var authoritativeSolids = normalizeSolidSpecs(manifest.solidBoxes);
 
         function markSolid(mesh) {
             mesh.updateMatrixWorld(true);
@@ -514,9 +533,10 @@
 
         // Authoritative solid cover/barrier geometry (server manifest in net mode).
         var coreMats = [stoneMat, blockMat, brickMat];
-        var manifestSolids = (authoritativeSolids && authoritativeSolids.length > 0)
-            ? authoritativeSolids
-            : buildDefaultSolidSpecs();
+        if (!authoritativeSolids || authoritativeSolids.length === 0) {
+            throw new Error('World manifest has no solid geometry.');
+        }
+        var manifestSolids = authoritativeSolids;
         var coreMatIndex = 0;
         for (var s = 0; s < manifestSolids.length; s++) {
             var solid = manifestSolids[s];
@@ -676,6 +696,10 @@
 
     GameWorld.getSeed = function () {
         return WORLD_SEED;
+    };
+
+    GameWorld.getLocalManifest = function () {
+        return createLocalManifest();
     };
 
     GameWorld.setSeed = function (seedText) {

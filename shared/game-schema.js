@@ -238,13 +238,6 @@
             return okResult(msg);
         }
 
-        if (msg.t === 'throw') {
-            if (!isString(msg.throwableId) || !msg.throwableId) {
-                return failResult(['throw.throwableId must be a non-empty string']);
-            }
-            return okResult(msg);
-        }
-
         if (msg.t === 'class_queue') {
             if (!isString(msg.classId) || !msg.classId) {
                 return failResult(['class_queue.classId must be a non-empty string']);

@@ -821,10 +821,6 @@
         });
     };
 
-    GameNet.sendThrow = function (throwableId) {
-        return wsSend({ t: 'throw', throwableId: throwableId });
-    };
-
     GameNet.queueClassChange = function (classId) {
         return wsSend({ t: 'class_queue', classId: classId });
     };
