@@ -12,6 +12,16 @@
     var screenPoint = new THREE.Vector2(0, 0);
     var plasmaForward = new THREE.Vector3();
     var plasmaMuzzle = new THREE.Vector3();
+    var tracerStart = new THREE.Vector3();
+    var tracerMissEnd = new THREE.Vector3();
+    var tracerMaxCount = 96;
+    var tracerPool = [];
+    var tracerCursor = 0;
+    var tracerScene = null;
+    var tracerShotCounter = {};
+    var tracerMeshMid = new THREE.Vector3();
+    var tracerMeshUp = new THREE.Vector3(0, 1, 0);
+    var tracerMeshQuat = new THREE.Quaternion();
 
     // Y is positive-down for UI layout consistency.
     var SHOTGUN_PATTERN = [
@@ -20,12 +30,12 @@
         [-0.90,  0.90], [0.00,  0.90], [0.90, 0.90],
         [-0.45,  0.45], [0.45, -0.45]
     ];
-    var SHOTGUN_RETICLE_SIZE_PX = 300;
+    var SHOTGUN_RETICLE_SIZE_PX = 225;
     var SHOTGUN_RETICLE_REF_DISTANCE = 14;
     var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
     var SHOTGUN_RETICLE_THIRD_MAX_SCALE = 0.96;
     var SHOTGUN_RETICLE_POINTS = [];
-    var PLASMA_RETICLE_SIZE_PX = 220;
+    var PLASMA_RETICLE_SIZE_PX = 360;
     var PLASMA_RETICLE_REF_DISTANCE = 14;
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
@@ -40,7 +50,7 @@
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
     }
 
-    var weaponOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
+    var weaponOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun', 'plasma'];
     var weapons = {
         rifle: {
             id: 'rifle',
@@ -97,6 +107,17 @@
             spreadNdc: 0.00035,
             maxRange: 190
         },
+        seekergun: {
+            id: 'seekergun',
+            name: 'Seeker Gun',
+            automatic: true,
+            cooldown: 320,
+            bodyDamage: 0,
+            headDamage: 0,
+            pellets: 1,
+            spreadNdc: 0,
+            maxRange: 24
+        },
         plasma: {
             id: 'plasma',
             name: 'Plasma Cannon',
@@ -122,6 +143,114 @@
         beamStart: new THREE.Vector3(),
         beamEnd: new THREE.Vector3()
     };
+
+    function ensureTracerScene(camera) {
+        if (tracerScene) return tracerScene;
+        if (camera && camera.parent) {
+            tracerScene = camera.parent;
+            return tracerScene;
+        }
+        return null;
+    }
+
+    function allocTracer(camera) {
+        if (!ensureTracerScene(camera)) return null;
+        if (tracerPool.length < tracerMaxCount) {
+            var mesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.03, 0.03, 1, 8),
+                new THREE.MeshBasicMaterial({
+                    color: 0xffe29a,
+                    transparent: true,
+                    opacity: 0,
+                    depthWrite: false,
+                    depthTest: false
+                })
+            );
+            mesh.visible = false;
+            mesh.renderOrder = 40;
+            mesh.frustumCulled = false;
+            tracerScene.add(mesh);
+            tracerPool.push({
+                mesh: mesh,
+                origin: new THREE.Vector3(),
+                dir: new THREE.Vector3(),
+                head: new THREE.Vector3(),
+                tail: new THREE.Vector3(),
+                speed: 0,
+                segmentLength: 0,
+                traveled: 0,
+                maxDistance: 0,
+                life: 0,
+                maxLife: 0.12,
+                framesAlive: 0
+            });
+        }
+        if (tracerPool.length === 0) return null;
+        tracerCursor = (tracerCursor + 1) % tracerPool.length;
+        return tracerPool[tracerCursor];
+    }
+
+    function shouldDrawTracerForShot(weapon) {
+        if (!weapon || !weapon.id) return false;
+        if (weapon.id === 'plasma' || weapon.id === 'seekergun') return false;
+        if (weapon.id === 'machinegun') return true;
+        return true;
+    }
+
+    function tracerColorForWeapon(weaponId) {
+        if (weaponId === 'sniper') return 0xd9f2ff;
+        if (weaponId === 'shotgun') return 0xffe2ad;
+        if (weaponId === 'machinegun') return 0xfff7cf;
+        return 0xffedbf;
+    }
+
+    function tracerLifeForWeapon(weaponId) {
+        if (weaponId === 'machinegun') return 0.09;
+        if (weaponId === 'shotgun') return 0.1;
+        if (weaponId === 'sniper') return 0.12;
+        return 0.11;
+    }
+
+    function tracerSpeedForWeapon(weaponId) {
+        if (weaponId === 'machinegun') return 260;
+        if (weaponId === 'shotgun') return 230;
+        if (weaponId === 'sniper') return 320;
+        return 280;
+    }
+
+    function tracerSegmentLengthForWeapon(weaponId) {
+        if (weaponId === 'machinegun') return 1.7;
+        if (weaponId === 'shotgun') return 1.9;
+        if (weaponId === 'sniper') return 2.6;
+        return 2.1;
+    }
+
+    function spawnTracer(camera, weaponId, endPoint) {
+        if (!camera || !endPoint) return;
+        var tracer = allocTracer(camera);
+        if (!tracer || !tracer.mesh) return;
+
+        resolvePlasmaMuzzle(camera);
+        tracerStart.copy(plasmaMuzzle);
+        tracer.origin.copy(tracerStart);
+        tracer.dir.copy(endPoint).sub(tracerStart);
+        var len = tracer.dir.length();
+        if (len <= 0.001) return;
+        tracer.dir.divideScalar(len);
+        tracer.head.copy(tracer.origin);
+        tracer.tail.copy(tracer.origin);
+        tracer.traveled = 0;
+        tracer.maxDistance = len;
+        tracer.segmentLength = tracerSegmentLengthForWeapon(weaponId);
+        tracer.speed = tracerSpeedForWeapon(weaponId);
+        tracer.framesAlive = 0;
+
+        tracer.maxLife = tracerLifeForWeapon(weaponId);
+        tracer.life = tracer.maxLife;
+        tracer.mesh.material.opacity = 1.0;
+        tracer.mesh.material.color.setHex(tracerColorForWeapon(weaponId));
+        tracer.mesh.visible = true;
+    }
 
     function getCombatHitboxes() {
         var out = [];
@@ -197,6 +326,10 @@
         return size * scale;
     }
 
+    function getSeekergunReticleSizePx() {
+        return getPlasmaReticleSizePx() * 0.72;
+    }
+
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
             var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
@@ -269,7 +402,6 @@
         for (var i = 0; i < targets.length; i++) {
             var t = targets[i];
             if (!t || t.alive === false || !t.worldPos) continue;
-
             var projected = t.worldPos.clone().project(camera);
             if (projected.z > 1 || projected.z < -1) continue;
             if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
@@ -278,12 +410,70 @@
             var dist = camera.position.distanceTo(t.worldPos);
             if (dist > maxRange) continue;
             if (dist < bestDist) {
-                bestDist = dist;
                 best = t;
+                bestDist = dist;
             }
         }
 
         return best;
+    }
+
+    function getSeekerTelemetry(camera, maxRange, boxSizePx) {
+        var targets = getLockTargets() || [];
+        var halfNdcX = (boxSizePx * 0.5) / (window.innerWidth * 0.5);
+        var halfNdcY = (boxSizePx * 0.5) / (window.innerHeight * 0.5);
+        var best = null;
+        var bestDist = Infinity;
+        var nearestNorm = Infinity;
+        var nearestId = '';
+
+        for (var i = 0; i < targets.length; i++) {
+            var t = targets[i];
+            if (!t || t.alive === false || !t.worldPos) continue;
+            var projected = t.worldPos.clone().project(camera);
+            if (projected.z > 1 || projected.z < -1) continue;
+
+            if (halfNdcX > 0.0001 && halfNdcY > 0.0001) {
+                var nx = projected.x / halfNdcX;
+                var ny = projected.y / halfNdcY;
+                var norm = Math.sqrt(nx * nx + ny * ny);
+                if (norm < nearestNorm) {
+                    nearestNorm = norm;
+                    nearestId = t.targetId || '';
+                }
+            }
+
+            if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
+            if (!hasLineOfSight(camera, t.worldPos, maxRange)) continue;
+
+            var dist = camera.position.distanceTo(t.worldPos);
+            if (dist > maxRange) continue;
+            if (dist < bestDist) {
+                best = t;
+                bestDist = dist;
+            }
+        }
+
+        var lockNorm = Infinity;
+        if (best && best.worldPos && halfNdcX > 0.0001 && halfNdcY > 0.0001) {
+            var bestProjected = best.worldPos.clone().project(camera);
+            var bnx = bestProjected.x / halfNdcX;
+            var bny = bestProjected.y / halfNdcY;
+            lockNorm = Math.sqrt(bnx * bnx + bny * bny);
+        }
+
+        return {
+            hasLock: !!best,
+            lockTargetId: best && best.targetId ? best.targetId : '',
+            nearestTargetId: nearestId,
+            nearestNorm: isFinite(nearestNorm) ? nearestNorm : -1,
+            lockNorm: isFinite(lockNorm) ? lockNorm : -1,
+            reticleSizePx: boxSizePx,
+            reticleHalfNdcX: halfNdcX,
+            reticleHalfNdcY: halfNdcY,
+            maxRange: maxRange,
+            candidateCount: targets.length
+        };
     }
 
     function resolvePlasmaMuzzle(camera) {
@@ -322,7 +512,7 @@
         }
     }
 
-    function fireSinglePellet(camera, weapon, pelletIndex, onHit) {
+    function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
         var targetsHitboxes = getCombatHitboxes();
         var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
         var allTargets = targetsHitboxes.concat(worldMeshes);
@@ -333,9 +523,16 @@
         raycaster.far = weapon.maxRange;
 
         var intersects = raycaster.intersectObjects(allTargets, false);
-        if (intersects.length === 0) return false;
+        if (intersects.length === 0) {
+            if (onTrace) {
+                tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, weapon.maxRange);
+                onTrace(tracerMissEnd);
+            }
+            return false;
+        }
 
         var hit = intersects[0];
+        if (onTrace) onTrace(hit.point);
         if (targetsHitboxes.indexOf(hit.object) === -1) {
             return false;
         }
@@ -400,11 +597,29 @@
         }
 
         lastFireTime = now;
+        if (weapon.id === 'seekergun') {
+            var seekerLock = selectPlasmaTarget(camera, weapon.maxRange, getSeekergunReticleSizePx());
+            if (window.GameThrowables && window.GameThrowables.fireSeekerShot) {
+                return !!window.GameThrowables.fireSeekerShot(camera, seekerLock || null);
+            }
+            return false;
+        }
 
         var pellets = weapon.pellets || 1;
         var anyHit = false;
+        var drawTracersForShot = shouldDrawTracerForShot(weapon);
+        var shotgunTracerCap = 8;
         for (var i = 0; i < pellets; i++) {
-            var hit = fireSinglePellet(camera, weapon, i, onHit);
+            var shouldTraceThisPellet = drawTracersForShot && (weapon.id !== 'shotgun' || i < shotgunTracerCap);
+            var hit = fireSinglePellet(
+                camera,
+                weapon,
+                i,
+                onHit,
+                shouldTraceThisPellet ? function (traceEnd) {
+                    spawnTracer(camera, weapon.id, traceEnd);
+                } : null
+            );
             anyHit = anyHit || hit;
         }
 
@@ -602,6 +817,52 @@
             beamStart: plasmaState.beamStart.clone(),
             beamEnd: plasmaState.beamEnd.clone()
         };
+    };
+
+    GameHitscan.getSeekergunDebugInfo = function (camera) {
+        if (!camera) return null;
+        var weapon = getCurrentWeaponData();
+        if (!weapon || weapon.id !== 'seekergun') return null;
+        return getSeekerTelemetry(camera, weapon.maxRange, getSeekergunReticleSizePx());
+    };
+
+    GameHitscan.updateTracers = function (dt) {
+        if (!dt || tracerPool.length === 0) return;
+        var simDt = Math.min(dt, 1 / 30);
+        for (var i = 0; i < tracerPool.length; i++) {
+            var t = tracerPool[i];
+            if (!t || !t.mesh || t.life <= 0) continue;
+            t.life -= simDt;
+            t.framesAlive++;
+
+            var step = t.speed * simDt;
+            t.traveled += step;
+            if (t.traveled > t.maxDistance) t.traveled = t.maxDistance;
+            t.head.copy(t.origin).addScaledVector(t.dir, t.traveled);
+            var tailTravel = Math.max(0, t.traveled - t.segmentLength);
+            t.tail.copy(t.origin).addScaledVector(t.dir, tailTravel);
+            tracerMeshMid.copy(t.tail).add(t.head).multiplyScalar(0.5);
+            t.mesh.position.copy(tracerMeshMid);
+            tracerMeshQuat.setFromUnitVectors(tracerMeshUp, t.dir);
+            t.mesh.quaternion.copy(tracerMeshQuat);
+            t.mesh.scale.set(1, Math.max(0.05, t.segmentLength * 0.82), 1);
+
+            if (t.life <= 0) {
+                t.life = 0;
+                t.mesh.visible = false;
+                t.mesh.material.opacity = 0;
+                continue;
+            }
+            if (t.traveled >= t.maxDistance && t.framesAlive > 1) {
+                t.life = 0;
+                t.mesh.visible = false;
+                t.mesh.material.opacity = 0;
+                continue;
+            }
+            var alpha = t.life / Math.max(0.0001, t.maxLife);
+            t.mesh.material.opacity = alpha;
+            t.mesh.visible = true;
+        }
     };
 
     GameHitscan.getWeaponCatalog = function () {

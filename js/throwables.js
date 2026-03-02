@@ -45,6 +45,19 @@
             damage: 110,
             regen: 15
         },
+        seekershot: {
+            id: 'seekershot',
+            label: 'Seeker Shot',
+            speed: 34,
+            upward: 0.6,
+            gravity: 5,
+            fuse: 1.8,
+            radius: 4.6,
+            damage: 95,
+            homingBoost: 4.5,
+            homingLerp: 3.8,
+            lockHalfAngleDeg: 30
+        },
         molotov: {
             id: 'molotov',
             label: 'Molotov',
@@ -155,7 +168,7 @@
                 new THREE.MeshLambertMaterial({ color: 0x2f7f2f })
             );
         }
-        if (type === 'seeker') {
+        if (type === 'seeker' || type === 'seekershot') {
             return new THREE.Mesh(
                 new THREE.BoxGeometry(0.2, 0.2, 0.2),
                 new THREE.MeshLambertMaterial({ color: 0x22aabb, emissive: 0x112222 })
@@ -206,22 +219,30 @@
         });
     }
 
-    function spawnProjectile(type, camera) {
+    function spawnProjectile(type, camera, options) {
         if (!sceneRef || !camera) return false;
         var def = defs[type];
         if (!def) return false;
+        options = options || {};
 
         camera.getWorldDirection(tmpForward);
         tmpRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
         tmpUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
 
-        var origin = camera.position.clone()
-            .addScaledVector(tmpForward, 0.75)
-            .addScaledVector(tmpRight, 0.2)
-            .addScaledVector(tmpUp, -0.15);
+        var origin = options.origin
+            ? options.origin.clone()
+            : camera.position.clone()
+                .addScaledVector(tmpForward, 0.75)
+                .addScaledVector(tmpRight, 0.2)
+                .addScaledVector(tmpUp, -0.15);
 
-        var vel = tmpForward.clone().multiplyScalar(def.speed);
-        vel.y += def.upward;
+        var baseDir = options.direction ? options.direction.clone().normalize() : tmpForward.clone();
+        var vel = baseDir.multiplyScalar(def.speed);
+        if (!options.direction) {
+            vel.y += def.upward;
+        } else if (def.upward) {
+            vel.y += def.upward * 0.15;
+        }
 
         var mesh = createThrowableMesh(type);
         mesh.position.copy(origin);
@@ -231,8 +252,10 @@
             type: type,
             mesh: mesh,
             velocity: vel,
+            launchDir: baseDir.clone().normalize(),
             age: 0,
-            bounces: 0
+            bounces: 0,
+            forcedTargetId: options.targetId || ''
         });
 
         return true;
@@ -365,13 +388,41 @@
 
         p.age += dt;
 
-        if (p.type === 'seeker' && p.age > 0.15) {
-            var targetEnemy = findNearestEnemy(p.mesh.position, 22);
+        var isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot');
+        if (isSeekerLike && p.age > 0.03) {
+            var targetEnemy = null;
+            if (p.forcedTargetId && window.GameEnemy && window.GameEnemy.getLockTargets) {
+                var lockTargets = window.GameEnemy.getLockTargets() || [];
+                for (var lt = 0; lt < lockTargets.length; lt++) {
+                    if (lockTargets[lt] && lockTargets[lt].targetId === p.forcedTargetId && lockTargets[lt].enemyRef && lockTargets[lt].enemyRef.alive) {
+                        targetEnemy = lockTargets[lt].enemyRef;
+                        break;
+                    }
+                }
+            }
+            if (!targetEnemy) {
+                targetEnemy = findNearestEnemy(p.mesh.position, 22);
+            }
             if (targetEnemy) {
                 tmpTarget.copy(targetEnemy.group.position);
                 tmpTarget.y += 1.5;
-                tmpDir.copy(tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(def.speed + 2);
-                p.velocity.lerp(tmpDir, Math.min(1, dt * 4.8));
+                if (p.type === 'seekershot') {
+                    var currentDir = (p.velocity.lengthSq() > 0.0001)
+                        ? p.velocity.clone().normalize()
+                        : (p.launchDir ? p.launchDir.clone() : new THREE.Vector3(0, 0, -1));
+                    var toTargetDir = tmpTarget.clone().sub(p.mesh.position).normalize();
+                    var halfAngleDeg = (typeof def.lockHalfAngleDeg === 'number') ? def.lockHalfAngleDeg : 30;
+                    var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
+                    if (currentDir.dot(toTargetDir) < cosLimit) {
+                        targetEnemy = null;
+                    }
+                }
+            }
+            if (targetEnemy) {
+                var homingSpeed = def.speed + (def.homingBoost || 2);
+                var homingLerp = def.homingLerp || 4.8;
+                tmpDir.copy(tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(homingSpeed);
+                p.velocity.lerp(tmpDir, Math.min(1, dt * homingLerp));
             }
         }
 
@@ -424,7 +475,7 @@
                 return;
             }
 
-            if (p.type === 'seeker') {
+            if (p.type === 'seeker' || p.type === 'seekershot') {
                 explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
                 removeProjectile(index);
                 return;
@@ -453,7 +504,7 @@
             return;
         }
 
-        if (p.type === 'seeker' && p.age >= def.fuse) {
+        if ((p.type === 'seeker' || p.type === 'seekershot') && p.age >= def.fuse) {
             explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
             removeProjectile(index);
             return;
@@ -562,6 +613,19 @@
         return getThrowableState();
     };
 
+    GameThrowables.getSeekerShotTuning = function () {
+        var def = defs.seekershot;
+        if (!def) return null;
+        return {
+            speed: def.speed,
+            gravity: def.gravity,
+            fuse: def.fuse,
+            homingBoost: def.homingBoost || 0,
+            homingLerp: def.homingLerp || 0,
+            lockHalfAngleDeg: def.lockHalfAngleDeg || 0
+        };
+    };
+
     /**
      * Throw a specific type if charge is available
      * @param {string} type - frag|seeker|molotov|knife
@@ -583,6 +647,23 @@
         }
 
         return { ok: true, reason: '', state: getThrowableState() };
+    };
+
+    GameThrowables.fireSeekerShot = function (camera, lockTarget) {
+        if (!sceneRef || !camera) return false;
+        camera.getWorldDirection(tmpForward);
+        var muzzle = null;
+        if (window.GamePlayer && window.GamePlayer.getMuzzleWorldPosition) {
+            muzzle = window.GamePlayer.getMuzzleWorldPosition();
+        }
+        var origin = muzzle && typeof muzzle.x === 'number'
+            ? muzzle.clone().addScaledVector(tmpForward, 0.1)
+            : camera.position.clone().addScaledVector(tmpForward, 0.75);
+        return spawnProjectile('seekershot', camera, {
+            origin: origin,
+            direction: tmpForward.clone(),
+            targetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : ''
+        });
     };
 
     /**

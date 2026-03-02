@@ -682,9 +682,11 @@
 
     function setupDebugKeys() {
         document.addEventListener('keydown', function (e) {
-            if (e.code !== 'KeyH') return;
-            applyDebugVisuals(!wallhackRingVisible);
-            setTransientDebug(wallhackRingVisible ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);
+            if (e.code === 'KeyH') {
+                applyDebugVisuals(!wallhackRingVisible);
+                setTransientDebug(wallhackRingVisible ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);
+                return;
+            }
         });
     }
 
@@ -810,6 +812,9 @@
                 window.GameNet.sendPlasmaTick(targetId.slice(4));
             }
         });
+        if (window.GameHitscan.updateTracers) {
+            window.GameHitscan.updateTracers(dt);
+        }
         if (plasmaState.active && !lastPlasmaActive && window.GameAudio && window.GameAudio.play) {
             window.GameAudio.play('plasma');
         }
@@ -913,6 +918,21 @@
         window.GameUI.updateCooldown(cdReady, cdPct);
         window.GameUI.updateDamageEffects(dt);
         window.GameUI.updateClassInfo(window.GameClasses.getHudState());
+        if (window.GameUI.updateSeekerDebugInfo) {
+            var showSeekerDebug = !!wallhackRingVisible && currentWeapon && currentWeapon.id === 'seekergun';
+            var seekerTelemetry = null;
+            var seekerTuning = null;
+            if (showSeekerDebug && window.GameHitscan.getSeekergunDebugInfo) {
+                seekerTelemetry = window.GameHitscan.getSeekergunDebugInfo(camera);
+            }
+            if (showSeekerDebug && window.GameThrowables && window.GameThrowables.getSeekerShotTuning) {
+                seekerTuning = window.GameThrowables.getSeekerShotTuning();
+            }
+            window.GameUI.updateSeekerDebugInfo(showSeekerDebug, seekerTelemetry, seekerTuning, {
+                fov: camera && camera.fov ? camera.fov : 60,
+                aspect: camera && camera.aspect ? camera.aspect : (window.innerWidth / Math.max(1, window.innerHeight))
+            });
+        }
 
         renderer.render(scene, camera);
     }

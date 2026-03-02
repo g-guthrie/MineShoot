@@ -185,6 +185,13 @@
         return boxes;
     }
 
+    function getGroundHeightAt(x, z) {
+        if (window.GameWorld && window.GameWorld.getGroundHeightAt) {
+            return window.GameWorld.getGroundHeightAt(x, z);
+        }
+        return 0;
+    }
+
     function intersectsXZ(x, z, radius, box) {
         var closestX = Math.max(box.min.x, Math.min(x, box.max.x));
         var closestZ = Math.max(box.min.z, Math.min(z, box.max.z));
@@ -208,7 +215,8 @@
 
     function findLandingSurfaceY(x, z, currentFeetY, nextFeetY) {
         var boxes = getCollisionBoxes();
-        if (boxes.length === 0) return 0;
+        var baseGroundY = getGroundHeightAt(x, z);
+        if (boxes.length === 0) return baseGroundY;
 
         var best = null;
         for (var i = 0; i < boxes.length; i++) {
@@ -219,7 +227,8 @@
                 if (best === null || top > best) best = top;
             }
         }
-        return (best === null || best < 0) ? 0 : best;
+        if (best === null || best < baseGroundY) return baseGroundY;
+        return best;
     }
 
     function findCeilingY(x, z, currentHeadY, nextHeadY) {
@@ -485,8 +494,9 @@
             isGrounded = false;
         }
 
-        if (nextFeetY < 0) {
-            nextFeetY = 0;
+        var baseGround = getGroundHeightAt(playerX, playerZ);
+        if (nextFeetY < baseGround) {
+            nextFeetY = baseGround;
             velocityY = 0;
             isGrounded = true;
             jumpHoldTimer = 0;

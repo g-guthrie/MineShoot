@@ -8,7 +8,8 @@
     var GameUI = {};
 
     var crosshairEl, shotgunReticleEl, plasmaReticleEl, hitmarkerEl, killCounterEl;
-    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl;
+    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, seekerDebugInfoEl;
+    var seekerConeMarkersEl, seekerConeMarkerEls;
     var weaponInfoEl, throwableInfoEl;
     var classInfoEl;
     var cooldownBarEl, cooldownStatusEl;
@@ -44,6 +45,9 @@
         armorBarEl = document.getElementById('armor-bar');
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
+        seekerDebugInfoEl = document.getElementById('seeker-debug-info');
+        seekerConeMarkersEl = document.getElementById('seeker-cone-markers');
+        seekerConeMarkerEls = seekerConeMarkersEl ? seekerConeMarkersEl.querySelectorAll('.seeker-cone-marker') : [];
         weaponInfoEl = document.getElementById('weapon-info');
         throwableInfoEl = document.getElementById('throwable-info');
         classInfoEl = document.getElementById('class-info');
@@ -172,6 +176,72 @@
         debugInfoEl.textContent = text || '';
     };
 
+    GameUI.updateSeekerDebugInfo = function (visible, telemetry, tuning, viewInfo) {
+        if (!seekerDebugInfoEl) return;
+        if (!visible || !telemetry) {
+            seekerDebugInfoEl.style.display = 'none';
+            seekerDebugInfoEl.textContent = '';
+            if (seekerConeMarkersEl) seekerConeMarkersEl.style.display = 'none';
+            return;
+        }
+        var hasLock = telemetry.hasLock ? 'YES' : 'NO';
+        var lockStrength = telemetry.hasLock && telemetry.lockNorm >= 0
+            ? Math.max(0, 1 - telemetry.lockNorm).toFixed(2)
+            : '0.00';
+        var nearestNorm = telemetry.nearestNorm >= 0 ? telemetry.nearestNorm.toFixed(2) : '--';
+        var lines = [
+            'SEEKER DEBUG',
+            'LOCK: ' + hasLock + '  TARGET: ' + (telemetry.lockTargetId || 'none'),
+            'LOCK_STRENGTH: ' + lockStrength + '  NEAREST_NORM: ' + nearestNorm,
+            'BOX_PX: ' + Math.round(telemetry.reticleSizePx) + '  CANDIDATES: ' + telemetry.candidateCount,
+            'RANGE: ' + telemetry.maxRange.toFixed(1)
+        ];
+        if (tuning) {
+            lines.push(
+                'HOMING_LERP: ' + Number(tuning.homingLerp || 0).toFixed(2) +
+                '  HOMING_BOOST: ' + Number(tuning.homingBoost || 0).toFixed(2)
+            );
+            lines.push(
+                'PROJ_SPEED: ' + Number(tuning.speed || 0).toFixed(1) +
+                '  FUSE: ' + Number(tuning.fuse || 0).toFixed(2)
+            );
+            lines.push('LOCK_HALF_ANGLE: ' + Number(tuning.lockHalfAngleDeg || 0).toFixed(1) + ' deg');
+        }
+        seekerDebugInfoEl.textContent = lines.join('\n');
+        seekerDebugInfoEl.style.display = 'block';
+
+        if (!seekerConeMarkersEl || !seekerConeMarkerEls || seekerConeMarkerEls.length < 4) return;
+        if (!tuning || !viewInfo || !viewInfo.fov || !viewInfo.aspect || !tuning.lockHalfAngleDeg) {
+            seekerConeMarkersEl.style.display = 'none';
+            return;
+        }
+        var halfAngleRad = Number(tuning.lockHalfAngleDeg) * Math.PI / 180;
+        var vFovRad = Number(viewInfo.fov) * Math.PI / 180;
+        var aspect = Math.max(0.0001, Number(viewInfo.aspect));
+        var tanHalf = Math.tan(halfAngleRad);
+        var tanV = Math.tan(vFovRad * 0.5);
+        if (!isFinite(tanHalf) || !isFinite(tanV) || tanV <= 0.000001) {
+            seekerConeMarkersEl.style.display = 'none';
+            return;
+        }
+        var xNdc = tanHalf / (tanV * aspect);
+        var yNdc = tanHalf / tanV;
+        var dx = Math.min(window.innerWidth * 0.45, Math.max(6, xNdc * window.innerWidth * 0.5));
+        var dy = Math.min(window.innerHeight * 0.45, Math.max(6, yNdc * window.innerHeight * 0.5));
+        var cx = window.innerWidth * 0.5;
+        var cy = window.innerHeight * 0.5;
+
+        seekerConeMarkerEls[0].style.left = Math.round(cx + dx) + 'px'; // right
+        seekerConeMarkerEls[0].style.top = Math.round(cy) + 'px';
+        seekerConeMarkerEls[1].style.left = Math.round(cx - dx) + 'px'; // left
+        seekerConeMarkerEls[1].style.top = Math.round(cy) + 'px';
+        seekerConeMarkerEls[2].style.left = Math.round(cx) + 'px'; // top
+        seekerConeMarkerEls[2].style.top = Math.round(cy - dy) + 'px';
+        seekerConeMarkerEls[3].style.left = Math.round(cx) + 'px'; // bottom
+        seekerConeMarkerEls[3].style.top = Math.round(cy + dy) + 'px';
+        seekerConeMarkersEl.style.display = 'block';
+    };
+
     GameUI.updateCooldown = function (ready, pct) {
         if (!cooldownBarEl || !cooldownStatusEl) return;
         cooldownBarEl.style.width = (pct * 100) + '%';
@@ -230,9 +300,9 @@
         }
 
         if (weapon.id === 'plasma') {
-            crosshairEl.style.display = 'none';
+            crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
-            plasmaReticleEl.style.display = 'block';
+            plasmaReticleEl.style.display = 'none';
             var pSize = (spec && spec.size) ? spec.size : 220;
             plasmaReticleEl.style.width = pSize + 'px';
             plasmaReticleEl.style.height = pSize + 'px';

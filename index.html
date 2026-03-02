@@ -822,6 +822,45 @@
             user-select: none;
         }
 
+        #seeker-debug-info {
+            position: fixed;
+            top: 46px;
+            left: 20px;
+            color: #f5fdff;
+            font-size: 12px;
+            line-height: 1.2;
+            white-space: pre;
+            z-index: 10;
+            pointer-events: none;
+            user-select: none;
+            display: none;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.95);
+            background: rgba(6, 10, 14, 0.72);
+            border: 1px solid rgba(180, 235, 255, 0.45);
+            border-radius: 4px;
+            padding: 6px 8px;
+        }
+
+        #seeker-cone-markers {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 12;
+            display: none;
+        }
+
+        .seeker-cone-marker {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            margin-left: -4px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: rgba(168, 246, 255, 0.96);
+            border: 1px solid rgba(8, 18, 24, 0.95);
+            box-shadow: 0 0 5px rgba(136, 237, 255, 0.9);
+        }
+
         #overhead-bars {
             position: fixed;
             inset: 0;
@@ -985,6 +1024,13 @@
     <div id="cooldown-status">READY</div>
     <div id="cooldown-container"><div id="cooldown-bar"></div></div>
     <div id="debug-info"></div>
+    <div id="seeker-debug-info"></div>
+    <div id="seeker-cone-markers">
+        <div class="seeker-cone-marker"></div>
+        <div class="seeker-cone-marker"></div>
+        <div class="seeker-cone-marker"></div>
+        <div class="seeker-cone-marker"></div>
+    </div>
 
     <!-- Scripts: load order matters -->
     <script src="js/vendor/three.min.js"></script>

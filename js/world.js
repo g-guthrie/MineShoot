@@ -17,9 +17,14 @@
     var DEFAULT_SPAWN_PADDING = 8;
     var WORLD_SEED = 'mineshoot-v1';
     var rngState = 1;
+    var waterPools = [];
 
     // Solid meshes used for movement/raycast collisions.
     var collidables = [];
+    var BIOME_ARCTIC = 'arctic';
+    var BIOME_URBAN = 'urban';
+    var BIOME_DESERT = 'desert';
+    var BIOME_JUNGLE = 'jungle';
 
     function hashSeed(seedText) {
         var str = String(seedText || 'mineshoot-v1');
@@ -69,10 +74,59 @@
         var pad = (typeof padding === 'number') ? padding : DEFAULT_SPAWN_PADDING;
         var min = WORLD_MIN + pad;
         var max = WORLD_MAX - pad;
+        for (var tries = 0; tries < 20; tries++) {
+            var x = randRange(min, max);
+            var z = randRange(min, max);
+            if (getGroundHeightAt(x, z) > -0.15) {
+                return { x: x, z: z };
+            }
+        }
+        return { x: randRange(min, max), z: randRange(min, max) };
+    }
+
+    function biomeAt(x, z) {
+        if (x < WORLD_CENTER && z < WORLD_CENTER) return BIOME_ARCTIC;
+        if (x >= WORLD_CENTER && z < WORLD_CENTER) return BIOME_URBAN;
+        if (x < WORLD_CENTER && z >= WORLD_CENTER) return BIOME_DESERT;
+        return BIOME_JUNGLE;
+    }
+
+    function biomeBounds(biomeId, padding) {
+        var pad = padding || 0;
+        if (biomeId === BIOME_ARCTIC) {
+            return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
+        }
+        if (biomeId === BIOME_URBAN) {
+            return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
+        }
+        if (biomeId === BIOME_DESERT) {
+            return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+        }
+        return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+    }
+
+    function randomPointInBiome(biomeId, padding) {
+        var b = biomeBounds(biomeId, padding || 0);
         return {
-            x: randRange(min, max),
-            z: randRange(min, max)
+            x: randRange(b.minX, b.maxX),
+            z: randRange(b.minZ, b.maxZ)
         };
+    }
+
+    function getGroundHeightAt(x, z) {
+        var y = 0;
+        for (var i = 0; i < waterPools.length; i++) {
+            var p = waterPools[i];
+            var dx = x - p.x;
+            var dz = z - p.z;
+            var d = Math.sqrt(dx * dx + dz * dz);
+            if (d >= p.radius) continue;
+            var t = 1 - (d / p.radius);
+            var depth = p.depth * (0.35 + 0.65 * t);
+            var sampleY = -depth;
+            if (sampleY < y) y = sampleY;
+        }
+        return y;
     }
 
     GameWorld.create = function (scene) {
@@ -99,8 +153,19 @@
             return mesh;
         }
 
-        function addPatch(x, z, w, d, color) {
-            addBlock(x, 0.01, z, w, 0.02, d, new THREE.MeshLambertMaterial({ color: color }), false);
+        function addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
+            var geo = new THREE.BoxGeometry(w, h, d);
+            var mesh = new THREE.Mesh(geo, material);
+            mesh.position.set(x, y, z);
+            mesh.rotation.y = rotY || 0;
+            mesh.rotation.x = tiltX || 0;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            if (isSolid !== false) {
+                markSolid(mesh);
+            }
+            return mesh;
         }
 
         function addJungleTree(x, z, trunkHeight, trunkMat, leavesMat, vineMat) {
@@ -138,11 +203,59 @@
         }
 
         // --- Ground ---
-        var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE);
-        var groundMat = new THREE.MeshLambertMaterial({ color: 0x3a7d3a });
+        waterPools = [];
+        var junglePoolCount = Math.max(3, Math.round(WORLD_AREA_SCALE * 1.2));
+        var poolTries = 0;
+        while (waterPools.length < junglePoolCount && poolTries < junglePoolCount * 8) {
+            poolTries++;
+            var poolPt = randomPointInBiome(BIOME_JUNGLE, 5);
+            var poolRadius = randRange(2.5, 5.2);
+            if (poolPt.x + poolRadius > WORLD_MAX - 2 || poolPt.z + poolRadius > WORLD_MAX - 2) continue;
+            waterPools.push({
+                x: poolPt.x,
+                z: poolPt.z,
+                radius: poolRadius,
+                depth: randRange(0.55, 0.9),
+                surfaceY: -0.22
+            });
+        }
+
+        var groundSeg = Math.max(48, Math.round(WORLD_SIZE * 1.15));
+        var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, groundSeg, groundSeg);
+        groundGeo.rotateX(-Math.PI / 2);
+        groundGeo.translate(WORLD_CENTER, 0, WORLD_CENTER);
+        var groundPos = groundGeo.attributes.position;
+        var groundColors = new Float32Array(groundPos.count * 3);
+        var color = new THREE.Color();
+        for (var vi = 0; vi < groundPos.count; vi++) {
+            var gx = groundPos.getX(vi);
+            var gz = groundPos.getZ(vi);
+            var gy = getGroundHeightAt(gx, gz);
+            groundPos.setY(vi, gy);
+
+            var biomeId = biomeAt(gx, gz);
+            if (biomeId === BIOME_ARCTIC) {
+                color.setHex(0xd6ecff);
+            } else if (biomeId === BIOME_URBAN) {
+                color.setHex(0x888f97);
+            } else if (biomeId === BIOME_DESERT) {
+                color.setHex(0xd8c184);
+            } else {
+                color.setHex(0x3f7e3d);
+            }
+            if (gy < -0.05) {
+                color.setHex(0x2f6f8f);
+            }
+
+            groundColors[(vi * 3)] = color.r;
+            groundColors[(vi * 3) + 1] = color.g;
+            groundColors[(vi * 3) + 2] = color.b;
+        }
+        groundGeo.setAttribute('color', new THREE.BufferAttribute(groundColors, 3));
+        groundPos.needsUpdate = true;
+        groundGeo.computeVertexNormals();
+        var groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
         var ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.set(WORLD_CENTER, 0, WORLD_CENTER);
         ground.receiveShadow = true;
         scene.add(ground);
 
@@ -156,17 +269,9 @@
         lowerGround.receiveShadow = true;
         scene.add(lowerGround);
 
-        // Large biome tint patches as a first pass on multi-biome readability.
-        var quarter = WORLD_SIZE * 0.25;
-        addPatch(quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xdcecff);               // ice
-        addPatch(WORLD_SIZE - quarter, quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x8a8f95);   // urban
-        addPatch(quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0xd9c58d);   // beach
-        addPatch(WORLD_SIZE - quarter, WORLD_SIZE - quarter, WORLD_SIZE * 0.34, WORLD_SIZE * 0.34, 0x2e6a2f); // jungle
-        addPatch(WORLD_CENTER, WORLD_CENTER, WORLD_SIZE * 0.28, WORLD_SIZE * 0.28, 0x2f7a3b);      // rainforest
-
         var gridSegments = Math.max(40, Math.round(WORLD_SIZE));
         var gridHelper = new THREE.GridHelper(WORLD_SIZE, gridSegments, 0x2a5d2a, 0x2a5d2a);
-        gridHelper.position.set(WORLD_CENTER, 0.01, WORLD_CENTER);
+        gridHelper.position.set(WORLD_CENTER, 0.04, WORLD_CENTER);
         scene.add(gridHelper);
 
         // --- Structure materials ---
@@ -251,47 +356,113 @@
             rowToggle++;
         }
 
-        // Interior vegetation and cover tuned for the larger area.
-        var centerKeepout = Math.max(10, WORLD_SIZE * 0.11);
-        var treeTarget = Math.round(18 * WORLD_AREA_SCALE);
-        var bushTarget = Math.round(24 * WORLD_AREA_SCALE);
-        var logTarget = Math.round(8 * WORLD_AREA_SCALE);
+        // Biome-specific props and cover.
         var tries = 0;
         var placed = 0;
         var x, z;
 
-        while (placed < treeTarget && tries < treeTarget * 6) {
+        // Jungle: dense vegetation and logs.
+        var jungleTreeTarget = Math.round(14 * WORLD_AREA_SCALE);
+        var jungleBushTarget = Math.round(18 * WORLD_AREA_SCALE);
+        var jungleLogTarget = Math.round(7 * WORLD_AREA_SCALE);
+        tries = 0;
+        placed = 0;
+        while (placed < jungleTreeTarget && tries < jungleTreeTarget * 7) {
             tries++;
-            x = randRange(WORLD_MIN + 4, WORLD_MAX - 4);
-            z = randRange(WORLD_MIN + 4, WORLD_MAX - 4);
-
-            if (Math.abs(x - WORLD_CENTER) < centerKeepout && Math.abs(z - WORLD_CENTER) < centerKeepout) continue;
-            if (pointBlocked(x, z, 1.3)) continue;
-
+            var jt = randomPointInBiome(BIOME_JUNGLE, 4);
+            x = jt.x; z = jt.z;
+            if (getGroundHeightAt(x, z) < -0.18) continue;
+            if (pointBlocked(x, z, 1.35)) continue;
             addJungleTree(x, z, 3 + (placed % 3), jungleWoodMat, jungleLeafMat, vineMat);
             placed++;
         }
 
         tries = 0;
         placed = 0;
-        while (placed < bushTarget && tries < bushTarget * 4) {
+        while (placed < jungleBushTarget && tries < jungleBushTarget * 5) {
             tries++;
-            x = randRange(WORLD_MIN + 2, WORLD_MAX - 2);
-            z = randRange(WORLD_MIN + 2, WORLD_MAX - 2);
-            if (Math.abs(x - WORLD_CENTER) < centerKeepout * 0.8 && Math.abs(z - WORLD_CENTER) < centerKeepout * 0.8) continue;
+            var jb = randomPointInBiome(BIOME_JUNGLE, 3);
+            x = jb.x; z = jb.z;
+            if (getGroundHeightAt(x, z) < -0.15) continue;
             addBush(x, z, jungleLeafMat);
             placed++;
         }
 
         tries = 0;
         placed = 0;
-        while (placed < logTarget && tries < logTarget * 8) {
+        while (placed < jungleLogTarget && tries < jungleLogTarget * 9) {
             tries++;
-            x = randRange(WORLD_MIN + 3, WORLD_MAX - 3);
-            z = randRange(WORLD_MIN + 3, WORLD_MAX - 3);
+            var jl = randomPointInBiome(BIOME_JUNGLE, 4);
+            x = jl.x; z = jl.z;
+            if (getGroundHeightAt(x, z) < -0.12) continue;
             if (pointBlocked(x, z, 1.2)) continue;
             addLog(x, z, (placed % 2) === 0, jungleWoodMat);
             placed++;
+        }
+
+        // Arctic: ice blocks and crystal-like pillars.
+        var iceMat = new THREE.MeshLambertMaterial({ color: 0xbfe6ff });
+        var frostMat = new THREE.MeshLambertMaterial({ color: 0xe8f6ff });
+        var arcticTarget = Math.round(16 * WORLD_AREA_SCALE);
+        tries = 0;
+        placed = 0;
+        while (placed < arcticTarget && tries < arcticTarget * 8) {
+            tries++;
+            var ap = randomPointInBiome(BIOME_ARCTIC, 4);
+            x = ap.x; z = ap.z;
+            if (pointBlocked(x, z, 1.25)) continue;
+            var h = randRange(1.2, 3.8);
+            addBlock(x, h * 0.5, z, randRange(0.7, 1.3), h, randRange(0.7, 1.3), (placed % 3 === 0) ? frostMat : iceMat, true);
+            placed++;
+        }
+
+        // Desert: sandstone cover and cacti.
+        var sandMat = new THREE.MeshLambertMaterial({ color: 0xd9bf75 });
+        var cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3d });
+        var desertRockTarget = Math.round(12 * WORLD_AREA_SCALE);
+        tries = 0;
+        placed = 0;
+        while (placed < desertRockTarget && tries < desertRockTarget * 8) {
+            tries++;
+            var dp = randomPointInBiome(BIOME_DESERT, 4);
+            x = dp.x; z = dp.z;
+            if (pointBlocked(x, z, 1.2)) continue;
+            addBlock(x, 0.7, z, randRange(1.0, 2.2), randRange(1.1, 2.0), randRange(1.0, 2.2), sandMat, true);
+            if (placed % 3 === 0) {
+                addBlock(x + 0.45, 1.15, z, 0.2, 1.4, 0.2, cactusMat, true);
+                addBlock(x + 0.72, 1.05, z, 0.34, 0.2, 0.2, cactusMat, true);
+            }
+            placed++;
+        }
+
+        // Urban skatepark: ramps, rails, and ledges.
+        var concreteMat = new THREE.MeshLambertMaterial({ color: 0x7f868d });
+        var railMat = new THREE.MeshLambertMaterial({ color: 0x595f66 });
+        var urbanBounds = biomeBounds(BIOME_URBAN, 6);
+        var urbanMidX = (urbanBounds.minX + urbanBounds.maxX) * 0.5;
+        var urbanMidZ = (urbanBounds.minZ + urbanBounds.maxZ) * 0.5;
+        addRamp(urbanMidX - 6, 0.9, urbanMidZ - 4, 6.5, 1.4, 3.6, concreteMat, 0, -0.28, true);
+        addRamp(urbanMidX + 6, 0.9, urbanMidZ + 3, 6.5, 1.4, 3.6, concreteMat, Math.PI, -0.28, true);
+        addBlock(urbanMidX, 0.65, urbanMidZ, 7.2, 1.3, 3.0, concreteMat, true); // center funbox
+        addBlock(urbanMidX, 1.45, urbanMidZ, 6.2, 0.12, 0.12, railMat, true); // rail
+        addBlock(urbanMidX - 10, 0.55, urbanMidZ + 4, 4.8, 1.1, 2.4, concreteMat, true);
+        addBlock(urbanMidX + 10, 0.55, urbanMidZ - 4, 4.8, 1.1, 2.4, concreteMat, true);
+
+        // Water surfaces over carved jungle pools (non-coplanar above basin floors).
+        var waterMat = new THREE.MeshLambertMaterial({
+            color: 0x2f7ca1,
+            transparent: true,
+            opacity: 0.72
+        });
+        for (var wp = 0; wp < waterPools.length; wp++) {
+            var pool = waterPools[wp];
+            var water = new THREE.Mesh(
+                new THREE.CylinderGeometry(pool.radius * 0.98, pool.radius * 0.98, 0.12, 24),
+                waterMat
+            );
+            water.position.set(pool.x, pool.surfaceY, pool.z);
+            water.receiveShadow = true;
+            scene.add(water);
         }
 
         // --- Lighting ---
@@ -339,6 +510,10 @@
 
     GameWorld.getRandomSpawnPoint = function (padding) {
         return randomSpawnPoint(padding);
+    };
+
+    GameWorld.getGroundHeightAt = function (x, z) {
+        return getGroundHeightAt(x, z);
     };
 
     GameWorld.getRecommendedEnemyCount = function () {
