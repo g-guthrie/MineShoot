@@ -77,40 +77,6 @@
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 
-    function applyWeaponToRig(rig, weaponId) {
-        if (!rig || !rig.gun || !rig.gunBody || !rig.gunBarrel) return;
-
-        var pistol = weaponId === 'pistol';
-        rig.twoHanded = !pistol;
-
-        if (pistol) {
-            rig.gun.position.set(0.44, 0.9, 0.22);
-            rig.gun.rotation.set(0.05, 0, 0);
-            rig.gunBody.scale.set(0.78, 0.88, 0.64);
-            rig.gunBarrel.scale.set(0.7, 0.72, 0.64);
-            if (rig.supportHand) rig.supportHand.visible = false;
-            return;
-        }
-
-        rig.gun.position.set(0.24, 0.92, 0.24);
-        rig.gun.rotation.set(0, 0, 0);
-        if (rig.supportHand) rig.supportHand.visible = true;
-
-        if (weaponId === 'shotgun') {
-            rig.gunBody.scale.set(1.22, 1.0, 1.16);
-            rig.gunBarrel.scale.set(1.6, 1.05, 1.3);
-        } else if (weaponId === 'sniper') {
-            rig.gunBody.scale.set(1.05, 0.88, 1.35);
-            rig.gunBarrel.scale.set(1.06, 0.88, 1.88);
-        } else if (weaponId === 'machinegun') {
-            rig.gunBody.scale.set(1.22, 1.02, 1.05);
-            rig.gunBarrel.scale.set(1.16, 1.0, 1.24);
-        } else {
-            rig.gunBody.scale.set(1.0, 1.0, 1.0);
-            rig.gunBarrel.scale.set(1.0, 1.0, 1.0);
-        }
-    }
-
     function createSharedHumanoidModel(color, weaponId) {
         if (!window.GameAvatarRig || !window.GameAvatarRig.create) return null;
         var shared = window.GameAvatarRig.create('enemy', {
@@ -129,102 +95,7 @@
             if (outMeta) outMeta.rigApi = sharedModel;
             return sharedModel.root;
         }
-
-        var group = new THREE.Group();
-        var mat = new THREE.MeshLambertMaterial({ color: color });
-        var darkMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-
-        var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), mat);
-        body.position.y = 0.5;
-        group.add(body);
-
-        var head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
-        head.position.y = 1.25;
-        group.add(head);
-
-        var eyeGeo = new THREE.BoxGeometry(0.12, 0.08, 0.1);
-        var eyeL = new THREE.Mesh(eyeGeo, darkMat);
-        eyeL.position.set(-0.12, 1.3, 0.26);
-        group.add(eyeL);
-
-        var eyeR = new THREE.Mesh(eyeGeo, darkMat);
-        eyeR.position.set(0.12, 1.3, 0.26);
-        group.add(eyeR);
-
-        var armGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25);
-        var armPivotL = new THREE.Group();
-        armPivotL.position.set(-0.52, 0.86, 0);
-        var armL = new THREE.Mesh(armGeo, mat);
-        armL.position.y = -0.4;
-        armPivotL.add(armL);
-        group.add(armPivotL);
-
-        var armPivotR = new THREE.Group();
-        armPivotR.position.set(0.52, 0.86, 0);
-        var armR = new THREE.Mesh(armGeo, mat);
-        armR.position.y = -0.4;
-        armPivotR.add(armR);
-        group.add(armPivotR);
-
-        var legGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
-        var legPivotL = new THREE.Group();
-        legPivotL.position.set(-0.2, 0.02, 0);
-        var legL = new THREE.Mesh(legGeo, darkMat);
-        legL.position.y = -0.4;
-        legPivotL.add(legL);
-        group.add(legPivotL);
-
-        var legPivotR = new THREE.Group();
-        legPivotR.position.set(0.2, 0.02, 0);
-        var legR = new THREE.Mesh(legGeo, darkMat);
-        legR.position.y = -0.4;
-        legPivotR.add(legR);
-        group.add(legPivotR);
-
-        var gun = new THREE.Group();
-        var gunMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-        var gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.55), gunMat);
-        gunBody.position.z = -0.04;
-        gun.add(gunBody);
-
-        var gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.26), gunMat);
-        gunBarrel.position.z = -0.42;
-        gun.add(gunBarrel);
-
-        var supportHand = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.13), mat);
-        supportHand.position.set(-0.12, -0.03, -0.2);
-        gun.add(supportHand);
-
-        var muzzleMat = new THREE.MeshBasicMaterial({ color: 0xffcc66 });
-        var muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), muzzleMat);
-        muzzle.position.set(0, 0, -0.58);
-        muzzle.visible = false;
-        gun.add(muzzle);
-
-        group.add(gun);
-
-        var rig = {
-            armL: armPivotL,
-            armR: armPivotR,
-            legL: legPivotL,
-            legR: legPivotR,
-            supportHand: supportHand,
-            gun: gun,
-            gunBody: gunBody,
-            gunBarrel: gunBarrel,
-            muzzle: muzzle,
-            twoHanded: true,
-            weaponId: weaponId
-        };
-
-        applyWeaponToRig(rig, weaponId);
-
-        group.userData.bodyParts = [body, head, armL, armR, legL, legR];
-        group.userData.originalColor = color;
-        group.userData.weaponMuzzle = muzzle;
-        group.userData.rig = rig;
-
-        return group;
+        return new THREE.Group();
     }
 
     function createRevealGhost(visual) {
@@ -416,30 +287,6 @@
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
             enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
-            return;
-        }
-        if (!enemy.rig) return;
-
-        var stride = Math.max(0, Math.min(1, enemy.moveSpeed / 2.2));
-        enemy.animPhase += dt * (4 + enemy.moveSpeed * 4 + (engaging ? 1.5 : 0));
-
-        var legAmplitude = 0.12 + stride * 0.52;
-        var legSwing = Math.sin(enemy.animPhase) * legAmplitude;
-
-        enemy.rig.legL.rotation.x = legSwing;
-        enemy.rig.legR.rotation.x = -legSwing;
-
-        if (enemy.rig.twoHanded) {
-            enemy.rig.armR.rotation.x = -0.36 + Math.sin(enemy.animPhase * 2.1) * 0.03 - (engaging ? 0.03 : 0);
-            enemy.rig.armR.rotation.z = 0.12;
-            enemy.rig.armL.rotation.x = -0.32 + Math.cos(enemy.animPhase * 2.0) * 0.03 - (engaging ? 0.02 : 0);
-            enemy.rig.armL.rotation.z = -0.12;
-        } else {
-            var sideSwing = -legSwing * 0.75;
-            enemy.rig.armR.rotation.x = -0.4 - (engaging ? 0.07 : 0);
-            enemy.rig.armR.rotation.z = 0.14;
-            enemy.rig.armL.rotation.x = sideSwing;
-            enemy.rig.armL.rotation.z = -0.04;
         }
     }
 
@@ -487,7 +334,7 @@
             if (pos.z < patrolBounds.min) { pos.z = patrolBounds.min; enemy.wanderDir.z = Math.abs(enemy.wanderDir.z); }
             if (pos.z > patrolBounds.max) { pos.z = patrolBounds.max; enemy.wanderDir.z = -Math.abs(enemy.wanderDir.z); }
 
-            var facing = Math.atan2(enemy.wanderDir.x, enemy.wanderDir.z);
+            var facing = Math.atan2(enemy.wanderDir.x, enemy.wanderDir.z) + Math.PI;
             enemy.visual.rotation.y = facing;
             enemy.revealGhost.rotation.y = facing;
 
@@ -519,7 +366,7 @@
 
         var toPlayerX = enemyShootTarget.x - enemy.group.position.x;
         var toPlayerZ = enemyShootTarget.z - enemy.group.position.z;
-        var facing = Math.atan2(toPlayerX, toPlayerZ);
+        var facing = Math.atan2(toPlayerX, toPlayerZ) + Math.PI;
         enemy.visual.rotation.y = facing;
         enemy.revealGhost.rotation.y = facing;
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minecraft FPS</title>
+    <title>Mayhem</title>
     <style>
         * {
             margin: 0;
@@ -16,25 +16,6 @@
             background: #000;
             font-family: 'Courier New', monospace;
             cursor: none;
-        }
-
-        #camera-toggle {
-            position: fixed;
-            top: 16px;
-            left: 16px;
-            z-index: 120;
-            border: 1px solid #6b6b6b;
-            background: rgba(25, 25, 25, 0.85);
-            color: #f2f2f2;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            padding: 6px 10px;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        #camera-toggle:hover {
-            background: rgba(40, 40, 40, 0.92);
         }
 
         #hud-manual-btn {
@@ -939,11 +920,10 @@
         </div>
     </div>
 
-    <button id="camera-toggle" type="button">CAM: FIRST</button>
     <button id="hud-manual-btn" type="button">MANUAL</button>
     <!-- Overlay -->
     <div id="overlay">
-        <h1>MINECRAFT FPS</h1>
+        <h1>MAYHEM</h1>
         <p>Click PLAY to Enter Arena</p>
         <button id="play-btn" type="button">PLAY</button>
         <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
@@ -959,7 +939,6 @@
         <div class="controls">
             WASD - Move | Mouse - Look<br>
             Space (hold) - Variable Jump | Shift - Sprint | Left Click - Shoot<br>
-            C / Camera Button - Toggle View<br>
             6 Ninja | 7 Jedi | 8 Magician | 9 Sharpshooter | 0 Brawler<br>
             E Ability | R Ultimate<br>
             G Frag | V Seeker | B Molotov | Q Knife<br>
@@ -971,7 +950,7 @@
     <div id="docs-panel" aria-hidden="true">
         <div id="docs-terminal">
             <div id="docs-header">
-                <span id="docs-title">MINECRAFT FPS :: OPEN FIELD MANUAL</span>
+                <span id="docs-title">MAYHEM :: OPEN FIELD MANUAL</span>
                 <button id="docs-close-btn" type="button">CLOSE</button>
             </div>
             <div id="docs-nav"></div>
@@ -1010,6 +989,7 @@
     <!-- Scripts: load order matters -->
     <script src="js/vendor/three.min.js"></script>
     <script src="js/world.js"></script>
+    <script src="js/weapon-sprites.js"></script>
     <script src="js/avatar-rig.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/enemy.js"></script>

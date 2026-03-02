@@ -469,7 +469,7 @@
         renderHint();
 
         if (titleEl) {
-            titleEl.textContent = 'MINECRAFT FPS :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
+            titleEl.textContent = 'MAYHEM :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
         }
 
         contentEl.textContent = buildContent(state.activePage, data);

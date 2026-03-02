@@ -511,10 +511,6 @@
         return ids;
     };
 
-    GameHitscan.getDamage = function () {
-        return getCurrentWeaponData().bodyDamage;
-    };
-
     GameHitscan.getHeadDamage = function () {
         return getCurrentWeaponData().headDamage;
     };

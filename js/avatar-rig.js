@@ -6,6 +6,7 @@
     'use strict';
 
     var GameAvatarRig = {};
+    var DEG_TO_RAD = Math.PI / 180;
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -23,8 +24,8 @@
     function styleMap() {
         return {
             rifle: {
-                twoHanded: true,
-                gunPos: [0.12, 1.0, 0.28],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.02, 0.08],
                 gunRot: [0, 0, 0],
                 body:   { p: [0, 0.0, -0.06], s: [1.0, 1.0, 1.0], c: 0x333333 },
                 barrel: { p: [0, 0.02, -0.36], s: [1.0, 1.0, 1.0], c: 0x222222 },
@@ -36,8 +37,8 @@
                 muzzlePos: [0, 0.02, -0.56]
             },
             pistol: {
-                twoHanded: false,
-                gunPos: [0.32, 1.02, 0.24],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.03, 0.06],
                 gunRot: [0.12, 0.05, 0],
                 body:   { p: [0, -0.02, -0.06], s: [0.75, 0.85, 0.7], c: 0x3a3a3a },
                 barrel: { p: [0, 0.0, -0.24], s: [0.68, 0.68, 0.65], c: 0x2c2c2c },
@@ -49,8 +50,8 @@
                 muzzlePos: [0, 0.0, -0.33]
             },
             machinegun: {
-                twoHanded: true,
-                gunPos: [0.14, 1.0, 0.28],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.02, 0.08],
                 gunRot: [0, 0, 0],
                 body:   { p: [0, 0.0, -0.09], s: [1.16, 1.0, 1.14], c: 0x2b2b2b },
                 barrel: { p: [0, 0.03, -0.45], s: [1.1, 1.0, 1.3], c: 0x191919 },
@@ -62,8 +63,8 @@
                 muzzlePos: [0, 0.03, -0.7]
             },
             shotgun: {
-                twoHanded: true,
-                gunPos: [0.12, 1.0, 0.3],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.02, 0.06],
                 gunRot: [0, 0, 0],
                 body:   { p: [0, 0.0, -0.1], s: [1.18, 1.02, 1.1], c: 0x6b4220 },
                 barrel: { p: [0, 0.02, -0.43], s: [1.7, 1.12, 1.35], c: 0x222222 },
@@ -75,8 +76,8 @@
                 muzzlePos: [0, 0.02, -0.71]
             },
             sniper: {
-                twoHanded: true,
-                gunPos: [0.12, 1.0, 0.32],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.02, 0.04],
                 gunRot: [0, 0, 0],
                 body:   { p: [0, -0.01, -0.14], s: [1.22, 0.9, 1.58], c: 0x2f3f2f },
                 barrel: { p: [0, 0.02, -0.56], s: [0.82, 0.82, 2.15], c: 0x1c1c1c },
@@ -88,8 +89,8 @@
                 muzzlePos: [0, 0.02, -1.03]
             },
             plasma: {
-                twoHanded: true,
-                gunPos: [0.14, 1.02, 0.3],
+                weaponClass: 'gun',
+                gunPos: [0.0, 0.03, 0.06],
                 gunRot: [0.02, 0.02, 0],
                 body:   { p: [0, 0.0, -0.09], s: [1.18, 1.08, 1.25], c: 0x1d4f57 },
                 barrel: { p: [0, 0.03, -0.5], s: [0.92, 0.92, 1.3], c: 0x4bd6f3 },
@@ -107,6 +108,8 @@
         options = options || {};
 
         var root = new THREE.Group();
+        var modelRoot = new THREE.Group();
+        root.add(modelRoot);
         var bodyMat = new THREE.MeshLambertMaterial({ color: ensureHex(options.bodyColor, 0x4a7fc1) });
         var skinMat = new THREE.MeshLambertMaterial({ color: ensureHex(options.skinColor, 0xd2a77d) });
         var legMat = new THREE.MeshLambertMaterial({ color: ensureHex(options.legColor, 0x2f2f2f) });
@@ -117,39 +120,50 @@
 
         var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
         body.position.y = 1.0;
-        root.add(body);
+        modelRoot.add(body);
 
         var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
         head.position.y = 1.8;
-        root.add(head);
+        modelRoot.add(head);
+
+        var eyeAnchor = new THREE.Object3D();
+        eyeAnchor.position.set(0, 0.05, 0.18);
+        head.add(eyeAnchor);
 
         var shoulderLeft = new THREE.Group();
-        shoulderLeft.position.set(-0.43, 1.37, 0);
+        shoulderLeft.position.set(-0.52, 1.37, 0);
         var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
         armL.position.y = -0.42;
         shoulderLeft.add(armL);
-        root.add(shoulderLeft);
+        var palmLeft = new THREE.Group();
+        palmLeft.position.set(-0.11, -0.85, 0);
+        shoulderLeft.add(palmLeft);
+        modelRoot.add(shoulderLeft);
 
         var shoulderRight = new THREE.Group();
-        shoulderRight.position.set(0.43, 1.37, 0);
+        shoulderRight.position.set(0.52, 1.37, 0);
         var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
         armR.position.y = -0.42;
         shoulderRight.add(armR);
-        root.add(shoulderRight);
+
+        var palmRight = new THREE.Group();
+        palmRight.position.set(0.18, -0.85, 0);
+        shoulderRight.add(palmRight);
+        modelRoot.add(shoulderRight);
 
         var hipLeft = new THREE.Group();
         hipLeft.position.set(-0.18, 0.6, 0);
         var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), legMat);
         legL.position.y = -0.45;
         hipLeft.add(legL);
-        root.add(hipLeft);
+        modelRoot.add(hipLeft);
 
         var hipRight = new THREE.Group();
         hipRight.position.set(0.18, 0.6, 0);
         var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), legMat);
         legR.position.y = -0.45;
         hipRight.add(legR);
-        root.add(hipRight);
+        modelRoot.add(hipRight);
 
         var gun = new THREE.Group();
         var gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.55), gunDark);
@@ -183,21 +197,17 @@
         coil.visible = false;
         gun.add(coil);
 
-        var supportHand = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.13), skinMat);
-        supportHand.position.set(-0.12, -0.03, -0.2);
-        gun.add(supportHand);
-
         var muzzleMat = new THREE.MeshBasicMaterial({ color: ensureHex(options.muzzleColor, 0xffcc66) });
         var muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), muzzleMat);
         muzzle.position.set(0, 0, -0.58);
         muzzle.visible = false;
         gun.add(muzzle);
 
-        root.add(gun);
+        palmRight.add(gun);
 
         var coreAnchor = new THREE.Object3D();
         coreAnchor.position.set(0, 1.0, 0);
-        root.add(coreAnchor);
+        modelRoot.add(coreAnchor);
 
         var rig = {
             armL: shoulderLeft,
@@ -208,7 +218,8 @@
             armRMesh: armR,
             legLMesh: legL,
             legRMesh: legR,
-            supportHand: supportHand,
+            bodyMesh: body,
+            headMesh: head,
             gun: gun,
             gunBody: gunBody,
             gunBarrel: gunBarrel,
@@ -219,10 +230,15 @@
             coil: coil,
             muzzle: muzzle,
             coreAnchor: coreAnchor,
-            twoHanded: true,
+            eyeAnchor: eyeAnchor,
+            palmLeft: palmLeft,
+            palmRight: palmRight,
+            weaponClass: 'gun',
             weaponId: 'rifle',
             gaitPhase: Math.random() * Math.PI * 2,
-            aimPitch: 0
+            aimPitch: 0,
+            gunBasePos: new THREE.Vector3(),
+            gunBaseRot: new THREE.Vector3()
         };
 
         var styles = styleMap();
@@ -230,10 +246,14 @@
         function setWeapon(weaponId) {
             var style = styles[weaponId] || styles.rifle;
             rig.weaponId = (styles[weaponId] ? weaponId : 'rifle');
-            rig.twoHanded = !!style.twoHanded;
+            rig.weaponClass = style.weaponClass || 'gun';
 
             rig.gun.position.set(style.gunPos[0], style.gunPos[1], style.gunPos[2]);
             rig.gun.rotation.set(style.gunRot[0], style.gunRot[1], style.gunRot[2]);
+            // Keep a fixed wrist-style relationship: gun sits 75deg below the forearm.
+            rig.gun.rotation.x = -75 * DEG_TO_RAD;
+            rig.gunBasePos.copy(rig.gun.position);
+            rig.gunBaseRot.copy(rig.gun.rotation);
 
             setPart(rig.gunBody, style.body);
             setPart(rig.gunBarrel, style.barrel);
@@ -243,7 +263,6 @@
             rig.scope.visible = !!style.scope;
             rig.pump.visible = !!style.pump;
             rig.coil.visible = !!style.coil;
-            rig.supportHand.visible = !!style.twoHanded;
             rig.muzzle.position.set(style.muzzlePos[0], style.muzzlePos[1], style.muzzlePos[2]);
         }
 
@@ -266,16 +285,22 @@
             rig.legR.rotation.x = -walkSwing;
 
             var aimBias = rig.aimPitch * 0.2;
-            if (rig.twoHanded) {
-                rig.armR.rotation.x = -0.36 - aimBias + Math.sin(rig.gaitPhase * 2.1) * 0.03;
-                rig.armR.rotation.z = 0.12;
-                rig.armL.rotation.x = -0.32 - aimBias + Math.cos(rig.gaitPhase * 2.0) * 0.03;
-                rig.armL.rotation.z = -0.12;
-            } else {
-                rig.armR.rotation.x = -0.42 - aimBias;
-                rig.armR.rotation.z = 0.14;
-                rig.armL.rotation.x = sideSwing;
+            if (rig.weaponClass === 'melee') {
+                rig.armR.rotation.x = -walkSwing;
+                rig.armR.rotation.z = 0.18;
+                rig.armL.rotation.x = walkSwing;
                 rig.armL.rotation.z = -0.04;
+                rig.palmRight.rotation.x = 0;
+                rig.gun.rotation.x = rig.gunBaseRot.x;
+            } else {
+                var shoulderAim = rig.aimPitch * 0.35;
+                var armBase = 75 * DEG_TO_RAD;
+                rig.armR.rotation.x = armBase + shoulderAim;
+                rig.armR.rotation.z = -0.08;
+                rig.armL.rotation.x = -sideSwing;
+                rig.armL.rotation.z = -0.04;
+                rig.palmRight.rotation.x = 0;
+                rig.gun.rotation.x = rig.gunBaseRot.x;
             }
         }
 
@@ -289,6 +314,12 @@
         function getMuzzleWorldPosition(outVec3) {
             var out = outVec3 || new THREE.Vector3();
             muzzle.getWorldPosition(out);
+            return out;
+        }
+
+        function getEyeWorldPosition(outVec3) {
+            var out = outVec3 || new THREE.Vector3();
+            eyeAnchor.getWorldPosition(out);
             return out;
         }
 
@@ -316,6 +347,7 @@
             updateLocomotion: updateLocomotion,
             updateAimPitch: updateAimPitch,
             getCoreWorldPosition: getCoreWorldPosition,
+            getEyeWorldPosition: getEyeWorldPosition,
             getMuzzleWorldPosition: getMuzzleWorldPosition,
             setMuzzleVisible: setMuzzleVisible,
             getWeaponId: function () { return rig.weaponId; },

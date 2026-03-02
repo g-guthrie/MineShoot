@@ -30,11 +30,18 @@
 
     var currentAimTargetId = '';
     var multiplayerMode = false;
+    var forceGuestNetMode = false;
     var startupDebugNotice = '';
     var lastPlasmaActive = false;
 
-    function cameraModeLabel(mode) {
-        return mode === 'third' ? 'CAM: THIRD' : 'CAM: FIRST';
+    function applyBrandingOverrides() {
+        document.title = 'Mayhem';
+        var overlayTitle = document.querySelector('#overlay h1');
+        if (overlayTitle) overlayTitle.textContent = 'MAYHEM';
+        var docsTitle = document.getElementById('docs-title');
+        if (docsTitle && /minecraft fps/i.test(docsTitle.textContent || '')) {
+            docsTitle.textContent = String(docsTitle.textContent).replace(/minecraft fps/ig, 'MAYHEM');
+        }
     }
 
     function setTransientDebug(text, ms) {
@@ -197,36 +204,6 @@
             window.GameDocs.refresh();
         }
         setTransientDebug('Queued class: ' + queued.name + ' (applies on death)', 1300);
-    }
-
-    function setupPerspectiveControls() {
-        var btn = document.getElementById('camera-toggle');
-
-        function syncButton() {
-            if (!btn) return;
-            btn.textContent = cameraModeLabel(window.GamePlayer.getPerspective());
-        }
-
-        function togglePerspective() {
-            var mode = window.GamePlayer.togglePerspective();
-            syncButton();
-            syncReticleWithWeapon(window.GameHitscan.getCurrentWeapon());
-            setTransientDebug(mode === 'third' ? 'Third-person camera' : 'First-person camera', 800);
-        }
-
-        if (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                togglePerspective();
-            });
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.code === 'KeyC') togglePerspective();
-        });
-
-        syncButton();
     }
 
     function handleEnemyHit(hitPoint, damage, hitType, result) {
@@ -712,6 +689,7 @@
     }
 
     function initGame() {
+        applyBrandingOverrides();
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
@@ -749,7 +727,7 @@
 
         camera = window.GamePlayer.init(scene);
 
-        multiplayerMode = !!(window.GameNet && window.GameNet.getCurrentUser && window.GameNet.getCurrentUser());
+        multiplayerMode = forceGuestNetMode || !!(window.GameNet && window.GameNet.getCurrentUser && window.GameNet.getCurrentUser());
 
         if (multiplayerMode) {
             window.GameNet.init(scene);
@@ -787,7 +765,6 @@
         setupWeaponControls();
         setupThrowableControls();
         setupClassControls();
-        setupPerspectiveControls();
         setupLoadoutControls();
         setupDocsControls();
         setupDebugKeys();
@@ -941,6 +918,8 @@
     }
 
     function isLocalDevMode() {
+        var host = (window.location.hostname || '').toLowerCase();
+        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return true;
         try {
             var params = new URLSearchParams(window.location.search || '');
             if (params.get('local') === '1' || params.get('offline') === '1') return true;
@@ -951,7 +930,17 @@
         return window.location.protocol === 'file:';
     }
 
+    function wantsGuestNetMode() {
+        try {
+            var params = new URLSearchParams(window.location.search || '');
+            return params.get('net') === '1';
+        } catch (err) {
+            return false;
+        }
+    }
+
     function boot() {
+        forceGuestNetMode = wantsGuestNetMode();
         function safeInit() {
             try {
                 initGame();
@@ -963,6 +952,13 @@
                 if (dbg) dbg.textContent = 'Startup error: ' + msg;
                 console.error('Startup error:', err);
             }
+        }
+
+        if (forceGuestNetMode && window.GameNet && window.GameNet.enableGuestMode) {
+            window.GameNet.enableGuestMode();
+            startupDebugNotice = 'Guest net mode: auth disabled, auto-joining shared room.';
+            safeInit();
+            return;
         }
 
         if (!isLocalDevMode() && window.GameNet && window.GameNet.requireAuth) {

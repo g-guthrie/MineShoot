@@ -21,6 +21,7 @@
     var sceneRef = null;
 
     var user = null;
+    var guestMode = false;
     var selfId = '';
     var selfState = null;
 
@@ -64,6 +65,15 @@
     function wsEndpoint() {
         var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return proto + '//' + window.location.host + WS_URL;
+    }
+
+    function makeGuestUser() {
+        var nonce = Math.random().toString(36).slice(2, 8).toUpperCase();
+        return {
+            id: 'guest-' + Date.now().toString(36) + '-' + nonce.toLowerCase(),
+            username: 'Guest-' + nonce,
+            classId: 'sharpshooter'
+        };
     }
 
     function apiFetch(url, options) {
@@ -265,7 +275,7 @@
             ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
             entity.z
         );
-        group.rotation.y = (entity.yaw || 0) + Math.PI;
+        group.rotation.y = (entity.yaw || 0);
 
         sceneRef.add(group);
         hitboxArray.push(bodyHitbox);
@@ -297,7 +307,7 @@
             targetY: entity.y || 1.6,
             targetFootY: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
             targetZ: entity.z,
-            targetYaw: (entity.yaw || 0) + Math.PI,
+            targetYaw: (entity.yaw || 0),
             targetPitch: entity.pitch || 0,
             hp: entity.hp,
             hpMax: entity.hpMax,
@@ -356,7 +366,7 @@
         r.targetY = entity.y || 1.6;
         r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
         r.targetZ = entity.z;
-        r.targetYaw = (entity.yaw || 0) + Math.PI;
+        r.targetYaw = (entity.yaw || 0);
         r.targetPitch = entity.pitch || 0;
         r.hp = entity.hp;
         r.hpMax = entity.hpMax;
@@ -570,6 +580,19 @@
     };
 
     GameNet.getCurrentUser = function () {
+        if (guestMode && !user) {
+            user = makeGuestUser();
+        }
+        return user;
+    };
+
+    GameNet.enableGuestMode = function () {
+        guestMode = true;
+        if (!user) {
+            user = makeGuestUser();
+        }
+        setAuthVisible(false);
+        setAuthStatus('', false);
         return user;
     };
 
