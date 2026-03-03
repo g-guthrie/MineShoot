@@ -46,6 +46,7 @@ Menu/subtitle/debug text must always match the effective room ID for clarity.
 - Deterministic arctic mountain hero landmark with stepped traversal surfaces.
 - Landmark spawn exclusion zones to avoid invalid spawns inside hero geometry.
 - Central combat readability preserved (no over-cluttering of core lanes).
+- Open sightline density rebalance: jungle `-40%`, arctic/desert `-60%`.
 
 ### Phase 3: Waterfall Hero Feature
 - Static rock cut + basin geometry.
