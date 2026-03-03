@@ -1173,10 +1173,16 @@
         // Desert: layered cliffs, sandstone boulders, and cactus clusters.
         var sandMat = new THREE.MeshLambertMaterial({ color: 0xd9bf75 });
         var cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3d });
-        var desertRockTarget = Math.round(10 * WORLD_AREA_SCALE);
-        var cactusTarget = Math.round(14 * WORLD_AREA_SCALE);
+        var desertRockTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(10, 'desert', 1)
+            : Math.max(1, Math.round(10 * WORLD_AREA_SCALE * 0.4));
+        var cactusTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(14, 'desert', 1)
+            : Math.max(1, Math.round(14 * WORLD_AREA_SCALE * 0.4));
         var cliffPlaced = 0;
-        var cliffTarget = 4;
+        var cliffTarget = (typeof DESERT_HERO_TARGETS !== 'undefined' && DESERT_HERO_TARGETS && typeof DESERT_HERO_TARGETS.ridge === 'number')
+            ? DESERT_HERO_TARGETS.ridge
+            : 1;
         var cliffTries = 0;
         while (cliffPlaced < cliffTarget && cliffTries < cliffTarget * 14) {
             cliffTries++;
@@ -1185,6 +1191,29 @@
             if (pointBlocked(cliffPt.x, cliffPt.z, 6.2)) continue;
             createDesertCliffRidge(cliffPt.x, cliffPt.z, randRange(10, 17), randRange(0, Math.PI * 2), mesaBodyMat, mesaTopMat);
             cliffPlaced++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                generationStats.desert.ridges++;
+            }
+        }
+        if (cliffPlaced < cliffTarget) {
+            var desertBoundsForRidge = biomeBounds(BIOME_DESERT, 10);
+            var rcx = (desertBoundsForRidge.minX + desertBoundsForRidge.maxX) * 0.5;
+            var rcz = (desertBoundsForRidge.minZ + desertBoundsForRidge.maxZ) * 0.5;
+            var ridgeFallbacks = [
+                { x: rcx - 8, z: rcz + 6, len: 13, angle: Math.PI * 0.18 },
+                { x: rcx + 6, z: rcz + 10, len: 15, angle: Math.PI * 0.41 },
+                { x: rcx - 10, z: rcz + 12, len: 12, angle: Math.PI * 0.72 }
+            ];
+            for (var rf = 0; rf < ridgeFallbacks.length && cliffPlaced < cliffTarget; rf++) {
+                var rfb = ridgeFallbacks[rf];
+                if (Math.abs(rfb.x - WORLD_CENTER) < 10 && Math.abs(rfb.z - WORLD_CENTER) < 10) continue;
+                if (pointBlocked(rfb.x, rfb.z, 6.2)) continue;
+                createDesertCliffRidge(rfb.x, rfb.z, rfb.len, rfb.angle, mesaBodyMat, mesaTopMat);
+                cliffPlaced++;
+                if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                    generationStats.desert.ridges++;
+                }
+            }
         }
 
         tries = 0;
@@ -1198,6 +1227,9 @@
             var rockH = randRange(1.0, 2.2);
             addBlock(x, rockH * 0.5, z, randRange(1.0, 2.4), rockH, randRange(1.0, 2.4), sandMat, true);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                generationStats.desert.rocks++;
+            }
         }
 
         tries = 0;
@@ -1210,6 +1242,9 @@
             if (pointBlocked(x, z, 0.85)) continue;
             addCactus(x, z, cactusMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                generationStats.desert.cacti++;
+            }
         }
 
         // Urban skatepark: ramps, rails, and ledges.
@@ -1227,7 +1262,9 @@
 
         // Desert hero landmarks: mesa/cliff clusters.
         var mesaPlaced = 0;
-        var mesaTarget = 3;
+        var mesaTarget = (typeof DESERT_HERO_TARGETS !== 'undefined' && DESERT_HERO_TARGETS && typeof DESERT_HERO_TARGETS.mesa === 'number')
+            ? DESERT_HERO_TARGETS.mesa
+            : 1;
         var mesaTries = 0;
         while (mesaPlaced < mesaTarget && mesaTries < 30) {
             mesaTries++;
@@ -1236,6 +1273,29 @@
             if (pointBlocked(mesaPt.x, mesaPt.z, 5.5)) continue;
             createDesertMesa(mesaPt.x, mesaPt.z, randRange(4.8, 7.1), 4 + Math.round(random01() * 2), mesaBodyMat, mesaTopMat);
             mesaPlaced++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                generationStats.desert.mesas++;
+            }
+        }
+        if (mesaPlaced < mesaTarget) {
+            var desertBoundsForMesa = biomeBounds(BIOME_DESERT, 10);
+            var mcx = (desertBoundsForMesa.minX + desertBoundsForMesa.maxX) * 0.5;
+            var mcz = (desertBoundsForMesa.minZ + desertBoundsForMesa.maxZ) * 0.5;
+            var mesaFallbacks = [
+                { x: mcx + 10, z: mcz + 5, radius: 6.2, tiers: 5 },
+                { x: mcx - 6, z: mcz + 9, radius: 5.6, tiers: 4 },
+                { x: mcx + 2, z: mcz + 13, radius: 5.2, tiers: 4 }
+            ];
+            for (var mf = 0; mf < mesaFallbacks.length && mesaPlaced < mesaTarget; mf++) {
+                var mfb = mesaFallbacks[mf];
+                if (Math.abs(mfb.x - WORLD_CENTER) < 12 && Math.abs(mfb.z - WORLD_CENTER) < 12) continue;
+                if (pointBlocked(mfb.x, mfb.z, 5.5)) continue;
+                createDesertMesa(mfb.x, mfb.z, mfb.radius, mfb.tiers, mesaBodyMat, mesaTopMat);
+                mesaPlaced++;
+                if (typeof generationStats !== 'undefined' && generationStats && generationStats.desert) {
+                    generationStats.desert.mesas++;
+                }
+            }
         }
 
         // Arctic hero landmark: snowy mountain.
