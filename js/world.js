@@ -1021,12 +1021,18 @@
         }
 
         // Dense border trees.
-        var borderStep = Math.max(7, Math.round(WORLD_SIZE / 12));
+        var borderStepBase = Math.max(7, Math.round(WORLD_SIZE / 12));
+        var borderStep = (typeof scaledStep === 'function')
+            ? scaledStep(borderStepBase, 'jungle', 7)
+            : Math.max(7, Math.round(borderStepBase / 0.6));
         var borderOffset = 2.8;
         var rowToggle = 0;
         for (edge = WORLD_MIN + 3; edge <= WORLD_MAX - 3; edge += borderStep) {
             addJungleTree(edge, WORLD_MIN + borderOffset + (rowToggle % 2) * 0.8, 3 + (rowToggle % 3), jungleWoodMat, jungleLeafMat, vineMat);
             addJungleTree(edge, WORLD_MAX - borderOffset - (rowToggle % 2) * 0.8, 3 + ((rowToggle + 1) % 3), jungleWoodMat, jungleLeafMat, vineMat);
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.borderTrees += 2;
+            }
             rowToggle++;
         }
 
@@ -1034,6 +1040,9 @@
         for (edge = WORLD_MIN + 3; edge <= WORLD_MAX - 3; edge += borderStep) {
             addJungleTree(WORLD_MIN + borderOffset + (rowToggle % 2) * 0.8, edge, 3 + (rowToggle % 3), jungleWoodMat, jungleLeafMat, vineMat);
             addJungleTree(WORLD_MAX - borderOffset - (rowToggle % 2) * 0.8, edge, 3 + ((rowToggle + 1) % 3), jungleWoodMat, jungleLeafMat, vineMat);
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.borderTrees += 2;
+            }
             rowToggle++;
         }
 
@@ -1044,10 +1053,18 @@
         var z;
 
         // Jungle: more variation, denser undergrowth, and hidden shrine artifacts.
-        var jungleTreeTarget = Math.round(18 * WORLD_AREA_SCALE);
-        var jungleBushTarget = Math.round(24 * WORLD_AREA_SCALE);
-        var jungleLogTarget = Math.round(8 * WORLD_AREA_SCALE);
-        var jungleArtifactTarget = Math.max(2, Math.round(WORLD_AREA_SCALE * 0.9));
+        var jungleTreeTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(18, 'jungle', 1)
+            : Math.max(1, Math.round(18 * WORLD_AREA_SCALE * 0.6));
+        var jungleBushTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(24, 'jungle', 1)
+            : Math.max(1, Math.round(24 * WORLD_AREA_SCALE * 0.6));
+        var jungleLogTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(8, 'jungle', 1)
+            : Math.max(1, Math.round(8 * WORLD_AREA_SCALE * 0.6));
+        var jungleArtifactTarget = (typeof scaledBiomeTarget === 'function')
+            ? Math.max(2, scaledBiomeTarget(0.9, 'jungle', 0))
+            : Math.max(2, Math.round(WORLD_AREA_SCALE * 0.9 * 0.6));
 
         tries = 0;
         placed = 0;
@@ -1061,6 +1078,9 @@
             var treeHeight = 2.7 + (pointHash(x, z, 151) * 2.8);
             addJungleTree(x, z, treeHeight, jungleWoodMat, jungleLeafMat, vineMat, jungleFlowerMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.trees++;
+            }
         }
 
         tries = 0;
@@ -1074,6 +1094,9 @@
             if (pointBlocked(x, z, 0.75)) continue;
             addBush(x, z, jungleLeafMat, jungleFlowerMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.bushes++;
+            }
         }
 
         tries = 0;
@@ -1087,6 +1110,9 @@
             if (pointBlocked(x, z, 1.2)) continue;
             addLog(x, z, pointHash(x, z, 159) > 0.5, jungleWoodMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.logs++;
+            }
         }
 
         tries = 0;
@@ -1100,6 +1126,9 @@
             if (pointBlocked(x, z, 3.1)) continue;
             addJungleArtifact(x, z, jungleArtifactStoneMat, jungleArtifactCoreMat, vineMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.jungle) {
+                generationStats.jungle.artifacts++;
+            }
         }
 
         // Arctic: brighter blue crystal fields plus snow drifts.
