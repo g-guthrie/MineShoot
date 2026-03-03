@@ -9,9 +9,10 @@
     var DEG_TO_RAD = Math.PI / 180;
     var ARM_SHORT_SIDE = 0.22;
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
-    // Large temporary test offset: intentionally mounts weapon far above forearm.
-    var GUN_MOUNT_LIFT_Y = 1.35 + HALF_ARM_SHORT_SIDE;
+    // Massive temporary test offset: intentionally detach gun-arm interface vertically.
+    var GUN_MOUNT_LIFT_Y = 3.75 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
+    var PALM_RIGHT_TEST_OFFSET_Y = 1.9;
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -152,7 +153,7 @@
         shoulderRight.add(armR);
 
         var palmRight = new THREE.Group();
-        palmRight.position.set(0.18, -0.85, 0);
+        palmRight.position.set(0.18, -0.85 + PALM_RIGHT_TEST_OFFSET_Y, 0);
         shoulderRight.add(palmRight);
         modelRoot.add(shoulderRight);
 
