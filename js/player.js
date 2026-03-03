@@ -263,18 +263,26 @@
         var forwardZ = -Math.cos(yaw) * cosPitch;
         var rightX = Math.cos(yaw);
         var rightZ = -Math.sin(yaw);
+        var isFirstPerson = perspectiveMode === 'first';
 
         if (avatarGroup) avatarGroup.visible = true;
         if (avatarRigApi && avatarRigApi.rig) {
-            if (avatarRigApi.rig.headMesh) avatarRigApi.rig.headMesh.visible = true;
-            if (avatarRigApi.rig.bodyMesh) avatarRigApi.rig.bodyMesh.visible = true;
+            if (avatarRigApi.rig.headMesh) avatarRigApi.rig.headMesh.visible = !isFirstPerson;
+            if (avatarRigApi.rig.bodyMesh) avatarRigApi.rig.bodyMesh.visible = !isFirstPerson;
         }
         updateAvatarPose();
+
+        viewTarget.set(playerX + forwardX * 20, posY + forwardY * 20, playerZ + forwardZ * 20);
+        if (isFirstPerson) {
+            camera.position.set(playerX, posY, playerZ);
+            camera.lookAt(viewTarget);
+            thirdCameraInitialized = false;
+            return;
+        }
 
         var camDist = experimentalCameraView ? EXP_THIRD_DIST : THIRD_DIST;
         var camShoulder = experimentalCameraView ? EXP_THIRD_SHOULDER : THIRD_SHOULDER;
         viewOrigin.set(playerX, posY + 0.3, playerZ);
-        viewTarget.set(playerX + forwardX * 20, posY + forwardY * 20, playerZ + forwardZ * 20);
         viewDesired.set(
             playerX + (rightX * camShoulder) - (forwardX * camDist),
             posY + THIRD_HEIGHT,
@@ -322,9 +330,7 @@
                     e.preventDefault();
                     break;
                 case 'KeyC':
-                    experimentalCameraView = !experimentalCameraView;
-                    thirdCameraInitialized = false;
-                    updateCameraFromPlayer(1);
+                    GamePlayer.togglePerspective();
                     break;
             }
         });
@@ -534,14 +540,14 @@
     };
 
     GamePlayer.togglePerspective = function () {
-        perspectiveMode = 'third';
+        perspectiveMode = perspectiveMode === 'first' ? 'third' : 'first';
         thirdCameraInitialized = false;
         updateCameraFromPlayer(1);
         return perspectiveMode;
     };
 
     GamePlayer.setPerspective = function (mode) {
-        perspectiveMode = 'third';
+        perspectiveMode = mode === 'first' ? 'first' : 'third';
         thirdCameraInitialized = false;
         updateCameraFromPlayer(1);
         return perspectiveMode;
