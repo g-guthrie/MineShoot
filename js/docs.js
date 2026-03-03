@@ -200,7 +200,7 @@
             'Combat',
             '  LMB: Fire',
             '  1-5 / Wheel: Weapon swap',
-            '  G Frag | V Seeker | B Molotov | Q Knife',
+            '  G Frag (arm/throw) | V Seeker | B Molotov | Q Knife',
             '  E: Class ability   R: Class ultimate',
             '',
             'Utility',

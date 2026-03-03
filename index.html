@@ -170,6 +170,32 @@
             margin-bottom: 10px;
         }
 
+        #mode-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 10px 20px;
+            border: 2px solid #8dd59f;
+            border-radius: 4px;
+            background: rgba(20, 70, 28, 0.86);
+            color: #e7ffe9;
+            font-size: 16px;
+            letter-spacing: 0.8px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            min-width: 180px;
+        }
+
+        .mode-btn:hover {
+            background: rgba(33, 92, 42, 0.93);
+        }
+
         #play-btn {
             margin-top: 4px;
             margin-bottom: 10px;
@@ -182,6 +208,7 @@
             letter-spacing: 1px;
             font-family: 'Courier New', monospace;
             cursor: pointer;
+            display: none;
         }
 
         #play-btn:hover {
@@ -1124,8 +1151,12 @@
     <!-- Overlay -->
     <div id="overlay">
         <h1>MAYHEM</h1>
-        <p>Click PLAY to Enter Arena</p>
-        <button id="play-btn" type="button">PLAY</button>
+        <p id="mode-subtitle">Choose Game Mode</p>
+        <div id="mode-buttons">
+            <button id="mode-multiplayer-btn" class="mode-btn" type="button">MULTIPLAYER</button>
+            <button id="mode-singleplayer-btn" class="mode-btn" type="button">SINGLEPLAYER</button>
+        </div>
+        <button id="play-btn" type="button">RESUME</button>
         <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
         <button id="sound-toggle-btn" type="button">SOUND: ON</button>
         <div id="loadout-panel">
@@ -1142,7 +1173,7 @@
             Space (hold) - Variable Jump | Shift - Sprint | Left Click - Shoot<br>
             6 Ninja | 7 Jedi | 8 Magician | 9 Sharpshooter | 0 Brawler<br>
             E Ability | R Ultimate<br>
-            G Frag | V Seeker | B Molotov | Q Knife<br>
+            G Frag (arm/throw) | V Seeker | B Molotov | Q Knife<br>
             1-5 / Mouse Wheel - Switch Weapon<br>
             H - Toggle Hitbox Debug | I - Toggle Manual
         </div>
@@ -1181,7 +1212,7 @@
     <div id="damage-numbers"></div>
     <div id="overhead-bars"></div>
     <div id="class-info">Sharpshooter | E Focus: READY | R Deadeye: READY</div>
-    <div id="throwable-info">G Frag: 1<br>V Seeker: 1<br>B Molotov: 1<br>Q Knife: 1</div>
+    <div id="throwable-info">G Frag (arm/throw): 1<br>V Seeker: 1<br>B Molotov: 1<br>Q Knife: 1</div>
     <div id="weapon-info">Rifle | SEMI | 36/68 DMG</div>
     <div id="plasma-status">PLASMA READY</div>
     <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>

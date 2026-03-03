@@ -421,7 +421,7 @@
         }
 
         throwableInfoEl.innerHTML =
-            line('G Frag', state.frag) + '<br>' +
+            line('G Frag (arm/throw)', state.frag) + '<br>' +
             line('V Seeker', state.seeker) + '<br>' +
             line('B Molotov', state.molotov) + '<br>' +
             line('Q Knife', state.knife);

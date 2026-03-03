@@ -44,6 +44,7 @@
     var throwRejectQueue = [];
     var throwableEventQueue = [];
     var classCastResultQueue = [];
+    var damageFeedbackQueue = [];
 
     var notices = [];
 
@@ -84,7 +85,15 @@
 
     function wsEndpoint() {
         var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        return proto + '//' + window.location.host + WS_URL;
+        var endpoint = proto + '//' + window.location.host + WS_URL;
+        if (!user || !user.id) return endpoint;
+
+        var params = new URLSearchParams();
+        params.set('uid', String(user.id));
+        params.set('username', String(user.username || user.id));
+        params.set('classId', String(user.classId || 'sharpshooter'));
+        if (guestMode) params.set('guest', '1');
+        return endpoint + '?' + params.toString();
     }
 
     function makeGuestUser() {
@@ -439,6 +448,48 @@
         remoteFireZoneState = Array.isArray(fireZones) ? fireZones.slice() : [];
     }
 
+    function damagePointForEntityId(entityId) {
+        if (!entityId) return null;
+
+        if (entityId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
+            var selfPos = window.GamePlayer.getPosition();
+            return {
+                x: selfPos.x,
+                y: selfPos.y + 1.1,
+                z: selfPos.z
+            };
+        }
+
+        var render = renderMap.get(entityId);
+        if (!render || !render.group) return null;
+        return {
+            x: render.group.position.x,
+            y: render.group.position.y + 1.3,
+            z: render.group.position.z
+        };
+    }
+
+    function markerPointForEntityId(entityId) {
+        if (!entityId) return null;
+
+        if (entityId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
+            var selfPos = window.GamePlayer.getPosition();
+            return {
+                x: selfPos.x,
+                y: selfPos.y + 2.2,
+                z: selfPos.z
+            };
+        }
+
+        var render = renderMap.get(entityId);
+        if (!render || !render.group) return null;
+        return {
+            x: render.group.position.x,
+            y: render.group.position.y + 2.2,
+            z: render.group.position.z
+        };
+    }
+
     function handleMessage(raw) {
         var msg = null;
         try {
@@ -491,6 +542,26 @@
             if (selfState && msg.targetId === selfId) {
                 if (typeof msg.health === 'number') selfState.hp = msg.health;
                 if (typeof msg.armor === 'number') selfState.armor = msg.armor;
+            }
+
+            if (msg.targetId && msg.targetId !== selfId) {
+                var targetRender = renderMap.get(msg.targetId);
+                if (targetRender) {
+                    if (typeof msg.health === 'number') targetRender.hp = msg.health;
+                    if (typeof msg.armor === 'number') targetRender.armor = msg.armor;
+                    if (msg.killed) targetRender.alive = false;
+                }
+            }
+
+            if (msg.sourceId === selfId) {
+                damageFeedbackQueue.push({
+                    targetId: msg.targetId || '',
+                    damage: Math.max(0, Number(msg.damage || 0)),
+                    hitType: msg.hitType === 'head' ? 'head' : 'body',
+                    killed: !!msg.killed,
+                    worldPos: damagePointForEntityId(msg.targetId || '')
+                });
+                if (damageFeedbackQueue.length > 48) damageFeedbackQueue.shift();
             }
             return;
         }
@@ -706,6 +777,7 @@
         throwRejectQueue = [];
         throwableEventQueue = [];
         classCastResultQueue = [];
+        damageFeedbackQueue = [];
         selfState = null;
         selfId = '';
     };
@@ -863,14 +935,16 @@
         });
     };
 
-    GameNet.sendFire = function (hitbox, weaponId, hitType) {
+    GameNet.sendFire = function (hitbox, weaponId, hitType, shotToken) {
         if (!hitbox || !hitbox.userData || !hitbox.userData.netEntityId) return false;
-        return wsSend({
+        var payload = {
             t: 'fire',
             targetId: hitbox.userData.netEntityId,
             weaponId: weaponId,
             hitType: hitType === 'head' ? 'head' : 'body'
-        });
+        };
+        if (shotToken) payload.shotToken = String(shotToken);
+        return wsSend(payload);
     };
 
     GameNet.sendEquipWeapon = function (weaponId) {
@@ -946,8 +1020,16 @@
         return wsSend({ t: 'class_queue', classId: classId });
     };
 
-    GameNet.sendClassCast = function (slot) {
-        return wsSend({ t: 'class_cast', slot: slot });
+    GameNet.sendClassCast = function (slot, castData) {
+        var payload = { t: 'class_cast', slot: slot };
+        if (castData && castData.aimPoint) {
+            payload.aimPoint = {
+                x: Number(castData.aimPoint.x || 0),
+                y: Number(castData.aimPoint.y || 0),
+                z: Number(castData.aimPoint.z || 0)
+            };
+        }
+        return wsSend(payload);
     };
 
     GameNet.consumeClassCastResult = function () {
@@ -955,11 +1037,23 @@
         return classCastResultQueue.shift();
     };
 
+    GameNet.consumeDamageFeedback = function () {
+        if (!damageFeedbackQueue.length) return null;
+        return damageFeedbackQueue.shift();
+    };
+
+    GameNet.getEntityMarkerWorldPos = function (entityId) {
+        return markerPointForEntityId(entityId);
+    };
+
     GameNet.getSelfAbilityState = function () {
         if (!selfState) return null;
         return {
             abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
             ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
+            focusShots: selfState.focusShots || 0,
+            focusUntil: selfState.focusUntil || 0,
+            rageUntil: selfState.rageUntil || 0,
             shadowDashUntil: selfState.shadowDashUntil || 0,
             chokeState: selfState.chokeState || null,
             deadeyeState: selfState.deadeyeState || null

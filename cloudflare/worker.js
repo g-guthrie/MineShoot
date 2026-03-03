@@ -9,12 +9,12 @@ const GAMEPLAY_TUNING_WU = {
     brawler: { armorMax: 150, wallhackRadius: 75 }
   },
   weaponStats: {
-    rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
-    pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
-    machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
-    shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
-    sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
-    plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
+    rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120, pellets: 1 },
+    pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92, pellets: 1 },
+    machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88, pellets: 1 },
+    shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42, pellets: 12 },
+    sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1 },
+    plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24, pellets: 1 }
   },
   throwables: {
     order: ['frag', 'seeker', 'molotov', 'knife'],
@@ -38,16 +38,35 @@ const GAMEPLAY_TUNING_WU = {
     }
   },
   classAbilities: {
-    jedi: {
-      choke: { boxPx: 190, range: 24, duration: 1.55, liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0 },
-      saberThrow: { speed: 34, maxDistance: 22, returnSpeed: 42, hitRadius: 1.3, bodyDamage: 175, headDamage: 240, life: 2.1 }
-    },
     ninja: {
-      stars: { count: 3, spreadDeg: 16, speed: 44, life: 0.85, hitRadius: 1.35, bodyDamage: 120, headDamage: 170 },
+      abilityCooldownMs: 6000,
+      ultimateCooldownMs: 20000,
+      stars: { count: 3, range: 42, bodyDamage: 120, headDamage: 170, minDot: 0.95 },
       shadowDash: { steps: 4, stepDuration: 0.12 }
     },
+    jedi: {
+      abilityCooldownMs: 8000,
+      ultimateCooldownMs: 18000,
+      choke: { range: 13, minDot: 0.05, duration: 1.6, liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95 },
+      saberThrow: { range: 22, minDot: -0.15, bodyDamage: 175 }
+    },
+    magician: {
+      abilityCooldownMs: 7000,
+      ultimateCooldownMs: 20000,
+      fireball: { range: 36, radius: 4.8, minDamage: 55, maxDamage: 180 },
+      chainLightning: { range: 60, minDot: 0.15, maxTargets: 4, startDamage: 240, falloff: 0.68 }
+    },
     sharpshooter: {
-      deadeye: { boxPx: 220, range: 80, lockTimePerTarget: 0.42, maxTargets: 4, damage: 260 }
+      abilityCooldownMs: 8000,
+      ultimateCooldownMs: 22000,
+      focus: { shots: 1, duration: 8, sniperBoost: 1.8, defaultBoost: 1.55 },
+      deadeye: { range: 80, duration: 6.0, maxTargets: 6, minDot: 0.18, damage: 260 }
+    },
+    brawler: {
+      abilityCooldownMs: 5000,
+      ultimateCooldownMs: 20000,
+      batSwing: { range: 4.2, minDot: -0.2, bodyDamage: 130, maxTargets: 3, stunDuration: 0.35 },
+      rage: { duration: 4.8, tickEvery: 0.45, radius: 5.2, tickDamage: 75 }
     }
   }
 };
@@ -71,6 +90,9 @@ const THROWABLE_BOT_THROW_COOLDOWN_S = 2.8;
 const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
 const KNIFE_HEADSHOT_HEIGHT_DELTA_WU = 0.45;
+const SHOTGUN_BURST_WINDOW_MS = 220;
+const SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU = 8;
+const SHOTGUN_FALLOFF_MIN_DAMAGE_START_WU = 24;
 
 function nowMs() {
   return Date.now();
@@ -349,6 +371,8 @@ export class GlobalArenaRoom extends DurableObject {
         respawnAt: 0,
         lastDamageAt: 0,
         weaponId: 'rifle',
+        lastShotAt: {},
+        shotBurstState: {},
         moveSpeedNorm: 0,
         sprinting: false,
         beamTargetId: '',
@@ -362,6 +386,13 @@ export class GlobalArenaRoom extends DurableObject {
         lastThrowAt: 0,
         abilityCooldownUntil: 0,
         ultimateCooldownUntil: 0,
+        focusShots: 0,
+        focusUntil: 0,
+        rageUntil: 0,
+        rageNextTickAt: 0,
+        stunUntil: 0,
+        slowUntil: 0,
+        slowMultiplier: 1,
         shadowDashUntil: 0,
         deadeye: null,
         chokeState: null,
@@ -463,6 +494,7 @@ export class GlobalArenaRoom extends DurableObject {
       lastDamageAt: 0,
       seq: 0,
       lastShotAt: {},
+      shotBurstState: {},
       weaponId: 'rifle',
       moveSpeedNorm: 0,
       sprinting: false,
@@ -477,6 +509,13 @@ export class GlobalArenaRoom extends DurableObject {
       lastThrowAt: 0,
       abilityCooldownUntil: 0,
       ultimateCooldownUntil: 0,
+      focusShots: 0,
+      focusUntil: 0,
+      rageUntil: 0,
+      rageNextTickAt: 0,
+      stunUntil: 0,
+      slowUntil: 0,
+      slowMultiplier: 1,
       shadowDashUntil: 0,
       deadeye: null,
       chokeState: null
@@ -672,19 +711,18 @@ export class GlobalArenaRoom extends DurableObject {
   projectileDamageHit(projectile, target, hitType) {
     const def = THROWABLE_STATS[projectile.type];
     if (!def || !target) return;
+    const owner = this.getEntityById(projectile.ownerId);
     const damage = hitType === 'head'
       ? (def.headDamage || def.damage || 1)
       : (def.bodyDamage || def.damage || 1);
-    const out = this.applyDamage(target, damage);
-    if (!out) return;
-    this.broadcast({
-      t: 'damage_event',
-      targetId: target.id,
-      sourceId: projectile.ownerId,
-      health: out.hp,
-      armor: out.armor,
-      hitType: hitType
+    const out = this.applyDamageFromSource(owner, target, damage, {
+      hitType,
+      weaponId: projectile.type || 'knife',
+      sourceKind: 'throwable',
+      applyOutgoing: false
     });
+    if (!out) return;
+    this.broadcastDamageEvent(projectile.ownerId, target, out, hitType);
     if (out.killed) {
       this.broadcast({
         t: 'death_respawn',
@@ -715,6 +753,7 @@ export class GlobalArenaRoom extends DurableObject {
     }
     const radius = def.radius || 0;
     const damage = def.damage || 0;
+    const owner = this.getEntityById(projectile.ownerId);
     const entities = [];
     for (const p of this.players.values()) entities.push(p);
     for (const b of this.bots.values()) entities.push(b);
@@ -727,16 +766,14 @@ export class GlobalArenaRoom extends DurableObject {
       if (dist > radius) continue;
       const falloff = 1 - (dist / Math.max(0.001, radius));
       const blastDamage = Math.max(20, Math.round(damage * falloff));
-      const out = this.applyDamage(e, blastDamage);
-      if (!out) continue;
-      this.broadcast({
-        t: 'damage_event',
-        targetId: e.id,
-        sourceId: projectile.ownerId,
-        health: out.hp,
-        armor: out.armor,
-        hitType: 'body'
+      const out = this.applyDamageFromSource(owner, e, blastDamage, {
+        hitType: 'body',
+        weaponId: projectile.type || 'frag',
+        sourceKind: 'throwable',
+        applyOutgoing: false
       });
+      if (!out) continue;
+      this.broadcastDamageEvent(projectile.ownerId, e, out, 'body');
       if (out.killed) {
         this.broadcast({
           t: 'death_respawn',
@@ -752,16 +789,37 @@ export class GlobalArenaRoom extends DurableObject {
   handleInput(player, msg) {
     if (!player || !player.alive) return;
 
-    if (typeof msg.x === 'number') player.x = clamp(msg.x, this.boundsMin, this.boundsMax);
-    if (typeof msg.z === 'number') player.z = clamp(msg.z, this.boundsMin, this.boundsMax);
-    if (typeof msg.y === 'number') player.y = clamp(msg.y, 0, 16);
+    const now = nowMs();
+    const stunned = (player.stunUntil || 0) > now;
+    if (!stunned) {
+      const slowMult = (player.slowUntil || 0) > now
+        ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
+        : 1;
+      if (typeof msg.x === 'number') {
+        const targetX = clamp(msg.x, this.boundsMin, this.boundsMax);
+        player.x = player.x + ((targetX - player.x) * slowMult);
+      }
+      if (typeof msg.z === 'number') {
+        const targetZ = clamp(msg.z, this.boundsMin, this.boundsMax);
+        player.z = player.z + ((targetZ - player.z) * slowMult);
+      }
+      if (typeof msg.y === 'number') {
+        const targetY = clamp(msg.y, 0, 16);
+        player.y = player.y + ((targetY - player.y) * slowMult);
+      }
+    }
     if (typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
     if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
-    if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
-    if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
-    if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
+    if (!stunned) {
+      if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
+      if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
+      if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
+    } else {
+      player.moveSpeedNorm = 0;
+      player.sprinting = false;
+    }
   }
 
   getEntityById(entityId) {
@@ -770,12 +828,138 @@ export class GlobalArenaRoom extends DurableObject {
     return null;
   }
 
+  getClassAbilityCfg(classId) {
+    return CLASS_ABILITY_STATS[classId] || CLASS_ABILITY_STATS.sharpshooter || {};
+  }
+
+  applyShotgunFalloff(baseDamage, distance) {
+    let damage = Math.max(1, Math.round(baseDamage));
+    if (distance <= SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU) return damage;
+    if (distance >= SHOTGUN_FALLOFF_MIN_DAMAGE_START_WU) {
+      return Math.max(3, Math.round(damage * 0.25));
+    }
+    const span = Math.max(0.001, SHOTGUN_FALLOFF_MIN_DAMAGE_START_WU - SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU);
+    const t = (distance - SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU) / span;
+    const factor = 1 - (0.75 * t);
+    return Math.max(3, Math.round(damage * factor));
+  }
+
+  applyIncomingDamageModifier(target, damage) {
+    let out = Math.max(1, Math.round(damage));
+    if (target && target.classId === 'brawler') {
+      out = Math.max(1, Math.round(out * 0.85));
+    } else if (target && target.classId === 'jedi') {
+      out = Math.max(1, Math.round(out * 0.9));
+    }
+    return out;
+  }
+
+  applyOutgoingDamageModifier(source, damage, hitType, weaponId, sourceKind) {
+    let out = Math.max(1, Math.round(damage));
+    if (!source || sourceKind !== 'weapon') return out;
+
+    const classId = source.classId || 'sharpshooter';
+    const now = nowMs();
+
+    if (classId === 'sharpshooter') {
+      if ((source.focusShots || 0) > 0 && (source.focusUntil || 0) > now) {
+        source.focusShots = Math.max(0, (source.focusShots || 0) - 1);
+        if (source.focusShots <= 0) source.focusUntil = 0;
+        const cfg = this.getClassAbilityCfg('sharpshooter');
+        const focusCfg = cfg.focus || {};
+        const boost = weaponId === 'sniper'
+          ? Number(focusCfg.sniperBoost || 1.8)
+          : Number(focusCfg.defaultBoost || 1.55);
+        out = Math.max(1, Math.round(out * boost));
+      } else if ((source.focusUntil || 0) <= now) {
+        source.focusShots = 0;
+        source.focusUntil = 0;
+      }
+    }
+
+    if (classId === 'ninja' && hitType === 'head') {
+      out = Math.max(1, Math.round(out * 1.18));
+    }
+
+    if (classId === 'magician' && weaponId === 'shotgun') {
+      out = Math.max(1, Math.round(out * 0.92));
+    }
+
+    return out;
+  }
+
+  applyDamageFromSource(source, target, baseDamage, opts = {}) {
+    if (!target || !target.alive) return null;
+    const hitType = opts.hitType === 'head' ? 'head' : 'body';
+    const weaponId = String(opts.weaponId || '');
+    const sourceKind = String(opts.sourceKind || 'weapon');
+    let damage = Math.max(1, Math.round(baseDamage));
+
+    if (opts.applyOutgoing !== false) {
+      damage = this.applyOutgoingDamageModifier(source, damage, hitType, weaponId, sourceKind);
+    }
+    if (opts.applyIncoming !== false) {
+      damage = this.applyIncomingDamageModifier(target, damage);
+    }
+
+    return this.applyDamage(target, damage);
+  }
+
+  hostilesInCone(player, range, minDot) {
+    if (!player || !player.alive) return [];
+    const forward = this.entityForward(player);
+    const entities = this.getAliveEntities();
+    const out = [];
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e || e.id === player.id) continue;
+      const to = normalize3(e.x - player.x, ((e.y || PLAYER_EYE_HEIGHT_WU) - player.y), e.z - player.z);
+      if (dot3(to, forward) < minDot) continue;
+      const d = distance3(player, e);
+      if (d > range) continue;
+      out.push({ entity: e, dist: d });
+    }
+    out.sort((a, b) => a.dist - b.dist);
+    return out;
+  }
+
+  hostilesInRadius(center, radius, excludeId) {
+    if (!center) return [];
+    const entities = this.getAliveEntities();
+    const out = [];
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e || !e.alive) continue;
+      if (excludeId && e.id === excludeId) continue;
+      const d = distance3(e, center);
+      if (d > radius) continue;
+      out.push({ entity: e, dist: d });
+    }
+    out.sort((a, b) => a.dist - b.dist);
+    return out;
+  }
+
+  applyTimedStun(target, durationSec) {
+    if (!target || !target.alive) return;
+    const until = nowMs() + Math.max(0, Math.round(durationSec * 1000));
+    target.stunUntil = Math.max(target.stunUntil || 0, until);
+  }
+
+  applyTimedSlow(target, durationSec, multiplier) {
+    if (!target || !target.alive) return;
+    const until = nowMs() + Math.max(0, Math.round(durationSec * 1000));
+    target.slowUntil = Math.max(target.slowUntil || 0, until);
+    target.slowMultiplier = Math.max(0.1, Math.min(1, Number(multiplier || 1)));
+  }
+
   applyDamage(target, damage) {
     if (!target || !target.alive) return null;
 
     const now = nowMs();
     target.lastDamageAt = now;
 
+    const hpBefore = target.hp;
+    const armorBefore = target.armor;
     let remaining = Math.max(1, Math.round(damage));
     if (target.armor > 0) {
       const absorbed = Math.min(target.armor, remaining);
@@ -798,8 +982,25 @@ export class GlobalArenaRoom extends DurableObject {
       id: target.id,
       hp: target.hp,
       armor: target.armor,
+      armorDamage: Math.max(0, armorBefore - target.armor),
+      healthDamage: Math.max(0, hpBefore - target.hp),
+      damageApplied: Math.max(0, (armorBefore - target.armor) + (hpBefore - target.hp)),
       killed
     };
+  }
+
+  broadcastDamageEvent(sourceId, target, out, hitType) {
+    if (!target || !out) return;
+    this.broadcast({
+      t: 'damage_event',
+      targetId: target.id,
+      sourceId: sourceId,
+      health: out.hp,
+      armor: out.armor,
+      hitType: hitType === 'head' ? 'head' : 'body',
+      damage: out.damageApplied || 0,
+      killed: !!out.killed
+    });
   }
 
   handleFire(player, msg) {
@@ -813,8 +1014,31 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const prev = player.lastShotAt[weaponId] || 0;
-    if ((now - prev) < stats.cooldownMs) return;
-    player.lastShotAt[weaponId] = now;
+    const shotToken = String(msg.shotToken || '');
+    let acceptedByCooldown = false;
+    if (weaponId === 'shotgun') {
+      const maxPellets = Math.max(1, Number(stats.pellets || 12));
+      const hasToken = /^[a-zA-Z0-9_-]{6,96}$/.test(shotToken);
+      let burst = (player.shotBurstState && player.shotBurstState.shotgun) || null;
+      if (hasToken && burst && burst.token === shotToken && now <= burst.expiresAt && burst.count < maxPellets) {
+        burst.count += 1;
+        acceptedByCooldown = true;
+      } else if ((now - prev) >= stats.cooldownMs) {
+        player.lastShotAt[weaponId] = now;
+        if (!player.shotBurstState) player.shotBurstState = {};
+        player.shotBurstState.shotgun = {
+          token: hasToken ? shotToken : '',
+          count: 1,
+          expiresAt: now + SHOTGUN_BURST_WINDOW_MS
+        };
+        acceptedByCooldown = true;
+      }
+    } else {
+      if ((now - prev) < stats.cooldownMs) return;
+      player.lastShotAt[weaponId] = now;
+      acceptedByCooldown = true;
+    }
+    if (!acceptedByCooldown) return;
     player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
 
     const targetId = String(msg.targetId || '');
@@ -827,18 +1051,18 @@ export class GlobalArenaRoom extends DurableObject {
     const dist = distance3(player, target);
     if (dist > stats.maxRange) return;
 
-    const damage = hitType === 'head' ? stats.headDamage : stats.bodyDamage;
-    const out = this.applyDamage(target, damage);
+    let damage = hitType === 'head' ? stats.headDamage : stats.bodyDamage;
+    if (weaponId === 'shotgun') {
+      damage = this.applyShotgunFalloff(damage, dist);
+    }
+    const out = this.applyDamageFromSource(player, target, damage, {
+      hitType,
+      weaponId,
+      sourceKind: 'weapon'
+    });
     if (!out) return;
 
-    this.broadcast({
-      t: 'damage_event',
-      targetId: target.id,
-      sourceId: player.id,
-      health: out.hp,
-      armor: out.armor,
-      hitType
-    });
+    this.broadcastDamageEvent(player.id, target, out, hitType);
 
     if (out.killed) {
       this.broadcast({
@@ -886,17 +1110,15 @@ export class GlobalArenaRoom extends DurableObject {
     player.beamTargetId = target.id;
     player.beamActiveUntil = now + REMOTE_BEAM_HOLD_MS;
 
-    const out = this.applyDamage(target, stats.bodyDamage);
+    const out = this.applyDamageFromSource(player, target, stats.bodyDamage, {
+      hitType: 'body',
+      weaponId: 'plasma',
+      sourceKind: 'weapon',
+      applyOutgoing: false
+    });
     if (!out) return;
 
-    this.broadcast({
-      t: 'damage_event',
-      targetId: target.id,
-      sourceId: player.id,
-      health: out.hp,
-      armor: out.armor,
-      hitType: 'body'
-    });
+    this.broadcastDamageEvent(player.id, target, out, 'body');
 
     if (out.killed) {
       this.broadcast({
@@ -1007,42 +1229,67 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   closestHostileInRange(player, range, minDot) {
-    if (!player || !player.alive) return null;
-    const forward = this.entityForward(player);
-    const entities = this.getAliveEntities();
-    let best = null;
-    let bestDist = range;
-    for (let i = 0; i < entities.length; i++) {
-      const e = entities[i];
-      if (!e || e.id === player.id) continue;
-      const to = normalize3(e.x - player.x, ((e.y || PLAYER_EYE_HEIGHT_WU) - player.y), e.z - player.z);
-      if (dot3(to, forward) < minDot) continue;
-      const d = distance3(player, e);
-      if (d > range) continue;
-      if (d < bestDist) {
-        bestDist = d;
-        best = e;
-      }
-    }
-    return best;
+    const hits = this.hostilesInCone(player, range, minDot);
+    return hits.length > 0 ? hits[0].entity : null;
   }
 
   deadeyeCandidates(player, range, minDot, maxTargets) {
-    if (!player || !player.alive) return [];
+    const hits = this.hostilesInCone(player, range, minDot);
+    return hits.slice(0, Math.max(1, maxTargets || 1)).map((hit) => ({
+      id: hit.entity.id,
+      dist: hit.dist
+    }));
+  }
+
+  resolveClassAimPoint(player, msg, maxRange) {
+    const range = Math.max(1, Number(maxRange || 24));
     const forward = this.entityForward(player);
-    const entities = this.getAliveEntities();
-    const out = [];
-    for (let i = 0; i < entities.length; i++) {
-      const e = entities[i];
-      if (!e || e.id === player.id) continue;
-      const to = normalize3(e.x - player.x, ((e.y || PLAYER_EYE_HEIGHT_WU) - player.y), e.z - player.z);
-      if (dot3(to, forward) < minDot) continue;
-      const d = distance3(player, e);
-      if (d > range) continue;
-      out.push({ id: e.id, dist: d });
+    const eye = this.entityAimTargetPosition(player);
+    const fallback = addScaled3(eye, forward, range);
+    const raw = msg && msg.aimPoint;
+    if (!raw || typeof raw !== 'object') return fallback;
+
+    const point = {
+      x: Number(raw.x),
+      y: Number(raw.y),
+      z: Number(raw.z)
+    };
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return fallback;
+    if (distance3(player, point) > (range + 1.5)) return fallback;
+
+    const to = normalize3(point.x - player.x, point.y - player.y, point.z - player.z);
+    if (dot3(to, forward) < -0.2) return fallback;
+    return point;
+  }
+
+  fireDeadeyeLocks(player) {
+    if (!player || !player.deadeye) return { fired: false, landed: 0 };
+    const d = player.deadeye;
+    const ids = Array.isArray(d.queue) ? d.queue : [];
+    const lockCount = Math.max(0, Math.min(ids.length, Number(d.lockIndex || 0)));
+    let landed = 0;
+    for (let i = 0; i < lockCount; i++) {
+      const target = this.getEntityById(ids[i]);
+      if (!target || !target.alive || target.id === player.id) continue;
+      const out = this.applyDamageFromSource(player, target, d.damage || 260, {
+        hitType: 'body',
+        sourceKind: 'ability',
+        applyOutgoing: false
+      });
+      if (!out) continue;
+      landed++;
+      this.broadcastDamageEvent(player.id, target, out, 'body');
+      if (out.killed) {
+        this.broadcast({
+          t: 'death_respawn',
+          entityId: target.id,
+          respawnAt: target.respawnAt,
+          classApplied: target.classId
+        });
+      }
     }
-    out.sort((a, b) => a.dist - b.dist);
-    return out.slice(0, Math.max(1, maxTargets || 1));
+    player.deadeye = null;
+    return { fired: true, landed };
   }
 
   applyChokeTick(owner, targetId, damagePerTick) {
@@ -1050,16 +1297,13 @@ export class GlobalArenaRoom extends DurableObject {
     const target = this.getEntityById(targetId);
     if (!target || !target.alive || target.id === owner.id) return;
     if (damagePerTick <= 0) return;
-    const out = this.applyDamage(target, damagePerTick);
-    if (!out) return;
-    this.broadcast({
-      t: 'damage_event',
-      targetId: target.id,
-      sourceId: owner.id,
-      health: out.hp,
-      armor: out.armor,
-      hitType: 'body'
+    const out = this.applyDamageFromSource(owner, target, damagePerTick, {
+      hitType: 'body',
+      sourceKind: 'ability',
+      applyOutgoing: false
     });
+    if (!out) return;
+    this.broadcastDamageEvent(owner.id, target, out, 'body');
     if (out.killed) {
       this.broadcast({
         t: 'death_respawn',
@@ -1075,11 +1319,26 @@ export class GlobalArenaRoom extends DurableObject {
     const slot = Number(msg.slot || 0);
     if (slot !== 1 && slot !== 2) return;
     const now = nowMs();
-    const abilityCfg = CLASS_ABILITY_STATS[player.classId] || null;
+    const abilityCfg = this.getClassAbilityCfg(player.classId);
     if (!abilityCfg) {
       this.send(ws, { t: 'class_cast_reject', reason: 'invalid_class' });
       return;
     }
+    const abilityCooldownMs = Math.max(0, Number(abilityCfg.abilityCooldownMs || 0));
+    const ultimateCooldownMs = Math.max(0, Number(abilityCfg.ultimateCooldownMs || 0));
+
+    if (player.classId === 'sharpshooter' && slot === 2 && player.deadeye) {
+      const release = this.fireDeadeyeLocks(player);
+      this.send(ws, {
+        t: 'class_cast_ok',
+        slot,
+        classId: player.classId,
+        kind: 'deadeye_release',
+        landed: release.landed || 0
+      });
+      return;
+    }
+
     if (slot === 1 && now < (player.abilityCooldownUntil || 0)) {
       this.send(ws, { t: 'class_cast_reject', reason: 'ability_cooldown' });
       return;
@@ -1090,13 +1349,33 @@ export class GlobalArenaRoom extends DurableObject {
     }
 
     let ok = false;
+    let kind = '';
+    const payload = {};
+
     if (player.classId === 'jedi' && slot === 1) {
       const chokeCfg = abilityCfg.choke || {};
-      const target = this.closestHostileInRange(player, chokeCfg.range || 24, 0.86);
+      const target = this.closestHostileInRange(player, chokeCfg.range || 13, chokeCfg.minDot || 0.05);
       if (target) {
+        const castOut = this.applyDamageFromSource(player, target, chokeCfg.castDamage || 95, {
+          hitType: 'body',
+          sourceKind: 'ability',
+          applyOutgoing: false
+        });
+        if (castOut) {
+          this.broadcastDamageEvent(player.id, target, castOut, 'body');
+          if (castOut.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+          }
+        }
+        this.applyTimedStun(target, chokeCfg.duration || 1.6);
         player.chokeState = {
           targetId: target.id,
-          endsAt: now + Math.round((chokeCfg.duration || 1.5) * 1000),
+          endsAt: now + Math.round((chokeCfg.duration || 1.6) * 1000),
           nextTickAt: now + Math.round((chokeCfg.tickRate || 0.25) * 1000),
           tickRateMs: Math.round((chokeCfg.tickRate || 0.25) * 1000),
           dotPerTick: Math.max(0, Math.round(chokeCfg.dotPerTick || 0)),
@@ -1105,79 +1384,209 @@ export class GlobalArenaRoom extends DurableObject {
         ok = true;
       }
       if (ok) {
-        player.abilityCooldownUntil = now + 8000;
-        this.send(ws, { t: 'class_cast_ok', slot, classId: player.classId, kind: 'jedi_choke' });
+        player.abilityCooldownUntil = now + abilityCooldownMs;
+        kind = 'jedi_choke';
       }
     } else if (player.classId === 'jedi' && slot === 2) {
       const saberCfg = abilityCfg.saberThrow || {};
-      const forward = this.entityForward(player);
-      this.spawnAbilityProjectile(player, {
-        type: 'lightsaber',
-        vx: forward.x * (saberCfg.speed || 34),
-        vy: forward.y * (saberCfg.speed || 34),
-        vz: forward.z * (saberCfg.speed || 34),
-        hitRadius: saberCfg.hitRadius || 1.3,
-        lifeSec: saberCfg.life || 2.1,
-        damageBody: saberCfg.bodyDamage || 175,
-        damageHead: saberCfg.headDamage || 240,
-        returnToOwner: true,
-        returnSpeed: saberCfg.returnSpeed || 42,
-        maxDistance: saberCfg.maxDistance || 22
-      });
-      ok = true;
-      player.ultimateCooldownUntil = now + 18000;
-      this.send(ws, { t: 'class_cast_ok', slot, classId: player.classId, kind: 'jedi_saber' });
+      const targets = this.hostilesInCone(player, saberCfg.range || 22, saberCfg.minDot || -0.15);
+      if (targets.length > 0) {
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i].entity;
+          const out = this.applyDamageFromSource(player, target, saberCfg.bodyDamage || 175, {
+            hitType: 'body',
+            sourceKind: 'ability',
+            applyOutgoing: false
+          });
+          if (!out) continue;
+          this.broadcastDamageEvent(player.id, target, out, 'body');
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+          }
+        }
+        ok = true;
+        player.ultimateCooldownUntil = now + ultimateCooldownMs;
+        kind = 'jedi_saber';
+        payload.hitCount = targets.length;
+      }
     } else if (player.classId === 'ninja' && slot === 1) {
       const starCfg = abilityCfg.stars || {};
-      const spreadDeg = Number(starCfg.spreadDeg || 16);
       const count = Math.max(1, Number(starCfg.count || 3));
-      for (let i = 0; i < count; i++) {
-        const center = (count - 1) * 0.5;
-        const offsetDeg = (i - center) * spreadDeg;
-        const yaw = (player.yaw || 0) + (offsetDeg * Math.PI / 180);
-        const pitch = player.pitch || 0;
-        const dir = normalize3(
-          -Math.sin(yaw) * Math.cos(pitch),
-          Math.sin(-pitch),
-          -Math.cos(yaw) * Math.cos(pitch)
-        );
-        const speed = starCfg.speed || 44;
-        this.spawnAbilityProjectile(player, {
-          type: 'ninjastar',
-          vx: dir.x * speed,
-          vy: dir.y * speed,
-          vz: dir.z * speed,
-          hitRadius: starCfg.hitRadius || 1.35,
-          lifeSec: starCfg.life || 0.85,
-          damageBody: starCfg.bodyDamage || 120,
-          damageHead: starCfg.headDamage || 170
-        });
+      const target = this.closestHostileInRange(player, starCfg.range || 42, starCfg.minDot || 0.95);
+      let landed = 0;
+      if (target) {
+        for (let i = 0; i < count; i++) {
+          const out = this.applyDamageFromSource(player, target, starCfg.bodyDamage || 120, {
+            hitType: 'body',
+            sourceKind: 'ability',
+            applyOutgoing: false
+          });
+          if (!out) continue;
+          landed++;
+          this.broadcastDamageEvent(player.id, target, out, 'body');
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+            break;
+          }
+        }
       }
       ok = true;
-      player.abilityCooldownUntil = now + 6000;
-      this.send(ws, { t: 'class_cast_ok', slot, classId: player.classId, kind: 'ninja_stars' });
+      player.abilityCooldownUntil = now + abilityCooldownMs;
+      kind = 'ninja_stars';
+      payload.landed = landed;
     } else if (player.classId === 'ninja' && slot === 2) {
       const dashCfg = abilityCfg.shadowDash || {};
       const durationMs = Math.round((dashCfg.steps || 4) * (dashCfg.stepDuration || 0.12) * 1000);
       player.shadowDashUntil = now + durationMs;
       ok = true;
-      player.ultimateCooldownUntil = now + 20000;
-      this.send(ws, { t: 'class_cast_ok', slot, classId: player.classId, kind: 'shadow_dash' });
+      player.ultimateCooldownUntil = now + ultimateCooldownMs;
+      kind = 'shadow_dash';
+    } else if (player.classId === 'magician' && slot === 1) {
+      const fireballCfg = abilityCfg.fireball || {};
+      const radius = Math.max(0.5, Number(fireballCfg.radius || 4.8));
+      const aimPoint = this.resolveClassAimPoint(player, msg, fireballCfg.range || 36);
+      const targets = this.hostilesInRadius(aimPoint, radius, player.id);
+      for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
+        const falloff = 1 - (t.dist / Math.max(0.001, radius));
+        const raw = (fireballCfg.maxDamage || 180) * Math.max(0, falloff);
+        const damage = Math.max(Number(fireballCfg.minDamage || 55), Math.round(raw));
+        const out = this.applyDamageFromSource(player, t.entity, damage, {
+          hitType: 'body',
+          sourceKind: 'ability',
+          applyOutgoing: false
+        });
+        if (!out) continue;
+        this.broadcastDamageEvent(player.id, t.entity, out, 'body');
+        this.applyTimedSlow(t.entity, 1.8, 0.72);
+        if (out.killed) {
+          this.broadcast({
+            t: 'death_respawn',
+            entityId: t.entity.id,
+            respawnAt: t.entity.respawnAt,
+            classApplied: t.entity.classId
+          });
+        }
+      }
+      ok = true;
+      player.abilityCooldownUntil = now + abilityCooldownMs;
+      kind = 'magician_fireball';
+      payload.hitCount = targets.length;
+    } else if (player.classId === 'magician' && slot === 2) {
+      const chainCfg = abilityCfg.chainLightning || {};
+      const maxTargets = Math.max(1, Number(chainCfg.maxTargets || 4));
+      const targets = this.hostilesInCone(player, chainCfg.range || 60, chainCfg.minDot || 0.15)
+        .slice(0, maxTargets);
+      if (targets.length > 0) {
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i].entity;
+          const damage = Math.max(1, Math.round((chainCfg.startDamage || 240) * Math.pow(chainCfg.falloff || 0.68, i)));
+          const out = this.applyDamageFromSource(player, target, damage, {
+            hitType: 'body',
+            sourceKind: 'ability',
+            applyOutgoing: false
+          });
+          if (!out) continue;
+          this.broadcastDamageEvent(player.id, target, out, 'body');
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+          }
+        }
+        ok = true;
+        player.ultimateCooldownUntil = now + ultimateCooldownMs;
+        kind = 'chain_lightning';
+        payload.hitCount = targets.length;
+      }
+    } else if (player.classId === 'sharpshooter' && slot === 1) {
+      const focusCfg = abilityCfg.focus || {};
+      player.focusShots = Math.max(1, Math.round(focusCfg.shots || 1));
+      player.focusUntil = now + Math.round((focusCfg.duration || 8) * 1000);
+      ok = true;
+      player.abilityCooldownUntil = now + abilityCooldownMs;
+      kind = 'focus_shot';
     } else if (player.classId === 'sharpshooter' && slot === 2) {
       const deadeyeCfg = abilityCfg.deadeye || {};
-      const picks = this.deadeyeCandidates(player, deadeyeCfg.range || 80, 0.82, deadeyeCfg.maxTargets || 4);
+      const maxTargets = Math.max(1, Math.round(deadeyeCfg.maxTargets || 6));
+      const picks = this.deadeyeCandidates(player, deadeyeCfg.range || 80, deadeyeCfg.minDot || 0.18, maxTargets);
       if (picks.length > 0) {
+        const durationMs = Math.max(1, Math.round((deadeyeCfg.duration || 6.0) * 1000));
+        const lockEveryMs = Math.max(1, Math.round(durationMs / maxTargets));
         player.deadeye = {
           queue: picks.map((p) => p.id),
-          nextLockAt: now + Math.round((deadeyeCfg.lockTimePerTarget || 0.42) * 1000),
-          lockEveryMs: Math.round((deadeyeCfg.lockTimePerTarget || 0.42) * 1000),
+          maxLocks: maxTargets,
+          nextLockAt: now + lockEveryMs,
+          lockEveryMs: lockEveryMs,
           lockIndex: 0,
-          damage: Math.max(1, Math.round(deadeyeCfg.damage || 260))
+          damage: Math.max(1, Math.round(deadeyeCfg.damage || 260)),
+          endsAt: now + durationMs
         };
-        player.ultimateCooldownUntil = now + 22000;
+        player.ultimateCooldownUntil = now + ultimateCooldownMs;
         ok = true;
-        this.send(ws, { t: 'class_cast_ok', slot, classId: player.classId, kind: 'deadeye_start', targetCount: picks.length });
+        kind = 'deadeye_start';
+        payload.targetCount = picks.length;
       }
+    } else if (player.classId === 'brawler' && slot === 1) {
+      const batCfg = abilityCfg.batSwing || {};
+      const targets = this.hostilesInCone(player, batCfg.range || 4.2, batCfg.minDot || -0.2)
+        .slice(0, Math.max(1, Number(batCfg.maxTargets || 3)));
+      if (targets.length > 0) {
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i].entity;
+          const out = this.applyDamageFromSource(player, target, batCfg.bodyDamage || 130, {
+            hitType: 'body',
+            sourceKind: 'ability',
+            applyOutgoing: false
+          });
+          if (!out) continue;
+          this.broadcastDamageEvent(player.id, target, out, 'body');
+          this.applyTimedStun(target, batCfg.stunDuration || 0.35);
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+          }
+        }
+        ok = true;
+        player.abilityCooldownUntil = now + abilityCooldownMs;
+        kind = 'bat_swing';
+        payload.hitCount = targets.length;
+      }
+    } else if (player.classId === 'brawler' && slot === 2) {
+      const rageCfg = abilityCfg.rage || {};
+      player.rageUntil = now + Math.round((rageCfg.duration || 4.8) * 1000);
+      player.rageNextTickAt = now + 10;
+      ok = true;
+      player.ultimateCooldownUntil = now + ultimateCooldownMs;
+      kind = 'rage_mode';
+    }
+
+    if (ok) {
+      this.send(ws, {
+        t: 'class_cast_ok',
+        slot,
+        classId: player.classId,
+        kind,
+        ...payload
+      });
+      return;
     }
 
     if (!ok) {
@@ -1297,16 +1706,15 @@ export class GlobalArenaRoom extends DurableObject {
         if (d > hitRadius) continue;
         if (p.type === 'knife' || p.type === 'ninjastar' || p.type === 'lightsaber') {
           if (isAbilityProj) {
-            const out = this.applyDamage(e, p.damageBody || 100);
+            const owner = this.getEntityById(p.ownerId);
+            const out = this.applyDamageFromSource(owner, e, p.damageBody || 100, {
+              hitType: 'body',
+              weaponId: p.type || 'ability_projectile',
+              sourceKind: 'ability',
+              applyOutgoing: false
+            });
             if (out) {
-              this.broadcast({
-                t: 'damage_event',
-                targetId: e.id,
-                sourceId: p.ownerId,
-                health: out.hp,
-                armor: out.armor,
-                hitType: 'body'
-              });
+              this.broadcastDamageEvent(p.ownerId, e, out, 'body');
               if (out.killed) {
                 this.broadcast({
                   t: 'death_respawn',
@@ -1358,16 +1766,15 @@ export class GlobalArenaRoom extends DurableObject {
           const dz = e.z - z.z;
           const d = Math.sqrt(dx * dx + dz * dz);
           if (d > z.radius) continue;
-          const out = this.applyDamage(e, THROWABLE_STATS.molotov.fireTickDamage);
-          if (!out) continue;
-          this.broadcast({
-            t: 'damage_event',
-            targetId: e.id,
-            sourceId: z.ownerId,
-            health: out.hp,
-            armor: out.armor,
-            hitType: 'body'
+          const owner = this.getEntityById(z.ownerId);
+          const out = this.applyDamageFromSource(owner, e, THROWABLE_STATS.molotov.fireTickDamage, {
+            hitType: 'body',
+            weaponId: 'molotov',
+            sourceKind: 'throwable',
+            applyOutgoing: false
           });
+          if (!out) continue;
+          this.broadcastDamageEvent(z.ownerId, e, out, 'body');
           if (out.killed) {
             this.broadcast({
               t: 'death_respawn',
@@ -1519,11 +1926,20 @@ export class GlobalArenaRoom extends DurableObject {
     entity.beamOverheated = false;
     entity.beamOverheatedUntil = 0;
     entity.lastPlasmaTickAt = 0;
+    entity.lastShotAt = {};
+    entity.shotBurstState = {};
     entity.muzzleFlashUntil = 0;
     entity.throwables = this.createThrowableRuntime();
     entity.lastThrowAt = 0;
     entity.abilityCooldownUntil = 0;
     entity.ultimateCooldownUntil = 0;
+    entity.focusShots = 0;
+    entity.focusUntil = 0;
+    entity.rageUntil = 0;
+    entity.rageNextTickAt = 0;
+    entity.stunUntil = 0;
+    entity.slowUntil = 0;
+    entity.slowMultiplier = 1;
     entity.shadowDashUntil = 0;
     entity.deadeye = null;
     entity.chokeState = null;
@@ -1534,6 +1950,7 @@ export class GlobalArenaRoom extends DurableObject {
     for (const bot of this.bots.values()) {
       this.respawnIfNeeded(bot);
       if (!bot.alive) continue;
+      const now = nowMs();
 
       bot.aiTurnTimer -= dtSec;
       if (bot.aiTurnTimer <= 0) {
@@ -1553,12 +1970,21 @@ export class GlobalArenaRoom extends DurableObject {
         bot.aiDirZ = dz / len;
       }
 
-      bot.x = clamp(bot.x + bot.aiDirX * bot.aiSpeed * dtSec, this.boundsMin, this.boundsMax);
-      bot.z = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * dtSec, this.boundsMin, this.boundsMax);
-      bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
-      bot.pitch = 0;
-      bot.moveSpeedNorm = clamp(bot.aiSpeed / 3.2, 0, 1.4);
-      bot.sprinting = bot.aiSpeed > 2.5;
+      const stunned = now < (bot.stunUntil || 0);
+      if (stunned) {
+        bot.moveSpeedNorm = 0;
+        bot.sprinting = false;
+      } else {
+        const slowMult = now < (bot.slowUntil || 0)
+          ? clamp(Number(bot.slowMultiplier || 1), 0.1, 1)
+          : 1;
+        bot.x = clamp(bot.x + bot.aiDirX * bot.aiSpeed * slowMult * dtSec, this.boundsMin, this.boundsMax);
+        bot.z = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * slowMult * dtSec, this.boundsMin, this.boundsMax);
+        bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
+        bot.pitch = 0;
+        bot.moveSpeedNorm = clamp((bot.aiSpeed * slowMult) / 3.2, 0, 1.4);
+        bot.sprinting = (bot.aiSpeed * slowMult) > 2.5;
+      }
 
       this.regenArmor(bot, dtSec);
       this.tickPlasmaState(bot, dtSec);
@@ -1585,6 +2011,45 @@ export class GlobalArenaRoom extends DurableObject {
   tickClassAbilityState(entity) {
     if (!entity || !entity.alive) return;
     const now = nowMs();
+
+    if ((entity.focusShots || 0) > 0 && now >= (entity.focusUntil || 0)) {
+      entity.focusShots = 0;
+      entity.focusUntil = 0;
+    }
+    if ((entity.slowUntil || 0) > 0 && now >= (entity.slowUntil || 0)) {
+      entity.slowUntil = 0;
+      entity.slowMultiplier = 1;
+    }
+
+    if ((entity.rageUntil || 0) > now) {
+      const rageCfg = (this.getClassAbilityCfg('brawler') || {}).rage || {};
+      if (now >= (entity.rageNextTickAt || 0)) {
+        const targets = this.hostilesInRadius(entity, rageCfg.radius || 5.2, entity.id);
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i].entity;
+          const out = this.applyDamageFromSource(entity, target, rageCfg.tickDamage || 75, {
+            hitType: 'body',
+            sourceKind: 'ability',
+            applyOutgoing: false
+          });
+          if (!out) continue;
+          this.broadcastDamageEvent(entity.id, target, out, 'body');
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: target.id,
+              respawnAt: target.respawnAt,
+              classApplied: target.classId
+            });
+          }
+        }
+        entity.rageNextTickAt = now + Math.round((rageCfg.tickEvery || 0.45) * 1000);
+      }
+    } else {
+      entity.rageUntil = 0;
+      entity.rageNextTickAt = 0;
+    }
+
     if (entity.chokeState) {
       const state = entity.chokeState;
       if (!state.targetId || now >= (state.endsAt || 0)) {
@@ -1605,33 +2070,14 @@ export class GlobalArenaRoom extends DurableObject {
       const d = entity.deadeye;
       if (!d.queue || !d.queue.length) {
         entity.deadeye = null;
-      } else if (now >= (d.nextLockAt || 0)) {
-        d.lockIndex = Math.min(d.queue.length, (d.lockIndex || 0) + 1);
-        d.nextLockAt = now + (d.lockEveryMs || 420);
-        if (d.lockIndex >= d.queue.length) {
-          for (let i = 0; i < d.queue.length; i++) {
-            const target = this.getEntityById(d.queue[i]);
-            if (!target || !target.alive || target.id === entity.id) continue;
-            const out = this.applyDamage(target, d.damage || 260);
-            if (!out) continue;
-            this.broadcast({
-              t: 'damage_event',
-              targetId: target.id,
-              sourceId: entity.id,
-              health: out.hp,
-              armor: out.armor,
-              hitType: 'body'
-            });
-            if (out.killed) {
-              this.broadcast({
-                t: 'death_respawn',
-                entityId: target.id,
-                respawnAt: target.respawnAt,
-                classApplied: target.classId
-              });
-            }
-          }
-          entity.deadeye = null;
+      } else {
+        const lockEveryMs = Math.max(1, Math.round(d.lockEveryMs || 420));
+        while ((d.lockIndex || 0) < d.queue.length && now >= (d.nextLockAt || 0)) {
+          d.lockIndex = Math.min(d.queue.length, (d.lockIndex || 0) + 1);
+          d.nextLockAt = (d.nextLockAt || now) + lockEveryMs;
+        }
+        if (now >= (d.endsAt || 0)) {
+          this.fireDeadeyeLocks(entity);
         }
       }
     }
@@ -1677,7 +2123,12 @@ export class GlobalArenaRoom extends DurableObject {
       muzzleFlashUntil: entity.muzzleFlashUntil || 0,
       abilityCooldownRemaining: Math.max(0, ((entity.abilityCooldownUntil || 0) - nowMs()) / 1000),
       ultimateCooldownRemaining: Math.max(0, ((entity.ultimateCooldownUntil || 0) - nowMs()) / 1000),
+      focusShots: Math.max(0, Math.round(entity.focusShots || 0)),
+      focusUntil: entity.focusUntil || 0,
+      rageUntil: entity.rageUntil || 0,
       shadowDashUntil: entity.shadowDashUntil || 0,
+      stunUntil: entity.stunUntil || 0,
+      slowUntil: entity.slowUntil || 0,
       chokeState: entity.chokeState ? {
         targetId: entity.chokeState.targetId || '',
         endsAt: entity.chokeState.endsAt || 0,
@@ -1685,8 +2136,11 @@ export class GlobalArenaRoom extends DurableObject {
       } : null,
       deadeyeState: entity.deadeye ? {
         lockCount: entity.deadeye.lockIndex || 0,
-        maxLocks: entity.deadeye.queue ? entity.deadeye.queue.length : 0,
-        nextLockAt: entity.deadeye.nextLockAt || 0
+        maxLocks: entity.deadeye.maxLocks || (entity.deadeye.queue ? entity.deadeye.queue.length : 0),
+        nextLockAt: entity.deadeye.nextLockAt || 0,
+        lockEveryMs: entity.deadeye.lockEveryMs || 0,
+        endsAt: entity.deadeye.endsAt || 0,
+        targetIds: entity.deadeye.queue ? entity.deadeye.queue.slice(0) : []
       } : null,
       throwables,
       visibleWallhack: true
@@ -1758,8 +2212,25 @@ export class GlobalArenaRoom extends DurableObject {
 }
 
 async function handleWsUpgrade(env, request) {
-  const session = await getSessionFromRequest(env, request);
-  if (!session) return new Response('Unauthorized', { status: 401 });
+  let session = await getSessionFromRequest(env, request);
+  if (!session) {
+    const url = new URL(request.url);
+    const rawGuestId = String(url.searchParams.get('uid') || '').trim();
+    const rawGuestName = String(url.searchParams.get('username') || '').trim();
+    const rawGuestClassId = String(url.searchParams.get('classId') || '').trim();
+
+    const guestId = /^[a-zA-Z0-9_-]{6,64}$/.test(rawGuestId) ? rawGuestId : randomId('gst');
+    const guestName = validUsername(rawGuestName)
+      ? rawGuestName
+      : `Guest_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const guestClassId = CLASS_PRESETS[rawGuestClassId] ? rawGuestClassId : 'sharpshooter';
+
+    session = {
+      userId: guestId,
+      username: guestName,
+      classId: guestClassId
+    };
+  }
 
   const id = env.GLOBAL_ARENA.idFromName(env.ROOM_NAME || 'global');
   const stub = env.GLOBAL_ARENA.get(id);

@@ -34,6 +34,20 @@
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
     var tmpNetVec = new THREE.Vector3();
+    var trajPos = new THREE.Vector3();
+    var trajVel = new THREE.Vector3();
+    var trajStart = new THREE.Vector3();
+    var trajEnd = new THREE.Vector3();
+    var trajectoryPreview = {
+        line: null,
+        impact: null,
+        activeType: ''
+    };
+    var trajectoryPreviewTuning = {
+        stepSec: 1 / 60,
+        maxPoints: 120,
+        maxPreviewTime: 4.0
+    };
     var throwableDistanceTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableDistanceTuning)
         ? window.GameCombatTuning.getThrowableDistanceTuning()
         : {
@@ -466,6 +480,159 @@
         };
     }
 
+    function clearTrajectoryPreview() {
+        trajectoryPreview.activeType = '';
+        if (trajectoryPreview.line) trajectoryPreview.line.visible = false;
+        if (trajectoryPreview.impact) trajectoryPreview.impact.visible = false;
+    }
+
+    function ensureTrajectoryPreviewMeshes() {
+        if (!sceneRef) return false;
+
+        if (!trajectoryPreview.line) {
+            var lineGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, 0)
+            ]);
+            var lineMat = new THREE.LineBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.92,
+                depthTest: false
+            });
+            trajectoryPreview.line = new THREE.Line(lineGeo, lineMat);
+            trajectoryPreview.line.visible = false;
+            trajectoryPreview.line.renderOrder = 60;
+            trajectoryPreview.line.frustumCulled = false;
+            sceneRef.add(trajectoryPreview.line);
+        }
+
+        if (!trajectoryPreview.impact) {
+            trajectoryPreview.impact = new THREE.Mesh(
+                new THREE.SphereGeometry(0.12, 10, 10),
+                new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.95,
+                    depthTest: false
+                })
+            );
+            trajectoryPreview.impact.visible = false;
+            trajectoryPreview.impact.renderOrder = 61;
+            sceneRef.add(trajectoryPreview.impact);
+        }
+
+        return true;
+    }
+
+    function previewLifetimeForType(type, def) {
+        if (!def) return 2.2;
+        if (type === 'knife') return Math.max(0.2, Number(def.life || 1.8));
+        if (typeof def.fuse === 'number') return Math.max(0.2, Number(def.fuse));
+        if (typeof def.life === 'number') return Math.max(0.2, Number(def.life));
+        return 2.2;
+    }
+
+    function simulateTrajectory(type, intent) {
+        var def = defs[type];
+        if (!def || !intent || !intent.origin || !intent.direction) {
+            return { points: [], impactPoint: null };
+        }
+
+        var dt = Math.max(1 / 120, Number(trajectoryPreviewTuning.stepSec || (1 / 60)));
+        var maxPoints = Math.max(8, Math.round(Number(trajectoryPreviewTuning.maxPoints || 120)));
+        var maxTime = Math.min(
+            Math.max(0.5, Number(trajectoryPreviewTuning.maxPreviewTime || 4)),
+            previewLifetimeForType(type, def) + 0.9
+        );
+
+        trajPos.copy(intent.origin);
+        trajVel.copy(intent.direction).normalize().multiplyScalar(def.speed || 0);
+        trajVel.y += Number(def.upward || 0);
+
+        var points = [trajPos.clone()];
+        var age = 0;
+        var bounces = 0;
+
+        while (age < maxTime && points.length < maxPoints) {
+            trajStart.copy(trajPos);
+            trajVel.y -= Number(def.gravity || 0) * dt;
+            trajEnd.copy(trajPos).addScaledVector(trajVel, dt);
+
+            var hit = segmentCollision(trajStart, trajEnd);
+            if (hit) {
+                points.push(hit.point.clone());
+
+                if (type === 'frag' && hit.kind === 'world') {
+                    trajPos.copy(hit.point);
+                    trajVel.multiplyScalar(throwableMechanicsTuning.fragBounceVelocityDamping || 0.4);
+                    trajVel.y = Math.abs(trajVel.y) * (throwableMechanicsTuning.fragBounceVerticalDamping || 0.42);
+                    bounces++;
+                    if (bounces > (throwableMechanicsTuning.fragBounceMaxCount || 2) ||
+                        trajVel.lengthSq() < (throwableMechanicsTuning.fragBounceStopSpeedSq || 2.5)) {
+                        trajVel.set(0, 0, 0);
+                    }
+                    age += dt;
+                    if (age >= previewLifetimeForType(type, def)) {
+                        return { points: points, impactPoint: trajPos.clone() };
+                    }
+                    continue;
+                }
+
+                return { points: points, impactPoint: hit.point.clone() };
+            }
+
+            trajPos.copy(trajEnd);
+            points.push(trajPos.clone());
+            age += dt;
+
+            if (age >= previewLifetimeForType(type, def)) {
+                return { points: points, impactPoint: trajPos.clone() };
+            }
+        }
+
+        return {
+            points: points,
+            impactPoint: points.length ? points[points.length - 1].clone() : null
+        };
+    }
+
+    function updateTrajectoryPreview(type, intent) {
+        if (!defs[type] || !intent) {
+            clearTrajectoryPreview();
+            return null;
+        }
+        if (!ensureTrajectoryPreviewMeshes()) return null;
+
+        var sim = simulateTrajectory(type, intent);
+        if (!sim || !sim.points || sim.points.length < 2) {
+            clearTrajectoryPreview();
+            return null;
+        }
+
+        trajectoryPreview.line.geometry.setFromPoints(sim.points);
+        trajectoryPreview.line.geometry.computeBoundingSphere();
+        trajectoryPreview.line.visible = true;
+        trajectoryPreview.activeType = type;
+
+        if (sim.impactPoint) {
+            trajectoryPreview.impact.position.copy(sim.impactPoint);
+            trajectoryPreview.impact.visible = true;
+        } else {
+            trajectoryPreview.impact.visible = false;
+        }
+
+        return {
+            type: type,
+            points: sim.points.length,
+            impactPoint: sim.impactPoint ? {
+                x: sim.impactPoint.x,
+                y: sim.impactPoint.y,
+                z: sim.impactPoint.z
+            } : null
+        };
+    }
+
     function reportHit(onEnemyHit, hitPoint, damage, hitType, result, source, special) {
         if (!onEnemyHit || !result) return;
         onEnemyHit({
@@ -751,6 +918,16 @@
     }
 
     GameThrowables.init = function (scene) {
+        if (trajectoryPreview.line && trajectoryPreview.line.parent) {
+            trajectoryPreview.line.parent.remove(trajectoryPreview.line);
+        }
+        if (trajectoryPreview.impact && trajectoryPreview.impact.parent) {
+            trajectoryPreview.impact.parent.remove(trajectoryPreview.impact);
+        }
+        trajectoryPreview.line = null;
+        trajectoryPreview.impact = null;
+        trajectoryPreview.activeType = '';
+
         sceneRef = scene;
         projectiles = [];
         fireZones = [];
@@ -850,6 +1027,31 @@
             direction: direction.normalize()
         };
     }
+
+    GameThrowables.updateTrajectoryPreview = function (type, camera, intentPayload) {
+        if (!type || !defs[type] || !camera) {
+            clearTrajectoryPreview();
+            return null;
+        }
+
+        var intent = intentToVectors(intentPayload);
+        if (!intent) {
+            intent = buildThrowIntent(camera);
+        }
+        return updateTrajectoryPreview(type, intent);
+    };
+
+    GameThrowables.clearTrajectoryPreview = function () {
+        clearTrajectoryPreview();
+    };
+
+    GameThrowables.getTrajectoryPreviewTuning = function () {
+        return {
+            stepSec: trajectoryPreviewTuning.stepSec,
+            maxPoints: trajectoryPreviewTuning.maxPoints,
+            maxPreviewTime: trajectoryPreviewTuning.maxPreviewTime
+        };
+    };
 
     GameThrowables.throw = function (type, camera, intentPayload) {
         if (!defs[type]) {

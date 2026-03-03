@@ -81,7 +81,7 @@
     var palmRecoil = 0;
 
     function hasInputCapture() {
-        return !!document.pointerLockElement || !!window.__gameNoLockInput;
+        return !!document.pointerLockElement;
     }
 
     function createAvatarModel() {
