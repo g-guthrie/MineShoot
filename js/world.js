@@ -1134,8 +1134,12 @@
         // Arctic: brighter blue crystal fields plus snow drifts.
         var iceMat = new THREE.MeshLambertMaterial({ color: 0xaad8ff });
         var frostMat = new THREE.MeshLambertMaterial({ color: 0xecf8ff });
-        var arcticCrystalTarget = Math.round(20 * WORLD_AREA_SCALE);
-        var arcticDriftTarget = Math.round(16 * WORLD_AREA_SCALE);
+        var arcticCrystalTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(20, 'arctic', 1)
+            : Math.max(1, Math.round(20 * WORLD_AREA_SCALE * 0.4));
+        var arcticDriftTarget = (typeof scaledBiomeTarget === 'function')
+            ? scaledBiomeTarget(16, 'arctic', 1)
+            : Math.max(1, Math.round(16 * WORLD_AREA_SCALE * 0.4));
         tries = 0;
         placed = 0;
         while (placed < arcticCrystalTarget && tries < arcticCrystalTarget * 8) {
@@ -1146,6 +1150,9 @@
             if (pointBlocked(x, z, 1.25)) continue;
             addArcticCrystal(x, z, iceMat, frostMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.arctic) {
+                generationStats.arctic.crystals++;
+            }
         }
 
         tries = 0;
@@ -1158,6 +1165,9 @@
             if (pointBlocked(x, z, 1.7)) continue;
             addSnowDrift(x, z, snowCapMat);
             placed++;
+            if (typeof generationStats !== 'undefined' && generationStats && generationStats.arctic) {
+                generationStats.arctic.drifts++;
+            }
         }
 
         // Desert: layered cliffs, sandstone boulders, and cactus clusters.
@@ -1245,7 +1255,10 @@
 
         // Arctic mountain foothills: extra crystals + drifts for a colder blue silhouette.
         if (mountainCenter) {
-            for (var ring = 0; ring < 6; ring++) {
+            var foothillRingCount = (typeof ARCTIC_FOOTHILL_RING_COUNT === 'number' && ARCTIC_FOOTHILL_RING_COUNT > 0)
+                ? ARCTIC_FOOTHILL_RING_COUNT
+                : 3;
+            for (var ring = 0; ring < foothillRingCount; ring++) {
                 var ang = (Math.PI * 2 * ring) / 6;
                 var radius = 8.6 + randRange(0.8, 3.2);
                 var mx = mountainCenter.x + (Math.cos(ang) * radius);
@@ -1253,8 +1266,14 @@
                 if (biomeAt(mx, mz) !== BIOME_ARCTIC) continue;
                 if (pointBlocked(mx, mz, 1.4)) continue;
                 addArcticCrystal(mx, mz, icePeakMat, frostMat);
+                if (typeof generationStats !== 'undefined' && generationStats && generationStats.arctic) {
+                    generationStats.arctic.foothillCrystals++;
+                }
                 if (!pointBlocked(mx + 1.1, mz - 0.6, 1.0)) {
                     addSnowDrift(mx + 1.1, mz - 0.6, snowCapMat);
+                    if (typeof generationStats !== 'undefined' && generationStats && generationStats.arctic) {
+                        generationStats.arctic.foothillDrifts++;
+                    }
                 }
             }
         }
