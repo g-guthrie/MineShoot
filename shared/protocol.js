@@ -7,8 +7,8 @@ export const AUTH_PATH = {
 };
 
 export const WORLD_DEFAULTS = {
-  profileVersion: 4,
-  seedPrefix: 'room-env-v4',
+  profileVersion: 6,
+  seedPrefix: 'room-env-v6-static',
   flags: {
     envV2: true,
     terrainPhysicsV2: true

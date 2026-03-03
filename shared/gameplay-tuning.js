@@ -13,8 +13,46 @@ export const gameplayTuning = {
     defaultWallhackRadius: 90
   },
   shotgunFalloff: {
-    fullDamageEnd: 8,
-    minDamageStart: 24
+    fullDamageEnd: 7,
+    minDamageStart: 22
+  },
+  weaponFalloff: {
+    rifle: [
+      { maxDistance: 20, scale: 1.0 },
+      { maxDistance: 45, scale: 0.96 },
+      { maxDistance: 80, scale: 0.88 },
+      { maxDistance: 120, scale: 0.78 }
+    ],
+    pistol: [
+      { maxDistance: 14, scale: 1.0 },
+      { maxDistance: 26, scale: 0.92 },
+      { maxDistance: 42, scale: 0.74 },
+      { maxDistance: 92, scale: 0.52 }
+    ],
+    machinegun: [
+      { maxDistance: 12, scale: 1.0 },
+      { maxDistance: 28, scale: 0.94 },
+      { maxDistance: 52, scale: 0.84 },
+      { maxDistance: 88, scale: 0.72 }
+    ],
+    shotgun: [
+      { maxDistance: 7, scale: 1.0 },
+      { maxDistance: 14, scale: 0.75 },
+      { maxDistance: 22, scale: 0.5 },
+      { maxDistance: 42, scale: 0.28 }
+    ],
+    sniper: [
+      { maxDistance: 45, scale: 1.0 },
+      { maxDistance: 95, scale: 0.96 },
+      { maxDistance: 145, scale: 0.9 },
+      { maxDistance: 190, scale: 0.85 }
+    ],
+    seekergun: [
+      { maxDistance: 24, scale: 1.0 }
+    ],
+    plasma: [
+      { maxDistance: 24, scale: 1.0 }
+    ]
   },
   throwableMechanics: {
     aimRayRange: 100,
@@ -35,10 +73,10 @@ export const gameplayTuning = {
     brawler: { armorMax: 150, wallhackRadius: 75 }
   },
   weaponStats: {
-    rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120, pellets: 1 },
-    pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92, pellets: 1 },
+    rifle: { cooldownMs: 180, bodyDamage: 34, headDamage: 86, maxRange: 120, pellets: 1 },
+    pistol: { cooldownMs: 230, bodyDamage: 27, headDamage: 120, maxRange: 92, pellets: 1 },
     machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88, pellets: 1 },
-    shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42, pellets: 12 },
+    shotgun: { cooldownMs: 820, bodyDamage: 13, headDamage: 20, maxRange: 42, pellets: 12 },
     sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1 },
     seekergun: { cooldownMs: 320, bodyDamage: 0, headDamage: 0, maxRange: 24, pellets: 1 },
     plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24, pellets: 1 }

@@ -31,8 +31,46 @@
             plasma: 24
         },
         shotgunFalloff: {
-            fullDamageEnd: 8,
-            minDamageStart: 24
+            fullDamageEnd: 7,
+            minDamageStart: 22
+        },
+        weaponFalloff: {
+            rifle: [
+                { maxDistance: 20, scale: 1.0 },
+                { maxDistance: 45, scale: 0.96 },
+                { maxDistance: 80, scale: 0.88 },
+                { maxDistance: 120, scale: 0.78 }
+            ],
+            pistol: [
+                { maxDistance: 14, scale: 1.0 },
+                { maxDistance: 26, scale: 0.92 },
+                { maxDistance: 42, scale: 0.74 },
+                { maxDistance: 92, scale: 0.52 }
+            ],
+            machinegun: [
+                { maxDistance: 12, scale: 1.0 },
+                { maxDistance: 28, scale: 0.94 },
+                { maxDistance: 52, scale: 0.84 },
+                { maxDistance: 88, scale: 0.72 }
+            ],
+            shotgun: [
+                { maxDistance: 7, scale: 1.0 },
+                { maxDistance: 14, scale: 0.75 },
+                { maxDistance: 22, scale: 0.5 },
+                { maxDistance: 42, scale: 0.28 }
+            ],
+            sniper: [
+                { maxDistance: 45, scale: 1.0 },
+                { maxDistance: 95, scale: 0.96 },
+                { maxDistance: 145, scale: 0.9 },
+                { maxDistance: 190, scale: 0.85 }
+            ],
+            seekergun: [
+                { maxDistance: 24, scale: 1.0 }
+            ],
+            plasma: [
+                { maxDistance: 24, scale: 1.0 }
+            ]
         },
         throwables: {
             fragRadius: 5.4,
@@ -138,6 +176,7 @@
                 plasma: Number(weapons.plasma && weapons.plasma.maxRange) || DEFAULTS.weapons.plasma
             },
             shotgunFalloff: shared.shotgunFalloff || deepCopy(DEFAULTS.shotgunFalloff),
+            weaponFalloff: shared.weaponFalloff || deepCopy(DEFAULTS.weaponFalloff),
             throwables: {
                 fragRadius: Number(throwables.frag && throwables.frag.radius) || DEFAULTS.throwables.fragRadius,
                 seekerRadius: Number(throwables.seeker && throwables.seeker.radius) || DEFAULTS.throwables.seekerRadius,
@@ -216,6 +255,24 @@
         return out;
     }
 
+    function normalizeAndScaleFalloffBands(bands) {
+        if (!Array.isArray(bands) || bands.length === 0) return [];
+        var out = [];
+        for (var i = 0; i < bands.length; i++) {
+            var band = bands[i] || {};
+            var maxDistance = Number(band.maxDistance);
+            var scale = Number(band.scale);
+            if (!isFinite(maxDistance) || maxDistance <= 0) continue;
+            if (!isFinite(scale)) continue;
+            out.push({
+                maxDistance: scaleDistance(maxDistance),
+                scale: Math.max(0, scale)
+            });
+        }
+        out.sort(function (a, b) { return a.maxDistance - b.maxDistance; });
+        return out;
+    }
+
     GameCombatTuning.getAwarenessTuning = function () {
         return {
             segments: BASE.awareness.segments,
@@ -246,6 +303,14 @@
             fullDamageEnd: scaleDistance(BASE.shotgunFalloff.fullDamageEnd),
             minDamageStart: scaleDistance(BASE.shotgunFalloff.minDamageStart)
         };
+    };
+
+    GameCombatTuning.getWeaponFalloffTuning = function (weaponId) {
+        var id = String(weaponId || '');
+        var sharedMap = BASE.weaponFalloff || {};
+        var fallbackMap = DEFAULTS.weaponFalloff || {};
+        var profile = sharedMap[id] || fallbackMap[id] || [];
+        return normalizeAndScaleFalloffBands(profile);
     };
 
     GameCombatTuning.getThrowableDistanceTuning = function () {
@@ -304,6 +369,15 @@
                 plasma: GameCombatTuning.getWeaponRange('plasma')
             },
             shotgunFalloff: GameCombatTuning.getShotgunFalloffTuning(),
+            weaponFalloff: {
+                rifle: GameCombatTuning.getWeaponFalloffTuning('rifle'),
+                pistol: GameCombatTuning.getWeaponFalloffTuning('pistol'),
+                machinegun: GameCombatTuning.getWeaponFalloffTuning('machinegun'),
+                shotgun: GameCombatTuning.getWeaponFalloffTuning('shotgun'),
+                sniper: GameCombatTuning.getWeaponFalloffTuning('sniper'),
+                seekergun: GameCombatTuning.getWeaponFalloffTuning('seekergun'),
+                plasma: GameCombatTuning.getWeaponFalloffTuning('plasma')
+            },
             throwables: GameCombatTuning.getThrowableDistanceTuning(),
             classWallhackRadius: {
                 ninja: GameCombatTuning.getClassWallhackRadius('ninja'),

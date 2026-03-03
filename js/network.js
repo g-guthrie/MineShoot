@@ -76,8 +76,8 @@
 
     function buildExpectedWorldMeta(roomName) {
         var cfg = protocolWorldConfig();
-        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 3));
-        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v3');
+        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 6));
+        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v6-static');
         var normalizedRoom = sanitizeRoomId(roomName || roomId || 'global');
         return {
             roomId: normalizedRoom,

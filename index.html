@@ -146,20 +146,18 @@
             background: rgba(54, 76, 48, 0.95);
         }
 
-        /* Overlay */
+        /* Overlay (Pip-Boy style) */
         #overlay {
             position: fixed;
             inset: 0;
-            background:
-                radial-gradient(circle at 18% 10%, rgba(40, 90, 132, 0.38), rgba(0, 0, 0, 0) 36%),
-                radial-gradient(circle at 82% 88%, rgba(140, 38, 38, 0.32), rgba(0, 0, 0, 0) 34%),
-                linear-gradient(145deg, rgba(8, 14, 22, 0.96), rgba(4, 8, 14, 0.96));
+            background: rgba(1, 6, 2, 0.92);
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 18px;
             z-index: 100;
             cursor: default;
+            overflow: hidden;
         }
 
         #overlay::before {
@@ -168,168 +166,307 @@
             inset: 0;
             pointer-events: none;
             background:
-                repeating-linear-gradient(
-                    -25deg,
-                    rgba(186, 219, 255, 0.045) 0px,
-                    rgba(186, 219, 255, 0.045) 2px,
-                    rgba(0, 0, 0, 0) 2px,
-                    rgba(0, 0, 0, 0) 11px
-                );
-            opacity: 0.4;
+                radial-gradient(circle at 18% 12%, rgba(32, 221, 88, 0.07), transparent 34%),
+                radial-gradient(circle at 82% 82%, rgba(14, 130, 54, 0.08), transparent 42%);
+            z-index: 1;
+        }
+
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         #menu-shell {
             position: relative;
             width: min(980px, 96vw);
-            border-radius: 20px;
-            border: 1px solid rgba(148, 196, 242, 0.34);
-            background:
-                linear-gradient(180deg, rgba(14, 26, 42, 0.94), rgba(9, 16, 28, 0.88));
-            box-shadow:
-                0 24px 80px rgba(0, 0, 0, 0.6),
-                0 0 0 1px rgba(55, 98, 148, 0.28) inset;
-            padding: 28px 28px 22px;
-            backdrop-filter: blur(8px);
+            max-height: min(92vh, 760px);
+            border: 3px solid #065518;
+            background: #030e05;
+            box-shadow: 0 0 48px rgba(0, 66, 37, 0.26), inset 0 0 80px rgba(0, 66, 37, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 3;
+        }
+
+        #menu-shell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(0, 66, 37, 0.08) 0px,
+                rgba(0, 66, 37, 0.08) 1px,
+                transparent 1px,
+                transparent 4px
+            );
+            z-index: 10;
+        }
+
+        #menu-shell::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, transparent 56%, rgba(0, 0, 0, 0.52) 100%);
+            z-index: 11;
         }
 
         #menu-header {
-            margin-bottom: 20px;
-            text-align: left;
+            position: relative;
+            z-index: 5;
+            padding: 10px 14px 8px;
+            border-bottom: 1px solid #004225;
         }
 
-        #overlay h1 {
-            color: #f2f7ff;
-            font-family: 'Orbitron', 'Rajdhani', sans-serif;
-            font-size: clamp(34px, 5vw, 54px);
-            letter-spacing: 4px;
+        #menu-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 8px;
-            text-shadow: 0 0 20px rgba(145, 191, 255, 0.28);
+        }
+
+        #menu-brand {
+            color: #30ff70;
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 9px rgba(48, 255, 112, 0.45);
+        }
+
+        #menu-ascii-logo {
+            margin: 0 0 8px;
+            color: #30ff70;
+            font-size: 10px;
+            line-height: 1.13;
+            text-shadow: 0 0 8px rgba(48, 255, 112, 0.34);
+            white-space: pre;
+            overflow-x: auto;
         }
 
         #mode-subtitle {
-            color: #9bc2ec;
-            font-size: clamp(18px, 2.8vw, 26px);
-            font-weight: 500;
-            letter-spacing: 0.5px;
+            color: #18bb48;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        #menu-main {
+            position: relative;
+            z-index: 5;
+            flex: 1;
+            overflow: auto;
+            padding: 12px 14px 14px;
         }
 
         #mode-buttons {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-            margin-bottom: 14px;
+            gap: 10px;
+            margin-bottom: 12px;
         }
 
         .mode-btn {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: flex-start;
-            gap: 5px;
-            min-height: 92px;
-            border: 1px solid rgba(128, 181, 236, 0.42);
-            border-radius: 12px;
-            background: linear-gradient(150deg, rgba(24, 47, 74, 0.95), rgba(12, 28, 46, 0.95));
-            color: #ecf5ff;
-            padding: 12px 14px;
-            font-size: 17px;
+            border: 1px solid #004225;
+            background: rgba(0, 20, 8, 0.72);
+            color: #1dc750;
+            padding: 9px 10px;
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.8px;
-            font-family: 'Rajdhani', sans-serif;
+            letter-spacing: 0.7px;
+            text-align: left;
+            text-transform: uppercase;
+            font-family: 'Courier New', monospace;
             cursor: pointer;
-            transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+            transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
         }
 
         .mode-btn:hover {
-            transform: translateY(-1px);
-            border-color: rgba(161, 212, 255, 0.7);
-            box-shadow: 0 10px 24px rgba(24, 87, 148, 0.34);
+            border-color: #18bb48;
+            background: rgba(0, 66, 37, 0.28);
+            color: #30ff70;
         }
 
         .mode-btn .mode-desc {
-            font-size: 13px;
-            font-weight: 500;
-            letter-spacing: 0.4px;
-            color: #9bc7f4;
+            display: block;
+            margin-top: 4px;
+            color: #109938;
+            font-size: 10px;
             text-transform: none;
+            letter-spacing: 0.2px;
         }
 
         #play-btn {
-            margin-bottom: 14px;
-            padding: 11px 26px;
-            border: 1px solid rgba(126, 208, 170, 0.62);
-            border-radius: 10px;
-            background: linear-gradient(140deg, rgba(24, 78, 56, 0.95), rgba(15, 56, 42, 0.95));
-            color: #dcffe9;
-            font-size: 17px;
-            font-weight: 700;
-            letter-spacing: 1.1px;
-            font-family: 'Rajdhani', sans-serif;
+            margin-bottom: 12px;
+            padding: 9px 28px;
+            border: 2px solid #004225;
+            background: rgba(0, 66, 37, 0.24);
+            color: #30ff70;
+            font-size: 15px;
+            letter-spacing: 3px;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
             cursor: pointer;
             display: none;
+            text-shadow: 0 0 8px rgba(48, 255, 112, 0.4);
+            animation: pipboyBtnPulse 2.4s ease-in-out infinite;
         }
 
         #play-btn:hover {
-            border-color: rgba(159, 242, 203, 0.82);
+            background: rgba(0, 66, 37, 0.42);
+            border-color: #20dd58;
+        }
+
+        @keyframes pipboyBtnPulse {
+            0%, 100% { box-shadow: 0 0 7px rgba(0, 66, 37, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(0, 66, 37, 0.54), 0 0 38px rgba(0, 66, 37, 0.15); }
         }
 
         #menu-actions {
             display: flex;
-            gap: 10px;
-            margin-bottom: 16px;
+            gap: 8px;
             flex-wrap: wrap;
+            margin-bottom: 12px;
         }
 
         #open-manual-btn,
         #sound-toggle-btn {
-            border: 1px solid rgba(132, 175, 218, 0.5);
-            border-radius: 9px;
-            background: rgba(15, 28, 44, 0.88);
-            color: #d9ecff;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.7px;
-            font-family: 'Rajdhani', sans-serif;
-            padding: 8px 12px;
+            border: 1px solid #004225;
+            background: rgba(0, 20, 8, 0.72);
+            color: #20dd58;
+            font-size: 11px;
+            letter-spacing: 1px;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            padding: 7px 11px;
             cursor: pointer;
-            transition: border-color 120ms ease, background 120ms ease;
+            transition: background 0.12s, color 0.12s;
         }
 
         #open-manual-btn:hover,
         #sound-toggle-btn:hover {
-            border-color: rgba(174, 214, 255, 0.8);
-            background: rgba(20, 36, 55, 0.96);
+            color: #30ff70;
+            background: rgba(0, 66, 37, 0.34);
+        }
+
+        #weapon-slot-panel {
+            border: 1px solid #004225;
+            background: rgba(0, 20, 8, 0.58);
+            padding: 10px 10px 8px;
+            margin-bottom: 12px;
+        }
+
+        #weapon-slot-title {
+            color: #30ff70;
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #0a3517;
+            padding-bottom: 6px;
+        }
+
+        #weapon-slot-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .weapon-slot-btn {
+            border: 1px solid #004225;
+            background: rgba(3, 14, 5, 0.9);
+            color: #109938;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 0.4px;
+            text-align: left;
+            padding: 7px 8px;
+            cursor: pointer;
+        }
+
+        .weapon-slot-btn:hover {
+            background: rgba(0, 66, 37, 0.22);
+            color: #18bb48;
+        }
+
+        .weapon-slot-btn.active {
+            border-color: #20dd58;
+            background: rgba(0, 66, 37, 0.3);
+            color: #30ff70;
+            text-shadow: 0 0 4px rgba(48, 255, 112, 0.28);
+        }
+
+        #weapon-choice-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 5px;
+            margin-bottom: 6px;
+        }
+
+        .weapon-choice-btn {
+            border: 1px solid #004225;
+            background: rgba(3, 14, 5, 0.9);
+            color: #0a7728;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            padding: 6px 5px;
+            cursor: pointer;
+        }
+
+        .weapon-choice-btn:hover {
+            background: rgba(0, 66, 37, 0.2);
+            color: #18bb48;
+        }
+
+        .weapon-choice-btn.active {
+            border-color: #20dd58;
+            color: #30ff70;
+            background: rgba(0, 66, 37, 0.34);
+        }
+
+        #weapon-slot-note {
+            color: #0a7728;
+            font-size: 10px;
+            line-height: 1.35;
         }
 
         #overlay .controls {
-            border: 1px solid rgba(117, 153, 193, 0.34);
-            border-radius: 12px;
-            background: rgba(8, 14, 24, 0.68);
-            padding: 12px;
+            border: 1px solid #004225;
+            background: rgba(0, 16, 7, 0.5);
+            padding: 10px;
         }
 
         #overlay .controls-title {
-            color: #b9daf9;
-            font-size: 14px;
-            letter-spacing: 0.9px;
-            font-weight: 600;
-            margin-bottom: 8px;
+            color: #30ff70;
+            font-size: 11px;
+            letter-spacing: 1px;
             text-transform: uppercase;
+            margin-bottom: 7px;
         }
 
         #overlay .controls-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 6px 8px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 5px;
         }
 
         #overlay .controls-grid span {
-            color: #c6d9ee;
-            font-size: 13px;
-            padding: 4px 6px;
-            border-radius: 7px;
-            background: rgba(19, 36, 56, 0.62);
-            border: 1px solid rgba(116, 156, 202, 0.24);
+            color: #18bb48;
+            font-size: 11px;
+            padding: 4px 5px;
+            border: 1px solid rgba(6, 85, 24, 0.6);
+            background: rgba(0, 30, 11, 0.52);
         }
 
         #docs-panel {
@@ -1112,12 +1249,24 @@
 
         @media (max-width: 840px) {
             #menu-shell {
-                padding: 20px 16px 16px;
-                border-radius: 14px;
+                max-height: min(94vh, 760px);
+            }
+
+            #menu-header-top {
+                flex-direction: column;
+                align-items: flex-start;
             }
 
             #mode-buttons {
                 grid-template-columns: 1fr;
+            }
+
+            #weapon-slot-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            #weapon-choice-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
 
             #overlay .controls-grid {
@@ -1168,47 +1317,70 @@
     <div id="overlay">
         <div id="menu-shell">
             <div id="menu-header">
-                <h1>MAYHEM</h1>
+                <h1 class="visually-hidden">MAYHEM</h1>
+                <div id="menu-header-top">
+                    <div id="menu-brand">PIP-ARENA MKIV :: MAYHEM TERMINAL</div>
+                    <div id="menu-actions">
+                        <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
+                        <button id="sound-toggle-btn" type="button">SOUND: ON</button>
+                    </div>
+                </div>
+                <pre id="menu-ascii-logo"> __  __    _ __   _______ _   _
+|  \/  |  / \ \ / / ____| | | |
+| |\/| | / _ \ V /|  _| | |_| |
+| |  | |/ ___ \| | | |___|  _  |
+|_|  |_/_/   \_\_| |_____|_| |_|
+     .-""""-.
+   _/ 0  _ 0 \_      PIP-BRO
+  /___  ( )  ___\     // ARENA UNIT
+      \  -  /
+       |___|</pre>
                 <p id="mode-subtitle">Select deployment mode</p>
             </div>
-            <div id="mode-buttons">
-                <button id="mode-multiplayer-btn" class="mode-btn" type="button">
-                    MULTIPLAYER
-                    <span class="mode-desc">Global room on live backend</span>
-                </button>
-                <button id="mode-singleplayer-server-btn" class="mode-btn" type="button">
-                    SINGLEPLAYER DEV SERVER
-                    <span class="mode-desc">Shared dev room (dev-local)</span>
-                </button>
-                <button id="mode-singleplayer-local-btn" class="mode-btn" type="button">
-                    SINGLEPLAYER DEV LOCAL
-                    <span class="mode-desc">Offline local simulation</span>
-                </button>
-            </div>
-            <button id="play-btn" type="button">RESUME MATCH</button>
-            <div id="menu-actions">
-                <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
-                <button id="sound-toggle-btn" type="button">SOUND: ON</button>
-            </div>
-            <div class="controls">
-                <div class="controls-title">Core Controls</div>
-                <div class="controls-grid">
-                    <span>WASD Move</span>
-                    <span>Mouse Look</span>
-                    <span>Shift Sprint</span>
-                    <span>Space Jump</span>
-                    <span>LMB Fire</span>
-                    <span>1-5 / Wheel Swap</span>
-                    <span>T Slot 6</span>
-                    <span>E Choke</span>
-                    <span>R Deadeye</span>
-                    <span>G Frag (arm/throw)</span>
-                    <span>V Seeker</span>
-                    <span>B Molotov</span>
-                    <span>Q Knife</span>
-                    <span>H Dev Visuals</span>
-                    <span>I Field Manual</span>
-                    <span>Esc Release Cursor</span>
+            <div id="menu-main">
+                <div id="mode-buttons">
+                    <button id="mode-multiplayer-btn" class="mode-btn" type="button">
+                        MULTIPLAYER
+                        <span class="mode-desc">Global room on live backend</span>
+                    </button>
+                    <button id="mode-singleplayer-server-btn" class="mode-btn" type="button">
+                        SINGLEPLAYER DEV SERVER
+                        <span class="mode-desc">Shared dev room (dev-local)</span>
+                    </button>
+                    <button id="mode-singleplayer-local-btn" class="mode-btn" type="button">
+                        SINGLEPLAYER DEV LOCAL
+                        <span class="mode-desc">Offline local simulation</span>
+                    </button>
+                </div>
+                <button id="play-btn" type="button">RESUME MATCH</button>
+                <div id="weapon-slot-panel">
+                    <div id="weapon-slot-title">Starting Loadout :: Two Weapon Slots</div>
+                    <div id="weapon-slot-buttons">
+                        <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">SLOT 1 :: MACHINE GUN</button>
+                        <button id="weapon-slot-secondary" class="weapon-slot-btn" type="button" data-slot-index="1">SLOT 2 :: SHOTGUN</button>
+                    </div>
+                    <div id="weapon-choice-grid"></div>
+                    <div id="weapon-slot-note">Click a slot, then choose a weapon. Current build uses a two-weapon swap loop.</div>
+                </div>
+                <div class="controls">
+                    <div class="controls-title">Core Controls</div>
+                    <div class="controls-grid">
+                        <span>WASD Move</span>
+                        <span>Mouse Look</span>
+                        <span>Shift Sprint</span>
+                        <span>Space Jump</span>
+                        <span>LMB Fire</span>
+                        <span>1-2 / Wheel Swap</span>
+                        <span>E Choke</span>
+                        <span>R Deadeye</span>
+                        <span>G Frag (arm/throw)</span>
+                        <span>V Needler</span>
+                        <span>B Molotov</span>
+                        <span>Q Knife</span>
+                        <span>H Dev Visuals</span>
+                        <span>I Field Manual</span>
+                        <span>Esc Release Cursor</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1247,8 +1419,8 @@
     <div id="damage-numbers"></div>
     <div id="overhead-bars"></div>
     <div id="ability-info">Abilities | E Choke: READY | R Deadeye: READY</div>
-    <div id="throwable-info">G Frag (arm/throw): 1<br>V Seeker: 1<br>B Molotov: 1<br>Q Knife: 1</div>
-    <div id="weapon-info">Rifle | SEMI | 36/68 DMG</div>
+    <div id="throwable-info">G Frag (arm/throw): 1<br>V Needler: 1<br>B Molotov: 1<br>Q Knife: 1</div>
+    <div id="weapon-info">Machine Gun | AUTO | 16/30 DMG</div>
     <div id="plasma-status">PLASMA READY</div>
     <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>
     <div id="cooldown-status">READY</div>

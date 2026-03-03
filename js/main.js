@@ -51,6 +51,11 @@
     var AWARENESS_CORE_RANGE = awarenessTuning.coreRange;
     var AWARENESS_BEACON_MIN_RANGE = awarenessTuning.beaconMinRange;
     var AWARENESS_BEACON_MAX_COUNT = awarenessTuning.beaconMaxCount;
+    var MENU_LOADOUT_DEFAULT = ['machinegun', 'shotgun'];
+    var MENU_LOADOUT_ALLOWED = ['machinegun', 'shotgun', 'rifle', 'pistol', 'seekergun'];
+    var menuWeaponSlots = MENU_LOADOUT_DEFAULT.slice();
+    var menuActiveSlot = 0;
+    var runtimeInitialized = false;
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -301,13 +306,190 @@
         setTransientDebug('Weapon: ' + weapon.name, 950);
     }
 
+    function availableMenuWeaponIds() {
+        var ids = [];
+        var available = {};
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getAllWeaponIds) {
+            var all = globalThis.__MAYHEM_RUNTIME.GameHitscan.getAllWeaponIds() || [];
+            for (var n = 0; n < all.length; n++) {
+                var id = String(all[n] || '');
+                if (!id) continue;
+                available[id] = true;
+            }
+        }
+        var hasDiscoveredCatalog = false;
+        for (var key in available) {
+            if (Object.prototype.hasOwnProperty.call(available, key)) {
+                hasDiscoveredCatalog = true;
+                break;
+            }
+        }
+
+        for (var i = 0; i < MENU_LOADOUT_ALLOWED.length; i++) {
+            var allowedId = MENU_LOADOUT_ALLOWED[i];
+            if (available[allowedId] || !hasDiscoveredCatalog) {
+                ids.push(allowedId);
+            }
+        }
+
+        if (ids.length === 0) {
+            ids = MENU_LOADOUT_DEFAULT.slice();
+        }
+
+        return ids;
+    }
+
+    function weaponNameLookup() {
+        var out = {
+            rifle: 'Rifle',
+            pistol: 'Pistol',
+            machinegun: 'Machine Gun',
+            shotgun: 'Shotgun',
+            seekergun: 'Needler'
+        };
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
+            var catalog = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog() || [];
+            for (var i = 0; i < catalog.length; i++) {
+                var item = catalog[i];
+                if (!item || !item.id || !item.name) continue;
+                out[item.id] = item.name;
+            }
+        }
+        return out;
+    }
+
+    function normalizeMenuWeaponSlots() {
+        var available = availableMenuWeaponIds();
+        var availableMap = {};
+        for (var i = 0; i < available.length; i++) {
+            availableMap[available[i]] = true;
+        }
+
+        var next = [];
+        var seen = {};
+        for (var n = 0; n < menuWeaponSlots.length; n++) {
+            var id = String(menuWeaponSlots[n] || '');
+            if (!availableMap[id] || seen[id]) continue;
+            seen[id] = true;
+            next.push(id);
+            if (next.length >= 2) break;
+        }
+
+        for (var m = 0; m < MENU_LOADOUT_DEFAULT.length && next.length < 2; m++) {
+            var fallback = MENU_LOADOUT_DEFAULT[m];
+            if (!availableMap[fallback] || seen[fallback]) continue;
+            seen[fallback] = true;
+            next.push(fallback);
+        }
+
+        for (var p = 0; p < available.length && next.length < 2; p++) {
+            var candidate = available[p];
+            if (seen[candidate]) continue;
+            seen[candidate] = true;
+            next.push(candidate);
+        }
+
+        if (next.length === 1) {
+            next.push(next[0]);
+        }
+        if (next.length === 0) {
+            next = MENU_LOADOUT_DEFAULT.slice();
+        }
+
+        menuWeaponSlots = next.slice(0, 2);
+        if (menuActiveSlot < 0 || menuActiveSlot > 1) menuActiveSlot = 0;
+    }
+
+    function syncMenuWeaponSlotsToRuntime() {
+        normalizeMenuWeaponSlots();
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder) {
+            globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder(menuWeaponSlots.slice());
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout({ slots: menuWeaponSlots.slice() });
+        }
+        return menuWeaponSlots.slice();
+    }
+
+    function setupMenuWeaponLoadout() {
+        var primaryBtn = document.getElementById('weapon-slot-primary');
+        var secondaryBtn = document.getElementById('weapon-slot-secondary');
+        var weaponChoiceGrid = document.getElementById('weapon-choice-grid');
+        if (!primaryBtn || !secondaryBtn || !weaponChoiceGrid) return;
+
+        var slotBtns = [primaryBtn, secondaryBtn];
+        if (weaponChoiceGrid.__menuLoadoutBound) {
+            syncMenuWeaponSlotsToRuntime();
+            return;
+        }
+        weaponChoiceGrid.__menuLoadoutBound = true;
+
+        function render() {
+            var slots = syncMenuWeaponSlotsToRuntime();
+            var names = weaponNameLookup();
+            var available = availableMenuWeaponIds();
+
+            for (var i = 0; i < slotBtns.length; i++) {
+                var btn = slotBtns[i];
+                var slotId = slots[i] || slots[0] || 'machinegun';
+                var title = 'SLOT ' + (i + 1) + ' :: ' + String(names[slotId] || slotId).toUpperCase();
+                btn.textContent = title;
+                btn.classList.toggle('active', i === menuActiveSlot);
+            }
+
+            weaponChoiceGrid.innerHTML = '';
+            for (var n = 0; n < available.length; n++) {
+                var weaponId = available[n];
+                var choice = document.createElement('button');
+                choice.type = 'button';
+                choice.className = 'weapon-choice-btn';
+                choice.dataset.weaponId = weaponId;
+                choice.textContent = String(names[weaponId] || weaponId).toUpperCase();
+                if (slots[menuActiveSlot] === weaponId) {
+                    choice.classList.add('active');
+                }
+                choice.addEventListener('click', function () {
+                    var selectedId = String(this.dataset.weaponId || '');
+                    if (!selectedId) return;
+                    var active = menuActiveSlot;
+                    var other = active === 0 ? 1 : 0;
+                    if (slots[other] === selectedId) {
+                        slots[other] = slots[active];
+                    }
+                    slots[active] = selectedId;
+                    menuWeaponSlots = slots.slice(0, 2);
+                    syncMenuWeaponSlotsToRuntime();
+                    if (runtimeInitialized && globalThis.__MAYHEM_RUNTIME.GameHitscan) {
+                        applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(selectedId));
+                    }
+                    render();
+                });
+                weaponChoiceGrid.appendChild(choice);
+            }
+        }
+
+        primaryBtn.addEventListener('click', function () {
+            menuActiveSlot = 0;
+            render();
+        });
+        secondaryBtn.addEventListener('click', function () {
+            menuActiveSlot = 1;
+            render();
+        });
+
+        render();
+    }
+
     function applyAbilityProfile(profileId) {
         if (!globalThis.__MAYHEM_RUNTIME.GameAbilities) return null;
         var selected = globalThis.__MAYHEM_RUNTIME.GameAbilities.setClass(profileId);
         if (!selected) return null;
 
-        if (selected.loadoutWeapon) {
-            applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(selected.loadoutWeapon));
+        if (selected.loadoutWeapon || (menuWeaponSlots && menuWeaponSlots.length > 0)) {
+            var preferredWeapon = (menuWeaponSlots && menuWeaponSlots.length > 0)
+                ? menuWeaponSlots[0]
+                : selected.loadoutWeapon;
+            applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(preferredWeapon));
         }
 
         applyArmorProfile(selected.armorMax || playerArmorMax);
@@ -634,20 +816,13 @@
 
     function setupWeaponControls() {
         document.addEventListener('keydown', function (e) {
-            if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4' || e.code === 'Digit5') {
+            if (e.code === 'Digit1' || e.code === 'Digit2') {
                 var weaponOrder = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponOrder();
                 var idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
                 if (idx >= 0 && idx < weaponOrder.length) {
                     applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(weaponOrder[idx]));
                 }
                 return;
-            }
-
-            if (e.code === 'KeyT') {
-                var loadoutOrder = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponOrder();
-                if (loadoutOrder.length > 5) {
-                    applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(loadoutOrder[5]));
-                }
             }
         });
 
@@ -915,6 +1090,7 @@
             rebuildWallhackRing(getCurrentWallhackRadius());
             applyDebugVisuals(true);
 
+            syncMenuWeaponSlotsToRuntime();
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon());
 
             setupPointerLock();
@@ -925,6 +1101,7 @@
             setupSoundToggleControl();
             setupDocsControls();
             setupDebugKeys();
+            runtimeInitialized = true;
 
             var bootstrapApi = depGet('GameBootstrap');
             if (bootstrapApi && bootstrapApi.installResizeHandler) {
@@ -1365,6 +1542,7 @@
         var modeSubtitle = document.getElementById('mode-subtitle');
         var playBtn = document.getElementById('play-btn');
         var started = false;
+        setupMenuWeaponLoadout();
 
         function startWithMode(mode) {
             if (started) return;
@@ -1412,6 +1590,7 @@
                 startupDebugNotice = 'Single-player dev local: local bots only.';
             }
 
+            syncMenuWeaponSlotsToRuntime();
             safeInit();
         }
 

@@ -76,6 +76,13 @@
             '           ||',
             '         __||__'
         ].join('\n'),
+        seekergun: [
+            '       .-===[ NEEDLER ]===-.',
+            ' ____/==_==_==_==_==_==_==\\____',
+            '|_____/__/_/_/_/_/_/_/_/______/=====>',
+            '          \\_\\_\\_\\_\\_\\',
+            '             ||  ||'
+        ].join('\n'),
         plasma: [
             '        .-====================-.',
             '  _____/  _  _  _  _  _  _    /=====>',
@@ -152,9 +159,11 @@
         if (!weapon) return '--';
         if (weapon.id === 'shotgun') return '12 deterministic hitscan pellets with hard spread box';
         if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
-        if (weapon.id === 'machinegun') return 'Automatic suppression, strongest sustained DPS';
+        if (weapon.id === 'machinegun') return 'Automatic suppression baseline with predictable recoil-free taping';
+        if (weapon.id === 'rifle') return 'Best precision consistency from mid to long range';
+        if (weapon.id === 'seekergun') return 'Needler homing burst that rewards target tracking';
         if (weapon.id === 'plasma') return 'Seek-stream lock ticks with overheat control';
-        if (weapon.id === 'pistol') return 'Fast swap sidearm, reliable fallback';
+        if (weapon.id === 'pistol') return 'Close-range precision sidearm with high headshot payoff';
         return 'Balanced baseline weapon';
     }
 
@@ -206,8 +215,8 @@
             '',
             'Combat',
             '  LMB: Fire',
-            '  1-5 / Wheel: Weapon swap',
-            '  G Frag (arm/throw) | V Seeker | B Molotov | Q Knife',
+            '  1-2 / Wheel: Weapon swap',
+            '  G Frag (arm/throw) | V Needler | B Molotov | Q Knife',
             '  E: Choke   R: Deadeye',
             '',
             'Utility',
@@ -316,6 +325,7 @@
             '+----------------------------------------------------------+',
             'BASE HP                = 500 for players and AI',
             'DAMAGE ORDER           = armor first, then health',
+            'WEAPON FALLOFF         = tier bands (close/mid/long/extreme)',
             'ARMOR REGEN START      = 6.0s after last damage taken',
             'ARMOR REGEN RATE       = 12 armor per second',
             'ABILITY LOADOUT        = shared by all players',

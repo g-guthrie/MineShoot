@@ -90,7 +90,7 @@
         },
         seeker: {
             id: 'seeker',
-            label: 'Seeker',
+            label: 'Needler',
             speed: 14,
             upward: 4.4,
             gravity: 12,
@@ -105,7 +105,7 @@
         },
         seekershot: {
             id: 'seekershot',
-            label: 'Seeker Shot',
+            label: 'Needler Shot',
             speed: 34,
             upward: 0.6,
             gravity: 5,

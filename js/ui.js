@@ -212,7 +212,7 @@
             : '0.00';
         var nearestNorm = telemetry.nearestNorm >= 0 ? telemetry.nearestNorm.toFixed(2) : '--';
         var lines = [
-            'SEEKER DEBUG',
+            'NEEDLER DEBUG',
             'LOCK: ' + hasLock + '  TARGET: ' + (telemetry.lockTargetId || 'none'),
             'LOCK_STRENGTH: ' + lockStrength + '  NEAREST_NORM: ' + nearestNorm,
             'BOX_PX: ' + Math.round(telemetry.reticleSizePx) + '  CANDIDATES: ' + telemetry.candidateCount,
@@ -422,7 +422,7 @@
 
         throwableInfoEl.innerHTML =
             line('G Frag (arm/throw)', state.frag) + '<br>' +
-            line('V Seeker', state.seeker) + '<br>' +
+            line('V Needler', state.seeker) + '<br>' +
             line('B Molotov', state.molotov) + '<br>' +
             line('Q Knife', state.knife);
     };

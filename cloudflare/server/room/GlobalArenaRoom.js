@@ -14,7 +14,7 @@ import {
   dot3,
   clamp
 } from '../transport.js';
-import { applyShotgunFalloffDamage } from '../sim/combat.js';
+import { applyDistanceFalloffDamage } from '../sim/combat.js';
 import { buildDeadeyeState, getAbilityCooldowns } from '../sim/abilities.js';
 import { integrateProjectileMotion } from '../sim/projectiles.js';
 import { getSeekProfileByWeaponId } from '../../../shared/seek-profiles.js';
@@ -26,8 +26,8 @@ const MSG_C2S = SHARED_PROTOCOL.msg.c2s;
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 const SHARED_WORLD_DEFAULTS = SHARED_PROTOCOL.world || {};
 
-const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVersion || 3));
-const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v3');
+const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVersion || 6));
+const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v6-static');
 const WORLD_FLAGS = {
   envV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.envV2),
   terrainPhysicsV2: (SHARED_WORLD_DEFAULTS.flags)
@@ -37,6 +37,7 @@ const WORLD_FLAGS = {
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
+const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const CLASS_ABILITY_STATS = GAMEPLAY_TUNING_WU.classAbilities;
 const CLASS_DEFAULT_WEAPON = {
@@ -60,8 +61,6 @@ const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
 const KNIFE_HEADSHOT_HEIGHT_DELTA_WU = 0.45;
 const SHOTGUN_BURST_WINDOW_MS = 220;
-const SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU = 8;
-const SHOTGUN_FALLOFF_MIN_DAMAGE_START_WU = 24;
 
 function classPreset(classId) {
   return CLASS_PRESETS[classId] || CLASS_PRESETS.sharpshooter;
@@ -637,13 +636,11 @@ export class GlobalArenaRoom extends DurableObject {
     return CLASS_ABILITY_STATS[classId] || CLASS_ABILITY_STATS.sharpshooter || {};
   }
 
-  applyShotgunFalloff(baseDamage, distance) {
-    return applyShotgunFalloffDamage(
-      baseDamage,
-      distance,
-      SHOTGUN_FALLOFF_FULL_DAMAGE_END_WU,
-      SHOTGUN_FALLOFF_MIN_DAMAGE_START_WU
-    );
+  applyWeaponFalloff(weaponId, baseDamage, distance) {
+    const id = String(weaponId || '');
+    const profile = Array.isArray(WEAPON_FALLOFF[id]) ? WEAPON_FALLOFF[id] : null;
+    if (!profile || profile.length === 0) return Math.max(1, Math.round(baseDamage));
+    return applyDistanceFalloffDamage(baseDamage, distance, profile);
   }
 
   applyIncomingDamageModifier(target, damage) {
@@ -854,9 +851,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (dist > stats.maxRange) return;
 
     let damage = hitType === 'head' ? stats.headDamage : stats.bodyDamage;
-    if (weaponId === 'shotgun') {
-      damage = this.applyShotgunFalloff(damage, dist);
-    }
+    damage = this.applyWeaponFalloff(weaponId, damage, dist);
     const out = this.applyDamageFromSource(player, target, damage, {
       hitType,
       weaponId,

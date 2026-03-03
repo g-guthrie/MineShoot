@@ -59,11 +59,49 @@
             seekergun: 24,
             plasma: 24
         };
-    var shotgunFalloffTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getShotgunFalloffTuning)
-        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getShotgunFalloffTuning()
+    var weaponFalloffTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning)
+        ? {
+            rifle: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('rifle'),
+            pistol: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('pistol'),
+            machinegun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('machinegun'),
+            shotgun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('shotgun'),
+            sniper: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('sniper'),
+            seekergun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('seekergun'),
+            plasma: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('plasma')
+        }
         : {
-            fullDamageEnd: 8,
-            minDamageStart: 24
+            rifle: [
+                { maxDistance: 20, scale: 1.0 },
+                { maxDistance: 45, scale: 0.96 },
+                { maxDistance: 80, scale: 0.88 },
+                { maxDistance: 120, scale: 0.78 }
+            ],
+            pistol: [
+                { maxDistance: 14, scale: 1.0 },
+                { maxDistance: 26, scale: 0.92 },
+                { maxDistance: 42, scale: 0.74 },
+                { maxDistance: 92, scale: 0.52 }
+            ],
+            machinegun: [
+                { maxDistance: 12, scale: 1.0 },
+                { maxDistance: 28, scale: 0.94 },
+                { maxDistance: 52, scale: 0.84 },
+                { maxDistance: 88, scale: 0.72 }
+            ],
+            shotgun: [
+                { maxDistance: 7, scale: 1.0 },
+                { maxDistance: 14, scale: 0.75 },
+                { maxDistance: 22, scale: 0.5 },
+                { maxDistance: 42, scale: 0.28 }
+            ],
+            sniper: [
+                { maxDistance: 45, scale: 1.0 },
+                { maxDistance: 95, scale: 0.96 },
+                { maxDistance: 145, scale: 0.9 },
+                { maxDistance: 190, scale: 0.85 }
+            ],
+            seekergun: [{ maxDistance: 24, scale: 1.0 }],
+            plasma: [{ maxDistance: 24, scale: 1.0 }]
         };
     var STREAM_MAX_SUSTAIN_SEC = 2.5;
     var STREAM_OVERHEAT_LOCKOUT_SEC = 1.6;
@@ -75,16 +113,17 @@
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
     }
 
-    var weaponOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun', 'plasma'];
+    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun', 'plasma'];
+    var weaponOrder = weaponCatalogOrder.slice();
     var weapons = {
         rifle: {
             id: 'rifle',
             name: 'Rifle',
             primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: false,
-            cooldown: 190,
-            bodyDamage: 36,
-            headDamage: 68,
+            cooldown: 180,
+            bodyDamage: 34,
+            headDamage: 86,
             pellets: 1,
             spreadNdc: 0.0018,
             maxRange: weaponRangeTuning.rifle
@@ -94,9 +133,9 @@
             name: 'Pistol',
             primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: false,
-            cooldown: 280,
-            bodyDamage: 30,
-            headDamage: 56,
+            cooldown: 230,
+            bodyDamage: 27,
+            headDamage: 120,
             pellets: 1,
             spreadNdc: 0.0032,
             maxRange: weaponRangeTuning.pistol
@@ -119,8 +158,8 @@
             primitiveType: PRIMITIVE_HITSCAN_MULTI,
             automatic: false,
             cooldown: 820,
-            bodyDamage: 14,
-            headDamage: 22,
+            bodyDamage: 13,
+            headDamage: 20,
             pellets: 12,
             spreadNdc: 0,
             maxRange: weaponRangeTuning.shotgun
@@ -139,7 +178,7 @@
         },
         seekergun: {
             id: 'seekergun',
-            name: 'Seeker Gun',
+            name: 'Needler',
             primitiveType: PRIMITIVE_PROJECTILE_HOMING,
             automatic: true,
             cooldown: 320,
@@ -430,17 +469,19 @@
     }
 
     function applyDistanceFalloff(weapon, damage, distance) {
-        if (weapon.id !== 'shotgun') return damage;
-        var fullDamageEnd = shotgunFalloffTuning.fullDamageEnd;
-        var minDamageStart = shotgunFalloffTuning.minDamageStart;
-        var span = Math.max(0.0001, minDamageStart - fullDamageEnd);
-
-        if (distance <= fullDamageEnd) return damage;
-        if (distance >= minDamageStart) return Math.max(3, Math.round(damage * 0.25));
-
-        var t = (distance - fullDamageEnd) / span;
-        var scale = 1 - (t * 0.75);
-        return Math.max(3, Math.round(damage * scale));
+        if (!weapon || !weapon.id) return damage;
+        var bands = weaponFalloffTuning[weapon.id];
+        if (!Array.isArray(bands) || bands.length === 0) return damage;
+        for (var i = 0; i < bands.length; i++) {
+            var band = bands[i];
+            if (!band || typeof band.maxDistance !== 'number' || typeof band.scale !== 'number') continue;
+            if (distance <= band.maxDistance) {
+                return Math.max(1, Math.round(damage * Math.max(0, band.scale)));
+            }
+        }
+        var tail = bands[bands.length - 1];
+        var tailScale = (tail && typeof tail.scale === 'number') ? Math.max(0, tail.scale) : 1;
+        return Math.max(1, Math.round(damage * tailScale));
     }
 
     function getThirdPersonCameraDistance() {
@@ -1005,8 +1046,8 @@
 
     GameHitscan.getWeaponCatalog = function () {
         var out = [];
-        for (var i = 0; i < weaponOrder.length; i++) {
-            var id = weaponOrder[i];
+        for (var i = 0; i < weaponCatalogOrder.length; i++) {
+            var id = weaponCatalogOrder[i];
             var weapon = weapons[id];
             var weaponDomain = (globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry && globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get)
                 ? globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get(id)
