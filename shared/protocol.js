@@ -11,7 +11,7 @@ export const WORLD_DEFAULTS = {
   seedPrefix: 'room-env-v3',
   flags: {
     envV2: true,
-    terrainPhysicsV2: false
+    terrainPhysicsV2: true
   }
 };
 

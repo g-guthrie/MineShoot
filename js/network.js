@@ -45,6 +45,12 @@
     var hitboxArray = [];
     var hitboxVisible = true;
     var REMOTE_EYE_HEIGHT = 1.6;
+    var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
+    var HEAD_HITBOX_SIZE = {
+        x: 1.55 * HEAD_HITBOX_LINEAR_SCALE,
+        y: 0.95 * HEAD_HITBOX_LINEAR_SCALE,
+        z: 1.55 * HEAD_HITBOX_LINEAR_SCALE
+    };
 
     var remoteProjectileState = [];
     var remoteFireZoneState = [];
@@ -77,7 +83,7 @@
             roomId: normalizedRoom,
             worldSeed: prefix + '-' + normalizedRoom,
             worldProfileVersion: profileVersion,
-            worldFlags: cloneWorldFlags((cfg && cfg.flags) ? cfg.flags : { envV2: true, terrainPhysicsV2: false })
+            worldFlags: cloneWorldFlags((cfg && cfg.flags) ? cfg.flags : { envV2: true, terrainPhysicsV2: true })
         };
     }
 
@@ -329,7 +335,7 @@
         sceneRef.add(bodyHitbox);
 
         var headHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(1.55, 0.95, 1.55),
+            new THREE.BoxGeometry(HEAD_HITBOX_SIZE.x, HEAD_HITBOX_SIZE.y, HEAD_HITBOX_SIZE.z),
             new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: hitboxVisible ? 0.3 : 0,

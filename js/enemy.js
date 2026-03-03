@@ -28,6 +28,12 @@
     var ENEMY_HEADSHOT_NEAR_RANGE = enemyTuning.headshotNearRange;
     var ENEMY_HEADSHOT_MID_RANGE = enemyTuning.headshotMidRange;
     var DEFAULT_WALLHACK_RADIUS = enemyTuning.defaultWallhackRadius;
+    var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
+    var HEAD_HITBOX_SIZE = {
+        x: 1.55 * HEAD_HITBOX_LINEAR_SCALE,
+        y: 0.95 * HEAD_HITBOX_LINEAR_SCALE,
+        z: 1.55 * HEAD_HITBOX_LINEAR_SCALE
+    };
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -137,7 +143,7 @@
         var geo, color;
 
         if (type === 'head') {
-            geo = new THREE.BoxGeometry(1.55, 0.95, 1.55);
+            geo = new THREE.BoxGeometry(HEAD_HITBOX_SIZE.x, HEAD_HITBOX_SIZE.y, HEAD_HITBOX_SIZE.z);
             color = 0xff4444;
         } else {
             geo = new THREE.BoxGeometry(2.7, 1.525, 2.7);

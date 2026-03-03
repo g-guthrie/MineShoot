@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { getSharedTuningWu } from '../../lib/shared-tuning.js';
 import { getSharedProtocol } from '../../lib/shared-protocol.js';
+import { createSharedTerrainSampler } from '../../lib/shared-terrain.js';
 import {
   nowMs,
   safeJsonParse,
@@ -29,7 +30,9 @@ const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVe
 const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v3');
 const WORLD_FLAGS = {
   envV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.envV2),
-  terrainPhysicsV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.terrainPhysicsV2)
+  terrainPhysicsV2: (SHARED_WORLD_DEFAULTS.flags)
+    ? !!SHARED_WORLD_DEFAULTS.flags.terrainPhysicsV2
+    : true
 };
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
@@ -100,6 +103,11 @@ export class GlobalArenaRoom extends DurableObject {
     this.worldSeed = `${WORLD_SEED_PREFIX}-${this.roomName}`;
     this.worldProfileVersion = WORLD_PROFILE_VERSION;
     this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
+    this.terrainSampler = createSharedTerrainSampler({
+      worldSeed: this.worldSeed,
+      worldProfileVersion: this.worldProfileVersion,
+      worldFlags: cloneWorldFlags(this.worldFlags)
+    });
   }
 
   buildWelcomePayload(selfId) {
@@ -232,20 +240,24 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.players.has(userId)) {
       const p = this.players.get(userId);
       p.username = username || p.username;
+      this.enforceEntityTerrainFloor(p);
       return p;
     }
 
     classId = 'abilities';
     const preset = classPreset(classId);
+    const spawnX = 15 + Math.random() * 80;
+    const spawnZ = 15 + Math.random() * 80;
+    const spawnY = this.terrainEyeYAt(spawnX, spawnZ);
     const p = {
       id: userId,
       kind: 'player',
       username,
       classId,
       queuedClassId: null,
-      x: 15 + Math.random() * 80,
-      y: 1.6,
-      z: 15 + Math.random() * 80,
+      x: spawnX,
+      y: spawnY,
+      z: spawnZ,
       yaw: 0,
       pitch: 0,
       hp: MAX_HP,
@@ -320,6 +332,26 @@ export class GlobalArenaRoom extends DurableObject {
       };
     }
     return out;
+  }
+
+  terrainFeetYAt(x, z) {
+    if (this.worldFlags && this.worldFlags.terrainPhysicsV2 && this.terrainSampler && typeof this.terrainSampler.getGroundHeightAt === 'function') {
+      return Number(this.terrainSampler.getGroundHeightAt(Number(x || 0), Number(z || 0)) || 0);
+    }
+    return 0;
+  }
+
+  terrainEyeYAt(x, z) {
+    return this.terrainFeetYAt(x, z) + PLAYER_EYE_HEIGHT_WU;
+  }
+
+  enforceEntityTerrainFloor(entity) {
+    if (!entity) return 0;
+    const floorEyeY = this.terrainEyeYAt(entity.x, entity.z);
+    if (!Number.isFinite(entity.y) || entity.y < floorEyeY) {
+      entity.y = floorEyeY;
+    }
+    return floorEyeY;
   }
 
   tickThrowableRegen(entity, dtSec) {
@@ -512,7 +544,7 @@ export class GlobalArenaRoom extends DurableObject {
         id: zoneId,
         ownerId: projectile.ownerId,
         x,
-        y: 0,
+        y,
         z,
         radius: def.fireRadius,
         life: def.fireDuration,
@@ -561,8 +593,9 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const stunned = (player.stunUntil || 0) > now;
+    let slowMult = 1;
     if (!stunned) {
-      const slowMult = (player.slowUntil || 0) > now
+      slowMult = (player.slowUntil || 0) > now
         ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
         : 1;
       if (typeof msg.x === 'number') {
@@ -574,7 +607,8 @@ export class GlobalArenaRoom extends DurableObject {
         player.z = player.z + ((targetZ - player.z) * slowMult);
       }
       if (typeof msg.y === 'number') {
-        const targetY = clamp(msg.y, 0, 16);
+        const floorEyeY = this.terrainEyeYAt(player.x, player.z);
+        const targetY = clamp(msg.y, floorEyeY, 16);
         player.y = player.y + ((targetY - player.y) * slowMult);
       }
     }
@@ -590,6 +624,7 @@ export class GlobalArenaRoom extends DurableObject {
       player.moveSpeedNorm = 0;
       player.sprinting = false;
     }
+    this.enforceEntityTerrainFloor(player);
   }
 
   getEntityById(entityId) {
@@ -1458,10 +1493,11 @@ export class GlobalArenaRoom extends DurableObject {
         const speed = Math.sqrt((p.vx * p.vx) + (p.vy * p.vy) + (p.vz * p.vz));
         p.traveled = (p.traveled || 0) + (speed * dtSec);
       }
+      const groundY = this.terrainFeetYAt(p.x, p.z);
 
-      if (p.type === 'frag' && p.y <= 0.05) {
+      if (p.type === 'frag' && p.y <= (groundY + 0.05)) {
         if (p.bounces < (def.bounceMaxCount || 2) && Math.abs(p.vy) > 1.2) {
-          p.y = 0.05;
+          p.y = groundY + 0.05;
           p.vy = Math.abs(p.vy) * (def.bounceVerticalDamping || 0.42);
           p.vx *= (def.bounceVelocityDamping || 0.4);
           p.vz *= (def.bounceVelocityDamping || 0.4);
@@ -1472,24 +1508,24 @@ export class GlobalArenaRoom extends DurableObject {
             p.vz = 0;
           }
         } else {
-          p.y = 0.05;
+          p.y = groundY + 0.05;
           p.vx *= 0.92;
           p.vz *= 0.92;
         }
-      } else if (p.y <= 0 && !isAbilityProj) {
+      } else if (p.y <= groundY && !isAbilityProj) {
         if (p.type === 'knife' || p.type === 'plasma_stream') {
-          this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: 0, z: p.z });
+          this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: groundY, z: p.z });
           toRemove.push(p.id);
           return;
         }
         if (p.type === 'seeker') {
-          p.y = 0;
+          p.y = groundY;
           if (stickProjectile(p, null, p.x, p.y, p.z)) {
             this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: p.y, z: p.z });
             return;
           }
         }
-        this.explodeProjectile(p, p.x, 0, p.z);
+        this.explodeProjectile(p, p.x, groundY, p.z);
         toRemove.push(p.id);
         return;
       }
@@ -1721,6 +1757,11 @@ export class GlobalArenaRoom extends DurableObject {
     entity.lastDamageAt = 0;
     entity.x = 10 + Math.random() * 90;
     entity.z = 10 + Math.random() * 90;
+    if (entity.kind === 'player') {
+      entity.y = this.terrainEyeYAt(entity.x, entity.z);
+    } else if (!Number.isFinite(entity.y)) {
+      entity.y = PLAYER_EYE_HEIGHT_WU;
+    }
     entity.streamHeat = 0;
     entity.streamOverheatedUntil = 0;
     entity.lastShotAt = {};

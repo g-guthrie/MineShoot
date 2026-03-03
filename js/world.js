@@ -26,7 +26,7 @@
     var DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(SHARED_WORLD_CFG && SHARED_WORLD_CFG.profileVersion) || 3));
     var DEFAULT_WORLD_FLAGS = {
         envV2: (SHARED_WORLD_CFG && SHARED_WORLD_CFG.flags) ? !!SHARED_WORLD_CFG.flags.envV2 : true,
-        terrainPhysicsV2: (SHARED_WORLD_CFG && SHARED_WORLD_CFG.flags) ? !!SHARED_WORLD_CFG.flags.terrainPhysicsV2 : false
+        terrainPhysicsV2: (SHARED_WORLD_CFG && SHARED_WORLD_CFG.flags) ? !!SHARED_WORLD_CFG.flags.terrainPhysicsV2 : true
     };
 
     var WORLD_PROFILE_VERSION = DEFAULT_WORLD_PROFILE_VERSION;
@@ -36,6 +36,7 @@
     var seedHash = 1;
     var rngState = 1;
     var waterPools = [];
+    var terrainSampler = null;
     var spawnExclusionZones = [];
 
     var animatedWaterfallSheets = [];
@@ -287,7 +288,27 @@
         };
     }
 
+    function cloneWaterPools(rawPools) {
+        var out = [];
+        if (!rawPools || !rawPools.length) return out;
+        for (var i = 0; i < rawPools.length; i++) {
+            var p = rawPools[i];
+            out.push({
+                x: Number(p && p.x || 0),
+                z: Number(p && p.z || 0),
+                radius: Number(p && p.radius || 0),
+                depth: Number(p && p.depth || 0),
+                surfaceY: Number(p && p.surfaceY || 0)
+            });
+        }
+        return out;
+    }
+
     function getGroundHeightAt(x, z) {
+        if (terrainSampler && typeof terrainSampler.getGroundHeightAt === 'function') {
+            return Number(terrainSampler.getGroundHeightAt(x, z) || 0);
+        }
+
         var y = 0;
         for (var i = 0; i < waterPools.length; i++) {
             var p = waterPools[i];
@@ -351,10 +372,29 @@
 
         collidables = [];
         waterPools = [];
+        terrainSampler = null;
         spawnExclusionZones = [];
         animatedWaterfallSheets = [];
         animatedMistCards = [];
         animClock = 0;
+
+        var SHARED_TERRAIN = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler
+            : null;
+        if (SHARED_TERRAIN && typeof SHARED_TERRAIN.createTerrainSampler === 'function') {
+            terrainSampler = SHARED_TERRAIN.createTerrainSampler({
+                worldSeed: WORLD_SEED,
+                worldProfileVersion: WORLD_PROFILE_VERSION,
+                worldFlags: cloneWorldFlags(WORLD_FLAGS)
+            });
+            if (terrainSampler && terrainSampler.waterPools) {
+                waterPools = cloneWaterPools(terrainSampler.waterPools);
+            }
+            if (terrainSampler && typeof terrainSampler.poolRngStateAfter === 'number' && isFinite(terrainSampler.poolRngStateAfter)) {
+                var samplerRngState = (terrainSampler.poolRngStateAfter >>> 0) || 1;
+                rngState = samplerRngState;
+            }
+        }
 
         function markSolid(mesh) {
             mesh.updateMatrixWorld(true);
@@ -715,21 +755,26 @@
         }
 
         // --- Ground ---
-        var junglePoolCount = Math.max(3, Math.round(WORLD_AREA_SCALE * 1.2));
-        var poolTries = 0;
-        while (waterPools.length < junglePoolCount && poolTries < junglePoolCount * 8) {
-            poolTries++;
-            var poolPt = randomPointInBiome(BIOME_JUNGLE, 5);
-            var poolRadius = randRange(2.5, 5.2);
-            if (poolPt.x + poolRadius > WORLD_MAX - 2 || poolPt.z + poolRadius > WORLD_MAX - 2) continue;
-            waterPools.push({
-                x: poolPt.x,
-                z: poolPt.z,
-                radius: poolRadius,
-                depth: randRange(0.55, 0.9),
-                surfaceY: -0.22
-            });
-            addSpawnExclusionCircle(poolPt.x, poolPt.z, poolRadius * 0.62);
+        if (!terrainSampler || !terrainSampler.waterPools) {
+            var junglePoolCount = Math.max(3, Math.round(WORLD_AREA_SCALE * 1.2));
+            var poolTries = 0;
+            while (waterPools.length < junglePoolCount && poolTries < junglePoolCount * 8) {
+                poolTries++;
+                var poolPt = randomPointInBiome(BIOME_JUNGLE, 5);
+                var poolRadius = randRange(2.5, 5.2);
+                if (poolPt.x + poolRadius > WORLD_MAX - 2 || poolPt.z + poolRadius > WORLD_MAX - 2) continue;
+                waterPools.push({
+                    x: poolPt.x,
+                    z: poolPt.z,
+                    radius: poolRadius,
+                    depth: randRange(0.55, 0.9),
+                    surfaceY: -0.22
+                });
+            }
+        }
+        for (var poolIdx = 0; poolIdx < waterPools.length; poolIdx++) {
+            var poolEntry = waterPools[poolIdx];
+            addSpawnExclusionCircle(poolEntry.x, poolEntry.z, poolEntry.radius * 0.62);
         }
 
         var groundSeg = Math.max(48, Math.round(WORLD_SIZE * 1.15));

@@ -63,12 +63,16 @@ Menu/subtitle/debug text must always match the effective room ID for clarity.
 - Deterministic world generation preserved across clients in a room.
 - Fallback path exists if metadata is missing/timed out, with warning notice.
 
-## Deferred Work (Phase 5, Not in Current Integration)
-- Shared terrain sampler used by both client and server simulation.
-- Terrain-aware server projectile and y-ground physics model.
-- Terrain-aware bot locomotion.
+## Phase 5: Terrain Authority Sync (Human Players)
+- Shared deterministic terrain sampler is used by browser and Cloudflare Worker runtime.
+- Server-side human-player grounding now samples terrain for:
+  - Input y-floor clamping
+  - Player spawn/respawn y placement
+  - Projectile terrain impact and bounce checks
+- Terrain physics remains rollback-safe through `worldFlags.terrainPhysicsV2`.
 
-Current gameplay authority remains flat-ground physics on server for risk control.
+Out of scope for this phase:
+- Bot-specific locomotion updates are intentionally deferred.
 
 ## Current Public Interfaces
 - `GameWorld.create(scene, options?)`
@@ -91,4 +95,6 @@ Current gameplay authority remains flat-ground physics on server for risk contro
 - [ ] Waterfall animates continuously without large frame-time spikes.
 - [ ] Multiplayer clients in same room receive identical world metadata.
 - [ ] Core combat loop (join/input/fire/throw/damage) has no regression.
-- [ ] Phase 5 terrain-physics work remains deferred and disabled.
+- [ ] Human-player terrain authority remains deterministic across browser/server for a room seed.
+- [ ] Human player y never sinks below sampled terrain eye height on server.
+- [ ] Server projectile terrain impacts use sampled ground height (not hardcoded zero plane).

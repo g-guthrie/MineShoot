@@ -3,6 +3,7 @@ globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 const orderedModules = [
   '../../shared/gameplay-tuning.js',
   '../../shared/protocol.js',
+  '../../shared/terrain-sampler.js',
   '../../shared/seek-profiles.js',
   '../../shared/seek-core.js',
   '../core/bootstrap.js',
