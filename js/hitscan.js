@@ -40,9 +40,6 @@
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
 
-    var PLASMA_RANGE = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange)
-        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('plasma')
-        : 24;
     var weaponRangeTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange)
         ? {
             rifle: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('rifle'),
@@ -68,13 +65,10 @@
             fullDamageEnd: 8,
             minDamageStart: 24
         };
-    var PLASMA_DAMAGE = 15;
-    var PLASMA_TICK_INTERVAL = 0.1;
-    var PLASMA_MAX_SUSTAIN = 2.5;
-    var PLASMA_OVERHEAT_LOCKOUT = 1.6;
+    var STREAM_MAX_SUSTAIN_SEC = 2.5;
+    var STREAM_OVERHEAT_LOCKOUT_SEC = 1.6;
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
-    var PRIMITIVE_BEAM_LOCK_DOT = 'beam_lock_dot';
     var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
 
     for (var i = 0; i < SHOTGUN_PATTERN.length; i++) {
@@ -158,11 +152,11 @@
         plasma: {
             id: 'plasma',
             name: 'Plasma Cannon',
-            primitiveType: PRIMITIVE_BEAM_LOCK_DOT,
+            primitiveType: PRIMITIVE_PROJECTILE_HOMING,
             automatic: true,
             cooldown: 100,
-            bodyDamage: PLASMA_DAMAGE,
-            headDamage: PLASMA_DAMAGE,
+            bodyDamage: 15,
+            headDamage: 15,
             pellets: 1,
             spreadNdc: 0,
             maxRange: weaponRangeTuning.plasma
@@ -185,15 +179,13 @@
 
     var currentWeaponId = 'rifle';
     var lastFireTime = 0;
-    var plasmaTickTimer = 0;
     var plasmaState = {
         heat: 0,
         overheated: false,
         overheatedUntil: 0,
         active: false,
-        targetId: '',
-        beamStart: new THREE.Vector3(),
-        beamEnd: new THREE.Vector3()
+        activeUntil: 0,
+        targetId: ''
     };
 
     function ensureTracerScene(camera) {
@@ -205,10 +197,91 @@
         return null;
     }
 
+    function sharedSeekProfiles() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        if (shared.seekProfiles) return shared.seekProfiles;
+        return null;
+    }
+
+    function sharedSeekCore() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        if (shared.seekCore) return shared.seekCore;
+        return null;
+    }
+
+    function seekProfileForWeapon(weaponId) {
+        var profiles = sharedSeekProfiles();
+        if (!profiles) return null;
+        if (weaponId === 'plasma') return profiles.plasma_stream || null;
+        if (weaponId === 'seekergun') return profiles.seekergun_shot || null;
+        return null;
+    }
+
+    function toSeekCandidate(rawTarget) {
+        if (!rawTarget || !rawTarget.worldPos) return null;
+        return {
+            id: rawTarget.targetId || '',
+            ownerType: rawTarget.ownerType || 'unknown',
+            corePos: rawTarget.worldPos,
+            alive: rawTarget.alive !== false,
+            rawTarget: rawTarget
+        };
+    }
+
+    function selectSeekLock(camera, maxRange, boxSizePx, options) {
+        if (!camera) return null;
+        var seekCore = sharedSeekCore();
+        if (!seekCore || !seekCore.selectSeekTarget) return null;
+        var lockTargets = (options && Array.isArray(options.targetsList)) ? options.targetsList : (getLockTargets() || []);
+        var candidates = [];
+        for (var i = 0; i < lockTargets.length; i++) {
+            var c = toSeekCandidate(lockTargets[i]);
+            if (c) candidates.push(c);
+        }
+        var origin = camera.position;
+        camera.getWorldDirection(plasmaForward);
+        var forward = {
+            x: plasmaForward.x,
+            y: plasmaForward.y,
+            z: plasmaForward.z
+        };
+        return seekCore.selectSeekTarget({
+            origin: {
+                x: origin.x,
+                y: origin.y,
+                z: origin.z
+            },
+            forward: forward,
+            candidates: candidates,
+            maxRange: maxRange,
+            coneHalfAngleDeg: options && typeof options.coneHalfAngleDeg === 'number' ? options.coneHalfAngleDeg : 180,
+            ownerTypes: options && options.ownerTypes ? options.ownerTypes : null,
+            boxSizePx: boxSizePx,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            projectToNdc: function (worldPos) {
+                if (!worldPos || !worldPos.clone || !worldPos.project) return null;
+                var projected = worldPos.clone().project(camera);
+                return { x: projected.x, y: projected.y, z: projected.z };
+            },
+            hasWorldLos: function (worldPos) {
+                return hasLineOfSight(camera, worldPos, maxRange);
+            }
+        });
+    }
+
     function fireHomingProjectile(camera, weapon) {
-        var seekerLock = selectPlasmaTarget(camera, weapon.maxRange, getSeekergunReticleSizePx());
+        var profile = seekProfileForWeapon(weapon && weapon.id ? weapon.id : '');
+        var boxSize = (weapon.id === 'plasma') ? getPlasmaReticleSizePx() : getSeekergunReticleSizePx();
+        var lock = selectSeekLock(camera, weapon.maxRange, boxSize, {
+            ownerTypes: ['enemy', 'net'],
+            coneHalfAngleDeg: profile && typeof profile.coneHalfAngleDeg === 'number' ? profile.coneHalfAngleDeg : 180
+        });
+        var seekerLock = lock && lock.candidate ? lock.candidate.rawTarget : null;
         if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot) {
-            return !!globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot(camera, seekerLock || null);
+            return !!globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot(camera, seekerLock || null, '', {
+                weaponId: weapon.id || 'seekergun'
+            });
         }
         return false;
     }
@@ -495,89 +568,37 @@
     }
 
     function selectPlasmaTarget(camera, maxRange, boxSizePx, options) {
-        var targets = getLockTargets();
-        if (!targets || targets.length === 0) return null;
-
-        var halfNdcX = (boxSizePx * 0.5) / (window.innerWidth * 0.5);
-        var halfNdcY = (boxSizePx * 0.5) / (window.innerHeight * 0.5);
-        var best = null;
-        var bestDist = Infinity;
-
-        for (var i = 0; i < targets.length; i++) {
-            var t = targets[i];
+        var lockTargets = getLockTargets() || [];
+        var filtered = [];
+        for (var i = 0; i < lockTargets.length; i++) {
+            var t = lockTargets[i];
             if (!t || t.alive === false || !t.worldPos) continue;
             if (!lockTargetPassesFilter(t, options)) continue;
-            var projected = t.worldPos.clone().project(camera);
-            if (projected.z > 1 || projected.z < -1) continue;
-            if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
-            if (!hasLineOfSight(camera, t.worldPos, maxRange)) continue;
-
-            var dist = camera.position.distanceTo(t.worldPos);
-            if (dist > maxRange) continue;
-            if (dist < bestDist) {
-                best = t;
-                bestDist = dist;
-            }
+            filtered.push(t);
         }
-
-        return best;
+        var lock = selectSeekLock(camera, maxRange, boxSizePx, {
+            coneHalfAngleDeg: 180,
+            targetsList: filtered
+        });
+        return lock && lock.candidate ? lock.candidate.rawTarget : null;
     }
 
     function getSeekerTelemetry(camera, maxRange, boxSizePx) {
-        var targets = getLockTargets() || [];
-        var halfNdcX = (boxSizePx * 0.5) / (window.innerWidth * 0.5);
-        var halfNdcY = (boxSizePx * 0.5) / (window.innerHeight * 0.5);
-        var best = null;
-        var bestDist = Infinity;
-        var nearestNorm = Infinity;
-        var nearestId = '';
-
-        for (var i = 0; i < targets.length; i++) {
-            var t = targets[i];
-            if (!t || t.alive === false || !t.worldPos) continue;
-            var projected = t.worldPos.clone().project(camera);
-            if (projected.z > 1 || projected.z < -1) continue;
-
-            if (halfNdcX > 0.0001 && halfNdcY > 0.0001) {
-                var nx = projected.x / halfNdcX;
-                var ny = projected.y / halfNdcY;
-                var norm = Math.sqrt(nx * nx + ny * ny);
-                if (norm < nearestNorm) {
-                    nearestNorm = norm;
-                    nearestId = t.targetId || '';
-                }
-            }
-
-            if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
-            if (!hasLineOfSight(camera, t.worldPos, maxRange)) continue;
-
-            var dist = camera.position.distanceTo(t.worldPos);
-            if (dist > maxRange) continue;
-            if (dist < bestDist) {
-                best = t;
-                bestDist = dist;
-            }
-        }
-
-        var lockNorm = Infinity;
-        if (best && best.worldPos && halfNdcX > 0.0001 && halfNdcY > 0.0001) {
-            var bestProjected = best.worldPos.clone().project(camera);
-            var bnx = bestProjected.x / halfNdcX;
-            var bny = bestProjected.y / halfNdcY;
-            lockNorm = Math.sqrt(bnx * bnx + bny * bny);
-        }
+        var lock = selectSeekLock(camera, maxRange, boxSizePx, {
+            ownerTypes: ['enemy', 'net']
+        });
 
         return {
-            hasLock: !!best,
-            lockTargetId: best && best.targetId ? best.targetId : '',
-            nearestTargetId: nearestId,
-            nearestNorm: isFinite(nearestNorm) ? nearestNorm : -1,
-            lockNorm: isFinite(lockNorm) ? lockNorm : -1,
+            hasLock: !!(lock && lock.hasLock),
+            lockTargetId: lock && lock.lockTargetId ? lock.lockTargetId : '',
+            nearestTargetId: lock && lock.nearestTargetId ? lock.nearestTargetId : '',
+            nearestNorm: lock && isFinite(lock.nearestNorm) ? lock.nearestNorm : -1,
+            lockNorm: lock && isFinite(lock.lockNorm) ? lock.lockNorm : -1,
             reticleSizePx: boxSizePx,
-            reticleHalfNdcX: halfNdcX,
-            reticleHalfNdcY: halfNdcY,
+            reticleHalfNdcX: lock && lock.reticleHalfNdcX ? lock.reticleHalfNdcX : 0,
+            reticleHalfNdcY: lock && lock.reticleHalfNdcY ? lock.reticleHalfNdcY : 0,
             maxRange: maxRange,
-            candidateCount: targets.length
+            candidateCount: lock && typeof lock.candidateCount === 'number' ? lock.candidateCount : 0
         };
     }
 
@@ -599,22 +620,33 @@
         if (plasmaState.overheated && nowSec >= plasmaState.overheatedUntil) {
             plasmaState.overheated = false;
         }
-
         var coolRate = plasmaState.overheated ? 0.35 : 0.55;
         plasmaState.heat -= dt * coolRate;
         if (plasmaState.heat < 0) plasmaState.heat = 0;
+        if (plasmaState.activeUntil && nowSec >= plasmaState.activeUntil) {
+            plasmaState.active = false;
+            plasmaState.targetId = '';
+            plasmaState.activeUntil = 0;
+        }
     }
 
-    function heatPlasma(dt, nowSec) {
-        plasmaState.heat += dt / PLASMA_MAX_SUSTAIN;
+    function heatPlasmaByShot(weaponCooldownMs, nowSec) {
+        var cooldownSec = Math.max(0.001, Number(weaponCooldownMs || 100) / 1000);
+        plasmaState.heat += cooldownSec / STREAM_MAX_SUSTAIN_SEC;
         if (plasmaState.heat >= 1) {
             plasmaState.heat = 1;
             plasmaState.overheated = true;
-            plasmaState.overheatedUntil = nowSec + PLASMA_OVERHEAT_LOCKOUT;
+            plasmaState.overheatedUntil = nowSec + STREAM_OVERHEAT_LOCKOUT_SEC;
             plasmaState.active = false;
             plasmaState.targetId = '';
-            plasmaTickTimer = 0;
+            plasmaState.activeUntil = 0;
         }
+    }
+
+    function markPlasmaShot(lockTargetId, nowSec) {
+        plasmaState.active = true;
+        plasmaState.activeUntil = nowSec + 0.16;
+        plasmaState.targetId = lockTargetId || '';
     }
 
     function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
@@ -695,7 +727,13 @@
     GameHitscan.fire = function (camera, onHit, onMiss) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
-        if (weapon.primitiveType === PRIMITIVE_BEAM_LOCK_DOT) return false;
+
+        if (weapon.id === 'plasma') {
+            var nowSec = Date.now() * 0.001;
+            if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) {
+                return false;
+            }
+        }
 
         if (now - lastFireTime < weapon.cooldown) {
             return false;
@@ -703,7 +741,22 @@
 
         lastFireTime = now;
         if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
-            return fireHomingProjectile(camera, weapon);
+            var fired = fireHomingProjectile(camera, weapon);
+            if (weapon.id === 'plasma') {
+                var nowSec = Date.now() * 0.001;
+                if (fired) {
+                    var plasmaProfile = seekProfileForWeapon('plasma');
+                    var lock = selectSeekLock(camera, weapon.maxRange, getPlasmaReticleSizePx(), {
+                        ownerTypes: ['enemy', 'net'],
+                        coneHalfAngleDeg: (plasmaProfile && plasmaProfile.coneHalfAngleDeg) || 35
+                    });
+                    markPlasmaShot(lock && lock.lockTargetId ? lock.lockTargetId : '', nowSec);
+                    heatPlasmaByShot(weapon.cooldown, nowSec);
+                } else {
+                    coolPlasma(0, nowSec);
+                }
+            }
+            return fired;
         }
         return fireHitscanPattern(camera, weapon, onHit, onMiss);
     };
@@ -751,6 +804,7 @@
         if (weaponId !== 'plasma') {
             plasmaState.active = false;
             plasmaState.targetId = '';
+            plasmaState.activeUntil = 0;
         }
         return GameHitscan.getCurrentWeapon();
     };
@@ -769,6 +823,7 @@
         if (currentWeaponId !== 'plasma') {
             plasmaState.active = false;
             plasmaState.targetId = '';
+            plasmaState.activeUntil = 0;
         }
         return GameHitscan.getCurrentWeapon();
     };
@@ -819,6 +874,10 @@
 
     GameHitscan.canFire = function () {
         var weapon = getCurrentWeaponData();
+        if (weapon.id === 'plasma') {
+            var nowSec = Date.now() * 0.001;
+            if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) return false;
+        }
         return (performance.now() - lastFireTime) >= weapon.cooldown;
     };
 
@@ -833,57 +892,14 @@
         return castCenter(camera, range);
     };
 
-    GameHitscan.updatePlasmaBeam = function (dt, camera, options) {
-        options = options || {};
-        var nowSec = performance.now() * 0.001;
-        var weapon = getCurrentWeaponData();
-        if (weapon.id !== 'plasma' || !camera) {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            coolPlasma(dt, nowSec);
-            return GameHitscan.getPlasmaState();
-        }
-
-        var triggerHeld = !!options.triggerHeld;
-        if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            coolPlasma(dt, nowSec);
-            return GameHitscan.getPlasmaState();
-        }
-
-        var target = selectPlasmaTarget(camera, PLASMA_RANGE, getPlasmaReticleSizePx());
-        if (triggerHeld && target) {
-            plasmaState.active = true;
-            plasmaState.targetId = target.targetId || '';
-            resolvePlasmaMuzzle(camera);
-            plasmaState.beamStart.copy(plasmaMuzzle);
-            plasmaState.beamEnd.copy(target.worldPos);
-
-            heatPlasma(dt, nowSec);
-
-            plasmaTickTimer -= dt;
-            while (plasmaTickTimer <= 0 && !plasmaState.overheated) {
-                if (options.onLocalTick) {
-                    options.onLocalTick(target, PLASMA_DAMAGE);
-                }
-                if (options.onNetTick && plasmaState.targetId) {
-                    options.onNetTick(plasmaState.targetId);
-                }
-                plasmaTickTimer += PLASMA_TICK_INTERVAL;
-            }
-        } else {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            plasmaTickTimer = 0;
-            coolPlasma(dt, nowSec);
-        }
-
-        if (plasmaState.overheated && nowSec >= plasmaState.overheatedUntil && plasmaState.heat <= 0.95) {
-            plasmaState.overheated = false;
-        }
-
+    GameHitscan.tick = function (dt) {
+        var nowSec = Date.now() * 0.001;
+        coolPlasma(Math.max(0, Number(dt || 0)), nowSec);
         return GameHitscan.getPlasmaState();
+    };
+
+    GameHitscan.updatePlasmaBeam = function (dt) {
+        return GameHitscan.tick(dt);
     };
 
     GameHitscan.getPlasmaState = function () {
@@ -892,10 +908,38 @@
             overheated: plasmaState.overheated,
             overheatedUntil: plasmaState.overheatedUntil,
             active: plasmaState.active,
-            targetId: plasmaState.targetId,
-            beamStart: plasmaState.beamStart.clone(),
-            beamEnd: plasmaState.beamEnd.clone()
+            targetId: plasmaState.targetId
         };
+    };
+
+    GameHitscan.applySeekerReject = function (payload) {
+        var msg = payload || {};
+        var weaponId = String(msg.weaponId || '');
+        if (weaponId && weaponId !== 'plasma') return;
+        var reason = String(msg.reason || '');
+        var nowSec = Date.now() * 0.001;
+        if (reason === 'overheated') {
+            plasmaState.overheated = true;
+            plasmaState.overheatedUntil = Math.max(plasmaState.overheatedUntil, nowSec + STREAM_OVERHEAT_LOCKOUT_SEC);
+            plasmaState.active = false;
+            plasmaState.activeUntil = 0;
+            plasmaState.targetId = '';
+            plasmaState.heat = Math.max(plasmaState.heat, 1);
+        }
+    };
+
+    GameHitscan.syncPlasmaStateFromNet = function (state) {
+        if (!state || typeof state !== 'object') return;
+        if (typeof state.streamHeat === 'number') {
+            plasmaState.heat = Math.max(0, Math.min(1, Number(state.streamHeat)));
+        }
+        if (typeof state.streamOverheatedUntil === 'number') {
+            plasmaState.overheatedUntil = Math.max(0, Number(state.streamOverheatedUntil) * 0.001);
+            plasmaState.overheated = (Date.now() * 0.001) < plasmaState.overheatedUntil;
+            if (!plasmaState.overheated && plasmaState.heat <= 0.95) {
+                plasmaState.overheatedUntil = 0;
+            }
+        }
     };
 
     GameHitscan.getSeekergunDebugInfo = function (camera) {

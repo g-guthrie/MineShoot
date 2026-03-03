@@ -7,8 +7,8 @@ export const AUTH_PATH = {
 };
 
 export const WORLD_DEFAULTS = {
-  profileVersion: 2,
-  seedPrefix: 'room-env-v2',
+  profileVersion: 3,
+  seedPrefix: 'room-env-v3',
   flags: {
     envV2: true,
     terrainPhysicsV2: false
@@ -28,7 +28,6 @@ export const MSG_C2S = {
   INPUT: 'input',
   FIRE: 'fire',
   EQUIP_WEAPON: 'equip_weapon',
-  PLASMA_TICK: 'plasma_tick',
   SEEKER_SHOT: 'seeker_shot',
   THROW: 'throw',
   CLASS_QUEUE: 'class_queue',
@@ -45,6 +44,7 @@ export const MSG_S2C = {
   THROW_EXPLODE: 'throw_explode',
   AOE_END: 'aoe_end',
   DAMAGE_EVENT: 'damage_event',
+  SEEKER_REJECT: 'seeker_reject',
   DEATH_RESPAWN: 'death_respawn',
   CLASS_CAST_OK: 'class_cast_ok',
   CLASS_CAST_REJECT: 'class_cast_reject',

@@ -16,6 +16,8 @@ import {
 import { applyShotgunFalloffDamage } from '../sim/combat.js';
 import { buildDeadeyeState, getAbilityCooldowns } from '../sim/abilities.js';
 import { integrateProjectileMotion } from '../sim/projectiles.js';
+import { getSeekProfileByWeaponId } from '../../../shared/seek-profiles.js';
+import { selectSeekTarget, steerHomingVelocity } from '../../../shared/seek-core.js';
 
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const SHARED_PROTOCOL = getSharedProtocol();
@@ -23,8 +25,8 @@ const MSG_C2S = SHARED_PROTOCOL.msg.c2s;
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 const SHARED_WORLD_DEFAULTS = SHARED_PROTOCOL.world || {};
 
-const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVersion || 2));
-const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v2');
+const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVersion || 3));
+const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v3');
 const WORLD_FLAGS = {
   envV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.envV2),
   terrainPhysicsV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.terrainPhysicsV2)
@@ -45,9 +47,6 @@ const CLASS_DEFAULT_WEAPON = {
 
 const ROOM_TICK_MS = 50;
 const MAX_HP = 500;
-const PLASMA_MAX_SUSTAIN_MS = 2500;
-const PLASMA_OVERHEAT_MS = 1600;
-const REMOTE_BEAM_HOLD_MS = 180;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const PLAYER_EYE_HEIGHT_WU = 1.6;
 const THROWABLE_SPAWN_FORWARD_WU = 0.55;
@@ -146,12 +145,8 @@ export class GlobalArenaRoom extends DurableObject {
         shotBurstState: {},
         moveSpeedNorm: 0,
         sprinting: false,
-        beamTargetId: '',
-        beamActiveUntil: 0,
-        beamHeat: 0,
-        beamOverheated: false,
-        beamOverheatedUntil: 0,
-        lastPlasmaTickAt: 0,
+        streamHeat: 0,
+        streamOverheatedUntil: 0,
         muzzleFlashUntil: 0,
         throwables: this.createThrowableRuntime(),
         lastThrowAt: 0,
@@ -267,12 +262,8 @@ export class GlobalArenaRoom extends DurableObject {
       weaponId: 'rifle',
       moveSpeedNorm: 0,
       sprinting: false,
-      beamTargetId: '',
-      beamActiveUntil: 0,
-      beamHeat: 0,
-      beamOverheated: false,
-      beamOverheatedUntil: 0,
-      lastPlasmaTickAt: 0,
+      streamHeat: 0,
+      streamOverheatedUntil: 0,
       muzzleFlashUntil: 0,
       throwables: this.createThrowableRuntime(),
       lastThrowAt: 0,
@@ -856,88 +847,134 @@ export class GlobalArenaRoom extends DurableObject {
     if (!WEAPON_STATS[weaponId]) return;
     player.weaponId = weaponId;
     if (weaponId !== 'plasma') {
-      player.beamTargetId = '';
-      player.beamActiveUntil = 0;
+      player.streamHeat = 0;
+      player.streamOverheatedUntil = 0;
     }
   }
 
-  handlePlasmaTick(player, msg) {
-    if (!player || !player.alive) return;
-    if (player.weaponId !== 'plasma') return;
-
-    const now = nowMs();
-    if (player.beamOverheated && now < (player.beamOverheatedUntil || 0)) return;
-
-    const stats = WEAPON_STATS.plasma;
-    const prev = player.lastPlasmaTickAt || 0;
-    if ((now - prev) < stats.cooldownMs) return;
-    player.lastPlasmaTickAt = now;
-    player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
-
-    const targetId = String(msg.targetId || '');
-    if (!targetId) return;
-
-    const target = this.getEntityById(targetId);
-    if (!target || !target.alive || target.id === player.id) return;
-
-    const dist = distance3(player, target);
-    if (dist > stats.maxRange) return;
-
-    player.beamTargetId = target.id;
-    player.beamActiveUntil = now + REMOTE_BEAM_HOLD_MS;
-
-    const out = this.applyDamageFromSource(player, target, stats.bodyDamage, {
-      hitType: 'body',
-      weaponId: 'plasma',
-      sourceKind: 'weapon',
-      applyOutgoing: false
-    });
-    if (!out) return;
-
-    this.broadcastDamageEvent(player.id, target, out, 'body');
-
-    if (out.killed) {
-      this.broadcast({
-        t: MSG_S2C.DEATH_RESPAWN,
-        entityId: target.id,
-        respawnAt: target.respawnAt,
-        classApplied: target.classId
+  buildSeekCandidates(player) {
+    const out = [];
+    if (!player) return out;
+    const entities = this.getAliveEntities();
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e || !e.alive || e.id === player.id) continue;
+      out.push({
+        id: e.id,
+        ownerType: e.kind || 'entity',
+        corePos: this.entityAimTargetPosition(e),
+        alive: true
       });
     }
-
-    player.beamHeat = clamp((player.beamHeat || 0) + (stats.cooldownMs / PLASMA_MAX_SUSTAIN_MS), 0, 1);
-    if (player.beamHeat >= 1) {
-      player.beamHeat = 1;
-      player.beamOverheated = true;
-      player.beamOverheatedUntil = now + PLASMA_OVERHEAT_MS;
-      player.beamTargetId = '';
-      player.beamActiveUntil = 0;
-    }
+    return out;
   }
 
-  handleSeekerShot(player, msg) {
+  resolveSeekLock(player, preferredTargetId, profile) {
+    if (!player || !player.alive || !profile) return null;
+    const candidates = this.buildSeekCandidates(player);
+    if (!candidates.length) return null;
+    const preferred = String(preferredTargetId || '');
+    const shortlist = preferred ? candidates.filter((c) => c.id === preferred) : candidates;
+    const lock = selectSeekTarget({
+      origin: this.entityAimTargetPosition(player),
+      forward: this.entityForward(player),
+      candidates: shortlist.length ? shortlist : candidates,
+      maxRange: Number(profile.maxRange || 24),
+      coneHalfAngleDeg: Number(profile.coneHalfAngleDeg || 35)
+    });
+    if (!lock || !lock.hasLock || !lock.lockTargetId) return null;
+    const target = this.getEntityById(lock.lockTargetId);
+    if (!target || !target.alive || target.id === player.id) return null;
+    return target;
+  }
+
+  applyPlasmaStreamHeat(player, profile, now) {
+    if (!player || !profile) return false;
+    const sustainMs = Math.max(500, Number(profile.overheatMaxSustainMs || 2500));
+    const tickMs = Math.max(1, Number(profile.tickIntervalMs || profile.cooldownMs || 100));
+    player.streamHeat = clamp((player.streamHeat || 0) + (tickMs / sustainMs), 0, 1);
+    if (player.streamHeat >= 1) {
+      player.streamHeat = 1;
+      player.streamOverheatedUntil = now + Math.max(100, Number(profile.overheatLockoutMs || 1600));
+      return true;
+    }
+    return false;
+  }
+
+  handleSeekerShot(player, msg, ws) {
     if (!player || !player.alive) return;
 
-    const stats = WEAPON_STATS.seekergun || { cooldownMs: 320, maxRange: 24 };
+    const requestedWeaponId = String(msg && msg.weaponId ? msg.weaponId : 'seekergun');
+    const weaponId = requestedWeaponId === 'plasma' ? 'plasma' : 'seekergun';
+    const profile = getSeekProfileByWeaponId(weaponId) || getSeekProfileByWeaponId('seekergun');
+    if (!profile) {
+      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'invalid' });
+      return;
+    }
+    const stats = WEAPON_STATS[weaponId] || WEAPON_STATS.seekergun || { cooldownMs: 320, maxRange: 24 };
+    const cooldownMs = Math.max(1, Number(profile.cooldownMs || stats.cooldownMs || 320));
     const now = nowMs();
-    const prev = player.lastShotAt.seekergun || 0;
-    if ((now - prev) < stats.cooldownMs) return;
-    player.lastShotAt.seekergun = now;
-    player.weaponId = 'seekergun';
+    const shotKey = weaponId === 'plasma' ? 'plasma' : 'seekergun';
+    const prev = player.lastShotAt[shotKey] || 0;
+    if ((now - prev) < cooldownMs) {
+      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'cooldown' });
+      return;
+    }
+
+    if (weaponId === 'plasma' && now < (player.streamOverheatedUntil || 0)) {
+      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId: 'plasma', reason: 'overheated' });
+      return;
+    }
+
+    player.lastShotAt[shotKey] = now;
+    player.weaponId = weaponId;
     player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
 
     const rawClientShotId = String(msg && msg.clientShotId ? msg.clientShotId : '');
     const clientShotId = /^[a-zA-Z0-9_-]{3,96}$/.test(rawClientShotId) ? rawClientShotId : '';
     const rawLockTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
-    const locked = this.resolveLockedHostile(player, rawLockTargetId, stats.maxRange || 24, -0.35);
+    const locked = this.resolveSeekLock(player, rawLockTargetId, profile);
+
+    if (weaponId === 'plasma' && locked) {
+      const tickDamage = Math.max(1, Math.round(Number(profile.tickDamage || stats.bodyDamage || 15)));
+      const out = this.applyDamageFromSource(player, locked, tickDamage, {
+        hitType: 'body',
+        weaponId: 'plasma',
+        sourceKind: 'weapon',
+        applyOutgoing: false
+      });
+      if (out) {
+        this.broadcastDamageEvent(player.id, locked, out, 'body');
+        if (out.killed) {
+          this.broadcast({
+            t: MSG_S2C.DEATH_RESPAWN,
+            entityId: locked.id,
+            respawnAt: locked.respawnAt,
+            classApplied: locked.classId
+          });
+        }
+      }
+    }
+
+    if (weaponId === 'plasma') {
+      const overheatedNow = this.applyPlasmaStreamHeat(player, profile, now);
+      if (overheatedNow && ws) {
+        this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId: 'plasma', reason: 'overheated' });
+      }
+    }
+
+    const projectileType = String(profile.projectileType || (weaponId === 'plasma' ? 'plasma_stream' : 'seekershot'));
     const projectile = this.spawnProjectile(
       player,
-      'seekershot',
+      projectileType,
       clientShotId,
       msg && msg.throwIntent ? msg.throwIntent : null,
       { lockTargetId: locked ? locked.id : '' }
     );
-    if (!projectile) return;
+    if (!projectile) {
+      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'invalid' });
+      return;
+    }
 
     this.broadcast({
       t: MSG_S2C.THROW_SPAWN,
@@ -970,12 +1007,8 @@ export class GlobalArenaRoom extends DurableObject {
 
     const defaultWeapon = CLASS_DEFAULT_WEAPON[classId] || 'rifle';
     if (WEAPON_STATS[defaultWeapon]) entity.weaponId = defaultWeapon;
-    entity.beamTargetId = '';
-    entity.beamActiveUntil = 0;
-    entity.beamHeat = 0;
-    entity.beamOverheated = false;
-    entity.beamOverheatedUntil = 0;
-    entity.lastPlasmaTickAt = 0;
+    entity.streamHeat = 0;
+    entity.streamOverheatedUntil = 0;
     return true;
   }
 
@@ -1336,7 +1369,7 @@ export class GlobalArenaRoom extends DurableObject {
       }
 
       if ((p.lifeSec > 0 && p.age >= p.lifeSec) || (p.fuseSec > 0 && p.age >= p.fuseSec)) {
-        if (p.type === 'knife' || p.type === 'ninjastar' || p.type === 'lightsaber') {
+        if (p.type === 'knife' || p.type === 'ninjastar' || p.type === 'lightsaber' || p.type === 'plasma_stream') {
           this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'despawn', x: p.x, y: p.y, z: p.z });
         } else {
           this.explodeProjectile(p, p.x, p.y, p.z);
@@ -1345,7 +1378,7 @@ export class GlobalArenaRoom extends DurableObject {
         return;
       }
 
-      const isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot');
+      const isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream');
       if (isSeekerLike) {
         const acquireRange = Number(def.acquireRange || 24);
         let target = null;
@@ -1369,18 +1402,28 @@ export class GlobalArenaRoom extends DurableObject {
             ? normalize3(p.vx, p.vy, p.vz)
             : normalize3(p.launchDirX || 0, p.launchDirY || 0, p.launchDirZ || -1);
           const halfAngleDeg = Number(
-            p.type === 'seekershot'
+            (p.type === 'seekershot' || p.type === 'plasma_stream')
               ? (def.lockHalfAngleDeg || 30)
               : (def.acquireHalfAngleDeg || 35)
           );
           const cosLimit = Math.cos((halfAngleDeg * Math.PI) / 180);
           if (dot3(baseDir, toTarget) >= cosLimit) {
-            const speed = (def.speed || 14) + (def.homingBoost || 2);
-            const goal = { x: toTarget.x * speed, y: toTarget.y * speed, z: toTarget.z * speed };
-            const blend = Math.min(1, dtSec * (def.homingLerp || 3.2));
-            p.vx += (goal.x - p.vx) * blend;
-            p.vy += (goal.y - p.vy) * blend;
-            p.vz += (goal.z - p.vz) * blend;
+            const nextVel = steerHomingVelocity({
+              projectilePos: { x: p.x, y: p.y, z: p.z },
+              targetPos: {
+                x: target.x,
+                y: ((target.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0),
+                z: target.z
+              },
+              velocity: { x: p.vx, y: p.vy, z: p.vz },
+              speed: Number(def.speed || 14),
+              boost: Number(def.homingBoost || 2),
+              lerp: Number(def.homingLerp || 3.2),
+              dt: dtSec
+            });
+            p.vx = Number(nextVel.x || 0);
+            p.vy = Number(nextVel.y || 0);
+            p.vz = Number(nextVel.z || 0);
           }
         }
       }
@@ -1434,7 +1477,7 @@ export class GlobalArenaRoom extends DurableObject {
           p.vz *= 0.92;
         }
       } else if (p.y <= 0 && !isAbilityProj) {
-        if (p.type === 'knife') {
+        if (p.type === 'knife' || p.type === 'plasma_stream') {
           this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: 0, z: p.z });
           toRemove.push(p.id);
           return;
@@ -1465,6 +1508,11 @@ export class GlobalArenaRoom extends DurableObject {
             this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
             return;
           }
+        }
+        if (p.type === 'plasma_stream') {
+          this.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
+          toRemove.push(p.id);
+          return;
         }
         if (p.type === 'knife' || p.type === 'ninjastar' || p.type === 'lightsaber') {
           if (isAbilityProj) {
@@ -1601,12 +1649,8 @@ export class GlobalArenaRoom extends DurableObject {
       this.handleEquipWeapon(player, msg);
       return;
     }
-    if (type === MSG_C2S.PLASMA_TICK) {
-      this.handlePlasmaTick(player, msg);
-      return;
-    }
     if (type === MSG_C2S.SEEKER_SHOT) {
-      this.handleSeekerShot(player, msg);
+      this.handleSeekerShot(player, msg, ws);
       return;
     }
     if (type === MSG_C2S.THROW) {
@@ -1648,29 +1692,14 @@ export class GlobalArenaRoom extends DurableObject {
     entity.armor = Math.min(entity.armorMax, entity.armor + (12 * dtSec));
   }
 
-  tickPlasmaState(entity, dtSec) {
+  tickStreamState(entity, dtSec) {
     if (!entity) return;
-    if (!entity.alive) {
-      entity.beamTargetId = '';
-      entity.beamActiveUntil = 0;
-      return;
-    }
     const now = nowMs();
-
-    if ((entity.beamActiveUntil || 0) <= now) {
-      entity.beamActiveUntil = 0;
-      entity.beamTargetId = '';
-    }
-
-    const active = !!entity.beamTargetId && (entity.beamActiveUntil || 0) > now;
-    const coolRate = entity.beamOverheated ? 0.35 : 0.55;
-    if (!active) {
-      entity.beamHeat = Math.max(0, (entity.beamHeat || 0) - (coolRate * dtSec));
-    }
-
-    if (entity.beamOverheated && now >= (entity.beamOverheatedUntil || 0) && entity.beamHeat <= 0.95) {
-      entity.beamOverheated = false;
-      entity.beamOverheatedUntil = 0;
+    const overheated = now < (entity.streamOverheatedUntil || 0);
+    const coolRate = overheated ? 0.35 : 0.55;
+    entity.streamHeat = Math.max(0, (entity.streamHeat || 0) - (coolRate * dtSec));
+    if (!overheated && entity.streamHeat < 0.95) {
+      entity.streamOverheatedUntil = 0;
     }
   }
 
@@ -1692,12 +1721,8 @@ export class GlobalArenaRoom extends DurableObject {
     entity.lastDamageAt = 0;
     entity.x = 10 + Math.random() * 90;
     entity.z = 10 + Math.random() * 90;
-    entity.beamTargetId = '';
-    entity.beamActiveUntil = 0;
-    entity.beamHeat = 0;
-    entity.beamOverheated = false;
-    entity.beamOverheatedUntil = 0;
-    entity.lastPlasmaTickAt = 0;
+    entity.streamHeat = 0;
+    entity.streamOverheatedUntil = 0;
     entity.lastShotAt = {};
     entity.shotBurstState = {};
     entity.muzzleFlashUntil = 0;
@@ -1759,7 +1784,7 @@ export class GlobalArenaRoom extends DurableObject {
       }
 
       this.regenArmor(bot, dtSec);
-      this.tickPlasmaState(bot, dtSec);
+      this.tickStreamState(bot, dtSec);
       this.tickThrowableRegen(bot, dtSec);
       this.tickClassAbilityState(bot);
 
@@ -1774,7 +1799,7 @@ export class GlobalArenaRoom extends DurableObject {
     for (const player of this.players.values()) {
       this.respawnIfNeeded(player);
       this.regenArmor(player, dtSec);
-      this.tickPlasmaState(player, dtSec);
+      this.tickStreamState(player, dtSec);
       this.tickThrowableRegen(player, dtSec);
       this.tickClassAbilityState(player);
     }
@@ -1888,10 +1913,8 @@ export class GlobalArenaRoom extends DurableObject {
       armorMax: Number(entity.armorMax.toFixed(2)),
       wallhackRadius: entity.wallhackRadius,
       alive: !!entity.alive,
-      beamTargetId: entity.beamTargetId || '',
-      beamActiveUntil: entity.beamActiveUntil || 0,
-      beamHeat: Number((entity.beamHeat || 0).toFixed(3)),
-      beamOverheated: !!entity.beamOverheated,
+      streamHeat: Number((entity.streamHeat || 0).toFixed(3)),
+      streamOverheatedUntil: entity.streamOverheatedUntil || 0,
       muzzleFlashUntil: entity.muzzleFlashUntil || 0,
       abilityCooldownRemaining: Math.max(0, ((entity.abilityCooldownUntil || 0) - nowMs()) / 1000),
       ultimateCooldownRemaining: Math.max(0, ((entity.ultimateCooldownUntil || 0) - nowMs()) / 1000),

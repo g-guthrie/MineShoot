@@ -44,11 +44,8 @@
     var renderMap = new Map();
     var hitboxArray = [];
     var hitboxVisible = true;
-    var beamScratchA = new THREE.Vector3();
-    var beamScratchB = new THREE.Vector3();
     var REMOTE_EYE_HEIGHT = 1.6;
 
-    var REMOTE_BEAM_HOLD_MS = 180;
     var remoteProjectileState = [];
     var remoteFireZoneState = [];
     var throwAckQueue = [];
@@ -56,6 +53,7 @@
     var throwableEventQueue = [];
     var classCastResultQueue = [];
     var damageFeedbackQueue = [];
+    var seekerRejectQueue = [];
 
     var notices = [];
 
@@ -72,8 +70,8 @@
 
     function buildExpectedWorldMeta(roomName) {
         var cfg = protocolWorldConfig();
-        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 2));
-        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v2');
+        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 3));
+        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v3');
         var normalizedRoom = sanitizeRoomId(roomName || roomId || 'global');
         return {
             roomId: normalizedRoom,
@@ -359,21 +357,6 @@
         hitboxArray.push(bodyHitbox);
         hitboxArray.push(headHitbox);
 
-        var beamGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(),
-            new THREE.Vector3()
-        ]);
-        var beamMat = new THREE.LineBasicMaterial({
-            color: 0x66ddff,
-            transparent: true,
-            opacity: 0.85,
-            depthTest: false
-        });
-        var beamLine = new THREE.Line(beamGeom, beamMat);
-        beamLine.visible = false;
-        beamLine.renderOrder = 25;
-        sceneRef.add(beamLine);
-
         return {
             id: entity.id,
             kind: entity.kind,
@@ -398,12 +381,9 @@
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
             weaponId: entity.weaponId || 'rifle',
-            beamTargetId: entity.beamTargetId || '',
-            beamActiveUntil: entity.beamActiveUntil || 0,
-            beamHeat: entity.beamHeat || 0,
-            beamOverheated: !!entity.beamOverheated,
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
-            beamLine: beamLine
+            streamHeat: entity.streamHeat || 0,
+            streamOverheatedUntil: entity.streamOverheatedUntil || 0
         };
     }
 
@@ -414,7 +394,6 @@
         if (r.group && r.group.parent) r.group.parent.remove(r.group);
         if (r.bodyHitbox && r.bodyHitbox.parent) r.bodyHitbox.parent.remove(r.bodyHitbox);
         if (r.headHitbox && r.headHitbox.parent) r.headHitbox.parent.remove(r.headHitbox);
-        if (r.beamLine && r.beamLine.parent) r.beamLine.parent.remove(r.beamLine);
 
         var next = [];
         for (var i = 0; i < hitboxArray.length; i++) {
@@ -458,10 +437,8 @@
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
         r.weaponId = entity.weaponId || 'rifle';
-        r.beamTargetId = entity.beamTargetId || '';
-        r.beamActiveUntil = entity.beamActiveUntil || 0;
-        r.beamHeat = entity.beamHeat || 0;
-        r.beamOverheated = !!entity.beamOverheated;
+        r.streamHeat = entity.streamHeat || 0;
+        r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
         r.shadowDashUntil = entity.shadowDashUntil || 0;
         r.chokeState = entity.chokeState || null;
@@ -650,6 +627,15 @@
             return;
         }
 
+        if (msg.t === (MSG_S2C.SEEKER_REJECT || 'seeker_reject')) {
+            seekerRejectQueue.push({
+                weaponId: msg.weaponId || 'seekergun',
+                reason: msg.reason || 'invalid'
+            });
+            if (seekerRejectQueue.length > 32) seekerRejectQueue.shift();
+            return;
+        }
+
         if (
             msg.t === (MSG_S2C.THROW_IMPACT || 'throw_impact') ||
             msg.t === (MSG_S2C.THROW_EXPLODE || 'throw_explode') ||
@@ -821,33 +807,6 @@
         return out;
     }
 
-    function getRenderMuzzleWorldPosition(render, outVec3) {
-        if (!render) return null;
-        var out = outVec3 || new THREE.Vector3();
-        if (render.rigApi && render.rigApi.getMuzzleWorldPosition) {
-            return render.rigApi.getMuzzleWorldPosition(out);
-        }
-        out.copy(render.group.position);
-        out.y += 1.45;
-        return out;
-    }
-
-    function resolveBeamTargetPosition(targetId, outVec3) {
-        if (!targetId) return null;
-        var out = outVec3 || new THREE.Vector3();
-
-        if (targetId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
-            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
-            out.copy(selfPos);
-            out.y -= 0.6;
-            return out;
-        }
-
-        var render = renderMap.get(targetId);
-        if (!render) return null;
-        return getRenderCoreWorldPosition(render, out);
-    }
-
     function getChokeLiftForEntity(entityId) {
         if (!entityId) return 0;
         var now = Date.now();
@@ -865,15 +824,6 @@
             }
         }
         return lift;
-    }
-
-    function setBeamPoints(line, start, end) {
-        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
-        var arr = line.geometry.attributes.position.array;
-        arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
-        arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
-        line.geometry.attributes.position.needsUpdate = true;
-        line.geometry.computeBoundingSphere();
     }
 
     GameNet.requireAuth = function (onAuthed) {
@@ -981,6 +931,7 @@
         throwableEventQueue = [];
         classCastResultQueue = [];
         damageFeedbackQueue = [];
+        seekerRejectQueue = [];
         selfState = null;
         selfId = '';
         worldMeta = null;
@@ -1120,23 +1071,6 @@
 
             r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 0.7625, r.group.position.z);
             r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.0, r.group.position.z);
-
-            if (r.beamLine) {
-                var beamActive = !!r.alive && r.beamTargetId && (r.beamActiveUntil || 0) > Date.now();
-                if (beamActive) {
-                    var beamStart = getRenderMuzzleWorldPosition(r, beamScratchA);
-                    var beamEnd = resolveBeamTargetPosition(r.beamTargetId, beamScratchB);
-                    if (beamStart && beamEnd) {
-                        setBeamPoints(r.beamLine, beamStart, beamEnd);
-                        r.beamLine.visible = true;
-                        r.beamLine.material.opacity = r.beamOverheated ? 0.2 : 0.85;
-                    } else {
-                        r.beamLine.visible = false;
-                    }
-                } else {
-                    r.beamLine.visible = false;
-                }
-            }
         });
     };
 
@@ -1157,15 +1091,6 @@
         return wsSend({
             t: (MSG_C2S.EQUIP_WEAPON || 'equip_weapon'),
             weaponId: String(weaponId)
-        });
-    };
-
-    GameNet.sendPlasmaTick = function (targetId) {
-        if (!targetId) return false;
-        return wsSend({
-            t: (MSG_C2S.PLASMA_TICK || 'plasma_tick'),
-            seq: inputSeq++,
-            targetId: String(targetId)
         });
     };
 
@@ -1242,12 +1167,13 @@
 
     GameNet.sendAbilityCast = GameNet.sendClassCast;
 
-    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId) {
+    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId, weaponId) {
         var payload = {
             t: (MSG_C2S.SEEKER_SHOT || 'seeker_shot')
         };
         if (lockTargetId) payload.lockTargetId = String(lockTargetId);
         if (clientShotId) payload.clientShotId = String(clientShotId);
+        if (weaponId) payload.weaponId = String(weaponId);
         if (throwIntent && throwIntent.origin && throwIntent.direction) {
             payload.throwIntent = {
                 origin: {
@@ -1268,6 +1194,11 @@
             };
         }
         return wsSend(payload);
+    };
+
+    GameNet.consumeSeekerReject = function () {
+        if (!seekerRejectQueue.length) return null;
+        return seekerRejectQueue.shift();
     };
 
     GameNet.consumeClassCastResult = function () {

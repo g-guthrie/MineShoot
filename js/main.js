@@ -22,7 +22,6 @@
     var wallhackRing = null;
     var wallhackRingRadius = 0;
     var wallhackRingVisible = true;
-    var plasmaBeamLine = null;
 
     var DEFAULT_ENEMY_COUNT = 5;
     var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
@@ -249,15 +248,6 @@
         }
     }
 
-    function setBeamLinePoints(line, start, end) {
-        if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
-        var arr = line.geometry.attributes.position.array;
-        arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
-        arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
-        line.geometry.attributes.position.needsUpdate = true;
-        line.geometry.computeBoundingSphere();
-    }
-
     function applyDebugVisuals(visible) {
         wallhackRingVisible = !!visible;
         if (wallhackRing) wallhackRing.visible = wallhackRingVisible;
@@ -463,7 +453,13 @@
 
         if (fired) {
             var activeWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon() : null;
-            if (multiplayerMode && activeWeapon && activeWeapon.id === 'seekergun' && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot) {
+            if (
+                multiplayerMode &&
+                activeWeapon &&
+                (activeWeapon.id === 'seekergun' || activeWeapon.id === 'plasma') &&
+                globalThis.__MAYHEM_RUNTIME.GameNet &&
+                globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot
+            ) {
                 var seekerShotMeta = (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.consumeLastSeekerShotMeta)
                     ? globalThis.__MAYHEM_RUNTIME.GameThrowables.consumeLastSeekerShotMeta()
                     : null;
@@ -476,7 +472,8 @@
                     }
                     seekerIntent = seekerShotMeta.throwIntent || null;
                     clientShotId = String(seekerShotMeta.clientShotId || '');
-                    globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot(netLockTargetId, seekerIntent, clientShotId);
+                    var seekerWeaponId = String(seekerShotMeta.weaponId || activeWeapon.id || 'seekergun');
+                    globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot(netLockTargetId, seekerIntent, clientShotId, seekerWeaponId);
                 }
             }
 
@@ -886,21 +883,6 @@
             }
             depRequire('GameOverhead').init();
 
-            var plasmaBeamGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(),
-                new THREE.Vector3()
-            ]);
-            var plasmaBeamMaterial = new THREE.LineBasicMaterial({
-                color: 0x66ddff,
-                transparent: true,
-                opacity: 0.9,
-                depthTest: false
-            });
-            plasmaBeamLine = new THREE.Line(plasmaBeamGeometry, plasmaBeamMaterial);
-            plasmaBeamLine.visible = false;
-            plasmaBeamLine.renderOrder = 24;
-            scene.add(plasmaBeamLine);
-
             if (startupDebugNotice) {
                 setTransientDebug(startupDebugNotice, 2100);
                 startupDebugNotice = '';
@@ -1010,27 +992,13 @@
             syncReticleWithWeapon(currentWeapon);
         }
 
-        if (triggerHeld && hasInputCapture() && currentWeapon && currentWeapon.automatic && currentWeapon.id !== 'plasma') {
+        if (triggerHeld && hasInputCapture() && currentWeapon && currentWeapon.automatic) {
             tryPlayerFire();
         }
 
-        var plasmaState = globalThis.__MAYHEM_RUNTIME.GameHitscan.updatePlasmaBeam(dt, camera, {
-            triggerHeld: triggerHeld && hasInputCapture(),
-            onLocalTick: function (target, damage) {
-                if (multiplayerMode) return;
-                if (!target || target.ownerType !== 'enemy' || !target.hitbox) return;
-                if (!globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) return;
-                var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(target.hitbox, damage);
-                if (!result) return;
-                var hitPoint = target.worldPos ? target.worldPos.clone() : target.hitbox.position.clone();
-                handleEnemyHit(hitPoint, damage, 'body', result);
-            },
-            onNetTick: function (targetId) {
-                if (!multiplayerMode || !globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.sendPlasmaTick) return;
-                if (typeof targetId !== 'string' || targetId.indexOf('net:') !== 0) return;
-                globalThis.__MAYHEM_RUNTIME.GameNet.sendPlasmaTick(targetId.slice(4));
-            }
-        });
+        var plasmaState = globalThis.__MAYHEM_RUNTIME.GameHitscan.tick
+            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.tick(dt)
+            : globalThis.__MAYHEM_RUNTIME.GameHitscan.updatePlasmaBeam(dt, camera);
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers) {
             globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers(dt);
         }
@@ -1039,15 +1007,6 @@
         }
         lastPlasmaActive = !!plasmaState.active;
         globalThis.__MAYHEM_RUNTIME.GameUI.updatePlasmaState(plasmaState);
-        if (plasmaBeamLine) {
-            if (plasmaState && plasmaState.active) {
-                setBeamLinePoints(plasmaBeamLine, plasmaState.beamStart, plasmaState.beamEnd);
-                plasmaBeamLine.visible = true;
-                plasmaBeamLine.material.opacity = plasmaState.overheated ? 0.2 : 0.9;
-            } else {
-                plasmaBeamLine.visible = false;
-            }
-        }
 
         if (respawnInvulnTimer > 0) {
             respawnInvulnTimer -= dt;
@@ -1087,6 +1046,9 @@
                 globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(playerHP, playerMaxHP);
                 globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(playerArmor, playerArmorMax);
                 syncWallhackRingRadius();
+                if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.syncPlasmaStateFromNet) {
+                    globalThis.__MAYHEM_RUNTIME.GameHitscan.syncPlasmaStateFromNet(selfState);
+                }
                 if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState) {
                     globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
                     globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
@@ -1115,6 +1077,20 @@
                         handleNetworkDamageFeedback(damageFeedback);
                     }
                 } while (damageFeedback);
+            }
+
+            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeSeekerReject) {
+                var seekerReject = null;
+                do {
+                    seekerReject = globalThis.__MAYHEM_RUNTIME.GameNet.consumeSeekerReject();
+                    if (!seekerReject) continue;
+                    if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject) {
+                        globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject(seekerReject);
+                    }
+                    if (seekerReject.reason === 'overheated') {
+                        setTransientDebug('Plasma overheated.', 650);
+                    }
+                } while (seekerReject);
             }
 
             if (globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {

@@ -7,6 +7,7 @@
 
     var GameAvatarRig = {};
     var DEG_TO_RAD = Math.PI / 180;
+    var GUN_MOUNT_LIFT_Y = 0.09;
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -253,7 +254,8 @@
             rig.weaponId = (styles[weaponId] ? weaponId : 'rifle');
             rig.weaponClass = style.weaponClass || 'gun';
 
-            rig.gun.position.set(style.gunPos[0], style.gunPos[1], style.gunPos[2]);
+            // Keep weapon body above the hand line so grip/stock read as hand-held.
+            rig.gun.position.set(style.gunPos[0], style.gunPos[1] + GUN_MOUNT_LIFT_Y, style.gunPos[2]);
             rig.gun.rotation.set(style.gunRot[0], style.gunRot[1], style.gunRot[2]);
             // Keep a fixed wrist-style relationship: gun sits 75deg below the forearm.
             rig.gun.rotation.x = -75 * DEG_TO_RAD;

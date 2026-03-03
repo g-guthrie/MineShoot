@@ -153,7 +153,7 @@
         if (weapon.id === 'shotgun') return '12 deterministic hitscan pellets with hard spread box';
         if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
         if (weapon.id === 'machinegun') return 'Automatic suppression, strongest sustained DPS';
-        if (weapon.id === 'plasma') return 'Short-range lock beam, sustained DPS, overheat-limited';
+        if (weapon.id === 'plasma') return 'Seek-stream lock ticks with overheat control';
         if (weapon.id === 'pistol') return 'Fast swap sidearm, reliable fallback';
         return 'Balanced baseline weapon';
     }

@@ -116,6 +116,21 @@
             homingLerp: 3.8,
             lockHalfAngleDeg: 30
         },
+        plasma_stream: {
+            id: 'plasma_stream',
+            label: 'Plasma Stream',
+            speed: 34,
+            upward: 0.35,
+            gravity: 2,
+            fuse: 0.42,
+            radius: 0.01,
+            damage: 15,
+            bodyDamage: 15,
+            headDamage: 15,
+            homingBoost: 4.5,
+            homingLerp: 3.8,
+            lockHalfAngleDeg: 35
+        },
         molotov: {
             id: 'molotov',
             label: 'Molotov',
@@ -229,10 +244,12 @@
                 new THREE.MeshLambertMaterial({ color: 0x2f7f2f })
             );
         }
-        if (type === 'seeker' || type === 'seekershot') {
+        if (type === 'seeker' || type === 'seekershot' || type === 'plasma_stream') {
+            var color = (type === 'plasma_stream') ? 0x66ddff : 0x22aabb;
+            var emissive = (type === 'plasma_stream') ? 0x114466 : 0x112222;
             return new THREE.Mesh(
                 new THREE.BoxGeometry(0.2, 0.2, 0.2),
-                new THREE.MeshLambertMaterial({ color: 0x22aabb, emissive: 0x112222 })
+                new THREE.MeshLambertMaterial({ color: color, emissive: emissive })
             );
         }
         if (type === 'molotov') {
@@ -801,7 +818,7 @@
             return;
         }
 
-        var isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot');
+        var isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream');
         if (isSeekerLike && p.age > 0.03) {
             var targetEnemy = null;
             var targetPoint = null;
@@ -810,11 +827,11 @@
             var currentDir = (p.velocity.lengthSq() > 0.0001)
                 ? p.velocity.clone().normalize()
                 : (p.launchDir ? p.launchDir.clone() : new THREE.Vector3(0, 0, -1));
-            var halfAngleDeg = (p.type === 'seekershot')
+            var halfAngleDeg = (p.type === 'seekershot' || p.type === 'plasma_stream')
                 ? ((typeof def.lockHalfAngleDeg === 'number') ? def.lockHalfAngleDeg : 30)
                 : ((typeof def.acquireHalfAngleDeg === 'number') ? def.acquireHalfAngleDeg : (throwableDistanceTuning.seekerAcquireHalfAngleDeg || 35));
             var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
-            var maxAcquireRange = (p.type === 'seekershot')
+            var maxAcquireRange = (p.type === 'seekershot' || p.type === 'plasma_stream')
                 ? ((typeof def.acquireRange === 'number') ? def.acquireRange : 24)
                 : (throwableDistanceTuning.seekerAcquireRange || 18);
 
@@ -844,8 +861,24 @@
             if (targetEnemy) {
                 var homingSpeed = def.speed + (def.homingBoost || 2);
                 var homingLerp = def.homingLerp || 4.8;
-                tmpDir.copy(targetPoint || tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(homingSpeed);
-                p.velocity.lerp(tmpDir, Math.min(1, dt * homingLerp));
+                var seekCore = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.seekCore)
+                    ? globalThis.__MAYHEM_RUNTIME.GameShared.seekCore
+                    : null;
+                if (seekCore && seekCore.steerHomingVelocity) {
+                    var nextVelocity = seekCore.steerHomingVelocity({
+                        projectilePos: { x: p.mesh.position.x, y: p.mesh.position.y, z: p.mesh.position.z },
+                        targetPos: { x: (targetPoint || tmpTarget).x, y: (targetPoint || tmpTarget).y, z: (targetPoint || tmpTarget).z },
+                        velocity: { x: p.velocity.x, y: p.velocity.y, z: p.velocity.z },
+                        speed: def.speed || 14,
+                        boost: def.homingBoost || 2,
+                        lerp: homingLerp,
+                        dt: dt
+                    });
+                    p.velocity.set(Number(nextVelocity.x || 0), Number(nextVelocity.y || 0), Number(nextVelocity.z || 0));
+                } else {
+                    tmpDir.copy(targetPoint || tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(homingSpeed);
+                    p.velocity.lerp(tmpDir, Math.min(1, dt * homingLerp));
+                }
             }
         }
 
@@ -893,8 +926,20 @@
                     return;
                 }
 
-                explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
-                removeProjectile(index);
+                if (p.type === 'plasma_stream') {
+                    var netActive = !!(globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive());
+                    if (!netActive && hit.object && hit.object.userData) {
+                        var streamHitType = hit.object.userData.type || 'body';
+                        var streamDamage = streamHitType === 'head' ? (def.headDamage || def.damage || 15) : (def.bodyDamage || def.damage || 15);
+                        var streamResult = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hit.object, streamDamage);
+                        reportHit(onEnemyHit, hit.point, streamDamage, streamHitType, streamResult, 'plasma_stream');
+                    }
+                    spawnFlash(hit.point, 0x66ddff, 0.08, 0.08);
+                    removeProjectile(index);
+                } else {
+                    explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
+                    removeProjectile(index);
+                }
                 return;
             }
 
@@ -911,13 +956,16 @@
                 return;
             }
 
-            if (p.type === 'seeker' || p.type === 'seekershot') {
+            if (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream') {
                 if (p.type === 'seeker') {
                     p.mesh.position.copy(hit.point);
                     p.velocity.set(0, 0, 0);
                     p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
                     p.stuckEnemy = null;
                     p.stuckOffset.set(0, 0, 0);
+                } else if (p.type === 'plasma_stream') {
+                    spawnFlash(hit.point, 0x66ddff, 0.07, 0.07);
+                    removeProjectile(index);
                 } else {
                     explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
                     removeProjectile(index);
@@ -949,9 +997,13 @@
             return;
         }
 
-        if ((p.type === 'seeker' || p.type === 'seekershot') && p.age >= def.fuse) {
-            explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
-            removeProjectile(index);
+        if ((p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream') && p.age >= def.fuse) {
+            if (p.type === 'plasma_stream') {
+                removeProjectile(index);
+            } else {
+                explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
+                removeProjectile(index);
+            }
             return;
         }
 
@@ -1348,6 +1400,8 @@
     GameThrowables.fireSeekerShot = function (camera, lockTarget, clientShotId, options) {
         if (!sceneRef || !camera) return false;
         options = options || {};
+        var weaponId = String(options.weaponId || 'seekergun');
+        var projectileType = weaponId === 'plasma' ? 'plasma_stream' : 'seekershot';
         camera.getWorldDirection(tmpForward);
         var muzzle = null;
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {
@@ -1376,7 +1430,7 @@
         }
 
         if (shouldPredict) {
-            var ok = spawnProjectile('seekershot', camera, {
+            var ok = spawnProjectile(projectileType, camera, {
                 intent: intent,
                 origin: origin,
                 direction: tmpForward.clone(),
@@ -1387,13 +1441,14 @@
             if (!ok) return false;
 
             predictedByClientId[shotId] = {
-                type: 'seekershot',
+                type: projectileType,
                 createdAt: Date.now(),
                 authoritativeSeen: false
             };
         }
         lastSeekerShotMeta = {
             clientShotId: shotId,
+            weaponId: weaponId,
             lockTargetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : '',
             throwIntent: {
                 origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },

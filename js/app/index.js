@@ -3,6 +3,8 @@ globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 const orderedModules = [
   '../../shared/gameplay-tuning.js',
   '../../shared/protocol.js',
+  '../../shared/seek-profiles.js',
+  '../../shared/seek-core.js',
   '../core/bootstrap.js',
   '../core/mode-flow.js',
   '../core/loop.js',
@@ -10,7 +12,6 @@ const orderedModules = [
   '../net/snapshots.js',
   '../domain/weapons/primitives/cooldown.js',
   '../domain/weapons/families/hitscan.js',
-  '../domain/weapons/families/plasma-beam.js',
   '../domain/weapons/families/seeker-projectile.js',
   '../domain/weapons/registry.js',
   '../world.js',

@@ -60,6 +60,10 @@ export const gameplayTuning = {
       id: 'seekershot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
       homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 30
     },
+    plasma_stream: {
+      id: 'plasma_stream', speed: 34, upward: 0.35, gravity: 2, fuse: 0.42, radius: 0.01, damage: 0,
+      bodyDamage: 0, headDamage: 0, homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 35, acquireRange: 24
+    },
     molotov: {
       id: 'molotov', speed: 15, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
       fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 14
