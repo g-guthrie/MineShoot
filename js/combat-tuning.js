@@ -1,13 +1,13 @@
 /**
  * combat-tuning.js - Canonical combat distance tuning (meters/world-units)
- * Loaded as global: window.GameCombatTuning
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameCombatTuning
  */
 (function () {
     'use strict';
 
     var GameCombatTuning = {};
 
-    var BASE = {
+    var DEFAULTS = {
         awareness: {
             segments: 8,
             radarRange: 35,
@@ -39,7 +39,9 @@
             seekerRadius: 5.0,
             seekerShotRadius: 4.6,
             molotovFireRadius: 3.2,
-            seekerAcquireRange: 22
+            seekerAcquireRange: 18,
+            seekerAcquireHalfAngleDeg: 35,
+            seekerStickExplodeDelay: 0.65
         },
         throwableMechanics: {
             aimRayRange: 100,
@@ -61,20 +63,21 @@
         classAbilities: {
             ninjaThrowRange: 42,
             ninjaUltimateRadius: 11,
-            jediAbilityRange: 13,
-            jediUltimateRange: 6.0,
+            jediAbilityRange: 24,
+            jediUltimateRange: 22,
             magicianAimRange: 36,
             magicianAbilityRadius: 4.8,
             magicianUltimateRange: 60,
-            sharpshooterUltimateRange: 70,
+            sharpshooterUltimateRange: 80,
             brawlerAbilityRange: 4.2,
             brawlerRageRadius: 5.2,
             jediChokeLockBoxPx: 190,
             jediChokeRange: 24,
-            jediChokeDuration: 1.55,
+            jediChokeDuration: 1.6,
             jediChokeLiftHeight: 1.0,
             jediChokeTickRate: 0.25,
             jediChokeDotPerTick: 0,
+            jediChokeCastDamage: 95,
             jediSaberSpeed: 34,
             jediSaberMaxDistance: 22,
             jediSaberReturnSpeed: 42,
@@ -98,9 +101,107 @@
         }
     };
 
+    function deepCopy(data) {
+        return JSON.parse(JSON.stringify(data));
+    }
+
+    function sharedTuning() {
+        return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning
+            : null;
+    }
+
+    function buildBase() {
+        var shared = sharedTuning();
+        if (!shared) return deepCopy(DEFAULTS);
+
+        var weapons = shared.weaponStats || {};
+        var throwables = shared.throwables || {};
+        var classPresets = shared.classPresets || {};
+        var abilities = shared.classAbilities || {};
+        var ninja = abilities.ninja || {};
+        var jedi = abilities.jedi || {};
+        var magician = abilities.magician || {};
+        var sharpshooter = abilities.sharpshooter || {};
+        var brawler = abilities.brawler || {};
+
+        return {
+            awareness: shared.awareness || deepCopy(DEFAULTS.awareness),
+            enemy: shared.enemy || deepCopy(DEFAULTS.enemy),
+            weapons: {
+                rifle: Number(weapons.rifle && weapons.rifle.maxRange) || DEFAULTS.weapons.rifle,
+                pistol: Number(weapons.pistol && weapons.pistol.maxRange) || DEFAULTS.weapons.pistol,
+                machinegun: Number(weapons.machinegun && weapons.machinegun.maxRange) || DEFAULTS.weapons.machinegun,
+                shotgun: Number(weapons.shotgun && weapons.shotgun.maxRange) || DEFAULTS.weapons.shotgun,
+                sniper: Number(weapons.sniper && weapons.sniper.maxRange) || DEFAULTS.weapons.sniper,
+                seekergun: Number(weapons.seekergun && weapons.seekergun.maxRange) || DEFAULTS.weapons.seekergun,
+                plasma: Number(weapons.plasma && weapons.plasma.maxRange) || DEFAULTS.weapons.plasma
+            },
+            shotgunFalloff: shared.shotgunFalloff || deepCopy(DEFAULTS.shotgunFalloff),
+            throwables: {
+                fragRadius: Number(throwables.frag && throwables.frag.radius) || DEFAULTS.throwables.fragRadius,
+                seekerRadius: Number(throwables.seeker && throwables.seeker.radius) || DEFAULTS.throwables.seekerRadius,
+                seekerShotRadius: Number(throwables.seekershot && throwables.seekershot.radius) || DEFAULTS.throwables.seekerShotRadius,
+                molotovFireRadius: Number(throwables.molotov && throwables.molotov.fireRadius) || DEFAULTS.throwables.molotovFireRadius,
+                seekerAcquireRange: Number(throwables.seeker && throwables.seeker.acquireRange) || DEFAULTS.throwables.seekerAcquireRange,
+                seekerAcquireHalfAngleDeg: Number(throwables.seeker && throwables.seeker.acquireHalfAngleDeg) || DEFAULTS.throwables.seekerAcquireHalfAngleDeg,
+                seekerStickExplodeDelay: Number(throwables.seeker && throwables.seeker.stickExplodeDelay) || DEFAULTS.throwables.seekerStickExplodeDelay
+            },
+            throwableMechanics: shared.throwableMechanics || deepCopy(DEFAULTS.throwableMechanics),
+            classWallhackRadius: {
+                ninja: Number(classPresets.ninja && classPresets.ninja.wallhackRadius) || DEFAULTS.classWallhackRadius.ninja,
+                jedi: Number(classPresets.jedi && classPresets.jedi.wallhackRadius) || DEFAULTS.classWallhackRadius.jedi,
+                magician: Number(classPresets.magician && classPresets.magician.wallhackRadius) || DEFAULTS.classWallhackRadius.magician,
+                sharpshooter: Number(classPresets.sharpshooter && classPresets.sharpshooter.wallhackRadius) || DEFAULTS.classWallhackRadius.sharpshooter,
+                brawler: Number(classPresets.brawler && classPresets.brawler.wallhackRadius) || DEFAULTS.classWallhackRadius.brawler
+            },
+            classAbilities: {
+                ninjaThrowRange: Number(ninja.stars && ninja.stars.range) || DEFAULTS.classAbilities.ninjaThrowRange,
+                ninjaUltimateRadius: DEFAULTS.classAbilities.ninjaUltimateRadius,
+                jediAbilityRange: Number(jedi.choke && jedi.choke.range) || DEFAULTS.classAbilities.jediAbilityRange,
+                jediUltimateRange: Number(jedi.saberThrow && jedi.saberThrow.range) || DEFAULTS.classAbilities.jediUltimateRange,
+                magicianAimRange: Number(magician.fireball && magician.fireball.range) || DEFAULTS.classAbilities.magicianAimRange,
+                magicianAbilityRadius: Number(magician.fireball && magician.fireball.radius) || DEFAULTS.classAbilities.magicianAbilityRadius,
+                magicianUltimateRange: Number(magician.chainLightning && magician.chainLightning.range) || DEFAULTS.classAbilities.magicianUltimateRange,
+                sharpshooterUltimateRange: Number(sharpshooter.deadeye && sharpshooter.deadeye.range) || DEFAULTS.classAbilities.sharpshooterUltimateRange,
+                brawlerAbilityRange: Number(brawler.batSwing && brawler.batSwing.range) || DEFAULTS.classAbilities.brawlerAbilityRange,
+                brawlerRageRadius: Number(brawler.rage && brawler.rage.radius) || DEFAULTS.classAbilities.brawlerRageRadius,
+                jediChokeLockBoxPx: Number(jedi.choke && jedi.choke.lockBoxPx) || DEFAULTS.classAbilities.jediChokeLockBoxPx,
+                jediChokeRange: Number(jedi.choke && jedi.choke.range) || DEFAULTS.classAbilities.jediChokeRange,
+                jediChokeDuration: Number(jedi.choke && jedi.choke.duration) || DEFAULTS.classAbilities.jediChokeDuration,
+                jediChokeLiftHeight: Number(jedi.choke && jedi.choke.liftHeight) || DEFAULTS.classAbilities.jediChokeLiftHeight,
+                jediChokeTickRate: Number(jedi.choke && jedi.choke.tickRate) || DEFAULTS.classAbilities.jediChokeTickRate,
+                jediChokeDotPerTick: Number(jedi.choke && jedi.choke.dotPerTick) || DEFAULTS.classAbilities.jediChokeDotPerTick,
+                jediChokeCastDamage: Number(jedi.choke && jedi.choke.castDamage) || DEFAULTS.classAbilities.jediChokeCastDamage,
+                jediSaberSpeed: Number(jedi.saberThrow && jedi.saberThrow.speed) || DEFAULTS.classAbilities.jediSaberSpeed,
+                jediSaberMaxDistance: Number(jedi.saberThrow && jedi.saberThrow.maxDistance) || DEFAULTS.classAbilities.jediSaberMaxDistance,
+                jediSaberReturnSpeed: Number(jedi.saberThrow && jedi.saberThrow.returnSpeed) || DEFAULTS.classAbilities.jediSaberReturnSpeed,
+                jediSaberHitRadius: Number(jedi.saberThrow && jedi.saberThrow.hitRadius) || DEFAULTS.classAbilities.jediSaberHitRadius,
+                jediSaberDamage: Number(jedi.saberThrow && jedi.saberThrow.bodyDamage) || DEFAULTS.classAbilities.jediSaberDamage,
+                jediSaberHeadDamage: Number(jedi.saberThrow && jedi.saberThrow.headDamage) || DEFAULTS.classAbilities.jediSaberHeadDamage,
+                ninjaStarCount: Number(ninja.stars && ninja.stars.count) || DEFAULTS.classAbilities.ninjaStarCount,
+                ninjaStarSpreadDeg: DEFAULTS.classAbilities.ninjaStarSpreadDeg,
+                ninjaStarSpeed: DEFAULTS.classAbilities.ninjaStarSpeed,
+                ninjaStarLife: DEFAULTS.classAbilities.ninjaStarLife,
+                ninjaStarHitRadius: DEFAULTS.classAbilities.ninjaStarHitRadius,
+                ninjaStarBodyDamage: Number(ninja.stars && ninja.stars.bodyDamage) || DEFAULTS.classAbilities.ninjaStarBodyDamage,
+                ninjaStarHeadDamage: Number(ninja.stars && ninja.stars.headDamage) || DEFAULTS.classAbilities.ninjaStarHeadDamage,
+                shadowDashSteps: Number(ninja.shadowDash && ninja.shadowDash.steps) || DEFAULTS.classAbilities.shadowDashSteps,
+                shadowDashStepDuration: Number(ninja.shadowDash && ninja.shadowDash.stepDuration) || DEFAULTS.classAbilities.shadowDashStepDuration,
+                deadeyeLockBoxPx: DEFAULTS.classAbilities.deadeyeLockBoxPx,
+                deadeyeLockRange: Number(sharpshooter.deadeye && sharpshooter.deadeye.range) || DEFAULTS.classAbilities.deadeyeLockRange,
+                deadeyeDuration: Number(sharpshooter.deadeye && sharpshooter.deadeye.duration) || DEFAULTS.classAbilities.deadeyeDuration,
+                deadeyeMaxTargets: Number(sharpshooter.deadeye && sharpshooter.deadeye.maxTargets) || DEFAULTS.classAbilities.deadeyeMaxTargets,
+                deadeyeDamage: Number(sharpshooter.deadeye && sharpshooter.deadeye.damage) || DEFAULTS.classAbilities.deadeyeDamage
+            }
+        };
+    }
+
+    var BASE = buildBase();
+
     function scaleDistance(meters) {
-        if (window.GameWorld && window.GameWorld.scaleCombatDistance) {
-            return window.GameWorld.scaleCombatDistance(meters);
+        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.scaleCombatDistance) {
+            return globalThis.__MAYHEM_RUNTIME.GameWorld.scaleCombatDistance(meters);
         }
         return meters;
     }
@@ -153,7 +254,9 @@
             seekerRadius: scaleDistance(BASE.throwables.seekerRadius),
             seekerShotRadius: scaleDistance(BASE.throwables.seekerShotRadius),
             molotovFireRadius: scaleDistance(BASE.throwables.molotovFireRadius),
-            seekerAcquireRange: scaleDistance(BASE.throwables.seekerAcquireRange)
+            seekerAcquireRange: scaleDistance(BASE.throwables.seekerAcquireRange),
+            seekerAcquireHalfAngleDeg: BASE.throwables.seekerAcquireHalfAngleDeg,
+            seekerStickExplodeDelay: BASE.throwables.seekerStickExplodeDelay
         };
     };
 
@@ -181,9 +284,14 @@
         return scaledCopy(BASE.classAbilities);
     };
 
+    GameCombatTuning.getRawSharedTuning = function () {
+        var shared = sharedTuning();
+        return shared ? deepCopy(shared) : null;
+    };
+
     GameCombatTuning.debugDump = function () {
         return {
-            combatScale: (window.GameWorld && window.GameWorld.getCombatScale) ? window.GameWorld.getCombatScale() : 1,
+            combatScale: (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getCombatScale) ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCombatScale() : 1,
             awareness: GameCombatTuning.getAwarenessTuning(),
             enemy: GameCombatTuning.getEnemyTuning(),
             weaponRanges: {
@@ -208,5 +316,5 @@
         };
     };
 
-    window.GameCombatTuning = GameCombatTuning;
+    globalThis.__MAYHEM_RUNTIME.GameCombatTuning = GameCombatTuning;
 })();

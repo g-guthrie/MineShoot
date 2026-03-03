@@ -1,16 +1,22 @@
 /**
  * network.js - Cloudflare auth + global room websocket + remote entity rendering
- * Loaded as global: window.GameNet
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameNet
  */
 (function () {
     'use strict';
 
     var GameNet = {};
 
-    var SESSION_ME_URL = '/api/me';
-    var SESSION_LOGIN_URL = '/api/auth/login';
-    var SESSION_LOGOUT_URL = '/api/auth/logout';
-    var WS_URL = '/api/ws';
+    var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
+    var AUTH_PATH = (PROTOCOL && PROTOCOL.authPath) ? PROTOCOL.authPath : {};
+    var MSG = (PROTOCOL && PROTOCOL.msg) ? PROTOCOL.msg : { c2s: {}, s2c: {} };
+    var MSG_C2S = MSG.c2s || {};
+    var MSG_S2C = MSG.s2c || {};
+
+    var SESSION_ME_URL = AUTH_PATH.me || '/api/me';
+    var SESSION_LOGIN_URL = AUTH_PATH.login || '/api/auth/login';
+    var SESSION_LOGOUT_URL = AUTH_PATH.logout || '/api/auth/logout';
+    var WS_URL = (PROTOCOL && PROTOCOL.wsPath) ? PROTOCOL.wsPath : '/api/ws';
 
     var AUTH_COOKIE_HELP = 'Username + 4-digit PIN';
 
@@ -18,18 +24,23 @@
     var connected = false;
     var ws = null;
     var reconnectTimer = null;
+    var transport = null;
     var sceneRef = null;
 
     var user = null;
     var guestMode = false;
+    var roomId = 'global';
     var selfId = '';
     var selfState = null;
+    var worldMeta = null;
+    var worldMismatchNotified = false;
 
     var inputSeq = 1;
     var inputSendTimer = 0;
     var INPUT_SEND_INTERVAL = 0.05;
 
     var snapshotMap = new Map();
+    var snapshotHelper = null;
     var renderMap = new Map();
     var hitboxArray = [];
     var hitboxVisible = true;
@@ -48,29 +59,55 @@
 
     var notices = [];
 
+    function cloneWorldFlags(flags) {
+        return {
+            envV2: !!(flags && flags.envV2),
+            terrainPhysicsV2: !!(flags && flags.terrainPhysicsV2)
+        };
+    }
+
+    function protocolWorldConfig() {
+        return (PROTOCOL && PROTOCOL.world) ? PROTOCOL.world : null;
+    }
+
+    function buildExpectedWorldMeta(roomName) {
+        var cfg = protocolWorldConfig();
+        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 2));
+        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v2');
+        var normalizedRoom = sanitizeRoomId(roomName || roomId || 'global');
+        return {
+            roomId: normalizedRoom,
+            worldSeed: prefix + '-' + normalizedRoom,
+            worldProfileVersion: profileVersion,
+            worldFlags: cloneWorldFlags((cfg && cfg.flags) ? cfg.flags : { envV2: true, terrainPhysicsV2: false })
+        };
+    }
+
     function classWallhackRadiusFor(classId) {
-        if (window.GameCombatTuning && window.GameCombatTuning.getClassWallhackRadius) {
-            return window.GameCombatTuning.getClassWallhackRadius(classId);
+        if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius) {
+            return globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius(classId);
         }
         var fallback = {
+            abilities: 90,
             ninja: 90,
             jedi: 85,
             magician: 100,
             sharpshooter: 115,
             brawler: 75
         };
-        return fallback[classId] || fallback.sharpshooter;
+        return fallback[classId] || fallback.abilities;
     }
 
     function classStats(classId) {
         var defs = {
+            abilities: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('abilities') },
             ninja: { armorMax: 80, wallhackRadius: classWallhackRadiusFor('ninja') },
             jedi: { armorMax: 130, wallhackRadius: classWallhackRadiusFor('jedi') },
             magician: { armorMax: 100, wallhackRadius: classWallhackRadiusFor('magician') },
             sharpshooter: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('sharpshooter') },
             brawler: { armorMax: 150, wallhackRadius: classWallhackRadiusFor('brawler') }
         };
-        return defs[classId] || defs.sharpshooter;
+        return defs[classId] || defs.abilities;
     }
 
     function pushNotice(text) {
@@ -86,14 +123,26 @@
     function wsEndpoint() {
         var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         var endpoint = proto + '//' + window.location.host + WS_URL;
-        if (!user || !user.id) return endpoint;
-
         var params = new URLSearchParams();
-        params.set('uid', String(user.id));
-        params.set('username', String(user.username || user.id));
-        params.set('classId', String(user.classId || 'sharpshooter'));
-        if (guestMode) params.set('guest', '1');
+        params.set('room', String(roomId || 'global'));
+        if (user && user.id) {
+            params.set('uid', String(user.id));
+            params.set('username', String(user.username || user.id));
+            params.set('classId', String(user.classId || 'abilities'));
+            if (guestMode) params.set('guest', '1');
+        }
         return endpoint + '?' + params.toString();
+    }
+
+    function sanitizeRoomId(raw) {
+        if (PROTOCOL && typeof PROTOCOL.sanitizeRoomId === 'function') {
+            return PROTOCOL.sanitizeRoomId(raw);
+        }
+        var id = String(raw || '').toLowerCase().trim();
+        id = id.replace(/[^a-z0-9-]/g, '');
+        if (!id) return 'global';
+        if (id.length > 32) id = id.slice(0, 32);
+        return id;
     }
 
     function makeGuestUser() {
@@ -101,7 +150,7 @@
         return {
             id: 'guest-' + Date.now().toString(36) + '-' + nonce.toLowerCase(),
             username: 'Guest-' + nonce,
-            classId: 'sharpshooter'
+            classId: 'abilities'
         };
     }
 
@@ -225,8 +274,8 @@
         var group = new THREE.Group();
         var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
         var rigApi = null;
-        if (window.GameAvatarRig && window.GameAvatarRig.create) {
-            rigApi = window.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
+        if (globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
+            rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
                 bodyColor: color,
                 skinColor: 0xd2a77d,
                 legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
@@ -264,7 +313,7 @@
         }
 
         var bodyHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(2.7, 2.0, 2.7),
+            new THREE.BoxGeometry(2.7, 1.525, 2.7),
             new THREE.MeshBasicMaterial({
                 transparent: true,
                 opacity: hitboxVisible ? 0.3 : 0,
@@ -427,6 +476,10 @@
     }
 
     function applySnapshot(entities, projectiles, fireZones) {
+        if (snapshotHelper && snapshotHelper.applySnapshot) {
+            snapshotHelper.applySnapshot(entities, projectiles, fireZones);
+            return;
+        }
         if (!Array.isArray(entities)) return;
 
         snapshotMap.clear();
@@ -448,11 +501,39 @@
         remoteFireZoneState = Array.isArray(fireZones) ? fireZones.slice() : [];
     }
 
+    function initSnapshotHelper() {
+        if (!globalThis.__MAYHEM_RUNTIME.GameNetSnapshots || !globalThis.__MAYHEM_RUNTIME.GameNetSnapshots.create) {
+            snapshotHelper = null;
+            return;
+        }
+        snapshotHelper = globalThis.__MAYHEM_RUNTIME.GameNetSnapshots.create({
+            onEntity: function (entity) {
+                updateRemoteFromSnapshot(entity);
+            },
+            onPrune: function (nextMap) {
+                snapshotMap = nextMap;
+                var toRemove = [];
+                renderMap.forEach(function (_v, id) {
+                    if (!snapshotMap.has(id)) toRemove.push(id);
+                });
+                for (var i = 0; i < toRemove.length; i++) {
+                    removeRemoteVisual(toRemove[i]);
+                }
+            },
+            onProjectiles: function (projectiles) {
+                remoteProjectileState = projectiles;
+            },
+            onFireZones: function (fireZones) {
+                remoteFireZoneState = fireZones;
+            }
+        });
+    }
+
     function damagePointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
-            var selfPos = window.GamePlayer.getPosition();
+        if (entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
+            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             return {
                 x: selfPos.x,
                 y: selfPos.y + 1.1,
@@ -464,7 +545,7 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: render.group.position.y + 1.3,
+            y: render.group.position.y + 1.06,
             z: render.group.position.z
         };
     }
@@ -472,8 +553,8 @@
     function markerPointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
-            var selfPos = window.GamePlayer.getPosition();
+        if (entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
+            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             return {
                 x: selfPos.x,
                 y: selfPos.y + 2.2,
@@ -485,7 +566,7 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: render.group.position.y + 2.2,
+            y: render.group.position.y + 2.25,
             z: render.group.position.z
         };
     }
@@ -499,19 +580,56 @@
         }
         if (!msg || !msg.t) return;
 
-        if (msg.t === 'welcome') {
+        if (msg.t === (MSG_S2C.WELCOME || 'welcome')) {
             connected = true;
             selfId = msg.selfId || selfId;
-            pushNotice('Joined room ' + (msg.roomId || 'global'));
+            roomId = sanitizeRoomId(msg.roomId || roomId || 'global');
+
+            var expectedMeta = buildExpectedWorldMeta(roomId);
+            var nextMeta = {
+                roomId: roomId,
+                worldSeed: (typeof msg.worldSeed === 'string' && msg.worldSeed.trim()) ? msg.worldSeed.trim() : expectedMeta.worldSeed,
+                worldProfileVersion: Math.max(1, Math.round(Number(msg.worldProfileVersion) || expectedMeta.worldProfileVersion)),
+                worldFlags: cloneWorldFlags((msg.worldFlags && typeof msg.worldFlags === 'object') ? msg.worldFlags : expectedMeta.worldFlags)
+            };
+            worldMeta = nextMeta;
+
+            if (!msg.worldSeed) {
+                pushNotice('Server world metadata missing; using local fallback profile.');
+            } else if (
+                expectedMeta.worldSeed !== nextMeta.worldSeed ||
+                expectedMeta.worldProfileVersion !== nextMeta.worldProfileVersion ||
+                expectedMeta.worldFlags.envV2 !== nextMeta.worldFlags.envV2 ||
+                expectedMeta.worldFlags.terrainPhysicsV2 !== nextMeta.worldFlags.terrainPhysicsV2
+            ) {
+                pushNotice('Server world profile differs from local defaults.');
+            }
+
+            if (!worldMismatchNotified && globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getWorldMeta) {
+                var activeWorldMeta = globalThis.__MAYHEM_RUNTIME.GameWorld.getWorldMeta();
+                if (
+                    activeWorldMeta &&
+                    activeWorldMeta.worldSeed &&
+                    (
+                        String(activeWorldMeta.worldSeed) !== nextMeta.worldSeed ||
+                        Number(activeWorldMeta.worldProfileVersion || 0) !== nextMeta.worldProfileVersion
+                    )
+                ) {
+                    worldMismatchNotified = true;
+                    pushNotice('World metadata mismatch with active scene. Rejoin room to resync.');
+                }
+            }
+
+            pushNotice('Joined room ' + roomId);
             return;
         }
 
-        if (msg.t === 'snapshot') {
+        if (msg.t === (MSG_S2C.SNAPSHOT || 'snapshot')) {
             applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || []);
             return;
         }
 
-        if (msg.t === 'throw_spawn') {
+        if (msg.t === (MSG_S2C.THROW_SPAWN || 'throw_spawn')) {
             throwAckQueue.push({
                 projectileId: msg.projectileId || '',
                 ownerId: msg.ownerId || '',
@@ -522,7 +640,7 @@
             return;
         }
 
-        if (msg.t === 'throw_reject') {
+        if (msg.t === (MSG_S2C.THROW_REJECT || 'throw_reject')) {
             throwRejectQueue.push({
                 throwableId: msg.throwableId || '',
                 clientThrowId: msg.clientThrowId || '',
@@ -532,13 +650,17 @@
             return;
         }
 
-        if (msg.t === 'throw_impact' || msg.t === 'throw_explode' || msg.t === 'aoe_end') {
+        if (
+            msg.t === (MSG_S2C.THROW_IMPACT || 'throw_impact') ||
+            msg.t === (MSG_S2C.THROW_EXPLODE || 'throw_explode') ||
+            msg.t === (MSG_S2C.AOE_END || 'aoe_end')
+        ) {
             throwableEventQueue.push(msg);
             if (throwableEventQueue.length > 64) throwableEventQueue.shift();
             return;
         }
 
-        if (msg.t === 'damage_event') {
+        if (msg.t === (MSG_S2C.DAMAGE_EVENT || 'damage_event')) {
             if (selfState && msg.targetId === selfId) {
                 if (typeof msg.health === 'number') selfState.hp = msg.health;
                 if (typeof msg.armor === 'number') selfState.armor = msg.armor;
@@ -566,32 +688,56 @@
             return;
         }
 
-        if (msg.t === 'death_respawn') {
-            if (msg.entityId === selfId && window.GamePlayer && window.GamePlayer.respawnRandom) {
-                window.GamePlayer.respawnRandom();
+        if (msg.t === (MSG_S2C.DEATH_RESPAWN || 'death_respawn')) {
+            if (msg.entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.respawnRandom) {
+                globalThis.__MAYHEM_RUNTIME.GamePlayer.respawnRandom();
             }
             return;
         }
 
-        if (msg.t === 'class_cast_ok' || msg.t === 'class_cast_reject') {
+        if (
+            msg.t === (MSG_S2C.CLASS_CAST_OK || 'class_cast_ok') ||
+            msg.t === (MSG_S2C.CLASS_CAST_REJECT || 'class_cast_reject')
+        ) {
             classCastResultQueue.push(msg);
             if (classCastResultQueue.length > 16) classCastResultQueue.shift();
             return;
         }
 
-        if (msg.t === 'class_queued') {
-            pushNotice('Class queued: ' + msg.classId);
-            if (selfState) selfState.queuedClassId = msg.classId;
+        if (msg.t === (MSG_S2C.CLASS_CHANGED || 'class_changed')) {
+            pushNotice('Ability profile synced.');
+            if (selfState) {
+                selfState.classId = msg.classId || selfState.classId;
+                selfState.queuedClassId = null;
+                selfState.abilityCooldownRemaining = 0;
+                selfState.ultimateCooldownRemaining = 0;
+            }
             return;
         }
 
-        if (msg.t === 'error') {
+        if (msg.t === (MSG_S2C.CLASS_QUEUED || 'class_queued')) {
+            // Backward compatibility for older Worker versions.
+            pushNotice('Ability profile synced.');
+            if (selfState) {
+                selfState.classId = msg.classId || selfState.classId;
+                selfState.queuedClassId = null;
+                selfState.abilityCooldownRemaining = 0;
+                selfState.ultimateCooldownRemaining = 0;
+            }
+            return;
+        }
+
+        if (msg.t === (MSG_S2C.ERROR || 'error')) {
             pushNotice(msg.message || 'Server error');
             return;
         }
     }
 
     function clearReconnectTimer() {
+        if (transport && transport.shutdown) {
+            transport.shutdown();
+            transport = null;
+        }
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -602,12 +748,35 @@
         if (!active || !user) return;
         clearReconnectTimer();
 
+        if (globalThis.__MAYHEM_RUNTIME.GameNetTransport && globalThis.__MAYHEM_RUNTIME.GameNetTransport.create) {
+            transport = globalThis.__MAYHEM_RUNTIME.GameNetTransport.create({
+                endpoint: wsEndpoint,
+                isActive: function () { return active; },
+                reconnectMs: 1200,
+                onOpen: function (socket) {
+                    ws = socket;
+                    connected = true;
+                    socket.send(JSON.stringify({ t: (MSG_C2S.JOIN_ROOM || 'join_room') }));
+                },
+                onMessage: handleMessage,
+                onClose: function () {
+                    connected = false;
+                    ws = null;
+                },
+                onError: function () {
+                    connected = false;
+                }
+            });
+            transport.connect();
+            return;
+        }
+
         var endpoint = wsEndpoint();
         ws = new WebSocket(endpoint);
 
         ws.addEventListener('open', function () {
             connected = true;
-            ws.send(JSON.stringify({ t: 'join_room' }));
+            ws.send(JSON.stringify({ t: (MSG_C2S.JOIN_ROOM || 'join_room') }));
         });
 
         ws.addEventListener('message', function (event) {
@@ -629,6 +798,7 @@
     }
 
     function wsSend(msg) {
+        if (transport && transport.send) return transport.send(msg);
         if (!ws || ws.readyState !== WebSocket.OPEN) return false;
         ws.send(JSON.stringify(msg));
         return true;
@@ -666,8 +836,8 @@
         if (!targetId) return null;
         var out = outVec3 || new THREE.Vector3();
 
-        if (targetId === selfId && window.GamePlayer && window.GamePlayer.getPosition) {
-            var selfPos = window.GamePlayer.getPosition();
+        if (targetId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
+            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             out.copy(selfPos);
             out.y -= 0.6;
             return out;
@@ -750,9 +920,41 @@
         return user;
     };
 
+    GameNet.setRoomId = function (nextRoomId) {
+        roomId = sanitizeRoomId(nextRoomId);
+        worldMeta = null;
+        worldMismatchNotified = false;
+        return roomId;
+    };
+
+    GameNet.getRoomId = function () {
+        return roomId;
+    };
+
+    GameNet.getExpectedWorldMeta = function () {
+        var expected = buildExpectedWorldMeta(roomId);
+        return {
+            roomId: expected.roomId,
+            worldSeed: expected.worldSeed,
+            worldProfileVersion: expected.worldProfileVersion,
+            worldFlags: cloneWorldFlags(expected.worldFlags)
+        };
+    };
+
+    GameNet.getWorldMeta = function () {
+        if (!worldMeta) return null;
+        return {
+            roomId: worldMeta.roomId,
+            worldSeed: worldMeta.worldSeed,
+            worldProfileVersion: worldMeta.worldProfileVersion,
+            worldFlags: cloneWorldFlags(worldMeta.worldFlags)
+        };
+    };
+
     GameNet.init = function (scene) {
         sceneRef = scene;
         active = true;
+        initSnapshotHelper();
         connectWs();
     };
 
@@ -771,6 +973,7 @@
         for (var i = 0; i < ids.length; i++) removeRemoteVisual(ids[i]);
 
         snapshotMap.clear();
+        snapshotHelper = null;
         remoteProjectileState = [];
         remoteFireZoneState = [];
         throwAckQueue = [];
@@ -780,6 +983,8 @@
         damageFeedbackQueue = [];
         selfState = null;
         selfId = '';
+        worldMeta = null;
+        worldMismatchNotified = false;
     };
 
     GameNet.isActive = function () {
@@ -817,7 +1022,7 @@
                 armorMax: r.armorMax,
                 alive: r.alive,
                 worldPos: r.group.position,
-                headY: 2.9,
+                headY: 2.45,
                 targetId: 'net:' + r.id
             });
         });
@@ -826,14 +1031,14 @@
 
     GameNet.getSelfState = function () {
         if (!selfState && user) {
-            var defaults = classStats(user.classId || 'sharpshooter');
+            var defaults = classStats(user.classId || 'abilities');
             return {
                 id: user.id,
                 hp: 500,
                 hpMax: 500,
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
-                classId: user.classId || 'sharpshooter',
+                classId: user.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
                 queuedClassId: null,
                 throwables: null,
@@ -850,11 +1055,11 @@
         if (inputSendTimer <= 0) {
             inputSendTimer = INPUT_SEND_INTERVAL;
             if (playerPos && rotation) {
-                var anim = (window.GamePlayer && window.GamePlayer.getAnimNetState)
-                    ? window.GamePlayer.getAnimNetState()
+                var anim = (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState)
+                    ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState()
                     : null;
                 wsSend({
-                    t: 'input',
+                    t: (MSG_C2S.INPUT || 'input'),
                     seq: inputSeq++,
                     x: playerPos.x,
                     y: playerPos.y,
@@ -913,8 +1118,8 @@
                 }
             }
 
-            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 1.0, r.group.position.z);
-            r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.475, r.group.position.z);
+            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 0.7625, r.group.position.z);
+            r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.0, r.group.position.z);
 
             if (r.beamLine) {
                 var beamActive = !!r.alive && r.beamTargetId && (r.beamActiveUntil || 0) > Date.now();
@@ -938,7 +1143,7 @@
     GameNet.sendFire = function (hitbox, weaponId, hitType, shotToken) {
         if (!hitbox || !hitbox.userData || !hitbox.userData.netEntityId) return false;
         var payload = {
-            t: 'fire',
+            t: (MSG_C2S.FIRE || 'fire'),
             targetId: hitbox.userData.netEntityId,
             weaponId: weaponId,
             hitType: hitType === 'head' ? 'head' : 'body'
@@ -950,7 +1155,7 @@
     GameNet.sendEquipWeapon = function (weaponId) {
         if (!weaponId) return false;
         return wsSend({
-            t: 'equip_weapon',
+            t: (MSG_C2S.EQUIP_WEAPON || 'equip_weapon'),
             weaponId: String(weaponId)
         });
     };
@@ -958,7 +1163,7 @@
     GameNet.sendPlasmaTick = function (targetId) {
         if (!targetId) return false;
         return wsSend({
-            t: 'plasma_tick',
+            t: (MSG_C2S.PLASMA_TICK || 'plasma_tick'),
             seq: inputSeq++,
             targetId: String(targetId)
         });
@@ -966,7 +1171,7 @@
 
     GameNet.sendThrow = function (throwableId, clientThrowId, throwIntent) {
         var payload = {
-            t: 'throw',
+            t: (MSG_C2S.THROW || 'throw'),
             throwableId: throwableId,
             clientThrowId: clientThrowId || ''
         };
@@ -1017,16 +1222,49 @@
     };
 
     GameNet.queueClassChange = function (classId) {
-        return wsSend({ t: 'class_queue', classId: classId });
+        return wsSend({ t: (MSG_C2S.CLASS_QUEUE || 'class_queue'), classId: classId });
     };
 
     GameNet.sendClassCast = function (slot, castData) {
-        var payload = { t: 'class_cast', slot: slot };
+        var payload = { t: (MSG_C2S.CLASS_CAST || 'class_cast'), slot: slot };
         if (castData && castData.aimPoint) {
             payload.aimPoint = {
                 x: Number(castData.aimPoint.x || 0),
                 y: Number(castData.aimPoint.y || 0),
                 z: Number(castData.aimPoint.z || 0)
+            };
+        }
+        if (castData && castData.lockTargetId) {
+            payload.lockTargetId = String(castData.lockTargetId);
+        }
+        return wsSend(payload);
+    };
+
+    GameNet.sendAbilityCast = GameNet.sendClassCast;
+
+    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId) {
+        var payload = {
+            t: (MSG_C2S.SEEKER_SHOT || 'seeker_shot')
+        };
+        if (lockTargetId) payload.lockTargetId = String(lockTargetId);
+        if (clientShotId) payload.clientShotId = String(clientShotId);
+        if (throwIntent && throwIntent.origin && throwIntent.direction) {
+            payload.throwIntent = {
+                origin: {
+                    x: Number(throwIntent.origin.x || 0),
+                    y: Number(throwIntent.origin.y || 0),
+                    z: Number(throwIntent.origin.z || 0)
+                },
+                direction: {
+                    x: Number(throwIntent.direction.x || 0),
+                    y: Number(throwIntent.direction.y || 0),
+                    z: Number(throwIntent.direction.z || 0)
+                },
+                aimPoint: throwIntent.aimPoint ? {
+                    x: Number(throwIntent.aimPoint.x || 0),
+                    y: Number(throwIntent.aimPoint.y || 0),
+                    z: Number(throwIntent.aimPoint.z || 0)
+                } : null
             };
         }
         return wsSend(payload);
@@ -1092,5 +1330,5 @@
             });
     };
 
-    window.GameNet = GameNet;
+    globalThis.__MAYHEM_RUNTIME.GameNet = GameNet;
 })();

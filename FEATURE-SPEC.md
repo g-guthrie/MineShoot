@@ -1,88 +1,94 @@
-# Feature Spec: Minecraft-Style FPS Hitscan Game
+# Feature Spec: MAYHEM Web FPS (Menu + Environment V2)
 
-## Overview
+## Product Goal
+Fast browser shooter with one-click session entry:
+- Open URL
+- Pick mode
+- Enter a live room quickly on almost any machine
 
-Build a browser-based first-person shooter with Minecraft-style voxel graphics. The game features hitscan shooting mechanics where raycast bullets hit instantly (no projectile travel time). Characters have hitboxes that are **2x the visual size** of the character model, making them easier to hit.
+The design priority is low complexity for strong frame pacing and network responsiveness, while still delivering strong visual identity.
 
-## Core Requirements
+## Runtime Architecture
+- Entry HTML: `index.html`
+- Module loader: `js/app/index.js` (ordered dynamic imports)
+- Runtime registry: `globalThis.__MAYHEM_RUNTIME`
+- Shared cross-runtime config: `shared/protocol.js`, `shared/gameplay-tuning.js`
+- Server authority: Cloudflare Worker + Durable Object room
 
-### 1. Rendering & World
-- 3D voxel/blocky Minecraft aesthetic using Three.js
-- Simple flat terrain (grass-textured ground plane, ~50x50 blocks)
-- Skybox or solid sky-blue background
-- A few scattered block structures (walls, pillars) for cover
-- First-person camera with mouselook (pointer lock)
+## Mode Menu (Current)
+Menu buttons:
+1. `MULTIPLAYER`
+2. `SINGLEPLAYER DEV SERVER`
+3. `SINGLEPLAYER DEV LOCAL`
 
-### 2. Player
-- WASD movement + Space to jump
-- Mouselook for aiming (pointer lock API)
-- Crosshair overlay in center of screen
-- Blocky Minecraft-style arms/weapon visible in first person (simple box geometry)
-- Health bar UI (100 HP)
+Behavior:
+- `MULTIPLAYER`:
+  - Runs networked mode with guest auth.
+  - Uses room from `?room=<id>` when provided, else `global`.
+- `SINGLEPLAYER DEV SERVER`:
+  - Runs networked mode against shared room `dev-local`.
+- `SINGLEPLAYER DEV LOCAL`:
+  - Runs local simulation (bots/dev loop), no server authority.
 
-### 3. Enemy Characters
-- 3-5 blocky humanoid enemies (Minecraft Steve-style: box head, box body, box limbs)
-- Each enemy is approximately 1 unit wide x 2 units tall x 1 unit deep (visual model)
-- **Hitbox is 2x the visual size**: 2 units wide x 4 units tall x 2 units deep
-- Enemies wander randomly, pausing occasionally
-- Enemies have health (50 HP), show damage flash (red tint) when hit
-- Enemies despawn/ragdoll when health reaches 0
+Menu/subtitle/debug text must always match the effective room ID for clarity.
 
-### 4. Hitscan Shooting
-- Left click to shoot
-- Instant raycast from camera center (hitscan — no bullet travel)
-- Ray checks against enemy HITBOXES (the 2x oversized invisible box), NOT the visual mesh
-- Visual feedback: muzzle flash, hit marker on crosshair, damage number popup
-- Fire rate: ~3 shots per second (cooldown 333ms)
-- Damage: 25 per hit (2 shots to kill an enemy)
+## Environment V2 (Phases 1-4 Implemented)
 
-### 5. Hitbox System (KEY FEATURE)
-- Each enemy has TWO collision volumes:
-  - **Visual mesh**: The rendered character model (normal size)
-  - **Hitbox**: An invisible Box3/BoxHelper that is exactly 2x the dimensions of the visual mesh, centered on the character
-- The hitbox should be toggleable (press H to show/hide wireframe hitboxes for debugging)
-- Raycasts for shooting ONLY check the hitbox, not the visual mesh
+### Phase 1: Visual Foundation
+- Prototype ground grid removed from default view.
+- Debug grid only via URL: `?debugGrid=1` (also supports `true`/`on`).
+- Deterministic ground color breakup with biome blending.
+- Updated sky/fog palette for better biome readability.
+- Renderer pixel ratio capped to reduce high-DPI spikes.
 
-### 6. UI / HUD
-- Crosshair (simple + shape, centered)
-- Health bar (bottom left)
-- Ammo/shot indicator (bottom right)  
-- Kill counter (top right)
-- Hit marker animation (brief X flash on crosshair when hitting enemy)
-- Damage numbers floating up from hit enemies
+### Phase 2: Landmark Pass
+- Deterministic desert mesa/cliff landmark clusters.
+- Deterministic arctic mountain hero landmark with stepped traversal surfaces.
+- Landmark spawn exclusion zones to avoid invalid spawns inside hero geometry.
+- Central combat readability preserved (no over-cluttering of core lanes).
 
-### 7. Game Loop
-- Enemies respawn after 5 seconds at random positions
-- No win/lose condition — infinite practice arena
-- Simple score counter for kills
+### Phase 3: Waterfall Hero Feature
+- Static rock cut + basin geometry.
+- Waterfall planes with animated UV scrolling.
+- Lightweight mist cards (no heavy particle systems).
+- `GameWorld.update(dtSec)` introduced for world animation updates.
+- Main loop calls `GameWorld.update(dtSec)` every frame.
 
-## Tech Stack
-- **HTML5 + CSS** for the page and HUD overlay
-- **Three.js** (via CDN) for 3D rendering
-- **Vanilla JavaScript** — no build tools, no npm, just .html + .js files
-- Must work by opening index.html in a browser (no server required)
+### Phase 4: Multiplayer Safety Hardening
+- Server sends authoritative world metadata on `WELCOME`:
+  - `worldSeed: string`
+  - `worldProfileVersion: number`
+  - `worldFlags: { envV2: boolean, terrainPhysicsV2: boolean }`
+- Client uses server metadata for multiplayer world generation.
+- Deterministic world generation preserved across clients in a room.
+- Fallback path exists if metadata is missing/timed out, with warning notice.
 
-## File Structure
-```
-index.html          — Entry point, loads scripts, contains HUD HTML/CSS
-js/
-  main.js           — Game init, render loop, pointer lock
-  player.js         — Player movement, camera, shooting
-  enemy.js          — Enemy class (model + hitbox + AI)
-  world.js          — Terrain and structures
-  hitscan.js        — Raycasting and hit detection against hitboxes
-  ui.js             — HUD updates, damage numbers, hit markers
-```
+## Deferred Work (Phase 5, Not in Current Integration)
+- Shared terrain sampler used by both client and server simulation.
+- Terrain-aware server projectile and y-ground physics model.
+- Terrain-aware bot locomotion.
 
-## Acceptance Criteria
-- [ ] Game loads in browser by opening index.html
-- [ ] WASD + mouselook movement works
-- [ ] Left click fires hitscan ray
-- [ ] Enemies have visible blocky Minecraft-style models
-- [ ] Hitboxes are 2x the visual size (verifiable by pressing H)
-- [ ] Hits register on the oversized hitbox, not the visual mesh
-- [ ] Damage numbers appear on hit
-- [ ] Enemies die after 2 hits (50 HP, 25 damage per shot)
-- [ ] Enemies respawn after death
-- [ ] Kill counter increments
-- [ ] No console errors
+Current gameplay authority remains flat-ground physics on server for risk control.
+
+## Current Public Interfaces
+- `GameWorld.create(scene, options?)`
+  - `options.worldMeta` accepted for multiplayer-authoritative world boot.
+- `GameWorld.update(dtSec)`
+- `GameWorld.getWorldMeta()`
+- `GameNet.getWorldMeta()`
+- `GameNet.getExpectedWorldMeta()`
+
+## Determinism and Performance Constraints
+- Decorative movement favors UV/card animation over heavy simulation.
+- Deterministic seed/profile controls landmark placement.
+- Pixel ratio cap used in renderer bootstrap + resize paths.
+- No post-processing requirement.
+
+## Acceptance Checklist
+- [ ] Mode menu launches correct runtime path for all three buttons.
+- [ ] Grid hidden by default; visible only with `?debugGrid=1`.
+- [ ] Desert/arctic landmarks spawn deterministically for same world seed.
+- [ ] Waterfall animates continuously without large frame-time spikes.
+- [ ] Multiplayer clients in same room receive identical world metadata.
+- [ ] Core combat loop (join/input/fire/throw/damage) has no regression.
+- [ ] Phase 5 terrain-physics work remains deferred and disabled.

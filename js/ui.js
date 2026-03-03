@@ -1,6 +1,6 @@
 /**
  * ui.js - HUD, damage numbers, reticles, and status text
- * Loaded as global: window.GameUI
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameUI
  */
 (function () {
     'use strict';
@@ -13,7 +13,7 @@
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
-    var classInfoEl;
+    var abilityInfoEl;
     var cooldownBarEl, cooldownStatusEl;
     var plasmaHeatBarEl, plasmaStatusEl;
     var damageVignetteEl, damageIndicatorEl;
@@ -61,7 +61,7 @@
         combatBeaconEls = [];
         weaponInfoEl = document.getElementById('weapon-info');
         throwableInfoEl = document.getElementById('throwable-info');
-        classInfoEl = document.getElementById('class-info');
+        abilityInfoEl = document.getElementById('ability-info');
         cooldownBarEl = document.getElementById('cooldown-bar');
         cooldownStatusEl = document.getElementById('cooldown-status');
         plasmaHeatBarEl = document.getElementById('plasma-heat-bar');
@@ -337,11 +337,11 @@
             weapon.bodyDamage + '/' + weapon.headDamage + ' DMG';
     };
 
-    GameUI.updateClassInfo = function (state) {
-        if (!classInfoEl || !state) return;
+    GameUI.updateAbilityInfo = function (state) {
+        if (!abilityInfoEl || !state) return;
 
         if (typeof state === 'string') {
-            classInfoEl.textContent = state;
+            abilityInfoEl.textContent = state;
             return;
         }
 
@@ -355,7 +355,7 @@
         if (state.queuedClassName) {
             extra += ' | QUEUE: ' + state.queuedClassName;
         }
-        classInfoEl.textContent =
+        abilityInfoEl.textContent =
             state.name + ' | E ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) +
             ' | R ' + (state.ultimateName || 'Ultimate') + ': ' + fmtCd(state.ultimateCooldown) + extra;
     };
@@ -603,5 +603,5 @@
         return killCount;
     };
 
-    window.GameUI = GameUI;
+    globalThis.__MAYHEM_RUNTIME.GameUI = GameUI;
 })();

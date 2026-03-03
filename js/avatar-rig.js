@@ -1,6 +1,6 @@
 /**
  * avatar-rig.js - Shared blocky humanoid rig for player/enemy/remote visuals
- * Loaded as global: window.GameAvatarRig
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAvatarRig
  */
 (function () {
     'use strict';
@@ -398,5 +398,5 @@
         };
     };
 
-    window.GameAvatarRig = GameAvatarRig;
+    globalThis.__MAYHEM_RUNTIME.GameAvatarRig = GameAvatarRig;
 })();

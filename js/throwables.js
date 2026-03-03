@@ -1,6 +1,6 @@
 /**
  * throwables.js - Frag/seeker/molotov/knife logic with regen inventory
- * Loaded as global: window.GameThrowables
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameThrowables
  */
 (function () {
     'use strict';
@@ -15,6 +15,7 @@
     var netFireZoneMap = {};
     var predictedByClientId = {};
     var localThrowSeq = 1;
+    var lastSeekerShotMeta = null;
     var debugInstantCooldowns = false;
     var debugTelemetry = {
         lastIntent: null,
@@ -34,6 +35,8 @@
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
     var tmpNetVec = new THREE.Vector3();
+    var tmpForwardAxis = new THREE.Vector3(0, 0, -1);
+    var tmpSpinAxis = new THREE.Vector3(0, 0, 1);
     var trajPos = new THREE.Vector3();
     var trajVel = new THREE.Vector3();
     var trajStart = new THREE.Vector3();
@@ -48,17 +51,19 @@
         maxPoints: 120,
         maxPreviewTime: 4.0
     };
-    var throwableDistanceTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableDistanceTuning)
-        ? window.GameCombatTuning.getThrowableDistanceTuning()
+    var throwableDistanceTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning)
+        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning()
         : {
             fragRadius: 5.4,
             seekerRadius: 5.0,
             seekerShotRadius: 4.6,
             molotovFireRadius: 3.2,
-            seekerAcquireRange: 22
+            seekerAcquireRange: 18,
+            seekerAcquireHalfAngleDeg: 35,
+            seekerStickExplodeDelay: 0.65
         };
-    var throwableMechanicsTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableMechanicsTuning)
-        ? window.GameCombatTuning.getThrowableMechanicsTuning()
+    var throwableMechanicsTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning)
+        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning()
         : {
             aimRayRange: 100,
             fragBounceMaxCount: 2,
@@ -94,6 +99,8 @@
             damage: 110,
             homingBoost: 2.0,
             homingLerp: 4.8,
+            acquireHalfAngleDeg: throwableDistanceTuning.seekerAcquireHalfAngleDeg || 35,
+            stickExplodeDelay: throwableDistanceTuning.seekerStickExplodeDelay || 0.65,
             regen: 15
         },
         seekershot: {
@@ -150,8 +157,8 @@
     }
 
     function getWorldTargets() {
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
-        var hitboxes = window.GameEnemy.getHitboxArray ? window.GameEnemy.getHitboxArray() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        var hitboxes = globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray() : [];
         return {
             worldMeshes: worldMeshes || [],
             hitboxes: hitboxes || []
@@ -259,13 +266,19 @@
         if (type === 'lightsaber') {
             var saberGroup = new THREE.Group();
             var hilt = new THREE.Mesh(
-                new THREE.BoxGeometry(0.06, 0.06, 0.18),
-                new THREE.MeshLambertMaterial({ color: 0x444444 })
+                new THREE.BoxGeometry(0.08, 0.08, 0.2),
+                new THREE.MeshLambertMaterial({ color: 0x3f3f3f })
             );
+            var hiltBand = new THREE.Mesh(
+                new THREE.BoxGeometry(0.085, 0.02, 0.06),
+                new THREE.MeshLambertMaterial({ color: 0x9a9a9a })
+            );
+            hiltBand.position.z = 0.07;
             saberGroup.add(hilt);
+            saberGroup.add(hiltBand);
             var bladeMesh = new THREE.Mesh(
                 new THREE.BoxGeometry(0.04, 0.04, 0.7),
-                new THREE.MeshBasicMaterial({ color: 0x44ff66, transparent: true, opacity: 0.88 })
+                new THREE.MeshBasicMaterial({ color: 0xff3d3d, transparent: true, opacity: 0.9 })
             );
             bladeMesh.position.z = -0.44;
             saberGroup.add(bladeMesh);
@@ -327,8 +340,8 @@
 
     function getDefaultThrowOrigin(camera, forward, right, up) {
         var hand = null;
-        if (window.GamePlayer && window.GamePlayer.getThrowableOriginWorldPosition) {
-            hand = window.GamePlayer.getThrowableOriginWorldPosition();
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition) {
+            hand = globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition();
         }
         if (hand && typeof hand.x === 'number' && typeof hand.y === 'number' && typeof hand.z === 'number') {
             return hand.clone();
@@ -422,6 +435,9 @@
             age: 0,
             bounces: 0,
             forcedTargetId: options.targetId || '',
+            stickyUntil: 0,
+            stuckEnemy: null,
+            stuckOffset: new THREE.Vector3(),
             predicted: !!options.predicted,
             clientThrowId: options.clientThrowId || '',
             projectileId: options.projectileId || '',
@@ -436,7 +452,7 @@
     }
 
     function findNearestEnemy(position, maxDistance) {
-        var enemies = window.GameEnemy.getEnemies ? window.GameEnemy.getEnemies() : [];
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
         var nearest = null;
         var nearestDist = maxDistance;
 
@@ -459,25 +475,84 @@
         var dist = tmpDir.length();
         if (dist < 0.0001) return null;
 
-        tmpDir.divideScalar(dist);
-        raycaster.set(start, tmpDir);
-        raycaster.far = dist + 0.03;
+        function getGroundYAt(x, z) {
+            if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getGroundHeightAt) {
+                return Number(globalThis.__MAYHEM_RUNTIME.GameWorld.getGroundHeightAt(x, z) || 0);
+            }
+            return 0;
+        }
 
+        function findGroundHit() {
+            var samples = 10;
+            var prevT = 0;
+            var prevX = start.x;
+            var prevY = start.y;
+            var prevZ = start.z;
+            var prevDiff = prevY - getGroundYAt(prevX, prevZ);
+
+            for (var i = 1; i <= samples; i++) {
+                var t = i / samples;
+                var x = start.x + ((end.x - start.x) * t);
+                var y = start.y + ((end.y - start.y) * t);
+                var z = start.z + ((end.z - start.z) * t);
+                var diff = y - getGroundYAt(x, z);
+                var descending = y < prevY;
+                if (diff <= 0 && prevDiff >= 0 && (prevDiff > 0 || descending)) {
+                    var lo = prevT;
+                    var hi = t;
+                    for (var iter = 0; iter < 8; iter++) {
+                        var mid = (lo + hi) * 0.5;
+                        var mx = start.x + ((end.x - start.x) * mid);
+                        var my = start.y + ((end.y - start.y) * mid);
+                        var mz = start.z + ((end.z - start.z) * mid);
+                        var md = my - getGroundYAt(mx, mz);
+                        if (md <= 0) hi = mid;
+                        else lo = mid;
+                    }
+
+                    var hitT = hi;
+                    var hx = start.x + ((end.x - start.x) * hitT);
+                    var hz = start.z + ((end.z - start.z) * hitT);
+                    var hy = getGroundYAt(hx, hz);
+                    var point = new THREE.Vector3(hx, hy, hz);
+                    return {
+                        kind: 'world',
+                        object: null,
+                        point: point,
+                        distance: point.distanceTo(start)
+                    };
+                }
+                prevT = t;
+                prevY = y;
+                prevDiff = diff;
+            }
+            return null;
+        }
+
+        var rayHit = null;
         var targets = getWorldTargets();
         var allTargets = targets.hitboxes.concat(targets.worldMeshes);
-        if (allTargets.length === 0) return null;
+        if (allTargets.length > 0) {
+            tmpDir.divideScalar(dist);
+            raycaster.set(start, tmpDir);
+            raycaster.far = dist + 0.03;
 
-        var hits = raycaster.intersectObjects(allTargets, false);
-        if (hits.length === 0) return null;
+            var hits = raycaster.intersectObjects(allTargets, false);
+            if (hits.length > 0) {
+                var hit = hits[0];
+                rayHit = {
+                    kind: targets.hitboxes.indexOf(hit.object) !== -1 ? 'enemy' : 'world',
+                    object: hit.object,
+                    point: hit.point,
+                    distance: Number(hit.distance || 0)
+                };
+            }
+        }
 
-        var hit = hits[0];
-        var kind = targets.hitboxes.indexOf(hit.object) !== -1 ? 'enemy' : 'world';
-
-        return {
-            kind: kind,
-            object: hit.object,
-            point: hit.point
-        };
+        var groundHit = findGroundHit();
+        if (!rayHit) return groundHit;
+        if (!groundHit) return rayHit;
+        return (groundHit.distance <= rayHit.distance) ? groundHit : rayHit;
     }
 
     function clearTrajectoryPreview() {
@@ -646,12 +721,12 @@
     }
 
     function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
-        if (window.GameAudio && window.GameAudio.play) {
-            window.GameAudio.play('explosion');
+        if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
         spawnFlash(position, 0xffaa22, 0.2, 0.18);
 
-        var enemies = window.GameEnemy.getEnemies ? window.GameEnemy.getEnemies() : [];
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];
             if (!enemy || !enemy.alive) continue;
@@ -661,7 +736,7 @@
 
             var falloff = 1 - (dist / radius);
             var damage = Math.max(20, Math.round(maxDamage * falloff));
-            var result = window.GameEnemy.damage(enemy.bodyHitbox, damage);
+            var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(enemy.bodyHitbox, damage);
             reportHit(
                 onEnemyHit,
                 enemy.bodyHitbox.position,
@@ -695,8 +770,8 @@
             tickTimer: 0
         });
 
-        if (window.GameAudio && window.GameAudio.play) {
-            window.GameAudio.play('explosion');
+        if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
         spawnFlash(position, 0xff6622, 0.25, 0.2);
     }
@@ -715,40 +790,61 @@
 
         p.age += dt;
 
+        if (p.type === 'seeker' && p.stickyUntil > 0) {
+            if (p.stuckEnemy && p.stuckEnemy.alive && p.stuckEnemy.group && p.stuckEnemy.group.position) {
+                p.mesh.position.copy(p.stuckEnemy.group.position).add(p.stuckOffset);
+            }
+            if (p.age >= p.stickyUntil) {
+                explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
+                removeProjectile(index);
+            }
+            return;
+        }
+
         var isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot');
         if (isSeekerLike && p.age > 0.03) {
             var targetEnemy = null;
-            if (p.forcedTargetId && window.GameEnemy && window.GameEnemy.getLockTargets) {
-                var lockTargets = window.GameEnemy.getLockTargets() || [];
-                for (var lt = 0; lt < lockTargets.length; lt++) {
-                    if (lockTargets[lt] && lockTargets[lt].targetId === p.forcedTargetId && lockTargets[lt].enemyRef && lockTargets[lt].enemyRef.alive) {
-                        targetEnemy = lockTargets[lt].enemyRef;
-                        break;
-                    }
+            var targetPoint = null;
+            var nearestDist = Infinity;
+            var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
+            var currentDir = (p.velocity.lengthSq() > 0.0001)
+                ? p.velocity.clone().normalize()
+                : (p.launchDir ? p.launchDir.clone() : new THREE.Vector3(0, 0, -1));
+            var halfAngleDeg = (p.type === 'seekershot')
+                ? ((typeof def.lockHalfAngleDeg === 'number') ? def.lockHalfAngleDeg : 30)
+                : ((typeof def.acquireHalfAngleDeg === 'number') ? def.acquireHalfAngleDeg : (throwableDistanceTuning.seekerAcquireHalfAngleDeg || 35));
+            var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
+            var maxAcquireRange = (p.type === 'seekershot')
+                ? ((typeof def.acquireRange === 'number') ? def.acquireRange : 24)
+                : (throwableDistanceTuning.seekerAcquireRange || 18);
+
+            for (var ei = 0; ei < enemies.length; ei++) {
+                var enemy = enemies[ei];
+                if (!enemy || !enemy.alive || !enemy.group || !enemy.group.position) continue;
+                if (p.forcedTargetId) {
+                    var enemyTargetId = (enemy.bodyHitbox && enemy.bodyHitbox.userData && enemy.bodyHitbox.userData.targetId)
+                        ? enemy.bodyHitbox.userData.targetId
+                        : ('enemy:' + enemy.index);
+                    if (enemyTargetId !== p.forcedTargetId) continue;
                 }
-            }
-            if (!targetEnemy) {
-                targetEnemy = findNearestEnemy(p.mesh.position, throwableDistanceTuning.seekerAcquireRange);
-            }
-            if (targetEnemy) {
-                tmpTarget.copy(targetEnemy.group.position);
+
+                tmpTarget.copy(enemy.group.position);
                 tmpTarget.y += 1.5;
-                if (p.type === 'seekershot') {
-                    var currentDir = (p.velocity.lengthSq() > 0.0001)
-                        ? p.velocity.clone().normalize()
-                        : (p.launchDir ? p.launchDir.clone() : new THREE.Vector3(0, 0, -1));
-                    var toTargetDir = tmpTarget.clone().sub(p.mesh.position).normalize();
-                    var halfAngleDeg = (typeof def.lockHalfAngleDeg === 'number') ? def.lockHalfAngleDeg : 30;
-                    var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
-                    if (currentDir.dot(toTargetDir) < cosLimit) {
-                        targetEnemy = null;
-                    }
-                }
+                tmpDir.copy(tmpTarget).sub(p.mesh.position);
+                var dist = tmpDir.length();
+                if (dist <= 0.001 || dist > maxAcquireRange || dist >= nearestDist) continue;
+                tmpDir.divideScalar(dist);
+                if (currentDir.dot(tmpDir) < cosLimit) continue;
+                targetEnemy = enemy;
+                targetPoint = tmpTarget.clone();
+                nearestDist = dist;
+                if (p.forcedTargetId) break;
             }
+
             if (targetEnemy) {
                 var homingSpeed = def.speed + (def.homingBoost || 2);
                 var homingLerp = def.homingLerp || 4.8;
-                tmpDir.copy(tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(homingSpeed);
+                tmpDir.copy(targetPoint || tmpTarget).sub(p.mesh.position).normalize().multiplyScalar(homingSpeed);
                 p.velocity.lerp(tmpDir, Math.min(1, dt * homingLerp));
             }
         }
@@ -764,7 +860,7 @@
                 if (p.type === 'knife') {
                     var hitType = hit.object.userData.type || 'body';
                     var damage = hitType === 'head' ? def.headDamage : def.bodyDamage;
-                    var result = window.GameEnemy.damage(hit.object, damage);
+                    var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hit.object, damage);
                     var special = null;
 
                     if (result && hitType === 'head') {
@@ -781,6 +877,19 @@
                 if (p.type === 'molotov') {
                     createFireZone(hit.point);
                     removeProjectile(index);
+                    return;
+                }
+
+                if (p.type === 'seeker') {
+                    p.mesh.position.copy(hit.point);
+                    p.velocity.set(0, 0, 0);
+                    p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
+                    p.stuckEnemy = hit.object && hit.object.userData ? hit.object.userData.enemyRef : null;
+                    p.stuckOffset.set(0, 0, 0);
+                    if (p.stuckEnemy && p.stuckEnemy.group && p.stuckEnemy.group.position) {
+                        p.stuckOffset.copy(hit.point).sub(p.stuckEnemy.group.position);
+                    }
+                    spawnFlash(hit.point, 0xffb347, 0.08, 0.08);
                     return;
                 }
 
@@ -803,8 +912,16 @@
             }
 
             if (p.type === 'seeker' || p.type === 'seekershot') {
-                explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
-                removeProjectile(index);
+                if (p.type === 'seeker') {
+                    p.mesh.position.copy(hit.point);
+                    p.velocity.set(0, 0, 0);
+                    p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
+                    p.stuckEnemy = null;
+                    p.stuckOffset.set(0, 0, 0);
+                } else {
+                    explodeAt(hit.point, def.radius, def.damage, p.type, onEnemyHit);
+                    removeProjectile(index);
+                }
                 return;
             }
 
@@ -852,7 +969,7 @@
 
             if (z.tickTimer <= 0) {
                 z.tickTimer += defs.molotov.fireTickRate;
-                var enemies = window.GameEnemy.getEnemies ? window.GameEnemy.getEnemies() : [];
+                var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
                 for (var j = 0; j < enemies.length; j++) {
                     var enemy = enemies[j];
                     if (!enemy || !enemy.alive) continue;
@@ -861,7 +978,7 @@
                     if (d > z.radius) continue;
 
                     var dmg = defs.molotov.fireTickDamage;
-                    var result = window.GameEnemy.damage(enemy.bodyHitbox, dmg);
+                    var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(enemy.bodyHitbox, dmg);
                     reportHit(
                         onEnemyHit,
                         enemy.bodyHitbox.position,
@@ -941,6 +1058,7 @@
         debugTelemetry.lastRejectClientThrowId = '';
         debugTelemetry.lastReconcileClientThrowId = '';
         debugTelemetry.predictedCount = 0;
+        lastSeekerShotMeta = null;
         resetInventory();
     };
 
@@ -1176,8 +1294,12 @@
             if (p.type === 'ninjastar') {
                 entry.mesh.rotation.z += 0.35;
             } else if (p.type === 'lightsaber') {
-                entry.mesh.rotation.z += 0.25;
-                entry.mesh.rotation.y += 0.15;
+                tmpNetVec.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
+                if (tmpNetVec.lengthSq() > 0.0001) {
+                    tmpNetVec.normalize();
+                    entry.mesh.quaternion.setFromUnitVectors(tmpForwardAxis, tmpNetVec);
+                }
+                entry.mesh.rotateOnAxis(tmpSpinAxis, 0.42);
             }
         }
 
@@ -1223,21 +1345,70 @@
         }
     };
 
-    GameThrowables.fireSeekerShot = function (camera, lockTarget) {
+    GameThrowables.fireSeekerShot = function (camera, lockTarget, clientShotId, options) {
         if (!sceneRef || !camera) return false;
+        options = options || {};
         camera.getWorldDirection(tmpForward);
         var muzzle = null;
-        if (window.GamePlayer && window.GamePlayer.getMuzzleWorldPosition) {
-            muzzle = window.GamePlayer.getMuzzleWorldPosition();
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {
+            muzzle = globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition();
         }
         var origin = muzzle && typeof muzzle.x === 'number'
             ? muzzle.clone().addScaledVector(tmpForward, 0.1)
             : camera.position.clone().addScaledVector(tmpForward, 0.75);
-        return spawnProjectile('seekershot', camera, {
+        var shotId = clientShotId || ('cseek-' + Date.now().toString(36) + '-' + (localThrowSeq++).toString(36));
+        var intent = buildThrowIntent(camera, {
             origin: origin,
-            direction: tmpForward.clone(),
-            targetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : ''
+            direction: tmpForward.clone()
         });
+        if (!intent) return false;
+
+        var shouldPredict = true;
+        if (typeof options.predictLocal === 'boolean') {
+            shouldPredict = options.predictLocal;
+        } else if (
+            globalThis.__MAYHEM_RUNTIME.GameNet &&
+            globalThis.__MAYHEM_RUNTIME.GameNet.isActive &&
+            globalThis.__MAYHEM_RUNTIME.GameNet.isActive()
+        ) {
+            // Multiplayer seeker shots are server-authoritative to avoid dual-stream visuals.
+            shouldPredict = false;
+        }
+
+        if (shouldPredict) {
+            var ok = spawnProjectile('seekershot', camera, {
+                intent: intent,
+                origin: origin,
+                direction: tmpForward.clone(),
+                targetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : '',
+                predicted: true,
+                clientThrowId: shotId
+            });
+            if (!ok) return false;
+
+            predictedByClientId[shotId] = {
+                type: 'seekershot',
+                createdAt: Date.now(),
+                authoritativeSeen: false
+            };
+        }
+        lastSeekerShotMeta = {
+            clientShotId: shotId,
+            lockTargetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : '',
+            throwIntent: {
+                origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },
+                direction: { x: intent.direction.x, y: intent.direction.y, z: intent.direction.z },
+                aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
+            }
+        };
+        return true;
+    };
+
+    GameThrowables.consumeLastSeekerShotMeta = function () {
+        if (!lastSeekerShotMeta) return null;
+        var meta = lastSeekerShotMeta;
+        lastSeekerShotMeta = null;
+        return meta;
     };
 
     /**
@@ -1284,5 +1455,5 @@
         };
     };
 
-    window.GameThrowables = GameThrowables;
+    globalThis.__MAYHEM_RUNTIME.GameThrowables = GameThrowables;
 })();

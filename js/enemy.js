@@ -1,6 +1,6 @@
 /**
  * enemy.js - Blocky humanoid enemies, hitboxes, AI movement/combat, wallhack silhouettes
- * Loaded as global: window.GameEnemy
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameEnemy
  */
 (function () {
     'use strict';
@@ -12,8 +12,8 @@
     var sceneRef = null;
     var hitboxVisible = true;
 
-    var enemyTuning = (window.GameCombatTuning && window.GameCombatTuning.getEnemyTuning)
-        ? window.GameCombatTuning.getEnemyTuning()
+    var enemyTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning)
+        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning()
         : {
             fireRange: 34,
             headshotNearRange: 12,
@@ -41,21 +41,21 @@
     var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'plasma'];
 
     function getCurrentWallhackRadius() {
-        if (window.GameNet && window.GameNet.isActive && window.GameNet.isActive() && window.GameNet.getSelfState) {
-            var selfState = window.GameNet.getSelfState();
+        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive() && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
+            var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
             if (selfState && typeof selfState.wallhackRadius === 'number') {
                 return selfState.wallhackRadius;
             }
         }
-        if (window.GameClasses && window.GameClasses.getWallhackRadius) {
-            return window.GameClasses.getWallhackRadius();
+        if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getWallhackRadius) {
+            return globalThis.__MAYHEM_RUNTIME.GameAbilities.getWallhackRadius();
         }
         return DEFAULT_WALLHACK_RADIUS;
     }
 
     function getWorldBounds() {
-        if (window.GameWorld && window.GameWorld.getBounds) {
-            return window.GameWorld.getBounds();
+        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds) {
+            return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
         }
         return { min: 1, max: 49, center: 25, size: 50 };
     }
@@ -73,8 +73,8 @@
         var min = bounds.min + 4;
         var max = bounds.max - 4;
 
-        if (window.GameWorld && window.GameWorld.getRandomSpawnPoint) {
-            return window.GameWorld.getRandomSpawnPoint(6);
+        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint) {
+            return globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(6);
         }
 
         return {
@@ -88,8 +88,8 @@
     }
 
     function createSharedHumanoidModel(color, weaponId) {
-        if (!window.GameAvatarRig || !window.GameAvatarRig.create) return null;
-        var shared = window.GameAvatarRig.create('enemy', {
+        if (!globalThis.__MAYHEM_RUNTIME.GameAvatarRig || !globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) return null;
+        var shared = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create('enemy', {
             bodyColor: color,
             skinColor: 0xd2a77d,
             legColor: 0x333333,
@@ -140,7 +140,7 @@
             geo = new THREE.BoxGeometry(1.55, 0.95, 1.55);
             color = 0xff4444;
         } else {
-            geo = new THREE.BoxGeometry(2.7, 2.0, 2.7);
+            geo = new THREE.BoxGeometry(2.7, 1.525, 2.7);
             color = 0x00aaff;
         }
 
@@ -170,11 +170,11 @@
         var pos = enemy.group.position;
 
         if (enemy.bodyHitbox) {
-            enemy.bodyHitbox.position.set(pos.x, pos.y + 1.0, pos.z);
+            enemy.bodyHitbox.position.set(pos.x, pos.y + 0.7625, pos.z);
         }
 
         if (enemy.headHitbox) {
-            enemy.headHitbox.position.set(pos.x, pos.y + 2.475, pos.z);
+            enemy.headHitbox.position.set(pos.x, pos.y + 2.0, pos.z);
         }
     }
 
@@ -276,7 +276,7 @@
     }
 
     function hasLineOfSight(origin, target, maxDist) {
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         if (!worldMeshes || worldMeshes.length === 0) return true;
 
         enemyShootDir.copy(target).sub(origin);
@@ -423,7 +423,7 @@
             return;
         }
 
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         if (!worldMeshes || worldMeshes.length === 0) {
             enemy.revealGhost.visible = false;
             return;
@@ -731,5 +731,5 @@
         return hitboxVisible;
     };
 
-    window.GameEnemy = GameEnemy;
+    globalThis.__MAYHEM_RUNTIME.GameEnemy = GameEnemy;
 })();

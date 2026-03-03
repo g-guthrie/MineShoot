@@ -1,6 +1,6 @@
 /**
  * docs.js - In-game Fallout-style ASCII field manual
- * Loaded as global: window.GameDocs
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameDocs
  */
 (function () {
     'use strict';
@@ -21,7 +21,7 @@
 
     var state = {
         activePage: 'home',
-        selectedClassId: '',
+        selectedAbilityId: '',
         selectedWeaponId: '',
         selectedThrowableId: ''
     };
@@ -29,7 +29,7 @@
     var PAGES = [
         { id: 'home', label: 'HOME' },
         { id: 'controls', label: 'CONTROLS' },
-        { id: 'classes', label: 'CLASSES' },
+        { id: 'abilities', label: 'ABILITIES' },
         { id: 'weapons', label: 'WEAPONS' },
         { id: 'throwables', label: 'THROWABLES' },
         { id: 'formulas', label: 'FORMULAS' }
@@ -86,14 +86,6 @@
         ].join('\n')
     };
 
-    var CLASS_ROLE = {
-        ninja: 'Mobility burst. High precision knife pressure.',
-        jedi: 'Close control. Durable front-liner with crowd disruption.',
-        magician: 'Area denial and spell burst from medium distance.',
-        sharpshooter: 'High precision pick class with lock potential.',
-        brawler: 'Sustained brawl with high armor and pressure uptime.'
-    };
-
     function fNum(value, fallback) {
         if (typeof value !== 'number' || !isFinite(value)) return fallback || '--';
         return String(value);
@@ -136,15 +128,15 @@
 
     function getData() {
         return {
-            classes: safeCatalog(window.GameClasses && window.GameClasses.getCatalog),
-            weapons: safeCatalog(window.GameHitscan && window.GameHitscan.getWeaponCatalog),
-            throwables: safeCatalog(window.GameThrowables && window.GameThrowables.getCatalog)
+            abilities: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog),
+            weapons: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog),
+            throwables: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog)
         };
     }
 
     function ensureSelections(data) {
-        if (!findById(data.classes, state.selectedClassId)) {
-            state.selectedClassId = data.classes.length ? data.classes[0].id : '';
+        if (!findById(data.abilities, state.selectedAbilityId)) {
+            state.selectedAbilityId = data.abilities.length ? data.abilities[0].id : '';
         }
 
         if (!findById(data.weapons, state.selectedWeaponId)) {
@@ -174,13 +166,24 @@
         lines.push('This manual is now split into clean Pip-Boy style pages.');
         lines.push('');
         lines.push('Catalog counts (live):');
-        lines.push('  Classes    : ' + data.classes.length);
+        lines.push('  Abilities  : ' + data.abilities.length);
         lines.push('  Weapons    : ' + data.weapons.length);
         lines.push('  Throwables : ' + data.throwables.length);
         lines.push('');
+        lines.push('Mode cards:');
+        lines.push('  MULTIPLAYER            -> shared backend room (?room=<id>, default global)');
+        lines.push('  SINGLEPLAYER DEV SERVER-> shared dev room (dev-local)');
+        lines.push('  SINGLEPLAYER DEV LOCAL -> offline local simulation');
+        lines.push('');
+        lines.push('Environment v2 highlights:');
+        lines.push('  Grid hidden by default (debug only via ?debugGrid=1)');
+        lines.push('  Deterministic biome blend + landmark generation');
+        lines.push('  Desert mesas, arctic mountain, and animated waterfall');
+        lines.push('  Multiplayer rooms use server-auth world metadata');
+        lines.push('');
         lines.push('Navigation:');
-        lines.push('  1. Choose top tab (Controls / Classes / Weapons / etc).');
-        lines.push('  2. For Classes/Weapons, choose a subpage from left list.');
+        lines.push('  1. Choose top tab (Controls / Abilities / Weapons / etc).');
+        lines.push('  2. For Abilities/Weapons, choose a subpage from left list.');
         lines.push('  3. Values are hydrated from gameplay modules.');
         lines.push('');
         lines.push('Status: live data linked to current game configs.');
@@ -197,37 +200,29 @@
             '  Shift: Sprint',
             '  Space: Variable jump (hold for full height)',
             '',
+            'Menu / Session',
+            '  Choose mode card on start screen',
+            '  RESUME MATCH to re-enter pointer lock',
+            '',
             'Combat',
             '  LMB: Fire',
             '  1-5 / Wheel: Weapon swap',
             '  G Frag (arm/throw) | V Seeker | B Molotov | Q Knife',
-            '  E: Class ability   R: Class ultimate',
+            '  E: Choke   R: Deadeye',
             '',
             'Utility',
-            '  C: Toggle first/third person',
             '  H: Toggle dev ring + hitboxes',
             '  I: Toggle field manual',
             '  ESC: Release pointer lock'
         ].join('\n');
     }
 
-    function classKeyLabel(classId) {
-        var keyMap = {
-            ninja: '6',
-            jedi: '7',
-            magician: '8',
-            sharpshooter: '9',
-            brawler: '0'
-        };
-        return keyMap[classId] || '--';
-    }
-
-    function buildClassPage(data) {
-        var c = findById(data.classes, state.selectedClassId);
+    function buildAbilityPage(data) {
+        var c = findById(data.abilities, state.selectedAbilityId);
         if (!c) {
             return [
                 '+----------------------------------------------------------+',
-                '| FIELD MANUAL / CLASS PROFILE                            |',
+                '| FIELD MANUAL / ABILITY PROFILE                          |',
                 '+----------------------------------------------------------+',
                 'DATA UNAVAILABLE'
             ].join('\n');
@@ -235,22 +230,13 @@
 
         var lines = [];
         lines.push('+----------------------------------------------------------+');
-        lines.push('| FIELD MANUAL / CLASS PROFILE                            |');
+        lines.push('| FIELD MANUAL / ABILITY PROFILE                          |');
         lines.push('+----------------------------------------------------------+');
-        lines.push('CLASS       : ' + String(c.name || '').toUpperCase());
-        lines.push('KEY         : ' + classKeyLabel(c.id));
-        lines.push('LOADOUT     : ' + String(c.loadoutWeapon || '--').toUpperCase());
-        lines.push('ARMOR MAX   : ' + fNum(c.armorMax));
-        lines.push('WALLHACK R  : ' + fNum(c.wallhackRadius));
-        lines.push('ROLE        : ' + (CLASS_ROLE[c.id] || 'Generalist combat package.'));
+        lines.push('ABILITY     : ' + String(c.name || c.id || '').toUpperCase());
+        lines.push('ID          : ' + String(c.id || '--'));
         lines.push('');
-        lines.push('PRIMARY (E) : ' + (c.abilityName || '--'));
-        lines.push('COOLDOWN    : ' + fSec(c.abilityCooldown));
-        lines.push('');
-        lines.push('ULTIMATE (R): ' + (c.ultimateName || '--'));
-        lines.push('COOLDOWN    : ' + fSec(c.ultimateCooldown));
-        lines.push('');
-        lines.push('NOTES       : Queue class swap any time; applies on respawn.');
+        lines.push('DESCRIPTION : ' + String(c.description || 'No description.'));
+        lines.push('KEYMAP      : ' + (c.id === 'choke' ? 'E' : (c.id === 'deadeye' ? 'R' : '--')));
         return lines.join('\n');
     }
 
@@ -332,11 +318,11 @@
             'DAMAGE ORDER           = armor first, then health',
             'ARMOR REGEN START      = 6.0s after last damage taken',
             'ARMOR REGEN RATE       = 12 armor per second',
-            'CLASS SWAP APPLICATION = queued now, applied at respawn',
+            'ABILITY LOADOUT        = shared by all players',
             '',
             'Distance/range values are normalized in world units',
             'through js/combat-tuning.js (single tuning source).',
-            'Weapon, enemy, radar, class, and throwable range values',
+            'Weapon, enemy, radar, ability, and throwable range values',
             'should be adjusted there before per-module fine tuning.'
         ].join('\n');
     }
@@ -344,7 +330,7 @@
     function buildContent(pageId, data) {
         switch (pageId) {
             case 'controls': return buildControlsPage();
-            case 'classes': return buildClassPage(data);
+            case 'abilities': return buildAbilityPage(data);
             case 'weapons': return buildWeaponPage(data);
             case 'throwables': return buildThrowablesPage(data);
             case 'formulas': return buildFormulasPage();
@@ -356,9 +342,9 @@
         var out = [];
         var i;
 
-        if (pageId === 'classes') {
-            for (i = 0; i < data.classes.length; i++) {
-                out.push({ id: data.classes[i].id, label: String(data.classes[i].name || data.classes[i].id || '').toUpperCase() });
+        if (pageId === 'abilities') {
+            for (i = 0; i < data.abilities.length; i++) {
+                out.push({ id: data.abilities[i].id, label: String(data.abilities[i].name || data.abilities[i].id || '').toUpperCase() });
             }
             return out;
         }
@@ -381,14 +367,14 @@
     }
 
     function getSelectedSubId(pageId) {
-        if (pageId === 'classes') return state.selectedClassId;
+        if (pageId === 'abilities') return state.selectedAbilityId;
         if (pageId === 'weapons') return state.selectedWeaponId;
         if (pageId === 'throwables') return state.selectedThrowableId;
         return '';
     }
 
     function setSelectedSubId(pageId, id) {
-        if (pageId === 'classes') state.selectedClassId = id;
+        if (pageId === 'abilities') state.selectedAbilityId = id;
         else if (pageId === 'weapons') state.selectedWeaponId = id;
         else if (pageId === 'throwables') state.selectedThrowableId = id;
     }
@@ -452,7 +438,7 @@
     function renderHint() {
         if (!hintEl) return;
 
-        if (state.activePage === 'classes' || state.activePage === 'weapons' || state.activePage === 'throwables') {
+        if (state.activePage === 'abilities' || state.activePage === 'weapons' || state.activePage === 'throwables') {
             hintEl.textContent = 'Select a profile from the left list. Data is live from current gameplay configs.';
             return;
         }
@@ -571,5 +557,5 @@
         return !!panelEl && panelEl.style.display !== 'none';
     };
 
-    window.GameDocs = GameDocs;
+    globalThis.__MAYHEM_RUNTIME.GameDocs = GameDocs;
 })();

@@ -1,6 +1,6 @@
 /**
  * overhead.js - floating health/armor bars over combatants
- * Loaded as global: window.GameOverhead
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameOverhead
  */
 (function () {
     'use strict';
@@ -64,9 +64,9 @@
     }
 
     function getLocalEnemyDescriptors() {
-        if (!window.GameEnemy || !window.GameEnemy.getEnemies) return [];
+        if (!globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return [];
 
-        var enemies = window.GameEnemy.getEnemies();
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies();
         var out = [];
 
         for (var i = 0; i < enemies.length; i++) {
@@ -89,8 +89,8 @@
     }
 
     function getNetworkDescriptors() {
-        if (!window.GameNet || !window.GameNet.getEntityStateList) return [];
-        var list = window.GameNet.getEntityStateList();
+        if (!globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.getEntityStateList) return [];
+        var list = globalThis.__MAYHEM_RUNTIME.GameNet.getEntityStateList();
         var out = [];
 
         for (var i = 0; i < list.length; i++) {
@@ -193,5 +193,5 @@
         cleanupUntouched(stamp);
     };
 
-    window.GameOverhead = GameOverhead;
+    globalThis.__MAYHEM_RUNTIME.GameOverhead = GameOverhead;
 })();

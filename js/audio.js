@@ -1,6 +1,6 @@
 /**
  * audio.js - Procedural sound effects via Web Audio API (no asset files)
- * Loaded as global: window.GameAudio
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAudio
  */
 (function () {
     'use strict';
@@ -201,5 +201,5 @@
 
     loadMutedPreference();
 
-    window.GameAudio = GameAudio;
+    globalThis.__MAYHEM_RUNTIME.GameAudio = GameAudio;
 })();

@@ -1,6 +1,6 @@
 /**
  * hitscan.js - Player weapons and hitscan logic
- * Loaded as global: window.GameHitscan
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameHitscan
  */
 (function () {
     'use strict';
@@ -40,18 +40,18 @@
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
 
-    var PLASMA_RANGE = (window.GameCombatTuning && window.GameCombatTuning.getWeaponRange)
-        ? window.GameCombatTuning.getWeaponRange('plasma')
+    var PLASMA_RANGE = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange)
+        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('plasma')
         : 24;
-    var weaponRangeTuning = (window.GameCombatTuning && window.GameCombatTuning.getWeaponRange)
+    var weaponRangeTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange)
         ? {
-            rifle: window.GameCombatTuning.getWeaponRange('rifle'),
-            pistol: window.GameCombatTuning.getWeaponRange('pistol'),
-            machinegun: window.GameCombatTuning.getWeaponRange('machinegun'),
-            shotgun: window.GameCombatTuning.getWeaponRange('shotgun'),
-            sniper: window.GameCombatTuning.getWeaponRange('sniper'),
-            seekergun: window.GameCombatTuning.getWeaponRange('seekergun'),
-            plasma: window.GameCombatTuning.getWeaponRange('plasma')
+            rifle: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('rifle'),
+            pistol: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('pistol'),
+            machinegun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('machinegun'),
+            shotgun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('shotgun'),
+            sniper: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('sniper'),
+            seekergun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('seekergun'),
+            plasma: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('plasma')
         }
         : {
             rifle: 120,
@@ -62,8 +62,8 @@
             seekergun: 24,
             plasma: 24
         };
-    var shotgunFalloffTuning = (window.GameCombatTuning && window.GameCombatTuning.getShotgunFalloffTuning)
-        ? window.GameCombatTuning.getShotgunFalloffTuning()
+    var shotgunFalloffTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getShotgunFalloffTuning)
+        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getShotgunFalloffTuning()
         : {
             fullDamageEnd: 8,
             minDamageStart: 24
@@ -168,6 +168,20 @@
             maxRange: weaponRangeTuning.plasma
         }
     };
+    if (globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry && globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.getAll) {
+        var registryEntries = globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.getAll();
+        for (var wid in weapons) {
+            if (!Object.prototype.hasOwnProperty.call(weapons, wid)) continue;
+            var entry = registryEntries ? registryEntries[wid] : null;
+            var stats = entry && entry.stats ? entry.stats : null;
+            if (!stats) continue;
+            if (typeof stats.cooldownMs === 'number') weapons[wid].cooldown = stats.cooldownMs;
+            if (typeof stats.bodyDamage === 'number') weapons[wid].bodyDamage = stats.bodyDamage;
+            if (typeof stats.headDamage === 'number') weapons[wid].headDamage = stats.headDamage;
+            if (typeof stats.pellets === 'number') weapons[wid].pellets = stats.pellets;
+            if (typeof stats.maxRange === 'number') weapons[wid].maxRange = stats.maxRange;
+        }
+    }
 
     var currentWeaponId = 'rifle';
     var lastFireTime = 0;
@@ -193,8 +207,8 @@
 
     function fireHomingProjectile(camera, weapon) {
         var seekerLock = selectPlasmaTarget(camera, weapon.maxRange, getSeekergunReticleSizePx());
-        if (window.GameThrowables && window.GameThrowables.fireSeekerShot) {
-            return !!window.GameThrowables.fireSeekerShot(camera, seekerLock || null);
+        if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot) {
+            return !!globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot(camera, seekerLock || null);
         }
         return false;
     }
@@ -323,12 +337,12 @@
 
     function getCombatHitboxes() {
         var out = [];
-        if (window.GameEnemy && window.GameEnemy.getHitboxArray) {
-            var local = window.GameEnemy.getHitboxArray() || [];
+        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray) {
+            var local = globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray() || [];
             out = out.concat(local);
         }
-        if (window.GameNet && window.GameNet.getHitboxArray) {
-            var net = window.GameNet.getHitboxArray() || [];
+        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getHitboxArray) {
+            var net = globalThis.__MAYHEM_RUNTIME.GameNet.getHitboxArray() || [];
             out = out.concat(net);
         }
         return out;
@@ -356,22 +370,16 @@
         return Math.max(3, Math.round(damage * scale));
     }
 
-    function getPerspectiveMode() {
-        if (!window.GamePlayer || !window.GamePlayer.getPerspective) return 'first';
-        return window.GamePlayer.getPerspective();
-    }
-
     function getThirdPersonCameraDistance() {
-        if (!window.GamePlayer || !window.GamePlayer.getCamera || !window.GamePlayer.getPosition) return null;
-        var camera = window.GamePlayer.getCamera();
-        var playerPos = window.GamePlayer.getPosition();
+        if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera || !globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) return null;
+        var camera = globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera();
+        var playerPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
         if (!camera || !playerPos || !camera.position || !camera.position.distanceTo) return null;
         return camera.position.distanceTo(playerPos);
     }
 
     function getShotgunReticleSizePx() {
         var size = SHOTGUN_RETICLE_SIZE_PX;
-        if (getPerspectiveMode() !== 'third') return size;
 
         var cameraDistance = getThirdPersonCameraDistance();
         if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
@@ -386,7 +394,6 @@
 
     function getPlasmaReticleSizePx() {
         var size = PLASMA_RETICLE_SIZE_PX;
-        if (getPerspectiveMode() !== 'third') return size;
 
         var cameraDistance = getThirdPersonCameraDistance();
         if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
@@ -421,11 +428,11 @@
     function getLockTargets() {
         var out = [];
 
-        if (window.GameEnemy && window.GameEnemy.getLockTargets) {
-            out = out.concat(window.GameEnemy.getLockTargets() || []);
+        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
+            out = out.concat(globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || []);
         }
-        if (window.GameNet && window.GameNet.getLockTargets) {
-            out = out.concat(window.GameNet.getLockTargets() || []);
+        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets) {
+            out = out.concat(globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets() || []);
         }
 
         if (out.length > 0) return out;
@@ -447,9 +454,34 @@
         return out;
     }
 
+    function lockTargetPassesFilter(target, options) {
+        if (!target) return false;
+        if (!options) return true;
+
+        if (options.ownerType && target.ownerType !== options.ownerType) return false;
+
+        if (Array.isArray(options.ownerTypes) && options.ownerTypes.length > 0) {
+            var matchedType = false;
+            for (var i = 0; i < options.ownerTypes.length; i++) {
+                if (target.ownerType === options.ownerTypes[i]) {
+                    matchedType = true;
+                    break;
+                }
+            }
+            if (!matchedType) return false;
+        }
+
+        if (options.targetIdPrefix) {
+            var targetId = String(target.targetId || '');
+            if (targetId.indexOf(String(options.targetIdPrefix)) !== 0) return false;
+        }
+
+        return true;
+    }
+
     function hasLineOfSight(camera, targetPos, maxRange) {
         if (!camera || !targetPos) return false;
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var toTarget = plasmaForward.copy(targetPos).sub(camera.position);
         var distance = toTarget.length();
         if (distance <= 0.001 || distance > maxRange) return false;
@@ -462,7 +494,7 @@
         return losRaycaster.intersectObjects(worldMeshes, false).length === 0;
     }
 
-    function selectPlasmaTarget(camera, maxRange, boxSizePx) {
+    function selectPlasmaTarget(camera, maxRange, boxSizePx, options) {
         var targets = getLockTargets();
         if (!targets || targets.length === 0) return null;
 
@@ -474,6 +506,7 @@
         for (var i = 0; i < targets.length; i++) {
             var t = targets[i];
             if (!t || t.alive === false || !t.worldPos) continue;
+            if (!lockTargetPassesFilter(t, options)) continue;
             var projected = t.worldPos.clone().project(camera);
             if (projected.z > 1 || projected.z < -1) continue;
             if (Math.abs(projected.x) > halfNdcX || Math.abs(projected.y) > halfNdcY) continue;
@@ -549,8 +582,8 @@
     }
 
     function resolvePlasmaMuzzle(camera) {
-        if (window.GamePlayer && window.GamePlayer.getMuzzleWorldPosition) {
-            var p = window.GamePlayer.getMuzzleWorldPosition();
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {
+            var p = globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition();
             if (p && typeof p.x === 'number') {
                 plasmaMuzzle.copy(p);
                 return plasmaMuzzle;
@@ -586,7 +619,7 @@
 
     function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
         var targetsHitboxes = getCombatHitboxes();
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var allTargets = targetsHitboxes.concat(worldMeshes);
         var ndcOffset = getPelletNdcOffset(weapon, pelletIndex);
 
@@ -622,7 +655,7 @@
 
     function castCenter(camera, maxRange) {
         var hitboxes = getCombatHitboxes();
-        var worldMeshes = window.GameWorld.getCollidables ? window.GameWorld.getCollidables() : [];
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var allTargets = hitboxes.concat(worldMeshes);
         if (allTargets.length === 0) return null;
 
@@ -872,6 +905,21 @@
         return getSeekerTelemetry(camera, weapon.maxRange, getSeekergunReticleSizePx());
     };
 
+    GameHitscan.selectLockTargetByBox = function (camera, maxRange, boxSizePx, options) {
+        if (!camera) return null;
+        var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
+        var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : getPlasmaReticleSizePx();
+        var target = selectPlasmaTarget(camera, range, size, options || null);
+        if (!target) return null;
+        return {
+            targetId: target.targetId || '',
+            ownerType: target.ownerType || 'unknown',
+            worldPos: target.worldPos && target.worldPos.clone ? target.worldPos.clone() : null,
+            hitbox: target.hitbox || null,
+            enemyRef: target.enemyRef || null
+        };
+    };
+
     GameHitscan.updateTracers = function (dt) {
         if (!dt || tracerPool.length === 0) return;
         var simDt = Math.min(dt, 1 / 30);
@@ -916,11 +964,15 @@
         for (var i = 0; i < weaponOrder.length; i++) {
             var id = weaponOrder[i];
             var weapon = weapons[id];
+            var weaponDomain = (globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry && globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get)
+                ? globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get(id)
+                : null;
             if (!weapon) continue;
             out.push({
                 id: weapon.id,
                 name: weapon.name,
                 primitiveType: weapon.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
+                family: weaponDomain ? weaponDomain.family : '',
                 automatic: !!weapon.automatic,
                 cooldown: weapon.cooldown,
                 bodyDamage: weapon.bodyDamage,
@@ -933,5 +985,5 @@
         return out;
     };
 
-    window.GameHitscan = GameHitscan;
+    globalThis.__MAYHEM_RUNTIME.GameHitscan = GameHitscan;
 })();
