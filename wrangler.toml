@@ -19,5 +19,5 @@ new_sqlite_classes = ["GlobalArenaRoom"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "minecraft-fps-db"
-database_id = "replace-with-your-d1-id"
+database_name = "minecraft-fps-db-prod"
+database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"
