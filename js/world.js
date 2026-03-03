@@ -1319,7 +1319,7 @@
                 ? ARCTIC_FOOTHILL_RING_COUNT
                 : 3;
             for (var ring = 0; ring < foothillRingCount; ring++) {
-                var ang = (Math.PI * 2 * ring) / 6;
+                var ang = (Math.PI * 2 * ring) / foothillRingCount;
                 var radius = 8.6 + randRange(0.8, 3.2);
                 var mx = mountainCenter.x + (Math.cos(ang) * radius);
                 var mz = mountainCenter.z + (Math.sin(ang) * radius);
