@@ -38,16 +38,35 @@
     var REMOTE_EYE_HEIGHT = 1.6;
 
     var REMOTE_BEAM_HOLD_MS = 180;
+    var remoteProjectileState = [];
+    var remoteFireZoneState = [];
+    var throwAckQueue = [];
+    var throwRejectQueue = [];
+    var throwableEventQueue = [];
 
     var notices = [];
 
+    function classWallhackRadiusFor(classId) {
+        if (window.GameCombatTuning && window.GameCombatTuning.getClassWallhackRadius) {
+            return window.GameCombatTuning.getClassWallhackRadius(classId);
+        }
+        var fallback = {
+            ninja: 90,
+            jedi: 85,
+            magician: 100,
+            sharpshooter: 115,
+            brawler: 75
+        };
+        return fallback[classId] || fallback.sharpshooter;
+    }
+
     function classStats(classId) {
         var defs = {
-            ninja: { armorMax: 80, wallhackRadius: 90 },
-            jedi: { armorMax: 130, wallhackRadius: 85 },
-            magician: { armorMax: 100, wallhackRadius: 100 },
-            sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-            brawler: { armorMax: 150, wallhackRadius: 75 }
+            ninja: { armorMax: 80, wallhackRadius: classWallhackRadiusFor('ninja') },
+            jedi: { armorMax: 130, wallhackRadius: classWallhackRadiusFor('jedi') },
+            magician: { armorMax: 100, wallhackRadius: classWallhackRadiusFor('magician') },
+            sharpshooter: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('sharpshooter') },
+            brawler: { armorMax: 150, wallhackRadius: classWallhackRadiusFor('brawler') }
         };
         return defs[classId] || defs.sharpshooter;
     }
@@ -324,6 +343,7 @@
             beamActiveUntil: entity.beamActiveUntil || 0,
             beamHeat: entity.beamHeat || 0,
             beamOverheated: !!entity.beamOverheated,
+            muzzleFlashUntil: entity.muzzleFlashUntil || 0,
             beamLine: beamLine
         };
     }
@@ -383,13 +403,14 @@
         r.beamActiveUntil = entity.beamActiveUntil || 0;
         r.beamHeat = entity.beamHeat || 0;
         r.beamOverheated = !!entity.beamOverheated;
+        r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
 
         r.group.visible = !!entity.alive;
         r.bodyHitbox.visible = !!entity.alive;
         r.headHitbox.visible = !!entity.alive;
     }
 
-    function applySnapshot(entities) {
+    function applySnapshot(entities, projectiles, fireZones) {
         if (!Array.isArray(entities)) return;
 
         snapshotMap.clear();
@@ -406,6 +427,9 @@
         for (i = 0; i < toRemove.length; i++) {
             removeRemoteVisual(toRemove[i]);
         }
+
+        remoteProjectileState = Array.isArray(projectiles) ? projectiles.slice() : [];
+        remoteFireZoneState = Array.isArray(fireZones) ? fireZones.slice() : [];
     }
 
     function handleMessage(raw) {
@@ -425,7 +449,34 @@
         }
 
         if (msg.t === 'snapshot') {
-            applySnapshot(msg.entities || []);
+            applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || []);
+            return;
+        }
+
+        if (msg.t === 'throw_spawn') {
+            throwAckQueue.push({
+                projectileId: msg.projectileId || '',
+                ownerId: msg.ownerId || '',
+                clientThrowId: msg.clientThrowId || '',
+                throwableId: msg.throwableId || ''
+            });
+            if (throwAckQueue.length > 32) throwAckQueue.shift();
+            return;
+        }
+
+        if (msg.t === 'throw_reject') {
+            throwRejectQueue.push({
+                throwableId: msg.throwableId || '',
+                clientThrowId: msg.clientThrowId || '',
+                reason: msg.reason || 'rejected'
+            });
+            if (throwRejectQueue.length > 32) throwRejectQueue.shift();
+            return;
+        }
+
+        if (msg.t === 'throw_impact' || msg.t === 'throw_explode' || msg.t === 'aoe_end') {
+            throwableEventQueue.push(msg);
+            if (throwableEventQueue.length > 64) throwableEventQueue.shift();
             return;
         }
 
@@ -617,6 +668,11 @@
         for (var i = 0; i < ids.length; i++) removeRemoteVisual(ids[i]);
 
         snapshotMap.clear();
+        remoteProjectileState = [];
+        remoteFireZoneState = [];
+        throwAckQueue = [];
+        throwRejectQueue = [];
+        throwableEventQueue = [];
         selfState = null;
         selfId = '';
     };
@@ -675,6 +731,7 @@
                 classId: user.classId || 'sharpshooter',
                 wallhackRadius: defaults.wallhackRadius,
                 queuedClassId: null,
+                throwables: null,
                 alive: true
             };
         }
@@ -721,6 +778,9 @@
                 r.rigApi.setWeapon(r.weaponId || 'rifle');
                 r.rigApi.updateAimPitch(r.targetPitch || 0);
                 r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
+                if (r.rigApi.setMuzzleVisible) {
+                    r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
+                }
             }
 
             r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 1.0, r.group.position.z);
@@ -772,8 +832,36 @@
         });
     };
 
-    GameNet.sendThrow = function (throwableId) {
-        return wsSend({ t: 'throw', throwableId: throwableId });
+    GameNet.sendThrow = function (throwableId, clientThrowId) {
+        return wsSend({
+            t: 'throw',
+            throwableId: throwableId,
+            clientThrowId: clientThrowId || ''
+        });
+    };
+
+    GameNet.consumeThrowAck = function () {
+        if (!throwAckQueue.length) return null;
+        return throwAckQueue.shift();
+    };
+
+    GameNet.consumeThrowReject = function () {
+        if (!throwRejectQueue.length) return null;
+        return throwRejectQueue.shift();
+    };
+
+    GameNet.consumeThrowableEvent = function () {
+        if (!throwableEventQueue.length) return null;
+        return throwableEventQueue.shift();
+    };
+
+    GameNet.getAuthoritativeThrowableState = function () {
+        var selfThrowables = (selfState && selfState.throwables) ? selfState.throwables : null;
+        return {
+            projectiles: remoteProjectileState.slice(),
+            fireZones: remoteFireZoneState.slice(),
+            selfThrowables: selfThrowables
+        };
     };
 
     GameNet.queueClassChange = function (classId) {

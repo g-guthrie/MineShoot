@@ -10,6 +10,8 @@
     var crosshairEl, shotgunReticleEl, plasmaReticleEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, seekerDebugInfoEl;
     var seekerConeMarkersEl, seekerConeMarkerEls;
+    var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
+    var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
     var classInfoEl;
     var cooldownBarEl, cooldownStatusEl;
@@ -48,6 +50,11 @@
         seekerDebugInfoEl = document.getElementById('seeker-debug-info');
         seekerConeMarkersEl = document.getElementById('seeker-cone-markers');
         seekerConeMarkerEls = seekerConeMarkersEl ? seekerConeMarkersEl.querySelectorAll('.seeker-cone-marker') : [];
+        combatRadarEl = document.getElementById('combat-radar');
+        combatRadarSlicesEl = document.getElementById('combat-radar-slices');
+        combatRadarCoreEl = document.getElementById('combat-radar-core');
+        combatBeaconsEl = document.getElementById('combat-beacons');
+        combatBeaconEls = [];
         weaponInfoEl = document.getElementById('weapon-info');
         throwableInfoEl = document.getElementById('throwable-info');
         classInfoEl = document.getElementById('class-info');
@@ -88,6 +95,15 @@
                 damageIndicatorEl.appendChild(tick);
                 damageTicks.push(tick);
                 damageTickTimers.push(0);
+            }
+        }
+
+        if (combatBeaconsEl) {
+            for (var b = 0; b < 3; b++) {
+                var beacon = document.createElement('div');
+                beacon.className = 'combat-beacon-dot';
+                combatBeaconsEl.appendChild(beacon);
+                combatBeaconEls.push(beacon);
             }
         }
     };
@@ -240,6 +256,55 @@
         seekerConeMarkerEls[3].style.left = Math.round(cx) + 'px'; // bottom
         seekerConeMarkerEls[3].style.top = Math.round(cy + dy) + 'px';
         seekerConeMarkersEl.style.display = 'block';
+    };
+
+    GameUI.updateCombatRadar = function (state) {
+        if (!combatRadarEl || !combatRadarSlicesEl || !combatRadarCoreEl) return;
+        if (!state || !state.segments || !state.segments.length) {
+            combatRadarEl.style.display = 'none';
+            return;
+        }
+        combatRadarEl.style.display = 'block';
+        var segs = state.segments;
+        var count = Math.max(1, segs.length);
+        var step = 360 / count;
+        var parts = [];
+        for (var i = 0; i < count; i++) {
+            var intensity = Math.max(0, Math.min(1, Number(segs[i] || 0)));
+            var alpha = (0.04 + intensity * 0.78).toFixed(3);
+            var start = (i * step - step * 0.5);
+            var end = start + step;
+            parts.push('rgba(86, 193, 255, ' + alpha + ') ' + start.toFixed(2) + 'deg ' + end.toFixed(2) + 'deg');
+        }
+        combatRadarSlicesEl.style.background = 'conic-gradient(' + parts.join(', ') + ')';
+
+        var core = Math.max(0, Math.min(1, Number(state.coreIntensity || 0)));
+        var coreAlpha = (core * 0.82).toFixed(3);
+        combatRadarCoreEl.style.background = 'rgba(255, 96, 96, ' + coreAlpha + ')';
+        combatRadarCoreEl.style.boxShadow = '0 0 ' + (4 + core * 10).toFixed(1) + 'px rgba(255, 90, 90, ' + (core * 0.7).toFixed(3) + ')';
+    };
+
+    GameUI.updateCombatBeacons = function (beacons) {
+        if (!combatRadarEl || !combatBeaconEls || combatBeaconEls.length === 0) return;
+        var rect = combatRadarEl.getBoundingClientRect();
+        var cx = rect.left + rect.width * 0.5;
+        var cy = rect.top + rect.height * 0.5;
+        var radius = Math.max(40, rect.width * 0.78);
+        for (var i = 0; i < combatBeaconEls.length; i++) {
+            var el = combatBeaconEls[i];
+            var b = (beacons && i < beacons.length) ? beacons[i] : null;
+            if (!b || typeof b.angleRad !== 'number') {
+                el.style.display = 'none';
+                continue;
+            }
+            var intensity = Math.max(0.25, Math.min(1, Number(b.intensity || 0.5)));
+            var x = cx + Math.sin(b.angleRad) * radius;
+            var y = cy - Math.cos(b.angleRad) * radius;
+            el.style.left = Math.round(x) + 'px';
+            el.style.top = Math.round(y) + 'px';
+            el.style.opacity = intensity.toFixed(3);
+            el.style.display = 'block';
+        }
     };
 
     GameUI.updateCooldown = function (ready, pct) {

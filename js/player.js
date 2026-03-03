@@ -581,6 +581,14 @@
         return camera.position.clone().addScaledVector(plasmaForwardDir, 0.65);
     };
 
+    GamePlayer.getCoreWorldPosition = function () {
+        if (avatarRigApi && avatarRigApi.getCoreWorldPosition) {
+            return avatarRigApi.getCoreWorldPosition();
+        }
+        if (!camera) return null;
+        return camera.position.clone().setY(camera.position.y - 0.6);
+    };
+
     GamePlayer.getEquippedWeaponId = function () {
         return currentWeaponId;
     };

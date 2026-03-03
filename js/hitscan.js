@@ -40,11 +40,42 @@
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
 
-    var PLASMA_RANGE = 24;
+    var PLASMA_RANGE = (window.GameCombatTuning && window.GameCombatTuning.getWeaponRange)
+        ? window.GameCombatTuning.getWeaponRange('plasma')
+        : 24;
+    var weaponRangeTuning = (window.GameCombatTuning && window.GameCombatTuning.getWeaponRange)
+        ? {
+            rifle: window.GameCombatTuning.getWeaponRange('rifle'),
+            pistol: window.GameCombatTuning.getWeaponRange('pistol'),
+            machinegun: window.GameCombatTuning.getWeaponRange('machinegun'),
+            shotgun: window.GameCombatTuning.getWeaponRange('shotgun'),
+            sniper: window.GameCombatTuning.getWeaponRange('sniper'),
+            seekergun: window.GameCombatTuning.getWeaponRange('seekergun'),
+            plasma: window.GameCombatTuning.getWeaponRange('plasma')
+        }
+        : {
+            rifle: 120,
+            pistol: 92,
+            machinegun: 88,
+            shotgun: 42,
+            sniper: 190,
+            seekergun: 24,
+            plasma: 24
+        };
+    var shotgunFalloffTuning = (window.GameCombatTuning && window.GameCombatTuning.getShotgunFalloffTuning)
+        ? window.GameCombatTuning.getShotgunFalloffTuning()
+        : {
+            fullDamageEnd: 8,
+            minDamageStart: 24
+        };
     var PLASMA_DAMAGE = 15;
     var PLASMA_TICK_INTERVAL = 0.1;
     var PLASMA_MAX_SUSTAIN = 2.5;
     var PLASMA_OVERHEAT_LOCKOUT = 1.6;
+    var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
+    var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
+    var PRIMITIVE_BEAM_LOCK_DOT = 'beam_lock_dot';
+    var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
 
     for (var i = 0; i < SHOTGUN_PATTERN.length; i++) {
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
@@ -55,79 +86,86 @@
         rifle: {
             id: 'rifle',
             name: 'Rifle',
+            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: false,
             cooldown: 190,
             bodyDamage: 36,
             headDamage: 68,
             pellets: 1,
             spreadNdc: 0.0018,
-            maxRange: 120
+            maxRange: weaponRangeTuning.rifle
         },
         pistol: {
             id: 'pistol',
             name: 'Pistol',
+            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: false,
             cooldown: 280,
             bodyDamage: 30,
             headDamage: 56,
             pellets: 1,
             spreadNdc: 0.0032,
-            maxRange: 92
+            maxRange: weaponRangeTuning.pistol
         },
         machinegun: {
             id: 'machinegun',
             name: 'Machine Gun',
+            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: true,
             cooldown: 80,
             bodyDamage: 16,
             headDamage: 30,
             pellets: 1,
             spreadNdc: 0.0078,
-            maxRange: 88
+            maxRange: weaponRangeTuning.machinegun
         },
         shotgun: {
             id: 'shotgun',
             name: 'Shotgun',
+            primitiveType: PRIMITIVE_HITSCAN_MULTI,
             automatic: false,
             cooldown: 820,
             bodyDamage: 14,
             headDamage: 22,
             pellets: 12,
             spreadNdc: 0,
-            maxRange: 42
+            maxRange: weaponRangeTuning.shotgun
         },
         sniper: {
             id: 'sniper',
             name: 'Sniper',
+            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
             automatic: false,
             cooldown: 1250,
             bodyDamage: 120,
             headDamage: 220,
             pellets: 1,
             spreadNdc: 0.00035,
-            maxRange: 190
+            maxRange: weaponRangeTuning.sniper
         },
         seekergun: {
             id: 'seekergun',
             name: 'Seeker Gun',
+            primitiveType: PRIMITIVE_PROJECTILE_HOMING,
             automatic: true,
             cooldown: 320,
             bodyDamage: 0,
             headDamage: 0,
             pellets: 1,
             spreadNdc: 0,
-            maxRange: 24
+            maxRange: weaponRangeTuning.seekergun
         },
         plasma: {
             id: 'plasma',
             name: 'Plasma Cannon',
+            primitiveType: PRIMITIVE_BEAM_LOCK_DOT,
             automatic: true,
             cooldown: 100,
             bodyDamage: PLASMA_DAMAGE,
             headDamage: PLASMA_DAMAGE,
             pellets: 1,
             spreadNdc: 0,
-            maxRange: PLASMA_RANGE
+            maxRange: weaponRangeTuning.plasma
         }
     };
 
@@ -151,6 +189,37 @@
             return tracerScene;
         }
         return null;
+    }
+
+    function fireHomingProjectile(camera, weapon) {
+        var seekerLock = selectPlasmaTarget(camera, weapon.maxRange, getSeekergunReticleSizePx());
+        if (window.GameThrowables && window.GameThrowables.fireSeekerShot) {
+            return !!window.GameThrowables.fireSeekerShot(camera, seekerLock || null);
+        }
+        return false;
+    }
+
+    function fireHitscanPattern(camera, weapon, onHit, onMiss) {
+        var pellets = weapon.pellets || 1;
+        var anyHit = false;
+        var drawTracersForShot = shouldDrawTracerForShot(weapon);
+        var shotgunTracerCap = 8;
+        for (var i = 0; i < pellets; i++) {
+            var shouldTraceThisPellet = drawTracersForShot && (weapon.id !== 'shotgun' || i < shotgunTracerCap);
+            var hit = fireSinglePellet(
+                camera,
+                weapon,
+                i,
+                onHit,
+                shouldTraceThisPellet ? function (traceEnd) {
+                    spawnTracer(camera, weapon.id, traceEnd);
+                } : null
+            );
+            anyHit = anyHit || hit;
+        }
+
+        if (!anyHit && onMiss) onMiss();
+        return true;
     }
 
     function allocTracer(camera) {
@@ -275,11 +344,14 @@
 
     function applyDistanceFalloff(weapon, damage, distance) {
         if (weapon.id !== 'shotgun') return damage;
+        var fullDamageEnd = shotgunFalloffTuning.fullDamageEnd;
+        var minDamageStart = shotgunFalloffTuning.minDamageStart;
+        var span = Math.max(0.0001, minDamageStart - fullDamageEnd);
 
-        if (distance <= 8) return damage;
-        if (distance >= 24) return Math.max(3, Math.round(damage * 0.25));
+        if (distance <= fullDamageEnd) return damage;
+        if (distance >= minDamageStart) return Math.max(3, Math.round(damage * 0.25));
 
-        var t = (distance - 8) / 16;
+        var t = (distance - fullDamageEnd) / span;
         var scale = 1 - (t * 0.75);
         return Math.max(3, Math.round(damage * scale));
     }
@@ -590,44 +662,17 @@
     GameHitscan.fire = function (camera, onHit, onMiss) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
-        if (weapon.id === 'plasma') return false;
+        if (weapon.primitiveType === PRIMITIVE_BEAM_LOCK_DOT) return false;
 
         if (now - lastFireTime < weapon.cooldown) {
             return false;
         }
 
         lastFireTime = now;
-        if (weapon.id === 'seekergun') {
-            var seekerLock = selectPlasmaTarget(camera, weapon.maxRange, getSeekergunReticleSizePx());
-            if (window.GameThrowables && window.GameThrowables.fireSeekerShot) {
-                return !!window.GameThrowables.fireSeekerShot(camera, seekerLock || null);
-            }
-            return false;
+        if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
+            return fireHomingProjectile(camera, weapon);
         }
-
-        var pellets = weapon.pellets || 1;
-        var anyHit = false;
-        var drawTracersForShot = shouldDrawTracerForShot(weapon);
-        var shotgunTracerCap = 8;
-        for (var i = 0; i < pellets; i++) {
-            var shouldTraceThisPellet = drawTracersForShot && (weapon.id !== 'shotgun' || i < shotgunTracerCap);
-            var hit = fireSinglePellet(
-                camera,
-                weapon,
-                i,
-                onHit,
-                shouldTraceThisPellet ? function (traceEnd) {
-                    spawnTracer(camera, weapon.id, traceEnd);
-                } : null
-            );
-            anyHit = anyHit || hit;
-        }
-
-        if (!anyHit && onMiss) {
-            onMiss();
-        }
-
-        return true;
+        return fireHitscanPattern(camera, weapon, onHit, onMiss);
     };
 
     GameHitscan.getCurrentWeapon = function () {
@@ -635,6 +680,7 @@
         return {
             id: weapon.id,
             name: weapon.name,
+            primitiveType: weapon.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
             automatic: weapon.automatic,
             cooldown: weapon.cooldown,
             bodyDamage: weapon.bodyDamage,
@@ -874,6 +920,7 @@
             out.push({
                 id: weapon.id,
                 name: weapon.name,
+                primitiveType: weapon.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
                 automatic: !!weapon.automatic,
                 cooldown: weapon.cooldown,
                 bodyDamage: weapon.bodyDamage,

@@ -334,8 +334,10 @@
             'ARMOR REGEN RATE       = 12 armor per second',
             'CLASS SWAP APPLICATION = queued now, applied at respawn',
             '',
-            'Shot validation and balancing values are drawn from',
-            'the active weapon/class/throwable module catalogs.'
+            'Distance/range values are normalized in world units',
+            'through js/combat-tuning.js (single tuning source).',
+            'Weapon, enemy, radar, class, and throwable range values',
+            'should be adjusted there before per-module fine tuning.'
         ].join('\n');
     }
 

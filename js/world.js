@@ -15,6 +15,8 @@
     var WORLD_MIN = WORLD_MARGIN;
     var WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
     var DEFAULT_SPAWN_PADDING = 8;
+    // Baseline world size used for current combat tuning (1 unit = 1 meter convention).
+    var COMBAT_TUNED_WORLD_SIZE = 112;
     var WORLD_SEED = 'mineshoot-v1';
     var rngState = 1;
     var waterPools = [];
@@ -64,6 +66,15 @@
 
     function scaleSpan(value) {
         return Math.max(1, (value / BASE_WORLD_SIZE) * WORLD_SIZE);
+    }
+
+    function getCombatScale() {
+        if (COMBAT_TUNED_WORLD_SIZE <= 0) return 1;
+        return WORLD_SIZE / COMBAT_TUNED_WORLD_SIZE;
+    }
+
+    function scaleCombatDistance(value) {
+        return value * getCombatScale();
     }
 
     function randRange(min, max) {
@@ -502,6 +513,14 @@
 
     GameWorld.getAreaScale = function () {
         return WORLD_AREA_SCALE;
+    };
+
+    GameWorld.getCombatScale = function () {
+        return getCombatScale();
+    };
+
+    GameWorld.scaleCombatDistance = function (value) {
+        return scaleCombatDistance(value);
     };
 
     GameWorld.getSpawnPadding = function () {

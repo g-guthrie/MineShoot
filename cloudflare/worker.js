@@ -1,27 +1,54 @@
 import { DurableObject } from 'cloudflare:workers';
 
-const CLASS_PRESETS = {
-  ninja: { armorMax: 80, wallhackRadius: 90 },
-  jedi: { armorMax: 130, wallhackRadius: 85 },
-  magician: { armorMax: 100, wallhackRadius: 100 },
-  sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-  brawler: { armorMax: 150, wallhackRadius: 75 }
+const GAMEPLAY_TUNING_WU = {
+  classPresets: {
+    ninja: { armorMax: 80, wallhackRadius: 90 },
+    jedi: { armorMax: 130, wallhackRadius: 85 },
+    magician: { armorMax: 100, wallhackRadius: 100 },
+    sharpshooter: { armorMax: 90, wallhackRadius: 115 },
+    brawler: { armorMax: 150, wallhackRadius: 75 }
+  },
+  weaponStats: {
+    rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
+    pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
+    machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
+    shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
+    sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
+    plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
+  },
+  throwables: {
+    order: ['frag', 'seeker', 'molotov', 'knife'],
+    frag: {
+      id: 'frag', speed: 16, upward: 5.2, gravity: 19, fuse: 2.2, radius: 5.4, damage: 125, regen: 10, bounce: true
+    },
+    seeker: {
+      id: 'seeker', speed: 14, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 15,
+      homingBoost: 2.0, homingLerp: 3.2, acquireRange: 22
+    },
+    molotov: {
+      id: 'molotov', speed: 15, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
+      fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 14
+    },
+    knife: {
+      id: 'knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, bodyDamage: 100, headDamage: 250, regen: 8
+    }
+  }
 };
 
-const WEAPON_STATS = {
-  rifle: { cooldownMs: 190, bodyDamage: 36, headDamage: 68, maxRange: 120 },
-  pistol: { cooldownMs: 280, bodyDamage: 30, headDamage: 56, maxRange: 92 },
-  machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88 },
-  shotgun: { cooldownMs: 820, bodyDamage: 14, headDamage: 22, maxRange: 42 },
-  sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190 },
-  plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24 }
-};
+const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
+const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
+const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 
 const ROOM_TICK_MS = 50;
 const MAX_HP = 500;
 const PLASMA_MAX_SUSTAIN_MS = 2500;
 const PLASMA_OVERHEAT_MS = 1600;
 const REMOTE_BEAM_HOLD_MS = 180;
+const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
+const PLAYER_EYE_HEIGHT_WU = 1.6;
+const THROWABLE_SPAWN_FORWARD_WU = 0.65;
+const THROWABLE_SPAWN_HEIGHT_WU = 1.0;
+const THROWABLE_BOT_THROW_COOLDOWN_S = 2.8;
 
 function nowMs() {
   return Date.now();
@@ -232,6 +259,19 @@ function distance3(a, b) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+function normalize3(x, y, z) {
+  const len = Math.sqrt(x * x + y * y + z * z) || 1;
+  return { x: x / len, y: y / len, z: z / len };
+}
+
+function addScaled3(a, b, scale) {
+  return {
+    x: a.x + b.x * scale,
+    y: a.y + b.y * scale,
+    z: a.z + b.z * scale
+  };
+}
+
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
@@ -249,6 +289,10 @@ export class GlobalArenaRoom extends DurableObject {
     this.roomName = env.ROOM_NAME || 'global';
     this.boundsMin = 2;
     this.boundsMax = 110;
+    this.projectiles = new Map();
+    this.fireZones = new Map();
+    this.nextProjectileSeq = 1;
+    this.nextFireZoneSeq = 1;
     this.ensureBots();
   }
 
@@ -287,6 +331,9 @@ export class GlobalArenaRoom extends DurableObject {
         beamOverheated: false,
         beamOverheatedUntil: 0,
         lastPlasmaTickAt: 0,
+        muzzleFlashUntil: 0,
+        throwables: this.createThrowableRuntime(),
+        lastThrowAt: 0,
         aiDirX: Math.cos(Math.random() * Math.PI * 2),
         aiDirZ: Math.sin(Math.random() * Math.PI * 2),
         aiSpeed: 2.2,
@@ -393,7 +440,10 @@ export class GlobalArenaRoom extends DurableObject {
       beamHeat: 0,
       beamOverheated: false,
       beamOverheatedUntil: 0,
-      lastPlasmaTickAt: 0
+      lastPlasmaTickAt: 0,
+      muzzleFlashUntil: 0,
+      throwables: this.createThrowableRuntime(),
+      lastThrowAt: 0
     };
 
     this.players.set(userId, p);
@@ -401,6 +451,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   send(ws, obj) {
+    if (!ws) return;
     try {
       ws.send(JSON.stringify(obj));
     } catch (err) {
@@ -418,6 +469,205 @@ export class GlobalArenaRoom extends DurableObject {
         // noop
       }
     }
+  }
+
+  createThrowableRuntime() {
+    const out = {};
+    const order = THROWABLE_STATS.order || [];
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      const def = THROWABLE_STATS[id];
+      if (!def) continue;
+      out[id] = {
+        charges: 1,
+        maxCharges: 1,
+        cooldownRemaining: 0
+      };
+    }
+    return out;
+  }
+
+  tickThrowableRegen(entity, dtSec) {
+    if (!entity || !entity.throwables) return;
+    const order = THROWABLE_STATS.order || [];
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      const def = THROWABLE_STATS[id];
+      const inv = entity.throwables[id];
+      if (!def || !inv) continue;
+      if (inv.charges >= inv.maxCharges) continue;
+      inv.cooldownRemaining -= dtSec;
+      if (inv.cooldownRemaining <= 0) {
+        inv.charges++;
+        if (inv.charges < inv.maxCharges) inv.cooldownRemaining += def.regen;
+        else inv.cooldownRemaining = 0;
+      }
+    }
+  }
+
+  consumeThrowCharge(entity, throwableId) {
+    if (!entity || !entity.throwables) return false;
+    const inv = entity.throwables[throwableId];
+    const def = THROWABLE_STATS[throwableId];
+    if (!inv || !def || inv.charges <= 0) return false;
+    inv.charges--;
+    if (inv.charges < inv.maxCharges && inv.cooldownRemaining <= 0) {
+      inv.cooldownRemaining = def.regen;
+    }
+    return true;
+  }
+
+  entityCorePosition(entity) {
+    return {
+      x: entity.x,
+      y: (entity.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + THROWABLE_SPAWN_HEIGHT_WU,
+      z: entity.z
+    };
+  }
+
+  entityForward(entity) {
+    const yaw = entity && typeof entity.yaw === 'number' ? entity.yaw : 0;
+    const pitch = entity && typeof entity.pitch === 'number' ? entity.pitch : 0;
+    const x = -Math.sin(yaw) * Math.cos(pitch);
+    const y = Math.sin(-pitch);
+    const z = -Math.cos(yaw) * Math.cos(pitch);
+    return normalize3(x, y, z);
+  }
+
+  spawnProjectile(player, throwableId, clientThrowId) {
+    const def = THROWABLE_STATS[throwableId];
+    if (!def) return null;
+    const originCore = this.entityCorePosition(player);
+    const forward = this.entityForward(player);
+    const origin = addScaled3(originCore, forward, THROWABLE_SPAWN_FORWARD_WU);
+    const velocity = {
+      x: forward.x * def.speed,
+      y: (forward.y * def.speed) + def.upward,
+      z: forward.z * def.speed
+    };
+    const id = `proj_${this.nextProjectileSeq++}`;
+    const now = nowMs();
+    const projectile = {
+      id,
+      type: throwableId,
+      ownerId: player.id,
+      clientThrowId: clientThrowId || '',
+      x: origin.x,
+      y: origin.y,
+      z: origin.z,
+      vx: velocity.x,
+      vy: velocity.y,
+      vz: velocity.z,
+      alive: true,
+      age: 0,
+      bounces: 0,
+      fuseSec: typeof def.fuse === 'number' ? def.fuse : (typeof def.life === 'number' ? def.life : 0),
+      lifeSec: typeof def.life === 'number' ? def.life : 0,
+      createdAt: now
+    };
+    this.projectiles.set(projectile.id, projectile);
+    return projectile;
+  }
+
+  nearestTargetForProjectile(projectile, maxRange) {
+    if (!projectile) return null;
+    let nearest = null;
+    let nearestDist = maxRange;
+    const entities = [];
+    for (const p of this.players.values()) entities.push(p);
+    for (const b of this.bots.values()) entities.push(b);
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e || !e.alive || e.id === projectile.ownerId) continue;
+      const dx = e.x - projectile.x;
+      const dz = e.z - projectile.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = e;
+      }
+    }
+    return nearest;
+  }
+
+  projectileDamageHit(projectile, target, hitType) {
+    const def = THROWABLE_STATS[projectile.type];
+    if (!def || !target) return;
+    const damage = hitType === 'head'
+      ? (def.headDamage || def.damage || 1)
+      : (def.bodyDamage || def.damage || 1);
+    const out = this.applyDamage(target, damage);
+    if (!out) return;
+    this.broadcast({
+      t: 'damage_event',
+      targetId: target.id,
+      sourceId: projectile.ownerId,
+      health: out.hp,
+      armor: out.armor,
+      hitType: hitType
+    });
+    if (out.killed) {
+      this.broadcast({
+        t: 'death_respawn',
+        entityId: target.id,
+        respawnAt: target.respawnAt,
+        classApplied: target.classId
+      });
+    }
+  }
+
+  explodeProjectile(projectile, x, y, z) {
+    const def = THROWABLE_STATS[projectile.type];
+    if (!def) return;
+    if (projectile.type === 'molotov') {
+      const zoneId = `zone_${this.nextFireZoneSeq++}`;
+      this.fireZones.set(zoneId, {
+        id: zoneId,
+        ownerId: projectile.ownerId,
+        x,
+        y: 0,
+        z,
+        radius: def.fireRadius,
+        life: def.fireDuration,
+        tickTimer: 0
+      });
+      this.broadcast({ t: 'throw_impact', projectileId: projectile.id, impactType: 'molotov', x, y, z });
+      return;
+    }
+    const radius = def.radius || 0;
+    const damage = def.damage || 0;
+    const entities = [];
+    for (const p of this.players.values()) entities.push(p);
+    for (const b of this.bots.values()) entities.push(b);
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e || !e.alive || e.id === projectile.ownerId) continue;
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist > radius) continue;
+      const falloff = 1 - (dist / Math.max(0.001, radius));
+      const blastDamage = Math.max(20, Math.round(damage * falloff));
+      const out = this.applyDamage(e, blastDamage);
+      if (!out) continue;
+      this.broadcast({
+        t: 'damage_event',
+        targetId: e.id,
+        sourceId: projectile.ownerId,
+        health: out.hp,
+        armor: out.armor,
+        hitType: 'body'
+      });
+      if (out.killed) {
+        this.broadcast({
+          t: 'death_respawn',
+          entityId: e.id,
+          respawnAt: e.respawnAt,
+          classApplied: e.classId
+        });
+      }
+    }
+    this.broadcast({ t: 'throw_explode', projectileId: projectile.id, x, y, z, radius });
   }
 
   handleInput(player, msg) {
@@ -486,6 +736,7 @@ export class GlobalArenaRoom extends DurableObject {
     const prev = player.lastShotAt[weaponId] || 0;
     if ((now - prev) < stats.cooldownMs) return;
     player.lastShotAt[weaponId] = now;
+    player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
 
     const targetId = String(msg.targetId || '');
     const hitType = msg.hitType === 'head' ? 'head' : 'body';
@@ -542,6 +793,7 @@ export class GlobalArenaRoom extends DurableObject {
     const prev = player.lastPlasmaTickAt || 0;
     if ((now - prev) < stats.cooldownMs) return;
     player.lastPlasmaTickAt = now;
+    player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
 
     const targetId = String(msg.targetId || '');
     if (!targetId) return;
@@ -595,8 +847,175 @@ export class GlobalArenaRoom extends DurableObject {
     this.send(ws, { t: 'class_queued', classId });
   }
 
-  handleThrow(_player, _msg) {
-    // v1 placeholder: type accepted and ignored; dedicated throwable simulation comes next.
+  handleThrow(player, msg, ws) {
+    if (!player || !player.alive) return;
+    const throwableId = String(msg.throwableId || '');
+    const clientThrowId = String(msg.clientThrowId || '');
+    const def = THROWABLE_STATS[throwableId];
+    if (!def) return;
+    if (!this.consumeThrowCharge(player, throwableId)) {
+      this.send(ws, { t: 'throw_reject', throwableId, clientThrowId, reason: 'cooldown_or_empty' });
+      return;
+    }
+    const projectile = this.spawnProjectile(player, throwableId, clientThrowId);
+    if (!projectile) {
+      const inv = player.throwables && player.throwables[throwableId];
+      if (inv) inv.charges = Math.min(inv.maxCharges, inv.charges + 1);
+      this.send(ws, { t: 'throw_reject', throwableId, clientThrowId, reason: 'spawn_failed' });
+      return;
+    }
+    player.lastThrowAt = nowMs();
+    player.muzzleFlashUntil = player.lastThrowAt + REMOTE_MUZZLE_FLASH_HOLD_MS;
+    this.broadcast({
+      t: 'throw_spawn',
+      projectileId: projectile.id,
+      ownerId: projectile.ownerId,
+      clientThrowId: projectile.clientThrowId || '',
+      throwableId: projectile.type
+    });
+  }
+
+  tickProjectiles(dtSec) {
+    if (this.projectiles.size === 0) return;
+    const now = nowMs();
+    const toRemove = [];
+    const entities = [];
+    for (const p of this.players.values()) entities.push(p);
+    for (const b of this.bots.values()) entities.push(b);
+
+    this.projectiles.forEach((p) => {
+      const def = THROWABLE_STATS[p.type];
+      if (!def || !p.alive) {
+        toRemove.push(p.id);
+        return;
+      }
+
+      p.age += dtSec;
+      if ((p.lifeSec > 0 && p.age >= p.lifeSec) || (p.fuseSec > 0 && p.age >= p.fuseSec)) {
+        if (p.type === 'knife') {
+          this.broadcast({ t: 'throw_impact', projectileId: p.id, impactType: 'despawn', x: p.x, y: p.y, z: p.z });
+        } else {
+          this.explodeProjectile(p, p.x, p.y, p.z);
+        }
+        toRemove.push(p.id);
+        return;
+      }
+
+      if (p.type === 'seeker') {
+        const target = this.nearestTargetForProjectile(p, def.acquireRange || 22);
+        if (target) {
+          const toTarget = normalize3(target.x - p.x, ((target.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0) - p.y, target.z - p.z);
+          const speed = (def.speed || 14) + (def.homingBoost || 2);
+          const goal = { x: toTarget.x * speed, y: toTarget.y * speed, z: toTarget.z * speed };
+          const blend = Math.min(1, dtSec * (def.homingLerp || 3.2));
+          p.vx += (goal.x - p.vx) * blend;
+          p.vy += (goal.y - p.vy) * blend;
+          p.vz += (goal.z - p.vz) * blend;
+        }
+      }
+
+      p.vy -= (def.gravity || 0) * dtSec;
+      p.x += p.vx * dtSec;
+      p.y += p.vy * dtSec;
+      p.z += p.vz * dtSec;
+
+      if (p.type === 'frag' && p.y <= 0.05) {
+        if (p.bounces < 2 && Math.abs(p.vy) > 1.2) {
+          p.y = 0.05;
+          p.vy = Math.abs(p.vy) * 0.42;
+          p.vx *= 0.5;
+          p.vz *= 0.5;
+          p.bounces++;
+        } else {
+          p.y = 0.05;
+          p.vx *= 0.92;
+          p.vz *= 0.92;
+        }
+      } else if (p.y <= 0) {
+        if (p.type === 'knife') {
+          this.broadcast({ t: 'throw_impact', projectileId: p.id, impactType: 'world', x: p.x, y: 0, z: p.z });
+          toRemove.push(p.id);
+          return;
+        }
+        this.explodeProjectile(p, p.x, 0, p.z);
+        toRemove.push(p.id);
+        return;
+      }
+
+      for (let i = 0; i < entities.length; i++) {
+        const e = entities[i];
+        if (!e || !e.alive || e.id === p.ownerId) continue;
+        const dx = e.x - p.x;
+        const dz = e.z - p.z;
+        const dy = ((e.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0) - p.y;
+        const d = Math.sqrt(dx * dx + dz * dz + dy * dy);
+        if (d > 1.35) continue;
+        if (p.type === 'knife') {
+          this.projectileDamageHit(p, e, 'body');
+          this.broadcast({ t: 'throw_impact', projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
+          toRemove.push(p.id);
+          return;
+        }
+        this.explodeProjectile(p, p.x, p.y, p.z);
+        toRemove.push(p.id);
+        return;
+      }
+
+      p.updatedAt = now;
+    });
+
+    for (let i = 0; i < toRemove.length; i++) {
+      this.projectiles.delete(toRemove[i]);
+    }
+  }
+
+  tickFireZones(dtSec) {
+    if (this.fireZones.size === 0) return;
+    const toRemove = [];
+    const entities = [];
+    for (const p of this.players.values()) entities.push(p);
+    for (const b of this.bots.values()) entities.push(b);
+
+    this.fireZones.forEach((z) => {
+      z.life -= dtSec;
+      z.tickTimer -= dtSec;
+      if (z.tickTimer <= 0) {
+        z.tickTimer += THROWABLE_STATS.molotov.fireTickRate;
+        for (let i = 0; i < entities.length; i++) {
+          const e = entities[i];
+          if (!e || !e.alive || e.id === z.ownerId) continue;
+          const dx = e.x - z.x;
+          const dz = e.z - z.z;
+          const d = Math.sqrt(dx * dx + dz * dz);
+          if (d > z.radius) continue;
+          const out = this.applyDamage(e, THROWABLE_STATS.molotov.fireTickDamage);
+          if (!out) continue;
+          this.broadcast({
+            t: 'damage_event',
+            targetId: e.id,
+            sourceId: z.ownerId,
+            health: out.hp,
+            armor: out.armor,
+            hitType: 'body'
+          });
+          if (out.killed) {
+            this.broadcast({
+              t: 'death_respawn',
+              entityId: e.id,
+              respawnAt: e.respawnAt,
+              classApplied: e.classId
+            });
+          }
+        }
+      }
+      if (z.life <= 0) toRemove.push(z.id);
+    });
+
+    for (let i = 0; i < toRemove.length; i++) {
+      const id = toRemove[i];
+      this.fireZones.delete(id);
+      this.broadcast({ t: 'aoe_end', zoneId: id });
+    }
   }
 
   webSocketMessage(ws, message) {
@@ -637,7 +1056,7 @@ export class GlobalArenaRoom extends DurableObject {
       return;
     }
     if (type === 'throw') {
-      this.handleThrow(player, msg);
+      this.handleThrow(player, msg, ws);
       return;
     }
     if (type === 'class_queue') {
@@ -726,6 +1145,9 @@ export class GlobalArenaRoom extends DurableObject {
     entity.beamOverheated = false;
     entity.beamOverheatedUntil = 0;
     entity.lastPlasmaTickAt = 0;
+    entity.muzzleFlashUntil = 0;
+    entity.throwables = this.createThrowableRuntime();
+    entity.lastThrowAt = 0;
   }
 
   tickBots(dtSec) {
@@ -761,6 +1183,12 @@ export class GlobalArenaRoom extends DurableObject {
 
       this.regenArmor(bot, dtSec);
       this.tickPlasmaState(bot, dtSec);
+      this.tickThrowableRegen(bot, dtSec);
+
+      if ((nowMs() - (bot.lastThrowAt || 0)) > (THROWABLE_BOT_THROW_COOLDOWN_S * 1000) && players.length > 0 && Math.random() < 0.02) {
+        const throwableId = THROWABLE_STATS.order[Math.floor(Math.random() * THROWABLE_STATS.order.length)];
+        this.handleThrow(bot, { throwableId, clientThrowId: '' }, null);
+      }
     }
   }
 
@@ -769,10 +1197,23 @@ export class GlobalArenaRoom extends DurableObject {
       this.respawnIfNeeded(player);
       this.regenArmor(player, dtSec);
       this.tickPlasmaState(player, dtSec);
+      this.tickThrowableRegen(player, dtSec);
     }
   }
 
   toEntityState(entity) {
+    const throwables = {};
+    const order = THROWABLE_STATS.order || [];
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      const inv = entity.throwables && entity.throwables[id];
+      if (!inv) continue;
+      throwables[id] = {
+        charges: inv.charges,
+        maxCharges: inv.maxCharges,
+        cooldownRemaining: Number((inv.cooldownRemaining || 0).toFixed(3))
+      };
+    }
     return {
       id: entity.id,
       kind: entity.kind,
@@ -797,7 +1238,37 @@ export class GlobalArenaRoom extends DurableObject {
       beamActiveUntil: entity.beamActiveUntil || 0,
       beamHeat: Number((entity.beamHeat || 0).toFixed(3)),
       beamOverheated: !!entity.beamOverheated,
+      muzzleFlashUntil: entity.muzzleFlashUntil || 0,
+      throwables,
       visibleWallhack: true
+    };
+  }
+
+  toProjectileState(projectile) {
+    return {
+      id: projectile.id,
+      type: projectile.type,
+      ownerId: projectile.ownerId,
+      clientThrowId: projectile.clientThrowId || '',
+      x: Number(projectile.x.toFixed(3)),
+      y: Number(projectile.y.toFixed(3)),
+      z: Number(projectile.z.toFixed(3)),
+      vx: Number(projectile.vx.toFixed(3)),
+      vy: Number(projectile.vy.toFixed(3)),
+      vz: Number(projectile.vz.toFixed(3)),
+      age: Number(projectile.age.toFixed(3))
+    };
+  }
+
+  toFireZoneState(zone) {
+    return {
+      id: zone.id,
+      ownerId: zone.ownerId,
+      x: Number(zone.x.toFixed(3)),
+      y: Number(zone.y.toFixed(3)),
+      z: Number(zone.z.toFixed(3)),
+      radius: Number(zone.radius.toFixed(3)),
+      life: Number(zone.life.toFixed(3))
     };
   }
 
@@ -805,11 +1276,22 @@ export class GlobalArenaRoom extends DurableObject {
     const entities = [];
     for (const player of this.players.values()) entities.push(this.toEntityState(player));
     for (const bot of this.bots.values()) entities.push(this.toEntityState(bot));
+    const projectiles = [];
+    this.projectiles.forEach((p) => {
+      if (!p || !p.alive) return;
+      projectiles.push(this.toProjectileState(p));
+    });
+    const fireZones = [];
+    this.fireZones.forEach((z) => {
+      fireZones.push(this.toFireZoneState(z));
+    });
 
     this.broadcast({
       t: 'snapshot',
       serverTime: nowMs(),
-      entities
+      entities,
+      projectiles,
+      fireZones
     });
   }
 
@@ -820,6 +1302,8 @@ export class GlobalArenaRoom extends DurableObject {
 
     this.tickPlayers(dtSec);
     this.tickBots(dtSec);
+    this.tickProjectiles(dtSec);
+    this.tickFireZones(dtSec);
     this.broadcastSnapshot();
   }
 }

@@ -12,12 +12,22 @@
     var sceneRef = null;
     var hitboxVisible = true;
 
-    var ENEMY_FIRE_RANGE = 34;
+    var enemyTuning = (window.GameCombatTuning && window.GameCombatTuning.getEnemyTuning)
+        ? window.GameCombatTuning.getEnemyTuning()
+        : {
+            fireRange: 34,
+            headshotNearRange: 12,
+            headshotMidRange: 22,
+            defaultWallhackRadius: 90
+        };
+    var ENEMY_FIRE_RANGE = enemyTuning.fireRange;
     var ENEMY_BODY_DAMAGE = 14;
     var ENEMY_HEAD_DAMAGE = 26;
     var ENEMY_FIRE_COOLDOWN_MIN = 0.55;
     var ENEMY_FIRE_COOLDOWN_MAX = 1.25;
-    var DEFAULT_WALLHACK_RADIUS = 90;
+    var ENEMY_HEADSHOT_NEAR_RANGE = enemyTuning.headshotNearRange;
+    var ENEMY_HEADSHOT_MID_RANGE = enemyTuning.headshotMidRange;
+    var DEFAULT_WALLHACK_RADIUS = enemyTuning.defaultWallhackRadius;
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -380,7 +390,7 @@
         hitChance = Math.max(0.35, Math.min(0.9, hitChance));
 
         if (Math.random() <= hitChance) {
-            var headChance = distance < 12 ? 0.2 : (distance < 22 ? 0.12 : 0.07);
+            var headChance = distance < ENEMY_HEADSHOT_NEAR_RANGE ? 0.2 : (distance < ENEMY_HEADSHOT_MID_RANGE ? 0.12 : 0.07);
             var isHeadshot = Math.random() < headChance;
             var hitType = isHeadshot ? 'head' : 'body';
             var damage = isHeadshot ? ENEMY_HEAD_DAMAGE : ENEMY_BODY_DAMAGE;

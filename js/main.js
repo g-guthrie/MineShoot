@@ -33,6 +33,118 @@
     var forceGuestNetMode = false;
     var startupDebugNotice = '';
     var lastPlasmaActive = false;
+    var awarenessTuning = (window.GameCombatTuning && window.GameCombatTuning.getAwarenessTuning)
+        ? window.GameCombatTuning.getAwarenessTuning()
+        : {
+            segments: 8,
+            radarRange: 35,
+            coreRange: 10,
+            beaconMinRange: 35,
+            beaconMaxCount: 2
+        };
+    var AWARENESS_SEGMENTS = awarenessTuning.segments;
+    var AWARENESS_RADAR_RANGE = awarenessTuning.radarRange;
+    var AWARENESS_CORE_RANGE = awarenessTuning.coreRange;
+    var AWARENESS_BEACON_MIN_RANGE = awarenessTuning.beaconMinRange;
+    var AWARENESS_BEACON_MAX_COUNT = awarenessTuning.beaconMaxCount;
+
+    function normalizeSectorIndex(idx, segCount) {
+        return ((idx % segCount) + segCount) % segCount;
+    }
+
+    function collectAwarenessTargets() {
+        var out = [];
+        var seen = {};
+        function appendTargets(list) {
+            if (!list || !list.length) return;
+            for (var i = 0; i < list.length; i++) {
+                var t = list[i];
+                if (!t || t.alive === false || !t.worldPos) continue;
+                var key = (t.targetId || '') + '|' + Number(t.worldPos.x).toFixed(2) + '|' + Number(t.worldPos.z).toFixed(2);
+                if (seen[key]) continue;
+                seen[key] = true;
+                out.push({
+                    targetId: t.targetId || '',
+                    worldPos: t.worldPos.clone ? t.worldPos.clone() : t.worldPos
+                });
+            }
+        }
+        if (window.GameEnemy && window.GameEnemy.getLockTargets) {
+            appendTargets(window.GameEnemy.getLockTargets() || []);
+        }
+        if (window.GameNet && window.GameNet.getLockTargets) {
+            appendTargets(window.GameNet.getLockTargets() || []);
+        }
+        return out;
+    }
+
+    function buildAwarenessState(playerPos, playerYaw) {
+        var segments = new Array(AWARENESS_SEGMENTS);
+        for (var i = 0; i < AWARENESS_SEGMENTS; i++) segments[i] = 0;
+        var coreIntensity = 0;
+        var targets = collectAwarenessTargets();
+        var buckets = {};
+        var sectorStep = (Math.PI * 2) / AWARENESS_SEGMENTS;
+        var forwardX = -Math.sin(playerYaw || 0);
+        var forwardZ = -Math.cos(playerYaw || 0);
+        var rightX = Math.cos(playerYaw || 0);
+        var rightZ = -Math.sin(playerYaw || 0);
+
+        for (var n = 0; n < targets.length; n++) {
+            var p = targets[n].worldPos;
+            var dx = p.x - playerPos.x;
+            var dz = p.z - playerPos.z;
+            var dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist <= 0.001) continue;
+            var nx = dx / dist;
+            var nz = dz / dist;
+            var frontDot = nx * forwardX + nz * forwardZ;
+            var rightDot = nx * rightX + nz * rightZ;
+            var angle = Math.atan2(rightDot, frontDot);
+            var sector = normalizeSectorIndex(Math.round(angle / sectorStep), AWARENESS_SEGMENTS);
+            var nearIntensity = Math.max(0, 1 - (dist / AWARENESS_RADAR_RANGE));
+            segments[sector] = Math.max(segments[sector], nearIntensity);
+            if (dist <= AWARENESS_CORE_RANGE) {
+                coreIntensity = Math.max(coreIntensity, Math.max(0, 1 - (dist / AWARENESS_CORE_RANGE)));
+            }
+
+            if (dist > AWARENESS_BEACON_MIN_RANGE) {
+                var key = String(sector);
+                if (!buckets[key]) {
+                    buckets[key] = {
+                        sector: sector,
+                        angleRad: sector * sectorStep,
+                        count: 0,
+                        minDist: Infinity
+                    };
+                }
+                buckets[key].count++;
+                if (dist < buckets[key].minDist) buckets[key].minDist = dist;
+            }
+        }
+
+        var beacons = [];
+        for (var k in buckets) {
+            if (!Object.prototype.hasOwnProperty.call(buckets, k)) continue;
+            var b = buckets[k];
+            var score = b.count * 2 + (1 / (1 + b.minDist * 0.04));
+            beacons.push({
+                angleRad: b.angleRad,
+                intensity: Math.max(0.3, Math.min(1, 0.35 + b.count * 0.18)),
+                score: score
+            });
+        }
+        beacons.sort(function (a, b) { return b.score - a.score; });
+        if (beacons.length > AWARENESS_BEACON_MAX_COUNT) {
+            beacons = beacons.slice(0, AWARENESS_BEACON_MAX_COUNT);
+        }
+
+        return {
+            segments: segments,
+            coreIntensity: coreIntensity,
+            beacons: beacons
+        };
+    }
 
     function applyBrandingOverrides() {
         document.title = 'Mayhem';
@@ -77,6 +189,9 @@
             return window.GameEnemy.getWallhackRadius();
         }
 
+        if (window.GameCombatTuning && window.GameCombatTuning.getEnemyTuning) {
+            return window.GameCombatTuning.getEnemyTuning().defaultWallhackRadius;
+        }
         return 90;
     }
 
@@ -321,7 +436,9 @@
             window.GamePlayer.fireAnimation();
             if (window.GameAudio && window.GameAudio.play) {
                 var w = window.GameHitscan.getCurrentWeapon();
-                window.GameAudio.play('fire', { weapon: w && w.id ? w.id : 'rifle' });
+                if (document.hasFocus()) {
+                    window.GameAudio.play('fire', { weapon: w && w.id ? w.id : 'rifle' });
+                }
             }
         }
     }
@@ -598,11 +715,37 @@
         renderSlots();
     }
 
+    function setupSoundToggleControl() {
+        var soundToggleBtn = document.getElementById('sound-toggle-btn');
+        if (!soundToggleBtn || !window.GameAudio) return;
+        if (!window.GameAudio.setMuted || !window.GameAudio.isMuted) return;
+
+        function refreshLabel() {
+            soundToggleBtn.textContent = window.GameAudio.isMuted() ? 'SOUND: OFF' : 'SOUND: ON';
+        }
+
+        soundToggleBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var muted = window.GameAudio.setMuted(!window.GameAudio.isMuted());
+            refreshLabel();
+            setTransientDebug(muted ? 'Sound muted' : 'Sound unmuted', 900);
+        });
+
+        refreshLabel();
+    }
+
     function tryThrow(type) {
         if (!hasInputCapture()) return;
 
         if (multiplayerMode && window.GameNet && window.GameNet.sendThrow) {
-            window.GameNet.sendThrow(type);
+            var clientThrowId = (window.GameThrowables && window.GameThrowables.buildClientThrowId)
+                ? window.GameThrowables.buildClientThrowId()
+                : ('cthrow-' + Date.now().toString(36));
+            if (window.GameThrowables && window.GameThrowables.throwPredicted) {
+                window.GameThrowables.throwPredicted(type, camera, clientThrowId);
+            }
+            window.GameNet.sendThrow(type, clientThrowId);
             setTransientDebug('Throw sent: ' + type, 650);
             return;
         }
@@ -768,6 +911,7 @@
         setupThrowableControls();
         setupClassControls();
         setupLoadoutControls();
+        setupSoundToggleControl();
         setupDocsControls();
         setupDebugKeys();
 
@@ -846,12 +990,13 @@
         }
 
         var playerPos = window.GamePlayer.getPosition();
+        var playerRot = window.GamePlayer.getRotation();
         if (wallhackRing) {
             wallhackRing.position.set(playerPos.x, 0.06, playerPos.z);
         }
 
         if (multiplayerMode) {
-            window.GameNet.update(dt, playerPos, window.GamePlayer.getRotation());
+            window.GameNet.update(dt, playerPos, playerRot);
             var selfState = window.GameNet.getSelfState();
             if (selfState) {
                 var currentClass = window.GameClasses.getCurrentClass();
@@ -871,16 +1016,57 @@
                 window.GameUI.updateHealth(playerHP, playerMaxHP);
                 window.GameUI.updateArmor(playerArmor, playerArmorMax);
                 syncWallhackRingRadius();
+                if (window.GameThrowables && window.GameThrowables.setNetworkInventoryState) {
+                    window.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
+                    window.GameUI.updateThrowableInfo(window.GameThrowables.getState());
+                }
             }
 
             var notice = window.GameNet.consumeNotice();
             if (notice) setTransientDebug(notice, 900);
+
+            if (window.GameNet.consumeThrowAck && window.GameThrowables && window.GameThrowables.confirmPredictedThrow) {
+                var throwAck = null;
+                do {
+                    throwAck = window.GameNet.consumeThrowAck();
+                    if (throwAck && throwAck.clientThrowId) {
+                        window.GameThrowables.confirmPredictedThrow(throwAck.clientThrowId);
+                    }
+                } while (throwAck);
+            }
+
+            if (window.GameNet.consumeThrowReject && window.GameThrowables && window.GameThrowables.rejectPredictedThrow) {
+                var throwReject = null;
+                do {
+                    throwReject = window.GameNet.consumeThrowReject();
+                    if (throwReject && throwReject.clientThrowId) {
+                        window.GameThrowables.rejectPredictedThrow(throwReject.clientThrowId);
+                    }
+                } while (throwReject);
+            }
+
+            if (window.GameNet.getAuthoritativeThrowableState && window.GameThrowables && window.GameThrowables.syncAuthoritativeState) {
+                window.GameThrowables.syncAuthoritativeState(
+                    window.GameNet.getAuthoritativeThrowableState(),
+                    selfState ? selfState.id : ''
+                );
+            }
+
+            if (window.GameNet.consumeThrowableEvent && window.GameThrowables && window.GameThrowables.applyNetworkEvent) {
+                var throwEvent = null;
+                do {
+                    throwEvent = window.GameNet.consumeThrowableEvent();
+                    if (throwEvent) window.GameThrowables.applyNetworkEvent(throwEvent);
+                } while (throwEvent);
+            }
+
+            window.GameThrowables.update(dt, function () {});
         } else {
             window.GameClasses.update(
                 dt,
                 camera,
                 playerPos,
-                window.GamePlayer.getRotation(),
+                playerRot,
                 function (hitData) {
                     if (!hitData || !hitData.result) return;
                     handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result);
@@ -909,6 +1095,15 @@
         }
 
         window.GameOverhead.update(camera, playerPos, currentAimTargetId);
+        if (window.GameUI.updateCombatRadar || window.GameUI.updateCombatBeacons) {
+            var awarenessState = buildAwarenessState(playerPos, playerRot ? playerRot.yaw : 0);
+            if (window.GameUI.updateCombatRadar) {
+                window.GameUI.updateCombatRadar(awarenessState);
+            }
+            if (window.GameUI.updateCombatBeacons) {
+                window.GameUI.updateCombatBeacons(awarenessState.beacons);
+            }
+        }
 
         var cdRemaining = window.GameHitscan.cooldownRemaining();
         var cdTotal = window.GameHitscan.getCooldown();

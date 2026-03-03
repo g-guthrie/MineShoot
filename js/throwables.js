@@ -11,6 +11,10 @@
     var projectiles = [];
     var fireZones = [];
     var impactFlashes = [];
+    var netProjectileMap = {};
+    var netFireZoneMap = {};
+    var predictedByClientId = {};
+    var localThrowSeq = 1;
 
     var raycaster = new THREE.Raycaster();
     var tmpForward = new THREE.Vector3();
@@ -20,6 +24,17 @@
     var tmpEnd = new THREE.Vector3();
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
+    var tmpNetVec = new THREE.Vector3();
+    var THROWABLE_SPAWN_FORWARD = 0.65;
+    var throwableDistanceTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableDistanceTuning)
+        ? window.GameCombatTuning.getThrowableDistanceTuning()
+        : {
+            fragRadius: 5.4,
+            seekerRadius: 5.0,
+            seekerShotRadius: 4.6,
+            molotovFireRadius: 3.2,
+            seekerAcquireRange: 22
+        };
 
     var throwableOrder = ['frag', 'seeker', 'molotov', 'knife'];
     var defs = {
@@ -30,7 +45,7 @@
             upward: 5.2,
             gravity: 19,
             fuse: 2.2,
-            radius: 5.4,
+            radius: throwableDistanceTuning.fragRadius,
             damage: 125,
             regen: 10
         },
@@ -41,7 +56,7 @@
             upward: 4.4,
             gravity: 12,
             fuse: 3.4,
-            radius: 5.0,
+            radius: throwableDistanceTuning.seekerRadius,
             damage: 110,
             regen: 15
         },
@@ -52,7 +67,7 @@
             upward: 0.6,
             gravity: 5,
             fuse: 1.8,
-            radius: 4.6,
+            radius: throwableDistanceTuning.seekerShotRadius,
             damage: 95,
             homingBoost: 4.5,
             homingLerp: 3.8,
@@ -65,7 +80,7 @@
             upward: 4.8,
             gravity: 21,
             fuse: 3.0,
-            fireRadius: 3.2,
+            fireRadius: throwableDistanceTuning.molotovFireRadius,
             fireDuration: 5.5,
             fireTickDamage: 18,
             fireTickRate: 0.35,
@@ -199,6 +214,31 @@
         return knife;
     }
 
+    function removeNetProjectileById(id) {
+        var entry = netProjectileMap[id];
+        if (!entry) return;
+        if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+        delete netProjectileMap[id];
+    }
+
+    function removeNetFireZoneById(id) {
+        var zone = netFireZoneMap[id];
+        if (!zone) return;
+        if (zone.mesh && zone.mesh.parent) zone.mesh.parent.remove(zone.mesh);
+        delete netFireZoneMap[id];
+    }
+
+    function buildFireZoneMesh(radius) {
+        return new THREE.Mesh(
+            new THREE.CylinderGeometry(radius, radius, 0.08, 16),
+            new THREE.MeshBasicMaterial({
+                color: 0xff7733,
+                transparent: true,
+                opacity: 0.45
+            })
+        );
+    }
+
     function spawnFlash(position, color, baseScale, life) {
         if (!sceneRef) return;
         var flash = new THREE.Mesh(
@@ -219,6 +259,20 @@
         });
     }
 
+    function getDefaultThrowOrigin(camera, forward, right, up) {
+        var core = null;
+        if (window.GamePlayer && window.GamePlayer.getCoreWorldPosition) {
+            core = window.GamePlayer.getCoreWorldPosition();
+        }
+        if (core && typeof core.x === 'number' && typeof core.y === 'number' && typeof core.z === 'number') {
+            return core.clone().addScaledVector(forward, THROWABLE_SPAWN_FORWARD);
+        }
+        return camera.position.clone()
+            .addScaledVector(forward, 0.75)
+            .addScaledVector(right, 0.2)
+            .addScaledVector(up, -0.15);
+    }
+
     function spawnProjectile(type, camera, options) {
         if (!sceneRef || !camera) return false;
         var def = defs[type];
@@ -231,10 +285,7 @@
 
         var origin = options.origin
             ? options.origin.clone()
-            : camera.position.clone()
-                .addScaledVector(tmpForward, 0.75)
-                .addScaledVector(tmpRight, 0.2)
-                .addScaledVector(tmpUp, -0.15);
+            : getDefaultThrowOrigin(camera, tmpForward, tmpRight, tmpUp);
 
         var baseDir = options.direction ? options.direction.clone().normalize() : tmpForward.clone();
         var vel = baseDir.multiplyScalar(def.speed);
@@ -255,7 +306,10 @@
             launchDir: baseDir.clone().normalize(),
             age: 0,
             bounces: 0,
-            forcedTargetId: options.targetId || ''
+            forcedTargetId: options.targetId || '',
+            predicted: !!options.predicted,
+            clientThrowId: options.clientThrowId || '',
+            projectileId: options.projectileId || ''
         });
 
         return true;
@@ -401,7 +455,7 @@
                 }
             }
             if (!targetEnemy) {
-                targetEnemy = findNearestEnemy(p.mesh.position, 22);
+                targetEnemy = findNearestEnemy(p.mesh.position, throwableDistanceTuning.seekerAcquireRange);
             }
             if (targetEnemy) {
                 tmpTarget.copy(targetEnemy.group.position);
@@ -574,6 +628,10 @@
         projectiles = [];
         fireZones = [];
         impactFlashes = [];
+        netProjectileMap = {};
+        netFireZoneMap = {};
+        predictedByClientId = {};
+        localThrowSeq = 1;
         resetInventory();
     };
 
@@ -647,6 +705,126 @@
         }
 
         return { ok: true, reason: '', state: getThrowableState() };
+    };
+
+    GameThrowables.buildClientThrowId = function () {
+        localThrowSeq++;
+        return 'cthrow-' + localThrowSeq + '-' + Date.now().toString(36);
+    };
+
+    GameThrowables.throwPredicted = function (type, camera, clientThrowId) {
+        if (!defs[type]) return false;
+        var id = String(clientThrowId || '');
+        if (!id) id = GameThrowables.buildClientThrowId();
+        var spawned = spawnProjectile(type, camera, {
+            predicted: true,
+            clientThrowId: id
+        });
+        if (!spawned) return false;
+        predictedByClientId[id] = Date.now();
+        return true;
+    };
+
+    GameThrowables.confirmPredictedThrow = function (clientThrowId) {
+        var id = String(clientThrowId || '');
+        if (!id || !predictedByClientId[id]) return false;
+        delete predictedByClientId[id];
+        for (var i = projectiles.length - 1; i >= 0; i--) {
+            var p = projectiles[i];
+            if (!p || p.clientThrowId !== id) continue;
+            removeProjectile(i);
+        }
+        return true;
+    };
+
+    GameThrowables.rejectPredictedThrow = function (clientThrowId) {
+        var id = String(clientThrowId || '');
+        if (!id) return false;
+        delete predictedByClientId[id];
+        for (var i = projectiles.length - 1; i >= 0; i--) {
+            var p = projectiles[i];
+            if (!p || p.clientThrowId !== id) continue;
+            removeProjectile(i);
+        }
+        return true;
+    };
+
+    GameThrowables.setNetworkInventoryState = function (state) {
+        if (!state || typeof state !== 'object') return;
+        for (var i = 0; i < throwableOrder.length; i++) {
+            var id = throwableOrder[i];
+            var src = state[id];
+            if (!src || !inventory[id]) continue;
+            inventory[id].charges = Math.max(0, Number(src.charges || 0));
+            inventory[id].maxCharges = Math.max(1, Number(src.maxCharges || 1));
+            inventory[id].cooldownRemaining = Math.max(0, Number(src.cooldownRemaining || 0));
+        }
+    };
+
+    GameThrowables.syncAuthoritativeState = function (payload, selfId) {
+        if (!sceneRef) return;
+        payload = payload || {};
+        var projectilesState = Array.isArray(payload.projectiles) ? payload.projectiles : [];
+        var fireZonesState = Array.isArray(payload.fireZones) ? payload.fireZones : [];
+
+        var seenProjectile = {};
+        for (var i = 0; i < projectilesState.length; i++) {
+            var p = projectilesState[i];
+            if (!p || !p.id || !defs[p.type]) continue;
+            seenProjectile[p.id] = true;
+            if (p.ownerId === selfId && p.clientThrowId) {
+                GameThrowables.confirmPredictedThrow(p.clientThrowId);
+            }
+            var entry = netProjectileMap[p.id];
+            if (!entry) {
+                var mesh = createThrowableMesh(p.type);
+                sceneRef.add(mesh);
+                entry = { id: p.id, mesh: mesh, type: p.type };
+                netProjectileMap[p.id] = entry;
+            }
+            entry.mesh.position.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
+        }
+
+        for (var key in netProjectileMap) {
+            if (!Object.prototype.hasOwnProperty.call(netProjectileMap, key)) continue;
+            if (!seenProjectile[key]) removeNetProjectileById(key);
+        }
+
+        var seenZone = {};
+        for (var z = 0; z < fireZonesState.length; z++) {
+            var zoneState = fireZonesState[z];
+            if (!zoneState || !zoneState.id) continue;
+            seenZone[zoneState.id] = true;
+            var zone = netFireZoneMap[zoneState.id];
+            if (!zone) {
+                var zoneMesh = buildFireZoneMesh(Number(zoneState.radius || defs.molotov.fireRadius || 3));
+                zoneMesh.position.set(Number(zoneState.x || 0), 0.04, Number(zoneState.z || 0));
+                sceneRef.add(zoneMesh);
+                zone = { id: zoneState.id, mesh: zoneMesh };
+                netFireZoneMap[zoneState.id] = zone;
+            }
+            zone.mesh.position.set(Number(zoneState.x || 0), 0.04, Number(zoneState.z || 0));
+        }
+
+        for (var zk in netFireZoneMap) {
+            if (!Object.prototype.hasOwnProperty.call(netFireZoneMap, zk)) continue;
+            if (!seenZone[zk]) removeNetFireZoneById(zk);
+        }
+    };
+
+    GameThrowables.applyNetworkEvent = function (event) {
+        if (!event || !event.t) return;
+        if (event.t === 'throw_impact') {
+            spawnFlash(new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)), 0xffffff, 0.1, 0.1);
+            return;
+        }
+        if (event.t === 'throw_explode') {
+            spawnFlash(new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)), 0xffaa22, 0.2, 0.18);
+            return;
+        }
+        if (event.t === 'aoe_end' && event.zoneId) {
+            removeNetFireZoneById(event.zoneId);
+        }
     };
 
     GameThrowables.fireSeekerShot = function (camera, lockTarget) {

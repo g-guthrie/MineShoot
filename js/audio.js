@@ -9,6 +9,26 @@
     var ctx = null;
     var unlockInFlight = false;
     var pendingPlaybacks = [];
+    var muted = false;
+
+    function loadMutedPreference() {
+        try {
+            var raw = window.localStorage ? window.localStorage.getItem('mayhem_audio_muted') : null;
+            muted = raw === '1';
+        } catch (err) {
+            muted = false;
+        }
+    }
+
+    function saveMutedPreference() {
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem('mayhem_audio_muted', muted ? '1' : '0');
+            }
+        } catch (err) {
+            // noop
+        }
+    }
 
     function getCtx() {
         if (ctx) return ctx;
@@ -123,6 +143,7 @@
     };
 
     GameAudio.play = function (soundId, options) {
+        if (muted) return;
         options = options || {};
         unlock(function (c) {
             switch (soundId) {
@@ -147,7 +168,9 @@
                     });
                     break;
                 case 'playerHit':
-                    playTone(c, { freq: 150, duration: 0.15, vol: 0.12, type: 'sawtooth' });
+                    // Keep hit feedback extremely subtle (faint whoosh-like cue).
+                    playNoise(c, { duration: 0.045, vol: 0.012 });
+                    playTone(c, { freq: 130, duration: 0.04, vol: 0.008, type: 'sine', attack: 0.002 });
                     break;
                 case 'explosion':
                     playNoise(c, { duration: 0.25, vol: 0.12 });
@@ -165,6 +188,18 @@
     GameAudio.unlock = function () {
         unlock();
     };
+
+    GameAudio.setMuted = function (nextMuted) {
+        muted = !!nextMuted;
+        saveMutedPreference();
+        return muted;
+    };
+
+    GameAudio.isMuted = function () {
+        return !!muted;
+    };
+
+    loadMutedPreference();
 
     window.GameAudio = GameAudio;
 })();

@@ -6,6 +6,34 @@
     'use strict';
 
     var GameClasses = {};
+    var classAbilityTuning = (window.GameCombatTuning && window.GameCombatTuning.getClassAbilityTuning)
+        ? window.GameCombatTuning.getClassAbilityTuning()
+        : {
+            ninjaThrowRange: 42,
+            ninjaUltimateRadius: 11,
+            jediAbilityRange: 13,
+            jediUltimateRange: 6.0,
+            magicianAimRange: 36,
+            magicianAbilityRadius: 4.8,
+            magicianUltimateRange: 60,
+            sharpshooterUltimateRange: 70,
+            brawlerAbilityRange: 4.2,
+            brawlerRageRadius: 5.2
+        };
+
+    function classWallhackRadiusFor(classId) {
+        if (window.GameCombatTuning && window.GameCombatTuning.getClassWallhackRadius) {
+            return window.GameCombatTuning.getClassWallhackRadius(classId);
+        }
+        var fallback = {
+            ninja: 90,
+            jedi: 85,
+            magician: 100,
+            sharpshooter: 115,
+            brawler: 75
+        };
+        return fallback[classId] || fallback.sharpshooter;
+    }
 
     var CLASS_ORDER = ['ninja', 'jedi', 'magician', 'sharpshooter', 'brawler'];
     var CLASS_DEFS = {
@@ -18,7 +46,7 @@
             ultimateCooldown: 20.0,
             loadoutWeapon: 'pistol',
             armorMax: 80,
-            wallhackRadius: 90
+            wallhackRadius: classWallhackRadiusFor('ninja')
         },
         jedi: {
             id: 'jedi',
@@ -29,7 +57,7 @@
             ultimateCooldown: 18.0,
             loadoutWeapon: 'shotgun',
             armorMax: 130,
-            wallhackRadius: 85
+            wallhackRadius: classWallhackRadiusFor('jedi')
         },
         magician: {
             id: 'magician',
@@ -40,7 +68,7 @@
             ultimateCooldown: 20.0,
             loadoutWeapon: 'rifle',
             armorMax: 100,
-            wallhackRadius: 100
+            wallhackRadius: classWallhackRadiusFor('magician')
         },
         sharpshooter: {
             id: 'sharpshooter',
@@ -51,7 +79,7 @@
             ultimateCooldown: 22.0,
             loadoutWeapon: 'sniper',
             armorMax: 90,
-            wallhackRadius: 115
+            wallhackRadius: classWallhackRadiusFor('sharpshooter')
         },
         brawler: {
             id: 'brawler',
@@ -62,7 +90,7 @@
             ultimateCooldown: 20.0,
             loadoutWeapon: 'machinegun',
             armorMax: 150,
-            wallhackRadius: 75
+            wallhackRadius: classWallhackRadiusFor('brawler')
         }
     };
 
@@ -329,7 +357,7 @@
     }
 
     function triggerNinjaAbility(camera, onEnemyHit) {
-        var hit = castEnemyHitboxFromCenter(camera, 42);
+        var hit = castEnemyHitboxFromCenter(camera, classAbilityTuning.ninjaThrowRange);
         if (!hit || !hit.hitbox) return { ok: false, message: 'Ninja throw missed.' };
 
         var hitType = hit.hitbox.userData.type || 'body';
@@ -340,7 +368,7 @@
     }
 
     function triggerNinjaUltimate(playerPos, onEnemyHit) {
-        var targets = enemiesInRadius(playerPos, 11);
+        var targets = enemiesInRadius(playerPos, classAbilityTuning.ninjaUltimateRadius);
         if (targets.length === 0) return { ok: false, message: 'No enemies in Shadow Flurry range.' };
 
         for (var i = 0; i < targets.length; i++) {
@@ -353,7 +381,7 @@
     }
 
     function triggerJediAbility(playerPos, yaw, onEnemyHit) {
-        var targets = enemiesInCone(playerPos, yaw, 13, 0.05);
+        var targets = enemiesInCone(playerPos, yaw, classAbilityTuning.jediAbilityRange, 0.05);
         if (targets.length === 0) return { ok: false, message: 'No target for Force Choke.' };
 
         var enemy = targets[0].enemy;
@@ -364,7 +392,7 @@
     }
 
     function triggerJediUltimate(playerPos, yaw, onEnemyHit) {
-        var targets = enemiesInCone(playerPos, yaw, 6.0, -0.15);
+        var targets = enemiesInCone(playerPos, yaw, classAbilityTuning.jediUltimateRange, -0.15);
         if (targets.length === 0) return { ok: false, message: 'No targets for Saber Sweep.' };
 
         var hits = 0;
@@ -379,10 +407,10 @@
     }
 
     function triggerMagicianAbility(camera, onEnemyHit) {
-        var point = getAimPoint(camera, 36);
+        var point = getAimPoint(camera, classAbilityTuning.magicianAimRange);
         if (!point) return { ok: false, message: 'Fireball failed.' };
 
-        var radius = 4.8;
+        var radius = classAbilityTuning.magicianAbilityRadius;
         var targets = enemiesInRadius(point, radius);
         for (var i = 0; i < targets.length; i++) {
             var falloff = 1 - (targets[i].distance / radius);
@@ -396,7 +424,7 @@
     }
 
     function triggerMagicianUltimate(camera, onEnemyHit) {
-        var targets = visibleEnemies(camera, 60, 0.15);
+        var targets = visibleEnemies(camera, classAbilityTuning.magicianUltimateRange, 0.15);
         if (targets.length === 0) return { ok: false, message: 'No targets for Chain Lightning.' };
 
         var count = Math.min(4, targets.length);
@@ -416,7 +444,7 @@
     }
 
     function triggerSharpshooterUltimate(camera) {
-        var targets = visibleEnemies(camera, 70, 0.18);
+        var targets = visibleEnemies(camera, classAbilityTuning.sharpshooterUltimateRange, 0.18);
         if (targets.length === 0) return { ok: false, message: 'No targets for Deadeye.' };
 
         deadeyeTargets = targets.slice(0, 5);
@@ -426,7 +454,7 @@
     }
 
     function triggerBrawlerAbility(playerPos, yaw, onEnemyHit) {
-        var targets = enemiesInCone(playerPos, yaw, 4.2, -0.2);
+        var targets = enemiesInCone(playerPos, yaw, classAbilityTuning.brawlerAbilityRange, -0.2);
         if (targets.length === 0) return { ok: false, message: 'Bat swing missed.' };
 
         var count = Math.min(3, targets.length);
@@ -490,7 +518,7 @@
         rageTickTimer -= dt;
         if (rageTickTimer <= 0) {
             rageTickTimer += 0.45;
-            var targets = enemiesInRadius(playerPos, 5.2);
+            var targets = enemiesInRadius(playerPos, classAbilityTuning.brawlerRageRadius);
             for (var i = 0; i < targets.length; i++) {
                 reportEnemyDamage(targets[i].enemy, 75, 'body', 'rage-mode', onEnemyHit);
             }
@@ -618,7 +646,7 @@
 
     GameClasses.getWallhackRadius = function () {
         var def = getClassDef();
-        return def.wallhackRadius || 90;
+        return def.wallhackRadius || classWallhackRadiusFor(def.id);
     };
 
     GameClasses.cycleClass = function (delta) {
