@@ -22,6 +22,16 @@
     var DEFAULT_SPAWN_PADDING = 8;
     // Baseline world size used for current combat tuning (1 unit = 1 meter convention).
     var COMBAT_TUNED_WORLD_SIZE = 112;
+    var BIOME_DENSITY = {
+        jungle: 0.6,
+        arctic: 0.4,
+        desert: 0.4
+    };
+    var DESERT_HERO_TARGETS = {
+        ridge: 1,
+        mesa: 1
+    };
+    var ARCTIC_FOOTHILL_RING_COUNT = 3;
 
     var DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(SHARED_WORLD_CFG && SHARED_WORLD_CFG.profileVersion) || 3));
     var DEFAULT_WORLD_FLAGS = {
@@ -38,6 +48,7 @@
     var waterPools = [];
     var terrainSampler = null;
     var spawnExclusionZones = [];
+    var generationStats = null;
 
     var animatedWaterfallSheets = [];
     var animatedMistCards = [];
@@ -139,6 +150,47 @@
 
     function scaleCombatDistance(value) {
         return value * getCombatScale();
+    }
+
+    function scaledBiomeTarget(basePerArea, biomeKey, minCount) {
+        var key = String(biomeKey || '').toLowerCase();
+        var density = Number(BIOME_DENSITY[key]);
+        if (!isFinite(density) || density <= 0) density = 1;
+        var min = Math.max(0, Math.round(Number(minCount) || 0));
+        return Math.max(min, Math.round(Number(basePerArea || 0) * WORLD_AREA_SCALE * density));
+    }
+
+    function scaledStep(baseStep, biomeKey, minStep) {
+        var key = String(biomeKey || '').toLowerCase();
+        var density = Number(BIOME_DENSITY[key]);
+        if (!isFinite(density) || density <= 0) density = 1;
+        var min = Math.max(1, Math.round(Number(minStep) || 1));
+        return Math.max(min, Math.round(Number(baseStep || min) / density));
+    }
+
+    function cloneGenerationStats(stats) {
+        if (!stats || typeof stats !== 'object') return null;
+        return {
+            jungle: {
+                trees: Number(stats.jungle && stats.jungle.trees) || 0,
+                bushes: Number(stats.jungle && stats.jungle.bushes) || 0,
+                logs: Number(stats.jungle && stats.jungle.logs) || 0,
+                artifacts: Number(stats.jungle && stats.jungle.artifacts) || 0,
+                borderTrees: Number(stats.jungle && stats.jungle.borderTrees) || 0
+            },
+            arctic: {
+                crystals: Number(stats.arctic && stats.arctic.crystals) || 0,
+                drifts: Number(stats.arctic && stats.arctic.drifts) || 0,
+                foothillCrystals: Number(stats.arctic && stats.arctic.foothillCrystals) || 0,
+                foothillDrifts: Number(stats.arctic && stats.arctic.foothillDrifts) || 0
+            },
+            desert: {
+                rocks: Number(stats.desert && stats.desert.rocks) || 0,
+                cacti: Number(stats.desert && stats.desert.cacti) || 0,
+                ridges: Number(stats.desert && stats.desert.ridges) || 0,
+                mesas: Number(stats.desert && stats.desert.mesas) || 0
+            }
+        };
     }
 
     function randRange(min, max) {
@@ -377,6 +429,27 @@
         animatedWaterfallSheets = [];
         animatedMistCards = [];
         animClock = 0;
+        generationStats = {
+            jungle: {
+                trees: 0,
+                bushes: 0,
+                logs: 0,
+                artifacts: 0,
+                borderTrees: 0
+            },
+            arctic: {
+                crystals: 0,
+                drifts: 0,
+                foothillCrystals: 0,
+                foothillDrifts: 0
+            },
+            desert: {
+                rocks: 0,
+                cacti: 0,
+                ridges: 0,
+                mesas: 0
+            }
+        };
 
         var SHARED_TERRAIN = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler)
             ? globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler
@@ -1248,6 +1321,10 @@
 
     GameWorld.getSpawnExclusionZones = function () {
         return spawnExclusionZones.slice();
+    };
+
+    GameWorld.getGenerationStats = function () {
+        return cloneGenerationStats(generationStats);
     };
 
     GameWorld.getSize = function () {
