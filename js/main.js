@@ -258,6 +258,13 @@
         if (window.GameNet && window.GameNet.setHitboxVisibility) {
             window.GameNet.setHitboxVisibility(!!visible);
         }
+
+        if (window.GameClasses && window.GameClasses.setDebugMode) {
+            window.GameClasses.setDebugMode(!!visible);
+        }
+        if (window.GameThrowables && window.GameThrowables.setDebugMode) {
+            window.GameThrowables.setDebugMode(!!visible);
+        }
     }
 
     function syncReticleWithWeapon(weapon) {
@@ -737,20 +744,23 @@
 
     function tryThrow(type) {
         if (!hasInputCapture()) return;
+        var throwIntent = (window.GameThrowables && window.GameThrowables.buildThrowIntent)
+            ? window.GameThrowables.buildThrowIntent(camera)
+            : null;
 
         if (multiplayerMode && window.GameNet && window.GameNet.sendThrow) {
             var clientThrowId = (window.GameThrowables && window.GameThrowables.buildClientThrowId)
                 ? window.GameThrowables.buildClientThrowId()
                 : ('cthrow-' + Date.now().toString(36));
             if (window.GameThrowables && window.GameThrowables.throwPredicted) {
-                window.GameThrowables.throwPredicted(type, camera, clientThrowId);
+                window.GameThrowables.throwPredicted(type, camera, clientThrowId, throwIntent);
             }
-            window.GameNet.sendThrow(type, clientThrowId);
+            window.GameNet.sendThrow(type, clientThrowId, throwIntent);
             setTransientDebug('Throw sent: ' + type, 650);
             return;
         }
 
-        var outcome = window.GameThrowables.throw(type, camera);
+        var outcome = window.GameThrowables.throw(type, camera, throwIntent);
         window.GameUI.updateThrowableInfo(outcome.state);
         if (outcome.ok && window.GameAudio && window.GameAudio.play) {
             window.GameAudio.play('throw');
@@ -782,12 +792,12 @@
         };
 
         function triggerClassAbility(slot) {
-            if (multiplayerMode) {
-                setTransientDebug('Abilities are local-only right now in net mode.', 900);
+            if (!hasInputCapture()) return;
+
+            if (multiplayerMode && window.GameNet && window.GameNet.sendClassCast) {
+                window.GameNet.sendClassCast(slot);
                 return;
             }
-
-            if (!hasInputCapture()) return;
 
             var playerPos = window.GamePlayer.getPosition();
             var rot = window.GamePlayer.getRotation();
@@ -873,13 +883,13 @@
         camera = window.GamePlayer.init(scene);
 
         multiplayerMode = forceGuestNetMode || !!(window.GameNet && window.GameNet.getCurrentUser && window.GameNet.getCurrentUser());
+        window.GameThrowables.init(scene);
 
         if (multiplayerMode) {
             window.GameNet.init(scene);
         } else {
             var enemyCount = window.GameWorld.getRecommendedEnemyCount ? window.GameWorld.getRecommendedEnemyCount() : DEFAULT_ENEMY_COUNT;
             window.GameEnemy.init(scene, enemyCount);
-            window.GameThrowables.init(scene);
             window.GameUI.updateThrowableInfo(window.GameThrowables.getState());
         }
 
@@ -1022,6 +1032,36 @@
                 }
             }
 
+            if (window.GameNet.consumeClassCastResult) {
+                var castResult = null;
+                do {
+                    castResult = window.GameNet.consumeClassCastResult();
+                    if (castResult) {
+                        if (castResult.t === 'class_cast_ok') {
+                            setTransientDebug((castResult.kind || 'Ability') + ' cast!', 800);
+                        } else if (castResult.t === 'class_cast_reject') {
+                            setTransientDebug('Ability failed: ' + (castResult.reason || 'rejected'), 700);
+                        }
+                    }
+                } while (castResult);
+            }
+
+            if (window.GameNet.getSelfAbilityState) {
+                var abilityState = window.GameNet.getSelfAbilityState();
+                if (abilityState) {
+                    var hudState = window.GameClasses.getHudState();
+                    hudState.abilityCooldown = abilityState.abilityCooldownRemaining || 0;
+                    hudState.ultimateCooldown = abilityState.ultimateCooldownRemaining || 0;
+                    if (abilityState.deadeyeState && abilityState.deadeyeState.lockCount > 0) {
+                        hudState.extra = 'DEADEYE ' + abilityState.deadeyeState.lockCount + '/' + abilityState.deadeyeState.maxLocks;
+                    }
+                    if (abilityState.shadowDashUntil && abilityState.shadowDashUntil > Date.now()) {
+                        hudState.extra = 'SHADOW DASH';
+                    }
+                    window.GameUI.updateClassInfo(hudState);
+                }
+            }
+
             var notice = window.GameNet.consumeNotice();
             if (notice) setTransientDebug(notice, 900);
 
@@ -1113,6 +1153,35 @@
         window.GameUI.updateCooldown(cdReady, cdPct);
         window.GameUI.updateDamageEffects(dt);
         window.GameUI.updateClassInfo(window.GameClasses.getHudState());
+
+        var currentClassForReticle = window.GameClasses.getCurrentClass();
+        if (window.GameUI.updateChokeReticle) {
+            window.GameUI.updateChokeReticle(
+                currentClassForReticle && currentClassForReticle.id === 'jedi',
+                190
+            );
+        }
+        if (window.GameUI.updateDeadeyeReticle) {
+            var deadeyeStateForUi = null;
+            if (multiplayerMode && window.GameNet && window.GameNet.getSelfAbilityState) {
+                var abilState = window.GameNet.getSelfAbilityState();
+                if (abilState && abilState.deadeyeState && abilState.deadeyeState.maxLocks > 0) {
+                    deadeyeStateForUi = {
+                        targets: [{
+                            screenCenter: true,
+                            progress: abilState.deadeyeState.lockCount / abilState.deadeyeState.maxLocks,
+                            locked: (abilState.deadeyeState.lockCount >= abilState.deadeyeState.maxLocks)
+                        }]
+                    };
+                }
+            } else if (window.GameClasses && window.GameClasses.getDeadeyeState) {
+                var localDeadeye = window.GameClasses.getDeadeyeState();
+                if (localDeadeye) {
+                    deadeyeStateForUi = localDeadeye;
+                }
+            }
+            window.GameUI.updateDeadeyeReticle(camera, deadeyeStateForUi);
+        }
         if (window.GameUI.updateSeekerDebugInfo) {
             var showSeekerDebug = !!wallhackRingVisible && currentWeapon && currentWeapon.id === 'seekergun';
             var seekerTelemetry = null;

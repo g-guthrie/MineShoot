@@ -40,8 +40,8 @@
         ninja: {
             id: 'ninja',
             name: 'Ninja',
-            abilityName: 'Assassin Throw',
-            ultimateName: 'Shadow Flurry',
+            abilityName: 'Shuriken Burst',
+            ultimateName: 'Shadow Dash',
             abilityCooldown: 6.0,
             ultimateCooldown: 20.0,
             loadoutWeapon: 'pistol',
@@ -52,7 +52,7 @@
             id: 'jedi',
             name: 'Jedi',
             abilityName: 'Force Choke',
-            ultimateName: 'Saber Sweep',
+            ultimateName: 'Saber Throw',
             abilityCooldown: 8.0,
             ultimateCooldown: 18.0,
             loadoutWeapon: 'shotgun',
@@ -97,6 +97,7 @@
     var sceneRef = null;
     var currentClassId = 'sharpshooter';
     var queuedClassId = null;
+    var debugInstantCooldowns = false;
 
     var abilityCooldownRemaining = 0;
     var ultimateCooldownRemaining = 0;
@@ -104,8 +105,14 @@
     // Sharpshooter state
     var focusShots = 0;
     var focusTimer = 0;
-    var deadeyeChannel = 0;
-    var deadeyeTargets = [];
+    var deadeyeActive = false;
+    var deadeyeRemaining = 0;
+    var deadeyeDurationTotal = 0;
+    var deadeyeMaxLocks = 0;
+    var deadeyeLockTime = 0;
+    var deadeyeRange = 0;
+    var deadeyeLockedTargets = [];
+    var deadeyeAcquiringTarget = null;
     var deadeyeDamage = 260;
 
     // Brawler state
@@ -133,10 +140,17 @@
         ultimateCooldownRemaining = 0;
         focusShots = 0;
         focusTimer = 0;
-        deadeyeChannel = 0;
-        deadeyeTargets = [];
+        deadeyeActive = false;
+        deadeyeRemaining = 0;
+        deadeyeDurationTotal = 0;
+        deadeyeMaxLocks = 0;
+        deadeyeLockTime = 0;
+        deadeyeRange = 0;
+        deadeyeLockedTargets = [];
+        deadeyeAcquiringTarget = null;
         rageTimer = 0;
         rageTickTimer = 0;
+        ninjaShadowDashTimer = 0;
     }
 
     function spawnPulse(position, color, scale, life) {
@@ -356,28 +370,44 @@
         }
     }
 
-    function triggerNinjaAbility(camera, onEnemyHit) {
-        var hit = castEnemyHitboxFromCenter(camera, classAbilityTuning.ninjaThrowRange);
-        if (!hit || !hit.hitbox) return { ok: false, message: 'Ninja throw missed.' };
+    var ninjaShadowDashTimer = 0;
 
-        var hitType = hit.hitbox.userData.type || 'body';
-        var damage = hitType === 'head' ? 240 : 160;
-        var ok = reportEnemyHit(hit.hitbox, damage, 'ninja-throw', onEnemyHit);
-        if (ok) spawnPulse(hit.point, hitType === 'head' ? 0xffe680 : 0xffffff, 0.3, 0.18);
-        return ok ? { ok: true, message: 'Assassin Throw!' } : { ok: false, message: 'No target.' };
+    function triggerNinjaAbility(camera, onEnemyHit) {
+        var count = classAbilityTuning.ninjaStarCount || 3;
+        var spreadDeg = classAbilityTuning.ninjaStarSpreadDeg || 16;
+        var damage = classAbilityTuning.ninjaStarBodyDamage || 120;
+        var headDamage = classAbilityTuning.ninjaStarHeadDamage || 170;
+        var range = classAbilityTuning.ninjaThrowRange || 42;
+        var anyHit = false;
+
+        for (var i = 0; i < count; i++) {
+            var center = (count - 1) * 0.5;
+            var offsetDeg = (i - center) * spreadDeg;
+            var hit = castEnemyHitboxFromCenter(camera, range);
+            if (hit && hit.hitbox) {
+                var hitType = hit.hitbox.userData.type || 'body';
+                var dmg = hitType === 'head' ? headDamage : damage;
+                var ok = reportEnemyHit(hit.hitbox, dmg, 'ninja-star', onEnemyHit);
+                if (ok) {
+                    spawnPulse(hit.point, 0xcccccc, 0.2, 0.14);
+                    anyHit = true;
+                }
+            }
+        }
+
+        if (anyHit) {
+            spawnPulse(camera.position, 0xaaaaaa, 0.25, 0.12);
+            return { ok: true, message: 'Shuriken Burst!' };
+        }
+        return { ok: true, message: 'Shurikens thrown!' };
     }
 
     function triggerNinjaUltimate(playerPos, onEnemyHit) {
-        var targets = enemiesInRadius(playerPos, classAbilityTuning.ninjaUltimateRadius);
-        if (targets.length === 0) return { ok: false, message: 'No enemies in Shadow Flurry range.' };
-
-        for (var i = 0; i < targets.length; i++) {
-            reportEnemyDamage(targets[i].enemy, 170, 'body', 'shadow-flurry', onEnemyHit);
-            applySlow(targets[i].enemy, 2.4, 0.7);
-        }
-
-        spawnPulse(playerPos, 0x9b7dff, 0.45, 0.24);
-        return { ok: true, message: 'Shadow Flurry!' };
+        var steps = classAbilityTuning.shadowDashSteps || 4;
+        var stepDur = classAbilityTuning.shadowDashStepDuration || 0.12;
+        ninjaShadowDashTimer = steps * stepDur;
+        spawnPulse(playerPos, 0x555555, 0.6, 0.3);
+        return { ok: true, message: 'Shadow Dash!' };
     }
 
     function triggerJediAbility(playerPos, yaw, onEnemyHit) {
@@ -392,18 +422,19 @@
     }
 
     function triggerJediUltimate(playerPos, yaw, onEnemyHit) {
-        var targets = enemiesInCone(playerPos, yaw, classAbilityTuning.jediUltimateRange, -0.15);
-        if (targets.length === 0) return { ok: false, message: 'No targets for Saber Sweep.' };
+        var saberRange = classAbilityTuning.jediSaberMaxDistance || 22;
+        var saberDamage = classAbilityTuning.jediSaberDamage || 175;
+        var targets = enemiesInCone(playerPos, yaw, saberRange, -0.15);
+        if (targets.length === 0) return { ok: false, message: 'No targets for Saber Throw.' };
 
         var hits = 0;
         for (var i = 0; i < targets.length; i++) {
             hits++;
-            reportEnemyDamage(targets[i].enemy, 220, 'body', 'saber-sweep', onEnemyHit);
-            applyStun(targets[i].enemy, 0.8);
+            reportEnemyDamage(targets[i].enemy, saberDamage, 'body', 'saber-throw', onEnemyHit);
         }
 
-        spawnPulse(playerPos, 0x8cff88, 0.52, 0.2);
-        return { ok: true, message: 'Saber Sweep x' + hits };
+        spawnPulse(playerPos, 0x44ff88, 0.52, 0.2);
+        return { ok: true, message: 'Saber Throw x' + hits };
     }
 
     function triggerMagicianAbility(camera, onEnemyHit) {
@@ -443,13 +474,93 @@
         return { ok: true, message: 'Focus primed.' };
     }
 
+    function isDeadeyeTargetLocked(enemy) {
+        for (var i = 0; i < deadeyeLockedTargets.length; i++) {
+            if (deadeyeLockedTargets[i] && deadeyeLockedTargets[i].enemy === enemy) return true;
+        }
+        return false;
+    }
+
+    function pickNextDeadeyeTarget(camera) {
+        var visible = visibleEnemies(camera, deadeyeRange, 0.18);
+        for (var i = 0; i < visible.length; i++) {
+            var enemy = visible[i];
+            if (!enemy || !enemy.alive) continue;
+            if (deadeyeAcquiringTarget && deadeyeAcquiringTarget.enemy === enemy) continue;
+            if (isDeadeyeTargetLocked(enemy)) continue;
+            return enemy;
+        }
+        return null;
+    }
+
+    function buildDeadeyeMarker(enemy, progress, locked) {
+        if (!enemy || !enemy.group || !enemy.group.position) return null;
+        return {
+            worldPos: {
+                x: enemy.group.position.x,
+                y: enemy.group.position.y + 2.2,
+                z: enemy.group.position.z
+            },
+            progress: Math.max(0, Math.min(1, progress || 0)),
+            locked: !!locked
+        };
+    }
+
+    function fireDeadeye(camera, onEnemyHit, notifier, manualRelease) {
+        if (!deadeyeActive && deadeyeLockedTargets.length === 0) {
+            return { ok: false, message: 'Deadeye is not active.', skipCooldown: true };
+        }
+
+        var landed = 0;
+        var losRange = deadeyeRange > 0 ? deadeyeRange : (classAbilityTuning.deadeyeLockRange || classAbilityTuning.sharpshooterUltimateRange || 70);
+        for (var i = 0; i < deadeyeLockedTargets.length; i++) {
+            var target = deadeyeLockedTargets[i] ? deadeyeLockedTargets[i].enemy : null;
+            if (!target || !target.alive) continue;
+            if (!hasLineOfSightFromCamera(target, camera, losRange, 0.18)) continue;
+            if (reportEnemyDamage(target, deadeyeDamage, 'body', 'deadeye', onEnemyHit)) {
+                landed++;
+                spawnPulse(target.group.position, 0xffdf80, 0.4, 0.2);
+            }
+        }
+
+        deadeyeActive = false;
+        deadeyeRemaining = 0;
+        deadeyeDurationTotal = 0;
+        deadeyeMaxLocks = 0;
+        deadeyeLockTime = 0;
+        deadeyeRange = 0;
+        deadeyeLockedTargets = [];
+        deadeyeAcquiringTarget = null;
+
+        if (landed > 0) {
+            notify(notifier, 'Deadeye fired x' + landed, 1100);
+        } else if (manualRelease) {
+            notify(notifier, 'Deadeye released.', 900);
+        }
+        return {
+            ok: true,
+            message: landed > 0 ? ('Deadeye fired x' + landed) : 'Deadeye released.',
+            skipCooldown: true
+        };
+    }
+
     function triggerSharpshooterUltimate(camera) {
-        var targets = visibleEnemies(camera, classAbilityTuning.sharpshooterUltimateRange, 0.18);
+        var range = classAbilityTuning.deadeyeLockRange || classAbilityTuning.sharpshooterUltimateRange || 70;
+        var maxTargets = Math.max(1, Math.round(classAbilityTuning.deadeyeMaxTargets || 6));
+        var duration = classAbilityTuning.deadeyeDuration || (classAbilityTuning.deadeyeLockTimePerTarget || 0.42) * maxTargets;
+        var lockTime = duration / maxTargets;
+        var targets = visibleEnemies(camera, range, 0.18);
         if (targets.length === 0) return { ok: false, message: 'No targets for Deadeye.' };
 
-        deadeyeTargets = targets.slice(0, 5);
-        deadeyeChannel = 1.1;
-        deadeyeDamage = 260;
+        deadeyeActive = true;
+        deadeyeRange = range;
+        deadeyeMaxLocks = maxTargets;
+        deadeyeDurationTotal = duration;
+        deadeyeRemaining = duration;
+        deadeyeLockTime = lockTime;
+        deadeyeLockedTargets = [];
+        deadeyeAcquiringTarget = null;
+        deadeyeDamage = classAbilityTuning.deadeyeDamage || 260;
         return { ok: true, message: 'Deadeye charging...' };
     }
 
@@ -483,7 +594,7 @@
         }
     }
 
-    function stepSharpshooter(dt, onEnemyHit, notifier) {
+    function stepSharpshooter(dt, camera, onEnemyHit, notifier) {
         if (focusTimer > 0) {
             focusTimer -= dt;
             if (focusTimer <= 0) {
@@ -492,19 +603,39 @@
             }
         }
 
-        if (deadeyeChannel > 0) {
-            deadeyeChannel -= dt;
-            if (deadeyeChannel <= 0) {
-                deadeyeChannel = 0;
-                var landed = 0;
-                for (var i = 0; i < deadeyeTargets.length; i++) {
-                    if (reportEnemyDamage(deadeyeTargets[i], deadeyeDamage, 'body', 'deadeye', onEnemyHit)) {
-                        landed++;
-                        spawnPulse(deadeyeTargets[i].group.position, 0xffdf80, 0.4, 0.2);
+        if (deadeyeActive) {
+            deadeyeRemaining -= dt;
+            if (deadeyeRemaining < 0) deadeyeRemaining = 0;
+
+            if (deadeyeAcquiringTarget && (!deadeyeAcquiringTarget.enemy || !deadeyeAcquiringTarget.enemy.alive ||
+                !hasLineOfSightFromCamera(deadeyeAcquiringTarget.enemy, camera, deadeyeRange, 0.18))) {
+                deadeyeAcquiringTarget = null;
+            }
+
+            if (deadeyeAcquiringTarget) {
+                deadeyeAcquiringTarget.elapsed += dt;
+                if (deadeyeAcquiringTarget.elapsed >= deadeyeLockTime) {
+                    if (!isDeadeyeTargetLocked(deadeyeAcquiringTarget.enemy)) {
+                        deadeyeLockedTargets.push({
+                            enemy: deadeyeAcquiringTarget.enemy
+                        });
                     }
+                    deadeyeAcquiringTarget = null;
                 }
-                deadeyeTargets = [];
-                if (landed > 0) notify(notifier, 'Deadeye fired x' + landed, 1100);
+            }
+
+            if (!deadeyeAcquiringTarget && deadeyeLockedTargets.length < deadeyeMaxLocks) {
+                var nextTarget = pickNextDeadeyeTarget(camera);
+                if (nextTarget) {
+                    deadeyeAcquiringTarget = {
+                        enemy: nextTarget,
+                        elapsed: 0
+                    };
+                }
+            }
+
+            if (deadeyeRemaining <= 0 || deadeyeLockedTargets.length >= deadeyeMaxLocks) {
+                fireDeadeye(camera, onEnemyHit, notifier, false);
             }
         }
     }
@@ -527,8 +658,11 @@
     }
 
     function extraHudText() {
+        if (currentClassId === 'ninja' && ninjaShadowDashTimer > 0) {
+            return 'SHADOW DASH ' + ninjaShadowDashTimer.toFixed(1) + 's';
+        }
         if (currentClassId === 'sharpshooter') {
-            if (deadeyeChannel > 0) return 'DEADEYE ' + deadeyeChannel.toFixed(1) + 's';
+            if (deadeyeActive) return 'DEADEYE ' + deadeyeRemaining.toFixed(1) + 's';
             if (focusShots > 0) return 'FOCUS READY';
         }
         if (currentClassId === 'brawler' && rageTimer > 0) {
@@ -694,7 +828,7 @@
         var outcome = null;
 
         if (slot === 1) {
-            if (abilityCooldownRemaining > 0) {
+            if (!debugInstantCooldowns && abilityCooldownRemaining > 0) {
                 return { ok: false, message: def.abilityName + ' on cooldown (' + abilityCooldownRemaining.toFixed(1) + 's)' };
             }
 
@@ -705,25 +839,28 @@
             else outcome = triggerBrawlerAbility(playerPos, yaw, onEnemyHit);
 
             if (outcome && outcome.ok) {
-                abilityCooldownRemaining = def.abilityCooldown;
+                abilityCooldownRemaining = debugInstantCooldowns ? 0 : def.abilityCooldown;
                 notify(notifier, outcome.message || (def.abilityName + '!'));
             }
             return outcome || { ok: false, message: 'Ability failed.' };
         }
 
         if (slot === 2) {
-            if (ultimateCooldownRemaining > 0) {
+            if (currentClassId === 'sharpshooter' && deadeyeActive) {
+                return fireDeadeye(camera, onEnemyHit, notifier, true);
+            }
+            if (!debugInstantCooldowns && ultimateCooldownRemaining > 0) {
                 return { ok: false, message: def.ultimateName + ' on cooldown (' + ultimateCooldownRemaining.toFixed(1) + 's)' };
             }
 
-            if (currentClassId === 'ninja') outcome = triggerNinjaUltimate(playerPos, onEnemyHit);
+            if (currentClassId === 'ninja') outcome = triggerNinjaUltimate(playerPos, onEnemyHit, camera);
             else if (currentClassId === 'jedi') outcome = triggerJediUltimate(playerPos, yaw, onEnemyHit);
             else if (currentClassId === 'magician') outcome = triggerMagicianUltimate(camera, onEnemyHit);
             else if (currentClassId === 'sharpshooter') outcome = triggerSharpshooterUltimate(camera);
             else outcome = triggerBrawlerUltimate();
 
-            if (outcome && outcome.ok) {
-                ultimateCooldownRemaining = def.ultimateCooldown;
+            if (outcome && outcome.ok && !outcome.skipCooldown) {
+                ultimateCooldownRemaining = debugInstantCooldowns ? 0 : def.ultimateCooldown;
                 notify(notifier, outcome.message || (def.ultimateName + '!'), 1100);
             }
             return outcome || { ok: false, message: 'Ultimate failed.' };
@@ -735,13 +872,54 @@
     GameClasses.update = function (dt, camera, playerPos, rotation, onEnemyHit, notifier) {
         stepCooldowns(dt);
 
+        if (ninjaShadowDashTimer > 0) {
+            ninjaShadowDashTimer -= dt;
+            if (ninjaShadowDashTimer < 0) ninjaShadowDashTimer = 0;
+        }
+
         if (currentClassId === 'sharpshooter') {
-            stepSharpshooter(dt, onEnemyHit, notifier);
+            stepSharpshooter(dt, camera, onEnemyHit, notifier);
         } else if (currentClassId === 'brawler') {
             stepBrawler(dt, playerPos, onEnemyHit);
         }
 
         updateEffects(dt);
+    };
+
+    GameClasses.isShadowDashActive = function () {
+        return ninjaShadowDashTimer > 0;
+    };
+
+    GameClasses.setDebugMode = function (enabled) {
+        debugInstantCooldowns = !!enabled;
+        if (debugInstantCooldowns) {
+            abilityCooldownRemaining = 0;
+            ultimateCooldownRemaining = 0;
+        }
+    };
+
+    GameClasses.isDeadeyeActive = function () {
+        return !!deadeyeActive;
+    };
+
+    GameClasses.getDeadeyeState = function () {
+        if (!deadeyeActive || deadeyeDurationTotal <= 0) return null;
+        var markers = [];
+        for (var i = 0; i < deadeyeLockedTargets.length; i++) {
+            var lockedMarker = buildDeadeyeMarker(deadeyeLockedTargets[i].enemy, 1, true);
+            if (lockedMarker) markers.push(lockedMarker);
+        }
+        if (deadeyeAcquiringTarget && deadeyeAcquiringTarget.enemy) {
+            var acquiringProgress = deadeyeLockTime > 0 ? (deadeyeAcquiringTarget.elapsed / deadeyeLockTime) : 1;
+            var acquiringMarker = buildDeadeyeMarker(deadeyeAcquiringTarget.enemy, acquiringProgress, false);
+            if (acquiringMarker) markers.push(acquiringMarker);
+        }
+        return {
+            lockCount: deadeyeLockedTargets.length,
+            maxLocks: deadeyeMaxLocks,
+            progress: 1 - (deadeyeRemaining / deadeyeDurationTotal),
+            targets: markers
+        };
     };
 
     window.GameClasses = GameClasses;

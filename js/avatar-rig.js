@@ -209,6 +209,10 @@
         coreAnchor.position.set(0, 1.0, 0);
         modelRoot.add(coreAnchor);
 
+        var throwableOriginAnchor = new THREE.Object3D();
+        throwableOriginAnchor.position.set(0.01, -0.02, -0.12);
+        palmLeft.add(throwableOriginAnchor);
+
         var rig = {
             armL: shoulderLeft,
             armR: shoulderRight,
@@ -230,6 +234,7 @@
             coil: coil,
             muzzle: muzzle,
             coreAnchor: coreAnchor,
+            throwableOriginAnchor: throwableOriginAnchor,
             eyeAnchor: eyeAnchor,
             palmLeft: palmLeft,
             palmRight: palmRight,
@@ -317,6 +322,12 @@
             return out;
         }
 
+        function getThrowableOriginWorldPosition(outVec3) {
+            var out = outVec3 || new THREE.Vector3();
+            throwableOriginAnchor.getWorldPosition(out);
+            return out;
+        }
+
         function getEyeWorldPosition(outVec3) {
             var out = outVec3 || new THREE.Vector3();
             eyeAnchor.getWorldPosition(out);
@@ -340,6 +351,33 @@
         updateAimPitch(0);
         updateLocomotion(0, false, 0);
 
+        var throwPoseTimer = 0;
+        function applyThrowPose(dt) {
+            if (throwPoseTimer <= 0) return;
+            throwPoseTimer -= dt;
+            if (throwPoseTimer < 0) throwPoseTimer = 0;
+            var t = Math.min(1, throwPoseTimer * 4);
+            rig.armL.rotation.x = -1.4 * t;
+            rig.armL.rotation.z = -0.3 * t;
+        }
+
+        function triggerThrowPose() {
+            throwPoseTimer = 0.35;
+        }
+
+        var chokeGripTimer = 0;
+        function applyChokeGripPose(dt) {
+            if (chokeGripTimer <= 0) return;
+            chokeGripTimer -= dt;
+            if (chokeGripTimer < 0) chokeGripTimer = 0;
+            rig.armR.rotation.x = 1.2;
+            rig.armR.rotation.z = 0.15;
+        }
+
+        function triggerChokeGripPose(duration) {
+            chokeGripTimer = Math.max(0.1, duration || 1.5);
+        }
+
         return {
             root: root,
             rig: rig,
@@ -349,7 +387,12 @@
             getCoreWorldPosition: getCoreWorldPosition,
             getEyeWorldPosition: getEyeWorldPosition,
             getMuzzleWorldPosition: getMuzzleWorldPosition,
+            getThrowableOriginWorldPosition: getThrowableOriginWorldPosition,
             setMuzzleVisible: setMuzzleVisible,
+            applyThrowPose: applyThrowPose,
+            triggerThrowPose: triggerThrowPose,
+            applyChokeGripPose: applyChokeGripPose,
+            triggerChokeGripPose: triggerChokeGripPose,
             getWeaponId: function () { return rig.weaponId; },
             _tmp: tmpVec
         };

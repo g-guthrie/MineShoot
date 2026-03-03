@@ -51,6 +51,7 @@
     var viewTarget = new THREE.Vector3();
     var viewDir = new THREE.Vector3();
     var plasmaForwardDir = new THREE.Vector3();
+    var throwableRightDir = new THREE.Vector3();
     var viewRay = new THREE.Raycaster();
 
     var keys = {
@@ -587,6 +588,19 @@
         }
         if (!camera) return null;
         return camera.position.clone().setY(camera.position.y - 0.6);
+    };
+
+    GamePlayer.getThrowableOriginWorldPosition = function () {
+        if (avatarRigApi && avatarRigApi.getThrowableOriginWorldPosition) {
+            return avatarRigApi.getThrowableOriginWorldPosition();
+        }
+        if (!camera) return null;
+        camera.getWorldDirection(plasmaForwardDir);
+        throwableRightDir.set(1, 0, 0).applyQuaternion(camera.quaternion);
+        return camera.position.clone()
+            .addScaledVector(plasmaForwardDir, 0.55)
+            .addScaledVector(throwableRightDir, -0.34)
+            .setY(camera.position.y - 0.58);
     };
 
     GamePlayer.getEquippedWeaponId = function () {

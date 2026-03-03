@@ -7,7 +7,7 @@
 
     var GameUI = {};
 
-    var crosshairEl, shotgunReticleEl, plasmaReticleEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, shotgunReticleEl, plasmaReticleEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, seekerDebugInfoEl;
     var seekerConeMarkersEl, seekerConeMarkerEls;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
@@ -20,6 +20,8 @@
     var damageTicks = [];
     var damageTickTimers = [];
     var damageFlashLevel = 0;
+    var deadeyeReticlePool = [];
+    var deadeyeProjectVec = new THREE.Vector3();
 
     var killCount = 0;
     var hitmarkerTimer = null;
@@ -40,6 +42,8 @@
         crosshairEl = document.getElementById('crosshair');
         shotgunReticleEl = document.getElementById('shotgun-reticle');
         plasmaReticleEl = document.getElementById('plasma-reticle');
+        chokeReticleEl = document.getElementById('choke-reticle');
+        deadeyeReticlesEl = document.getElementById('deadeye-reticles');
         hitmarkerEl = document.getElementById('hitmarker');
         killCounterEl = document.getElementById('kill-counter');
         healthBarEl = document.getElementById('health-bar');
@@ -106,6 +110,8 @@
                 combatBeaconEls.push(beacon);
             }
         }
+
+        deadeyeReticlePool = [];
     };
 
     GameUI.showHitMarker = function () {
@@ -513,6 +519,83 @@
 
         if (damageVignetteEl) {
             damageVignetteEl.style.opacity = (damageFlashLevel * 0.45).toFixed(3);
+        }
+    };
+
+    GameUI.updateChokeReticle = function (visible, sizePx) {
+        if (!chokeReticleEl) return;
+        if (!visible) {
+            chokeReticleEl.style.display = 'none';
+            return;
+        }
+        var size = sizePx || 190;
+        chokeReticleEl.style.width = size + 'px';
+        chokeReticleEl.style.height = size + 'px';
+        chokeReticleEl.style.display = 'block';
+    };
+
+    function ensureDeadeyeReticles(count) {
+        if (!deadeyeReticlesEl) return;
+        while (deadeyeReticlePool.length < count) {
+            var node = document.createElement('div');
+            node.className = 'deadeye-target-reticle';
+            var core = document.createElement('div');
+            core.className = 'deadeye-target-core';
+            node.appendChild(core);
+            deadeyeReticlesEl.appendChild(node);
+            deadeyeReticlePool.push(node);
+        }
+    }
+
+    function hideDeadeyeReticles() {
+        if (!deadeyeReticlesEl) return;
+        deadeyeReticlesEl.style.display = 'none';
+        for (var i = 0; i < deadeyeReticlePool.length; i++) {
+            deadeyeReticlePool[i].style.display = 'none';
+        }
+    }
+
+    GameUI.updateDeadeyeReticle = function (camera, deadeyeState) {
+        if (!deadeyeReticlesEl) return;
+        if (!deadeyeState || !Array.isArray(deadeyeState.targets) || deadeyeState.targets.length === 0) {
+            hideDeadeyeReticles();
+            return;
+        }
+
+        ensureDeadeyeReticles(deadeyeState.targets.length);
+        deadeyeReticlesEl.style.display = 'block';
+
+        for (var i = 0; i < deadeyeReticlePool.length; i++) {
+            deadeyeReticlePool[i].style.display = 'none';
+        }
+
+        for (var t = 0; t < deadeyeState.targets.length; t++) {
+            var target = deadeyeState.targets[t];
+            var el = deadeyeReticlePool[t];
+            if (!target || !el) continue;
+
+            var screenX = window.innerWidth * 0.5;
+            var screenY = window.innerHeight * 0.5;
+            if (!target.screenCenter) {
+                if (!camera || !target.worldPos) continue;
+                deadeyeProjectVec.set(target.worldPos.x, target.worldPos.y, target.worldPos.z).project(camera);
+                if (deadeyeProjectVec.z < -1 || deadeyeProjectVec.z > 1) continue;
+                screenX = (deadeyeProjectVec.x * 0.5 + 0.5) * window.innerWidth;
+                screenY = (-deadeyeProjectVec.y * 0.5 + 0.5) * window.innerHeight;
+            }
+
+            var progress = Math.max(0, Math.min(1, target.progress || 0));
+            var size = target.locked ? 22 : Math.round(220 - (progress * 160));
+            if (size < 22) size = 22;
+            if (size > 220) size = 220;
+
+            el.style.left = screenX.toFixed(1) + 'px';
+            el.style.top = screenY.toFixed(1) + 'px';
+            el.style.width = size + 'px';
+            el.style.height = size + 'px';
+            el.style.display = 'block';
+            if (target.locked) el.classList.add('locked');
+            else el.classList.remove('locked');
         }
     };
 

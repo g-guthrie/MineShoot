@@ -43,6 +43,7 @@
     var throwAckQueue = [];
     var throwRejectQueue = [];
     var throwableEventQueue = [];
+    var classCastResultQueue = [];
 
     var notices = [];
 
@@ -404,10 +405,16 @@
         r.beamHeat = entity.beamHeat || 0;
         r.beamOverheated = !!entity.beamOverheated;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
+        r.shadowDashUntil = entity.shadowDashUntil || 0;
+        r.chokeState = entity.chokeState || null;
 
         r.group.visible = !!entity.alive;
         r.bodyHitbox.visible = !!entity.alive;
         r.headHitbox.visible = !!entity.alive;
+
+        if (r.shadowDashUntil && r.shadowDashUntil > Date.now()) {
+            r.group.visible = false;
+        }
     }
 
     function applySnapshot(entities, projectiles, fireZones) {
@@ -492,6 +499,12 @@
             if (msg.entityId === selfId && window.GamePlayer && window.GamePlayer.respawnRandom) {
                 window.GamePlayer.respawnRandom();
             }
+            return;
+        }
+
+        if (msg.t === 'class_cast_ok' || msg.t === 'class_cast_reject') {
+            classCastResultQueue.push(msg);
+            if (classCastResultQueue.length > 16) classCastResultQueue.shift();
             return;
         }
 
@@ -594,6 +607,25 @@
         return getRenderCoreWorldPosition(render, out);
     }
 
+    function getChokeLiftForEntity(entityId) {
+        if (!entityId) return 0;
+        var now = Date.now();
+        var lift = 0;
+        renderMap.forEach(function (r) {
+            if (!r.chokeState || !r.chokeState.targetId) return;
+            if (r.chokeState.targetId !== entityId) return;
+            if (r.chokeState.endsAt && r.chokeState.endsAt > now) {
+                lift = Math.max(lift, r.chokeState.liftHeight || 1.0);
+            }
+        });
+        if (selfState && selfState.chokeState && selfState.chokeState.targetId === entityId) {
+            if (selfState.chokeState.endsAt && selfState.chokeState.endsAt > now) {
+                lift = Math.max(lift, selfState.chokeState.liftHeight || 1.0);
+            }
+        }
+        return lift;
+    }
+
     function setBeamPoints(line, start, end) {
         if (!line || !line.geometry || !line.geometry.attributes || !line.geometry.attributes.position) return;
         var arr = line.geometry.attributes.position.array;
@@ -673,6 +705,7 @@
         throwAckQueue = [];
         throwRejectQueue = [];
         throwableEventQueue = [];
+        classCastResultQueue = [];
         selfState = null;
         selfId = '';
     };
@@ -781,6 +814,31 @@
                 if (r.rigApi.setMuzzleVisible) {
                     r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
                 }
+                if (r.rigApi.applyThrowPose) r.rigApi.applyThrowPose(dt);
+                if (r.rigApi.applyChokeGripPose) {
+                    if (r.chokeState && r.chokeState.targetId && r.chokeState.endsAt > Date.now()) {
+                        if (!r._chokeGripTriggered) {
+                            r._chokeGripTriggered = true;
+                            r.rigApi.triggerChokeGripPose((r.chokeState.endsAt - Date.now()) / 1000);
+                        }
+                    } else {
+                        r._chokeGripTriggered = false;
+                    }
+                    r.rigApi.applyChokeGripPose(dt);
+                }
+            }
+
+            var chokeVictimLift = getChokeLiftForEntity(r.id);
+            if (chokeVictimLift > 0) {
+                r.group.position.y += chokeVictimLift;
+                if (r.rigApi && r.rigApi.rig) {
+                    var squirmPhase = Date.now() * 0.012;
+                    var squirmAmp = 0.55;
+                    var rig = r.rigApi.rig;
+                    if (rig.legL) rig.legL.rotation.x = Math.sin(squirmPhase) * squirmAmp;
+                    if (rig.legR) rig.legR.rotation.x = Math.sin(squirmPhase + 2.1) * squirmAmp;
+                    if (rig.armL) rig.armL.rotation.x = Math.sin(squirmPhase + 1.0) * squirmAmp;
+                }
             }
 
             r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 1.0, r.group.position.z);
@@ -832,12 +890,32 @@
         });
     };
 
-    GameNet.sendThrow = function (throwableId, clientThrowId) {
-        return wsSend({
+    GameNet.sendThrow = function (throwableId, clientThrowId, throwIntent) {
+        var payload = {
             t: 'throw',
             throwableId: throwableId,
             clientThrowId: clientThrowId || ''
-        });
+        };
+        if (throwIntent && throwIntent.origin && throwIntent.direction) {
+            payload.throwIntent = {
+                origin: {
+                    x: Number(throwIntent.origin.x || 0),
+                    y: Number(throwIntent.origin.y || 0),
+                    z: Number(throwIntent.origin.z || 0)
+                },
+                direction: {
+                    x: Number(throwIntent.direction.x || 0),
+                    y: Number(throwIntent.direction.y || 0),
+                    z: Number(throwIntent.direction.z || 0)
+                },
+                aimPoint: throwIntent.aimPoint ? {
+                    x: Number(throwIntent.aimPoint.x || 0),
+                    y: Number(throwIntent.aimPoint.y || 0),
+                    z: Number(throwIntent.aimPoint.z || 0)
+                } : null
+            };
+        }
+        return wsSend(payload);
     };
 
     GameNet.consumeThrowAck = function () {
@@ -866,6 +944,26 @@
 
     GameNet.queueClassChange = function (classId) {
         return wsSend({ t: 'class_queue', classId: classId });
+    };
+
+    GameNet.sendClassCast = function (slot) {
+        return wsSend({ t: 'class_cast', slot: slot });
+    };
+
+    GameNet.consumeClassCastResult = function () {
+        if (!classCastResultQueue.length) return null;
+        return classCastResultQueue.shift();
+    };
+
+    GameNet.getSelfAbilityState = function () {
+        if (!selfState) return null;
+        return {
+            abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
+            ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
+            shadowDashUntil: selfState.shadowDashUntil || 0,
+            chokeState: selfState.chokeState || null,
+            deadeyeState: selfState.deadeyeState || null
+        };
     };
 
     GameNet.getLockTargets = function () {

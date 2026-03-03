@@ -15,8 +15,17 @@
     var netFireZoneMap = {};
     var predictedByClientId = {};
     var localThrowSeq = 1;
+    var debugInstantCooldowns = false;
+    var debugTelemetry = {
+        lastIntent: null,
+        lastAckClientThrowId: '',
+        lastRejectClientThrowId: '',
+        lastReconcileClientThrowId: '',
+        predictedCount: 0
+    };
 
     var raycaster = new THREE.Raycaster();
+    var centerPoint = new THREE.Vector2(0, 0);
     var tmpForward = new THREE.Vector3();
     var tmpRight = new THREE.Vector3();
     var tmpUp = new THREE.Vector3();
@@ -25,7 +34,6 @@
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
     var tmpNetVec = new THREE.Vector3();
-    var THROWABLE_SPAWN_FORWARD = 0.65;
     var throwableDistanceTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableDistanceTuning)
         ? window.GameCombatTuning.getThrowableDistanceTuning()
         : {
@@ -34,6 +42,18 @@
             seekerShotRadius: 4.6,
             molotovFireRadius: 3.2,
             seekerAcquireRange: 22
+        };
+    var throwableMechanicsTuning = (window.GameCombatTuning && window.GameCombatTuning.getThrowableMechanicsTuning)
+        ? window.GameCombatTuning.getThrowableMechanicsTuning()
+        : {
+            aimRayRange: 100,
+            fragBounceMaxCount: 2,
+            fragBounceVelocityDamping: 0.4,
+            fragBounceVerticalDamping: 0.42,
+            fragBounceStopSpeedSq: 2.5,
+            predictedTtlMs: 5000,
+            throwIntentOriginMaxOffset: 1.2,
+            throwIntentDirectionMinDot: -0.2
         };
 
     var throwableOrder = ['frag', 'seeker', 'molotov', 'knife'];
@@ -58,6 +78,8 @@
             fuse: 3.4,
             radius: throwableDistanceTuning.seekerRadius,
             damage: 110,
+            homingBoost: 2.0,
+            homingLerp: 4.8,
             regen: 15
         },
         seekershot: {
@@ -142,7 +164,10 @@
         var inv = inventory[type];
         if (!inv || inv.charges <= 0) return false;
         inv.charges--;
-        if (inv.charges < inv.maxCharges && inv.cooldownRemaining <= 0) {
+        if (debugInstantCooldowns) {
+            inv.charges = inv.maxCharges;
+            inv.cooldownRemaining = 0;
+        } else if (inv.charges < inv.maxCharges && inv.cooldownRemaining <= 0) {
             inv.cooldownRemaining = defs[type].regen;
         }
         return true;
@@ -205,6 +230,33 @@
             group.add(rag);
             return group;
         }
+        if (type === 'ninjastar') {
+            var starGroup = new THREE.Group();
+            var starMat = new THREE.MeshLambertMaterial({ color: 0x888888, emissive: 0x222222 });
+            for (var s = 0; s < 4; s++) {
+                var blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.06), starMat);
+                blade.rotation.z = (s * Math.PI) / 4;
+                starGroup.add(blade);
+            }
+            var core = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), starMat);
+            starGroup.add(core);
+            return starGroup;
+        }
+        if (type === 'lightsaber') {
+            var saberGroup = new THREE.Group();
+            var hilt = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.06, 0.18),
+                new THREE.MeshLambertMaterial({ color: 0x444444 })
+            );
+            saberGroup.add(hilt);
+            var bladeMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 0.04, 0.7),
+                new THREE.MeshBasicMaterial({ color: 0x44ff66, transparent: true, opacity: 0.88 })
+            );
+            bladeMesh.position.z = -0.44;
+            saberGroup.add(bladeMesh);
+            return saberGroup;
+        }
         // knife
         var knife = new THREE.Mesh(
             new THREE.BoxGeometry(0.04, 0.04, 0.45),
@@ -260,12 +312,12 @@
     }
 
     function getDefaultThrowOrigin(camera, forward, right, up) {
-        var core = null;
-        if (window.GamePlayer && window.GamePlayer.getCoreWorldPosition) {
-            core = window.GamePlayer.getCoreWorldPosition();
+        var hand = null;
+        if (window.GamePlayer && window.GamePlayer.getThrowableOriginWorldPosition) {
+            hand = window.GamePlayer.getThrowableOriginWorldPosition();
         }
-        if (core && typeof core.x === 'number' && typeof core.y === 'number' && typeof core.z === 'number') {
-            return core.clone().addScaledVector(forward, THROWABLE_SPAWN_FORWARD);
+        if (hand && typeof hand.x === 'number' && typeof hand.y === 'number' && typeof hand.z === 'number') {
+            return hand.clone();
         }
         return camera.position.clone()
             .addScaledVector(forward, 0.75)
@@ -273,10 +325,8 @@
             .addScaledVector(up, -0.15);
     }
 
-    function spawnProjectile(type, camera, options) {
-        if (!sceneRef || !camera) return false;
-        var def = defs[type];
-        if (!def) return false;
+    function buildThrowIntent(camera, options) {
+        if (!camera) return null;
         options = options || {};
 
         camera.getWorldDirection(tmpForward);
@@ -287,7 +337,58 @@
             ? options.origin.clone()
             : getDefaultThrowOrigin(camera, tmpForward, tmpRight, tmpUp);
 
-        var baseDir = options.direction ? options.direction.clone().normalize() : tmpForward.clone();
+        var direction = null;
+        var aimPoint = null;
+        var rayRange = Math.max(1, Number(throwableMechanicsTuning.aimRayRange || 100));
+
+        if (options.direction) {
+            direction = options.direction.clone().normalize();
+            aimPoint = origin.clone().addScaledVector(direction, rayRange);
+        } else {
+            var targets = getWorldTargets();
+            var allTargets = targets.hitboxes.concat(targets.worldMeshes);
+            if (allTargets.length > 0) {
+                raycaster.setFromCamera(centerPoint, camera);
+                raycaster.far = rayRange;
+                var hits = raycaster.intersectObjects(allTargets, false);
+                if (hits.length > 0) {
+                    aimPoint = hits[0].point.clone();
+                }
+            }
+            if (!aimPoint) {
+                aimPoint = camera.position.clone().addScaledVector(tmpForward, rayRange);
+            }
+            direction = aimPoint.clone().sub(origin).normalize();
+        }
+
+        if (!direction || !isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z) || direction.lengthSq() < 0.00001) {
+            direction = tmpForward.clone();
+        }
+
+        var intent = {
+            origin: origin,
+            direction: direction.normalize(),
+            aimPoint: aimPoint ? aimPoint.clone() : origin.clone().addScaledVector(direction, rayRange),
+            rayRange: rayRange
+        };
+        debugTelemetry.lastIntent = {
+            origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },
+            direction: { x: intent.direction.x, y: intent.direction.y, z: intent.direction.z },
+            aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
+        };
+        return intent;
+    }
+
+    function spawnProjectile(type, camera, options) {
+        if (!sceneRef || !camera) return false;
+        var def = defs[type];
+        if (!def) return false;
+        options = options || {};
+
+        var intent = options.intent || buildThrowIntent(camera, options);
+        if (!intent || !intent.origin || !intent.direction) return false;
+        var origin = intent.origin.clone();
+        var baseDir = intent.direction.clone().normalize();
         var vel = baseDir.multiplyScalar(def.speed);
         if (!options.direction) {
             vel.y += def.upward;
@@ -309,7 +410,12 @@
             forcedTargetId: options.targetId || '',
             predicted: !!options.predicted,
             clientThrowId: options.clientThrowId || '',
-            projectileId: options.projectileId || ''
+            projectileId: options.projectileId || '',
+            throwIntent: {
+                origin: { x: origin.x, y: origin.y, z: origin.z },
+                direction: { x: baseDir.x, y: baseDir.y, z: baseDir.z },
+                aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
+            }
         });
 
         return true;
@@ -537,10 +643,11 @@
 
             // Frag grenade can bounce before fuse pop.
             p.mesh.position.copy(hit.point);
-            p.velocity.multiplyScalar(0.4);
-            p.velocity.y = Math.abs(p.velocity.y) * 0.42;
+            p.velocity.multiplyScalar(throwableMechanicsTuning.fragBounceVelocityDamping || 0.4);
+            p.velocity.y = Math.abs(p.velocity.y) * (throwableMechanicsTuning.fragBounceVerticalDamping || 0.42);
             p.bounces++;
-            if (p.bounces > 2 || p.velocity.lengthSq() < 2.5) {
+            if (p.bounces > (throwableMechanicsTuning.fragBounceMaxCount || 2) ||
+                p.velocity.lengthSq() < (throwableMechanicsTuning.fragBounceStopSpeedSq || 2.5)) {
                 p.velocity.set(0, 0, 0);
             }
         } else {
@@ -623,6 +730,26 @@
         }
     }
 
+    function purgeStalePredicted() {
+        var now = Date.now();
+        var ttlMs = Math.max(1000, Number(throwableMechanicsTuning.predictedTtlMs || 5000));
+        for (var key in predictedByClientId) {
+            if (!Object.prototype.hasOwnProperty.call(predictedByClientId, key)) continue;
+            var entry = predictedByClientId[key];
+            if (!entry || !entry.createdAt) {
+                delete predictedByClientId[key];
+                continue;
+            }
+            if ((now - entry.createdAt) <= ttlMs) continue;
+            delete predictedByClientId[key];
+            for (var i = projectiles.length - 1; i >= 0; i--) {
+                var p = projectiles[i];
+                if (!p || p.clientThrowId !== key) continue;
+                removeProjectile(i);
+            }
+        }
+    }
+
     GameThrowables.init = function (scene) {
         sceneRef = scene;
         projectiles = [];
@@ -632,6 +759,11 @@
         netFireZoneMap = {};
         predictedByClientId = {};
         localThrowSeq = 1;
+        debugTelemetry.lastIntent = null;
+        debugTelemetry.lastAckClientThrowId = '';
+        debugTelemetry.lastRejectClientThrowId = '';
+        debugTelemetry.lastReconcileClientThrowId = '';
+        debugTelemetry.predictedCount = 0;
         resetInventory();
     };
 
@@ -690,7 +822,36 @@
      * @param {THREE.Camera} camera
      * @returns {Object} { ok, reason, state }
      */
-    GameThrowables.throw = function (type, camera) {
+    GameThrowables.buildThrowIntent = function (camera, options) {
+        var intent = buildThrowIntent(camera, options);
+        if (!intent) return null;
+        return {
+            origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },
+            direction: { x: intent.direction.x, y: intent.direction.y, z: intent.direction.z },
+            aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
+        };
+    };
+
+    function intentToVectors(intent) {
+        if (!intent || !intent.origin || !intent.direction) return null;
+        var origin = new THREE.Vector3(
+            Number(intent.origin.x || 0),
+            Number(intent.origin.y || 0),
+            Number(intent.origin.z || 0)
+        );
+        var direction = new THREE.Vector3(
+            Number(intent.direction.x || 0),
+            Number(intent.direction.y || 0),
+            Number(intent.direction.z || 0)
+        );
+        if (!isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z) || direction.lengthSq() < 0.00001) return null;
+        return {
+            origin: origin,
+            direction: direction.normalize()
+        };
+    }
+
+    GameThrowables.throw = function (type, camera, intentPayload) {
         if (!defs[type]) {
             return { ok: false, reason: 'unknown', state: getThrowableState() };
         }
@@ -698,7 +859,8 @@
             return { ok: false, reason: 'cooldown', state: getThrowableState() };
         }
 
-        var spawned = spawnProjectile(type, camera);
+        var intent = intentToVectors(intentPayload);
+        var spawned = spawnProjectile(type, camera, intent ? { intent: intent } : undefined);
         if (!spawned) {
             inventory[type].charges++;
             return { ok: false, reason: 'spawn_failed', state: getThrowableState() };
@@ -712,28 +874,30 @@
         return 'cthrow-' + localThrowSeq + '-' + Date.now().toString(36);
     };
 
-    GameThrowables.throwPredicted = function (type, camera, clientThrowId) {
+    GameThrowables.throwPredicted = function (type, camera, clientThrowId, intentPayload) {
         if (!defs[type]) return false;
         var id = String(clientThrowId || '');
         if (!id) id = GameThrowables.buildClientThrowId();
+        var intent = intentToVectors(intentPayload);
         var spawned = spawnProjectile(type, camera, {
             predicted: true,
-            clientThrowId: id
+            clientThrowId: id,
+            intent: intent || null
         });
         if (!spawned) return false;
-        predictedByClientId[id] = Date.now();
+        predictedByClientId[id] = {
+            createdAt: Date.now(),
+            acked: false,
+            authoritativeSeen: false
+        };
         return true;
     };
 
     GameThrowables.confirmPredictedThrow = function (clientThrowId) {
         var id = String(clientThrowId || '');
         if (!id || !predictedByClientId[id]) return false;
-        delete predictedByClientId[id];
-        for (var i = projectiles.length - 1; i >= 0; i--) {
-            var p = projectiles[i];
-            if (!p || p.clientThrowId !== id) continue;
-            removeProjectile(i);
-        }
+        predictedByClientId[id].acked = true;
+        debugTelemetry.lastAckClientThrowId = id;
         return true;
     };
 
@@ -741,6 +905,7 @@
         var id = String(clientThrowId || '');
         if (!id) return false;
         delete predictedByClientId[id];
+        debugTelemetry.lastRejectClientThrowId = id;
         for (var i = projectiles.length - 1; i >= 0; i--) {
             var p = projectiles[i];
             if (!p || p.clientThrowId !== id) continue;
@@ -748,6 +913,30 @@
         }
         return true;
     };
+
+    function reconcilePredictedAgainstAuthoritative(selfId, projectilesState) {
+        var seenByClientThrowId = {};
+        for (var i = 0; i < projectilesState.length; i++) {
+            var p = projectilesState[i];
+            if (!p || p.ownerId !== selfId) continue;
+            if (!p.clientThrowId) continue;
+            seenByClientThrowId[p.clientThrowId] = true;
+        }
+
+        for (var key in seenByClientThrowId) {
+            if (!Object.prototype.hasOwnProperty.call(seenByClientThrowId, key)) continue;
+            if (predictedByClientId[key]) {
+                predictedByClientId[key].authoritativeSeen = true;
+                delete predictedByClientId[key];
+            }
+            debugTelemetry.lastReconcileClientThrowId = key;
+            for (var j = projectiles.length - 1; j >= 0; j--) {
+                var localP = projectiles[j];
+                if (!localP || localP.clientThrowId !== key) continue;
+                removeProjectile(j);
+            }
+        }
+    }
 
     GameThrowables.setNetworkInventoryState = function (state) {
         if (!state || typeof state !== 'object') return;
@@ -766,15 +955,14 @@
         payload = payload || {};
         var projectilesState = Array.isArray(payload.projectiles) ? payload.projectiles : [];
         var fireZonesState = Array.isArray(payload.fireZones) ? payload.fireZones : [];
+        reconcilePredictedAgainstAuthoritative(selfId, projectilesState);
 
         var seenProjectile = {};
         for (var i = 0; i < projectilesState.length; i++) {
             var p = projectilesState[i];
-            if (!p || !p.id || !defs[p.type]) continue;
+            var isAbilityProj = (p.type === 'ninjastar' || p.type === 'lightsaber');
+            if (!p || !p.id || (!defs[p.type] && !isAbilityProj)) continue;
             seenProjectile[p.id] = true;
-            if (p.ownerId === selfId && p.clientThrowId) {
-                GameThrowables.confirmPredictedThrow(p.clientThrowId);
-            }
             var entry = netProjectileMap[p.id];
             if (!entry) {
                 var mesh = createThrowableMesh(p.type);
@@ -783,6 +971,12 @@
                 netProjectileMap[p.id] = entry;
             }
             entry.mesh.position.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
+            if (p.type === 'ninjastar') {
+                entry.mesh.rotation.z += 0.35;
+            } else if (p.type === 'lightsaber') {
+                entry.mesh.rotation.z += 0.25;
+                entry.mesh.rotation.y += 0.15;
+            }
         }
 
         for (var key in netProjectileMap) {
@@ -851,12 +1045,41 @@
      */
     GameThrowables.update = function (dt, onEnemyHit) {
         regenCharges(dt);
+        purgeStalePredicted();
+        debugTelemetry.predictedCount = Object.keys(predictedByClientId).length;
 
         for (var i = projectiles.length - 1; i >= 0; i--) {
             updateProjectile(i, dt, onEnemyHit);
         }
         updateFireZones(dt, onEnemyHit);
         updateFlashes(dt);
+    };
+
+    GameThrowables.setDebugMode = function (enabled) {
+        debugInstantCooldowns = !!enabled;
+        if (debugInstantCooldowns) {
+            for (var i = 0; i < throwableOrder.length; i++) {
+                var inv = inventory[throwableOrder[i]];
+                if (inv) {
+                    inv.charges = inv.maxCharges;
+                    inv.cooldownRemaining = 0;
+                }
+            }
+        }
+    };
+
+    GameThrowables.getDebugTelemetry = function () {
+        return {
+            lastIntent: debugTelemetry.lastIntent ? {
+                origin: debugTelemetry.lastIntent.origin,
+                direction: debugTelemetry.lastIntent.direction,
+                aimPoint: debugTelemetry.lastIntent.aimPoint
+            } : null,
+            lastAckClientThrowId: debugTelemetry.lastAckClientThrowId,
+            lastRejectClientThrowId: debugTelemetry.lastRejectClientThrowId,
+            lastReconcileClientThrowId: debugTelemetry.lastReconcileClientThrowId,
+            predictedCount: debugTelemetry.predictedCount
+        };
     };
 
     window.GameThrowables = GameThrowables;

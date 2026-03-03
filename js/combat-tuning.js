@@ -41,6 +41,16 @@
             molotovFireRadius: 3.2,
             seekerAcquireRange: 22
         },
+        throwableMechanics: {
+            aimRayRange: 100,
+            fragBounceMaxCount: 2,
+            fragBounceVelocityDamping: 0.4,
+            fragBounceVerticalDamping: 0.42,
+            fragBounceStopSpeedSq: 2.5,
+            predictedTtlMs: 5000,
+            throwIntentOriginMaxOffset: 1.2,
+            throwIntentDirectionMinDot: -0.2
+        },
         classWallhackRadius: {
             ninja: 90,
             jedi: 85,
@@ -58,7 +68,33 @@
             magicianUltimateRange: 60,
             sharpshooterUltimateRange: 70,
             brawlerAbilityRange: 4.2,
-            brawlerRageRadius: 5.2
+            brawlerRageRadius: 5.2,
+            jediChokeLockBoxPx: 190,
+            jediChokeRange: 24,
+            jediChokeDuration: 1.55,
+            jediChokeLiftHeight: 1.0,
+            jediChokeTickRate: 0.25,
+            jediChokeDotPerTick: 0,
+            jediSaberSpeed: 34,
+            jediSaberMaxDistance: 22,
+            jediSaberReturnSpeed: 42,
+            jediSaberHitRadius: 1.3,
+            jediSaberDamage: 175,
+            jediSaberHeadDamage: 240,
+            ninjaStarCount: 3,
+            ninjaStarSpreadDeg: 16,
+            ninjaStarSpeed: 44,
+            ninjaStarLife: 0.85,
+            ninjaStarHitRadius: 1.35,
+            ninjaStarBodyDamage: 120,
+            ninjaStarHeadDamage: 170,
+            shadowDashSteps: 4,
+            shadowDashStepDuration: 0.12,
+            deadeyeLockBoxPx: 220,
+            deadeyeLockRange: 80,
+            deadeyeDuration: 6.0,
+            deadeyeMaxTargets: 6,
+            deadeyeDamage: 260
         }
     };
 
@@ -118,6 +154,19 @@
             seekerShotRadius: scaleDistance(BASE.throwables.seekerShotRadius),
             molotovFireRadius: scaleDistance(BASE.throwables.molotovFireRadius),
             seekerAcquireRange: scaleDistance(BASE.throwables.seekerAcquireRange)
+        };
+    };
+
+    GameCombatTuning.getThrowableMechanicsTuning = function () {
+        return {
+            aimRayRange: scaleDistance(BASE.throwableMechanics.aimRayRange),
+            fragBounceMaxCount: BASE.throwableMechanics.fragBounceMaxCount,
+            fragBounceVelocityDamping: BASE.throwableMechanics.fragBounceVelocityDamping,
+            fragBounceVerticalDamping: BASE.throwableMechanics.fragBounceVerticalDamping,
+            fragBounceStopSpeedSq: BASE.throwableMechanics.fragBounceStopSpeedSq,
+            predictedTtlMs: BASE.throwableMechanics.predictedTtlMs,
+            throwIntentOriginMaxOffset: scaleDistance(BASE.throwableMechanics.throwIntentOriginMaxOffset),
+            throwIntentDirectionMinDot: BASE.throwableMechanics.throwIntentDirectionMinDot
         };
     };
 
