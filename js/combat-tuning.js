@@ -92,7 +92,7 @@
             shadowDashStepDuration: 0.12,
             deadeyeLockBoxPx: 220,
             deadeyeLockRange: 80,
-            deadeyeDuration: 6.0,
+            deadeyeDuration: 4.0,
             deadeyeMaxTargets: 6,
             deadeyeDamage: 260
         }
