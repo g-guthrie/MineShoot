@@ -1,5 +1,7 @@
 /**
- * network.js - Cloudflare auth + global room websocket + remote entity rendering
+ * network.js - Global room websocket + remote entity rendering
+ * Auth logic lives in net/auth.js (GameNetAuth); thin wrappers kept for backward compat.
+ * Remote entity visuals/hitboxes live in net/remote-entities.js (GameNetEntities).
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameNet
  */
 (function () {
@@ -8,17 +10,14 @@
     var GameNet = {};
 
     var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
-    var AUTH_PATH = (PROTOCOL && PROTOCOL.authPath) ? PROTOCOL.authPath : {};
     var MSG = (PROTOCOL && PROTOCOL.msg) ? PROTOCOL.msg : { c2s: {}, s2c: {} };
     var MSG_C2S = MSG.c2s || {};
     var MSG_S2C = MSG.s2c || {};
 
-    var SESSION_ME_URL = AUTH_PATH.me || '/api/me';
-    var SESSION_LOGIN_URL = AUTH_PATH.login || '/api/auth/login';
-    var SESSION_LOGOUT_URL = AUTH_PATH.logout || '/api/auth/logout';
     var WS_URL = (PROTOCOL && PROTOCOL.wsPath) ? PROTOCOL.wsPath : '/api/ws';
 
-    var AUTH_COOKIE_HELP = 'Username + 4-digit PIN';
+    var GameNetAuth = globalThis.__MAYHEM_RUNTIME.GameNetAuth;
+    var GameNetEntities = globalThis.__MAYHEM_RUNTIME.GameNetEntities;
 
     var active = false;
     var connected = false;
@@ -27,8 +26,6 @@
     var transport = null;
     var sceneRef = null;
 
-    var user = null;
-    var guestMode = false;
     var roomId = 'global';
     var selfId = '';
     var selfState = null;
@@ -41,16 +38,6 @@
 
     var snapshotMap = new Map();
     var snapshotHelper = null;
-    var renderMap = new Map();
-    var hitboxArray = [];
-    var hitboxVisible = true;
-    var REMOTE_EYE_HEIGHT = 1.6;
-    var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
-    var HEAD_HITBOX_SIZE = {
-        x: 1.55 * HEAD_HITBOX_LINEAR_SCALE,
-        y: 0.95 * HEAD_HITBOX_LINEAR_SCALE,
-        z: 1.55 * HEAD_HITBOX_LINEAR_SCALE
-    };
 
     var remoteProjectileState = [];
     var remoteFireZoneState = [];
@@ -87,31 +74,8 @@
         };
     }
 
-    function classWallhackRadiusFor(classId) {
-        if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius) {
-            return globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius(classId);
-        }
-        var fallback = {
-            abilities: 90,
-            ninja: 90,
-            jedi: 85,
-            magician: 100,
-            sharpshooter: 115,
-            brawler: 75
-        };
-        return fallback[classId] || fallback.abilities;
-    }
-
     function classStats(classId) {
-        var defs = {
-            abilities: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('abilities') },
-            ninja: { armorMax: 80, wallhackRadius: classWallhackRadiusFor('ninja') },
-            jedi: { armorMax: 130, wallhackRadius: classWallhackRadiusFor('jedi') },
-            magician: { armorMax: 100, wallhackRadius: classWallhackRadiusFor('magician') },
-            sharpshooter: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('sharpshooter') },
-            brawler: { armorMax: 150, wallhackRadius: classWallhackRadiusFor('brawler') }
-        };
-        return defs[classId] || defs.abilities;
+        return GameNetEntities.classStats(classId);
     }
 
     function pushNotice(text) {
@@ -129,11 +93,12 @@
         var endpoint = proto + '//' + window.location.host + WS_URL;
         var params = new URLSearchParams();
         params.set('room', String(roomId || 'global'));
-        if (user && user.id) {
-            params.set('uid', String(user.id));
-            params.set('username', String(user.username || user.id));
-            params.set('classId', String(user.classId || 'abilities'));
-            if (guestMode) params.set('guest', '1');
+        var u = GameNetAuth.getUser();
+        if (u && u.id) {
+            params.set('uid', String(u.id));
+            params.set('username', String(u.username || u.id));
+            params.set('classId', String(u.classId || 'abilities'));
+            if (GameNetAuth.isGuest()) params.set('guest', '1');
         }
         return endpoint + '?' + params.toString();
     }
@@ -149,313 +114,13 @@
         return id;
     }
 
-    function makeGuestUser() {
-        var nonce = Math.random().toString(36).slice(2, 8).toUpperCase();
-        return {
-            id: 'guest-' + Date.now().toString(36) + '-' + nonce.toLowerCase(),
-            username: 'Guest-' + nonce,
-            classId: 'abilities'
-        };
-    }
-
-    function apiFetch(url, options) {
-        options = options || {};
-        var cfg = {
-            method: options.method || 'GET',
-            headers: options.headers || {},
-            credentials: 'include'
-        };
-        if (options.body !== undefined) {
-            cfg.body = options.body;
-        }
-        return fetch(url, cfg);
-    }
-
-    function authOverlay() {
-        return document.getElementById('auth-overlay');
-    }
-
-    function setAuthStatus(msg, isErr) {
-        var el = document.getElementById('auth-status');
-        if (!el) return;
-        el.textContent = msg || '';
-        el.style.color = isErr ? '#ff9a9a' : '#d4ffd4';
-    }
-
-    function setAuthVisible(visible) {
-        var overlay = authOverlay();
-        if (!overlay) return;
-        overlay.style.display = visible ? 'flex' : 'none';
-    }
-
-    function bindAuthForm(onAuthed) {
-        var form = document.getElementById('auth-form');
-        if (!form) {
-            onAuthed(null);
-            return;
-        }
-
-        var usernameInput = document.getElementById('auth-username');
-        var pinInput = document.getElementById('auth-pin');
-        var playBtn = document.getElementById('auth-play-btn');
-        var logoutBtn = document.getElementById('auth-logout-btn');
-        var localBtn = document.getElementById('auth-local-btn');
-
-        function lockForm(lock) {
-            if (usernameInput) usernameInput.disabled = lock;
-            if (pinInput) pinInput.disabled = lock;
-            if (playBtn) playBtn.disabled = lock;
-            if (logoutBtn) logoutBtn.disabled = lock;
-            if (localBtn) localBtn.disabled = lock;
-        }
-
-        function login(username, pin) {
-            lockForm(true);
-            setAuthStatus('Signing in...', false);
-
-            apiFetch(SESSION_LOGIN_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, pin: pin })
-            })
-                .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-                .then(function (res) {
-                    lockForm(false);
-                    if (!res.body || !res.body.ok) {
-                        setAuthStatus((res.body && res.body.error) || 'Login failed.', true);
-                        return;
-                    }
-
-                    user = res.body.user;
-                    setAuthStatus('Welcome, ' + user.username + '!', false);
-                    setAuthVisible(false);
-                    onAuthed(user);
-                })
-                .catch(function () {
-                    lockForm(false);
-                    setAuthStatus('Network error during login.', true);
-                });
-        }
-
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            var username = usernameInput ? usernameInput.value.trim() : '';
-            var pin = pinInput ? pinInput.value.trim() : '';
-            if (!username) {
-                setAuthStatus('Enter a username.', true);
-                return;
-            }
-            if (!/^\d{4}$/.test(pin)) {
-                setAuthStatus('PIN must be exactly 4 digits.', true);
-                return;
-            }
-            login(username, pin);
-        });
-
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function () {
-                apiFetch(SESSION_LOGOUT_URL, { method: 'POST' })
-                    .finally(function () {
-                        user = null;
-                        setAuthVisible(true);
-                        setAuthStatus('Logged out. ' + AUTH_COOKIE_HELP, false);
-                    });
-            });
-        }
-
-        if (localBtn) {
-            localBtn.addEventListener('click', function () {
-                lockForm(true);
-                user = null;
-                setAuthStatus('Bypassed login. Starting local mode...', false);
-                setAuthVisible(false);
-                onAuthed(null);
-            });
-        }
-    }
-
-    function createRemoteVisual(entity) {
-        var group = new THREE.Group();
-        var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
-        var rigApi = null;
-        if (globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
-            rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create(entity.kind === 'bot' ? 'bot' : 'remote', {
-                bodyColor: color,
-                skinColor: 0xd2a77d,
-                legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
-                weaponId: entity.weaponId || 'rifle'
-            });
-            group.add(rigApi.root);
-        } else {
-            var bodyMat = new THREE.MeshLambertMaterial({ color: color });
-            var limbMat = new THREE.MeshLambertMaterial({ color: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d });
-            var skinMat = new THREE.MeshLambertMaterial({ color: 0xd2a77d });
-
-            var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
-            body.position.y = 1.0;
-            group.add(body);
-
-            var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
-            head.position.y = 1.8;
-            group.add(head);
-
-            var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-            armL.position.set(-0.45, 1.0, 0);
-            group.add(armL);
-
-            var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-            armR.position.set(0.45, 1.0, 0);
-            group.add(armR);
-
-            var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-            legL.position.set(-0.18, 0.45, 0);
-            group.add(legL);
-
-            var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-            legR.position.set(0.18, 0.45, 0);
-            group.add(legR);
-        }
-
-        var bodyHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(2.7, 1.525, 2.7),
-            new THREE.MeshBasicMaterial({
-                transparent: true,
-                opacity: hitboxVisible ? 0.3 : 0,
-                wireframe: true,
-                color: 0x22bbff,
-                depthTest: true
-            })
-        );
-        bodyHitbox.userData = {
-            type: 'body',
-            ownerType: 'net',
-            netEntityId: entity.id,
-            targetId: 'net:' + entity.id
-        };
-        sceneRef.add(bodyHitbox);
-
-        var headHitbox = new THREE.Mesh(
-            new THREE.BoxGeometry(HEAD_HITBOX_SIZE.x, HEAD_HITBOX_SIZE.y, HEAD_HITBOX_SIZE.z),
-            new THREE.MeshBasicMaterial({
-                transparent: true,
-                opacity: hitboxVisible ? 0.3 : 0,
-                wireframe: true,
-                color: 0xff6666,
-                depthTest: false
-            })
-        );
-        headHitbox.userData = {
-            type: 'head',
-            ownerType: 'net',
-            netEntityId: entity.id,
-            targetId: 'net:' + entity.id
-        };
-        sceneRef.add(headHitbox);
-
-        group.position.set(
-            entity.x,
-            ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
-            entity.z
-        );
-        group.rotation.y = (entity.yaw || 0);
-
-        sceneRef.add(group);
-        hitboxArray.push(bodyHitbox);
-        hitboxArray.push(headHitbox);
-
-        return {
-            id: entity.id,
-            kind: entity.kind,
-            group: group,
-            bodyHitbox: bodyHitbox,
-            headHitbox: headHitbox,
-            rigApi: rigApi,
-            targetX: entity.x,
-            targetY: entity.y || 1.6,
-            targetFootY: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
-            targetZ: entity.z,
-            targetYaw: (entity.yaw || 0),
-            targetPitch: entity.pitch || 0,
-            hp: entity.hp,
-            hpMax: entity.hpMax,
-            armor: entity.armor,
-            armorMax: entity.armorMax,
-            classId: entity.classId,
-            username: entity.username,
-            alive: entity.alive,
-            wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
-            moveSpeedNorm: entity.moveSpeedNorm || 0,
-            sprinting: !!entity.sprinting,
-            weaponId: entity.weaponId || 'rifle',
-            muzzleFlashUntil: entity.muzzleFlashUntil || 0,
-            streamHeat: entity.streamHeat || 0,
-            streamOverheatedUntil: entity.streamOverheatedUntil || 0
-        };
-    }
-
-    function removeRemoteVisual(id) {
-        var r = renderMap.get(id);
-        if (!r) return;
-
-        if (r.group && r.group.parent) r.group.parent.remove(r.group);
-        if (r.bodyHitbox && r.bodyHitbox.parent) r.bodyHitbox.parent.remove(r.bodyHitbox);
-        if (r.headHitbox && r.headHitbox.parent) r.headHitbox.parent.remove(r.headHitbox);
-
-        var next = [];
-        for (var i = 0; i < hitboxArray.length; i++) {
-            var hb = hitboxArray[i];
-            if (hb !== r.bodyHitbox && hb !== r.headHitbox) next.push(hb);
-        }
-        hitboxArray = next;
-
-        renderMap.delete(id);
-    }
-
-    function ensureRemote(entity) {
-        if (!renderMap.has(entity.id)) {
-            renderMap.set(entity.id, createRemoteVisual(entity));
-        }
-        return renderMap.get(entity.id);
-    }
-
     function updateRemoteFromSnapshot(entity) {
         if (!sceneRef) return;
         if (entity.id === selfId) {
             selfState = entity;
             return;
         }
-
-        var r = ensureRemote(entity);
-        r.targetX = entity.x;
-        r.targetY = entity.y || 1.6;
-        r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
-        r.targetZ = entity.z;
-        r.targetYaw = (entity.yaw || 0);
-        r.targetPitch = entity.pitch || 0;
-        r.hp = entity.hp;
-        r.hpMax = entity.hpMax;
-        r.armor = entity.armor;
-        r.armorMax = entity.armorMax;
-        r.classId = entity.classId;
-        r.username = entity.username;
-        r.alive = entity.alive;
-        r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
-        r.moveSpeedNorm = entity.moveSpeedNorm || 0;
-        r.sprinting = !!entity.sprinting;
-        r.weaponId = entity.weaponId || 'rifle';
-        r.streamHeat = entity.streamHeat || 0;
-        r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
-        r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
-        r.shadowDashUntil = entity.shadowDashUntil || 0;
-        r.chokeState = entity.chokeState || null;
-
-        r.group.visible = !!entity.alive;
-        r.bodyHitbox.visible = !!entity.alive;
-        r.headHitbox.visible = !!entity.alive;
-
-        if (r.shadowDashUntil && r.shadowDashUntil > Date.now()) {
-            r.group.visible = false;
-        }
+        GameNetEntities.updateFromSnapshot(entity);
     }
 
     function applySnapshot(entities, projectiles, fireZones) {
@@ -465,6 +130,7 @@
         }
         if (!Array.isArray(entities)) return;
 
+        var renderMap = GameNetEntities.getRenderMap();
         snapshotMap.clear();
         for (var i = 0; i < entities.length; i++) {
             var e = entities[i];
@@ -477,7 +143,7 @@
             if (!snapshotMap.has(id)) toRemove.push(id);
         });
         for (i = 0; i < toRemove.length; i++) {
-            removeRemoteVisual(toRemove[i]);
+            GameNetEntities.removeRemoteVisual(toRemove[i]);
         }
 
         remoteProjectileState = Array.isArray(projectiles) ? projectiles.slice() : [];
@@ -495,12 +161,13 @@
             },
             onPrune: function (nextMap) {
                 snapshotMap = nextMap;
+                var renderMap = GameNetEntities.getRenderMap();
                 var toRemove = [];
                 renderMap.forEach(function (_v, id) {
                     if (!snapshotMap.has(id)) toRemove.push(id);
                 });
                 for (var i = 0; i < toRemove.length; i++) {
-                    removeRemoteVisual(toRemove[i]);
+                    GameNetEntities.removeRemoteVisual(toRemove[i]);
                 }
             },
             onProjectiles: function (projectiles) {
@@ -524,7 +191,7 @@
             };
         }
 
-        var render = renderMap.get(entityId);
+        var render = GameNetEntities.getRenderMap().get(entityId);
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
@@ -545,7 +212,7 @@
             };
         }
 
-        var render = renderMap.get(entityId);
+        var render = GameNetEntities.getRenderMap().get(entityId);
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
@@ -659,7 +326,7 @@
             }
 
             if (msg.targetId && msg.targetId !== selfId) {
-                var targetRender = renderMap.get(msg.targetId);
+                var targetRender = GameNetEntities.getRenderMap().get(msg.targetId);
                 if (targetRender) {
                     if (typeof msg.health === 'number') targetRender.hp = msg.health;
                     if (typeof msg.armor === 'number') targetRender.armor = msg.armor;
@@ -697,22 +364,22 @@
         }
 
         if (msg.t === (MSG_S2C.CLASS_CHANGED || 'class_changed')) {
-            pushNotice('Ability profile synced.');
+            pushNotice('Ability loadout synced.');
             if (selfState) {
                 selfState.classId = msg.classId || selfState.classId;
-                selfState.queuedClassId = null;
                 selfState.abilityCooldownRemaining = 0;
                 selfState.ultimateCooldownRemaining = 0;
+            }
+            if (msg.abilityLoadout && globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.setLoadout) {
+                globalThis.__MAYHEM_RUNTIME.GameAbilities.setLoadout(msg.abilityLoadout.slot1, msg.abilityLoadout.slot2);
             }
             return;
         }
 
         if (msg.t === (MSG_S2C.CLASS_QUEUED || 'class_queued')) {
-            // Backward compatibility for older Worker versions.
-            pushNotice('Ability profile synced.');
+            pushNotice('Ability loadout synced.');
             if (selfState) {
                 selfState.classId = msg.classId || selfState.classId;
-                selfState.queuedClassId = null;
                 selfState.abilityCooldownRemaining = 0;
                 selfState.ultimateCooldownRemaining = 0;
             }
@@ -737,7 +404,7 @@
     }
 
     function connectWs() {
-        if (!active || !user) return;
+        if (!active || !GameNetAuth.getUser()) return;
         clearReconnectTimer();
 
         if (globalThis.__MAYHEM_RUNTIME.GameNetTransport && globalThis.__MAYHEM_RUNTIME.GameNetTransport.create) {
@@ -817,7 +484,7 @@
         if (!entityId) return 0;
         var now = Date.now();
         var lift = 0;
-        renderMap.forEach(function (r) {
+        GameNetEntities.getRenderMap().forEach(function (r) {
             if (!r.chokeState || !r.chokeState.targetId) return;
             if (r.chokeState.targetId !== entityId) return;
             if (r.chokeState.endsAt && r.chokeState.endsAt > now) {
@@ -833,47 +500,15 @@
     }
 
     GameNet.requireAuth = function (onAuthed) {
-        bindAuthForm(function (userObj) {
-            onAuthed(userObj || user);
-        });
-
-        setAuthVisible(true);
-        setAuthStatus('Checking session...', false);
-
-        apiFetch(SESSION_ME_URL)
-            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-            .then(function (res) {
-                if (res.body && res.body.ok) {
-                    user = res.body.user;
-                    setAuthVisible(false);
-                    onAuthed(user);
-                    return;
-                }
-
-                setAuthVisible(true);
-                setAuthStatus(AUTH_COOKIE_HELP, false);
-            })
-            .catch(function () {
-                setAuthVisible(true);
-                setAuthStatus('Could not reach auth API. ' + AUTH_COOKIE_HELP, true);
-            });
+        GameNetAuth.requireAuth(onAuthed);
     };
 
     GameNet.getCurrentUser = function () {
-        if (guestMode && !user) {
-            user = makeGuestUser();
-        }
-        return user;
+        return GameNetAuth.getCurrentUser();
     };
 
     GameNet.enableGuestMode = function () {
-        guestMode = true;
-        if (!user) {
-            user = makeGuestUser();
-        }
-        setAuthVisible(false);
-        setAuthStatus('', false);
-        return user;
+        return GameNetAuth.enableGuestMode();
     };
 
     GameNet.setRoomId = function (nextRoomId) {
@@ -910,6 +545,7 @@
     GameNet.init = function (scene) {
         sceneRef = scene;
         active = true;
+        GameNetEntities.init(scene);
         initSnapshotHelper();
         connectWs();
     };
@@ -924,9 +560,7 @@
             ws = null;
         }
 
-        var ids = [];
-        renderMap.forEach(function (_v, id) { ids.push(id); });
-        for (var i = 0; i < ids.length; i++) removeRemoteVisual(ids[i]);
+        GameNetEntities.cleanup();
 
         snapshotMap.clear();
         snapshotHelper = null;
@@ -942,6 +576,7 @@
         selfId = '';
         worldMeta = null;
         worldMismatchNotified = false;
+        GameNetAuth.clearUser();
     };
 
     GameNet.isActive = function () {
@@ -953,21 +588,16 @@
     };
 
     GameNet.getHitboxArray = function () {
-        return hitboxArray;
+        return GameNetEntities.getHitboxArray();
     };
 
     GameNet.setHitboxVisibility = function (visible) {
-        hitboxVisible = !!visible;
-        renderMap.forEach(function (r) {
-            if (!r.bodyHitbox || !r.headHitbox) return;
-            r.bodyHitbox.material.opacity = hitboxVisible ? 0.3 : 0;
-            r.headHitbox.material.opacity = hitboxVisible ? 0.3 : 0;
-        });
+        GameNetEntities.setHitboxVisibility(visible);
     };
 
     GameNet.getEntityStateList = function () {
         var out = [];
-        renderMap.forEach(function (r) {
+        GameNetEntities.getRenderMap().forEach(function (r) {
             out.push({
                 id: r.id,
                 kind: r.kind,
@@ -987,17 +617,17 @@
     };
 
     GameNet.getSelfState = function () {
-        if (!selfState && user) {
-            var defaults = classStats(user.classId || 'abilities');
+        var u = GameNetAuth.getUser();
+        if (!selfState && u) {
+            var defaults = classStats(u.classId || 'abilities');
             return {
-                id: user.id,
+                id: u.id,
                 hp: 500,
                 hpMax: 500,
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
-                classId: user.classId || 'abilities',
+                classId: u.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
-                queuedClassId: null,
                 throwables: null,
                 alive: true
             };
@@ -1032,7 +662,7 @@
             }
         }
 
-        renderMap.forEach(function (r) {
+        GameNetEntities.getRenderMap().forEach(function (r) {
             var lerp = Math.min(1, dt * 10);
             r.group.position.x += (r.targetX - r.group.position.x) * lerp;
             r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
@@ -1156,6 +786,10 @@
         return wsSend({ t: (MSG_C2S.CLASS_QUEUE || 'class_queue'), classId: classId });
     };
 
+    GameNet.sendAbilityLoadout = function (slot1, slot2) {
+        return wsSend({ t: (MSG_C2S.CLASS_QUEUE || 'class_queue'), slot1: slot1, slot2: slot2 });
+    };
+
     GameNet.sendClassCast = function (slot, castData) {
         var payload = { t: (MSG_C2S.CLASS_CAST || 'class_cast'), slot: slot };
         if (castData && castData.aimPoint) {
@@ -1226,10 +860,7 @@
         return {
             abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
             ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
-            focusShots: selfState.focusShots || 0,
-            focusUntil: selfState.focusUntil || 0,
-            rageUntil: selfState.rageUntil || 0,
-            shadowDashUntil: selfState.shadowDashUntil || 0,
+            abilityLoadout: selfState.abilityLoadout || null,
             chokeState: selfState.chokeState || null,
             deadeyeState: selfState.deadeyeState || null
         };
@@ -1237,7 +868,7 @@
 
     GameNet.getLockTargets = function () {
         var out = [];
-        renderMap.forEach(function (r) {
+        GameNetEntities.getRenderMap().forEach(function (r) {
             if (!r || !r.alive) return;
             var worldPos = getRenderCoreWorldPosition(r, new THREE.Vector3());
             if (!worldPos) return;
@@ -1258,12 +889,9 @@
     };
 
     GameNet.logout = function () {
-        return apiFetch(SESSION_LOGOUT_URL, { method: 'POST' })
+        return GameNetAuth.logout()
             .finally(function () {
                 GameNet.shutdown();
-                user = null;
-                setAuthVisible(true);
-                setAuthStatus('Logged out.', false);
             });
     };
 

@@ -1,5 +1,5 @@
 /**
- * abilities.js - Shared player ability runtime (Deadeye + Choke)
+ * abilities.js - Player ability runtime with mix-and-match loadout
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAbilities
  */
 (function () {
@@ -7,18 +7,18 @@
 
     var GameAbilities = {};
 
-    var profile = {
-        id: 'abilities',
-        name: 'Abilities',
+    var activeSlot1 = 'choke';
+    var activeSlot2 = 'deadeye';
+    var slot1CooldownUntil = 0;
+    var slot2CooldownUntil = 0;
+    var deadeyeState = null;
+    var debugMode = false;
+
+    var profileDefaults = {
         armorMax: 90,
         wallhackRadius: 90,
         loadoutWeapon: 'rifle'
     };
-
-    var chokeCooldownUntil = 0;
-    var deadeyeCooldownUntil = 0;
-    var deadeyeState = null;
-    var debugMode = false;
 
     function nowMs() {
         return Date.now();
@@ -28,45 +28,50 @@
         return Math.max(0, (Number(until || 0) - nowMs()) / 1000);
     }
 
-    function getSharedAbilityConfig() {
-        var out = {
+    function getCatalog() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
+        if (shared && shared.abilityCatalog) return shared.abilityCatalog;
+        return {
             choke: {
-                range: 24,
-                lockBoxPx: 190,
-                castDamage: 95,
-                duration: 1.6,
-                cooldownMs: 8000
+                id: 'choke', slot: 'ability', name: 'Vader Choke',
+                description: 'Single-target lift + damage in reticle box.',
+                cooldownMs: 8000, range: 24, lockBoxPx: 190, castDamage: 95, duration: 1.6
             },
             deadeye: {
-                range: 80,
-                minDot: 0.18,
-                duration: 4.0,
-                maxTargets: 6,
-                damage: 260,
-                cooldownMs: 22000
+                id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
+                description: 'Lock and execute marked targets.',
+                cooldownMs: 22000, range: 80, minDot: 0.18, duration: 2.0, maxTargets: 3, damage: 260
             }
         };
+    }
+
+    function getAbilityDef(abilityId) {
+        var catalog = getCatalog();
+        return catalog[abilityId] || null;
+    }
+
+    function getSlotConfig(slot) {
+        var id = slot === 1 ? activeSlot1 : activeSlot2;
+        var def = getAbilityDef(id);
+        if (!def) return null;
+
+        var out = {};
+        for (var k in def) {
+            if (Object.prototype.hasOwnProperty.call(def, k)) out[k] = def[k];
+        }
 
         if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning) {
             var tuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {};
-            out.choke.range = Number(tuning.jediChokeRange || out.choke.range);
-            out.choke.lockBoxPx = Number(tuning.jediChokeLockBoxPx || out.choke.lockBoxPx);
-            out.choke.castDamage = Number(tuning.jediChokeCastDamage || out.choke.castDamage);
-            out.choke.duration = Number(tuning.jediChokeDuration || out.choke.duration);
-            out.deadeye.range = Number(tuning.deadeyeLockRange || out.deadeye.range);
-            out.deadeye.duration = Number(tuning.deadeyeDuration || out.deadeye.duration);
-            out.deadeye.maxTargets = Number(tuning.deadeyeMaxTargets || out.deadeye.maxTargets);
-            out.deadeye.damage = Number(tuning.deadeyeDamage || out.deadeye.damage);
-        }
-
-        if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getRawSharedTuning) {
-            var raw = globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getRawSharedTuning();
-            var abilities = raw && raw.classAbilities ? raw.classAbilities : null;
-            if (abilities && abilities.jedi) {
-                out.choke.cooldownMs = Number(abilities.jedi.abilityCooldownMs || out.choke.cooldownMs);
-            }
-            if (abilities && abilities.sharpshooter) {
-                out.deadeye.cooldownMs = Number(abilities.sharpshooter.ultimateCooldownMs || out.deadeye.cooldownMs);
+            if (id === 'choke') {
+                out.range = Number(tuning.chokeRange || out.range);
+                out.lockBoxPx = Number(tuning.chokeLockBoxPx || out.lockBoxPx);
+                out.castDamage = Number(tuning.chokeCastDamage || out.castDamage);
+                out.duration = Number(tuning.chokeDuration || out.duration);
+            } else if (id === 'deadeye') {
+                out.range = Number(tuning.deadeyeLockRange || out.range);
+                out.duration = Number(tuning.deadeyeDuration || out.duration);
+                out.maxTargets = Number(tuning.deadeyeMaxTargets || out.maxTargets);
+                out.damage = Number(tuning.deadeyeDamage || out.damage);
             }
         }
 
@@ -77,6 +82,23 @@
         if (!v) return null;
         if (v.clone) return v.clone();
         return new THREE.Vector3(Number(v.x || 0), Number(v.y || 0), Number(v.z || 0));
+    }
+
+    var losRaycaster = new THREE.Raycaster();
+    var losDir = new THREE.Vector3();
+
+    function deadeyeHasLOS(origin, targetPos, maxRange) {
+        if (!origin || !targetPos) return false;
+        var collidables = globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables
+            ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        losDir.copy(targetPos).sub(origin);
+        var dist = losDir.length();
+        if (dist <= 0.001 || dist > maxRange) return false;
+        losDir.divideScalar(dist);
+        if (!collidables || collidables.length === 0) return true;
+        losRaycaster.set(origin, losDir);
+        losRaycaster.far = Math.max(0, dist - 0.12);
+        return losRaycaster.intersectObjects(collidables, false).length === 0;
     }
 
     function collectDeadeyeCandidates(camera, range, minDot, maxTargets) {
@@ -98,6 +120,7 @@
             if (dist <= 0.001 || dist > range) continue;
             to.divideScalar(dist);
             if (forward.dot(to) < minDot) continue;
+            if (!deadeyeHasLOS(origin, worldPos, range)) continue;
             out.push({
                 targetId: String(t.targetId || ''),
                 worldPos: worldPos,
@@ -120,6 +143,7 @@
 
         var markers = [];
         for (var i = 0; i < state.targets.length; i++) {
+            if (state.targets[i].dead) continue;
             var locked = i < state.lockCount;
             markers.push({
                 worldPos: makeVector3Like(state.targets[i].worldPos),
@@ -130,30 +154,60 @@
         return { targets: markers };
     }
 
-    function fireDeadeye(onEnemyHit, notifier, reason) {
+    function refreshDeadeyeTargetPositions() {
+        if (!deadeyeState || !deadeyeState.active || !deadeyeState.targets) return;
+        var liveList = null;
+        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
+            liveList = globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || [];
+        }
+
+        var byId = {};
+        if (liveList) {
+            for (var i = 0; i < liveList.length; i++) {
+                var lt = liveList[i];
+                if (lt && lt.targetId && lt.worldPos) byId[lt.targetId] = lt;
+            }
+        }
+
+        for (var t = 0; t < deadeyeState.targets.length; t++) {
+            var stored = deadeyeState.targets[t];
+            if (!stored || !stored.targetId || stored.dead) continue;
+            var live = byId[stored.targetId];
+            if (live && live.worldPos) {
+                stored.worldPos = makeVector3Like(live.worldPos);
+                if (live.hitbox) stored.hitbox = live.hitbox;
+            } else {
+                stored.dead = true;
+            }
+        }
+    }
+
+    function fireDeadeye(camera, onEnemyHit, notifier, reason) {
         if (!deadeyeState || !deadeyeState.active) {
             return { ok: false, message: 'Deadeye not active.' };
         }
 
-        var cfg = getSharedAbilityConfig().deadeye;
+        var cfg = getSlotConfig(2) || {};
         var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
         if (count <= 0) {
             deadeyeState = null;
-            deadeyeCooldownUntil = nowMs() + Math.max(0, cfg.cooldownMs);
+            slot2CooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
             return { ok: false, message: 'No Deadeye locks acquired.' };
         }
 
+        var camPos = camera ? camera.position : null;
         var landed = 0;
         for (var i = 0; i < count; i++) {
             var item = deadeyeState.targets[i];
-            if (!item || !item.hitbox || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) continue;
-            var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(item.hitbox, cfg.damage);
+            if (!item || item.dead || !item.hitbox || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) continue;
+            if (camPos && item.worldPos && !deadeyeHasLOS(camPos, makeVector3Like(item.worldPos), cfg.range || 80)) continue;
+            var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(item.hitbox, cfg.damage || 260);
             if (!result) continue;
             landed++;
             if (onEnemyHit) {
                 onEnemyHit({
                     hitPoint: makeVector3Like(item.worldPos),
-                    damage: cfg.damage,
+                    damage: cfg.damage || 260,
                     hitType: 'body',
                     result: result
                 });
@@ -161,15 +215,103 @@
         }
 
         deadeyeState = null;
-        deadeyeCooldownUntil = nowMs() + Math.max(0, cfg.cooldownMs);
+        slot2CooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
         if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
 
+    function castChoke(camera, onEnemyHit, notifier) {
+        var now = nowMs();
+        var cfg = getSlotConfig(1);
+        if (!cfg) return { ok: false, message: 'Choke not configured.' };
+
+        if (!debugMode && now < slot1CooldownUntil) {
+            return { ok: false, message: 'Choke is cooling down.' };
+        }
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
+            return { ok: false, message: 'Choke targeting unavailable.' };
+        }
+        var target = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(
+            camera,
+            cfg.range || 24,
+            cfg.lockBoxPx || 190,
+            { ownerType: 'local' }
+        );
+        if (!target || !target.hitbox) {
+            return { ok: false, message: 'No target in choke reticle.' };
+        }
+        var result = null;
+        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) {
+            result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(target.hitbox, cfg.castDamage || 95);
+        }
+        if (target.enemyRef && globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun) {
+            globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun(target.enemyRef, cfg.duration || 1.6);
+        }
+        if (result && onEnemyHit) {
+            onEnemyHit({
+                hitPoint: makeVector3Like(target.worldPos),
+                damage: cfg.castDamage || 95,
+                hitType: 'body',
+                result: result
+            });
+        }
+        slot1CooldownUntil = debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0);
+        if (notifier) notifier('Choke cast.', 700);
+        return { ok: true, kind: 'choke' };
+    }
+
+    function castDeadeye(camera, onEnemyHit, notifier) {
+        var now = nowMs();
+        var cfg = getSlotConfig(2);
+        if (!cfg) return { ok: false, message: 'Deadeye not configured.' };
+
+        if (deadeyeState && deadeyeState.active) {
+            return fireDeadeye(camera, onEnemyHit, notifier, 'manual');
+        }
+        if (!debugMode && now < slot2CooldownUntil) {
+            return { ok: false, message: 'Deadeye is cooling down.' };
+        }
+
+        var candidates = collectDeadeyeCandidates(
+            camera,
+            cfg.range || 80,
+            cfg.minDot || 0.18,
+            cfg.maxTargets || 3
+        );
+        if (!candidates.length) {
+            return { ok: false, message: 'No Deadeye targets.' };
+        }
+
+        var durationMs = Math.max(1, Math.round((cfg.duration || 2.0) * 1000));
+        var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, cfg.maxTargets || 3)));
+        deadeyeState = {
+            active: true,
+            startedAt: now,
+            endsAt: now + durationMs,
+            lockEveryMs: lockEveryMs,
+            nextLockAt: now + lockEveryMs,
+            lockCount: 0,
+            targets: candidates
+        };
+        if (notifier) notifier('Deadeye primed. Press R again to fire.', 900);
+        return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
+    }
+
+    var abilityHandlers = {
+        choke: castChoke,
+        deadeye: castDeadeye
+    };
+
     GameAbilities.init = function (_scene) {
-        chokeCooldownUntil = 0;
-        deadeyeCooldownUntil = 0;
+        slot1CooldownUntil = 0;
+        slot2CooldownUntil = 0;
         deadeyeState = null;
+
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
+        if (shared && shared.defaultAbilityLoadout) {
+            activeSlot1 = shared.defaultAbilityLoadout.slot1 || 'choke';
+            activeSlot2 = shared.defaultAbilityLoadout.slot2 || 'deadeye';
+        }
     };
 
     GameAbilities.getOrder = function () {
@@ -177,23 +319,56 @@
     };
 
     GameAbilities.getCatalog = function () {
-        return [
-            { id: 'choke', name: 'Vader Choke', description: 'Single-target lift + damage in reticle box.' },
-            { id: 'deadeye', name: 'Deadeye', description: 'Lock and execute marked targets.' }
-        ];
+        var catalog = getCatalog();
+        var out = [];
+        for (var id in catalog) {
+            if (!Object.prototype.hasOwnProperty.call(catalog, id)) continue;
+            var def = catalog[id];
+            out.push({ id: def.id, name: def.name, description: def.description, slot: def.slot });
+        }
+        return out;
+    };
+
+    GameAbilities.getAbilitiesForSlot = function (slotType) {
+        var catalog = getCatalog();
+        var out = [];
+        for (var id in catalog) {
+            if (!Object.prototype.hasOwnProperty.call(catalog, id)) continue;
+            var def = catalog[id];
+            if (def.slot === slotType || def.slot === 'either') {
+                out.push({ id: def.id, name: def.name, description: def.description, slot: def.slot });
+            }
+        }
+        return out;
     };
 
     GameAbilities.getCurrentClass = function () {
-        return { id: profile.id, name: profile.name };
+        return { id: 'abilities', name: 'Abilities' };
+    };
+
+    GameAbilities.getLoadout = function () {
+        return { slot1: activeSlot1, slot2: activeSlot2 };
+    };
+
+    GameAbilities.setLoadout = function (slot1Id, slot2Id) {
+        var catalog = getCatalog();
+        if (slot1Id && catalog[slot1Id]) activeSlot1 = slot1Id;
+        if (slot2Id && catalog[slot2Id]) activeSlot2 = slot2Id;
+        slot1CooldownUntil = 0;
+        slot2CooldownUntil = 0;
+        deadeyeState = null;
+        return { slot1: activeSlot1, slot2: activeSlot2 };
     };
 
     GameAbilities.getHudState = function () {
+        var slot1Def = getAbilityDef(activeSlot1);
+        var slot2Def = getAbilityDef(activeSlot2);
         return {
             name: 'Abilities',
-            abilityName: 'Choke',
-            ultimateName: 'Deadeye',
-            abilityCooldown: cooldownSec(chokeCooldownUntil),
-            ultimateCooldown: cooldownSec(deadeyeCooldownUntil),
+            abilityName: slot1Def ? slot1Def.name : activeSlot1,
+            ultimateName: slot2Def ? slot2Def.name : activeSlot2,
+            abilityCooldown: cooldownSec(slot1CooldownUntil),
+            ultimateCooldown: cooldownSec(slot2CooldownUntil),
             extra: deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''
@@ -202,11 +377,11 @@
 
     GameAbilities.setClass = function (_id) {
         return {
-            id: profile.id,
-            name: profile.name,
-            armorMax: profile.armorMax,
-            wallhackRadius: profile.wallhackRadius,
-            loadoutWeapon: profile.loadoutWeapon
+            id: 'abilities',
+            name: 'Abilities',
+            armorMax: profileDefaults.armorMax,
+            wallhackRadius: profileDefaults.wallhackRadius,
+            loadoutWeapon: profileDefaults.loadoutWeapon
         };
     };
 
@@ -225,11 +400,11 @@
     GameAbilities.clearQueuedClass = function () {};
 
     GameAbilities.getArmorMax = function () {
-        return profile.armorMax;
+        return profileDefaults.armorMax;
     };
 
     GameAbilities.getWallhackRadius = function () {
-        return profile.wallhackRadius;
+        return profileDefaults.wallhackRadius;
     };
 
     GameAbilities.modifyOutgoingDamage = function (damage, _hitType, _weaponId) {
@@ -241,90 +416,26 @@
     };
 
     GameAbilities.triggerAbility = function (slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
-        var now = nowMs();
-        var cfg = getSharedAbilityConfig();
-
-        if (slot === 1) {
-            if (now < chokeCooldownUntil) {
-                return { ok: false, message: 'Choke is cooling down.' };
-            }
-            if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
-                return { ok: false, message: 'Choke targeting unavailable.' };
-            }
-            var target = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(
-                camera,
-                cfg.choke.range,
-                cfg.choke.lockBoxPx,
-                { ownerType: 'local' }
-            );
-            if (!target || !target.hitbox) {
-                return { ok: false, message: 'No target in choke reticle.' };
-            }
-            var result = null;
-            if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) {
-                result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(target.hitbox, cfg.choke.castDamage);
-            }
-            if (target.enemyRef && globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun) {
-                globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun(target.enemyRef, cfg.choke.duration);
-            }
-            if (result && onEnemyHit) {
-                onEnemyHit({
-                    hitPoint: makeVector3Like(target.worldPos),
-                    damage: cfg.choke.castDamage,
-                    hitType: 'body',
-                    result: result
-                });
-            }
-            chokeCooldownUntil = now + Math.max(0, cfg.choke.cooldownMs);
-            if (notifier) notifier('Choke cast.', 700);
-            return { ok: true, kind: 'choke' };
+        var abilityId = slot === 1 ? activeSlot1 : activeSlot2;
+        var handler = abilityHandlers[abilityId];
+        if (!handler) {
+            return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
-
-        if (slot === 2) {
-            if (deadeyeState && deadeyeState.active) {
-                return fireDeadeye(onEnemyHit, notifier, 'manual');
-            }
-            if (now < deadeyeCooldownUntil) {
-                return { ok: false, message: 'Deadeye is cooling down.' };
-            }
-
-            var candidates = collectDeadeyeCandidates(
-                camera,
-                cfg.deadeye.range,
-                cfg.deadeye.minDot,
-                cfg.deadeye.maxTargets
-            );
-            if (!candidates.length) {
-                return { ok: false, message: 'No Deadeye targets.' };
-            }
-
-            var durationMs = Math.max(1, Math.round(cfg.deadeye.duration * 1000));
-            var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, cfg.deadeye.maxTargets)));
-            deadeyeState = {
-                active: true,
-                startedAt: now,
-                endsAt: now + durationMs,
-                lockEveryMs: lockEveryMs,
-                nextLockAt: now + lockEveryMs,
-                lockCount: 0,
-                targets: candidates
-            };
-            if (notifier) notifier('Deadeye primed. Press R again to fire.', 900);
-            return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
-        }
-
-        return { ok: false, message: 'Unknown ability slot.' };
+        return handler(camera, onEnemyHit, notifier);
     };
 
-    GameAbilities.update = function (_dt, _camera, _playerPos, _rotation, onEnemyHit, notifier) {
+    GameAbilities.update = function (_dt, camera, _playerPos, _rotation, onEnemyHit, notifier) {
         if (!deadeyeState || !deadeyeState.active) return;
         var now = nowMs();
+
+        refreshDeadeyeTargetPositions();
+
         while (deadeyeState.lockCount < deadeyeState.targets.length && now >= deadeyeState.nextLockAt) {
             deadeyeState.lockCount += 1;
             deadeyeState.nextLockAt += deadeyeState.lockEveryMs;
         }
-        if (now >= deadeyeState.endsAt) {
-            fireDeadeye(onEnemyHit, notifier, 'auto');
+        if (deadeyeState.lockCount >= deadeyeState.targets.length || now >= deadeyeState.endsAt) {
+            fireDeadeye(camera, onEnemyHit, notifier, 'auto');
         }
     };
 
@@ -343,8 +454,9 @@
     GameAbilities.debugDump = function () {
         return {
             debugMode: debugMode,
-            chokeCooldown: cooldownSec(chokeCooldownUntil),
-            deadeyeCooldown: cooldownSec(deadeyeCooldownUntil),
+            loadout: { slot1: activeSlot1, slot2: activeSlot2 },
+            slot1Cooldown: cooldownSec(slot1CooldownUntil),
+            slot2Cooldown: cooldownSec(slot2CooldownUntil),
             deadeye: deadeyeState ? {
                 lockCount: deadeyeState.lockCount,
                 targetCount: deadeyeState.targets.length
@@ -354,4 +466,3 @@
 
     globalThis.__MAYHEM_RUNTIME.GameAbilities = GameAbilities;
 })();
-

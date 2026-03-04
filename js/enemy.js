@@ -28,12 +28,7 @@
     var ENEMY_HEADSHOT_NEAR_RANGE = enemyTuning.headshotNearRange;
     var ENEMY_HEADSHOT_MID_RANGE = enemyTuning.headshotMidRange;
     var DEFAULT_WALLHACK_RADIUS = enemyTuning.defaultWallhackRadius;
-    var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
-    var HEAD_HITBOX_SIZE = {
-        x: 1.55 * HEAD_HITBOX_LINEAR_SCALE,
-        y: 0.95 * HEAD_HITBOX_LINEAR_SCALE,
-        z: 1.55 * HEAD_HITBOX_LINEAR_SCALE
-    };
+    var hitboxFactory = globalThis.__MAYHEM_RUNTIME.GameHitboxFactory || null;
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -60,10 +55,7 @@
     }
 
     function getWorldBounds() {
-        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds) {
-            return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
-        }
-        return { min: 1, max: 49, center: 25, size: 50 };
+        return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
     }
 
     function getPatrolBounds() {
@@ -140,34 +132,27 @@
     }
 
     function createHitboxMesh(type, index) {
-        var geo, color;
-
-        if (type === 'head') {
-            geo = new THREE.BoxGeometry(HEAD_HITBOX_SIZE.x, HEAD_HITBOX_SIZE.y, HEAD_HITBOX_SIZE.z);
-            color = 0xff4444;
-        } else {
-            geo = new THREE.BoxGeometry(2.7, 1.525, 2.7);
-            color = 0x00aaff;
+        if (hitboxFactory && hitboxFactory.createCombatHitbox) {
+            return hitboxFactory.createCombatHitbox(type, 'enemy', {
+                entityIndex: index,
+                targetId: 'enemy:' + index
+            });
         }
-
+        var ec = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
+        var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.375, y: 0.844, z: 1.375 };
+        var BODY = ec.BODY_HITBOX_SIZE || { x: 2.7, y: 1.525, z: 2.7 };
+        var geo = (type === 'head')
+            ? new THREE.BoxGeometry(HEAD.x, HEAD.y, HEAD.z)
+            : new THREE.BoxGeometry(BODY.x, BODY.y, BODY.z);
         var mat = new THREE.MeshBasicMaterial({
-            transparent: true,
-            opacity: 0.3,
-            wireframe: true,
-            color: color,
+            transparent: true, opacity: 0.3, wireframe: true,
+            color: type === 'head' ? 0xff4444 : 0x00aaff,
             depthTest: type !== 'head'
         });
-
         var mesh = new THREE.Mesh(geo, mat);
         mesh.visible = true;
         mesh.renderOrder = type === 'head' ? 1 : 0;
-        mesh.userData = {
-            enemyIndex: index,
-            type: type,
-            enemyRef: null,
-            targetId: 'enemy:' + index,
-            ownerType: 'enemy'
-        };
+        mesh.userData = { enemyIndex: index, type: type, enemyRef: null, targetId: 'enemy:' + index, ownerType: 'enemy' };
 
         return mesh;
     }
@@ -319,12 +304,16 @@
             }
         }
 
-        if (enemy.armorRegenDelay > 0) {
-            enemy.armorRegenDelay -= dt;
-            if (enemy.armorRegenDelay < 0) enemy.armorRegenDelay = 0;
-        } else if (enemy.armor < enemy.armorMax) {
-            enemy.armor += 12 * dt;
-            if (enemy.armor > enemy.armorMax) enemy.armor = enemy.armorMax;
+        if (sharedDamageMod && sharedDamageMod.tickArmorRegen) {
+            sharedDamageMod.tickArmorRegen(enemy, dt);
+        } else {
+            if (enemy.armorRegenDelay > 0) {
+                enemy.armorRegenDelay -= dt;
+                if (enemy.armorRegenDelay < 0) enemy.armorRegenDelay = 0;
+            } else if (enemy.armor < enemy.armorMax) {
+                enemy.armor += 12 * dt;
+                if (enemy.armor > enemy.armorMax) enemy.armor = enemy.armorMax;
+            }
         }
     }
 
@@ -574,23 +563,28 @@
         }
     };
 
+    var sharedDamageMod = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.damage) || null;
+
     GameEnemy.damage = function (hitboxMesh, damage) {
         var enemy = hitboxMesh.userData.enemyRef;
         if (!enemy || !enemy.alive) return null;
 
         var hitType = hitboxMesh.userData.type;
-        var incoming = Math.max(1, Math.round(damage));
-
-        enemy.armorRegenDelay = 6.0;
-
-        if (enemy.armor > 0) {
-            var absorbed = Math.min(enemy.armor, incoming);
-            enemy.armor -= absorbed;
-            incoming -= absorbed;
-        }
-
-        if (incoming > 0) {
-            enemy.hp -= incoming;
+        var result;
+        if (sharedDamageMod && sharedDamageMod.applyDamage) {
+            result = sharedDamageMod.applyDamage(enemy, damage);
+        } else {
+            var incoming = Math.max(1, Math.round(damage));
+            enemy.armorRegenDelay = 6.0;
+            if (enemy.armor > 0) {
+                var absorbed = Math.min(enemy.armor, incoming);
+                enemy.armor -= absorbed;
+                incoming -= absorbed;
+            }
+            if (incoming > 0) enemy.hp -= incoming;
+            var killed = enemy.hp <= 0;
+            if (killed) enemy.hp = 0;
+            result = { absorbed: 0, hpLost: incoming, killed: killed, hp: enemy.hp, armor: enemy.armor };
         }
 
         enemy.isFlashing = true;
@@ -603,19 +597,16 @@
             }
         }
 
-        var killed = false;
-        if (enemy.hp <= 0) {
-            enemy.hp = 0;
-            killed = true;
+        if (result.killed) {
             GameEnemy.kill(enemy);
         }
 
         return {
             enemy: enemy,
-            killed: killed,
+            killed: result.killed,
             hitType: hitType,
-            hp: enemy.hp,
-            armor: enemy.armor
+            hp: result.hp,
+            armor: result.armor
         };
     };
 

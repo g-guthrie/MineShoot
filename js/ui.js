@@ -8,8 +8,8 @@
     var GameUI = {};
 
     var crosshairEl, shotgunReticleEl, plasmaReticleEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
-    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, seekerDebugInfoEl;
-    var seekerConeMarkersEl, seekerConeMarkerEls;
+    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl;
+    var seekerReticleEl, seekerReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
@@ -51,9 +51,8 @@
         armorBarEl = document.getElementById('armor-bar');
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
-        seekerDebugInfoEl = document.getElementById('seeker-debug-info');
-        seekerConeMarkersEl = document.getElementById('seeker-cone-markers');
-        seekerConeMarkerEls = seekerConeMarkersEl ? seekerConeMarkersEl.querySelectorAll('.seeker-cone-marker') : [];
+        seekerReticleEl = document.getElementById('seeker-reticle');
+        seekerReticleLabelEl = document.getElementById('seeker-reticle-label');
         combatRadarEl = document.getElementById('combat-radar');
         combatRadarSlicesEl = document.getElementById('combat-radar-slices');
         combatRadarCoreEl = document.getElementById('combat-radar-core');
@@ -198,70 +197,43 @@
         debugInfoEl.textContent = text || '';
     };
 
-    GameUI.updateSeekerDebugInfo = function (visible, telemetry, tuning, viewInfo) {
-        if (!seekerDebugInfoEl) return;
-        if (!visible || !telemetry) {
-            seekerDebugInfoEl.style.display = 'none';
-            seekerDebugInfoEl.textContent = '';
-            if (seekerConeMarkersEl) seekerConeMarkersEl.style.display = 'none';
+    GameUI.updateSeekerReticle = function (visible, hasTarget, halfAngleDeg, viewInfo) {
+        if (!seekerReticleEl) return;
+        if (!visible) {
+            seekerReticleEl.style.display = 'none';
             return;
         }
-        var hasLock = telemetry.hasLock ? 'YES' : 'NO';
-        var lockStrength = telemetry.hasLock && telemetry.lockNorm >= 0
-            ? Math.max(0, 1 - telemetry.lockNorm).toFixed(2)
-            : '0.00';
-        var nearestNorm = telemetry.nearestNorm >= 0 ? telemetry.nearestNorm.toFixed(2) : '--';
-        var lines = [
-            'NEEDLER DEBUG',
-            'LOCK: ' + hasLock + '  TARGET: ' + (telemetry.lockTargetId || 'none'),
-            'LOCK_STRENGTH: ' + lockStrength + '  NEAREST_NORM: ' + nearestNorm,
-            'BOX_PX: ' + Math.round(telemetry.reticleSizePx) + '  CANDIDATES: ' + telemetry.candidateCount,
-            'RANGE: ' + telemetry.maxRange.toFixed(1)
-        ];
-        if (tuning) {
-            lines.push(
-                'HOMING_LERP: ' + Number(tuning.homingLerp || 0).toFixed(2) +
-                '  HOMING_BOOST: ' + Number(tuning.homingBoost || 0).toFixed(2)
-            );
-            lines.push(
-                'PROJ_SPEED: ' + Number(tuning.speed || 0).toFixed(1) +
-                '  FUSE: ' + Number(tuning.fuse || 0).toFixed(2)
-            );
-            lines.push('LOCK_HALF_ANGLE: ' + Number(tuning.lockHalfAngleDeg || 0).toFixed(1) + ' deg');
-        }
-        seekerDebugInfoEl.textContent = lines.join('\n');
-        seekerDebugInfoEl.style.display = 'block';
 
-        if (!seekerConeMarkersEl || !seekerConeMarkerEls || seekerConeMarkerEls.length < 4) return;
-        if (!tuning || !viewInfo || !viewInfo.fov || !viewInfo.aspect || !tuning.lockHalfAngleDeg) {
-            seekerConeMarkersEl.style.display = 'none';
-            return;
+        var size = 80;
+        if (halfAngleDeg && viewInfo && viewInfo.fov && viewInfo.aspect) {
+            var halfAngleRad = halfAngleDeg * Math.PI / 180;
+            var vFovRad = viewInfo.fov * Math.PI / 180;
+            var tanHalf = Math.tan(halfAngleRad);
+            var tanV = Math.tan(vFovRad * 0.5);
+            if (isFinite(tanHalf) && isFinite(tanV) && tanV > 0.000001) {
+                var aspect = Math.max(0.0001, viewInfo.aspect);
+                var xNdc = tanHalf / (tanV * aspect);
+                var yNdc = tanHalf / tanV;
+                var dx = Math.max(30, Math.min(window.innerWidth * 0.35, xNdc * window.innerWidth * 0.5));
+                var dy = Math.max(30, Math.min(window.innerHeight * 0.35, yNdc * window.innerHeight * 0.5));
+                size = Math.round(Math.min(dx, dy) * 2);
+            }
         }
-        var halfAngleRad = Number(tuning.lockHalfAngleDeg) * Math.PI / 180;
-        var vFovRad = Number(viewInfo.fov) * Math.PI / 180;
-        var aspect = Math.max(0.0001, Number(viewInfo.aspect));
-        var tanHalf = Math.tan(halfAngleRad);
-        var tanV = Math.tan(vFovRad * 0.5);
-        if (!isFinite(tanHalf) || !isFinite(tanV) || tanV <= 0.000001) {
-            seekerConeMarkersEl.style.display = 'none';
-            return;
-        }
-        var xNdc = tanHalf / (tanV * aspect);
-        var yNdc = tanHalf / tanV;
-        var dx = Math.min(window.innerWidth * 0.45, Math.max(6, xNdc * window.innerWidth * 0.5));
-        var dy = Math.min(window.innerHeight * 0.45, Math.max(6, yNdc * window.innerHeight * 0.5));
-        var cx = window.innerWidth * 0.5;
-        var cy = window.innerHeight * 0.5;
+        size = Math.max(50, Math.min(400, size));
 
-        seekerConeMarkerEls[0].style.left = Math.round(cx + dx) + 'px'; // right
-        seekerConeMarkerEls[0].style.top = Math.round(cy) + 'px';
-        seekerConeMarkerEls[1].style.left = Math.round(cx - dx) + 'px'; // left
-        seekerConeMarkerEls[1].style.top = Math.round(cy) + 'px';
-        seekerConeMarkerEls[2].style.left = Math.round(cx) + 'px'; // top
-        seekerConeMarkerEls[2].style.top = Math.round(cy - dy) + 'px';
-        seekerConeMarkerEls[3].style.left = Math.round(cx) + 'px'; // bottom
-        seekerConeMarkerEls[3].style.top = Math.round(cy + dy) + 'px';
-        seekerConeMarkersEl.style.display = 'block';
+        seekerReticleEl.style.display = 'block';
+        seekerReticleEl.style.width = size + 'px';
+        seekerReticleEl.style.height = size + 'px';
+        seekerReticleEl.style.left = Math.round(window.innerWidth * 0.5) + 'px';
+        seekerReticleEl.style.top = Math.round(window.innerHeight * 0.5) + 'px';
+
+        if (hasTarget) {
+            seekerReticleEl.classList.add('has-lock');
+            if (seekerReticleLabelEl) seekerReticleLabelEl.style.display = 'block';
+        } else {
+            seekerReticleEl.classList.remove('has-lock');
+            if (seekerReticleLabelEl) seekerReticleLabelEl.style.display = 'none';
+        }
     };
 
     GameUI.updateCombatRadar = function (state) {
@@ -356,7 +328,7 @@
             extra += ' | QUEUE: ' + state.queuedClassName;
         }
         abilityInfoEl.textContent =
-            state.name + ' | E ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) +
+            state.name + ' | Y ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) +
             ' | R ' + (state.ultimateName || 'Ultimate') + ': ' + fmtCd(state.ultimateCooldown) + extra;
     };
 
@@ -374,9 +346,6 @@
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
             plasmaReticleEl.style.display = 'none';
-            var pSize = (spec && spec.size) ? spec.size : 220;
-            plasmaReticleEl.style.width = pSize + 'px';
-            plasmaReticleEl.style.height = pSize + 'px';
             return;
         }
 
@@ -414,17 +383,15 @@
     GameUI.updateThrowableInfo = function (state) {
         if (!throwableInfoEl || !state) return;
 
-        function line(prefix, entry) {
-            if (!entry) return prefix + ': --';
-            var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
-            return prefix + ': ' + entry.charges + cd;
+        var GT = globalThis.__MAYHEM_RUNTIME.GameThrowables;
+        var selectedId = (GT && GT.getSelectedThrowable) ? GT.getSelectedThrowable() : 'frag';
+        var entry = state[selectedId];
+        if (!entry) {
+            throwableInfoEl.textContent = 'F --';
+            return;
         }
-
-        throwableInfoEl.innerHTML =
-            line('G Frag (arm/throw)', state.frag) + '<br>' +
-            line('V Needler', state.seeker) + '<br>' +
-            line('B Molotov', state.molotov) + '<br>' +
-            line('Q Knife', state.knife);
+        var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
+        throwableInfoEl.textContent = 'F ' + entry.label + ': ' + entry.charges + cd;
     };
 
     GameUI.updatePlasmaState = function (state) {

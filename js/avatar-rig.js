@@ -306,6 +306,13 @@
                 rig.armL.rotation.z = -0.04;
                 rig.palmRight.rotation.x = 0;
                 rig.gun.rotation.x = rig.gunBaseRot.x;
+            } else if (sprinting) {
+                rig.armR.rotation.x = -walkSwing;
+                rig.armR.rotation.z = 0.18;
+                rig.armL.rotation.x = walkSwing;
+                rig.armL.rotation.z = -0.04;
+                rig.palmRight.rotation.x = 0;
+                rig.gun.rotation.x = rig.gunBaseRot.x;
             } else {
                 var shoulderAim = rig.aimPitch * 0.35;
                 var armBase = 75 * DEG_TO_RAD;

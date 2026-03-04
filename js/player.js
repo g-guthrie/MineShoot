@@ -13,7 +13,7 @@
 
     var EYE_HEIGHT = 1.6;
     var JOG_SPEED = 8;
-    var RUN_SPEED = 11;
+    var RUN_SPEED = 14;
     var JUMP_VELOCITY = 8.8;
     var JUMP_HOLD_ACCEL = 16;
     var MAX_JUMP_HOLD = 0.2;
@@ -22,8 +22,6 @@
     var MOUSE_SENSITIVITY = 0.002;
     var PITCH_LIMIT = 89 * (Math.PI / 180);
 
-    var WORLD_MIN = 1;
-    var WORLD_MAX = 49;
     var PLAYER_RADIUS = 0.35;
     var PLAYER_HEIGHT = 1.7;
     var EPSILON = 0.001;
@@ -139,10 +137,7 @@
     }
 
     function getWorldBounds() {
-        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds) {
-            return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
-        }
-        return { min: WORLD_MIN, max: WORLD_MAX };
+        return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
     }
 
     function getDefaultSpawnPoint() {
@@ -302,6 +297,7 @@
                 case 'KeyA': keys.left = true; break;
                 case 'KeyS': keys.backward = true; break;
                 case 'KeyD': keys.right = true; break;
+                case 'KeyE':
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     keys.sprint = true;
@@ -319,6 +315,7 @@
                 case 'KeyA': keys.left = false; break;
                 case 'KeyS': keys.backward = false; break;
                 case 'KeyD': keys.right = false; break;
+                case 'KeyE':
                 case 'ShiftLeft':
                 case 'ShiftRight':
                     keys.sprint = false;
@@ -497,12 +494,12 @@
     GamePlayer.fireAnimation = function () {
         if (!avatarRigApi || !avatarRigApi.rig || !avatarRigApi.rig.gun) return;
         var recoilByWeapon = {
-            pistol: { z: -0.025, x: -0.04 },
-            rifle: { z: -0.03, x: -0.05 },
-            machinegun: { z: -0.018, x: -0.04 },
-            shotgun: { z: -0.05, x: -0.08 },
-            sniper: { z: -0.06, x: -0.09 },
-            plasma: { z: -0.012, x: -0.02 }
+            pistol: { z: -0.0375, x: -0.06 },
+            rifle: { z: -0.045, x: -0.075 },
+            machinegun: { z: -0.027, x: -0.06 },
+            shotgun: { z: -0.075, x: -0.12 },
+            sniper: { z: -0.09, x: -0.135 },
+            plasma: { z: -0.018, x: -0.03 }
         };
         var recoil = recoilByWeapon[currentWeaponId] || recoilByWeapon.rifle;
 
@@ -571,6 +568,10 @@
 
     GamePlayer.getEquippedWeaponId = function () {
         return currentWeaponId;
+    };
+
+    GamePlayer.isSprinting = function () {
+        return !!sprinting;
     };
 
     GamePlayer.getAnimNetState = function () {

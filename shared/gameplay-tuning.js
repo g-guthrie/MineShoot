@@ -12,10 +12,6 @@ export const gameplayTuning = {
     headshotMidRange: 22,
     defaultWallhackRadius: 90
   },
-  shotgunFalloff: {
-    fullDamageEnd: 7,
-    minDamageStart: 22
-  },
   weaponFalloff: {
     rifle: [
       { maxDistance: 20, scale: 1.0 },
@@ -65,104 +61,85 @@ export const gameplayTuning = {
     throwIntentDirectionMinDot: -0.2
   },
   classPresets: {
-    abilities: { armorMax: 90, wallhackRadius: 90 },
-    ninja: { armorMax: 80, wallhackRadius: 90 },
-    jedi: { armorMax: 130, wallhackRadius: 85 },
-    magician: { armorMax: 100, wallhackRadius: 100 },
-    sharpshooter: { armorMax: 90, wallhackRadius: 115 },
-    brawler: { armorMax: 150, wallhackRadius: 75 }
+    abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle: { cooldownMs: 180, bodyDamage: 34, headDamage: 86, maxRange: 120, pellets: 1 },
-    pistol: { cooldownMs: 230, bodyDamage: 27, headDamage: 120, maxRange: 92, pellets: 1 },
-    machinegun: { cooldownMs: 80, bodyDamage: 16, headDamage: 30, maxRange: 88, pellets: 1 },
-    shotgun: { cooldownMs: 820, bodyDamage: 13, headDamage: 20, maxRange: 42, pellets: 12 },
-    sniper: { cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1 },
-    seekergun: { cooldownMs: 320, bodyDamage: 0, headDamage: 0, maxRange: 24, pellets: 1 },
-    plasma: { cooldownMs: 100, bodyDamage: 15, headDamage: 15, maxRange: 24, pellets: 1 }
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 180,  bodyDamage: 34,  headDamage: 86,  maxRange: 120, pellets: 1,  spreadNdc: 0.0018 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 230,  bodyDamage: 27,  headDamage: 120, maxRange: 92,  pellets: 1,  spreadNdc: 0.0032 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 30,  maxRange: 88,  pellets: 1,  spreadNdc: 0.0078 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 820,  bodyDamage: 13,  headDamage: 20,  maxRange: 42,  pellets: 12, spreadNdc: 0 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1,  spreadNdc: 0.00035 },
+    seekergun:  { name: 'Plasma Grenade', primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
+    plasma:     { name: 'Plasma Cannon',  primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 100,  bodyDamage: 15,  headDamage: 15,  maxRange: 24,  pellets: 1,  spreadNdc: 0 }
+  },
+  throwableCategories: {
+    grenade: { label: 'Grenades', items: ['frag', 'molotov'], previewType: 'trajectory' },
+    sticky:  { label: 'Sticky', items: ['seeker'], previewType: 'cone' },
+    blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
   },
   throwables: {
     order: ['frag', 'seeker', 'molotov', 'knife'],
     frag: {
-      id: 'frag', speed: 16, upward: 5.2, gravity: 19, fuse: 2.2, radius: 5.4, damage: 125, regen: 10, bounce: true,
+      id: 'frag', category: 'grenade', label: 'Frag', speed: 16, upward: 5.2, gravity: 19, fuse: 2.2, radius: 5.4, damage: 125, regen: 10, bounce: true,
       bounceVelocityDamping: 0.4,
       bounceVerticalDamping: 0.42,
       bounceMaxCount: 2,
       bounceStopSpeedSq: 2.5
     },
     seeker: {
-      id: 'seeker', speed: 14, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 15,
+      id: 'seeker', category: 'sticky', label: 'Plasma Grenade', speed: 14, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 15,
       homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
     },
     seekershot: {
-      id: 'seekershot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
+      id: 'seekershot', label: 'Plasma Grenade Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
       homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 30
     },
     plasma_stream: {
-      id: 'plasma_stream', speed: 34, upward: 0.35, gravity: 2, fuse: 0.42, radius: 0.01, damage: 0,
-      bodyDamage: 0, headDamage: 0, homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 35, acquireRange: 24
+      id: 'plasma_stream', label: 'Plasma Stream', speed: 34, upward: 0.35, gravity: 2, fuse: 0.42, radius: 0.01, damage: 15,
+      bodyDamage: 15, headDamage: 15, homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 35, acquireRange: 24
     },
     molotov: {
-      id: 'molotov', speed: 15, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
+      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 15, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
       fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 14
     },
     knife: {
-      id: 'knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, bodyDamage: 100, headDamage: 250, regen: 8
+      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, bodyDamage: 100, headDamage: 250, regen: 8
     }
   },
-  classAbilities: {
-    ninja: {
-      abilityCooldownMs: 6000,
-      ultimateCooldownMs: 20000,
-      stars: { count: 3, range: 42, bodyDamage: 120, headDamage: 170, minDot: 0.95 },
-      shadowDash: { steps: 4, stepDuration: 0.12 }
+  abilityCatalog: {
+    choke: {
+      id: 'choke', slot: 'ability', name: 'Vader Choke',
+      description: 'Single-target lift + damage in reticle box.',
+      cooldownMs: 8000, range: 24, minDot: 0.05, duration: 1.6,
+      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190
     },
-    jedi: {
-      abilityCooldownMs: 8000,
-      ultimateCooldownMs: 18000,
-      choke: { range: 24, minDot: 0.05, duration: 1.6, liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190 },
-      saberThrow: {
-        range: 22,
-        minDot: -0.15,
-        bodyDamage: 175,
-        headDamage: 240,
-        speed: 34,
-        maxDistance: 22,
-        returnSpeed: 42,
-        hitRadius: 1.3
-      }
-    },
-    magician: {
-      abilityCooldownMs: 7000,
-      ultimateCooldownMs: 20000,
-      fireball: { range: 36, radius: 4.8, minDamage: 55, maxDamage: 180 },
-      chainLightning: { range: 60, minDot: 0.15, maxTargets: 4, startDamage: 240, falloff: 0.68 }
-    },
-    sharpshooter: {
-      abilityCooldownMs: 8000,
-      ultimateCooldownMs: 22000,
-      focus: { shots: 1, duration: 8, sniperBoost: 1.8, defaultBoost: 1.55 },
-      deadeye: { range: 80, duration: 4.0, maxTargets: 6, minDot: 0.18, damage: 260 }
-    },
-    brawler: {
-      abilityCooldownMs: 5000,
-      ultimateCooldownMs: 20000,
-      batSwing: { range: 4.2, minDot: -0.2, bodyDamage: 130, maxTargets: 3, stunDuration: 0.35 },
-      rage: { duration: 4.8, tickEvery: 0.45, radius: 5.2, tickDamage: 75 }
+    deadeye: {
+      id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
+      description: 'Lock and execute marked targets.',
+      cooldownMs: 22000, range: 80, duration: 2.0, maxTargets: 3, minDot: 0.18, damage: 260
     }
-  }
+  },
+  defaultAbilityLoadout: { slot1: 'choke', slot2: 'deadeye' }
 };
 
 export function getClassPreset(classId) {
-  return gameplayTuning.classPresets[classId] || gameplayTuning.classPresets.sharpshooter;
+  return gameplayTuning.classPresets[classId] || gameplayTuning.classPresets.abilities;
 }
 
 export function getWeaponStats(weaponId) {
   return gameplayTuning.weaponStats[weaponId] || null;
 }
 
-export function getClassAbility(classId) {
-  return gameplayTuning.classAbilities[classId] || null;
+export function getAbilityDef(abilityId) {
+  return (gameplayTuning.abilityCatalog && gameplayTuning.abilityCatalog[abilityId]) || null;
+}
+
+export function getAbilityCatalog() {
+  return gameplayTuning.abilityCatalog || {};
+}
+
+export function getDefaultAbilityLoadout() {
+  return gameplayTuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
 }
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});

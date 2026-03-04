@@ -18,10 +18,16 @@
     var tracerPool = [];
     var tracerCursor = 0;
     var tracerScene = null;
-    var tracerShotCounter = {};
+    var tracerInstancedMesh = null;
+    var tracerPoolReady = false;
+    var tracerTmpMatrix = new THREE.Matrix4();
+    var tracerTmpPos = new THREE.Vector3();
+    var tracerTmpQuat = new THREE.Quaternion();
+    var tracerTmpScale = new THREE.Vector3();
+    var tracerTmpColor = new THREE.Color();
     var tracerMeshMid = new THREE.Vector3();
     var tracerMeshUp = new THREE.Vector3(0, 1, 0);
-    var tracerMeshQuat = new THREE.Quaternion();
+    var tracerZeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
     // Y is positive-down for UI layout consistency.
     var SHOTGUN_PATTERN = [
@@ -40,69 +46,6 @@
     var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
     var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
 
-    var weaponRangeTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange)
-        ? {
-            rifle: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('rifle'),
-            pistol: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('pistol'),
-            machinegun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('machinegun'),
-            shotgun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('shotgun'),
-            sniper: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('sniper'),
-            seekergun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('seekergun'),
-            plasma: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponRange('plasma')
-        }
-        : {
-            rifle: 120,
-            pistol: 92,
-            machinegun: 88,
-            shotgun: 42,
-            sniper: 190,
-            seekergun: 24,
-            plasma: 24
-        };
-    var weaponFalloffTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning)
-        ? {
-            rifle: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('rifle'),
-            pistol: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('pistol'),
-            machinegun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('machinegun'),
-            shotgun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('shotgun'),
-            sniper: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('sniper'),
-            seekergun: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('seekergun'),
-            plasma: globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getWeaponFalloffTuning('plasma')
-        }
-        : {
-            rifle: [
-                { maxDistance: 20, scale: 1.0 },
-                { maxDistance: 45, scale: 0.96 },
-                { maxDistance: 80, scale: 0.88 },
-                { maxDistance: 120, scale: 0.78 }
-            ],
-            pistol: [
-                { maxDistance: 14, scale: 1.0 },
-                { maxDistance: 26, scale: 0.92 },
-                { maxDistance: 42, scale: 0.74 },
-                { maxDistance: 92, scale: 0.52 }
-            ],
-            machinegun: [
-                { maxDistance: 12, scale: 1.0 },
-                { maxDistance: 28, scale: 0.94 },
-                { maxDistance: 52, scale: 0.84 },
-                { maxDistance: 88, scale: 0.72 }
-            ],
-            shotgun: [
-                { maxDistance: 7, scale: 1.0 },
-                { maxDistance: 14, scale: 0.75 },
-                { maxDistance: 22, scale: 0.5 },
-                { maxDistance: 42, scale: 0.28 }
-            ],
-            sniper: [
-                { maxDistance: 45, scale: 1.0 },
-                { maxDistance: 95, scale: 0.96 },
-                { maxDistance: 145, scale: 0.9 },
-                { maxDistance: 190, scale: 0.85 }
-            ],
-            seekergun: [{ maxDistance: 24, scale: 1.0 }],
-            plasma: [{ maxDistance: 24, scale: 1.0 }]
-        };
     var STREAM_MAX_SUSTAIN_SEC = 2.5;
     var STREAM_OVERHEAT_LOCKOUT_SEC = 1.6;
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
@@ -113,107 +56,40 @@
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
     }
 
+    var combatTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning;
+    var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
+    var sharedWeaponStats = sharedTuning.weaponStats || {};
+
+    function buildWeaponFromShared(id) {
+        var s = sharedWeaponStats[id] || {};
+        var maxRange = (combatTuning && combatTuning.getWeaponRange) ? combatTuning.getWeaponRange(id) : (s.maxRange || 0);
+        return {
+            id: id,
+            name: s.name || id,
+            primitiveType: s.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
+            automatic: !!s.automatic,
+            cooldown: Number(s.cooldownMs || 0),
+            bodyDamage: Number(s.bodyDamage || 0),
+            headDamage: Number(s.headDamage || 0),
+            pellets: Number(s.pellets || 1),
+            spreadNdc: Number(s.spreadNdc || 0),
+            maxRange: maxRange
+        };
+    }
+
     var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun', 'plasma'];
     var weaponOrder = weaponCatalogOrder.slice();
-    var weapons = {
-        rifle: {
-            id: 'rifle',
-            name: 'Rifle',
-            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
-            automatic: false,
-            cooldown: 180,
-            bodyDamage: 34,
-            headDamage: 86,
-            pellets: 1,
-            spreadNdc: 0.0018,
-            maxRange: weaponRangeTuning.rifle
-        },
-        pistol: {
-            id: 'pistol',
-            name: 'Pistol',
-            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
-            automatic: false,
-            cooldown: 230,
-            bodyDamage: 27,
-            headDamage: 120,
-            pellets: 1,
-            spreadNdc: 0.0032,
-            maxRange: weaponRangeTuning.pistol
-        },
-        machinegun: {
-            id: 'machinegun',
-            name: 'Machine Gun',
-            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
-            automatic: true,
-            cooldown: 80,
-            bodyDamage: 16,
-            headDamage: 30,
-            pellets: 1,
-            spreadNdc: 0.0078,
-            maxRange: weaponRangeTuning.machinegun
-        },
-        shotgun: {
-            id: 'shotgun',
-            name: 'Shotgun',
-            primitiveType: PRIMITIVE_HITSCAN_MULTI,
-            automatic: false,
-            cooldown: 820,
-            bodyDamage: 13,
-            headDamage: 20,
-            pellets: 12,
-            spreadNdc: 0,
-            maxRange: weaponRangeTuning.shotgun
-        },
-        sniper: {
-            id: 'sniper',
-            name: 'Sniper',
-            primitiveType: PRIMITIVE_HITSCAN_SINGLE,
-            automatic: false,
-            cooldown: 1250,
-            bodyDamage: 120,
-            headDamage: 220,
-            pellets: 1,
-            spreadNdc: 0.00035,
-            maxRange: weaponRangeTuning.sniper
-        },
-        seekergun: {
-            id: 'seekergun',
-            name: 'Needler',
-            primitiveType: PRIMITIVE_PROJECTILE_HOMING,
-            automatic: true,
-            cooldown: 320,
-            bodyDamage: 0,
-            headDamage: 0,
-            pellets: 1,
-            spreadNdc: 0,
-            maxRange: weaponRangeTuning.seekergun
-        },
-        plasma: {
-            id: 'plasma',
-            name: 'Plasma Cannon',
-            primitiveType: PRIMITIVE_PROJECTILE_HOMING,
-            automatic: true,
-            cooldown: 100,
-            bodyDamage: 15,
-            headDamage: 15,
-            pellets: 1,
-            spreadNdc: 0,
-            maxRange: weaponRangeTuning.plasma
-        }
-    };
-    if (globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry && globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.getAll) {
-        var registryEntries = globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.getAll();
-        for (var wid in weapons) {
-            if (!Object.prototype.hasOwnProperty.call(weapons, wid)) continue;
-            var entry = registryEntries ? registryEntries[wid] : null;
-            var stats = entry && entry.stats ? entry.stats : null;
-            if (!stats) continue;
-            if (typeof stats.cooldownMs === 'number') weapons[wid].cooldown = stats.cooldownMs;
-            if (typeof stats.bodyDamage === 'number') weapons[wid].bodyDamage = stats.bodyDamage;
-            if (typeof stats.headDamage === 'number') weapons[wid].headDamage = stats.headDamage;
-            if (typeof stats.pellets === 'number') weapons[wid].pellets = stats.pellets;
-            if (typeof stats.maxRange === 'number') weapons[wid].maxRange = stats.maxRange;
-        }
+    var weapons = {};
+    for (var wi = 0; wi < weaponCatalogOrder.length; wi++) {
+        weapons[weaponCatalogOrder[wi]] = buildWeaponFromShared(weaponCatalogOrder[wi]);
+    }
+
+    var weaponFalloffTuning = {};
+    for (var fi = 0; fi < weaponCatalogOrder.length; fi++) {
+        var fid = weaponCatalogOrder[fi];
+        weaponFalloffTuning[fid] = (combatTuning && combatTuning.getWeaponFalloffTuning)
+            ? combatTuning.getWeaponFalloffTuning(fid)
+            : ((sharedTuning.weaponFalloff && sharedTuning.weaponFalloff[fid]) || []);
     }
 
     var currentWeaponId = 'rifle';
@@ -348,25 +224,30 @@
         return true;
     }
 
-    function allocTracer(camera) {
-        if (!ensureTracerScene(camera)) return null;
-        if (tracerPool.length < tracerMaxCount) {
-            var mesh = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.03, 0.03, 1, 8),
-                new THREE.MeshBasicMaterial({
-                    color: 0xffe29a,
-                    transparent: true,
-                    opacity: 0,
-                    depthWrite: false,
-                    depthTest: false
-                })
-            );
-            mesh.visible = false;
-            mesh.renderOrder = 40;
-            mesh.frustumCulled = false;
-            tracerScene.add(mesh);
+    function initTracerPool(camera) {
+        if (tracerPoolReady) return true;
+        if (!ensureTracerScene(camera)) return false;
+
+        var geo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+        var mat = new THREE.MeshBasicMaterial({
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: false,
+            depthTest: false
+        });
+        tracerInstancedMesh = new THREE.InstancedMesh(geo, mat, tracerMaxCount);
+        tracerInstancedMesh.frustumCulled = false;
+        tracerInstancedMesh.renderOrder = 40;
+        tracerInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(
+            new Float32Array(tracerMaxCount * 3), 3
+        );
+        tracerInstancedMesh.geometry.setAttribute('instanceColor', tracerInstancedMesh.instanceColor);
+        mat.vertexColors = true;
+
+        for (var i = 0; i < tracerMaxCount; i++) {
+            tracerInstancedMesh.setMatrixAt(i, tracerZeroMatrix);
+            tracerInstancedMesh.setColorAt(i, tracerTmpColor.setHex(0x000000));
             tracerPool.push({
-                mesh: mesh,
                 origin: new THREE.Vector3(),
                 dir: new THREE.Vector3(),
                 head: new THREE.Vector3(),
@@ -377,12 +258,21 @@
                 maxDistance: 0,
                 life: 0,
                 maxLife: 0.12,
-                framesAlive: 0
+                framesAlive: 0,
+                baseColor: new THREE.Color(0x000000)
             });
         }
-        if (tracerPool.length === 0) return null;
-        tracerCursor = (tracerCursor + 1) % tracerPool.length;
-        return tracerPool[tracerCursor];
+        tracerInstancedMesh.instanceMatrix.needsUpdate = true;
+        tracerInstancedMesh.instanceColor.needsUpdate = true;
+        tracerScene.add(tracerInstancedMesh);
+        tracerPoolReady = true;
+        return true;
+    }
+
+    function allocTracer(camera) {
+        if (!initTracerPool(camera)) return null;
+        tracerCursor = (tracerCursor + 1) % tracerMaxCount;
+        return tracerCursor;
     }
 
     function shouldDrawTracerForShot(weapon) {
@@ -422,8 +312,9 @@
 
     function spawnTracer(camera, weaponId, endPoint) {
         if (!camera || !endPoint) return;
-        var tracer = allocTracer(camera);
-        if (!tracer || !tracer.mesh) return;
+        var idx = allocTracer(camera);
+        if (idx === null) return;
+        var tracer = tracerPool[idx];
 
         resolvePlasmaMuzzle(camera);
         tracerStart.copy(plasmaMuzzle);
@@ -442,9 +333,9 @@
 
         tracer.maxLife = tracerLifeForWeapon(weaponId);
         tracer.life = tracer.maxLife;
-        tracer.mesh.material.opacity = 1.0;
-        tracer.mesh.material.color.setHex(tracerColorForWeapon(weaponId));
-        tracer.mesh.visible = true;
+        tracer.baseColor.setHex(tracerColorForWeapon(weaponId));
+        tracerInstancedMesh.setColorAt(idx, tracer.baseColor);
+        tracerInstancedMesh.instanceColor.needsUpdate = true;
     }
 
     function getCombatHitboxes() {
@@ -468,9 +359,12 @@
         return hitType === 'head' ? weapon.headDamage : weapon.bodyDamage;
     }
 
+    var sharedDamage = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.damage) || null;
+
     function applyDistanceFalloff(weapon, damage, distance) {
         if (!weapon || !weapon.id) return damage;
         var bands = weaponFalloffTuning[weapon.id];
+        if (sharedDamage && sharedDamage.applyFalloff) return sharedDamage.applyFalloff(damage, distance, bands);
         if (!Array.isArray(bands) || bands.length === 0) return damage;
         for (var i = 0; i < bands.length; i++) {
             var band = bands[i];
@@ -1006,11 +900,13 @@
     };
 
     GameHitscan.updateTracers = function (dt) {
-        if (!dt || tracerPool.length === 0) return;
+        if (!dt || !tracerPoolReady || tracerPool.length === 0) return;
         var simDt = Math.min(dt, 1 / 30);
+        var matrixDirty = false;
+        var colorDirty = false;
         for (var i = 0; i < tracerPool.length; i++) {
             var t = tracerPool[i];
-            if (!t || !t.mesh || t.life <= 0) continue;
+            if (!t || t.life <= 0) continue;
             t.life -= simDt;
             t.framesAlive++;
 
@@ -1021,27 +917,39 @@
             var tailTravel = Math.max(0, t.traveled - t.segmentLength);
             t.tail.copy(t.origin).addScaledVector(t.dir, tailTravel);
             tracerMeshMid.copy(t.tail).add(t.head).multiplyScalar(0.5);
-            t.mesh.position.copy(tracerMeshMid);
-            tracerMeshQuat.setFromUnitVectors(tracerMeshUp, t.dir);
-            t.mesh.quaternion.copy(tracerMeshQuat);
-            t.mesh.scale.set(1, Math.max(0.05, t.segmentLength * 0.82), 1);
 
+            var dead = false;
             if (t.life <= 0) {
                 t.life = 0;
-                t.mesh.visible = false;
-                t.mesh.material.opacity = 0;
-                continue;
-            }
-            if (t.traveled >= t.maxDistance && t.framesAlive > 1) {
+                dead = true;
+            } else if (t.traveled >= t.maxDistance && t.framesAlive > 1) {
                 t.life = 0;
-                t.mesh.visible = false;
-                t.mesh.material.opacity = 0;
+                dead = true;
+            }
+
+            if (dead) {
+                tracerInstancedMesh.setMatrixAt(i, tracerZeroMatrix);
+                tracerTmpColor.setRGB(0, 0, 0);
+                tracerInstancedMesh.setColorAt(i, tracerTmpColor);
+                matrixDirty = true;
+                colorDirty = true;
                 continue;
             }
+
             var alpha = t.life / Math.max(0.0001, t.maxLife);
-            t.mesh.material.opacity = alpha;
-            t.mesh.visible = true;
+            tracerTmpColor.copy(t.baseColor).multiplyScalar(alpha);
+            tracerInstancedMesh.setColorAt(i, tracerTmpColor);
+            colorDirty = true;
+
+            tracerTmpPos.copy(tracerMeshMid);
+            tracerTmpQuat.setFromUnitVectors(tracerMeshUp, t.dir);
+            tracerTmpScale.set(1, Math.max(0.05, t.segmentLength * 0.82), 1);
+            tracerTmpMatrix.compose(tracerTmpPos, tracerTmpQuat, tracerTmpScale);
+            tracerInstancedMesh.setMatrixAt(i, tracerTmpMatrix);
+            matrixDirty = true;
         }
+        if (matrixDirty) tracerInstancedMesh.instanceMatrix.needsUpdate = true;
+        if (colorDirty) tracerInstancedMesh.instanceColor.needsUpdate = true;
     };
 
     GameHitscan.getWeaponCatalog = function () {

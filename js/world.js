@@ -1,5 +1,6 @@
 /**
  * world.js - Static authored world layout for open-arena combat.
+ * Biome content is provided by plug-and-play quadrant modules in js/world/.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameWorld
  */
 (function () {
@@ -21,13 +22,19 @@
     var WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
     var DEFAULT_SPAWN_PADDING = 8;
 
-    // Baseline world size used for combat-distance scaling.
     var COMBAT_TUNED_WORLD_SIZE = 112;
 
     var BIOME_ARCTIC = 'arctic';
     var BIOME_URBAN = 'urban';
     var BIOME_DESERT = 'desert';
     var BIOME_JUNGLE = 'jungle';
+
+    var DEFAULT_QUADRANT_MAP = [
+        { quadrant: 'NW', biome: BIOME_ARCTIC },
+        { quadrant: 'NE', biome: BIOME_URBAN },
+        { quadrant: 'SW', biome: BIOME_DESERT },
+        { quadrant: 'SE', biome: BIOME_JUNGLE }
+    ];
 
     var DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(SHARED_WORLD_CFG && SHARED_WORLD_CFG.profileVersion) || 6));
     var DEFAULT_WORLD_FLAGS = {
@@ -46,7 +53,17 @@
 
     var animatedWaterfallSheets = [];
     var animatedMistCards = [];
+    var animatedLeaves = [];
+    var animatedIceShimmers = [];
+    var animatedFlickers = [];
     var animClock = 0;
+
+    // --- Ground color per biome ---
+    var GROUND_COLORS = {};
+    GROUND_COLORS[BIOME_ARCTIC] = 0xd0e8f4;
+    GROUND_COLORS[BIOME_URBAN]  = 0x8f969e;
+    GROUND_COLORS[BIOME_DESERT] = 0xd6bf7f;
+    GROUND_COLORS[BIOME_JUNGLE] = 0x3b7c3f;
 
     function cloneWorldFlags(flags) {
         return {
@@ -129,25 +146,30 @@
         return a + ((b - a) * t);
     }
 
+    function quadrantBounds(quadrant, padding) {
+        var pad = Number(padding || 0);
+        if (quadrant === 'NW') return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
+        if (quadrant === 'NE') return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
+        if (quadrant === 'SW') return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+        return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+    }
+
     function biomeAt(x, z) {
-        if (x < WORLD_CENTER && z < WORLD_CENTER) return BIOME_ARCTIC;
-        if (x >= WORLD_CENTER && z < WORLD_CENTER) return BIOME_URBAN;
-        if (x < WORLD_CENTER && z >= WORLD_CENTER) return BIOME_DESERT;
+        var q = (x < WORLD_CENTER ? 'W' : 'E');
+        q = (z < WORLD_CENTER ? 'N' : 'S') + q;
+        for (var i = 0; i < DEFAULT_QUADRANT_MAP.length; i++) {
+            if (DEFAULT_QUADRANT_MAP[i].quadrant === q) return DEFAULT_QUADRANT_MAP[i].biome;
+        }
         return BIOME_JUNGLE;
     }
 
     function biomeBounds(biomeId, padding) {
-        var pad = Number(padding || 0);
-        if (biomeId === BIOME_ARCTIC) {
-            return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
+        for (var i = 0; i < DEFAULT_QUADRANT_MAP.length; i++) {
+            if (DEFAULT_QUADRANT_MAP[i].biome === biomeId) {
+                return quadrantBounds(DEFAULT_QUADRANT_MAP[i].quadrant, padding);
+            }
         }
-        if (biomeId === BIOME_URBAN) {
-            return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
-        }
-        if (biomeId === BIOME_DESERT) {
-            return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
-        }
-        return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+        return quadrantBounds('SE', padding);
     }
 
     function pointInBounds(bounds, u, v) {
@@ -221,115 +243,9 @@
         };
     }
 
-    function placeBiomeSpec(bounds, spec, place) {
-        if (!bounds || !spec || !place) return;
-        var blocks = Array.isArray(spec.blocks) ? spec.blocks : [];
-        var ramps = Array.isArray(spec.ramps) ? spec.ramps : [];
-        var exclusions = Array.isArray(spec.exclusions) ? spec.exclusions : [];
-
-        for (var i = 0; i < blocks.length; i++) {
-            var b = blocks[i];
-            var bp = pointInBounds(bounds, b.u, b.v);
-            place.addBlock(bp.x, Number(b.y || 0), bp.z, Number(b.w || 1), Number(b.h || 1), Number(b.d || 1), b.material, b.solid !== false);
-        }
-
-        for (var r = 0; r < ramps.length; r++) {
-            var rp = ramps[r];
-            var rPos = pointInBounds(bounds, rp.u, rp.v);
-            place.addRamp(
-                rPos.x,
-                Number(rp.y || 0),
-                rPos.z,
-                Number(rp.w || 1),
-                Number(rp.h || 1),
-                Number(rp.d || 1),
-                rp.material,
-                Number(rp.rotY || 0),
-                Number(rp.tiltX || 0),
-                rp.solid !== false
-            );
-        }
-
-        for (var e = 0; e < exclusions.length; e++) {
-            var ex = exclusions[e];
-            var exPos = pointInBounds(bounds, ex.u, ex.v);
-            addSpawnExclusionCircle(exPos.x, exPos.z, Number(ex.radius || 1));
-        }
-    }
-
-    function createArcticMountain(centerX, centerZ, mats, place) {
-        var yCursor = 0;
-        var tierWidths = [20.0, 17.4, 15.0, 12.6, 10.4, 8.4, 6.7, 5.2];
-        var tierHeights = [1.8, 1.7, 1.6, 1.5, 1.35, 1.2, 1.1, 1.0];
-
-        for (var t = 0; t < tierWidths.length; t++) {
-            var h = tierHeights[t];
-            var y = yCursor + (h * 0.5);
-            place.addBlock(centerX, y, centerZ, tierWidths[t], h, tierWidths[t], t >= 4 ? mats.snow : mats.rock, true);
-            yCursor += h * 0.62;
-        }
-
-        // Traversable mountain features (all solid to prevent foot sinking).
-        place.addBlock(centerX + 5.2, 4.3, centerZ - 2.2, 5.3, 1.1, 2.8, mats.snow, true);
-        place.addBlock(centerX - 4.9, 5.5, centerZ + 1.8, 4.7, 1.0, 2.5, mats.snow, true);
-        place.addRamp(centerX + 2.4, 2.4, centerZ + 5.1, 5.2, 1.1, 3.2, mats.rock, Math.PI * 0.5, -0.24, true);
-        place.addRamp(centerX - 2.5, 3.1, centerZ - 4.7, 4.7, 1.0, 2.9, mats.snow, Math.PI * 1.12, -0.2, true);
-
-        addSpawnExclusionCircle(centerX, centerZ, 9.2);
-    }
-
-    function addArcticIcicle(x, z, height, mat, place) {
-        var h = Math.max(1.6, Number(height || 2.8));
-        place.addBlock(x, h * 0.5, z, 0.78, h, 0.78, mat, true);
-    }
-
-    function createDesertRidge(centerX, centerZ, mat, place) {
-        var offsets = [
-            { dx: -4.8, dz: -1.2, h: 2.3, w: 2.4, d: 2.0 },
-            { dx: -2.4, dz: -0.3, h: 2.8, w: 2.6, d: 2.2 },
-            { dx: 0.0, dz: 0.4, h: 3.2, w: 2.8, d: 2.3 },
-            { dx: 2.4, dz: 1.0, h: 2.7, w: 2.5, d: 2.1 },
-            { dx: 4.9, dz: 1.6, h: 2.2, w: 2.3, d: 2.0 }
-        ];
-        for (var i = 0; i < offsets.length; i++) {
-            var seg = offsets[i];
-            place.addBlock(centerX + seg.dx, seg.h * 0.5, centerZ + seg.dz, seg.w, seg.h, seg.d, mat, true);
-        }
-        addSpawnExclusionCircle(centerX, centerZ, 6.4);
-    }
-
-    function addSimpleCactus(x, z, mat, place) {
-        place.addBlock(x, 1.1, z, 0.42, 2.2, 0.42, mat, true);
-    }
-
-    function addStaticJungleTree(x, z, trunkMat, leafMat, place) {
-        place.addBlock(x, 1.65, z, 0.82, 3.3, 0.82, trunkMat, true);
-        place.addBlock(x, 3.55, z, 2.4, 1.1, 2.4, leafMat, false);
-    }
-
-    function addStaticLog(x, z, alongX, logMat, place) {
-        if (alongX) {
-            place.addBlock(x, 0.32, z, 2.8, 0.64, 0.9, logMat, true);
-        } else {
-            place.addBlock(x, 0.32, z, 0.9, 0.64, 2.8, logMat, true);
-        }
-    }
-
-    function createJungleLab(centerX, centerZ, mats, place) {
-        // 8 blocking parts: base, upper pad, 4 pillars, 2 walls.
-        place.addBlock(centerX, 0.45, centerZ, 8.6, 0.9, 6.6, mats.stone, true);
-        place.addBlock(centerX, 1.1, centerZ, 4.2, 0.8, 2.8, mats.core, true);
-
-        place.addBlock(centerX - 3.2, 1.8, centerZ - 2.4, 0.8, 3.6, 0.8, mats.stone, true);
-        place.addBlock(centerX + 3.2, 1.8, centerZ - 2.4, 0.8, 3.6, 0.8, mats.stone, true);
-        place.addBlock(centerX - 3.2, 1.8, centerZ + 2.4, 0.8, 3.6, 0.8, mats.stone, true);
-        place.addBlock(centerX + 3.2, 1.8, centerZ + 2.4, 0.8, 3.6, 0.8, mats.stone, true);
-
-        place.addBlock(centerX - 1.4, 1.5, centerZ, 0.8, 2.2, 2.7, mats.stone, true);
-        place.addBlock(centerX + 1.4, 1.5, centerZ, 0.8, 2.2, 2.7, mats.stone, true);
-
-        addSpawnExclusionCircle(centerX, centerZ, 4.8);
-    }
+    // ---------------------------------------------------------------
+    // World creation
+    // ---------------------------------------------------------------
 
     GameWorld.create = function (scene, options) {
         var meta = normalizeWorldMeta(options && options.worldMeta ? options.worldMeta : null);
@@ -344,6 +260,9 @@
         spawnExclusionZones = [];
         animatedWaterfallSheets = [];
         animatedMistCards = [];
+        animatedLeaves = [];
+        animatedIceShimmers = [];
+        animatedFlickers = [];
         animClock = 0;
 
         generationStats = {
@@ -393,12 +312,25 @@
             return mesh;
         }
 
+        function addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
+            var mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            if (rotY) mesh.rotation.y = rotY;
+            if (rotX) mesh.rotation.x = rotX;
+            if (rotZ) mesh.rotation.z = rotZ;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            return mesh;
+        }
+
         var place = {
             addBlock: addBlock,
-            addRamp: addRamp
+            addRamp: addRamp,
+            addDecor: addDecor
         };
 
-        // --- Ground ---
+        // --- Ground plane with per-biome vertex colors ---
         var groundSeg = Math.max(48, Math.round(WORLD_SIZE * 1.15));
         var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, groundSeg, groundSeg);
         groundGeo.rotateX(-Math.PI / 2);
@@ -407,11 +339,12 @@
         var groundPos = groundGeo.attributes.position;
         var groundColors = new Float32Array(groundPos.count * 3);
         var color = new THREE.Color();
-        var arcticColor = new THREE.Color(0xb9def8);
-        var urbanColor = new THREE.Color(0x8f969e);
-        var desertColor = new THREE.Color(0xd6bf7f);
-        var jungleColor = new THREE.Color(0x3b7c3f);
         var seamColor = new THREE.Color(0x666b64);
+
+        var biomeColorCache = {};
+        for (var bk in GROUND_COLORS) {
+            biomeColorCache[bk] = new THREE.Color(GROUND_COLORS[bk]);
+        }
 
         for (var vi = 0; vi < groundPos.count; vi++) {
             var gx = groundPos.getX(vi);
@@ -420,15 +353,12 @@
             groundPos.setY(vi, gy);
 
             var biomeId = biomeAt(gx, gz);
-            if (biomeId === BIOME_ARCTIC) color.copy(arcticColor);
-            else if (biomeId === BIOME_URBAN) color.copy(urbanColor);
-            else if (biomeId === BIOME_DESERT) color.copy(desertColor);
-            else color.copy(jungleColor);
+            color.copy(biomeColorCache[biomeId] || biomeColorCache[BIOME_JUNGLE]);
 
             if (Math.abs(gx - WORLD_CENTER) <= 0.55 || Math.abs(gz - WORLD_CENTER) <= 0.55) {
-                color.r = color.r + ((seamColor.r - color.r) * 0.45);
-                color.g = color.g + ((seamColor.g - color.g) * 0.45);
-                color.b = color.b + ((seamColor.b - color.b) * 0.45);
+                color.r += (seamColor.r - color.r) * 0.45;
+                color.g += (seamColor.g - color.g) * 0.45;
+                color.b += (seamColor.b - color.b) * 0.45;
             }
 
             groundColors[(vi * 3)] = color.r;
@@ -445,133 +375,178 @@
         ground.receiveShadow = true;
         scene.add(ground);
 
+        var matLib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
+
+        // Abyss plane far below to hide the void.
         var lowerGroundGeo = new THREE.PlaneGeometry(WORLD_SIZE * 3, WORLD_SIZE * 3);
-        var lowerGroundMat = new THREE.MeshLambertMaterial({ color: 0x22372a });
+        var lowerGroundMat = matLib.getLambert({ color: 0x1a2a20 });
         var lowerGround = new THREE.Mesh(lowerGroundGeo, lowerGroundMat);
         lowerGround.rotation.x = -Math.PI / 2;
         lowerGround.position.set(WORLD_CENTER, -6, WORLD_CENTER);
         lowerGround.receiveShadow = true;
         scene.add(lowerGround);
 
-        // Visual seam strips only.
-        var seamStripMat = new THREE.MeshLambertMaterial({ color: 0x646861 });
+        // Visual seam strips.
+        var seamStripMat = matLib.getLambert({ color: 0x646861 });
         addBlock(WORLD_CENTER, 0.08, WORLD_CENTER, 1.06, 0.16, WORLD_SIZE - (WORLD_MARGIN * 2.2), seamStripMat, false);
         addBlock(WORLD_CENTER, 0.08, WORLD_CENTER, WORLD_SIZE - (WORLD_MARGIN * 2.2), 0.16, 1.06, seamStripMat, false);
 
-        // --- Materials ---
-        var concreteMat = new THREE.MeshLambertMaterial({ color: 0x7f868d });
-        var railMat = new THREE.MeshLambertMaterial({ color: 0x595f66 });
+        // --- Natural center dividers (biome debris extending past seam) ---
+        (function buildCenterDividers() {
+            var C = WORLD_CENTER;
 
-        var snowRockMat = new THREE.MeshLambertMaterial({ color: 0x8ea2b4 });
-        var snowCapMat = new THREE.MeshLambertMaterial({ color: 0xeff7ff });
-        var icePeakMat = new THREE.MeshLambertMaterial({ color: 0xbbe5ff });
+            // Arctic side (NW) -- ice shelves along both seam arms
+            var iceFrost = matLib.getLambert({ color: 0xc8e8f8 });
+            var iceAccent = matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.75 });
+            var snowDrift = matLib.getLambert({ color: 0xdce8f2 });
+            // Along Z-seam (heading north from center)
+            addBlock(C - 3.5, 0.75, C - 4.0, 2.8, 1.5, 1.8, iceFrost, true);
+            addBlock(C - 3.5, 1.6, C - 4.0, 2.4, 0.3, 1.4, iceAccent, false);
+            addBlock(C - 2.0, 0.15, C - 3.0, 2.0, 0.3, 1.5, snowDrift, false);
+            addBlock(C - 5.5, 0.6, C - 2.5, 2.0, 1.2, 1.4, iceFrost, true);
+            // Along X-seam (heading west from center)
+            addBlock(C - 4.5, 0.65, C - 3.0, 1.6, 1.3, 2.2, iceFrost, true);
+            addBlock(C - 4.5, 1.4, C - 3.0, 1.2, 0.25, 1.8, iceAccent, false);
+            addBlock(C - 3.0, 0.12, C - 1.8, 1.8, 0.24, 1.2, snowDrift, false);
 
-        var mesaBodyMat = new THREE.MeshLambertMaterial({ color: 0xae8456 });
-        var cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f8a3d });
+            // Urban side (NE) -- jersey barriers and chain-link fence
+            var concreteBarrier = matLib.getLambert({ color: 0x6a7078 });
+            var concreteLt = matLib.getLambert({ color: 0x8a9098 });
+            var chainLink = matLib.getLambert({ color: 0x3a3e44 });
+            // Along Z-seam (heading north)
+            addBlock(C + 3.0, 0.35, C - 3.5, 2.4, 0.7, 0.8, concreteBarrier, true);
+            addBlock(C + 3.0, 0.35, C - 3.5, 2.0, 0.5, 0.6, concreteLt, false);
+            addBlock(C + 5.0, 0.35, C - 5.0, 2.4, 0.7, 0.8, concreteBarrier, true);
+            // Along X-seam (heading east)
+            addBlock(C + 4.0, 0.35, C - 2.5, 0.8, 0.7, 2.4, concreteBarrier, true);
+            addBlock(C + 3.5, 0.75, C - 4.5, 0.08, 1.5, 3.0, chainLink, false);
+            addBlock(C + 3.5, 1.55, C - 4.5, 0.06, 0.06, 3.0, chainLink, false);
 
-        var jungleWoodMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2e });
-        var jungleLeafMat = new THREE.MeshLambertMaterial({ color: 0x2f6f2f });
-        var jungleArtifactStoneMat = new THREE.MeshLambertMaterial({ color: 0x6d7e5f });
-        var jungleArtifactCoreMat = new THREE.MeshLambertMaterial({ color: 0x89caa7 });
+            // Desert side (SW) -- eroded mesa fragments
+            var sandstone = matLib.getLambert({ color: 0xc49a5c });
+            var mesaFrag = matLib.getLambert({ color: 0xb07842 });
+            var darkRock = matLib.getLambert({ color: 0x8a6b4a });
+            // Along Z-seam (heading south)
+            addBlock(C - 4.0, 0.5, C + 3.5, 3.5, 1.0, 2.0, sandstone, true);
+            addBlock(C - 4.0, 1.1, C + 3.5, 3.0, 0.2, 1.6, mesaFrag, false);
+            addBlock(C - 2.5, 0.3, C + 5.5, 2.0, 0.6, 1.5, sandstone, true);
+            // Along X-seam (heading west)
+            addBlock(C - 3.5, 0.45, C + 3.0, 1.8, 0.9, 2.5, sandstone, true);
+            addBlock(C - 5.0, 0.2, C + 2.0, 0.6, 0.4, 0.5, darkRock, false);
+            addBlock(C - 3.0, 0.15, C + 5.0, 0.5, 0.3, 0.4, darkRock, false);
 
-        // --- Authored biome layout ---
-        var arcticBounds = biomeBounds(BIOME_ARCTIC, 6);
-        var urbanBounds = biomeBounds(BIOME_URBAN, 6);
-        var desertBounds = biomeBounds(BIOME_DESERT, 6);
-        var jungleBounds = biomeBounds(BIOME_JUNGLE, 6);
+            // Jungle side (SE) -- mossy stones with vines, fallen log
+            var mossyStone = matLib.getLambert({ color: 0x3d4a32 });
+            var jungleStone = matLib.getLambert({ color: 0x4a5040 });
+            var jungleVineC = matLib.getLambert({ color: 0x1e5a1e });
+            var logMat = matLib.getLambert({ color: 0x5c3d1e });
+            // Along Z-seam (heading south)
+            addBlock(C + 3.5, 0.6, C + 4.0, 2.2, 1.2, 1.8, mossyStone, true);
+            addBlock(C + 3.8, 1.0, C + 4.0, 0.2, 0.8, 0.2, jungleVineC, false);
+            addBlock(C + 3.2, 0.8, C + 4.3, 0.2, 0.6, 0.2, jungleVineC, false);
+            addBlock(C + 5.0, 0.5, C + 2.5, 1.8, 1.0, 1.5, jungleStone, true);
+            // Along X-seam (heading east)
+            addBlock(C + 4.5, 0.55, C + 3.5, 1.5, 1.1, 2.0, mossyStone, true);
+            addBlock(C + 4.8, 0.9, C + 3.5, 0.2, 0.7, 0.2, jungleVineC, false);
+            // Fallen log across the seam
+            addBlock(C + 2.5, 0.3, C + 1.5, 0.7, 0.6, 3.5, logMat, true);
+            addBlock(C + 2.6, 0.62, C + 1.4, 0.5, 0.04, 1.5, mossyStone, false);
+        })();
 
-        // Urban skatepark: keep exactly 6 blockers.
-        placeBiomeSpec(urbanBounds, {
-            ramps: [
-                { u: 0.32, v: 0.34, y: 0.9, w: 6.5, h: 1.4, d: 3.6, material: concreteMat, rotY: 0, tiltX: -0.28, solid: true },
-                { u: 0.68, v: 0.66, y: 0.9, w: 6.5, h: 1.4, d: 3.6, material: concreteMat, rotY: Math.PI, tiltX: -0.28, solid: true }
-            ],
-            blocks: [
-                { u: 0.50, v: 0.50, y: 0.65, w: 7.2, h: 1.3, d: 3.0, material: concreteMat, solid: true },
-                { u: 0.50, v: 0.50, y: 1.45, w: 6.2, h: 0.12, d: 0.12, material: railMat, solid: true },
-                { u: 0.16, v: 0.62, y: 0.55, w: 4.8, h: 1.1, d: 2.4, material: concreteMat, solid: true },
-                { u: 0.84, v: 0.38, y: 0.55, w: 4.8, h: 1.1, d: 2.4, material: concreteMat, solid: true }
-            ]
-        }, place);
+        // --- Biome-themed perimeter walls ---
+        (function buildBiomeWalls() {
+            var edgeH = 3.0;
+            var edgeThick = 1.2;
+            var halfLen = (WORLD_CENTER - WORLD_MIN) + edgeThick * 0.5;
+            var qMid = (WORLD_MIN + WORLD_CENTER) * 0.5;
+            var qMid2 = (WORLD_CENTER + WORLD_MAX) * 0.5;
 
-        // Arctic: 12 mountain blockers + 4 icicles = 16.
-        var arcticCenterPt = pointInBounds(arcticBounds, 0.50, 0.50);
-        createArcticMountain(arcticCenterPt.x, arcticCenterPt.z, {
-            rock: snowRockMat,
-            snow: snowCapMat
-        }, place);
+            var arcticBase = matLib.getLambert({ color: 0x8aafcc });
+            var arcticCap  = matLib.getLambert({ color: 0xc8e8f8 });
+            var arcticIce  = matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 });
 
-        var arcticIcicleOffsets = [
-            { dx: -8.6, dz: -5.6, h: 2.8 },
-            { dx: -7.3, dz: 5.9, h: 3.1 },
-            { dx: 8.2, dz: -6.2, h: 2.9 },
-            { dx: 7.1, dz: 5.7, h: 2.7 }
-        ];
-        for (var ai = 0; ai < arcticIcicleOffsets.length; ai++) {
-            var ic = arcticIcicleOffsets[ai];
-            addArcticIcicle(arcticCenterPt.x + ic.dx, arcticCenterPt.z + ic.dz, ic.h, icePeakMat, place);
+            var urbanBase  = matLib.getLambert({ color: 0x6a7078 });
+            var urbanRail  = matLib.getLambert({ color: 0x3a3e44 });
+            var urbanPaint = matLib.getLambert({ color: 0xc85a3a });
+
+            var desertBase = matLib.getLambert({ color: 0xc49a5c });
+            var desertCap  = matLib.getLambert({ color: 0xb07842 });
+
+            var jungleBase = matLib.getLambert({ color: 0x4a5040 });
+            var jungleVine = matLib.getLambert({ color: 0x2d5a28 });
+            var jungleMoss = matLib.getLambert({ color: 0x3d6a32 });
+
+            // North wall (Z-min): left=Arctic(NW), right=Urban(NE)
+            addBlock(qMid, edgeH * 0.5, WORLD_MIN - edgeThick * 0.5, halfLen, edgeH, edgeThick, arcticBase, true);
+            addBlock(qMid, edgeH + 0.2, WORLD_MIN - edgeThick * 0.5, halfLen, 0.4, edgeThick + 0.2, arcticCap, false);
+            for (var ni = 0; ni < 5; ni++) {
+                var nx = WORLD_MIN + halfLen * 0.15 + (halfLen * 0.7 * ni / 4);
+                addBlock(nx, edgeH * 0.7, WORLD_MIN - edgeThick * 0.8, 1.4, edgeH * 0.5, 0.3, arcticIce, false);
+            }
+
+            addBlock(qMid2, edgeH * 0.5, WORLD_MIN - edgeThick * 0.5, halfLen, edgeH, edgeThick, urbanBase, true);
+            addBlock(qMid2, edgeH + 0.15, WORLD_MIN - edgeThick * 0.5, halfLen, 0.1, 0.1, urbanRail, false);
+            addBlock(qMid2, edgeH * 0.65, WORLD_MIN - edgeThick * 0.85, halfLen * 0.6, 0.3, 0.15, urbanPaint, false);
+
+            // South wall (Z-max): left=Desert(SW), right=Jungle(SE)
+            addBlock(qMid, edgeH * 0.5, WORLD_MAX + edgeThick * 0.5, halfLen, edgeH, edgeThick, desertBase, true);
+            addBlock(qMid, edgeH + 0.15, WORLD_MAX + edgeThick * 0.5, halfLen, 0.35, edgeThick + 0.3, desertCap, false);
+
+            addBlock(qMid2, edgeH * 0.5, WORLD_MAX + edgeThick * 0.5, halfLen, edgeH, edgeThick, jungleBase, true);
+            addBlock(qMid2, edgeH + 0.1, WORLD_MAX + edgeThick * 0.5, halfLen, 0.3, edgeThick + 0.1, jungleMoss, false);
+            for (var si = 0; si < 6; si++) {
+                var sx = WORLD_CENTER + halfLen * 0.1 + (halfLen * 0.8 * si / 5);
+                var vineH = 1.2 + (si % 3) * 0.5;
+                addBlock(sx, vineH * 0.5, WORLD_MAX + edgeThick * 0.85, 0.25, vineH, 0.2, jungleVine, false);
+            }
+
+            // West wall (X-min): top=Arctic(NW), bottom=Desert(SW)
+            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH * 0.5, qMid, edgeThick, edgeH, halfLen, arcticBase, true);
+            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH + 0.2, qMid, edgeThick + 0.2, 0.4, halfLen, arcticCap, false);
+
+            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH * 0.5, qMid2, edgeThick, edgeH, halfLen, desertBase, true);
+            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH + 0.15, qMid2, edgeThick + 0.3, 0.35, halfLen, desertCap, false);
+
+            // East wall (X-max): top=Urban(NE), bottom=Jungle(SE)
+            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH * 0.5, qMid, edgeThick, edgeH, halfLen, urbanBase, true);
+            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH + 0.15, qMid, 0.1, 0.1, halfLen, urbanRail, false);
+            addBlock(WORLD_MAX + edgeThick * 0.85, edgeH * 0.5, qMid, 0.15, 0.3, halfLen * 0.5, urbanPaint, false);
+
+            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH * 0.5, qMid2, edgeThick, edgeH, halfLen, jungleBase, true);
+            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH + 0.1, qMid2, edgeThick + 0.1, 0.3, halfLen, jungleMoss, false);
+            for (var ei = 0; ei < 6; ei++) {
+                var ez = WORLD_CENTER + halfLen * 0.1 + (halfLen * 0.8 * ei / 5);
+                var evH = 1.0 + (ei % 3) * 0.6;
+                addBlock(WORLD_MAX + edgeThick * 0.85, evH * 0.5, ez, 0.2, evH, 0.25, jungleVine, false);
+            }
+        })();
+
+        // --- Quadrant dispatch ---
+        var quadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {};
+
+        var quadrantCtx = {
+            scene: scene,
+            addExclusion: function (x, z, r) { addSpawnExclusionCircle(x, z, r); },
+            addWaterfallSheet: function (data) { animatedWaterfallSheets.push(data); },
+            addMistCard: function (data) { animatedMistCards.push(data); },
+            addLeafSway: function (data) { animatedLeaves.push(data); },
+            addIceShimmer: function (data) { animatedIceShimmers.push(data); },
+            addFlicker: function (data) { animatedFlickers.push(data); }
+        };
+
+        for (var qi = 0; qi < DEFAULT_QUADRANT_MAP.length; qi++) {
+            var entry = DEFAULT_QUADRANT_MAP[qi];
+            var builder = quadrants[entry.biome];
+            if (typeof builder !== 'function') continue;
+            var qBounds = quadrantBounds(entry.quadrant, 6);
+            var stats = builder(qBounds, place, quadrantCtx);
+            if (stats && generationStats[entry.biome]) {
+                var target = generationStats[entry.biome];
+                for (var sk in stats) {
+                    if (typeof stats[sk] === 'number') target[sk] = stats[sk];
+                }
+            }
         }
-
-        generationStats.arctic.crystals = 4;
-        generationStats.arctic.drifts = 0;
-        generationStats.arctic.foothillCrystals = 0;
-        generationStats.arctic.foothillDrifts = 0;
-
-        // Desert: 5 ridge blockers + 5 cacti blockers = 10.
-        var desertCenterPt = pointInBounds(desertBounds, 0.48, 0.50);
-        createDesertRidge(desertCenterPt.x, desertCenterPt.z, mesaBodyMat, place);
-        var cactusPoints = [
-            pointInBounds(desertBounds, 0.22, 0.28),
-            pointInBounds(desertBounds, 0.72, 0.26),
-            pointInBounds(desertBounds, 0.18, 0.78),
-            pointInBounds(desertBounds, 0.74, 0.76),
-            pointInBounds(desertBounds, 0.88, 0.54)
-        ];
-        for (var dc = 0; dc < cactusPoints.length; dc++) {
-            addSimpleCactus(cactusPoints[dc].x, cactusPoints[dc].z, cactusMat, place);
-        }
-
-        generationStats.desert.rocks = 0;
-        generationStats.desert.cacti = 5;
-        generationStats.desert.ridges = 1;
-        generationStats.desert.mesas = 0;
-
-        // Jungle: 8 lab blockers + 8 trees + 4 logs = 20.
-        var jungleCenterPt = pointInBounds(jungleBounds, 0.50, 0.52);
-        createJungleLab(jungleCenterPt.x, jungleCenterPt.z, {
-            stone: jungleArtifactStoneMat,
-            core: jungleArtifactCoreMat
-        }, place);
-
-        var jungleTreePoints = [
-            pointInBounds(jungleBounds, 0.20, 0.18),
-            pointInBounds(jungleBounds, 0.36, 0.16),
-            pointInBounds(jungleBounds, 0.64, 0.18),
-            pointInBounds(jungleBounds, 0.80, 0.20),
-            pointInBounds(jungleBounds, 0.18, 0.78),
-            pointInBounds(jungleBounds, 0.34, 0.84),
-            pointInBounds(jungleBounds, 0.66, 0.82),
-            pointInBounds(jungleBounds, 0.82, 0.76)
-        ];
-        for (var jt = 0; jt < jungleTreePoints.length; jt++) {
-            addStaticJungleTree(jungleTreePoints[jt].x, jungleTreePoints[jt].z, jungleWoodMat, jungleLeafMat, place);
-        }
-
-        var jungleLogPoints = [
-            { p: pointInBounds(jungleBounds, 0.24, 0.50), alongX: true },
-            { p: pointInBounds(jungleBounds, 0.76, 0.48), alongX: false },
-            { p: pointInBounds(jungleBounds, 0.50, 0.24), alongX: true },
-            { p: pointInBounds(jungleBounds, 0.52, 0.78), alongX: false }
-        ];
-        for (var jl = 0; jl < jungleLogPoints.length; jl++) {
-            addStaticLog(jungleLogPoints[jl].p.x, jungleLogPoints[jl].p.z, jungleLogPoints[jl].alongX, jungleWoodMat, place);
-        }
-
-        generationStats.jungle.trees = 8;
-        generationStats.jungle.bushes = 0;
-        generationStats.jungle.logs = 4;
-        generationStats.jungle.artifacts = 1;
-        generationStats.jungle.borderTrees = 0;
 
         // --- Lighting ---
         scene.add(new THREE.AmbientLight(0x6a7584, 0.94));
@@ -581,19 +556,23 @@
         dirLight.castShadow = false;
         scene.add(dirLight);
 
-        scene.add(new THREE.HemisphereLight(0xc5e8ff, 0x4d6149, 0.7));
+        scene.add(new THREE.HemisphereLight(0xd4e8ff, 0x4d6149, 0.7));
 
         var arcticFillLight = new THREE.PointLight(0x8ed5ff, 0.32, WORLD_SIZE * 0.95);
         arcticFillLight.position.set(WORLD_CENTER * 0.48, WORLD_SIZE * 0.28, WORLD_CENTER * 0.5);
         scene.add(arcticFillLight);
 
-        scene.background = new THREE.Color(0x95c5ea);
-        scene.fog = new THREE.Fog(0x93bad7, WORLD_SIZE * 0.45, WORLD_SIZE * 1.28);
+        // --- Sky & atmosphere ---
+        scene.background = new THREE.Color(0x6a9bc2);
+        scene.fog = new THREE.Fog(0x7eaec8, WORLD_SIZE * 0.5, WORLD_SIZE * 1.4);
     };
+
+    // ---------------------------------------------------------------
+    // Animation tick
+    // ---------------------------------------------------------------
 
     GameWorld.update = function (dtSec) {
         if (!dtSec || dtSec <= 0) return;
-        if (animatedWaterfallSheets.length === 0 && animatedMistCards.length === 0) return;
 
         animClock += dtSec;
 
@@ -607,7 +586,7 @@
             }
 
             sheet.mesh.position.x = sheet.baseX + (Math.sin((animClock * sheet.wobbleFreq) + sheet.phase) * sheet.wobbleAmp);
-            sheet.material.opacity = sheet.baseOpacity + (Math.sin((animClock * 1.8) + sheet.phase) * 0.03);
+            sheet.material.opacity = sheet.baseOpacity + (Math.sin((animClock * 3.14) + sheet.phase) * 0.10);
         }
 
         for (var m = 0; m < animatedMistCards.length; m++) {
@@ -615,19 +594,35 @@
             if (!mist || !mist.mesh || !mist.mesh.material) continue;
             mist.mesh.material.opacity = mist.baseOpacity + (Math.sin((animClock * 2.2) + mist.phase) * 0.06);
         }
+
+        for (var li = 0; li < animatedLeaves.length; li++) {
+            var leaf = animatedLeaves[li];
+            if (!leaf || !leaf.mesh) continue;
+            leaf.mesh.rotation.y = leaf.baseRotY + Math.sin((animClock * leaf.freq) + leaf.phase) * leaf.amp;
+        }
+
+        for (var si = 0; si < animatedIceShimmers.length; si++) {
+            var ice = animatedIceShimmers[si];
+            if (!ice || !ice.material) continue;
+            ice.material.opacity = ice.baseOpacity + Math.sin((animClock * 1.4) + ice.phase) * 0.06;
+        }
+
+        for (var fi = 0; fi < animatedFlickers.length; fi++) {
+            var flk = animatedFlickers[fi];
+            if (!flk || !flk.material) continue;
+            var v = 0.7 + Math.sin((animClock * flk.freq) + flk.phase) * 0.3;
+            flk.material.emissiveIntensity = v;
+        }
     };
 
-    GameWorld.getCollidables = function () {
-        return collidables;
-    };
+    // ---------------------------------------------------------------
+    // Public API (unchanged contract)
+    // ---------------------------------------------------------------
+
+    GameWorld.getCollidables = function () { return collidables; };
 
     GameWorld.getBounds = function () {
-        return {
-            min: WORLD_MIN,
-            max: WORLD_MAX,
-            size: WORLD_SIZE,
-            center: WORLD_CENTER
-        };
+        return { min: WORLD_MIN, max: WORLD_MAX, size: WORLD_SIZE, center: WORLD_CENTER };
     };
 
     GameWorld.getWorldMeta = function () {
@@ -641,57 +636,19 @@
         };
     };
 
-    GameWorld.getSpawnExclusionZones = function () {
-        return spawnExclusionZones.slice();
-    };
-
-    GameWorld.getGenerationStats = function () {
-        return cloneGenerationStats(generationStats);
-    };
-
-    GameWorld.getSize = function () {
-        return WORLD_SIZE;
-    };
-
-    GameWorld.getCenter = function () {
-        return WORLD_CENTER;
-    };
-
-    GameWorld.getAreaScale = function () {
-        return WORLD_AREA_SCALE;
-    };
-
-    GameWorld.getCombatScale = function () {
-        return getCombatScale();
-    };
-
-    GameWorld.scaleCombatDistance = function (value) {
-        return scaleCombatDistance(value);
-    };
-
-    GameWorld.getSpawnPadding = function () {
-        return DEFAULT_SPAWN_PADDING;
-    };
-
-    GameWorld.getRandomSpawnPoint = function (padding) {
-        return randomSpawnPoint(padding);
-    };
-
-    GameWorld.getGroundHeightAt = function (x, z) {
-        return getGroundHeightAt(x, z);
-    };
-
-    GameWorld.getRecommendedEnemyCount = function () {
-        return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE)));
-    };
-
-    GameWorld.getSeed = function () {
-        return WORLD_SEED;
-    };
-
-    GameWorld.setSeed = function (seedText) {
-        return setSeed(seedText);
-    };
+    GameWorld.getSpawnExclusionZones = function () { return spawnExclusionZones.slice(); };
+    GameWorld.getGenerationStats = function () { return cloneGenerationStats(generationStats); };
+    GameWorld.getSize = function () { return WORLD_SIZE; };
+    GameWorld.getCenter = function () { return WORLD_CENTER; };
+    GameWorld.getAreaScale = function () { return WORLD_AREA_SCALE; };
+    GameWorld.getCombatScale = function () { return getCombatScale(); };
+    GameWorld.scaleCombatDistance = function (value) { return scaleCombatDistance(value); };
+    GameWorld.getSpawnPadding = function () { return DEFAULT_SPAWN_PADDING; };
+    GameWorld.getRandomSpawnPoint = function (padding) { return randomSpawnPoint(padding); };
+    GameWorld.getGroundHeightAt = function (x, z) { return getGroundHeightAt(x, z); };
+    GameWorld.getRecommendedEnemyCount = function () { return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE))); };
+    GameWorld.getSeed = function () { return WORLD_SEED; };
+    GameWorld.setSeed = function (seedText) { return setSeed(seedText); };
 
     globalThis.__MAYHEM_RUNTIME.GameWorld = GameWorld;
 })();

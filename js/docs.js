@@ -161,7 +161,7 @@
         if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
         if (weapon.id === 'machinegun') return 'Automatic suppression baseline with predictable recoil-free taping';
         if (weapon.id === 'rifle') return 'Best precision consistency from mid to long range';
-        if (weapon.id === 'seekergun') return 'Needler homing burst that rewards target tracking';
+        if (weapon.id === 'seekergun') return 'Plasma Grenade homing burst that rewards target tracking';
         if (weapon.id === 'plasma') return 'Seek-stream lock ticks with overheat control';
         if (weapon.id === 'pistol') return 'Close-range precision sidearm with high headshot payoff';
         return 'Balanced baseline weapon';
@@ -206,7 +206,7 @@
             '+----------------------------------------------------------+',
             'Movement',
             '  WASD: Move',
-            '  Shift: Sprint',
+            '  E: Sprint',
             '  Space: Variable jump (hold for full height)',
             '',
             'Menu / Session',
@@ -216,8 +216,8 @@
             'Combat',
             '  LMB: Fire',
             '  1-2 / Wheel: Weapon swap',
-            '  G Frag (arm/throw) | V Needler | B Molotov | Q Knife',
-            '  E: Choke   R: Deadeye',
+            '  F: Throwable (hold for preview, release to throw)',
+            '  Y: Choke   R: Deadeye',
             '',
             'Utility',
             '  H: Toggle dev ring + hitboxes',

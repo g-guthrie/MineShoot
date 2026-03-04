@@ -75,87 +75,40 @@
             throwIntentDirectionMinDot: -0.2
         };
 
-    var throwableOrder = ['frag', 'seeker', 'molotov', 'knife'];
-    var defs = {
-        frag: {
-            id: 'frag',
-            label: 'Frag',
-            speed: 16,
-            upward: 5.2,
-            gravity: 19,
-            fuse: 2.2,
-            radius: throwableDistanceTuning.fragRadius,
-            damage: 125,
-            regen: 10
-        },
-        seeker: {
-            id: 'seeker',
-            label: 'Needler',
-            speed: 14,
-            upward: 4.4,
-            gravity: 12,
-            fuse: 3.4,
-            radius: throwableDistanceTuning.seekerRadius,
-            damage: 110,
-            homingBoost: 2.0,
-            homingLerp: 4.8,
-            acquireHalfAngleDeg: throwableDistanceTuning.seekerAcquireHalfAngleDeg || 35,
-            stickExplodeDelay: throwableDistanceTuning.seekerStickExplodeDelay || 0.65,
-            regen: 15
-        },
-        seekershot: {
-            id: 'seekershot',
-            label: 'Needler Shot',
-            speed: 34,
-            upward: 0.6,
-            gravity: 5,
-            fuse: 1.8,
-            radius: throwableDistanceTuning.seekerShotRadius,
-            damage: 95,
-            homingBoost: 4.5,
-            homingLerp: 3.8,
-            lockHalfAngleDeg: 30
-        },
-        plasma_stream: {
-            id: 'plasma_stream',
-            label: 'Plasma Stream',
-            speed: 34,
-            upward: 0.35,
-            gravity: 2,
-            fuse: 0.42,
-            radius: 0.01,
-            damage: 15,
-            bodyDamage: 15,
-            headDamage: 15,
-            homingBoost: 4.5,
-            homingLerp: 3.8,
-            lockHalfAngleDeg: 35
-        },
-        molotov: {
-            id: 'molotov',
-            label: 'Molotov',
-            speed: 15,
-            upward: 4.8,
-            gravity: 21,
-            fuse: 3.0,
-            fireRadius: throwableDistanceTuning.molotovFireRadius,
-            fireDuration: 5.5,
-            fireTickDamage: 18,
-            fireTickRate: 0.35,
-            regen: 14
-        },
-        knife: {
-            id: 'knife',
-            label: 'Knife',
-            speed: 28,
-            upward: 1.4,
-            gravity: 7,
-            life: 1.8,
-            bodyDamage: 100,
-            headDamage: 250,
-            regen: 8
-        }
+    var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
+    var sharedThrowables = sharedTuning.throwables || {};
+    var throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || ['frag', 'seeker', 'molotov', 'knife'];
+    var throwableCategories = sharedTuning.throwableCategories || {
+        grenade: { label: 'Grenades', items: ['frag', 'molotov'], previewType: 'trajectory' },
+        sticky:  { label: 'Sticky', items: ['seeker'], previewType: 'cone' },
+        blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
     };
+    var selectedThrowableId = 'frag';
+
+    function buildDefsFromShared() {
+        var out = {};
+        var ids = ['frag', 'seeker', 'seekershot', 'plasma_stream', 'molotov', 'knife'];
+        for (var i = 0; i < ids.length; i++) {
+            var id = ids[i];
+            var src = sharedThrowables[id];
+            if (!src) continue;
+            var def = {};
+            for (var k in src) {
+                if (Object.prototype.hasOwnProperty.call(src, k)) def[k] = src[k];
+            }
+            if (id === 'frag') def.radius = throwableDistanceTuning.fragRadius;
+            if (id === 'seeker') {
+                def.radius = throwableDistanceTuning.seekerRadius;
+                def.acquireHalfAngleDeg = throwableDistanceTuning.seekerAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 35;
+                def.stickExplodeDelay = throwableDistanceTuning.seekerStickExplodeDelay || def.stickExplodeDelay || 0.65;
+            }
+            if (id === 'seekershot') def.radius = throwableDistanceTuning.seekerShotRadius;
+            if (id === 'molotov') def.fireRadius = throwableDistanceTuning.molotovFireRadius;
+            out[id] = def;
+        }
+        return out;
+    }
+    var defs = buildDefsFromShared();
 
     var inventory = {};
 
@@ -267,39 +220,6 @@
             rag.position.y = 0.14;
             group.add(rag);
             return group;
-        }
-        if (type === 'ninjastar') {
-            var starGroup = new THREE.Group();
-            var starMat = new THREE.MeshLambertMaterial({ color: 0x888888, emissive: 0x222222 });
-            for (var s = 0; s < 4; s++) {
-                var blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.06), starMat);
-                blade.rotation.z = (s * Math.PI) / 4;
-                starGroup.add(blade);
-            }
-            var core = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), starMat);
-            starGroup.add(core);
-            return starGroup;
-        }
-        if (type === 'lightsaber') {
-            var saberGroup = new THREE.Group();
-            var hilt = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.08, 0.2),
-                new THREE.MeshLambertMaterial({ color: 0x3f3f3f })
-            );
-            var hiltBand = new THREE.Mesh(
-                new THREE.BoxGeometry(0.085, 0.02, 0.06),
-                new THREE.MeshLambertMaterial({ color: 0x9a9a9a })
-            );
-            hiltBand.position.z = 0.07;
-            saberGroup.add(hilt);
-            saberGroup.add(hiltBand);
-            var bladeMesh = new THREE.Mesh(
-                new THREE.BoxGeometry(0.04, 0.04, 0.7),
-                new THREE.MeshBasicMaterial({ color: 0xff3d3d, transparent: true, opacity: 0.9 })
-            );
-            bladeMesh.position.z = -0.44;
-            saberGroup.add(bladeMesh);
-            return saberGroup;
         }
         // knife
         var knife = new THREE.Mesh(
@@ -1332,8 +1252,7 @@
         var seenProjectile = {};
         for (var i = 0; i < projectilesState.length; i++) {
             var p = projectilesState[i];
-            var isAbilityProj = (p.type === 'ninjastar' || p.type === 'lightsaber');
-            if (!p || !p.id || (!defs[p.type] && !isAbilityProj)) continue;
+            if (!p || !p.id || !defs[p.type]) continue;
             seenProjectile[p.id] = true;
             var entry = netProjectileMap[p.id];
             if (!entry) {
@@ -1343,16 +1262,6 @@
                 netProjectileMap[p.id] = entry;
             }
             entry.mesh.position.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
-            if (p.type === 'ninjastar') {
-                entry.mesh.rotation.z += 0.35;
-            } else if (p.type === 'lightsaber') {
-                tmpNetVec.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
-                if (tmpNetVec.lengthSq() > 0.0001) {
-                    tmpNetVec.normalize();
-                    entry.mesh.quaternion.setFromUnitVectors(tmpForwardAxis, tmpNetVec);
-                }
-                entry.mesh.rotateOnAxis(tmpSpinAxis, 0.42);
-            }
         }
 
         for (var key in netProjectileMap) {
@@ -1508,6 +1417,76 @@
             lastReconcileClientThrowId: debugTelemetry.lastReconcileClientThrowId,
             predictedCount: debugTelemetry.predictedCount
         };
+    };
+
+    GameThrowables.getSelectedThrowable = function () {
+        return selectedThrowableId;
+    };
+
+    GameThrowables.setSelectedThrowable = function (id) {
+        if (defs[id] && defs[id].category && throwableOrder.indexOf(id) !== -1) {
+            selectedThrowableId = id;
+            return true;
+        }
+        return false;
+    };
+
+    GameThrowables.getCategories = function () {
+        var out = {};
+        for (var catId in throwableCategories) {
+            if (!Object.prototype.hasOwnProperty.call(throwableCategories, catId)) continue;
+            var cat = throwableCategories[catId];
+            var items = [];
+            for (var i = 0; i < cat.items.length; i++) {
+                var def = defs[cat.items[i]];
+                if (def) items.push({ id: def.id, label: def.label });
+            }
+            out[catId] = { label: cat.label, previewType: cat.previewType, items: items };
+        }
+        return out;
+    };
+
+    GameThrowables.getCategoryForType = function (type) {
+        var def = defs[type];
+        return (def && def.category) ? def.category : '';
+    };
+
+    GameThrowables.getPreviewType = function (type) {
+        var def = defs[type];
+        if (!def || !def.category) return 'none';
+        var cat = throwableCategories[def.category];
+        return cat ? cat.previewType : 'none';
+    };
+
+    GameThrowables.getThrowableDef = function (type) {
+        return defs[type] || null;
+    };
+
+    GameThrowables.checkSeekerLockInCone = function (camera) {
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return false;
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies();
+        if (!enemies || !enemies.length) return false;
+
+        var origin = camera.position;
+        var forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+
+        var seekerDef = defs['seeker'];
+        var halfAngleDeg = (seekerDef && seekerDef.acquireHalfAngleDeg) ? seekerDef.acquireHalfAngleDeg : 35;
+        var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
+        var maxRange = throwableDistanceTuning.seekerAcquireRange || 18;
+
+        for (var i = 0; i < enemies.length; i++) {
+            var enemy = enemies[i];
+            if (!enemy || !enemy.alive || !enemy.group || !enemy.group.position) continue;
+            var toEnemy = enemy.group.position.clone().sub(origin);
+            toEnemy.y += 1.5;
+            var dist = toEnemy.length();
+            if (dist <= 0.001 || dist > maxRange) continue;
+            toEnemy.divideScalar(dist);
+            if (forward.dot(toEnemy) >= cosLimit) return true;
+        }
+        return false;
     };
 
     globalThis.__MAYHEM_RUNTIME.GameThrowables = GameThrowables;
