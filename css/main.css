@@ -1095,88 +1095,55 @@ canvas {
     }
 }
 
-/* Ammo / weapon info */
-#weapon-info {
+/* Bottom-right HUD stack */
+#hud-bottom-right {
     position: fixed;
-    bottom: 30px; right: 20px;
-    color: #fff;
-    font-size: 16px;
-    z-index: 10;
-    pointer-events: none;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    user-select: none;
-    text-align: right;
-}
-
-#throwable-info {
-    position: fixed;
-    bottom: 82px;
+    bottom: 12px;
     right: 20px;
-    color: #ddd;
-    font-size: 13px;
-    line-height: 1.3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
     z-index: 10;
     pointer-events: none;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
     user-select: none;
-    text-align: right;
 }
 
 #ability-info {
-    position: fixed;
-    bottom: 58px;
-    right: 20px;
     color: #bde8ff;
     font-size: 13px;
     line-height: 1.2;
-    z-index: 10;
-    pointer-events: none;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
-    user-select: none;
     text-align: right;
     max-width: 46vw;
 }
 
-/* Cooldown indicator */
-#cooldown-container {
-    position: fixed;
-    bottom: 12px; right: 20px;
-    width: 120px;
-    height: 6px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid #555;
-    z-index: 10;
-    pointer-events: none;
+#throwable-info {
+    color: #ddd;
+    font-size: 13px;
+    line-height: 1.3;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+    text-align: right;
 }
 
-#cooldown-bar {
-    width: 100%;
-    height: 100%;
-    background: #4CAF50;
-    transition: width 0.05s linear;
-}
-
-#cooldown-status {
-    position: fixed;
-    bottom: 20px; right: 145px;
-    color: #4CAF50;
-    font-size: 12px;
-    z-index: 10;
-    pointer-events: none;
+#weapon-info {
+    color: #fff;
+    font-size: 16px;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    user-select: none;
+    text-align: right;
+}
+
+#plasma-status {
+    color: #7edbff;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
 }
 
 #plasma-heat-wrap {
-    position: fixed;
-    bottom: 30px;
-    right: 20px;
     width: 120px;
     height: 8px;
     border: 1px solid #3f7483;
     background: rgba(0, 10, 16, 0.58);
-    z-index: 10;
-    pointer-events: none;
 }
 
 #plasma-heat-bar {
@@ -1186,16 +1153,24 @@ canvas {
     transition: width 0.05s linear;
 }
 
-#plasma-status {
-    position: fixed;
-    bottom: 42px;
-    right: 20px;
-    color: #7edbff;
-    font-size: 11px;
-    z-index: 10;
-    pointer-events: none;
+#cooldown-status {
+    color: #4CAF50;
+    font-size: 12px;
     text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    user-select: none;
+}
+
+#cooldown-container {
+    width: 120px;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #555;
+}
+
+#cooldown-bar {
+    width: 100%;
+    height: 100%;
+    background: #4CAF50;
+    transition: width 0.05s linear;
 }
 
 #damage-vignette {

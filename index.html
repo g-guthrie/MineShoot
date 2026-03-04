@@ -74,22 +74,15 @@
                         <div id="weapon-slot-note">Click a slot, then choose a weapon.</div>
                     </div>
                     <div id="throwable-slot-panel">
-                        <div id="throwable-slot-title">&gt; Throwable [F]_</div>
+                        <div id="throwable-slot-title">&gt; Throwable [Q]_</div>
                         <div id="throwable-category-tabs"></div>
                         <div id="throwable-choice-grid"></div>
-                        <div id="throwable-slot-note">Hold F for preview, release to throw.</div>
+                        <div id="throwable-slot-note">Hold Q for preview, release to throw.</div>
                     </div>
                     <div id="ability-slot-panel">
-                        <div id="ability-slot-title">&gt; Abilities [Y / R]_</div>
-                        <div class="ability-slot-section">
-                            <div class="ability-slot-label">Ability [Y]</div>
-                            <div id="ability-slot1-grid" class="ability-choice-grid"></div>
-                        </div>
-                        <div class="ability-slot-section">
-                            <div class="ability-slot-label">Ultimate [R]</div>
-                            <div id="ability-slot2-grid" class="ability-choice-grid"></div>
-                        </div>
-                        <div id="ability-slot-note">Select one ability and one ultimate.</div>
+                        <div id="ability-slot-title">&gt; Ability [R]_</div>
+                        <div id="ability-slot1-grid" class="ability-choice-grid"></div>
+                        <div id="ability-slot-note">Select an ability. Switch anytime from this menu.</div>
                     </div>
                 </div>
                 <div class="menu-separator">&#9472;&#9472;&#9472;[ CONTROLS ]&#9472;&#9472;&#9472;</div>
@@ -102,9 +95,8 @@
                         <span>Space Jump</span>
                         <span>LMB Fire</span>
                         <span>1-2 / Wheel Swap</span>
-                        <span>Y Choke</span>
-                        <span>R Deadeye</span>
-                        <span>F Throwable</span>
+                        <span>R Ability</span>
+                        <span>Q Throwable</span>
                         <span>H Dev Visuals</span>
                         <span>I Field Manual</span>
                         <span>Esc Release Cursor</span>
@@ -147,13 +139,15 @@
     <div id="damage-indicator"></div>
     <div id="damage-numbers"></div>
     <div id="overhead-bars"></div>
-    <div id="ability-info">Abilities | Y Choke: READY | R Deadeye: READY</div>
-    <div id="throwable-info">F Frag: 1</div>
-    <div id="weapon-info">Machine Gun | AUTO | 16/30 DMG</div>
-    <div id="plasma-status">PLASMA READY</div>
-    <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>
-    <div id="cooldown-status">READY</div>
-    <div id="cooldown-container"><div id="cooldown-bar"></div></div>
+    <div id="hud-bottom-right">
+        <div id="ability-info">R Choke: READY</div>
+        <div id="throwable-info">Q Frag: 1</div>
+        <div id="weapon-info">Machine Gun | AUTO | 16/30 DMG</div>
+        <div id="plasma-status">PLASMA READY</div>
+        <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>
+        <div id="cooldown-status">READY</div>
+        <div id="cooldown-container"><div id="cooldown-bar"></div></div>
+    </div>
     <div id="combat-radar">
         <div id="combat-radar-slices"></div>
         <div id="combat-radar-core"></div>

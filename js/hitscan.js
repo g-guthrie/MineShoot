@@ -24,7 +24,7 @@
     var tracerTmpPos = new THREE.Vector3();
     var tracerTmpQuat = new THREE.Quaternion();
     var tracerTmpScale = new THREE.Vector3();
-    var tracerTmpColor = new THREE.Color();
+
     var tracerMeshMid = new THREE.Vector3();
     var tracerMeshUp = new THREE.Vector3(0, 1, 0);
     var tracerZeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -228,8 +228,9 @@
         if (tracerPoolReady) return true;
         if (!ensureTracerScene(camera)) return false;
 
-        var geo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+        var geo = new THREE.CylinderGeometry(0.03, 0.03, 0.75, 8);
         var mat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
             transparent: true,
             opacity: 1.0,
             depthWrite: false,
@@ -238,15 +239,9 @@
         tracerInstancedMesh = new THREE.InstancedMesh(geo, mat, tracerMaxCount);
         tracerInstancedMesh.frustumCulled = false;
         tracerInstancedMesh.renderOrder = 40;
-        tracerInstancedMesh.instanceColor = new THREE.InstancedBufferAttribute(
-            new Float32Array(tracerMaxCount * 3), 3
-        );
-        tracerInstancedMesh.geometry.setAttribute('instanceColor', tracerInstancedMesh.instanceColor);
-        mat.vertexColors = true;
 
         for (var i = 0; i < tracerMaxCount; i++) {
             tracerInstancedMesh.setMatrixAt(i, tracerZeroMatrix);
-            tracerInstancedMesh.setColorAt(i, tracerTmpColor.setHex(0x000000));
             tracerPool.push({
                 origin: new THREE.Vector3(),
                 dir: new THREE.Vector3(),
@@ -259,11 +254,10 @@
                 life: 0,
                 maxLife: 0.12,
                 framesAlive: 0,
-                baseColor: new THREE.Color(0x000000)
+                baseColor: null
             });
         }
         tracerInstancedMesh.instanceMatrix.needsUpdate = true;
-        tracerInstancedMesh.instanceColor.needsUpdate = true;
         tracerScene.add(tracerInstancedMesh);
         tracerPoolReady = true;
         return true;
@@ -282,12 +276,6 @@
         return true;
     }
 
-    function tracerColorForWeapon(weaponId) {
-        if (weaponId === 'sniper') return 0xd9f2ff;
-        if (weaponId === 'shotgun') return 0xffe2ad;
-        if (weaponId === 'machinegun') return 0xfff7cf;
-        return 0xffedbf;
-    }
 
     function tracerLifeForWeapon(weaponId) {
         if (weaponId === 'machinegun') return 0.09;
@@ -333,9 +321,6 @@
 
         tracer.maxLife = tracerLifeForWeapon(weaponId);
         tracer.life = tracer.maxLife;
-        tracer.baseColor.setHex(tracerColorForWeapon(weaponId));
-        tracerInstancedMesh.setColorAt(idx, tracer.baseColor);
-        tracerInstancedMesh.instanceColor.needsUpdate = true;
     }
 
     function getCombatHitboxes() {
@@ -903,7 +888,6 @@
         if (!dt || !tracerPoolReady || tracerPool.length === 0) return;
         var simDt = Math.min(dt, 1 / 30);
         var matrixDirty = false;
-        var colorDirty = false;
         for (var i = 0; i < tracerPool.length; i++) {
             var t = tracerPool[i];
             if (!t || t.life <= 0) continue;
@@ -929,17 +913,9 @@
 
             if (dead) {
                 tracerInstancedMesh.setMatrixAt(i, tracerZeroMatrix);
-                tracerTmpColor.setRGB(0, 0, 0);
-                tracerInstancedMesh.setColorAt(i, tracerTmpColor);
                 matrixDirty = true;
-                colorDirty = true;
                 continue;
             }
-
-            var alpha = t.life / Math.max(0.0001, t.maxLife);
-            tracerTmpColor.copy(t.baseColor).multiplyScalar(alpha);
-            tracerInstancedMesh.setColorAt(i, tracerTmpColor);
-            colorDirty = true;
 
             tracerTmpPos.copy(tracerMeshMid);
             tracerTmpQuat.setFromUnitVectors(tracerMeshUp, t.dir);
@@ -949,7 +925,6 @@
             matrixDirty = true;
         }
         if (matrixDirty) tracerInstancedMesh.instanceMatrix.needsUpdate = true;
-        if (colorDirty) tracerInstancedMesh.instanceColor.needsUpdate = true;
     };
 
     GameHitscan.getWeaponCatalog = function () {

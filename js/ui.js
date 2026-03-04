@@ -324,12 +324,8 @@
         }
 
         var extra = state.extra ? (' | ' + state.extra) : '';
-        if (state.queuedClassName) {
-            extra += ' | QUEUE: ' + state.queuedClassName;
-        }
         abilityInfoEl.textContent =
-            state.name + ' | Y ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) +
-            ' | R ' + (state.ultimateName || 'Ultimate') + ': ' + fmtCd(state.ultimateCooldown) + extra;
+            'R ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) + extra;
     };
 
     GameUI.updateReticle = function (weapon, spec) {
@@ -387,11 +383,11 @@
         var selectedId = (GT && GT.getSelectedThrowable) ? GT.getSelectedThrowable() : 'frag';
         var entry = state[selectedId];
         if (!entry) {
-            throwableInfoEl.textContent = 'F --';
+            throwableInfoEl.textContent = 'Q --';
             return;
         }
         var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
-        throwableInfoEl.textContent = 'F ' + entry.label + ': ' + entry.charges + cd;
+        throwableInfoEl.textContent = 'Q ' + entry.label + ': ' + entry.charges + cd;
     };
 
     GameUI.updatePlasmaState = function (state) {

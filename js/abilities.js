@@ -7,10 +7,8 @@
 
     var GameAbilities = {};
 
-    var activeSlot1 = 'choke';
-    var activeSlot2 = 'deadeye';
-    var slot1CooldownUntil = 0;
-    var slot2CooldownUntil = 0;
+    var activeAbility = 'choke';
+    var cooldownUntil = 0;
     var deadeyeState = null;
     var debugMode = false;
 
@@ -50,8 +48,8 @@
         return catalog[abilityId] || null;
     }
 
-    function getSlotConfig(slot) {
-        var id = slot === 1 ? activeSlot1 : activeSlot2;
+    function getActiveConfig() {
+        var id = activeAbility;
         var def = getAbilityDef(id);
         if (!def) return null;
 
@@ -187,11 +185,11 @@
             return { ok: false, message: 'Deadeye not active.' };
         }
 
-        var cfg = getSlotConfig(2) || {};
+        var cfg = getActiveConfig() || {};
         var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
         if (count <= 0) {
             deadeyeState = null;
-            slot2CooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
+            cooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
             return { ok: false, message: 'No Deadeye locks acquired.' };
         }
 
@@ -215,17 +213,17 @@
         }
 
         deadeyeState = null;
-        slot2CooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
+        cooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
         if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
 
     function castChoke(camera, onEnemyHit, notifier) {
         var now = nowMs();
-        var cfg = getSlotConfig(1);
+        var cfg = getActiveConfig();
         if (!cfg) return { ok: false, message: 'Choke not configured.' };
 
-        if (!debugMode && now < slot1CooldownUntil) {
+        if (!debugMode && now < cooldownUntil) {
             return { ok: false, message: 'Choke is cooling down.' };
         }
         if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
@@ -235,7 +233,7 @@
             camera,
             cfg.range || 24,
             cfg.lockBoxPx || 190,
-            { ownerType: 'local' }
+            { ownerType: 'enemy' }
         );
         if (!target || !target.hitbox) {
             return { ok: false, message: 'No target in choke reticle.' };
@@ -255,20 +253,20 @@
                 result: result
             });
         }
-        slot1CooldownUntil = debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0);
+        cooldownUntil = debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0);
         if (notifier) notifier('Choke cast.', 700);
         return { ok: true, kind: 'choke' };
     }
 
     function castDeadeye(camera, onEnemyHit, notifier) {
         var now = nowMs();
-        var cfg = getSlotConfig(2);
+        var cfg = getActiveConfig();
         if (!cfg) return { ok: false, message: 'Deadeye not configured.' };
 
         if (deadeyeState && deadeyeState.active) {
             return fireDeadeye(camera, onEnemyHit, notifier, 'manual');
         }
-        if (!debugMode && now < slot2CooldownUntil) {
+        if (!debugMode && now < cooldownUntil) {
             return { ok: false, message: 'Deadeye is cooling down.' };
         }
 
@@ -303,14 +301,12 @@
     };
 
     GameAbilities.init = function (_scene) {
-        slot1CooldownUntil = 0;
-        slot2CooldownUntil = 0;
+        cooldownUntil = 0;
         deadeyeState = null;
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
         if (shared && shared.defaultAbilityLoadout) {
-            activeSlot1 = shared.defaultAbilityLoadout.slot1 || 'choke';
-            activeSlot2 = shared.defaultAbilityLoadout.slot2 || 'deadeye';
+            activeAbility = shared.defaultAbilityLoadout.slot1 || 'choke';
         }
     };
 
@@ -324,20 +320,7 @@
         for (var id in catalog) {
             if (!Object.prototype.hasOwnProperty.call(catalog, id)) continue;
             var def = catalog[id];
-            out.push({ id: def.id, name: def.name, description: def.description, slot: def.slot });
-        }
-        return out;
-    };
-
-    GameAbilities.getAbilitiesForSlot = function (slotType) {
-        var catalog = getCatalog();
-        var out = [];
-        for (var id in catalog) {
-            if (!Object.prototype.hasOwnProperty.call(catalog, id)) continue;
-            var def = catalog[id];
-            if (def.slot === slotType || def.slot === 'either') {
-                out.push({ id: def.id, name: def.name, description: def.description, slot: def.slot });
-            }
+            out.push({ id: def.id, name: def.name, description: def.description });
         }
         return out;
     };
@@ -347,28 +330,23 @@
     };
 
     GameAbilities.getLoadout = function () {
-        return { slot1: activeSlot1, slot2: activeSlot2 };
+        return { slot1: activeAbility };
     };
 
-    GameAbilities.setLoadout = function (slot1Id, slot2Id) {
+    GameAbilities.setLoadout = function (abilityId) {
         var catalog = getCatalog();
-        if (slot1Id && catalog[slot1Id]) activeSlot1 = slot1Id;
-        if (slot2Id && catalog[slot2Id]) activeSlot2 = slot2Id;
-        slot1CooldownUntil = 0;
-        slot2CooldownUntil = 0;
+        if (abilityId && catalog[abilityId]) activeAbility = abilityId;
+        cooldownUntil = 0;
         deadeyeState = null;
-        return { slot1: activeSlot1, slot2: activeSlot2 };
+        return { slot1: activeAbility };
     };
 
     GameAbilities.getHudState = function () {
-        var slot1Def = getAbilityDef(activeSlot1);
-        var slot2Def = getAbilityDef(activeSlot2);
+        var def = getAbilityDef(activeAbility);
         return {
             name: 'Abilities',
-            abilityName: slot1Def ? slot1Def.name : activeSlot1,
-            ultimateName: slot2Def ? slot2Def.name : activeSlot2,
-            abilityCooldown: cooldownSec(slot1CooldownUntil),
-            ultimateCooldown: cooldownSec(slot2CooldownUntil),
+            abilityName: def ? def.name : activeAbility,
+            abilityCooldown: cooldownSec(cooldownUntil),
             extra: deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''
@@ -415,11 +393,10 @@
         return damage;
     };
 
-    GameAbilities.triggerAbility = function (slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
-        var abilityId = slot === 1 ? activeSlot1 : activeSlot2;
-        var handler = abilityHandlers[abilityId];
+    GameAbilities.triggerAbility = function (_slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
+        var handler = abilityHandlers[activeAbility];
         if (!handler) {
-            return { ok: false, message: 'Unknown ability: ' + abilityId };
+            return { ok: false, message: 'Unknown ability: ' + activeAbility };
         }
         return handler(camera, onEnemyHit, notifier);
     };
@@ -454,9 +431,8 @@
     GameAbilities.debugDump = function () {
         return {
             debugMode: debugMode,
-            loadout: { slot1: activeSlot1, slot2: activeSlot2 },
-            slot1Cooldown: cooldownSec(slot1CooldownUntil),
-            slot2Cooldown: cooldownSec(slot2CooldownUntil),
+            activeAbility: activeAbility,
+            cooldown: cooldownSec(cooldownUntil),
             deadeye: deadeyeState ? {
                 lockCount: deadeyeState.lockCount,
                 targetCount: deadeyeState.targets.length
