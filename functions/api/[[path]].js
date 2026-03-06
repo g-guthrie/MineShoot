@@ -1,4 +1,4 @@
-const PROD_WORKER_ORIGIN = 'https://minecraft-fps-arena.gguthrie-minecraft-fps.workers.dev';
+const PROD_WORKER_ORIGIN = 'https://mayhem.gguthrie-minecraft-fps.workers.dev';
 const LOCAL_WORKER_ORIGIN = 'http://127.0.0.1:8787';
 
 function isLocalHost(hostname) {
