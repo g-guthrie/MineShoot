@@ -44,14 +44,14 @@
             id: 'single_dev_server',
             label: 'Single Dev Server',
             menuTitle: 'SINGLE DEV SERVER',
-            menuDesc: 'Shared fixed room (dev-local) on the local Wrangler worker.',
+            menuDesc: 'Shared fixed room on the local Wrangler worker.',
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',
             authorityMode: 'networked',
             authMode: 'guest',
             roomStrategy: 'fixed',
             roomPrefix: '',
-            fixedRoomId: 'dev-local',
+            fixedRoomId: 'local-shared',
             visible: 'local-only'
         },
         single_full_sandbox: {
@@ -206,7 +206,7 @@
         if (!def || def.roomStrategy === 'none') return '';
 
         if (def.roomStrategy === 'fixed') {
-            return sanitizeRoomId(def.fixedRoomId || 'dev-local');
+            return sanitizeRoomId(def.fixedRoomId || 'local-shared');
         }
 
         var requested = requestedRoomId();
