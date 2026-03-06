@@ -6,7 +6,7 @@
         ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
         : null;
 
-    var PROD_WORKER_ORIGIN = 'https://minecraft-fps-arena.gguthrie-minecraft-fps.workers.dev';
+    var PROD_WORKER_ORIGIN = 'https://mayhem.gguthrie-minecraft-fps.workers.dev';
     var LOCAL_WORKER_ORIGIN = 'http://127.0.0.1:8787';
     var ROOM_STORAGE_PREFIX = 'mayhem.runtime.room.';
     var DEFAULT_MODE_ID = 'cloud_multiplayer';
@@ -42,8 +42,8 @@
         },
         single_dev_server: {
             id: 'single_dev_server',
-            label: 'Single Dev Server',
-            menuTitle: 'SINGLE DEV SERVER',
+            label: 'Solo Dev Server',
+            menuTitle: 'SOLO DEV SERVER',
             menuDesc: 'Shared fixed room on the local Wrangler worker.',
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',

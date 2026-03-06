@@ -244,15 +244,76 @@ canvas {
     margin-left: 6px;
 }
 
-#menu-ascii-logo {
-    margin: 0 0 4px;
-    color: #30ff70;
-    font-size: 8px;
-    line-height: 1.05;
-    text-shadow: 0 0 12px rgba(48, 255, 112, 0.4), 0 0 24px rgba(48, 255, 112, 0.15);
+#menu-title-stage {
+    position: relative;
+    margin: 2px 0 6px;
+    min-height: 154px;
+    border: 1px solid rgba(10, 119, 40, 0.28);
+    background:
+        radial-gradient(circle at 15% 20%, rgba(48, 255, 112, 0.1), transparent 34%),
+        linear-gradient(180deg, rgba(3, 20, 8, 0.88), rgba(2, 10, 4, 0.98));
+    overflow: hidden;
+}
+
+#menu-title-stage::before,
+#menu-title-stage::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#menu-title-stage::before {
+    background:
+        linear-gradient(118deg, transparent 0 61%, rgba(48, 255, 112, 0.08) 61.5%, transparent 62.5%),
+        linear-gradient(92deg, transparent 0 34%, rgba(48, 255, 112, 0.06) 34.5%, transparent 35.5%);
+    mix-blend-mode: screen;
+}
+
+#menu-title-stage::after {
+    background: linear-gradient(180deg, transparent 0 68%, rgba(0, 0, 0, 0.42) 100%);
+}
+
+#menu-title-rubble,
+#menu-title-mayhem,
+#menu-title-skull {
+    position: absolute;
+    margin: 0;
     white-space: pre;
-    overflow-x: auto;
-    text-align: center;
+    font-family: 'Courier New', monospace;
+    user-select: none;
+}
+
+#menu-title-rubble {
+    top: 10px;
+    left: 16px;
+    color: rgba(24, 187, 72, 0.52);
+    font-size: 10px;
+    line-height: 1.05;
+    text-shadow: 0 0 10px rgba(48, 255, 112, 0.12);
+}
+
+#menu-title-mayhem {
+    left: 18px;
+    bottom: 20px;
+    color: #5bff95;
+    font-size: 15px;
+    line-height: 1.02;
+    text-shadow:
+        0 0 14px rgba(48, 255, 112, 0.34),
+        0 0 34px rgba(48, 255, 112, 0.12);
+    transform: skewX(-4deg);
+}
+
+#menu-title-skull {
+    right: 34px;
+    bottom: 6px;
+    color: #9bffbd;
+    font-size: 17px;
+    line-height: 0.9;
+    text-shadow: 0 0 16px rgba(48, 255, 112, 0.22);
+    transform: rotate(-14deg);
+    opacity: 0.95;
 }
 
 #mode-subtitle {
@@ -271,11 +332,77 @@ canvas {
     padding: 8px 14px 10px;
 }
 
+#primary-play-btn {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 14px 18px;
+    border: 2px solid #1db34b;
+    background:
+        linear-gradient(180deg, rgba(5, 43, 15, 0.92), rgba(2, 18, 7, 0.96));
+    color: #96ffb6;
+    font-size: 28px;
+    letter-spacing: 10px;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-shadow: 0 0 10px rgba(48, 255, 112, 0.44);
+    box-shadow:
+        0 0 0 1px rgba(48, 255, 112, 0.08) inset,
+        0 0 24px rgba(0, 66, 37, 0.28);
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    animation: pipboyBtnPulse 2.4s ease-in-out infinite;
+}
+
+#primary-play-btn:hover {
+    border-color: #5bff95;
+    background: linear-gradient(180deg, rgba(9, 56, 21, 0.96), rgba(4, 23, 9, 0.98));
+    box-shadow:
+        0 0 0 1px rgba(48, 255, 112, 0.14) inset,
+        0 0 34px rgba(0, 66, 37, 0.38);
+    transform: translateY(-1px);
+}
+
+#alt-mode-panel {
+    margin-bottom: 8px;
+    border: 1px solid #004225;
+    background: rgba(0, 20, 8, 0.66);
+}
+
+#alt-mode-toggle {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid rgba(10, 119, 40, 0.24);
+    background: rgba(0, 22, 8, 0.82);
+    color: #39ef74;
+    padding: 10px 12px 9px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    text-align: left;
+    text-transform: uppercase;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+}
+
+#alt-mode-toggle:hover {
+    background: rgba(0, 34, 13, 0.9);
+}
+
+#alt-mode-toggle-hint {
+    display: block;
+    margin-top: 4px;
+    color: #109938;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    text-transform: none;
+}
+
 #mode-buttons {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
-    margin-bottom: 8px;
+    padding: 9px;
+    margin: 0;
 }
 
 .mode-btn {
@@ -1452,6 +1579,27 @@ canvas {
     #menu-header-top {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    #menu-title-stage {
+        min-height: 128px;
+    }
+
+    #menu-title-mayhem {
+        left: 10px;
+        bottom: 18px;
+        font-size: 11px;
+    }
+
+    #menu-title-skull {
+        right: 14px;
+        font-size: 13px;
+    }
+
+    #primary-play-btn {
+        font-size: 22px;
+        letter-spacing: 6px;
+        padding: 12px 14px;
     }
 
     #mode-buttons {

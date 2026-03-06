@@ -38,32 +38,47 @@
                         <button id="sound-toggle-btn" type="button">SOUND: ON</button>
                     </div>
                 </div>
-                <pre id="menu-ascii-logo"> ███╗   ███╗ █████╗ ██╗   ██╗██╗  ██╗███████╗███╗   ███╗
- ████╗ ████║██╔══██╗╚██╗ ██╔╝██║  ██║██╔════╝████╗ ████║
- ██╔████╔██║███████║ ╚████╔╝ ███████║█████╗  ██╔████╔██║
- ██║╚██╔╝██║██╔══██║  ╚██╔╝  ██╔══██║██╔══╝  ██║╚██╔╝██║
- ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║███████╗██║ ╚═╝ ██║
- ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝</pre>
-                <p id="mode-subtitle">Select runtime mode</p>
+                <div id="menu-title-stage" aria-hidden="true">
+                    <pre id="menu-title-rubble">      .  .       _     _     .  .           __
+   .        _.-' `-._/ \_.-' `-._        .`  `.
+      __.--'  broken neon slab   `--.__  /  ..  \</pre>
+                    <pre id="menu-title-mayhem"> __  __   ___   __   __  _   _  _____  __  __
+|  \/  | / _ \  \ \ / / | | | || ____||  \/  |
+| |\/| || /_\ |  \ V /  | |_| ||  _|  | |\/| |
+| |  | ||  _  |   | |   |  _  || |___ | |  | |
+|_|  |_||_| |_|   |_|   |_| |_||_____||_|  |_|
+  _.-._____.--._____.--._____.--._____.-._</pre>
+                    <pre id="menu-title-skull">   .-.
+  (x x)
+  | O \\
+  |    \\
+  |__.-'
+ /|\
+/_|_\\</pre>
+                </div>
+                <p id="mode-subtitle">Play drops you into the shared Cloudflare room. Alternate runtimes are below.</p>
             </div>
             <div id="menu-main">
-                <div id="mode-buttons">
-                    <button id="mode-cloud-multiplayer-btn" class="mode-btn" type="button" data-mode-id="cloud_multiplayer">
-                        MULTIPLAYER CLOUDFLARE
-                        <span class="mode-desc">Shared global room on the deployed worker.</span>
+                <button id="primary-play-btn" type="button">PLAY</button>
+                <div id="alt-mode-panel">
+                    <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">
+                        OTHER RUNTIMES
+                        <span id="alt-mode-toggle-hint">Single Cloudflare, Solo Dev Server, Local Sandbox</span>
                     </button>
+                    <div id="mode-buttons" hidden>
                     <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">
                         SINGLE CLOUDFLARE
                         <span class="mode-desc">Private per-tab room on the deployed worker.</span>
                     </button>
                     <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">
-                        SINGLE DEV SERVER
+                        SOLO DEV SERVER
                         <span class="mode-desc">Shared local worker room for authoritative multiplayer testing.</span>
                     </button>
                     <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">
                         SINGLE FULL SANDBOX
                         <span class="mode-desc">Offline experimental sandbox. Not authoritative.</span>
                     </button>
+                    </div>
                 </div>
                 <button id="play-btn" type="button">RESUME MATCH</button>
                 <div class="menu-separator">&#9472;&#9472;&#9472;[ LOADOUT ]&#9472;&#9472;&#9472;</div>

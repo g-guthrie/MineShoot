@@ -681,22 +681,45 @@
         var _wheelCooldownUntil = 0;
         var _wheelScrollAccum = 0;
         var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 150;
+        var _WHEEL_COOLDOWN_MS = 45;
+        var _wheelGestureLatched = false;
+        var _wheelLatchedDirection = 0;
+        var _WHEEL_RELEASE_EPSILON = 1.1;
         document.addEventListener('wheel', function (e) {
             if (!hasInputCapture()) return;
             e.preventDefault();
             var now = performance.now();
+            var primaryDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            var direction = primaryDelta === 0 ? 0 : (primaryDelta > 0 ? 1 : -1);
+            var dominantMagnitude = Math.max(Math.abs(e.deltaX), Math.abs(e.deltaY));
+
+            if (dominantMagnitude <= _WHEEL_RELEASE_EPSILON) {
+                _wheelGestureLatched = false;
+                _wheelLatchedDirection = 0;
+                _wheelScrollAccum = 0;
+            }
+
+            if (_wheelGestureLatched && direction !== 0 && direction === _wheelLatchedDirection) {
+                _wheelScrollAccum = 0;
+                return;
+            }
+
             if (now < _wheelCooldownUntil) return;
 
-            var ax = Math.abs(e.deltaX);
-            var ay = Math.abs(e.deltaY);
+            if (direction !== 0 && _wheelLatchedDirection !== 0 && direction !== _wheelLatchedDirection) {
+                _wheelScrollAccum = 0;
+                _wheelGestureLatched = false;
+                _wheelLatchedDirection = 0;
+            }
 
-            _wheelScrollAccum += Math.max(ax, ay);
+            _wheelScrollAccum += dominantMagnitude;
             if (_wheelScrollAccum < _WHEEL_SCROLL_THRESHOLD) return;
 
-            // Consume the current swipe so inertial tail events do not trigger a second swap.
+            // Consume the current swipe and wait for the trackpad to settle before allowing another switch.
             _wheelScrollAccum = 0;
             _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
+            _wheelGestureLatched = true;
+            _wheelLatchedDirection = direction;
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.cycleWeapon(1));
         }, { passive: false });
     }
