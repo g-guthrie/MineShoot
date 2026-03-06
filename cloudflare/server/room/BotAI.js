@@ -62,7 +62,21 @@ export function createBot(room, index) {
 }
 
 export function ensureBots(room) {
-  const desired = Math.max(0, Number(room.env.BOT_COUNT || '6'));
+  const desired = room && typeof room.desiredBotCount === 'function'
+    ? Math.max(0, Number(room.desiredBotCount() || 0))
+    : Math.max(0, Number(room.env.BOT_COUNT || '6'));
+
+  const toRemove = [];
+  for (const id of room.bots.keys()) {
+    const match = /^bot-(\d+)$/.exec(String(id || ''));
+    if (!match) continue;
+    const idx = Math.max(0, Number(match[1]) || 0);
+    if (idx > desired) toRemove.push(id);
+  }
+  for (let i = 0; i < toRemove.length; i++) {
+    room.bots.delete(toRemove[i]);
+  }
+
   for (let i = 0; i < desired; i++) {
     const id = `bot-${i + 1}`;
     if (room.bots.has(id)) continue;

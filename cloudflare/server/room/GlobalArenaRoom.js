@@ -61,6 +61,10 @@ const THROWABLE_SPAWN_HEIGHT_WU = 1.0;
 const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
 const SHOTGUN_BURST_WINDOW_MS = 220;
+const DEV_LOCAL_ROOM_NAME = 'dev-local';
+const DEV_LOCAL_BOT_COUNT = 2;
+const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
+const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
 
 function classPreset(classId) {
   return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
@@ -94,7 +98,6 @@ export class GlobalArenaRoom extends DurableObject {
     this.fireZones = new Map();
     this.nextProjectileSeq = 1;
     this.nextFireZoneSeq = 1;
-    ensureBots(this);
   }
 
   refreshWorldMeta() {
@@ -145,10 +148,17 @@ export class GlobalArenaRoom extends DurableObject {
     const url = new URL(request.url);
     this.roomName = sanitizeRoomId(url.searchParams.get('roomId') || this.roomName || this.env.ROOM_NAME || 'global');
     this.refreshWorldMeta();
+    this.syncRoomFixtures();
 
     if (request.headers.get('Upgrade') !== 'websocket') {
       if (url.pathname === '/state') {
-        return json({ ok: true, players: this.players.size, bots: this.bots.size });
+        return json({
+          ok: true,
+          players: this.humanPlayerCount(),
+          connectedPlayers: this.connectedHumanCount(),
+          simPlayers: this.simulatedPlayerCount(),
+          bots: this.bots.size
+        });
       }
       return new Response('Expected websocket upgrade', { status: 426 });
     }
@@ -179,30 +189,70 @@ export class GlobalArenaRoom extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  ensurePlayer(userId, username, classId) {
-    if (this.players.has(userId)) {
-      const p = this.players.get(userId);
-      p.username = username || p.username;
-      this.enforceEntityTerrainFloor(p);
-      return p;
-    }
+  isDevLocalRoom() {
+    return this.roomName === DEV_LOCAL_ROOM_NAME;
+  }
 
-    classId = 'abilities';
-    const preset = classPreset(classId);
-    const spawnX = 15 + Math.random() * 80;
-    const spawnZ = 15 + Math.random() * 80;
-    const spawnY = this.terrainEyeYAt(spawnX, spawnZ);
+  desiredBotCount() {
+    if (this.isDevLocalRoom()) return DEV_LOCAL_BOT_COUNT;
+    return Math.max(0, Number(this.env.BOT_COUNT || '6'));
+  }
+
+  humanPlayerCount() {
+    let count = 0;
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      count++;
+    }
+    return count;
+  }
+
+  connectedHumanCount() {
+    let count = 0;
+    for (const meta of this.clients.values()) {
+      if (!meta || !meta.userId) continue;
+      const player = this.players.get(meta.userId);
+      if (!player || player.fixtureType === 'sim_player') continue;
+      count++;
+    }
+    return count;
+  }
+
+  simulatedPlayerCount() {
+    let count = 0;
+    for (const player of this.players.values()) {
+      if (player && player.fixtureType === 'sim_player') count++;
+    }
+    return count;
+  }
+
+  spawnEntityRandomly(entity) {
+    if (!entity) return;
+    entity.x = 15 + Math.random() * 80;
+    entity.z = 15 + Math.random() * 80;
+    if (entity.kind === 'player') {
+      entity.y = this.terrainEyeYAt(entity.x, entity.z);
+    } else if (!Number.isFinite(entity.y)) {
+      entity.y = PLAYER_EYE_HEIGHT_WU;
+    }
+  }
+
+  buildPlayerEntity(userId, username, classId, options = null) {
+    const opts = options || {};
+    const nextClassId = 'abilities';
+    const preset = classPreset(nextClassId);
     const p = {
       id: userId,
       kind: 'player',
       username,
-      classId,
+      classId: nextClassId,
+      fixtureType: opts.fixtureType || '',
       abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
-      x: spawnX,
-      y: spawnY,
-      z: spawnZ,
-      yaw: 0,
-      pitch: 0,
+      x: 0,
+      y: PLAYER_EYE_HEIGHT_WU,
+      z: 0,
+      yaw: Number(opts.yaw || 0),
+      pitch: Number(opts.pitch || 0),
       hp: MAX_HP,
       hpMax: MAX_HP,
       armor: preset.armorMax,
@@ -231,6 +281,70 @@ export class GlobalArenaRoom extends DurableObject {
       chokeState: null
     };
 
+    this.spawnEntityRandomly(p);
+    return p;
+  }
+
+  syncSimulatedPlayers() {
+    const allowed = {};
+    for (let i = 0; i < DEV_LOCAL_SIM_PLAYER_IDS.length; i++) {
+      allowed[DEV_LOCAL_SIM_PLAYER_IDS[i]] = true;
+    }
+
+    if (!this.isDevLocalRoom()) {
+      const toRemove = [];
+      for (const player of this.players.values()) {
+        if (player && player.fixtureType === 'sim_player') toRemove.push(player.id);
+      }
+      for (let i = 0; i < toRemove.length; i++) {
+        this.players.delete(toRemove[i]);
+      }
+      return;
+    }
+
+    for (let i = 0; i < DEV_LOCAL_SIM_PLAYER_IDS.length; i++) {
+      const id = DEV_LOCAL_SIM_PLAYER_IDS[i];
+      const username = DEV_LOCAL_SIM_PLAYER_NAMES[i];
+      if (!this.players.has(id)) {
+        this.players.set(id, this.buildPlayerEntity(id, username, 'abilities', { fixtureType: 'sim_player' }));
+        continue;
+      }
+      const player = this.players.get(id);
+      player.fixtureType = 'sim_player';
+      player.kind = 'player';
+      player.username = username;
+      player.classId = 'abilities';
+      player.moveSpeedNorm = 0;
+      player.sprinting = false;
+      player.yaw = 0;
+      player.pitch = 0;
+      this.enforceEntityTerrainFloor(player);
+    }
+
+    const extra = [];
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType !== 'sim_player') continue;
+      if (!allowed[player.id]) extra.push(player.id);
+    }
+    for (let i = 0; i < extra.length; i++) {
+      this.players.delete(extra[i]);
+    }
+  }
+
+  syncRoomFixtures() {
+    this.syncSimulatedPlayers();
+    ensureBots(this);
+  }
+
+  ensurePlayer(userId, username, classId) {
+    if (this.players.has(userId)) {
+      const p = this.players.get(userId);
+      p.username = username || p.username;
+      this.enforceEntityTerrainFloor(p);
+      return p;
+    }
+
+    const p = this.buildPlayerEntity(userId, username, classId);
     this.players.set(userId, p);
     return p;
   }
@@ -1014,13 +1128,7 @@ export class GlobalArenaRoom extends DurableObject {
     entity.alive = true;
     entity.respawnAt = 0;
     entity.lastDamageAt = 0;
-    entity.x = 10 + Math.random() * 90;
-    entity.z = 10 + Math.random() * 90;
-    if (entity.kind === 'player') {
-      entity.y = this.terrainEyeYAt(entity.x, entity.z);
-    } else if (!Number.isFinite(entity.y)) {
-      entity.y = PLAYER_EYE_HEIGHT_WU;
-    }
+    this.spawnEntityRandomly(entity);
     entity.streamHeat = 0;
     entity.streamOverheatedUntil = 0;
     entity.lastShotAt = {};
@@ -1035,6 +1143,12 @@ export class GlobalArenaRoom extends DurableObject {
     entity.slowMultiplier = 1;
     entity.deadeye = null;
     entity.chokeState = null;
+    if (entity.fixtureType === 'sim_player') {
+      entity.moveSpeedNorm = 0;
+      entity.sprinting = false;
+      entity.yaw = 0;
+      entity.pitch = 0;
+    }
   }
 
   tickPlayers(dtSec) {
@@ -1075,6 +1189,7 @@ export class GlobalArenaRoom extends DurableObject {
     const dtSec = Math.max(0.001, Math.min(0.2, (now - this.lastTickAt) / 1000));
     this.lastTickAt = now;
 
+    this.syncRoomFixtures();
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
     tickProjectiles(this, dtSec);

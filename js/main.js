@@ -1358,7 +1358,7 @@
             return 'Connecting to Cloudflare private room: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_dev_server') {
-            return 'Connecting to local dev-server room: ' + mode.roomId + '...';
+            return 'Connecting to shared local dev-server room: ' + mode.roomId + '...';
         }
         return 'Starting offline experimental sandbox...';
     }
@@ -1372,7 +1372,7 @@
             return 'Single Cloudflare: private room ' + mode.roomId + '.';
         }
         if (mode.id === 'single_dev_server') {
-            return 'Single Dev Server: private room ' + mode.roomId + '.';
+            return 'Single Dev Server: shared room ' + mode.roomId + ' with 2 simulated players and 2 bots.';
         }
         return 'Single Full Sandbox: offline local simulation only.';
     }

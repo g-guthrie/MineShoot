@@ -44,13 +44,14 @@
             id: 'single_dev_server',
             label: 'Single Dev Server',
             menuTitle: 'SINGLE DEV SERVER',
-            menuDesc: 'Private per-tab room on the local Wrangler worker.',
+            menuDesc: 'Shared fixed room (dev-local) on the local Wrangler worker.',
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',
             authorityMode: 'networked',
             authMode: 'guest',
-            roomStrategy: 'private',
-            roomPrefix: 'local-solo',
+            roomStrategy: 'fixed',
+            roomPrefix: '',
+            fixedRoomId: 'dev-local',
             visible: 'local-only'
         },
         single_full_sandbox: {
@@ -92,6 +93,7 @@
             authMode: mode.authMode,
             roomStrategy: mode.roomStrategy,
             roomPrefix: mode.roomPrefix,
+            fixedRoomId: mode.fixedRoomId || '',
             apiOrigin: mode.apiOrigin || '',
             backendOrigin: mode.backendOrigin || '',
             roomId: mode.roomId || '',
@@ -206,6 +208,10 @@
 
     function resolveRoomId(def) {
         if (!def || def.roomStrategy === 'none') return '';
+
+        if (def.roomStrategy === 'fixed') {
+            return sanitizeRoomId(def.fixedRoomId || 'dev-local');
+        }
 
         var requested = requestedRoomId();
         if (requested) return requested;
