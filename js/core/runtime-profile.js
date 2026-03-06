@@ -42,8 +42,8 @@
         },
         single_dev_server: {
             id: 'single_dev_server',
-            label: 'Single Dev Server',
-            menuTitle: 'SINGLE DEV SERVER',
+            label: 'Solo Dev Server',
+            menuTitle: 'SOLO DEV SERVER',
             menuDesc: 'Shared fixed room on the local Wrangler worker.',
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',

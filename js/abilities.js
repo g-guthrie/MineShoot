@@ -9,7 +9,7 @@
 
     var activeAbility = 'deadeye';
     var abilityLoadout = { slot1: 'choke', slot2: 'deadeye' };
-    var cooldownUntil = 0;
+    var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
     var deadeyeState = null;
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
@@ -26,6 +26,24 @@
 
     function cooldownSec(until) {
         return Math.max(0, (Number(until || 0) - nowMs()) / 1000);
+    }
+
+    function activeSlotKey() {
+        if (activeAbility && activeAbility === abilityLoadout.slot2) return 'slot2';
+        return 'slot1';
+    }
+
+    function activeCooldownUntil() {
+        return cooldownUntilBySlot[activeSlotKey()] || 0;
+    }
+
+    function setActiveCooldown(until) {
+        cooldownUntilBySlot[activeSlotKey()] = Number(until || 0);
+    }
+
+    function resetCooldowns() {
+        cooldownUntilBySlot.slot1 = 0;
+        cooldownUntilBySlot.slot2 = 0;
     }
 
     function getCatalog() {
@@ -191,7 +209,7 @@
         var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
         if (count <= 0) {
             deadeyeState = null;
-            cooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
+            setActiveCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
             return { ok: false, message: 'No Deadeye locks acquired.' };
         }
 
@@ -215,7 +233,7 @@
         }
 
         deadeyeState = null;
-        cooldownUntil = debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0);
+        setActiveCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
@@ -225,7 +243,7 @@
         var cfg = getActiveConfig();
         if (!cfg) return { ok: false, message: 'Choke not configured.' };
 
-        if (!debugMode && now < cooldownUntil) {
+        if (!debugMode && now < activeCooldownUntil()) {
             return { ok: false, message: 'Choke is cooling down.' };
         }
         if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
@@ -255,7 +273,7 @@
                 result: result
             });
         }
-        cooldownUntil = debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0);
+        setActiveCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Choke cast.', 700);
         return { ok: true, kind: 'choke' };
     }
@@ -268,7 +286,7 @@
         if (deadeyeState && deadeyeState.active) {
             return fireDeadeye(camera, onEnemyHit, notifier, 'manual');
         }
-        if (!debugMode && now < cooldownUntil) {
+        if (!debugMode && now < activeCooldownUntil()) {
             return { ok: false, message: 'Deadeye is cooling down.' };
         }
 
@@ -303,7 +321,7 @@
     };
 
     GameAbilities.init = function (_scene) {
-        cooldownUntil = 0;
+        resetCooldowns();
         deadeyeState = null;
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
@@ -345,6 +363,10 @@
         var catalog = getCatalog();
         var firstId = slot1OrActive && catalog[slot1OrActive] ? slot1OrActive : '';
         var secondId = slot2 && catalog[slot2] ? slot2 : '';
+        var prevSlot1 = abilityLoadout.slot1;
+        var prevSlot2 = abilityLoadout.slot2;
+        var prevActiveAbility = activeAbility;
+        var prevActiveSlot = activeSlotKey();
 
         if (firstId && secondId) {
             if ((catalog[firstId].slot === 'ability' || catalog[firstId].slot === 'either')) {
@@ -353,7 +375,19 @@
             if ((catalog[secondId].slot === 'ultimate' || catalog[secondId].slot === 'either')) {
                 abilityLoadout.slot2 = secondId;
             }
-            activeAbility = abilityLoadout.slot2 || abilityLoadout.slot1 || activeAbility;
+            if (prevActiveAbility && (prevActiveAbility === abilityLoadout.slot1 || prevActiveAbility === abilityLoadout.slot2)) {
+                activeAbility = prevActiveAbility;
+            } else if (prevActiveSlot === 'slot1' && abilityLoadout.slot1) {
+                activeAbility = abilityLoadout.slot1;
+            } else if (prevActiveSlot === 'slot2' && abilityLoadout.slot2) {
+                activeAbility = abilityLoadout.slot2;
+            } else if (prevActiveAbility === prevSlot1 && abilityLoadout.slot1) {
+                activeAbility = abilityLoadout.slot1;
+            } else if (prevActiveAbility === prevSlot2 && abilityLoadout.slot2) {
+                activeAbility = abilityLoadout.slot2;
+            } else {
+                activeAbility = abilityLoadout.slot1 || abilityLoadout.slot2 || activeAbility;
+            }
             hasExplicitLoadoutSelection = true;
         } else if (firstId) {
             if (catalog[firstId].slot === 'ultimate') {
@@ -364,7 +398,7 @@
             activeAbility = firstId;
             hasExplicitLoadoutSelection = true;
         }
-        cooldownUntil = 0;
+        resetCooldowns();
         deadeyeState = null;
         return {
             slot1: abilityLoadout.slot1,
@@ -379,7 +413,7 @@
         return {
             name: 'Abilities',
             abilityName: def ? def.name : activeAbility,
-            abilityCooldown: cooldownSec(cooldownUntil),
+            abilityCooldown: cooldownSec(activeCooldownUntil()),
             activeSlot: isUltimate ? 2 : 1,
             extra: deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
@@ -466,7 +500,7 @@
         return {
             debugMode: debugMode,
             activeAbility: activeAbility,
-            cooldown: cooldownSec(cooldownUntil),
+            cooldown: cooldownSec(activeCooldownUntil()),
             deadeye: deadeyeState ? {
                 lockCount: deadeyeState.lockCount,
                 targetCount: deadeyeState.targets.length

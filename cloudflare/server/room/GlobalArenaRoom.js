@@ -878,22 +878,6 @@ export class GlobalArenaRoom extends DurableObject {
     const rawLockTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
     const locked = this.resolveSeekLock(player, rawLockTargetId, profile);
 
-    if (weaponId === 'plasma' && locked) {
-      const tickDamage = Math.max(1, Math.round(Number(profile.tickDamage || stats.bodyDamage || 15)));
-      const out = applyDamageFromSource(player, locked, tickDamage, {
-        hitType: 'body',
-        weaponId: 'plasma',
-        sourceKind: 'weapon',
-        applyOutgoing: false
-      });
-      if (out) {
-        broadcastDamageEvent(this, player.id, locked, out, 'body');
-        if (out.killed) {
-          broadcastDeathRespawn(this, locked);
-        }
-      }
-    }
-
     if (weaponId === 'plasma') {
       const overheatedNow = this.applyPlasmaStreamHeat(player, profile, now);
       if (overheatedNow && ws) {

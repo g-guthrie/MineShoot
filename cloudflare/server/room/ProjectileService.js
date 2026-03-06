@@ -190,6 +190,7 @@ export function tickProjectiles(room, dtSec) {
         }
       }
       if (p.type === 'plasma_stream') {
+        projectileDamageHit(room, p, e, 'body');
         room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
         toRemove.push(p.id);
         return;
