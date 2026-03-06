@@ -180,9 +180,10 @@
         lines.push('  Throwables : ' + data.throwables.length);
         lines.push('');
         lines.push('Mode cards:');
-        lines.push('  MULTIPLAYER            -> shared backend room (?room=<id>, default global)');
-        lines.push('  SINGLEPLAYER DEV SERVER-> shared dev room (dev-local)');
-        lines.push('  SINGLEPLAYER DEV LOCAL -> offline local simulation');
+        lines.push('  MULTIPLAYER CLOUDFLARE -> shared deployed room (?room=<id>, default global)');
+        lines.push('  SINGLE CLOUDFLARE      -> deployed private room (per tab by default)');
+        lines.push('  SINGLE DEV SERVER      -> local worker private room (per tab by default)');
+        lines.push('  SINGLE FULL SANDBOX    -> offline experimental sandbox');
         lines.push('');
         lines.push('Environment v2 highlights:');
         lines.push('  Grid hidden by default (debug only via ?debugGrid=1)');

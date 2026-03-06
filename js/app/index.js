@@ -11,6 +11,7 @@ const orderedModules = [
   '../core/bootstrap.js',
   '../core/event-bus.js',
   '../core/mode-flow.js',
+  '../core/runtime-profile.js',
   '../core/loop.js',
   '../core/awareness.js',
   '../net/transport.js',

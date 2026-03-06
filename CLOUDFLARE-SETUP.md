@@ -47,7 +47,32 @@ Open two browser windows to the deployed URL:
 3. Confirm overhead health/armor bars render for bots + other players.
 4. Press `H` and verify hitboxes + wallhack circle hide/show together while silhouettes still work in range.
 
-## 8) Offline local multiplayer dev
+## 8) Unified local dev
+
+Run the default dev command:
+
+```bash
+npm run dev
+```
+
+This is the same Cloudflare Worker + static asset architecture used in production, served locally through Wrangler.
+
+The localhost menu now exposes four runtime modes:
+
+- `Multiplayer Cloudflare`
+- `Single Cloudflare`
+- `Single Dev Server`
+- `Single Full Sandbox`
+
+Use `Single Dev Server` for the fast local client/server loop. Use `Single Full Sandbox` only for offline experiments.
+
+For frontend-only iteration without the Worker runtime, use:
+
+```bash
+npm run dev:frontend
+```
+
+## 9) Offline local multiplayer dev
 
 Run the local Worker + local Pages stack:
 

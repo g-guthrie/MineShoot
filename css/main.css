@@ -273,7 +273,7 @@ canvas {
 
 #mode-buttons {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 8px;
 }
@@ -1217,6 +1217,24 @@ canvas {
     user-select: none;
 }
 
+#runtime-indicator {
+    position: fixed;
+    top: 20px;
+    right: 18px;
+    z-index: 12;
+    border: 1px solid rgba(15, 110, 45, 0.8);
+    background: rgba(2, 14, 5, 0.76);
+    color: #30ff70;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.9px;
+    padding: 7px 10px;
+    text-transform: uppercase;
+    box-shadow: 0 0 12px rgba(0, 66, 37, 0.24);
+    pointer-events: none;
+    user-select: none;
+}
+
 #seeker-reticle {
     position: fixed;
     pointer-events: none;
@@ -1482,5 +1500,13 @@ canvas {
     #hud-manual-btn {
         left: 16px;
         top: 56px;
+    }
+
+    #runtime-indicator {
+        top: 16px;
+        right: 16px;
+        max-width: calc(100vw - 32px);
+        font-size: 10px;
+        line-height: 1.3;
     }
 }

@@ -21,6 +21,7 @@
     var multiplayerMode = false;
     var forceGuestNetMode = false;
     var forcedRoomId = 'global';
+    var activeRuntimeMode = null;
     var startupDebugNotice = '';
     var autoStartNoLock = false;
     var armedThrowableType = '';
@@ -932,7 +933,7 @@
             clock = new THREE.Clock();
         }
 
-        multiplayerMode = forceGuestNetMode;
+        multiplayerMode = !!(activeRuntimeMode && activeRuntimeMode.authorityMode === 'networked');
 
         function finalizeWorldBootstrap(worldMeta) {
             var worldOptions = (worldMeta && worldMeta.worldSeed) ? { worldMeta: worldMeta } : undefined;
@@ -1302,59 +1303,78 @@
         renderer.render(scene, camera);
     }
 
-    function isLocalDevMode() {
-        var modeFlow = depGet('GameModeFlow');
-        if (modeFlow && modeFlow.isLocalDevMode) return modeFlow.isLocalDevMode();
-        var host = (window.location.hostname || '').toLowerCase();
-        if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return true;
-        try {
-            var params = new URLSearchParams(window.location.search || '');
-            if (params.get('local') === '1' || params.get('offline') === '1') return true;
-            if (params.get('net') === '1') return false;
-        } catch (err) {
-            // URL parsing failed; continue with protocol fallback.
-        }
-        return window.location.protocol === 'file:';
+    function runtimeProfile() {
+        return depGet('GameRuntimeProfile');
     }
 
-    function wantsGuestNetMode() {
-        var modeFlow = depGet('GameModeFlow');
-        if (modeFlow && modeFlow.wantsGuestNetMode) return modeFlow.wantsGuestNetMode();
-        try {
-            var params = new URLSearchParams(window.location.search || '');
-            return params.get('net') === '1';
-        } catch (err) {
-            return false;
-        }
+    function requestedModeId() {
+        var runtime = runtimeProfile();
+        if (runtime && runtime.getRequestedModeId) return runtime.getRequestedModeId();
+        return '';
     }
 
     function requestedRoomId() {
-        var modeFlow = depGet('GameModeFlow');
-        if (modeFlow && modeFlow.requestedRoomId) return modeFlow.requestedRoomId();
-        var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
-            ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
-            : null;
+        var runtime = runtimeProfile();
+        if (runtime && runtime.requestedRoomId) return runtime.requestedRoomId();
+        return '';
+    }
 
-        function sanitizeRoomId(raw) {
-            if (protocol && typeof protocol.sanitizeRoomId === 'function') {
-                return protocol.sanitizeRoomId(raw);
-            }
-            var id = String(raw || '').toLowerCase().trim();
-            id = id.replace(/[^a-z0-9-]/g, '');
-            if (!id) return 'global';
-            if (id.length > 32) id = id.slice(0, 32);
-            return id;
+    function activeModeById(modeId) {
+        var runtime = runtimeProfile();
+        if (!runtime || !runtime.getMode) return null;
+        return runtime.getMode(modeId);
+    }
+
+    function availableModes() {
+        var runtime = runtimeProfile();
+        if (!runtime || !runtime.getAvailableModes) return [];
+        return runtime.getAvailableModes() || [];
+    }
+
+    function setRuntimeIndicator(mode) {
+        var el = document.getElementById('runtime-indicator');
+        if (!el) return;
+        if (!mode) {
+            el.textContent = 'PROFILE :: STANDBY';
+            return;
         }
 
-        try {
-            var params = new URLSearchParams(window.location.search || '');
-            var requested = params.get('room');
-            if (requested === null || requested === undefined) return '';
-            if (!String(requested).trim()) return '';
-            return sanitizeRoomId(requested);
-        } catch (err) {
-            return '';
+        var parts = [
+            String(mode.label || '').toUpperCase(),
+            String(mode.backendLabel || '').toUpperCase()
+        ];
+        if (mode.roomId) {
+            parts.push('ROOM ' + String(mode.roomId).toUpperCase());
         }
+        el.textContent = 'PROFILE :: ' + parts.join(' :: ');
+    }
+
+    function startupSubtitleForMode(mode) {
+        if (!mode) return 'Select runtime mode';
+        if (mode.id === 'cloud_multiplayer') {
+            return 'Connecting to Cloudflare global room: ' + mode.roomId + '...';
+        }
+        if (mode.id === 'single_cloudflare') {
+            return 'Connecting to Cloudflare private room: ' + mode.roomId + '...';
+        }
+        if (mode.id === 'single_dev_server') {
+            return 'Connecting to local dev-server room: ' + mode.roomId + '...';
+        }
+        return 'Starting offline experimental sandbox...';
+    }
+
+    function startupNoticeForMode(mode) {
+        if (!mode) return '';
+        if (mode.id === 'cloud_multiplayer') {
+            return 'Cloud multiplayer: shared room ' + mode.roomId + '.';
+        }
+        if (mode.id === 'single_cloudflare') {
+            return 'Single Cloudflare: private room ' + mode.roomId + '.';
+        }
+        if (mode.id === 'single_dev_server') {
+            return 'Single Dev Server: private room ' + mode.roomId + '.';
+        }
+        return 'Single Full Sandbox: offline local simulation only.';
     }
 
     function boot() {
@@ -1371,94 +1391,93 @@
             }
         }
 
+        var runtime = runtimeProfile();
         var modeButtonsWrap = document.getElementById('mode-buttons');
-        var multiplayerBtn = document.getElementById('mode-multiplayer-btn');
-        var singleplayerServerBtn = document.getElementById('mode-singleplayer-server-btn');
-        var singleplayerLocalBtn = document.getElementById('mode-singleplayer-local-btn');
+        var modeButtons = Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]'));
         var modeSubtitle = document.getElementById('mode-subtitle');
         var playBtn = document.getElementById('play-btn');
         var started = false;
+        setRuntimeIndicator(null);
         setupMenuWeaponLoadout();
         setupMenuThrowableLoadout();
         setupMenuAbilityLoadout();
 
-        function startWithMode(mode) {
+        function syncModeButtonVisibility() {
+            var visible = {};
+            var modes = availableModes();
+            for (var i = 0; i < modes.length; i++) {
+                visible[modes[i].id] = true;
+            }
+            for (var n = 0; n < modeButtons.length; n++) {
+                var btn = modeButtons[n];
+                var modeId = String(btn.dataset.modeId || '');
+                btn.style.display = visible[modeId] ? '' : 'none';
+                btn.disabled = false;
+            }
+        }
+
+        function disableModeButtons() {
+            for (var i = 0; i < modeButtons.length; i++) {
+                modeButtons[i].disabled = true;
+            }
+        }
+
+        function startWithMode(modeId) {
             if (started) return;
+            var selectedMode = runtime && runtime.selectMode ? runtime.selectMode(modeId) : activeModeById(modeId);
+            if (!selectedMode) return;
+
             started = true;
-            var requestedRoom = requestedRoomId() || 'global';
-            var selectedRoom = (mode === 'singleplayer_server')
-                ? 'dev-local'
-                : requestedRoom;
+            activeRuntimeMode = selectedMode;
 
             if (modeButtonsWrap) modeButtonsWrap.style.display = 'none';
             if (playBtn) playBtn.style.display = 'none';
-            if (multiplayerBtn) multiplayerBtn.disabled = true;
-            if (singleplayerServerBtn) singleplayerServerBtn.disabled = true;
-            if (singleplayerLocalBtn) singleplayerLocalBtn.disabled = true;
+            disableModeButtons();
             if (modeSubtitle) {
-                if (mode === 'multiplayer') {
-                    modeSubtitle.textContent = 'Connecting to multiplayer room: ' + selectedRoom + '...';
-                } else if (mode === 'singleplayer_server') {
-                    modeSubtitle.textContent = 'Connecting to shared dev-server room: ' + selectedRoom + '...';
-                } else {
-                    modeSubtitle.textContent = 'Starting offline local simulation...';
-                }
+                modeSubtitle.textContent = startupSubtitleForMode(selectedMode);
             }
+            setRuntimeIndicator(selectedMode);
 
             autoStartNoLock = true;
 
-            if (mode === 'multiplayer' || mode === 'singleplayer_server') {
+            if (selectedMode.authorityMode === 'networked') {
                 forceGuestNetMode = true;
-                forcedRoomId = selectedRoom;
+                forcedRoomId = selectedMode.roomId || 'global';
                 if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode) {
                     globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode();
                 }
                 if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
                     globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
                 }
-                startupDebugNotice = mode === 'singleplayer_server'
-                    ? ('Single-player dev server: shared room ' + selectedRoom + '.')
-                    : ('Guest multiplayer mode: shared room ' + selectedRoom + '.');
+                startupDebugNotice = startupNoticeForMode(selectedMode);
             } else {
                 forceGuestNetMode = false;
                 forcedRoomId = 'global';
                 if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
                     globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
                 }
-                startupDebugNotice = 'Single-player dev local: local bots only.';
+                startupDebugNotice = startupNoticeForMode(selectedMode);
             }
 
             syncMenuWeaponSlotsToRuntime();
             safeInit();
         }
 
-        if (multiplayerBtn) {
-            multiplayerBtn.addEventListener('click', function () {
-                startWithMode('multiplayer');
-            });
-        }
-        if (singleplayerServerBtn) {
-            singleplayerServerBtn.addEventListener('click', function () {
-                startWithMode('singleplayer_server');
-            });
-        }
-        if (singleplayerLocalBtn) {
-            singleplayerLocalBtn.addEventListener('click', function () {
-                startWithMode('singleplayer_local');
+        syncModeButtonVisibility();
+
+        for (var i = 0; i < modeButtons.length; i++) {
+            modeButtons[i].addEventListener('click', function () {
+                startWithMode(String(this.dataset.modeId || ''));
             });
         }
 
-        if (wantsGuestNetMode()) {
-            var roomFromQuery = requestedRoomId();
-            if (roomFromQuery && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(roomFromQuery);
-            }
-            startWithMode('multiplayer');
+        if (requestedModeId()) {
+            startWithMode(requestedModeId());
             return;
         }
 
-        if (!multiplayerBtn || !singleplayerServerBtn || !singleplayerLocalBtn) {
-            startWithMode(isLocalDevMode() ? 'singleplayer_local' : 'multiplayer');
+        if (modeButtons.length === 0) {
+            startWithMode('cloud_multiplayer');
         }
     }
 

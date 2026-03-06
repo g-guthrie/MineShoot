@@ -19,6 +19,10 @@
     var GameNetAuth = globalThis.__MAYHEM_RUNTIME.GameNetAuth;
     var GameNetEntities = globalThis.__MAYHEM_RUNTIME.GameNetEntities;
 
+    function runtimeProfile() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
+    }
+
     var active = false;
     var connected = false;
     var ws = null;
@@ -89,8 +93,10 @@
     }
 
     function wsEndpoint() {
-        var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        var endpoint = proto + '//' + window.location.host + WS_URL;
+        var runtime = runtimeProfile();
+        var endpoint = (runtime && runtime.resolveWsUrl)
+            ? runtime.resolveWsUrl(WS_URL)
+            : ((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + WS_URL);
         var params = new URLSearchParams();
         params.set('room', String(roomId || 'global'));
         var u = GameNetAuth.getUser();

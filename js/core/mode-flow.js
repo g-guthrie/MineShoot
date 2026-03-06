@@ -21,7 +21,13 @@
         return id;
     }
 
+    function runtimeProfile() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
+    }
+
     GameModeFlow.isLocalDevMode = function () {
+        var runtime = runtimeProfile();
+        if (runtime && runtime.isLocalEnvironment) return runtime.isLocalEnvironment();
         var host = (window.location.hostname || '').toLowerCase();
         if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return true;
         try {
@@ -35,6 +41,8 @@
     };
 
     GameModeFlow.wantsGuestNetMode = function () {
+        var runtime = runtimeProfile();
+        if (runtime && runtime.getRequestedModeId) return !!runtime.getRequestedModeId();
         try {
             var params = new URLSearchParams(window.location.search || '');
             return params.get('net') === '1';
@@ -44,6 +52,8 @@
     };
 
     GameModeFlow.requestedRoomId = function () {
+        var runtime = runtimeProfile();
+        if (runtime && runtime.requestedRoomId) return runtime.requestedRoomId();
         try {
             var params = new URLSearchParams(window.location.search || '');
             var requested = params.get('room');

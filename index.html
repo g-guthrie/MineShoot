@@ -44,21 +44,25 @@
  ██║╚██╔╝██║██╔══██║  ╚██╔╝  ██╔══██║██╔══╝  ██║╚██╔╝██║
  ██║ ╚═╝ ██║██║  ██║   ██║   ██║  ██║███████╗██║ ╚═╝ ██║
  ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝</pre>
-                <p id="mode-subtitle">Select deployment mode</p>
+                <p id="mode-subtitle">Select runtime mode</p>
             </div>
             <div id="menu-main">
                 <div id="mode-buttons">
-                    <button id="mode-multiplayer-btn" class="mode-btn" type="button">
-                        MULTIPLAYER
-                        <span class="mode-desc">Global room on live backend</span>
+                    <button id="mode-cloud-multiplayer-btn" class="mode-btn" type="button" data-mode-id="cloud_multiplayer">
+                        MULTIPLAYER CLOUDFLARE
+                        <span class="mode-desc">Shared global room on the deployed worker.</span>
                     </button>
-                    <button id="mode-singleplayer-server-btn" class="mode-btn" type="button">
-                        SINGLEPLAYER DEV SERVER
-                        <span class="mode-desc">Shared dev room (dev-local)</span>
+                    <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">
+                        SINGLE CLOUDFLARE
+                        <span class="mode-desc">Private per-tab room on the deployed worker.</span>
                     </button>
-                    <button id="mode-singleplayer-local-btn" class="mode-btn" type="button">
-                        SINGLEPLAYER DEV LOCAL
-                        <span class="mode-desc">Offline local simulation</span>
+                    <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">
+                        SINGLE DEV SERVER
+                        <span class="mode-desc">Private per-tab room on the local Worker stack.</span>
+                    </button>
+                    <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">
+                        SINGLE FULL SANDBOX
+                        <span class="mode-desc">Offline experimental sandbox. Not authoritative.</span>
                     </button>
                 </div>
                 <button id="play-btn" type="button">RESUME MATCH</button>
@@ -155,6 +159,7 @@
     </div>
     <div id="combat-beacons"></div>
     <div id="debug-info"></div>
+    <div id="runtime-indicator">PROFILE :: STANDBY</div>
     <div id="seeker-reticle">
         <div id="seeker-reticle-corner-tl"></div>
         <div id="seeker-reticle-corner-tr"></div>

@@ -10,14 +10,42 @@
     var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
     var AUTH_PATH = (PROTOCOL && PROTOCOL.authPath) ? PROTOCOL.authPath : {};
 
-    var SESSION_ME_URL = AUTH_PATH.me || '/api/me';
-    var SESSION_LOGIN_URL = AUTH_PATH.login || '/api/auth/login';
-    var SESSION_LOGOUT_URL = AUTH_PATH.logout || '/api/auth/logout';
-
     var AUTH_COOKIE_HELP = 'Username + 4-digit PIN';
 
     var user = null;
     var guestMode = false;
+
+    function runtimeProfile() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
+    }
+
+    function selectedMode() {
+        var runtime = runtimeProfile();
+        return (runtime && runtime.getSelectedMode) ? runtime.getSelectedMode() : null;
+    }
+
+    function authMode() {
+        var mode = selectedMode();
+        return (mode && mode.authMode) ? mode.authMode : 'guest';
+    }
+
+    function resolveApiUrl(path) {
+        var runtime = runtimeProfile();
+        if (runtime && runtime.resolveApiUrl) return runtime.resolveApiUrl(path);
+        return path;
+    }
+
+    function sessionMeUrl() {
+        return resolveApiUrl(AUTH_PATH.me || '/api/me');
+    }
+
+    function sessionLoginUrl() {
+        return resolveApiUrl(AUTH_PATH.login || '/api/auth/login');
+    }
+
+    function sessionLogoutUrl() {
+        return resolveApiUrl(AUTH_PATH.logout || '/api/auth/logout');
+    }
 
     function apiFetch(url, options) {
         options = options || {};
@@ -29,7 +57,7 @@
         if (options.body !== undefined) {
             cfg.body = options.body;
         }
-        return fetch(url, cfg);
+        return fetch(resolveApiUrl(url), cfg);
     }
 
     function makeGuestUser() {
@@ -83,7 +111,7 @@
             lockForm(true);
             setAuthStatus('Signing in...', false);
 
-            apiFetch(SESSION_LOGIN_URL, {
+            apiFetch(sessionLoginUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, pin: pin })
@@ -124,7 +152,7 @@
 
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function () {
-                apiFetch(SESSION_LOGOUT_URL, { method: 'POST' })
+                GameNetAuth.logout()
                     .finally(function () {
                         user = null;
                         setAuthVisible(true);
@@ -148,7 +176,7 @@
 
     GameNetAuth.login = function (username, pin) {
         return new Promise(function (resolve, reject) {
-            apiFetch(SESSION_LOGIN_URL, {
+            apiFetch(sessionLoginUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, pin: pin })
@@ -167,8 +195,17 @@
     };
 
     GameNetAuth.logout = function () {
-        return apiFetch(SESSION_LOGOUT_URL, { method: 'POST' })
+        if (guestMode || authMode() !== 'account') {
+            guestMode = false;
+            user = null;
+            setAuthVisible(false);
+            setAuthStatus('', false);
+            return Promise.resolve();
+        }
+
+        return apiFetch(sessionLogoutUrl(), { method: 'POST' })
             .finally(function () {
+                guestMode = false;
                 user = null;
                 setAuthVisible(true);
                 setAuthStatus('Logged out.', false);
@@ -176,7 +213,7 @@
     };
 
     GameNetAuth.fetchMe = function () {
-        return apiFetch(SESSION_ME_URL)
+        return apiFetch(sessionMeUrl())
             .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
             .then(function (res) {
                 if (res.body && res.body.ok) {
@@ -217,6 +254,7 @@
     };
 
     GameNetAuth.clearUser = function () {
+        guestMode = false;
         user = null;
     };
 
@@ -225,6 +263,20 @@
     };
 
     GameNetAuth.requireAuth = function (onAuthed) {
+        var modeAuth = authMode();
+        if (modeAuth === 'none') {
+            guestMode = false;
+            user = null;
+            setAuthVisible(false);
+            setAuthStatus('', false);
+            onAuthed(null);
+            return;
+        }
+        if (modeAuth === 'guest') {
+            onAuthed(GameNetAuth.enableGuestMode());
+            return;
+        }
+
         bindAuthForm(function (userObj) {
             onAuthed(userObj || user);
         });
@@ -232,7 +284,7 @@
         setAuthVisible(true);
         setAuthStatus('Checking session...', false);
 
-        apiFetch(SESSION_ME_URL)
+        apiFetch(sessionMeUrl())
             .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
             .then(function (res) {
                 if (res.body && res.body.ok) {
