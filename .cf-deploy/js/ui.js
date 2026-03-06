@@ -115,14 +115,7 @@
     };
 
     GameUI.showHitMarker = function () {
-        hitmarkerEl.style.transition = 'none';
-        hitmarkerEl.style.opacity = '1';
-        if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
-        hitmarkerTimer = setTimeout(function () {
-            hitmarkerEl.style.transition = 'opacity 0.2s ease-out';
-            hitmarkerEl.style.opacity = '0';
-            hitmarkerTimer = null;
-        }, 200);
+        return;
     };
 
     GameUI.showKillMarker = function () {
