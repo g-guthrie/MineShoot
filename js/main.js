@@ -681,7 +681,7 @@
         var _wheelCooldownUntil = 0;
         var _wheelScrollAccum = 0;
         var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 1000;
+        var _WHEEL_COOLDOWN_MS = 150;
         document.addEventListener('wheel', function (e) {
             if (!hasInputCapture()) return;
             e.preventDefault();
@@ -694,6 +694,7 @@
             _wheelScrollAccum += Math.max(ax, ay);
             if (_wheelScrollAccum < _WHEEL_SCROLL_THRESHOLD) return;
 
+            // Consume the current swipe so inertial tail events do not trigger a second swap.
             _wheelScrollAccum = 0;
             _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.cycleWeapon(1));

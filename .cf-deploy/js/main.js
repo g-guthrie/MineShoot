@@ -681,7 +681,7 @@
         var _wheelCooldownUntil = 0;
         var _wheelScrollAccum = 0;
         var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 1000;
+        var _WHEEL_COOLDOWN_MS = 150;
         document.addEventListener('wheel', function (e) {
             if (!hasInputCapture()) return;
             e.preventDefault();
@@ -694,6 +694,7 @@
             _wheelScrollAccum += Math.max(ax, ay);
             if (_wheelScrollAccum < _WHEEL_SCROLL_THRESHOLD) return;
 
+            // Consume the current swipe so inertial tail events do not trigger a second swap.
             _wheelScrollAccum = 0;
             _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.cycleWeapon(1));
@@ -1405,14 +1406,24 @@
 
         var runtime = runtimeProfile();
         var modeButtonsWrap = document.getElementById('mode-buttons');
+        var altModePanel = document.getElementById('alt-mode-panel');
+        var altModeToggle = document.getElementById('alt-mode-toggle');
+        var primaryPlayBtn = document.getElementById('primary-play-btn');
         var modeButtons = Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]'));
         var modeSubtitle = document.getElementById('mode-subtitle');
         var playBtn = document.getElementById('play-btn');
         var started = false;
+        var altModesOpen = false;
         setRuntimeIndicator(null);
         setupMenuWeaponLoadout();
         setupMenuThrowableLoadout();
         setupMenuAbilityLoadout();
+
+        function setAltModesOpen(open) {
+            altModesOpen = !!open;
+            if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
+            if (altModeToggle) altModeToggle.setAttribute('aria-expanded', altModesOpen ? 'true' : 'false');
+        }
 
         function syncModeButtonVisibility() {
             var visible = {};
@@ -1420,18 +1431,25 @@
             for (var i = 0; i < modes.length; i++) {
                 visible[modes[i].id] = true;
             }
+            var visibleCount = 0;
             for (var n = 0; n < modeButtons.length; n++) {
                 var btn = modeButtons[n];
                 var modeId = String(btn.dataset.modeId || '');
-                btn.style.display = visible[modeId] ? '' : 'none';
+                var show = !!visible[modeId];
+                btn.style.display = show ? '' : 'none';
                 btn.disabled = false;
+                if (show) visibleCount += 1;
             }
+            if (altModePanel) altModePanel.style.display = visibleCount > 0 ? '' : 'none';
+            if (visibleCount <= 0) setAltModesOpen(false);
         }
 
         function disableModeButtons() {
             for (var i = 0; i < modeButtons.length; i++) {
                 modeButtons[i].disabled = true;
             }
+            if (altModeToggle) altModeToggle.disabled = true;
+            if (primaryPlayBtn) primaryPlayBtn.disabled = true;
         }
 
         function startWithMode(modeId) {
@@ -1442,7 +1460,9 @@
             started = true;
             activeRuntimeMode = selectedMode;
 
-            if (modeButtonsWrap) modeButtonsWrap.style.display = 'none';
+            if (modeButtonsWrap) modeButtonsWrap.hidden = true;
+            if (altModePanel) altModePanel.style.display = 'none';
+            if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
             if (playBtn) playBtn.style.display = 'none';
             disableModeButtons();
             if (modeSubtitle) {
@@ -1482,15 +1502,34 @@
                 if (runtime && runtime.clearSelectedMode) {
                     runtime.clearSelectedMode();
                 }
-                if (modeButtonsWrap) modeButtonsWrap.style.display = '';
+                if (primaryPlayBtn) {
+                    primaryPlayBtn.disabled = false;
+                    primaryPlayBtn.style.display = '';
+                }
+                if (altModeToggle) altModeToggle.disabled = false;
+                if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
+                if (altModePanel) altModePanel.style.display = '';
                 if (playBtn) playBtn.style.display = 'none';
-                if (modeSubtitle) modeSubtitle.textContent = 'Select runtime mode';
+                if (modeSubtitle) modeSubtitle.textContent = 'Play drops you into the shared Cloudflare room. Alternate runtimes are below.';
                 setRuntimeIndicator(null);
                 syncModeButtonVisibility();
             }
         }
 
         syncModeButtonVisibility();
+        setAltModesOpen(false);
+
+        if (altModeToggle) {
+            altModeToggle.addEventListener('click', function () {
+                setAltModesOpen(!altModesOpen);
+            });
+        }
+
+        if (primaryPlayBtn) {
+            primaryPlayBtn.addEventListener('click', function () {
+                startWithMode('cloud_multiplayer');
+            });
+        }
 
         for (var i = 0; i < modeButtons.length; i++) {
             modeButtons[i].addEventListener('click', function () {
