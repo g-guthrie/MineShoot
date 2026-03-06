@@ -75,10 +75,6 @@
     function applyDebugVisuals(visible) {
         debugVisualsOn = !!visible;
 
-        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals(!!visible);
-        }
-
         if (globalThis.__MAYHEM_RUNTIME.GameEnemy) {
             if (globalThis.__MAYHEM_RUNTIME.GameEnemy.setHitboxVisibility) {
                 globalThis.__MAYHEM_RUNTIME.GameEnemy.setHitboxVisibility(!!visible);
@@ -674,9 +670,7 @@
         });
 
         var _wheelCooldownUntil = 0;
-        var _wheelScrollAccum = 0;
-        var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 1000;
+        var _WHEEL_COOLDOWN_MS = 300;
         document.addEventListener('wheel', function (e) {
             if (!hasInputCapture()) return;
             e.preventDefault();
@@ -686,12 +680,17 @@
             var ax = Math.abs(e.deltaX);
             var ay = Math.abs(e.deltaY);
 
-            _wheelScrollAccum += Math.max(ax, ay);
-            if (_wheelScrollAccum < _WHEEL_SCROLL_THRESHOLD) return;
-
-            _wheelScrollAccum = 0;
-            _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
-            applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.cycleWeapon(1));
+            if (ax > ay && ax > 2) {
+                _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
+                var weaponOrder = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponOrder();
+                var slot = e.deltaX < 0 ? 0 : 1;
+                if (slot < weaponOrder.length) {
+                    applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(weaponOrder[slot]));
+                }
+            } else if (ay > ax && ay > 2) {
+                _wheelCooldownUntil = now + _WHEEL_COOLDOWN_MS;
+                applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.cycleWeapon(e.deltaY > 0 ? 1 : -1));
+            }
         }, { passive: false });
     }
 
@@ -1373,7 +1372,7 @@
             return 'Single Cloudflare: private room ' + mode.roomId + '.';
         }
         if (mode.id === 'single_dev_server') {
-            return 'Single Dev Server: shared local-worker room ' + mode.roomId + '.';
+            return 'Single Dev Server: shared room ' + mode.roomId + ' with 2 simulated players and 2 bots.';
         }
         return 'Single Full Sandbox: offline local simulation only.';
     }

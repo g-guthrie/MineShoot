@@ -30,8 +30,12 @@
     var tracerZeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
     // Y is positive-down for UI layout consistency.
-    var SHOTGUN_MEDIUM_RING_RATIO = 0.5;
-    var SHOTGUN_OUTER_RING_RATIO = 0.9;
+    var SHOTGUN_PATTERN = [
+        [-0.90, -0.90], [0.00, -0.90], [0.90, -0.90],
+        [-0.90,  0.00], [-0.35, -0.35], [0.35, 0.35], [0.90, 0.00],
+        [-0.90,  0.90], [0.00,  0.90], [0.90, 0.90],
+        [-0.45,  0.45], [0.45, -0.45]
+    ];
     var SHOTGUN_RETICLE_SIZE_PX = 225;
     var SHOTGUN_RETICLE_REF_DISTANCE = 14;
     var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
@@ -47,22 +51,6 @@
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
     var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
-
-    function pushRingPoints(out, count, radius, angleOffsetRad) {
-        for (var i = 0; i < count; i++) {
-            var angle = angleOffsetRad + ((Math.PI * 2 * i) / count);
-            out.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
-        }
-    }
-
-    function buildShotgunPattern() {
-        var points = [[0, 0]];
-        pushRingPoints(points, 5, SHOTGUN_MEDIUM_RING_RATIO, -Math.PI * 0.5);
-        pushRingPoints(points, 6, SHOTGUN_OUTER_RING_RATIO, -Math.PI * 0.5);
-        return points;
-    }
-
-    var SHOTGUN_PATTERN = buildShotgunPattern();
 
     for (var i = 0; i < SHOTGUN_PATTERN.length; i++) {
         SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);

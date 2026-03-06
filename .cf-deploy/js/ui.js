@@ -22,7 +22,6 @@
     var damageFlashLevel = 0;
     var deadeyeReticlePool = [];
     var deadeyeProjectVec = new THREE.Vector3();
-    var debugVisualsOn = false;
 
     var killCount = 0;
     var hitmarkerTimer = null;
@@ -196,15 +195,6 @@
     GameUI.setDebugInfo = function (text) {
         if (!debugInfoEl) return;
         debugInfoEl.textContent = text || '';
-    };
-
-    GameUI.setDebugVisuals = function (enabled) {
-        debugVisualsOn = !!enabled;
-        if (!shotgunReticleEl) return;
-        var dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
-        for (var i = 0; i < dots.length; i++) {
-            dots[i].style.display = debugVisualsOn ? 'block' : 'none';
-        }
     };
 
     GameUI.updateSeekerReticle = function (visible, hasTarget, halfAngleDeg, viewInfo) {
@@ -383,7 +373,6 @@
             var y = Math.round((size * 0.5) + (points[i][1] * size * 0.5));
             dots[i].style.left = x + 'px';
             dots[i].style.top = y + 'px';
-            dots[i].style.display = debugVisualsOn ? 'block' : 'none';
         }
     };
 

@@ -182,7 +182,7 @@
         lines.push('Mode cards:');
         lines.push('  MULTIPLAYER CLOUDFLARE -> shared deployed room (?room=<id>, default global)');
         lines.push('  SINGLE CLOUDFLARE      -> deployed private room (per tab by default)');
-        lines.push('  SINGLE DEV SERVER      -> shared local-worker room for authoritative multiplayer testing');
+        lines.push('  SINGLE DEV SERVER      -> shared local room dev-local with 2 sim players + 2 bots');
         lines.push('  SINGLE FULL SANDBOX    -> offline experimental sandbox');
         lines.push('');
         lines.push('Environment v2 highlights:');

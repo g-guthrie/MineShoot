@@ -7,10 +7,17 @@ cd "$ROOT_DIR"
 WRANGLER_BIN="${WRANGLER_BIN:-npx}"
 WRANGLER_PKG="${WRANGLER_PKG:-wrangler@3}"
 WORKER_PORT="${WORKER_PORT:-8787}"
+ASSET_DIR="${ASSET_DIR:-$ROOT_DIR/.cf-deploy}"
 
 WORKER_LOG="${WORKER_LOG:-$ROOT_DIR/.wrangler/offline-worker.log}"
 
 mkdir -p "$ROOT_DIR/.wrangler"
+
+if [[ ! -f "$ASSET_DIR/index.html" ]]; then
+  echo "Missing local asset bundle at $ASSET_DIR"
+  echo "Build and stage assets first."
+  exit 1
+fi
 
 worker_pid=""
 
@@ -23,7 +30,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Starting local multiplayer dev server on http://127.0.0.1:${WORKER_PORT}"
-"${WRANGLER_BIN}" "${WRANGLER_PKG}" dev cloudflare/worker.js --config wrangler.toml --port "${WORKER_PORT}" --local --assets . >"${WORKER_LOG}" 2>&1 &
+"${WRANGLER_BIN}" "${WRANGLER_PKG}" dev cloudflare/worker.js --config wrangler.toml --port "${WORKER_PORT}" --local --assets "${ASSET_DIR}" >"${WORKER_LOG}" 2>&1 &
 worker_pid=$!
 
 sleep 2
