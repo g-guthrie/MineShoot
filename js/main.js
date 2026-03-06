@@ -159,7 +159,7 @@
             pistol: 'Pistol',
             machinegun: 'Machine Gun',
             shotgun: 'Shotgun',
-            seekergun: 'Plasma Grenade'
+            seekergun: 'Needler'
         };
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
             var catalog = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog() || [];
@@ -372,15 +372,20 @@
                 btn.type = 'button';
                 btn.className = 'ability-choice-btn';
                 btn.dataset.abilityId = def.id;
+                btn.dataset.slot = def.slot || 'ability';
                 btn.textContent = def.name.toUpperCase();
-                if (def.id === loadout.slot1) btn.classList.add('active');
+                if (def.id === loadout.activeAbility) btn.classList.add('active');
 
                 btn.addEventListener('click', function () {
                     var id = this.dataset.abilityId;
+                    var slot = this.dataset.slot || 'ability';
                     GA.setLoadout(id);
                     if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
                         var updated = GA.getLoadout();
-                        globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(updated.slot1, null);
+                        globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(
+                            slot === 'ultimate' ? null : updated.slot1,
+                            slot === 'ultimate' ? updated.slot2 : null
+                        );
                     }
                     globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(GA.getHudState());
                     render();
@@ -839,7 +844,8 @@
                 var castData = null;
                 var loadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout
                     ? globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout() : {};
-                var slotAbilityId = loadout.slot1 || '';
+                var slotAbilityId = loadout.activeAbility || loadout.slot1 || '';
+                var castSlot = slotAbilityId === loadout.slot2 ? 2 : 1;
 
                 if (slotAbilityId === 'choke' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
                     var classTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
@@ -876,7 +882,7 @@
                     }
                 }
                 var sendFn = globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityCast || globalThis.__MAYHEM_RUNTIME.GameNet.sendClassCast;
-                sendFn(1, castData);
+                sendFn(castSlot, castData);
                 return;
             }
 
@@ -1141,7 +1147,10 @@
                 var abilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
                 if (abilityState) {
                     var hudState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState();
-                    hudState.abilityCooldown = abilityState.abilityCooldownRemaining || 0;
+                    var activeSlot = Number(hudState.activeSlot || 1);
+                    hudState.abilityCooldown = activeSlot === 2
+                        ? (abilityState.ultimateCooldownRemaining || 0)
+                        : (abilityState.abilityCooldownRemaining || 0);
                     hudState.extra = '';
                     if (abilityState.deadeyeState && abilityState.deadeyeState.maxLocks > 0) {
                         hudState.extra = 'DEADEYE ' + abilityState.deadeyeState.lockCount + '/' + abilityState.deadeyeState.maxLocks;

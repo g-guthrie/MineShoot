@@ -47,7 +47,7 @@ export const seekProfiles = {
       boost: Number(seekershot.homingBoost || 4.5),
       lerp: Number(seekershot.homingLerp || 3.8)
     },
-    projectileType: 'plasma_stream'
+    projectileType: 'seekershot'
   },
   plasma_stream: {
     id: 'plasma_stream',

@@ -69,7 +69,7 @@ export const gameplayTuning = {
     machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 30,  maxRange: 88,  pellets: 1,  spreadNdc: 0.0078 },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 820,  bodyDamage: 13,  headDamage: 20,  maxRange: 42,  pellets: 12, spreadNdc: 0 },
     sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1,  spreadNdc: 0.00035 },
-    seekergun:  { name: 'Plasma Grenade', primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
+    seekergun:  { name: 'Needler',        primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
     plasma:     { name: 'Plasma Cannon',  primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 100,  bodyDamage: 15,  headDamage: 15,  maxRange: 24,  pellets: 1,  spreadNdc: 0 }
   },
   throwableCategories: {
@@ -91,7 +91,7 @@ export const gameplayTuning = {
       homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
     },
     seekershot: {
-      id: 'seekershot', label: 'Plasma Grenade Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
+      id: 'seekershot', label: 'Needler Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
       homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 30
     },
     plasma_stream: {

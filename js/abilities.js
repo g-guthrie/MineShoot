@@ -7,7 +7,8 @@
 
     var GameAbilities = {};
 
-    var activeAbility = 'choke';
+    var activeAbility = 'deadeye';
+    var abilityLoadout = { slot1: 'choke', slot2: 'deadeye' };
     var cooldownUntil = 0;
     var deadeyeState = null;
     var debugMode = false;
@@ -307,7 +308,9 @@
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
         if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
-            activeAbility = shared.defaultAbilityLoadout.slot1 || 'choke';
+            abilityLoadout.slot1 = shared.defaultAbilityLoadout.slot1 || 'choke';
+            abilityLoadout.slot2 = shared.defaultAbilityLoadout.slot2 || 'deadeye';
+            activeAbility = abilityLoadout.slot2 || abilityLoadout.slot1;
         }
     };
 
@@ -321,7 +324,7 @@
         for (var id in catalog) {
             if (!Object.prototype.hasOwnProperty.call(catalog, id)) continue;
             var def = catalog[id];
-            out.push({ id: def.id, name: def.name, description: def.description });
+            out.push({ id: def.id, name: def.name, description: def.description, slot: def.slot || 'ability' });
         }
         return out;
     };
@@ -331,26 +334,53 @@
     };
 
     GameAbilities.getLoadout = function () {
-        return { slot1: activeAbility };
+        return {
+            slot1: abilityLoadout.slot1,
+            slot2: abilityLoadout.slot2,
+            activeAbility: activeAbility
+        };
     };
 
-    GameAbilities.setLoadout = function (abilityId) {
+    GameAbilities.setLoadout = function (slot1OrActive, slot2) {
         var catalog = getCatalog();
-        if (abilityId && catalog[abilityId]) {
-            activeAbility = abilityId;
+        var firstId = slot1OrActive && catalog[slot1OrActive] ? slot1OrActive : '';
+        var secondId = slot2 && catalog[slot2] ? slot2 : '';
+
+        if (firstId && secondId) {
+            if ((catalog[firstId].slot === 'ability' || catalog[firstId].slot === 'either')) {
+                abilityLoadout.slot1 = firstId;
+            }
+            if ((catalog[secondId].slot === 'ultimate' || catalog[secondId].slot === 'either')) {
+                abilityLoadout.slot2 = secondId;
+            }
+            activeAbility = abilityLoadout.slot2 || abilityLoadout.slot1 || activeAbility;
+            hasExplicitLoadoutSelection = true;
+        } else if (firstId) {
+            if (catalog[firstId].slot === 'ultimate') {
+                abilityLoadout.slot2 = firstId;
+            } else {
+                abilityLoadout.slot1 = firstId;
+            }
+            activeAbility = firstId;
             hasExplicitLoadoutSelection = true;
         }
         cooldownUntil = 0;
         deadeyeState = null;
-        return { slot1: activeAbility };
+        return {
+            slot1: abilityLoadout.slot1,
+            slot2: abilityLoadout.slot2,
+            activeAbility: activeAbility
+        };
     };
 
     GameAbilities.getHudState = function () {
         var def = getAbilityDef(activeAbility);
+        var isUltimate = !!(def && (def.slot === 'ultimate' || def.id === abilityLoadout.slot2));
         return {
             name: 'Abilities',
             abilityName: def ? def.name : activeAbility,
             abilityCooldown: cooldownSec(cooldownUntil),
+            activeSlot: isUltimate ? 2 : 1,
             extra: deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''

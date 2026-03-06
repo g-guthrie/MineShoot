@@ -11,6 +11,7 @@
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
     var GUN_MOUNT_LIFT_Y = 0.15 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
+    var FOOT_PLANE_OFFSET_Y = 0.3;
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -113,6 +114,7 @@
 
         var root = new THREE.Group();
         var modelRoot = new THREE.Group();
+        modelRoot.position.y = FOOT_PLANE_OFFSET_Y;
         root.add(modelRoot);
         var bodyMat = new THREE.MeshLambertMaterial({ color: ensureHex(options.bodyColor, 0x4a7fc1) });
         var skinMat = new THREE.MeshLambertMaterial({ color: ensureHex(options.skinColor, 0xd2a77d) });
@@ -247,7 +249,8 @@
             gaitPhase: Math.random() * Math.PI * 2,
             aimPitch: 0,
             gunBasePos: new THREE.Vector3(),
-            gunBaseRot: new THREE.Vector3()
+            gunBaseRot: new THREE.Vector3(),
+            footPlaneOffsetY: FOOT_PLANE_OFFSET_Y
         };
 
         var styles = styleMap();
@@ -397,6 +400,7 @@
         return {
             root: root,
             rig: rig,
+            footPlaneOffsetY: FOOT_PLANE_OFFSET_Y,
             setWeapon: setWeapon,
             updateLocomotion: updateLocomotion,
             updateAimPitch: updateAimPitch,
