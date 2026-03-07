@@ -163,7 +163,7 @@
             pistol: 'Pistol',
             machinegun: 'Machine Gun',
             shotgun: 'Shotgun',
-            seekergun: 'Needler'
+            seekergun: 'Seeker'
         };
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
             var catalog = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog() || [];

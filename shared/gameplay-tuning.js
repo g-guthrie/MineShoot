@@ -69,29 +69,28 @@ export const gameplayTuning = {
     machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 30,  maxRange: 88,  pellets: 1,  spreadNdc: 0.0078 },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 820,  bodyDamage: 13,  headDamage: 20,  maxRange: 42,  pellets: 12, spreadNdc: 0 },
     sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1,  spreadNdc: 0.00035 },
-    seekergun:  { name: 'Needler',        primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
+    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
     plasma:     { name: 'Plasma Cannon',  primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 100,  bodyDamage: 15,  headDamage: 15,  maxRange: 24,  pellets: 1,  spreadNdc: 0 }
   },
   throwableCategories: {
-    grenade: { label: 'Grenades', items: ['frag', 'molotov'], previewType: 'trajectory' },
-    sticky:  { label: 'Sticky', items: ['seeker'], previewType: 'cone' },
+    grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
     blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
   },
   throwables: {
     order: ['frag', 'seeker', 'molotov', 'knife'],
     frag: {
-      id: 'frag', category: 'grenade', label: 'Frag', speed: 16, upward: 5.2, gravity: 19, fuse: 2.2, radius: 5.4, damage: 125, regen: 10, bounce: true,
+      id: 'frag', category: 'grenade', label: 'Frag', speed: 18, upward: 5.2, gravity: 19, fuse: 2.2, radius: 5.4, damage: 125, regen: 10, bounce: true,
       bounceVelocityDamping: 0.4,
       bounceVerticalDamping: 0.42,
       bounceMaxCount: 2,
       bounceStopSpeedSq: 2.5
     },
     seeker: {
-      id: 'seeker', category: 'sticky', label: 'Plasma Grenade', speed: 14, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 15,
+      id: 'seeker', category: 'grenade', label: 'Plasma Grenade', speed: 16, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 15,
       homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
     },
     seekershot: {
-      id: 'seekershot', label: 'Needler Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
+      id: 'seekershot', label: 'Seeker Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
       homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 30
     },
     plasma_stream: {
@@ -99,7 +98,7 @@ export const gameplayTuning = {
       bodyDamage: 15, headDamage: 15, homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 35, acquireRange: 24
     },
     molotov: {
-      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 15, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
+      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 17, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,
       fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 14
     },
     knife: {

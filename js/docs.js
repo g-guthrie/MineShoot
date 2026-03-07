@@ -77,7 +77,7 @@
             '         __||__'
         ].join('\n'),
         seekergun: [
-            '       .-===[ NEEDLER ]===-.',
+            '        .-====[ SEEKER ]====-.',
             ' ____/==_==_==_==_==_==_==\\____',
             '|_____/__/_/_/_/_/_/_/_/______/=====>',
             '          \\_\\_\\_\\_\\_\\',
@@ -161,7 +161,7 @@
         if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
         if (weapon.id === 'machinegun') return 'Automatic suppression baseline with predictable recoil-free taping';
         if (weapon.id === 'rifle') return 'Best precision consistency from mid to long range';
-        if (weapon.id === 'seekergun') return 'Needler homing burst that rewards target tracking';
+        if (weapon.id === 'seekergun') return 'Seeker homing burst that rewards target tracking';
         if (weapon.id === 'plasma') return 'Seek-stream lock ticks with overheat control';
         if (weapon.id === 'pistol') return 'Close-range precision sidearm with high headshot payoff';
         return 'Balanced baseline weapon';

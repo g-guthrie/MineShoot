@@ -42,7 +42,8 @@
     var trajStart = new THREE.Vector3();
     var trajEnd = new THREE.Vector3();
     var trajectoryPreview = {
-        line: null,
+        dotsNear: null,
+        dotsFar: null,
         impact: null,
         activeType: ''
     };
@@ -50,7 +51,10 @@
         stepSec: 1 / 60,
         maxPoints: 120,
         maxPreviewTime: 4.0,
-        hiddenStartDistance: 3.0
+        hiddenStartDistance: 3.75,
+        pointStrideNear: 4,
+        pointStrideFar: 6,
+        aimPitchBoost: 1.5
     };
     var throwableDistanceTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning()
@@ -344,6 +348,31 @@
         return intent;
     }
 
+    function buildThrowVelocity(def, intent, useExplicitDirection) {
+        if (!def || !intent || !intent.direction) return null;
+
+        var baseDir = intent.direction.clone().normalize();
+        var aimPitchBoost = Math.max(0, Number(trajectoryPreviewTuning.aimPitchBoost || 1));
+        if (baseDir.y > 0 && aimPitchBoost !== 1) {
+            baseDir.y *= aimPitchBoost;
+            baseDir.normalize();
+        }
+
+        var horizontalDir = baseDir.clone();
+        horizontalDir.y = 0;
+        if (horizontalDir.lengthSq() > 0.00001) {
+            horizontalDir.normalize();
+        } else {
+            horizontalDir.set(0, 0, -1);
+        }
+
+        var speed = Math.max(0, Number(def.speed || 0));
+        var upward = Math.max(0, Number(def.upward || 0));
+        var vel = horizontalDir.multiplyScalar(speed);
+        vel.y = (baseDir.y * speed) + (useExplicitDirection ? (upward * 0.15) : upward);
+        return vel;
+    }
+
     function spawnProjectile(type, camera, options) {
         if (!sceneRef || !camera) return false;
         var def = defs[type];
@@ -354,12 +383,8 @@
         if (!intent || !intent.origin || !intent.direction) return false;
         var origin = intent.origin.clone();
         var baseDir = intent.direction.clone().normalize();
-        var vel = baseDir.multiplyScalar(def.speed);
-        if (!options.direction) {
-            vel.y += def.upward;
-        } else if (def.upward) {
-            vel.y += def.upward * 0.15;
-        }
+        var vel = buildThrowVelocity(def, intent, !!options.direction);
+        if (!vel) return false;
 
         var mesh = createThrowableMesh(type);
         mesh.position.copy(origin);
@@ -495,31 +520,56 @@
 
     function clearTrajectoryPreview() {
         trajectoryPreview.activeType = '';
-        if (trajectoryPreview.line) trajectoryPreview.line.visible = false;
+        if (trajectoryPreview.dotsNear) trajectoryPreview.dotsNear.visible = false;
+        if (trajectoryPreview.dotsFar) trajectoryPreview.dotsFar.visible = false;
         if (trajectoryPreview.impact) trajectoryPreview.impact.visible = false;
     }
 
     function ensureTrajectoryPreviewMeshes() {
         if (!sceneRef) return false;
 
-        if (!trajectoryPreview.line) {
-            var lineGeo = new THREE.BufferGeometry().setFromPoints([
+        if (!trajectoryPreview.dotsNear) {
+            var nearGeo = new THREE.BufferGeometry().setFromPoints([
                 new THREE.Vector3(0, 0, 0),
                 new THREE.Vector3(0, 0, 0)
             ]);
-            var lineMat = new THREE.LineBasicMaterial({
+            var nearMat = new THREE.PointsMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.92,
+                opacity: 0.34,
+                size: 0.18,
+                sizeAttenuation: true,
                 depthTest: false,
                 depthWrite: false
             });
-            trajectoryPreview.line = new THREE.Line(lineGeo, lineMat);
-            trajectoryPreview.line.visible = false;
-            trajectoryPreview.line.renderOrder = 60;
-            trajectoryPreview.line.frustumCulled = false;
-            trajectoryPreview.line.layers.set(0);
-            sceneRef.add(trajectoryPreview.line);
+            trajectoryPreview.dotsNear = new THREE.Points(nearGeo, nearMat);
+            trajectoryPreview.dotsNear.visible = false;
+            trajectoryPreview.dotsNear.renderOrder = 60;
+            trajectoryPreview.dotsNear.frustumCulled = false;
+            trajectoryPreview.dotsNear.layers.set(0);
+            sceneRef.add(trajectoryPreview.dotsNear);
+        }
+
+        if (!trajectoryPreview.dotsFar) {
+            var farGeo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, 0)
+            ]);
+            var farMat = new THREE.PointsMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.86,
+                size: 0.12,
+                sizeAttenuation: true,
+                depthTest: false,
+                depthWrite: false
+            });
+            trajectoryPreview.dotsFar = new THREE.Points(farGeo, farMat);
+            trajectoryPreview.dotsFar.visible = false;
+            trajectoryPreview.dotsFar.renderOrder = 60;
+            trajectoryPreview.dotsFar.frustumCulled = false;
+            trajectoryPreview.dotsFar.layers.set(0);
+            sceneRef.add(trajectoryPreview.dotsFar);
         }
 
         if (!trajectoryPreview.impact) {
@@ -540,6 +590,36 @@
         }
 
         return true;
+    }
+
+    function previewColorsForType(type) {
+        if (type === 'molotov') {
+            return { lineNear: 0xb77730, lineFar: 0xffffff, impact: 0xff8a3d };
+        }
+        return { lineNear: 0x98a4b8, lineFar: 0xffffff, impact: 0xffffff };
+    }
+
+    function splitPreviewPoints(points) {
+        if (!Array.isArray(points) || points.length < 2) {
+            return { near: [], far: [] };
+        }
+        var splitIndex = Math.max(2, Math.min(points.length - 1, Math.floor(points.length * 0.38)));
+        return {
+            near: points.slice(0, splitIndex),
+            far: points.slice(splitIndex - 1)
+        };
+    }
+
+    function sparsePreviewPoints(points, stride) {
+        if (!Array.isArray(points) || points.length < 2) return [];
+        var step = Math.max(1, Math.round(Number(stride || 1)));
+        if (step <= 1) return points.slice();
+        var out = [points[0]];
+        for (var i = step; i < points.length - 1; i += step) {
+            out.push(points[i]);
+        }
+        out.push(points[points.length - 1]);
+        return out;
     }
 
     function previewLifetimeForType(type, def) {
@@ -564,8 +644,11 @@
         );
 
         trajPos.copy(intent.origin);
-        trajVel.copy(intent.direction).normalize().multiplyScalar(def.speed || 0);
-        trajVel.y += Number(def.upward || 0);
+        var previewVelocity = buildThrowVelocity(def, intent, false);
+        if (!previewVelocity) {
+            return { points: [], impactPoint: null };
+        }
+        trajVel.copy(previewVelocity);
 
         var points = [trajPos.clone()];
         var age = 0;
@@ -666,12 +749,28 @@
             return null;
         }
 
-        trajectoryPreview.line.geometry.setFromPoints(visiblePoints);
-        trajectoryPreview.line.geometry.computeBoundingSphere();
-        trajectoryPreview.line.visible = true;
+        var splitPoints = splitPreviewPoints(visiblePoints);
+        var nearPoints = sparsePreviewPoints(splitPoints.near, trajectoryPreviewTuning.pointStrideNear || 4);
+        var farPoints = sparsePreviewPoints(splitPoints.far, trajectoryPreviewTuning.pointStrideFar || 6);
+        var previewColors = previewColorsForType(type);
+        if (trajectoryPreview.dotsNear.material && trajectoryPreview.dotsNear.material.color) {
+            trajectoryPreview.dotsNear.material.color.setHex(previewColors.lineNear);
+        }
+        if (trajectoryPreview.dotsFar.material && trajectoryPreview.dotsFar.material.color) {
+            trajectoryPreview.dotsFar.material.color.setHex(previewColors.lineFar);
+        }
+        trajectoryPreview.dotsNear.geometry.setFromPoints(nearPoints.length >= 2 ? nearPoints : visiblePoints.slice(0, 2));
+        trajectoryPreview.dotsNear.geometry.computeBoundingSphere();
+        trajectoryPreview.dotsNear.visible = true;
+        trajectoryPreview.dotsFar.geometry.setFromPoints(farPoints.length >= 2 ? farPoints : visiblePoints.slice(-2));
+        trajectoryPreview.dotsFar.geometry.computeBoundingSphere();
+        trajectoryPreview.dotsFar.visible = true;
         trajectoryPreview.activeType = type;
 
         if (sim.impactPoint) {
+            if (trajectoryPreview.impact.material && trajectoryPreview.impact.material.color) {
+                trajectoryPreview.impact.material.color.setHex(previewColors.impact);
+            }
             trajectoryPreview.impact.position.copy(sim.impactPoint);
             trajectoryPreview.impact.visible = true;
         } else {
@@ -1051,13 +1150,17 @@
     }
 
     GameThrowables.init = function (scene) {
-        if (trajectoryPreview.line && trajectoryPreview.line.parent) {
-            trajectoryPreview.line.parent.remove(trajectoryPreview.line);
+        if (trajectoryPreview.dotsNear && trajectoryPreview.dotsNear.parent) {
+            trajectoryPreview.dotsNear.parent.remove(trajectoryPreview.dotsNear);
+        }
+        if (trajectoryPreview.dotsFar && trajectoryPreview.dotsFar.parent) {
+            trajectoryPreview.dotsFar.parent.remove(trajectoryPreview.dotsFar);
         }
         if (trajectoryPreview.impact && trajectoryPreview.impact.parent) {
             trajectoryPreview.impact.parent.remove(trajectoryPreview.impact);
         }
-        trajectoryPreview.line = null;
+        trajectoryPreview.dotsNear = null;
+        trajectoryPreview.dotsFar = null;
         trajectoryPreview.impact = null;
         trajectoryPreview.activeType = '';
 
