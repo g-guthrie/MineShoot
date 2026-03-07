@@ -173,7 +173,7 @@
         if (avatarRigApi && avatarRigApi.updateLocomotion) {
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             avatarRigApi.updateAimPitch(pitch);
-            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt);
+            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded);
         }
     }
 
@@ -562,7 +562,7 @@
         var horizontalSpeed = Math.sqrt(movedX * movedX + movedZ * movedZ) / Math.max(dt, 0.0001);
         lastMoveSpeedNorm = Math.max(0, Math.min(1.4, horizontalSpeed / RUN_SPEED));
         isMoving = horizontalSpeed > 0.06;
-        sprinting = !adsActive && isMoving && keys.sprint;
+        sprinting = !adsActive && isGrounded && isMoving && keys.sprint;
 
         if (jumpJustPressed && adsActive) {
             scopeHeld = false;
@@ -626,13 +626,13 @@
 
     GamePlayer.fireAnimation = function () {
         if (!avatarRigApi || !avatarRigApi.rig || !avatarRigApi.rig.gun) return;
-        var recoilByWeapon = {
-            pistol: { z: -0.0375, x: -0.06 },
-            rifle: { z: -0.045, x: -0.075 },
-            machinegun: { z: -0.027, x: -0.06 },
-            shotgun: { z: -0.075, x: -0.12 },
-            sniper: { z: -0.09, x: -0.135 },
-            seekergun: { z: -0.022, x: -0.04 }
+    var recoilByWeapon = {
+            pistol: { z: -0.04, x: -0.08 },
+            rifle: { z: -0.05, x: -0.09 },
+            machinegun: { z: -0.024, x: -0.045 },
+            shotgun: { z: -0.09, x: -0.16 },
+            sniper: { z: -0.12, x: -0.2 },
+            seekergun: { z: -0.03, x: -0.06 }
         };
         var recoil = recoilByWeapon[currentWeaponId] || recoilByWeapon.rifle;
 
@@ -644,6 +644,10 @@
             setTimeout(function () {
                 avatarRigApi.setMuzzleVisible(false);
             }, currentWeaponId === 'sniper' ? 90 : 60);
+        }
+        if (avatarRigApi.rig) {
+            if (avatarRigApi.rig.armR) avatarRigApi.rig.armR.rotation.x += recoil.x * 0.2;
+            if (avatarRigApi.rig.armL) avatarRigApi.rig.armL.rotation.x += recoil.x * 0.08;
         }
     };
 

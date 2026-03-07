@@ -302,7 +302,7 @@
 
 
     function tracerLifeForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 0.09;
+        if (weaponId === 'machinegun') return 0.055;
         if (weaponId === 'shotgun') return 0.1;
         if (weaponId === 'sniper') return 0.12;
         return 0.11;
@@ -316,7 +316,7 @@
     }
 
     function tracerSegmentLengthForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 1.7;
+        if (weaponId === 'machinegun') return 1.15;
         if (weaponId === 'shotgun') return 1.9;
         if (weaponId === 'sniper') return 2.6;
         return 2.1;

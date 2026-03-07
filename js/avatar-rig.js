@@ -16,8 +16,8 @@
     //   +Z = backward
     var ARM_SHORT_SIDE = 0.22;
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
-    var GUN_MOUNT_SHIFT_X = -0.2;
-    var GUN_MOUNT_LIFT_Y = 0.15 + HALF_ARM_SHORT_SIDE;
+    var GUN_MOUNT_SHIFT_X = -0.08;
+    var GUN_MOUNT_LIFT_Y = 0.1 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
     var FOOT_PLANE_OFFSET_Y = 0.3;
     var HEAD_EYE_Y = 0.06;
@@ -86,53 +86,53 @@
                 weaponClass: 'gun',
                 gunPos: [0.0, 0.02, 0.08],
                 gunRot: [0, 0, 0],
-                body:   { p: [0, 0.0, -0.09], s: [1.16, 1.0, 1.14], c: 0x2b2b2b },
-                barrel: { p: [0, 0.03, -0.45], s: [1.1, 1.0, 1.3], c: 0x191919 },
-                stock:  { p: [0, -0.03, 0.16], s: [1.1, 1.0, 1.0], c: 0x5b5b5b },
-                grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5b5b5b },
+                body:   { p: [0, 0.0, -0.08], s: [1.38, 1.05, 1.32], c: 0x2b2b2b },
+                barrel: { p: [0, 0.03, -0.52], s: [1.18, 1.0, 1.62], c: 0x191919 },
+                stock:  { p: [0, -0.03, 0.19], s: [1.2, 1.05, 1.18], c: 0x565656 },
+                grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.08, 1.0], c: 0x565656 },
                 scope: false,
                 pump: false,
                 coil: true,
-                muzzlePos: [0, 0.03, -0.7]
+                muzzlePos: [0, 0.03, -0.82]
             },
             shotgun: {
                 weaponClass: 'gun',
                 gunPos: [0.0, 0.02, 0.06],
                 gunRot: [0, 0, 0],
-                body:   { p: [0, 0.0, -0.1], s: [1.18, 1.02, 1.1], c: 0x6b4220 },
-                barrel: { p: [0, 0.02, -0.43], s: [1.7, 1.12, 1.35], c: 0x222222 },
-                stock:  { p: [0, -0.03, 0.17], s: [1.12, 1.02, 1.02], c: 0x8a5a2d },
-                grip:   { p: [0, -0.1, 0.02], s: [1.0, 1.0, 1.0], c: 0x8a5a2d },
+                body:   { p: [0, 0.0, -0.1], s: [1.3, 1.06, 1.18], c: 0x6b4220 },
+                barrel: { p: [0, 0.02, -0.47], s: [1.95, 1.12, 1.55], c: 0x222222 },
+                stock:  { p: [0, -0.03, 0.21], s: [1.2, 1.04, 1.16], c: 0x8a5a2d },
+                grip:   { p: [0, -0.1, 0.02], s: [1.02, 1.06, 1.02], c: 0x8a5a2d },
                 scope: false,
                 pump: true,
                 coil: false,
-                muzzlePos: [0, 0.02, -0.71]
+                muzzlePos: [0, 0.02, -0.86]
             },
             sniper: {
                 weaponClass: 'gun',
                 gunPos: [0.0, 0.02, 0.04],
                 gunRot: [0, 0, 0],
-                body:   { p: [0, -0.01, -0.14], s: [1.22, 0.9, 1.58], c: 0x2f3f2f },
-                barrel: { p: [0, 0.02, -0.56], s: [0.82, 0.82, 2.15], c: 0x1c1c1c },
-                stock:  { p: [0, -0.02, 0.17], s: [1.1, 1.0, 1.15], c: 0x5d3c1f },
+                body:   { p: [0, -0.01, -0.16], s: [1.26, 0.9, 1.9], c: 0x2f3f2f },
+                barrel: { p: [0, 0.02, -0.7], s: [0.8, 0.8, 2.95], c: 0x1c1c1c },
+                stock:  { p: [0, -0.02, 0.22], s: [1.16, 1.0, 1.28], c: 0x5d3c1f },
                 grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5d3c1f },
                 scope: true,
                 pump: false,
                 coil: false,
-                muzzlePos: [0, 0.02, -1.03]
+                muzzlePos: [0, 0.02, -1.34]
             },
-            plasma: {
+            seekergun: {
                 weaponClass: 'gun',
                 gunPos: [0.0, 0.03, 0.06],
                 gunRot: [0.02, 0.02, 0],
-                body:   { p: [0, 0.0, -0.09], s: [1.18, 1.08, 1.25], c: 0x1d4f57 },
-                barrel: { p: [0, 0.03, -0.5], s: [0.92, 0.92, 1.3], c: 0x4bd6f3 },
-                stock:  { p: [0, -0.03, 0.16], s: [1.08, 1.0, 1.0], c: 0x314f5d },
+                body:   { p: [0, 0.0, -0.06], s: [1.08, 1.04, 1.08], c: 0x254b57 },
+                barrel: { p: [0, 0.02, -0.44], s: [0.88, 0.9, 1.18], c: 0x70d6ee },
+                stock:  { p: [0, -0.03, 0.14], s: [1.0, 1.0, 1.0], c: 0x314f5d },
                 grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x314f5d },
                 scope: true,
                 pump: false,
                 coil: true,
-                muzzlePos: [0, 0.04, -0.78]
+                muzzlePos: [0, 0.04, -0.72]
             }
         };
     }
@@ -173,7 +173,7 @@
         armL.position.y = -0.42;
         shoulderLeft.add(armL);
         var palmLeft = new THREE.Group();
-        palmLeft.position.set(-0.02, -0.85, 0);
+        palmLeft.position.set(-0.01, -0.84, -0.03);
         shoulderLeft.add(palmLeft);
         modelRoot.add(shoulderLeft);
 
@@ -184,7 +184,7 @@
         shoulderRight.add(armR);
 
         var palmRight = new THREE.Group();
-        palmRight.position.set(0.01, -0.85, 0);
+        palmRight.position.set(0.015, -0.84, -0.02);
         shoulderRight.add(palmRight);
         modelRoot.add(shoulderRight);
 
@@ -242,6 +242,10 @@
 
         palmRight.add(gun);
 
+        var supportAnchor = new THREE.Object3D();
+        supportAnchor.position.set(0, -0.01, -0.28);
+        gun.add(supportAnchor);
+
         var coreAnchor = new THREE.Object3D();
         coreAnchor.position.set(0, 1.0, 0);
         modelRoot.add(coreAnchor);
@@ -270,6 +274,7 @@
             pump: pump,
             coil: coil,
             muzzle: muzzle,
+            supportAnchor: supportAnchor,
             coreAnchor: coreAnchor,
             throwableOriginAnchor: throwableOriginAnchor,
             eyeAnchor: eyeAnchor,
@@ -283,6 +288,7 @@
             aimPitch: 0,
             gunBasePos: new THREE.Vector3(),
             gunBaseRot: new THREE.Vector3(),
+            supportBasePos: new THREE.Vector3(),
             footPlaneOffsetY: FOOT_PLANE_OFFSET_Y
         };
 
@@ -304,6 +310,7 @@
             rig.gun.rotation.x = -75 * DEG_TO_RAD;
             rig.gunBasePos.copy(rig.gun.position);
             rig.gunBaseRot.copy(rig.gun.rotation);
+            rig.supportBasePos.set(0, -0.01, (style.barrel && style.barrel.p ? style.barrel.p[2] * 0.6 : -0.28));
 
             setPart(rig.gunBody, style.body);
             setPart(rig.gunBarrel, style.barrel);
@@ -314,14 +321,16 @@
             rig.pump.visible = !!style.pump;
             rig.coil.visible = !!style.coil;
             rig.muzzle.position.set(style.muzzlePos[0], style.muzzlePos[1], style.muzzlePos[2]);
+            rig.supportAnchor.position.set(rig.supportBasePos.x, rig.supportBasePos.y, rig.supportBasePos.z);
         }
 
         function updateAimPitch(pitch) {
             rig.aimPitch = Math.max(-1.1, Math.min(1.1, pitch || 0));
         }
 
-        function updateLocomotion(speedNorm, sprinting, dt) {
+        function updateLocomotion(speedNorm, sprinting, dt, airborne) {
             speedNorm = Math.max(0, Math.min(1.4, speedNorm || 0));
+            airborne = !!airborne;
             if (speedNorm > 0.02) {
                 rig.gaitPhase += dt * ((sprinting ? 13 : 9) * (0.35 + speedNorm));
             }
@@ -331,8 +340,28 @@
             var walkSwing = Math.sin(rig.gaitPhase) * legAmp;
             var sideSwing = -walkSwing * 0.75;
 
+            if (airborne) {
+                rig.legL.rotation.x = 0.18;
+                rig.legR.rotation.x = 0.18;
+                rig.legL.rotation.z = -0.08;
+                rig.legR.rotation.z = 0.08;
+                rig.legL.position.x = -0.06;
+                rig.legR.position.x = 0.06;
+                rig.armL.rotation.x = -1.55;
+                rig.armL.rotation.z = -0.12;
+                rig.armR.rotation.x = 1.05 + (rig.aimPitch * 0.25);
+                rig.armR.rotation.z = -0.08;
+                rig.palmRight.rotation.x = 0;
+                rig.gun.rotation.x = rig.gunBaseRot.x;
+                return;
+            }
+
             rig.legL.rotation.x = walkSwing;
             rig.legR.rotation.x = -walkSwing;
+            rig.legL.rotation.z = 0;
+            rig.legR.rotation.z = 0;
+            rig.legL.position.x = -0.18;
+            rig.legR.position.x = 0.18;
 
             var aimBias = rig.aimPitch * 0.2;
             if (rig.weaponClass === 'melee') {
@@ -354,9 +383,13 @@
                 var armBase = 75 * DEG_TO_RAD;
                 rig.armR.rotation.x = armBase + shoulderAim;
                 rig.armR.rotation.z = -0.08;
-                rig.armL.rotation.x = -sideSwing;
-                rig.armL.rotation.z = -0.04;
+                rig.armL.rotation.x = 1.18 + (rig.aimPitch * 0.18);
+                rig.armL.rotation.y = -0.18;
+                rig.armL.rotation.z = 0.28;
                 rig.palmRight.rotation.x = 0;
+                rig.palmLeft.position.x = -0.01;
+                rig.palmLeft.position.y = -0.72;
+                rig.palmLeft.position.z = -0.2;
                 rig.gun.rotation.x = rig.gunBaseRot.x;
             }
         }
@@ -389,8 +422,28 @@
         function setMuzzleVisible(visible) {
             if (!muzzle) return;
             muzzle.visible = !!visible;
-            if (rig.weaponId === 'plasma' && muzzle.material && muzzle.material.color) {
-                muzzle.material.color.setHex(visible ? 0x66ddff : 0x44aacc);
+            if (!muzzle.material) return;
+            if (visible) {
+                if (rig.weaponId === 'seekergun') {
+                    muzzle.scale.set(0.95, 0.95, 1.4);
+                    muzzle.material.color.setHex(0x8fe7ff);
+                } else if (rig.weaponId === 'shotgun' || rig.weaponId === 'sniper') {
+                    muzzle.scale.set(1.6, 1.6, 2.2);
+                    muzzle.material.color.setHex(0xfff0c2);
+                } else if (rig.weaponId === 'machinegun') {
+                    muzzle.scale.set(1.05, 1.05, 1.5);
+                    muzzle.material.color.setHex(0xffd67d);
+                } else {
+                    muzzle.scale.set(1.2, 1.2, 1.8);
+                    muzzle.material.color.setHex(0xffd896);
+                }
+            } else {
+                muzzle.scale.set(1, 1, 1);
+                if (rig.weaponId === 'seekergun') {
+                    muzzle.material.color.setHex(0x56b8d1);
+                } else {
+                    muzzle.material.color.setHex(0xffcc66);
+                }
             }
         }
 
