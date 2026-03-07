@@ -7,12 +7,22 @@
 
     var GameAvatarRig = {};
     var DEG_TO_RAD = Math.PI / 180;
+    // Local rig axes:
+    //   +X = actor right
+    //   -X = actor left
+    //   +Y = up
+    //   -Y = down
+    //   -Z = forward / face / muzzle direction
+    //   +Z = backward
     var ARM_SHORT_SIDE = 0.22;
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
     var GUN_MOUNT_SHIFT_X = -0.2;
     var GUN_MOUNT_LIFT_Y = 0.15 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
     var FOOT_PLANE_OFFSET_Y = 0.3;
+    var HEAD_EYE_Y = 0.06;
+    var HEAD_EYE_Z = -0.282;
+    var HEAD_EYE_X = 0.12;
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -30,7 +40,7 @@
     function addXEye(head, xOffset, material) {
         if (!head) return null;
         var eye = new THREE.Group();
-        eye.position.set(xOffset, 0.06, 0.282);
+        eye.position.set(xOffset, HEAD_EYE_Y, HEAD_EYE_Z);
 
         var slashA = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.028, 0.02), material);
         slashA.rotation.z = 45 * DEG_TO_RAD;
@@ -150,8 +160,8 @@
         var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
         head.position.y = 1.8;
         modelRoot.add(head);
-        var eyeLeft = addXEye(head, -0.12, eyeMat);
-        var eyeRight = addXEye(head, 0.12, eyeMat);
+        var eyeLeft = addXEye(head, -HEAD_EYE_X, eyeMat);
+        var eyeRight = addXEye(head, HEAD_EYE_X, eyeMat);
 
         var eyeAnchor = new THREE.Object3D();
         eyeAnchor.position.set(0, 0.05, 0.18);

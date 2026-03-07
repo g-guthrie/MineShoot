@@ -1519,6 +1519,7 @@
         var controlsToggle = document.getElementById('controls-toggle');
         var primaryPlayBtn = document.getElementById('primary-play-btn');
         var tdmPlayBtn = document.getElementById('tdm-play-btn');
+        var sandboxPlayBtn = document.getElementById('sandbox-play-btn');
         var createPrivateRoomBtn = document.getElementById('create-private-room-btn');
         var privateRoomInput = document.getElementById('private-room-input');
         var joinPrivateRoomBtn = document.getElementById('join-private-room-btn');
@@ -1571,6 +1572,7 @@
             roomActionInFlight = !!busy;
             if (primaryPlayBtn) primaryPlayBtn.disabled = roomActionInFlight;
             if (tdmPlayBtn) tdmPlayBtn.disabled = roomActionInFlight;
+            if (sandboxPlayBtn) sandboxPlayBtn.disabled = roomActionInFlight;
             if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = roomActionInFlight;
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = roomActionInFlight;
             if (privateRoomInput) privateRoomInput.disabled = roomActionInFlight;
@@ -1617,6 +1619,7 @@
             if (controlsToggle) controlsToggle.disabled = true;
             if (primaryPlayBtn) primaryPlayBtn.disabled = true;
             if (tdmPlayBtn) tdmPlayBtn.disabled = true;
+            if (sandboxPlayBtn) sandboxPlayBtn.disabled = true;
             if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = true;
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = true;
             if (privateRoomInput) privateRoomInput.disabled = true;
@@ -1646,6 +1649,7 @@
             if (controlsMenu) controlsMenu.hidden = true;
             if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
             if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
+            if (sandboxPlayBtn) sandboxPlayBtn.style.display = 'none';
             if (createPrivateRoomBtn) createPrivateRoomBtn.style.display = 'none';
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
             if (privateRoomInput) privateRoomInput.style.display = 'none';
@@ -1696,6 +1700,10 @@
                 if (tdmPlayBtn) {
                     tdmPlayBtn.disabled = false;
                     tdmPlayBtn.style.display = '';
+                }
+                if (sandboxPlayBtn) {
+                    sandboxPlayBtn.disabled = false;
+                    sandboxPlayBtn.style.display = '';
                 }
                 if (createPrivateRoomBtn) {
                     createPrivateRoomBtn.disabled = false;
@@ -1806,6 +1814,12 @@
         if (tdmPlayBtn) {
             tdmPlayBtn.addEventListener('click', function () {
                 beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...');
+            });
+        }
+
+        if (sandboxPlayBtn) {
+            sandboxPlayBtn.addEventListener('click', function () {
+                startWithMode('single_full_sandbox');
             });
         }
 
