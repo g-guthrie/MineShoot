@@ -1239,6 +1239,9 @@
             }
 
             globalThis.__MAYHEM_RUNTIME.GameThrowables.update(dt, function () {});
+            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState) {
+                globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState(), selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
+            }
         } else {
             globalThis.__MAYHEM_RUNTIME.GameAbilities.update(
                 dt,
@@ -1264,6 +1267,7 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmor(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmorMax());
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(null, null);
         }
 
         if (currentWeapon && currentWeapon.id === 'seekergun' && !armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
@@ -1424,10 +1428,11 @@
 
     function runtimeRoomLabel(mode) {
         if (!mode || !mode.roomId) return '';
+        var prefix = mode.gameMode ? String(mode.gameMode).toUpperCase() + ' ' : '';
         if (mode.id === 'single_cloudflare' && isShareCodeRoomId(mode.roomId)) {
-            return 'CODE ' + roomCodeFromRoomId(mode.roomId);
+            return prefix + 'CODE ' + roomCodeFromRoomId(mode.roomId);
         }
-        return 'ROOM ' + String(mode.roomId).toUpperCase();
+        return prefix + 'ROOM ' + String(mode.roomId).toUpperCase();
     }
 
     function setRuntimeIndicator(mode) {
@@ -1454,7 +1459,10 @@
             if (mode.roomId === 'global') {
                 return 'Connecting to Public Lobby: ' + mode.roomId + '...';
             }
-            return 'Connecting to Quick Match: ' + mode.roomId + '...';
+            if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
+                return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
+            }
+            return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_cloudflare') {
             return 'Connecting to Solo Cloudflare room: ' + mode.roomId + '...';
@@ -1471,7 +1479,10 @@
             if (mode.roomId === 'global') {
                 return 'Public Lobby: shared room ' + mode.roomId + '.';
             }
-            return 'Quick match joined room ' + mode.roomId + '.';
+            if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
+                return 'Team Deathmatch joined room ' + mode.roomId + '.';
+            }
+            return 'Free For All joined room ' + mode.roomId + '.';
         }
         if (mode.id === 'single_cloudflare') {
             if (isShareCodeRoomId(mode.roomId)) {
@@ -1507,6 +1518,7 @@
         var controlsMenu = document.getElementById('controls-menu');
         var controlsToggle = document.getElementById('controls-toggle');
         var primaryPlayBtn = document.getElementById('primary-play-btn');
+        var tdmPlayBtn = document.getElementById('tdm-play-btn');
         var createPrivateRoomBtn = document.getElementById('create-private-room-btn');
         var privateRoomInput = document.getElementById('private-room-input');
         var joinPrivateRoomBtn = document.getElementById('join-private-room-btn');
@@ -1558,6 +1570,7 @@
         function setRoomActionBusy(busy, message) {
             roomActionInFlight = !!busy;
             if (primaryPlayBtn) primaryPlayBtn.disabled = roomActionInFlight;
+            if (tdmPlayBtn) tdmPlayBtn.disabled = roomActionInFlight;
             if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = roomActionInFlight;
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = roomActionInFlight;
             if (privateRoomInput) privateRoomInput.disabled = roomActionInFlight;
@@ -1603,6 +1616,7 @@
             if (altModeToggle) altModeToggle.disabled = true;
             if (controlsToggle) controlsToggle.disabled = true;
             if (primaryPlayBtn) primaryPlayBtn.disabled = true;
+            if (tdmPlayBtn) tdmPlayBtn.disabled = true;
             if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = true;
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = true;
             if (privateRoomInput) privateRoomInput.disabled = true;
@@ -1616,6 +1630,9 @@
             if (options.roomId) {
                 selectedMode.roomId = String(options.roomId);
             }
+            if (options.gameMode) {
+                selectedMode.gameMode = String(options.gameMode);
+            }
             if (selectedMode.id === 'single_cloudflare' && isShareCodeRoomId(selectedMode.roomId)) {
                 setPrivateRoomShare(selectedMode.roomId);
             } else {
@@ -1628,6 +1645,7 @@
             if (modeButtonsWrap) modeButtonsWrap.hidden = true;
             if (controlsMenu) controlsMenu.hidden = true;
             if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
+            if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
             if (createPrivateRoomBtn) createPrivateRoomBtn.style.display = 'none';
             if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
             if (privateRoomInput) privateRoomInput.style.display = 'none';
@@ -1674,6 +1692,10 @@
                 if (primaryPlayBtn) {
                     primaryPlayBtn.disabled = false;
                     primaryPlayBtn.style.display = '';
+                }
+                if (tdmPlayBtn) {
+                    tdmPlayBtn.disabled = false;
+                    tdmPlayBtn.style.display = '';
                 }
                 if (createPrivateRoomBtn) {
                     createPrivateRoomBtn.disabled = false;
@@ -1733,11 +1755,12 @@
                 setRoomAccessStatus('Private room ready. Share code ' + roomCodeFromRoomId(payload.roomId) + '.', false);
             } else {
                 setPrivateRoomShare('');
-                setRoomAccessStatus('Joined public room ' + String(payload.roomId).toUpperCase() + '.', false);
+                setRoomAccessStatus('Joined ' + String((payload.gameMode || 'ffa')).toUpperCase() + ' room ' + String(payload.roomId).toUpperCase() + '.', false);
             }
 
             startWithMode(payload.modeId || 'cloud_multiplayer', {
-                roomId: payload.roomId
+                roomId: payload.roomId,
+                gameMode: payload.gameMode || 'ffa'
             });
         }
 
@@ -1776,7 +1799,13 @@
 
         if (primaryPlayBtn) {
             primaryPlayBtn.addEventListener('click', function () {
-                beginRoomAction('quick', {}, 'Finding a public room...');
+                beginRoomAction('quick', { gameMode: 'ffa' }, 'Finding an FFA room...');
+            });
+        }
+
+        if (tdmPlayBtn) {
+            tdmPlayBtn.addEventListener('click', function () {
+                beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...');
             });
         }
 

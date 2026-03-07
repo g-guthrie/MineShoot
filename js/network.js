@@ -33,6 +33,8 @@
     var roomId = 'global';
     var selfId = '';
     var selfState = null;
+    var matchState = null;
+    var gameMode = '';
     var worldMeta = null;
     var worldMismatchNotified = false;
 
@@ -240,6 +242,8 @@
             connected = true;
             selfId = msg.selfId || selfId;
             roomId = sanitizeRoomId(msg.roomId || roomId || 'global');
+            gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
+            matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : null;
 
             var expectedMeta = buildExpectedWorldMeta(roomId);
             var nextMeta = {
@@ -281,6 +285,8 @@
         }
 
         if (msg.t === (MSG_S2C.SNAPSHOT || 'snapshot')) {
+            gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
+            matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : matchState;
             applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || []);
             return;
         }
@@ -581,6 +587,8 @@
         seekerRejectQueue = [];
         selfState = null;
         selfId = '';
+        matchState = null;
+        gameMode = '';
         worldMeta = null;
         worldMismatchNotified = false;
         GameNetAuth.clearUser();
@@ -636,6 +644,10 @@
                 classId: u.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
                 throwables: null,
+                kills: 0,
+                deaths: 0,
+                progressScore: 0,
+                teamId: '',
                 alive: true
             };
         }
@@ -881,6 +893,14 @@
             chokeState: selfState.chokeState || null,
             deadeyeState: selfState.deadeyeState || null
         };
+    };
+
+    GameNet.getMatchState = function () {
+        return matchState ? JSON.parse(JSON.stringify(matchState)) : null;
+    };
+
+    GameNet.getGameMode = function () {
+        return gameMode || '';
     };
 
     GameNet.getLockTargets = function () {

@@ -65,7 +65,7 @@ export const gameplayTuning = {
     pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 250,  bodyDamage: 24,  headDamage: 145, maxRange: 76,  pellets: 1,  spreadNdc: 0.017 },
     machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 28,  maxRange: 84,  pellets: 1,  spreadNdc: 0.018 },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 900,  bodyDamage: 15,  headDamage: 24,  maxRange: 36,  pellets: 12, spreadNdc: 0 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1100, bodyDamage: 185, headDamage: 340, maxRange: 230, pellets: 1,  spreadNdc: 0.03 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1100, bodyDamage: 185, headDamage: 340, maxRange: 230, pellets: 1,  spreadNdc: 0.085 },
     seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  spreadNdc: 0 }
   },
   throwableCategories: {
@@ -107,7 +107,7 @@ export const gameplayTuning = {
     deadeye: {
       id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
-      cooldownMs: 22000, range: 80, duration: 2.0, maxTargets: 3, minDot: 0.18, damage: 260
+      cooldownMs: 22000, range: 80, duration: 3.0, maxTargets: 3, minDot: 0.18, damage: 260
     }
   },
   defaultAbilityLoadout: { slot1: 'choke', slot2: 'deadeye' }

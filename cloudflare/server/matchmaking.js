@@ -1,9 +1,14 @@
 import { json, sanitizeRoomId } from './transport.js';
 
-const PUBLIC_ROOM_PREFIX = 'match';
+const PUBLIC_ROOM_PREFIX = {
+  ffa: 'ffa',
+  tdm: 'tdm'
+};
 const PRIVATE_ROOM_PREFIX = 'private';
 const DEFAULT_PUBLIC_ROOM_COUNT = 8;
-const DEFAULT_PUBLIC_ROOM_CAPACITY = 6;
+const PUBLIC_ROOM_START_THRESHOLD = 8;
+const PUBLIC_ROOM_SOFT_TARGET = 12;
+const DEFAULT_PUBLIC_ROOM_CAPACITY = 16;
 const PRIVATE_ROOM_CODE_LENGTH = 6;
 
 function clampInt(value, min, max, fallback) {
@@ -20,8 +25,14 @@ function randomToken(length) {
   return out.slice(0, length).toLowerCase();
 }
 
-function publicRoomId(index) {
-  return sanitizeRoomId(`${PUBLIC_ROOM_PREFIX}-${String(index + 1).padStart(2, '0')}`);
+function normalizePublicGameMode(raw) {
+  const mode = String(raw || 'ffa').trim().toLowerCase();
+  return mode === 'tdm' ? 'tdm' : 'ffa';
+}
+
+function publicRoomId(gameMode, index) {
+  const prefix = PUBLIC_ROOM_PREFIX[normalizePublicGameMode(gameMode)] || PUBLIC_ROOM_PREFIX.ffa;
+  return sanitizeRoomId(`${prefix}-${String(index + 1).padStart(2, '0')}`);
 }
 
 function privateRoomIdFromCode(code) {
@@ -78,47 +89,58 @@ async function fetchRoomState(env, roomId) {
   }
 }
 
-async function allocateQuickMatch(env) {
+function chooseBestRoom(entries, predicate) {
+  const candidates = entries.filter(predicate).sort((a, b) => {
+    if (b.connectedPlayers !== a.connectedPlayers) {
+      return b.connectedPlayers - a.connectedPlayers;
+    }
+    return a.roomId.localeCompare(b.roomId);
+  });
+  return candidates.length ? candidates[0] : null;
+}
+
+async function allocateQuickMatch(env, requestedGameMode) {
+  const gameMode = normalizePublicGameMode(requestedGameMode);
   const roomCount = clampInt(env.PUBLIC_ROOM_COUNT, 1, 24, DEFAULT_PUBLIC_ROOM_COUNT);
-  const roomCapacity = clampInt(env.PUBLIC_ROOM_CAPACITY, 1, 32, DEFAULT_PUBLIC_ROOM_CAPACITY);
+  const roomCapacity = clampInt(env.PUBLIC_ROOM_CAPACITY, PUBLIC_ROOM_SOFT_TARGET, 32, DEFAULT_PUBLIC_ROOM_CAPACITY);
   const roomIds = [];
 
   for (let i = 0; i < roomCount; i++) {
-    roomIds.push(publicRoomId(i));
+    roomIds.push(publicRoomId(gameMode, i));
   }
 
   const stateEntries = await Promise.all(roomIds.map(async (roomId) => {
     const state = await fetchRoomState(env, roomId);
     const connectedPlayers = Math.max(0, Number(state && state.connectedPlayers) || 0);
     const players = Math.max(connectedPlayers, Number(state && state.players) || 0);
+    const matchStarted = !!(state && state.matchStarted);
     return {
       roomId,
       connectedPlayers,
-      players
+      players,
+      matchStarted
     };
   }));
 
-  const candidates = stateEntries
-    .filter((entry) => entry.connectedPlayers < roomCapacity)
-    .sort((a, b) => {
-      if (b.connectedPlayers !== a.connectedPlayers) {
-        return b.connectedPlayers - a.connectedPlayers;
-      }
-      return a.roomId.localeCompare(b.roomId);
-    });
+  const selected =
+    chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+    chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
+    chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+    chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity);
 
-  if (candidates.length > 0) {
-    const selected = candidates[0];
+  if (selected) {
     return buildRoomPayload(selected.roomId, 'public', {
+      gameMode,
       players: selected.players,
       connectedPlayers: selected.connectedPlayers
     });
   }
 
   const overflowRoomId = sanitizeRoomId(
-    `${PUBLIC_ROOM_PREFIX}-${Date.now().toString(36).slice(-4)}-${randomToken(2)}`
+    `${PUBLIC_ROOM_PREFIX[gameMode]}-${Date.now().toString(36).slice(-4)}-${randomToken(2)}`
   );
   return buildRoomPayload(overflowRoomId, 'public', {
+    gameMode,
     players: 0,
     connectedPlayers: 0
   });
@@ -150,7 +172,7 @@ export async function handleMatchmaking(env, request) {
   const action = String(body.action || '').trim().toLowerCase();
 
   if (action === 'quick') {
-    const payload = await allocateQuickMatch(env);
+    const payload = await allocateQuickMatch(env, body.gameMode || 'ffa');
     return json(payload);
   }
 

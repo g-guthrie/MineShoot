@@ -82,6 +82,9 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
 
 export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '') {
   if (!target || !out) return;
+  if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
+    room.recordElimination(sourceId, target.id);
+  }
   room.broadcast({
     t: MSG_S2C.DAMAGE_EVENT,
     targetId: target.id,

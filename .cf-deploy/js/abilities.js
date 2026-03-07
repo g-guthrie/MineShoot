@@ -300,8 +300,8 @@
             return { ok: false, message: 'No Deadeye targets.' };
         }
 
-        var durationMs = Math.max(1, Math.round((cfg.duration || 2.0) * 1000));
-        var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, cfg.maxTargets || 3)));
+        var durationMs = Math.max(1, Math.round((cfg.duration || 3.0) * 1000));
+        var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, candidates.length)));
         deadeyeState = {
             active: true,
             startedAt: now,

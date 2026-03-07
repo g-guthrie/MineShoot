@@ -64,11 +64,22 @@ const SHOTGUN_BURST_WINDOW_MS = 220;
 const DEV_LOCAL_ROOM_NAME = 'dev-local';
 const LOCAL_SHARED_ROOM_NAME = 'local-shared';
 const SOLO_CLOUDFLARE_ROOM_PREFIX = 'cf-solo-';
-const PUBLIC_MATCH_ROOM_PREFIX = 'match-';
+const PUBLIC_FFA_ROOM_PREFIX = 'ffa-';
+const PUBLIC_TDM_ROOM_PREFIX = 'tdm-';
 const PRIVATE_SHARE_ROOM_PREFIX = 'private-';
 const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
+const GAME_MODE_FFA = 'ffa';
+const GAME_MODE_TDM = 'tdm';
+const TDM_TEAM_A = 'alpha';
+const TDM_TEAM_B = 'bravo';
+const PUBLIC_ROOM_START_THRESHOLD = 8;
+const PUBLIC_ROOM_SOFT_TARGET = 12;
+const PUBLIC_ROOM_HARD_CAP = 16;
+const FFA_TARGET_PROGRESS = 10;
+const TDM_TARGET_PROGRESS = 10;
+const MATCH_RESET_DELAY_MS = 5000;
 
 function classPreset(classId) {
   return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
@@ -78,6 +89,42 @@ function cloneWorldFlags(flags) {
   return {
     envV2: !!(flags && flags.envV2),
     terrainPhysicsV2: !!(flags && flags.terrainPhysicsV2)
+  };
+}
+
+function detectGameMode(roomName) {
+  const room = String(roomName || '');
+  if (room.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return GAME_MODE_TDM;
+  if (room.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return GAME_MODE_FFA;
+  return '';
+}
+
+function isPublicMatchRoom(roomName) {
+  return detectGameMode(roomName) === GAME_MODE_FFA || detectGameMode(roomName) === GAME_MODE_TDM;
+}
+
+function emptyMatchState(gameMode) {
+  return {
+    gameMode: gameMode || '',
+    started: false,
+    ended: false,
+    startedAt: 0,
+    endedAt: 0,
+    resetAt: 0,
+    matchBaselinePlayerCount: 0,
+    targetProgress: gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : FFA_TARGET_PROGRESS,
+    leaderProgress: 0,
+    leaderId: '',
+    winnerId: '',
+    winnerTeam: '',
+    teamProgress: {
+      [TDM_TEAM_A]: 0,
+      [TDM_TEAM_B]: 0
+    },
+    teamBaselineSize: {
+      [TDM_TEAM_A]: 0,
+      [TDM_TEAM_B]: 0
+    }
   };
 }
 
@@ -102,10 +149,16 @@ export class GlobalArenaRoom extends DurableObject {
     this.fireZones = new Map();
     this.nextProjectileSeq = 1;
     this.nextFireZoneSeq = 1;
+    this.gameMode = detectGameMode(this.roomName);
+    this.matchState = emptyMatchState(this.gameMode);
   }
 
   refreshWorldMeta() {
     this.roomName = sanitizeRoomId(this.roomName || this.env.ROOM_NAME || 'global');
+    this.gameMode = detectGameMode(this.roomName);
+    if (!this.matchState || this.matchState.gameMode !== this.gameMode) {
+      this.matchState = emptyMatchState(this.gameMode);
+    }
     this.worldSeed = `${WORLD_SEED_PREFIX}-${this.roomName}`;
     this.worldProfileVersion = WORLD_PROFILE_VERSION;
     this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
@@ -121,6 +174,8 @@ export class GlobalArenaRoom extends DurableObject {
       t: MSG_S2C.WELCOME,
       selfId,
       roomId: this.roomName,
+      gameMode: this.gameMode || '',
+      matchState: this.serializeMatchState(),
       tickRate: Math.round(1000 / ROOM_TICK_MS),
       worldSeed: this.worldSeed,
       worldProfileVersion: this.worldProfileVersion,
@@ -157,10 +212,16 @@ export class GlobalArenaRoom extends DurableObject {
       if (url.pathname === '/state') {
         return json({
           ok: true,
+          roomId: this.roomName,
+          gameMode: this.gameMode || '',
+          matchStarted: !!(this.matchState && this.matchState.started),
+          matchEnded: !!(this.matchState && this.matchState.ended),
           players: this.humanPlayerCount(),
           connectedPlayers: this.connectedHumanCount(),
           simPlayers: this.simulatedPlayerCount(),
-          bots: this.bots.size
+          bots: this.bots.size,
+          softTarget: PUBLIC_ROOM_SOFT_TARGET,
+          hardCap: PUBLIC_ROOM_HARD_CAP
         });
       }
       return new Response('Expected websocket upgrade', { status: 426 });
@@ -185,6 +246,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     this.ensurePlayer(userId, username, classId);
     this.clients.set(server, { userId });
+    this.startPublicMatchIfReady();
     this.ensureTick();
 
     this.send(server, this.buildWelcomePayload(userId));
@@ -202,9 +264,244 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.roomName === LOCAL_SHARED_ROOM_NAME) return true;
     if (this.roomName.startsWith(SOLO_CLOUDFLARE_ROOM_PREFIX)) return true;
     if (this.roomName === 'global') return false;
-    if (this.roomName.startsWith(PUBLIC_MATCH_ROOM_PREFIX)) return false;
+    if (this.roomName.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return false;
+    if (this.roomName.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return false;
     if (this.roomName.startsWith(PRIVATE_SHARE_ROOM_PREFIX)) return false;
     return false;
+  }
+
+  isPublicMatchRoom() {
+    return isPublicMatchRoom(this.roomName);
+  }
+
+  serializeMatchState() {
+    const match = this.matchState || emptyMatchState(this.gameMode);
+    return {
+      gameMode: match.gameMode || '',
+      started: !!match.started,
+      ended: !!match.ended,
+      startedAt: match.startedAt || 0,
+      endedAt: match.endedAt || 0,
+      resetAt: match.resetAt || 0,
+      matchBaselinePlayerCount: match.matchBaselinePlayerCount || 0,
+      targetProgress: Number(match.targetProgress || 0),
+      leaderProgress: Number(match.leaderProgress || 0),
+      leaderId: match.leaderId || '',
+      winnerId: match.winnerId || '',
+      winnerTeam: match.winnerTeam || '',
+      teamProgress: {
+        [TDM_TEAM_A]: Number((match.teamProgress && match.teamProgress[TDM_TEAM_A]) || 0),
+        [TDM_TEAM_B]: Number((match.teamProgress && match.teamProgress[TDM_TEAM_B]) || 0)
+      },
+      teamBaselineSize: {
+        [TDM_TEAM_A]: Number((match.teamBaselineSize && match.teamBaselineSize[TDM_TEAM_A]) || 0),
+        [TDM_TEAM_B]: Number((match.teamBaselineSize && match.teamBaselineSize[TDM_TEAM_B]) || 0)
+      }
+    };
+  }
+
+  connectedHumanIds() {
+    const ids = [];
+    for (const meta of this.clients.values()) {
+      if (!meta || !meta.userId) continue;
+      const player = this.players.get(meta.userId);
+      if (!player || player.fixtureType === 'sim_player') continue;
+      ids.push(player.id);
+    }
+    return ids;
+  }
+
+  currentFfaAverageProgress() {
+    const connectedIds = this.connectedHumanIds();
+    if (!connectedIds.length) return 0;
+    let total = 0;
+    for (let i = 0; i < connectedIds.length; i++) {
+      const player = this.players.get(connectedIds[i]);
+      total += Number((player && player.progressScore) || 0);
+    }
+    return total / connectedIds.length;
+  }
+
+  assignPlayerToCurrentTeam(player) {
+    if (!player) return '';
+    const progress = (this.matchState && this.matchState.teamProgress) || {};
+    let alphaCount = 0;
+    let bravoCount = 0;
+    for (const p of this.players.values()) {
+      if (!p || p.fixtureType === 'sim_player' || p.id === player.id) continue;
+      if (p.teamId === TDM_TEAM_A) alphaCount++;
+      else if (p.teamId === TDM_TEAM_B) bravoCount++;
+    }
+    let teamId = TDM_TEAM_A;
+    if (alphaCount > bravoCount) {
+      teamId = TDM_TEAM_B;
+    } else if (alphaCount === bravoCount) {
+      const alphaProgress = Number(progress[TDM_TEAM_A] || 0);
+      const bravoProgress = Number(progress[TDM_TEAM_B] || 0);
+      teamId = alphaProgress <= bravoProgress ? TDM_TEAM_A : TDM_TEAM_B;
+    }
+    player.teamId = teamId;
+    return teamId;
+  }
+
+  applyJoinBaseline(player) {
+    if (!player || !this.isPublicMatchRoom()) return;
+    if (this.gameMode === GAME_MODE_FFA) {
+      player.teamId = '';
+      if (this.matchState && this.matchState.started) {
+        player.progressScore = Number(this.currentFfaAverageProgress().toFixed(3));
+      } else {
+        player.progressScore = 0;
+      }
+      return;
+    }
+    if (this.gameMode === GAME_MODE_TDM) {
+      const teamId = this.assignPlayerToCurrentTeam(player);
+      const teamProgress = (this.matchState && this.matchState.teamProgress)
+        ? Number(this.matchState.teamProgress[teamId] || 0)
+        : 0;
+      player.progressScore = Number(teamProgress.toFixed(3));
+    }
+  }
+
+  startPublicMatchIfReady() {
+    if (!this.isPublicMatchRoom()) return false;
+    if (!this.matchState) this.matchState = emptyMatchState(this.gameMode);
+    if (this.matchState.started || this.matchState.ended) return false;
+    const connectedCount = this.connectedHumanCount();
+    if (connectedCount < PUBLIC_ROOM_START_THRESHOLD) return false;
+    const now = nowMs();
+    this.matchState.started = true;
+    this.matchState.ended = false;
+    this.matchState.startedAt = now;
+    this.matchState.endedAt = 0;
+    this.matchState.resetAt = 0;
+    this.matchState.winnerId = '';
+    this.matchState.winnerTeam = '';
+    this.matchState.targetProgress = this.gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : FFA_TARGET_PROGRESS;
+    this.matchState.matchBaselinePlayerCount = connectedCount;
+    this.matchState.teamProgress = {
+      [TDM_TEAM_A]: 0,
+      [TDM_TEAM_B]: 0
+    };
+    this.matchState.teamBaselineSize = {
+      [TDM_TEAM_A]: 0,
+      [TDM_TEAM_B]: 0
+    };
+
+    if (this.gameMode === GAME_MODE_FFA) {
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        player.teamId = '';
+        player.progressScore = Number(player.progressScore || 0);
+      }
+    } else if (this.gameMode === GAME_MODE_TDM) {
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        this.assignPlayerToCurrentTeam(player);
+      }
+      let alphaSize = 0;
+      let bravoSize = 0;
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        if (player.teamId === TDM_TEAM_A) alphaSize++;
+        else if (player.teamId === TDM_TEAM_B) bravoSize++;
+      }
+      this.matchState.teamBaselineSize[TDM_TEAM_A] = Math.max(1, alphaSize);
+      this.matchState.teamBaselineSize[TDM_TEAM_B] = Math.max(1, bravoSize);
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        player.progressScore = 0;
+      }
+    }
+    return true;
+  }
+
+  maybeResetPublicMatch() {
+    if (!this.isPublicMatchRoom() || !this.matchState || !this.matchState.ended) return false;
+    if ((this.matchState.resetAt || 0) > nowMs()) return false;
+    this.matchState = emptyMatchState(this.gameMode);
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      player.progressScore = 0;
+      player.teamId = '';
+      player.kills = 0;
+      player.deaths = 0;
+    }
+    this.startPublicMatchIfReady();
+    return true;
+  }
+
+  updateLeaderProgress() {
+    if (!this.matchState) return;
+    if (this.gameMode === GAME_MODE_FFA) {
+      let leaderId = '';
+      let leaderProgress = 0;
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        const progress = Number(player.progressScore || 0);
+        if (progress >= leaderProgress) {
+          leaderProgress = progress;
+          leaderId = player.id;
+        }
+      }
+      this.matchState.leaderId = leaderId;
+      this.matchState.leaderProgress = Number(leaderProgress.toFixed(3));
+      return;
+    }
+    const alpha = Number((this.matchState.teamProgress && this.matchState.teamProgress[TDM_TEAM_A]) || 0);
+    const bravo = Number((this.matchState.teamProgress && this.matchState.teamProgress[TDM_TEAM_B]) || 0);
+    this.matchState.leaderId = '';
+    this.matchState.leaderProgress = Number(Math.max(alpha, bravo).toFixed(3));
+  }
+
+  finishPublicMatch(winnerId, winnerTeam) {
+    if (!this.isPublicMatchRoom() || !this.matchState || this.matchState.ended) return false;
+    const now = nowMs();
+    this.matchState.ended = true;
+    this.matchState.endedAt = now;
+    this.matchState.resetAt = now + MATCH_RESET_DELAY_MS;
+    this.matchState.winnerId = winnerId || '';
+    this.matchState.winnerTeam = winnerTeam || '';
+    return true;
+  }
+
+  recordElimination(sourceId, targetId) {
+    if (!this.isPublicMatchRoom() || !this.matchState || !this.matchState.started || this.matchState.ended) return;
+    const source = this.getEntityById(sourceId);
+    const target = this.getEntityById(targetId);
+    if (!source || !target || source.id === target.id) return;
+    if (source.fixtureType === 'sim_player' || target.fixtureType === 'sim_player') return;
+    source.kills = Math.max(0, Number(source.kills || 0)) + 1;
+    target.deaths = Math.max(0, Number(target.deaths || 0)) + 1;
+
+    if (this.gameMode === GAME_MODE_FFA) {
+      const baseline = Math.max(1, Number(this.matchState.matchBaselinePlayerCount || this.connectedHumanCount() || 1));
+      source.progressScore = Number((Number(source.progressScore || 0) + (1 / baseline)).toFixed(3));
+      this.updateLeaderProgress();
+      if (Number(source.progressScore || 0) >= Number(this.matchState.targetProgress || FFA_TARGET_PROGRESS)) {
+        this.finishPublicMatch(source.id, '');
+      }
+      return;
+    }
+
+    if (this.gameMode === GAME_MODE_TDM) {
+      const teamId = source.teamId || this.assignPlayerToCurrentTeam(source);
+      if (!teamId) return;
+      const baseline = Math.max(1, Number((this.matchState.teamBaselineSize && this.matchState.teamBaselineSize[teamId]) || 1));
+      const nextProgress = Number(((this.matchState.teamProgress && this.matchState.teamProgress[teamId]) || 0) + (1 / baseline));
+      this.matchState.teamProgress[teamId] = Number(nextProgress.toFixed(3));
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        if (player.teamId === teamId) {
+          player.progressScore = this.matchState.teamProgress[teamId];
+        }
+      }
+      this.updateLeaderProgress();
+      if (this.matchState.teamProgress[teamId] >= Number(this.matchState.targetProgress || TDM_TARGET_PROGRESS)) {
+        this.finishPublicMatch('', teamId);
+      }
+    }
   }
 
   desiredBotCount() {
@@ -287,6 +584,10 @@ export class GlobalArenaRoom extends DurableObject {
       muzzleFlashUntil: 0,
       throwables: this.createThrowableRuntime(),
       lastThrowAt: 0,
+      kills: 0,
+      deaths: 0,
+      progressScore: 0,
+      teamId: '',
       abilityCooldownUntil: 0,
       ultimateCooldownUntil: 0,
       stunUntil: 0,
@@ -356,10 +657,14 @@ export class GlobalArenaRoom extends DurableObject {
       const p = this.players.get(userId);
       p.username = username || p.username;
       this.enforceEntityTerrainFloor(p);
+      if (this.isPublicMatchRoom() && this.gameMode === GAME_MODE_TDM && !p.teamId) {
+        this.applyJoinBaseline(p);
+      }
       return p;
     }
 
     const p = this.buildPlayerEntity(userId, username, classId);
+    this.applyJoinBaseline(p);
     this.players.set(userId, p);
     return p;
   }
@@ -1165,6 +1470,8 @@ export class GlobalArenaRoom extends DurableObject {
     this.broadcast({
       t: MSG_S2C.SNAPSHOT,
       serverTime: nowMs(),
+      gameMode: this.gameMode || '',
+      matchState: this.serializeMatchState(),
       entities,
       projectiles,
       fireZones
@@ -1176,11 +1483,14 @@ export class GlobalArenaRoom extends DurableObject {
     const dtSec = Math.max(0.001, Math.min(0.2, (now - this.lastTickAt) / 1000));
     this.lastTickAt = now;
 
+    this.maybeResetPublicMatch();
     this.syncRoomFixtures();
+    this.startPublicMatchIfReady();
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
     tickProjectiles(this, dtSec);
     tickFireZones(this, dtSec);
+    this.updateLeaderProgress();
     this.broadcastSnapshot();
   }
 }

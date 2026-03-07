@@ -144,6 +144,26 @@
         killCounterEl.textContent = 'Kills: ' + killCount;
     };
 
+    GameUI.updateMatchStatus = function (matchState, selfState) {
+        if (!killCounterEl) return;
+        if (!matchState || !matchState.started) {
+            GameUI.updateKillCounter();
+            return;
+        }
+
+        var ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
+        var ownProgress = Number(selfState && selfState.progressScore || 0);
+        if (String(matchState.gameMode || '') === 'tdm') {
+            var teamId = String(selfState && selfState.teamId || '');
+            var teamProgress = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
+            var enemyTeamId = teamId === 'alpha' ? 'bravo' : 'alpha';
+            var enemyProgress = Number(matchState.teamProgress && matchState.teamProgress[enemyTeamId] || 0);
+            killCounterEl.textContent = 'Kills: ' + ownKills + ' | Team: ' + teamProgress.toFixed(1) + ' / ' + enemyProgress.toFixed(1);
+            return;
+        }
+        killCounterEl.textContent = 'Kills: ' + ownKills + ' | Score: ' + ownProgress.toFixed(1) + ' | Lead: ' + Number(matchState.leaderProgress || 0).toFixed(1);
+    };
+
     GameUI.updateHealth = function (hp, maxHp) {
         var pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
         healthBarEl.style.width = pct + '%';

@@ -7,7 +7,7 @@
 
     var GameUI = {};
 
-    var crosshairEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, bloomReticleEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl;
     var seekerReticleEl, seekerReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
@@ -22,6 +22,7 @@
     var deadeyeReticlePool = [];
     var deadeyeProjectVec = new THREE.Vector3();
     var debugVisualsOn = false;
+    var bloomReticle = null;
 
     var killCount = 0;
     var hitmarkerTimer = null;
@@ -40,6 +41,10 @@
 
     GameUI.init = function () {
         crosshairEl = document.getElementById('crosshair');
+        bloomReticleEl = document.getElementById('bloom-reticle');
+        bloomReticle = (globalThis.__MAYHEM_RUNTIME.GameBloomReticle && globalThis.__MAYHEM_RUNTIME.GameBloomReticle.create)
+            ? globalThis.__MAYHEM_RUNTIME.GameBloomReticle.create(bloomReticleEl)
+            : null;
         shotgunReticleEl = document.getElementById('shotgun-reticle');
         sniperScopeEl = document.getElementById('sniper-scope');
         chokeReticleEl = document.getElementById('choke-reticle');
@@ -139,6 +144,26 @@
         killCounterEl.textContent = 'Kills: ' + killCount;
     };
 
+    GameUI.updateMatchStatus = function (matchState, selfState) {
+        if (!killCounterEl) return;
+        if (!matchState || !matchState.started) {
+            GameUI.updateKillCounter();
+            return;
+        }
+
+        var ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
+        var ownProgress = Number(selfState && selfState.progressScore || 0);
+        if (String(matchState.gameMode || '') === 'tdm') {
+            var teamId = String(selfState && selfState.teamId || '');
+            var teamProgress = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
+            var enemyTeamId = teamId === 'alpha' ? 'bravo' : 'alpha';
+            var enemyProgress = Number(matchState.teamProgress && matchState.teamProgress[enemyTeamId] || 0);
+            killCounterEl.textContent = 'Kills: ' + ownKills + ' | Team: ' + teamProgress.toFixed(1) + ' / ' + enemyProgress.toFixed(1);
+            return;
+        }
+        killCounterEl.textContent = 'Kills: ' + ownKills + ' | Score: ' + ownProgress.toFixed(1) + ' | Lead: ' + Number(matchState.leaderProgress || 0).toFixed(1);
+    };
+
     GameUI.updateHealth = function (hp, maxHp) {
         var pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
         healthBarEl.style.width = pct + '%';
@@ -197,6 +222,11 @@
         var dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
         for (var i = 0; i < dots.length; i++) {
             dots[i].style.display = debugVisualsOn ? 'block' : 'none';
+        }
+        if (bloomReticle && bloomReticle.setDebugEnabled) {
+            bloomReticle.setDebugEnabled(debugVisualsOn);
+        } else if (bloomReticleEl && !debugVisualsOn) {
+            bloomReticleEl.style.display = 'none';
         }
     };
 
@@ -332,15 +362,25 @@
     };
 
     GameUI.updateReticle = function (weapon, spec) {
-        if (!crosshairEl || !shotgunReticleEl || !weapon) return;
+        if (!crosshairEl || !bloomReticleEl || !shotgunReticleEl || !weapon) return;
 
         if (weapon.id !== 'shotgun') {
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
+            if (bloomReticle && bloomReticle.updateForWeapon) {
+                bloomReticle.updateForWeapon(weapon, {
+                    adsActive: !!(spec && spec.adsActive),
+                    scoped: false
+                });
+            } else {
+                bloomReticleEl.style.display = 'none';
+            }
             return;
         }
 
         crosshairEl.style.display = 'none';
+        if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
+        else bloomReticleEl.style.display = 'none';
         shotgunReticleEl.style.display = 'block';
 
         var size = (spec && spec.size) ? spec.size : 300;
@@ -386,7 +426,7 @@
     };
 
     GameUI.updateSniperScope = function (state) {
-        if (!sniperScopeEl || !crosshairEl || !shotgunReticleEl) return;
+        if (!sniperScopeEl || !crosshairEl || !bloomReticleEl || !shotgunReticleEl) return;
         var isSniper = !!(state && state.sniper);
         var blend = Math.max(0, Math.min(1, Number(state && state.blend) || 0));
         var active = isSniper && blend > 0.02;
@@ -396,6 +436,8 @@
 
         if (active) {
             crosshairEl.style.display = 'none';
+            if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
+            else bloomReticleEl.style.display = 'none';
             shotgunReticleEl.style.display = 'none';
             return;
         }
