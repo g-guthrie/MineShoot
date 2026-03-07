@@ -345,6 +345,7 @@
                     targetId: msg.targetId || '',
                     damage: Math.max(0, Number(msg.damage || 0)),
                     hitType: msg.hitType === 'head' ? 'head' : 'body',
+                    weaponId: msg.weaponId || '',
                     killed: !!msg.killed,
                     worldPos: damagePointForEntityId(msg.targetId || '')
                 });

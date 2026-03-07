@@ -777,7 +777,7 @@ export class GlobalArenaRoom extends DurableObject {
     });
     if (!out) return;
 
-    broadcastDamageEvent(this, player.id, target, out, hitType);
+    broadcastDamageEvent(this, player.id, target, out, hitType, weaponId);
 
     if (out.killed) {
       broadcastDeathRespawn(this, target);

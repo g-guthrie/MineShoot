@@ -80,7 +80,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   return applyDamage(target, damage);
 }
 
-export function broadcastDamageEvent(room, sourceId, target, out, hitType) {
+export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '') {
   if (!target || !out) return;
   room.broadcast({
     t: MSG_S2C.DAMAGE_EVENT,
@@ -89,6 +89,7 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType) {
     health: out.hp,
     armor: out.armor,
     hitType: hitType === 'head' ? 'head' : 'body',
+    weaponId: String(weaponId || ''),
     damage: out.damageApplied || 0,
     killed: !!out.killed
   });
@@ -118,7 +119,7 @@ export function projectileDamageHit(room, projectile, target, hitType) {
     applyOutgoing: false
   });
   if (!out) return;
-  broadcastDamageEvent(room, projectile.ownerId, target, out, hitType);
+  broadcastDamageEvent(room, projectile.ownerId, target, out, hitType, projectile.type || 'knife');
   if (out.killed) {
     broadcastDeathRespawn(room, target);
   }
@@ -163,7 +164,7 @@ export function explodeProjectile(room, projectile, x, y, z) {
       applyOutgoing: false
     });
     if (!out) continue;
-    broadcastDamageEvent(room, projectile.ownerId, e, out, 'body');
+    broadcastDamageEvent(room, projectile.ownerId, e, out, 'body', projectile.type || 'frag');
     if (out.killed) {
       broadcastDeathRespawn(room, e);
     }

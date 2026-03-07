@@ -53,19 +53,40 @@
         // Landing platform at top
         place.addBlock(cx, 1.1, cz + 5.0 * dir, 4.0, 0.4, 1.0, mats.concreteDark, true);
 
-        // Handrail running diagonally alongside the stairs
-        var railStartY = 0.6;
-        var railEndY = 1.7;
-        var railLen = 6.0;
-        for (var r = 0; r < 5; r++) {
-            var t = r / 4;
-            var ry = railStartY + (railEndY - railStartY) * t;
-            var rz = cz + (5.2 * dir * t);
-            place.addBlock(cx + 2.2, ry, rz, 0.08, 0.08, 1.3, mats.railShiny, false);
-        }
-        // Rail posts
-        place.addBlock(cx + 2.2, 0.35, cz, 0.08, 0.7, 0.08, mats.rail, false);
-        place.addBlock(cx + 2.2, 1.0, cz + 5.0 * dir, 0.08, 1.0, 0.08, mats.rail, false);
+        // One continuous handrail reads much cleaner than stacked floating segments.
+        var railX = cx + 2.2;
+        var railStartY = 0.62;
+        var railEndY = 1.68;
+        var railSpan = 5.2;
+        place.addRamp(
+            railX,
+            (railStartY + railEndY) * 0.5,
+            cz + (railSpan * dir * 0.5),
+            0.08,
+            0.08,
+            railSpan + 0.35,
+            mats.railShiny,
+            0,
+            dir > 0 ? -0.2 : 0.2,
+            false
+        );
+
+        // Rail posts and a lower support bar keep the silhouette grounded.
+        place.addBlock(railX, 0.35, cz, 0.08, 0.7, 0.08, mats.rail, false);
+        place.addBlock(railX, 0.8, cz + 2.6 * dir, 0.08, 0.9, 0.08, mats.rail, false);
+        place.addBlock(railX, 1.0, cz + 5.0 * dir, 0.08, 1.0, 0.08, mats.rail, false);
+        place.addRamp(
+            railX,
+            0.78,
+            cz + (railSpan * dir * 0.5),
+            0.06,
+            0.06,
+            railSpan,
+            mats.rail,
+            0,
+            dir > 0 ? -0.16 : 0.16,
+            false
+        );
     }
 
     function buildQuarterPipe(cx, cz, place, mats) {
@@ -88,7 +109,7 @@
         var w = rotated ? 2.0 : 6.0;
         var d = rotated ? 6.0 : 2.0;
         place.addBlock(cx, 0.4, cz, w, 0.8, d, mats.concreteDark, true);
-        place.addBlock(cx, 0.9, cz, w * 0.92, 0.1, d * 0.92, mats.railShiny, true);
+        place.addBlock(cx, 0.9, cz, w * 0.92, 0.1, d * 0.92, mats.railShiny, false);
     }
 
     function buildKicker(cx, cz, place, mats, rotY) {
@@ -190,11 +211,6 @@
         var barrB = pt(bounds, 0.62, 0.85);
         place.addBlock(barrB.x, 0.35, barrB.z, 2.4, 0.7, 0.6, mats.concreteDark, true);
         place.addBlock(barrB.x, 0.35, barrB.z, 2.0, 0.5, 0.4, mats.concreteLight, false);
-
-        // Ground markings (painted lines on the asphalt)
-        var gm = pt(bounds, 0.50, 0.50);
-        place.addBlock(gm.x - 8, 0.01, gm.z, 0.08, 0.02, 20, mats.paintWhite, false);
-        place.addBlock(gm.x + 8, 0.01, gm.z, 0.08, 0.02, 20, mats.paintWhite, false);
 
         return {};
     }

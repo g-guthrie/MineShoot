@@ -420,21 +420,28 @@
 
     function handleEnemyHit(hitPoint, damage, hitType, result) {
         if (!result) return;
+        var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
+            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
+            : null;
+        var isShotgun = !!(currentWeapon && currentWeapon.id === 'shotgun');
+        var damageNumberSpread = isShotgun ? { spreadX: 96, spreadY: 38 } : undefined;
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!result.killed });
         }
         if (result.killed) {
             globalThis.__MAYHEM_RUNTIME.GameUI.showKillMarker();
             globalThis.__MAYHEM_RUNTIME.GameUI.addKill();
-            globalThis.__MAYHEM_RUNTIME.GameUI.showDamageNumber(hitPoint, damage, true, camera, hitType);
+            globalThis.__MAYHEM_RUNTIME.GameUI.showDamageNumber(hitPoint, damage, true, camera, hitType, damageNumberSpread);
         } else {
             globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker();
-            globalThis.__MAYHEM_RUNTIME.GameUI.showDamageNumber(hitPoint, damage, false, camera, hitType);
+            globalThis.__MAYHEM_RUNTIME.GameUI.showDamageNumber(hitPoint, damage, false, camera, hitType, damageNumberSpread);
         }
     }
 
     function handleNetworkDamageFeedback(feedback) {
         if (!feedback) return;
+        var isShotgun = feedback.weaponId === 'shotgun';
+        var damageNumberSpread = isShotgun ? { spreadX: 96, spreadY: 38 } : undefined;
 
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!feedback.killed });
@@ -453,7 +460,8 @@
                 feedback.damage,
                 !!feedback.killed,
                 camera,
-                feedback.hitType || 'body'
+                feedback.hitType || 'body',
+                damageNumberSpread
             );
         }
     }

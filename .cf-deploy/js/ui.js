@@ -163,11 +163,13 @@
         armorBarEl.style.width = pct + '%';
     };
 
-    GameUI.showDamageNumber = function (worldPoint, damage, isKill, camera, hitType) {
+    GameUI.showDamageNumber = function (worldPoint, damage, isKill, camera, hitType, options) {
+        options = options || {};
         var projected = worldPoint.clone().project(camera);
         var x = (projected.x * 0.5 + 0.5) * window.innerWidth;
         var y = (-projected.y * 0.5 + 0.5) * window.innerHeight;
         if (projected.z > 1) return;
+        damage = Math.max(0, Math.round(Number(damage) || 0));
 
         var className = 'damage-number';
         if (isKill) className += ' kill';
@@ -178,7 +180,8 @@
         el.textContent = isKill ? ('-' + damage + ' KILL!') : ('-' + damage);
         el.style.left = x + 'px';
         el.style.top = y + 'px';
-        el.style.marginLeft = ((Math.random() - 0.5) * 40) + 'px';
+        el.style.marginLeft = ((Math.random() - 0.5) * (Number(options.spreadX) || 40)) + 'px';
+        el.style.marginTop = ((Math.random() - 0.5) * (Number(options.spreadY) || 0)) + 'px';
 
         damageNumbersEl.appendChild(el);
         setTimeout(function () {
