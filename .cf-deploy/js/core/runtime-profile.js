@@ -16,9 +16,9 @@
     var MODE_DEFS = {
         cloud_multiplayer: {
             id: 'cloud_multiplayer',
-            label: 'Multiplayer Cloudflare',
-            menuTitle: 'MULTIPLAYER CLOUDFLARE',
-            menuDesc: 'Shared global room on the deployed Cloudflare worker.',
+            label: 'Public Lobby',
+            menuTitle: 'PUBLIC LOBBY',
+            menuDesc: 'Shared Cloudflare lobby for public preview play.',
             backendKind: 'cloudflare-prod',
             backendLabel: 'CLOUDFLARE PROD',
             authorityMode: 'networked',
@@ -29,9 +29,9 @@
         },
         single_cloudflare: {
             id: 'single_cloudflare',
-            label: 'Single Cloudflare',
-            menuTitle: 'SINGLE CLOUDFLARE',
-            menuDesc: 'Private per-tab room on the deployed Cloudflare worker.',
+            label: 'Solo Cloudflare (Bots)',
+            menuTitle: 'SOLO CLOUDFLARE (BOTS)',
+            menuDesc: 'Private Cloudflare test room with bots enabled.',
             backendKind: 'cloudflare-prod',
             backendLabel: 'CLOUDFLARE PROD',
             authorityMode: 'networked',
@@ -42,9 +42,9 @@
         },
         single_dev_server: {
             id: 'single_dev_server',
-            label: 'Solo Dev Server',
-            menuTitle: 'SOLO DEV SERVER',
-            menuDesc: 'Shared fixed room on the local Wrangler worker.',
+            label: 'Local Dev Room (Bots)',
+            menuTitle: 'LOCAL DEV ROOM (BOTS)',
+            menuDesc: 'Shared local Wrangler room with bots enabled.',
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',
             authorityMode: 'networked',
@@ -56,8 +56,8 @@
         },
         single_full_sandbox: {
             id: 'single_full_sandbox',
-            label: 'Single Full Sandbox',
-            menuTitle: 'SINGLE FULL SANDBOX',
+            label: 'Offline Sandbox',
+            menuTitle: 'OFFLINE SANDBOX',
             menuDesc: 'Offline experimental sandbox. Not authoritative.',
             backendKind: 'sandbox',
             backendLabel: 'OFFLINE SANDBOX',
@@ -135,6 +135,14 @@
         // but the room websocket/API still needs to land on the same worker backend.
         if (kind === 'local-worker') return LOCAL_WORKER_ORIGIN;
         return '';
+    }
+
+    function apiOriginFor(mode) {
+        if (!mode || !mode.backendKind) return '';
+        if (mode.backendKind === 'cloudflare-prod' && isHttpEnvironment() && !isLocalEnvironment()) {
+            return String(window.location.origin || '');
+        }
+        return backendOriginFor(mode.backendKind);
     }
 
     function sessionStore() {
@@ -233,7 +241,7 @@
             authMode: def.authMode,
             roomStrategy: def.roomStrategy,
             roomPrefix: def.roomPrefix,
-            apiOrigin: backendOrigin,
+            apiOrigin: apiOriginFor(def),
             backendOrigin: backendOrigin,
             roomId: resolveRoomId(def),
             visible: true

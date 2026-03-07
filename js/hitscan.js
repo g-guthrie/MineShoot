@@ -39,16 +39,10 @@
     var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
     var SHOTGUN_RETICLE_THIRD_MAX_SCALE = 0.96;
     var SHOTGUN_RETICLE_POINTS = [];
-    var PLASMA_RETICLE_SIZE_PX = 360;
-    var PLASMA_RETICLE_REF_DISTANCE = 14;
-    var PLASMA_RETICLE_THIRD_MIN_SCALE = 0.6;
-    var PLASMA_RETICLE_THIRD_MAX_SCALE = 0.98;
-
-    var STREAM_MAX_SUSTAIN_SEC = 2.5;
-    var STREAM_OVERHEAT_LOCKOUT_SEC = 1.6;
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
     var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
+    var SHOTGUN_ADS_SPREAD_SCALE = 0.42;
 
     function pushRingPoints(out, count, radius, angleOffsetRad) {
         for (var i = 0; i < count; i++) {
@@ -91,7 +85,7 @@
         };
     }
 
-    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun', 'plasma'];
+    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun'];
     var weaponOrder = weaponCatalogOrder.slice();
     var weapons = {};
     for (var wi = 0; wi < weaponCatalogOrder.length; wi++) {
@@ -108,15 +102,6 @@
 
     var currentWeaponId = 'rifle';
     var lastFireTime = 0;
-    var plasmaState = {
-        heat: 0,
-        overheated: false,
-        overheatedUntil: 0,
-        active: false,
-        activeUntil: 0,
-        targetId: ''
-    };
-
     function ensureTracerScene(camera) {
         if (tracerScene) return tracerScene;
         if (camera && camera.parent) {
@@ -141,9 +126,32 @@
     function seekProfileForWeapon(weaponId) {
         var profiles = sharedSeekProfiles();
         if (!profiles) return null;
-        if (weaponId === 'plasma') return profiles.plasma_stream || null;
         if (weaponId === 'seekergun') return profiles.seekergun_shot || null;
         return null;
+    }
+
+    function resolveSeekAimProfile(profile, adsActive) {
+        if (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles && globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles.resolveSeekAimProfile) {
+            return globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles.resolveSeekAimProfile(profile, adsActive);
+        }
+        if (!profile) return null;
+        return {
+            maxRange: adsActive ? (profile.adsMaxRange || profile.maxRange) : (profile.hipfireMaxRange || profile.maxRange),
+            lockBoxPx: adsActive ? (profile.adsLockBoxPx || profile.lockBoxPx) : (profile.hipfireLockBoxPx || profile.lockBoxPx),
+            coneHalfAngleDeg: adsActive ? (profile.adsConeHalfAngleDeg || profile.coneHalfAngleDeg) : (profile.hipfireConeHalfAngleDeg || profile.coneHalfAngleDeg)
+        };
+    }
+
+    function adsState() {
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
+            return globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();
+        }
+        return null;
+    }
+
+    function isAdsActiveForWeapon(weaponId) {
+        var state = adsState();
+        return !!(state && state.active && state.weaponId === weaponId);
     }
 
     function toSeekCandidate(rawTarget) {
@@ -201,10 +209,12 @@
 
     function fireHomingProjectile(camera, weapon) {
         var profile = seekProfileForWeapon(weapon && weapon.id ? weapon.id : '');
-        var boxSize = (weapon.id === 'plasma') ? getPlasmaReticleSizePx() : getSeekergunReticleSizePx();
-        var lock = selectSeekLock(camera, weapon.maxRange, boxSize, {
+        var adsActive = isAdsActiveForWeapon(weapon.id);
+        var seekAim = resolveSeekAimProfile(profile, adsActive) || {};
+        var boxSize = Number(seekAim.lockBoxPx || getSeekergunReticleSizePx());
+        var lock = selectSeekLock(camera, Number(seekAim.maxRange || weapon.maxRange), boxSize, {
             ownerTypes: ['enemy', 'net'],
-            coneHalfAngleDeg: profile && typeof profile.coneHalfAngleDeg === 'number' ? profile.coneHalfAngleDeg : 180
+            coneHalfAngleDeg: seekAim.coneHalfAngleDeg || (profile && typeof profile.coneHalfAngleDeg === 'number' ? profile.coneHalfAngleDeg : 180)
         });
         var seekerLock = lock && lock.candidate ? lock.candidate.rawTarget : null;
         if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot) {
@@ -285,7 +295,7 @@
 
     function shouldDrawTracerForShot(weapon) {
         if (!weapon || !weapon.id) return false;
-        if (weapon.id === 'plasma' || weapon.id === 'seekergun') return false;
+        if (weapon.id === 'seekergun') return false;
         if (weapon.id === 'machinegun') return true;
         return true;
     }
@@ -399,31 +409,28 @@
         return size * scale;
     }
 
-    function getPlasmaReticleSizePx() {
-        var size = PLASMA_RETICLE_SIZE_PX;
-
-        var cameraDistance = getThirdPersonCameraDistance();
-        if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
-            return size * 0.78;
-        }
-
-        var scale = PLASMA_RETICLE_REF_DISTANCE / (PLASMA_RETICLE_REF_DISTANCE + cameraDistance);
-        scale = Math.max(PLASMA_RETICLE_THIRD_MIN_SCALE, Math.min(PLASMA_RETICLE_THIRD_MAX_SCALE, scale));
-        return size * scale;
-    }
-
     function getSeekergunReticleSizePx() {
-        return getPlasmaReticleSizePx() * 0.72;
+        var state = adsState();
+        var profile = seekProfileForWeapon('seekergun');
+        var seekAim = resolveSeekAimProfile(profile, !!(state && state.active && state.weaponId === 'seekergun'));
+        return Number(seekAim && seekAim.lockBoxPx) || 260;
     }
 
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
             var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
             var halfSize = getShotgunReticleSizePx() * 0.5;
+            if (isAdsActiveForWeapon('shotgun')) {
+                halfSize *= SHOTGUN_ADS_SPREAD_SCALE;
+            }
             return {
                 x: (p[0] * halfSize) / (window.innerWidth * 0.5),
                 y: -(p[1] * halfSize) / (window.innerHeight * 0.5)
             };
+        }
+
+        if (isAdsActiveForWeapon(weapon.id)) {
+            return { x: 0, y: 0 };
         }
 
         return {
@@ -501,7 +508,7 @@
         return losRaycaster.intersectObjects(worldMeshes, false).length === 0;
     }
 
-    function selectPlasmaTarget(camera, maxRange, boxSizePx, options) {
+    function selectSeekTargetByBox(camera, maxRange, boxSizePx, options) {
         var lockTargets = getLockTargets() || [];
         var filtered = [];
         for (var i = 0; i < lockTargets.length; i++) {
@@ -517,9 +524,10 @@
         return lock && lock.candidate ? lock.candidate.rawTarget : null;
     }
 
-    function getSeekerTelemetry(camera, maxRange, boxSizePx) {
+    function getSeekerTelemetry(camera, maxRange, boxSizePx, coneHalfAngleDeg) {
         var lock = selectSeekLock(camera, maxRange, boxSizePx, {
-            ownerTypes: ['enemy', 'net']
+            ownerTypes: ['enemy', 'net'],
+            coneHalfAngleDeg: coneHalfAngleDeg
         });
 
         return {
@@ -532,6 +540,7 @@
             reticleHalfNdcX: lock && lock.reticleHalfNdcX ? lock.reticleHalfNdcX : 0,
             reticleHalfNdcY: lock && lock.reticleHalfNdcY ? lock.reticleHalfNdcY : 0,
             maxRange: maxRange,
+            coneHalfAngleDeg: coneHalfAngleDeg,
             candidateCount: lock && typeof lock.candidateCount === 'number' ? lock.candidateCount : 0
         };
     }
@@ -548,39 +557,6 @@
         camera.getWorldDirection(plasmaForward);
         plasmaMuzzle.copy(camera.position).addScaledVector(plasmaForward, 0.65);
         return plasmaMuzzle;
-    }
-
-    function coolPlasma(dt, nowSec) {
-        if (plasmaState.overheated && nowSec >= plasmaState.overheatedUntil) {
-            plasmaState.overheated = false;
-        }
-        var coolRate = plasmaState.overheated ? 0.35 : 0.55;
-        plasmaState.heat -= dt * coolRate;
-        if (plasmaState.heat < 0) plasmaState.heat = 0;
-        if (plasmaState.activeUntil && nowSec >= plasmaState.activeUntil) {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            plasmaState.activeUntil = 0;
-        }
-    }
-
-    function heatPlasmaByShot(weaponCooldownMs, nowSec) {
-        var cooldownSec = Math.max(0.001, Number(weaponCooldownMs || 100) / 1000);
-        plasmaState.heat += cooldownSec / STREAM_MAX_SUSTAIN_SEC;
-        if (plasmaState.heat >= 1) {
-            plasmaState.heat = 1;
-            plasmaState.overheated = true;
-            plasmaState.overheatedUntil = nowSec + STREAM_OVERHEAT_LOCKOUT_SEC;
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            plasmaState.activeUntil = 0;
-        }
-    }
-
-    function markPlasmaShot(lockTargetId, nowSec) {
-        plasmaState.active = true;
-        plasmaState.activeUntil = nowSec + 0.16;
-        plasmaState.targetId = lockTargetId || '';
     }
 
     function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
@@ -675,35 +651,13 @@
         var now = performance.now();
         var weapon = getCurrentWeaponData();
 
-        if (weapon.id === 'plasma') {
-            var nowSec = Date.now() * 0.001;
-            if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) {
-                return false;
-            }
-        }
-
         if (now - lastFireTime < weapon.cooldown) {
             return false;
         }
 
         lastFireTime = now;
         if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
-            var fired = fireHomingProjectile(camera, weapon);
-            if (weapon.id === 'plasma') {
-                var nowSec = Date.now() * 0.001;
-                if (fired) {
-                    var plasmaProfile = seekProfileForWeapon('plasma');
-                    var lock = selectSeekLock(camera, weapon.maxRange, getPlasmaReticleSizePx(), {
-                        ownerTypes: ['enemy', 'net'],
-                        coneHalfAngleDeg: (plasmaProfile && plasmaProfile.coneHalfAngleDeg) || 35
-                    });
-                    markPlasmaShot(lock && lock.lockTargetId ? lock.lockTargetId : '', nowSec);
-                    heatPlasmaByShot(weapon.cooldown, nowSec);
-                } else {
-                    coolPlasma(0, nowSec);
-                }
-            }
-            return fired;
+            return fireHomingProjectile(camera, weapon);
         }
         return fireHitscanPattern(camera, weapon, onHit, onMiss);
     };
@@ -726,12 +680,6 @@
 
     GameHitscan.getReticleSpec = function (weaponId) {
         var id = weaponId || currentWeaponId;
-        if (id === 'plasma') {
-            return {
-                type: 'plasma',
-                size: getPlasmaReticleSizePx()
-            };
-        }
         if (id !== 'shotgun') return null;
 
         return {
@@ -748,11 +696,6 @@
     GameHitscan.setWeapon = function (weaponId) {
         if (!weapons[weaponId]) return null;
         currentWeaponId = weaponId;
-        if (weaponId !== 'plasma') {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            plasmaState.activeUntil = 0;
-        }
         return GameHitscan.getCurrentWeapon();
     };
 
@@ -767,11 +710,6 @@
         }
 
         currentWeaponId = weaponOrder[idx];
-        if (currentWeaponId !== 'plasma') {
-            plasmaState.active = false;
-            plasmaState.targetId = '';
-            plasmaState.activeUntil = 0;
-        }
         return GameHitscan.getCurrentWeapon();
     };
 
@@ -821,10 +759,6 @@
 
     GameHitscan.canFire = function () {
         var weapon = getCurrentWeaponData();
-        if (weapon.id === 'plasma') {
-            var nowSec = Date.now() * 0.001;
-            if (plasmaState.overheated && nowSec < plasmaState.overheatedUntil) return false;
-        }
         return (performance.now() - lastFireTime) >= weapon.cooldown;
     };
 
@@ -839,68 +773,36 @@
         return castCenter(camera, range);
     };
 
-    GameHitscan.tick = function (dt) {
-        var nowSec = Date.now() * 0.001;
-        coolPlasma(Math.max(0, Number(dt || 0)), nowSec);
-        return GameHitscan.getPlasmaState();
-    };
-
-    GameHitscan.updatePlasmaBeam = function (dt) {
-        return GameHitscan.tick(dt);
-    };
-
-    GameHitscan.getPlasmaState = function () {
-        return {
-            heat: plasmaState.heat,
-            overheated: plasmaState.overheated,
-            overheatedUntil: plasmaState.overheatedUntil,
-            active: plasmaState.active,
-            targetId: plasmaState.targetId
-        };
+    GameHitscan.tick = function (_dt) {
+        return null;
     };
 
     GameHitscan.applySeekerReject = function (payload) {
-        var msg = payload || {};
-        var weaponId = String(msg.weaponId || '');
-        if (weaponId && weaponId !== 'plasma') return;
-        var reason = String(msg.reason || '');
-        var nowSec = Date.now() * 0.001;
-        if (reason === 'overheated') {
-            plasmaState.overheated = true;
-            plasmaState.overheatedUntil = Math.max(plasmaState.overheatedUntil, nowSec + STREAM_OVERHEAT_LOCKOUT_SEC);
-            plasmaState.active = false;
-            plasmaState.activeUntil = 0;
-            plasmaState.targetId = '';
-            plasmaState.heat = Math.max(plasmaState.heat, 1);
-        }
+        return payload || null;
     };
 
-    GameHitscan.syncPlasmaStateFromNet = function (state) {
-        if (!state || typeof state !== 'object') return;
-        if (typeof state.streamHeat === 'number') {
-            plasmaState.heat = Math.max(0, Math.min(1, Number(state.streamHeat)));
-        }
-        if (typeof state.streamOverheatedUntil === 'number') {
-            plasmaState.overheatedUntil = Math.max(0, Number(state.streamOverheatedUntil) * 0.001);
-            plasmaState.overheated = (Date.now() * 0.001) < plasmaState.overheatedUntil;
-            if (!plasmaState.overheated && plasmaState.heat <= 0.95) {
-                plasmaState.overheatedUntil = 0;
-            }
-        }
-    };
+    GameHitscan.syncPlasmaStateFromNet = function (_state) {};
 
     GameHitscan.getSeekergunDebugInfo = function (camera) {
         if (!camera) return null;
         var weapon = getCurrentWeaponData();
         if (!weapon || weapon.id !== 'seekergun') return null;
-        return getSeekerTelemetry(camera, weapon.maxRange, getSeekergunReticleSizePx());
+        var state = adsState();
+        var profile = seekProfileForWeapon('seekergun');
+        var seekAim = resolveSeekAimProfile(profile, !!(state && state.active && state.weaponId === 'seekergun'));
+        return getSeekerTelemetry(
+            camera,
+            Number(seekAim && seekAim.maxRange) || weapon.maxRange,
+            Number(seekAim && seekAim.lockBoxPx) || getSeekergunReticleSizePx(),
+            Number(seekAim && seekAim.coneHalfAngleDeg) || 20
+        );
     };
 
     GameHitscan.selectLockTargetByBox = function (camera, maxRange, boxSizePx, options) {
         if (!camera) return null;
         var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
-        var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : getPlasmaReticleSizePx();
-        var target = selectPlasmaTarget(camera, range, size, options || null);
+        var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : getSeekergunReticleSizePx();
+        var target = selectSeekTargetByBox(camera, range, size, options || null);
         if (!target) return null;
         return {
             targetId: target.targetId || '',

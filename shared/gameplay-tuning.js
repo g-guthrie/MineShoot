@@ -14,39 +14,36 @@ export const gameplayTuning = {
   },
   weaponFalloff: {
     rifle: [
-      { maxDistance: 20, scale: 1.0 },
-      { maxDistance: 45, scale: 0.96 },
-      { maxDistance: 80, scale: 0.88 },
-      { maxDistance: 120, scale: 0.78 }
+      { maxDistance: 22, scale: 1.0 },
+      { maxDistance: 52, scale: 0.98 },
+      { maxDistance: 92, scale: 0.92 },
+      { maxDistance: 132, scale: 0.84 }
     ],
     pistol: [
-      { maxDistance: 14, scale: 1.0 },
-      { maxDistance: 26, scale: 0.92 },
-      { maxDistance: 42, scale: 0.74 },
-      { maxDistance: 92, scale: 0.52 }
+      { maxDistance: 12, scale: 1.0 },
+      { maxDistance: 24, scale: 0.9 },
+      { maxDistance: 40, scale: 0.7 },
+      { maxDistance: 76, scale: 0.46 }
     ],
     machinegun: [
       { maxDistance: 12, scale: 1.0 },
-      { maxDistance: 28, scale: 0.94 },
-      { maxDistance: 52, scale: 0.84 },
-      { maxDistance: 88, scale: 0.72 }
+      { maxDistance: 24, scale: 0.88 },
+      { maxDistance: 44, scale: 0.72 },
+      { maxDistance: 84, scale: 0.56 }
     ],
     shotgun: [
       { maxDistance: 7, scale: 1.0 },
-      { maxDistance: 14, scale: 0.75 },
-      { maxDistance: 22, scale: 0.5 },
-      { maxDistance: 42, scale: 0.28 }
+      { maxDistance: 13, scale: 0.7 },
+      { maxDistance: 21, scale: 0.4 },
+      { maxDistance: 36, scale: 0.14 }
     ],
     sniper: [
-      { maxDistance: 45, scale: 1.0 },
-      { maxDistance: 95, scale: 0.96 },
-      { maxDistance: 145, scale: 0.9 },
-      { maxDistance: 190, scale: 0.85 }
+      { maxDistance: 60, scale: 1.0 },
+      { maxDistance: 120, scale: 1.0 },
+      { maxDistance: 180, scale: 0.96 },
+      { maxDistance: 230, scale: 0.9 }
     ],
     seekergun: [
-      { maxDistance: 24, scale: 1.0 }
-    ],
-    plasma: [
       { maxDistance: 24, scale: 1.0 }
     ]
   },
@@ -64,13 +61,12 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 180,  bodyDamage: 34,  headDamage: 86,  maxRange: 120, pellets: 1,  spreadNdc: 0.0018 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 230,  bodyDamage: 27,  headDamage: 120, maxRange: 92,  pellets: 1,  spreadNdc: 0.0032 },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 30,  maxRange: 88,  pellets: 1,  spreadNdc: 0.0078 },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 820,  bodyDamage: 13,  headDamage: 20,  maxRange: 42,  pellets: 12, spreadNdc: 0 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 120, headDamage: 220, maxRange: 190, pellets: 1,  spreadNdc: 0.00035 },
-    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 320,  bodyDamage: 0,   headDamage: 0,   maxRange: 24,  pellets: 1,  spreadNdc: 0 },
-    plasma:     { name: 'Plasma Cannon',  primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 100,  bodyDamage: 15,  headDamage: 15,  maxRange: 24,  pellets: 1,  spreadNdc: 0 }
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 190,  bodyDamage: 35,  headDamage: 94,  maxRange: 132, pellets: 1,  spreadNdc: 0.009 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 250,  bodyDamage: 24,  headDamage: 145, maxRange: 76,  pellets: 1,  spreadNdc: 0.017 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 28,  maxRange: 84,  pellets: 1,  spreadNdc: 0.018 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 900,  bodyDamage: 15,  headDamage: 24,  maxRange: 36,  pellets: 12, spreadNdc: 0 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1100, bodyDamage: 185, headDamage: 340, maxRange: 230, pellets: 1,  spreadNdc: 0.03 },
+    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  spreadNdc: 0 }
   },
   throwableCategories: {
     grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
@@ -90,12 +86,8 @@ export const gameplayTuning = {
       homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
     },
     seekershot: {
-      id: 'seekershot', label: 'Seeker Shot', speed: 34, upward: 0.6, gravity: 5, fuse: 1.8, radius: 4.6, damage: 95,
-      homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 30
-    },
-    plasma_stream: {
-      id: 'plasma_stream', label: 'Plasma Stream', speed: 34, upward: 0.35, gravity: 2, fuse: 0.42, radius: 0.01, damage: 15,
-      bodyDamage: 15, headDamage: 15, homingBoost: 4.5, homingLerp: 3.8, lockHalfAngleDeg: 35, acquireRange: 24
+      id: 'seekershot', label: 'Seeker Shot', speed: 31, upward: 0.4, gravity: 4.5, fuse: 1.8, radius: 4.2, damage: 72,
+      homingBoost: 4.0, homingLerp: 4.6, lockHalfAngleDeg: 20
     },
     molotov: {
       id: 'molotov', category: 'grenade', label: 'Molotov', speed: 17, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.2,

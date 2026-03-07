@@ -25,10 +25,9 @@
     var startupDebugNotice = '';
     var autoStartNoLock = false;
     var armedThrowableType = '';
-    var lastPlasmaActive = false;
     var netShotCounter = 0;
     var MENU_LOADOUT_DEFAULT = ['machinegun', 'shotgun'];
-    var MENU_LOADOUT_ALLOWED = ['machinegun', 'shotgun', 'rifle', 'pistol', 'seekergun'];
+    var MENU_LOADOUT_ALLOWED = ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper', 'seekergun'];
     var menuWeaponSlots = MENU_LOADOUT_DEFAULT.slice();
     var menuActiveSlot = 0;
     var runtimeInitialized = false;
@@ -163,6 +162,7 @@
             pistol: 'Pistol',
             machinegun: 'Machine Gun',
             shotgun: 'Shotgun',
+            sniper: 'Sniper',
             seekergun: 'Seeker'
         };
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
@@ -505,7 +505,7 @@
             if (
                 multiplayerMode &&
                 activeWeapon &&
-                (activeWeapon.id === 'seekergun' || activeWeapon.id === 'plasma') &&
+                activeWeapon.id === 'seekergun' &&
                 globalThis.__MAYHEM_RUNTIME.GameNet &&
                 globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot
             ) {
@@ -521,8 +521,9 @@
                     }
                     seekerIntent = seekerShotMeta.throwIntent || null;
                     clientShotId = String(seekerShotMeta.clientShotId || '');
-                    var seekerWeaponId = String(seekerShotMeta.weaponId || activeWeapon.id || 'seekergun');
-                    globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot(netLockTargetId, seekerIntent, clientShotId, seekerWeaponId);
+                    var seekerWeaponId = 'seekergun';
+                    var adsActive = !!(globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState().active);
+                    globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot(netLockTargetId, seekerIntent, clientShotId, seekerWeaponId, adsActive);
                 }
             }
 
@@ -1109,26 +1110,23 @@
         globalThis.__MAYHEM_RUNTIME.GamePlayer.update(dt);
 
         var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon();
-        if (currentWeapon && (currentWeapon.id === 'shotgun' || currentWeapon.id === 'plasma')) {
+        if (currentWeapon && currentWeapon.id === 'shotgun') {
             syncReticleWithWeapon(currentWeapon);
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSniperScope && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getScopeState) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateSniperScope(globalThis.__MAYHEM_RUNTIME.GamePlayer.getScopeState());
         }
 
         if (triggerHeld && hasInputCapture() && currentWeapon && currentWeapon.automatic && !globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) {
             tryPlayerFire();
         }
 
-        var plasmaState = globalThis.__MAYHEM_RUNTIME.GameHitscan.tick
-            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.tick(dt)
-            : globalThis.__MAYHEM_RUNTIME.GameHitscan.updatePlasmaBeam(dt, camera);
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan.tick) {
+            globalThis.__MAYHEM_RUNTIME.GameHitscan.tick(dt);
+        }
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers) {
             globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers(dt);
         }
-        if (plasmaState.active && !lastPlasmaActive && globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('plasma');
-        }
-        lastPlasmaActive = !!plasmaState.active;
-        globalThis.__MAYHEM_RUNTIME.GameUI.updatePlasmaState(plasmaState);
-
         globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.tickInvulnTimer(dt);
         globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.tickArmorRegen(dt);
 
@@ -1145,9 +1143,6 @@
                 }
 
                 globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.syncFromNetwork(selfState);
-                if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.syncPlasmaStateFromNet) {
-                    globalThis.__MAYHEM_RUNTIME.GameHitscan.syncPlasmaStateFromNet(selfState);
-                }
                 if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState) {
                     globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
                     globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
@@ -1185,9 +1180,6 @@
                     if (!seekerReject) continue;
                     if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject) {
                         globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject(seekerReject);
-                    }
-                    if (seekerReject.reason === 'overheated') {
-                        setTransientDebug('Plasma overheated.', 650);
                     }
                 } while (seekerReject);
             }
@@ -1272,6 +1264,21 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmor(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmorMax());
+        }
+
+        if (currentWeapon && currentWeapon.id === 'seekergun' && !armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
+            var seekerInfo = globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo(camera);
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(
+                !!seekerInfo,
+                !!(seekerInfo && seekerInfo.hasLock),
+                seekerInfo ? seekerInfo.coneHalfAngleDeg : 20,
+                {
+                    fov: camera && camera.fov ? camera.fov : 60,
+                    aspect: camera && camera.aspect ? camera.aspect : (window.innerWidth / Math.max(1, window.innerHeight))
+                }
+            );
+        } else if (!armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(false, false);
         }
 
         currentAimTargetId = '';

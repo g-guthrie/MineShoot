@@ -16,7 +16,6 @@
             machinegun: { family: 'hitscan', stats: stats.machinegun || null },
             shotgun: { family: 'hitscan', stats: stats.shotgun || null },
             sniper: { family: 'hitscan', stats: stats.sniper || null },
-            plasma: { family: 'seekerProjectile', stats: stats.plasma || null },
             seekergun: { family: 'seekerProjectile', stats: stats.seekergun || null }
         };
     }

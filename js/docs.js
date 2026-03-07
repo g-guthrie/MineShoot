@@ -83,14 +83,6 @@
             '          \\_\\_\\_\\_\\_\\',
             '             ||  ||'
         ].join('\n'),
-        plasma: [
-            '        .-====================-.',
-            '  _____/  _  _  _  _  _  _    /=====>',
-            ' |____/__/ \\/ \\/ \\/ \\/ \\/___/',
-            '        ||  PLASMA CORE  ||',
-            '        ||=====[##]======||',
-            '            \\\\____//'
-        ].join('\n')
     };
 
     function fNum(value, fallback) {
@@ -162,7 +154,6 @@
         if (weapon.id === 'machinegun') return 'Automatic suppression baseline with predictable recoil-free taping';
         if (weapon.id === 'rifle') return 'Best precision consistency from mid to long range';
         if (weapon.id === 'seekergun') return 'Seeker homing burst that rewards target tracking';
-        if (weapon.id === 'plasma') return 'Seek-stream lock ticks with overheat control';
         if (weapon.id === 'pistol') return 'Close-range precision sidearm with high headshot payoff';
         return 'Balanced baseline weapon';
     }
@@ -208,6 +199,7 @@
             'Movement',
             '  WASD: Move',
             '  E: Sprint',
+            '  RMB / Shift: Toggle ADS',
             '  Space: Variable jump (hold for full height)',
             '',
             'Menu / Session',
@@ -216,6 +208,7 @@
             '',
             'Combat',
             '  LMB: Fire',
+            '  ADS disables sprint and first jump press only exits ADS',
             '  1-2 / Wheel: Weapon swap',
             '  F: Throwable (hold for preview, release to throw)',
             '  Y: Choke   R: Deadeye',

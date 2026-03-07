@@ -27,8 +27,7 @@
             machinegun: 88,
             shotgun: 42,
             sniper: 190,
-            seekergun: 24,
-            plasma: 24
+            seekergun: 24
         },
         weaponFalloff: {
             rifle: [
@@ -62,9 +61,6 @@
                 { maxDistance: 190, scale: 0.85 }
             ],
             seekergun: [
-                { maxDistance: 24, scale: 1.0 }
-            ],
-            plasma: [
                 { maxDistance: 24, scale: 1.0 }
             ]
         },
@@ -136,8 +132,7 @@
                 machinegun: Number(weapons.machinegun && weapons.machinegun.maxRange) || DEFAULTS.weapons.machinegun,
                 shotgun: Number(weapons.shotgun && weapons.shotgun.maxRange) || DEFAULTS.weapons.shotgun,
                 sniper: Number(weapons.sniper && weapons.sniper.maxRange) || DEFAULTS.weapons.sniper,
-                seekergun: Number(weapons.seekergun && weapons.seekergun.maxRange) || DEFAULTS.weapons.seekergun,
-                plasma: Number(weapons.plasma && weapons.plasma.maxRange) || DEFAULTS.weapons.plasma
+                seekergun: Number(weapons.seekergun && weapons.seekergun.maxRange) || DEFAULTS.weapons.seekergun
             },
             weaponFalloff: shared.weaponFalloff || deepCopy(DEFAULTS.weaponFalloff),
             throwables: {
@@ -292,8 +287,7 @@
                 machinegun: GameCombatTuning.getWeaponRange('machinegun'),
                 shotgun: GameCombatTuning.getWeaponRange('shotgun'),
                 sniper: GameCombatTuning.getWeaponRange('sniper'),
-                seekergun: GameCombatTuning.getWeaponRange('seekergun'),
-                plasma: GameCombatTuning.getWeaponRange('plasma')
+                seekergun: GameCombatTuning.getWeaponRange('seekergun')
             },
             weaponFalloff: {
                 rifle: GameCombatTuning.getWeaponFalloffTuning('rifle'),
@@ -301,8 +295,7 @@
                 machinegun: GameCombatTuning.getWeaponFalloffTuning('machinegun'),
                 shotgun: GameCombatTuning.getWeaponFalloffTuning('shotgun'),
                 sniper: GameCombatTuning.getWeaponFalloffTuning('sniper'),
-                seekergun: GameCombatTuning.getWeaponFalloffTuning('seekergun'),
-                plasma: GameCombatTuning.getWeaponFalloffTuning('plasma')
+                seekergun: GameCombatTuning.getWeaponFalloffTuning('seekergun')
             },
             throwables: GameCombatTuning.getThrowableDistanceTuning(),
             classWallhackRadius: {

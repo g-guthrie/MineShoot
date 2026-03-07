@@ -1456,8 +1456,8 @@
     GameThrowables.fireSeekerShot = function (camera, lockTarget, clientShotId, options) {
         if (!sceneRef || !camera) return false;
         options = options || {};
-        var weaponId = String(options.weaponId || 'seekergun');
-        var projectileType = weaponId === 'plasma' ? 'plasma_stream' : 'seekershot';
+        var weaponId = 'seekergun';
+        var projectileType = 'seekershot';
         camera.getWorldDirection(tmpForward);
         var muzzle = null;
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {

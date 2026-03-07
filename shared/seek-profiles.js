@@ -17,7 +17,6 @@ function throwableStats(id, fallback) {
 }
 
 const seekergun = weaponStats('seekergun', { cooldownMs: 320, maxRange: 24 });
-const plasma = weaponStats('plasma', { cooldownMs: 100, bodyDamage: 15, maxRange: 24 });
 const seekershot = throwableStats('seekershot', {
   speed: 34,
   homingBoost: 4.5,
@@ -39,34 +38,21 @@ export const seekProfiles = {
     weaponId: 'seekergun',
     mode: 'impact',
     cooldownMs: Number(seekergun.cooldownMs || 320),
-    maxRange: Number(seekergun.maxRange || 24),
+    maxRange: Number(seekergun.maxRange || 28),
+    hipfireMaxRange: 18,
+    adsMaxRange: Number(seekergun.maxRange || 28),
     lockBoxPx: 260,
-    coneHalfAngleDeg: Number(seekershot.lockHalfAngleDeg || 30),
+    hipfireLockBoxPx: 220,
+    adsLockBoxPx: 320,
+    coneHalfAngleDeg: Number(seekershot.lockHalfAngleDeg || 20),
+    hipfireConeHalfAngleDeg: Number(seekershot.lockHalfAngleDeg || 20),
+    adsConeHalfAngleDeg: 32,
     homing: {
-      speed: Number(seekershot.speed || 34),
-      boost: Number(seekershot.homingBoost || 4.5),
-      lerp: Number(seekershot.homingLerp || 3.8)
+      speed: Number(seekershot.speed || 31),
+      boost: Number(seekershot.homingBoost || 4.0),
+      lerp: Number(seekershot.homingLerp || 4.6)
     },
     projectileType: 'seekershot'
-  },
-  plasma_stream: {
-    id: 'plasma_stream',
-    weaponId: 'plasma',
-    mode: 'stream',
-    cooldownMs: Number(plasma.cooldownMs || 100),
-    maxRange: Number(plasma.maxRange || 24),
-    lockBoxPx: 360,
-    coneHalfAngleDeg: 35,
-    tickDamage: Number(plasma.bodyDamage || 15),
-    tickIntervalMs: Number(plasma.cooldownMs || 100),
-    overheatMaxSustainMs: 2500,
-    overheatLockoutMs: 1600,
-    homing: {
-      speed: Number(seekershot.speed || 34),
-      boost: Number(seekershot.homingBoost || 4.5),
-      lerp: Number(seekershot.homingLerp || 3.8)
-    },
-    projectileType: 'plasma_stream'
   },
   seeker_throwable: {
     id: 'seeker_throwable',
@@ -88,9 +74,18 @@ export function getSeekProfile(id) {
 }
 
 export function getSeekProfileByWeaponId(weaponId) {
-  if (weaponId === 'plasma') return seekProfiles.plasma_stream;
   if (weaponId === 'seekergun') return seekProfiles.seekergun_shot;
   return null;
+}
+
+export function resolveSeekAimProfile(profile, adsActive) {
+  if (!profile) return null;
+  const isAds = !!adsActive;
+  return {
+    maxRange: Number(isAds ? (profile.adsMaxRange || profile.maxRange) : (profile.hipfireMaxRange || profile.maxRange)),
+    lockBoxPx: Number(isAds ? (profile.adsLockBoxPx || profile.lockBoxPx) : (profile.hipfireLockBoxPx || profile.lockBoxPx)),
+    coneHalfAngleDeg: Number(isAds ? (profile.adsConeHalfAngleDeg || profile.coneHalfAngleDeg) : (profile.hipfireConeHalfAngleDeg || profile.coneHalfAngleDeg))
+  };
 }
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});

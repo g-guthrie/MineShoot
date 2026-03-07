@@ -13,7 +13,7 @@ import {
   dot3,
   clamp
 } from '../transport.js';
-import { getSeekProfileByWeaponId } from '../../../shared/seek-profiles.js';
+import { getSeekProfileByWeaponId, resolveSeekAimProfile } from '../../../shared/seek-profiles.js';
 import { selectSeekTarget } from '../../../shared/seek-core.js';
 
 import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
@@ -827,8 +827,9 @@ export class GlobalArenaRoom extends DurableObject {
     return out;
   }
 
-  resolveSeekLock(player, preferredTargetId, profile) {
+  resolveSeekLock(player, preferredTargetId, profile, adsActive = false) {
     if (!player || !player.alive || !profile) return null;
+    const resolved = resolveSeekAimProfile(profile, adsActive) || {};
     const candidates = this.buildSeekCandidates(player);
     if (!candidates.length) return null;
     const preferred = String(preferredTargetId || '');
@@ -837,8 +838,8 @@ export class GlobalArenaRoom extends DurableObject {
       origin: this.entityAimTargetPosition(player),
       forward: this.entityForward(player),
       candidates: shortlist.length ? shortlist : candidates,
-      maxRange: Number(profile.maxRange || 24),
-      coneHalfAngleDeg: Number(profile.coneHalfAngleDeg || 35)
+      maxRange: Number(resolved.maxRange || profile.maxRange || 24),
+      coneHalfAngleDeg: Number(resolved.coneHalfAngleDeg || profile.coneHalfAngleDeg || 35)
     });
     if (!lock || !lock.hasLock || !lock.lockTargetId) return null;
     const target = this.getEntityById(lock.lockTargetId);
@@ -862,25 +863,19 @@ export class GlobalArenaRoom extends DurableObject {
   handleSeekerShot(player, msg, ws) {
     if (!player || !player.alive) return;
 
-    const requestedWeaponId = String(msg && msg.weaponId ? msg.weaponId : 'seekergun');
-    const weaponId = requestedWeaponId === 'plasma' ? 'plasma' : 'seekergun';
-    const profile = getSeekProfileByWeaponId(weaponId) || getSeekProfileByWeaponId('seekergun');
+    const weaponId = 'seekergun';
+    const profile = getSeekProfileByWeaponId('seekergun');
     if (!profile) {
       if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'invalid' });
       return;
     }
-    const stats = WEAPON_STATS[weaponId] || WEAPON_STATS.seekergun || { cooldownMs: 320, maxRange: 24 };
+    const stats = WEAPON_STATS.seekergun || { cooldownMs: 320, maxRange: 24 };
     const cooldownMs = Math.max(1, Number(profile.cooldownMs || stats.cooldownMs || 320));
     const now = nowMs();
-    const shotKey = weaponId === 'plasma' ? 'plasma' : 'seekergun';
+    const shotKey = 'seekergun';
     const prev = player.lastShotAt[shotKey] || 0;
     if ((now - prev) < cooldownMs) {
       if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'cooldown' });
-      return;
-    }
-
-    if (weaponId === 'plasma' && now < (player.streamOverheatedUntil || 0)) {
-      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId: 'plasma', reason: 'overheated' });
       return;
     }
 
@@ -891,16 +886,9 @@ export class GlobalArenaRoom extends DurableObject {
     const rawClientShotId = String(msg && msg.clientShotId ? msg.clientShotId : '');
     const clientShotId = /^[a-zA-Z0-9_-]{3,96}$/.test(rawClientShotId) ? rawClientShotId : '';
     const rawLockTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
-    const locked = this.resolveSeekLock(player, rawLockTargetId, profile);
-
-    if (weaponId === 'plasma') {
-      const overheatedNow = this.applyPlasmaStreamHeat(player, profile, now);
-      if (overheatedNow && ws) {
-        this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId: 'plasma', reason: 'overheated' });
-      }
-    }
-
-    const projectileType = String(profile.projectileType || (weaponId === 'plasma' ? 'plasma_stream' : 'seekershot'));
+    const adsActive = !!(msg && msg.adsActive);
+    const locked = this.resolveSeekLock(player, rawLockTargetId, profile, adsActive);
+    const projectileType = String(profile.projectileType || 'seekershot');
     const projectile = this.spawnProjectile(
       player,
       projectileType,

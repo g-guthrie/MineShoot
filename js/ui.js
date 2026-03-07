@@ -7,7 +7,7 @@
 
     var GameUI = {};
 
-    var crosshairEl, shotgunReticleEl, plasmaReticleEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl;
     var seekerReticleEl, seekerReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
@@ -15,7 +15,6 @@
     var weaponInfoEl, throwableInfoEl;
     var abilityInfoEl;
     var cooldownBarEl, cooldownStatusEl;
-    var plasmaHeatBarEl, plasmaStatusEl;
     var damageVignetteEl, damageIndicatorEl;
     var damageTicks = [];
     var damageTickTimers = [];
@@ -42,7 +41,7 @@
     GameUI.init = function () {
         crosshairEl = document.getElementById('crosshair');
         shotgunReticleEl = document.getElementById('shotgun-reticle');
-        plasmaReticleEl = document.getElementById('plasma-reticle');
+        sniperScopeEl = document.getElementById('sniper-scope');
         chokeReticleEl = document.getElementById('choke-reticle');
         deadeyeReticlesEl = document.getElementById('deadeye-reticles');
         hitmarkerEl = document.getElementById('hitmarker');
@@ -64,8 +63,6 @@
         abilityInfoEl = document.getElementById('ability-info');
         cooldownBarEl = document.getElementById('cooldown-bar');
         cooldownStatusEl = document.getElementById('cooldown-status');
-        plasmaHeatBarEl = document.getElementById('plasma-heat-bar');
-        plasmaStatusEl = document.getElementById('plasma-status');
         damageVignetteEl = document.getElementById('damage-vignette');
         damageIndicatorEl = document.getElementById('damage-indicator');
 
@@ -335,25 +332,16 @@
     };
 
     GameUI.updateReticle = function (weapon, spec) {
-        if (!crosshairEl || !shotgunReticleEl || !plasmaReticleEl || !weapon) return;
+        if (!crosshairEl || !shotgunReticleEl || !weapon) return;
 
-        if (weapon.id !== 'shotgun' && weapon.id !== 'plasma') {
+        if (weapon.id !== 'shotgun') {
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
-            plasmaReticleEl.style.display = 'none';
-            return;
-        }
-
-        if (weapon.id === 'plasma') {
-            crosshairEl.style.display = 'block';
-            shotgunReticleEl.style.display = 'none';
-            plasmaReticleEl.style.display = 'none';
             return;
         }
 
         crosshairEl.style.display = 'none';
         shotgunReticleEl.style.display = 'block';
-        plasmaReticleEl.style.display = 'none';
 
         var size = (spec && spec.size) ? spec.size : 300;
         var points = (spec && spec.points) ? spec.points : [];
@@ -397,37 +385,27 @@
         throwableInfoEl.textContent = 'Q ' + entry.label + ': ' + entry.charges + cd;
     };
 
-    GameUI.updatePlasmaState = function (state) {
-        if (!plasmaHeatBarEl || !plasmaStatusEl) return;
-        if (!state) {
-            plasmaHeatBarEl.style.width = '0%';
-            plasmaStatusEl.textContent = 'PLASMA READY';
-            plasmaStatusEl.style.color = '#7edbff';
-            if (plasmaReticleEl) plasmaReticleEl.style.borderColor = 'rgba(102, 221, 255, 0.9)';
+    GameUI.updateSniperScope = function (state) {
+        if (!sniperScopeEl || !crosshairEl || !shotgunReticleEl) return;
+        var isSniper = !!(state && state.sniper);
+        var blend = Math.max(0, Math.min(1, Number(state && state.blend) || 0));
+        var active = isSniper && blend > 0.02;
+
+        sniperScopeEl.style.display = active ? 'block' : 'none';
+        sniperScopeEl.style.opacity = active ? blend.toFixed(3) : '0';
+
+        if (active) {
+            crosshairEl.style.display = 'none';
+            shotgunReticleEl.style.display = 'none';
             return;
         }
 
-        var heat = Math.max(0, Math.min(1, state.heat || 0));
-        plasmaHeatBarEl.style.width = Math.round(heat * 100) + '%';
-
-        if (state.overheated) {
-            plasmaStatusEl.textContent = 'PLASMA OVERHEATED';
-            plasmaStatusEl.style.color = '#ff8a7a';
-            if (plasmaReticleEl) plasmaReticleEl.style.borderColor = 'rgba(255, 122, 102, 0.92)';
-            return;
+        if (isSniper) {
+            crosshairEl.style.display = 'block';
         }
-
-        if (state.active && state.targetId) {
-            plasmaStatusEl.textContent = 'LOCK: ' + state.targetId;
-            plasmaStatusEl.style.color = '#8ef5b2';
-            if (plasmaReticleEl) plasmaReticleEl.style.borderColor = 'rgba(120, 255, 170, 0.95)';
-            return;
-        }
-
-        plasmaStatusEl.textContent = heat > 0.02 ? 'PLASMA COOLING' : 'PLASMA READY';
-        plasmaStatusEl.style.color = '#7edbff';
-        if (plasmaReticleEl) plasmaReticleEl.style.borderColor = 'rgba(102, 221, 255, 0.9)';
     };
+
+    GameUI.updatePlasmaState = function (_state) {};
 
     GameUI.showDirectionalDamage = function (sourcePos, playerPos, playerYaw, damage) {
         if (!sourcePos || !playerPos || typeof playerYaw !== 'number') return;

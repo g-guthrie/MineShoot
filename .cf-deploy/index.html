@@ -36,11 +36,11 @@
                     <div id="menu-actions">
                         <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
                         <div id="top-mode-panel">
-                            <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">OTHER RUNTIMES</button>
+                            <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">DEV / TEST</button>
                             <div id="mode-buttons" hidden>
-                                <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">SINGLE CLOUDFLARE</button>
-                                <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">SOLO DEV SERVER</button>
-                                <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">LOCAL SANDBOX</button>
+                                <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">SOLO CLOUDFLARE (BOTS)</button>
+                                <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">LOCAL DEV ROOM (BOTS)</button>
+                                <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">OFFLINE SANDBOX</button>
                             </div>
                         </div>
                         <div id="top-controls-panel">
@@ -50,6 +50,7 @@
                                     <span>WASD Move</span>
                                     <span>Mouse Look</span>
                                     <span>E Sprint</span>
+                                    <span>RMB / Shift ADS</span>
                                     <span>Space Jump</span>
                                     <span>LMB Fire</span>
                                     <span>1-2 / Wheel Swap</span>
@@ -90,7 +91,22 @@
                 <p id="mode-subtitle"></p>
             </div>
             <div id="menu-main">
-                <button id="primary-play-btn" type="button">PLAY</button>
+                <div id="matchmaking-panel">
+                    <button id="primary-play-btn" type="button">QUICK MATCH</button>
+                    <div id="private-room-actions">
+                        <button id="create-private-room-btn" type="button">CREATE PRIVATE ROOM</button>
+                        <div id="private-room-join-row">
+                            <input id="private-room-input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ROOM CODE">
+                            <button id="join-private-room-btn" type="button">JOIN ROOM</button>
+                        </div>
+                    </div>
+                    <div id="room-access-status" aria-live="polite"></div>
+                    <div id="room-share-panel" hidden>
+                        <span id="room-share-label">PRIVATE ROOM CODE</span>
+                        <span id="room-share-code">------</span>
+                        <button id="copy-room-code-btn" type="button">COPY</button>
+                    </div>
+                </div>
                 <div id="menu-session-actions">
                     <button id="play-btn" type="button">RESUME MATCH</button>
                     <button id="back-mode-btn" type="button">CHANGE MODE</button>
@@ -141,7 +157,12 @@
     <!-- HUD Elements -->
     <div id="crosshair">+</div>
     <div id="shotgun-reticle"></div>
-    <div id="plasma-reticle"></div>
+    <div id="sniper-scope">
+        <div id="sniper-scope-vignette"></div>
+        <div id="sniper-scope-ring"></div>
+        <div id="sniper-scope-cross-v"></div>
+        <div id="sniper-scope-cross-h"></div>
+    </div>
     <div id="choke-reticle"></div>
     <div id="deadeye-reticles"></div>
     <div id="hitmarker">✕</div>
@@ -155,12 +176,14 @@
     <div id="damage-indicator"></div>
     <div id="damage-numbers"></div>
     <div id="overhead-bars"></div>
+    <div id="room-code-badge" hidden>
+        <span id="room-code-badge-label">PRIVATE ROOM</span>
+        <span id="room-code-badge-value">------</span>
+    </div>
     <div id="hud-bottom-right">
         <div id="ability-info">R Choke: READY</div>
         <div id="throwable-info">Q Frag: 1</div>
         <div id="weapon-info">Machine Gun | AUTO | 16/30 DMG</div>
-        <div id="plasma-status">PLASMA READY</div>
-        <div id="plasma-heat-wrap"><div id="plasma-heat-bar"></div></div>
         <div id="cooldown-status">READY</div>
         <div id="cooldown-container"><div id="cooldown-bar"></div></div>
     </div>

@@ -823,13 +823,14 @@
 
     GameNet.sendAbilityCast = GameNet.sendClassCast;
 
-    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId, weaponId) {
+    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId, weaponId, adsActive) {
         var payload = {
             t: (MSG_C2S.SEEKER_SHOT || 'seeker_shot')
         };
         if (lockTargetId) payload.lockTargetId = String(lockTargetId);
         if (clientShotId) payload.clientShotId = String(clientShotId);
         if (weaponId) payload.weaponId = String(weaponId);
+        if (adsActive) payload.adsActive = true;
         if (throwIntent && throwIntent.origin && throwIntent.direction) {
             payload.throwIntent = {
                 origin: {

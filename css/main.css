@@ -1184,6 +1184,57 @@ canvas {
     transform: translate(-50%, -50%);
 }
 
+#sniper-scope {
+    position: fixed;
+    inset: 0;
+    z-index: 12;
+    pointer-events: none;
+    display: none;
+    opacity: 0;
+}
+
+#sniper-scope-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at center,
+            transparent 0 21.5vmin,
+            rgba(0, 0, 0, 0.08) 22vmin,
+            rgba(0, 0, 0, 0.92) 26vmin,
+            rgba(0, 0, 0, 0.98) 100%);
+}
+
+#sniper-scope-ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44vmin;
+    height: 44vmin;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(240, 248, 255, 0.72);
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.08);
+}
+
+#sniper-scope-cross-v,
+#sniper-scope-cross-h {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: rgba(245, 250, 255, 0.86);
+    transform: translate(-50%, -50%);
+}
+
+#sniper-scope-cross-v {
+    width: 1px;
+    height: 44vmin;
+}
+
+#sniper-scope-cross-h {
+    width: 44vmin;
+    height: 1px;
+}
+
 #choke-reticle {
     position: fixed;
     top: 50%;
