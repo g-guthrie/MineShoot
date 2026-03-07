@@ -22,46 +22,46 @@
             defaultWallhackRadius: 90
         },
         weapons: {
-            rifle: 120,
-            pistol: 92,
-            machinegun: 88,
-            shotgun: 42,
-            sniper: 190,
-            seekergun: 24
+            rifle: 118,
+            pistol: 52,
+            machinegun: 48,
+            shotgun: 24,
+            sniper: 160,
+            seekergun: 28
         },
         weaponFalloff: {
             rifle: [
-                { maxDistance: 20, scale: 1.0 },
-                { maxDistance: 45, scale: 0.96 },
-                { maxDistance: 80, scale: 0.88 },
-                { maxDistance: 120, scale: 0.78 }
+                { maxDistance: 24, scale: 1.0 },
+                { maxDistance: 50, scale: 0.96 },
+                { maxDistance: 86, scale: 0.88 },
+                { maxDistance: 118, scale: 0.78 }
             ],
             pistol: [
                 { maxDistance: 14, scale: 1.0 },
-                { maxDistance: 26, scale: 0.92 },
-                { maxDistance: 42, scale: 0.74 },
-                { maxDistance: 92, scale: 0.52 }
+                { maxDistance: 24, scale: 0.88 },
+                { maxDistance: 36, scale: 0.64 },
+                { maxDistance: 52, scale: 0.4 }
             ],
             machinegun: [
-                { maxDistance: 12, scale: 1.0 },
-                { maxDistance: 28, scale: 0.94 },
-                { maxDistance: 52, scale: 0.84 },
-                { maxDistance: 88, scale: 0.72 }
+                { maxDistance: 10, scale: 1.0 },
+                { maxDistance: 18, scale: 0.82 },
+                { maxDistance: 30, scale: 0.62 },
+                { maxDistance: 48, scale: 0.42 }
             ],
             shotgun: [
-                { maxDistance: 7, scale: 1.0 },
-                { maxDistance: 14, scale: 0.75 },
-                { maxDistance: 22, scale: 0.5 },
-                { maxDistance: 42, scale: 0.28 }
+                { maxDistance: 6, scale: 1.0 },
+                { maxDistance: 11, scale: 0.68 },
+                { maxDistance: 17, scale: 0.38 },
+                { maxDistance: 24, scale: 0.12 }
             ],
             sniper: [
-                { maxDistance: 45, scale: 1.0 },
-                { maxDistance: 95, scale: 0.96 },
-                { maxDistance: 145, scale: 0.9 },
-                { maxDistance: 190, scale: 0.85 }
+                { maxDistance: 55, scale: 1.0 },
+                { maxDistance: 105, scale: 1.0 },
+                { maxDistance: 135, scale: 0.94 },
+                { maxDistance: 160, scale: 0.86 }
             ],
             seekergun: [
-                { maxDistance: 24, scale: 1.0 }
+                { maxDistance: 28, scale: 1.0 }
             ]
         },
         throwables: {

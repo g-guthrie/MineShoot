@@ -23,6 +23,8 @@
     var HEAD_EYE_Y = 0.06;
     var HEAD_EYE_Z = -0.282;
     var HEAD_EYE_X = 0.12;
+    var HANDLE_ANCHOR_NAME = 'weaponHandleAnchor';
+    var BARREL_TIP_ANCHOR_NAME = 'weaponBarrelTipAnchor';
 
     function ensureHex(value, fallback) {
         return (typeof value === 'number' && isFinite(value)) ? value : fallback;
@@ -54,87 +56,35 @@
         return eye;
     }
 
-    function styleMap() {
-        return {
-            rifle: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.02, 0.08],
-                gunRot: [0, 0, 0],
-                body:   { p: [0, 0.0, -0.06], s: [1.0, 1.0, 1.0], c: 0x333333 },
-                barrel: { p: [0, 0.02, -0.36], s: [1.0, 1.0, 1.0], c: 0x222222 },
-                stock:  { p: [0, -0.04, 0.14], s: [1.0, 1.0, 1.0], c: 0x7a512d },
-                grip:   { p: [0, -0.1, 0.02], s: [1.0, 1.0, 1.0], c: 0x7a512d },
-                scope: false,
-                pump: false,
-                coil: false,
-                muzzlePos: [0, 0.02, -0.56]
-            },
-            pistol: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.03, 0.06],
-                gunRot: [0.12, 0.05, 0],
-                body:   { p: [0, -0.02, -0.06], s: [0.75, 0.85, 0.7], c: 0x3a3a3a },
-                barrel: { p: [0, 0.0, -0.24], s: [0.68, 0.68, 0.65], c: 0x2c2c2c },
-                stock:  { p: [0, -0.05, 0.09], s: [0.52, 0.85, 0.72], c: 0x6f4d32 },
-                grip:   { p: [0, -0.14, -0.01], s: [0.9, 1.1, 1.25], c: 0x6f4d32 },
-                scope: false,
-                pump: false,
-                coil: false,
-                muzzlePos: [0, 0.0, -0.33]
-            },
-            machinegun: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.02, 0.08],
-                gunRot: [0, 0, 0],
-                body:   { p: [0, 0.0, -0.08], s: [1.38, 1.05, 1.32], c: 0x2b2b2b },
-                barrel: { p: [0, 0.03, -0.52], s: [1.18, 1.0, 1.62], c: 0x191919 },
-                stock:  { p: [0, -0.03, 0.19], s: [1.2, 1.05, 1.18], c: 0x565656 },
-                grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.08, 1.0], c: 0x565656 },
-                scope: false,
-                pump: false,
-                coil: true,
-                muzzlePos: [0, 0.03, -0.82]
-            },
-            shotgun: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.02, 0.06],
-                gunRot: [0, 0, 0],
-                body:   { p: [0, 0.0, -0.1], s: [1.3, 1.06, 1.18], c: 0x6b4220 },
-                barrel: { p: [0, 0.02, -0.47], s: [1.95, 1.12, 1.55], c: 0x222222 },
-                stock:  { p: [0, -0.03, 0.21], s: [1.2, 1.04, 1.16], c: 0x8a5a2d },
-                grip:   { p: [0, -0.1, 0.02], s: [1.02, 1.06, 1.02], c: 0x8a5a2d },
-                scope: false,
-                pump: true,
-                coil: false,
-                muzzlePos: [0, 0.02, -0.86]
-            },
-            sniper: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.02, 0.04],
-                gunRot: [0, 0, 0],
-                body:   { p: [0, -0.01, -0.16], s: [1.26, 0.9, 1.9], c: 0x2f3f2f },
-                barrel: { p: [0, 0.02, -0.7], s: [0.8, 0.8, 2.95], c: 0x1c1c1c },
-                stock:  { p: [0, -0.02, 0.22], s: [1.16, 1.0, 1.28], c: 0x5d3c1f },
-                grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5d3c1f },
-                scope: true,
-                pump: false,
-                coil: false,
-                muzzlePos: [0, 0.02, -1.34]
-            },
-            seekergun: {
-                weaponClass: 'gun',
-                gunPos: [0.0, 0.03, 0.06],
-                gunRot: [0.02, 0.02, 0],
-                body:   { p: [0, 0.0, -0.06], s: [1.08, 1.04, 1.08], c: 0x254b57 },
-                barrel: { p: [0, 0.02, -0.44], s: [0.88, 0.9, 1.18], c: 0x70d6ee },
-                stock:  { p: [0, -0.03, 0.14], s: [1.0, 1.0, 1.0], c: 0x314f5d },
-                grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x314f5d },
-                scope: true,
-                pump: false,
-                coil: true,
-                muzzlePos: [0, 0.04, -0.72]
-            }
-        };
+    function weaponRegistry() {
+        return globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry || null;
+    }
+
+    function resolveWeaponEntry(weaponId) {
+        var registry = weaponRegistry();
+        var entry = registry && registry.get ? registry.get(weaponId) : null;
+        if (entry && entry.visual) {
+            return {
+                weaponId: weaponId,
+                visual: entry.visual
+            };
+        }
+        var fallback = registry && registry.get ? registry.get('rifle') : null;
+        return fallback && fallback.visual ? {
+            weaponId: 'rifle',
+            visual: fallback.visual
+        } : null;
+    }
+
+    function setAnchorPosition(group, name, coords) {
+        var anchor = group.getObjectByName(name);
+        if (!anchor) {
+            anchor = new THREE.Object3D();
+            anchor.name = name;
+            group.add(anchor);
+        }
+        anchor.position.set(coords[0], coords[1], coords[2]);
+        return anchor;
     }
 
     GameAvatarRig.create = function (kind, options) {
@@ -240,6 +190,14 @@
         muzzle.visible = false;
         gun.add(muzzle);
 
+        var handleAnchor = new THREE.Object3D();
+        handleAnchor.name = HANDLE_ANCHOR_NAME;
+        gun.add(handleAnchor);
+
+        var barrelTipAnchor = new THREE.Object3D();
+        barrelTipAnchor.name = BARREL_TIP_ANCHOR_NAME;
+        gun.add(barrelTipAnchor);
+
         palmRight.add(gun);
 
         var supportAnchor = new THREE.Object3D();
@@ -292,36 +250,53 @@
             footPlaneOffsetY: FOOT_PLANE_OFFSET_Y
         };
 
-        var styles = styleMap();
-
         function setWeapon(weaponId) {
-            var style = styles[weaponId] || styles.rifle;
-            rig.weaponId = (styles[weaponId] ? weaponId : 'rifle');
-            rig.weaponClass = style.weaponClass || 'gun';
+            var resolved = resolveWeaponEntry(weaponId);
+            var visual = resolved && resolved.visual ? resolved.visual : null;
+            var mount = visual && visual.mount ? visual.mount : null;
+            var parts = visual && visual.parts ? visual.parts : {};
+            var anchors = visual && visual.anchors ? visual.anchors : {};
+            var effects = visual && visual.effects ? visual.effects : {};
+            var handlePos = anchors.handle || [0, 0, 0];
+            var barrelTipPos = anchors.barrelTip || [0, 0, -0.58];
+            var supportPos = anchors.support || [0, -0.01, -0.28];
+            var mountPos = mount && mount.position ? mount.position : [0, 0.02, 0.08];
+            var mountRot = mount && mount.rotation ? mount.rotation : [0, 0, 0];
+            var muzzlePos = effects.muzzleFlash && effects.muzzleFlash.position ? effects.muzzleFlash.position : barrelTipPos;
+
+            rig.weaponId = resolved && resolved.weaponId ? resolved.weaponId : 'rifle';
+            rig.weaponClass = visual && visual.classId ? visual.classId : 'gun';
 
             // Keep weapon body above the hand line so grip/stock read as hand-held.
             rig.gun.position.set(
-                style.gunPos[0] + GUN_MOUNT_SHIFT_X,
-                style.gunPos[1] + GUN_MOUNT_LIFT_Y,
-                style.gunPos[2] + GUN_MOUNT_SHIFT_Z
+                mountPos[0] + GUN_MOUNT_SHIFT_X,
+                mountPos[1] + GUN_MOUNT_LIFT_Y,
+                mountPos[2] + GUN_MOUNT_SHIFT_Z
             );
-            rig.gun.rotation.set(style.gunRot[0], style.gunRot[1], style.gunRot[2]);
+            rig.gun.rotation.set(mountRot[0], mountRot[1], mountRot[2]);
             // Keep a fixed wrist-style relationship: gun sits 75deg below the forearm.
             rig.gun.rotation.x = -75 * DEG_TO_RAD;
+
+            var handleOffset = new THREE.Vector3(handlePos[0], handlePos[1], handlePos[2]);
+            handleOffset.applyEuler(rig.gun.rotation);
+            rig.gun.position.sub(handleOffset);
+
             rig.gunBasePos.copy(rig.gun.position);
             rig.gunBaseRot.copy(rig.gun.rotation);
-            rig.supportBasePos.set(0, -0.01, (style.barrel && style.barrel.p ? style.barrel.p[2] * 0.6 : -0.28));
+            rig.supportBasePos.set(supportPos[0], supportPos[1], supportPos[2]);
 
-            setPart(rig.gunBody, style.body);
-            setPart(rig.gunBarrel, style.barrel);
-            setPart(rig.gunStock, style.stock);
-            setPart(rig.gunGrip, style.grip);
+            setPart(rig.gunBody, parts.body);
+            setPart(rig.gunBarrel, parts.barrel);
+            setPart(rig.gunStock, parts.stock);
+            setPart(rig.gunGrip, parts.grip);
 
-            rig.scope.visible = !!style.scope;
-            rig.pump.visible = !!style.pump;
-            rig.coil.visible = !!style.coil;
-            rig.muzzle.position.set(style.muzzlePos[0], style.muzzlePos[1], style.muzzlePos[2]);
+            rig.scope.visible = !!parts.scope;
+            rig.pump.visible = !!parts.pump;
+            rig.coil.visible = !!parts.coil;
+            rig.muzzle.position.set(muzzlePos[0], muzzlePos[1], muzzlePos[2]);
             rig.supportAnchor.position.set(rig.supportBasePos.x, rig.supportBasePos.y, rig.supportBasePos.z);
+            setAnchorPosition(rig.gun, HANDLE_ANCHOR_NAME, handlePos);
+            setAnchorPosition(rig.gun, BARREL_TIP_ANCHOR_NAME, barrelTipPos);
         }
 
         function updateAimPitch(pitch) {
@@ -338,17 +313,18 @@
             var legAmp = 0.12 + speedNorm * 0.55;
             if (legAmp > 0.72) legAmp = 0.72;
             var walkSwing = Math.sin(rig.gaitPhase) * legAmp;
-            var sideSwing = -walkSwing * 0.75;
+            var airborneLegPose = 0.504;
 
             if (airborne) {
-                rig.legL.rotation.x = 0.18;
-                rig.legR.rotation.x = 0.18;
+                rig.legL.rotation.x = -airborneLegPose;
+                rig.legR.rotation.x = airborneLegPose;
                 rig.legL.rotation.z = -0.08;
                 rig.legR.rotation.z = 0.08;
                 rig.legL.position.x = -0.06;
                 rig.legR.position.x = 0.06;
-                rig.armL.rotation.x = -1.55;
-                rig.armL.rotation.z = -0.12;
+                rig.armL.rotation.x = 0;
+                rig.armL.rotation.y = 0;
+                rig.armL.rotation.z = 0;
                 rig.armR.rotation.x = 1.05 + (rig.aimPitch * 0.25);
                 rig.armR.rotation.z = -0.08;
                 rig.palmRight.rotation.x = 0;
@@ -403,6 +379,11 @@
 
         function getMuzzleWorldPosition(outVec3) {
             var out = outVec3 || new THREE.Vector3();
+            var barrelTip = rig.gun.getObjectByName(BARREL_TIP_ANCHOR_NAME);
+            if (barrelTip) {
+                barrelTip.getWorldPosition(out);
+                return out;
+            }
             muzzle.getWorldPosition(out);
             return out;
         }

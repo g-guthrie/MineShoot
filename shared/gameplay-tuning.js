@@ -14,37 +14,37 @@ export const gameplayTuning = {
   },
   weaponFalloff: {
     rifle: [
-      { maxDistance: 22, scale: 1.0 },
-      { maxDistance: 52, scale: 0.98 },
-      { maxDistance: 92, scale: 0.92 },
-      { maxDistance: 132, scale: 0.84 }
+      { maxDistance: 24, scale: 1.0 },
+      { maxDistance: 50, scale: 0.96 },
+      { maxDistance: 86, scale: 0.88 },
+      { maxDistance: 118, scale: 0.78 }
     ],
     pistol: [
-      { maxDistance: 12, scale: 1.0 },
-      { maxDistance: 24, scale: 0.9 },
-      { maxDistance: 40, scale: 0.7 },
-      { maxDistance: 76, scale: 0.46 }
+      { maxDistance: 14, scale: 1.0 },
+      { maxDistance: 24, scale: 0.88 },
+      { maxDistance: 36, scale: 0.64 },
+      { maxDistance: 52, scale: 0.4 }
     ],
     machinegun: [
-      { maxDistance: 12, scale: 1.0 },
-      { maxDistance: 24, scale: 0.88 },
-      { maxDistance: 44, scale: 0.72 },
-      { maxDistance: 84, scale: 0.56 }
+      { maxDistance: 10, scale: 1.0 },
+      { maxDistance: 18, scale: 0.82 },
+      { maxDistance: 30, scale: 0.62 },
+      { maxDistance: 48, scale: 0.42 }
     ],
     shotgun: [
-      { maxDistance: 7, scale: 1.0 },
-      { maxDistance: 13, scale: 0.7 },
-      { maxDistance: 21, scale: 0.4 },
-      { maxDistance: 36, scale: 0.14 }
+      { maxDistance: 6, scale: 1.0 },
+      { maxDistance: 11, scale: 0.68 },
+      { maxDistance: 17, scale: 0.38 },
+      { maxDistance: 24, scale: 0.12 }
     ],
     sniper: [
-      { maxDistance: 60, scale: 1.0 },
-      { maxDistance: 120, scale: 1.0 },
-      { maxDistance: 180, scale: 0.96 },
-      { maxDistance: 230, scale: 0.9 }
+      { maxDistance: 55, scale: 1.0 },
+      { maxDistance: 105, scale: 1.0 },
+      { maxDistance: 135, scale: 0.94 },
+      { maxDistance: 160, scale: 0.86 }
     ],
     seekergun: [
-      { maxDistance: 24, scale: 1.0 }
+      { maxDistance: 28, scale: 1.0 }
     ]
   },
   throwableMechanics: {
@@ -61,11 +61,11 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 190,  bodyDamage: 35,  headDamage: 94,  maxRange: 132, pellets: 1,  spreadNdc: 0.009 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 250,  bodyDamage: 24,  headDamage: 145, maxRange: 76,  pellets: 1,  spreadNdc: 0.017 },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 80,   bodyDamage: 16,  headDamage: 28,  maxRange: 84,  pellets: 1,  spreadNdc: 0.018 },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 900,  bodyDamage: 15,  headDamage: 24,  maxRange: 36,  pellets: 12, spreadNdc: 0 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1100, bodyDamage: 185, headDamage: 340, maxRange: 230, pellets: 1,  spreadNdc: 0.085 },
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  spreadNdc: 0.007 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  spreadNdc: 0.012 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  spreadNdc: 0.028 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, spreadNdc: 0 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  spreadNdc: 0.14 },
     seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  spreadNdc: 0 }
   },
   throwableCategories: {
