@@ -62,6 +62,11 @@
     var avatarGroup = null;
     var avatarRig = null;
     var avatarRigApi = null;
+    var actorVisual = null;
+    var sceneRef = null;
+    var bodyHitbox = null;
+    var headHitbox = null;
+    var hitboxVisible = false;
 
     var bobTimer = 0;
     var isMoving = false;
@@ -76,22 +81,6 @@
 
     function hasInputCapture() {
         return !!document.pointerLockElement;
-    }
-
-    function createAvatarModel() {
-        if (globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
-            var shared = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create('player', {
-                bodyColor: 0x4a7fc1,
-                skinColor: 0xd2a77d,
-                legColor: 0x2f2f2f,
-                weaponId: currentWeaponId
-            });
-            return {
-                model: shared.root,
-                rigApi: shared
-            };
-        }
-        return { model: new THREE.Group(), rigApi: null };
     }
 
     function applyAvatarWeaponPose() {
@@ -238,6 +227,47 @@
         if (!avatarGroup) return;
         avatarGroup.position.set(playerX, posY - EYE_HEIGHT, playerZ);
         avatarGroup.rotation.y = yaw;
+        syncHitboxPositions();
+    }
+
+    function syncHitboxPositions() {
+        var feetY = posY - EYE_HEIGHT;
+        if (actorVisual && actorVisual.syncHitboxes) {
+            actorVisual.syncHitboxes({ x: playerX, y: feetY, z: playerZ });
+        }
+    }
+
+    function ensureHitboxes() {
+        if (!sceneRef || actorVisual) return;
+        var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
+        if (!actorFactory || !actorFactory.create) return;
+        actorVisual = actorFactory.create({
+            kind: 'player',
+            ownerType: 'player',
+            bodyColor: 0x4a7fc1,
+            skinColor: 0xd2a77d,
+            legColor: 0x2f2f2f,
+            weaponId: currentWeaponId,
+            targetId: 'self',
+            hitboxOpacity: hitboxVisible ? 0.3 : 0
+        });
+        avatarGroup = actorVisual.visual;
+        avatarRigApi = actorVisual.rigApi;
+        avatarRig = avatarGroup && avatarGroup.userData ? avatarGroup.userData.rig || null : null;
+        bodyHitbox = actorVisual.bodyHitbox;
+        headHitbox = actorVisual.headHitbox;
+        sceneRef.add(avatarGroup);
+        if (bodyHitbox) sceneRef.add(bodyHitbox);
+        if (headHitbox) sceneRef.add(headHitbox);
+        syncHitboxPositions();
+    }
+
+    function setHitboxVisibility(visible) {
+        hitboxVisible = !!visible;
+        if (actorVisual && actorVisual.setHitboxVisibility) {
+            actorVisual.setHitboxVisibility(hitboxVisible);
+        }
+        return hitboxVisible;
     }
 
     function updateCameraFromPlayer(dt) {
@@ -358,6 +388,7 @@
     }
 
     GamePlayer.init = function (scene) {
+        sceneRef = scene;
         var bounds = getWorldBounds();
         var worldSpan = (typeof bounds.size === 'number') ? bounds.size : (bounds.max - bounds.min);
         var cameraFar = Math.max(120, worldSpan * 2.2);
@@ -370,11 +401,7 @@
         playerZ = spawn.z;
         posY = EYE_HEIGHT;
 
-        var avatarModel = createAvatarModel();
-        avatarGroup = avatarModel.model;
-        avatarRig = avatarGroup.userData.rig || null;
-        avatarRigApi = avatarModel.rigApi || null;
-        scene.add(avatarGroup);
+        ensureHitboxes();
 
         applyAvatarWeaponPose();
         setupInput();
@@ -615,6 +642,11 @@
 
     GamePlayer.getLoadout = function () {
         return { slots: loadoutSlots.slice() };
+    };
+
+    GamePlayer.setHitboxVisibility = function (visible) {
+        ensureHitboxes();
+        return setHitboxVisibility(visible);
     };
 
     GamePlayer.equipSlot = function (slotIndex) {

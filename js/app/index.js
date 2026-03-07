@@ -29,6 +29,7 @@ const orderedModules = [
   '../combat-tuning.js',
   '../hitbox-factory.js',
   '../avatar-rig.js',
+  '../actor-visual-factory.js',
   '../ui.js',
   '../enemy.js',
   '../hitscan.js',

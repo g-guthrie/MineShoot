@@ -712,8 +712,12 @@
                 }
             }
 
-            r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 0.7625, r.group.position.z);
-            r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.0, r.group.position.z);
+            if (r.actorVisual && r.actorVisual.syncHitboxes) {
+                r.actorVisual.syncHitboxes(r.group.position);
+            } else if (r.bodyHitbox && r.headHitbox) {
+                r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 0.7625, r.group.position.z);
+                r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.0, r.group.position.z);
+            }
         });
     };
 

@@ -93,6 +93,10 @@
             globalThis.__MAYHEM_RUNTIME.GameNet.setHitboxVisibility(!!visible);
         }
 
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setHitboxVisibility) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setHitboxVisibility(!!visible);
+        }
+
         if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.setDebugMode) {
             globalThis.__MAYHEM_RUNTIME.GameAbilities.setDebugMode(!!visible);
         }
@@ -424,7 +428,7 @@
             ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
             : null;
         var isShotgun = !!(currentWeapon && currentWeapon.id === 'shotgun');
-        var damageNumberSpread = isShotgun ? { spreadX: 96, spreadY: 38 } : undefined;
+        var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!result.killed });
         }
@@ -441,7 +445,7 @@
     function handleNetworkDamageFeedback(feedback) {
         if (!feedback) return;
         var isShotgun = feedback.weaponId === 'shotgun';
-        var damageNumberSpread = isShotgun ? { spreadX: 96, spreadY: 38 } : undefined;
+        var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
 
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!feedback.killed });
@@ -535,12 +539,14 @@
     function setupPointerLock() {
         overlay = document.getElementById('overlay');
         var playBtn = document.getElementById('play-btn');
+        var backModeBtn = document.getElementById('back-mode-btn');
         var modeButtonsWrap = document.getElementById('mode-buttons');
         var lastStartRequest = 0;
 
         function showResumeControl(show) {
             if (!playBtn) return;
             playBtn.style.display = show ? 'inline-block' : 'none';
+            if (backModeBtn) backModeBtn.style.display = show ? 'inline-block' : 'none';
         }
 
         function requestPlayStart(e) {
@@ -599,6 +605,17 @@
             playBtn.addEventListener('pointerup', requestPlayStart);
             playBtn.addEventListener('mousedown', requestPlayStart);
             playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+        }
+
+        if (backModeBtn) {
+            backModeBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile && globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode) {
+                    globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode();
+                }
+                window.location.href = window.location.pathname;
+            });
         }
 
         document.addEventListener('pointerlockchange', function () {
@@ -1437,14 +1454,17 @@
 
         var runtime = runtimeProfile();
         var modeButtonsWrap = document.getElementById('mode-buttons');
-        var altModePanel = document.getElementById('alt-mode-panel');
         var altModeToggle = document.getElementById('alt-mode-toggle');
+        var controlsMenu = document.getElementById('controls-menu');
+        var controlsToggle = document.getElementById('controls-toggle');
         var primaryPlayBtn = document.getElementById('primary-play-btn');
         var modeButtons = Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]'));
         var modeSubtitle = document.getElementById('mode-subtitle');
         var playBtn = document.getElementById('play-btn');
+        var backModeBtn = document.getElementById('back-mode-btn');
         var started = false;
         var altModesOpen = false;
+        var controlsOpen = false;
         setRuntimeIndicator(null);
         setupMenuWeaponLoadout();
         setupMenuThrowableLoadout();
@@ -1454,6 +1474,12 @@
             altModesOpen = !!open;
             if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
             if (altModeToggle) altModeToggle.setAttribute('aria-expanded', altModesOpen ? 'true' : 'false');
+        }
+
+        function setControlsOpen(open) {
+            controlsOpen = !!open;
+            if (controlsMenu) controlsMenu.hidden = !controlsOpen;
+            if (controlsToggle) controlsToggle.setAttribute('aria-expanded', controlsOpen ? 'true' : 'false');
         }
 
         function syncModeButtonVisibility() {
@@ -1471,7 +1497,6 @@
                 btn.disabled = false;
                 if (show) visibleCount += 1;
             }
-            if (altModePanel) altModePanel.style.display = visibleCount > 0 ? '' : 'none';
             if (visibleCount <= 0) setAltModesOpen(false);
         }
 
@@ -1480,6 +1505,7 @@
                 modeButtons[i].disabled = true;
             }
             if (altModeToggle) altModeToggle.disabled = true;
+            if (controlsToggle) controlsToggle.disabled = true;
             if (primaryPlayBtn) primaryPlayBtn.disabled = true;
         }
 
@@ -1492,9 +1518,10 @@
             activeRuntimeMode = selectedMode;
 
             if (modeButtonsWrap) modeButtonsWrap.hidden = true;
-            if (altModePanel) altModePanel.style.display = 'none';
+            if (controlsMenu) controlsMenu.hidden = true;
             if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
             if (playBtn) playBtn.style.display = 'none';
+            if (backModeBtn) backModeBtn.style.display = 'none';
             disableModeButtons();
             if (modeSubtitle) {
                 modeSubtitle.textContent = startupSubtitleForMode(selectedMode);
@@ -1538,10 +1565,12 @@
                     primaryPlayBtn.style.display = '';
                 }
                 if (altModeToggle) altModeToggle.disabled = false;
+                if (controlsToggle) controlsToggle.disabled = false;
                 if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-                if (altModePanel) altModePanel.style.display = '';
+                if (controlsMenu) controlsMenu.hidden = !controlsOpen;
                 if (playBtn) playBtn.style.display = 'none';
-                if (modeSubtitle) modeSubtitle.textContent = 'Play drops you into the shared Cloudflare room. Alternate runtimes are below.';
+                if (backModeBtn) backModeBtn.style.display = 'none';
+                if (modeSubtitle) modeSubtitle.textContent = '';
                 setRuntimeIndicator(null);
                 syncModeButtonVisibility();
             }
@@ -1549,10 +1578,19 @@
 
         syncModeButtonVisibility();
         setAltModesOpen(false);
+        setControlsOpen(false);
 
         if (altModeToggle) {
             altModeToggle.addEventListener('click', function () {
+                setControlsOpen(false);
                 setAltModesOpen(!altModesOpen);
+            });
+        }
+
+        if (controlsToggle) {
+            controlsToggle.addEventListener('click', function () {
+                setAltModesOpen(false);
+                setControlsOpen(!controlsOpen);
             });
         }
 

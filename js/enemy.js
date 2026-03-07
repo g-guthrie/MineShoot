@@ -85,27 +85,6 @@
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 
-    function createSharedHumanoidModel(color, weaponId) {
-        if (!globalThis.__MAYHEM_RUNTIME.GameAvatarRig || !globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) return null;
-        var shared = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create('enemy', {
-            bodyColor: color,
-            skinColor: 0xd2a77d,
-            legColor: 0x333333,
-            weaponId: weaponId
-        });
-        if (!shared || !shared.root) return null;
-        return shared;
-    }
-
-    function createHumanoidModel(color, weaponId, outMeta) {
-        var sharedModel = createSharedHumanoidModel(color, weaponId);
-        if (sharedModel) {
-            if (outMeta) outMeta.rigApi = sharedModel;
-            return sharedModel.root;
-        }
-        return new THREE.Group();
-    }
-
     function createRevealGhost(visual) {
         var ghost = visual.clone(true);
         var mats = [];
@@ -131,71 +110,45 @@
         return ghost;
     }
 
-    function createHitboxMesh(type, index) {
-        if (hitboxFactory && hitboxFactory.createCombatHitbox) {
-            return hitboxFactory.createCombatHitbox(type, 'enemy', {
-                entityIndex: index,
-                targetId: 'enemy:' + index
-            });
-        }
-        var ec = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
-        var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.375, y: 0.844, z: 1.375 };
-        var BODY = ec.BODY_HITBOX_SIZE || { x: 2.7, y: 1.525, z: 2.7 };
-        var geo = (type === 'head')
-            ? new THREE.BoxGeometry(HEAD.x, HEAD.y, HEAD.z)
-            : new THREE.BoxGeometry(BODY.x, BODY.y, BODY.z);
-        var mat = new THREE.MeshBasicMaterial({
-            transparent: true, opacity: 0.3, wireframe: true,
-            color: type === 'head' ? 0xff4444 : 0x00aaff,
-            depthTest: type !== 'head'
-        });
-        var mesh = new THREE.Mesh(geo, mat);
-        mesh.visible = true;
-        mesh.renderOrder = type === 'head' ? 1 : 0;
-        mesh.userData = { enemyIndex: index, type: type, enemyRef: null, targetId: 'enemy:' + index, ownerType: 'enemy' };
-
-        return mesh;
-    }
-
     function syncHitboxPositions(enemy) {
-        var pos = enemy.group.position;
-
-        if (enemy.bodyHitbox) {
-            enemy.bodyHitbox.position.set(pos.x, pos.y + 0.7625, pos.z);
-        }
-
-        if (enemy.headHitbox) {
-            enemy.headHitbox.position.set(pos.x, pos.y + 2.0, pos.z);
+        if (enemy && enemy.actorVisual && enemy.group && enemy.actorVisual.syncHitboxes) {
+            enemy.actorVisual.syncHitboxes(enemy.group.position);
         }
     }
 
     function createEnemy(scene, index) {
         var color = skinColors[index % skinColors.length];
         var weaponId = randomEnemyWeapon();
-        var visualMeta = { rigApi: null };
-
         var group = new THREE.Group();
-
-        var visual = createHumanoidModel(color, weaponId, visualMeta);
-        // Shared rig is already built around the same world anchor as hitboxes.
-        // Keep legacy fallback offset only for non-shared model path.
-        visual.position.y = visualMeta.rigApi ? 0 : 1.0;
+        var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
+        var actorVisual = actorFactory && actorFactory.create ? actorFactory.create({
+            kind: 'enemy',
+            ownerType: 'enemy',
+            bodyColor: color,
+            skinColor: 0xd2a77d,
+            legColor: 0x333333,
+            weaponId: weaponId,
+            targetId: 'enemy:' + index,
+            hitboxOpacity: hitboxVisible ? 0.3 : 0,
+            includeRevealGhost: true
+        }) : null;
+        var visual = actorVisual ? actorVisual.visual : new THREE.Group();
         group.add(visual);
-
-        var revealGhost = createRevealGhost(visual);
-        revealGhost.position.copy(visual.position);
-        group.add(revealGhost);
+        var revealGhost = actorVisual ? actorVisual.revealGhost : createRevealGhost(visual);
+        if (revealGhost) {
+            revealGhost.position.copy(visual.position);
+            group.add(revealGhost);
+        }
 
         var spawn = getEnemySpawnPoint();
         group.position.set(spawn.x, 0, spawn.z);
 
         scene.add(group);
+        var bodyHitbox = actorVisual ? actorVisual.bodyHitbox : null;
+        var headHitbox = actorVisual ? actorVisual.headHitbox : null;
 
-        var bodyHitbox = createHitboxMesh('body', index);
-        var headHitbox = createHitboxMesh('head', index);
-
-        scene.add(bodyHitbox);
-        scene.add(headHitbox);
+        if (bodyHitbox) scene.add(bodyHitbox);
+        if (headHitbox) scene.add(headHitbox);
 
         var enemy = {
             group: group,
@@ -203,6 +156,7 @@
             revealGhost: revealGhost,
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
+            actorVisual: actorVisual,
             hp: 500,
             maxHp: 500,
             armor: 100,
@@ -212,7 +166,7 @@
             color: color,
             weaponType: weaponId,
             rig: visual.userData.rig || null,
-            rigApi: visualMeta.rigApi,
+            rigApi: actorVisual ? actorVisual.rigApi : null,
 
             aiState: 'WANDER',
             aiTimer: 0,

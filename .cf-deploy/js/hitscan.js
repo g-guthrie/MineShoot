@@ -28,6 +28,8 @@
     var tracerMeshMid = new THREE.Vector3();
     var tracerMeshUp = new THREE.Vector3(0, 1, 0);
     var tracerZeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+    var playerForward = new THREE.Vector3();
+    var hitFromPlayer = new THREE.Vector3();
 
     // Y is positive-down for UI layout consistency.
     var SHOTGUN_MEDIUM_RING_RATIO = 0.5;
@@ -604,6 +606,19 @@
         if (onTrace) onTrace(hit.point);
         if (targetsHitboxes.indexOf(hit.object) === -1) {
             return false;
+        }
+
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getRotation && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
+            var playerRot = globalThis.__MAYHEM_RUNTIME.GamePlayer.getRotation();
+            var playerPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
+            playerForward.set(-Math.sin(playerRot.yaw || 0), 0, -Math.cos(playerRot.yaw || 0));
+            hitFromPlayer.copy(hit.point).sub(playerPos).setY(0);
+            if (hitFromPlayer.lengthSq() > 0.0001) {
+                hitFromPlayer.normalize();
+                if (playerForward.dot(hitFromPlayer) <= 0.1) {
+                    return false;
+                }
+            }
         }
 
         var hitType = hit.object.userData.type || 'body';

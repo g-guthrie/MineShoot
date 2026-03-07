@@ -35,6 +35,32 @@
                     <div id="menu-brand">PIP-ARENA MKIV :: MAYHEM TERMINAL <span id="build-version">v0.1.3</span></div>
                     <div id="menu-actions">
                         <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
+                        <div id="top-mode-panel">
+                            <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">OTHER RUNTIMES</button>
+                            <div id="mode-buttons" hidden>
+                                <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">SINGLE CLOUDFLARE</button>
+                                <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">SOLO DEV SERVER</button>
+                                <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">LOCAL SANDBOX</button>
+                            </div>
+                        </div>
+                        <div id="top-controls-panel">
+                            <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-menu">CONTROLS</button>
+                            <div id="controls-menu" hidden>
+                                <div class="controls-menu-grid">
+                                    <span>WASD Move</span>
+                                    <span>Mouse Look</span>
+                                    <span>E Sprint</span>
+                                    <span>Space Jump</span>
+                                    <span>LMB Fire</span>
+                                    <span>1-2 / Wheel Swap</span>
+                                    <span>R Ability</span>
+                                    <span>Q Throwable</span>
+                                    <span>H Dev Visuals</span>
+                                    <span>I Field Manual</span>
+                                    <span>Esc Release Cursor</span>
+                                </div>
+                            </div>
+                        </div>
                         <button id="sound-toggle-btn" type="button">SOUND: ON</button>
                     </div>
                 </div>
@@ -55,32 +81,20 @@
   |__.-'
  /|\
 /_|_\\</pre>
+                    <pre id="menu-title-ghost">   .--.
+ .(    ).
+(___.__)__)
+ /  ..  \\
+ \_.--._/</pre>
                 </div>
-                <p id="mode-subtitle">Play drops you into the shared Cloudflare room. Alternate runtimes are below.</p>
+                <p id="mode-subtitle"></p>
             </div>
             <div id="menu-main">
                 <button id="primary-play-btn" type="button">PLAY</button>
-                <div id="alt-mode-panel">
-                    <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">
-                        OTHER RUNTIMES
-                        <span id="alt-mode-toggle-hint">Single Cloudflare, Solo Dev Server, Local Sandbox</span>
-                    </button>
-                    <div id="mode-buttons" hidden>
-                    <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">
-                        SINGLE CLOUDFLARE
-                        <span class="mode-desc">Private per-tab room on the deployed worker.</span>
-                    </button>
-                    <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">
-                        SOLO DEV SERVER
-                        <span class="mode-desc">Shared local worker room for authoritative multiplayer testing.</span>
-                    </button>
-                    <button id="mode-single-full-sandbox-btn" class="mode-btn" type="button" data-mode-id="single_full_sandbox">
-                        SINGLE FULL SANDBOX
-                        <span class="mode-desc">Offline experimental sandbox. Not authoritative.</span>
-                    </button>
-                    </div>
+                <div id="menu-session-actions">
+                    <button id="play-btn" type="button">RESUME MATCH</button>
+                    <button id="back-mode-btn" type="button">CHANGE MODE</button>
                 </div>
-                <button id="play-btn" type="button">RESUME MATCH</button>
                 <div class="menu-separator">&#9472;&#9472;&#9472;[ LOADOUT ]&#9472;&#9472;&#9472;</div>
                 <div id="loadout-row">
                     <div id="weapon-slot-panel">
@@ -102,23 +116,6 @@
                         <div id="ability-slot-title">&gt; Ability [R]_</div>
                         <div id="ability-slot1-grid" class="ability-choice-grid"></div>
                         <div id="ability-slot-note">Select an ability. Switch anytime from this menu.</div>
-                    </div>
-                </div>
-                <div class="menu-separator">&#9472;&#9472;&#9472;[ CONTROLS ]&#9472;&#9472;&#9472;</div>
-                <div class="controls">
-                    <div class="controls-title">&gt; Core Controls_</div>
-                    <div class="controls-grid">
-                        <span>WASD Move</span>
-                        <span>Mouse Look</span>
-                        <span>E Sprint</span>
-                        <span>Space Jump</span>
-                        <span>LMB Fire</span>
-                        <span>1-2 / Wheel Swap</span>
-                        <span>R Ability</span>
-                        <span>Q Throwable</span>
-                        <span>H Dev Visuals</span>
-                        <span>I Field Manual</span>
-                        <span>Esc Release Cursor</span>
                     </div>
                 </div>
                 <div class="menu-footer">&#9484;&#9472; SYS.OK &#9472;&#9472; ARENA READY &#9472;&#9472; AWAITING INPUT &#9472;&#9488;</div>
