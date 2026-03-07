@@ -1,4 +1,5 @@
 import { handleLogin, handleLogout, handleMe } from './server/auth.js';
+import { handleMatchmaking } from './server/matchmaking.js';
 import { handleWsUpgrade } from './server/ws-upgrade.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
 import { getSharedTuningWu } from './lib/shared-tuning.js';
@@ -8,6 +9,7 @@ const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const SHARED_PROTOCOL = getSharedProtocol();
 const AUTH_PATH = SHARED_PROTOCOL.authPath || {};
 const WS_PATH = SHARED_PROTOCOL.wsPath || '/api/ws';
+const MATCHMAKING_PATH = SHARED_PROTOCOL.matchmakingPath || '/api/matchmaking';
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 
@@ -27,6 +29,10 @@ export default {
 
     if (request.method === 'GET' && url.pathname === (AUTH_PATH.me || '/api/me')) {
       return handleMe(env, request);
+    }
+
+    if (request.method === 'POST' && url.pathname === MATCHMAKING_PATH) {
+      return handleMatchmaking(env, request);
     }
 
     if (url.pathname === WS_PATH) {

@@ -62,6 +62,10 @@ const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
 const SHOTGUN_BURST_WINDOW_MS = 220;
 const DEV_LOCAL_ROOM_NAME = 'dev-local';
+const LOCAL_SHARED_ROOM_NAME = 'local-shared';
+const SOLO_CLOUDFLARE_ROOM_PREFIX = 'cf-solo-';
+const PUBLIC_MATCH_ROOM_PREFIX = 'match-';
+const PRIVATE_SHARE_ROOM_PREFIX = 'private-';
 const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
@@ -148,7 +152,6 @@ export class GlobalArenaRoom extends DurableObject {
     const url = new URL(request.url);
     this.roomName = sanitizeRoomId(url.searchParams.get('roomId') || this.roomName || this.env.ROOM_NAME || 'global');
     this.refreshWorldMeta();
-    this.syncRoomFixtures();
 
     if (request.headers.get('Upgrade') !== 'websocket') {
       if (url.pathname === '/state') {
@@ -162,6 +165,8 @@ export class GlobalArenaRoom extends DurableObject {
       }
       return new Response('Expected websocket upgrade', { status: 426 });
     }
+
+    this.syncRoomFixtures();
 
     const userId = url.searchParams.get('userId');
     const username = url.searchParams.get('username') || 'player';
@@ -193,8 +198,18 @@ export class GlobalArenaRoom extends DurableObject {
     return this.roomName === DEV_LOCAL_ROOM_NAME;
   }
 
+  usesConfiguredBots() {
+    if (this.roomName === LOCAL_SHARED_ROOM_NAME) return true;
+    if (this.roomName.startsWith(SOLO_CLOUDFLARE_ROOM_PREFIX)) return true;
+    if (this.roomName === 'global') return false;
+    if (this.roomName.startsWith(PUBLIC_MATCH_ROOM_PREFIX)) return false;
+    if (this.roomName.startsWith(PRIVATE_SHARE_ROOM_PREFIX)) return false;
+    return false;
+  }
+
   desiredBotCount() {
     if (this.isDevLocalRoom()) return DEV_LOCAL_BOT_COUNT;
+    if (!this.usesConfiguredBots()) return 0;
     return Math.max(0, Number(this.env.BOT_COUNT || '6'));
   }
 
