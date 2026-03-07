@@ -49,7 +49,8 @@
     var trajectoryPreviewTuning = {
         stepSec: 1 / 60,
         maxPoints: 120,
-        maxPreviewTime: 4.0
+        maxPreviewTime: 4.0,
+        hiddenStartDistance: 3.0
     };
     var throwableDistanceTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning()
@@ -510,12 +511,14 @@
                 color: 0xffffff,
                 transparent: true,
                 opacity: 0.92,
-                depthTest: false
+                depthTest: false,
+                depthWrite: false
             });
             trajectoryPreview.line = new THREE.Line(lineGeo, lineMat);
             trajectoryPreview.line.visible = false;
             trajectoryPreview.line.renderOrder = 60;
             trajectoryPreview.line.frustumCulled = false;
+            trajectoryPreview.line.layers.set(0);
             sceneRef.add(trajectoryPreview.line);
         }
 
@@ -526,11 +529,13 @@
                     color: 0xffffff,
                     transparent: true,
                     opacity: 0.95,
-                    depthTest: false
+                    depthTest: false,
+                    depthWrite: false
                 })
             );
             trajectoryPreview.impact.visible = false;
             trajectoryPreview.impact.renderOrder = 61;
+            trajectoryPreview.impact.layers.set(0);
             sceneRef.add(trajectoryPreview.impact);
         }
 
@@ -609,6 +614,39 @@
         };
     }
 
+    function trimPreviewStart(points, hiddenDistance) {
+        var distToHide = Math.max(0, Number(hiddenDistance || 0));
+        if (!Array.isArray(points) || points.length < 2 || distToHide <= 0.0001) {
+            return Array.isArray(points) ? points.slice() : [];
+        }
+
+        var remaining = distToHide;
+        var out = null;
+
+        for (var i = 1; i < points.length; i++) {
+            var prev = points[i - 1];
+            var curr = points[i];
+            var segLen = prev.distanceTo(curr);
+            if (segLen <= 0.0001) continue;
+            if (remaining >= segLen) {
+                remaining -= segLen;
+                continue;
+            }
+            var t = remaining > 0 ? (remaining / segLen) : 0;
+            var start = prev.clone().lerp(curr, t);
+            out = [start];
+            for (var j = i; j < points.length; j++) {
+                out.push(points[j].clone());
+            }
+            break;
+        }
+
+        if (!out || out.length < 2) {
+            return points.slice(-2);
+        }
+        return out;
+    }
+
     function updateTrajectoryPreview(type, intent) {
         if (!defs[type] || !intent) {
             clearTrajectoryPreview();
@@ -622,7 +660,13 @@
             return null;
         }
 
-        trajectoryPreview.line.geometry.setFromPoints(sim.points);
+        var visiblePoints = trimPreviewStart(sim.points, trajectoryPreviewTuning.hiddenStartDistance || 0);
+        if (!visiblePoints || visiblePoints.length < 2) {
+            clearTrajectoryPreview();
+            return null;
+        }
+
+        trajectoryPreview.line.geometry.setFromPoints(visiblePoints);
         trajectoryPreview.line.geometry.computeBoundingSphere();
         trajectoryPreview.line.visible = true;
         trajectoryPreview.activeType = type;
