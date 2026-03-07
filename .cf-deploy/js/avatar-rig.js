@@ -9,6 +9,7 @@
     var DEG_TO_RAD = Math.PI / 180;
     var ARM_SHORT_SIDE = 0.22;
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
+    var GUN_MOUNT_SHIFT_X = -0.2;
     var GUN_MOUNT_LIFT_Y = 0.15 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
     var FOOT_PLANE_OFFSET_Y = 0.3;
@@ -24,6 +25,23 @@
         if (typeof style.c === 'number' && mesh.material && mesh.material.color) {
             mesh.material.color.setHex(style.c);
         }
+    }
+
+    function addXEye(head, xOffset, material) {
+        if (!head) return null;
+        var eye = new THREE.Group();
+        eye.position.set(xOffset, 0.06, 0.282);
+
+        var slashA = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.028, 0.02), material);
+        slashA.rotation.z = 45 * DEG_TO_RAD;
+        eye.add(slashA);
+
+        var slashB = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.028, 0.02), material);
+        slashB.rotation.z = -45 * DEG_TO_RAD;
+        eye.add(slashB);
+
+        head.add(eye);
+        return eye;
     }
 
     function styleMap() {
@@ -123,6 +141,7 @@
         var gunDarker = new THREE.MeshLambertMaterial({ color: 0x161616 });
         var gunWood = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
         var gunMetal = new THREE.MeshLambertMaterial({ color: 0x666666 });
+        var eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
 
         var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
         body.position.y = 1.0;
@@ -131,6 +150,8 @@
         var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
         head.position.y = 1.8;
         modelRoot.add(head);
+        var eyeLeft = addXEye(head, -0.12, eyeMat);
+        var eyeRight = addXEye(head, 0.12, eyeMat);
 
         var eyeAnchor = new THREE.Object3D();
         eyeAnchor.position.set(0, 0.05, 0.18);
@@ -142,7 +163,7 @@
         armL.position.y = -0.42;
         shoulderLeft.add(armL);
         var palmLeft = new THREE.Group();
-        palmLeft.position.set(-0.11, -0.85, 0);
+        palmLeft.position.set(-0.02, -0.85, 0);
         shoulderLeft.add(palmLeft);
         modelRoot.add(shoulderLeft);
 
@@ -153,7 +174,7 @@
         shoulderRight.add(armR);
 
         var palmRight = new THREE.Group();
-        palmRight.position.set(0.18, -0.85, 0);
+        palmRight.position.set(0.01, -0.85, 0);
         shoulderRight.add(palmRight);
         modelRoot.add(shoulderRight);
 
@@ -242,6 +263,8 @@
             coreAnchor: coreAnchor,
             throwableOriginAnchor: throwableOriginAnchor,
             eyeAnchor: eyeAnchor,
+            eyeLeft: eyeLeft,
+            eyeRight: eyeRight,
             palmLeft: palmLeft,
             palmRight: palmRight,
             weaponClass: 'gun',
@@ -262,7 +285,7 @@
 
             // Keep weapon body above the hand line so grip/stock read as hand-held.
             rig.gun.position.set(
-                style.gunPos[0],
+                style.gunPos[0] + GUN_MOUNT_SHIFT_X,
                 style.gunPos[1] + GUN_MOUNT_LIFT_Y,
                 style.gunPos[2] + GUN_MOUNT_SHIFT_Z
             );

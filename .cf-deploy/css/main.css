@@ -673,7 +673,7 @@ canvas {
 }
 
 #weapon-slot-title {
-    color: #30ff70;
+    color: #7bc4ff;
     font-size: 10px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -702,15 +702,15 @@ canvas {
 }
 
 .weapon-slot-btn:hover {
-    background: rgba(0, 66, 37, 0.22);
-    color: #18bb48;
+    background: rgba(18, 56, 90, 0.28);
+    color: #7bc4ff;
 }
 
 .weapon-slot-btn.active {
-    border-color: #20dd58;
-    background: rgba(0, 66, 37, 0.3);
-    color: #30ff70;
-    text-shadow: 0 0 4px rgba(48, 255, 112, 0.28);
+    border-color: #5ca8ff;
+    background: rgba(18, 56, 90, 0.34);
+    color: #b9ddff;
+    text-shadow: 0 0 4px rgba(92, 168, 255, 0.34);
 }
 
 #weapon-choice-grid {
@@ -732,14 +732,15 @@ canvas {
 }
 
 .weapon-choice-btn:hover {
-    background: rgba(0, 66, 37, 0.2);
-    color: #18bb48;
+    background: rgba(18, 56, 90, 0.24);
+    color: #7bc4ff;
 }
 
 .weapon-choice-btn.active {
-    border-color: #20dd58;
-    color: #30ff70;
-    background: rgba(0, 66, 37, 0.34);
+    border-color: #5ca8ff;
+    color: #d5ecff;
+    background: rgba(18, 56, 90, 0.38);
+    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
 }
 
 #weapon-slot-note {
@@ -755,7 +756,7 @@ canvas {
 }
 
 #throwable-slot-title {
-    color: #30ff70;
+    color: #ffb16b;
     font-size: 10px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -784,15 +785,15 @@ canvas {
 }
 
 .throwable-cat-btn:hover {
-    background: rgba(0, 66, 37, 0.22);
-    color: #18bb48;
+    background: rgba(94, 52, 17, 0.24);
+    color: #ffb16b;
 }
 
 .throwable-cat-btn.active {
-    border-color: #20dd58;
-    background: rgba(0, 66, 37, 0.3);
-    color: #30ff70;
-    text-shadow: 0 0 4px rgba(48, 255, 112, 0.28);
+    border-color: #ff9148;
+    background: rgba(94, 52, 17, 0.34);
+    color: #ffd7b4;
+    text-shadow: 0 0 4px rgba(255, 145, 72, 0.34);
 }
 
 #throwable-choice-grid {
@@ -814,14 +815,15 @@ canvas {
 }
 
 .throwable-choice-btn:hover {
-    background: rgba(0, 66, 37, 0.2);
-    color: #18bb48;
+    background: rgba(94, 52, 17, 0.24);
+    color: #ffb16b;
 }
 
 .throwable-choice-btn.active {
-    border-color: #20dd58;
-    color: #30ff70;
-    background: rgba(0, 66, 37, 0.34);
+    border-color: #ff9148;
+    color: #ffe2c8;
+    background: rgba(94, 52, 17, 0.38);
+    text-shadow: 0 0 4px rgba(255, 145, 72, 0.32);
 }
 
 #ability-slot-panel {
@@ -832,7 +834,7 @@ canvas {
 }
 
 #ability-slot-title {
-    color: #30ff70;
+    color: #d29cff;
     font-size: 10px;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -846,7 +848,7 @@ canvas {
 }
 
 .ability-slot-label {
-    color: #109938;
+    color: #b476ff;
     font-size: 9px;
     letter-spacing: 0.6px;
     text-transform: uppercase;
@@ -871,14 +873,15 @@ canvas {
 }
 
 .ability-choice-btn:hover {
-    background: rgba(0, 66, 37, 0.2);
-    color: #18bb48;
+    background: rgba(66, 28, 92, 0.24);
+    color: #d29cff;
 }
 
 .ability-choice-btn.active {
-    border-color: #20dd58;
-    color: #30ff70;
-    background: rgba(0, 66, 37, 0.34);
+    border-color: #b476ff;
+    color: #f0dcff;
+    background: rgba(66, 28, 92, 0.38);
+    text-shadow: 0 0 4px rgba(180, 118, 255, 0.32);
 }
 
 #ability-slot-note {
