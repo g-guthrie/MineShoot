@@ -69,6 +69,7 @@
         opts = opts || {};
         var ownerType = String(opts.ownerType || 'net');
         var targetId = String(opts.targetId || '');
+        var netEntityId = String(opts.netEntityId || '');
         var bodyColor = (typeof opts.bodyColor === 'number') ? opts.bodyColor : 0x4a7fc1;
         var skinColor = (typeof opts.skinColor === 'number') ? opts.skinColor : 0xd2a77d;
         var legColor = (typeof opts.legColor === 'number') ? opts.legColor : 0x2f2f2f;
@@ -97,11 +98,13 @@
         if (hitboxFactory && hitboxFactory.createCombatHitbox) {
             bodyHitbox = hitboxFactory.createCombatHitbox('body', ownerType, {
                 opacity: hitboxOpacity,
-                targetId: targetId
+                targetId: targetId,
+                netEntityId: netEntityId
             });
             headHitbox = hitboxFactory.createCombatHitbox('head', ownerType, {
                 opacity: hitboxOpacity,
-                targetId: targetId
+                targetId: targetId,
+                netEntityId: netEntityId
             });
         }
 

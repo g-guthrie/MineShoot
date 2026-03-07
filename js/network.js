@@ -722,10 +722,15 @@
     };
 
     GameNet.sendFire = function (hitbox, weaponId, hitType, shotToken) {
-        if (!hitbox || !hitbox.userData || !hitbox.userData.netEntityId) return false;
+        if (!hitbox || !hitbox.userData) return false;
+        var targetEntityId = String(hitbox.userData.netEntityId || '');
+        if (!targetEntityId && typeof hitbox.userData.targetId === 'string' && hitbox.userData.targetId.indexOf('net:') === 0) {
+            targetEntityId = String(hitbox.userData.targetId).slice(4);
+        }
+        if (!targetEntityId) return false;
         var payload = {
             t: (MSG_C2S.FIRE || 'fire'),
-            targetId: hitbox.userData.netEntityId,
+            targetId: targetEntityId,
             weaponId: weaponId,
             hitType: hitType === 'head' ? 'head' : 'body'
         };

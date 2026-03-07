@@ -40,11 +40,14 @@
             legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
             weaponId: entity.weaponId || 'rifle',
             targetId: 'net:' + entity.id,
+            netEntityId: entity.id,
             hitboxOpacity: hitboxVisible ? 0.3 : 0
         }) : null;
         var rigApi = actorVisual ? actorVisual.rigApi : null;
         var bodyHitbox = actorVisual ? actorVisual.bodyHitbox : null;
         var headHitbox = actorVisual ? actorVisual.headHitbox : null;
+        if (bodyHitbox && bodyHitbox.userData) bodyHitbox.userData.netEntityId = entity.id;
+        if (headHitbox && headHitbox.userData) headHitbox.userData.netEntityId = entity.id;
         if (actorVisual && actorVisual.visual) {
             group.add(actorVisual.visual);
         }
