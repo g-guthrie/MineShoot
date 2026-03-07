@@ -91,3 +91,4 @@ export function resolveSeekAimProfile(profile, adsActive) {
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.seekProfiles = seekProfiles;
+runtime.GameShared.resolveSeekAimProfile = resolveSeekAimProfile;

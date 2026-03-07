@@ -1120,6 +1120,21 @@ canvas {
     user-select: none;
 }
 
+#bloom-reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.38) inset;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+
 /* Deterministic shotgun spread reticle */
 #shotgun-reticle {
     position: fixed;

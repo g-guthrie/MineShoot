@@ -1110,7 +1110,7 @@
         globalThis.__MAYHEM_RUNTIME.GamePlayer.update(dt);
 
         var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon();
-        if (currentWeapon && currentWeapon.id === 'shotgun') {
+        if (currentWeapon) {
             syncReticleWithWeapon(currentWeapon);
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSniperScope && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getScopeState) {

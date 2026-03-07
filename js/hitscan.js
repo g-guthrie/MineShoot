@@ -131,8 +131,8 @@
     }
 
     function resolveSeekAimProfile(profile, adsActive) {
-        if (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles && globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles.resolveSeekAimProfile) {
-            return globalThis.__MAYHEM_RUNTIME.GameShared.seekProfiles.resolveSeekAimProfile(profile, adsActive);
+        if (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.resolveSeekAimProfile) {
+            return globalThis.__MAYHEM_RUNTIME.GameShared.resolveSeekAimProfile(profile, adsActive);
         }
         if (!profile) return null;
         return {
@@ -416,6 +416,14 @@
         return Number(seekAim && seekAim.lockBoxPx) || 260;
     }
 
+    function getBloomCircleSizePx(weapon) {
+        if (!weapon || weapon.id === 'shotgun') return 0;
+        if (isAdsActiveForWeapon(weapon.id)) return 0;
+        var spread = Math.max(0, Number(weapon.spreadNdc || 0));
+        if (spread <= 0.00001) return 0;
+        return spread * Math.min(window.innerWidth, window.innerHeight) * 0.5 * 2;
+    }
+
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
             var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
@@ -685,7 +693,9 @@
         return {
             type: 'shotgun',
             size: getShotgunReticleSizePx(),
-            points: SHOTGUN_RETICLE_POINTS
+            points: SHOTGUN_RETICLE_POINTS,
+            bloomSize: 0,
+            adsActive: isAdsActiveForWeapon(id)
         };
     };
 

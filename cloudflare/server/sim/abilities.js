@@ -6,12 +6,12 @@ export function getAbilityCooldowns(abilityCfg) {
 }
 
 export function buildDeadeyeState(deadeyeCfg, picks, now) {
-  const maxTargets = Math.max(1, Math.round((deadeyeCfg && deadeyeCfg.maxTargets) || 3));
-  const durationMs = Math.max(1, Math.round(Number((deadeyeCfg && deadeyeCfg.duration) || 2.0) * 1000));
-  const lockEveryMs = Math.max(1, Math.round(durationMs / maxTargets));
+  const pickedCount = Math.max(1, Array.isArray(picks) ? picks.length : 0);
+  const durationMs = Math.max(1, Math.round(Number((deadeyeCfg && deadeyeCfg.duration) || 3.0) * 1000));
+  const lockEveryMs = Math.max(1, Math.round(durationMs / pickedCount));
   return {
     queue: picks.map((p) => p.id),
-    maxLocks: maxTargets,
+    maxLocks: pickedCount,
     nextLockAt: now + lockEveryMs,
     lockEveryMs,
     lockIndex: 0,
@@ -19,4 +19,3 @@ export function buildDeadeyeState(deadeyeCfg, picks, now) {
     endsAt: now + durationMs
   };
 }
-

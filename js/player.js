@@ -33,7 +33,7 @@
     var CAMERA_FOV = 75;
     var ADS_FOV = 56;
     var ADS_DIST = 1.72;
-    var ADS_SHOULDER = 0.56;
+    var ADS_SHOULDER = 2;
     var ADS_HEIGHT = 0.46;
     var ADS_BLEND_SPEED = 16;
     var ADS_MOVE_MULT = 0.4;
