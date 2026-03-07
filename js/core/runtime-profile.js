@@ -137,6 +137,14 @@
         return '';
     }
 
+    function apiOriginFor(mode) {
+        if (!mode || !mode.backendKind) return '';
+        if (mode.backendKind === 'cloudflare-prod' && isHttpEnvironment() && !isLocalEnvironment()) {
+            return String(window.location.origin || '');
+        }
+        return backendOriginFor(mode.backendKind);
+    }
+
     function sessionStore() {
         try {
             return window.sessionStorage || null;
@@ -233,7 +241,7 @@
             authMode: def.authMode,
             roomStrategy: def.roomStrategy,
             roomPrefix: def.roomPrefix,
-            apiOrigin: backendOrigin,
+            apiOrigin: apiOriginFor(def),
             backendOrigin: backendOrigin,
             roomId: resolveRoomId(def),
             visible: true
