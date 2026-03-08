@@ -48,6 +48,7 @@ const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
 const CLASS_DEFAULT_WEAPON = {
   abilities: 'rifle'
 };
@@ -133,6 +134,42 @@ function emptyMatchState(gameMode) {
       [TDM_TEAM_B]: 0
     }
   };
+}
+
+function isSelectableWeaponId(weaponId) {
+  const id = String(weaponId || '');
+  return !!(id && WEAPON_STATS[id] && id !== 'seekergun' && id !== 'plasma');
+}
+
+function normalizeWeaponLoadout(rawSlots, fallbackSlots) {
+  const fallback = Array.isArray(fallbackSlots) && fallbackSlots.length ? fallbackSlots : DEFAULT_WEAPON_LOADOUT;
+  const next = [];
+  const seen = {};
+  const combined = Array.isArray(rawSlots) ? rawSlots.slice(0) : [];
+  for (let i = 0; i < fallback.length; i++) combined.push(fallback[i]);
+  for (let i = 0; i < combined.length && next.length < 2; i++) {
+    const id = String(combined[i] || '');
+    if (!isSelectableWeaponId(id) || seen[id]) continue;
+    seen[id] = true;
+    next.push(id);
+  }
+  return next.length ? next : DEFAULT_WEAPON_LOADOUT.slice();
+}
+
+function entityWeaponLoadout(entity) {
+  if (!entity) return DEFAULT_WEAPON_LOADOUT.slice();
+  entity.weaponLoadout = normalizeWeaponLoadout(entity.weaponLoadout, DEFAULT_WEAPON_LOADOUT);
+  return entity.weaponLoadout;
+}
+
+function canEntityUseWeapon(entity, weaponId) {
+  const id = String(weaponId || '');
+  if (!isSelectableWeaponId(id)) return false;
+  const loadout = entityWeaponLoadout(entity);
+  for (let i = 0; i < loadout.length; i++) {
+    if (loadout[i] === id) return true;
+  }
+  return false;
 }
 
 export class GlobalArenaRoom extends DurableObject {
@@ -621,6 +658,7 @@ export class GlobalArenaRoom extends DurableObject {
       classId: nextClassId,
       fixtureType: opts.fixtureType || '',
       abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
+      weaponLoadout: DEFAULT_WEAPON_LOADOUT.slice(),
       x: 0,
       y: PLAYER_EYE_HEIGHT_WU,
       z: 0,
@@ -639,7 +677,7 @@ export class GlobalArenaRoom extends DurableObject {
       seq: 0,
       lastShotAt: {},
       shotBurstState: {},
-      weaponId: 'rifle',
+      weaponId: DEFAULT_WEAPON_LOADOUT[0],
       moveSpeedNorm: 0,
       sprinting: false,
       streamHeat: 0,
@@ -986,7 +1024,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!actionLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (!actionLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
-    if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
+    if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
     if (!actionLocked) {
       if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
       if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
@@ -1164,6 +1202,7 @@ export class GlobalArenaRoom extends DurableObject {
     const stats = WEAPON_STATS[weaponId];
     if (!stats) return;
     if (weaponId === 'plasma') return;
+    if (!canEntityUseWeapon(player, weaponId)) return;
     player.weaponId = weaponId;
 
     const now = nowMs();
@@ -1227,10 +1266,20 @@ export class GlobalArenaRoom extends DurableObject {
     }
   }
 
+  handleWeaponLoadout(player, msg) {
+    if (!player) return;
+    const nextLoadout = normalizeWeaponLoadout([msg && msg.slot1, msg && msg.slot2], entityWeaponLoadout(player));
+    player.weaponLoadout = nextLoadout;
+    if (!canEntityUseWeapon(player, player.weaponId)) {
+      player.weaponId = nextLoadout[0];
+    }
+  }
+
   handleEquipWeapon(player, msg) {
     if (!player) return;
     const weaponId = String(msg.weaponId || '');
     if (!WEAPON_STATS[weaponId]) return;
+    if (!canEntityUseWeapon(player, weaponId)) return;
     player.weaponId = weaponId;
     if (weaponId !== 'plasma') {
       player.streamHeat = 0;
@@ -1353,7 +1402,12 @@ export class GlobalArenaRoom extends DurableObject {
     entity.chokeState = null;
 
     const defaultWeapon = CLASS_DEFAULT_WEAPON[classId] || 'rifle';
-    if (WEAPON_STATS[defaultWeapon]) entity.weaponId = defaultWeapon;
+    entity.weaponLoadout = normalizeWeaponLoadout(entity.weaponLoadout, DEFAULT_WEAPON_LOADOUT);
+    if (WEAPON_STATS[defaultWeapon] && canEntityUseWeapon(entity, defaultWeapon)) {
+      entity.weaponId = defaultWeapon;
+    } else {
+      entity.weaponId = entity.weaponLoadout[0];
+    }
     entity.streamHeat = 0;
     entity.streamOverheatedUntil = 0;
     return true;
@@ -1476,6 +1530,10 @@ export class GlobalArenaRoom extends DurableObject {
     }
     if (type === MSG_C2S.EQUIP_WEAPON) {
       this.handleEquipWeapon(player, msg);
+      return;
+    }
+    if (type === MSG_C2S.WEAPON_LOADOUT) {
+      this.handleWeaponLoadout(player, msg);
       return;
     }
     if (type === MSG_C2S.SEEKER_SHOT) {

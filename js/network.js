@@ -40,6 +40,7 @@
     var pendingSpawnSync = null;
     var pendingRespawnInfo = null;
     var initialSpawnApplied = false;
+    var pendingWeaponLoadout = null;
 
     var inputSeq = 1;
     var inputSendTimer = 0;
@@ -358,6 +359,7 @@
             }
 
             pushNotice('Joined room ' + roomId);
+            flushPendingWeaponLoadout();
             return;
         }
 
@@ -578,6 +580,25 @@
         return true;
     }
 
+    function normalizeWeaponLoadoutPayload(slot1, slot2) {
+        return {
+            slot1: String(slot1 || ''),
+            slot2: String(slot2 || '')
+        };
+    }
+
+    function flushPendingWeaponLoadout() {
+        var pending = pendingWeaponLoadout;
+        if (!pending) return false;
+        if (!wsSend({
+            t: (MSG_C2S.WEAPON_LOADOUT || 'weapon_loadout'),
+            slot1: pending.slot1,
+            slot2: pending.slot2
+        })) return false;
+        pendingWeaponLoadout = null;
+        return true;
+    }
+
     function normalizeAngle(rad) {
         while (rad > Math.PI) rad -= Math.PI * 2;
         while (rad < -Math.PI) rad += Math.PI * 2;
@@ -690,6 +711,7 @@
         pendingSpawnSync = null;
         pendingRespawnInfo = null;
         initialSpawnApplied = false;
+        pendingWeaponLoadout = null;
         selfState = null;
         selfId = '';
         matchState = null;
@@ -806,6 +828,7 @@
                 r.rigApi.updateAimPitch(r.targetPitch || 0);
                 var chokeVictimState = getChokeVictimStateForEntity(r.id);
                 r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt, false, {
+                    hooked: !!r.hookPullState,
                     choked: chokeVictimState.lift > 0,
                     startedAt: chokeVictimState.startedAt || 0
                 });
@@ -870,6 +893,11 @@
             t: (MSG_C2S.EQUIP_WEAPON || 'equip_weapon'),
             weaponId: String(weaponId)
         });
+    };
+
+    GameNet.sendWeaponLoadout = function (slot1, slot2) {
+        pendingWeaponLoadout = normalizeWeaponLoadoutPayload(slot1, slot2);
+        return flushPendingWeaponLoadout();
     };
 
     GameNet.sendThrow = function (throwableId, clientThrowId, throwIntent) {
@@ -1012,6 +1040,7 @@
         return {
             abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
             ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
+            weaponLoadout: selfState.weaponLoadout || null,
             abilityLoadout: selfState.abilityLoadout || null,
             chokeState: selfState.chokeState || null,
             hookState: selfState.hookState || null,

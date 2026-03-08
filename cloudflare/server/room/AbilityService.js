@@ -53,15 +53,6 @@ function closestHostileToHookPoint(room, player, point, catchRadius) {
   return best;
 }
 
-function targetWithinAimTolerance(room, player, target, msg, cfg) {
-  if (!room || !player || !target) return false;
-  const aimPoint = room.resolveClassAimPoint(player, msg, cfg.range || 24);
-  if (!aimPoint) return false;
-  const targetPoint = room.entityAimTargetPosition(target);
-  const tolerance = Math.max(0.25, Number(cfg.targetTolerance || 1.8));
-  return distanceSq3(aimPoint, targetPoint) <= (tolerance * tolerance);
-}
-
 function abilityDef(abilityId) {
   return ABILITY_CATALOG[abilityId] || null;
 }
@@ -116,7 +107,6 @@ export function castChoke(room, player, cfg, msg, now) {
   const lockedTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
   const target = room.resolveLockedHostile(player, lockedTargetId, cfg.range || 24, cfg.minDot || 0.05);
   if (!target) return { ok: false };
-  if (!targetWithinAimTolerance(room, player, target, msg, cfg)) return { ok: false };
 
   room.applyTimedStun(target, cfg.duration || 1.6);
   target.chokeVictimState = {
@@ -269,8 +259,9 @@ export function tickClassAbilityState(room, entity) {
       const toX = desiredX - entity.x;
       const toZ = desiredZ - entity.z;
       const dist = Math.sqrt((toX * toX) + (toZ * toZ));
-      const step = Math.max(0.001, Number(pull.pullSpeed || 26)) * (1 / 20);
-      if (dist <= step) {
+      const baseStep = Math.max(0.001, Number(pull.pullSpeed || 26)) * (1 / 20);
+      const step = Math.min(dist, Math.max(baseStep * 0.45, dist * 0.24));
+      if (dist <= 0.08) {
         entity.x = desiredX;
         entity.z = desiredZ;
         entity.hookPullState = null;

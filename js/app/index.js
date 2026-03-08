@@ -19,7 +19,6 @@ const orderedModules = [
   '../net/auth.js',
   '../net/remote-entities.js',
   '../domain/weapons/registry.js',
-  '../domain/weapons/behaviors.js',
   '../world/material-library.js',
   '../world/intersection-builder.js',
   '../world/quadrant-arctic.js',

@@ -239,9 +239,11 @@
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             avatarRigApi.updateAimPitch(pitch);
             avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded, {
+                hooked: isHookPulled(),
                 choked: isChoked(),
                 startedAt: statusState.chokeStartedAt || 0
             });
+            if (avatarRigApi.applyChokeGripPose) avatarRigApi.applyChokeGripPose(dt);
         }
     }
 
@@ -1006,6 +1008,12 @@
 
     GamePlayer.setHealFlash = function (active) {
         setHealFlash(!!active);
+    };
+
+    GamePlayer.triggerChokeGripPose = function (duration) {
+        if (!avatarRigApi || !avatarRigApi.triggerChokeGripPose) return false;
+        avatarRigApi.triggerChokeGripPose(duration);
+        return true;
     };
 
     GamePlayer.setSpawnShield = function (active) {

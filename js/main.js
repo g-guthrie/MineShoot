@@ -87,13 +87,17 @@
     }
 
     function createHookVisual() {
-        var chain = new THREE.Mesh(
-            new THREE.BoxGeometry(0.11, 0.11, 1),
-            new THREE.MeshLambertMaterial({ color: 0xb7bcc4 })
-        );
-        chain.renderOrder = 55;
-        chain.visible = false;
-        scene.add(chain);
+        var chainSegments = [];
+        for (var i = 0; i < 9; i++) {
+            var seg = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.08, 0.56),
+                new THREE.MeshLambertMaterial({ color: 0xb7bcc4 })
+            );
+            seg.renderOrder = 55;
+            seg.visible = false;
+            scene.add(seg);
+            chainSegments.push(seg);
+        }
 
         var head = new THREE.Mesh(
             new THREE.BoxGeometry(0.4, 0.28, 0.62),
@@ -103,7 +107,13 @@
         head.visible = false;
         scene.add(head);
 
-        return { chain: chain, head: head };
+        return {
+            chainSegments: chainSegments,
+            head: head,
+            currentStart: new THREE.Vector3(),
+            currentEnd: new THREE.Vector3(),
+            seeded: false
+        };
     }
 
     function ensureSelfHookVisual() {
@@ -122,8 +132,13 @@
 
     function hideHookVisual(visual) {
         if (!visual) return;
-        if (visual.chain) visual.chain.visible = false;
+        if (visual.chainSegments) {
+            for (var i = 0; i < visual.chainSegments.length; i++) {
+                visual.chainSegments[i].visible = false;
+            }
+        }
         if (visual.head) visual.head.visible = false;
+        visual.seeded = false;
     }
 
     function setHookVisual(visual, start, end) {
@@ -131,19 +146,33 @@
             hideHookVisual(visual);
             return;
         }
-        hookTmpA.copy(end).sub(start);
+        if (!visual.seeded) {
+            visual.currentStart.copy(start);
+            visual.currentEnd.copy(end);
+            visual.seeded = true;
+        } else {
+            visual.currentStart.lerp(start, 0.38);
+            visual.currentEnd.lerp(end, 0.32);
+        }
+        hookTmpA.copy(visual.currentEnd).sub(visual.currentStart);
         var len = hookTmpA.length();
         if (len <= 0.00001) {
             hideHookVisual(visual);
             return;
         }
-        visual.chain.visible = true;
+        hookTmpA.normalize();
+        var segmentCount = visual.chainSegments ? visual.chainSegments.length : 0;
+        for (var i = 0; i < segmentCount; i++) {
+            var seg = visual.chainSegments[i];
+            var t = (i + 0.5) / segmentCount;
+            hookTmpStart.copy(visual.currentStart).lerp(visual.currentEnd, t);
+            seg.position.copy(hookTmpStart);
+            seg.lookAt(hookTmpB.copy(hookTmpStart).add(hookTmpA));
+            seg.visible = true;
+        }
         visual.head.visible = true;
-        visual.chain.position.copy(start).addScaledVector(hookTmpA, 0.5);
-        visual.chain.scale.set(1, 1, len);
-        visual.chain.lookAt(end);
-        visual.head.position.copy(end);
-        visual.head.lookAt(hookTmpB.copy(end).add(hookTmpA));
+        visual.head.position.copy(visual.currentEnd);
+        visual.head.lookAt(hookTmpB.copy(visual.currentEnd).add(hookTmpA));
     }
 
     function playerCoreWorldPosition() {
@@ -536,6 +565,9 @@
         }
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout) {
             globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout({ slots: equipped });
+        }
+        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendWeaponLoadout) {
+            globalThis.__MAYHEM_RUNTIME.GameNet.sendWeaponLoadout(menuWeaponSlots[0] || '', menuWeaponSlots[1] || '');
         }
         return menuWeaponSlots.slice();
     }
@@ -1619,10 +1651,12 @@
                 var abilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
                 if (abilityState) {
                     var hudState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState();
-                    var activeSlot = Number(hudState.activeSlot || 1);
-                    hudState.abilityCooldown = activeSlot === 2
-                        ? (abilityState.ultimateCooldownRemaining || 0)
-                        : (abilityState.abilityCooldownRemaining || 0);
+                    var sharedCooldown = Math.max(
+                        Number(abilityState.abilityCooldownRemaining || 0),
+                        Number(abilityState.ultimateCooldownRemaining || 0)
+                    );
+                    hudState.slot1Cooldown = sharedCooldown;
+                    hudState.slot2Cooldown = sharedCooldown;
                     hudState.extra = '';
                     if (abilityState.deadeyeState && abilityState.deadeyeState.maxLocks > 0) {
                         hudState.extra = 'DEADEYE ' + abilityState.deadeyeState.lockCount + '/' + abilityState.deadeyeState.maxLocks;

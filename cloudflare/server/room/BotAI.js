@@ -5,6 +5,7 @@ import { tickClassAbilityState } from './AbilityService.js';
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 
 const MAX_HP = 500;
@@ -24,6 +25,7 @@ export function createBot(room, index) {
     username: `BOT_${index + 1}`,
     classId,
     abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
+    weaponLoadout: DEFAULT_WEAPON_LOADOUT.slice(),
     x: 10 + Math.random() * 90,
     y: 1.6,
     z: 10 + Math.random() * 90,
@@ -37,7 +39,7 @@ export function createBot(room, index) {
     alive: true,
     respawnAt: 0,
     lastDamageAt: 0,
-    weaponId: 'rifle',
+    weaponId: DEFAULT_WEAPON_LOADOUT[0],
     lastShotAt: {},
     shotBurstState: {},
     moveSpeedNorm: 0,

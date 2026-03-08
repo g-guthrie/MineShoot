@@ -249,6 +249,7 @@
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
             enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt, false, {
+                hooked: !!enemy.hookPullState,
                 choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
                 startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0
             });
@@ -304,8 +305,9 @@
             var toX = desiredX - enemy.group.position.x;
             var toZ = desiredZ - enemy.group.position.z;
             var dist = Math.sqrt((toX * toX) + (toZ * toZ));
-            var step = Math.max(0.001, Number(pull.pullSpeed || 26)) * dt;
-            if (dist <= step) {
+            var baseStep = Math.max(0.001, Number(pull.pullSpeed || 26)) * dt;
+            var step = Math.min(dist, Math.max(baseStep * 0.45, dist * 0.24));
+            if (dist <= 0.08) {
                 enemy.group.position.x = desiredX;
                 enemy.group.position.z = desiredZ;
                 enemy.hookPullState = null;

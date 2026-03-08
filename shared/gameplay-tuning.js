@@ -101,7 +101,7 @@ export const gameplayTuning = {
       debugSummary: 'Square = choke target box.',
       tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
       cooldownMs: 15000, range: 24, minDot: 0.05, duration: 1.1,
-      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 180, targetTolerance: 1.6
+      liftHeight: 1.25, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 180, targetTolerance: 1.6
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',

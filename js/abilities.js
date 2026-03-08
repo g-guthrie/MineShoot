@@ -7,13 +7,43 @@
 
     var GameAbilities = {};
 
-    var abilityLoadout = { slot1: 'choke', slot2: 'deadeye' };
+    var DEFAULT_ABILITY_LOADOUT = { slot1: 'choke', slot2: 'deadeye' };
+    var abilityLoadout = cloneLoadout(DEFAULT_ABILITY_LOADOUT);
     var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
     var deadeyeState = null;
     var hookState = null;
     var healState = null;
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
+    var abilityTuningFields = {
+        choke: {
+            range: 'chokeRange',
+            lockBoxPx: 'chokeLockBoxPx',
+            targetTolerance: 'chokeTargetTolerance',
+            castDamage: 'chokeCastDamage',
+            duration: 'chokeDuration'
+        },
+        hook: {
+            range: 'hookRange',
+            lockBoxPx: 'hookLockBoxPx',
+            reticleRadiusPx: 'hookReticleRadiusPx',
+            castDamage: 'hookCastDamage',
+            stunDuration: 'hookStunDuration',
+            pullDistance: 'hookPullDistance',
+            catchRadius: 'hookCatchRadius',
+            travelSpeed: 'hookTravelSpeed'
+        },
+        heal: {
+            duration: 'healDuration',
+            healAmount: 'healAmount'
+        },
+        deadeye: {
+            range: 'deadeyeLockRange',
+            duration: 'deadeyeDuration',
+            maxTargets: 'deadeyeMaxTargets',
+            damage: 'deadeyeDamage'
+        }
+    };
 
     var profileDefaults = {
         armorMax: 90,
@@ -29,8 +59,23 @@
         return Math.max(0, (Number(until || 0) - nowMs()) / 1000);
     }
 
+    function cloneLoadout(loadout) {
+        return {
+            slot1: loadout && loadout.slot1 ? loadout.slot1 : DEFAULT_ABILITY_LOADOUT.slot1,
+            slot2: loadout && loadout.slot2 ? loadout.slot2 : DEFAULT_ABILITY_LOADOUT.slot2
+        };
+    }
+
     function slotKeyForIndex(slotIndex) {
         return Number(slotIndex) === 2 ? 'slot2' : 'slot1';
+    }
+
+    function buildLoadoutState() {
+        return {
+            slot1: abilityLoadout.slot1,
+            slot2: abilityLoadout.slot2,
+            activeAbility: abilityLoadout.slot1
+        };
     }
 
     function getAbilityIdForSlot(slotIndex) {
@@ -64,6 +109,17 @@
         healState = null;
     }
 
+    function clearTransientStates() {
+        deadeyeState = null;
+        clearHookState();
+        clearHealState();
+    }
+
+    function resetAbilityRuntimeState() {
+        resetCooldowns();
+        clearTransientStates();
+    }
+
     function hookHeadWorldPosition(state, now) {
         if (!state || !state.startPos || !state.endPos) return null;
         var start = makeVector3Like(state.startPos);
@@ -84,7 +140,7 @@
                 description: 'Single-target lift and stun in reticle box.',
                 debugSummary: 'Square = choke target box.',
                 tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-                cooldownMs: 15000, range: 24, lockBoxPx: 180, castDamage: 0, duration: 1.1, targetTolerance: 1.6, liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0
+                cooldownMs: 15000, range: 24, lockBoxPx: 180, castDamage: 0, duration: 1.1, targetTolerance: 1.6, liftHeight: 1.25, tickRate: 0.25, dotPerTick: 0
             },
             hook: {
                 id: 'hook', slot: 'either', name: 'Chain Hook',
@@ -115,6 +171,22 @@
         return catalog[abilityId] || null;
     }
 
+    function getClassAbilityTuning() {
+        return globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning
+            ? (globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {})
+            : null;
+    }
+
+    function applyNumericOverrides(target, source, fields) {
+        if (!target || !source || !fields) return;
+        for (var key in fields) {
+            if (!Object.prototype.hasOwnProperty.call(fields, key)) continue;
+            var sourceKey = fields[key];
+            if (source[sourceKey] == null) continue;
+            target[key] = Number(source[sourceKey]);
+        }
+    }
+
     function getConfigForAbility(abilityId) {
         var id = abilityId;
         var def = getAbilityDef(id);
@@ -125,33 +197,7 @@
             if (Object.prototype.hasOwnProperty.call(def, k)) out[k] = def[k];
         }
 
-        if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning) {
-            var tuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {};
-            if (id === 'choke') {
-                out.range = Number(tuning.chokeRange || out.range);
-                out.lockBoxPx = Number(tuning.chokeLockBoxPx || out.lockBoxPx);
-                out.targetTolerance = Number(tuning.chokeTargetTolerance || out.targetTolerance);
-                out.castDamage = Number(tuning.chokeCastDamage != null ? tuning.chokeCastDamage : out.castDamage);
-                out.duration = Number(tuning.chokeDuration || out.duration);
-            } else if (id === 'hook') {
-                out.range = Number(tuning.hookRange || out.range);
-                out.lockBoxPx = Number(tuning.hookLockBoxPx || out.lockBoxPx);
-                out.reticleRadiusPx = Number(tuning.hookReticleRadiusPx || out.reticleRadiusPx);
-                out.castDamage = Number(tuning.hookCastDamage || out.castDamage);
-                out.stunDuration = Number(tuning.hookStunDuration || out.stunDuration);
-                out.pullDistance = Number(tuning.hookPullDistance || out.pullDistance);
-                out.catchRadius = Number(tuning.hookCatchRadius || out.catchRadius);
-                out.travelSpeed = Number(tuning.hookTravelSpeed || out.travelSpeed);
-            } else if (id === 'heal') {
-                out.duration = Number(tuning.healDuration || out.duration);
-                out.healAmount = Number(tuning.healAmount || out.healAmount);
-            } else if (id === 'deadeye') {
-                out.range = Number(tuning.deadeyeLockRange || out.range);
-                out.duration = Number(tuning.deadeyeDuration || out.duration);
-                out.maxTargets = Number(tuning.deadeyeMaxTargets || out.maxTargets);
-                out.damage = Number(tuning.deadeyeDamage || out.damage);
-            }
-        }
+        applyNumericOverrides(out, getClassAbilityTuning(), abilityTuningFields[id]);
 
         return out;
     }
@@ -369,7 +415,6 @@
         if (!target || !target.hitbox) {
             return { ok: false, message: 'No target in choke reticle.' };
         }
-        var result = null;
         if (target.enemyRef && globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun) {
             globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun(target.enemyRef, cfg.duration || 1.6);
             target.enemyRef.chokeVictimState = {
@@ -378,6 +423,9 @@
                 endsAt: now + Math.round((cfg.duration || 1.6) * 1000),
                 liftHeight: Number(cfg.liftHeight || 1.0)
             };
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose(cfg.duration || 1.6);
         }
         setSharedCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Choke cast.', 700);
@@ -495,15 +543,11 @@
     };
 
     GameAbilities.init = function (_scene) {
-        resetCooldowns();
-        deadeyeState = null;
-        clearHookState();
-        clearHealState();
+        resetAbilityRuntimeState();
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
         if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
-            abilityLoadout.slot1 = shared.defaultAbilityLoadout.slot1 || 'choke';
-            abilityLoadout.slot2 = shared.defaultAbilityLoadout.slot2 || 'deadeye';
+            abilityLoadout = cloneLoadout(shared.defaultAbilityLoadout);
         }
     };
 
@@ -527,11 +571,7 @@
     };
 
     GameAbilities.getLoadout = function () {
-        return {
-            slot1: abilityLoadout.slot1,
-            slot2: abilityLoadout.slot2,
-            activeAbility: abilityLoadout.slot1
-        };
+        return buildLoadoutState();
     };
 
     GameAbilities.setLoadoutSlot = function (slotIndex, abilityId) {
@@ -554,18 +594,14 @@
             abilityLoadout[otherKey] = replacement;
         }
         hasExplicitLoadoutSelection = true;
-        resetCooldowns();
-        deadeyeState = null;
-        clearHookState();
-        return GameAbilities.getLoadout();
+        resetAbilityRuntimeState();
+        return buildLoadoutState();
     };
 
     GameAbilities.setLoadout = function (slot1OrActive, slot2) {
         var catalog = getCatalog();
         var firstId = slot1OrActive && catalog[slot1OrActive] ? slot1OrActive : '';
         var secondId = slot2 && catalog[slot2] ? slot2 : '';
-        var prevSlot1 = abilityLoadout.slot1;
-        var prevSlot2 = abilityLoadout.slot2;
         if (firstId && secondId) {
             abilityLoadout.slot1 = firstId;
             abilityLoadout.slot2 = secondId;
@@ -574,15 +610,8 @@
             abilityLoadout.slot1 = firstId;
             hasExplicitLoadoutSelection = true;
         }
-        resetCooldowns();
-        deadeyeState = null;
-        clearHookState();
-        clearHealState();
-        return {
-            slot1: abilityLoadout.slot1,
-            slot2: abilityLoadout.slot2,
-            activeAbility: abilityLoadout.slot1
-        };
+        resetAbilityRuntimeState();
+        return buildLoadoutState();
     };
 
     GameAbilities.getHudState = function () {

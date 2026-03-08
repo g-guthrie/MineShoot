@@ -4,6 +4,7 @@ import { nowMs } from '../transport.js';
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
 
 export function toEntityState(entity) {
   const throwables = {};
@@ -45,6 +46,9 @@ export function toEntityState(entity) {
     streamHeat: Number((entity.streamHeat || 0).toFixed(3)),
     streamOverheatedUntil: entity.streamOverheatedUntil || 0,
     muzzleFlashUntil: entity.muzzleFlashUntil || 0,
+    weaponLoadout: Array.isArray(entity.weaponLoadout) && entity.weaponLoadout.length
+      ? entity.weaponLoadout.slice(0, 2)
+      : DEFAULT_WEAPON_LOADOUT.slice(),
     abilityLoadout: entity.abilityLoadout || DEFAULT_ABILITY_LOADOUT,
     abilityCooldownRemaining: Math.max(0, ((entity.abilityCooldownUntil || 0) - nowMs()) / 1000),
     ultimateCooldownRemaining: Math.max(0, ((entity.ultimateCooldownUntil || 0) - nowMs()) / 1000),

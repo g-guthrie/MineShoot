@@ -33,6 +33,7 @@ export const MSG_C2S = {
   INPUT: 'input',
   FIRE: 'fire',
   EQUIP_WEAPON: 'equip_weapon',
+  WEAPON_LOADOUT: 'weapon_loadout',
   SEEKER_SHOT: 'seeker_shot',
   THROW: 'throw',
   CLASS_QUEUE: 'class_queue',
