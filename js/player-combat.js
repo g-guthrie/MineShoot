@@ -167,6 +167,22 @@
         return Math.max(0, playerHP - prev);
     }
 
+    function showIncomingFeedback(sourcePos, rawDamage, hitType) {
+        if (RT.GameAudio && RT.GameAudio.play) {
+            RT.GameAudio.play('playerHit');
+        }
+        if (sourcePos && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GamePlayer.getRotation) {
+            var playerPos = RT.GamePlayer.getPosition();
+            var rot = RT.GamePlayer.getRotation();
+            RT.GameUI.showDirectionalDamage(
+                sourcePos,
+                playerPos,
+                rot && typeof rot.yaw === 'number' ? rot.yaw : 0,
+                rawDamage
+            );
+        }
+    }
+
     RT.GamePlayerCombat = {
         init: init,
         getHP: function () { return playerHP; },
@@ -181,6 +197,7 @@
         respawn: respawn,
         applyArmorProfile: applyArmorProfile,
         heal: heal,
+        showIncomingFeedback: showIncomingFeedback,
         tickArmorRegen: tickArmorRegen,
         isInvulnerable: function () { return respawnInvulnTimer > 0; },
         setInvulnTimer: function (t) { respawnInvulnTimer = Math.max(0, t); },

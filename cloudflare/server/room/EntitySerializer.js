@@ -52,8 +52,15 @@ export function toEntityState(entity) {
     slowUntil: entity.slowUntil || 0,
     chokeState: entity.chokeState ? {
       targetId: entity.chokeState.targetId || '',
+      startedAt: entity.chokeState.startedAt || 0,
       endsAt: entity.chokeState.endsAt || 0,
       liftHeight: entity.chokeState.liftHeight || 1.0
+    } : null,
+    chokeVictimState: entity.chokeVictimState ? {
+      sourceId: entity.chokeVictimState.sourceId || '',
+      startedAt: entity.chokeVictimState.startedAt || 0,
+      endsAt: entity.chokeVictimState.endsAt || 0,
+      liftHeight: entity.chokeVictimState.liftHeight || 1.0
     } : null,
     hookPullState: entity.hookPullState ? {
       sourceId: entity.hookPullState.sourceId || '',

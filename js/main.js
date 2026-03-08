@@ -564,6 +564,7 @@
                     if (!selectedId) return;
                     var active = menuActiveSlot;
                     var other = active === 0 ? 1 : 0;
+                    if (slots[active] === selectedId) return;
                     if (slots[other] === selectedId) {
                         slots[other] = '';
                     }
@@ -676,6 +677,7 @@
                     if (def.id === blockedId) btn.classList.add('owned-other');
                     btn.addEventListener('click', function () {
                         var id = this.dataset.abilityId;
+                        if (selectedId === id) return;
                         GA.setLoadoutSlot(slotIndex, id);
                         if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
                             var updated = GA.getLoadout();
@@ -765,6 +767,11 @@
     }
 
     function tryPlayerFire() {
+        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet) {
+            var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState ? globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState() : null;
+            var respawnState = globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState ? globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState() : null;
+            if ((selfState && selfState.alive === false) || (respawnState && respawnState.active)) return;
+        }
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) return;
         if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.isDeadeyeActive()) return;
         var shotToken = '';
@@ -1006,7 +1013,7 @@
         var _wheelCooldownUntil = 0;
         var _wheelScrollAccum = 0;
         var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 200;
+        var _WHEEL_COOLDOWN_MS = 500;
         var _wheelGestureLatched = false;
         var _wheelLatchedDirection = 0;
         var _WHEEL_RELEASE_EPSILON = 1.1;
@@ -1447,6 +1454,19 @@
                 }
 
                 globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.syncFromNetwork(selfState);
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual) {
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual(selfState.alive !== false);
+                }
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setExternalLift) {
+                    var selfChokeVictimState = { lift: 0, startedAt: 0 };
+                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity && selfState.id) {
+                        selfChokeVictimState = globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity(selfState.id) || selfChokeVictimState;
+                    }
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setExternalLift(Number(selfChokeVictimState.lift || 0));
+                    if (globalThis.__MAYHEM_RUNTIME.GamePlayer.setChokeVictimState) {
+                        globalThis.__MAYHEM_RUNTIME.GamePlayer.setChokeVictimState(selfChokeVictimState);
+                    }
+                }
                 if (
                     selfState.hookPullState &&
                     globalThis.__MAYHEM_RUNTIME.GamePlayer &&
@@ -1482,6 +1502,19 @@
                         handleNetworkDamageFeedback(damageFeedback);
                     }
                 } while (damageFeedback);
+            }
+            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeIncomingDamageFeedback) {
+                var incomingDamageFeedback = null;
+                do {
+                    incomingDamageFeedback = globalThis.__MAYHEM_RUNTIME.GameNet.consumeIncomingDamageFeedback();
+                    if (incomingDamageFeedback && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.showIncomingFeedback) {
+                        globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.showIncomingFeedback(
+                            incomingDamageFeedback.sourcePos,
+                            incomingDamageFeedback.damage,
+                            incomingDamageFeedback.hitType
+                        );
+                    }
+                } while (incomingDamageFeedback);
             }
 
             if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeSeekerReject) {

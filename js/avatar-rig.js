@@ -474,6 +474,15 @@
             chokeGripTimer = Math.max(0.1, duration || 1.5);
         }
 
+        function applyChokeVictimPose(nowStamp, startedAt) {
+            if (!startedAt) return;
+            var phase = ((Number(nowStamp || 0) - Number(startedAt || 0)) * 0.012);
+            var squirmAmp = 0.55;
+            if (rig.legL) rig.legL.rotation.x = Math.sin(phase) * squirmAmp;
+            if (rig.legR) rig.legR.rotation.x = Math.sin(phase + 2.1) * squirmAmp;
+            if (rig.armL) rig.armL.rotation.x = Math.sin(phase + 1.0) * squirmAmp;
+        }
+
         return {
             root: root,
             rig: rig,
@@ -490,6 +499,7 @@
             triggerThrowPose: triggerThrowPose,
             applyChokeGripPose: applyChokeGripPose,
             triggerChokeGripPose: triggerChokeGripPose,
+            applyChokeVictimPose: applyChokeVictimPose,
             getWeaponId: function () { return rig.weaponId; },
             _tmp: tmpVec
         };

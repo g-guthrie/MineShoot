@@ -659,6 +659,7 @@ export class GlobalArenaRoom extends DurableObject {
       slowMultiplier: 1,
       deadeye: null,
       chokeState: null,
+      chokeVictimState: null,
       hookState: null,
       hookPullState: null,
       healState: null
@@ -1561,6 +1562,7 @@ export class GlobalArenaRoom extends DurableObject {
     entity.slowMultiplier = 1;
     entity.deadeye = null;
     entity.chokeState = null;
+    entity.chokeVictimState = null;
     entity.hookState = null;
     entity.hookPullState = null;
     entity.healState = null;

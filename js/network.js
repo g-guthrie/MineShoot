@@ -55,6 +55,7 @@
     var throwableEventQueue = [];
     var classCastResultQueue = [];
     var damageFeedbackQueue = [];
+    var incomingDamageFeedbackQueue = [];
     var seekerRejectQueue = [];
 
     var notices = [];
@@ -414,6 +415,13 @@
             if (selfState && msg.targetId === selfId) {
                 if (typeof msg.health === 'number') selfState.hp = msg.health;
                 if (typeof msg.armor === 'number') selfState.armor = msg.armor;
+                if (msg.killed) selfState.alive = false;
+                incomingDamageFeedbackQueue.push({
+                    sourcePos: damagePointForEntityId(msg.sourceId || ''),
+                    damage: Math.max(0, Number(msg.damage || 0)),
+                    hitType: msg.hitType === 'head' ? 'head' : 'body'
+                });
+                if (incomingDamageFeedbackQueue.length > 32) incomingDamageFeedbackQueue.shift();
             }
 
             if (msg.targetId && msg.targetId !== selfId) {
@@ -587,23 +595,23 @@
         return out;
     }
 
-    function getChokeLiftForEntity(entityId) {
-        if (!entityId) return 0;
+    function getChokeVictimStateForEntity(entityId) {
+        if (!entityId) return { lift: 0, startedAt: 0 };
         var now = Date.now();
-        var lift = 0;
-        GameNetEntities.getRenderMap().forEach(function (r) {
-            if (!r.chokeState || !r.chokeState.targetId) return;
-            if (r.chokeState.targetId !== entityId) return;
-            if (r.chokeState.endsAt && r.chokeState.endsAt > now) {
-                lift = Math.max(lift, r.chokeState.liftHeight || 1.0);
-            }
-        });
-        if (selfState && selfState.chokeState && selfState.chokeState.targetId === entityId) {
-            if (selfState.chokeState.endsAt && selfState.chokeState.endsAt > now) {
-                lift = Math.max(lift, selfState.chokeState.liftHeight || 1.0);
-            }
+        if (selfState && selfState.id === entityId && selfState.chokeVictimState && selfState.chokeVictimState.endsAt > now) {
+            return {
+                lift: Number(selfState.chokeVictimState.liftHeight || 1.0),
+                startedAt: Number(selfState.chokeVictimState.startedAt || 0)
+            };
         }
-        return lift;
+        var render = GameNetEntities.getRenderMap().get(entityId);
+        if (render && render.chokeVictimState && render.chokeVictimState.endsAt > now) {
+            return {
+                lift: Number(render.chokeVictimState.liftHeight || 1.0),
+                startedAt: Number(render.chokeVictimState.startedAt || 0)
+            };
+        }
+        return { lift: 0, startedAt: 0 };
     }
 
     GameNet.requireAuth = function (onAuthed) {
@@ -817,16 +825,11 @@
             setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
             setRemoteSpawnShieldVisual(r, !!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
 
-            var chokeVictimLift = getChokeLiftForEntity(r.id);
-            if (chokeVictimLift > 0) {
-                r.group.position.y += chokeVictimLift;
-                if (r.rigApi && r.rigApi.rig) {
-                    var squirmPhase = Date.now() * 0.012;
-                    var squirmAmp = 0.55;
-                    var rig = r.rigApi.rig;
-                    if (rig.legL) rig.legL.rotation.x = Math.sin(squirmPhase) * squirmAmp;
-                    if (rig.legR) rig.legR.rotation.x = Math.sin(squirmPhase + 2.1) * squirmAmp;
-                    if (rig.armL) rig.armL.rotation.x = Math.sin(squirmPhase + 1.0) * squirmAmp;
+            var chokeVictimState = getChokeVictimStateForEntity(r.id);
+            if (chokeVictimState.lift > 0) {
+                r.group.position.y += chokeVictimState.lift;
+                if (r.rigApi && r.rigApi.applyChokeVictimPose) {
+                    r.rigApi.applyChokeVictimPose(Date.now(), chokeVictimState.startedAt);
                 }
             }
 
@@ -990,8 +993,17 @@
         return damageFeedbackQueue.shift();
     };
 
+    GameNet.consumeIncomingDamageFeedback = function () {
+        if (!incomingDamageFeedbackQueue.length) return null;
+        return incomingDamageFeedbackQueue.shift();
+    };
+
     GameNet.getEntityMarkerWorldPos = function (entityId) {
         return markerPointForEntityId(entityId);
+    };
+
+    GameNet.getChokeVictimStateForEntity = function (entityId) {
+        return getChokeVictimStateForEntity(entityId);
     };
 
     GameNet.getSelfAbilityState = function () {

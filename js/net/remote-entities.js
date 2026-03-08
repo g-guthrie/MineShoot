@@ -92,6 +92,7 @@
             sprinting: !!entity.sprinting,
             weaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
+            chokeVictimState: entity.chokeVictimState || null,
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
             hookState: entity.hookState || null,
@@ -155,6 +156,7 @@
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
         r.chokeState = entity.chokeState || null;
+        r.chokeVictimState = entity.chokeVictimState || null;
         r.hookState = entity.hookState || null;
         r.hookPullState = entity.hookPullState || null;
         r.healState = entity.healState || null;

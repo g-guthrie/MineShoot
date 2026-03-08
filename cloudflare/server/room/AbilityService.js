@@ -130,8 +130,15 @@ export function castChoke(room, player, cfg, msg, now) {
     }
   }
   room.applyTimedStun(target, cfg.duration || 1.6);
+  target.chokeVictimState = {
+    sourceId: player.id,
+    startedAt: now,
+    endsAt: now + Math.round((cfg.duration || 1.6) * 1000),
+    liftHeight: cfg.liftHeight || 1.0
+  };
   player.chokeState = {
     targetId: target.id,
+    startedAt: now,
     endsAt: now + Math.round((cfg.duration || 1.6) * 1000),
     nextTickAt: now + Math.round((cfg.tickRate || 0.25) * 1000),
     tickRateMs: Math.round((cfg.tickRate || 0.25) * 1000),
@@ -295,6 +302,13 @@ export function tickClassAbilityState(room, entity) {
       if (!target || !target.alive) {
         entity.chokeState = null;
       }
+    }
+  }
+
+  if (entity.chokeVictimState) {
+    const state = entity.chokeVictimState;
+    if ((state.endsAt || 0) <= now) {
+      entity.chokeVictimState = null;
     }
   }
 

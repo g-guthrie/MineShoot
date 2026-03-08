@@ -95,6 +95,8 @@
     var gunBobY = 0;
     var gunRecoil = 0;
     var palmRecoil = 0;
+    var externalLiftY = 0;
+    var chokeVictimStartedAt = 0;
 
     function hasInputCapture() {
         return !!document.pointerLockElement;
@@ -174,6 +176,9 @@
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             avatarRigApi.updateAimPitch(pitch);
             avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded);
+            if (chokeVictimStartedAt && avatarRigApi.applyChokeVictimPose) {
+                avatarRigApi.applyChokeVictimPose(Date.now(), chokeVictimStartedAt);
+            }
         }
     }
 
@@ -304,16 +309,22 @@
 
     function updateAvatarPose() {
         if (!avatarGroup) return;
-        avatarGroup.position.set(playerX, posY - EYE_HEIGHT, playerZ);
+        avatarGroup.position.set(playerX, posY - EYE_HEIGHT + externalLiftY, playerZ);
         avatarGroup.rotation.y = yaw;
         syncHitboxPositions();
     }
 
     function syncHitboxPositions() {
-        var feetY = posY - EYE_HEIGHT;
+        var feetY = posY - EYE_HEIGHT + externalLiftY;
         if (actorVisual && actorVisual.syncHitboxes) {
             actorVisual.syncHitboxes({ x: playerX, y: feetY, z: playerZ });
         }
+    }
+
+    function setAliveVisual(active) {
+        if (avatarGroup) avatarGroup.visible = !!active;
+        if (bodyHitbox) bodyHitbox.visible = !!active && hitboxVisible;
+        if (headHitbox) headHitbox.visible = !!active && hitboxVisible;
     }
 
     function ensureHitboxes() {
@@ -413,15 +424,16 @@
         updateAvatarPose();
 
         viewTarget.set(playerX + forwardX * 20, posY + forwardY * 20, playerZ + forwardZ * 20);
-        viewOrigin.set(playerX, posY + 0.3, playerZ);
+        viewTarget.y += externalLiftY;
+        viewOrigin.set(playerX, posY + 0.3 + externalLiftY, playerZ);
         viewDesired.set(
             playerX + (rightX * CAMERA_SHOULDER) - (forwardX * CAMERA_DIST),
-            posY + THIRD_HEIGHT,
+            posY + THIRD_HEIGHT + externalLiftY,
             playerZ + (rightZ * CAMERA_SHOULDER) - (forwardZ * CAMERA_DIST)
         );
         adsDesired.set(
             playerX + (rightX * (sniperMode ? SNIPER_SCOPE_SHOULDER : ADS_SHOULDER)) - (forwardX * (sniperMode ? SNIPER_SCOPE_DIST : ADS_DIST)),
-            posY + (sniperMode ? SNIPER_SCOPE_HEIGHT : ADS_HEIGHT),
+            posY + (sniperMode ? SNIPER_SCOPE_HEIGHT : ADS_HEIGHT) + externalLiftY,
             playerZ + (rightZ * (sniperMode ? SNIPER_SCOPE_SHOULDER : ADS_SHOULDER)) - (forwardZ * (sniperMode ? SNIPER_SCOPE_DIST : ADS_DIST))
         );
         viewDesired.lerp(adsDesired, scopeBlend);
@@ -875,6 +887,19 @@
     GamePlayer.setHitboxVisibility = function (visible) {
         ensureHitboxes();
         return setHitboxVisibility(visible);
+    };
+
+    GamePlayer.setExternalLift = function (liftY) {
+        externalLiftY = Number(liftY || 0);
+        if (Math.abs(externalLiftY) < 0.0001) externalLiftY = 0;
+    };
+
+    GamePlayer.setChokeVictimState = function (state) {
+        chokeVictimStartedAt = state && state.startedAt ? Number(state.startedAt || 0) : 0;
+    };
+
+    GamePlayer.setAliveVisual = function (active) {
+        setAliveVisual(active);
     };
 
     GamePlayer.setHealFlash = function (active) {
