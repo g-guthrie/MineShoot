@@ -1204,7 +1204,9 @@ export class GlobalArenaRoom extends DurableObject {
 
     const dist = distance3(player, target);
     var effectiveMaxRange = Number(stats.maxRange || 0);
-    if (msg && msg.adsActive) {
+    if (stats.infiniteRange) {
+      effectiveMaxRange = Infinity;
+    } else if (msg && msg.adsActive) {
       effectiveMaxRange *= Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1));
     }
     if (dist > effectiveMaxRange) return;

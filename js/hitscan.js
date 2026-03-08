@@ -59,7 +59,7 @@
         };
     }
 
-    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun'];
+    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
     var weaponOrder = weaponCatalogOrder.slice();
     var weapons = {};
     for (var wi = 0; wi < weaponCatalogOrder.length; wi++) {
@@ -501,6 +501,47 @@
         return lock && lock.candidate ? lock.candidate.rawTarget : null;
     }
 
+    function selectSeekTargetByRect(camera, maxRange, boxWidthPx, boxHeightPx, options) {
+        if (!camera) return null;
+        var seekCore = sharedSeekCore();
+        if (!seekCore || !seekCore.selectSeekTarget) return null;
+        var lockTargets = getLockTargets() || [];
+        var filtered = [];
+        for (var i = 0; i < lockTargets.length; i++) {
+            var t = lockTargets[i];
+            if (!t || t.alive === false || !t.worldPos) continue;
+            if (!lockTargetPassesFilter(t, options)) continue;
+            filtered.push(t);
+        }
+        var origin = camera.position;
+        camera.getWorldDirection(plasmaForward);
+        var forward = {
+            x: plasmaForward.x,
+            y: plasmaForward.y,
+            z: plasmaForward.z
+        };
+        var lock = seekCore.selectSeekTarget({
+            origin: { x: origin.x, y: origin.y, z: origin.z },
+            forward: forward,
+            candidates: filtered.map(toSeekCandidate).filter(Boolean),
+            maxRange: maxRange,
+            coneHalfAngleDeg: 180,
+            boxWidthPx: boxWidthPx,
+            boxHeightPx: boxHeightPx,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            projectToNdc: function (worldPos) {
+                if (!worldPos || !worldPos.clone || !worldPos.project) return null;
+                var projected = worldPos.clone().project(camera);
+                return { x: projected.x, y: projected.y, z: projected.z };
+            },
+            hasWorldLos: function (worldPos) {
+                return hasLineOfSight(camera, worldPos, maxRange);
+            }
+        });
+        return lock && lock.candidate ? lock.candidate.rawTarget : null;
+    }
+
     function getSeekerTelemetry(camera, maxRange, boxSizePx, coneHalfAngleDeg) {
         var lock = selectSeekLock(camera, maxRange, boxSizePx, {
             ownerTypes: ['enemy', 'net'],
@@ -795,6 +836,22 @@
         var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
         var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : getSeekergunReticleSizePx();
         var target = selectSeekTargetByBox(camera, range, size, options || null);
+        if (!target) return null;
+        return {
+            targetId: target.targetId || '',
+            ownerType: target.ownerType || 'unknown',
+            worldPos: target.worldPos && target.worldPos.clone ? target.worldPos.clone() : null,
+            hitbox: target.hitbox || null,
+            enemyRef: target.enemyRef || null
+        };
+    };
+
+    GameHitscan.selectLockTargetByRect = function (camera, maxRange, boxWidthPx, boxHeightPx, options) {
+        if (!camera) return null;
+        var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
+        var width = (typeof boxWidthPx === 'number' && boxWidthPx > 1) ? boxWidthPx : 60;
+        var height = (typeof boxHeightPx === 'number' && boxHeightPx > 1) ? boxHeightPx : 180;
+        var target = selectSeekTargetByRect(camera, range, width, height, options || null);
         if (!target) return null;
         return {
             targetId: target.targetId || '',

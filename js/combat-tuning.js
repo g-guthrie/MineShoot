@@ -22,43 +22,40 @@
             defaultWallhackRadius: 90
         },
         weapons: {
-            rifle: 118,
-            pistol: 52,
-            machinegun: 48,
-            shotgun: 24,
-            sniper: 160,
+            rifle: 100,
+            pistol: 54,
+            machinegun: 40,
+            shotgun: 22,
+            sniper: 99999,
             seekergun: 28
         },
         weaponFalloff: {
             rifle: [
                 { maxDistance: 24, scale: 1.0 },
-                { maxDistance: 50, scale: 0.96 },
-                { maxDistance: 86, scale: 0.88 },
-                { maxDistance: 118, scale: 0.78 }
+                { maxDistance: 42, scale: 0.95 },
+                { maxDistance: 68, scale: 0.87 },
+                { maxDistance: 100, scale: 0.74 }
             ],
             pistol: [
-                { maxDistance: 14, scale: 1.0 },
-                { maxDistance: 24, scale: 0.88 },
-                { maxDistance: 36, scale: 0.64 },
-                { maxDistance: 52, scale: 0.4 }
+                { maxDistance: 12, scale: 1.0 },
+                { maxDistance: 22, scale: 0.84 },
+                { maxDistance: 34, scale: 0.60 },
+                { maxDistance: 54, scale: 0.40 }
             ],
             machinegun: [
-                { maxDistance: 10, scale: 1.0 },
-                { maxDistance: 18, scale: 0.82 },
-                { maxDistance: 30, scale: 0.62 },
-                { maxDistance: 48, scale: 0.42 }
+                { maxDistance: 8, scale: 1.0 },
+                { maxDistance: 15, scale: 0.76 },
+                { maxDistance: 24, scale: 0.50 },
+                { maxDistance: 40, scale: 0.28 }
             ],
             shotgun: [
                 { maxDistance: 6, scale: 1.0 },
-                { maxDistance: 11, scale: 0.68 },
-                { maxDistance: 17, scale: 0.38 },
-                { maxDistance: 24, scale: 0.12 }
+                { maxDistance: 10, scale: 0.70 },
+                { maxDistance: 15, scale: 0.40 },
+                { maxDistance: 22, scale: 0.15 }
             ],
             sniper: [
-                { maxDistance: 55, scale: 1.0 },
-                { maxDistance: 105, scale: 1.0 },
-                { maxDistance: 135, scale: 0.94 },
-                { maxDistance: 160, scale: 0.86 }
+                { maxDistance: 99999, scale: 1.0 }
             ],
             seekergun: [
                 { maxDistance: 28, scale: 1.0 }
@@ -87,29 +84,29 @@
             abilities: 90
         },
         classAbilities: {
-            chokeLockBoxPx: 190,
+            chokeLockBoxPx: 180,
             chokeRange: 24,
-            chokeTargetTolerance: 1.8,
-            chokeDuration: 1.6,
+            chokeTargetTolerance: 1.6,
+            chokeDuration: 1.1,
             chokeLiftHeight: 1.0,
             chokeTickRate: 0.25,
             chokeDotPerTick: 0,
-            chokeCastDamage: 95,
+            chokeCastDamage: 0,
             hookLockBoxPx: 170,
             hookReticleRadiusPx: 52,
-            hookRange: 26,
-            hookCastDamage: 50,
-            hookStunDuration: 0.7,
+            hookRange: 24,
+            hookCastDamage: 35,
+            hookStunDuration: 0.5,
             hookPullDistance: 3.2,
-            hookCatchRadius: 1.8,
-            hookTravelSpeed: 26,
+            hookCatchRadius: 1.6,
+            hookTravelSpeed: 24,
             healDuration: 0.85,
-            healAmount: 100,
+            healAmount: 150,
             deadeyeLockBoxPx: 220,
-            deadeyeLockRange: 80,
-            deadeyeDuration: 2.0,
-            deadeyeMaxTargets: 3,
-            deadeyeDamage: 260
+            deadeyeLockRange: 70,
+            deadeyeDuration: 1.5,
+            deadeyeMaxTargets: 2,
+            deadeyeDamage: 180
         }
     };
 
@@ -162,29 +159,29 @@
                 abilities: Number(classPresets.abilities && classPresets.abilities.wallhackRadius) || DEFAULTS.classWallhackRadius.abilities
             },
             classAbilities: {
-                chokeLockBoxPx: Number(choke.lockBoxPx) || DEFAULTS.classAbilities.chokeLockBoxPx,
-                chokeRange: Number(choke.range) || DEFAULTS.classAbilities.chokeRange,
-                chokeTargetTolerance: Number(choke.targetTolerance) || DEFAULTS.classAbilities.chokeTargetTolerance,
-                chokeDuration: Number(choke.duration) || DEFAULTS.classAbilities.chokeDuration,
-                chokeLiftHeight: Number(choke.liftHeight) || DEFAULTS.classAbilities.chokeLiftHeight,
-                chokeTickRate: Number(choke.tickRate) || DEFAULTS.classAbilities.chokeTickRate,
-                chokeDotPerTick: Number(choke.dotPerTick) || DEFAULTS.classAbilities.chokeDotPerTick,
-                chokeCastDamage: Number(choke.castDamage) || DEFAULTS.classAbilities.chokeCastDamage,
-                hookLockBoxPx: Number(hook.lockBoxPx) || DEFAULTS.classAbilities.hookLockBoxPx,
-                hookReticleRadiusPx: Number(hook.reticleRadiusPx) || DEFAULTS.classAbilities.hookReticleRadiusPx,
-                hookRange: Number(hook.range) || DEFAULTS.classAbilities.hookRange,
-                hookCastDamage: Number(hook.castDamage) || DEFAULTS.classAbilities.hookCastDamage,
-                hookStunDuration: Number(hook.stunDuration) || DEFAULTS.classAbilities.hookStunDuration,
-                hookPullDistance: Number(hook.pullDistance) || DEFAULTS.classAbilities.hookPullDistance,
-                hookCatchRadius: Number(hook.catchRadius) || DEFAULTS.classAbilities.hookCatchRadius,
-                hookTravelSpeed: Number(hook.travelSpeed) || DEFAULTS.classAbilities.hookTravelSpeed,
-                healDuration: Number(heal.duration) || DEFAULTS.classAbilities.healDuration,
-                healAmount: Number(heal.healAmount) || DEFAULTS.classAbilities.healAmount,
+                chokeLockBoxPx: Number.isFinite(Number(choke.lockBoxPx)) ? Number(choke.lockBoxPx) : DEFAULTS.classAbilities.chokeLockBoxPx,
+                chokeRange: Number.isFinite(Number(choke.range)) ? Number(choke.range) : DEFAULTS.classAbilities.chokeRange,
+                chokeTargetTolerance: Number.isFinite(Number(choke.targetTolerance)) ? Number(choke.targetTolerance) : DEFAULTS.classAbilities.chokeTargetTolerance,
+                chokeDuration: Number.isFinite(Number(choke.duration)) ? Number(choke.duration) : DEFAULTS.classAbilities.chokeDuration,
+                chokeLiftHeight: Number.isFinite(Number(choke.liftHeight)) ? Number(choke.liftHeight) : DEFAULTS.classAbilities.chokeLiftHeight,
+                chokeTickRate: Number.isFinite(Number(choke.tickRate)) ? Number(choke.tickRate) : DEFAULTS.classAbilities.chokeTickRate,
+                chokeDotPerTick: Number.isFinite(Number(choke.dotPerTick)) ? Number(choke.dotPerTick) : DEFAULTS.classAbilities.chokeDotPerTick,
+                chokeCastDamage: Number.isFinite(Number(choke.castDamage)) ? Number(choke.castDamage) : DEFAULTS.classAbilities.chokeCastDamage,
+                hookLockBoxPx: Number.isFinite(Number(hook.lockBoxPx)) ? Number(hook.lockBoxPx) : DEFAULTS.classAbilities.hookLockBoxPx,
+                hookReticleRadiusPx: Number.isFinite(Number(hook.reticleRadiusPx)) ? Number(hook.reticleRadiusPx) : DEFAULTS.classAbilities.hookReticleRadiusPx,
+                hookRange: Number.isFinite(Number(hook.range)) ? Number(hook.range) : DEFAULTS.classAbilities.hookRange,
+                hookCastDamage: Number.isFinite(Number(hook.castDamage)) ? Number(hook.castDamage) : DEFAULTS.classAbilities.hookCastDamage,
+                hookStunDuration: Number.isFinite(Number(hook.stunDuration)) ? Number(hook.stunDuration) : DEFAULTS.classAbilities.hookStunDuration,
+                hookPullDistance: Number.isFinite(Number(hook.pullDistance)) ? Number(hook.pullDistance) : DEFAULTS.classAbilities.hookPullDistance,
+                hookCatchRadius: Number.isFinite(Number(hook.catchRadius)) ? Number(hook.catchRadius) : DEFAULTS.classAbilities.hookCatchRadius,
+                hookTravelSpeed: Number.isFinite(Number(hook.travelSpeed)) ? Number(hook.travelSpeed) : DEFAULTS.classAbilities.hookTravelSpeed,
+                healDuration: Number.isFinite(Number(heal.duration)) ? Number(heal.duration) : DEFAULTS.classAbilities.healDuration,
+                healAmount: Number.isFinite(Number(heal.healAmount)) ? Number(heal.healAmount) : DEFAULTS.classAbilities.healAmount,
                 deadeyeLockBoxPx: DEFAULTS.classAbilities.deadeyeLockBoxPx,
-                deadeyeLockRange: Number(deadeye.range) || DEFAULTS.classAbilities.deadeyeLockRange,
-                deadeyeDuration: Number(deadeye.duration) || DEFAULTS.classAbilities.deadeyeDuration,
-                deadeyeMaxTargets: Number(deadeye.maxTargets) || DEFAULTS.classAbilities.deadeyeMaxTargets,
-                deadeyeDamage: Number(deadeye.damage) || DEFAULTS.classAbilities.deadeyeDamage
+                deadeyeLockRange: Number.isFinite(Number(deadeye.range)) ? Number(deadeye.range) : DEFAULTS.classAbilities.deadeyeLockRange,
+                deadeyeDuration: Number.isFinite(Number(deadeye.duration)) ? Number(deadeye.duration) : DEFAULTS.classAbilities.deadeyeDuration,
+                deadeyeMaxTargets: Number.isFinite(Number(deadeye.maxTargets)) ? Number(deadeye.maxTargets) : DEFAULTS.classAbilities.deadeyeMaxTargets,
+                deadeyeDamage: Number.isFinite(Number(deadeye.damage)) ? Number(deadeye.damage) : DEFAULTS.classAbilities.deadeyeDamage
             }
         };
     }

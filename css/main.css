@@ -11,6 +11,17 @@ body {
     cursor: none;
 }
 
+body.menu-booting #overlay,
+body.menu-booting #hud-manual-btn {
+    opacity: 0;
+    pointer-events: none;
+}
+
+body:not(.menu-booting) #overlay,
+body:not(.menu-booting) #hud-manual-btn {
+    transition: opacity 120ms ease-out;
+}
+
 #hud-manual-btn {
     position: fixed;
     top: 16px;

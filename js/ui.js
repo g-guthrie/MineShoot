@@ -500,15 +500,14 @@
         }
     };
 
-    GameUI.updateChokeReticle = function (visible, sizePx) {
+    GameUI.updateChokeReticle = function (visible, widthPx, heightPx) {
         if (!chokeReticleEl) return;
         if (!visible) {
             chokeReticleEl.style.display = 'none';
             return;
         }
-        var size = sizePx || 190;
-        chokeReticleEl.style.width = size + 'px';
-        chokeReticleEl.style.height = size + 'px';
+        chokeReticleEl.style.width = Math.round(widthPx || 60) + 'px';
+        chokeReticleEl.style.height = Math.round(heightPx || 180) + 'px';
         chokeReticleEl.style.display = 'block';
     };
 

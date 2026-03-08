@@ -15,33 +15,30 @@ export const gameplayTuning = {
   weaponFalloff: {
     rifle: [
       { maxDistance: 24, scale: 1.0 },
-      { maxDistance: 50, scale: 0.96 },
-      { maxDistance: 86, scale: 0.88 },
-      { maxDistance: 118, scale: 0.78 }
+      { maxDistance: 42, scale: 0.95 },
+      { maxDistance: 68, scale: 0.87 },
+      { maxDistance: 100, scale: 0.74 }
     ],
     pistol: [
-      { maxDistance: 14, scale: 1.0 },
-      { maxDistance: 24, scale: 0.88 },
-      { maxDistance: 36, scale: 0.64 },
-      { maxDistance: 52, scale: 0.4 }
+      { maxDistance: 12, scale: 1.0 },
+      { maxDistance: 22, scale: 0.84 },
+      { maxDistance: 34, scale: 0.60 },
+      { maxDistance: 54, scale: 0.40 }
     ],
     machinegun: [
-      { maxDistance: 10, scale: 1.0 },
-      { maxDistance: 18, scale: 0.82 },
-      { maxDistance: 30, scale: 0.62 },
-      { maxDistance: 48, scale: 0.42 }
+      { maxDistance: 8, scale: 1.0 },
+      { maxDistance: 15, scale: 0.76 },
+      { maxDistance: 24, scale: 0.50 },
+      { maxDistance: 40, scale: 0.28 }
     ],
     shotgun: [
       { maxDistance: 6, scale: 1.0 },
-      { maxDistance: 11, scale: 0.68 },
-      { maxDistance: 17, scale: 0.38 },
-      { maxDistance: 24, scale: 0.12 }
+      { maxDistance: 10, scale: 0.70 },
+      { maxDistance: 15, scale: 0.40 },
+      { maxDistance: 22, scale: 0.15 }
     ],
     sniper: [
-      { maxDistance: 55, scale: 1.0 },
-      { maxDistance: 105, scale: 1.0 },
-      { maxDistance: 135, scale: 0.94 },
-      { maxDistance: 160, scale: 0.86 }
+      { maxDistance: 99999, scale: 1.0 }
     ],
     seekergun: [
       { maxDistance: 28, scale: 1.0 }
@@ -61,11 +58,11 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  hipfireSpread: 0.007, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.4 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  hipfireSpread: 0.012, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.35 },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  hipfireSpread: 0.028, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.3 },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, hipfireSpread: 0.19,  adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.1 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  hipfireSpread: 0.24,  adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.0 },
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 240,  bodyDamage: 42,  headDamage: 92,  maxRange: 100, pellets: 1,  hipfireSpread: 0.013, adsSpreadMultiplier: 0.0,  adsHitscanRangeMultiplier: 1.4 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 215,  bodyDamage: 28,  headDamage: 96,  maxRange: 54,  pellets: 1,  hipfireSpread: 0.016, adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   bodyDamage: 15,  headDamage: 20,  maxRange: 40,  pellets: 1,  hipfireSpread: 0.046, adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 1100, bodyDamage: 18,  headDamage: 28,  maxRange: 22,  pellets: 12, hipfireSpread: 0.21,  adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1450, bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1,  hipfireSpread: 0.32,  adsSpreadMultiplier: 0.0,  adsHitscanRangeMultiplier: 1.0, infiniteRange: true },
     seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsSpreadMultiplier: 1,    adsHitscanRangeMultiplier: 1.0 }
   },
   throwableCategories: {
@@ -100,33 +97,33 @@ export const gameplayTuning = {
   abilityCatalog: {
     choke: {
       id: 'choke', slot: 'ability', name: 'Vader Choke',
-      description: 'Single-target lift + damage in reticle box.',
+      description: 'Single-target lift and stun in reticle box.',
       debugSummary: 'Square = choke target box.',
-      tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 8000, range: 24, minDot: 0.05, duration: 1.6,
-      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190, targetTolerance: 1.8
+      tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
+      cooldownMs: 15000, range: 24, minDot: 0.05, duration: 1.1,
+      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 180, targetTolerance: 1.6
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',
       description: 'Latch a target and yank them into close range.',
       debugSummary: 'Circle = hook catch radius debug.',
       tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
-      cooldownMs: 7000, range: 26, minDot: 0.03, pullDistance: 3.2,
-      stunDuration: 0.7, castDamage: 50, lockBoxPx: 170, reticleRadiusPx: 52, catchRadius: 1.8, travelSpeed: 26
+      cooldownMs: 15000, range: 24, minDot: 0.03, pullDistance: 3.2,
+      stunDuration: 0.5, castDamage: 35, lockBoxPx: 170, reticleRadiusPx: 52, catchRadius: 1.6, travelSpeed: 24
     },
     heal: {
       id: 'heal', slot: 'either', name: 'Heal',
       description: 'Brief self-heal with visible windup.',
-      debugSummary: 'No geometry; instant heal plus green flash.',
+      debugSummary: 'Visible windup before the heal resolves.',
       tunableParams: ['healAmount', 'cooldownMs'],
-      cooldownMs: 9000, duration: 0.85, healAmount: 100
+      cooldownMs: 15000, duration: 0.85, healAmount: 150
     },
     deadeye: {
       id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
       debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
       tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
-      cooldownMs: 22000, range: 80, duration: 3.0, maxTargets: 3, minDot: 0.18, damage: 260
+      cooldownMs: 15000, range: 70, duration: 1.5, maxTargets: 2, minDot: 0.22, damage: 180
     }
   },
   defaultAbilityLoadout: { slot1: 'choke', slot2: 'deadeye' }

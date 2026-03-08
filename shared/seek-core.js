@@ -91,10 +91,12 @@ export function selectSeekTarget(options) {
   const hasWorldLos = typeof cfg.hasWorldLos === 'function' ? cfg.hasWorldLos : null;
   const projectToNdc = typeof cfg.projectToNdc === 'function' ? cfg.projectToNdc : null;
   const boxSizePx = Number(cfg.boxSizePx || 0);
+  const boxWidthPx = Number(cfg.boxWidthPx || boxSizePx || 0);
+  const boxHeightPx = Number(cfg.boxHeightPx || boxSizePx || 0);
   const viewportWidth = Math.max(1, Number(cfg.viewportWidth || 1));
   const viewportHeight = Math.max(1, Number(cfg.viewportHeight || 1));
-  const halfNdcX = boxSizePx > 0 ? (boxSizePx * 0.5) / (viewportWidth * 0.5) : 0;
-  const halfNdcY = boxSizePx > 0 ? (boxSizePx * 0.5) / (viewportHeight * 0.5) : 0;
+  const halfNdcX = boxWidthPx > 0 ? (boxWidthPx * 0.5) / (viewportWidth * 0.5) : 0;
+  const halfNdcY = boxHeightPx > 0 ? (boxHeightPx * 0.5) / (viewportHeight * 0.5) : 0;
 
   let selected = null;
   let selectedDistance = Infinity;

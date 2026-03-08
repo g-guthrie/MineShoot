@@ -38,6 +38,7 @@
     var hookTmpA = new THREE.Vector3();
     var hookTmpB = new THREE.Vector3();
     var lastHandledMatchEndAt = 0;
+    var menuBootReleased = false;
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -49,6 +50,40 @@
 
     function cappedPixelRatio() {
         return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));
+    }
+
+    function releaseMenuBoot() {
+        if (menuBootReleased) return;
+        menuBootReleased = true;
+        if (document.body) {
+            document.body.classList.remove('menu-booting');
+        }
+    }
+
+    function scheduleMenuBootRelease() {
+        function releaseAfterPaint() {
+            if (typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(function () {
+                    window.requestAnimationFrame(releaseMenuBoot);
+                });
+                return;
+            }
+            releaseMenuBoot();
+        }
+
+        var fallbackTimer = window.setTimeout(releaseAfterPaint, 700);
+        if (!document.fonts || !document.fonts.ready || typeof document.fonts.ready.then !== 'function') {
+            return;
+        }
+        document.fonts.ready
+            .then(function () {
+                window.clearTimeout(fallbackTimer);
+                releaseAfterPaint();
+            })
+            .catch(function () {
+                window.clearTimeout(fallbackTimer);
+                releaseAfterPaint();
+            });
     }
 
     function createHookVisual() {
@@ -175,6 +210,16 @@
         return {
             width: Math.max(60, Math.min(window.innerWidth * 0.86, xNdc * window.innerWidth)),
             height: Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight))
+        };
+    }
+
+    function chokeRectSizePx(camera) {
+        var deadeyeMinDot = Number(((currentAbilityCatalogMap().deadeye || {}).minDot) || 0.22);
+        var rect = deadeyeDebugRectSizePx(camera, deadeyeMinDot);
+        var height = rect ? rect.height : 180;
+        return {
+            width: Math.max(24, height * 0.3),
+            height: height
         };
     }
 
@@ -1241,13 +1286,13 @@
                 var castSlot = Number(slotIndex) === 2 ? 2 : 1;
                 var slotAbilityId = castSlot === 2 ? loadout.slot2 : loadout.slot1;
 
-                if (slotAbilityId === 'choke' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
+                if (slotAbilityId === 'choke' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect) {
                     var classTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
                         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning()
                         : {};
-                    var chokeBoxPx = Number(classTuning.chokeLockBoxPx || 190);
+                    var chokeRect = chokeRectSizePx(camera);
                     var chokeRange = Number(classTuning.chokeRange || 24);
-                    var chokeTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(camera, chokeRange, chokeBoxPx, {
+                    var chokeTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect(camera, chokeRange, chokeRect.width, chokeRect.height, {
                         ownerType: 'net'
                     });
                     if (!chokeTarget || !chokeTarget.targetId || String(chokeTarget.targetId).indexOf('net:') !== 0) {
@@ -1384,6 +1429,7 @@
             syncMenuWeaponSlotsToRuntime();
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon());
 
+            runtimeInitialized = true;
             setupPointerLock();
             setupShooting();
             setupWeaponControls();
@@ -1392,7 +1438,6 @@
             setupSoundToggleControl();
             setupDocsControls();
             setupDebugKeys();
-            runtimeInitialized = true;
 
             var bootstrapApi = depGet('GameBootstrap');
             if (bootstrapApi && bootstrapApi.installResizeHandler) {
@@ -1753,8 +1798,8 @@
 
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle) {
             var chokeVisible = !!debugVisualsOn && (slot1Ability === 'choke' || slot2Ability === 'choke');
-            var chokeReticleSize = Number(abilityTuningState.chokeLockBoxPx || 190);
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(chokeVisible, chokeReticleSize);
+            var chokeRectSize = chokeRectSizePx(camera);
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(chokeVisible, chokeRectSize.width, chokeRectSize.height);
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateHookReticle) {
             var hookVisible = !!debugVisualsOn && (slot1Ability === 'hook' || slot2Ability === 'hook');
@@ -1965,6 +2010,8 @@
     }
 
     function boot() {
+        scheduleMenuBootRelease();
+
         function safeInit() {
             try {
                 initGame();

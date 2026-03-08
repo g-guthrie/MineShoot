@@ -118,17 +118,6 @@ export function castChoke(room, player, cfg, msg, now) {
   if (!target) return { ok: false };
   if (!targetWithinAimTolerance(room, player, target, msg, cfg)) return { ok: false };
 
-  const castOut = applyDamageFromSource(player, target, cfg.castDamage || 95, {
-    hitType: 'body',
-    sourceKind: 'ability',
-    applyOutgoing: false
-  });
-  if (castOut) {
-    broadcastDamageEvent(room, player.id, target, castOut, 'body');
-    if (castOut.killed) {
-      broadcastDeathRespawn(room, target);
-    }
-  }
   room.applyTimedStun(target, cfg.duration || 1.6);
   target.chokeVictimState = {
     sourceId: player.id,
@@ -149,19 +138,19 @@ export function castChoke(room, player, cfg, msg, now) {
 }
 
 export function castDeadeye(room, player, cfg, _msg, now) {
-  const maxTargets = Math.max(1, Math.round(cfg.maxTargets || 3));
-  const picks = room.deadeyeCandidates(player, cfg.range || 80, cfg.minDot || 0.18, maxTargets);
+  const maxTargets = Math.max(1, Math.round(cfg.maxTargets || 2));
+  const picks = room.deadeyeCandidates(player, cfg.range || 70, cfg.minDot || 0.22, maxTargets);
   if (picks.length === 0) return { ok: false };
   player.deadeye = buildDeadeyeState(cfg, picks, now);
-  player.deadeye.range = Number(cfg.range || 80);
-  player.deadeye.minDot = Number(cfg.minDot || 0.18);
+  player.deadeye.range = Number(cfg.range || 70);
+  player.deadeye.minDot = Number(cfg.minDot || 0.22);
   return { ok: true, kind: 'ability_deadeye_start', payload: { targetCount: picks.length } };
 }
 
 export function castHook(room, player, cfg, _msg, now) {
   const forward = room.entityForward(player);
   const startPos = room.entityCorePosition(player);
-  const range = Math.max(1, Number(cfg.range || 26));
+  const range = Math.max(1, Number(cfg.range || 24));
   const endPos = {
     x: startPos.x + (forward.x * range),
     y: startPos.y + (forward.y * range),
@@ -175,11 +164,11 @@ export function castHook(room, player, cfg, _msg, now) {
     startPos,
     endPos,
     headPos: startPos,
-    catchRadius: Number(cfg.catchRadius || 1.8),
+    catchRadius: Number(cfg.catchRadius || 1.6),
     pullDistance: Number(cfg.pullDistance || 3.2),
-    stunDuration: Number(cfg.stunDuration || 0.7),
-    castDamage: Number(cfg.castDamage || 40),
-    travelSpeed: Number(cfg.travelSpeed || 26),
+    stunDuration: Number(cfg.stunDuration || 0.5),
+    castDamage: Number(cfg.castDamage || 35),
+    travelSpeed: Number(cfg.travelSpeed || 24),
     startedAt: now,
     hitAt: now + travelMs,
     endsAt: now + travelMs
@@ -188,11 +177,11 @@ export function castHook(room, player, cfg, _msg, now) {
 }
 
 export function castHeal(_room, player, cfg, _msg, now) {
-  player.hp = Math.min(player.hpMax, player.hp + Math.max(1, Math.round(Number(cfg.healAmount || 100))));
   player.healState = {
     startedAt: now,
-    endsAt: now + 220,
-    healAmount: Math.max(1, Math.round(Number(cfg.healAmount || 100)))
+    endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
+    healAmount: Math.max(1, Math.round(Number(cfg.healAmount || 150))),
+    applied: false
   };
   return { ok: true, kind: 'ability_heal_start' };
 }
@@ -235,15 +224,17 @@ export function handleClassCast(room, player, msg, ws) {
     return;
   }
 
-  const cooldownKey = slot === 1 ? 'abilityCooldownUntil' : 'ultimateCooldownUntil';
-  if (now < (player[cooldownKey] || 0)) {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: slot === 1 ? 'ability_cooldown' : 'ultimate_cooldown' });
+  const sharedCooldownUntil = Math.max(player.abilityCooldownUntil || 0, player.ultimateCooldownUntil || 0);
+  if (now < sharedCooldownUntil) {
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'ability_cooldown' });
     return;
   }
 
   const result = castAbility(room, player, abilityId, cfg, msg, now);
   if (result.ok) {
-    player[cooldownKey] = now + Math.max(0, cfg.cooldownMs || 0);
+    const cooldownUntil = now + Math.max(0, cfg.cooldownMs || 0);
+    player.abilityCooldownUntil = cooldownUntil;
+    player.ultimateCooldownUntil = cooldownUntil;
     room.send(ws, {
       t: MSG_S2C.CLASS_CAST_OK,
       slot,
@@ -333,7 +324,7 @@ export function tickClassAbilityState(room, entity) {
             broadcastDeathRespawn(room, target);
           }
         }
-        room.pullEntityToward(entity, target, state.pullDistance || 3.2, state.travelSpeed || 26);
+        room.pullEntityToward(entity, target, state.pullDistance || 3.2, state.travelSpeed || 24);
         state.phase = 'latched';
         state.targetId = target.id;
         state.headPos = room.entityAimTargetPosition(target);
@@ -349,6 +340,10 @@ export function tickClassAbilityState(room, entity) {
   if (entity.healState) {
     const state = entity.healState;
     if (now >= (state.endsAt || 0)) {
+      if (!state.applied) {
+        entity.hp = Math.min(entity.hpMax, entity.hp + Math.max(1, Math.round(Number(state.healAmount || 150))));
+        state.applied = true;
+      }
       entity.healState = null;
     }
   }
@@ -358,7 +353,7 @@ export function tickClassAbilityState(room, entity) {
     if (!d.queue || !d.queue.length) {
       entity.deadeye = null;
     } else {
-      d.queue = d.queue.filter((targetId) => !!room.resolveLockedHostile(entity, targetId, d.range || 80, d.minDot || 0.18));
+      d.queue = d.queue.filter((targetId) => !!room.resolveLockedHostile(entity, targetId, d.range || 70, d.minDot || 0.22));
       d.lockIndex = Math.min(d.queue.length, Number(d.lockIndex || 0));
       if (!d.queue.length) {
         entity.deadeye = null;

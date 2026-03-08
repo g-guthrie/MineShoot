@@ -58,6 +58,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     var animatedLeaves = [];
     var animatedIceShimmers = [];
     var animatedFlickers = [];
+    var animatedClouds = [];
     var animClock = 0;
 
     // --- Ground color per biome ---
@@ -264,6 +265,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         animatedLeaves = [];
         animatedIceShimmers = [];
         animatedFlickers = [];
+        animatedClouds = [];
         animClock = 0;
 
         generationStats = {
@@ -517,6 +519,95 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         // --- Sky & atmosphere ---
         scene.background = new THREE.Color(0x6a9bc2);
         scene.fog = new THREE.Fog(0x7eaec8, WORLD_SIZE * 0.5, WORLD_SIZE * 1.4);
+
+        (function buildBlockClouds() {
+            var cloudMat = matLib.getLambert({ color: 0xf5fbff });
+            var BLOCK_W = 3.2;
+            var BLOCK_H = 1.6;
+            var BLOCK_D = 3.2;
+
+            function addCloudCluster(cx, cy, cz, cells, driftSpeed, driftPhase) {
+                var root = new THREE.Group();
+                root.position.set(cx, cy, cz);
+                root.userData.baseX = cx;
+                root.userData.baseZ = cz;
+                scene.add(root);
+
+                for (var i = 0; i < cells.length; i++) {
+                    var cell = cells[i];
+                    var block = new THREE.Mesh(
+                        new THREE.BoxGeometry(
+                            (cell.w || 1) * BLOCK_W,
+                            (cell.h || 1) * BLOCK_H,
+                            (cell.d || 1) * BLOCK_D
+                        ),
+                        cloudMat
+                    );
+                    block.position.set(
+                        (cell.x || 0) * BLOCK_W,
+                        (cell.y || 0) * BLOCK_H,
+                        (cell.z || 0) * BLOCK_D
+                    );
+                    block.castShadow = false;
+                    block.receiveShadow = false;
+                    root.add(block);
+                }
+
+                animatedClouds.push({
+                    root: root,
+                    baseX: cx,
+                    baseZ: cz,
+                    driftSpeed: driftSpeed,
+                    driftPhase: driftPhase
+                });
+            }
+
+            addCloudCluster(18, 33.6, 22, [
+                { x: 0,  y: 0, z: 0, w: 4, d: 2 },
+                { x: -2, y: 0, z: 0, w: 2, d: 2 },
+                { x: 2,  y: 0, z: 0, w: 2, d: 1 },
+                { x: -1, y: 1, z: 0, w: 2, d: 1 },
+                { x: 1,  y: 1, z: 0, w: 1, d: 1 },
+                { x: 0,  y: -1,z: 1, w: 2, d: 1 }
+            ], 0.55, 0.2);
+
+            addCloudCluster(74, 37.2, 18, [
+                { x: 0,  y: 0, z: 0, w: 5, d: 2 },
+                { x: -3, y: 0, z: 0, w: 2, d: 1 },
+                { x: 3,  y: 0, z: 0, w: 2, d: 2 },
+                { x: -1, y: 1, z: 0, w: 3, d: 1 },
+                { x: 1,  y: 1, z: -1,w: 2, d: 1 },
+                { x: 0,  y: -1,z: 1, w: 2, d: 1 }
+            ], 0.38, 1.3);
+
+            addCloudCluster(96, 32.4, 70, [
+                { x: 0,  y: 0, z: 0, w: 3, d: 2 },
+                { x: -2, y: 0, z: 0, w: 1, d: 1 },
+                { x: 2,  y: 0, z: 0, w: 1, d: 1 },
+                { x: 0,  y: 1, z: 0, w: 1, d: 1 }
+            ], 0.62, 2.1);
+
+            addCloudCluster(40, 40.8, 88, [
+                { x: 0,  y: 0, z: 0, w: 6, d: 2 },
+                { x: -4, y: 0, z: 0, w: 2, d: 2 },
+                { x: 4,  y: 0, z: 0, w: 2, d: 1 },
+                { x: -1, y: 1, z: 0, w: 4, d: 1 },
+                { x: 2,  y: 1, z: -1,w: 2, d: 1 },
+                { x: 0,  y: -1,z: 1, w: 3, d: 1 }
+            ], 0.29, 0.9);
+
+            addCloudCluster(12, 36.0, 92, [
+                { x: 0,  y: 0, z: 0, w: 3, d: 1 },
+                { x: -2, y: 0, z: 0, w: 1, d: 1 },
+                { x: 1,  y: 1, z: 0, w: 1, d: 1 }
+            ], 0.48, 2.8);
+
+            addCloudCluster(58, 31.2, 54, [
+                { x: 0,  y: 0, z: 0, w: 2, d: 1 },
+                { x: -1, y: 0, z: 0, w: 1, d: 1 },
+                { x: 1,  y: 1, z: 0, w: 1, d: 1 }
+            ], 0.71, 1.7);
+        })();
     };
 
     // ---------------------------------------------------------------
@@ -579,6 +670,13 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             if (!flk || !flk.material) continue;
             var v = 0.7 + Math.sin((animClock * flk.freq) + flk.phase) * 0.3;
             flk.material.emissiveIntensity = v;
+        }
+
+        for (var ci = 0; ci < animatedClouds.length; ci++) {
+            var cloud = animatedClouds[ci];
+            if (!cloud || !cloud.root) continue;
+            cloud.root.position.x = cloud.baseX + Math.sin((animClock * cloud.driftSpeed) + cloud.driftPhase) * 3.2;
+            cloud.root.position.z = cloud.baseZ + Math.cos((animClock * cloud.driftSpeed * 0.7) + cloud.driftPhase) * 1.6;
         }
     };
 
