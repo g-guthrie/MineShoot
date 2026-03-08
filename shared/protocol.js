@@ -6,6 +6,10 @@ export const AUTH_PATH = {
   login: '/api/auth/login',
   logout: '/api/auth/logout'
 };
+export const PROFILE_PATH = {
+  me: '/api/profile/me',
+  public: '/api/profile'
+};
 
 export const WORLD_DEFAULTS = {
   profileVersion: 6,
@@ -63,6 +67,7 @@ export const protocol = {
   wsPath: WS_PATH,
   matchmakingPath: MATCHMAKING_PATH,
   authPath: AUTH_PATH,
+  profilePath: PROFILE_PATH,
   msg: {
     c2s: MSG_C2S,
     s2c: MSG_S2C

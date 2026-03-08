@@ -27,7 +27,7 @@
     var armedThrowableType = '';
     var netShotCounter = 0;
     var MENU_LOADOUT_DEFAULT = ['machinegun', 'shotgun'];
-    var MENU_LOADOUT_ALLOWED = ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper', 'seekergun'];
+    var MENU_LOADOUT_ALLOWED = ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'];
     var menuWeaponSlots = MENU_LOADOUT_DEFAULT.slice();
     var menuActiveSlot = 0;
     var runtimeInitialized = false;
@@ -349,6 +349,12 @@
         }, ms || 1000);
     }
 
+    function isLocalActionLocked() {
+        return !!(globalThis.__MAYHEM_RUNTIME.GamePlayer &&
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.isActionLocked &&
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.isActionLocked());
+    }
+
     function hasInputCapture() {
         return !!renderer && document.pointerLockElement === renderer.domElement;
     }
@@ -445,8 +451,7 @@
             pistol: 'Pistol',
             machinegun: 'Machine Gun',
             shotgun: 'Shotgun',
-            sniper: 'Sniper',
-            seekergun: 'Seeker'
+            sniper: 'Sniper'
         };
         if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
             var catalog = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog() || [];
@@ -531,6 +536,22 @@
         }
         weaponChoiceGrid.__menuLoadoutBound = true;
 
+        function assignWeaponToSlot(activeSlot, weaponId) {
+            var nextSlots = syncMenuWeaponSlotsToRuntime();
+            var selectedId = String(weaponId || '');
+            var active = activeSlot === 1 ? 1 : 0;
+            var other = active === 0 ? 1 : 0;
+            if (!selectedId) return false;
+            if (nextSlots[active] === selectedId) return false;
+            if (nextSlots[other] === selectedId) {
+                nextSlots[other] = '';
+            }
+            nextSlots[active] = selectedId;
+            menuWeaponSlots = nextSlots.slice(0, 2);
+            syncMenuWeaponSlotsToRuntime();
+            return true;
+        }
+
         function render() {
             var slots = syncMenuWeaponSlotsToRuntime();
             var names = weaponNameLookup();
@@ -562,15 +583,7 @@
                 choice.addEventListener('click', function () {
                     var selectedId = String(this.dataset.weaponId || '');
                     if (!selectedId) return;
-                    var active = menuActiveSlot;
-                    var other = active === 0 ? 1 : 0;
-                    if (slots[active] === selectedId) return;
-                    if (slots[other] === selectedId) {
-                        slots[other] = '';
-                    }
-                    slots[active] = selectedId;
-                    menuWeaponSlots = slots.slice(0, 2);
-                    syncMenuWeaponSlotsToRuntime();
+                    if (!assignWeaponToSlot(menuActiveSlot, selectedId)) return;
                     if (runtimeInitialized && globalThis.__MAYHEM_RUNTIME.GameHitscan) {
                         applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(selectedId));
                     }
@@ -658,6 +671,16 @@
         var GA = globalThis.__MAYHEM_RUNTIME.GameAbilities;
         if (!GA || !GA.getCatalog || !GA.getLoadout || !GA.setLoadoutSlot) return;
 
+        function assignAbilityToSlot(slotIndex, abilityId) {
+            var loadout = GA.getLoadout() || {};
+            var ownKey = slotIndex === 2 ? 'slot2' : 'slot1';
+            if (String(loadout[ownKey] || '') === String(abilityId || '')) {
+                return false;
+            }
+            GA.setLoadoutSlot(slotIndex, abilityId);
+            return true;
+        }
+
         function render() {
             var catalog = GA.getCatalog();
             var loadout = GA.getLoadout();
@@ -677,8 +700,7 @@
                     if (def.id === blockedId) btn.classList.add('owned-other');
                     btn.addEventListener('click', function () {
                         var id = this.dataset.abilityId;
-                        if (selectedId === id) return;
-                        GA.setLoadoutSlot(slotIndex, id);
+                        if (!assignAbilityToSlot(slotIndex, id)) return;
                         if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
                             var updated = GA.getLoadout();
                             globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(updated.slot1, updated.slot2);
@@ -726,7 +748,11 @@
         var isShotgun = !!(currentWeapon && currentWeapon.id === 'shotgun');
         var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!result.killed });
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('bulletImpact', {
+                killed: !!result.killed,
+                hitType: hitType,
+                weapon: currentWeapon && currentWeapon.id ? currentWeapon.id : ''
+            });
         }
         if (result.killed) {
             globalThis.__MAYHEM_RUNTIME.GameUI.showKillMarker();
@@ -744,7 +770,11 @@
         var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
 
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('enemyHit', { killed: !!feedback.killed });
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('bulletImpact', {
+                killed: !!feedback.killed,
+                hitType: feedback.hitType || 'body',
+                weapon: feedback.weaponId || ''
+            });
         }
         if (feedback.killed) {
             globalThis.__MAYHEM_RUNTIME.GameUI.showKillMarker();
@@ -767,6 +797,7 @@
     }
 
     function tryPlayerFire() {
+        if (isLocalActionLocked()) return;
         if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet) {
             var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState ? globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState() : null;
             var respawnState = globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState ? globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState() : null;
@@ -1127,6 +1158,7 @@
     }
 
     function tryThrow(type, throwIntentOverride) {
+        if (isLocalActionLocked()) return null;
         if (!hasInputCapture()) return null;
         var throwIntent = throwIntentOverride || ((globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.buildThrowIntent)
             ? globalThis.__MAYHEM_RUNTIME.GameThrowables.buildThrowIntent(camera)
@@ -1160,6 +1192,7 @@
             if (e.repeat) return;
             if (e.code !== 'KeyQ') return;
             if (!hasInputCapture()) return;
+            if (isLocalActionLocked()) return;
 
             var GT = globalThis.__MAYHEM_RUNTIME.GameThrowables;
             if (!GT || !GT.getSelectedThrowable) return;
@@ -1181,6 +1214,10 @@
         document.addEventListener('keyup', function (e) {
             if (e.code !== 'KeyQ') return;
             if (!throwableHeldType) return;
+            if (isLocalActionLocked()) {
+                clearArmedThrowablePreview();
+                return;
+            }
 
             var type = throwableHeldType;
             var intent = (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.buildThrowIntent)
@@ -1194,6 +1231,7 @@
     function setupAbilityControls() {
         function triggerAbility(slotIndex) {
             if (!hasInputCapture()) return;
+            if (isLocalActionLocked()) return;
 
             if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet &&
                 (globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityCast || globalThis.__MAYHEM_RUNTIME.GameNet.sendClassCast)) {
@@ -1457,15 +1495,19 @@
                 if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual) {
                     globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual(selfState.alive !== false);
                 }
-                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setExternalLift) {
-                    var selfChokeVictimState = { lift: 0, startedAt: 0 };
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState) {
+                    var selfChokeVictimState = { lift: 0, startedAt: 0, endsAt: 0 };
                     if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity && selfState.id) {
                         selfChokeVictimState = globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity(selfState.id) || selfChokeVictimState;
                     }
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setExternalLift(Number(selfChokeVictimState.lift || 0));
-                    if (globalThis.__MAYHEM_RUNTIME.GamePlayer.setChokeVictimState) {
-                        globalThis.__MAYHEM_RUNTIME.GamePlayer.setChokeVictimState(selfChokeVictimState);
-                    }
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState({
+                        stunUntil: Number(selfState.stunUntil || 0),
+                        hookPullUntil: selfState.hookPullState ? Number(selfState.hookPullState.endsAt || 0) : 0,
+                        chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
+                        chokeUntil: Number(selfChokeVictimState.endsAt || 0),
+                        chokeLift: Number(selfChokeVictimState.lift || 0),
+                        spawnShieldUntil: Number(selfState.spawnShieldUntil || 0)
+                    });
                 }
                 if (
                     selfState.hookPullState &&
@@ -1689,16 +1731,17 @@
             }
             globalThis.__MAYHEM_RUNTIME.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
         }
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setSpawnShield) {
-            var spawnShieldActive = false;
-            if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
-                var netSpawnState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
-                spawnShieldActive = !!(netSpawnState && netSpawnState.spawnShieldUntil && netSpawnState.spawnShieldUntil > Date.now());
-            }
-            if (!spawnShieldActive && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable) {
-                spawnShieldActive = globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable();
-            }
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.setSpawnShield(spawnShieldActive);
+        if (!multiplayerMode && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState({
+                stunUntil: 0,
+                hookPullUntil: 0,
+                chokeStartedAt: 0,
+                chokeUntil: 0,
+                chokeLift: 0,
+                spawnShieldUntil: (globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable())
+                    ? (Date.now() + 120)
+                    : 0
+            });
         }
 
         var abilityLoadoutState = currentAbilityLoadoutState();
@@ -1938,6 +1981,7 @@
         }
 
         var runtime = runtimeProfile();
+        var authApi = globalThis.__MAYHEM_RUNTIME.GameNetAuth || null;
         var modeButtonsWrap = document.getElementById('mode-buttons');
         var altModeToggle = document.getElementById('alt-mode-toggle');
         var controlsMenu = document.getElementById('controls-menu');
@@ -1962,10 +2006,14 @@
         var altModesOpen = false;
         var controlsOpen = false;
         var roomActionInFlight = false;
+        var startPending = false;
         setRuntimeIndicator(null);
         setupMenuWeaponLoadout();
         setupMenuThrowableLoadout();
         setupMenuAbilityLoadout();
+        if (authApi && authApi.initMenuAuth) {
+            authApi.initMenuAuth();
+        }
 
         function setRoomAccessStatus(text, isErr) {
             if (!roomAccessStatus) return;
@@ -2052,107 +2100,129 @@
 
         function startWithMode(modeId, options) {
             options = options || {};
-            if (started) return;
+            if (started || startPending) return;
             var selectedMode = runtime && runtime.selectMode ? runtime.selectMode(modeId) : activeModeById(modeId);
             if (!selectedMode) return;
-            if (options.roomId) {
-                selectedMode.roomId = String(options.roomId);
-            }
-            if (options.gameMode) {
-                selectedMode.gameMode = String(options.gameMode);
-            }
-            if (selectedMode.id === 'single_cloudflare' && isShareCodeRoomId(selectedMode.roomId)) {
-                setPrivateRoomShare(selectedMode.roomId);
-            } else {
-                setPrivateRoomShare('');
-            }
+            startPending = true;
 
-            started = true;
-            activeRuntimeMode = selectedMode;
+            function proceedStart() {
+                if (!startPending || started) return;
+                startPending = false;
 
-            if (modeButtonsWrap) modeButtonsWrap.hidden = true;
-            if (controlsMenu) controlsMenu.hidden = true;
-            if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
-            if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
-            if (sandboxPlayBtn) sandboxPlayBtn.style.display = 'none';
-            if (createPrivateRoomBtn) createPrivateRoomBtn.style.display = 'none';
-            if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
-            if (privateRoomInput) privateRoomInput.style.display = 'none';
-            if (playBtn) playBtn.style.display = 'none';
-            if (backModeBtn) backModeBtn.style.display = 'none';
-            disableModeButtons();
-            if (modeSubtitle) {
-                modeSubtitle.textContent = options.subtitle || startupSubtitleForMode(selectedMode);
-            }
-            setRuntimeIndicator(selectedMode);
+                if (options.roomId) {
+                    selectedMode.roomId = String(options.roomId);
+                }
+                if (options.gameMode) {
+                    selectedMode.gameMode = String(options.gameMode);
+                }
+                if (selectedMode.id === 'single_cloudflare' && isShareCodeRoomId(selectedMode.roomId)) {
+                    setPrivateRoomShare(selectedMode.roomId);
+                } else {
+                    setPrivateRoomShare('');
+                }
 
-            autoStartNoLock = true;
+                started = true;
+                activeRuntimeMode = selectedMode;
 
-            if (selectedMode.authorityMode === 'networked') {
-                forceGuestNetMode = true;
-                forcedRoomId = selectedMode.roomId || 'global';
-                if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode) {
-                    globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode();
-                }
-                if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                    globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
-                }
-                startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
-            } else {
-                forceGuestNetMode = false;
-                forcedRoomId = 'global';
-                if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                    globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
-                }
-                startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
-            }
-
-            syncMenuWeaponSlotsToRuntime();
-            if (!safeInit()) {
-                started = false;
-                activeRuntimeMode = null;
-                autoStartNoLock = false;
-                startupDebugNotice = '';
-                forceGuestNetMode = false;
-                forcedRoomId = 'global';
-                if (runtime && runtime.clearSelectedMode) {
-                    runtime.clearSelectedMode();
-                }
-                if (primaryPlayBtn) {
-                    primaryPlayBtn.disabled = false;
-                    primaryPlayBtn.style.display = '';
-                }
-                if (tdmPlayBtn) {
-                    tdmPlayBtn.disabled = false;
-                    tdmPlayBtn.style.display = '';
-                }
-                if (sandboxPlayBtn) {
-                    sandboxPlayBtn.disabled = false;
-                    sandboxPlayBtn.style.display = '';
-                }
-                if (createPrivateRoomBtn) {
-                    createPrivateRoomBtn.disabled = false;
-                    createPrivateRoomBtn.style.display = '';
-                }
-                if (joinPrivateRoomBtn) {
-                    joinPrivateRoomBtn.disabled = false;
-                    joinPrivateRoomBtn.style.display = '';
-                }
-                if (privateRoomInput) {
-                    privateRoomInput.disabled = false;
-                    privateRoomInput.style.display = '';
-                }
-                if (altModeToggle) altModeToggle.disabled = false;
-                if (controlsToggle) controlsToggle.disabled = false;
-                if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-                if (controlsMenu) controlsMenu.hidden = !controlsOpen;
+                if (modeButtonsWrap) modeButtonsWrap.hidden = true;
+                if (controlsMenu) controlsMenu.hidden = true;
+                if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
+                if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
+                if (sandboxPlayBtn) sandboxPlayBtn.style.display = 'none';
+                if (createPrivateRoomBtn) createPrivateRoomBtn.style.display = 'none';
+                if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
+                if (privateRoomInput) privateRoomInput.style.display = 'none';
                 if (playBtn) playBtn.style.display = 'none';
                 if (backModeBtn) backModeBtn.style.display = 'none';
-                if (modeSubtitle) modeSubtitle.textContent = '';
-                setRuntimeIndicator(null);
-                setPrivateRoomShare('');
-                syncModeButtonVisibility();
+                disableModeButtons();
+                if (modeSubtitle) {
+                    modeSubtitle.textContent = options.subtitle || startupSubtitleForMode(selectedMode);
+                }
+                setRuntimeIndicator(selectedMode);
+
+                autoStartNoLock = true;
+
+                if (selectedMode.authorityMode === 'networked') {
+                    var useGuestIdentity = !(authApi && authApi.isLoggedIn && authApi.isLoggedIn());
+                    forceGuestNetMode = useGuestIdentity;
+                    forcedRoomId = selectedMode.roomId || 'global';
+                    if (useGuestIdentity && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode) {
+                        globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode();
+                    }
+                    if (!useGuestIdentity && authApi && authApi.setAuthVisible) {
+                        authApi.setAuthVisible(false);
+                    }
+                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
+                        globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
+                    }
+                    startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
+                } else {
+                    forceGuestNetMode = false;
+                    forcedRoomId = 'global';
+                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
+                        globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
+                    }
+                    startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
+                }
+
+                syncMenuWeaponSlotsToRuntime();
+                if (!safeInit()) {
+                    started = false;
+                    activeRuntimeMode = null;
+                    autoStartNoLock = false;
+                    startupDebugNotice = '';
+                    forceGuestNetMode = false;
+                    forcedRoomId = 'global';
+                    if (runtime && runtime.clearSelectedMode) {
+                        runtime.clearSelectedMode();
+                    }
+                    if (primaryPlayBtn) {
+                        primaryPlayBtn.disabled = false;
+                        primaryPlayBtn.style.display = '';
+                    }
+                    if (tdmPlayBtn) {
+                        tdmPlayBtn.disabled = false;
+                        tdmPlayBtn.style.display = '';
+                    }
+                    if (sandboxPlayBtn) {
+                        sandboxPlayBtn.disabled = false;
+                        sandboxPlayBtn.style.display = '';
+                    }
+                    if (createPrivateRoomBtn) {
+                        createPrivateRoomBtn.disabled = false;
+                        createPrivateRoomBtn.style.display = '';
+                    }
+                    if (joinPrivateRoomBtn) {
+                        joinPrivateRoomBtn.disabled = false;
+                        joinPrivateRoomBtn.style.display = '';
+                    }
+                    if (privateRoomInput) {
+                        privateRoomInput.disabled = false;
+                        privateRoomInput.style.display = '';
+                    }
+                    if (altModeToggle) altModeToggle.disabled = false;
+                    if (controlsToggle) controlsToggle.disabled = false;
+                    if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
+                    if (controlsMenu) controlsMenu.hidden = !controlsOpen;
+                    if (playBtn) playBtn.style.display = 'none';
+                    if (backModeBtn) backModeBtn.style.display = 'none';
+                    if (modeSubtitle) modeSubtitle.textContent = '';
+                    setRuntimeIndicator(null);
+                    setPrivateRoomShare('');
+                    syncModeButtonVisibility();
+                }
             }
+
+            if (selectedMode.authorityMode === 'networked' && authApi && authApi.ensureMenuSession) {
+                authApi.ensureMenuSession()
+                    .catch(function () {
+                        return null;
+                    })
+                    .finally(proceedStart);
+                return;
+            }
+
+            proceedStart();
         }
 
         function requestMatchmaking(action, extra) {

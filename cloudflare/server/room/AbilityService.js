@@ -207,6 +207,10 @@ export function castAbility(room, player, abilityId, cfg, msg, now) {
 
 export function handleClassCast(room, player, msg, ws) {
   if (!player || !player.alive) return;
+  if (room && typeof room.isEntityActionLocked === 'function' && room.isEntityActionLocked(player)) {
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', slot: Number(msg && msg.slot || 0), classId: 'abilities' });
+    return;
+  }
   const slot = Number(msg.slot || 0);
   if (slot !== 1 && slot !== 2) return;
   const now = nowMs();

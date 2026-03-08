@@ -1,5 +1,6 @@
 import { handleLogin, handleLogout, handleMe } from './server/auth.js';
 import { handleMatchmaking } from './server/matchmaking.js';
+import { handleProfileMe, handleProfileUpdate, handlePublicProfile } from './server/profile.js';
 import { handleWsUpgrade } from './server/ws-upgrade.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
 import { getSharedTuningWu } from './lib/shared-tuning.js';
@@ -8,6 +9,7 @@ import { getSharedProtocol } from './lib/shared-protocol.js';
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const SHARED_PROTOCOL = getSharedProtocol();
 const AUTH_PATH = SHARED_PROTOCOL.authPath || {};
+const PROFILE_PATH = SHARED_PROTOCOL.profilePath || {};
 const WS_PATH = SHARED_PROTOCOL.wsPath || '/api/ws';
 const MATCHMAKING_PATH = SHARED_PROTOCOL.matchmakingPath || '/api/matchmaking';
 
@@ -29,6 +31,18 @@ export default {
 
     if (request.method === 'GET' && url.pathname === (AUTH_PATH.me || '/api/me')) {
       return handleMe(env, request);
+    }
+
+    if (request.method === 'GET' && url.pathname === (PROFILE_PATH.me || '/api/profile/me')) {
+      return handleProfileMe(env, request);
+    }
+
+    if (request.method === 'PATCH' && url.pathname === (PROFILE_PATH.me || '/api/profile/me')) {
+      return handleProfileUpdate(env, request);
+    }
+
+    if (request.method === 'GET' && url.pathname === (PROFILE_PATH.public || '/api/profile')) {
+      return handlePublicProfile(env, request);
     }
 
     if (request.method === 'POST' && url.pathname === MATCHMAKING_PATH) {

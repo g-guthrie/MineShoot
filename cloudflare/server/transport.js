@@ -26,7 +26,10 @@ export function validPin(pin) {
 }
 
 export function validUsername(username) {
-  return /^[a-zA-Z0-9_]{3,20}$/.test(String(username || '').trim());
+  const value = String(username || '').trim();
+  if (!value) return false;
+  if (value.length > 64) return false;
+  return !/[\u0000-\u001f\u007f]/.test(value);
 }
 
 export function randomId(prefix) {

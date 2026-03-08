@@ -962,8 +962,10 @@ export class GlobalArenaRoom extends DurableObject {
     const now = nowMs();
     const stunned = (player.stunUntil || 0) > now;
     const hookPulling = !!player.hookPullState;
+    const choked = this.isEntityChoked(player, now);
+    const actionLocked = stunned || hookPulling || choked;
     let slowMult = 1;
-    if (!stunned && !hookPulling) {
+    if (!actionLocked) {
       slowMult = (player.slowUntil || 0) > now
         ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
         : 1;
@@ -981,11 +983,11 @@ export class GlobalArenaRoom extends DurableObject {
         player.y = player.y + ((targetY - player.y) * slowMult);
       }
     }
-    if (!hookPulling && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (!hookPulling && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
+    if (!actionLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
+    if (!actionLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
     if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
-    if (!stunned && !hookPulling) {
+    if (!actionLocked) {
       if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
       if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
       if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
@@ -1017,6 +1019,15 @@ export class GlobalArenaRoom extends DurableObject {
     if (!entity || !entity.alive) return false;
     if (sourceId && entity.id === sourceId) return false;
     return !this.isEntitySpawnShielded(entity);
+  }
+
+  isEntityChoked(entity, now = nowMs()) {
+    return !!(entity && entity.alive && entity.chokeVictimState && (entity.chokeVictimState.endsAt || 0) > now);
+  }
+
+  isEntityActionLocked(entity, now = nowMs()) {
+    if (!entity || !entity.alive) return false;
+    return ((entity.stunUntil || 0) > now) || !!entity.hookPullState || this.isEntityChoked(entity, now);
   }
 
   entityAimTargetPosition(entity) {
@@ -1146,6 +1157,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleFire(player, msg) {
     if (!player || !player.alive) return;
+    if (this.isEntityActionLocked(player)) return;
     if (player.deadeye) return;
 
     const weaponId = String(msg.weaponId || 'rifle');
@@ -1370,6 +1382,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleThrow(player, msg, ws) {
     if (!player || !player.alive) return;
+    if (this.isEntityActionLocked(player)) return;
     const throwableId = String(msg.throwableId || '');
     const clientThrowId = String(msg.clientThrowId || '');
     const def = THROWABLE_STATS[throwableId];

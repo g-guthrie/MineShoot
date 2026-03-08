@@ -39,7 +39,7 @@
     var revealDir = new THREE.Vector3();
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
-    var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun'];
+    var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
 
     function getCurrentWallhackRadius() {
         if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive() && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
@@ -61,23 +61,27 @@
     function getPatrolBounds() {
         var bounds = getWorldBounds();
         return {
-            min: bounds.min + 1,
-            max: bounds.max - 1
+            minX: (typeof bounds.minX === 'number' ? bounds.minX : bounds.min) + 1,
+            maxX: (typeof bounds.maxX === 'number' ? bounds.maxX : bounds.max) - 1,
+            minZ: (typeof bounds.minZ === 'number' ? bounds.minZ : bounds.min) + 1,
+            maxZ: (typeof bounds.maxZ === 'number' ? bounds.maxZ : bounds.max) - 1
         };
     }
 
     function getEnemySpawnPoint() {
         var bounds = getWorldBounds();
-        var min = bounds.min + 4;
-        var max = bounds.max - 4;
+        var minX = (typeof bounds.minX === 'number' ? bounds.minX : bounds.min) + 4;
+        var maxX = (typeof bounds.maxX === 'number' ? bounds.maxX : bounds.max) - 4;
+        var minZ = (typeof bounds.minZ === 'number' ? bounds.minZ : bounds.min) + 4;
+        var maxZ = (typeof bounds.maxZ === 'number' ? bounds.maxZ : bounds.max) - 4;
 
         if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint) {
             return globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(6);
         }
 
         return {
-            x: min + Math.random() * (max - min),
-            z: min + Math.random() * (max - min)
+            x: minX + Math.random() * (maxX - minX),
+            z: minZ + Math.random() * (maxZ - minZ)
         };
     }
 
@@ -188,7 +192,9 @@
             stunTimer: 0,
             slowTimer: 0,
             slowMultiplier: 1,
-            hookPullState: null
+            hookPullState: null,
+            chokeVictimState: null,
+            seekerNeedleState: null
         };
 
         bodyHitbox.userData.enemyRef = enemy;
@@ -243,6 +249,9 @@
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
             enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
+            if (enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now() && enemy.rigApi.applyChokeVictimPose) {
+                enemy.rigApi.applyChokeVictimPose(Date.now(), enemy.chokeVictimState.startedAt);
+            }
         }
     }
 
@@ -257,6 +266,9 @@
                 enemy.slowTimer = 0;
                 enemy.slowMultiplier = 1;
             }
+        }
+        if (enemy.chokeVictimState && enemy.chokeVictimState.endsAt <= Date.now()) {
+            enemy.chokeVictimState = null;
         }
 
         if (sharedDamageMod && sharedDamageMod.tickArmorRegen) {
@@ -287,8 +299,8 @@
             var forwardX = -Math.sin(sourceRot.yaw || 0);
             var forwardZ = -Math.cos(sourceRot.yaw || 0);
             var patrolBounds = getPatrolBounds();
-            var desiredX = Math.max(patrolBounds.min, Math.min(patrolBounds.max, sourcePos.x + (forwardX * targetDist)));
-            var desiredZ = Math.max(patrolBounds.min, Math.min(patrolBounds.max, sourcePos.z + (forwardZ * targetDist)));
+            var desiredX = Math.max(patrolBounds.minX, Math.min(patrolBounds.maxX, sourcePos.x + (forwardX * targetDist)));
+            var desiredZ = Math.max(patrolBounds.minZ, Math.min(patrolBounds.maxZ, sourcePos.z + (forwardZ * targetDist)));
             var toX = desiredX - enemy.group.position.x;
             var toZ = desiredZ - enemy.group.position.z;
             var dist = Math.sqrt((toX * toX) + (toZ * toZ));
@@ -322,10 +334,10 @@
             enemy.moveSpeed = enemy.wanderSpeed * slowScale;
 
             var patrolBounds = getPatrolBounds();
-            if (pos.x < patrolBounds.min) { pos.x = patrolBounds.min; enemy.wanderDir.x = Math.abs(enemy.wanderDir.x); }
-            if (pos.x > patrolBounds.max) { pos.x = patrolBounds.max; enemy.wanderDir.x = -Math.abs(enemy.wanderDir.x); }
-            if (pos.z < patrolBounds.min) { pos.z = patrolBounds.min; enemy.wanderDir.z = Math.abs(enemy.wanderDir.z); }
-            if (pos.z > patrolBounds.max) { pos.z = patrolBounds.max; enemy.wanderDir.z = -Math.abs(enemy.wanderDir.z); }
+            if (pos.x < patrolBounds.minX) { pos.x = patrolBounds.minX; enemy.wanderDir.x = Math.abs(enemy.wanderDir.x); }
+            if (pos.x > patrolBounds.maxX) { pos.x = patrolBounds.maxX; enemy.wanderDir.x = -Math.abs(enemy.wanderDir.x); }
+            if (pos.z < patrolBounds.minZ) { pos.z = patrolBounds.minZ; enemy.wanderDir.z = Math.abs(enemy.wanderDir.z); }
+            if (pos.z > patrolBounds.maxZ) { pos.z = patrolBounds.maxZ; enemy.wanderDir.z = -Math.abs(enemy.wanderDir.z); }
 
             var facing = Math.atan2(enemy.wanderDir.x, enemy.wanderDir.z) + Math.PI;
             enemy.visual.rotation.y = facing;
@@ -537,6 +549,7 @@
                 updateStatusTimers(enemy, dt);
                 updateAI(enemy, dt);
                 var engaging = updateCombat(enemy, dt, playerPos, onPlayerHit);
+                enemy.group.position.y = enemy.chokeVictimState ? Number(enemy.chokeVictimState.liftHeight || 1.0) : 0;
                 updateEnemyAnimation(enemy, dt, engaging);
                 updateRevealGhost(enemy, playerPos, camera, dt);
                 updateFlash(enemy, dt);
@@ -604,10 +617,12 @@
         enemy.muzzleFlashTimer = 0;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
+        enemy.chokeVictimState = null;
 
         removeHitboxes(enemy);
 
         enemy.respawnTimer = 5.0;
+        enemy.seekerNeedleState = null;
     };
 
     GameEnemy.respawn = function (enemy) {
@@ -636,6 +651,8 @@
         enemy.slowTimer = 0;
         enemy.slowMultiplier = 1;
         enemy.hookPullState = null;
+        enemy.chokeVictimState = null;
+        enemy.seekerNeedleState = null;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
         resetFireCooldown(enemy);
