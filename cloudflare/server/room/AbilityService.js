@@ -15,6 +15,44 @@ const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { sl
 const SHARED_PROTOCOL = getSharedProtocol();
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 
+function hookHeadPosition(state, now) {
+  if (!state || !state.startPos || !state.endPos) return null;
+  const startAt = Number(state.startedAt || 0);
+  const hitAt = Math.max(startAt + 1, Number(state.hitAt || startAt + 1));
+  const t = Math.max(0, Math.min(1, (Number(now || nowMs()) - startAt) / (hitAt - startAt)));
+  return {
+    x: state.startPos.x + ((state.endPos.x - state.startPos.x) * t),
+    y: state.startPos.y + ((state.endPos.y - state.startPos.y) * t),
+    z: state.startPos.z + ((state.endPos.z - state.startPos.z) * t)
+  };
+}
+
+function distanceSq3(a, b) {
+  if (!a || !b) return Infinity;
+  const dx = Number(a.x || 0) - Number(b.x || 0);
+  const dy = Number(a.y || 0) - Number(b.y || 0);
+  const dz = Number(a.z || 0) - Number(b.z || 0);
+  return (dx * dx) + (dy * dy) + (dz * dz);
+}
+
+function closestHostileToHookPoint(room, player, point, catchRadius) {
+  if (!room || !player || !point) return null;
+  const maxDistSq = Math.max(0.01, Number(catchRadius || 1.8)) ** 2;
+  const entities = room.getAliveEntities();
+  let best = null;
+  let bestDistSq = maxDistSq;
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    if (!entity || !entity.alive || entity.id === player.id) continue;
+    const core = room.entityAimTargetPosition(entity);
+    const distSq = distanceSq3(core, point);
+    if (distSq > bestDistSq) continue;
+    best = entity;
+    bestDistSq = distSq;
+  }
+  return best;
+}
+
 function abilityDef(abilityId) {
   return ABILITY_CATALOG[abilityId] || null;
 }
@@ -104,8 +142,49 @@ export function castDeadeye(room, player, cfg, _msg, now) {
   return { ok: true, kind: 'ability_deadeye_start', payload: { targetCount: picks.length } };
 }
 
+export function castHook(room, player, cfg, _msg, now) {
+  const forward = room.entityForward(player);
+  const startPos = room.entityCorePosition(player);
+  const range = Math.max(1, Number(cfg.range || 26));
+  const endPos = {
+    x: startPos.x + (forward.x * range),
+    y: startPos.y + (forward.y * range),
+    z: startPos.z + (forward.z * range)
+  };
+  const travelSpeed = Math.max(8, Number(cfg.travelSpeed || 26));
+  const travelMs = Math.max(120, Math.round((range / travelSpeed) * 1000));
+  player.hookState = {
+    phase: 'travel',
+    targetId: '',
+    startPos,
+    endPos,
+    headPos: startPos,
+    catchRadius: Number(cfg.catchRadius || 1.8),
+    pullDistance: Number(cfg.pullDistance || 3.2),
+    stunDuration: Number(cfg.stunDuration || 0.7),
+    castDamage: Number(cfg.castDamage || 40),
+    travelSpeed: Number(cfg.travelSpeed || 26),
+    startedAt: now,
+    hitAt: now + travelMs,
+    endsAt: now + travelMs
+  };
+  return { ok: true, kind: 'ability_hook_start' };
+}
+
+export function castHeal(_room, player, cfg, _msg, now) {
+  player.hp = Math.min(player.hpMax, player.hp + Math.max(1, Math.round(Number(cfg.healAmount || 100))));
+  player.healState = {
+    startedAt: now,
+    endsAt: now + 220,
+    healAmount: Math.max(1, Math.round(Number(cfg.healAmount || 100)))
+  };
+  return { ok: true, kind: 'ability_heal_start' };
+}
+
 export function castAbility(room, player, abilityId, cfg, msg, now) {
   if (abilityId === 'choke') return castChoke(room, player, cfg, msg, now);
+  if (abilityId === 'hook') return castHook(room, player, cfg, msg, now);
+  if (abilityId === 'heal') return castHeal(room, player, cfg, msg, now);
   if (abilityId === 'deadeye') return castDeadeye(room, player, cfg, msg, now);
   return { ok: false };
 }
@@ -166,6 +245,21 @@ export function tickClassAbilityState(room, entity) {
     entity.slowMultiplier = 1;
   }
 
+  if (entity.hookPullState) {
+    const pull = entity.hookPullState;
+    const startAt = Number(pull.startAt || now);
+    const endsAt = Math.max(startAt + 1, Number(pull.endsAt || startAt + 1));
+    const t = Math.max(0, Math.min(1, (now - startAt) / (endsAt - startAt)));
+    entity.x = pull.startX + ((pull.endX - pull.startX) * t);
+    entity.z = pull.startZ + ((pull.endZ - pull.startZ) * t);
+    entity.yaw = Number(pull.facingYaw || entity.yaw || 0);
+    entity.moveSpeedNorm = 0;
+    entity.sprinting = false;
+    if (t >= 1) {
+      entity.hookPullState = null;
+    }
+  }
+
   if (entity.chokeState) {
     const state = entity.chokeState;
     if (!state.targetId || now >= (state.endsAt || 0)) {
@@ -179,6 +273,43 @@ export function tickClassAbilityState(room, entity) {
       if (!target || !target.alive) {
         entity.chokeState = null;
       }
+    }
+  }
+
+  if (entity.hookState) {
+    const state = entity.hookState;
+    if (state.phase === 'travel') {
+      state.headPos = hookHeadPosition(state, now) || state.headPos || state.startPos;
+      const target = closestHostileToHookPoint(room, entity, state.headPos, state.catchRadius);
+      if (target) {
+        const out = applyDamageFromSource(entity, target, state.castDamage || 40, {
+          hitType: 'body',
+          sourceKind: 'ability',
+          applyOutgoing: false
+        });
+        if (out) {
+          broadcastDamageEvent(room, entity.id, target, out, 'body');
+          if (out.killed) {
+            broadcastDeathRespawn(room, target);
+          }
+        }
+        room.pullEntityToward(entity, target, state.pullDistance || 3.2, state.travelSpeed || 26);
+        state.phase = 'latched';
+        state.targetId = target.id;
+        state.headPos = room.entityAimTargetPosition(target);
+        state.endsAt = now + 260;
+      } else if (now >= (state.hitAt || 0)) {
+        entity.hookState = null;
+      }
+    } else if (now >= (state.endsAt || 0)) {
+      entity.hookState = null;
+    }
+  }
+
+  if (entity.healState) {
+    const state = entity.healState;
+    if (now >= (state.endsAt || 0)) {
+      entity.healState = null;
     }
   }
 

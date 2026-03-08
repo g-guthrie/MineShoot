@@ -54,6 +54,22 @@ export function toEntityState(entity) {
       endsAt: entity.chokeState.endsAt || 0,
       liftHeight: entity.chokeState.liftHeight || 1.0
     } : null,
+    hookState: entity.hookState ? {
+      targetId: entity.hookState.targetId || '',
+      phase: entity.hookState.phase || 'travel',
+      startPos: entity.hookState.startPos || null,
+      endPos: entity.hookState.endPos || null,
+      headPos: entity.hookState.headPos || null,
+      catchRadius: entity.hookState.catchRadius || 1.8,
+      startedAt: entity.hookState.startedAt || 0,
+      hitAt: entity.hookState.hitAt || 0,
+      endsAt: entity.hookState.endsAt || 0
+    } : null,
+    healState: entity.healState ? {
+      startedAt: entity.healState.startedAt || 0,
+      endsAt: entity.healState.endsAt || 0,
+      healAmount: entity.healState.healAmount || 100
+    } : null,
     deadeyeState: entity.deadeye ? {
       lockCount: entity.deadeye.lockIndex || 0,
       maxLocks: entity.deadeye.maxLocks || (entity.deadeye.queue ? entity.deadeye.queue.length : 0),

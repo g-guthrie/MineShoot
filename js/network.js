@@ -229,6 +229,25 @@
         };
     }
 
+    function setRemoteHealFlash(render, active) {
+        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
+        var visual = render.actorVisual.visual;
+        var parts = visual.userData && visual.userData.bodyParts ? visual.userData.bodyParts : null;
+        var originalColors = visual.userData && visual.userData.originalPartColors ? visual.userData.originalPartColors : [];
+        if (!parts) return;
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            if (!part || !part.material || !part.material.color) continue;
+            if (active) {
+                part.material.color.setHex(0x6dff9a);
+                if (part.material.emissive) part.material.emissive.setHex(0x163d18);
+            } else {
+                part.material.color.setHex(typeof originalColors[i] === 'number' ? originalColors[i] : 0xffffff);
+                if (part.material.emissive) part.material.emissive.setHex(0x000000);
+            }
+        }
+    }
+
     function handleMessage(raw) {
         var msg = null;
         try {
@@ -625,7 +644,8 @@
                 alive: r.alive,
                 worldPos: r.group.position,
                 headY: 2.45,
-                targetId: 'net:' + r.id
+                targetId: 'net:' + r.id,
+                healState: r.healState || null
             });
         });
         return out;
@@ -710,6 +730,8 @@
                     r.rigApi.applyChokeGripPose(dt);
                 }
             }
+
+            setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
 
             var chokeVictimLift = getChokeLiftForEntity(r.id);
             if (chokeVictimLift > 0) {
@@ -891,6 +913,8 @@
             ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
             abilityLoadout: selfState.abilityLoadout || null,
             chokeState: selfState.chokeState || null,
+            hookState: selfState.hookState || null,
+            healState: selfState.healState || null,
             deadeyeState: selfState.deadeyeState || null
         };
     };

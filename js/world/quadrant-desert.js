@@ -109,12 +109,12 @@
 
     function addDryBush(x, z, place, mats) {
         place.addBlock(x, 0.25, z, 1.2, 0.5, 1.0, mats.dryBush, false);
-        place.addBlock(x + 0.3, 0.35, z - 0.2, 0.6, 0.3, 0.5, mats.dryBushDark, false);
+        place.addBlock(x + 0.3, 0.39, z - 0.2, 0.6, 0.3, 0.5, mats.dryBushDark, false);
     }
 
     function addSmallMesa(x, z, place, mats) {
         place.addBlock(x, 1.0, z, 3.6, 2.0, 3.2, mats.mesa, true);
-        place.addBlock(x, 2.2, z, 4.2, 0.4, 3.8, mats.sandstone, true);
+        place.addBlock(x, 2.24, z, 4.2, 0.4, 3.8, mats.sandstone, true);
         // Erosion detail
         place.addBlock(x + 1.2, 0.3, z + 1.8, 0.8, 0.6, 0.6, mats.rubble, false);
         place.addBlock(x - 1.5, 0.2, z - 1.6, 0.6, 0.4, 0.5, mats.darkRock, false);
@@ -132,12 +132,58 @@
         place.addBlock(x + 0.15, 0.04, z + 0.2, 0.08, 0.06, 0.4, mats.bone, false);
     }
 
-    function addFencePost(x, z, place, mats, broken) {
-        var h = broken ? 1.2 : 2.0;
-        place.addBlock(x, h * 0.5, z, 0.15, h, 0.15, mats.bleachedWood, false);
-        if (!broken) {
-            place.addBlock(x, h + 0.05, z, 0.22, 0.1, 0.22, mats.bleachedWood, false);
+    function addFencePost(x, z, place, mats, height, leanYaw, leanTilt, brokenTop) {
+        var h = height || 2.0;
+        var postYaw = leanYaw || 0;
+        var postTilt = leanTilt || 0;
+        if (postTilt) {
+            place.addRamp(x, h * 0.5, z, 0.18, h, 0.18, mats.bleachedWood, postYaw, postTilt, false);
+        } else {
+            place.addBlock(x, h * 0.5, z, 0.18, h, 0.18, mats.bleachedWood, false);
         }
+        if (brokenTop) {
+            place.addRamp(x, h - 0.05, z, 0.28, 0.08, 0.16, mats.bleachedWood, postYaw + 0.45, 0.28, false);
+            return;
+        }
+        place.addBlock(x, h + 0.05, z, 0.24, 0.1, 0.24, mats.bleachedWood, false);
+    }
+
+    function addFenceRail(x1, z1, x2, z2, y, thickness, place, mats) {
+        var dx = x2 - x1;
+        var dz = z2 - z1;
+        var len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.1) return;
+        place.addRamp(
+            (x1 + x2) * 0.5,
+            y,
+            (z1 + z2) * 0.5,
+            thickness,
+            thickness,
+            len + 0.18,
+            mats.bleachedWood,
+            Math.atan2(dx, dz),
+            0,
+            false
+        );
+    }
+
+    function buildFenceRuins(x, z, place, mats) {
+        var postA = { x: x - 0.95, z: z - 1.25, h: 2.3 };
+        var postB = { x: x - 0.95, z: z + 1.05, h: 1.9 };
+        var postC = { x: x + 0.9, z: z - 0.45, h: 1.65, yaw: 1.2, tilt: -0.24 };
+
+        addFencePost(postA.x, postA.z, place, mats, postA.h, 0, 0, false);
+        addFencePost(postB.x, postB.z, place, mats, postB.h, 0, 0, true);
+        addFencePost(postC.x, postC.z, place, mats, postC.h, postC.yaw, postC.tilt, true);
+
+        addFenceRail(postA.x, postA.z, postB.x, postB.z, 1.5, 0.1, place, mats);
+        addFenceRail(postA.x, postA.z, postB.x, postB.z, 0.9, 0.08, place, mats);
+        addFenceRail(postA.x, postA.z, x + 0.3, z - 0.8, 1.3, 0.08, place, mats);
+
+        // Collapsed slats and debris so the silhouette reads as a ruined corral.
+        addFenceRail(x - 0.15, z + 0.6, x + 1.15, z + 0.05, 0.08, 0.08, place, mats);
+        place.addRamp(x + 0.55, 0.22, z - 0.1, 0.14, 0.14, 1.35, mats.bleachedWood, 0.95, -0.18, false);
+        place.addBlock(x - 0.9, 0.14, z + 1.35, 0.55, 0.16, 0.35, mats.darkRock, false);
     }
 
     function addSandDune(x, z, w, d, place, mats) {
@@ -211,17 +257,9 @@
         var bones2 = pt(bounds, 0.30, 0.18);
         addBones(bones2.x, bones2.z, place, mats);
 
-        // Broken fence posts (abandoned outpost feel)
-        var fp1 = pt(bounds, 0.12, 0.40);
-        addFencePost(fp1.x, fp1.z, place, mats, false);
-        var fp2 = pt(bounds, 0.12, 0.45);
-        addFencePost(fp2.x, fp2.z, place, mats, true);
-        var fp3 = pt(bounds, 0.12, 0.50);
-        addFencePost(fp3.x, fp3.z, place, mats, false);
-        // Crossbar between standing posts
-        place.addBlock(fp1.x, 1.3, (fp1.z + fp3.z) * 0.5, 0.08, 0.08, fp3.z - fp1.z + 0.2, mats.bleachedWood, false);
-        // Fallen crossbar on the ground
-        place.addBlock(fp2.x + 0.4, 0.06, fp2.z, 0.08, 0.08, 2.0, mats.bleachedWood, false);
+        // Ruined fence/corral fragment instead of the old floating slats.
+        var fencePt = pt(bounds, 0.14, 0.45);
+        buildFenceRuins(fencePt.x, fencePt.z, place, mats);
 
         // Sand dunes (break up the flat ground)
         var dune1 = pt(bounds, 0.50, 0.90);

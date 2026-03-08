@@ -92,7 +92,9 @@
             weaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
             streamHeat: entity.streamHeat || 0,
-            streamOverheatedUntil: entity.streamOverheatedUntil || 0
+            streamOverheatedUntil: entity.streamOverheatedUntil || 0,
+            hookState: entity.hookState || null,
+            healState: entity.healState || null
         };
     }
 
@@ -150,6 +152,8 @@
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
         r.chokeState = entity.chokeState || null;
+        r.hookState = entity.hookState || null;
+        r.healState = entity.healState || null;
         r.abilityLoadout = entity.abilityLoadout || null;
 
         r.group.visible = !!entity.alive;

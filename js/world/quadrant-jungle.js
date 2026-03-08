@@ -28,7 +28,6 @@
             mossy:      lib.getLambert({ color: 0x3d4a32 }),
             shrine:     lib.getLambert({ color: 0x5a6a4a }),
             water:      lib.getLambert({ color: 0x3a7a8a, transparent: true, opacity: 0.55 }),
-            waterfall:  lib.getLambert({ color: 0x6abaca, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
             mist:       lib.getLambert({ color: 0xc8ddd8, transparent: true, opacity: 0.18, side: THREE.DoubleSide }),
             mushStem:   lib.getLambert({ color: 0xc8b898 }),
             mushCapRed: lib.getLambert({ color: 0x8a3028 }),
@@ -206,8 +205,8 @@
         var capMat = red ? mats.mushCapRed : mats.mushCapBrn;
         place.addBlock(x, 0.35, z, 0.35, 0.12, 0.35, capMat, false);
         if (red) {
-            place.addBlock(x + 0.08, 0.42, z - 0.05, 0.06, 0.04, 0.06, mats.mushSpot, false);
-            place.addBlock(x - 0.06, 0.42, z + 0.08, 0.05, 0.04, 0.05, mats.mushSpot, false);
+            place.addBlock(x + 0.08, 0.44, z - 0.05, 0.06, 0.04, 0.06, mats.mushSpot, false);
+            place.addBlock(x - 0.06, 0.44, z + 0.08, 0.05, 0.04, 0.05, mats.mushSpot, false);
         }
     }
 
@@ -223,6 +222,10 @@
     function buildShrine(cx, cz, place, mats, ctx) {
         place.addBlock(cx, 0.5, cz, 9.0, 1.0, 7.0, mats.stone, true);
         place.addBlock(cx, 1.2, cz, 4.6, 0.9, 3.2, mats.mossy, true);
+
+        // Front steps make the shrine read more intentionally built.
+        place.addBlock(cx, 0.22, cz + 4.1, 3.8, 0.16, 1.1, mats.stone, true);
+        place.addBlock(cx, 0.36, cz + 3.55, 2.6, 0.12, 0.8, mats.mossy, false);
 
         place.addBlock(cx - 3.4, 2.0, cz - 2.6, 0.9, 4.0, 0.9, mats.stone, true);
         place.addBlock(cx + 3.4, 2.0, cz - 2.6, 0.9, 4.0, 0.9, mats.stone, true);
@@ -268,29 +271,49 @@
         place.addBlock(cx - 2.4, 3.4, cz + 0.5, 1.4, 0.3, 1.2, mats.mossy, false);
         place.addBlock(cx + 2.2, 2.8, cz + 0.3, 1.2, 0.25, 1.0, mats.mossy, false);
 
-        // 3 overlapping waterfall sheets at different offsets, speeds, phases
-        var sheetConfigs = [
-            { xOff:  0.0, w: 2.4, h: 4.8, speed: 0.126, wobbleFreq: 0.42, wobbleAmp: 0.02, phase: 1.23, opacity: 0.42 },
-            { xOff:  0.35, w: 1.8, h: 4.6, speed: 0.168, wobbleFreq: 0.35, wobbleAmp: 0.03, phase: 3.5,  opacity: 0.30 },
-            { xOff: -0.25, w: 2.0, h: 4.4, speed: 0.098, wobbleFreq: 0.49, wobbleAmp: 0.02, phase: 5.1,  opacity: 0.25 }
-        ];
-        for (var si = 0; si < sheetConfigs.length; si++) {
-            var cfg = sheetConfigs[si];
-            var sheetGeo = new THREE.PlaneGeometry(cfg.w, cfg.h);
-            var sheetMat = mats.waterfall.clone();
-            sheetMat.opacity = cfg.opacity;
-            var sheet = new THREE.Mesh(sheetGeo, sheetMat);
-            sheet.position.set(cx + cfg.xOff, 2.8, cz + 1.15);
-            ctx.scene.add(sheet);
-            ctx.addWaterfallSheet({
-                mesh: sheet, material: sheetMat, baseX: cx + cfg.xOff,
-                offset: 0, speed: cfg.speed, wobbleFreq: cfg.wobbleFreq,
-                wobbleAmp: cfg.wobbleAmp, phase: cfg.phase, baseOpacity: cfg.opacity
-            });
+        // Chunky retro waterfall: block columns with slow stepped palette changes.
+        var tileColumns = 4;
+        var tileRows = 8;
+        var tileW = 0.56;
+        var tileH = 0.54;
+        var tileGapY = 0.06;
+        var baseX = cx - 0.9;
+        var baseY = 4.95;
+        var frontZ = cz + 1.18;
+        var waterfallTiles = [];
+        for (var col = 0; col < tileColumns; col++) {
+            for (var row = 0; row < tileRows; row++) {
+                var tileMat = mats.water.clone();
+                tileMat.transparent = true;
+                tileMat.opacity = 0.66;
+                tileMat.color.setHex((row + col) % 2 === 0 ? 0x5eb6cf : 0x3d8fb3);
+                var tile = place.addBlock(
+                    baseX + (col * 0.6),
+                    baseY - (row * (tileH + tileGapY)),
+                    frontZ,
+                    tileW,
+                    tileH,
+                    0.12,
+                    tileMat,
+                    false
+                );
+                waterfallTiles.push({
+                    mesh: tile,
+                    material: tileMat,
+                    column: col,
+                    row: row
+                });
+            }
         }
+        ctx.addWaterfallSheet({
+            tiles: waterfallTiles,
+            stepInterval: 0.5,
+            darkColor: 0x3d8fb3,
+            lightColor: 0x74d6f2
+        });
 
         // Basin pool (wider)
-        place.addBlock(cx, -0.04, cz + 3.0, 4.0, 0.08, 3.0, mats.water, false);
+        place.addBlock(cx, -0.01, cz + 3.0, 4.0, 0.08, 3.0, mats.water, false);
         // Spray blocks at basin edges
         place.addBlock(cx - 1.2, 0.06, cz + 3.8, 0.6, 0.08, 0.4, mats.water, false);
         place.addBlock(cx + 1.0, 0.05, cz + 4.0, 0.5, 0.06, 0.35, mats.water, false);
@@ -373,34 +396,79 @@
             place.addRamp(aX + spanDx * t, bridgeY + 0.08, aZ + spanDz * t, bridgeWidth * 0.95, 0.02, 0.08, mats.rope, bridgeRotY, 0, false);
         }
 
-        // Rope uprights every ~2 units
-        var postSpacing = Math.max(3, Math.round(spanLen / 2.0));
-        for (var p = 1; p < postSpacing; p++) {
-            var pt2 = p / postSpacing;
+        // Build the hand ropes and uprights off the same nodes so they actually meet.
+        var railNodes = Math.max(4, Math.round(spanLen / 2.0));
+        var railY = bridgeY + 0.78;
+        var uprightBaseY = bridgeY + 0.08;
+        var railOffset = ropeOffset - 0.03;
+        var leftNodes = [];
+        var rightNodes = [];
+
+        for (var p = 0; p <= railNodes; p++) {
+            var pt2 = p / railNodes;
             var ux = aX + spanDx * pt2;
             var uz = aZ + spanDz * pt2;
-            var postH = 0.7;
-            place.addBlock(ux + perpX * ropeOffset, bridgeY + postH * 0.5 + 0.07, uz + perpZ * ropeOffset, 0.07, postH, 0.07, mats.rope, false);
-            place.addBlock(ux - perpX * ropeOffset, bridgeY + postH * 0.5 + 0.07, uz - perpZ * ropeOffset, 0.07, postH, 0.07, mats.rope, false);
+            var leftNode = {
+                x: ux + perpX * railOffset,
+                y: railY,
+                z: uz + perpZ * railOffset
+            };
+            var rightNode = {
+                x: ux - perpX * railOffset,
+                y: railY,
+                z: uz - perpZ * railOffset
+            };
+            var postW = (p === 0 || p === railNodes) ? 0.09 : 0.07;
+            var postH = railY - uprightBaseY;
+
+            leftNodes.push(leftNode);
+            rightNodes.push(rightNode);
+            place.addBlock(leftNode.x, uprightBaseY + postH * 0.5, leftNode.z, postW, postH, postW, mats.rope, false);
+            place.addBlock(rightNode.x, uprightBaseY + postH * 0.5, rightNode.z, postW, postH, postW, mats.rope, false);
         }
 
-        // Rope rails (segmented sag)
-        var railSegs = Math.max(4, Math.round(spanLen / 3.0));
-        var sagAmt = spanLen * 0.015;
-        var railY = bridgeY + 0.75;
-        for (var r = 0; r < railSegs; r++) {
-            var mt = ((r + 0.5) / railSegs);
-            var sag = Math.sin(mt * Math.PI) * sagAmt;
-            var rx = aX + spanDx * mt;
-            var rz = aZ + spanDz * mt;
-            var segLen = spanLen / railSegs;
-            place.addRamp(rx + perpX * ropeOffset, railY - sag, rz + perpZ * ropeOffset, 0.06, 0.06, segLen, mats.rope, bridgeRotY, 0, false);
-            place.addRamp(rx - perpX * ropeOffset, railY - sag, rz - perpZ * ropeOffset, 0.06, 0.06, segLen, mats.rope, bridgeRotY, 0, false);
+        for (var r = 0; r < railNodes; r++) {
+            var leftA = leftNodes[r];
+            var leftB = leftNodes[r + 1];
+            var rightA = rightNodes[r];
+            var rightB = rightNodes[r + 1];
+            var segLen = Math.sqrt(
+                (leftB.x - leftA.x) * (leftB.x - leftA.x) +
+                (leftB.z - leftA.z) * (leftB.z - leftA.z)
+            );
+
+            place.addRamp(
+                (leftA.x + leftB.x) * 0.5,
+                railY,
+                (leftA.z + leftB.z) * 0.5,
+                0.06,
+                0.06,
+                segLen + 0.03,
+                mats.rope,
+                bridgeRotY,
+                0,
+                false
+            );
+            place.addRamp(
+                (rightA.x + rightB.x) * 0.5,
+                railY,
+                (rightA.z + rightB.z) * 0.5,
+                0.06,
+                0.06,
+                segLen + 0.03,
+                mats.rope,
+                bridgeRotY,
+                0,
+                false
+            );
         }
 
-        // Crossbars at each anchor
-        place.addRamp(aX, bridgeY + 0.75, aZ, 0.08, 0.08, bridgeWidth, mats.rope, bridgeRotY + Math.PI * 0.5, 0, false);
-        place.addRamp(bX, bridgeY + 0.75, bZ, 0.08, 0.08, bridgeWidth, mats.rope, bridgeRotY + Math.PI * 0.5, 0, false);
+        for (var tie = 0; tie <= railNodes; tie++) {
+            if (tie !== 0 && tie !== railNodes && (tie % 2 !== 0)) continue;
+            var tx = aX + spanDx * (tie / railNodes);
+            var tz = aZ + spanDz * (tie / railNodes);
+            place.addRamp(tx, railY - 0.02, tz, 0.05, 0.05, bridgeWidth - 0.08, mats.rope, bridgeRotY + Math.PI * 0.5, 0, false);
+        }
     }
 
     function addFirefly(x, y, z, place, mats, ctx) {
@@ -586,23 +654,6 @@
         addGroundVine(gv4a.x, gv4a.z, gv4b.x, gv4b.z, place, mats);
 
         // ============================================================
-        // FIREFLIES -- near waterfall, shrine, and giant trees
-        // ============================================================
-        addFirefly(wfPt.x + 1.5, 1.2, wfPt.z + 2.0, place, mats, ctx);
-        addFirefly(wfPt.x - 1.0, 0.8, wfPt.z + 3.5, place, mats, ctx);
-        addFirefly(wfPt.x + 0.3, 2.0, wfPt.z + 1.0, place, mats, ctx);
-        addFirefly(center.x + 2.0, 1.5, center.z - 1.0, place, mats, ctx);
-        addFirefly(center.x - 1.5, 1.8, center.z + 2.0, place, mats, ctx);
-        addFirefly(center.x + 0.5, 2.5, center.z, place, mats, ctx);
-        // Near giant trees
-        var g0 = pt(bounds, giants[0].u, giants[0].v);
-        addFirefly(g0.x + 2.0, 3.0, g0.z + 1.5, place, mats, ctx);
-        var g1 = pt(bounds, giants[1].u, giants[1].v);
-        addFirefly(g1.x - 1.5, 2.5, g1.z - 1.0, place, mats, ctx);
-        var g2 = pt(bounds, giants[2].u, giants[2].v);
-        addFirefly(g2.x + 1.0, 3.5, g2.z + 0.5, place, mats, ctx);
-
-        // ============================================================
         // FALLEN PILLAR near shrine (toppled column)
         // ============================================================
         place.addRamp(center.x + 6.0, 0.35, center.z - 2.5, 0.7, 0.7, 4.0, mats.stone, 0.3, 0.08, false);
@@ -612,10 +663,10 @@
         // ============================================================
         // MOSS PATCHES on ground
         // ============================================================
-        place.addBlock(wfPt.x + 2.0, 0.02, wfPt.z + 1.5, 1.5, 0.04, 1.2, mats.mossy, false);
-        place.addBlock(wfPt.x - 1.5, 0.02, wfPt.z + 3.0, 1.2, 0.04, 0.9, mats.fern, false);
-        place.addBlock(center.x - 3.0, 0.02, center.z + 3.5, 1.8, 0.04, 1.4, mats.mossy, false);
-        place.addBlock(center.x + 4.0, 0.02, center.z - 1.5, 1.0, 0.04, 1.6, mats.fern, false);
+        place.addBlock(wfPt.x + 2.0, 0.03, wfPt.z + 1.5, 1.5, 0.04, 1.2, mats.mossy, false);
+        place.addBlock(wfPt.x - 1.5, 0.03, wfPt.z + 3.0, 1.2, 0.04, 0.9, mats.fern, false);
+        place.addBlock(center.x - 3.0, 0.03, center.z + 3.5, 1.8, 0.04, 1.4, mats.mossy, false);
+        place.addBlock(center.x + 4.0, 0.03, center.z - 1.5, 1.0, 0.04, 1.6, mats.fern, false);
 
         var totalTrees = giants.length + canopyTrees.length + bushyTrees.length + saplings.length;
         return {

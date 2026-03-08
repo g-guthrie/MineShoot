@@ -38,7 +38,6 @@
     var SHOTGUN_RETICLE_REF_DISTANCE = 14;
     var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
     var SHOTGUN_RETICLE_THIRD_MAX_SCALE = 0.96;
-    var SHOTGUN_RETICLE_POINTS = [];
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
     var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
@@ -60,10 +59,6 @@
 
     var SHOTGUN_PATTERN = buildShotgunPattern();
 
-    for (var i = 0; i < SHOTGUN_PATTERN.length; i++) {
-        SHOTGUN_RETICLE_POINTS.push([SHOTGUN_PATTERN[i][0], SHOTGUN_PATTERN[i][1]]);
-    }
-
     var combatTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning;
     var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
     var sharedWeaponStats = sharedTuning.weaponStats || {};
@@ -80,8 +75,9 @@
             bodyDamage: Number(s.bodyDamage || 0),
             headDamage: Number(s.headDamage || 0),
             pellets: Number(s.pellets || 1),
-            spreadNdc: Number(s.spreadNdc || 0),
-            maxRange: maxRange
+            hipfireSpread: Number(s.hipfireSpread || 0),
+            maxRange: maxRange,
+            adsHitscanRangeMultiplier: Number(s.adsHitscanRangeMultiplier || 1)
         };
     }
 
@@ -364,6 +360,14 @@
         return weapons[currentWeaponId] || weapons.rifle;
     }
 
+    function getEffectiveMaxRange(weapon) {
+        var baseRange = Number(weapon && weapon.maxRange || 0);
+        if (!weapon || baseRange <= 0) return 0;
+        if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) return baseRange;
+        if (!isAdsActiveForWeapon(weapon.id)) return baseRange;
+        return baseRange * Math.max(1, Number(weapon.adsHitscanRangeMultiplier || 1));
+    }
+
     function getDamageForType(weapon, hitType) {
         return hitType === 'head' ? weapon.headDamage : weapon.bodyDamage;
     }
@@ -419,21 +423,22 @@
     function getBloomCircleSizePx(weapon) {
         if (!weapon || weapon.id === 'shotgun') return 0;
         if (isAdsActiveForWeapon(weapon.id)) return 0;
-        var spread = Math.max(0, Number(weapon.spreadNdc || 0));
+        var spread = Math.max(0, Number(weapon.hipfireSpread || 0));
         if (spread <= 0.00001) return 0;
         return spread * Math.min(window.innerWidth, window.innerHeight) * 0.5 * 2;
     }
 
     function getPelletNdcOffset(weapon, pelletIndex) {
         if (weapon.id === 'shotgun') {
-            var p = SHOTGUN_PATTERN[pelletIndex % SHOTGUN_PATTERN.length];
+            var angle = Math.random() * Math.PI * 2;
+            var radius = Math.sqrt(Math.random());
             var halfSize = getShotgunReticleSizePx() * 0.5;
             if (isAdsActiveForWeapon('shotgun')) {
                 halfSize *= SHOTGUN_ADS_SPREAD_SCALE;
             }
             return {
-                x: (p[0] * halfSize) / (window.innerWidth * 0.5),
-                y: -(p[1] * halfSize) / (window.innerHeight * 0.5)
+                x: ((Math.cos(angle) * radius) * halfSize) / (window.innerWidth * 0.5),
+                y: -((Math.sin(angle) * radius) * halfSize) / (window.innerHeight * 0.5)
             };
         }
 
@@ -442,8 +447,8 @@
         }
 
         return {
-            x: (Math.random() * 2 - 1) * weapon.spreadNdc,
-            y: (Math.random() * 2 - 1) * weapon.spreadNdc
+            x: (Math.random() * 2 - 1) * weapon.hipfireSpread,
+            y: (Math.random() * 2 - 1) * weapon.hipfireSpread
         };
     }
 
@@ -572,15 +577,16 @@
         var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var allTargets = targetsHitboxes.concat(worldMeshes);
         var ndcOffset = getPelletNdcOffset(weapon, pelletIndex);
+        var effectiveRange = getEffectiveMaxRange(weapon);
 
         screenPoint.set(ndcOffset.x, ndcOffset.y);
         raycaster.setFromCamera(screenPoint, camera);
-        raycaster.far = weapon.maxRange;
+        raycaster.far = effectiveRange;
 
         var intersects = raycaster.intersectObjects(allTargets, false);
         if (intersects.length === 0) {
             if (onTrace) {
-                tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, weapon.maxRange);
+                tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, effectiveRange);
                 onTrace(tracerMissEnd);
             }
             return false;
@@ -658,6 +664,9 @@
     GameHitscan.fire = function (camera, onHit, onMiss) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
+        if (weapon.id === 'sniper' && !isAdsActiveForWeapon('sniper')) {
+            return false;
+        }
 
         if (now - lastFireTime < weapon.cooldown) {
             return false;
@@ -681,8 +690,9 @@
             bodyDamage: weapon.bodyDamage,
             headDamage: weapon.headDamage,
             pellets: weapon.pellets,
-            spreadNdc: weapon.spreadNdc,
-            maxRange: weapon.maxRange
+            hipfireSpread: weapon.hipfireSpread,
+            maxRange: getEffectiveMaxRange(weapon),
+            adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1)
         };
     };
 
@@ -693,7 +703,6 @@
         return {
             type: 'shotgun',
             size: getShotgunReticleSizePx(),
-            points: SHOTGUN_RETICLE_POINTS,
             bloomSize: 0,
             adsActive: isAdsActiveForWeapon(id)
         };
@@ -769,6 +778,9 @@
 
     GameHitscan.canFire = function () {
         var weapon = getCurrentWeaponData();
+        if (weapon.id === 'sniper' && !isAdsActiveForWeapon('sniper')) {
+            return false;
+        }
         return (performance.now() - lastFireTime) >= weapon.cooldown;
     };
 
@@ -779,7 +791,8 @@
     };
 
     GameHitscan.peekCenterTarget = function (camera, maxRange) {
-        var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
+        var weapon = getCurrentWeaponData();
+        var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getEffectiveMaxRange(weapon);
         return castCenter(camera, range);
     };
 
@@ -885,7 +898,7 @@
                 bodyDamage: weapon.bodyDamage,
                 headDamage: weapon.headDamage,
                 pellets: weapon.pellets,
-                spreadNdc: weapon.spreadNdc,
+                hipfireSpread: weapon.hipfireSpread,
                 maxRange: weapon.maxRange
             });
         }

@@ -71,13 +71,14 @@
             false
         );
 
-        // Rail posts and a lower support bar keep the silhouette grounded.
-        place.addBlock(railX, 0.35, cz, 0.08, 0.7, 0.08, mats.rail, false);
-        place.addBlock(railX, 0.8, cz + 2.6 * dir, 0.08, 0.9, 0.08, mats.rail, false);
-        place.addBlock(railX, 1.0, cz + 5.0 * dir, 0.08, 1.0, 0.08, mats.rail, false);
+        // Rail posts sit just off the rail centerline to avoid surface fighting.
+        var railPostX = railX - 0.06;
+        place.addBlock(railPostX, 0.35, cz, 0.08, 0.7, 0.08, mats.rail, false);
+        place.addBlock(railPostX, 0.84, cz + 2.6 * dir, 0.08, 1.0, 0.08, mats.rail, false);
+        place.addBlock(railPostX, 0.94, cz + 5.0 * dir, 0.08, 1.48, 0.08, mats.rail, false);
         place.addRamp(
-            railX,
-            0.78,
+            railPostX,
+            0.86,
             cz + (railSpan * dir * 0.5),
             0.06,
             0.06,
@@ -102,7 +103,7 @@
             place.addRamp(cx, s.y, cz + s.dz, 5.5, s.h, 1.0, mats.concrete, 0, s.tilt, true);
         }
         // Coping rail at the lip
-        place.addBlock(cx, 2.25, cz + 2.3, 5.5, 0.1, 0.1, mats.railShiny, false);
+        place.addBlock(cx, 2.165, cz + 2.3, 5.5, 0.1, 0.1, mats.railShiny, false);
     }
 
     function buildFlatLedge(cx, cz, place, mats, rotated) {
@@ -114,7 +115,7 @@
 
     function buildKicker(cx, cz, place, mats, rotY) {
         place.addRamp(cx, 0.5, cz, 2.8, 0.8, 2.0, mats.concrete, rotY, -0.35, true);
-        place.addBlock(cx, 0.1, cz, 2.8, 0.2, 2.0, mats.asphalt, true);
+        place.addBlock(cx, 0.04, cz, 2.8, 0.08, 2.0, mats.asphalt, true);
     }
 
     function buildBench(cx, cz, place, mats) {
@@ -155,7 +156,7 @@
         place.addRamp(qp2.x, 0.4, qp2.z - 0.7, 5.5, 0.35, 1.0, mats.concrete, Math.PI, 0.08, true);
         place.addRamp(qp2.x, 0.75, qp2.z - 1.3, 5.5, 0.45, 1.0, mats.concrete, Math.PI, 0.18, true);
         place.addRamp(qp2.x, 1.2, qp2.z - 1.8, 5.5, 0.55, 1.0, mats.concrete, Math.PI, 0.30, true);
-        place.addBlock(qp2.x, 1.55, qp2.z - 2.0, 5.5, 0.1, 0.1, mats.railShiny, false);
+        place.addBlock(qp2.x, 1.47, qp2.z - 2.0, 5.5, 0.1, 0.1, mats.railShiny, false);
 
         // Center flat ledge (the grind box)
         var centerPt = pt(bounds, 0.50, 0.50);
@@ -175,7 +176,7 @@
         var manPt = pt(bounds, 0.65, 0.68);
         place.addBlock(manPt.x, 0.12, manPt.z, 3.5, 0.24, 2.0, mats.concreteLight, true);
         // Painted line on the pad
-        place.addBlock(manPt.x, 0.25, manPt.z, 3.3, 0.02, 0.08, mats.paintWhite, false);
+        place.addBlock(manPt.x, 0.262, manPt.z, 3.3, 0.02, 0.08, mats.paintWhite, false);
 
         // Graffiti walls
         var wallA = pt(bounds, 0.08, 0.50);

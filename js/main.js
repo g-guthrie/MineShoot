@@ -31,6 +31,12 @@
     var menuWeaponSlots = MENU_LOADOUT_DEFAULT.slice();
     var menuActiveSlot = 0;
     var runtimeInitialized = false;
+    var selfHookVisual = null;
+    var remoteHookVisuals = new Map();
+    var hookTmpStart = new THREE.Vector3();
+    var hookTmpEnd = new THREE.Vector3();
+    var hookTmpA = new THREE.Vector3();
+    var hookTmpB = new THREE.Vector3();
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -42,6 +48,146 @@
 
     function cappedPixelRatio() {
         return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));
+    }
+
+    function createHookVisual() {
+        var geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+        var line = new THREE.Line(
+            geometry,
+            new THREE.LineBasicMaterial({ color: 0xb7bcc4, transparent: true, opacity: 0.95 })
+        );
+        line.renderOrder = 55;
+        line.visible = false;
+        scene.add(line);
+
+        var head = new THREE.Mesh(
+            new THREE.BoxGeometry(0.16, 0.16, 0.24),
+            new THREE.MeshLambertMaterial({ color: 0x8a8f96 })
+        );
+        head.renderOrder = 56;
+        head.visible = false;
+        scene.add(head);
+
+        return { line: line, head: head };
+    }
+
+    function ensureSelfHookVisual() {
+        if (selfHookVisual) return selfHookVisual;
+        selfHookVisual = createHookVisual();
+        return selfHookVisual;
+    }
+
+    function ensureRemoteHookVisual(entityId) {
+        var existing = remoteHookVisuals.get(entityId);
+        if (existing) return existing;
+        existing = createHookVisual();
+        remoteHookVisuals.set(entityId, existing);
+        return existing;
+    }
+
+    function hideHookVisual(visual) {
+        if (!visual) return;
+        if (visual.line) visual.line.visible = false;
+        if (visual.head) visual.head.visible = false;
+    }
+
+    function setHookVisual(visual, start, end) {
+        if (!visual || !start || !end) {
+            hideHookVisual(visual);
+            return;
+        }
+        var pos = visual.line.geometry.getAttribute('position');
+        pos.setXYZ(0, start.x, start.y, start.z);
+        pos.setXYZ(1, end.x, end.y, end.z);
+        pos.needsUpdate = true;
+        visual.line.visible = true;
+        visual.head.visible = true;
+        visual.head.position.copy(end);
+        hookTmpA.copy(end).sub(start);
+        if (hookTmpA.lengthSq() > 0.00001) {
+            visual.head.lookAt(hookTmpB.copy(end).add(hookTmpA));
+        }
+    }
+
+    function playerCoreWorldPosition() {
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getCoreWorldPosition) {
+            return globalThis.__MAYHEM_RUNTIME.GamePlayer.getCoreWorldPosition();
+        }
+        if (!camera) return null;
+        return camera.position.clone();
+    }
+
+    function playerHookOriginWorldPosition() {
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition) {
+            return globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition();
+        }
+        return playerCoreWorldPosition();
+    }
+
+    function localEnemyCoreByTargetId(targetId) {
+        if (!targetId || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) return null;
+        var targets = globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || [];
+        for (var i = 0; i < targets.length; i++) {
+            var t = targets[i];
+            if (t && t.targetId === targetId && t.worldPos) return t.worldPos.clone ? t.worldPos.clone() : new THREE.Vector3(t.worldPos.x, t.worldPos.y, t.worldPos.z);
+        }
+        return null;
+    }
+
+    function netEntityCoreById(targetId) {
+        if (!targetId || !globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.getEntityMarkerWorldPos) return null;
+        var p = globalThis.__MAYHEM_RUNTIME.GameNet.getEntityMarkerWorldPos(targetId);
+        return p ? new THREE.Vector3(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0)) : null;
+    }
+
+    function resolveHookEnd(state, netMode) {
+        if (!state) return null;
+        if (state.phase === 'latched' && state.targetId) {
+            return netMode ? netEntityCoreById(state.targetId) : localEnemyCoreByTargetId(state.targetId);
+        }
+        if (state.headPos) return state.headPos.clone ? state.headPos.clone() : new THREE.Vector3(state.headPos.x, state.headPos.y, state.headPos.z);
+        return null;
+    }
+
+    function renderHookEffects() {
+        var selfState = null;
+        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
+            var netAbility = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
+            selfState = netAbility ? netAbility.hookState : null;
+        } else if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getHookState) {
+            selfState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHookState();
+        }
+
+        var selfVisual = ensureSelfHookVisual();
+        if (selfState) {
+            var selfStart = playerHookOriginWorldPosition();
+            var selfEnd = resolveHookEnd(selfState, multiplayerMode);
+            setHookVisual(selfVisual, selfStart, selfEnd);
+        } else {
+            hideHookVisual(selfVisual);
+        }
+
+        var activeRemote = {};
+        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNetEntities && globalThis.__MAYHEM_RUNTIME.GameNetEntities.getRenderMap) {
+            var renderMap = globalThis.__MAYHEM_RUNTIME.GameNetEntities.getRenderMap();
+            renderMap.forEach(function (render, entityId) {
+                var hookState = render && render.hookState ? render.hookState : null;
+                if (!hookState) return;
+                var start = render.rigApi && render.rigApi.getThrowableOriginWorldPosition
+                    ? render.rigApi.getThrowableOriginWorldPosition(new THREE.Vector3())
+                    : (render.rigApi && render.rigApi.getCoreWorldPosition
+                        ? render.rigApi.getCoreWorldPosition(new THREE.Vector3())
+                        : new THREE.Vector3(render.group.position.x, render.group.position.y + 1.0, render.group.position.z));
+                var end = resolveHookEnd(hookState, true);
+                var visual = ensureRemoteHookVisual(entityId);
+                setHookVisual(visual, start, end);
+                activeRemote[entityId] = true;
+            });
+        }
+        remoteHookVisuals.forEach(function (visual, entityId) {
+            if (!activeRemote[entityId]) hideHookVisual(visual);
+        });
     }
 
     function applyBrandingOverrides() {
@@ -176,57 +322,63 @@
         return out;
     }
 
-    function normalizeMenuWeaponSlots() {
+    function compactMenuWeaponSlots() {
         var available = availableMenuWeaponIds();
         var availableMap = {};
         for (var i = 0; i < available.length; i++) {
             availableMap[available[i]] = true;
         }
 
-        var next = [];
-        var seen = {};
-        for (var n = 0; n < menuWeaponSlots.length; n++) {
+        var next = ['', ''];
+        for (var n = 0; n < 2; n++) {
             var id = String(menuWeaponSlots[n] || '');
-            if (!availableMap[id] || seen[id]) continue;
-            seen[id] = true;
-            next.push(id);
-            if (next.length >= 2) break;
+            next[n] = availableMap[id] ? id : '';
         }
-
-        for (var m = 0; m < MENU_LOADOUT_DEFAULT.length && next.length < 2; m++) {
-            var fallback = MENU_LOADOUT_DEFAULT[m];
-            if (!availableMap[fallback] || seen[fallback]) continue;
-            seen[fallback] = true;
-            next.push(fallback);
-        }
-
-        for (var p = 0; p < available.length && next.length < 2; p++) {
-            var candidate = available[p];
-            if (seen[candidate]) continue;
-            seen[candidate] = true;
-            next.push(candidate);
-        }
-
-        if (next.length === 1) {
-            next.push(next[0]);
-        }
-        if (next.length === 0) {
-            next = MENU_LOADOUT_DEFAULT.slice();
-        }
-
-        menuWeaponSlots = next.slice(0, 2);
+        menuWeaponSlots = next;
         if (menuActiveSlot < 0 || menuActiveSlot > 1) menuActiveSlot = 0;
     }
 
     function syncMenuWeaponSlotsToRuntime() {
-        normalizeMenuWeaponSlots();
-        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder) {
-            globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder(menuWeaponSlots.slice());
+        compactMenuWeaponSlots();
+        var equipped = [];
+        for (var i = 0; i < menuWeaponSlots.length; i++) {
+            if (menuWeaponSlots[i]) equipped.push(menuWeaponSlots[i]);
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder && equipped.length > 0) {
+            globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeaponOrder(equipped);
         }
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout({ slots: menuWeaponSlots.slice() });
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setLoadout({ slots: equipped });
         }
         return menuWeaponSlots.slice();
+    }
+
+    function currentAbilityMenuLoadout() {
+        if (!globalThis.__MAYHEM_RUNTIME.GameAbilities || !globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout) {
+            return { slot1: '', slot2: '' };
+        }
+        var loadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout() || {};
+        return {
+            slot1: String(loadout.slot1 || ''),
+            slot2: String(loadout.slot2 || '')
+        };
+    }
+
+    function validateMenuSelections() {
+        compactMenuWeaponSlots();
+        var abilities = currentAbilityMenuLoadout();
+        var missingWeapons = [];
+        var missingAbilities = [];
+        if (!menuWeaponSlots[0]) missingWeapons.push('weapon slot 1');
+        if (!menuWeaponSlots[1]) missingWeapons.push('weapon slot 2');
+        if (!abilities.slot1) missingAbilities.push('ability slot R');
+        if (!abilities.slot2) missingAbilities.push('ability slot F');
+        if (!missingWeapons.length && !missingAbilities.length) return { ok: true, message: '' };
+
+        var parts = [];
+        if (missingWeapons.length) parts.push('Missing ' + missingWeapons.join(' and '));
+        if (missingAbilities.length) parts.push('Missing ' + missingAbilities.join(' and '));
+        return { ok: false, message: parts.join(' | ') };
     }
 
     function setupMenuWeaponLoadout() {
@@ -249,8 +401,8 @@
 
             for (var i = 0; i < slotBtns.length; i++) {
                 var btn = slotBtns[i];
-                var slotId = slots[i] || slots[0] || 'machinegun';
-                var title = 'SLOT ' + (i + 1) + ' :: ' + String(names[slotId] || slotId).toUpperCase();
+                var slotId = slots[i] || '';
+                var title = 'SLOT ' + (i + 1) + ' :: ' + (slotId ? String(names[slotId] || slotId).toUpperCase() : 'UNEQUIPPED');
                 btn.textContent = title;
                 btn.classList.toggle('active', i === menuActiveSlot);
             }
@@ -266,13 +418,17 @@
                 if (slots[menuActiveSlot] === weaponId) {
                     choice.classList.add('active');
                 }
+                var otherSlot = menuActiveSlot === 0 ? 1 : 0;
+                if (slots[otherSlot] === weaponId) {
+                    choice.classList.add('owned-other');
+                }
                 choice.addEventListener('click', function () {
                     var selectedId = String(this.dataset.weaponId || '');
                     if (!selectedId) return;
                     var active = menuActiveSlot;
                     var other = active === 0 ? 1 : 0;
                     if (slots[other] === selectedId) {
-                        slots[other] = slots[active];
+                        slots[other] = '';
                     }
                     slots[active] = selectedId;
                     menuWeaponSlots = slots.slice(0, 2);
@@ -355,47 +511,48 @@
     }
 
     function setupMenuAbilityLoadout() {
-        var abilityGrid = document.getElementById('ability-slot1-grid');
-        if (!abilityGrid) return;
-        if (abilityGrid.__abilityMenuBound) return;
-        abilityGrid.__abilityMenuBound = true;
+        var abilityGrid1 = document.getElementById('ability-slot1-grid');
+        var abilityGrid2 = document.getElementById('ability-slot2-grid');
+        if (!abilityGrid1 || !abilityGrid2) return;
+        if (abilityGrid1.__abilityMenuBound) return;
+        abilityGrid1.__abilityMenuBound = true;
 
         var GA = globalThis.__MAYHEM_RUNTIME.GameAbilities;
-        if (!GA || !GA.getCatalog || !GA.getLoadout || !GA.setLoadout) return;
+        if (!GA || !GA.getCatalog || !GA.getLoadout || !GA.setLoadoutSlot) return;
 
         function render() {
             var catalog = GA.getCatalog();
             var loadout = GA.getLoadout();
+            abilityGrid1.innerHTML = '';
+            abilityGrid2.innerHTML = '';
 
-            abilityGrid.innerHTML = '';
-
-            for (var i = 0; i < catalog.length; i++) {
-                var def = catalog[i];
-
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'ability-choice-btn';
-                btn.dataset.abilityId = def.id;
-                btn.dataset.slot = def.slot || 'ability';
-                btn.textContent = def.name.toUpperCase();
-                if (def.id === loadout.activeAbility) btn.classList.add('active');
-
-                btn.addEventListener('click', function () {
-                    var id = this.dataset.abilityId;
-                    var slot = this.dataset.slot || 'ability';
-                    GA.setLoadout(id);
-                    if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
-                        var updated = GA.getLoadout();
-                        globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(
-                            slot === 'ultimate' ? null : updated.slot1,
-                            slot === 'ultimate' ? updated.slot2 : null
-                        );
-                    }
-                    globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(GA.getHudState());
-                    render();
-                });
-                abilityGrid.appendChild(btn);
+            function appendChoices(slotIndex, gridEl, selectedId, blockedId) {
+                for (var i = 0; i < catalog.length; i++) {
+                    var def = catalog[i];
+                    if (!def || !def.id) continue;
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'ability-choice-btn';
+                    btn.dataset.abilityId = def.id;
+                    btn.textContent = def.name.toUpperCase();
+                    if (def.id === selectedId) btn.classList.add('active');
+                    if (def.id === blockedId) btn.classList.add('owned-other');
+                    btn.addEventListener('click', function () {
+                        var id = this.dataset.abilityId;
+                        GA.setLoadoutSlot(slotIndex, id);
+                        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
+                            var updated = GA.getLoadout();
+                            globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(updated.slot1, updated.slot2);
+                        }
+                        globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(GA.getHudState());
+                        render();
+                    });
+                    gridEl.appendChild(btn);
+                }
             }
+
+            appendChoices(1, abilityGrid1, loadout.slot1, loadout.slot2);
+            appendChoices(2, abilityGrid2, loadout.slot2, loadout.slot1);
         }
 
         render();
@@ -558,6 +715,11 @@
                 if (typeof e.button === 'number' && e.button !== 0) return;
                 e.preventDefault();
                 e.stopPropagation();
+            }
+            var validation = validateMenuSelections();
+            if (!validation.ok) {
+                setTransientDebug(validation.message, 1800);
+                return;
             }
             if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.unlock) {
                 globalThis.__MAYHEM_RUNTIME.GameAudio.unlock();
@@ -886,7 +1048,7 @@
     }
 
     function setupAbilityControls() {
-        function triggerAbility() {
+        function triggerAbility(slotIndex) {
             if (!hasInputCapture()) return;
 
             if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet &&
@@ -894,8 +1056,8 @@
                 var castData = null;
                 var loadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout
                     ? globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout() : {};
-                var slotAbilityId = loadout.activeAbility || loadout.slot1 || '';
-                var castSlot = slotAbilityId === loadout.slot2 ? 2 : 1;
+                var castSlot = Number(slotIndex) === 2 ? 2 : 1;
+                var slotAbilityId = castSlot === 2 ? loadout.slot2 : loadout.slot1;
 
                 if (slotAbilityId === 'choke' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
                     var classTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
@@ -939,7 +1101,7 @@
             var playerPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             var rot = globalThis.__MAYHEM_RUNTIME.GamePlayer.getRotation();
             var outcome = globalThis.__MAYHEM_RUNTIME.GameAbilities.triggerAbility(
-                1,
+                slotIndex,
                 camera,
                 playerPos,
                 rot,
@@ -958,7 +1120,9 @@
         document.addEventListener('keydown', function (e) {
             if (e.repeat) return;
             if (e.code === 'KeyR') {
-                triggerAbility();
+                triggerAbility(1);
+            } else if (e.code === 'KeyF') {
+                triggerAbility(2);
             }
         });
     }
@@ -1286,9 +1450,18 @@
         }
 
         currentAimTargetId = '';
-        var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, 220);
+        var centerTargetRange = (currentWeapon && typeof currentWeapon.maxRange === 'number')
+            ? currentWeapon.maxRange
+            : 220;
+        var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, centerTargetRange);
         if (centerTarget && centerTarget.targetId) {
             currentAimTargetId = centerTarget.targetId;
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(currentWeapon && currentWeapon.id !== 'shotgun' && currentWeapon.id !== 'seekergun' && centerTarget && centerTarget.hitbox));
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState(!!(currentWeapon && currentWeapon.id === 'shotgun' && centerTarget && centerTarget.hitbox));
         }
 
         globalThis.__MAYHEM_RUNTIME.GameOverhead.update(camera, playerPos, currentAimTargetId);
@@ -1312,9 +1485,33 @@
         if (!multiplayerMode) {
             globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState());
         }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setHealFlash) {
+            var selfHealState = null;
+            if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
+                var netSelfAbility = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
+                selfHealState = netSelfAbility ? netSelfAbility.healState : null;
+            } else if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getHealState) {
+                selfHealState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHealState();
+            }
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
+        }
 
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(false, 190);
+            var hookVisible = false;
+            var hookReticleSize = 170;
+            if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
+                var selfAbilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
+                var netLoadout = selfAbilityState && selfAbilityState.abilityLoadout ? selfAbilityState.abilityLoadout : null;
+                hookVisible = !!(netLoadout && (netLoadout.slot1 === 'hook' || netLoadout.slot2 === 'hook'));
+            } else if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout) {
+                var localLoadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout();
+                hookVisible = !!(localLoadout && (localLoadout.slot1 === 'hook' || localLoadout.slot2 === 'hook'));
+            }
+            if (hookVisible && globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning) {
+                var abilityTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {};
+                hookReticleSize = Number(abilityTuning.hookLockBoxPx || 170);
+            }
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(hookVisible, hookReticleSize);
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeReticle) {
             var deadeyeStateForUi = null;
@@ -1370,6 +1567,7 @@
             }
             globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeReticle(camera, deadeyeStateForUi);
         }
+        renderHookEffects();
         renderer.render(scene, camera);
     }
 

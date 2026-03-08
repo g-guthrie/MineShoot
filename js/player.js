@@ -322,6 +322,23 @@
         return hitboxVisible;
     }
 
+    function setHealFlash(active) {
+        if (!avatarGroup || !avatarGroup.userData || !avatarGroup.userData.bodyParts) return;
+        var parts = avatarGroup.userData.bodyParts;
+        var originalColors = avatarGroup.userData.originalPartColors || [];
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            if (!part || !part.material || !part.material.color) continue;
+            if (active) {
+                part.material.color.setHex(0x6dff9a);
+                if (part.material.emissive) part.material.emissive.setHex(0x163d18);
+            } else {
+                part.material.color.setHex(typeof originalColors[i] === 'number' ? originalColors[i] : 0xffffff);
+                if (part.material.emissive) part.material.emissive.setHex(0x000000);
+            }
+        }
+    }
+
     function updateCameraFromPlayer(dt) {
         if (!camera) return;
 
@@ -777,6 +794,10 @@
     GamePlayer.setHitboxVisibility = function (visible) {
         ensureHitboxes();
         return setHitboxVisibility(visible);
+    };
+
+    GamePlayer.setHealFlash = function (active) {
+        setHealFlash(!!active);
     };
 
     GamePlayer.equipSlot = function (slotIndex) {

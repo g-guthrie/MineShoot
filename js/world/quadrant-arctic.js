@@ -89,13 +89,13 @@
         place.addBlock(x, 0.7, z, 2.2, 1.4, 1.8, mats.rock, true);
         place.addBlock(x + 0.2, 1.5, z - 0.1, 1.4, 0.6, 1.2, mats.frost, false);
         // Snow cap on top
-        place.addBlock(x, 1.9, z, 1.8, 0.2, 1.5, mats.snow, false);
+        place.addBlock(x, 1.92, z, 1.8, 0.2, 1.5, mats.snow, false);
     }
 
     function addFrozenPool(x, z, place, mats) {
         place.addBlock(x, -0.08, z, 5.0, 0.16, 4.0, mats.ice, false);
         // Frost ring around the pool edge
-        place.addBlock(x, 0.02, z, 5.6, 0.04, 4.6, mats.frost, false);
+        place.addBlock(x, 0.04, z, 5.6, 0.04, 4.6, mats.frost, false);
     }
 
     function addSnowDrift(x, z, w, d, place, mats) {
@@ -109,7 +109,16 @@
         addIceSpire(cx + 2.5, cz, 3.8, place, mats, ctx);
         // Horizontal ice bridge connecting the tops
         place.addBlock(cx, 3.5, cz, 5.5, 0.5, 0.8, mats.ice, false);
-        place.addBlock(cx, 3.8, cz, 4.0, 0.2, 0.5, mats.frost, false);
+        place.addBlock(cx, 3.82, cz, 4.0, 0.2, 0.5, mats.frost, false);
+    }
+
+    function buildIceShelf(cx, cz, place, mats, ctx) {
+        place.addBlock(cx, 0.35, cz, 5.8, 0.7, 3.0, mats.frost, true);
+        place.addBlock(cx + 0.4, 0.74, cz - 0.1, 4.6, 0.16, 2.1, mats.ice, false);
+
+        addIceSpire(cx - 1.9, cz + 0.8, 2.8, place, mats, ctx);
+        addIceSpire(cx + 2.1, cz - 0.6, 2.4, place, mats, ctx);
+        place.addBlock(cx + 2.8, 0.24, cz + 0.9, 0.7, 0.48, 0.6, mats.darkRock, false);
     }
 
     function buildArcticQuadrant(bounds, place, ctx) {
@@ -155,6 +164,11 @@
         var poolPt = pt(bounds, 0.72, 0.72);
         addFrozenPool(poolPt.x, poolPt.z, place, mats);
 
+        // Wind-carved ice shelf gives the biome a lower landmark, not just tall forms.
+        var shelfPt = pt(bounds, 0.30, 0.30);
+        buildIceShelf(shelfPt.x, shelfPt.z, place, mats, ctx);
+        ctx.addExclusion(shelfPt.x, shelfPt.z, 4.2);
+
         // Snow drifts (break up the flat ground)
         var drifts = [
             { u: 0.18, v: 0.45, w: 3.5, d: 2.0 },
@@ -194,7 +208,7 @@
         }
 
         return {
-            crystals: spires.length + 2,
+            crystals: spires.length + 4,
             drifts: drifts.length,
             foothillCrystals: fragments.length,
             foothillDrifts: 0

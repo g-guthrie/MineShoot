@@ -594,7 +594,10 @@ export class GlobalArenaRoom extends DurableObject {
       slowUntil: 0,
       slowMultiplier: 1,
       deadeye: null,
-      chokeState: null
+      chokeState: null,
+      hookState: null,
+      hookPullState: null,
+      healState: null
     };
 
     this.spawnEntityRandomly(p);
@@ -887,8 +890,9 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const stunned = (player.stunUntil || 0) > now;
+    const hookPulling = !!(player.hookPullState && (player.hookPullState.endsAt || 0) > now);
     let slowMult = 1;
-    if (!stunned) {
+    if (!stunned && !hookPulling) {
       slowMult = (player.slowUntil || 0) > now
         ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
         : 1;
@@ -906,11 +910,11 @@ export class GlobalArenaRoom extends DurableObject {
         player.y = player.y + ((targetY - player.y) * slowMult);
       }
     }
-    if (typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
+    if (!hookPulling && typeof msg.yaw === 'number') player.yaw = msg.yaw;
+    if (!hookPulling && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
     if (typeof msg.weaponId === 'string' && WEAPON_STATS[msg.weaponId]) player.weaponId = msg.weaponId;
-    if (!stunned) {
+    if (!stunned && !hookPulling) {
       if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
       if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
       if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
@@ -987,6 +991,31 @@ export class GlobalArenaRoom extends DurableObject {
     const until = nowMs() + Math.max(0, Math.round(durationSec * 1000));
     target.slowUntil = Math.max(target.slowUntil || 0, until);
     target.slowMultiplier = Math.max(0.1, Math.min(1, Number(multiplier || 1)));
+  }
+
+  pullEntityToward(player, target, pullDistance, pullSpeed) {
+    if (!player || !target || !player.alive || !target.alive) return false;
+    const forward = this.entityForward(player);
+    const dist = Math.max(1.5, Number(pullDistance || 3.2));
+    const endX = clamp(player.x + (forward.x * dist), this.boundsMin, this.boundsMax);
+    const endZ = clamp(player.z + (forward.z * dist), this.boundsMin, this.boundsMax);
+    const dx = endX - target.x;
+    const dz = endZ - target.z;
+    const travelDist = Math.sqrt((dx * dx) + (dz * dz));
+    const speed = Math.max(8, Number(pullSpeed || 26));
+    const durationSec = Math.max(0.05, travelDist / speed);
+    const now = nowMs();
+    target.hookPullState = {
+      startX: target.x,
+      startZ: target.z,
+      endX,
+      endZ,
+      startAt: now,
+      endsAt: now + Math.round(durationSec * 1000),
+      facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
+    };
+    this.applyTimedStun(target, durationSec + 0.08);
+    return true;
   }
 
   closestHostileInRange(player, range, minDot) {
@@ -1240,17 +1269,20 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player) return;
     const slot1 = String(msg && msg.slot1 || '');
     const slot2 = String(msg && msg.slot2 || '');
-    if (slot1 && ABILITY_CATALOG[slot1]) {
+    player.abilityLoadout = player.abilityLoadout || {};
+    if (!slot1) {
+      player.abilityLoadout.slot1 = '';
+    } else if (ABILITY_CATALOG[slot1]) {
       const def = ABILITY_CATALOG[slot1];
       if (def.slot === 'ability' || def.slot === 'either') {
-        player.abilityLoadout = player.abilityLoadout || {};
         player.abilityLoadout.slot1 = slot1;
       }
     }
-    if (slot2 && ABILITY_CATALOG[slot2]) {
+    if (!slot2) {
+      player.abilityLoadout.slot2 = '';
+    } else if (ABILITY_CATALOG[slot2]) {
       const def = ABILITY_CATALOG[slot2];
       if (def.slot === 'ultimate' || def.slot === 'either') {
-        player.abilityLoadout = player.abilityLoadout || {};
         player.abilityLoadout.slot2 = slot2;
       }
     }
@@ -1435,6 +1467,9 @@ export class GlobalArenaRoom extends DurableObject {
     entity.slowMultiplier = 1;
     entity.deadeye = null;
     entity.chokeState = null;
+    entity.hookState = null;
+    entity.hookPullState = null;
+    entity.healState = null;
     if (entity.fixtureType === 'sim_player') {
       entity.moveSpeedNorm = 0;
       entity.sprinting = false;

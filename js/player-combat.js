@@ -158,6 +158,15 @@
         RT.GameUI.updateArmor(playerArmor, playerArmorMax);
     }
 
+    function heal(amount) {
+        var value = Math.max(0, Math.round(Number(amount || 0)));
+        if (value <= 0) return 0;
+        var prev = playerHP;
+        playerHP = Math.min(playerMaxHP, playerHP + value);
+        RT.GameUI.updateHealth(playerHP, playerMaxHP);
+        return Math.max(0, playerHP - prev);
+    }
+
     RT.GamePlayerCombat = {
         init: init,
         getHP: function () { return playerHP; },
@@ -171,6 +180,7 @@
         consumeDamage: consumeDamage,
         respawn: respawn,
         applyArmorProfile: applyArmorProfile,
+        heal: heal,
         tickArmorRegen: tickArmorRegen,
         isInvulnerable: function () { return respawnInvulnTimer > 0; },
         setInvulnTimer: function (t) { respawnInvulnTimer = Math.max(0, t); },

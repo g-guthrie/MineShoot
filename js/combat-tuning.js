@@ -94,6 +94,15 @@
             chokeTickRate: 0.25,
             chokeDotPerTick: 0,
             chokeCastDamage: 95,
+            hookLockBoxPx: 170,
+            hookRange: 26,
+            hookCastDamage: 50,
+            hookStunDuration: 0.7,
+            hookPullDistance: 3.2,
+            hookCatchRadius: 1.8,
+            hookTravelSpeed: 26,
+            healDuration: 0.85,
+            healAmount: 100,
             deadeyeLockBoxPx: 220,
             deadeyeLockRange: 80,
             deadeyeDuration: 2.0,
@@ -121,7 +130,9 @@
         var classPresets = shared.classPresets || {};
         var catalog = shared.abilityCatalog || {};
         var choke = catalog.choke || {};
+        var hook = catalog.hook || {};
         var deadeye = catalog.deadeye || {};
+        var heal = catalog.heal || {};
 
         return {
             awareness: shared.awareness || deepCopy(DEFAULTS.awareness),
@@ -156,6 +167,15 @@
                 chokeTickRate: Number(choke.tickRate) || DEFAULTS.classAbilities.chokeTickRate,
                 chokeDotPerTick: Number(choke.dotPerTick) || DEFAULTS.classAbilities.chokeDotPerTick,
                 chokeCastDamage: Number(choke.castDamage) || DEFAULTS.classAbilities.chokeCastDamage,
+                hookLockBoxPx: Number(hook.lockBoxPx) || DEFAULTS.classAbilities.hookLockBoxPx,
+                hookRange: Number(hook.range) || DEFAULTS.classAbilities.hookRange,
+                hookCastDamage: Number(hook.castDamage) || DEFAULTS.classAbilities.hookCastDamage,
+                hookStunDuration: Number(hook.stunDuration) || DEFAULTS.classAbilities.hookStunDuration,
+                hookPullDistance: Number(hook.pullDistance) || DEFAULTS.classAbilities.hookPullDistance,
+                hookCatchRadius: Number(hook.catchRadius) || DEFAULTS.classAbilities.hookCatchRadius,
+                hookTravelSpeed: Number(hook.travelSpeed) || DEFAULTS.classAbilities.hookTravelSpeed,
+                healDuration: Number(heal.duration) || DEFAULTS.classAbilities.healDuration,
+                healAmount: Number(heal.healAmount) || DEFAULTS.classAbilities.healAmount,
                 deadeyeLockBoxPx: DEFAULTS.classAbilities.deadeyeLockBoxPx,
                 deadeyeLockRange: Number(deadeye.range) || DEFAULTS.classAbilities.deadeyeLockRange,
                 deadeyeDuration: Number(deadeye.duration) || DEFAULTS.classAbilities.deadeyeDuration,

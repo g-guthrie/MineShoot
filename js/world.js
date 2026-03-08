@@ -578,7 +578,22 @@
 
         for (var i = 0; i < animatedWaterfallSheets.length; i++) {
             var sheet = animatedWaterfallSheets[i];
-            if (!sheet || !sheet.mesh || !sheet.material) continue;
+            if (!sheet) continue;
+
+            if (sheet.tiles && sheet.tiles.length) {
+                var stepInterval = Math.max(0.1, Number(sheet.stepInterval || 0.5));
+                var step = Math.floor(animClock / stepInterval);
+                for (var ti = 0; ti < sheet.tiles.length; ti++) {
+                    var tile = sheet.tiles[ti];
+                    if (!tile || !tile.material) continue;
+                    var on = ((step + tile.row + (tile.column * 2)) % 4) < 2;
+                    tile.material.color.setHex(on ? Number(sheet.lightColor || 0x74d6f2) : Number(sheet.darkColor || 0x3d8fb3));
+                    tile.material.opacity = on ? 0.78 : 0.5;
+                }
+                continue;
+            }
+
+            if (!sheet.mesh || !sheet.material) continue;
 
             sheet.offset = (sheet.offset + (dtSec * sheet.speed)) % 1;
             if (sheet.material.map) {

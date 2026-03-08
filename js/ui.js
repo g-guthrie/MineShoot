@@ -356,9 +356,10 @@
             return seconds.toFixed(1) + 's';
         }
 
+        var slot1 = 'R ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
+        var slot2 = 'F ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
         var extra = state.extra ? (' | ' + state.extra) : '';
-        abilityInfoEl.textContent =
-            'R ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.abilityCooldown) + extra;
+        abilityInfoEl.textContent = slot1 + ' | ' + slot2 + extra;
     };
 
     GameUI.updateReticle = function (weapon, spec) {
@@ -384,31 +385,16 @@
         shotgunReticleEl.style.display = 'block';
 
         var size = (spec && spec.size) ? spec.size : 300;
-        var points = (spec && spec.points) ? spec.points : [];
         shotgunReticleEl.style.width = size + 'px';
         shotgunReticleEl.style.height = size + 'px';
+    };
 
-        var dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
-        var needed = points.length;
+    GameUI.setHitscanTargetState = function (active) {
+        if (crosshairEl) crosshairEl.classList.toggle('reticle-target-in-range', !!active);
+    };
 
-        while (dots.length < needed) {
-            var dot = document.createElement('div');
-            dot.className = 'pellet-dot';
-            shotgunReticleEl.appendChild(dot);
-            dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
-        }
-        while (dots.length > needed) {
-            shotgunReticleEl.removeChild(dots[dots.length - 1]);
-            dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
-        }
-
-        for (var i = 0; i < needed; i++) {
-            var x = Math.round((size * 0.5) + (points[i][0] * size * 0.5));
-            var y = Math.round((size * 0.5) + (points[i][1] * size * 0.5));
-            dots[i].style.left = x + 'px';
-            dots[i].style.top = y + 'px';
-            dots[i].style.display = debugVisualsOn ? 'block' : 'none';
-        }
+    GameUI.setShotgunTargetState = function (active) {
+        if (shotgunReticleEl) shotgunReticleEl.classList.toggle('reticle-target-in-range', !!active);
     };
 
     GameUI.updateThrowableInfo = function (state) {

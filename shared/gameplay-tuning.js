@@ -61,12 +61,12 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  spreadNdc: 0.007 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  spreadNdc: 0.012 },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  spreadNdc: 0.028 },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, spreadNdc: 0 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  spreadNdc: 0.14 },
-    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  spreadNdc: 0 }
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  hipfireSpread: 0.007, adsHitscanRangeMultiplier: 1.4 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  hipfireSpread: 0.012, adsHitscanRangeMultiplier: 1.35 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  hipfireSpread: 0.028, adsHitscanRangeMultiplier: 1.3 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, hipfireSpread: 0,     adsHitscanRangeMultiplier: 1.1 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  hipfireSpread: 0.24,  adsHitscanRangeMultiplier: 1.0 },
+    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsHitscanRangeMultiplier: 1.0 }
   },
   throwableCategories: {
     grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
@@ -103,6 +103,17 @@ export const gameplayTuning = {
       description: 'Single-target lift + damage in reticle box.',
       cooldownMs: 8000, range: 24, minDot: 0.05, duration: 1.6,
       liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190
+    },
+    hook: {
+      id: 'hook', slot: 'either', name: 'Chain Hook',
+      description: 'Latch a target and yank them into close range.',
+      cooldownMs: 7000, range: 26, minDot: 0.03, pullDistance: 3.2,
+      stunDuration: 0.7, castDamage: 50, lockBoxPx: 170, catchRadius: 1.8, travelSpeed: 26
+    },
+    heal: {
+      id: 'heal', slot: 'either', name: 'Heal',
+      description: 'Brief self-heal with visible windup.',
+      cooldownMs: 9000, duration: 0.85, healAmount: 100
     },
     deadeye: {
       id: 'deadeye', slot: 'ultimate', name: 'Deadeye',

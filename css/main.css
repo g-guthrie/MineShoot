@@ -684,15 +684,16 @@ canvas {
 
 #loadout-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
     margin-bottom: 8px;
+    align-items: start;
 }
 
 #weapon-slot-panel {
     border: 1px solid #004225;
     background: rgba(0, 20, 8, 0.58);
-    padding: 8px 8px 6px;
+    padding: 7px 7px 5px;
 }
 
 #weapon-slot-title {
@@ -766,6 +767,13 @@ canvas {
     text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
 }
 
+.weapon-choice-btn.owned-other {
+    border-color: #e16060;
+    color: #ffcaca;
+    background: rgba(98, 26, 26, 0.34);
+    text-shadow: 0 0 4px rgba(225, 96, 96, 0.28);
+}
+
 #weapon-slot-note {
     color: #0a7728;
     font-size: 10px;
@@ -775,7 +783,7 @@ canvas {
 #throwable-slot-panel {
     border: 1px solid #004225;
     background: rgba(0, 20, 8, 0.58);
-    padding: 8px 8px 6px;
+    padding: 7px 7px 5px;
 }
 
 #throwable-slot-title {
@@ -852,8 +860,7 @@ canvas {
 #ability-slot-panel {
     border: 1px solid #004225;
     background: rgba(0, 20, 8, 0.58);
-    padding: 8px 8px 6px;
-    grid-column: 1 / -1;
+    padding: 7px 7px 5px;
 }
 
 #ability-slot-title {
@@ -882,6 +889,7 @@ canvas {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
+    margin-bottom: 4px;
 }
 
 .ability-choice-btn {
@@ -907,10 +915,45 @@ canvas {
     text-shadow: 0 0 4px rgba(180, 118, 255, 0.32);
 }
 
+.ability-choice-btn.owned-other {
+    border-color: #e16060;
+    color: #ffcaca;
+    background: rgba(98, 26, 26, 0.34);
+    text-shadow: 0 0 4px rgba(225, 96, 96, 0.28);
+}
+
+#ability-slot1-grid .ability-choice-btn.active {
+    border-color: #5ca8ff;
+    color: #dff0ff;
+    background: rgba(18, 56, 90, 0.38);
+    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
+}
+
+#ability-slot1-grid .ability-choice-btn:hover {
+    background: rgba(18, 56, 90, 0.24);
+    color: #7bc4ff;
+}
+
+#ability-slot2-grid .ability-choice-btn.active {
+    border-color: #5ca8ff;
+    color: #dff0ff;
+    background: rgba(18, 56, 90, 0.38);
+    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
+}
+
+#ability-slot2-grid .ability-choice-btn:hover {
+    background: rgba(18, 56, 90, 0.24);
+    color: #7bc4ff;
+}
+
 #ability-slot-note {
     color: #0a7728;
     font-size: 10px;
     line-height: 1.35;
+}
+
+#ability-slot2-grid {
+    margin-bottom: 4px;
 }
 
 #throwable-slot-note {
@@ -1169,6 +1212,13 @@ canvas {
     user-select: none;
 }
 
+#crosshair.reticle-target-in-range {
+    color: #ff6b6b;
+    text-shadow:
+        1px 1px 2px rgba(0, 0, 0, 0.8),
+        0 0 10px rgba(255, 70, 70, 0.28);
+}
+
 #bloom-reticle {
     position: fixed;
     top: 50%;
@@ -1200,14 +1250,11 @@ canvas {
     display: none;
 }
 
-#shotgun-reticle .pellet-dot {
-    position: absolute;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #fff;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 3px rgba(0, 0, 0, 0.75);
+#shotgun-reticle.reticle-target-in-range {
+    border-color: rgba(255, 90, 90, 0.92);
+    box-shadow:
+        0 0 0 1px rgba(60, 0, 0, 0.55) inset,
+        0 0 12px rgba(255, 70, 70, 0.22);
 }
 
 #plasma-reticle {
@@ -1247,6 +1294,7 @@ canvas {
     top: 50%;
     transform: translate(-50%, -50%);
 }
+
 
 #sniper-scope {
     position: fixed;

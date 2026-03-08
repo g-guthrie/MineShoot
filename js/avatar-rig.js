@@ -23,6 +23,8 @@
     var HEAD_EYE_Y = 0.06;
     var HEAD_EYE_Z = -0.282;
     var HEAD_EYE_X = 0.12;
+    var LEFT_PALM_NEUTRAL = { x: -0.01, y: -0.84, z: -0.03 };
+    var RIGHT_PALM_SOCKET = { x: 0.015, y: -0.98, z: -0.01 };
     var HANDLE_ANCHOR_NAME = 'weaponHandleAnchor';
     var BARREL_TIP_ANCHOR_NAME = 'weaponBarrelTipAnchor';
 
@@ -123,7 +125,7 @@
         armL.position.y = -0.42;
         shoulderLeft.add(armL);
         var palmLeft = new THREE.Group();
-        palmLeft.position.set(-0.01, -0.84, -0.03);
+        palmLeft.position.set(LEFT_PALM_NEUTRAL.x, LEFT_PALM_NEUTRAL.y, LEFT_PALM_NEUTRAL.z);
         shoulderLeft.add(palmLeft);
         modelRoot.add(shoulderLeft);
 
@@ -134,7 +136,7 @@
         shoulderRight.add(armR);
 
         var palmRight = new THREE.Group();
-        palmRight.position.set(0.015, -0.84, -0.02);
+        palmRight.position.set(RIGHT_PALM_SOCKET.x, RIGHT_PALM_SOCKET.y, RIGHT_PALM_SOCKET.z);
         shoulderRight.add(palmRight);
         modelRoot.add(shoulderRight);
 
@@ -313,15 +315,13 @@
             var legAmp = 0.12 + speedNorm * 0.55;
             if (legAmp > 0.72) legAmp = 0.72;
             var walkSwing = Math.sin(rig.gaitPhase) * legAmp;
-            var airborneLegPose = 0.504;
-
             if (airborne) {
-                rig.legL.rotation.x = -airborneLegPose;
-                rig.legR.rotation.x = airborneLegPose;
-                rig.legL.rotation.z = -0.08;
-                rig.legR.rotation.z = 0.08;
-                rig.legL.position.x = -0.06;
-                rig.legR.position.x = 0.06;
+                rig.legL.rotation.x = 0;
+                rig.legR.rotation.x = 0;
+                rig.legL.rotation.z = 0;
+                rig.legR.rotation.z = 0;
+                rig.legL.position.x = -0.18;
+                rig.legR.position.x = 0.18;
                 rig.armL.rotation.x = 0;
                 rig.armL.rotation.y = 0;
                 rig.armL.rotation.z = 0;
@@ -338,12 +338,16 @@
             rig.legR.rotation.z = 0;
             rig.legL.position.x = -0.18;
             rig.legR.position.x = 0.18;
+            rig.palmLeft.position.x = LEFT_PALM_NEUTRAL.x;
+            rig.palmLeft.position.y = LEFT_PALM_NEUTRAL.y;
+            rig.palmLeft.position.z = LEFT_PALM_NEUTRAL.z;
 
             var aimBias = rig.aimPitch * 0.2;
             if (rig.weaponClass === 'melee') {
                 rig.armR.rotation.x = -walkSwing;
                 rig.armR.rotation.z = 0.18;
                 rig.armL.rotation.x = walkSwing;
+                rig.armL.rotation.y = 0;
                 rig.armL.rotation.z = -0.04;
                 rig.palmRight.rotation.x = 0;
                 rig.gun.rotation.x = rig.gunBaseRot.x;
@@ -351,6 +355,7 @@
                 rig.armR.rotation.x = -walkSwing;
                 rig.armR.rotation.z = 0.18;
                 rig.armL.rotation.x = walkSwing;
+                rig.armL.rotation.y = 0;
                 rig.armL.rotation.z = -0.04;
                 rig.palmRight.rotation.x = 0;
                 rig.gun.rotation.x = rig.gunBaseRot.x;
@@ -359,13 +364,10 @@
                 var armBase = 75 * DEG_TO_RAD;
                 rig.armR.rotation.x = armBase + shoulderAim;
                 rig.armR.rotation.z = -0.08;
-                rig.armL.rotation.x = 1.18 + (rig.aimPitch * 0.18);
-                rig.armL.rotation.y = -0.18;
-                rig.armL.rotation.z = 0.28;
+                rig.armL.rotation.x = walkSwing * 0.65;
+                rig.armL.rotation.y = 0;
+                rig.armL.rotation.z = 0;
                 rig.palmRight.rotation.x = 0;
-                rig.palmLeft.position.x = -0.01;
-                rig.palmLeft.position.y = -0.72;
-                rig.palmLeft.position.z = -0.2;
                 rig.gun.rotation.x = rig.gunBaseRot.x;
             }
         }
@@ -430,6 +432,14 @@
 
         root.userData.bodyParts = [body, head, armL, armR, legL, legR];
         root.userData.originalColor = ensureHex(options.bodyColor, 0x4a7fc1);
+        root.userData.originalPartColors = [
+            body.material.color.getHex(),
+            head.material.color.getHex(),
+            armL.material.color.getHex(),
+            armR.material.color.getHex(),
+            legL.material.color.getHex(),
+            legR.material.color.getHex()
+        ];
         root.userData.weaponMuzzle = muzzle;
         root.userData.rig = rig;
 

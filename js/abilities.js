@@ -7,10 +7,11 @@
 
     var GameAbilities = {};
 
-    var activeAbility = 'deadeye';
     var abilityLoadout = { slot1: 'choke', slot2: 'deadeye' };
     var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
     var deadeyeState = null;
+    var hookState = null;
+    var healState = null;
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
 
@@ -28,22 +29,44 @@
         return Math.max(0, (Number(until || 0) - nowMs()) / 1000);
     }
 
-    function activeSlotKey() {
-        if (activeAbility && activeAbility === abilityLoadout.slot2) return 'slot2';
-        return 'slot1';
+    function slotKeyForIndex(slotIndex) {
+        return Number(slotIndex) === 2 ? 'slot2' : 'slot1';
     }
 
-    function activeCooldownUntil() {
-        return cooldownUntilBySlot[activeSlotKey()] || 0;
+    function getAbilityIdForSlot(slotIndex) {
+        return abilityLoadout[slotKeyForIndex(slotIndex)] || '';
     }
 
-    function setActiveCooldown(until) {
-        cooldownUntilBySlot[activeSlotKey()] = Number(until || 0);
+    function cooldownUntilForSlot(slotIndex) {
+        return cooldownUntilBySlot[slotKeyForIndex(slotIndex)] || 0;
+    }
+
+    function setCooldownForSlot(slotIndex, until) {
+        cooldownUntilBySlot[slotKeyForIndex(slotIndex)] = Number(until || 0);
     }
 
     function resetCooldowns() {
         cooldownUntilBySlot.slot1 = 0;
         cooldownUntilBySlot.slot2 = 0;
+    }
+
+    function clearHookState() {
+        hookState = null;
+    }
+
+    function clearHealState() {
+        healState = null;
+    }
+
+    function hookHeadWorldPosition(state, now) {
+        if (!state || !state.startPos || !state.endPos) return null;
+        var start = makeVector3Like(state.startPos);
+        var end = makeVector3Like(state.endPos);
+        if (!start || !end) return null;
+        var startAt = Number(state.startedAt || 0);
+        var hitAt = Math.max(startAt + 1, Number(state.hitAt || startAt + 1));
+        var t = Math.max(0, Math.min(1, (Number(now || nowMs()) - startAt) / (hitAt - startAt)));
+        return start.lerp(end, t);
     }
 
     function getCatalog() {
@@ -54,6 +77,16 @@
                 id: 'choke', slot: 'ability', name: 'Vader Choke',
                 description: 'Single-target lift + damage in reticle box.',
                 cooldownMs: 8000, range: 24, lockBoxPx: 190, castDamage: 95, duration: 1.6
+            },
+            hook: {
+                id: 'hook', slot: 'either', name: 'Chain Hook',
+                description: 'Latch a target and yank them into close range.',
+                cooldownMs: 7000, range: 26, lockBoxPx: 170, castDamage: 40, stunDuration: 0.7, pullDistance: 3.2, minDot: 0.03, catchRadius: 1.8, travelSpeed: 26
+            },
+            heal: {
+                id: 'heal', slot: 'either', name: 'Heal',
+                description: 'Brief self-heal with visible windup.',
+                cooldownMs: 9000, duration: 0.85, healAmount: 100
             },
             deadeye: {
                 id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
@@ -68,8 +101,8 @@
         return catalog[abilityId] || null;
     }
 
-    function getActiveConfig() {
-        var id = activeAbility;
+    function getConfigForAbility(abilityId) {
+        var id = abilityId;
         var def = getAbilityDef(id);
         if (!def) return null;
 
@@ -85,6 +118,17 @@
                 out.lockBoxPx = Number(tuning.chokeLockBoxPx || out.lockBoxPx);
                 out.castDamage = Number(tuning.chokeCastDamage || out.castDamage);
                 out.duration = Number(tuning.chokeDuration || out.duration);
+            } else if (id === 'hook') {
+                out.range = Number(tuning.hookRange || out.range);
+                out.lockBoxPx = Number(tuning.hookLockBoxPx || out.lockBoxPx);
+                out.castDamage = Number(tuning.hookCastDamage || out.castDamage);
+                out.stunDuration = Number(tuning.hookStunDuration || out.stunDuration);
+                out.pullDistance = Number(tuning.hookPullDistance || out.pullDistance);
+                out.catchRadius = Number(tuning.hookCatchRadius || out.catchRadius);
+                out.travelSpeed = Number(tuning.hookTravelSpeed || out.travelSpeed);
+            } else if (id === 'heal') {
+                out.duration = Number(tuning.healDuration || out.duration);
+                out.healAmount = Number(tuning.healAmount || out.healAmount);
             } else if (id === 'deadeye') {
                 out.range = Number(tuning.deadeyeLockRange || out.range);
                 out.duration = Number(tuning.deadeyeDuration || out.duration);
@@ -100,6 +144,32 @@
         if (!v) return null;
         if (v.clone) return v.clone();
         return new THREE.Vector3(Number(v.x || 0), Number(v.y || 0), Number(v.z || 0));
+    }
+
+    function distanceSqXYZ(a, b) {
+        if (!a || !b) return Infinity;
+        var dx = Number(a.x || 0) - Number(b.x || 0);
+        var dy = Number(a.y || 0) - Number(b.y || 0);
+        var dz = Number(a.z || 0) - Number(b.z || 0);
+        return (dx * dx) + (dy * dy) + (dz * dz);
+    }
+
+    function findHookTargetNearPoint(point, catchRadius) {
+        if (!point || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) return null;
+        var list = globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || [];
+        var best = null;
+        var maxDistSq = Math.max(0.01, Number(catchRadius || 1.8));
+        maxDistSq *= maxDistSq;
+        var bestDistSq = maxDistSq;
+        for (var i = 0; i < list.length; i++) {
+            var target = list[i];
+            if (!target || target.alive === false || !target.worldPos || !target.enemyRef || !target.hitbox) continue;
+            var distSq = distanceSqXYZ(target.worldPos, point);
+            if (distSq > bestDistSq) continue;
+            best = target;
+            bestDistSq = distSq;
+        }
+        return best;
     }
 
     var losRaycaster = new THREE.Raycaster();
@@ -200,16 +270,16 @@
         }
     }
 
-    function fireDeadeye(camera, onEnemyHit, notifier, reason) {
+    function fireDeadeye(slotIndex, camera, onEnemyHit, notifier, reason) {
         if (!deadeyeState || !deadeyeState.active) {
             return { ok: false, message: 'Deadeye not active.' };
         }
 
-        var cfg = getActiveConfig() || {};
+        var cfg = getConfigForAbility(deadeyeState.abilityId) || {};
         var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
         if (count <= 0) {
             deadeyeState = null;
-            setActiveCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownForSlot(slotIndex, debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
             return { ok: false, message: 'No Deadeye locks acquired.' };
         }
 
@@ -233,17 +303,17 @@
         }
 
         deadeyeState = null;
-        setActiveCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
 
-    function castChoke(camera, onEnemyHit, notifier) {
+    function castChoke(slotIndex, camera, onEnemyHit, notifier) {
         var now = nowMs();
-        var cfg = getActiveConfig();
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
         if (!cfg) return { ok: false, message: 'Choke not configured.' };
 
-        if (!debugMode && now < activeCooldownUntil()) {
+        if (!debugMode && now < cooldownUntilForSlot(slotIndex)) {
             return { ok: false, message: 'Choke is cooling down.' };
         }
         if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
@@ -273,20 +343,64 @@
                 result: result
             });
         }
-        setActiveCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Choke cast.', 700);
         return { ok: true, kind: 'choke' };
     }
 
-    function castDeadeye(camera, onEnemyHit, notifier) {
+    function castHook(slotIndex, camera, playerPos, rotation, onEnemyHit, notifier) {
         var now = nowMs();
-        var cfg = getActiveConfig();
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
+        if (!cfg) return { ok: false, message: 'Hook not configured.' };
+
+        if (!debugMode && now < cooldownUntilForSlot(slotIndex)) {
+            return { ok: false, message: 'Hook is cooling down.' };
+        }
+        if (!camera || !playerPos || !rotation || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget) {
+            return { ok: false, message: 'Hook targeting unavailable.' };
+        }
+        var forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+        var startPos = (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition)
+            ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition()
+            : camera.position.clone();
+        var endPos = camera.position.clone().addScaledVector(forward, Number(cfg.range || 26));
+        var travelDistance = Math.max(1, endPos.distanceTo(startPos));
+        var travelSpeed = Math.max(8, Number(cfg.travelSpeed || 26));
+        var travelMs = Math.max(120, Math.round((travelDistance / travelSpeed) * 1000));
+        hookState = {
+            active: true,
+            slotIndex: slotIndex,
+            phase: 'travel',
+            targetId: '',
+            catchRadius: Number(cfg.catchRadius || 1.8),
+            pullDistance: Number(cfg.pullDistance || 3.2),
+            stunDuration: Number(cfg.stunDuration || 0.7),
+            castDamage: Number(cfg.castDamage || 40),
+            travelSpeed: Number(cfg.travelSpeed || 26),
+            playerPos: makeVector3Like(playerPos),
+            playerYaw: Number(rotation.yaw || 0),
+            startPos: startPos,
+            endPos: endPos,
+            headPos: startPos.clone(),
+            startedAt: now,
+            hitAt: now + travelMs,
+            endsAt: now + travelMs
+        }
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        if (notifier) notifier('Chain Hook out.', 550);
+        return { ok: true, kind: 'hook_start' };
+    }
+
+    function castDeadeye(slotIndex, camera, onEnemyHit, notifier) {
+        var now = nowMs();
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
         if (!cfg) return { ok: false, message: 'Deadeye not configured.' };
 
-        if (deadeyeState && deadeyeState.active) {
-            return fireDeadeye(camera, onEnemyHit, notifier, 'manual');
+        if (deadeyeState && deadeyeState.active && deadeyeState.slotKey === slotKeyForIndex(slotIndex)) {
+            return fireDeadeye(slotIndex, camera, onEnemyHit, notifier, 'manual');
         }
-        if (!debugMode && now < activeCooldownUntil()) {
+        if (!debugMode && now < cooldownUntilForSlot(slotIndex)) {
             return { ok: false, message: 'Deadeye is cooling down.' };
         }
 
@@ -304,6 +418,8 @@
         var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, candidates.length)));
         deadeyeState = {
             active: true,
+            abilityId: getAbilityIdForSlot(slotIndex),
+            slotKey: slotKeyForIndex(slotIndex),
             startedAt: now,
             endsAt: now + durationMs,
             lockEveryMs: lockEveryMs,
@@ -315,20 +431,45 @@
         return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
     }
 
+    function castHeal(slotIndex, _camera, _playerPos, _rotation, _onEnemyHit, notifier) {
+        var now = nowMs();
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
+        if (!cfg) return { ok: false, message: 'Heal not configured.' };
+        if (!debugMode && now < cooldownUntilForSlot(slotIndex)) {
+            return { ok: false, message: 'Heal is cooling down.' };
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.heal) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.heal(cfg.healAmount || 100);
+        }
+        healState = {
+            active: true,
+            slotIndex: slotIndex,
+            startedAt: now,
+            endsAt: now + 220,
+            healAmount: Number(cfg.healAmount || 100)
+        };
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        if (notifier) notifier('Healed.', 450);
+        return { ok: true, kind: 'heal_start' };
+    }
+
     var abilityHandlers = {
         choke: castChoke,
+        hook: castHook,
+        heal: castHeal,
         deadeye: castDeadeye
     };
 
     GameAbilities.init = function (_scene) {
         resetCooldowns();
         deadeyeState = null;
+        clearHookState();
+        clearHealState();
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
         if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
             abilityLoadout.slot1 = shared.defaultAbilityLoadout.slot1 || 'choke';
             abilityLoadout.slot2 = shared.defaultAbilityLoadout.slot2 || 'deadeye';
-            activeAbility = abilityLoadout.slot2 || abilityLoadout.slot1;
         }
     };
 
@@ -355,8 +496,34 @@
         return {
             slot1: abilityLoadout.slot1,
             slot2: abilityLoadout.slot2,
-            activeAbility: activeAbility
+            activeAbility: abilityLoadout.slot1
         };
+    };
+
+    GameAbilities.setLoadoutSlot = function (slotIndex, abilityId) {
+        var catalog = getCatalog();
+        var id = abilityId && catalog[abilityId] ? abilityId : '';
+        if (!id) {
+            return GameAbilities.getLoadout();
+        }
+        var ownKey = slotKeyForIndex(slotIndex);
+        var otherKey = ownKey === 'slot1' ? 'slot2' : 'slot1';
+        abilityLoadout[ownKey] = id;
+        if (abilityLoadout[otherKey] === id) {
+            var replacement = '';
+            for (var catalogId in catalog) {
+                if (!Object.prototype.hasOwnProperty.call(catalog, catalogId)) continue;
+                if (catalogId === id) continue;
+                replacement = catalogId;
+                break;
+            }
+            abilityLoadout[otherKey] = replacement;
+        }
+        hasExplicitLoadoutSelection = true;
+        resetCooldowns();
+        deadeyeState = null;
+        clearHookState();
+        return GameAbilities.getLoadout();
     };
 
     GameAbilities.setLoadout = function (slot1OrActive, slot2) {
@@ -365,56 +532,34 @@
         var secondId = slot2 && catalog[slot2] ? slot2 : '';
         var prevSlot1 = abilityLoadout.slot1;
         var prevSlot2 = abilityLoadout.slot2;
-        var prevActiveAbility = activeAbility;
-        var prevActiveSlot = activeSlotKey();
-
         if (firstId && secondId) {
-            if ((catalog[firstId].slot === 'ability' || catalog[firstId].slot === 'either')) {
-                abilityLoadout.slot1 = firstId;
-            }
-            if ((catalog[secondId].slot === 'ultimate' || catalog[secondId].slot === 'either')) {
-                abilityLoadout.slot2 = secondId;
-            }
-            if (prevActiveAbility && (prevActiveAbility === abilityLoadout.slot1 || prevActiveAbility === abilityLoadout.slot2)) {
-                activeAbility = prevActiveAbility;
-            } else if (prevActiveSlot === 'slot1' && abilityLoadout.slot1) {
-                activeAbility = abilityLoadout.slot1;
-            } else if (prevActiveSlot === 'slot2' && abilityLoadout.slot2) {
-                activeAbility = abilityLoadout.slot2;
-            } else if (prevActiveAbility === prevSlot1 && abilityLoadout.slot1) {
-                activeAbility = abilityLoadout.slot1;
-            } else if (prevActiveAbility === prevSlot2 && abilityLoadout.slot2) {
-                activeAbility = abilityLoadout.slot2;
-            } else {
-                activeAbility = abilityLoadout.slot1 || abilityLoadout.slot2 || activeAbility;
-            }
+            abilityLoadout.slot1 = firstId;
+            abilityLoadout.slot2 = secondId;
             hasExplicitLoadoutSelection = true;
         } else if (firstId) {
-            if (catalog[firstId].slot === 'ultimate') {
-                abilityLoadout.slot2 = firstId;
-            } else {
-                abilityLoadout.slot1 = firstId;
-            }
-            activeAbility = firstId;
+            abilityLoadout.slot1 = firstId;
             hasExplicitLoadoutSelection = true;
         }
         resetCooldowns();
         deadeyeState = null;
+        clearHookState();
+        clearHealState();
         return {
             slot1: abilityLoadout.slot1,
             slot2: abilityLoadout.slot2,
-            activeAbility: activeAbility
+            activeAbility: abilityLoadout.slot1
         };
     };
 
     GameAbilities.getHudState = function () {
-        var def = getAbilityDef(activeAbility);
-        var isUltimate = !!(def && (def.slot === 'ultimate' || def.id === abilityLoadout.slot2));
+        var slot1Def = getAbilityDef(abilityLoadout.slot1);
+        var slot2Def = getAbilityDef(abilityLoadout.slot2);
         return {
             name: 'Abilities',
-            abilityName: def ? def.name : activeAbility,
-            abilityCooldown: cooldownSec(activeCooldownUntil()),
-            activeSlot: isUltimate ? 2 : 1,
+            slot1Name: slot1Def ? slot1Def.name : abilityLoadout.slot1,
+            slot1Cooldown: cooldownSec(cooldownUntilForSlot(1)),
+            slot2Name: slot2Def ? slot2Def.name : abilityLoadout.slot2,
+            slot2Cooldown: cooldownSec(cooldownUntilForSlot(2)),
             extra: deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''
@@ -461,17 +606,60 @@
         return damage;
     };
 
-    GameAbilities.triggerAbility = function (_slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
-        var handler = abilityHandlers[activeAbility];
+    GameAbilities.triggerAbility = function (slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
+        var abilityId = getAbilityIdForSlot(slot);
+        var handler = abilityHandlers[abilityId];
         if (!handler) {
-            return { ok: false, message: 'Unknown ability: ' + activeAbility };
+            return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
-        return handler(camera, onEnemyHit, notifier);
+        return handler(Number(slot) === 2 ? 2 : 1, camera, _playerPos, _rotation, onEnemyHit, notifier);
     };
 
     GameAbilities.update = function (_dt, camera, _playerPos, _rotation, onEnemyHit, notifier) {
-        if (!deadeyeState || !deadeyeState.active) return;
         var now = nowMs();
+        if (hookState && hookState.active) {
+            if (hookState.phase === 'travel') {
+                hookState.headPos = hookHeadWorldPosition(hookState, now);
+                var hookTarget = findHookTargetNearPoint(hookState.headPos, hookState.catchRadius);
+                if (hookTarget) {
+                    var hookResult = null;
+                    if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) {
+                        hookResult = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hookTarget.hitbox, hookState.castDamage || 40);
+                    }
+                    if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.pullTarget) {
+                        globalThis.__MAYHEM_RUNTIME.GameEnemy.pullTarget(
+                            hookTarget.enemyRef,
+                            hookState.playerPos,
+                            hookState.playerYaw || 0,
+                            hookState.pullDistance || 3.2,
+                            Number((hookState.travelSpeed || 26))
+                        );
+                    }
+                    hookState.phase = 'latched';
+                    hookState.targetId = String(hookTarget.targetId || '');
+                    hookState.headPos = makeVector3Like(hookTarget.worldPos);
+                    hookState.endsAt = now + 260;
+                    if (hookResult && onEnemyHit) {
+                        onEnemyHit({
+                            hitPoint: makeVector3Like(hookTarget.worldPos),
+                            damage: hookState.castDamage || 40,
+                            hitType: 'body',
+                            result: hookResult
+                        });
+                    }
+                    if (notifier) notifier('Chain Hook landed.', 700);
+                } else if (now >= (hookState.hitAt || 0)) {
+                    clearHookState();
+                    if (notifier) notifier('Hook missed.', 500);
+                }
+            } else if (now >= (hookState.endsAt || 0)) {
+                clearHookState();
+            }
+        }
+        if (healState && healState.active && now >= (healState.endsAt || 0)) {
+            clearHealState();
+        }
+        if (!deadeyeState || !deadeyeState.active) return;
 
         refreshDeadeyeTargetPositions();
 
@@ -480,7 +668,7 @@
             deadeyeState.nextLockAt += deadeyeState.lockEveryMs;
         }
         if (deadeyeState.lockCount >= deadeyeState.targets.length || now >= deadeyeState.endsAt) {
-            fireDeadeye(camera, onEnemyHit, notifier, 'auto');
+            fireDeadeye(deadeyeState.slotKey === 'slot2' ? 2 : 1, camera, onEnemyHit, notifier, 'auto');
         }
     };
 
@@ -496,11 +684,35 @@
         return buildDeadeyeUiState(deadeyeState);
     };
 
+    GameAbilities.getHookState = function () {
+        return hookState && hookState.active ? {
+            targetId: hookState.targetId,
+            phase: hookState.phase,
+            startPos: hookState.startPos ? makeVector3Like(hookState.startPos) : null,
+            endPos: hookState.endPos ? makeVector3Like(hookState.endPos) : null,
+            headPos: hookState.headPos ? makeVector3Like(hookState.headPos) : null,
+            catchRadius: Number(hookState.catchRadius || 1.8),
+            startedAt: hookState.startedAt || 0,
+            hitAt: hookState.hitAt || 0,
+            endsAt: hookState.endsAt
+        } : null;
+    };
+
+    GameAbilities.getHealState = function () {
+        return healState && healState.active ? {
+            startedAt: healState.startedAt,
+            endsAt: healState.endsAt,
+            healAmount: healState.healAmount || 100
+        } : null;
+    };
+
     GameAbilities.debugDump = function () {
         return {
             debugMode: debugMode,
-            activeAbility: activeAbility,
-            cooldown: cooldownSec(activeCooldownUntil()),
+            slot1: abilityLoadout.slot1,
+            slot2: abilityLoadout.slot2,
+            cooldownSlot1: cooldownSec(cooldownUntilForSlot(1)),
+            cooldownSlot2: cooldownSec(cooldownUntilForSlot(2)),
             deadeye: deadeyeState ? {
                 lockCount: deadeyeState.lockCount,
                 targetCount: deadeyeState.targets.length

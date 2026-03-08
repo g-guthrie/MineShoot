@@ -17,13 +17,13 @@
         if (!weapon || weapon.id === 'shotgun') return 0;
         if (!!options.scoped || !!options.adsActive) return 0;
 
-        var spreadNdc = Math.max(0, Number(weapon.spreadNdc || 0));
-        if (spreadNdc <= 0.00001) return 0;
+        var hipfireSpread = Math.max(0, Number(weapon.hipfireSpread || 0));
+        if (hipfireSpread <= 0.00001) return 0;
 
         var halfWidth = window.innerWidth * 0.5;
         var halfHeight = window.innerHeight * 0.5;
-        var xRadius = spreadNdc * halfWidth;
-        var yRadius = spreadNdc * halfHeight;
+        var xRadius = hipfireSpread * halfWidth;
+        var yRadius = hipfireSpread * halfHeight;
         return Math.max(xRadius, yRadius);
     };
 
