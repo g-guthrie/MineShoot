@@ -804,7 +804,11 @@
             if (r.rigApi) {
                 r.rigApi.setWeapon(r.weaponId || 'rifle');
                 r.rigApi.updateAimPitch(r.targetPitch || 0);
-                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt);
+                var chokeVictimState = getChokeVictimStateForEntity(r.id);
+                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt, false, {
+                    choked: chokeVictimState.lift > 0,
+                    startedAt: chokeVictimState.startedAt || 0
+                });
                 if (r.rigApi.setMuzzleVisible) {
                     r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
                 }
@@ -825,12 +829,9 @@
             setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
             setRemoteSpawnShieldVisual(r, !!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
 
-            var chokeVictimState = getChokeVictimStateForEntity(r.id);
+            chokeVictimState = getChokeVictimStateForEntity(r.id);
             if (chokeVictimState.lift > 0) {
                 r.group.position.y += chokeVictimState.lift;
-                if (r.rigApi && r.rigApi.applyChokeVictimPose) {
-                    r.rigApi.applyChokeVictimPose(Date.now(), chokeVictimState.startedAt);
-                }
             }
 
             if (r.actorVisual && r.actorVisual.syncHitboxes) {

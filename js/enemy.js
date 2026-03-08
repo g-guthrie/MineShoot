@@ -248,10 +248,10 @@
         if (enemy.rigApi && enemy.rigApi.updateLocomotion) {
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
-            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt);
-            if (enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now() && enemy.rigApi.applyChokeVictimPose) {
-                enemy.rigApi.applyChokeVictimPose(Date.now(), enemy.chokeVictimState.startedAt);
-            }
+            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt, false, {
+                choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
+                startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0
+            });
         }
     }
 

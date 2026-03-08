@@ -238,10 +238,10 @@
         if (avatarRigApi && avatarRigApi.updateLocomotion) {
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             avatarRigApi.updateAimPitch(pitch);
-            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded);
-            if (isChoked() && statusState.chokeStartedAt && avatarRigApi.applyChokeVictimPose) {
-                avatarRigApi.applyChokeVictimPose(nowMs(), statusState.chokeStartedAt);
-            }
+            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded, {
+                choked: isChoked(),
+                startedAt: statusState.chokeStartedAt || 0
+            });
         }
     }
 
