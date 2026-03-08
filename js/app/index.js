@@ -21,6 +21,7 @@ const orderedModules = [
   '../domain/weapons/registry.js',
   '../domain/weapons/behaviors.js',
   '../world/material-library.js',
+  '../world/intersection-builder.js',
   '../world/quadrant-arctic.js',
   '../world/quadrant-desert.js',
   '../world/quadrant-jungle.js',

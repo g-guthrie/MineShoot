@@ -386,72 +386,23 @@
         lowerGround.receiveShadow = true;
         scene.add(lowerGround);
 
-        // Visual seam strips.
-        var seamStripMat = matLib.getLambert({ color: 0x646861 });
-        addBlock(WORLD_CENTER, 0.08, WORLD_CENTER, 1.06, 0.16, WORLD_SIZE - (WORLD_MARGIN * 2.2), seamStripMat, false);
-        addBlock(WORLD_CENTER, 0.08, WORLD_CENTER, WORLD_SIZE - (WORLD_MARGIN * 2.2), 0.16, 1.06, seamStripMat, false);
-
-        // --- Natural center dividers (biome debris extending past seam) ---
-        (function buildCenterDividers() {
-            var C = WORLD_CENTER;
-
-            // Arctic side (NW) -- ice shelves along both seam arms
-            var iceFrost = matLib.getLambert({ color: 0xc8e8f8 });
-            var iceAccent = matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.75 });
-            var snowDrift = matLib.getLambert({ color: 0xdce8f2 });
-            // Along Z-seam (heading north from center)
-            addBlock(C - 3.5, 0.75, C - 4.0, 2.8, 1.5, 1.8, iceFrost, true);
-            addBlock(C - 3.5, 1.6, C - 4.0, 2.4, 0.3, 1.4, iceAccent, false);
-            addBlock(C - 2.0, 0.15, C - 3.0, 2.0, 0.3, 1.5, snowDrift, false);
-            addBlock(C - 5.5, 0.6, C - 2.5, 2.0, 1.2, 1.4, iceFrost, true);
-            // Along X-seam (heading west from center)
-            addBlock(C - 4.5, 0.65, C - 3.0, 1.6, 1.3, 2.2, iceFrost, true);
-            addBlock(C - 4.5, 1.4, C - 3.0, 1.2, 0.25, 1.8, iceAccent, false);
-            addBlock(C - 3.0, 0.12, C - 1.8, 1.8, 0.24, 1.2, snowDrift, false);
-
-            // Urban side (NE) -- jersey barriers and chain-link fence
-            var concreteBarrier = matLib.getLambert({ color: 0x6a7078 });
-            var concreteLt = matLib.getLambert({ color: 0x8a9098 });
-            var chainLink = matLib.getLambert({ color: 0x3a3e44 });
-            // Along Z-seam (heading north)
-            addBlock(C + 3.0, 0.35, C - 3.5, 2.4, 0.7, 0.8, concreteBarrier, true);
-            addBlock(C + 3.0, 0.35, C - 3.5, 2.0, 0.5, 0.6, concreteLt, false);
-            addBlock(C + 5.0, 0.35, C - 5.0, 2.4, 0.7, 0.8, concreteBarrier, true);
-            // Along X-seam (heading east)
-            addBlock(C + 4.0, 0.35, C - 2.5, 0.8, 0.7, 2.4, concreteBarrier, true);
-            addBlock(C + 3.5, 0.75, C - 4.5, 0.08, 1.5, 3.0, chainLink, false);
-            addBlock(C + 3.5, 1.55, C - 4.5, 0.06, 0.06, 3.0, chainLink, false);
-
-            // Desert side (SW) -- eroded mesa fragments
-            var sandstone = matLib.getLambert({ color: 0xc49a5c });
-            var mesaFrag = matLib.getLambert({ color: 0xb07842 });
-            var darkRock = matLib.getLambert({ color: 0x8a6b4a });
-            // Along Z-seam (heading south)
-            addBlock(C - 4.0, 0.5, C + 3.5, 3.5, 1.0, 2.0, sandstone, true);
-            addBlock(C - 4.0, 1.1, C + 3.5, 3.0, 0.2, 1.6, mesaFrag, false);
-            addBlock(C - 2.5, 0.3, C + 5.5, 2.0, 0.6, 1.5, sandstone, true);
-            // Along X-seam (heading west)
-            addBlock(C - 3.5, 0.45, C + 3.0, 1.8, 0.9, 2.5, sandstone, true);
-            addBlock(C - 5.0, 0.2, C + 2.0, 0.6, 0.4, 0.5, darkRock, false);
-            addBlock(C - 3.0, 0.15, C + 5.0, 0.5, 0.3, 0.4, darkRock, false);
-
-            // Jungle side (SE) -- mossy stones with vines, fallen log
-            var mossyStone = matLib.getLambert({ color: 0x3d4a32 });
-            var jungleStone = matLib.getLambert({ color: 0x4a5040 });
-            var jungleVineC = matLib.getLambert({ color: 0x1e5a1e });
-            var logMat = matLib.getLambert({ color: 0x5c3d1e });
-            // Along Z-seam (heading south)
-            addBlock(C + 3.5, 0.6, C + 4.0, 2.2, 1.2, 1.8, mossyStone, true);
-            addBlock(C + 3.8, 1.0, C + 4.0, 0.2, 0.8, 0.2, jungleVineC, false);
-            addBlock(C + 3.2, 0.8, C + 4.3, 0.2, 0.6, 0.2, jungleVineC, false);
-            addBlock(C + 5.0, 0.5, C + 2.5, 1.8, 1.0, 1.5, jungleStone, true);
-            // Along X-seam (heading east)
-            addBlock(C + 4.5, 0.55, C + 3.5, 1.5, 1.1, 2.0, mossyStone, true);
-            addBlock(C + 4.8, 0.9, C + 3.5, 0.2, 0.7, 0.2, jungleVineC, false);
-            // Fallen log across the seam
-            addBlock(C + 2.5, 0.3, C + 1.5, 0.7, 0.6, 3.5, logMat, true);
-            addBlock(C + 2.6, 0.62, C + 1.4, 0.5, 0.04, 1.5, mossyStone, false);
-        })();
+        // World-owned separator and center intersection.
+        var intersections = globalThis.__MAYHEM_RUNTIME.WorldIntersections || {};
+        var centerIntersection = null;
+        if (typeof intersections.stampIntersection === 'function') {
+            centerIntersection = intersections.stampIntersection({
+                centerX: WORLD_CENTER,
+                centerZ: WORLD_CENTER,
+                span: WORLD_SIZE - (WORLD_MARGIN * 2.2),
+                place: place,
+                materialLibrary: matLib,
+                seamMaterial: matLib.getLambert({ color: 0x646861 }),
+                seamSpec: (typeof intersections.createSeamSpec === 'function')
+                    ? intersections.createSeamSpec({ armWidth: 1.06, height: 0.16 })
+                    : { armWidth: 1.06, halfWidth: 0.53, height: 0.16 },
+                biomeMap: DEFAULT_QUADRANT_MAP.slice()
+            });
+        }
 
         // --- Biome-themed perimeter walls ---
         (function buildBiomeWalls() {

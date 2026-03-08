@@ -139,6 +139,8 @@ export function castDeadeye(room, player, cfg, _msg, now) {
   const picks = room.deadeyeCandidates(player, cfg.range || 80, cfg.minDot || 0.18, maxTargets);
   if (picks.length === 0) return { ok: false };
   player.deadeye = buildDeadeyeState(cfg, picks, now);
+  player.deadeye.range = Number(cfg.range || 80);
+  player.deadeye.minDot = Number(cfg.minDot || 0.18);
   return { ok: true, kind: 'ability_deadeye_start', payload: { targetCount: picks.length } };
 }
 
@@ -247,16 +249,29 @@ export function tickClassAbilityState(room, entity) {
 
   if (entity.hookPullState) {
     const pull = entity.hookPullState;
-    const startAt = Number(pull.startAt || now);
-    const endsAt = Math.max(startAt + 1, Number(pull.endsAt || startAt + 1));
-    const t = Math.max(0, Math.min(1, (now - startAt) / (endsAt - startAt)));
-    entity.x = pull.startX + ((pull.endX - pull.startX) * t);
-    entity.z = pull.startZ + ((pull.endZ - pull.startZ) * t);
-    entity.yaw = Number(pull.facingYaw || entity.yaw || 0);
-    entity.moveSpeedNorm = 0;
-    entity.sprinting = false;
-    if (t >= 1) {
+    const source = room.getEntityById(String(pull.sourceId || ''));
+    if (!source || !source.alive) {
       entity.hookPullState = null;
+    } else {
+      const forward = room.entityForward(source);
+      const targetDist = Math.max(1.5, Number(pull.pullDistance || 3.2));
+      const desiredX = Math.max(room.boundsMin, Math.min(room.boundsMax, source.x + (forward.x * targetDist)));
+      const desiredZ = Math.max(room.boundsMin, Math.min(room.boundsMax, source.z + (forward.z * targetDist)));
+      const toX = desiredX - entity.x;
+      const toZ = desiredZ - entity.z;
+      const dist = Math.sqrt((toX * toX) + (toZ * toZ));
+      const step = Math.max(0.001, Number(pull.pullSpeed || 26)) * (1 / 20);
+      if (dist <= step) {
+        entity.x = desiredX;
+        entity.z = desiredZ;
+        entity.hookPullState = null;
+      } else {
+        entity.x += (toX / dist) * step;
+        entity.z += (toZ / dist) * step;
+      }
+      entity.yaw = Math.atan2(source.x - entity.x, source.z - entity.z) + Math.PI;
+      entity.moveSpeedNorm = 0;
+      entity.sprinting = false;
     }
   }
 
@@ -318,6 +333,12 @@ export function tickClassAbilityState(room, entity) {
     if (!d.queue || !d.queue.length) {
       entity.deadeye = null;
     } else {
+      d.queue = d.queue.filter((targetId) => !!room.resolveLockedHostile(entity, targetId, d.range || 80, d.minDot || 0.18));
+      d.lockIndex = Math.min(d.queue.length, Number(d.lockIndex || 0));
+      if (!d.queue.length) {
+        entity.deadeye = null;
+        return;
+      }
       const lockEveryMs = Math.max(1, Math.round(d.lockEveryMs || 420));
       while ((d.lockIndex || 0) < d.queue.length && now >= (d.nextLockAt || 0)) {
         d.lockIndex = Math.min(d.queue.length, (d.lockIndex || 0) + 1);

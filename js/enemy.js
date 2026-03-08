@@ -276,16 +276,35 @@
         if (!enemy.alive) return;
         if (enemy.hookPullState) {
             var pull = enemy.hookPullState;
-            pull.elapsed += dt;
-            var t = Math.max(0, Math.min(1, pull.duration > 0 ? (pull.elapsed / pull.duration) : 1));
-            enemy.group.position.x = pull.startX + ((pull.endX - pull.startX) * t);
-            enemy.group.position.z = pull.startZ + ((pull.endZ - pull.startZ) * t);
+            var playerState = globalThis.__MAYHEM_RUNTIME.GamePlayer;
+            var sourcePos = playerState && playerState.getPosition ? playerState.getPosition() : null;
+            var sourceRot = playerState && playerState.getRotation ? playerState.getRotation() : null;
+            if (!sourcePos || !sourceRot) {
+                enemy.hookPullState = null;
+                return;
+            }
+            var targetDist = Math.max(1.5, Number(pull.pullDistance || 3.2));
+            var forwardX = -Math.sin(sourceRot.yaw || 0);
+            var forwardZ = -Math.cos(sourceRot.yaw || 0);
+            var patrolBounds = getPatrolBounds();
+            var desiredX = Math.max(patrolBounds.min, Math.min(patrolBounds.max, sourcePos.x + (forwardX * targetDist)));
+            var desiredZ = Math.max(patrolBounds.min, Math.min(patrolBounds.max, sourcePos.z + (forwardZ * targetDist)));
+            var toX = desiredX - enemy.group.position.x;
+            var toZ = desiredZ - enemy.group.position.z;
+            var dist = Math.sqrt((toX * toX) + (toZ * toZ));
+            var step = Math.max(0.001, Number(pull.pullSpeed || 26)) * dt;
+            if (dist <= step) {
+                enemy.group.position.x = desiredX;
+                enemy.group.position.z = desiredZ;
+                enemy.hookPullState = null;
+            } else {
+                enemy.group.position.x += (toX / dist) * step;
+                enemy.group.position.z += (toZ / dist) * step;
+            }
+            pull.facingYaw = Math.atan2(sourcePos.x - enemy.group.position.x, sourcePos.z - enemy.group.position.z) + Math.PI;
             enemy.visual.rotation.y = pull.facingYaw;
             enemy.revealGhost.rotation.y = pull.facingYaw;
             enemy.moveSpeed = 0;
-            if (t >= 1) {
-                enemy.hookPullState = null;
-            }
             return;
         }
         if (enemy.stunTimer > 0) {
@@ -678,27 +697,12 @@
 
     GameEnemy.pullTarget = function (enemy, playerPos, playerYaw, pullDistance, pullSpeed) {
         if (!enemy || !enemy.alive || !playerPos) return false;
-        var bounds = getPatrolBounds();
-        var dist = Math.max(1.5, Number(pullDistance || 3.2));
-        var forwardX = -Math.sin(playerYaw || 0);
-        var forwardZ = -Math.cos(playerYaw || 0);
-        var targetX = Math.max(bounds.min, Math.min(bounds.max, playerPos.x + (forwardX * dist)));
-        var targetZ = Math.max(bounds.min, Math.min(bounds.max, playerPos.z + (forwardZ * dist)));
-        var dx = targetX - enemy.group.position.x;
-        var dz = targetZ - enemy.group.position.z;
-        var travelDist = Math.sqrt((dx * dx) + (dz * dz));
-        var speed = Math.max(8, Number(pullSpeed || 26));
-        var duration = Math.max(0.05, travelDist / speed);
         enemy.hookPullState = {
-            startX: enemy.group.position.x,
-            startZ: enemy.group.position.z,
-            endX: targetX,
-            endZ: targetZ,
-            duration: duration,
-            elapsed: 0,
+            pullDistance: Math.max(1.5, Number(pullDistance || 3.2)),
+            pullSpeed: Math.max(8, Number(pullSpeed || 26)),
             facingYaw: Math.atan2(playerPos.x - enemy.group.position.x, playerPos.z - enemy.group.position.z) + Math.PI
         };
-        GameEnemy.applyStun(enemy, duration + 0.08);
+        GameEnemy.applyStun(enemy, 1.0);
         return true;
     };
 

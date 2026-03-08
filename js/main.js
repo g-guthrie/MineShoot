@@ -12,7 +12,7 @@
 
     var debugTimer = null;
 
-    var debugVisualsOn = true;
+    var debugVisualsOn = false;
 
     var DEFAULT_ENEMY_COUNT = 5;
     var MAX_PIXEL_RATIO = 1.75;
@@ -51,25 +51,23 @@
     }
 
     function createHookVisual() {
-        var geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
-        var line = new THREE.Line(
-            geometry,
-            new THREE.LineBasicMaterial({ color: 0xb7bcc4, transparent: true, opacity: 0.95 })
+        var chain = new THREE.Mesh(
+            new THREE.BoxGeometry(0.11, 0.11, 1),
+            new THREE.MeshLambertMaterial({ color: 0xb7bcc4 })
         );
-        line.renderOrder = 55;
-        line.visible = false;
-        scene.add(line);
+        chain.renderOrder = 55;
+        chain.visible = false;
+        scene.add(chain);
 
         var head = new THREE.Mesh(
-            new THREE.BoxGeometry(0.16, 0.16, 0.24),
+            new THREE.BoxGeometry(0.4, 0.28, 0.62),
             new THREE.MeshLambertMaterial({ color: 0x8a8f96 })
         );
         head.renderOrder = 56;
         head.visible = false;
         scene.add(head);
 
-        return { line: line, head: head };
+        return { chain: chain, head: head };
     }
 
     function ensureSelfHookVisual() {
@@ -88,7 +86,7 @@
 
     function hideHookVisual(visual) {
         if (!visual) return;
-        if (visual.line) visual.line.visible = false;
+        if (visual.chain) visual.chain.visible = false;
         if (visual.head) visual.head.visible = false;
     }
 
@@ -97,17 +95,19 @@
             hideHookVisual(visual);
             return;
         }
-        var pos = visual.line.geometry.getAttribute('position');
-        pos.setXYZ(0, start.x, start.y, start.z);
-        pos.setXYZ(1, end.x, end.y, end.z);
-        pos.needsUpdate = true;
-        visual.line.visible = true;
-        visual.head.visible = true;
-        visual.head.position.copy(end);
         hookTmpA.copy(end).sub(start);
-        if (hookTmpA.lengthSq() > 0.00001) {
-            visual.head.lookAt(hookTmpB.copy(end).add(hookTmpA));
+        var len = hookTmpA.length();
+        if (len <= 0.00001) {
+            hideHookVisual(visual);
+            return;
         }
+        visual.chain.visible = true;
+        visual.head.visible = true;
+        visual.chain.position.copy(start).addScaledVector(hookTmpA, 0.5);
+        visual.chain.scale.set(1, 1, len);
+        visual.chain.lookAt(end);
+        visual.head.position.copy(end);
+        visual.head.lookAt(hookTmpB.copy(end).add(hookTmpA));
     }
 
     function playerCoreWorldPosition() {
@@ -123,6 +123,58 @@
             return globalThis.__MAYHEM_RUNTIME.GamePlayer.getThrowableOriginWorldPosition();
         }
         return playerCoreWorldPosition();
+    }
+
+    function currentAbilityLoadoutState() {
+        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
+            var netState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
+            return netState && netState.abilityLoadout ? netState.abilityLoadout : null;
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout) {
+            return globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout();
+        }
+        return null;
+    }
+
+    function currentAbilityCatalogMap() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
+        return shared && shared.abilityCatalog ? shared.abilityCatalog : {};
+    }
+
+    function buildAbilityDebugText(loadout, _tuning) {
+        if (!loadout) return '';
+        var catalog = currentAbilityCatalogMap();
+        var lines = [];
+        function addSlot(label, abilityId) {
+            if (!abilityId) return;
+            var def = catalog[abilityId] || null;
+            lines.push(label + ' ' + String((def && def.name) || abilityId).toUpperCase());
+            lines.push(String((def && def.debugSummary) || 'No dev overlay summary.'));
+            if (def && Array.isArray(def.tunableParams) && def.tunableParams.length) {
+                lines.push('tune: ' + def.tunableParams.join(', '));
+            }
+            lines.push('');
+        }
+        addSlot('R', loadout.slot1);
+        addSlot('F', loadout.slot2);
+        return lines.join('\n').trim();
+    }
+
+    function deadeyeDebugRectSizePx(camera, minDot) {
+        if (!camera || !isFinite(minDot)) return null;
+        var clampedDot = Math.max(-1, Math.min(1, Number(minDot)));
+        var halfAngleRad = Math.acos(clampedDot);
+        var vFovRad = Number(camera.fov || 60) * Math.PI / 180;
+        var tanHalf = Math.tan(halfAngleRad);
+        var tanV = Math.tan(vFovRad * 0.5);
+        if (!isFinite(tanHalf) || !isFinite(tanV) || tanV <= 0.000001) return null;
+        var aspect = Math.max(0.0001, Number(camera.aspect || (window.innerWidth / Math.max(1, window.innerHeight))));
+        var xNdc = tanHalf / (tanV * aspect);
+        var yNdc = tanHalf / tanV;
+        return {
+            width: Math.max(60, Math.min(window.innerWidth * 0.86, xNdc * window.innerWidth)),
+            height: Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight))
+        };
     }
 
     function localEnemyCoreByTargetId(targetId) {
@@ -219,6 +271,7 @@
 
     function applyDebugVisuals(visible) {
         debugVisualsOn = !!visible;
+        setRuntimeIndicator(activeRuntimeMode);
 
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals) {
             globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals(!!visible);
@@ -1197,7 +1250,7 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState());
 
-            applyDebugVisuals(!multiplayerMode);
+            applyDebugVisuals(false);
 
             syncMenuWeaponSlotsToRuntime();
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon());
@@ -1496,22 +1549,38 @@
             globalThis.__MAYHEM_RUNTIME.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
         }
 
+        var abilityLoadoutState = currentAbilityLoadoutState();
+        var abilityTuningState = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
+            ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {}
+            : {};
+        var slot1Ability = abilityLoadoutState ? String(abilityLoadoutState.slot1 || '') : '';
+        var slot2Ability = abilityLoadoutState ? String(abilityLoadoutState.slot2 || '') : '';
+
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle) {
-            var hookVisible = false;
-            var hookReticleSize = 170;
-            if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
-                var selfAbilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
-                var netLoadout = selfAbilityState && selfAbilityState.abilityLoadout ? selfAbilityState.abilityLoadout : null;
-                hookVisible = !!(netLoadout && (netLoadout.slot1 === 'hook' || netLoadout.slot2 === 'hook'));
-            } else if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout) {
-                var localLoadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout();
-                hookVisible = !!(localLoadout && (localLoadout.slot1 === 'hook' || localLoadout.slot2 === 'hook'));
-            }
-            if (hookVisible && globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning) {
-                var abilityTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning() || {};
-                hookReticleSize = Number(abilityTuning.hookLockBoxPx || 170);
-            }
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(hookVisible, hookReticleSize);
+            var chokeVisible = !!debugVisualsOn && (slot1Ability === 'choke' || slot2Ability === 'choke');
+            var chokeReticleSize = Number(abilityTuningState.chokeLockBoxPx || 190);
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateChokeReticle(chokeVisible, chokeReticleSize);
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI.updateHookReticle) {
+            var hookVisible = !!debugVisualsOn && (slot1Ability === 'hook' || slot2Ability === 'hook');
+            var hookReticleSize = Number(abilityTuningState.hookReticleRadiusPx || 52) * 2;
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateHookReticle(hookVisible, hookReticleSize);
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeDebugRect) {
+            var deadeyeVisible = !!debugVisualsOn && (slot1Ability === 'deadeye' || slot2Ability === 'deadeye');
+            var deadeyeMinDot = Number(((currentAbilityCatalogMap().deadeye || {}).minDot) || 0.18);
+            var deadeyeRect = deadeyeDebugRectSizePx(camera, deadeyeMinDot);
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeDebugRect(
+                deadeyeVisible,
+                deadeyeRect ? deadeyeRect.width : 220,
+                deadeyeRect ? deadeyeRect.height : 160
+            );
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityDebugPanel) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityDebugPanel(
+                !!debugVisualsOn && !!abilityLoadoutState,
+                buildAbilityDebugText(abilityLoadoutState, abilityTuningState)
+            );
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeReticle) {
             var deadeyeStateForUi = null;
@@ -1636,8 +1705,14 @@
     function setRuntimeIndicator(mode) {
         var el = document.getElementById('runtime-indicator');
         if (!el) return;
+        el.classList.toggle('debug-active', !!debugVisualsOn);
         if (!mode) {
-            el.textContent = 'PROFILE :: STANDBY';
+            el.textContent = debugVisualsOn ? 'DEBUG MODE :: PRESS H TO SWITCH' : 'PROFILE :: STANDBY';
+            return;
+        }
+
+        if (debugVisualsOn) {
+            el.textContent = 'DEBUG MODE :: PRESS H TO SWITCH';
             return;
         }
 

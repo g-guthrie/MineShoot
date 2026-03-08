@@ -1362,6 +1362,52 @@ canvas {
     display: none;
 }
 
+#hook-reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 104px;
+    height: 104px;
+    border: 2px solid rgba(214, 228, 238, 0.88);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(200, 210, 220, 0.22), inset 0 0 8px rgba(220, 230, 240, 0.08);
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+
+#deadeye-debug-rect {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(255, 120, 120, 0.8);
+    box-shadow: 0 0 14px rgba(255, 70, 70, 0.18), inset 0 0 10px rgba(255, 80, 80, 0.06);
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+
+#ability-debug-panel {
+    position: fixed;
+    top: 62px;
+    right: 18px;
+    width: min(320px, 34vw);
+    padding: 9px 11px;
+    border: 1px solid rgba(18, 73, 116, 0.75);
+    background: rgba(4, 12, 18, 0.9);
+    color: #b9ddff;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    box-shadow: 0 0 14px rgba(0, 0, 0, 0.22);
+    z-index: 12;
+    pointer-events: none;
+    display: none;
+}
+
 #deadeye-reticles {
     position: fixed;
     top: 0;
@@ -1712,6 +1758,19 @@ canvas {
     box-shadow: 0 0 12px rgba(0, 66, 37, 0.24);
     pointer-events: none;
     user-select: none;
+}
+
+#runtime-indicator.debug-active {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    border-color: rgba(190, 55, 55, 0.92);
+    background: rgba(34, 6, 6, 0.92);
+    color: #ffb1b1;
+    font-size: 13px;
+    letter-spacing: 1.4px;
+    padding: 9px 16px;
+    box-shadow: 0 0 18px rgba(120, 0, 0, 0.28);
 }
 
 #seeker-reticle {

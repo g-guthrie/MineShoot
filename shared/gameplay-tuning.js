@@ -101,23 +101,31 @@ export const gameplayTuning = {
     choke: {
       id: 'choke', slot: 'ability', name: 'Vader Choke',
       description: 'Single-target lift + damage in reticle box.',
+      debugSummary: 'Square = choke target box.',
+      tunableParams: ['lockBoxPx', 'range', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
       cooldownMs: 8000, range: 24, minDot: 0.05, duration: 1.6,
       liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',
       description: 'Latch a target and yank them into close range.',
+      debugSummary: 'Circle = hook catch radius debug.',
+      tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
       cooldownMs: 7000, range: 26, minDot: 0.03, pullDistance: 3.2,
-      stunDuration: 0.7, castDamage: 50, lockBoxPx: 170, catchRadius: 1.8, travelSpeed: 26
+      stunDuration: 0.7, castDamage: 50, lockBoxPx: 170, reticleRadiusPx: 52, catchRadius: 1.8, travelSpeed: 26
     },
     heal: {
       id: 'heal', slot: 'either', name: 'Heal',
       description: 'Brief self-heal with visible windup.',
+      debugSummary: 'No geometry; instant heal plus green flash.',
+      tunableParams: ['healAmount', 'cooldownMs'],
       cooldownMs: 9000, duration: 0.85, healAmount: 100
     },
     deadeye: {
       id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
+      debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
+      tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
       cooldownMs: 22000, range: 80, duration: 3.0, maxTargets: 3, minDot: 0.18, damage: 260
     }
   },

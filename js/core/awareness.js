@@ -19,11 +19,16 @@
     var SEGMENTS = awarenessTuning.segments;
     var RADAR_RANGE = awarenessTuning.radarRange;
     var CORE_RANGE = awarenessTuning.coreRange;
-    var BEACON_MIN_RANGE = awarenessTuning.beaconMinRange;
-    var BEACON_MAX_COUNT = awarenessTuning.beaconMaxCount;
 
     function normalizeSectorIndex(idx, segCount) {
         return ((idx % segCount) + segCount) % segCount;
+    }
+
+    function quadrantIndexFromAngle(angle) {
+        if (angle >= 0) {
+            return angle < (Math.PI * 0.5) ? 0 : 1;
+        }
+        return angle >= (-Math.PI * 0.5) ? 3 : 2;
     }
 
     function collectTargets() {
@@ -57,7 +62,12 @@
         for (var i = 0; i < SEGMENTS; i++) segments[i] = 0;
         var coreIntensity = 0;
         var targets = collectTargets();
-        var buckets = {};
+        var quadrants = [
+            { angleRad: Math.PI * 0.25, count: 0, minDist: Infinity },
+            { angleRad: Math.PI * 0.75, count: 0, minDist: Infinity },
+            { angleRad: -Math.PI * 0.75, count: 0, minDist: Infinity },
+            { angleRad: -Math.PI * 0.25, count: 0, minDist: Infinity }
+        ];
         var sectorStep = (Math.PI * 2) / SEGMENTS;
         var forwardX = -Math.sin(playerYaw || 0);
         var forwardZ = -Math.cos(playerYaw || 0);
@@ -81,36 +91,25 @@
             if (dist <= CORE_RANGE) {
                 coreIntensity = Math.max(coreIntensity, Math.max(0, 1 - (dist / CORE_RANGE)));
             }
-
-            if (dist > BEACON_MIN_RANGE) {
-                var key = String(sector);
-                if (!buckets[key]) {
-                    buckets[key] = {
-                        sector: sector,
-                        angleRad: sector * sectorStep,
-                        count: 0,
-                        minDist: Infinity
-                    };
-                }
-                buckets[key].count++;
-                if (dist < buckets[key].minDist) buckets[key].minDist = dist;
-            }
+            var quadrant = quadrants[quadrantIndexFromAngle(angle)];
+            quadrant.count++;
+            if (dist < quadrant.minDist) quadrant.minDist = dist;
         }
 
         var beacons = [];
-        for (var k in buckets) {
-            if (!Object.prototype.hasOwnProperty.call(buckets, k)) continue;
-            var b = buckets[k];
-            var score = b.count * 2 + (1 / (1 + b.minDist * 0.04));
-            beacons.push({
-                angleRad: b.angleRad,
-                intensity: Math.max(0.3, Math.min(1, 0.35 + b.count * 0.18)),
-                score: score
-            });
+        var bestQuadrant = null;
+        for (var q = 0; q < quadrants.length; q++) {
+            var candidate = quadrants[q];
+            if (candidate.count <= 0) continue;
+            if (!bestQuadrant || candidate.count > bestQuadrant.count || (candidate.count === bestQuadrant.count && candidate.minDist < bestQuadrant.minDist)) {
+                bestQuadrant = candidate;
+            }
         }
-        beacons.sort(function (a, b) { return b.score - a.score; });
-        if (beacons.length > BEACON_MAX_COUNT) {
-            beacons = beacons.slice(0, BEACON_MAX_COUNT);
+        if (bestQuadrant) {
+            beacons.push({
+                angleRad: bestQuadrant.angleRad,
+                intensity: Math.max(0.45, Math.min(1, 0.4 + bestQuadrant.count * 0.12))
+            });
         }
 
         return {

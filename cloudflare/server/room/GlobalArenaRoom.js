@@ -51,7 +51,10 @@ const CLASS_DEFAULT_WEAPON = {
   abilities: 'rifle'
 };
 
-const ROOM_TICK_MS = 50;
+const ROOM_SIM_TICK_MS = 33;
+const ROOM_SNAPSHOT_TICK_MS = 67;
+const ROOM_FULL_RESYNC_MS = 1000;
+const DISCONNECT_GRACE_MS = 15000;
 const MAX_HP = 500;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const PLAYER_EYE_HEIGHT_WU = 1.6;
@@ -138,6 +141,9 @@ export class GlobalArenaRoom extends DurableObject {
     this.bots = new Map();
     this.tickHandle = null;
     this.lastTickAt = nowMs();
+    this.lastSnapshotAt = 0;
+    this.lastFullSnapshotAt = 0;
+    this.lastBroadcastEntityState = new Map();
     this.roomName = env.ROOM_NAME || 'global';
     this.worldSeed = '';
     this.worldProfileVersion = WORLD_PROFILE_VERSION;
@@ -176,7 +182,7 @@ export class GlobalArenaRoom extends DurableObject {
       roomId: this.roomName,
       gameMode: this.gameMode || '',
       matchState: this.serializeMatchState(),
-      tickRate: Math.round(1000 / ROOM_TICK_MS),
+      tickRate: Math.round(1000 / ROOM_SIM_TICK_MS),
       worldSeed: this.worldSeed,
       worldProfileVersion: this.worldProfileVersion,
       worldFlags: cloneWorldFlags(this.worldFlags)
@@ -186,17 +192,23 @@ export class GlobalArenaRoom extends DurableObject {
   ensureTick() {
     if (this.tickHandle) return;
     this.lastTickAt = nowMs();
+    this.lastSnapshotAt = 0;
+    this.lastFullSnapshotAt = 0;
     this.tickHandle = setInterval(() => {
       try {
         this.tick();
       } catch (err) {
         console.error('tick error', err);
       }
-    }, ROOM_TICK_MS);
+    }, ROOM_SIM_TICK_MS);
   }
 
   stopTickIfEmpty() {
     if (this.clients.size > 0) return;
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      return;
+    }
     if (this.tickHandle) {
       clearInterval(this.tickHandle);
       this.tickHandle = null;
@@ -251,7 +263,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     this.send(server, this.buildWelcomePayload(userId));
 
-    this.broadcastSnapshot();
+    this.broadcastSnapshot(true);
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -588,6 +600,7 @@ export class GlobalArenaRoom extends DurableObject {
       deaths: 0,
       progressScore: 0,
       teamId: '',
+      disconnectedAt: 0,
       abilityCooldownUntil: 0,
       ultimateCooldownUntil: 0,
       stunUntil: 0,
@@ -659,6 +672,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.players.has(userId)) {
       const p = this.players.get(userId);
       p.username = username || p.username;
+      p.disconnectedAt = 0;
       this.enforceEntityTerrainFloor(p);
       if (this.isPublicMatchRoom() && this.gameMode === GAME_MODE_TDM && !p.teamId) {
         this.applyJoinBaseline(p);
@@ -667,6 +681,7 @@ export class GlobalArenaRoom extends DurableObject {
     }
 
     const p = this.buildPlayerEntity(userId, username, classId);
+    p.disconnectedAt = 0;
     this.applyJoinBaseline(p);
     this.players.set(userId, p);
     return p;
@@ -995,26 +1010,13 @@ export class GlobalArenaRoom extends DurableObject {
 
   pullEntityToward(player, target, pullDistance, pullSpeed) {
     if (!player || !target || !player.alive || !target.alive) return false;
-    const forward = this.entityForward(player);
-    const dist = Math.max(1.5, Number(pullDistance || 3.2));
-    const endX = clamp(player.x + (forward.x * dist), this.boundsMin, this.boundsMax);
-    const endZ = clamp(player.z + (forward.z * dist), this.boundsMin, this.boundsMax);
-    const dx = endX - target.x;
-    const dz = endZ - target.z;
-    const travelDist = Math.sqrt((dx * dx) + (dz * dz));
-    const speed = Math.max(8, Number(pullSpeed || 26));
-    const durationSec = Math.max(0.05, travelDist / speed);
-    const now = nowMs();
     target.hookPullState = {
-      startX: target.x,
-      startZ: target.z,
-      endX,
-      endZ,
-      startAt: now,
-      endsAt: now + Math.round(durationSec * 1000),
+      sourceId: player.id,
+      pullDistance: Math.max(1.5, Number(pullDistance || 3.2)),
+      pullSpeed: Math.max(8, Number(pullSpeed || 26)),
       facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
     };
-    this.applyTimedStun(target, durationSec + 0.08);
+    this.applyTimedStun(target, 1.0);
     return true;
   }
 
@@ -1415,11 +1417,26 @@ export class GlobalArenaRoom extends DurableObject {
     this.clients.delete(ws);
 
     if (meta && meta.userId) {
-      // Keep player entity for short reconnect window by marking disconnected only via snapshots.
-      // For v1 we keep them alive and visible until room restart.
+      const player = this.players.get(meta.userId);
+      if (player) {
+        player.disconnectedAt = nowMs();
+      }
     }
 
     this.stopTickIfEmpty();
+  }
+
+  cleanupDisconnectedPlayers(now) {
+    const removeIds = [];
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!player.disconnectedAt) continue;
+      if ((now - player.disconnectedAt) < DISCONNECT_GRACE_MS) continue;
+      removeIds.push(player.id);
+    }
+    for (let i = 0; i < removeIds.length; i++) {
+      this.players.delete(removeIds[i]);
+    }
   }
 
   regenArmor(entity, dtSec) {
@@ -1488,10 +1505,27 @@ export class GlobalArenaRoom extends DurableObject {
     }
   }
 
-  broadcastSnapshot() {
+  broadcastSnapshot(forceFull = false) {
     const entities = [];
     for (const player of this.players.values()) entities.push(toEntityState(player));
     for (const bot of this.bots.values()) entities.push(toEntityState(bot));
+    const nextEntityState = new Map();
+    const changedEntities = [];
+    const removedEntityIds = [];
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      const serialized = JSON.stringify(entity);
+      nextEntityState.set(entity.id, serialized);
+      if (forceFull || this.lastBroadcastEntityState.get(entity.id) !== serialized) {
+        changedEntities.push(entity);
+      }
+    }
+    this.lastBroadcastEntityState.forEach((_state, entityId) => {
+      if (!nextEntityState.has(entityId)) {
+        removedEntityIds.push(entityId);
+      }
+    });
+    this.lastBroadcastEntityState = nextEntityState;
     const projectiles = [];
     this.projectiles.forEach((p) => {
       if (!p || !p.alive) return;
@@ -1505,9 +1539,11 @@ export class GlobalArenaRoom extends DurableObject {
     this.broadcast({
       t: MSG_S2C.SNAPSHOT,
       serverTime: nowMs(),
+      delta: !forceFull,
       gameMode: this.gameMode || '',
       matchState: this.serializeMatchState(),
-      entities,
+      entities: forceFull ? entities : changedEntities,
+      removedEntityIds,
       projectiles,
       fireZones
     });
@@ -1518,6 +1554,7 @@ export class GlobalArenaRoom extends DurableObject {
     const dtSec = Math.max(0.001, Math.min(0.2, (now - this.lastTickAt) / 1000));
     this.lastTickAt = now;
 
+    this.cleanupDisconnectedPlayers(now);
     this.maybeResetPublicMatch();
     this.syncRoomFixtures();
     this.startPublicMatchIfReady();
@@ -1526,6 +1563,13 @@ export class GlobalArenaRoom extends DurableObject {
     tickProjectiles(this, dtSec);
     tickFireZones(this, dtSec);
     this.updateLeaderProgress();
-    this.broadcastSnapshot();
+    if ((now - this.lastSnapshotAt) >= ROOM_SNAPSHOT_TICK_MS) {
+      const forceFull = (now - this.lastFullSnapshotAt) >= ROOM_FULL_RESYNC_MS;
+      this.broadcastSnapshot(forceFull);
+      this.lastSnapshotAt = now;
+      if (forceFull) this.lastFullSnapshotAt = now;
+    }
+
+    this.stopTickIfEmpty();
   }
 }

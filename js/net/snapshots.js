@@ -11,14 +11,21 @@
         hooks = hooks || {};
         var snapshotMap = new Map();
 
-        function applySnapshot(entities, projectiles, fireZones) {
+        function applySnapshot(entities, projectiles, fireZones, opts) {
+            opts = opts || {};
             if (!Array.isArray(entities)) return;
 
-            snapshotMap.clear();
+            if (!opts.delta) {
+                snapshotMap.clear();
+            }
             for (var i = 0; i < entities.length; i++) {
                 var e = entities[i];
                 snapshotMap.set(e.id, e);
                 if (hooks.onEntity) hooks.onEntity(e);
+            }
+            var removedIds = Array.isArray(opts.removedEntityIds) ? opts.removedEntityIds : [];
+            for (var r = 0; r < removedIds.length; r++) {
+                snapshotMap.delete(removedIds[r]);
             }
 
             if (hooks.onPrune) hooks.onPrune(snapshotMap);

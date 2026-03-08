@@ -7,8 +7,8 @@
 
     var GameUI = {};
 
-    var crosshairEl, bloomReticleEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
-    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl;
+    var crosshairEl, bloomReticleEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, abilityDebugPanelEl;
     var seekerReticleEl, seekerReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
@@ -48,6 +48,8 @@
         shotgunReticleEl = document.getElementById('shotgun-reticle');
         sniperScopeEl = document.getElementById('sniper-scope');
         chokeReticleEl = document.getElementById('choke-reticle');
+        hookReticleEl = document.getElementById('hook-reticle');
+        deadeyeDebugRectEl = document.getElementById('deadeye-debug-rect');
         deadeyeReticlesEl = document.getElementById('deadeye-reticles');
         hitmarkerEl = document.getElementById('hitmarker');
         killCounterEl = document.getElementById('kill-counter');
@@ -56,6 +58,7 @@
         armorBarEl = document.getElementById('armor-bar');
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
+        abilityDebugPanelEl = document.getElementById('ability-debug-panel');
         seekerReticleEl = document.getElementById('seeker-reticle');
         seekerReticleLabelEl = document.getElementById('seeker-reticle-label');
         combatRadarEl = document.getElementById('combat-radar');
@@ -105,7 +108,7 @@
         }
 
         if (combatBeaconsEl) {
-            for (var b = 0; b < 3; b++) {
+            for (var b = 0; b < 1; b++) {
                 var beacon = document.createElement('div');
                 beacon.className = 'combat-beacon-dot';
                 combatBeaconsEl.appendChild(beacon);
@@ -508,6 +511,40 @@
         chokeReticleEl.style.width = size + 'px';
         chokeReticleEl.style.height = size + 'px';
         chokeReticleEl.style.display = 'block';
+    };
+
+    GameUI.updateHookReticle = function (visible, diameterPx) {
+        if (!hookReticleEl) return;
+        if (!visible) {
+            hookReticleEl.style.display = 'none';
+            return;
+        }
+        var size = diameterPx || 104;
+        hookReticleEl.style.width = size + 'px';
+        hookReticleEl.style.height = size + 'px';
+        hookReticleEl.style.display = 'block';
+    };
+
+    GameUI.updateDeadeyeDebugRect = function (visible, widthPx, heightPx) {
+        if (!deadeyeDebugRectEl) return;
+        if (!visible) {
+            deadeyeDebugRectEl.style.display = 'none';
+            return;
+        }
+        deadeyeDebugRectEl.style.width = Math.round(widthPx || 220) + 'px';
+        deadeyeDebugRectEl.style.height = Math.round(heightPx || 160) + 'px';
+        deadeyeDebugRectEl.style.display = 'block';
+    };
+
+    GameUI.updateAbilityDebugPanel = function (visible, text) {
+        if (!abilityDebugPanelEl) return;
+        if (!visible || !text) {
+            abilityDebugPanelEl.style.display = 'none';
+            abilityDebugPanelEl.textContent = '';
+            return;
+        }
+        abilityDebugPanelEl.textContent = text;
+        abilityDebugPanelEl.style.display = 'block';
     };
 
     function ensureDeadeyeReticles(count) {

@@ -76,21 +76,29 @@
             choke: {
                 id: 'choke', slot: 'ability', name: 'Vader Choke',
                 description: 'Single-target lift + damage in reticle box.',
+                debugSummary: 'Square = choke target box.',
+                tunableParams: ['lockBoxPx', 'range', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
                 cooldownMs: 8000, range: 24, lockBoxPx: 190, castDamage: 95, duration: 1.6
             },
             hook: {
                 id: 'hook', slot: 'either', name: 'Chain Hook',
                 description: 'Latch a target and yank them into close range.',
+                debugSummary: 'Circle = hook catch radius debug.',
+                tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
                 cooldownMs: 7000, range: 26, lockBoxPx: 170, castDamage: 40, stunDuration: 0.7, pullDistance: 3.2, minDot: 0.03, catchRadius: 1.8, travelSpeed: 26
             },
             heal: {
                 id: 'heal', slot: 'either', name: 'Heal',
                 description: 'Brief self-heal with visible windup.',
+                debugSummary: 'No geometry; instant heal plus green flash.',
+                tunableParams: ['healAmount', 'cooldownMs'],
                 cooldownMs: 9000, duration: 0.85, healAmount: 100
             },
             deadeye: {
                 id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
                 description: 'Lock and execute marked targets.',
+                debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
+                tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
                 cooldownMs: 22000, range: 80, minDot: 0.18, duration: 2.0, maxTargets: 3, damage: 260
             }
         };
@@ -121,6 +129,7 @@
             } else if (id === 'hook') {
                 out.range = Number(tuning.hookRange || out.range);
                 out.lockBoxPx = Number(tuning.hookLockBoxPx || out.lockBoxPx);
+                out.reticleRadiusPx = Number(tuning.hookReticleRadiusPx || out.reticleRadiusPx);
                 out.castDamage = Number(tuning.hookCastDamage || out.castDamage);
                 out.stunDuration = Number(tuning.hookStunDuration || out.stunDuration);
                 out.pullDistance = Number(tuning.hookPullDistance || out.pullDistance);
@@ -242,7 +251,7 @@
         return { targets: markers };
     }
 
-    function refreshDeadeyeTargetPositions() {
+    function refreshDeadeyeTargetPositions(camera, cfg) {
         if (!deadeyeState || !deadeyeState.active || !deadeyeState.targets) return;
         var liveList = null;
         if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
@@ -262,8 +271,20 @@
             if (!stored || !stored.targetId || stored.dead) continue;
             var live = byId[stored.targetId];
             if (live && live.worldPos) {
-                stored.worldPos = makeVector3Like(live.worldPos);
-                if (live.hitbox) stored.hitbox = live.hitbox;
+                var nextWorldPos = makeVector3Like(live.worldPos);
+                if (
+                    camera &&
+                    nextWorldPos &&
+                    (
+                        !deadeyeHasLOS(camera.position.clone(), nextWorldPos, cfg && cfg.range || 80) ||
+                        camera.getWorldDirection(new THREE.Vector3()).dot(nextWorldPos.clone().sub(camera.position).normalize()) < Number(cfg && cfg.minDot || 0.18)
+                    )
+                ) {
+                    stored.dead = true;
+                } else {
+                    stored.worldPos = nextWorldPos;
+                    if (live.hitbox) stored.hitbox = live.hitbox;
+                }
             } else {
                 stored.dead = true;
             }
@@ -308,7 +329,7 @@
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
 
-    function castChoke(slotIndex, camera, onEnemyHit, notifier) {
+    function castChoke(slotIndex, camera, _playerPos, _rotation, onEnemyHit, notifier) {
         var now = nowMs();
         var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
         if (!cfg) return { ok: false, message: 'Choke not configured.' };
@@ -392,7 +413,7 @@
         return { ok: true, kind: 'hook_start' };
     }
 
-    function castDeadeye(slotIndex, camera, onEnemyHit, notifier) {
+    function castDeadeye(slotIndex, camera, _playerPos, _rotation, onEnemyHit, notifier) {
         var now = nowMs();
         var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
         if (!cfg) return { ok: false, message: 'Deadeye not configured.' };
@@ -661,7 +682,16 @@
         }
         if (!deadeyeState || !deadeyeState.active) return;
 
-        refreshDeadeyeTargetPositions();
+        var deadeyeCfg = getConfigForAbility(deadeyeState.abilityId) || {};
+        refreshDeadeyeTargetPositions(camera, deadeyeCfg);
+        deadeyeState.targets = deadeyeState.targets.filter(function (t) { return t && !t.dead; });
+        if (deadeyeState.lockCount > deadeyeState.targets.length) {
+            deadeyeState.lockCount = deadeyeState.targets.length;
+        }
+        if (!deadeyeState.targets.length) {
+            deadeyeState = null;
+            return;
+        }
 
         while (deadeyeState.lockCount < deadeyeState.targets.length && now >= deadeyeState.nextLockAt) {
             deadeyeState.lockCount += 1;

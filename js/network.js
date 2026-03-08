@@ -131,19 +131,27 @@
         GameNetEntities.updateFromSnapshot(entity);
     }
 
-    function applySnapshot(entities, projectiles, fireZones) {
+    function applySnapshot(entities, projectiles, fireZones, opts) {
+        opts = opts || {};
         if (snapshotHelper && snapshotHelper.applySnapshot) {
-            snapshotHelper.applySnapshot(entities, projectiles, fireZones);
+            snapshotHelper.applySnapshot(entities, projectiles, fireZones, opts);
             return;
         }
         if (!Array.isArray(entities)) return;
 
         var renderMap = GameNetEntities.getRenderMap();
-        snapshotMap.clear();
+        if (!opts.delta) {
+            snapshotMap.clear();
+        }
         for (var i = 0; i < entities.length; i++) {
             var e = entities[i];
             snapshotMap.set(e.id, e);
             updateRemoteFromSnapshot(e);
+        }
+        var removedIds = Array.isArray(opts.removedEntityIds) ? opts.removedEntityIds : [];
+        for (i = 0; i < removedIds.length; i++) {
+            snapshotMap.delete(removedIds[i]);
+            GameNetEntities.removeRemoteVisual(removedIds[i]);
         }
 
         var toRemove = [];
@@ -306,7 +314,10 @@
         if (msg.t === (MSG_S2C.SNAPSHOT || 'snapshot')) {
             gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
             matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : matchState;
-            applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || []);
+            applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || [], {
+                delta: !!msg.delta,
+                removedEntityIds: msg.removedEntityIds || []
+            });
             return;
         }
 
