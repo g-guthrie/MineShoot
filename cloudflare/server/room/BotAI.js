@@ -85,7 +85,7 @@ export function ensureBots(room) {
 }
 
 export function tickBots(room, dtSec) {
-  const players = Array.from(room.players.values()).filter((p) => p.alive);
+  const players = Array.from(room.players.values()).filter((p) => room.canTargetEntity(p));
   for (const bot of room.bots.values()) {
     room.respawnIfNeeded(bot);
     if (!bot.alive) continue;

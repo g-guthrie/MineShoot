@@ -31,33 +31,10 @@
     var playerForward = new THREE.Vector3();
     var hitFromPlayer = new THREE.Vector3();
 
-    // Y is positive-down for UI layout consistency.
-    var SHOTGUN_MEDIUM_RING_RATIO = 0.5;
-    var SHOTGUN_OUTER_RING_RATIO = 0.9;
-    var SHOTGUN_RETICLE_SIZE_PX = 225;
-    var SHOTGUN_RETICLE_REF_DISTANCE = 14;
-    var SHOTGUN_RETICLE_THIRD_MIN_SCALE = 0.62;
-    var SHOTGUN_RETICLE_THIRD_MAX_SCALE = 0.96;
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
     var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
-    var SHOTGUN_ADS_SPREAD_SCALE = 0.42;
-
-    function pushRingPoints(out, count, radius, angleOffsetRad) {
-        for (var i = 0; i < count; i++) {
-            var angle = angleOffsetRad + ((Math.PI * 2 * i) / count);
-            out.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
-        }
-    }
-
-    function buildShotgunPattern() {
-        var points = [[0, 0]];
-        pushRingPoints(points, 5, SHOTGUN_MEDIUM_RING_RATIO, -Math.PI * 0.5);
-        pushRingPoints(points, 6, SHOTGUN_OUTER_RING_RATIO, -Math.PI * 0.5);
-        return points;
-    }
-
-    var SHOTGUN_PATTERN = buildShotgunPattern();
+    var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
 
     var combatTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning;
     var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
@@ -77,6 +54,7 @@
             pellets: Number(s.pellets || 1),
             hipfireSpread: Number(s.hipfireSpread || 0),
             maxRange: maxRange,
+            adsSpreadMultiplier: Number(typeof s.adsSpreadMultiplier === 'number' ? s.adsSpreadMultiplier : 0),
             adsHitscanRangeMultiplier: Number(s.adsHitscanRangeMultiplier || 1)
         };
     }
@@ -298,7 +276,7 @@
 
 
     function tracerLifeForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 0.055;
+        if (weaponId === 'machinegun') return 0.075;
         if (weaponId === 'shotgun') return 0.1;
         if (weaponId === 'sniper') return 0.12;
         return 0.11;
@@ -312,7 +290,7 @@
     }
 
     function tracerSegmentLengthForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 1.15;
+        if (weaponId === 'machinegun') return 1.25;
         if (weaponId === 'shotgun') return 1.9;
         if (weaponId === 'sniper') return 2.6;
         return 2.1;
@@ -391,26 +369,35 @@
         return Math.max(1, Math.round(damage * tailScale));
     }
 
-    function getThirdPersonCameraDistance() {
-        if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera || !globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) return null;
-        var camera = globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera();
-        var playerPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
-        if (!camera || !playerPos || !camera.position || !camera.position.distanceTo) return null;
-        return camera.position.distanceTo(playerPos);
+    function getWeaponSpreadMultiplier(weapon) {
+        if (!weapon || !weapon.id) return 0;
+        if (!isAdsActiveForWeapon(weapon.id)) return 1;
+        return Math.max(0, Number(weapon.adsSpreadMultiplier || 0));
+    }
+
+    function getWeaponSpreadRadiusPx(weapon) {
+        if (!weapon || weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) return 0;
+        var spread = Math.max(0, Number(weapon.hipfireSpread || 0));
+        if (spread <= 0.00001) return 0;
+        var spreadScale = getWeaponSpreadMultiplier(weapon);
+        if (spreadScale <= 0.00001) return 0;
+        return spread * spreadScale * Math.min(window.innerWidth, window.innerHeight) * 0.5;
+    }
+
+    function getWeaponSpreadNdcOffset(weapon) {
+        var radiusPx = getWeaponSpreadRadiusPx(weapon);
+        if (!isFinite(radiusPx) || radiusPx <= 0.001) return { x: 0, y: 0 };
+
+        var angle = Math.random() * Math.PI * 2;
+        var radius = Math.sqrt(Math.random()) * radiusPx;
+        return {
+            x: (Math.cos(angle) * radius) / (window.innerWidth * 0.5),
+            y: -((Math.sin(angle) * radius) / (window.innerHeight * 0.5))
+        };
     }
 
     function getShotgunReticleSizePx() {
-        var size = SHOTGUN_RETICLE_SIZE_PX;
-
-        var cameraDistance = getThirdPersonCameraDistance();
-        if (typeof cameraDistance !== 'number' || !isFinite(cameraDistance) || cameraDistance <= 0.001) {
-            return size * 0.78;
-        }
-
-        // Keep spread feel consistent relative to the player, not just camera distance.
-        var scale = SHOTGUN_RETICLE_REF_DISTANCE / (SHOTGUN_RETICLE_REF_DISTANCE + cameraDistance);
-        scale = Math.max(SHOTGUN_RETICLE_THIRD_MIN_SCALE, Math.min(SHOTGUN_RETICLE_THIRD_MAX_SCALE, scale));
-        return size * scale;
+        return getWeaponSpreadRadiusPx(weapons.shotgun || getCurrentWeaponData()) * 2;
     }
 
     function getSeekergunReticleSizePx() {
@@ -422,34 +409,11 @@
 
     function getBloomCircleSizePx(weapon) {
         if (!weapon || weapon.id === 'shotgun') return 0;
-        if (isAdsActiveForWeapon(weapon.id)) return 0;
-        var spread = Math.max(0, Number(weapon.hipfireSpread || 0));
-        if (spread <= 0.00001) return 0;
-        return spread * Math.min(window.innerWidth, window.innerHeight) * 0.5 * 2;
+        return getWeaponSpreadRadiusPx(weapon) * 2;
     }
 
     function getPelletNdcOffset(weapon, pelletIndex) {
-        if (weapon.id === 'shotgun') {
-            var angle = Math.random() * Math.PI * 2;
-            var radius = Math.sqrt(Math.random());
-            var halfSize = getShotgunReticleSizePx() * 0.5;
-            if (isAdsActiveForWeapon('shotgun')) {
-                halfSize *= SHOTGUN_ADS_SPREAD_SCALE;
-            }
-            return {
-                x: ((Math.cos(angle) * radius) * halfSize) / (window.innerWidth * 0.5),
-                y: -((Math.sin(angle) * radius) * halfSize) / (window.innerHeight * 0.5)
-            };
-        }
-
-        if (isAdsActiveForWeapon(weapon.id)) {
-            return { x: 0, y: 0 };
-        }
-
-        return {
-            x: (Math.random() * 2 - 1) * weapon.hipfireSpread,
-            y: (Math.random() * 2 - 1) * weapon.hipfireSpread
-        };
+        return getWeaponSpreadNdcOffset(weapon);
     }
 
     function getLockTargets() {
@@ -559,16 +523,19 @@
     }
 
     function resolvePlasmaMuzzle(camera) {
+        var forward = plasmaForward;
+        if (camera && camera.getWorldDirection) {
+            camera.getWorldDirection(forward);
+        }
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {
             var p = globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition();
             if (p && typeof p.x === 'number') {
-                plasmaMuzzle.copy(p);
+                plasmaMuzzle.copy(p).addScaledVector(forward, TRACER_ORIGIN_FORWARD_OFFSET);
                 return plasmaMuzzle;
             }
         }
 
-        camera.getWorldDirection(plasmaForward);
-        plasmaMuzzle.copy(camera.position).addScaledVector(plasmaForward, 0.65);
+        plasmaMuzzle.copy(camera.position).addScaledVector(forward, 0.65 + TRACER_ORIGIN_FORWARD_OFFSET);
         return plasmaMuzzle;
     }
 
@@ -691,6 +658,7 @@
             headDamage: weapon.headDamage,
             pellets: weapon.pellets,
             hipfireSpread: weapon.hipfireSpread,
+            adsSpreadMultiplier: weapon.adsSpreadMultiplier,
             maxRange: getEffectiveMaxRange(weapon),
             adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1)
         };
@@ -703,6 +671,7 @@
         return {
             type: 'shotgun',
             size: getShotgunReticleSizePx(),
+            spreadRadiusPx: getWeaponSpreadRadiusPx(weapons[id]),
             bloomSize: 0,
             adsActive: isAdsActiveForWeapon(id)
         };
@@ -899,10 +868,16 @@
                 headDamage: weapon.headDamage,
                 pellets: weapon.pellets,
                 hipfireSpread: weapon.hipfireSpread,
+                adsSpreadMultiplier: weapon.adsSpreadMultiplier,
                 maxRange: weapon.maxRange
             });
         }
         return out;
+    };
+
+    GameHitscan.getSpreadRadiusPx = function (weaponId) {
+        var weapon = (typeof weaponId === 'string') ? weapons[weaponId] : weaponId;
+        return getWeaponSpreadRadiusPx(weapon);
     };
 
     globalThis.__MAYHEM_RUNTIME.GameHitscan = GameHitscan;

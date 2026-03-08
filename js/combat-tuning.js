@@ -89,6 +89,7 @@
         classAbilities: {
             chokeLockBoxPx: 190,
             chokeRange: 24,
+            chokeTargetTolerance: 1.8,
             chokeDuration: 1.6,
             chokeLiftHeight: 1.0,
             chokeTickRate: 0.25,
@@ -163,6 +164,7 @@
             classAbilities: {
                 chokeLockBoxPx: Number(choke.lockBoxPx) || DEFAULTS.classAbilities.chokeLockBoxPx,
                 chokeRange: Number(choke.range) || DEFAULTS.classAbilities.chokeRange,
+                chokeTargetTolerance: Number(choke.targetTolerance) || DEFAULTS.classAbilities.chokeTargetTolerance,
                 chokeDuration: Number(choke.duration) || DEFAULTS.classAbilities.chokeDuration,
                 chokeLiftHeight: Number(choke.liftHeight) || DEFAULTS.classAbilities.chokeLiftHeight,
                 chokeTickRate: Number(choke.tickRate) || DEFAULTS.classAbilities.chokeTickRate,

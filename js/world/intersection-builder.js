@@ -37,6 +37,7 @@
         var seamSpec = createSeamSpec(ctx.seamSpec);
         var seamHalf = seamSpec.halfWidth;
         var seamTop = seamSpec.height;
+        var baseLiftGap = 0.08;
 
         function addCenterBlock(offsetX, y, offsetZ, w, h, d, material) {
             place.addBlock(centerX + offsetX, y, centerZ + offsetZ, w, h, d, material, true);
@@ -88,14 +89,14 @@
         addCenterRect(2.4, 4.3, seamHalf, 2.0, seamTop * 0.5, seamTop, mats.jungleStone);
 
         // Inner rise: each slice can fill only its own quarter of the seam volume.
-        addCenterRect(-3.1, -0.75, -3.7, -0.75, 0.7, 1.05, mats.iceFrost);
+        addCenterRect(-3.1, -0.75, -3.7, -0.75, seamTop + baseLiftGap + (1.05 * 0.5), 1.05, mats.iceFrost);
         addCenterRect(-1.85, 0.0, -2.0, 0.0, 1.55, 0.95, mats.iceAccent);
         addCenterRect(-0.95, 0.0, -1.05, 0.0, 2.55, 1.15, mats.iceAccent);
         addCenterBlock(-1.35, 3.9, -1.0, 0.42, 1.45, 0.42, mats.iceAccent);
         addCenterBlock(-0.72, 4.35, -1.42, 0.28, 0.9, 0.28, mats.iceAccent);
         addCenterBlock(-1.0, 3.75, -0.65, 0.8, 0.2, 0.65, mats.snowDrift);
 
-        addCenterRect(0.75, 3.6, -3.1, -0.75, 0.62, 0.9, mats.concreteBarrier);
+        addCenterRect(0.75, 3.6, -3.1, -0.75, seamTop + baseLiftGap + (0.9 * 0.5), 0.9, mats.concreteBarrier);
         addCenterRect(0.0, 2.25, -1.75, 0.0, 1.35, 0.95, mats.concreteBarrier);
         addCenterRect(0.0, 1.15, -1.0, 0.0, 2.3, 1.0, mats.concreteLt);
         addCenterRect(2.2, 3.8, -1.5, -0.72, 1.72, 0.28, mats.concreteLt);
@@ -103,14 +104,14 @@
         addCenterRect(0.9, 1.06, -1.62, -0.18, 4.5, 0.08, mats.chainLink);
         addCenterBlock(2.05, 2.85, -1.15, 0.9, 0.12, 0.12, mats.concreteLt);
 
-        addCenterRect(-3.3, -0.78, 0.78, 3.4, 0.74, 1.15, mats.sandstone);
+        addCenterRect(-3.3, -0.78, 0.78, 3.4, seamTop + baseLiftGap + (1.15 * 0.5), 1.15, mats.sandstone);
         addCenterRect(-2.0, 0.0, 0.95, 2.35, 1.75, 1.0, mats.mesaFrag);
         addCenterRect(-0.98, 0.0, 1.1, 1.9, 2.78, 1.15, mats.darkRock);
         addCenterBlock(-2.45, 2.0, 1.05, 0.88, 0.52, 0.78, mats.mesaFrag);
         addCenterBlock(-1.48, 4.05, 1.42, 0.52, 1.12, 0.52, mats.darkRock);
         addCenterBlock(-0.7, 3.32, 0.92, 0.42, 0.18, 0.82, mats.sandstone);
 
-        addCenterRect(0.78, 3.4, 0.78, 3.2, 0.72, 1.2, mats.jungleStone);
+        addCenterRect(0.78, 3.4, 0.78, 3.2, seamTop + baseLiftGap + (1.2 * 0.5), 1.2, mats.jungleStone);
         addCenterRect(0.0, 2.2, 0.0, 2.25, 1.62, 1.0, mats.mossyStone);
         addCenterRect(0.0, 1.08, 0.72, 1.9, 2.6, 1.08, mats.mossyStone);
         addCenterBlock(1.36, 3.95, 1.36, 0.5, 1.8, 0.5, mats.log);

@@ -15,6 +15,7 @@ import {
 } from '../transport.js';
 import { getSeekProfileByWeaponId, resolveSeekAimProfile } from '../../../shared/seek-profiles.js';
 import { selectSeekTarget } from '../../../shared/seek-core.js';
+import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 
 import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
 import { ensureBots, tickBots } from './BotAI.js';
@@ -52,7 +53,7 @@ const CLASS_DEFAULT_WEAPON = {
 };
 
 const ROOM_SIM_TICK_MS = 33;
-const ROOM_SNAPSHOT_TICK_MS = 67;
+const ROOM_SNAPSHOT_TICK_MS = 33;
 const ROOM_FULL_RESYNC_MS = 1000;
 const DISCONNECT_GRACE_MS = 15000;
 const MAX_HP = 500;
@@ -83,6 +84,9 @@ const PUBLIC_ROOM_HARD_CAP = 16;
 const FFA_TARGET_PROGRESS = 10;
 const TDM_TARGET_PROGRESS = 10;
 const MATCH_RESET_DELAY_MS = 5000;
+const PLAYER_SPAWN_PADDING_WU = 8;
+const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
+const PLAYER_SPAWN_SHIELD_MS = 1000;
 
 function classPreset(classId) {
   return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
@@ -360,11 +364,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !this.isPublicMatchRoom()) return;
     if (this.gameMode === GAME_MODE_FFA) {
       player.teamId = '';
-      if (this.matchState && this.matchState.started) {
-        player.progressScore = Number(this.currentFfaAverageProgress().toFixed(3));
-      } else {
-        player.progressScore = 0;
-      }
+      player.progressScore = 0;
       return;
     }
     if (this.gameMode === GAME_MODE_TDM) {
@@ -405,7 +405,7 @@ export class GlobalArenaRoom extends DurableObject {
       for (const player of this.players.values()) {
         if (!player || player.fixtureType === 'sim_player') continue;
         player.teamId = '';
-        player.progressScore = Number(player.progressScore || 0);
+        player.progressScore = Math.max(0, Number(player.kills || 0));
       }
     } else if (this.gameMode === GAME_MODE_TDM) {
       for (const player of this.players.values()) {
@@ -439,6 +439,7 @@ export class GlobalArenaRoom extends DurableObject {
       player.teamId = '';
       player.kills = 0;
       player.deaths = 0;
+      player.plannedSpawnPoint = null;
     }
     this.startPublicMatchIfReady();
     return true;
@@ -488,10 +489,9 @@ export class GlobalArenaRoom extends DurableObject {
     target.deaths = Math.max(0, Number(target.deaths || 0)) + 1;
 
     if (this.gameMode === GAME_MODE_FFA) {
-      const baseline = Math.max(1, Number(this.matchState.matchBaselinePlayerCount || this.connectedHumanCount() || 1));
-      source.progressScore = Number((Number(source.progressScore || 0) + (1 / baseline)).toFixed(3));
+      source.progressScore = Math.max(0, Number(source.kills || 0));
       this.updateLeaderProgress();
-      if (Number(source.progressScore || 0) >= Number(this.matchState.targetProgress || FFA_TARGET_PROGRESS)) {
+      if (Number(source.kills || 0) >= Number(this.matchState.targetProgress || FFA_TARGET_PROGRESS)) {
         this.finishPublicMatch(source.id, '');
       }
       return;
@@ -552,13 +552,62 @@ export class GlobalArenaRoom extends DurableObject {
 
   spawnEntityRandomly(entity) {
     if (!entity) return;
-    entity.x = 15 + Math.random() * 80;
-    entity.z = 15 + Math.random() * 80;
+    const spawn = this.chooseEntitySpawnPoint(entity);
+    this.applyEntitySpawnPoint(entity, spawn);
+    entity.plannedSpawnPoint = null;
+  }
+
+  buildSpawnAvoidPoints(entity) {
+    const avoidPoints = [];
+    const selfId = entity && entity.id ? entity.id : '';
+    const entities = this.getAliveEntities();
+    for (let i = 0; i < entities.length; i++) {
+      const other = entities[i];
+      if (!other || !other.alive || other.id === selfId) continue;
+      avoidPoints.push({
+        x: Number(other.x || 0),
+        z: Number(other.z || 0)
+      });
+    }
+    return avoidPoints;
+  }
+
+  chooseEntitySpawnPoint(entity) {
+    return chooseSpawnPoint({
+      boundsMin: this.boundsMin,
+      boundsMax: this.boundsMax,
+      padding: PLAYER_SPAWN_PADDING_WU,
+      minGroundY: -0.15,
+      minClearance: PLAYER_SPAWN_MIN_CLEARANCE_WU,
+      avoidPoints: this.buildSpawnAvoidPoints(entity),
+      getGroundHeightAt: (x, z) => this.terrainFeetYAt(x, z)
+    });
+  }
+
+  applyEntitySpawnPoint(entity, spawn) {
+    if (!entity || !spawn) return;
+    entity.x = Number(spawn.x || 0);
+    entity.z = Number(spawn.z || 0);
     if (entity.kind === 'player') {
       entity.y = this.terrainEyeYAt(entity.x, entity.z);
     } else if (!Number.isFinite(entity.y)) {
       entity.y = PLAYER_EYE_HEIGHT_WU;
     }
+  }
+
+  applySpawnShield(entity) {
+    if (!entity) return;
+    entity.spawnShieldUntil = nowMs() + PLAYER_SPAWN_SHIELD_MS;
+  }
+
+  planEntityRespawn(entity) {
+    if (!entity) return null;
+    const spawn = this.chooseEntitySpawnPoint(entity);
+    entity.plannedSpawnPoint = {
+      x: Number(spawn.x || 0),
+      z: Number(spawn.z || 0)
+    };
+    return entity.plannedSpawnPoint;
   }
 
   buildPlayerEntity(userId, username, classId, options = null) {
@@ -584,6 +633,8 @@ export class GlobalArenaRoom extends DurableObject {
       wallhackRadius: preset.wallhackRadius,
       alive: true,
       respawnAt: 0,
+      plannedSpawnPoint: null,
+      spawnShieldUntil: 0,
       lastDamageAt: 0,
       seq: 0,
       lastShotAt: {},
@@ -614,6 +665,7 @@ export class GlobalArenaRoom extends DurableObject {
     };
 
     this.spawnEntityRandomly(p);
+    this.applySpawnShield(p);
     return p;
   }
 
@@ -868,6 +920,7 @@ export class GlobalArenaRoom extends DurableObject {
       launchDirX: forward.x,
       launchDirY: forward.y,
       launchDirZ: forward.z,
+      hitRadius: Number(def.hitRadius || 1.2),
       stickyDelaySec: (typeof def.stickExplodeDelay === 'number' ? def.stickExplodeDelay : 0),
       stickyUntil: 0,
       stuckToTargetId: '',
@@ -888,10 +941,12 @@ export class GlobalArenaRoom extends DurableObject {
     for (const b of this.bots.values()) entities.push(b);
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || !e.alive || e.id === projectile.ownerId) continue;
-      const dx = e.x - projectile.x;
-      const dz = e.z - projectile.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
+      if (!this.canTargetEntity(e, projectile.ownerId)) continue;
+      const targetPos = this.entityAimTargetPosition(e);
+      const dx = targetPos.x - projectile.x;
+      const dy = targetPos.y - projectile.y;
+      const dz = targetPos.z - projectile.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (d < nearestDist) {
         nearestDist = d;
         nearest = e;
@@ -905,7 +960,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const stunned = (player.stunUntil || 0) > now;
-    const hookPulling = !!(player.hookPullState && (player.hookPullState.endsAt || 0) > now);
+    const hookPulling = !!player.hookPullState;
     let slowMult = 1;
     if (!stunned && !hookPulling) {
       slowMult = (player.slowUntil || 0) > now
@@ -953,6 +1008,16 @@ export class GlobalArenaRoom extends DurableObject {
     return out;
   }
 
+  isEntitySpawnShielded(entity) {
+    return !!(entity && entity.alive && (entity.spawnShieldUntil || 0) > nowMs());
+  }
+
+  canTargetEntity(entity, sourceId = '') {
+    if (!entity || !entity.alive) return false;
+    if (sourceId && entity.id === sourceId) return false;
+    return !this.isEntitySpawnShielded(entity);
+  }
+
   entityAimTargetPosition(entity) {
     return {
       x: entity.x,
@@ -968,7 +1033,7 @@ export class GlobalArenaRoom extends DurableObject {
     const out = [];
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || e.id === player.id) continue;
+      if (!this.canTargetEntity(e, player.id)) continue;
       const to = normalize3(e.x - player.x, ((e.y || PLAYER_EYE_HEIGHT_WU) - player.y), e.z - player.z);
       if (dot3(to, forward) < minDot) continue;
       const d = distance3(player, e);
@@ -985,8 +1050,7 @@ export class GlobalArenaRoom extends DurableObject {
     const out = [];
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || !e.alive) continue;
-      if (excludeId && e.id === excludeId) continue;
+      if (!this.canTargetEntity(e, excludeId || '')) continue;
       const d = distance3(e, center);
       if (d > radius) continue;
       out.push({ entity: e, dist: d });
@@ -1010,10 +1074,19 @@ export class GlobalArenaRoom extends DurableObject {
 
   pullEntityToward(player, target, pullDistance, pullSpeed) {
     if (!player || !target || !player.alive || !target.alive) return false;
+    const dx = player.x - target.x;
+    const dz = player.z - target.z;
+    const currentDist = Math.sqrt((dx * dx) + (dz * dz));
+    const desiredDist = Math.max(1.5, Number(pullDistance || 3.2));
+    const travelDist = Math.max(0, currentDist - desiredDist);
+    const speed = Math.max(8, Number(pullSpeed || 26));
+    const durationMs = Math.max(120, Math.round((travelDist / speed) * 1000));
     target.hookPullState = {
       sourceId: player.id,
-      pullDistance: Math.max(1.5, Number(pullDistance || 3.2)),
-      pullSpeed: Math.max(8, Number(pullSpeed || 26)),
+      pullDistance: desiredDist,
+      pullSpeed: speed,
+      startedAt: nowMs(),
+      endsAt: nowMs() + durationMs,
       facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
     };
     this.applyTimedStun(target, 1.0);
@@ -1028,7 +1101,7 @@ export class GlobalArenaRoom extends DurableObject {
   resolveLockedHostile(player, lockTargetId, range, minDot) {
     if (!player || !player.alive || !lockTargetId) return null;
     const target = this.getEntityById(String(lockTargetId));
-    if (!target || !target.alive || target.id === player.id) return null;
+    if (!this.canTargetEntity(target, player.id)) return null;
     if (distance3(player, target) > Math.max(0.5, Number(range || 0))) return null;
 
     const forward = this.entityForward(player);
@@ -1114,10 +1187,14 @@ export class GlobalArenaRoom extends DurableObject {
     if (!targetId) return;
 
     const target = this.getEntityById(targetId);
-    if (!target || !target.alive || target.id === player.id) return;
+    if (!this.canTargetEntity(target, player.id)) return;
 
     const dist = distance3(player, target);
-    if (dist > stats.maxRange) return;
+    var effectiveMaxRange = Number(stats.maxRange || 0);
+    if (msg && msg.adsActive) {
+      effectiveMaxRange *= Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1));
+    }
+    if (dist > effectiveMaxRange) return;
 
     let damage = hitType === 'head' ? stats.headDamage : stats.bodyDamage;
     damage = applyWeaponFalloff(weaponId, damage, dist);
@@ -1152,7 +1229,7 @@ export class GlobalArenaRoom extends DurableObject {
     const entities = this.getAliveEntities();
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || !e.alive || e.id === player.id) continue;
+      if (!this.canTargetEntity(e, player.id)) continue;
       out.push({
         id: e.id,
         ownerType: e.kind || 'entity',
@@ -1275,18 +1352,12 @@ export class GlobalArenaRoom extends DurableObject {
     if (!slot1) {
       player.abilityLoadout.slot1 = '';
     } else if (ABILITY_CATALOG[slot1]) {
-      const def = ABILITY_CATALOG[slot1];
-      if (def.slot === 'ability' || def.slot === 'either') {
-        player.abilityLoadout.slot1 = slot1;
-      }
+      player.abilityLoadout.slot1 = slot1;
     }
     if (!slot2) {
       player.abilityLoadout.slot2 = '';
     } else if (ABILITY_CATALOG[slot2]) {
-      const def = ABILITY_CATALOG[slot2];
-      if (def.slot === 'ultimate' || def.slot === 'either') {
-        player.abilityLoadout.slot2 = slot2;
-      }
+      player.abilityLoadout.slot2 = slot2;
     }
     this.send(ws, {
       t: MSG_S2C.CLASS_CHANGED,
@@ -1469,7 +1540,13 @@ export class GlobalArenaRoom extends DurableObject {
     entity.alive = true;
     entity.respawnAt = 0;
     entity.lastDamageAt = 0;
-    this.spawnEntityRandomly(entity);
+    if (entity.plannedSpawnPoint) {
+      this.applyEntitySpawnPoint(entity, entity.plannedSpawnPoint);
+      entity.plannedSpawnPoint = null;
+    } else {
+      this.spawnEntityRandomly(entity);
+    }
+    this.applySpawnShield(entity);
     entity.streamHeat = 0;
     entity.streamOverheatedUntil = 0;
     entity.lastShotAt = {};

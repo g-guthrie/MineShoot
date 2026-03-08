@@ -77,8 +77,8 @@
                 id: 'choke', slot: 'ability', name: 'Vader Choke',
                 description: 'Single-target lift + damage in reticle box.',
                 debugSummary: 'Square = choke target box.',
-                tunableParams: ['lockBoxPx', 'range', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
-                cooldownMs: 8000, range: 24, lockBoxPx: 190, castDamage: 95, duration: 1.6
+                tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
+                cooldownMs: 8000, range: 24, lockBoxPx: 190, castDamage: 95, duration: 1.6, targetTolerance: 1.8
             },
             hook: {
                 id: 'hook', slot: 'either', name: 'Chain Hook',
@@ -124,6 +124,7 @@
             if (id === 'choke') {
                 out.range = Number(tuning.chokeRange || out.range);
                 out.lockBoxPx = Number(tuning.chokeLockBoxPx || out.lockBoxPx);
+                out.targetTolerance = Number(tuning.chokeTargetTolerance || out.targetTolerance);
                 out.castDamage = Number(tuning.chokeCastDamage || out.castDamage);
                 out.duration = Number(tuning.chokeDuration || out.duration);
             } else if (id === 'hook') {

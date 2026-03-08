@@ -168,9 +168,10 @@
                     });
                     break;
                 case 'playerHit':
-                    // Keep hit feedback extremely subtle (faint whoosh-like cue).
-                    playNoise(c, { duration: 0.045, vol: 0.012 });
-                    playTone(c, { freq: 130, duration: 0.04, vol: 0.008, type: 'sine', attack: 0.002 });
+                    // Sharper layered thump so incoming damage is unmistakable without being huge.
+                    playNoise(c, { duration: 0.06, vol: 0.028 });
+                    playTone(c, { freq: 118, duration: 0.065, vol: 0.02, type: 'triangle', attack: 0.0015 });
+                    playTone(c, { freq: 182, duration: 0.05, vol: 0.012, type: 'square', attack: 0.001 });
                     break;
                 case 'explosion':
                     playNoise(c, { duration: 0.25, vol: 0.12 });

@@ -43,7 +43,7 @@ function closestHostileToHookPoint(room, player, point, catchRadius) {
   let bestDistSq = maxDistSq;
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
-    if (!entity || !entity.alive || entity.id === player.id) continue;
+    if (!room.canTargetEntity(entity, player.id)) continue;
     const core = room.entityAimTargetPosition(entity);
     const distSq = distanceSq3(core, point);
     if (distSq > bestDistSq) continue;
@@ -51,6 +51,15 @@ function closestHostileToHookPoint(room, player, point, catchRadius) {
     bestDistSq = distSq;
   }
   return best;
+}
+
+function targetWithinAimTolerance(room, player, target, msg, cfg) {
+  if (!room || !player || !target) return false;
+  const aimPoint = room.resolveClassAimPoint(player, msg, cfg.range || 24);
+  if (!aimPoint) return false;
+  const targetPoint = room.entityAimTargetPosition(target);
+  const tolerance = Math.max(0.25, Number(cfg.targetTolerance || 1.8));
+  return distanceSq3(aimPoint, targetPoint) <= (tolerance * tolerance);
 }
 
 function abilityDef(abilityId) {
@@ -69,7 +78,7 @@ export function fireDeadeyeLocks(room, player) {
   let landed = 0;
   for (let i = 0; i < lockCount; i++) {
     const target = room.getEntityById(ids[i]);
-    if (!target || !target.alive || target.id === player.id) continue;
+    if (!room.canTargetEntity(target, player.id)) continue;
     const out = applyDamageFromSource(player, target, d.damage || 260, {
       hitType: 'body',
       sourceKind: 'ability',
@@ -89,7 +98,7 @@ export function fireDeadeyeLocks(room, player) {
 export function applyChokeTick(room, owner, targetId, damagePerTick) {
   if (!owner || !targetId) return;
   const target = room.getEntityById(targetId);
-  if (!target || !target.alive || target.id === owner.id) return;
+  if (!room.canTargetEntity(target, owner.id)) return;
   if (damagePerTick <= 0) return;
   const out = applyDamageFromSource(owner, target, damagePerTick, {
     hitType: 'body',
@@ -105,11 +114,9 @@ export function applyChokeTick(room, owner, targetId, damagePerTick) {
 
 export function castChoke(room, player, cfg, msg, now) {
   const lockedTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
-  let target = room.resolveLockedHostile(player, lockedTargetId, cfg.range || 24, cfg.minDot || 0.05);
-  if (!target) {
-    target = room.closestHostileInRange(player, cfg.range || 24, cfg.minDot || 0.05);
-  }
+  const target = room.resolveLockedHostile(player, lockedTargetId, cfg.range || 24, cfg.minDot || 0.05);
   if (!target) return { ok: false };
+  if (!targetWithinAimTolerance(room, player, target, msg, cfg)) return { ok: false };
 
   const castOut = applyDamageFromSource(player, target, cfg.castDamage || 95, {
     hitType: 'body',

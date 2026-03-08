@@ -86,6 +86,7 @@
             classId: entity.classId,
             username: entity.username,
             alive: entity.alive,
+            spawnShieldUntil: entity.spawnShieldUntil || 0,
             wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
@@ -94,6 +95,7 @@
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
             hookState: entity.hookState || null,
+            hookPullState: entity.hookPullState || null,
             healState: entity.healState || null
         };
     }
@@ -144,6 +146,7 @@
         r.classId = entity.classId;
         r.username = entity.username;
         r.alive = entity.alive;
+        r.spawnShieldUntil = entity.spawnShieldUntil || 0;
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
@@ -153,6 +156,7 @@
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
         r.chokeState = entity.chokeState || null;
         r.hookState = entity.hookState || null;
+        r.hookPullState = entity.hookPullState || null;
         r.healState = entity.healState || null;
         r.abilityLoadout = entity.abilityLoadout || null;
 

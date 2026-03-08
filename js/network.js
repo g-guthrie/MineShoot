@@ -37,6 +37,9 @@
     var gameMode = '';
     var worldMeta = null;
     var worldMismatchNotified = false;
+    var pendingSpawnSync = null;
+    var pendingRespawnInfo = null;
+    var initialSpawnApplied = false;
 
     var inputSeq = 1;
     var inputSendTimer = 0;
@@ -126,9 +129,34 @@
         if (!sceneRef) return;
         if (entity.id === selfId) {
             selfState = entity;
+            if (!initialSpawnApplied && entity && typeof entity.x === 'number' && typeof entity.z === 'number') {
+                pendingSpawnSync = {
+                    x: Number(entity.x || 0),
+                    z: Number(entity.z || 0),
+                    executeAt: Date.now(),
+                    kind: 'initial'
+                };
+            }
             return;
         }
         GameNetEntities.updateFromSnapshot(entity);
+    }
+
+    function applyPendingSpawnSync() {
+        if (!pendingSpawnSync) return;
+        if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return;
+        if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.respawn) return;
+        globalThis.__MAYHEM_RUNTIME.GamePlayer.respawn(
+            Number(pendingSpawnSync.x || 0),
+            Number(pendingSpawnSync.z || 0)
+        );
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.setInvulnTimer) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
+        }
+        if (pendingSpawnSync.kind === 'initial') {
+            initialSpawnApplied = true;
+        }
+        pendingSpawnSync = null;
     }
 
     function applySnapshot(entities, projectiles, fireZones, opts) {
@@ -256,6 +284,26 @@
         }
     }
 
+    function setRemoteSpawnShieldVisual(render, active) {
+        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
+        render.actorVisual.visual.traverse(function (node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mat = node.material;
+            if (mat.__spawnShieldBaseOpacity === undefined) {
+                mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
+                mat.__spawnShieldBaseTransparent = !!mat.transparent;
+            }
+            if (active) {
+                mat.transparent = true;
+                mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
+            } else {
+                mat.opacity = mat.__spawnShieldBaseOpacity;
+                mat.transparent = mat.__spawnShieldBaseTransparent;
+            }
+            mat.needsUpdate = true;
+        });
+    }
+
     function handleMessage(raw) {
         var msg = null;
         try {
@@ -271,6 +319,7 @@
             roomId = sanitizeRoomId(msg.roomId || roomId || 'global');
             gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
             matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : null;
+            pendingRespawnInfo = null;
 
             var expectedMeta = buildExpectedWorldMeta(roomId);
             var nextMeta = {
@@ -391,8 +440,23 @@
         }
 
         if (msg.t === (MSG_S2C.DEATH_RESPAWN || 'death_respawn')) {
-            if (msg.entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.respawnRandom) {
-                globalThis.__MAYHEM_RUNTIME.GamePlayer.respawnRandom();
+            if (msg.entityId === selfId) {
+                var respawnAt = Math.max(Date.now(), Number(msg.respawnAt || 0));
+                pendingRespawnInfo = {
+                    active: true,
+                    respawnAt: respawnAt
+                };
+                if (typeof msg.x === 'number' && typeof msg.z === 'number') {
+                    pendingSpawnSync = {
+                        x: Number(msg.x || 0),
+                        z: Number(msg.z || 0),
+                        executeAt: respawnAt,
+                        kind: 'respawn'
+                    };
+                } else {
+                    pendingSpawnSync = null;
+                }
+                if (selfState) selfState.alive = false;
             }
             return;
         }
@@ -615,6 +679,9 @@
         classCastResultQueue = [];
         damageFeedbackQueue = [];
         seekerRejectQueue = [];
+        pendingSpawnSync = null;
+        pendingRespawnInfo = null;
+        initialSpawnApplied = false;
         selfState = null;
         selfId = '';
         matchState = null;
@@ -688,6 +755,11 @@
     GameNet.update = function (dt, playerPos, rotation) {
         if (!active) return;
 
+        if (pendingRespawnInfo && pendingRespawnInfo.active && Date.now() >= Number(pendingRespawnInfo.respawnAt || 0)) {
+            pendingRespawnInfo = null;
+        }
+        applyPendingSpawnSync();
+
         inputSendTimer -= dt;
         if (inputSendTimer <= 0) {
             inputSendTimer = INPUT_SEND_INTERVAL;
@@ -743,6 +815,7 @@
             }
 
             setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
+            setRemoteSpawnShieldVisual(r, !!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
 
             var chokeVictimLift = getChokeLiftForEntity(r.id);
             if (chokeVictimLift > 0) {
@@ -779,6 +852,10 @@
             weaponId: weaponId,
             hitType: hitType === 'head' ? 'head' : 'body'
         };
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
+            var adsState = globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();
+            if (adsState && adsState.active) payload.adsActive = true;
+        }
         if (shotToken) payload.shotToken = String(shotToken);
         return wsSend(payload);
     };
@@ -934,8 +1011,27 @@
         return matchState ? JSON.parse(JSON.stringify(matchState)) : null;
     };
 
+    GameNet.getRespawnState = function () {
+        if (!pendingRespawnInfo || !pendingRespawnInfo.active) return null;
+        return {
+            active: true,
+            respawnAt: Number(pendingRespawnInfo.respawnAt || 0),
+            remainingMs: Math.max(0, Number(pendingRespawnInfo.respawnAt || 0) - Date.now())
+        };
+    };
+
     GameNet.getGameMode = function () {
         return gameMode || '';
+    };
+
+    GameNet.getEntityName = function (entityId) {
+        var id = String(entityId || '');
+        if (!id) return '';
+        if (selfState && id === selfId) return String(selfState.username || selfState.id || '');
+        var snapshotEntity = snapshotMap.get(id);
+        if (snapshotEntity) return String(snapshotEntity.username || snapshotEntity.id || '');
+        var render = GameNetEntities.getRenderMap().get(id);
+        return render ? String(render.username || render.id || '') : '';
     };
 
     GameNet.getLockTargets = function () {

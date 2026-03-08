@@ -618,8 +618,39 @@ canvas {
 
 #menu-session-actions {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     margin-bottom: 8px;
+}
+
+#menu-session-stats {
+    flex: 1 1 auto;
+    min-height: 46px;
+    border: 1px solid #12492b;
+    background: rgba(0, 20, 8, 0.62);
+    padding: 6px 10px;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+}
+
+#menu-session-status {
+    color: #b7ffd1;
+    font-size: 12px;
+    letter-spacing: 1.3px;
+    margin-bottom: 4px;
+}
+
+#menu-session-kd {
+    color: #7bc4ff;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+#menu-session-buttons {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
 }
 
 #play-btn,
@@ -1669,7 +1700,7 @@ canvas {
     z-index: 8;
     opacity: 0;
     background:
-        radial-gradient(circle at center, rgba(255, 0, 0, 0) 58%, rgba(255, 0, 0, 0.24) 100%);
+        radial-gradient(circle at center, rgba(255, 0, 0, 0) 52%, rgba(255, 0, 0, 0.34) 86%, rgba(255, 0, 0, 0.46) 100%);
 }
 
 #damage-indicator {
@@ -1688,7 +1719,7 @@ canvas {
     inset: -2px;
     opacity: 0;
     background:
-        radial-gradient(circle at center, rgba(255, 70, 70, 0) 72%, rgba(255, 70, 70, 0.46) 92%, rgba(255, 70, 70, 0.65) 100%);
+        radial-gradient(circle at center, rgba(255, 70, 70, 0) 66%, rgba(255, 70, 70, 0.62) 88%, rgba(255, 70, 70, 0.82) 100%);
     mix-blend-mode: screen;
 }
 
@@ -2026,6 +2057,17 @@ canvas {
 
     #mode-buttons {
         grid-template-columns: 1fr;
+    }
+
+    #menu-session-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #menu-session-buttons {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
     }
 
     #loadout-row {

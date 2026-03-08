@@ -37,6 +37,7 @@
     var hookTmpEnd = new THREE.Vector3();
     var hookTmpA = new THREE.Vector3();
     var hookTmpB = new THREE.Vector3();
+    var lastHandledMatchEndAt = 0;
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -250,6 +251,89 @@
         if (docsTitle && /minecraft fps/i.test(docsTitle.textContent || '')) {
             docsTitle.textContent = String(docsTitle.textContent).replace(/minecraft fps/ig, 'MAYHEM');
         }
+    }
+
+    function ensureMenuSessionEls() {
+        return {
+            stats: document.getElementById('menu-session-stats'),
+            status: document.getElementById('menu-session-status'),
+            kd: document.getElementById('menu-session-kd'),
+            playBtn: document.getElementById('play-btn'),
+            backBtn: document.getElementById('back-mode-btn')
+        };
+    }
+
+    function canResumeGameplay() {
+        if (!runtimeInitialized) return false;
+        if (!multiplayerMode || !globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState) {
+            return true;
+        }
+        var matchState = globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState();
+        return !(matchState && matchState.ended);
+    }
+
+    function setResumeButtonsVisible(show) {
+        var els = ensureMenuSessionEls();
+        if (els.playBtn) els.playBtn.style.display = show ? 'inline-block' : 'none';
+        if (els.backBtn) els.backBtn.style.display = show ? 'inline-block' : 'none';
+    }
+
+    function formatSecondsRemaining(ms) {
+        return (Math.max(0, Number(ms || 0)) / 1000).toFixed(1) + 's';
+    }
+
+    function winnerLabel(matchState, selfState) {
+        if (!matchState) return '';
+        if (String(matchState.gameMode || '') === 'tdm') {
+            var winnerTeam = String(matchState.winnerTeam || '').toUpperCase();
+            return winnerTeam ? ('TEAM ' + winnerTeam) : 'TEAM WIN';
+        }
+        var winnerId = String(matchState.winnerId || '');
+        if (!winnerId) return 'WINNER LOCKED';
+        if (selfState && winnerId === String(selfState.id || '')) return 'YOU';
+        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getEntityName) {
+            var winnerName = globalThis.__MAYHEM_RUNTIME.GameNet.getEntityName(winnerId);
+            if (winnerName) return String(winnerName).toUpperCase();
+        }
+        return 'PLAYER';
+    }
+
+    function updateMenuSessionPanel(matchState, selfState) {
+        var els = ensureMenuSessionEls();
+        if (!els.stats || !els.status || !els.kd) return;
+
+        if (!runtimeInitialized || !multiplayerMode) {
+            els.stats.hidden = true;
+            setResumeButtonsVisible(!isPlaying && runtimeInitialized);
+            return;
+        }
+
+        var kills = Math.max(0, Number(selfState && selfState.kills || 0));
+        var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
+        var respawnState = (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState)
+            ? globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState()
+            : null;
+
+        els.stats.hidden = false;
+        els.kd.textContent = 'KILLS ' + kills + ' | DEATHS ' + deaths;
+
+        if (!matchState || !matchState.started) {
+            els.status.textContent = 'WAITING FOR MATCH START';
+        } else if (matchState.ended) {
+            els.status.textContent = winnerLabel(matchState, selfState) + ' WON | RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
+        } else if (respawnState && respawnState.active) {
+            els.status.textContent = 'RESPAWN IN ' + formatSecondsRemaining(respawnState.remainingMs);
+        } else if (String(matchState.gameMode || '') === 'tdm') {
+            var teamId = String(selfState && selfState.teamId || '');
+            var teamScore = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
+            var enemyTeamId = teamId === 'alpha' ? 'bravo' : 'alpha';
+            var enemyScore = Number(matchState.teamProgress && matchState.teamProgress[enemyTeamId] || 0);
+            els.status.textContent = 'TDM ' + teamScore.toFixed(0) + ' - ' + enemyScore.toFixed(0) + ' | TARGET ' + Number(matchState.targetProgress || 0).toFixed(0);
+        } else {
+            els.status.textContent = 'FFA ' + kills + ' / ' + Number(matchState.targetProgress || 0).toFixed(0) + ' | LEAD ' + Number(matchState.leaderProgress || 0).toFixed(0);
+        }
+
+        setResumeButtonsVisible(!isPlaying && canResumeGameplay());
     }
 
     function setTransientDebug(text, ms) {
@@ -756,8 +840,7 @@
 
         function showResumeControl(show) {
             if (!playBtn) return;
-            playBtn.style.display = show ? 'inline-block' : 'none';
-            if (backModeBtn) backModeBtn.style.display = show ? 'inline-block' : 'none';
+            setResumeButtonsVisible(!!show && canResumeGameplay());
         }
 
         function requestPlayStart(e) {
@@ -769,6 +852,7 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
+            if (!canResumeGameplay()) return;
             var validation = validateMenuSelections();
             if (!validation.ok) {
                 setTransientDebug(validation.message, 1800);
@@ -841,7 +925,7 @@
                 }
                 if (overlay) overlay.style.display = 'none';
                 isPlaying = true;
-                showResumeControl(false);
+                setResumeButtonsVisible(false);
             } else {
                 triggerHeld = false;
                 if (armedThrowableType || throwableHeldType) {
@@ -849,7 +933,7 @@
                 }
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
-                showResumeControl(true);
+                setResumeButtonsVisible(canResumeGameplay());
             }
         });
 
@@ -922,7 +1006,7 @@
         var _wheelCooldownUntil = 0;
         var _wheelScrollAccum = 0;
         var _WHEEL_SCROLL_THRESHOLD = 3;
-        var _WHEEL_COOLDOWN_MS = 45;
+        var _WHEEL_COOLDOWN_MS = 200;
         var _wheelGestureLatched = false;
         var _wheelLatchedDirection = 0;
         var _WHEEL_RELEASE_EPSILON = 1.1;
@@ -1354,12 +1438,22 @@
         if (multiplayerMode) {
             globalThis.__MAYHEM_RUNTIME.GameNet.update(dt, playerPos, playerRot);
             var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
+            var activeMatchState = globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState
+                ? globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState()
+                : null;
             if (selfState) {
                 if (globalThis.__MAYHEM_RUNTIME.GameAbilities.clearQueuedClass) {
                     globalThis.__MAYHEM_RUNTIME.GameAbilities.clearQueuedClass();
                 }
 
                 globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.syncFromNetwork(selfState);
+                if (
+                    selfState.hookPullState &&
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer &&
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion
+                ) {
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion(selfState);
+                }
                 if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState) {
                     globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
                     globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
@@ -1417,6 +1511,18 @@
                 }
             }
 
+            if (activeMatchState && activeMatchState.ended && Number(activeMatchState.endedAt || 0) > 0) {
+                if (lastHandledMatchEndAt !== Number(activeMatchState.endedAt || 0)) {
+                    lastHandledMatchEndAt = Number(activeMatchState.endedAt || 0);
+                    if (document.pointerLockElement && document.exitPointerLock) {
+                        document.exitPointerLock();
+                    }
+                    setTransientDebug(winnerLabel(activeMatchState, selfState) + ' won the round.', 1800);
+                }
+            } else {
+                lastHandledMatchEndAt = 0;
+            }
+
             var notice = globalThis.__MAYHEM_RUNTIME.GameNet.consumeNotice();
             if (notice) setTransientDebug(notice, 900);
 
@@ -1457,8 +1563,9 @@
 
             globalThis.__MAYHEM_RUNTIME.GameThrowables.update(dt, function () {});
             if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState) {
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState(), selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
+                globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(activeMatchState, selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
             }
+            updateMenuSessionPanel(activeMatchState, selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
         } else {
             globalThis.__MAYHEM_RUNTIME.GameAbilities.update(
                 dt,
@@ -1485,6 +1592,7 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmor(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmorMax());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(null, null);
+            updateMenuSessionPanel(null, null);
         }
 
         if (currentWeapon && currentWeapon.id === 'seekergun' && !armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
@@ -1547,6 +1655,17 @@
                 selfHealState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHealState();
             }
             globalThis.__MAYHEM_RUNTIME.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setSpawnShield) {
+            var spawnShieldActive = false;
+            if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
+                var netSpawnState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
+                spawnShieldActive = !!(netSpawnState && netSpawnState.spawnShieldUntil && netSpawnState.spawnShieldUntil > Date.now());
+            }
+            if (!spawnShieldActive && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable) {
+                spawnShieldActive = globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.isInvulnerable();
+            }
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setSpawnShield(spawnShieldActive);
         }
 
         var abilityLoadoutState = currentAbilityLoadoutState();

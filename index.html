@@ -88,9 +88,9 @@
  \_.--._/</pre>
                 </div>
                 <p id="mode-subtitle"></p>
-            </div>
-            <div id="menu-main">
-                <div id="matchmaking-panel">
+                </div>
+                <div id="menu-main">
+                    <div id="matchmaking-panel">
                     <button id="primary-play-btn" type="button">QUICK MATCH (FFA)</button>
                     <button id="tdm-play-btn" type="button">TEAM DEATHMATCH</button>
                     <button id="sandbox-play-btn" type="button">OFFLINE SANDBOX</button>
@@ -109,8 +109,14 @@
                     </div>
                 </div>
                 <div id="menu-session-actions">
-                    <button id="play-btn" type="button">RESUME MATCH</button>
-                    <button id="back-mode-btn" type="button">CHANGE MODE</button>
+                    <div id="menu-session-stats" hidden>
+                        <div id="menu-session-status">MATCH STANDBY</div>
+                        <div id="menu-session-kd">KILLS 0 | DEATHS 0</div>
+                    </div>
+                    <div id="menu-session-buttons">
+                        <button id="play-btn" type="button">RESUME MATCH</button>
+                        <button id="back-mode-btn" type="button">CHANGE MODE</button>
+                    </div>
                 </div>
                 <div class="menu-separator">&#9472;&#9472;&#9472;[ LOADOUT ]&#9472;&#9472;&#9472;</div>
                 <div id="loadout-row">

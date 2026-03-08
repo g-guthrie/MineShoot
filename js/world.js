@@ -1,3 +1,5 @@
+import { chooseSpawnPoint } from '../shared/spawn-logic.js';
+
 /**
  * world.js - Static authored world layout for open-arena combat.
  * Biome content is provided by plug-and-play quadrant modules in js/world/.
@@ -222,25 +224,24 @@
         return 0;
     }
 
-    function randomSpawnPoint(padding) {
+    function randomSpawnPoint(padding, options) {
         var pad = (typeof padding === 'number') ? padding : DEFAULT_SPAWN_PADDING;
-        var min = WORLD_MIN + pad;
-        var max = WORLD_MAX - pad;
-
-        for (var tries = 0; tries < 42; tries++) {
-            var x = lerp(min, max, Math.random());
-            var z = lerp(min, max, Math.random());
-            var gy = getGroundHeightAt(x, z);
-            if (gy < -0.15) continue;
-            if (isSpawnExcluded(x, z, 0.85)) continue;
-            if (isPointBlockedByCollidables(x, z, 1.15)) continue;
-            return { x: x, z: z };
-        }
-
-        return {
-            x: lerp(min, max, Math.random()),
-            z: lerp(min, max, Math.random())
-        };
+        var opts = options || {};
+        return chooseSpawnPoint({
+            boundsMin: WORLD_MIN,
+            boundsMax: WORLD_MAX,
+            padding: pad,
+            minGroundY: -0.15,
+            minClearance: Number(opts.minClearance || 0),
+            avoidPoints: Array.isArray(opts.avoidPoints) ? opts.avoidPoints : [],
+            getGroundHeightAt: getGroundHeightAt,
+            isExcluded: function (x, z) {
+                return isSpawnExcluded(x, z, 0.85);
+            },
+            isBlocked: function (x, z) {
+                return isPointBlockedByCollidables(x, z, 1.15);
+            }
+        });
     }
 
     // ---------------------------------------------------------------
@@ -408,7 +409,7 @@
         (function buildBiomeWalls() {
             var edgeH = 3.0;
             var edgeThick = 1.2;
-            var halfLen = (WORLD_CENTER - WORLD_MIN) + edgeThick * 0.5;
+            var halfLen = (WORLD_CENTER - WORLD_MIN);
             var qMid = (WORLD_MIN + WORLD_CENTER) * 0.5;
             var qMid2 = (WORLD_CENTER + WORLD_MAX) * 0.5;
 
@@ -610,7 +611,7 @@
     GameWorld.getCombatScale = function () { return getCombatScale(); };
     GameWorld.scaleCombatDistance = function (value) { return scaleCombatDistance(value); };
     GameWorld.getSpawnPadding = function () { return DEFAULT_SPAWN_PADDING; };
-    GameWorld.getRandomSpawnPoint = function (padding) { return randomSpawnPoint(padding); };
+    GameWorld.getRandomSpawnPoint = function (padding, options) { return randomSpawnPoint(padding, options); };
     GameWorld.getGroundHeightAt = function (x, z) { return getGroundHeightAt(x, z); };
     GameWorld.getRecommendedEnemyCount = function () { return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE))); };
     GameWorld.getSeed = function () { return WORLD_SEED; };

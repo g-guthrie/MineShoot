@@ -15,16 +15,11 @@
     BloomReticle.prototype.radiusPxForWeapon = function (weapon, options) {
         options = options || {};
         if (!weapon || weapon.id === 'shotgun') return 0;
-        if (!!options.scoped || !!options.adsActive) return 0;
-
-        var hipfireSpread = Math.max(0, Number(weapon.hipfireSpread || 0));
-        if (hipfireSpread <= 0.00001) return 0;
-
-        var halfWidth = window.innerWidth * 0.5;
-        var halfHeight = window.innerHeight * 0.5;
-        var xRadius = hipfireSpread * halfWidth;
-        var yRadius = hipfireSpread * halfHeight;
-        return Math.max(xRadius, yRadius);
+        if (!!options.scoped) return 0;
+        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSpreadRadiusPx) {
+            return globalThis.__MAYHEM_RUNTIME.GameHitscan.getSpreadRadiusPx(weapon.id);
+        }
+        return 0;
     };
 
     BloomReticle.prototype.setDebugEnabled = function (enabled) {

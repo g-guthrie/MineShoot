@@ -91,7 +91,7 @@ export function tickProjectiles(room, dtSec) {
       let target = null;
       if (p.lockTargetId) {
         const locked = room.getEntityById(p.lockTargetId);
-        if (locked && locked.alive && locked.id !== p.ownerId && distance3(locked, p) <= acquireRange) {
+        if (room.canTargetEntity(locked, p.ownerId) && distance3(locked, p) <= acquireRange) {
           target = locked;
         }
       }
@@ -176,12 +176,12 @@ export function tickProjectiles(room, dtSec) {
 
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
-      if (!e || !e.alive || e.id === p.ownerId) continue;
+      if (!room.canTargetEntity(e, p.ownerId)) continue;
       const dx = e.x - p.x;
       const dz = e.z - p.z;
       const dy = ((e.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0) - p.y;
       const d = Math.sqrt(dx * dx + dz * dz + dy * dy);
-      const hitRadius = 1.35;
+      const hitRadius = Math.max(0.1, Number(p.hitRadius || 1.2));
       if (d > hitRadius) continue;
       if (p.type === 'seeker') {
         if (stickProjectile(p, e, p.x, p.y, p.z)) {
@@ -229,7 +229,7 @@ export function tickFireZones(room, dtSec) {
       z.tickTimer += THROWABLE_STATS.molotov.fireTickRate;
       for (let i = 0; i < entities.length; i++) {
         const e = entities[i];
-        if (!e || !e.alive || e.id === z.ownerId) continue;
+        if (!room.canTargetEntity(e, z.ownerId)) continue;
         const dx = e.x - z.x;
         const dz = e.z - z.z;
         const d = Math.sqrt(dx * dx + dz * dz);

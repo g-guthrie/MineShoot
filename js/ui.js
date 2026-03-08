@@ -155,7 +155,6 @@
         }
 
         var ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
-        var ownProgress = Number(selfState && selfState.progressScore || 0);
         if (String(matchState.gameMode || '') === 'tdm') {
             var teamId = String(selfState && selfState.teamId || '');
             var teamProgress = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
@@ -164,7 +163,7 @@
             killCounterEl.textContent = 'Kills: ' + ownKills + ' | Team: ' + teamProgress.toFixed(1) + ' / ' + enemyProgress.toFixed(1);
             return;
         }
-        killCounterEl.textContent = 'Kills: ' + ownKills + ' | Score: ' + ownProgress.toFixed(1) + ' | Lead: ' + Number(matchState.leaderProgress || 0).toFixed(1);
+        killCounterEl.textContent = 'Kills: ' + ownKills + ' | Lead: ' + Number(matchState.leaderProgress || 0).toFixed(0) + ' / ' + Number(matchState.targetProgress || 0).toFixed(0);
     };
 
     GameUI.updateHealth = function (hp, maxHp) {
@@ -462,18 +461,18 @@
         var sector = Math.round(angle / (Math.PI / 6));
         sector = ((sector % 12) + 12) % 12;
 
-        var duration = 1.0 + Math.min(0.5, damage / 120);
+        var duration = 1.15 + Math.min(0.65, damage / 90);
         damageTickTimers[sector] = Math.max(damageTickTimers[sector], duration);
 
         // Bleed to adjacent slices for smoother clock-like impact.
         var next = (sector + 1) % 12;
         var prev = (sector + 11) % 12;
-        damageTickTimers[next] = Math.max(damageTickTimers[next], duration * 0.45);
-        damageTickTimers[prev] = Math.max(damageTickTimers[prev], duration * 0.45);
+        damageTickTimers[next] = Math.max(damageTickTimers[next], duration * 0.62);
+        damageTickTimers[prev] = Math.max(damageTickTimers[prev], duration * 0.62);
 
         damageFlashLevel = Math.max(
             damageFlashLevel,
-            0.18 + Math.min(0.32, damage / 180)
+            0.28 + Math.min(0.42, damage / 120)
         );
     };
 
@@ -487,17 +486,17 @@
             }
 
             var t = Math.min(1, damageTickTimers[i]);
-            var opacity = t * 0.62;
+            var opacity = t * 0.84;
             damageTicks[i].style.opacity = opacity.toFixed(3);
         }
 
         if (damageFlashLevel > 0) {
-            damageFlashLevel -= dt * 1.4;
+            damageFlashLevel -= dt * 1.05;
             if (damageFlashLevel < 0) damageFlashLevel = 0;
         }
 
         if (damageVignetteEl) {
-            damageVignetteEl.style.opacity = (damageFlashLevel * 0.45).toFixed(3);
+            damageVignetteEl.style.opacity = (damageFlashLevel * 0.62).toFixed(3);
         }
     };
 

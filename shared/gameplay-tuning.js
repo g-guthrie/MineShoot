@@ -61,12 +61,12 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  hipfireSpread: 0.007, adsHitscanRangeMultiplier: 1.4 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  hipfireSpread: 0.012, adsHitscanRangeMultiplier: 1.35 },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  hipfireSpread: 0.028, adsHitscanRangeMultiplier: 1.3 },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, hipfireSpread: 0,     adsHitscanRangeMultiplier: 1.1 },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  hipfireSpread: 0.24,  adsHitscanRangeMultiplier: 1.0 },
-    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsHitscanRangeMultiplier: 1.0 }
+    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 210,  bodyDamage: 36,  headDamage: 88,  maxRange: 118, pellets: 1,  hipfireSpread: 0.007, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.4 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 220,  bodyDamage: 22,  headDamage: 170, maxRange: 52,  pellets: 1,  hipfireSpread: 0.012, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.35 },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 72,   bodyDamage: 14,  headDamage: 22,  maxRange: 48,  pellets: 1,  hipfireSpread: 0.028, adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.3 },
+    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 980,  bodyDamage: 16,  headDamage: 26,  maxRange: 24,  pellets: 12, hipfireSpread: 0.19,  adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.1 },
+    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1250, bodyDamage: 210, headDamage: 360, maxRange: 160, pellets: 1,  hipfireSpread: 0.24,  adsSpreadMultiplier: 0,    adsHitscanRangeMultiplier: 1.0 },
+    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsSpreadMultiplier: 1,    adsHitscanRangeMultiplier: 1.0 }
   },
   throwableCategories: {
     grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
@@ -94,7 +94,7 @@ export const gameplayTuning = {
       fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 14
     },
     knife: {
-      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, bodyDamage: 100, headDamage: 250, regen: 8
+      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, hitRadius: 0.55, bodyDamage: 100, headDamage: 250, regen: 8
     }
   },
   abilityCatalog: {
@@ -102,9 +102,9 @@ export const gameplayTuning = {
       id: 'choke', slot: 'ability', name: 'Vader Choke',
       description: 'Single-target lift + damage in reticle box.',
       debugSummary: 'Square = choke target box.',
-      tunableParams: ['lockBoxPx', 'range', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
+      tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'castDamage', 'liftHeight', 'tickRate', 'dotPerTick'],
       cooldownMs: 8000, range: 24, minDot: 0.05, duration: 1.6,
-      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190
+      liftHeight: 1.0, tickRate: 0.25, dotPerTick: 0, castDamage: 95, lockBoxPx: 190, targetTolerance: 1.8
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',

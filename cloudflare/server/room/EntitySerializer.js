@@ -41,6 +41,7 @@ export function toEntityState(entity) {
     teamId: entity.teamId || '',
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,
+    spawnShieldUntil: entity.spawnShieldUntil || 0,
     streamHeat: Number((entity.streamHeat || 0).toFixed(3)),
     streamOverheatedUntil: entity.streamOverheatedUntil || 0,
     muzzleFlashUntil: entity.muzzleFlashUntil || 0,
@@ -53,6 +54,14 @@ export function toEntityState(entity) {
       targetId: entity.chokeState.targetId || '',
       endsAt: entity.chokeState.endsAt || 0,
       liftHeight: entity.chokeState.liftHeight || 1.0
+    } : null,
+    hookPullState: entity.hookPullState ? {
+      sourceId: entity.hookPullState.sourceId || '',
+      pullDistance: entity.hookPullState.pullDistance || 3.2,
+      pullSpeed: entity.hookPullState.pullSpeed || 26,
+      facingYaw: entity.hookPullState.facingYaw || 0,
+      startedAt: entity.hookPullState.startedAt || 0,
+      endsAt: entity.hookPullState.endsAt || 0
     } : null,
     hookState: entity.hookState ? {
       targetId: entity.hookState.targetId || '',

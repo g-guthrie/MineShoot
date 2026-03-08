@@ -190,6 +190,33 @@
         return { x: center, z: z };
     }
 
+    function getSpawnThreatPoints() {
+        var points = [];
+        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
+            var localTargets = globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || [];
+            for (var i = 0; i < localTargets.length; i++) {
+                var localTarget = localTargets[i];
+                if (!localTarget || !localTarget.worldPos) continue;
+                points.push({
+                    x: Number(localTarget.worldPos.x || 0),
+                    z: Number(localTarget.worldPos.z || 0)
+                });
+            }
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets) {
+            var netTargets = globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets() || [];
+            for (var n = 0; n < netTargets.length; n++) {
+                var netTarget = netTargets[n];
+                if (!netTarget || !netTarget.worldPos) continue;
+                points.push({
+                    x: Number(netTarget.worldPos.x || 0),
+                    z: Number(netTarget.worldPos.z || 0)
+                });
+            }
+        }
+        return points;
+    }
+
     function getCollisionBoxes() {
         if (!globalThis.__MAYHEM_RUNTIME.GameWorld || !globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables) return [];
 
@@ -337,6 +364,26 @@
                 if (part.material.emissive) part.material.emissive.setHex(0x000000);
             }
         }
+    }
+
+    function setSpawnShieldVisual(active) {
+        if (!avatarGroup) return;
+        avatarGroup.traverse(function (node) {
+            if (!node || !node.isMesh || !node.material) return;
+            var mat = node.material;
+            if (mat.__spawnShieldBaseOpacity === undefined) {
+                mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
+                mat.__spawnShieldBaseTransparent = !!mat.transparent;
+            }
+            if (active) {
+                mat.transparent = true;
+                mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
+            } else {
+                mat.opacity = mat.__spawnShieldBaseOpacity;
+                mat.transparent = mat.__spawnShieldBaseTransparent;
+            }
+            mat.needsUpdate = true;
+        });
     }
 
     function updateCameraFromPlayer(dt) {
@@ -504,6 +551,36 @@
         return true;
     }
 
+    function applyAuthoritativeMotion(state) {
+        if (!camera || !state) return false;
+        var x = Number(state.x);
+        var z = Number(state.z);
+        if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+
+        playerX = x;
+        playerZ = z;
+
+        if (typeof state.y === 'number' && isFinite(state.y)) {
+            posY = Number(state.y);
+        } else {
+            posY = getGroundHeightAt(playerX, playerZ) + EYE_HEIGHT;
+        }
+        velocityY = 0;
+        isGrounded = true;
+        jumpHoldTimer = 0;
+
+        if (typeof state.yaw === 'number' && isFinite(state.yaw)) {
+            yaw = Number(state.yaw);
+        }
+        if (typeof state.pitch === 'number' && isFinite(state.pitch)) {
+            pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Number(state.pitch)));
+        }
+
+        updateAvatarPose();
+        updateCameraFromPlayer(1 / 60);
+        return true;
+    }
+
     GamePlayer.init = function (scene) {
         sceneRef = scene;
         var bounds = getWorldBounds();
@@ -513,7 +590,11 @@
         camera.rotation.order = 'YXZ';
         scene.add(camera);
 
-        var spawn = getDefaultSpawnPoint();
+        var spawn = (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint)
+            ? globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(
+                globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding ? globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding() : 8
+            )
+            : getDefaultSpawnPoint();
         playerX = spawn.x;
         playerZ = spawn.z;
         posY = EYE_HEIGHT;
@@ -800,6 +881,10 @@
         setHealFlash(!!active);
     };
 
+    GamePlayer.setSpawnShield = function (active) {
+        setSpawnShieldVisual(!!active);
+    };
+
     GamePlayer.equipSlot = function (slotIndex) {
         var idx = Math.max(0, Math.floor(slotIndex || 0));
         if (idx >= loadoutSlots.length) return null;
@@ -809,6 +894,10 @@
     GamePlayer.respawn = function (x, z) {
         if (!camera) return false;
         return setSpawnPosition(x, z, getGroundHeightAt(x, z));
+    };
+
+    GamePlayer.applyAuthoritativeMotion = function (state) {
+        return applyAuthoritativeMotion(state);
     };
 
     GamePlayer.respawnRandom = function () {
@@ -826,7 +915,10 @@
 
         for (var i = 0; i < 40; i++) {
             var randomSpawn = (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint)
-                ? globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(spawnPadding)
+                ? globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(spawnPadding, {
+                    avoidPoints: getSpawnThreatPoints(),
+                    minClearance: 14
+                })
                 : null;
             var x = randomSpawn ? randomSpawn.x : (min + Math.random() * (max - min));
             var z = randomSpawn ? randomSpawn.z : (min + Math.random() * (max - min));

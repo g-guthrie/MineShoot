@@ -30,6 +30,7 @@ export function applyDamage(target, damage) {
   if (!target || !target.alive) return null;
 
   const now = nowMs();
+  if ((target.spawnShieldUntil || 0) > now) return null;
   target.lastDamageAt = now;
 
   const hpBefore = target.hp;
@@ -99,11 +100,16 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
 }
 
 export function broadcastDeathRespawn(room, target) {
+  const plannedSpawn = room && typeof room.planEntityRespawn === 'function'
+    ? room.planEntityRespawn(target)
+    : null;
   room.broadcast({
     t: MSG_S2C.DEATH_RESPAWN,
     entityId: target.id,
     respawnAt: target.respawnAt,
-    classApplied: target.classId
+    classApplied: target.classId,
+    x: plannedSpawn ? Number(plannedSpawn.x || 0) : undefined,
+    z: plannedSpawn ? Number(plannedSpawn.z || 0) : undefined
   });
 }
 
@@ -153,7 +159,7 @@ export function explodeProjectile(room, projectile, x, y, z) {
   const entities = room.getAliveEntities();
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
-    if (!e || !e.alive || e.id === projectile.ownerId) continue;
+    if (!room.canTargetEntity(e, projectile.ownerId)) continue;
     const dx = e.x - x;
     const dz = e.z - z;
     const dist = Math.sqrt(dx * dx + dz * dz);
