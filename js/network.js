@@ -8,6 +8,7 @@
     'use strict';
 
     var GameNet = {};
+    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
 
     var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
     var MSG = (PROTOCOL && PROTOCOL.msg) ? PROTOCOL.msg : { c2s: {}, s2c: {} };
@@ -232,7 +233,7 @@
             var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             return {
                 x: selfPos.x,
-                y: selfPos.y + 1.1,
+                y: entityPoints.entityDamagePointY ? entityPoints.entityDamagePointY(selfPos.y) : (selfPos.y + 1.06),
                 z: selfPos.z
             };
         }
@@ -241,7 +242,7 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: render.group.position.y + 1.06,
+            y: entityPoints.entityDamagePointY ? entityPoints.entityDamagePointY(render.group.position.y) : (render.group.position.y + 1.06),
             z: render.group.position.z
         };
     }
@@ -253,7 +254,7 @@
             var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
             return {
                 x: selfPos.x,
-                y: selfPos.y + 2.2,
+                y: entityPoints.entityMarkerPointY ? entityPoints.entityMarkerPointY(selfPos.y) : (selfPos.y + 2.25),
                 z: selfPos.z
             };
         }
@@ -262,7 +263,7 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: render.group.position.y + 2.25,
+            y: entityPoints.entityMarkerPointY ? entityPoints.entityMarkerPointY(render.group.position.y) : (render.group.position.y + 2.25),
             z: render.group.position.z
         };
     }
@@ -860,24 +861,17 @@
             if (r.actorVisual && r.actorVisual.syncHitboxes) {
                 r.actorVisual.syncHitboxes(r.group.position);
             } else if (r.bodyHitbox && r.headHitbox) {
-                r.bodyHitbox.position.set(r.group.position.x, r.group.position.y + 0.7625, r.group.position.z);
-                r.headHitbox.position.set(r.group.position.x, r.group.position.y + 2.0, r.group.position.z);
+                r.bodyHitbox.position.set(r.group.position.x, entityPoints.entityBodyHitboxY ? entityPoints.entityBodyHitboxY(r.group.position.y) : (r.group.position.y + 0.7625), r.group.position.z);
+                r.headHitbox.position.set(r.group.position.x, entityPoints.entityHeadHitboxY ? entityPoints.entityHeadHitboxY(r.group.position.y) : (r.group.position.y + 2.0), r.group.position.z);
             }
         });
     };
 
-    GameNet.sendFire = function (hitbox, weaponId, hitType, shotToken) {
-        if (!hitbox || !hitbox.userData) return false;
-        var targetEntityId = String(hitbox.userData.netEntityId || '');
-        if (!targetEntityId && typeof hitbox.userData.targetId === 'string' && hitbox.userData.targetId.indexOf('net:') === 0) {
-            targetEntityId = String(hitbox.userData.targetId).slice(4);
-        }
-        if (!targetEntityId) return false;
+    GameNet.sendFire = function (weaponId, shotToken) {
+        if (!weaponId) return false;
         var payload = {
             t: (MSG_C2S.FIRE || 'fire'),
-            targetId: targetEntityId,
-            weaponId: weaponId,
-            hitType: hitType === 'head' ? 'head' : 'body'
+            weaponId: String(weaponId)
         };
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
             var adsState = globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();

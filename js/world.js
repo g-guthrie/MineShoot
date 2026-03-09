@@ -14,29 +14,27 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
         : null;
     var SHARED_WORLD_CFG = (SHARED_PROTOCOL && SHARED_PROTOCOL.world) ? SHARED_PROTOCOL.world : null;
+    var SHARED_LAYOUT = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.worldLayout)
+        ? globalThis.__MAYHEM_RUNTIME.GameShared.worldLayout
+        : null;
 
-    var BASE_WORLD_SIZE = 50;
-    var WORLD_AREA_SCALE = 5;
-    var WORLD_SIZE = Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE));
-    var WORLD_CENTER = WORLD_SIZE * 0.5;
-    var WORLD_MARGIN = 2;
-    var WORLD_MIN = WORLD_MARGIN;
-    var WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
-    var DEFAULT_SPAWN_PADDING = 8;
+    var BASE_WORLD_SIZE = SHARED_LAYOUT.BASE_WORLD_SIZE;
+    var WORLD_AREA_SCALE = SHARED_LAYOUT.WORLD_AREA_SCALE;
+    var WORLD_SIZE = SHARED_LAYOUT.WORLD_SIZE;
+    var WORLD_CENTER = SHARED_LAYOUT.WORLD_CENTER;
+    var WORLD_MARGIN = SHARED_LAYOUT.WORLD_MARGIN;
+    var WORLD_MIN = SHARED_LAYOUT.WORLD_MIN;
+    var WORLD_MAX = SHARED_LAYOUT.WORLD_MAX;
+    var DEFAULT_SPAWN_PADDING = SHARED_LAYOUT.DEFAULT_SPAWN_PADDING;
 
-    var COMBAT_TUNED_WORLD_SIZE = 112;
+    var COMBAT_TUNED_WORLD_SIZE = SHARED_LAYOUT.COMBAT_TUNED_WORLD_SIZE;
 
-    var BIOME_ARCTIC = 'arctic';
-    var BIOME_URBAN = 'urban';
-    var BIOME_DESERT = 'desert';
-    var BIOME_JUNGLE = 'jungle';
+    var BIOME_ARCTIC = SHARED_LAYOUT.BIOME_ARCTIC;
+    var BIOME_URBAN = SHARED_LAYOUT.BIOME_URBAN;
+    var BIOME_DESERT = SHARED_LAYOUT.BIOME_DESERT;
+    var BIOME_JUNGLE = SHARED_LAYOUT.BIOME_JUNGLE;
 
-    var DEFAULT_QUADRANT_MAP = [
-        { quadrant: 'NW', biome: BIOME_ARCTIC },
-        { quadrant: 'NE', biome: BIOME_URBAN },
-        { quadrant: 'SW', biome: BIOME_DESERT },
-        { quadrant: 'SE', biome: BIOME_JUNGLE }
-    ];
+    var DEFAULT_QUADRANT_MAP = SHARED_LAYOUT.DEFAULT_QUADRANT_MAP.slice();
 
     var DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(SHARED_WORLD_CFG && SHARED_WORLD_CFG.profileVersion) || 6));
     var DEFAULT_WORLD_FLAGS = {
@@ -150,11 +148,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     }
 
     function quadrantBounds(quadrant, padding) {
-        var pad = Number(padding || 0);
-        if (quadrant === 'NW') return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
-        if (quadrant === 'NE') return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_MIN + pad, maxZ: WORLD_CENTER - pad };
-        if (quadrant === 'SW') return { minX: WORLD_MIN + pad, maxX: WORLD_CENTER - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
-        return { minX: WORLD_CENTER + pad, maxX: WORLD_MAX - pad, minZ: WORLD_CENTER + pad, maxZ: WORLD_MAX - pad };
+        return SHARED_LAYOUT.quadrantBounds(quadrant, padding);
     }
 
     function biomeAt(x, z) {
@@ -409,70 +403,19 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
 
         // --- Biome-themed perimeter walls ---
         (function buildBiomeWalls() {
-            var edgeH = 3.0;
-            var edgeThick = 1.2;
-            var halfLen = (WORLD_CENTER - WORLD_MIN);
-            var qMid = (WORLD_MIN + WORLD_CENTER) * 0.5;
-            var qMid2 = (WORLD_CENTER + WORLD_MAX) * 0.5;
-
-            var arcticBase = matLib.getLambert({ color: 0x8aafcc });
-            var arcticCap  = matLib.getLambert({ color: 0xc8e8f8 });
-            var arcticIce  = matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 });
-
-            var urbanBase  = matLib.getLambert({ color: 0x6a7078 });
-            var urbanRail  = matLib.getLambert({ color: 0x3a3e44 });
-            var urbanPaint = matLib.getLambert({ color: 0xc85a3a });
-
-            var desertBase = matLib.getLambert({ color: 0xc49a5c });
-            var desertCap  = matLib.getLambert({ color: 0xb07842 });
-
-            var jungleBase = matLib.getLambert({ color: 0x4a5040 });
-            var jungleVine = matLib.getLambert({ color: 0x2d5a28 });
-            var jungleMoss = matLib.getLambert({ color: 0x3d6a32 });
-
-            // North wall (Z-min): left=Arctic(NW), right=Urban(NE)
-            addBlock(qMid, edgeH * 0.5, WORLD_MIN - edgeThick * 0.5, halfLen, edgeH, edgeThick, arcticBase, true);
-            addBlock(qMid, edgeH + 0.2, WORLD_MIN - edgeThick * 0.5, halfLen, 0.4, edgeThick + 0.2, arcticCap, false);
-            for (var ni = 0; ni < 5; ni++) {
-                var nx = WORLD_MIN + halfLen * 0.15 + (halfLen * 0.7 * ni / 4);
-                addBlock(nx, edgeH * 0.7, WORLD_MIN - edgeThick * 0.8, 1.4, edgeH * 0.5, 0.3, arcticIce, false);
-            }
-
-            addBlock(qMid2, edgeH * 0.5, WORLD_MIN - edgeThick * 0.5, halfLen, edgeH, edgeThick, urbanBase, true);
-            addBlock(qMid2, edgeH + 0.15, WORLD_MIN - edgeThick * 0.5, halfLen, 0.1, 0.1, urbanRail, false);
-            addBlock(qMid2, edgeH * 0.65, WORLD_MIN - edgeThick * 0.85, halfLen * 0.6, 0.3, 0.15, urbanPaint, false);
-
-            // South wall (Z-max): left=Desert(SW), right=Jungle(SE)
-            addBlock(qMid, edgeH * 0.5, WORLD_MAX + edgeThick * 0.5, halfLen, edgeH, edgeThick, desertBase, true);
-            addBlock(qMid, edgeH + 0.15, WORLD_MAX + edgeThick * 0.5, halfLen, 0.35, edgeThick + 0.3, desertCap, false);
-
-            addBlock(qMid2, edgeH * 0.5, WORLD_MAX + edgeThick * 0.5, halfLen, edgeH, edgeThick, jungleBase, true);
-            addBlock(qMid2, edgeH + 0.1, WORLD_MAX + edgeThick * 0.5, halfLen, 0.3, edgeThick + 0.1, jungleMoss, false);
-            for (var si = 0; si < 6; si++) {
-                var sx = WORLD_CENTER + halfLen * 0.1 + (halfLen * 0.8 * si / 5);
-                var vineH = 1.2 + (si % 3) * 0.5;
-                addBlock(sx, vineH * 0.5, WORLD_MAX + edgeThick * 0.85, 0.25, vineH, 0.2, jungleVine, false);
-            }
-
-            // West wall (X-min): top=Arctic(NW), bottom=Desert(SW)
-            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH * 0.5, qMid, edgeThick, edgeH, halfLen, arcticBase, true);
-            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH + 0.2, qMid, edgeThick + 0.2, 0.4, halfLen, arcticCap, false);
-
-            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH * 0.5, qMid2, edgeThick, edgeH, halfLen, desertBase, true);
-            addBlock(WORLD_MIN - edgeThick * 0.5, edgeH + 0.15, qMid2, edgeThick + 0.3, 0.35, halfLen, desertCap, false);
-
-            // East wall (X-max): top=Urban(NE), bottom=Jungle(SE)
-            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH * 0.5, qMid, edgeThick, edgeH, halfLen, urbanBase, true);
-            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH + 0.15, qMid, 0.1, 0.1, halfLen, urbanRail, false);
-            addBlock(WORLD_MAX + edgeThick * 0.85, edgeH * 0.5, qMid, 0.15, 0.3, halfLen * 0.5, urbanPaint, false);
-
-            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH * 0.5, qMid2, edgeThick, edgeH, halfLen, jungleBase, true);
-            addBlock(WORLD_MAX + edgeThick * 0.5, edgeH + 0.1, qMid2, edgeThick + 0.1, 0.3, halfLen, jungleMoss, false);
-            for (var ei = 0; ei < 6; ei++) {
-                var ez = WORLD_CENTER + halfLen * 0.1 + (halfLen * 0.8 * ei / 5);
-                var evH = 1.0 + (ei % 3) * 0.6;
-                addBlock(WORLD_MAX + edgeThick * 0.85, evH * 0.5, ez, 0.2, evH, 0.25, jungleVine, false);
-            }
+            SHARED_LAYOUT.buildBiomePerimeter(place, {
+                arcticBase: matLib.getLambert({ color: 0x8aafcc }),
+                arcticCap: matLib.getLambert({ color: 0xc8e8f8 }),
+                arcticIce: matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 }),
+                urbanBase: matLib.getLambert({ color: 0x6a7078 }),
+                urbanRail: matLib.getLambert({ color: 0x3a3e44 }),
+                urbanPaint: matLib.getLambert({ color: 0xc85a3a }),
+                desertBase: matLib.getLambert({ color: 0xc49a5c }),
+                desertCap: matLib.getLambert({ color: 0xb07842 }),
+                jungleBase: matLib.getLambert({ color: 0x4a5040 }),
+                jungleVine: matLib.getLambert({ color: 0x2d5a28 }),
+                jungleMoss: matLib.getLambert({ color: 0x3d6a32 })
+            });
         })();
 
         // --- Quadrant dispatch ---

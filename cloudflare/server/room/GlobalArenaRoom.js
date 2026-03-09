@@ -2,6 +2,9 @@ import { DurableObject } from 'cloudflare:workers';
 import { getSharedTuningWu } from '../../lib/shared-tuning.js';
 import { getSharedProtocol } from '../../lib/shared-protocol.js';
 import { createSharedTerrainSampler } from '../../lib/shared-terrain.js';
+import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { getSelectableWeaponIds } from '../../../shared/gameplay-tuning.js';
+import { entityAimTargetY } from '../../../shared/entity-points.js';
 import {
   nowMs,
   safeJsonParse,
@@ -16,11 +19,19 @@ import {
 import { getSeekProfileByWeaponId, resolveSeekAimProfile } from '../../../shared/seek-profiles.js';
 import { selectSeekTarget } from '../../../shared/seek-core.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
+import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
+import { buildWorldCollisionData } from '../../../shared/world-collision.js';
+import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
+import {
+  PUBLIC_ROOM_START_THRESHOLD,
+  PUBLIC_ROOM_SOFT_TARGET,
+  PUBLIC_ROOM_HARD_CAP,
+  PRIVATE_ROOM_ID_PREFIX
+} from '../../../shared/matchmaking-config.js';
 
 import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
 import { ensureBots, tickBots } from './BotAI.js';
 import {
-  applyWeaponFalloff,
   applyDamageFromSource,
   broadcastDamageEvent,
   broadcastDeathRespawn
@@ -45,10 +56,11 @@ const WORLD_FLAGS = {
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
+const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
-const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
+const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 const CLASS_DEFAULT_WEAPON = {
   abilities: 'rifle'
 };
@@ -59,19 +71,18 @@ const ROOM_FULL_RESYNC_MS = 1000;
 const DISCONNECT_GRACE_MS = 15000;
 const MAX_HP = 500;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
-const PLAYER_EYE_HEIGHT_WU = 1.6;
+const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const THROWABLE_SPAWN_FORWARD_WU = 0.55;
 const THROWABLE_SPAWN_LEFT_WU = 0.34;
 const THROWABLE_SPAWN_HEIGHT_WU = 1.0;
 const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
-const SHOTGUN_BURST_WINDOW_MS = 220;
 const DEV_LOCAL_ROOM_NAME = 'dev-local';
 const LOCAL_SHARED_ROOM_NAME = 'local-shared';
 const SOLO_CLOUDFLARE_ROOM_PREFIX = 'cf-solo-';
 const PUBLIC_FFA_ROOM_PREFIX = 'ffa-';
 const PUBLIC_TDM_ROOM_PREFIX = 'tdm-';
-const PRIVATE_SHARE_ROOM_PREFIX = 'private-';
+const PRIVATE_SHARE_ROOM_PREFIX = PRIVATE_ROOM_ID_PREFIX;
 const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
@@ -79,9 +90,6 @@ const GAME_MODE_FFA = 'ffa';
 const GAME_MODE_TDM = 'tdm';
 const TDM_TEAM_A = 'alpha';
 const TDM_TEAM_B = 'bravo';
-const PUBLIC_ROOM_START_THRESHOLD = 8;
-const PUBLIC_ROOM_SOFT_TARGET = 12;
-const PUBLIC_ROOM_HARD_CAP = 16;
 const FFA_TARGET_PROGRESS = 10;
 const TDM_TARGET_PROGRESS = 10;
 const MATCH_RESET_DELAY_MS = 5000;
@@ -138,7 +146,8 @@ function emptyMatchState(gameMode) {
 
 function isSelectableWeaponId(weaponId) {
   const id = String(weaponId || '');
-  return !!(id && WEAPON_STATS[id] && id !== 'seekergun' && id !== 'plasma');
+  const selectable = getSelectableWeaponIds();
+  return selectable.indexOf(id) !== -1 && !!WEAPON_STATS[id];
 }
 
 function normalizeWeaponLoadout(rawSlots, fallbackSlots) {
@@ -189,6 +198,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.worldSeed = '';
     this.worldProfileVersion = WORLD_PROFILE_VERSION;
     this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
+    this.worldCollision = null;
     this.refreshWorldMeta();
     this.boundsMin = 2;
     this.boundsMax = 110;
@@ -210,6 +220,11 @@ export class GlobalArenaRoom extends DurableObject {
     this.worldProfileVersion = WORLD_PROFILE_VERSION;
     this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
     this.terrainSampler = createSharedTerrainSampler({
+      worldSeed: this.worldSeed,
+      worldProfileVersion: this.worldProfileVersion,
+      worldFlags: cloneWorldFlags(this.worldFlags)
+    });
+    this.worldCollision = buildWorldCollisionData({
       worldSeed: this.worldSeed,
       worldProfileVersion: this.worldProfileVersion,
       worldFlags: cloneWorldFlags(this.worldFlags)
@@ -676,7 +691,7 @@ export class GlobalArenaRoom extends DurableObject {
       lastDamageAt: 0,
       seq: 0,
       lastShotAt: {},
-      shotBurstState: {},
+      lastShotTokenByWeapon: {},
       weaponId: DEFAULT_WEAPON_LOADOUT[0],
       moveSpeedNorm: 0,
       sprinting: false,
@@ -692,6 +707,9 @@ export class GlobalArenaRoom extends DurableObject {
       disconnectedAt: 0,
       abilityCooldownUntil: 0,
       ultimateCooldownUntil: 0,
+      weaponLockUntil: 0,
+      throwableLockUntil: 0,
+      abilityLockUntil: 0,
       stunUntil: 0,
       slowUntil: 0,
       slowMultiplier: 1,
@@ -998,10 +1016,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
 
     const now = nowMs();
-    const stunned = (player.stunUntil || 0) > now;
-    const hookPulling = !!player.hookPullState;
-    const choked = this.isEntityChoked(player, now);
-    const actionLocked = stunned || hookPulling || choked;
+    const actionLocked = this.isEntityMovementLocked(player, now);
     let slowMult = 1;
     if (!actionLocked) {
       slowMult = (player.slowUntil || 0) > now
@@ -1063,15 +1078,43 @@ export class GlobalArenaRoom extends DurableObject {
     return !!(entity && entity.alive && entity.chokeVictimState && (entity.chokeVictimState.endsAt || 0) > now);
   }
 
-  isEntityActionLocked(entity, now = nowMs()) {
+  isEntityActionRestricted(entity, actionType, now = nowMs()) {
+    if (!entity || !entity.alive) return false;
+    if (actionType === 'weapon') return Number(entity.weaponLockUntil || 0) > now;
+    if (actionType === 'throwable') return Number(entity.throwableLockUntil || 0) > now;
+    if (actionType === 'ability') return Number(entity.abilityLockUntil || 0) > now;
+    return false;
+  }
+
+  canEntityUseWeapon(entity, now = nowMs()) {
+    return !!(entity && entity.alive) && !this.isEntityMovementLocked(entity, now) && !this.isEntityActionRestricted(entity, 'weapon', now);
+  }
+
+  canEntityUseThrowable(entity, now = nowMs()) {
+    return !!(entity && entity.alive) && !this.isEntityMovementLocked(entity, now) && !this.isEntityActionRestricted(entity, 'throwable', now);
+  }
+
+  canEntityUseAbility(entity, now = nowMs()) {
+    return !!(entity && entity.alive) && !this.isEntityMovementLocked(entity, now) && !this.isEntityActionRestricted(entity, 'ability', now);
+  }
+
+  isEntityMovementLocked(entity, now = nowMs()) {
     if (!entity || !entity.alive) return false;
     return ((entity.stunUntil || 0) > now) || !!entity.hookPullState || this.isEntityChoked(entity, now);
+  }
+
+  isEntityActionLocked(entity, now = nowMs()) {
+    if (!entity || !entity.alive) return false;
+    return this.isEntityMovementLocked(entity, now) ||
+      this.isEntityActionRestricted(entity, 'weapon', now) ||
+      this.isEntityActionRestricted(entity, 'throwable', now) ||
+      this.isEntityActionRestricted(entity, 'ability', now);
   }
 
   entityAimTargetPosition(entity) {
     return {
       x: entity.x,
-      y: (entity.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0,
+      y: entityAimTargetY(entity && entity.y),
       z: entity.z
     };
   }
@@ -1195,7 +1238,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleFire(player, msg) {
     if (!player || !player.alive) return;
-    if (this.isEntityActionLocked(player)) return;
+    if (!this.canEntityUseWeapon(player)) return;
     if (player.deadeye) return;
 
     const weaponId = String(msg.weaponId || 'rifle');
@@ -1203,66 +1246,48 @@ export class GlobalArenaRoom extends DurableObject {
     if (!stats) return;
     if (weaponId === 'plasma') return;
     if (!canEntityUseWeapon(player, weaponId)) return;
+    if (weaponId === 'sniper' && !(msg && msg.adsActive)) return;
     player.weaponId = weaponId;
 
     const now = nowMs();
     const prev = player.lastShotAt[weaponId] || 0;
     const shotToken = String(msg.shotToken || '');
-    let acceptedByCooldown = false;
-    if (weaponId === 'shotgun') {
-      const maxPellets = Math.max(1, Number(stats.pellets || 12));
-      const hasToken = /^[a-zA-Z0-9_-]{6,96}$/.test(shotToken);
-      let burst = (player.shotBurstState && player.shotBurstState.shotgun) || null;
-      if (hasToken && burst && burst.token === shotToken && now <= burst.expiresAt && burst.count < maxPellets) {
-        burst.count += 1;
-        acceptedByCooldown = true;
-      } else if ((now - prev) >= stats.cooldownMs) {
-        player.lastShotAt[weaponId] = now;
-        if (!player.shotBurstState) player.shotBurstState = {};
-        player.shotBurstState.shotgun = {
-          token: hasToken ? shotToken : '',
-          count: 1,
-          expiresAt: now + SHOTGUN_BURST_WINDOW_MS
-        };
-        acceptedByCooldown = true;
-      }
-    } else {
-      if ((now - prev) < stats.cooldownMs) return;
-      player.lastShotAt[weaponId] = now;
-      acceptedByCooldown = true;
-    }
-    if (!acceptedByCooldown) return;
+    if (!player.lastShotTokenByWeapon) player.lastShotTokenByWeapon = {};
+    if (shotToken && player.lastShotTokenByWeapon && player.lastShotTokenByWeapon[weaponId] === shotToken) return;
+    if ((now - prev) < stats.cooldownMs) return;
+    player.lastShotAt[weaponId] = now;
+    if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
     player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
-
-    const targetId = String(msg.targetId || '');
-    const hitType = msg.hitType === 'head' ? 'head' : 'body';
-    if (!targetId) return;
-
-    const target = this.getEntityById(targetId);
-    if (!this.canTargetEntity(target, player.id)) return;
-
-    const dist = distance3(player, target);
-    var effectiveMaxRange = Number(stats.maxRange || 0);
-    if (stats.infiniteRange) {
-      effectiveMaxRange = Infinity;
-    } else if (msg && msg.adsActive) {
-      effectiveMaxRange *= Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1));
-    }
-    if (dist > effectiveMaxRange) return;
-
-    let damage = hitType === 'head' ? stats.headDamage : stats.bodyDamage;
-    damage = applyWeaponFalloff(weaponId, damage, dist);
-    const out = applyDamageFromSource(player, target, damage, {
-      hitType,
-      weaponId,
-      sourceKind: 'weapon'
+    const shots = resolveHitscanShot({
+      origin: {
+        x: Number(player.x || 0),
+        y: Number(player.y || PLAYER_EYE_HEIGHT_WU),
+        z: Number(player.z || 0)
+      },
+      forward: this.entityForward(player),
+      weaponStats: { ...stats, id: weaponId },
+      falloffBands: WEAPON_FALLOFF[weaponId] || [],
+      adsActive: !!(msg && msg.adsActive),
+      shotToken,
+      targets: this.getAliveEntities().filter((entity) => this.canTargetEntity(entity, player.id)),
+      worldBoxes: this.worldCollision && Array.isArray(this.worldCollision.collidables)
+        ? this.worldCollision.collidables
+        : []
     });
-    if (!out) return;
-
-    broadcastDamageEvent(this, player.id, target, out, hitType, weaponId);
-
-    if (out.killed) {
-      broadcastDeathRespawn(this, target);
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i];
+      const target = shot ? shot.target : null;
+      if (!this.canTargetEntity(target, player.id)) continue;
+      const out = applyDamageFromSource(player, target, shot.damage, {
+        hitType: shot.hitType === 'head' ? 'head' : 'body',
+        weaponId,
+        sourceKind: 'weapon'
+      });
+      if (!out) continue;
+      broadcastDamageEvent(this, player.id, target, out, shot.hitType === 'head' ? 'head' : 'body', weaponId);
+      if (out.killed) {
+        broadcastDeathRespawn(this, target);
+      }
     }
   }
 
@@ -1339,6 +1364,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleSeekerShot(player, msg, ws) {
     if (!player || !player.alive) return;
+    if (!this.canEntityUseWeapon(player)) return;
 
     const weaponId = 'seekergun';
     const profile = getSeekProfileByWeaponId('seekergun');
@@ -1398,6 +1424,9 @@ export class GlobalArenaRoom extends DurableObject {
 
     entity.abilityCooldownUntil = 0;
     entity.ultimateCooldownUntil = 0;
+    entity.weaponLockUntil = 0;
+    entity.throwableLockUntil = 0;
+    entity.abilityLockUntil = 0;
     entity.deadeye = null;
     entity.chokeState = null;
 
@@ -1438,7 +1467,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleThrow(player, msg, ws) {
     if (!player || !player.alive) return;
-    if (this.isEntityActionLocked(player)) return;
+    if (!this.canEntityUseThrowable(player)) return;
     const throwableId = String(msg.throwableId || '');
     const clientThrowId = String(msg.clientThrowId || '');
     const def = THROWABLE_STATS[throwableId];
@@ -1624,12 +1653,15 @@ export class GlobalArenaRoom extends DurableObject {
     entity.streamHeat = 0;
     entity.streamOverheatedUntil = 0;
     entity.lastShotAt = {};
-    entity.shotBurstState = {};
+    entity.lastShotTokenByWeapon = {};
     entity.muzzleFlashUntil = 0;
     entity.throwables = this.createThrowableRuntime();
     entity.lastThrowAt = 0;
     entity.abilityCooldownUntil = 0;
     entity.ultimateCooldownUntil = 0;
+    entity.weaponLockUntil = 0;
+    entity.throwableLockUntil = 0;
+    entity.abilityLockUntil = 0;
     entity.stunUntil = 0;
     entity.slowUntil = 0;
     entity.slowMultiplier = 1;

@@ -6,6 +6,7 @@
     'use strict';
 
     var GameActorVisualFactory = {};
+    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
 
     function createFallbackVisual(bodyColor, skinColor, legColor) {
         var group = new THREE.Group();
@@ -112,8 +113,8 @@
 
         function syncHitboxes(rootPosition) {
             if (!rootPosition) return;
-            if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, rootPosition.y + 0.7625, rootPosition.z);
-            if (headHitbox) headHitbox.position.set(rootPosition.x, rootPosition.y + 2.0, rootPosition.z);
+            if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxY ? entityPoints.entityBodyHitboxY(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);
+            if (headHitbox) headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxY ? entityPoints.entityHeadHitboxY(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
         }
 
         function setHitboxVisibility(visible) {

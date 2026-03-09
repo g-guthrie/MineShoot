@@ -3,6 +3,7 @@ import { getSharedProtocol } from '../../lib/shared-protocol.js';
 import { nowMs, distance3, normalize3, dot3 } from '../transport.js';
 import { integrateProjectileMotion } from '../sim/projectiles.js';
 import { steerHomingVelocity } from '../../../shared/seek-core.js';
+import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import {
   applyDamageFromSource,
   broadcastDamageEvent,
@@ -17,7 +18,7 @@ const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const SHARED_PROTOCOL = getSharedProtocol();
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 
-const PLAYER_EYE_HEIGHT_WU = 1.6;
+const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const KNIFE_HEADSHOT_HEIGHT_DELTA_WU = 0.45;
 
 export function tickProjectiles(room, dtSec) {

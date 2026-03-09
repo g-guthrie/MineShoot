@@ -1,11 +1,12 @@
 import { getSharedTuningWu } from '../../lib/shared-tuning.js';
+import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { nowMs, clamp } from '../transport.js';
 import { tickClassAbilityState } from './AbilityService.js';
 
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
-const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
+const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 
 const MAX_HP = 500;
@@ -41,7 +42,7 @@ export function createBot(room, index) {
     lastDamageAt: 0,
     weaponId: DEFAULT_WEAPON_LOADOUT[0],
     lastShotAt: {},
-    shotBurstState: {},
+    lastShotTokenByWeapon: {},
     moveSpeedNorm: 0,
     sprinting: false,
     streamHeat: 0,
@@ -51,6 +52,9 @@ export function createBot(room, index) {
     lastThrowAt: 0,
     abilityCooldownUntil: 0,
     ultimateCooldownUntil: 0,
+    weaponLockUntil: 0,
+    throwableLockUntil: 0,
+    abilityLockUntil: 0,
     stunUntil: 0,
     slowUntil: 0,
     slowMultiplier: 1,

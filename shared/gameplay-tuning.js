@@ -59,12 +59,14 @@ export const gameplayTuning = {
   },
   weaponStats: {
     rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 240,  bodyDamage: 42,  headDamage: 92,  maxRange: 100, pellets: 1,  hipfireSpread: 0.013, adsSpreadMultiplier: 0.0,  adsHitscanRangeMultiplier: 1.4 },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 215,  bodyDamage: 28,  headDamage: 96,  maxRange: 54,  pellets: 1,  hipfireSpread: 0.016, adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 215,  bodyDamage: 28,  headDamage: 96,  maxRange: 54,  pellets: 1,  hipfireSpread: 0.014, adsSpreadMultiplier: 0.75, adsHitscanRangeMultiplier: 1.0 },
     machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   bodyDamage: 15,  headDamage: 20,  maxRange: 40,  pellets: 1,  hipfireSpread: 0.046, adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 1100, bodyDamage: 18,  headDamage: 28,  maxRange: 22,  pellets: 12, hipfireSpread: 0.21,  adsSpreadMultiplier: 1.0,  adsHitscanRangeMultiplier: 1.0 },
     sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1450, bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1,  hipfireSpread: 0.32,  adsSpreadMultiplier: 0.0,  adsHitscanRangeMultiplier: 1.0, infiniteRange: true },
     seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsSpreadMultiplier: 1,    adsHitscanRangeMultiplier: 1.0 }
   },
+  defaultWeaponLoadout: ['machinegun', 'shotgun'],
+  selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
   throwableCategories: {
     grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
     blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
@@ -100,8 +102,8 @@ export const gameplayTuning = {
       description: 'Single-target lift and stun in reticle box.',
       debugSummary: 'Square = choke target box.',
       tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 15000, range: 24, minDot: 0.05, duration: 1.1,
-      liftHeight: 1.25, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 180, targetTolerance: 1.6
+      cooldownMs: 15000, range: 28, minDot: 0.05, duration: 0.85,
+      liftHeight: 1.75, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 315, targetTolerance: 1.6
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',
@@ -137,6 +139,18 @@ export function getWeaponStats(weaponId) {
   return gameplayTuning.weaponStats[weaponId] || null;
 }
 
+export function getDefaultWeaponLoadout() {
+  return Array.isArray(gameplayTuning.defaultWeaponLoadout) && gameplayTuning.defaultWeaponLoadout.length
+    ? gameplayTuning.defaultWeaponLoadout.slice(0, 2)
+    : ['machinegun', 'shotgun'];
+}
+
+export function getSelectableWeaponIds() {
+  return Array.isArray(gameplayTuning.selectableWeaponIds) && gameplayTuning.selectableWeaponIds.length
+    ? gameplayTuning.selectableWeaponIds.slice()
+    : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'];
+}
+
 export function getAbilityDef(abilityId) {
   return (gameplayTuning.abilityCatalog && gameplayTuning.abilityCatalog[abilityId]) || null;
 }
@@ -152,3 +166,5 @@ export function getDefaultAbilityLoadout() {
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
+runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
+runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;

@@ -7,6 +7,28 @@
 
     var GameCombatTuning = {};
 
+    function runtimeSharedTuning() {
+        return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning
+            : null;
+    }
+
+    function sharedAbilityDefault(abilityId, key, fallback) {
+        var shared = runtimeSharedTuning();
+        var catalog = shared && shared.abilityCatalog ? shared.abilityCatalog : null;
+        var ability = catalog && catalog[abilityId] ? catalog[abilityId] : null;
+        var value = Number(ability && ability[key]);
+        return Number.isFinite(value) ? value : fallback;
+    }
+
+    function sharedClassPresetDefault(classId, key, fallback) {
+        var shared = runtimeSharedTuning();
+        var presets = shared && shared.classPresets ? shared.classPresets : null;
+        var preset = presets && presets[classId] ? presets[classId] : null;
+        var value = Number(preset && preset[key]);
+        return Number.isFinite(value) ? value : fallback;
+    }
+
     var DEFAULTS = {
         awareness: {
             segments: 8,
@@ -81,32 +103,32 @@
             throwIntentDirectionMinDot: -0.2
         },
         classWallhackRadius: {
-            abilities: 90
+            abilities: sharedClassPresetDefault('abilities', 'wallhackRadius', 90)
         },
         classAbilities: {
-            chokeLockBoxPx: 180,
-            chokeRange: 24,
-            chokeTargetTolerance: 1.6,
-            chokeDuration: 1.1,
-            chokeLiftHeight: 1.0,
-            chokeTickRate: 0.25,
-            chokeDotPerTick: 0,
-            chokeCastDamage: 0,
-            hookLockBoxPx: 170,
-            hookReticleRadiusPx: 52,
-            hookRange: 24,
-            hookCastDamage: 35,
-            hookStunDuration: 0.5,
-            hookPullDistance: 3.2,
-            hookCatchRadius: 1.6,
-            hookTravelSpeed: 24,
-            healDuration: 0.85,
-            healAmount: 150,
+            chokeLockBoxPx: sharedAbilityDefault('choke', 'lockBoxPx', 315),
+            chokeRange: sharedAbilityDefault('choke', 'range', 24),
+            chokeTargetTolerance: sharedAbilityDefault('choke', 'targetTolerance', 1.6),
+            chokeDuration: sharedAbilityDefault('choke', 'duration', 0.85),
+            chokeLiftHeight: sharedAbilityDefault('choke', 'liftHeight', 1.0),
+            chokeTickRate: sharedAbilityDefault('choke', 'tickRate', 0.25),
+            chokeDotPerTick: sharedAbilityDefault('choke', 'dotPerTick', 0),
+            chokeCastDamage: sharedAbilityDefault('choke', 'castDamage', 0),
+            hookLockBoxPx: sharedAbilityDefault('hook', 'lockBoxPx', 170),
+            hookReticleRadiusPx: sharedAbilityDefault('hook', 'reticleRadiusPx', 52),
+            hookRange: sharedAbilityDefault('hook', 'range', 24),
+            hookCastDamage: sharedAbilityDefault('hook', 'castDamage', 35),
+            hookStunDuration: sharedAbilityDefault('hook', 'stunDuration', 0.5),
+            hookPullDistance: sharedAbilityDefault('hook', 'pullDistance', 3.2),
+            hookCatchRadius: sharedAbilityDefault('hook', 'catchRadius', 1.6),
+            hookTravelSpeed: sharedAbilityDefault('hook', 'travelSpeed', 24),
+            healDuration: sharedAbilityDefault('heal', 'duration', 0.85),
+            healAmount: sharedAbilityDefault('heal', 'healAmount', 150),
             deadeyeLockBoxPx: 220,
-            deadeyeLockRange: 70,
-            deadeyeDuration: 1.5,
-            deadeyeMaxTargets: 2,
-            deadeyeDamage: 180
+            deadeyeLockRange: sharedAbilityDefault('deadeye', 'range', 70),
+            deadeyeDuration: sharedAbilityDefault('deadeye', 'duration', 1.5),
+            deadeyeMaxTargets: sharedAbilityDefault('deadeye', 'maxTargets', 2),
+            deadeyeDamage: sharedAbilityDefault('deadeye', 'damage', 180)
         }
     };
 
@@ -115,9 +137,7 @@
     }
 
     function sharedTuning() {
-        return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning)
-            ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning
-            : null;
+        return runtimeSharedTuning();
     }
 
     function buildBase() {

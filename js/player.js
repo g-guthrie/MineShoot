@@ -103,7 +103,10 @@
         chokeStartedAt: 0,
         chokeUntil: 0,
         chokeLift: 0,
-        spawnShieldUntil: 0
+        spawnShieldUntil: 0,
+        weaponUntil: 0,
+        throwableUntil: 0,
+        abilityUntil: 0
     };
 
     function hasInputCapture() {
@@ -130,12 +133,38 @@
         return Number(statusState.spawnShieldUntil || 0) > Number(now || nowMs());
     }
 
+    function actionRestrictionUntil(actionType) {
+        if (actionType === 'weapon') return Number(statusState.weaponUntil || 0);
+        if (actionType === 'throwable') return Number(statusState.throwableUntil || 0);
+        if (actionType === 'ability') return Number(statusState.abilityUntil || 0);
+        return 0;
+    }
+
+    function isActionRestricted(actionType, now) {
+        return actionRestrictionUntil(actionType) > Number(now || nowMs());
+    }
+
     function isMovementLocked(now) {
         return isStunned(now) || isHookPulled(now) || isChoked(now);
     }
 
     function isActionLocked(now) {
-        return isMovementLocked(now);
+        return isMovementLocked(now) ||
+            isActionRestricted('weapon', now) ||
+            isActionRestricted('throwable', now) ||
+            isActionRestricted('ability', now);
+    }
+
+    function canUseWeapon(now) {
+        return !isMovementLocked(now) && !isActionRestricted('weapon', now);
+    }
+
+    function canUseThrowable(now) {
+        return !isMovementLocked(now) && !isActionRestricted('throwable', now);
+    }
+
+    function canUseAbility(now) {
+        return !isMovementLocked(now) && !isActionRestricted('ability', now);
     }
 
     function clearExpiredStatusState(now) {
@@ -148,6 +177,9 @@
             statusState.chokeLift = 0;
         }
         if (!isSpawnShielded(stamp)) statusState.spawnShieldUntil = 0;
+        if (!isActionRestricted('weapon', stamp)) statusState.weaponUntil = 0;
+        if (!isActionRestricted('throwable', stamp)) statusState.throwableUntil = 0;
+        if (!isActionRestricted('ability', stamp)) statusState.abilityUntil = 0;
     }
 
     function applyStatusState(patch) {
@@ -158,6 +190,9 @@
         if (typeof patch.chokeUntil === 'number') statusState.chokeUntil = Number(patch.chokeUntil || 0);
         if (typeof patch.chokeLift === 'number') statusState.chokeLift = Number(patch.chokeLift || 0);
         if (typeof patch.spawnShieldUntil === 'number') statusState.spawnShieldUntil = Number(patch.spawnShieldUntil || 0);
+        if (typeof patch.weaponUntil === 'number') statusState.weaponUntil = Number(patch.weaponUntil || 0);
+        if (typeof patch.throwableUntil === 'number') statusState.throwableUntil = Number(patch.throwableUntil || 0);
+        if (typeof patch.abilityUntil === 'number') statusState.abilityUntil = Number(patch.abilityUntil || 0);
         clearExpiredStatusState(nowMs());
         setSpawnShieldVisual(isSpawnShielded());
     }
@@ -1022,6 +1057,14 @@
         });
     };
 
+    GamePlayer.setActionRestrictions = function (state) {
+        applyStatusState({
+            weaponUntil: state && state.weaponUntil ? Number(state.weaponUntil || 0) : 0,
+            throwableUntil: state && state.throwableUntil ? Number(state.throwableUntil || 0) : 0,
+            abilityUntil: state && state.abilityUntil ? Number(state.abilityUntil || 0) : 0
+        });
+    };
+
     GamePlayer.isStunned = function () {
         return isStunned();
     };
@@ -1044,6 +1087,18 @@
 
     GamePlayer.isActionLocked = function () {
         return isActionLocked();
+    };
+
+    GamePlayer.canUseWeapon = function () {
+        return canUseWeapon();
+    };
+
+    GamePlayer.canUseThrowable = function () {
+        return canUseThrowable();
+    };
+
+    GamePlayer.canUseAbility = function () {
+        return canUseAbility();
     };
 
     GamePlayer.equipSlot = function (slotIndex) {

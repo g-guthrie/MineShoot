@@ -3,9 +3,12 @@ globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 const orderedModules = [
   '../../shared/gameplay-tuning.js',
   '../../shared/protocol.js',
+  '../../shared/world-layout.js',
+  '../../shared/private-room-codes.js',
   '../../shared/terrain-sampler.js',
   '../../shared/seek-profiles.js',
   '../../shared/entity-constants.js',
+  '../../shared/entity-points.js',
   '../../shared/damage.js',
   '../../shared/seek-core.js',
   '../core/bootstrap.js',

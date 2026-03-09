@@ -11,7 +11,8 @@
     var renderMap = new Map();
     var hitboxArray = [];
     var hitboxVisible = true;
-    var REMOTE_EYE_HEIGHT = 1.6;
+    var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
+    var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var hitboxFactory = globalThis.__MAYHEM_RUNTIME.GameHitboxFactory || null;
 
     function classWallhackRadiusFor(classId) {

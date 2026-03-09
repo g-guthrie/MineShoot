@@ -1,10 +1,12 @@
 import { getSharedTuningWu } from '../../lib/shared-tuning.js';
+import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import { nowMs } from '../transport.js';
 
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
-const DEFAULT_WEAPON_LOADOUT = ['machinegun', 'shotgun'];
+const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
 export function toEntityState(entity) {
   const throwables = {};
@@ -25,7 +27,7 @@ export function toEntityState(entity) {
     username: entity.username,
     classId: entity.classId,
     x: Number(entity.x.toFixed(3)),
-    y: Number((entity.y || 1.6).toFixed(3)),
+    y: Number((entity.y || EYE_HEIGHT).toFixed(3)),
     z: Number(entity.z.toFixed(3)),
     yaw: Number((entity.yaw || 0).toFixed(4)),
     pitch: Number((entity.pitch || 0).toFixed(4)),

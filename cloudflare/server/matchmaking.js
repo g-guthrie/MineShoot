@@ -1,15 +1,24 @@
 import { json, sanitizeRoomId } from './transport.js';
-
-const PUBLIC_ROOM_PREFIX = {
-  ffa: 'ffa',
-  tdm: 'tdm'
-};
-const PRIVATE_ROOM_PREFIX = 'private';
-const DEFAULT_PUBLIC_ROOM_COUNT = 8;
-const PUBLIC_ROOM_START_THRESHOLD = 8;
-const PUBLIC_ROOM_SOFT_TARGET = 12;
-const DEFAULT_PUBLIC_ROOM_CAPACITY = 16;
-const PRIVATE_ROOM_CODE_LENGTH = 6;
+import { getSessionFromRequest } from './auth.js';
+import {
+  createPrivateRoomRecord,
+  getPrivateRoomById,
+  touchPrivateRoomById
+} from './private-rooms.js';
+import {
+  PUBLIC_ROOM_PREFIX,
+  PRIVATE_ROOM_PREFIX,
+  DEFAULT_PUBLIC_ROOM_COUNT,
+  PUBLIC_ROOM_START_THRESHOLD,
+  PUBLIC_ROOM_SOFT_TARGET,
+  DEFAULT_PUBLIC_ROOM_CAPACITY,
+  PRIVATE_ROOM_CODE_LENGTH
+} from '../../shared/matchmaking-config.js';
+import {
+  privateRoomIdFromCode,
+  privateRoomCodeFromId,
+  normalizePrivateRoomId
+} from '../../shared/private-room-codes.js';
 
 function clampInt(value, min, max, fallback) {
   const next = Math.round(Number(value));
@@ -33,29 +42,6 @@ function normalizePublicGameMode(raw) {
 function publicRoomId(gameMode, index) {
   const prefix = PUBLIC_ROOM_PREFIX[normalizePublicGameMode(gameMode)] || PUBLIC_ROOM_PREFIX.ffa;
   return sanitizeRoomId(`${prefix}-${String(index + 1).padStart(2, '0')}`);
-}
-
-function privateRoomIdFromCode(code) {
-  return sanitizeRoomId(`${PRIVATE_ROOM_PREFIX}-${String(code || '').toLowerCase()}`);
-}
-
-function privateRoomCodeFromId(roomId) {
-  const normalized = sanitizeRoomId(roomId);
-  if (normalized.startsWith(`${PRIVATE_ROOM_PREFIX}-`)) {
-    return normalized.slice(PRIVATE_ROOM_PREFIX.length + 1).toUpperCase();
-  }
-  return normalized.toUpperCase();
-}
-
-function normalizePrivateRoomId(raw) {
-  const input = String(raw || '').trim().toLowerCase();
-  if (!input) return '';
-  if (input.startsWith(`${PRIVATE_ROOM_PREFIX}-`)) {
-    return sanitizeRoomId(input);
-  }
-  const compact = input.replace(/[^a-z0-9]/g, '');
-  if (!compact) return '';
-  return privateRoomIdFromCode(compact);
 }
 
 function buildRoomPayload(roomId, privacy, extras = null) {
@@ -146,17 +132,32 @@ async function allocateQuickMatch(env, requestedGameMode) {
   });
 }
 
-function createPrivateRoom() {
-  const roomId = privateRoomIdFromCode(randomToken(PRIVATE_ROOM_CODE_LENGTH));
-  return buildRoomPayload(roomId, 'private');
+async function createPrivateRoom(env, request) {
+  const session = await getSessionFromRequest(env, request).catch(() => null);
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const roomCode = randomToken(PRIVATE_ROOM_CODE_LENGTH).toUpperCase();
+    const roomId = privateRoomIdFromCode(roomCode);
+    try {
+      await createPrivateRoomRecord(env, roomId, roomCode, session && session.userId ? session.userId : '');
+      return buildRoomPayload(roomId, 'private');
+    } catch (_err) {
+      // Retry on rare code collisions or transient insert conflicts.
+    }
+  }
+  throw new Error('Private room creation failed.');
 }
 
-function joinPrivateRoom(rawRoomCode) {
+async function joinPrivateRoom(env, rawRoomCode) {
   const roomId = normalizePrivateRoomId(rawRoomCode);
   if (!roomId || roomId === 'global') {
-    return null;
+    return { ok: false, reason: 'invalid' };
   }
-  return buildRoomPayload(roomId, 'private');
+  const room = await getPrivateRoomById(env, roomId);
+  if (!room || !room.room_id) {
+    return { ok: false, reason: 'not_found' };
+  }
+  await touchPrivateRoomById(env, room.room_id);
+  return { ok: true, payload: buildRoomPayload(room.room_id, 'private') };
 }
 
 export async function handleMatchmaking(env, request) {
@@ -177,15 +178,19 @@ export async function handleMatchmaking(env, request) {
   }
 
   if (action === 'private') {
-    return json(createPrivateRoom());
+    const payload = await createPrivateRoom(env, request);
+    return json(payload);
   }
 
   if (action === 'join') {
-    const payload = joinPrivateRoom(body.roomCode || body.roomId || '');
-    if (!payload) {
+    const result = await joinPrivateRoom(env, body.roomCode || body.roomId || '');
+    if (!result.ok) {
+      if (result.reason === 'not_found') {
+        return json({ ok: false, error: 'Private room code not found.' }, 404);
+      }
       return json({ ok: false, error: 'Enter a valid private room code.' }, 400);
     }
-    return json(payload);
+    return json(result.payload);
   }
 
   return json({ ok: false, error: 'Unsupported matchmaking action.' }, 400);

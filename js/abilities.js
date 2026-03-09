@@ -133,37 +133,7 @@
 
     function getCatalog() {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
-        if (shared && shared.abilityCatalog) return shared.abilityCatalog;
-        return {
-            choke: {
-                id: 'choke', slot: 'ability', name: 'Vader Choke',
-                description: 'Single-target lift and stun in reticle box.',
-                debugSummary: 'Square = choke target box.',
-                tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-                cooldownMs: 15000, range: 24, lockBoxPx: 180, castDamage: 0, duration: 1.1, targetTolerance: 1.6, liftHeight: 1.25, tickRate: 0.25, dotPerTick: 0
-            },
-            hook: {
-                id: 'hook', slot: 'either', name: 'Chain Hook',
-                description: 'Latch a target and yank them into close range.',
-                debugSummary: 'Circle = hook catch radius debug.',
-                tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
-                cooldownMs: 15000, range: 24, lockBoxPx: 170, castDamage: 35, stunDuration: 0.5, pullDistance: 3.2, minDot: 0.03, catchRadius: 1.6, travelSpeed: 24
-            },
-            heal: {
-                id: 'heal', slot: 'either', name: 'Heal',
-                description: 'Brief self-heal with visible windup.',
-                debugSummary: 'Visible windup before the heal resolves.',
-                tunableParams: ['healAmount', 'cooldownMs'],
-                cooldownMs: 15000, duration: 0.85, healAmount: 150
-            },
-            deadeye: {
-                id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
-                description: 'Lock and execute marked targets.',
-                debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
-                tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
-                cooldownMs: 15000, range: 70, minDot: 0.22, duration: 1.5, maxTargets: 2, damage: 180
-            }
-        };
+        return (shared && shared.abilityCatalog) ? shared.abilityCatalog : {};
     }
 
     function getAbilityDef(abilityId) {
@@ -304,6 +274,24 @@
         return { targets: markers };
     }
 
+    function getChokeRectSize(camera, cfg) {
+        var deadeyeDef = getAbilityDef('deadeye') || {};
+        var deadeyeMinDot = Number(deadeyeDef.minDot || 0.22);
+        var halfAngleRad = Math.acos(Math.max(-1, Math.min(1, deadeyeMinDot)));
+        var vFovRad = Number(camera && camera.fov || 60) * Math.PI / 180;
+        var tanHalf = Math.tan(halfAngleRad);
+        var tanV = Math.tan(vFovRad * 0.5);
+        var height = 180;
+        if (isFinite(tanHalf) && isFinite(tanV) && tanV > 0.000001) {
+            var yNdc = tanHalf / tanV;
+            height = Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight));
+        }
+        return {
+            width: Math.max(24, Number(cfg && cfg.lockBoxPx || 180)),
+            height: height
+        };
+    }
+
     function refreshDeadeyeTargetPositions(camera, cfg) {
         if (!deadeyeState || !deadeyeState.active || !deadeyeState.targets) return;
         var liveList = null;
@@ -393,23 +381,12 @@
         if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect) {
             return { ok: false, message: 'Choke targeting unavailable.' };
         }
-        var deadeyeDef = getAbilityDef('deadeye') || {};
-        var deadeyeMinDot = Number(deadeyeDef.minDot || 0.22);
-        var halfAngleRad = Math.acos(Math.max(-1, Math.min(1, deadeyeMinDot)));
-        var vFovRad = Number(camera.fov || 60) * Math.PI / 180;
-        var tanHalf = Math.tan(halfAngleRad);
-        var tanV = Math.tan(vFovRad * 0.5);
-        var chokeRectHeight = 180;
-        if (isFinite(tanHalf) && isFinite(tanV) && tanV > 0.000001) {
-            var yNdc = tanHalf / tanV;
-            chokeRectHeight = Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight));
-        }
-        var chokeRectWidth = Math.max(24, chokeRectHeight * 0.3);
+        var chokeRect = getChokeRectSize(camera, cfg);
         var target = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect(
             camera,
             cfg.range || 24,
-            chokeRectWidth,
-            chokeRectHeight,
+            chokeRect.width,
+            chokeRect.height,
             { ownerType: 'enemy' }
         );
         if (!target || !target.hitbox) {
@@ -758,6 +735,10 @@
 
     GameAbilities.getDeadeyeState = function () {
         return buildDeadeyeUiState(deadeyeState);
+    };
+
+    GameAbilities.getChokeRectSize = function (camera) {
+        return getChokeRectSize(camera, getConfigForAbility('choke') || null);
     };
 
     GameAbilities.getHookState = function () {

@@ -1,9 +1,21 @@
 import { getSessionFromRequest } from './auth.js';
 import { randomId, sanitizeRoomId, validUsername } from './transport.js';
+import {
+  getPrivateRoomById,
+  isRegisteredPrivateRoomId,
+  touchPrivateRoomById
+} from './private-rooms.js';
 
 export async function handleWsUpgrade(env, request, classPresets) {
   const url = new URL(request.url);
   const roomId = sanitizeRoomId(url.searchParams.get('room') || env.ROOM_NAME || 'global');
+  if (isRegisteredPrivateRoomId(roomId)) {
+    const room = await getPrivateRoomById(env, roomId);
+    if (!room || !room.room_id) {
+      return new Response('Private room not found.', { status: 404 });
+    }
+    await touchPrivateRoomById(env, room.room_id);
+  }
 
   let session = await getSessionFromRequest(env, request);
   if (!session) {

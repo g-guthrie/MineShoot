@@ -108,17 +108,18 @@ export function castChoke(room, player, cfg, msg, now) {
   const target = room.resolveLockedHostile(player, lockedTargetId, cfg.range || 24, cfg.minDot || 0.05);
   if (!target) return { ok: false };
 
+  const endsAt = now + Math.round((cfg.duration || 1.6) * 1000);
   room.applyTimedStun(target, cfg.duration || 1.6);
   target.chokeVictimState = {
     sourceId: player.id,
     startedAt: now,
-    endsAt: now + Math.round((cfg.duration || 1.6) * 1000),
+    endsAt: endsAt,
     liftHeight: cfg.liftHeight || 1.0
   };
   player.chokeState = {
     targetId: target.id,
     startedAt: now,
-    endsAt: now + Math.round((cfg.duration || 1.6) * 1000),
+    endsAt: endsAt,
     nextTickAt: now + Math.round((cfg.tickRate || 0.25) * 1000),
     tickRateMs: Math.round((cfg.tickRate || 0.25) * 1000),
     dotPerTick: Math.max(0, Math.round(cfg.dotPerTick || 0)),
@@ -186,7 +187,7 @@ export function castAbility(room, player, abilityId, cfg, msg, now) {
 
 export function handleClassCast(room, player, msg, ws) {
   if (!player || !player.alive) return;
-  if (room && typeof room.isEntityActionLocked === 'function' && room.isEntityActionLocked(player)) {
+  if (room && typeof room.canEntityUseAbility === 'function' && !room.canEntityUseAbility(player)) {
     room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', slot: Number(msg && msg.slot || 0), classId: 'abilities' });
     return;
   }
