@@ -71,6 +71,8 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
 
 test('shared weapon helpers expose the selectable loadout order and falloff profiles', () => {
   assert.deepEqual(getSelectableWeaponIds(), ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper']);
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getSelectableWeaponIds, 'function');
+  assert.deepEqual(globalThis.__MAYHEM_RUNTIME.GameShared.getSelectableWeaponIds(), getSelectableWeaponIds());
 
   const machinegunFalloff = getWeaponFalloffProfile('machinegun');
   assert.deepEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);

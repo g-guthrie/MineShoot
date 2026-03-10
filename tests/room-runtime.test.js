@@ -1,0 +1,161 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  applyEntitySpawnPoint,
+  applySpawnShield,
+  buildPlayerEntity,
+  ensurePlayer,
+  respawnIfNeeded,
+  syncRoomFixtures,
+  terrainFeetYAt,
+  terrainEyeYAt
+} from '../cloudflare/server/room/RoomRuntime.js';
+
+function makeRoom() {
+  return {
+    roomName: 'global',
+    boundsMin: 2,
+    boundsMax: 110,
+    worldFlags: { terrainPhysicsV2: true },
+    terrainSampler: {
+      getGroundHeightAt(x, z) {
+        return x + z;
+      }
+    },
+    players: new Map(),
+    privateRoomConfig: { teams: new Map([['actor-a', 'bravo']]) },
+    gameMode: 'tdm',
+    matchState: { started: true, ended: false },
+    getAliveEntities() { return []; },
+    isDevLocalRoom() { return true; },
+    isPublicMatchRoom() { return true; },
+    createThrowableRuntime() { return { frag: { charges: 1 } }; },
+    buildPlayerEntity(userId, username, classId, options) {
+      return buildPlayerEntity(this, userId, username, classId, options, {
+        createPlayerEntity(config) {
+          return {
+            id: config.id,
+            username: config.username,
+            actorId: config.actorId,
+            actorName: config.actorName,
+            fixtureType: config.fixtureType,
+            kind: 'player',
+            yaw: config.yaw,
+            pitch: config.pitch,
+            inputState: config.createMovementInputState(),
+            weaponAmmo: config.createWeaponAmmoRuntime(['rifle']),
+            throwables: config.createThrowableRuntime()
+          };
+        },
+        createMovementInputState() { return { forward: false }; },
+        createWeaponAmmoRuntime() { return { rifle: { ammoInMag: 30 } }; },
+        playerEyeHeight: 1.7,
+        spawnPadding: 8,
+        spawnMinClearance: 14,
+        nowMs: () => 500,
+        playerSpawnShieldMs: 1000
+      });
+    },
+    spawnEntityRandomly(entity) {
+      entity.x = 10;
+      entity.z = 11;
+      entity.y = 12.7;
+      entity.plannedSpawnPoint = null;
+    },
+    applyEntitySpawnPoint(entity, spawn) {
+      return applyEntitySpawnPoint(this, entity, spawn, { playerEyeHeight: 1.7 });
+    },
+    applySpawnShield(entity) {
+      return applySpawnShield(entity, { nowMs: () => 500, playerSpawnShieldMs: 1000 });
+    },
+    applyJoinBaselineCalls: 0,
+    applyJoinBaseline(player) {
+      this.applyJoinBaselineCalls += 1;
+      player.teamId = player.teamId || 'alpha';
+    },
+    enforceEntityTerrainFloor(entity) {
+      return applyEntitySpawnPoint(this, entity, { x: entity.x, z: entity.z }, { playerEyeHeight: 1.7 });
+    },
+    tickAuthoritativePlayerMovementCalls: 0,
+    tickAuthoritativePlayerMovement() { this.tickAuthoritativePlayerMovementCalls += 1; },
+    regenArmorCalls: 0,
+    regenArmor() { this.regenArmorCalls += 1; },
+    tickStreamStateCalls: 0,
+    tickStreamState() { this.tickStreamStateCalls += 1; },
+    tickThrowableRegenCalls: 0,
+    tickThrowableRegen() { this.tickThrowableRegenCalls += 1; },
+    respawnIfNeeded(entity) {
+      return respawnIfNeeded(this, entity, {
+        nowMs: () => 1000,
+        gameModeLms: 'lms',
+        resetEntityForRespawn(target) {
+          target.alive = true;
+          target.respawnAt = 0;
+        },
+        createWeaponAmmoRuntime() { return { rifle: { ammoInMag: 30 } }; },
+        createMovementInputState() { return { forward: false }; }
+      });
+    }
+  };
+}
+
+test('room runtime terrain and spawn helpers keep player positions grounded', () => {
+  const room = makeRoom();
+  assert.equal(terrainFeetYAt(room, 2, 3), 5);
+  assert.equal(terrainEyeYAt(room, 2, 3, { playerEyeHeight: 1.7 }), 6.7);
+
+  const player = { kind: 'player', x: 1, z: 2, y: 0 };
+  applyEntitySpawnPoint(room, player, { x: 4, z: 5 }, { playerEyeHeight: 1.7 });
+  assert.equal(player.x, 4);
+  assert.equal(player.z, 5);
+  assert.equal(player.y, 10.7);
+  assert.equal(player.isGrounded, true);
+});
+
+test('room runtime ensures players and simulated fixtures through one boundary', () => {
+  const room = makeRoom();
+  const player = ensurePlayer(room, 'u1', 'ALPHA', 'abilities', 'actor-a', 'ALPHA', {
+    isPrivateMatchRoom: () => true,
+    teamAlpha: 'alpha',
+    gameModeTdm: 'tdm',
+    gameModeLms: 'lms',
+    lmsRules: { startingLives: 3 }
+  });
+
+  assert.equal(room.players.get('u1'), player);
+  assert.equal(player.teamId, 'bravo');
+  assert.equal(room.applyJoinBaselineCalls, 1);
+
+  syncRoomFixtures(room, {
+    simPlayerIds: ['sim-1'],
+    simPlayerNames: ['SIM ONE'],
+    ensureBots(targetRoom) {
+      targetRoom.botsEnsured = true;
+    }
+  });
+
+  assert.equal(room.players.has('sim-1'), true);
+  assert.equal(room.players.get('sim-1').fixtureType, 'sim_player');
+  assert.equal(room.botsEnsured, true);
+});
+
+test('room runtime respawns dead entities and ticks live players through shared helpers', () => {
+  const room = makeRoom();
+  const player = {
+    id: 'u2',
+    kind: 'player',
+    fixtureType: '',
+    alive: false,
+    lmsLives: 1,
+    respawnAt: 0,
+    plannedSpawnPoint: { x: 7, z: 8 }
+  };
+  room.players.set('u2', player);
+
+  room.respawnIfNeeded(player);
+  assert.equal(player.alive, true);
+  assert.equal(player.spawnShieldUntil, 1500);
+  assert.equal(player.x, 7);
+  assert.equal(player.z, 8);
+});

@@ -73,6 +73,9 @@
             var privateRoomState = currentState();
 
             if (!privateRoomState || !privateRoomState.room) {
+                if (ctx.privateRoomSummaryEl) ctx.privateRoomSummaryEl.textContent = '';
+                if (ctx.privateRoomTeamAlpha) ctx.privateRoomTeamAlpha.innerHTML = '';
+                if (ctx.privateRoomTeamBravo) ctx.privateRoomTeamBravo.innerHTML = '';
                 return;
             }
 

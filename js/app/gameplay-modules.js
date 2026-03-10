@@ -26,7 +26,7 @@ import '../net/state-view.js';
 import '../net/remote-sync.js';
 import '../net/self-sync.js';
 import '../net/feedback-sync.js';
-import '../domain/weapons/registry.js';
+import '../domain/weapons/visuals.js';
 import '../world/material-library.js';
 import '../asset-factory.js';
 import '../three-model-loader.js';

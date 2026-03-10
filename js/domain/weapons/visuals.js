@@ -1,14 +1,9 @@
 (function () {
     'use strict';
 
-    var GameWeaponRegistry = {};
+    var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var DEFAULT_HANDLE = [0, 0, 0];
     var DEFAULT_BARREL_TIP = [0, 0, -0.58];
-    var WEAPON_ORDER = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
-
-    function sharedTuning() {
-        return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning : null;
-    }
 
     function gunVisual(definition) {
         var visual = definition || {};
@@ -41,15 +36,8 @@
         };
     }
 
-    function buildVisualEntry(family, definition) {
-        return {
-            family: family,
-            visual: gunVisual(definition)
-        };
-    }
-
     var weaponVisualEntries = {
-        rifle: buildVisualEntry('hitscan', {
+        rifle: gunVisual({
             gunPos: [0.0, 0.02, 0.08],
             gunRot: [0, 0, 0],
             body:   { p: [0, 0.0, -0.06], s: [1.0, 1.0, 1.0], c: 0x333333 },
@@ -60,7 +48,7 @@
             supportPos: [-0.05, -0.03, -0.34],
             barrelTipPos: [0, 0.02, -0.56]
         }),
-        pistol: buildVisualEntry('hitscan', {
+        pistol: gunVisual({
             gunPos: [0.0, 0.03, 0.06],
             gunRot: [0.12, 0.05, 0],
             model: {
@@ -79,7 +67,7 @@
             supportPos: [-0.02, -0.055, -0.1],
             barrelTipPos: [0, 0.005, -0.44]
         }),
-        machinegun: buildVisualEntry('hitscan', {
+        machinegun: gunVisual({
             gunPos: [0.0, 0.02, 0.08],
             gunRot: [0, 0, 0],
             model: {
@@ -98,8 +86,8 @@
             supportPos: [-0.08, -0.03, -0.32],
             barrelTipPos: [0, 0.02, -0.9]
         }),
-        shotgun: buildVisualEntry('hitscan', {
-            gunPos: [0.0, 0.02, 0.06],
+        shotgun: gunVisual({
+            gunPos: [0.0, 0.02, 0.08],
             gunRot: [0, 0, 0],
             body:   { p: [0, 0.0, -0.1], s: [1.3, 1.06, 1.18], c: 0x6b4220 },
             barrel: { p: [0, 0.02, -0.47], s: [1.95, 1.12, 1.55], c: 0x222222 },
@@ -110,7 +98,7 @@
             supportPos: [-0.05, -0.03, -0.44],
             barrelTipPos: [0, 0.02, -0.86]
         }),
-        sniper: buildVisualEntry('hitscan', {
+        sniper: gunVisual({
             gunPos: [0.0, 0.02, 0.04],
             gunRot: [0, 0, 0],
             body:   { p: [0, -0.01, -0.16], s: [1.26, 0.9, 1.9], c: 0x2f3f2f },
@@ -119,35 +107,18 @@
             grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5d3c1f },
             handlePos: [0, -0.11, 0.11],
             scope: true,
-            supportPos: [-0.05, -0.02, -0.56],
+            supportPos: [-0.035, 0.005, -0.42],
             barrelTipPos: [0, 0.02, -1.34]
         })
     };
 
-    function buildEntry(weaponId) {
-        var tuning = sharedTuning();
-        var stats = tuning && tuning.weaponStats ? tuning.weaponStats : {};
-        var base = weaponVisualEntries[weaponId];
-        if (!base) return null;
-        return {
-            family: base.family,
-            stats: stats[weaponId] || null,
-            visual: base.visual
-        };
-    }
-
-    GameWeaponRegistry.get = function (weaponId) {
-        return buildEntry(weaponId);
-    };
-
-    GameWeaponRegistry.getAll = function () {
-        var out = {};
-        for (var i = 0; i < WEAPON_ORDER.length; i++) {
-            var weaponId = WEAPON_ORDER[i];
-            out[weaponId] = buildEntry(weaponId);
+    runtime.GameWeaponVisuals = {
+        get: function (weaponId) {
+            var resolvedId = Object.prototype.hasOwnProperty.call(weaponVisualEntries, weaponId) ? weaponId : 'rifle';
+            return {
+                weaponId: resolvedId,
+                visual: weaponVisualEntries[resolvedId]
+            };
         }
-        return out;
     };
-
-    globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry = GameWeaponRegistry;
 })();

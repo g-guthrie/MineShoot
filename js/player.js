@@ -17,6 +17,12 @@
         ? globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants
         : {};
 
+    function selectableWeaponIds() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var selected = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
+        return Array.isArray(selected) && selected.length ? selected : ['rifle'];
+    }
+
     var EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var JOG_SPEED = Number(movementTuning.jogSpeed || 8);
     var RUN_SPEED = Number(movementTuning.runSpeed || 14);
@@ -99,7 +105,7 @@
     var isMoving = false;
     var sprinting = false;
     var lastMoveSpeedNorm = 0;
-    var loadoutSlots = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
+    var loadoutSlots = selectableWeaponIds();
 
     var gunBobX = 0;
     var gunBobY = 0;

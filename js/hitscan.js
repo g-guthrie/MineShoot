@@ -1070,15 +1070,12 @@
         for (var i = 0; i < weaponCatalogOrder.length; i++) {
             var id = weaponCatalogOrder[i];
             var weapon = weapons[id];
-            var weaponDomain = (globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry && globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get)
-                ? globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry.get(id)
-                : null;
             if (!weapon) continue;
             out.push({
                 id: weapon.id,
                 name: weapon.name,
                 primitiveType: weapon.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
-                family: weaponDomain ? weaponDomain.family : '',
+                family: String(weapon.primitiveType || '').indexOf('hitscan') === 0 ? 'hitscan' : '',
                 automatic: !!weapon.automatic,
                 cooldown: weapon.cooldown,
                 reloadMs: weapon.reloadMs,

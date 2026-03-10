@@ -17,41 +17,6 @@
             ctx.friendsPreview.appendChild(empty);
         }
 
-        function normalizeFriend(friend) {
-            var raw = (friend && typeof friend === 'object') ? friend : {};
-            return {
-                userId: String(raw.userId || raw.id || ''),
-                username: String(raw.username || ''),
-                displayName: String(raw.displayName || raw.username || raw.userId || raw.id || 'FRIEND'),
-                online: !!raw.online,
-                incomingInvite: !!raw.incomingInvite,
-                outgoingInvite: !!raw.outgoingInvite,
-                joinLocked: !!raw.joinLocked,
-                sameParty: !!raw.sameParty,
-                canJoin: !!raw.canJoin,
-                canInvite: !!raw.canInvite,
-                isMutual: !!raw.isMutual,
-                activityState: String(raw.activityState || ''),
-                partyId: String(raw.partyId || ''),
-                roomId: String(raw.roomId || '')
-            };
-        }
-
-        function normalizeFriendsState(nextState) {
-            if (Array.isArray(nextState)) {
-                return { friends: nextState.map(normalizeFriend) };
-            }
-            if (!nextState || typeof nextState !== 'object') {
-                return { friends: [] };
-            }
-            var rawFriends = Array.isArray(nextState.friends) ? nextState.friends : [];
-            var normalizedFriends = [];
-            for (var i = 0; i < rawFriends.length; i++) {
-                normalizedFriends.push(normalizeFriend(rawFriends[i]));
-            }
-            return Object.assign({}, nextState, { friends: normalizedFriends });
-        }
-
         function friendActivityCopy(friend) {
             if (!friend) return 'OFFLINE';
             if (friend.incomingInvite) return 'INVITE WAITING';
@@ -174,7 +139,7 @@
         }
 
         function applyFriendsState(nextState) {
-            ctx.setState(normalizeFriendsState(nextState));
+            ctx.setState(nextState || { friends: [] });
             var friendsState = ctx.getState();
             if (!ctx.isLoggedIn()) {
                 setFriendsPreviewEmpty('Log in to save friends.');

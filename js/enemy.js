@@ -11,7 +11,6 @@
     var hitboxArray = [];
     var sceneRef = null;
     var hitboxVisible = true;
-
     var enemyTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning()
         : {
@@ -39,7 +38,12 @@
     var revealDir = new THREE.Vector3();
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
-    var enemyWeaponPool = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
+
+    function selectableWeaponIds() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var selected = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
+        return Array.isArray(selected) && selected.length ? selected : ['rifle'];
+    }
 
     function getCurrentWallhackRadius() {
         if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive() && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
@@ -86,6 +90,7 @@
     }
 
     function randomEnemyWeapon() {
+        var enemyWeaponPool = selectableWeaponIds();
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 

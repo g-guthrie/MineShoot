@@ -11,7 +11,7 @@ import './lobby-party-view.js';
 import './lobby-friends-view.js';
 import './lobby-private-room-view.js';
 import './lobby-clickables.js';
-import './lobby-sync-runtime.js';
+import './lobby-session.js';
 import '../net/auth.js';
 import './lobby-controller.js';
 import './menu-shell.js';

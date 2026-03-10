@@ -48,6 +48,7 @@
     var BARREL_TIP_ANCHOR_NAME = 'weaponBarrelTipAnchor';
     var INFERRED_JOG_SPEED = 8;
     var INFERRED_RUN_SPEED = 14;
+    var DEFAULT_GUN_WRIST_PITCH = -75 * DEG_TO_RAD;
 
     function clamp01(value) {
         return Math.max(0, Math.min(1, Number(value || 0)));
@@ -75,18 +76,20 @@
         var adsTighten = adsActive ? 1 : 0;
 
         return {
-            armX: 1.02 + (aim * 0.14) + (adsTighten * 0.04),
-            armY: -0.34 - (Math.abs(walk) * 0.04) - (adsTighten * 0.02),
-            armZ: -0.56 - (adsTighten * 0.05),
-            palmX: -0.01,
-            palmY: -0.9,
-            palmZ: -0.2 - (adsTighten * 0.02),
-            palmRotX: 0.08,
-            palmRotY: -0.05,
-            palmRotZ: -0.18,
-            targetX: 0.28 + (aim * 0.12) + (adsTighten * 0.02),
-            targetY: -0.08,
-            targetZ: -0.22 - (adsTighten * 0.02)
+            // Keep the sniper support hand tucked under the fore-end instead of
+            // reaching across the entire torso.
+            armX: 0.78 + (aim * 0.1) + (adsTighten * 0.03),
+            armY: -0.22 - (Math.abs(walk) * 0.03) - (adsTighten * 0.01),
+            armZ: -0.34 - (adsTighten * 0.03),
+            palmX: -0.015,
+            palmY: -0.87,
+            palmZ: -0.13 - (adsTighten * 0.015),
+            palmRotX: 0.03,
+            palmRotY: -0.02,
+            palmRotZ: -0.1,
+            targetX: 0.14 + (aim * 0.08) + (adsTighten * 0.015),
+            targetY: -0.03,
+            targetZ: -0.12 - (adsTighten * 0.015)
         };
     }
 
@@ -170,28 +173,14 @@
         return eye;
     }
 
-    function weaponRegistry() {
-        return globalThis.__MAYHEM_RUNTIME.GameWeaponRegistry || null;
-    }
-
     function weaponModelLoader() {
         return globalThis.__MAYHEM_RUNTIME.GameThreeModelLoader || null;
     }
 
     function resolveWeaponEntry(weaponId) {
-        var registry = weaponRegistry();
-        var entry = registry && registry.get ? registry.get(weaponId) : null;
-        if (entry && entry.visual) {
-            return {
-                weaponId: weaponId,
-                visual: entry.visual
-            };
-        }
-        var fallback = registry && registry.get ? registry.get('rifle') : null;
-        return fallback && fallback.visual ? {
-            weaponId: 'rifle',
-            visual: fallback.visual
-        } : null;
+        var visualsApi = globalThis.__MAYHEM_RUNTIME.GameWeaponVisuals || null;
+        if (visualsApi && visualsApi.get) return visualsApi.get(weaponId);
+        return null;
     }
 
     function setAnchorPosition(group, name, coords) {
@@ -411,7 +400,7 @@
             palmLeft: palmLeft,
             palmRight: palmRight,
             weaponClass: 'gun',
-            weaponId: 'rifle',
+            weaponId: '',
             gaitPhase: Math.random() * Math.PI * 2,
             aimPitch: 0,
             gunBasePos: new THREE.Vector3(),
@@ -489,9 +478,12 @@
                 mountPos[1] + GUN_MOUNT_LIFT_Y,
                 mountPos[2] + GUN_MOUNT_SHIFT_Z
             );
-            rig.gun.rotation.set(mountRot[0], mountRot[1], mountRot[2]);
-            // Keep a fixed wrist-style relationship: gun sits 75deg below the forearm.
-            rig.gun.rotation.x = -75 * DEG_TO_RAD;
+            // Let each weapon fine-tune its wrist pitch relative to the forearm.
+            rig.gun.rotation.set(
+                DEFAULT_GUN_WRIST_PITCH + Number(mountRot[0] || 0),
+                Number(mountRot[1] || 0),
+                Number(mountRot[2] || 0)
+            );
 
             var handleOffset = new THREE.Vector3(handlePos[0], handlePos[1], handlePos[2]);
             handleOffset.applyEuler(rig.gun.rotation);
@@ -608,11 +600,15 @@
                     rig.armL.rotation.z = -0.04;
                     rig.palmRight.rotation.x = 0;
                 } else if (sprinting) {
-                    rig.armR.rotation.x = -walkSwing;
-                    rig.armR.rotation.z = 0.18;
-                    rig.armL.rotation.x = walkSwing;
-                    rig.armL.rotation.y = 0;
-                    rig.armL.rotation.z = -0.04;
+                    // Keep firearms in a low-ready carry while sprinting. Reusing
+                    // the melee arm-pump leaves the weapon mount nearly vertical,
+                    // which is especially obvious on remote players and bots.
+                    rig.armR.rotation.x = 0.84 + (Math.abs(walkSwing) * 0.12);
+                    rig.armR.rotation.y = 0;
+                    rig.armR.rotation.z = -0.14;
+                    rig.armL.rotation.x = 0.52 + (walkSwing * 0.12);
+                    rig.armL.rotation.y = -0.08;
+                    rig.armL.rotation.z = -0.12;
                     rig.palmRight.rotation.x = 0;
                 } else {
                     var shoulderAim = rig.aimPitch * 0.35;
@@ -840,7 +836,8 @@
 
     GameAvatarRig._test = {
         getSupportPoseForWeapon: getSupportPoseForWeapon,
-        getReloadPoseForWeapon: getReloadPoseForWeapon
+        getReloadPoseForWeapon: getReloadPoseForWeapon,
+        resolveWeaponEntry: resolveWeaponEntry
     };
 
     globalThis.__MAYHEM_RUNTIME.GameAvatarRig = GameAvatarRig;

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 
 async function loadAvatarRig(runtimeOverrides = {}) {
+  const visualsCode = await fs.readFile(new URL('../js/domain/weapons/visuals.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../js/avatar-rig.js', import.meta.url), 'utf8');
   const runtime = {
     GameShared: {
@@ -20,19 +21,21 @@ async function loadAvatarRig(runtimeOverrides = {}) {
   };
   sandbox.globalThis = sandbox;
 
+  vm.runInContext(visualsCode, vm.createContext(sandbox));
   vm.runInContext(code, vm.createContext(sandbox));
   return sandbox.__MAYHEM_RUNTIME.GameAvatarRig;
 }
 
-test('sniper support pose drives the left arm across the rifle', async () => {
+test('sniper support pose keeps the left arm tucked near the rifle fore-end', async () => {
   const avatarRig = await loadAvatarRig();
   const pose = avatarRig._test.getSupportPoseForWeapon('sniper', 0.1, 0.2, true);
 
   assert.ok(pose);
-  assert.ok(pose.armX > 1);
-  assert.ok(pose.armY < -0.3);
-  assert.ok(pose.armZ < -0.55);
-  assert.ok(pose.palmZ < -0.18);
+  assert.ok(pose.armX > 0.75 && pose.armX < 0.85);
+  assert.ok(pose.armY < -0.2 && pose.armY > -0.3);
+  assert.ok(pose.armZ < -0.3 && pose.armZ > -0.4);
+  assert.ok(pose.palmZ < -0.1 && pose.palmZ > -0.18);
+  assert.ok(pose.targetX < 0.18);
 });
 
 test('reload pose is available for every firearm and includes wiggle offsets', async () => {
@@ -47,101 +50,72 @@ test('reload pose is available for every firearm and includes wiggle offsets', a
   }
 });
 
+test('built-in weapon visuals keep the sniper support anchor tucked under the fore-end', async () => {
+  const avatarRig = await loadAvatarRig();
+  const sniperEntry = avatarRig._test.resolveWeaponEntry('sniper');
+
+  assert.deepEqual(Array.from(sniperEntry.visual.anchors.support), [-0.035, 0.005, -0.42]);
+  assert.deepEqual(Array.from(sniperEntry.visual.anchors.handle), [0, -0.11, 0.11]);
+});
+
+test('built-in weapon visuals expose the embedded pistol and machinegun models', async () => {
+  const avatarRig = await loadAvatarRig();
+  const pistolEntry = avatarRig._test.resolveWeaponEntry('pistol');
+  const machinegunEntry = avatarRig._test.resolveWeaponEntry('machinegun');
+
+  assert.equal(pistolEntry.visual.model.kind, 'embedded-gltf');
+  assert.equal(pistolEntry.visual.model.url, '/assets/models/weapons/desert-eagle.gltf');
+  assert.deepEqual(Array.from(pistolEntry.visual.mount.position), [0, 0.03, 0.06]);
+
+  assert.equal(machinegunEntry.visual.model.kind, 'embedded-gltf');
+  assert.equal(machinegunEntry.visual.model.url, '/assets/models/weapons/ak-47.gltf');
+  assert.deepEqual(Array.from(machinegunEntry.visual.mount.position), [0, 0.02, 0.08]);
+});
+
 test('weapon models mount asynchronously and hide procedural fallback geometry', async () => {
   const modelNode = new THREE.Group();
   modelNode.name = 'test-model';
   const avatarRig = await loadAvatarRig({
-    GameWeaponRegistry: {
-      get(id) {
-        if (id !== 'shotgun') return null;
-        return {
-          visual: {
-            classId: 'gun',
-            mount: {
-              position: [0, 0.02, 0.06],
-              rotation: [0, 0, 0]
-            },
-            model: {
-              kind: 'embedded-gltf',
-              url: '/assets/models/weapons/shotgun.gltf',
-              position: [0.1, 0.2, 0.3],
-              rotation: [0.4, 0.5, 0.6],
-              scale: [0.7, 0.8, 0.9]
-            },
-            parts: {
-              body: { p: [0, 0, 0], s: [1, 1, 1], c: 0x111111 },
-              barrel: { p: [0, 0, -0.2], s: [1, 1, 1], c: 0x222222 },
-              stock: { p: [0, 0, 0.2], s: [1, 1, 1], c: 0x333333 },
-              grip: { p: [0, -0.1, 0], s: [1, 1, 1], c: 0x444444 },
-              pump: true
-            },
-            anchors: {
-              handle: [0, 0, 0],
-              barrelTip: [0, 0, -0.5],
-              support: [0, -0.01, -0.2]
-            },
-            effects: {
-              muzzleFlash: {
-                position: [0, 0, -0.5]
-              }
-            }
-          }
-        };
-      }
-    },
     GameThreeModelLoader: {
       load(spec) {
-        assert.equal(spec.url, '/assets/models/weapons/shotgun.gltf');
+        assert.equal(spec.url, '/assets/models/weapons/ak-47.gltf');
         return Promise.resolve(modelNode.clone(true));
       }
     }
   });
 
-  const api = avatarRig.create('player', { weaponId: 'shotgun' });
+  const api = avatarRig.create('player', { weaponId: 'machinegun' });
   await Promise.resolve();
   await Promise.resolve();
 
   assert.equal(api.rig.weaponModelMount.children.length, 1);
   assert.equal(api.rig.weaponModelMount.children[0].name, 'test-model');
-  assert.equal(api.rig.weaponModelMount.position.x, 0.1);
-  assert.equal(api.rig.weaponModelMount.position.y, 0.2);
-  assert.equal(api.rig.weaponModelMount.position.z, 0.3);
-  assert.equal(api.rig.weaponModelMount.scale.x, 0.7);
-  assert.equal(api.rig.weaponModelMount.scale.y, 0.8);
-  assert.equal(api.rig.weaponModelMount.scale.z, 0.9);
+  assert.equal(api.rig.weaponModelMount.position.x, 0.0);
+  assert.equal(api.rig.weaponModelMount.position.y, -0.01);
+  assert.equal(api.rig.weaponModelMount.position.z, -0.05);
+  assert.equal(api.rig.weaponModelMount.scale.x, 0.27);
+  assert.equal(api.rig.weaponModelMount.scale.y, 0.27);
+  assert.equal(api.rig.weaponModelMount.scale.z, 0.27);
   assert.equal(api.rig.gunBody.visible, false);
-  assert.equal(api.rig.pump.visible, false);
+  assert.equal(api.rig.coil.visible, false);
 });
 
 test('setting the same weapon does not re-request the weapon model', async () => {
   let loadCount = 0;
   const avatarRig = await loadAvatarRig({
-    GameWeaponRegistry: {
-      get(id) {
-        if (id !== 'shotgun') return null;
-        return {
-          visual: {
-            classId: 'gun',
-            model: {
-              kind: 'embedded-gltf',
-              url: '/assets/models/weapons/shotgun.gltf'
-            }
-          }
-        };
-      }
-    },
     GameThreeModelLoader: {
-      load() {
+      load(spec) {
+        assert.equal(spec.url, '/assets/models/weapons/ak-47.gltf');
         loadCount += 1;
         return Promise.resolve(new THREE.Group());
       }
     }
   });
 
-  const api = avatarRig.create('player', { weaponId: 'shotgun' });
+  const api = avatarRig.create('player', { weaponId: 'machinegun' });
   await Promise.resolve();
   await Promise.resolve();
-  api.setWeapon('shotgun');
+  api.setWeapon('machinegun');
   await Promise.resolve();
 
   assert.equal(loadCount, 1);
@@ -168,4 +142,29 @@ test('jump action trigger layers a takeoff pose on top of airborne animation', a
   });
 
   assert.ok(api.rig.legL.rotation.x < baselineLegRotation);
+});
+
+test('armed sprint animation keeps the weapon arm in a low-ready carry', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create('player', { weaponId: 'rifle' });
+
+  api.updateAnimation(0.016, {
+    speedNorm: 1.1,
+    sprinting: true,
+    airborne: false,
+    aimPitch: 0
+  });
+
+  assert.ok(api.rig.armR.rotation.x > 0.8);
+  assert.ok(api.rig.armR.rotation.z < -0.05);
+  assert.ok(api.rig.armL.rotation.x > 0.4);
+});
+
+test('weapon mount rotation can customize wrist pitch per weapon', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create('player', { weaponId: 'pistol' });
+
+  assert.ok(api.rig.gun.rotation.x > -1.2);
+  assert.ok(api.rig.gun.rotation.x < -1.1);
+  assert.ok(api.rig.gun.rotation.y > 0.04);
 });
