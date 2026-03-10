@@ -24,7 +24,6 @@
         }
         if (feedback.killed) {
             RT.GameUI.showKillMarker();
-            RT.GameUI.addKill();
         } else {
             RT.GameUI.showHitMarker();
         }

@@ -90,6 +90,7 @@ async function loadGameNetHarness() {
 
   const context = vm.createContext(sandbox);
   for (const path of [
+    '../js/ability-fx.js',
     '../js/net/message-router.js',
     '../js/net/runtime-core.js',
     '../js/net/state-view.js',

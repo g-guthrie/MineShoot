@@ -58,72 +58,22 @@ test('built-in weapon visuals keep the sniper support anchor tucked under the fo
   assert.deepEqual(Array.from(sniperEntry.visual.anchors.handle), [0, -0.11, 0.11]);
 });
 
-test('built-in weapon visuals expose the embedded pistol and machinegun models', async () => {
+test('built-in weapon visuals stay procedural for pistol and machinegun', async () => {
   const avatarRig = await loadAvatarRig();
   const pistolEntry = avatarRig._test.resolveWeaponEntry('pistol');
   const machinegunEntry = avatarRig._test.resolveWeaponEntry('machinegun');
 
-  assert.equal(pistolEntry.visual.model.kind, 'embedded-gltf');
-  assert.equal(pistolEntry.visual.model.url, '/assets/models/weapons/desert-eagle.gltf');
   assert.deepEqual(Array.from(pistolEntry.visual.mount.position), [0, 0.03, 0.06]);
+  assert.equal(pistolEntry.visual.parts.scope, false);
 
-  assert.equal(machinegunEntry.visual.model.kind, 'embedded-gltf');
-  assert.equal(machinegunEntry.visual.model.url, '/assets/models/weapons/ak-47.gltf');
   assert.deepEqual(Array.from(machinegunEntry.visual.mount.position), [0, 0.02, 0.08]);
-});
-
-test('weapon models mount asynchronously and hide procedural fallback geometry', async () => {
-  const modelNode = new THREE.Group();
-  modelNode.name = 'test-model';
-  const avatarRig = await loadAvatarRig({
-    GameThreeModelLoader: {
-      load(spec) {
-        assert.equal(spec.url, '/assets/models/weapons/ak-47.gltf');
-        return Promise.resolve(modelNode.clone(true));
-      }
-    }
-  });
-
-  const api = avatarRig.create('player', { weaponId: 'machinegun' });
-  await Promise.resolve();
-  await Promise.resolve();
-
-  assert.equal(api.rig.weaponModelMount.children.length, 1);
-  assert.equal(api.rig.weaponModelMount.children[0].name, 'test-model');
-  assert.equal(api.rig.weaponModelMount.position.x, 0.0);
-  assert.equal(api.rig.weaponModelMount.position.y, -0.01);
-  assert.equal(api.rig.weaponModelMount.position.z, -0.05);
-  assert.equal(api.rig.weaponModelMount.scale.x, 0.27);
-  assert.equal(api.rig.weaponModelMount.scale.y, 0.27);
-  assert.equal(api.rig.weaponModelMount.scale.z, 0.27);
-  assert.equal(api.rig.gunBody.visible, false);
-  assert.equal(api.rig.coil.visible, false);
-});
-
-test('setting the same weapon does not re-request the weapon model', async () => {
-  let loadCount = 0;
-  const avatarRig = await loadAvatarRig({
-    GameThreeModelLoader: {
-      load(spec) {
-        assert.equal(spec.url, '/assets/models/weapons/ak-47.gltf');
-        loadCount += 1;
-        return Promise.resolve(new THREE.Group());
-      }
-    }
-  });
-
-  const api = avatarRig.create('player', { weaponId: 'machinegun' });
-  await Promise.resolve();
-  await Promise.resolve();
-  api.setWeapon('machinegun');
-  await Promise.resolve();
-
-  assert.equal(loadCount, 1);
+  assert.equal(machinegunEntry.visual.parts.coil, false);
+  assert.equal(machinegunEntry.visual.parts.scope, false);
 });
 
 test('jump action trigger layers a takeoff pose on top of airborne animation', async () => {
   const avatarRig = await loadAvatarRig();
-  const api = avatarRig.create('player', { weaponId: 'rifle' });
+  const api = avatarRig.create({ weaponId: 'rifle' });
 
   api.updateAnimation(0.016, {
     speedNorm: 0,
@@ -146,7 +96,7 @@ test('jump action trigger layers a takeoff pose on top of airborne animation', a
 
 test('armed sprint animation keeps the weapon arm in a low-ready carry', async () => {
   const avatarRig = await loadAvatarRig();
-  const api = avatarRig.create('player', { weaponId: 'rifle' });
+  const api = avatarRig.create({ weaponId: 'rifle' });
 
   api.updateAnimation(0.016, {
     speedNorm: 1.1,
@@ -162,7 +112,7 @@ test('armed sprint animation keeps the weapon arm in a low-ready carry', async (
 
 test('weapon mount rotation can customize wrist pitch per weapon', async () => {
   const avatarRig = await loadAvatarRig();
-  const api = avatarRig.create('player', { weaponId: 'pistol' });
+  const api = avatarRig.create({ weaponId: 'pistol' });
 
   assert.ok(api.rig.gun.rotation.x > -1.2);
   assert.ok(api.rig.gun.rotation.x < -1.1);

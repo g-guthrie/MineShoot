@@ -24,8 +24,15 @@
     var debugVisualsOn = false;
     var bloomReticle = null;
 
-    var killCount = 0;
     var hitmarkerTimer = null;
+
+    function sharedMatchRules() {
+        return globalThis.__MAYHEM_RUNTIME &&
+            globalThis.__MAYHEM_RUNTIME.GameShared &&
+            globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
+            : null;
+    }
 
     function formatCooldown(seconds) {
         if (seconds <= 0) return '';
@@ -74,8 +81,7 @@
         damageVignetteEl = document.getElementById('damage-vignette');
         damageIndicatorEl = document.getElementById('damage-indicator');
 
-        killCount = 0;
-        GameUI.updateKillCounter();
+        GameUI.updateMatchStatus(null, null);
 
         damageTicks = [];
         damageTickTimers = [];
@@ -138,40 +144,14 @@
         }, 300);
     };
 
-    GameUI.addKill = function () {
-        killCount++;
-        GameUI.updateKillCounter();
-    };
-
-    GameUI.updateKillCounter = function () {
-        killCounterEl.textContent = 'Kills: ' + killCount;
-    };
-
     GameUI.updateMatchStatus = function (matchState, selfState) {
         if (!killCounterEl) return;
-        if (!matchState || !matchState.started) {
-            GameUI.updateKillCounter();
+        var matchRules = sharedMatchRules();
+        if (matchRules && matchRules.formatMatchHudCounter) {
+            killCounterEl.textContent = matchRules.formatMatchHudCounter(matchState, selfState);
             return;
         }
-
-        var ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
-        if (String(matchState.gameMode || '') === 'lms') {
-            var lmsLives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
-            var lmsCharge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
-            var chargeGoal = Math.max(1, Number(matchState.lms && matchState.lms.chargePerExtraLife || 2));
-            var remaining = Math.max(0, Number(matchState.lms && matchState.lms.remainingPlayers || 0));
-            killCounterEl.textContent = 'Lives: ' + lmsLives + ' | Charge: ' + lmsCharge + '/' + chargeGoal + ' | Left: ' + remaining;
-            return;
-        }
-        if (String(matchState.gameMode || '') === 'tdm') {
-            var teamId = String(selfState && selfState.teamId || '');
-            var teamProgress = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
-            var enemyTeamId = teamId === 'alpha' ? 'bravo' : 'alpha';
-            var enemyProgress = Number(matchState.teamProgress && matchState.teamProgress[enemyTeamId] || 0);
-            killCounterEl.textContent = 'Kills: ' + ownKills + ' | Team: ' + teamProgress.toFixed(1) + ' / ' + enemyProgress.toFixed(1);
-            return;
-        }
-        killCounterEl.textContent = 'Kills: ' + ownKills + ' | Lead: ' + Number(matchState.leaderProgress || 0).toFixed(0) + ' / ' + Number(matchState.targetProgress || 0).toFixed(0);
+        killCounterEl.textContent = 'Kills: ' + Math.max(0, Number(selfState && selfState.kills || 0));
     };
 
     GameUI.updateHealth = function (hp, maxHp) {

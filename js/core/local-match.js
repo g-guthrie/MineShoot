@@ -3,6 +3,7 @@
 
     var RT = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var sharedLms = RT.GameShared && RT.GameShared.lmsMode ? RT.GameShared.lmsMode : null;
+    var sharedMatchRules = RT.GameShared && RT.GameShared.matchRules ? RT.GameShared.matchRules : null;
     var lmsRules = sharedLms && sharedLms.rules ? sharedLms.rules : {
         startingLives: 4,
         maxLives: 4,
@@ -15,6 +16,16 @@
         beaconChannelMs: 4000,
         finalBankingCutoffRemaining: 4
     };
+    var matchResetDelayMs = sharedMatchRules && Number(sharedMatchRules.matchResetDelayMs || 0) > 0
+        ? Number(sharedMatchRules.matchResetDelayMs)
+        : 5000;
+
+    function targetProgressForMode(mode) {
+        if (sharedMatchRules && sharedMatchRules.targetProgressForGameMode) {
+            return Number(sharedMatchRules.targetProgressForGameMode(mode) || 0);
+        }
+        return String(mode || '') === 'ffa' ? 10 : 0;
+    }
 
     var GameLocalMatch = {};
     var SELF_ID = 'guest-self';
@@ -40,33 +51,42 @@
     }
 
     function emptyMatchState() {
-        return {
-            gameMode: modeId,
-            started: true,
-            ended: false,
-            startedAt: nowMs(),
-            endedAt: 0,
-            resetAt: 0,
-            matchBaselinePlayerCount: 0,
-            targetProgress: modeId === 'ffa' ? 10 : 0,
-            leaderProgress: 0,
-            leaderId: '',
-            winnerId: '',
-            winnerTeam: '',
-            lms: modeId === 'lms' ? {
-                startingLives: lmsRules.startingLives,
-                maxLives: lmsRules.maxLives,
-                chargePerExtraLife: lmsRules.chargePerExtraLife,
-                remainingPlayers: 0,
-                finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
-                warmupEndsAt: nowMs() + lmsRules.beaconWarmupMs,
-                nextRotateAt: nowMs() + lmsRules.beaconRotateMs,
-                bankingEnabled: false,
-                activeBeacon: null
-            } : null,
-            teamProgress: { alpha: 0, bravo: 0 },
-            teamBaselineSize: { alpha: 0, bravo: 0 }
-        };
+        var match = (sharedMatchRules && sharedMatchRules.createMatchState)
+            ? sharedMatchRules.createMatchState(modeId)
+            : {
+                gameMode: modeId,
+                started: false,
+                ended: false,
+                startedAt: 0,
+                endedAt: 0,
+                resetAt: 0,
+                matchBaselinePlayerCount: 0,
+                targetProgress: targetProgressForMode(modeId),
+                leaderProgress: 0,
+                leaderId: '',
+                winnerId: '',
+                winnerTeam: '',
+                lms: modeId === 'lms' ? {
+                    startingLives: lmsRules.startingLives,
+                    maxLives: lmsRules.maxLives,
+                    chargePerExtraLife: lmsRules.chargePerExtraLife,
+                    remainingPlayers: 0,
+                    finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
+                    warmupEndsAt: 0,
+                    nextRotateAt: 0,
+                    bankingEnabled: false,
+                    activeBeacon: null
+                } : null,
+                teamProgress: { alpha: 0, bravo: 0 },
+                teamBaselineSize: { alpha: 0, bravo: 0 }
+            };
+        match.started = true;
+        match.startedAt = nowMs();
+        if (modeId === 'lms' && match.lms) {
+            match.lms.warmupEndsAt = nowMs() + lmsRules.beaconWarmupMs;
+            match.lms.nextRotateAt = nowMs() + lmsRules.beaconRotateMs;
+        }
+        return match;
     }
 
     function baseParticipant(id, username) {
@@ -166,7 +186,7 @@
         if (!matchState || matchState.ended) return;
         matchState.ended = true;
         matchState.endedAt = nowMs();
-        matchState.resetAt = matchState.endedAt + 5000;
+        matchState.resetAt = matchState.endedAt + matchResetDelayMs;
         matchState.winnerId = String(winnerId || '');
         resetAt = matchState.resetAt;
     }
@@ -303,7 +323,7 @@
 
         selfState.progressScore = selfState.kills;
         updateLeader();
-        if (selfState.kills >= Number(matchState.targetProgress || 10)) {
+        if (selfState.kills >= Number(matchState.targetProgress || targetProgressForMode(modeId) || 10)) {
             finishMatch(selfState.id);
         }
         return { respawnDelaySec: 5.0 };
@@ -350,7 +370,7 @@
 
         if (attacker) attacker.progressScore = attacker.kills;
         updateLeader();
-        if (attacker && attacker.kills >= Number(matchState.targetProgress || 10)) {
+        if (attacker && attacker.kills >= Number(matchState.targetProgress || targetProgressForMode(modeId) || 10)) {
             finishMatch(attacker.id);
         }
         return { useManagedRespawn: false };

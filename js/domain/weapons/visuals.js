@@ -13,7 +13,6 @@
                 position: visual.gunPos || [0, 0, 0],
                 rotation: visual.gunRot || [0, 0, 0]
             },
-            model: visual.model || null,
             parts: {
                 body: visual.body || null,
                 barrel: visual.barrel || null,
@@ -51,14 +50,6 @@
         pistol: gunVisual({
             gunPos: [0.0, 0.03, 0.06],
             gunRot: [0.12, 0.05, 0],
-            model: {
-                kind: 'embedded-gltf',
-                url: '/assets/models/weapons/desert-eagle.gltf',
-                center: true,
-                position: [0.01, -0.035, -0.02],
-                rotation: [0, 0, 0],
-                scale: [0.4, 0.4, 0.4]
-            },
             body:   { p: [0, -0.02, -0.06], s: [0.75, 0.85, 0.7], c: 0x3a3a3a },
             barrel: { p: [0, 0.0, -0.24], s: [0.68, 0.68, 0.65], c: 0x2c2c2c },
             stock:  { p: [0, -0.05, 0.09], s: [0.52, 0.85, 0.72], c: 0x6f4d32 },
@@ -70,14 +61,6 @@
         machinegun: gunVisual({
             gunPos: [0.0, 0.02, 0.08],
             gunRot: [0, 0, 0],
-            model: {
-                kind: 'embedded-gltf',
-                url: '/assets/models/weapons/ak-47.gltf',
-                center: true,
-                position: [0.0, -0.01, -0.05],
-                rotation: [0, 0, 0],
-                scale: [0.27, 0.27, 0.27]
-            },
             body:   { p: [0, 0.0, -0.08], s: [1.38, 1.05, 1.32], c: 0x2b2b2b },
             barrel: { p: [0, 0.03, -0.52], s: [1.18, 1.0, 1.62], c: 0x191919 },
             stock:  { p: [0, -0.03, 0.19], s: [1.2, 1.05, 1.18], c: 0x565656 },

@@ -93,9 +93,14 @@
         function getSelfAbilityState() {
             var selfState = opts.getSelfState();
             if (!selfState) return null;
-            var abilityFx = (selfState.abilityFx && typeof selfState.abilityFx === 'object')
-                ? selfState.abilityFx
-                : null;
+            var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+            var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
+                ? abilityFxView.buildSnapshotAbilityState(selfState)
+                : {
+                    chokeState: null,
+                    hookState: null,
+                    healState: null
+                };
             return {
                 slot1CooldownRemaining: selfState.slot1CooldownRemaining || 0,
                 slot2CooldownRemaining: selfState.slot2CooldownRemaining || 0,
@@ -103,13 +108,9 @@
                 ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
                 weaponLoadout: selfState.weaponLoadout || null,
                 abilityLoadout: selfState.abilityLoadout || null,
-                chokeState: abilityFx && Number(abilityFx.chokeCasterUntil || 0) > 0
-                    ? { endsAt: Number(abilityFx.chokeCasterUntil || 0) }
-                    : null,
-                hookState: abilityFx ? (abilityFx.hookVisual || null) : null,
-                healState: abilityFx && Number(abilityFx.healUntil || 0) > 0
-                    ? { endsAt: Number(abilityFx.healUntil || 0) }
-                    : null,
+                chokeState: snapshotAbilityState.chokeState,
+                hookState: snapshotAbilityState.hookState,
+                healState: snapshotAbilityState.healState,
                 deadeyeState: selfState.deadeyeState || null
             };
         }

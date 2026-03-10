@@ -5,51 +5,10 @@
 (function () {
     'use strict';
 
-    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
-
     function normalizeAngle(rad) {
         while (rad > Math.PI) rad -= Math.PI * 2;
         while (rad < -Math.PI) rad += Math.PI * 2;
         return rad;
-    }
-
-    function setRemoteHealFlash(render, active) {
-        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
-        var visual = render.actorVisual.visual;
-        var parts = visual.userData && visual.userData.bodyParts ? visual.userData.bodyParts : null;
-        var originalColors = visual.userData && visual.userData.originalPartColors ? visual.userData.originalPartColors : [];
-        if (!parts) return;
-        for (var i = 0; i < parts.length; i++) {
-            var part = parts[i];
-            if (!part || !part.material || !part.material.color) continue;
-            if (active) {
-                part.material.color.setHex(0x6dff9a);
-                if (part.material.emissive) part.material.emissive.setHex(0x163d18);
-            } else {
-                part.material.color.setHex(typeof originalColors[i] === 'number' ? originalColors[i] : 0xffffff);
-                if (part.material.emissive) part.material.emissive.setHex(0x000000);
-            }
-        }
-    }
-
-    function setRemoteSpawnShieldVisual(render, active) {
-        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
-        render.actorVisual.visual.traverse(function (node) {
-            if (!node || !node.isMesh || !node.material) return;
-            var mat = node.material;
-            if (mat.__spawnShieldBaseOpacity === undefined) {
-                mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
-                mat.__spawnShieldBaseTransparent = !!mat.transparent;
-            }
-            if (active) {
-                mat.transparent = true;
-                mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
-            } else {
-                mat.opacity = mat.__spawnShieldBaseOpacity;
-                mat.transparent = mat.__spawnShieldBaseTransparent;
-            }
-            mat.needsUpdate = true;
-        });
     }
 
     function updateRemoteEntities(dt, renderMap, getChokeVictimStateForEntity) {
@@ -57,23 +16,37 @@
         renderMap.forEach(function (r) {
             if (!r || !r.group || !r.group.position || !r.group.rotation) return;
             var lerp = Math.min(1, dt * 10);
-            r.group.position.x += (r.targetX - r.group.position.x) * lerp;
-            r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
-            r.group.position.z += (r.targetZ - r.group.position.z) * lerp;
+            var nextX = r.group.position.x + (r.targetX - r.group.position.x) * lerp;
+            var nextY = r.group.position.y + ((r.targetFootY || 0) - r.group.position.y) * lerp;
+            var nextZ = r.group.position.z + (r.targetZ - r.group.position.z) * lerp;
 
             var deltaYaw = normalizeAngle(r.targetYaw - r.group.rotation.y);
-            r.group.rotation.y += deltaYaw * lerp;
+            var nextYaw = r.group.rotation.y + (deltaYaw * lerp);
+
+            if (r.actorVisual && r.actorVisual.setWorldTransform) {
+                r.actorVisual.setWorldTransform({ x: nextX, y: nextY, z: nextZ }, nextYaw);
+            } else {
+                r.group.position.x = nextX;
+                r.group.position.y = nextY;
+                r.group.position.z = nextZ;
+                r.group.rotation.y = nextYaw;
+            }
 
             if (r.rigApi) {
                 var nextWeaponId = r.weaponId || 'rifle';
                 if (r._appliedWeaponId !== nextWeaponId) {
-                    r.rigApi.setWeapon(nextWeaponId);
+                    if (r.actorVisual && r.actorVisual.setWeapon) {
+                        r.actorVisual.setWeapon(nextWeaponId);
+                    } else {
+                        r.rigApi.setWeapon(nextWeaponId);
+                    }
                     r._appliedWeaponId = nextWeaponId;
                 }
                 var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
                 var hookedNow = Number(r.hookedUntil || 0) > Date.now();
-                if (r.rigApi.updateAnimation) {
-                    r.rigApi.updateAnimation(dt, {
+                var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
+                if (animationApi && animationApi.updateAnimation) {
+                    animationApi.updateAnimation(dt, {
                         speedNorm: r.moveSpeedNorm || 0,
                         sprinting: !!r.sprinting,
                         airborne: r.isGrounded === false,
@@ -85,20 +58,21 @@
                         movingForward: (r.moveSpeedNorm || 0) > 0.05
                     });
                 }
-                if (r.rigApi.triggerAction) {
+                var triggerApi = (r.actorVisual && r.actorVisual.triggerAction) ? r.actorVisual : r.rigApi;
+                if (triggerApi && triggerApi.triggerAction) {
                     var jumpStarted = r._prevIsGrounded !== false && r.isGrounded === false && Number(r.velocityY || 0) > 0.1;
                     if (jumpStarted) {
-                        r.rigApi.triggerAction('jump');
+                        triggerApi.triggerAction('jump');
                     }
                 }
-                if (r.rigApi.setMuzzleVisible) {
-                    r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
+                if (r.actorVisual && r.actorVisual.setMuzzleVisible) {
+                    r.actorVisual.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
                 }
-                if (r.rigApi.triggerAction) {
+                if (triggerApi && triggerApi.triggerAction) {
                     if (r.chokeState && r.chokeState.endsAt > Date.now()) {
                         if (!r._chokeGripTriggered) {
                             r._chokeGripTriggered = true;
-                            r.rigApi.triggerAction('choke_grip', {
+                            triggerApi.triggerAction('choke_grip', {
                                 duration: (r.chokeState.endsAt - Date.now()) / 1000
                             });
                         }
@@ -109,8 +83,12 @@
                 r._prevIsGrounded = r.isGrounded !== false;
             }
 
-            setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
-            setRemoteSpawnShieldVisual(r, !!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
+            if (r.actorVisual && r.actorVisual.setHealFlash) {
+                r.actorVisual.setHealFlash(!!(r.healState && r.healState.endsAt > Date.now()));
+            }
+            if (r.actorVisual && r.actorVisual.setSpawnShield) {
+                r.actorVisual.setSpawnShield(!!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
+            }
 
             var finalChokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0 };
             if (finalChokeVictimState.lift > 0) {
@@ -119,17 +97,6 @@
 
             if (r.actorVisual && r.actorVisual.syncHitboxes) {
                 r.actorVisual.syncHitboxes(r.group.position);
-            } else if (r.bodyHitbox && r.headHitbox) {
-                r.bodyHitbox.position.set(
-                    r.group.position.x,
-                    entityPoints.entityBodyHitboxYFromFeet ? entityPoints.entityBodyHitboxYFromFeet(r.group.position.y) : (r.group.position.y + 0.7625),
-                    r.group.position.z
-                );
-                r.headHitbox.position.set(
-                    r.group.position.x,
-                    entityPoints.entityHeadHitboxYFromFeet ? entityPoints.entityHeadHitboxYFromFeet(r.group.position.y) : (r.group.position.y + 2.0),
-                    r.group.position.z
-                );
             }
         });
     }

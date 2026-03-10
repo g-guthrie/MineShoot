@@ -173,10 +173,6 @@
         return eye;
     }
 
-    function weaponModelLoader() {
-        return globalThis.__MAYHEM_RUNTIME.GameThreeModelLoader || null;
-    }
-
     function resolveWeaponEntry(weaponId) {
         var visualsApi = globalThis.__MAYHEM_RUNTIME.GameWeaponVisuals || null;
         if (visualsApi && visualsApi.get) return visualsApi.get(weaponId);
@@ -194,16 +190,6 @@
         return anchor;
     }
 
-    function setWeaponModelTransform(group, spec) {
-        var modelSpec = spec || {};
-        var position = Array.isArray(modelSpec.position) ? modelSpec.position : [0, 0, 0];
-        var rotation = Array.isArray(modelSpec.rotation) ? modelSpec.rotation : [0, 0, 0];
-        var scale = Array.isArray(modelSpec.scale) ? modelSpec.scale : [1, 1, 1];
-        group.position.set(position[0], position[1], position[2]);
-        group.rotation.set(rotation[0], rotation[1], rotation[2]);
-        group.scale.set(scale[0], scale[1], scale[2]);
-    }
-
     function setProceduralWeaponVisible(rig, visible) {
         if (!rig) return;
         rig.gunBody.visible = !!visible;
@@ -215,7 +201,7 @@
         rig.coil.visible = !!visible && !!rig.coilEnabled;
     }
 
-    GameAvatarRig.create = function (kind, options) {
+    GameAvatarRig.create = function (options) {
         options = options || {};
 
         var root = new THREE.Group();
@@ -312,10 +298,6 @@
         coil.visible = false;
         gun.add(coil);
 
-        var weaponModelMount = new THREE.Group();
-        weaponModelMount.name = 'weaponModelMount';
-        gun.add(weaponModelMount);
-
         var muzzleMat = new THREE.MeshBasicMaterial({ color: ensureHex(options.muzzleColor, 0xffcc66) });
         var muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), muzzleMat);
         muzzle.position.set(0, 0, -0.58);
@@ -389,7 +371,6 @@
             scope: scope,
             pump: pump,
             coil: coil,
-            weaponModelMount: weaponModelMount,
             muzzle: muzzle,
             supportAnchor: supportAnchor,
             coreAnchor: coreAnchor,
@@ -410,51 +391,13 @@
             footPlaneOffsetY: FOOT_PLANE_OFFSET_Y,
             scopeEnabled: false,
             pumpEnabled: false,
-            coilEnabled: false,
-            weaponModelToken: 0,
-            weaponModelSpec: null
+            coilEnabled: false
         };
-
-        function clearWeaponModel() {
-            while (rig.weaponModelMount.children.length) {
-                rig.weaponModelMount.remove(rig.weaponModelMount.children[0]);
-            }
-            rig.weaponModelSpec = null;
-            setProceduralWeaponVisible(rig, true);
-        }
-
-        function attachLoadedWeaponModel(modelScene, modelSpec, token) {
-            if (token !== rig.weaponModelToken || !modelScene) return;
-            clearWeaponModel();
-            rig.weaponModelMount.add(modelScene);
-            setWeaponModelTransform(rig.weaponModelMount, modelSpec);
-            rig.weaponModelSpec = modelSpec || null;
-            setProceduralWeaponVisible(rig, false);
-        }
-
-        function loadWeaponModel(modelSpec, token) {
-            var loader = weaponModelLoader();
-            if (!loader || !loader.load || !modelSpec || String(modelSpec.kind || '') !== 'embedded-gltf') {
-                clearWeaponModel();
-                return;
-            }
-            clearWeaponModel();
-            loader.load(modelSpec).then(function (scene) {
-                attachLoadedWeaponModel(scene, modelSpec, token);
-            }).catch(function (err) {
-                if (token !== rig.weaponModelToken) return;
-                clearWeaponModel();
-                if (globalThis.console && console.warn) {
-                    console.warn('Failed to load weapon model:', modelSpec.url || '', err);
-                }
-            });
-        }
 
         function setWeapon(weaponId) {
             var resolved = resolveWeaponEntry(weaponId);
             var visual = resolved && resolved.visual ? resolved.visual : null;
             var mount = visual && visual.mount ? visual.mount : null;
-            var model = visual && visual.model ? visual.model : null;
             var parts = visual && visual.parts ? visual.parts : {};
             var anchors = visual && visual.anchors ? visual.anchors : {};
             var effects = visual && visual.effects ? visual.effects : {};
@@ -506,8 +449,6 @@
             rig.supportAnchor.position.set(rig.supportBasePos.x, rig.supportBasePos.y, rig.supportBasePos.z);
             setAnchorPosition(rig.gun, HANDLE_ANCHOR_NAME, handlePos);
             setAnchorPosition(rig.gun, BARREL_TIP_ANCHOR_NAME, barrelTipPos);
-            rig.weaponModelToken += 1;
-            loadWeaponModel(model, rig.weaponModelToken);
         }
 
         function setAimPitch(pitch) {

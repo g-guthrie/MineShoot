@@ -97,8 +97,6 @@
     var avatarRigApi = null;
     var actorVisual = null;
     var sceneRef = null;
-    var bodyHitbox = null;
-    var headHitbox = null;
     var hitboxVisible = false;
 
     var bobTimer = 0;
@@ -230,16 +228,15 @@
     function chokeLiftAt(now) {
         var stamp = Number(now || nowMs());
         if (!isChoked(stamp)) return 0;
-        var maxLift = Number(statusState.chokeLift || 0);
-        var startedAt = Number(statusState.chokeStartedAt || 0);
-        var endsAt = Number(statusState.chokeUntil || 0);
-        if (!(endsAt > startedAt)) return maxLift;
-        var progress = Math.max(0, Math.min(1, (stamp - startedAt) / (endsAt - startedAt)));
-        if (progress <= 0) return 0;
-        if (progress >= 1) return 0;
-        if (progress < 0.24) return maxLift * Math.sin((progress / 0.24) * (Math.PI * 0.5));
-        if (progress > 0.76) return maxLift * Math.cos(((progress - 0.76) / 0.24) * (Math.PI * 0.5));
-        return maxLift;
+        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null;
+        if (abilityFxView && abilityFxView.chokeLiftAt) {
+            return abilityFxView.chokeLiftAt({
+                startedAt: statusState.chokeStartedAt || 0,
+                endsAt: statusState.chokeUntil || 0,
+                chokeLift: statusState.chokeLift || 0
+            }, stamp);
+        }
+        return 0;
     }
 
     function activeChokeLift() {
@@ -284,7 +281,10 @@
     }
 
     function applyAvatarWeaponPose() {
-        if (avatarRigApi && avatarRigApi.setWeapon) {
+        if (actorVisual && actorVisual.setWeapon) {
+            actorVisual.setWeapon(currentWeaponId);
+            avatarRig = actorVisual.rig || avatarRig;
+        } else if (avatarRigApi && avatarRigApi.setWeapon) {
             avatarRigApi.setWeapon(currentWeaponId);
             avatarRig = avatarRigApi.rig || avatarRig;
         }
@@ -305,7 +305,6 @@
         }
 
         var rig = avatarRigApi.rig;
-        if (rig.thirdPerson) rig.thirdPerson.visible = true;
         if (rig.headMesh) rig.headMesh.visible = true;
         if (rig.bodyMesh) rig.bodyMesh.visible = true;
         if (rig.legLMesh) rig.legLMesh.visible = true;
@@ -364,7 +363,7 @@
     }
 
     function updateAvatarAnimation(dt, speed) {
-        if (avatarRigApi && avatarRigApi.updateAnimation) {
+        if (actorVisual && actorVisual.updateAnimation) {
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             var activeWeaponState = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
                 ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
@@ -373,7 +372,7 @@
             if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
                 reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
             }
-            avatarRigApi.updateAnimation(dt, {
+            actorVisual.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: sprinting,
                 airborne: !isGrounded,
@@ -525,7 +524,12 @@
 
     function updateAvatarPose() {
         if (!avatarGroup) return;
-        avatarGroup.position.set(playerX, posY - EYE_HEIGHT + activeChokeLift(), playerZ);
+        var feetY = posY - EYE_HEIGHT + activeChokeLift();
+        if (actorVisual && actorVisual.setWorldTransform) {
+            actorVisual.setWorldTransform({ x: playerX, y: feetY, z: playerZ }, yaw);
+            return;
+        }
+        avatarGroup.position.set(playerX, feetY, playerZ);
         avatarGroup.rotation.y = yaw;
         syncHitboxPositions();
     }
@@ -539,17 +543,20 @@
 
     function setAliveVisual(active) {
         avatarAliveVisible = !!active;
+        if (actorVisual && actorVisual.setAlive) {
+            actorVisual.setAlive(active);
+            actorVisual.setHitboxVisibility(hitboxVisible);
+        }
         syncAvatarVisibility(isSniperScopeWeapon());
-        if (bodyHitbox) bodyHitbox.visible = !!active && hitboxVisible;
-        if (headHitbox) headHitbox.visible = !!active && hitboxVisible;
     }
 
     function ensureHitboxes() {
         if (!sceneRef || actorVisual) return;
         var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
-        if (!actorFactory || !actorFactory.create) return;
+        if (!actorFactory || !actorFactory.create) {
+            throw new Error('GamePlayer requires GameActorVisualFactory.create.');
+        }
         actorVisual = actorFactory.create({
-            kind: 'player',
             ownerType: 'player',
             bodyColor: 0x4a7fc1,
             skinColor: 0xd2a77d,
@@ -558,14 +565,14 @@
             targetId: 'self',
             hitboxOpacity: hitboxVisible ? 0.3 : 0
         });
-        avatarGroup = actorVisual.visual;
+        avatarGroup = actorVisual.root || actorVisual.visual;
         avatarRigApi = actorVisual.rigApi;
-        avatarRig = avatarGroup && avatarGroup.userData ? avatarGroup.userData.rig || null : null;
-        bodyHitbox = actorVisual.bodyHitbox;
-        headHitbox = actorVisual.headHitbox;
+        avatarRig = actorVisual.rig || null;
         sceneRef.add(avatarGroup);
-        if (bodyHitbox) sceneRef.add(bodyHitbox);
-        if (headHitbox) sceneRef.add(headHitbox);
+        if (actorVisual.bodyHitbox) sceneRef.add(actorVisual.bodyHitbox);
+        if (actorVisual.headHitbox) sceneRef.add(actorVisual.headHitbox);
+        if (actorVisual.setAlive) actorVisual.setAlive(avatarAliveVisible);
+        if (actorVisual.setHitboxVisibility) actorVisual.setHitboxVisibility(hitboxVisible);
         syncHitboxPositions();
     }
 
@@ -578,40 +585,11 @@
     }
 
     function setHealFlash(active) {
-        if (!avatarGroup || !avatarGroup.userData || !avatarGroup.userData.bodyParts) return;
-        var parts = avatarGroup.userData.bodyParts;
-        var originalColors = avatarGroup.userData.originalPartColors || [];
-        for (var i = 0; i < parts.length; i++) {
-            var part = parts[i];
-            if (!part || !part.material || !part.material.color) continue;
-            if (active) {
-                part.material.color.setHex(0x6dff9a);
-                if (part.material.emissive) part.material.emissive.setHex(0x163d18);
-            } else {
-                part.material.color.setHex(typeof originalColors[i] === 'number' ? originalColors[i] : 0xffffff);
-                if (part.material.emissive) part.material.emissive.setHex(0x000000);
-            }
-        }
+        if (actorVisual && actorVisual.setHealFlash) actorVisual.setHealFlash(active);
     }
 
     function setSpawnShieldVisual(active) {
-        if (!avatarGroup) return;
-        avatarGroup.traverse(function (node) {
-            if (!node || !node.isMesh || !node.material) return;
-            var mat = node.material;
-            if (mat.__spawnShieldBaseOpacity === undefined) {
-                mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
-                mat.__spawnShieldBaseTransparent = !!mat.transparent;
-            }
-            if (active) {
-                mat.transparent = true;
-                mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
-            } else {
-                mat.opacity = mat.__spawnShieldBaseOpacity;
-                mat.transparent = mat.__spawnShieldBaseTransparent;
-            }
-            mat.needsUpdate = true;
-        });
+        if (actorVisual && actorVisual.setSpawnShield) actorVisual.setSpawnShield(active);
     }
 
     function updateCameraFromPlayer(dt) {
@@ -1038,7 +1016,9 @@
             velocityY = JUMP_VELOCITY;
             isGrounded = false;
             jumpHoldTimer = MAX_JUMP_HOLD;
-            if (avatarRigApi && avatarRigApi.triggerAction) {
+            if (actorVisual && actorVisual.triggerAction) {
+                actorVisual.triggerAction('jump');
+            } else if (avatarRigApi && avatarRigApi.triggerAction) {
                 avatarRigApi.triggerAction('jump');
             }
         }
@@ -1117,13 +1097,18 @@
         cameraKickRoll += rollKick;
         firePoseKick += 1 * scopeMultiplier;
 
-        if (avatarRigApi.setMuzzleVisible) {
-            avatarRigApi.setMuzzleVisible(true);
+        if (actorVisual && actorVisual.setMuzzleVisible) {
+            actorVisual.setMuzzleVisible(true);
             setTimeout(function () {
-                avatarRigApi.setMuzzleVisible(false);
+                if (actorVisual && actorVisual.setMuzzleVisible) actorVisual.setMuzzleVisible(false);
             }, recoil.muzzleMs);
         }
-        if (avatarRigApi.triggerAction) {
+        if (actorVisual && actorVisual.triggerAction) {
+            actorVisual.triggerAction('fire', {
+                duration: recoil.muzzleMs / 1000,
+                strength: 0.9 + (Math.abs(recoil.z) * 4)
+            });
+        } else if (avatarRigApi.triggerAction) {
             avatarRigApi.triggerAction('fire', {
                 duration: recoil.muzzleMs / 1000,
                 strength: 0.9 + (Math.abs(recoil.z) * 4)
@@ -1160,6 +1145,9 @@
     };
 
     GamePlayer.getMuzzleWorldPosition = function () {
+        if (actorVisual && actorVisual.getMuzzleWorldPosition) {
+            return actorVisual.getMuzzleWorldPosition();
+        }
         if (avatarRigApi && avatarRigApi.getMuzzleWorldPosition) {
             return avatarRigApi.getMuzzleWorldPosition();
         }
@@ -1169,16 +1157,27 @@
     };
 
     GamePlayer.getCoreWorldPosition = function () {
-        if (avatarRigApi && avatarRigApi.getCoreWorldPosition) {
-            return avatarRigApi.getCoreWorldPosition();
+        if (actorVisual && actorVisual.getCoreWorldPosition) {
+            return actorVisual.getCoreWorldPosition();
         }
         if (!camera) return null;
         return camera.position.clone().setY(camera.position.y - 0.6);
     };
 
+    GamePlayer.getEyeWorldPosition = function () {
+        if (actorVisual && actorVisual.getEyeWorldPosition) {
+            return actorVisual.getEyeWorldPosition();
+        }
+        if (avatarRigApi && avatarRigApi.getEyeWorldPosition) {
+            return avatarRigApi.getEyeWorldPosition();
+        }
+        if (!camera) return null;
+        return camera.position.clone();
+    };
+
     GamePlayer.getThrowableOriginWorldPosition = function () {
-        if (avatarRigApi && avatarRigApi.getThrowableOriginWorldPosition) {
-            return avatarRigApi.getThrowableOriginWorldPosition();
+        if (actorVisual && actorVisual.getThrowableOriginWorldPosition) {
+            return actorVisual.getThrowableOriginWorldPosition();
         }
         if (!camera) return null;
         camera.getWorldDirection(plasmaForwardDir);
@@ -1312,6 +1311,9 @@
         if (kind === 'fire') {
             triggerFireAction();
             return true;
+        }
+        if (actorVisual && actorVisual.triggerAction) {
+            return actorVisual.triggerAction(kind, options || null);
         }
         if (!avatarRigApi || !avatarRigApi.triggerAction) return false;
         return !!avatarRigApi.triggerAction(kind, options || null);

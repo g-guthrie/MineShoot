@@ -6,9 +6,6 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
-    var shared = runtime.GameShared || {};
-    var assetRecipes = shared.assetRecipes || {};
-    var recipeDefinitions = assetRecipes.definitions || {};
     var materialLibrary = runtime.GameMaterialLibrary || null;
 
     function getLambert(opts) {
@@ -806,24 +803,6 @@
 
     runtime.GameAssetFactory = {
         create: create,
-        createEntityAsset: function (assetId, options) { return create('entity', assetId, options); },
-        createMiscAsset: function (assetId, options) { return create('misc', assetId, options); },
-        createItemAsset: function (assetId, options) { return create('item', assetId, options); },
-        createBlockAsset: function (assetId, options) { return create('block', assetId, options); },
-        createParticleAsset: function (assetId, options) { return create('particle', assetId, options); },
-        createProjectileAsset: function (assetId, options) { return create('projectile', assetId, options); },
-        createEnvironmentAsset: function (assetId, options) { return create('environment', assetId, options); },
-        createStructureAsset: function (assetId, options) { return create('structure', assetId, options); },
-        createUiAsset: function (assetId, options) { return create('ui', assetId, options); },
-        getRecipe: function (categoryId, assetId) {
-            if (assetRecipes.get) return assetRecipes.get(categoryId, assetId);
-            var defs = recipeDefinitions[String(categoryId || '')] || {};
-            return defs[String(assetId || '')] || null;
-        },
-        list: function (categoryId) {
-            if (assetRecipes.list) return assetRecipes.list(categoryId);
-            var defs = recipeDefinitions[String(categoryId || '')] || {};
-            return Object.values(defs);
-        }
+        createParticleAsset: function (assetId, options) { return create('particle', assetId, options); }
     };
 })();

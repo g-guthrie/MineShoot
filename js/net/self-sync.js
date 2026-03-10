@@ -9,20 +9,15 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
-    function emptyChokeVictimState() {
-        return { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
-    }
-
     function syncPlayerState(selfState, dt) {
         if (!selfState) return;
         var RT = runtime();
-        var selfAbilityFx = (selfState.abilityFx && typeof selfState.abilityFx === 'object')
-            ? selfState.abilityFx
-            : null;
-
-        if (RT.GameAbilities && RT.GameAbilities.clearQueuedClass) {
-            RT.GameAbilities.clearQueuedClass();
-        }
+        var abilityFxView = RT.GameAbilityFx || null;
+        var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
+            ? abilityFxView.readAbilityFx(selfState)
+            : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
+                ? selfState.abilityFx
+                : null);
 
         if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork) {
             RT.GamePlayerCombat.syncFromNetwork(selfState);
@@ -37,10 +32,9 @@
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
-            var selfChokeVictimState = emptyChokeVictimState();
-            if (RT.GameNet && RT.GameNet.getChokeVictimStateForEntity && selfState.id) {
-                selfChokeVictimState = RT.GameNet.getChokeVictimStateForEntity(selfState.id) || selfChokeVictimState;
-            }
+            var selfChokeVictimState = abilityFxView && abilityFxView.toChokeVictimVisualState
+                ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, Date.now())
+                : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
                 stunUntil: Number(selfState.stunUntil || 0),
                 hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
@@ -51,16 +45,10 @@
             });
 
             if (RT.GamePlayer.setActionRestrictions) {
-                var selfAbilityState = RT.GameNet && RT.GameNet.getSelfAbilityState
-                    ? RT.GameNet.getSelfAbilityState()
-                    : null;
-                var chokeCastUntil = (selfAbilityState && selfAbilityState.chokeState)
-                    ? Number(selfAbilityState.chokeState.endsAt || 0)
-                    : 0;
                 RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: chokeCastUntil,
-                    throwableUntil: chokeCastUntil,
-                    abilityUntil: chokeCastUntil
+                    weaponUntil: Number(selfState.weaponLockUntil || 0),
+                    throwableUntil: Number(selfState.throwableLockUntil || 0),
+                    abilityUntil: Number(selfState.abilityLockUntil || 0)
                 });
             }
         }

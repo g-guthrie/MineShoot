@@ -46,10 +46,6 @@
         if (respawnInvulnTimer > 0 || !isPlaying()) return;
 
         var damage = Math.max(1, Math.round(rawDamage));
-        if (RT.GameAbilities && RT.GameAbilities.modifyIncomingDamage) {
-            damage = RT.GameAbilities.modifyIncomingDamage(damage, hitType);
-        }
-
         var playerTarget = { hp: playerHP, armor: playerArmor, armorMax: playerArmorMax, armorRegenDelay: armorRegenDelay };
         if (sharedDamageMod && sharedDamageMod.applyDamage) {
             var result = sharedDamageMod.applyDamage(playerTarget, damage);
@@ -95,6 +91,9 @@
         }
 
         if (playerHP <= 0) {
+            if (RT.GameAbilities && RT.GameAbilities.clearTransientState) {
+                RT.GameAbilities.clearTransientState();
+            }
             if (!isMultiplayer() && RT.GameLocalMatch && RT.GameLocalMatch.isActive && RT.GameLocalMatch.isActive()) {
                 var localDeath = RT.GameLocalMatch.onSelfKilled ? RT.GameLocalMatch.onSelfKilled(attackerEnemy || null) : null;
                 if (localDeath && (localDeath.useManagedRespawn || localDeath.suppressDefaultRespawn)) {
@@ -112,6 +111,9 @@
     }
 
     function respawn() {
+        if (RT.GameAbilities && RT.GameAbilities.clearTransientState) {
+            RT.GameAbilities.clearTransientState();
+        }
         playerHP = playerMaxHP;
         if (!isMultiplayer()) {
             playerArmor = playerArmorMax;

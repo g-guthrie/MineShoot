@@ -27,7 +27,6 @@
     var ENEMY_HEADSHOT_NEAR_RANGE = enemyTuning.headshotNearRange;
     var ENEMY_HEADSHOT_MID_RANGE = enemyTuning.headshotMidRange;
     var DEFAULT_WALLHACK_RADIUS = enemyTuning.defaultWallhackRadius;
-    var hitboxFactory = globalThis.__MAYHEM_RUNTIME.GameHitboxFactory || null;
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -94,43 +93,6 @@
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 
-    function cloneVisualForRevealGhost(visual) {
-        if (!visual || !visual.clone) return null;
-        var originalUserData = visual.userData;
-        visual.userData = {};
-        try {
-            return visual.clone(true);
-        } finally {
-            visual.userData = originalUserData;
-        }
-    }
-
-    function createRevealGhost(visual) {
-        var ghost = cloneVisualForRevealGhost(visual);
-        if (!ghost) return null;
-        var mats = [];
-
-        ghost.traverse(function (node) {
-            if (!node.isMesh) return;
-            var mat = new THREE.MeshBasicMaterial({
-                color: 0x65d8ff,
-                transparent: true,
-                opacity: 0.26,
-                depthTest: false,
-                depthWrite: false
-            });
-            node.material = mat;
-            node.renderOrder = 90;
-            mats.push(mat);
-        });
-
-        ghost.visible = false;
-        ghost.scale.set(1.05, 1.05, 1.05);
-        ghost.userData.revealMaterials = mats;
-        ghost.userData.baseOpacity = 0.26;
-        return ghost;
-    }
-
     function syncHitboxPositions(enemy) {
         if (enemy && enemy.actorVisual && enemy.group && enemy.actorVisual.syncHitboxes) {
             enemy.actorVisual.syncHitboxes(enemy.group.position);
@@ -141,10 +103,11 @@
         var color = skinColors[index % skinColors.length];
         var weaponId = randomEnemyWeapon();
         var localMatchId = 'guest-bot-' + String(index + 1);
-        var group = new THREE.Group();
         var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
-        var actorVisual = actorFactory && actorFactory.create ? actorFactory.create({
-            kind: 'enemy',
+        if (!actorFactory || !actorFactory.create) {
+            throw new Error('GameEnemy requires GameActorVisualFactory.create.');
+        }
+        var actorVisual = actorFactory.create({
             ownerType: 'enemy',
             bodyColor: color,
             skinColor: 0xd2a77d,
@@ -153,21 +116,21 @@
             targetId: localMatchId,
             hitboxOpacity: hitboxVisible ? 0.3 : 0,
             includeRevealGhost: true
-        }) : null;
-        var visual = actorVisual ? actorVisual.visual : new THREE.Group();
-        group.add(visual);
-        var revealGhost = actorVisual ? actorVisual.revealGhost : createRevealGhost(visual);
-        if (revealGhost) {
-            revealGhost.position.copy(visual.position);
-            group.add(revealGhost);
-        }
+        });
+        var group = actorVisual.root || actorVisual.visual;
+        var visual = actorVisual.visual;
+        var revealGhost = actorVisual.revealGhost;
 
         var spawn = getEnemySpawnPoint();
-        group.position.set(spawn.x, 0, spawn.z);
+        if (actorVisual.setWorldTransform) {
+            actorVisual.setWorldTransform({ x: spawn.x, y: 0, z: spawn.z }, 0);
+        } else {
+            group.position.set(spawn.x, 0, spawn.z);
+        }
 
         scene.add(group);
-        var bodyHitbox = actorVisual ? actorVisual.bodyHitbox : null;
-        var headHitbox = actorVisual ? actorVisual.headHitbox : null;
+        var bodyHitbox = actorVisual.bodyHitbox;
+        var headHitbox = actorVisual.headHitbox;
 
         if (bodyHitbox) scene.add(bodyHitbox);
         if (headHitbox) scene.add(headHitbox);
@@ -189,8 +152,8 @@
             displayName: 'BOT_' + String(index + 1),
             color: color,
             weaponType: weaponId,
-            rig: visual.userData.rig || null,
-            rigApi: actorVisual ? actorVisual.rigApi : null,
+            rig: actorVisual.rig || null,
+            rigApi: actorVisual.rigApi,
 
             aiState: 'WANDER',
             aiTimer: 0,
@@ -204,7 +167,6 @@
             respawnTimer: 0,
             armorRegenDelay: 0,
 
-            weaponMuzzle: visual.userData.weaponMuzzle || null,
             muzzleFlashTimer: 0,
             fireCooldown: 0,
 
@@ -218,8 +180,9 @@
             trackingNeedleState: null
         };
 
-        bodyHitbox.userData.enemyRef = enemy;
-        headHitbox.userData.enemyRef = enemy;
+        if (bodyHitbox && bodyHitbox.userData) bodyHitbox.userData.enemyRef = enemy;
+        if (headHitbox && headHitbox.userData) headHitbox.userData.enemyRef = enemy;
+        actorVisual.setHitboxVisibility(hitboxVisible);
 
         syncHitboxPositions(enemy);
         startWander(enemy);
@@ -266,9 +229,9 @@
     }
 
     function updateEnemyAnimation(enemy, dt, engaging) {
-        if (enemy.rigApi && enemy.rigApi.updateAnimation) {
+        if (enemy.actorVisual && enemy.actorVisual.updateAnimation) {
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
-            enemy.rigApi.updateAnimation(dt, {
+            enemy.actorVisual.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: speedNorm > 0.85,
                 airborne: false,
@@ -347,8 +310,7 @@
                 enemy.group.position.z += (toZ / dist) * step;
             }
             pull.facingYaw = Math.atan2(sourcePos.x - enemy.group.position.x, sourcePos.z - enemy.group.position.z) + Math.PI;
-            enemy.visual.rotation.y = pull.facingYaw;
-            enemy.revealGhost.rotation.y = pull.facingYaw;
+            if (enemy.actorVisual && enemy.actorVisual.setYaw) enemy.actorVisual.setYaw(pull.facingYaw);
             enemy.moveSpeed = 0;
             return;
         }
@@ -373,8 +335,7 @@
             if (pos.z > patrolBounds.maxZ) { pos.z = patrolBounds.maxZ; enemy.wanderDir.z = -Math.abs(enemy.wanderDir.z); }
 
             var facing = Math.atan2(enemy.wanderDir.x, enemy.wanderDir.z) + Math.PI;
-            enemy.visual.rotation.y = facing;
-            enemy.revealGhost.rotation.y = facing;
+            if (enemy.actorVisual && enemy.actorVisual.setYaw) enemy.actorVisual.setYaw(facing);
 
             if (enemy.aiTimer >= enemy.aiDuration) {
                 startPause(enemy);
@@ -405,8 +366,7 @@
         var toPlayerX = enemyShootTarget.x - enemy.group.position.x;
         var toPlayerZ = enemyShootTarget.z - enemy.group.position.z;
         var facing = Math.atan2(toPlayerX, toPlayerZ) + Math.PI;
-        enemy.visual.rotation.y = facing;
-        enemy.revealGhost.rotation.y = facing;
+        if (enemy.actorVisual && enemy.actorVisual.setYaw) enemy.actorVisual.setYaw(facing);
 
         if (enemy.fireCooldown > 0) return true;
         if (!hasLineOfSight(enemyShootOrigin, enemyShootTarget, ENEMY_FIRE_RANGE)) {
@@ -425,8 +385,8 @@
             onPlayerHit(damage, hitType, enemy);
         }
 
-        if (enemy.weaponMuzzle) {
-            enemy.weaponMuzzle.visible = true;
+        if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) {
+            enemy.actorVisual.setMuzzleVisible(true);
             enemy.muzzleFlashTimer = 0.06;
         }
 
@@ -435,10 +395,10 @@
     }
 
     function updateRevealGhost(enemy, playerPos, camera, dt) {
-        if (!enemy.revealGhost) return;
+        if (!enemy.actorVisual || !enemy.revealGhost) return;
 
         if (!enemy.alive || !playerPos || !camera) {
-            enemy.revealGhost.visible = false;
+            enemy.actorVisual.setRevealGhostState(false);
             return;
         }
 
@@ -447,13 +407,13 @@
             enemy.group.position.z - playerPos.z
         );
         if (horizontalDist > getCurrentWallhackRadius()) {
-            enemy.revealGhost.visible = false;
+            enemy.actorVisual.setRevealGhostState(false);
             return;
         }
 
         var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         if (!worldMeshes || worldMeshes.length === 0) {
-            enemy.revealGhost.visible = false;
+            enemy.actorVisual.setRevealGhostState(false);
             return;
         }
 
@@ -463,7 +423,7 @@
         revealDir.copy(revealTarget).sub(camera.position);
         var distToTarget = revealDir.length();
         if (distToTarget <= 0.001) {
-            enemy.revealGhost.visible = false;
+            enemy.actorVisual.setRevealGhostState(false);
             return;
         }
 
@@ -472,26 +432,16 @@
         revealRaycaster.far = distToTarget - 0.2;
 
         var blocked = revealRaycaster.intersectObjects(worldMeshes, false).length > 0;
-        enemy.revealGhost.visible = blocked;
-
-        if (blocked && enemy.revealGhost.userData.revealMaterials) {
-            var pulse = 0.04 * Math.sin(performance.now() * 0.012 + enemy.index);
-            var opacity = enemy.revealGhost.userData.baseOpacity + pulse;
-            var mats = enemy.revealGhost.userData.revealMaterials;
-            for (var i = 0; i < mats.length; i++) {
-                mats[i].opacity = opacity;
-            }
-        }
-
-        enemy.revealGhost.position.copy(enemy.visual.position);
+        var pulse = 0.04 * Math.sin(performance.now() * 0.012 + enemy.index);
+        enemy.actorVisual.setRevealGhostState(blocked, 0.26 + pulse);
     }
 
     function updateMuzzleFlash(enemy, dt) {
-        if (!enemy.weaponMuzzle || enemy.muzzleFlashTimer <= 0) return;
+        if (!enemy.actorVisual || enemy.muzzleFlashTimer <= 0) return;
 
         enemy.muzzleFlashTimer -= dt;
         if (enemy.muzzleFlashTimer <= 0) {
-            enemy.weaponMuzzle.visible = false;
+            enemy.actorVisual.setMuzzleVisible(false);
             enemy.muzzleFlashTimer = 0;
         }
     }
@@ -501,14 +451,7 @@
 
         enemy.flashTimer -= dt;
         if (enemy.flashTimer <= 0) {
-            var parts = enemy.visual.userData.bodyParts;
-            var origColor = enemy.visual.userData.originalColor;
-            if (parts) {
-                for (var i = 0; i < parts.length; i++) {
-                    parts[i].material.color.setHex(i >= 4 ? 0x333333 : origColor);
-                    parts[i].material.emissive.setHex(0x000000);
-                }
-            }
+            if (enemy.actorVisual && enemy.actorVisual.setDamageFlash) enemy.actorVisual.setDamageFlash(false);
             enemy.isFlashing = false;
         }
     }
@@ -528,21 +471,19 @@
     }
 
     function addHitboxes(enemy) {
-        sceneRef.add(enemy.bodyHitbox);
-        sceneRef.add(enemy.headHitbox);
+        if (enemy.bodyHitbox) sceneRef.add(enemy.bodyHitbox);
+        if (enemy.headHitbox) sceneRef.add(enemy.headHitbox);
 
-        hitboxArray.push(enemy.bodyHitbox);
-        hitboxArray.push(enemy.headHitbox);
+        if (enemy.bodyHitbox) hitboxArray.push(enemy.bodyHitbox);
+        if (enemy.headHitbox) hitboxArray.push(enemy.headHitbox);
 
         applyHitboxVisibility(enemy);
     }
 
     function applyHitboxVisibility(enemy) {
-        var opacity = hitboxVisible ? 0.3 : 0;
-        enemy.bodyHitbox.material.opacity = opacity;
-        enemy.headHitbox.material.opacity = opacity;
-        enemy.bodyHitbox.visible = true;
-        enemy.headHitbox.visible = true;
+        if (enemy.actorVisual && enemy.actorVisual.setHitboxVisibility) {
+            enemy.actorVisual.setHitboxVisibility(hitboxVisible);
+        }
     }
 
     GameEnemy.init = function (scene, count) {
@@ -554,8 +495,8 @@
         for (var i = 0; i < count; i++) {
             var enemy = createEnemy(scene, i);
             enemies.push(enemy);
-            hitboxArray.push(enemy.bodyHitbox);
-            hitboxArray.push(enemy.headHitbox);
+            if (enemy.bodyHitbox) hitboxArray.push(enemy.bodyHitbox);
+            if (enemy.headHitbox) hitboxArray.push(enemy.headHitbox);
             if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
                 globalThis.__MAYHEM_RUNTIME.GameLocalMatch.registerEnemy(enemy);
             }
@@ -563,19 +504,11 @@
     };
 
     function chokeLiftAt(state, now) {
-        if (!state) return 0;
-        var stamp = Number(now || Date.now());
-        var startedAt = Number(state.startedAt || 0);
-        var endsAt = Number(state.endsAt || 0);
-        if (!(endsAt > stamp)) return 0;
-        var maxLift = Number(state.liftHeight || 1.0);
-        if (!(endsAt > startedAt)) return maxLift;
-        var progress = Math.max(0, Math.min(1, (stamp - startedAt) / (endsAt - startedAt)));
-        if (progress <= 0) return 0;
-        if (progress >= 1) return 0;
-        if (progress < 0.24) return maxLift * Math.sin((progress / 0.24) * (Math.PI * 0.5));
-        if (progress > 0.76) return maxLift * Math.cos(((progress - 0.76) / 0.24) * (Math.PI * 0.5));
-        return maxLift;
+        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null;
+        if (abilityFxView && abilityFxView.chokeLiftAt) {
+            return abilityFxView.chokeLiftAt(state, now);
+        }
+        return 0;
     }
 
     /**
@@ -645,13 +578,7 @@
 
         enemy.isFlashing = true;
         enemy.flashTimer = 0.15;
-        var parts = enemy.visual.userData.bodyParts;
-        if (parts) {
-            for (var i = 0; i < parts.length; i++) {
-                parts[i].material.color.setHex(0xff0000);
-                parts[i].material.emissive.setHex(0x440000);
-            }
-        }
+        if (enemy.actorVisual && enemy.actorVisual.setDamageFlash) enemy.actorVisual.setDamageFlash(true);
 
         if (result.killed) {
             GameEnemy.kill(enemy);
@@ -674,8 +601,9 @@
         enemy.alive = false;
         enemy.group.visible = false;
         enemy.muzzleFlashTimer = 0;
-        if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
-        if (enemy.revealGhost) enemy.revealGhost.visible = false;
+        if (enemy.actorVisual && enemy.actorVisual.setAlive) enemy.actorVisual.setAlive(false);
+        if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
+        if (enemy.actorVisual && enemy.actorVisual.setRevealGhostState) enemy.actorVisual.setRevealGhostState(false);
         enemy.chokeVictimState = null;
         enemy.justBeenHookedUntil = 0;
 
@@ -696,15 +624,8 @@
         var spawn = getEnemySpawnPoint();
         enemy.group.position.set(spawn.x, 0, spawn.z);
         enemy.group.visible = true;
-
-        var parts = enemy.visual.userData.bodyParts;
-        var origColor = enemy.visual.userData.originalColor;
-        if (parts) {
-            for (var i = 0; i < parts.length; i++) {
-                parts[i].material.color.setHex(i >= 4 ? 0x333333 : origColor);
-                parts[i].material.emissive.setHex(0x000000);
-            }
-        }
+        if (enemy.actorVisual && enemy.actorVisual.setAlive) enemy.actorVisual.setAlive(true);
+        if (enemy.actorVisual && enemy.actorVisual.setDamageFlash) enemy.actorVisual.setDamageFlash(false);
 
         enemy.moveSpeed = 0;
         enemy.isFlashing = false;
@@ -716,8 +637,8 @@
         enemy.justBeenHookedUntil = 0;
         enemy.chokeVictimState = null;
         enemy.trackingNeedleState = null;
-        if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
-        if (enemy.revealGhost) enemy.revealGhost.visible = false;
+        if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
+        if (enemy.actorVisual && enemy.actorVisual.setRevealGhostState) enemy.actorVisual.setRevealGhostState(false);
         resetFireCooldown(enemy);
         if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
             globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyRespawn(enemy);
@@ -743,8 +664,8 @@
             if (!enemy || !enemy.alive) continue;
 
             var corePos = null;
-            if (enemy.rigApi && enemy.rigApi.getCoreWorldPosition) {
-                corePos = enemy.rigApi.getCoreWorldPosition(new THREE.Vector3());
+            if (enemy.actorVisual && enemy.actorVisual.getCoreWorldPosition) {
+                corePos = enemy.actorVisual.getCoreWorldPosition(new THREE.Vector3());
             } else if (enemy.bodyHitbox && enemy.bodyHitbox.position) {
                 corePos = enemy.bodyHitbox.position.clone();
             } else if (enemy.group && enemy.group.position) {

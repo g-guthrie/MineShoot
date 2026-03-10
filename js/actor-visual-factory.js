@@ -7,58 +7,6 @@
 
     var GameActorVisualFactory = {};
     var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
-    var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
-
-    function readVec3(value, fallback) {
-        return {
-            x: (value && typeof value.x === 'number') ? value.x : fallback.x,
-            y: (value && typeof value.y === 'number') ? value.y : fallback.y,
-            z: (value && typeof value.z === 'number') ? value.z : fallback.z
-        };
-    }
-
-    function createFallbackVisual(bodyColor, skinColor, legColor) {
-        var group = new THREE.Group();
-        var bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
-        var limbMat = new THREE.MeshLambertMaterial({ color: legColor });
-        var skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
-        var torsoSize = readVec3(entityConstants.AVATAR_TORSO_SIZE, { x: 0.8, y: 1.0, z: 0.5 });
-        var torsoCenter = readVec3(entityConstants.AVATAR_TORSO_CENTER_OFFSET, { x: 0, y: 1.3, z: 0 });
-        var headSize = readVec3(entityConstants.AVATAR_HEAD_SIZE, { x: 0.55, y: 0.55, z: 0.55 });
-        var headCenter = readVec3(entityConstants.AVATAR_HEAD_CENTER_OFFSET, { x: 0, y: 2.1, z: 0 });
-        var armSize = readVec3(entityConstants.AVATAR_ARM_SIZE, { x: 0.22, y: 0.85, z: 0.22 });
-        var armLeftCenter = readVec3(entityConstants.AVATAR_ARM_LEFT_CENTER_OFFSET, { x: -0.52, y: 1.25, z: 0 });
-        var armRightCenter = readVec3(entityConstants.AVATAR_ARM_RIGHT_CENTER_OFFSET, { x: 0.52, y: 1.25, z: 0 });
-        var legSize = readVec3(entityConstants.AVATAR_LEG_SIZE, { x: 0.28, y: 0.9, z: 0.28 });
-        var legLeftCenter = readVec3(entityConstants.AVATAR_LEG_LEFT_CENTER_OFFSET, { x: -0.18, y: 0.45, z: 0 });
-        var legRightCenter = readVec3(entityConstants.AVATAR_LEG_RIGHT_CENTER_OFFSET, { x: 0.18, y: 0.45, z: 0 });
-
-        var body = new THREE.Mesh(new THREE.BoxGeometry(torsoSize.x, torsoSize.y, torsoSize.z), bodyMat);
-        body.position.set(torsoCenter.x, torsoCenter.y, torsoCenter.z);
-        group.add(body);
-
-        var head = new THREE.Mesh(new THREE.BoxGeometry(headSize.x, headSize.y, headSize.z), skinMat);
-        head.position.set(headCenter.x, headCenter.y, headCenter.z);
-        group.add(head);
-
-        var armL = new THREE.Mesh(new THREE.BoxGeometry(armSize.x, armSize.y, armSize.z), skinMat);
-        armL.position.set(armLeftCenter.x, armLeftCenter.y, armLeftCenter.z);
-        group.add(armL);
-
-        var armR = new THREE.Mesh(new THREE.BoxGeometry(armSize.x, armSize.y, armSize.z), skinMat);
-        armR.position.set(armRightCenter.x, armRightCenter.y, armRightCenter.z);
-        group.add(armR);
-
-        var legL = new THREE.Mesh(new THREE.BoxGeometry(legSize.x, legSize.y, legSize.z), limbMat);
-        legL.position.set(legLeftCenter.x, legLeftCenter.y, legLeftCenter.z);
-        group.add(legL);
-
-        var legR = new THREE.Mesh(new THREE.BoxGeometry(legSize.x, legSize.y, legSize.z), limbMat);
-        legR.position.set(legRightCenter.x, legRightCenter.y, legRightCenter.z);
-        group.add(legR);
-
-        return group;
-    }
 
     function cloneVisualForRevealGhost(visual) {
         if (!visual || !visual.clone) return null;
@@ -109,20 +57,30 @@
         var hitboxOpacity = (typeof opts.hitboxOpacity === 'number') ? opts.hitboxOpacity : 0;
         var includeRevealGhost = !!opts.includeRevealGhost;
 
-        var visual = null;
         var rigApi = null;
         if (globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
-            rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create(String(opts.kind || ownerType), {
+            rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create({
                 bodyColor: bodyColor,
                 skinColor: skinColor,
                 legColor: legColor,
                 weaponId: weaponId
             });
-            visual = rigApi && rigApi.root ? rigApi.root : null;
         }
-        if (!visual) {
-            visual = createFallbackVisual(bodyColor, skinColor, legColor);
+        if (!rigApi || !rigApi.root) {
+            throw new Error('GameActorVisualFactory.create requires GameAvatarRig.create to return a rig root.');
         }
+        var visual = rigApi.root;
+        var root = new THREE.Group();
+        root.add(visual);
+        var rig = rigApi.rig || null;
+        var bodyParts = (visual.userData && Array.isArray(visual.userData.bodyParts)) ? visual.userData.bodyParts : [];
+        var originalPartColors = (visual.userData && Array.isArray(visual.userData.originalPartColors)) ? visual.userData.originalPartColors : [];
+        var revealState = {
+            materials: [],
+            baseOpacity: 0.26
+        };
+        var alive = true;
+        var hitboxesEnabled = hitboxOpacity > 0;
 
         var bodyHitbox = null;
         var headHitbox = null;
@@ -141,33 +99,210 @@
         }
 
         var revealGhost = includeRevealGhost ? createRevealGhost(visual) : null;
+        if (revealGhost) {
+            root.add(revealGhost);
+        }
+        if (revealGhost && revealGhost.userData) {
+            revealState.materials = Array.isArray(revealGhost.userData.revealMaterials) ? revealGhost.userData.revealMaterials : [];
+            revealState.baseOpacity = Number(revealGhost.userData.baseOpacity || 0.26);
+        }
+
+        function restorePartColors() {
+            for (var i = 0; i < bodyParts.length; i++) {
+                var part = bodyParts[i];
+                if (!part || !part.material || !part.material.color) continue;
+                part.material.color.setHex(typeof originalPartColors[i] === 'number' ? originalPartColors[i] : 0xffffff);
+                if (part.material.emissive) part.material.emissive.setHex(0x000000);
+            }
+        }
+
+        function setPartFlash(colorHex, emissiveHex) {
+            for (var i = 0; i < bodyParts.length; i++) {
+                var part = bodyParts[i];
+                if (!part || !part.material || !part.material.color) continue;
+                part.material.color.setHex(colorHex);
+                if (part.material.emissive) part.material.emissive.setHex(emissiveHex);
+            }
+        }
+
+        function applyHitboxState() {
+            var opacity = hitboxesEnabled ? 0.3 : 0;
+            if (bodyHitbox) {
+                bodyHitbox.visible = alive;
+                if (bodyHitbox.material) bodyHitbox.material.opacity = opacity;
+            }
+            if (headHitbox) {
+                headHitbox.visible = alive;
+                if (headHitbox.material) headHitbox.material.opacity = opacity;
+            }
+        }
 
         function syncHitboxes(rootPosition) {
+            rootPosition = rootPosition || root.position;
             if (!rootPosition) return;
             if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxYFromFeet ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);
             if (headHitbox) headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxYFromFeet ? entityPoints.entityHeadHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
         }
 
+        function setPosition(rootPosition) {
+            if (!rootPosition) return;
+            root.position.set(
+                (typeof rootPosition.x === 'number') ? rootPosition.x : root.position.x,
+                (typeof rootPosition.y === 'number') ? rootPosition.y : root.position.y,
+                (typeof rootPosition.z === 'number') ? rootPosition.z : root.position.z
+            );
+            syncHitboxes(root.position);
+        }
+
+        function setYaw(yaw) {
+            if (typeof yaw !== 'number' || !isFinite(yaw)) return;
+            root.rotation.y = yaw;
+        }
+
+        function setWorldTransform(rootPosition, yaw) {
+            setPosition(rootPosition);
+            setYaw(yaw);
+        }
+
         function setHitboxVisibility(visible) {
-            var opacity = visible ? 0.3 : 0;
-            if (bodyHitbox) {
-                bodyHitbox.visible = true;
-                if (bodyHitbox.material) bodyHitbox.material.opacity = opacity;
-            }
-            if (headHitbox) {
-                headHitbox.visible = true;
-                if (headHitbox.material) headHitbox.material.opacity = opacity;
+            hitboxesEnabled = !!visible;
+            applyHitboxState();
+        }
+
+        function setAlive(active) {
+            alive = !!active;
+            root.visible = alive;
+            visual.visible = alive;
+            if (!alive && revealGhost) revealGhost.visible = false;
+            applyHitboxState();
+        }
+
+        function setHealFlash(active) {
+            if (active) {
+                setPartFlash(0x6dff9a, 0x163d18);
+            } else {
+                restorePartColors();
             }
         }
 
+        function setDamageFlash(active) {
+            if (active) {
+                setPartFlash(0xff0000, 0x440000);
+            } else {
+                restorePartColors();
+            }
+        }
+
+        function setSpawnShield(active) {
+            visual.traverse(function (node) {
+                if (!node || !node.isMesh || !node.material) return;
+                var mat = node.material;
+                if (mat.__spawnShieldBaseOpacity === undefined) {
+                    mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
+                    mat.__spawnShieldBaseTransparent = !!mat.transparent;
+                }
+                if (active) {
+                    mat.transparent = true;
+                    mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
+                } else {
+                    mat.opacity = mat.__spawnShieldBaseOpacity;
+                    mat.transparent = mat.__spawnShieldBaseTransparent;
+                }
+                mat.needsUpdate = true;
+            });
+        }
+
+        function setRevealGhostState(visible, opacity) {
+            if (!revealGhost) return;
+            revealGhost.visible = !!visible && alive;
+            if (!revealGhost.visible) return;
+            var nextOpacity = (typeof opacity === 'number' && isFinite(opacity)) ? opacity : revealState.baseOpacity;
+            for (var i = 0; i < revealState.materials.length; i++) {
+                revealState.materials[i].opacity = nextOpacity;
+            }
+        }
+
+        function destroy() {
+            if (root && root.parent) root.parent.remove(root);
+            if (bodyHitbox && bodyHitbox.parent) bodyHitbox.parent.remove(bodyHitbox);
+            if (headHitbox && headHitbox.parent) headHitbox.parent.remove(headHitbox);
+        }
+
+        function getCoreWorldPosition(outVec3) {
+            return rigApi && rigApi.getCoreWorldPosition ? rigApi.getCoreWorldPosition(outVec3) : null;
+        }
+
+        function getThrowableOriginWorldPosition(outVec3) {
+            return rigApi && rigApi.getThrowableOriginWorldPosition ? rigApi.getThrowableOriginWorldPosition(outVec3) : null;
+        }
+
+        function getEyeWorldPosition(outVec3) {
+            return rigApi && rigApi.getEyeWorldPosition ? rigApi.getEyeWorldPosition(outVec3) : null;
+        }
+
+        function setMuzzleVisible(visible) {
+            if (rigApi && rigApi.setMuzzleVisible) {
+                rigApi.setMuzzleVisible(visible);
+            }
+        }
+
+        function setWeapon(weaponId) {
+            if (rigApi && rigApi.setWeapon) {
+                rigApi.setWeapon(weaponId);
+            }
+        }
+
+        function updateAnimation(dt, animState) {
+            if (rigApi && rigApi.updateAnimation) {
+                rigApi.updateAnimation(dt, animState);
+            }
+        }
+
+        function triggerAction(action, options) {
+            if (rigApi && rigApi.triggerAction) {
+                return !!rigApi.triggerAction(action, options || null);
+            }
+            return false;
+        }
+
+        function getMuzzleWorldPosition(outVec3) {
+            return rigApi && rigApi.getMuzzleWorldPosition ? rigApi.getMuzzleWorldPosition(outVec3) : null;
+        }
+
+        function getWeaponId() {
+            return rigApi && rigApi.getWeaponId ? rigApi.getWeaponId() : weaponId;
+        }
+
+        applyHitboxState();
+
         return {
+            root: root,
             visual: visual,
+            rig: rig,
             rigApi: rigApi,
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
             revealGhost: revealGhost,
             syncHitboxes: syncHitboxes,
-            setHitboxVisibility: setHitboxVisibility
+            setPosition: setPosition,
+            setYaw: setYaw,
+            setWorldTransform: setWorldTransform,
+            setAlive: setAlive,
+            setHealFlash: setHealFlash,
+            setDamageFlash: setDamageFlash,
+            setSpawnShield: setSpawnShield,
+            setRevealGhostState: setRevealGhostState,
+            setHitboxVisibility: setHitboxVisibility,
+            setWeapon: setWeapon,
+            updateAnimation: updateAnimation,
+            setMuzzleVisible: setMuzzleVisible,
+            triggerAction: triggerAction,
+            destroy: destroy,
+            getCoreWorldPosition: getCoreWorldPosition,
+            getMuzzleWorldPosition: getMuzzleWorldPosition,
+            getThrowableOriginWorldPosition: getThrowableOriginWorldPosition,
+            getEyeWorldPosition: getEyeWorldPosition,
+            getWeaponId: getWeaponId
         };
     };
 

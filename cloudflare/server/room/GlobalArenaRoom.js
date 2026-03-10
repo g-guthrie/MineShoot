@@ -34,6 +34,13 @@ import {
 } from '../../../shared/authoritative-movement.js';
 import { LMS_MODE_ID, lmsRules, buildLmsBeaconAnchors } from '../../../shared/lms-mode.js';
 import {
+  MATCH_GAME_MODE_FFA,
+  MATCH_GAME_MODE_TDM,
+  MATCH_RESET_DELAY_MS,
+  createMatchState,
+  targetProgressForGameMode
+} from '../../../shared/match-rules.js';
+import {
   PUBLIC_ROOM_START_THRESHOLD,
   PRIVATE_ROOM_ID_PREFIX
 } from '../../../shared/matchmaking-config.js';
@@ -180,15 +187,14 @@ const PRIVATE_SHARE_ROOM_PREFIX = PRIVATE_ROOM_ID_PREFIX;
 const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
-const GAME_MODE_FFA = 'ffa';
-const GAME_MODE_TDM = 'tdm';
+const GAME_MODE_FFA = MATCH_GAME_MODE_FFA;
+const GAME_MODE_TDM = MATCH_GAME_MODE_TDM;
 const GAME_MODE_LMS = LMS_MODE_ID;
 const ROOM_PHASE_ACTIVE = 'active';
 const TDM_TEAM_A = 'alpha';
 const TDM_TEAM_B = 'bravo';
-const FFA_TARGET_PROGRESS = 10;
-const TDM_TARGET_PROGRESS = 10;
-const MATCH_RESET_DELAY_MS = 5000;
+const FFA_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_FFA);
+const TDM_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_TDM);
 const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
@@ -244,39 +250,10 @@ function isPrivateMatchRoom(roomName) {
 }
 
 function emptyMatchState(gameMode) {
-  return {
-    gameMode: gameMode || '',
-    started: false,
-    ended: false,
-    startedAt: 0,
-    endedAt: 0,
-    resetAt: 0,
-    matchBaselinePlayerCount: 0,
-    targetProgress: gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : (gameMode === GAME_MODE_FFA ? FFA_TARGET_PROGRESS : 0),
-    leaderProgress: 0,
-    leaderId: '',
-    winnerId: '',
-    winnerTeam: '',
-    lms: gameMode === GAME_MODE_LMS ? {
-      startingLives: lmsRules.startingLives,
-      maxLives: lmsRules.maxLives,
-      chargePerExtraLife: lmsRules.chargePerExtraLife,
-      remainingPlayers: 0,
-      finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
-      bankingEnabled: false,
-      warmupEndsAt: 0,
-      nextRotateAt: 0,
-      activeBeacon: null
-    } : null,
-    teamProgress: {
-      [TDM_TEAM_A]: 0,
-      [TDM_TEAM_B]: 0
-    },
-    teamBaselineSize: {
-      [TDM_TEAM_A]: 0,
-      [TDM_TEAM_B]: 0
-    }
-  };
+  return createMatchState(gameMode || '', {
+    teamAlpha: TDM_TEAM_A,
+    teamBravo: TDM_TEAM_B
+  });
 }
 
 function isSelectableWeaponId(weaponId) {

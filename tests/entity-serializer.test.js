@@ -70,10 +70,62 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     hookVisual: { phase: 'travel', targetId: '', headPos: { x: 7, y: 8, z: 9 }, endsAt: 1800 },
     healUntil: 1900
   });
+  assert.equal(state.weaponLockUntil, 0);
+  assert.equal(state.throwableLockUntil, 0);
+  assert.equal(state.abilityLockUntil, 0);
   assert.equal(state.chokeState, undefined);
   assert.equal(state.chokeVictimState, undefined);
   assert.equal(state.justBeenHookedState, undefined);
   assert.equal(state.hookPullState, undefined);
   assert.equal(state.hookState, undefined);
   assert.equal(state.healState, undefined);
+});
+
+test('toEntityState carries authoritative action lock timers', () => {
+  const state = toEntityState({
+    id: 'usr_test',
+    kind: 'player',
+    username: 'TEST',
+    classId: 'abilities',
+    x: 0,
+    y: 1.6,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    seq: 0,
+    weaponId: 'rifle',
+    moveSpeedNorm: 0,
+    sprinting: false,
+    velocityY: 0,
+    isGrounded: true,
+    jumpHoldTimer: 0,
+    jumpHeldLast: false,
+    hp: 500,
+    hpMax: 500,
+    armor: 90,
+    armorMax: 90,
+    kills: 0,
+    deaths: 0,
+    progressScore: 0,
+    lmsLives: 0,
+    lmsCharge: 0,
+    teamId: '',
+    wallhackRadius: 90,
+    alive: true,
+    spawnShieldUntil: 0,
+    streamHeat: 0,
+    streamOverheatedUntil: 0,
+    muzzleFlashUntil: 0,
+    weaponLoadout: ['rifle', 'shotgun'],
+    weaponAmmo: {},
+    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    throwables: {},
+    weaponLockUntil: 2100,
+    throwableLockUntil: 2200,
+    abilityLockUntil: 2300
+  });
+
+  assert.equal(state.weaponLockUntil, 2100);
+  assert.equal(state.throwableLockUntil, 2200);
+  assert.equal(state.abilityLockUntil, 2300);
 });

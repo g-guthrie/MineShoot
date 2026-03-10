@@ -113,13 +113,18 @@ test('lms helper rotates beacons and resolves banking/winner flow', () => {
     warmupEndsAt: 1,
     nextRotateAt: 0,
     activeBeaconIndex: 0,
-    activeBeacon: null,
+    activeBeacon: { id: 'b1', label: 'A', x: 0, z: 0 },
     bankingEnabled: true
   };
   room.players.get('u1').x = 0;
   room.players.get('u1').z = 0;
   room.players.get('u1').lmsLives = 2;
   room.players.get('u1').lmsCharge = 100;
+  room.players.get('u1').lmsBankState = {
+    beaconId: 'b1',
+    startedAt: 7000,
+    endsAt: 8200
+  };
   room.players.get('u2').x = 30;
   room.players.get('u2').z = 0;
   room.players.get('u2').lmsLives = 1;

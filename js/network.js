@@ -318,53 +318,37 @@
     function getRenderCoreWorldPosition(render, outVec3) {
         if (!render) return null;
         var out = outVec3 || new THREE.Vector3();
-        if (render.rigApi && render.rigApi.getCoreWorldPosition) {
-            return render.rigApi.getCoreWorldPosition(out);
+        if (render.actorVisual && render.actorVisual.getCoreWorldPosition) {
+            return render.actorVisual.getCoreWorldPosition(out);
         }
         out.copy(render.group.position);
         out.y += 1.0;
         return out;
     }
 
-    function chokeLiftAt(state, now) {
-        if (!state) return 0;
-        var stamp = Number(now || Date.now());
-        var startedAt = Number(state.startedAt || 0);
-        var endsAt = Number(state.endsAt || 0);
-        if (!(endsAt > stamp)) return 0;
-        var maxLift = Number(state.liftHeight || 1.0);
-        if (!(endsAt > startedAt)) return maxLift;
-        var progress = Math.max(0, Math.min(1, (stamp - startedAt) / (endsAt - startedAt)));
-        if (progress <= 0) return 0;
-        if (progress >= 1) return 0;
-        if (progress < 0.24) return maxLift * Math.sin((progress / 0.24) * (Math.PI * 0.5));
-        if (progress > 0.76) return maxLift * Math.cos(((progress - 0.76) / 0.24) * (Math.PI * 0.5));
-        return maxLift;
-    }
-
     function getChokeVictimStateForEntity(entityId) {
-        if (!entityId) return { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
+        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+        var emptyState = abilityFxView && abilityFxView.emptyChokeVictimState
+            ? abilityFxView.emptyChokeVictimState()
+            : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
+        if (!entityId) return emptyState;
         var now = Date.now();
-        var selfFx = selfState && selfState.abilityFx ? selfState.abilityFx : null;
+        var selfFx = abilityFxView && abilityFxView.readAbilityFx
+            ? abilityFxView.readAbilityFx(selfState)
+            : (selfState && selfState.abilityFx ? selfState.abilityFx : null);
         var selfChokeVictim = selfFx && selfFx.chokeVictim ? selfFx.chokeVictim : null;
         if (selfState && selfState.id === entityId && selfChokeVictim && selfChokeVictim.endsAt > now) {
-            return {
-                lift: chokeLiftAt(selfChokeVictim, now),
-                liftHeight: Number(selfChokeVictim.liftHeight || 1.0),
-                startedAt: Number(selfChokeVictim.startedAt || 0),
-                endsAt: Number(selfChokeVictim.endsAt || 0)
-            };
+            return abilityFxView && abilityFxView.toChokeVictimVisualState
+                ? abilityFxView.toChokeVictimVisualState(selfChokeVictim, now)
+                : emptyState;
         }
         var render = GameNetEntities.getRenderMap().get(entityId);
         if (render && render.chokeVictimState && render.chokeVictimState.endsAt > now) {
-            return {
-                lift: chokeLiftAt(render.chokeVictimState, now),
-                liftHeight: Number(render.chokeVictimState.liftHeight || 1.0),
-                startedAt: Number(render.chokeVictimState.startedAt || 0),
-                endsAt: Number(render.chokeVictimState.endsAt || 0)
-            };
+            return abilityFxView && abilityFxView.toChokeVictimVisualState
+                ? abilityFxView.toChokeVictimVisualState(render.chokeVictimState, now)
+                : emptyState;
         }
-        return { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
+        return emptyState;
     }
 
     var messageRouter = globalThis.__MAYHEM_RUNTIME.GameNetMessageRouter.create({

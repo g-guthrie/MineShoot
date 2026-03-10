@@ -1,6 +1,6 @@
 # Blender Asset Pipeline
 
-This repo already loads glTF weapon models from `public/assets/models/weapons`.
+This repo uses the Blender export wrapper for authored environment and prop assets.
 
 The missing piece was a repeatable Blender export path. Use the wrapper below instead of exporting by hand from the UI each time.
 
@@ -14,18 +14,18 @@ Check it with:
 Blender --version
 ```
 
-## Export a weapon from Blender
+## Export an asset from Blender
 
-Export a collection named `Weapon` from a `.blend` file into the repo:
+Export a collection named `Props` from a `.blend` file into the repo:
 
 ```sh
-./scripts/blender-export.sh ~/Downloads/pistol.blend public/assets/models/weapons/pistol.gltf --collection Weapon
+./scripts/blender-export.sh ~/Downloads/arena-props.blend public/assets/models/props/arena-props.gltf --collection Props
 ```
 
 Export a single object instead:
 
 ```sh
-./scripts/blender-export.sh ~/Downloads/rifle.blend public/assets/models/weapons/rifle.gltf --object Rifle
+./scripts/blender-export.sh scene.blend public/assets/models/props/door.gltf --object Door
 ```
 
 By default the wrapper derives the export format from the output extension:
@@ -59,9 +59,8 @@ Apply modifiers at export time:
 
 - Keep gameplay-facing models under `public/assets/models/...`.
 - Prefer one top-level collection per exportable asset.
-- For current weapon assets, prefer `.gltf` when you want to stay aligned with the existing loader URLs.
 - When exporting `.gltf`, commit the matching `.bin` file that Blender writes next to it.
-- Use `.glb` only if you also update the runtime asset URL and loader expectations accordingly.
+- Use `.glb` only if the runtime path consuming the asset already expects it.
 - Re-export into the final repo path so the runtime URL stays stable.
 
 ## NPM shortcut
@@ -69,5 +68,5 @@ Apply modifiers at export time:
 You can also call the wrapper through npm:
 
 ```sh
-npm run blender:export -- ~/Downloads/pistol.blend public/assets/models/weapons/pistol.gltf --collection Weapon
+npm run blender:export -- scene.blend public/assets/models/props/door.gltf --object Door
 ```
