@@ -1348,6 +1348,17 @@
         var throwIntent = throwIntentOverride || ((globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.buildThrowIntent)
             ? globalThis.__MAYHEM_RUNTIME.GameThrowables.buildThrowIntent(camera)
             : null);
+        var playerApi = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+        var audioApi = globalThis.__MAYHEM_RUNTIME.GameAudio || null;
+
+        function triggerLocalThrowFeedback() {
+            if (playerApi && playerApi.triggerThrowPose) {
+                playerApi.triggerThrowPose();
+            }
+            if (audioApi && audioApi.play) {
+                audioApi.play('throw');
+            }
+        }
 
         if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendThrow) {
             var clientThrowId = (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.buildClientThrowId)
@@ -1357,14 +1368,15 @@
                 globalThis.__MAYHEM_RUNTIME.GameThrowables.throwPredicted(type, camera, clientThrowId, throwIntent);
             }
             globalThis.__MAYHEM_RUNTIME.GameNet.sendThrow(type, clientThrowId, throwIntent);
+            triggerLocalThrowFeedback();
             setTransientDebug('Throw sent: ' + type, 650);
             return { ok: true, sent: true };
         }
 
         var outcome = globalThis.__MAYHEM_RUNTIME.GameThrowables.throw(type, camera, throwIntent);
         globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(outcome.state);
-        if (outcome.ok && globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('throw');
+        if (outcome.ok) {
+            triggerLocalThrowFeedback();
         }
         if (!outcome.ok && outcome.reason === 'cooldown') {
             setTransientDebug(type + ' is recharging.', 600);
@@ -1712,76 +1724,8 @@
                 ? globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState()
                 : null;
             if (selfState) {
-                if (globalThis.__MAYHEM_RUNTIME.GameAbilities.clearQueuedClass) {
-                    globalThis.__MAYHEM_RUNTIME.GameAbilities.clearQueuedClass();
-                }
-
-                globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.syncFromNetwork(selfState);
-                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual) {
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual(selfState.alive !== false);
-                }
-                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAuthoritativeCameraMode) {
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setAuthoritativeCameraMode(selfState.cameraMode || 'third');
-                }
-                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState) {
-                    var selfChokeVictimState = { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
-                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity && selfState.id) {
-                        selfChokeVictimState = globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity(selfState.id) || selfChokeVictimState;
-                    }
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState({
-                        stunUntil: Number(selfState.stunUntil || 0),
-                        hookPullUntil: Math.max(
-                            selfState.hookPullState ? Number(selfState.hookPullState.endsAt || 0) : 0,
-                            selfState.justBeenHookedState ? Number(selfState.justBeenHookedState.endsAt || 0) : 0
-                        ),
-                        chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
-                        chokeUntil: Number(selfChokeVictimState.endsAt || 0),
-                        chokeLift: Number(selfChokeVictimState.liftHeight || 0),
-                        spawnShieldUntil: Number(selfState.spawnShieldUntil || 0)
-                    });
-                    if (globalThis.__MAYHEM_RUNTIME.GamePlayer.setActionRestrictions) {
-                        var selfAbilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState
-                            ? globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState()
-                            : null;
-                        var chokeCastUntil = (selfAbilityState && selfAbilityState.chokeState)
-                            ? Number(selfAbilityState.chokeState.endsAt || 0)
-                            : 0;
-                        globalThis.__MAYHEM_RUNTIME.GamePlayer.setActionRestrictions({
-                            weaponUntil: chokeCastUntil,
-                            throwableUntil: chokeCastUntil,
-                            abilityUntil: chokeCastUntil
-                        });
-                    }
-                }
-                if (
-                    selfState.hookPullState &&
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer &&
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion
-                ) {
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion(selfState);
-                } else if (
-                    selfState.alive !== false &&
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer &&
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.reconcileAuthoritativeMotion
-                ) {
-                    var inputSyncState = globalThis.__MAYHEM_RUNTIME.GameNet.getInputSyncState
-                        ? globalThis.__MAYHEM_RUNTIME.GameNet.getInputSyncState()
-                        : null;
-                    var pendingInputs = globalThis.__MAYHEM_RUNTIME.GameNet.getPendingInputSamples
-                        ? globalThis.__MAYHEM_RUNTIME.GameNet.getPendingInputSamples()
-                        : [];
-                    globalThis.__MAYHEM_RUNTIME.GamePlayer.reconcileAuthoritativeMotion(selfState, {
-                        dt: dt,
-                        pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
-                        lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
-                        lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
-                        pendingInputs: pendingInputs,
-                        snapshotAt: Date.now()
-                    });
-                }
-                if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState) {
-                    globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
-                    globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
+                if (globalThis.__MAYHEM_RUNTIME.GameNetSelfSync && globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState) {
+                    globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState(selfState, dt);
                 }
             }
 

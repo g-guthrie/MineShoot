@@ -36,8 +36,8 @@
         },
         shotgun: {
             url: '/assets/audio/weapons/shotgun.mp3',
-            gain: 0.9,
-            playbackRateMin: 0.98,
+            gain: 0.98,
+            playbackRateMin: 0.97,
             playbackRateMax: 1.02
         },
         sniper: {
@@ -363,6 +363,12 @@
         playOscBurst(c, { type: 'triangle', startFreq: 170, endFreq: 95, duration: 0.11, vol: 0.04, delay: 0.004 });
     }
 
+    function playShotgunKickAccent(c) {
+        playNoiseBurst(c, { duration: 0.028, vol: 0.03, frequency: 2400, q: 2.2, filterType: 'highpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 64, duration: 0.12, vol: 0.032, attack: 0.0012, delay: 0.001 });
+        playOscBurst(c, { type: 'sine', startFreq: 84, endFreq: 52, duration: 0.16, vol: 0.018, attack: 0.0015, delay: 0.004 });
+    }
+
     function playWeaponFire(c, weaponId) {
         var weapon = String(weaponId || 'rifle');
         if (weapon === 'seekergun' || weapon === 'plasma') {
@@ -370,6 +376,9 @@
             return;
         }
         if (playSampleBuffer(c, WEAPON_SAMPLE_DEFS[weapon] || WEAPON_SAMPLE_DEFS.rifle)) {
+            if (weapon === 'shotgun') {
+                playShotgunKickAccent(c);
+            }
             return;
         }
         playWeaponFireProcedural(c, weapon);

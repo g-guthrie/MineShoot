@@ -692,7 +692,7 @@
                     transparent: true,
                     opacity: 0.12,
                     wireframe: true,
-                    depthTest: false,
+                    depthTest: true,
                     depthWrite: false
                 })
             );
@@ -710,7 +710,7 @@
                     transparent: true,
                     opacity: 0.2,
                     wireframe: true,
-                    depthTest: false,
+                    depthTest: true,
                     depthWrite: false
                 })
             );

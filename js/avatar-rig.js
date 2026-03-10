@@ -1098,112 +1098,52 @@
         }
 
         function applyLowerLocomotion(style, speedNorm, sprinting, phase) {
-            var amp = (sprinting ? 0.54 : 0.38) * Math.max(0.24, speedNorm);
+            var amp = 0.12 + (clamp(speedNorm || 0, 0, 1.4) * 0.55);
+            if (amp > 0.72) amp = 0.72;
             var swing = Math.sin(phase) * amp;
-            var side = Math.cos(phase) * amp * 0.12;
-            if (style === 'strafe-left') {
-                rig.legL.rotation.x = side;
-                rig.legR.rotation.x = -side;
-                rig.legL.rotation.z = -0.18 + (swing * 0.35);
-                rig.legR.rotation.z = 0.16 + (swing * 0.35);
-            } else if (style === 'strafe-right') {
-                rig.legL.rotation.x = -side;
-                rig.legR.rotation.x = side;
-                rig.legL.rotation.z = -0.16 + (swing * 0.35);
-                rig.legR.rotation.z = 0.18 + (swing * 0.35);
-            } else if (style === 'backward') {
+            rig.legL.position.x = -0.18;
+            rig.legR.position.x = 0.18;
+            if (style === 'backward') {
                 rig.legL.rotation.x = -swing * 0.9;
                 rig.legR.rotation.x = swing * 0.9;
-                rig.legL.rotation.z = -0.03;
-                rig.legR.rotation.z = 0.03;
             } else {
                 rig.legL.rotation.x = swing;
                 rig.legR.rotation.x = -swing;
-                rig.legL.rotation.z = 0;
-                rig.legR.rotation.z = 0;
             }
+            rig.legL.rotation.z = 0;
+            rig.legR.rotation.z = 0;
         }
 
         function applyGunUpperPose(style, speedNorm, sprinting, adsActive, fireWeight, supportMode, swayAmount) {
-            var grip = rig.gripProfile || DEFAULT_GRIP_PROFILE;
-            var leftTarget = grip.leftArmTarget || DEFAULT_GRIP_PROFILE.leftArmTarget;
-            var rightArm = grip.rightArm || DEFAULT_GRIP_PROFILE.rightArm;
-            var aim = rig.aimPitch;
-            var effectiveSupportMode = grip.supportMode || supportMode || 'both';
-            var freeArmMotion = adsActive ? 0.16 : 1;
-            var gaitAmp = (sprinting ? 0.54 : 0.38) * Math.max(0.24, speedNorm);
+            var gaitAmp = 0.12 + (clamp(speedNorm || 0, 0, 1.4) * 0.55);
+            if (gaitAmp > 0.72) gaitAmp = 0.72;
             var gaitSwing = Math.sin(rig.gaitPhase) * gaitAmp;
-            var gaitSide = Math.cos(rig.gaitPhase) * gaitAmp * 0.12;
-            var freeArmSwing = 0;
-            var freeArmSway = 0;
-            var freeArmYaw = 0;
-            if (style === 'backward') {
-                freeArmSwing = gaitSwing * 0.82 * freeArmMotion;
-                freeArmSway = gaitSide * 0.55 * freeArmMotion;
-                freeArmYaw = gaitSide * 1.15 * freeArmMotion;
-            } else if (style === 'strafe-left') {
-                freeArmSwing = gaitSide * 1.9 * freeArmMotion;
-                freeArmSway = gaitSwing * 0.4 * freeArmMotion;
-                freeArmYaw = (-0.08 - (gaitSwing * 0.35)) * freeArmMotion;
-            } else if (style === 'strafe-right') {
-                freeArmSwing = -gaitSide * 1.9 * freeArmMotion;
-                freeArmSway = gaitSwing * 0.4 * freeArmMotion;
-                freeArmYaw = (0.08 + (gaitSwing * 0.35)) * freeArmMotion;
-            } else {
-                freeArmSwing = (-gaitSwing * 0.92) * freeArmMotion;
-                freeArmSway = (-gaitSide * 0.9) * freeArmMotion;
-                freeArmYaw = (gaitSide * 0.6) * freeArmMotion;
-            }
-            var strafeTorso = (style === 'strafe-left') ? grip.torsoStrafe : ((style === 'strafe-right') ? -grip.torsoStrafe : 0);
-            rig.armL.position.set(
-                SHOULDER_LEFT_DEFAULT.x + grip.thirdLeftShoulder[0],
-                SHOULDER_LEFT_DEFAULT.y + grip.thirdLeftShoulder[1],
-                SHOULDER_LEFT_DEFAULT.z + grip.thirdLeftShoulder[2]
-            );
-            rig.armR.position.set(
-                SHOULDER_RIGHT_DEFAULT.x + grip.thirdRightShoulder[0],
-                SHOULDER_RIGHT_DEFAULT.y + grip.thirdRightShoulder[1],
-                SHOULDER_RIGHT_DEFAULT.z + grip.thirdRightShoulder[2]
-            );
-            rig.palmLeft.position.set(grip.thirdLeftPalm[0], grip.thirdLeftPalm[1], grip.thirdLeftPalm[2]);
-            rig.palmRight.position.set(grip.thirdRightPalm[0], grip.thirdRightPalm[1], grip.thirdRightPalm[2]);
-            rig.palmLeft.rotation.set(grip.thirdLeftPalmRot[0], grip.thirdLeftPalmRot[1], grip.thirdLeftPalmRot[2]);
-            rig.palmRight.rotation.set(grip.thirdRightPalmRot[0], grip.thirdRightPalmRot[1], grip.thirdRightPalmRot[2]);
-            var rightBase = sprinting ? rightArm.sprintX : (rightArm.baseX + (aim * rightArm.aimScale));
-            rig.armR.rotation.x = rightBase + (fireWeight * rightArm.fireScale);
-            rig.armR.rotation.y = sprinting ? rightArm.sprintY : ((style === 'strafe-left') ? rightArm.strafeLeftY : ((style === 'strafe-right') ? rightArm.strafeRightY : 0.02));
-            rig.armR.rotation.z = sprinting ? rightArm.sprintZ : rightArm.shoulderZ;
+            if (style === 'backward') gaitSwing = -gaitSwing;
+            rig.armL.position.set(SHOULDER_LEFT_DEFAULT.x, SHOULDER_LEFT_DEFAULT.y, SHOULDER_LEFT_DEFAULT.z);
+            rig.armR.position.set(SHOULDER_RIGHT_DEFAULT.x, SHOULDER_RIGHT_DEFAULT.y, SHOULDER_RIGHT_DEFAULT.z);
+            rig.palmLeft.position.set(LEFT_PALM_NEUTRAL.x, LEFT_PALM_NEUTRAL.y, LEFT_PALM_NEUTRAL.z);
+            rig.palmRight.position.set(RIGHT_PALM_SOCKET.x, RIGHT_PALM_SOCKET.y, RIGHT_PALM_SOCKET.z);
+            rig.palmLeft.rotation.set(0, 0, 0);
+            rig.palmRight.rotation.set(0, 0, 0);
+            rig.torso.rotation.set(0, 0, 0);
+            rig.head.rotation.x = 0;
+            rig.head.rotation.y = 0;
             rig.gun.rotation.x = rig.gunBaseRot.x - (fireWeight * 0.09);
-            rig.gun.rotation.z = ((style === 'strafe-left') ? 0.03 : ((style === 'strafe-right') ? -0.03 : 0)) + (swayAmount || 0);
-            rig.torso.rotation.y = strafeTorso;
-            rig.torso.rotation.x = (adsActive ? grip.torsoPitch : 0.02) + (speedNorm * grip.torsoPitchSpeed);
-            rig.head.rotation.x = aim * grip.headPitchScale;
-            rig.head.rotation.y = rig.torso.rotation.y * 0.65;
-            if (effectiveSupportMode === 'right') {
-                rig.armL.position.set(
-                    SHOULDER_LEFT_DEFAULT.x - 0.02,
-                    SHOULDER_LEFT_DEFAULT.y + 0.005,
-                    SHOULDER_LEFT_DEFAULT.z + 0.03
-                );
-                rig.palmLeft.position.set(-0.015, -0.78, 0.045);
-                rig.palmLeft.rotation.set(0.12, 0.03, -0.08);
-                rig.armL.rotation.x = -0.12 + freeArmSwing;
-                rig.armL.rotation.y = (style === 'strafe-left' ? -0.12 : (style === 'strafe-right' ? 0.1 : -0.03)) + freeArmYaw;
-                rig.armL.rotation.z = -0.14 - freeArmSway;
+            rig.gun.rotation.z = rig.gunBaseRot.z;
+            if (rig.weaponClass === 'melee' || sprinting) {
+                rig.armR.rotation.x = -gaitSwing;
+                rig.armR.rotation.y = 0;
+                rig.armR.rotation.z = 0.18;
+                rig.armL.rotation.x = gaitSwing;
+                rig.armL.rotation.y = 0;
+                rig.armL.rotation.z = -0.04;
             } else {
-                rig.supportAnchor.getWorldPosition(targetWorld);
-                pointArmAtTarget(
-                    rig.armL,
-                    targetWorld,
-                    arms,
-                    leftTarget.x + (aim * leftTarget.aimXScale),
-                    leftTarget.y,
-                    leftTarget.z - (fireWeight * leftTarget.fireZScale)
-                );
-                if (effectiveSupportMode === 'left') {
-                    rig.armR.rotation.x = 0.52 + (fireWeight * 0.1);
-                    rig.armR.rotation.z = 0.06;
-                }
+                rig.armR.rotation.x = (75 * DEG_TO_RAD) + (rig.aimPitch * 0.35) + (fireWeight * 0.1);
+                rig.armR.rotation.y = 0;
+                rig.armR.rotation.z = -0.08;
+                rig.armL.rotation.x = gaitSwing * 0.65;
+                rig.armL.rotation.y = 0;
+                rig.armL.rotation.z = 0;
             }
         }
 
@@ -1255,6 +1195,43 @@
             }
         }
 
+        function applyRuntimeAimOverlay(sprinting, adsActive, fireWeight) {
+            var grip = rig.gripProfile || DEFAULT_GRIP_PROFILE;
+            var aim = rig.aimPitch || 0;
+            if (rig.weaponClass !== 'melee') {
+                var leftTarget = grip.leftArmTarget || DEFAULT_GRIP_PROFILE.leftArmTarget;
+                rig.armR.rotation.x += aim * 0.35;
+                rig.torso.rotation.x += aim * (adsActive ? 0.05 : 0.03);
+                rig.head.rotation.x += aim * grip.headPitchScale;
+                if (!sprinting) {
+                    rig.supportAnchor.getWorldPosition(targetWorld);
+                    pointArmAtTarget(
+                        rig.armL,
+                        targetWorld,
+                        arms,
+                        leftTarget.x + (aim * leftTarget.aimXScale),
+                        leftTarget.y,
+                        leftTarget.z - (fireWeight * leftTarget.fireZScale)
+                    );
+                }
+            }
+            if (rig.firstPersonActive) {
+                var fp = grip.firstPerson || DEFAULT_GRIP_PROFILE.firstPerson;
+                var fpLeftTarget = fp.leftArmTarget || DEFAULT_GRIP_PROFILE.firstPerson.leftArmTarget;
+                var fpRightArm = fp.rightArm || DEFAULT_GRIP_PROFILE.firstPerson.rightArm;
+                rig.fpArmR.rotation.x += aim * fpRightArm.aimScale;
+                rig.supportAnchor.getWorldPosition(targetWorld);
+                pointArmAtTarget(
+                    rig.fpArmL,
+                    targetWorld,
+                    rig.bobRoot,
+                    fpLeftTarget.x + (aim * fpLeftTarget.aimXScale),
+                    fpLeftTarget.y,
+                    fpLeftTarget.z - (fireWeight * fpLeftTarget.fireZScale)
+                );
+            }
+        }
+
         function proceduralThirdPersonName(name, time, speedNorm) {
             var phase = time * 6;
             var def = thirdPersonAnimationDefinitions[name];
@@ -1273,14 +1250,9 @@
                 break;
             case 'locomotion_lower':
                 applyLowerLocomotion(def.style, def.intensity || speedNorm || 0.7, !!def.sprint, phase);
-                rig.lower.position.y = Math.abs(Math.sin(phase)) * 0.03 * (def.intensity || 0.7);
                 break;
             case 'gun_upper':
-                rig.upper.position.y = Math.abs(Math.sin(phase)) * 0.028 * Math.max(0.2, def.intensity || 0.2);
-                rig.upper.position.z = Math.cos(phase) * 0.012 * Math.max(0.2, def.intensity || 0.2);
                 applyGunUpperPose(def.style, def.intensity || speedNorm || 0.2, !!def.sprint, !!def.ads, def.fire || 0, def.support || 'both', Math.sin(phase * 0.4) * (def.sway || 0));
-                rig.palmLeft.rotation.x = Math.sin(phase) * 0.04;
-                rig.palmRight.rotation.x = -Math.sin(phase) * 0.03;
                 break;
             case 'crouch_upper':
                 rig.torso.rotation.x = 0.18 + (def.intensity * 0.06);
@@ -1889,6 +1861,7 @@
                 sampleTrackBlend(thirdPersonClips, rig.lowerTrack, time, 1, 1);
                 sampleTrackBlend(thirdPersonClips, rig.upperTrack, time, 1, 1);
                 sampleTrackBlend(firstPersonClips, rig.firstPersonTrack, time, rig.firstPersonActive ? 1 : 0, 1);
+                applyRuntimeAimOverlay(sprinting, adsActive, fireWeight);
                 return;
             }
 
@@ -1915,6 +1888,7 @@
             sampleTrackBlend(thirdPersonClips, rig.lowerTrack, time, 1, clamp(speedNorm / canonicalSpeedForClip(rig.currentLowerAnimation, 'third'), 0.6, 1.25));
             sampleTrackBlend(thirdPersonClips, rig.upperTrack, time, 1, 1);
             sampleTrackBlend(firstPersonClips, rig.firstPersonTrack, time, rig.firstPersonActive ? 1 : 0, 1);
+            applyRuntimeAimOverlay(sprinting, adsActive, fireWeight);
         }
 
         function weaponIdToFirstPersonAnimation(weaponId, adsActive, fireWeight, speedNorm) {

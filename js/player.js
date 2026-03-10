@@ -349,7 +349,7 @@
     function applyUnifiedGunOffsets(dt) {
         if (!avatarRigApi || !avatarRigApi.rig) return;
         var rig = avatarRigApi.rig;
-        if (!rig.gun || !rig.gunBasePos) return;
+        if (!rig.gun) return;
 
         var targetBobX = 0;
         var targetBobY = 0;
@@ -368,11 +368,9 @@
         cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
         cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
 
-        rig.gun.position.set(
-            rig.gunBasePos.x + gunBobX,
-            rig.gunBasePos.y + gunBobY,
-            rig.gunBasePos.z + gunRecoil
-        );
+        rig.gun.position.x += gunBobX;
+        rig.gun.position.y += gunBobY;
+        rig.gun.position.z += gunRecoil;
         if (rig.palmRight) {
             rig.palmRight.rotation.x += palmRecoil;
         } else if (rig.palmLeft) {
@@ -1130,6 +1128,8 @@
         if (avatarRigApi.rig) {
             if (avatarRigApi.rig.armR) avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR;
             if (avatarRigApi.rig.armL) avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL;
+            if (avatarRigApi.rig.fpArmR) avatarRigApi.rig.fpArmR.rotation.x += recoil.x * recoil.armR;
+            if (avatarRigApi.rig.fpArmL) avatarRigApi.rig.fpArmL.rotation.x += recoil.x * recoil.armL;
         }
     };
 
@@ -1340,6 +1340,12 @@
     GamePlayer.triggerChokeGripPose = function (duration) {
         if (!avatarRigApi || !avatarRigApi.triggerChokeGripPose) return false;
         avatarRigApi.triggerChokeGripPose(duration);
+        return true;
+    };
+
+    GamePlayer.triggerThrowPose = function () {
+        if (!avatarRigApi || !avatarRigApi.triggerThrowPose) return false;
+        avatarRigApi.triggerThrowPose();
         return true;
     };
 

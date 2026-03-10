@@ -21,6 +21,7 @@ import '../core/local-match.js';
 import '../net/transport.js';
 import '../net/snapshots.js';
 import '../net/remote-entities.js';
+import '../net/self-sync.js';
 import '../domain/weapons/registry.js';
 import '../world/material-library.js';
 import '../asset-factory.js';
