@@ -49,7 +49,7 @@
             machinegun: 58,
             shotgun: 26,
             sniper: 99999,
-            seekergun: 28
+            missile: 34
         },
         weaponFalloff: {
             rifle: [
@@ -79,18 +79,18 @@
             sniper: [
                 { maxDistance: 99999, scale: 1.0 }
             ],
-            seekergun: [
-                { maxDistance: 28, scale: 1.0 }
+            missile: [
+                { maxDistance: 34, scale: 1.0 }
             ]
         },
         throwables: {
             fragRadius: 6.8,
-            seekerRadius: 5.0,
-            seekerShotRadius: 4.6,
+            plasmaRadius: 5.0,
+            missileRadius: 2.4,
             molotovFireRadius: 3.8,
-            seekerAcquireRange: 18,
-            seekerAcquireHalfAngleDeg: 35,
-            seekerStickExplodeDelay: 0.65
+            plasmaAcquireRange: 18,
+            plasmaAcquireHalfAngleDeg: 35,
+            plasmaStickExplodeDelay: 0.65
         },
         throwableMechanics: {
             aimRayRange: 100,
@@ -122,6 +122,15 @@
             hookPullDistance: sharedAbilityDefault('hook', 'pullDistance', 3.2),
             hookCatchRadius: sharedAbilityDefault('hook', 'catchRadius', 1.6),
             hookTravelSpeed: sharedAbilityDefault('hook', 'travelSpeed', 24),
+            missileRange: sharedAbilityDefault('missile', 'range', 34),
+            missileDamage: sharedAbilityDefault('missile', 'damage', 90),
+            missileRadius: sharedAbilityDefault('missile', 'radius', 2.4),
+            missileTravelSpeed: sharedAbilityDefault('missile', 'travelSpeed', 38),
+            missileAcquireRange: sharedAbilityDefault('missile', 'acquireRange', 7.5),
+            missileCatchRadius: sharedAbilityDefault('missile', 'catchRadius', 1.25),
+            missileLockHalfAngleDeg: sharedAbilityDefault('missile', 'lockHalfAngleDeg', 12),
+            missileHomingBoost: sharedAbilityDefault('missile', 'homingBoost', 6),
+            missileHomingLerp: sharedAbilityDefault('missile', 'homingLerp', 8.4),
             healDuration: sharedAbilityDefault('heal', 'duration', 0.85),
             healAmount: sharedAbilityDefault('heal', 'healAmount', 150),
             deadeyeLockBoxPx: 220,
@@ -162,17 +171,17 @@
                 machinegun: Number(weapons.machinegun && weapons.machinegun.maxRange) || DEFAULTS.weapons.machinegun,
                 shotgun: Number(weapons.shotgun && weapons.shotgun.maxRange) || DEFAULTS.weapons.shotgun,
                 sniper: Number(weapons.sniper && weapons.sniper.maxRange) || DEFAULTS.weapons.sniper,
-                seekergun: Number(weapons.seekergun && weapons.seekergun.maxRange) || DEFAULTS.weapons.seekergun
+                missile: DEFAULTS.weapons.missile
             },
             weaponFalloff: shared.weaponFalloff || deepCopy(DEFAULTS.weaponFalloff),
             throwables: {
                 fragRadius: Number(throwables.frag && throwables.frag.radius) || DEFAULTS.throwables.fragRadius,
-                seekerRadius: Number(throwables.seeker && throwables.seeker.radius) || DEFAULTS.throwables.seekerRadius,
-                seekerShotRadius: Number(throwables.seekershot && throwables.seekershot.radius) || DEFAULTS.throwables.seekerShotRadius,
+                plasmaRadius: Number(throwables.plasma && throwables.plasma.radius) || DEFAULTS.throwables.plasmaRadius,
+                missileRadius: Number(throwables.missile && throwables.missile.radius) || DEFAULTS.throwables.missileRadius,
                 molotovFireRadius: Number(throwables.molotov && throwables.molotov.fireRadius) || DEFAULTS.throwables.molotovFireRadius,
-                seekerAcquireRange: Number(throwables.seeker && throwables.seeker.acquireRange) || DEFAULTS.throwables.seekerAcquireRange,
-                seekerAcquireHalfAngleDeg: Number(throwables.seeker && throwables.seeker.acquireHalfAngleDeg) || DEFAULTS.throwables.seekerAcquireHalfAngleDeg,
-                seekerStickExplodeDelay: Number(throwables.seeker && throwables.seeker.stickExplodeDelay) || DEFAULTS.throwables.seekerStickExplodeDelay
+                plasmaAcquireRange: Number(throwables.plasma && throwables.plasma.acquireRange) || DEFAULTS.throwables.plasmaAcquireRange,
+                plasmaAcquireHalfAngleDeg: Number(throwables.plasma && throwables.plasma.acquireHalfAngleDeg) || DEFAULTS.throwables.plasmaAcquireHalfAngleDeg,
+                plasmaStickExplodeDelay: Number(throwables.plasma && throwables.plasma.stickExplodeDelay) || DEFAULTS.throwables.plasmaStickExplodeDelay
             },
             throwableMechanics: shared.throwableMechanics || deepCopy(DEFAULTS.throwableMechanics),
             classWallhackRadius: {
@@ -195,6 +204,15 @@
                 hookPullDistance: Number.isFinite(Number(hook.pullDistance)) ? Number(hook.pullDistance) : DEFAULTS.classAbilities.hookPullDistance,
                 hookCatchRadius: Number.isFinite(Number(hook.catchRadius)) ? Number(hook.catchRadius) : DEFAULTS.classAbilities.hookCatchRadius,
                 hookTravelSpeed: Number.isFinite(Number(hook.travelSpeed)) ? Number(hook.travelSpeed) : DEFAULTS.classAbilities.hookTravelSpeed,
+                missileRange: Number.isFinite(Number((catalog.missile || {}).range)) ? Number((catalog.missile || {}).range) : DEFAULTS.classAbilities.missileRange,
+                missileDamage: Number.isFinite(Number((catalog.missile || {}).damage)) ? Number((catalog.missile || {}).damage) : DEFAULTS.classAbilities.missileDamage,
+                missileRadius: Number.isFinite(Number((catalog.missile || {}).radius)) ? Number((catalog.missile || {}).radius) : DEFAULTS.classAbilities.missileRadius,
+                missileTravelSpeed: Number.isFinite(Number((catalog.missile || {}).travelSpeed)) ? Number((catalog.missile || {}).travelSpeed) : DEFAULTS.classAbilities.missileTravelSpeed,
+                missileAcquireRange: Number.isFinite(Number((catalog.missile || {}).acquireRange)) ? Number((catalog.missile || {}).acquireRange) : DEFAULTS.classAbilities.missileAcquireRange,
+                missileCatchRadius: Number.isFinite(Number((catalog.missile || {}).catchRadius)) ? Number((catalog.missile || {}).catchRadius) : DEFAULTS.classAbilities.missileCatchRadius,
+                missileLockHalfAngleDeg: Number.isFinite(Number((catalog.missile || {}).lockHalfAngleDeg)) ? Number((catalog.missile || {}).lockHalfAngleDeg) : DEFAULTS.classAbilities.missileLockHalfAngleDeg,
+                missileHomingBoost: Number.isFinite(Number((catalog.missile || {}).homingBoost)) ? Number((catalog.missile || {}).homingBoost) : DEFAULTS.classAbilities.missileHomingBoost,
+                missileHomingLerp: Number.isFinite(Number((catalog.missile || {}).homingLerp)) ? Number((catalog.missile || {}).homingLerp) : DEFAULTS.classAbilities.missileHomingLerp,
                 healDuration: Number.isFinite(Number(heal.duration)) ? Number(heal.duration) : DEFAULTS.classAbilities.healDuration,
                 healAmount: Number.isFinite(Number(heal.healAmount)) ? Number(heal.healAmount) : DEFAULTS.classAbilities.healAmount,
                 deadeyeLockBoxPx: DEFAULTS.classAbilities.deadeyeLockBoxPx,
@@ -272,12 +290,12 @@
     GameCombatTuning.getThrowableDistanceTuning = function () {
         return {
             fragRadius: BASE.throwables.fragRadius,
-            seekerRadius: BASE.throwables.seekerRadius,
-            seekerShotRadius: BASE.throwables.seekerShotRadius,
+            plasmaRadius: BASE.throwables.plasmaRadius,
+            missileRadius: BASE.throwables.missileRadius,
             molotovFireRadius: BASE.throwables.molotovFireRadius,
-            seekerAcquireRange: BASE.throwables.seekerAcquireRange,
-            seekerAcquireHalfAngleDeg: BASE.throwables.seekerAcquireHalfAngleDeg,
-            seekerStickExplodeDelay: BASE.throwables.seekerStickExplodeDelay
+            plasmaAcquireRange: BASE.throwables.plasmaAcquireRange,
+            plasmaAcquireHalfAngleDeg: BASE.throwables.plasmaAcquireHalfAngleDeg,
+            plasmaStickExplodeDelay: BASE.throwables.plasmaStickExplodeDelay
         };
     };
 
@@ -320,7 +338,7 @@
                 machinegun: GameCombatTuning.getWeaponRange('machinegun'),
                 shotgun: GameCombatTuning.getWeaponRange('shotgun'),
                 sniper: GameCombatTuning.getWeaponRange('sniper'),
-                seekergun: GameCombatTuning.getWeaponRange('seekergun')
+                missile: GameCombatTuning.getWeaponRange('missile')
             },
             weaponFalloff: {
                 rifle: GameCombatTuning.getWeaponFalloffTuning('rifle'),
@@ -328,7 +346,7 @@
                 machinegun: GameCombatTuning.getWeaponFalloffTuning('machinegun'),
                 shotgun: GameCombatTuning.getWeaponFalloffTuning('shotgun'),
                 sniper: GameCombatTuning.getWeaponFalloffTuning('sniper'),
-                seekergun: GameCombatTuning.getWeaponFalloffTuning('seekergun')
+                missile: GameCombatTuning.getWeaponFalloffTuning('missile')
             },
             throwables: GameCombatTuning.getThrowableDistanceTuning(),
             classWallhackRadius: {

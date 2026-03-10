@@ -12,6 +12,11 @@ const CAMERA_FOV_DEG = 75;
 const ADS_FOV_DEG = 56;
 const SNIPER_SCOPE_FOV_DEG = 24;
 const DEFAULT_ASPECT = 16 / 9;
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function normalizeVec3(v) {
   const len = Math.sqrt((v.x * v.x) + (v.y * v.y) + (v.z * v.z)) || 1;
   return { x: v.x / len, y: v.y / len, z: v.z / len };
@@ -56,6 +61,19 @@ function weaponFovDeg(weaponId, adsActive) {
   return weaponId === 'sniper' ? SNIPER_SCOPE_FOV_DEG : ADS_FOV_DEG;
 }
 
+function weaponScopedFovDeg(weaponId) {
+  return weaponId === 'sniper' ? SNIPER_SCOPE_FOV_DEG : ADS_FOV_DEG;
+}
+
+function resolveViewFovDeg(weaponId, viewFovDeg) {
+  const fallback = weaponFovDeg(weaponId, false);
+  const raw = Number(viewFovDeg);
+  if (!Number.isFinite(raw) || raw <= 0.0001) return fallback;
+
+  const scoped = weaponScopedFovDeg(weaponId);
+  return clampNumber(raw, Math.min(CAMERA_FOV_DEG, scoped), Math.max(CAMERA_FOV_DEG, scoped));
+}
+
 function spreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
   const aim = resolveWeaponAimProfile(weaponStats, adsActive);
   const spread = Math.max(0, Number(aim && aim.spread || 0));
@@ -69,7 +87,7 @@ function spreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
   };
 }
 
-function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken) {
+function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken, viewFovDeg) {
   const baseForward = normalizeVec3(forward);
   const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
   const right = normalizeVec3(crossVec3(baseForward, worldUp));
@@ -77,7 +95,7 @@ function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotTok
   const offset = spreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
   if (offset.x === 0 && offset.y === 0) return baseForward;
 
-  const fovY = weaponFovDeg(weaponStats && weaponStats.id || '', adsActive) * Math.PI / 180;
+  const fovY = resolveViewFovDeg(weaponStats && weaponStats.id || '', viewFovDeg) * Math.PI / 180;
   const tanHalfY = Math.tan(fovY * 0.5);
   const tanHalfX = tanHalfY * DEFAULT_ASPECT;
   return normalizeVec3(addVec3(
@@ -162,12 +180,13 @@ export function resolveHitscanShot(options) {
   const worldBoxes = Array.isArray(options.worldBoxes) ? options.worldBoxes : [];
   const adsActive = !!(options && options.adsActive);
   const shotToken = String(options && options.shotToken || '');
+  const viewFovDeg = Number(options && options.viewFovDeg);
   const maxDistance = effectiveRange(weaponStats, adsActive);
   const pellets = Math.max(1, Number(weaponStats.pellets || 1));
   const out = [];
 
   for (let pelletIndex = 0; pelletIndex < pellets; pelletIndex++) {
-    const dir = buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken);
+    const dir = buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken, viewFovDeg);
     let worldHitDistance = maxDistance;
     for (let i = 0; i < worldBoxes.length; i++) {
       const hitDistance = intersectRayAabb(origin, dir, worldBoxes[i], maxDistance);

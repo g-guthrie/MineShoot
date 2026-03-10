@@ -8,6 +8,65 @@ import {
   parseCookies
 } from './transport.js';
 
+function forwardedProto(request) {
+  if (!request || !request.headers) return '';
+
+  const xForwardedProto = String(request.headers.get('x-forwarded-proto') || '').trim();
+  if (xForwardedProto) {
+    return xForwardedProto.split(',')[0].trim().toLowerCase();
+  }
+
+  const forwarded = String(request.headers.get('forwarded') || '').trim();
+  if (forwarded) {
+    const match = forwarded.match(/(?:^|[;,]\s*)proto=(?:"([^"]+)"|([^;,]+))/i);
+    if (match) {
+      return String(match[1] || match[2] || '').trim().toLowerCase();
+    }
+  }
+
+  const cfVisitor = String(request.headers.get('cf-visitor') || '').trim();
+  if (cfVisitor) {
+    try {
+      const parsed = JSON.parse(cfVisitor);
+      if (parsed && parsed.scheme) {
+        return String(parsed.scheme).trim().toLowerCase();
+      }
+    } catch (_err) {
+      // Ignore malformed proxy metadata and fall back to request.url.
+    }
+  }
+
+  return '';
+}
+
+function secureRequest(request) {
+  const proto = forwardedProto(request);
+  if (proto === 'https') return true;
+  if (proto === 'http') return false;
+
+  try {
+    return new URL(request.url).protocol === 'https:';
+  } catch (_err) {
+    return false;
+  }
+}
+
+function buildSessionCookie(name, value, request, maxAge) {
+  const attrs = [
+    `${name}=${encodeURIComponent(String(value || ''))}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/',
+    `Max-Age=${Math.max(0, Number(maxAge) || 0)}`
+  ];
+
+  if (secureRequest(request)) {
+    attrs.splice(2, 0, 'Secure');
+  }
+
+  return attrs.join('; ');
+}
+
 export async function getSessionFromRequest(env, request) {
   const cookieName = env.SESSION_COOKIE_NAME || 'mfa_session';
   const cookies = parseCookies(request.headers.get('Cookie'));
@@ -104,7 +163,7 @@ export async function handleLogin(env, request) {
   ).bind(user.id).first();
 
   const cookieName = env.SESSION_COOKIE_NAME || 'mfa_session';
-  const setCookie = `${cookieName}=${encodeURIComponent(sessionId)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+  const setCookie = buildSessionCookie(cookieName, sessionId, request, maxAge);
 
   return json({
     ok: true,
@@ -132,7 +191,7 @@ export async function handleLogout(env, request) {
     await env.DB.prepare('DELETE FROM sessions WHERE id = ?1').bind(sid).run();
   }
 
-  const clearCookie = `${cookieName}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+  const clearCookie = buildSessionCookie(cookieName, '', request, 0);
   return json({ ok: true }, 200, { 'Set-Cookie': clearCookie });
 }
 

@@ -4,7 +4,7 @@
     var GameWeaponRegistry = {};
     var DEFAULT_HANDLE = [0, 0, 0];
     var DEFAULT_BARREL_TIP = [0, 0, -0.58];
-    var WEAPON_ORDER = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper', 'seekergun'];
+    var WEAPON_ORDER = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
 
     function sharedTuning() {
         return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning : null;
@@ -121,19 +121,6 @@
             scope: true,
             supportPos: [-0.05, -0.02, -0.56],
             barrelTipPos: [0, 0.02, -1.34]
-        }),
-        seekergun: buildVisualEntry('seekerProjectile', {
-            gunPos: [0.0, 0.03, 0.06],
-            gunRot: [0.02, 0.02, 0],
-            body:   { p: [0, 0.0, -0.06], s: [1.08, 1.04, 1.08], c: 0x254b57 },
-            barrel: { p: [0, 0.02, -0.44], s: [0.88, 0.9, 1.18], c: 0x70d6ee },
-            stock:  { p: [0, -0.03, 0.14], s: [1.0, 1.0, 1.0], c: 0x314f5d },
-            grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x314f5d },
-            handlePos: [0, -0.11, 0.06],
-            scope: true,
-            coil: true,
-            supportPos: [-0.05, -0.02, -0.34],
-            barrelTipPos: [0, 0.04, -0.72]
         })
     };
 

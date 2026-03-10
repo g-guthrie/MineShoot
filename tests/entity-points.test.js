@@ -13,7 +13,10 @@ import {
   AVATAR_TORSO_CENTER_OFFSET,
   AVATAR_TORSO_SIZE,
   BODY_HITBOX_CENTER_OFFSET_Y,
+  BODY_HITBOX_SQUARE_PADDING,
   BODY_HITBOX_SIZE,
+  HEAD_HITBOX_SQUARE_PADDING,
+  HEAD_HITBOX_TOP_PADDING,
   HEAD_HITBOX_CENTER_OFFSET_Y,
   HEAD_HITBOX_SIZE
 } from '../shared/entity-constants.js';
@@ -64,12 +67,15 @@ test('combat hitbox vertical split is derived from avatar torso and head primiti
     Math.abs(AVATAR_LEG_LEFT_CENTER_OFFSET.z) + (AVATAR_LEG_SIZE.z * 0.5),
     Math.abs(AVATAR_LEG_RIGHT_CENTER_OFFSET.z) + (AVATAR_LEG_SIZE.z * 0.5)
   );
+  const bodyBaseSquareSize = Math.max(widestHalfX * 2, deepestHalfZ * 2);
+  const headBaseSquareSize = Math.max(AVATAR_HEAD_SIZE.x, AVATAR_HEAD_SIZE.z);
 
   assert.equal(bodyTopY, torsoTopY);
   assert.ok(Math.abs(bodyBottomY - legBottomY) < 1e-9);
-  assert.equal(BODY_HITBOX_SIZE.x, widestHalfX * 2);
-  assert.equal(BODY_HITBOX_SIZE.z, deepestHalfZ * 2);
-  assert.equal(HEAD_HITBOX_CENTER_OFFSET_Y, AVATAR_HEAD_CENTER_OFFSET.y);
-  assert.equal(HEAD_HITBOX_SIZE.y, AVATAR_HEAD_SIZE.y);
+  assert.equal(BODY_HITBOX_SIZE.x, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
+  assert.equal(BODY_HITBOX_SIZE.z, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
+  assert.equal(HEAD_HITBOX_SIZE.x, headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING);
+  assert.equal(HEAD_HITBOX_SIZE.z, headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING);
+  assert.equal(HEAD_HITBOX_SIZE.y, AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING);
   assert.equal(headBottomY, primitiveHeadBottomY);
 });

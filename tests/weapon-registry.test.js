@@ -15,8 +15,7 @@ async function loadWeaponRegistry() {
               pistol: { id: 'pistol' },
               machinegun: { id: 'machinegun' },
               shotgun: { id: 'shotgun' },
-              sniper: { id: 'sniper' },
-              seekergun: { id: 'seekergun' }
+              sniper: { id: 'sniper' }
             }
           }
         }

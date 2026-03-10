@@ -9,7 +9,7 @@
 
     var crosshairEl, bloomReticleEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, abilityDebugPanelEl;
-    var seekerReticleEl, seekerReticleLabelEl;
+    var trackingReticleEl, trackingReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
@@ -59,8 +59,8 @@
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
         abilityDebugPanelEl = document.getElementById('ability-debug-panel');
-        seekerReticleEl = document.getElementById('seeker-reticle');
-        seekerReticleLabelEl = document.getElementById('seeker-reticle-label');
+        trackingReticleEl = document.getElementById('tracking-reticle');
+        trackingReticleLabelEl = document.getElementById('tracking-reticle-label');
         combatRadarEl = document.getElementById('combat-radar');
         combatRadarSlicesEl = document.getElementById('combat-radar-slices');
         combatRadarCoreEl = document.getElementById('combat-radar-core');
@@ -240,10 +240,10 @@
         }
     };
 
-    GameUI.updateSeekerReticle = function (visible, hasTarget, halfAngleDeg, viewInfo) {
-        if (!seekerReticleEl) return;
+    GameUI.updateTrackingReticle = function (visible, hasTarget, halfAngleDeg, viewInfo) {
+        if (!trackingReticleEl) return;
         if (!visible) {
-            seekerReticleEl.style.display = 'none';
+            trackingReticleEl.style.display = 'none';
             return;
         }
 
@@ -264,18 +264,18 @@
         }
         size = Math.max(50, Math.min(400, size));
 
-        seekerReticleEl.style.display = 'block';
-        seekerReticleEl.style.width = size + 'px';
-        seekerReticleEl.style.height = size + 'px';
-        seekerReticleEl.style.left = Math.round(window.innerWidth * 0.5) + 'px';
-        seekerReticleEl.style.top = Math.round(window.innerHeight * 0.5) + 'px';
+        trackingReticleEl.style.display = 'block';
+        trackingReticleEl.style.width = size + 'px';
+        trackingReticleEl.style.height = size + 'px';
+        trackingReticleEl.style.left = Math.round(window.innerWidth * 0.5) + 'px';
+        trackingReticleEl.style.top = Math.round(window.innerHeight * 0.5) + 'px';
 
         if (hasTarget) {
-            seekerReticleEl.classList.add('has-lock');
-            if (seekerReticleLabelEl) seekerReticleLabelEl.style.display = 'block';
+            trackingReticleEl.classList.add('has-lock');
+            if (trackingReticleLabelEl) trackingReticleLabelEl.style.display = 'block';
         } else {
-            seekerReticleEl.classList.remove('has-lock');
-            if (seekerReticleLabelEl) seekerReticleLabelEl.style.display = 'none';
+            trackingReticleEl.classList.remove('has-lock');
+            if (trackingReticleLabelEl) trackingReticleLabelEl.style.display = 'none';
         }
     };
 

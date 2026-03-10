@@ -10,6 +10,8 @@ class FakeElement {
     this.attributes = {};
     this.listeners = new Map();
     this.dataset = {};
+    this.tagName = 'DIV';
+    this.isContentEditable = false;
   }
 
   setAttribute(name, value) {
@@ -32,6 +34,7 @@ test('modal manager registers, opens, and closes a dialog with aria/hidden seman
   const code = await fs.readFile(new URL('../js/app/modal-manager.js', import.meta.url), 'utf8');
   const overlay = new FakeElement('overlay');
   const trigger = new FakeElement('trigger');
+  let keydownHandler = null;
   const documentObj = {
     activeElement: trigger,
     getElementById(id) {
@@ -41,7 +44,9 @@ test('modal manager registers, opens, and closes a dialog with aria/hidden seman
     }
   };
   const windowObj = {
-    addEventListener() {}
+    addEventListener(type, handler) {
+      if (type === 'keydown') keydownHandler = handler;
+    }
   };
   const sandbox = {
     globalThis: { __MAYHEM_RUNTIME: {} },
@@ -69,5 +74,20 @@ test('modal manager registers, opens, and closes a dialog with aria/hidden seman
   assert.equal(modalManager.close('test'), true);
   assert.equal(overlay.hidden, true);
   assert.equal(overlay.attributes['aria-hidden'], 'true');
+  assert.equal(modalManager.isOpen('test'), false);
+
+  modalManager.open('test', trigger);
+  const input = new FakeElement('field');
+  input.tagName = 'INPUT';
+  keydownHandler({
+    key: 'Escape',
+    target: input
+  });
+  assert.equal(modalManager.isOpen('test'), true);
+
+  keydownHandler({
+    key: 'Escape',
+    target: trigger
+  });
   assert.equal(modalManager.isOpen('test'), false);
 });

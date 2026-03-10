@@ -97,6 +97,55 @@
         return fetch(resolveApiUrl(url), cfg);
     }
 
+    function parseApiBody(text) {
+        var raw = String(text || '').trim();
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch (_err) {
+            return null;
+        }
+    }
+
+    function readApiResponse(response) {
+        if (!response || typeof response.text !== 'function') {
+            return Promise.resolve({
+                status: 0,
+                body: null,
+                rawText: '',
+                response: response || null
+            });
+        }
+
+        return response.text()
+            .catch(function () {
+                return '';
+            })
+            .then(function (text) {
+                return {
+                    status: response.status,
+                    body: parseApiBody(text),
+                    rawText: String(text || ''),
+                    response: response
+                };
+            });
+    }
+
+    function apiErrorMessage(res, fallback) {
+        if (res && res.body && typeof res.body.error === 'string' && res.body.error.trim()) {
+            return res.body.error.trim();
+        }
+
+        if (res && typeof res.rawText === 'string') {
+            var raw = res.rawText.trim();
+            if (raw && raw.charAt(0) !== '<') {
+                return raw;
+            }
+        }
+
+        return fallback;
+    }
+
     function makeSocketPlayerId() {
         return randomToken('ply_').slice(0, 28);
     }
@@ -405,7 +454,7 @@
         }
 
         return apiFetch(profileMeUrl())
-            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+            .then(readApiResponse)
             .then(function (res) {
                 if (res.body && res.body.ok) {
                     ownProfile = res.body.profile || null;
@@ -426,7 +475,7 @@
         if (guestMode) return Promise.resolve(null);
 
         return apiFetch(sessionMeUrl())
-            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+            .then(readApiResponse)
             .then(function (res) {
                 if (res.body && res.body.ok) {
                     rememberSignedInUser(res.body.user);
@@ -564,10 +613,10 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, pin: pin })
             })
-                .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+                .then(readApiResponse)
                 .then(function (res) {
                     if (!res.body || !res.body.ok) {
-                        reject(new Error((res.body && res.body.error) || 'Login failed.'));
+                        reject(new Error(apiErrorMessage(res, 'Login failed.')));
                         return;
                     }
                     rememberSignedInUser(res.body.user);

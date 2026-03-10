@@ -56,8 +56,7 @@ async function loadGameNetHarness() {
           right: false,
           jump: false,
           sprint: false,
-          adsActive: false,
-          cameraMode: 'third'
+          adsActive: false
         };
       },
       respawn() {}

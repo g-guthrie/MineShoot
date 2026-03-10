@@ -16,15 +16,75 @@ export var ENEMY_HP_MAX = 500;
 export var ENEMY_ARMOR = 100;
 export var ENEMY_ARMOR_MAX = 100;
 
+// Shared avatar part definitions. Update these once and both the rig geometry
+// and combat hitboxes follow the same authored dimensions.
+export var AVATAR_FOOT_PLANE_OFFSET_Y = 0.3;
+export var AVATAR_TORSO_SIZE = { x: 0.8, y: 1.0, z: 0.5 };
+export var AVATAR_TORSO_CENTER_OFFSET = { x: 0, y: AVATAR_FOOT_PLANE_OFFSET_Y + 1.0, z: 0 };
+export var AVATAR_HEAD_SIZE = { x: 0.55, y: 0.55, z: 0.55 };
+export var AVATAR_HEAD_CENTER_OFFSET = { x: 0, y: AVATAR_FOOT_PLANE_OFFSET_Y + 1.8, z: 0 };
+export var AVATAR_ARM_SIZE = { x: 0.22, y: 0.85, z: 0.22 };
+export var AVATAR_ARM_LEFT_CENTER_OFFSET = { x: -0.52, y: AVATAR_FOOT_PLANE_OFFSET_Y + 0.95, z: 0 };
+export var AVATAR_ARM_RIGHT_CENTER_OFFSET = { x: 0.52, y: AVATAR_FOOT_PLANE_OFFSET_Y + 0.95, z: 0 };
+export var AVATAR_LEG_SIZE = { x: 0.28, y: 0.9, z: 0.28 };
+export var AVATAR_LEG_LEFT_CENTER_OFFSET = { x: -0.18, y: AVATAR_FOOT_PLANE_OFFSET_Y + 0.15, z: 0 };
+export var AVATAR_LEG_RIGHT_CENTER_OFFSET = { x: 0.18, y: AVATAR_FOOT_PLANE_OFFSET_Y + 0.15, z: 0 };
+
+function halfExtent(size, axis) {
+  return Number(size && size[axis] || 0) * 0.5;
+}
+
+function minExtent(center, size, axis) {
+  return Number(center && center[axis] || 0) - halfExtent(size, axis);
+}
+
+function maxExtent(center, size, axis) {
+  return Number(center && center[axis] || 0) + halfExtent(size, axis);
+}
+
+var BODY_MIN_Y = Math.min(
+  minExtent(AVATAR_LEG_LEFT_CENTER_OFFSET, AVATAR_LEG_SIZE, 'y'),
+  minExtent(AVATAR_LEG_RIGHT_CENTER_OFFSET, AVATAR_LEG_SIZE, 'y')
+);
+var BODY_MAX_Y = maxExtent(AVATAR_TORSO_CENTER_OFFSET, AVATAR_TORSO_SIZE, 'y');
+var BODY_HALF_X = Math.max(
+  halfExtent(AVATAR_TORSO_SIZE, 'x'),
+  Math.abs(Number(AVATAR_ARM_LEFT_CENTER_OFFSET.x || 0)) + halfExtent(AVATAR_ARM_SIZE, 'x'),
+  Math.abs(Number(AVATAR_ARM_RIGHT_CENTER_OFFSET.x || 0)) + halfExtent(AVATAR_ARM_SIZE, 'x'),
+  Math.abs(Number(AVATAR_LEG_LEFT_CENTER_OFFSET.x || 0)) + halfExtent(AVATAR_LEG_SIZE, 'x'),
+  Math.abs(Number(AVATAR_LEG_RIGHT_CENTER_OFFSET.x || 0)) + halfExtent(AVATAR_LEG_SIZE, 'x')
+);
+var BODY_HALF_Z = Math.max(
+  halfExtent(AVATAR_TORSO_SIZE, 'z'),
+  Math.abs(Number(AVATAR_ARM_LEFT_CENTER_OFFSET.z || 0)) + halfExtent(AVATAR_ARM_SIZE, 'z'),
+  Math.abs(Number(AVATAR_ARM_RIGHT_CENTER_OFFSET.z || 0)) + halfExtent(AVATAR_ARM_SIZE, 'z'),
+  Math.abs(Number(AVATAR_LEG_LEFT_CENTER_OFFSET.z || 0)) + halfExtent(AVATAR_LEG_SIZE, 'z'),
+  Math.abs(Number(AVATAR_LEG_RIGHT_CENTER_OFFSET.z || 0)) + halfExtent(AVATAR_LEG_SIZE, 'z')
+);
+var BODY_BASE_SQUARE_SIZE = Math.max(BODY_HALF_X * 2, BODY_HALF_Z * 2);
+var HEAD_BASE_SQUARE_SIZE = Math.max(AVATAR_HEAD_SIZE.x, AVATAR_HEAD_SIZE.z);
+var HEAD_BOTTOM_Y = minExtent(AVATAR_HEAD_CENTER_OFFSET, AVATAR_HEAD_SIZE, 'y');
+
+// Tunable combat padding values. Body keeps a fixed vertical span from leg bottom
+// to torso top, while x/z stay square. Head keeps its bottom locked to the head
+// primitive, with separate square padding and top padding.
+export var BODY_HITBOX_SQUARE_PADDING = 1.2252062288671335;
+export var HEAD_HITBOX_SQUARE_PADDING = 0.8262512027010309;
+export var HEAD_HITBOX_TOP_PADDING = 0.29350880165547055;
+
 export var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
 export var HEAD_HITBOX_SIZE = {
-  x: 1.55 * HEAD_HITBOX_LINEAR_SCALE,
-  y: 0.95 * HEAD_HITBOX_LINEAR_SCALE,
-  z: 1.55 * HEAD_HITBOX_LINEAR_SCALE
+  x: HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING,
+  y: AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING,
+  z: HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING
 };
-export var BODY_HITBOX_SIZE = { x: 2.7, y: 1.525, z: 2.7 };
-export var BODY_HITBOX_CENTER_OFFSET_Y = 0.7625;
-export var HEAD_HITBOX_CENTER_OFFSET_Y = 2.0;
+export var BODY_HITBOX_SIZE = {
+  x: BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING,
+  y: BODY_MAX_Y - BODY_MIN_Y,
+  z: BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING
+};
+export var BODY_HITBOX_CENTER_OFFSET_Y = (BODY_MIN_Y + BODY_MAX_Y) * 0.5;
+export var HEAD_HITBOX_CENTER_OFFSET_Y = HEAD_BOTTOM_Y + (HEAD_HITBOX_SIZE.y * 0.5);
 
 var runtime = (typeof globalThis !== 'undefined') ? globalThis : {};
 runtime.__MAYHEM_RUNTIME = runtime.__MAYHEM_RUNTIME || {};
@@ -37,6 +97,20 @@ runtime.__MAYHEM_RUNTIME.GameShared.entityConstants = {
   DEFAULT_HP_MAX: DEFAULT_HP_MAX,
   DEFAULT_ARMOR: DEFAULT_ARMOR,
   DEFAULT_ARMOR_MAX: DEFAULT_ARMOR_MAX,
+  AVATAR_FOOT_PLANE_OFFSET_Y: AVATAR_FOOT_PLANE_OFFSET_Y,
+  AVATAR_TORSO_SIZE: AVATAR_TORSO_SIZE,
+  AVATAR_TORSO_CENTER_OFFSET: AVATAR_TORSO_CENTER_OFFSET,
+  AVATAR_HEAD_SIZE: AVATAR_HEAD_SIZE,
+  AVATAR_HEAD_CENTER_OFFSET: AVATAR_HEAD_CENTER_OFFSET,
+  AVATAR_ARM_SIZE: AVATAR_ARM_SIZE,
+  AVATAR_ARM_LEFT_CENTER_OFFSET: AVATAR_ARM_LEFT_CENTER_OFFSET,
+  AVATAR_ARM_RIGHT_CENTER_OFFSET: AVATAR_ARM_RIGHT_CENTER_OFFSET,
+  AVATAR_LEG_SIZE: AVATAR_LEG_SIZE,
+  AVATAR_LEG_LEFT_CENTER_OFFSET: AVATAR_LEG_LEFT_CENTER_OFFSET,
+  AVATAR_LEG_RIGHT_CENTER_OFFSET: AVATAR_LEG_RIGHT_CENTER_OFFSET,
+  BODY_HITBOX_SQUARE_PADDING: BODY_HITBOX_SQUARE_PADDING,
+  HEAD_HITBOX_SQUARE_PADDING: HEAD_HITBOX_SQUARE_PADDING,
+  HEAD_HITBOX_TOP_PADDING: HEAD_HITBOX_TOP_PADDING,
   HEAD_HITBOX_LINEAR_SCALE: HEAD_HITBOX_LINEAR_SCALE,
   HEAD_HITBOX_SIZE: HEAD_HITBOX_SIZE,
   BODY_HITBOX_SIZE: BODY_HITBOX_SIZE,

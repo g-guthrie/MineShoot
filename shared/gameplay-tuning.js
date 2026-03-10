@@ -50,8 +50,8 @@ export const gameplayTuning = {
     sniper: [
       { maxDistance: 99999, scale: 1.0 }
     ],
-    seekergun: [
-      { maxDistance: 28, scale: 1.0 }
+    missile: [
+      { maxDistance: 34, scale: 1.0 }
     ]
   },
   throwableMechanics: {
@@ -73,16 +73,15 @@ export const gameplayTuning = {
     machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   reloadMs: 2200, magazineSize: 40, bodyDamage: 15,  headDamage: 23,  maxRange: 58,  pellets: 1,  hipfireSpread: 0.046, adsSpread: 0.03,  adsMaxRange: 72,  aimProfile: { hipfire: { spread: 0.046, maxRange: 58 },  ads: { spread: 0.03,  maxRange: 72 } } },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 1000, reloadMs: 1850, magazineSize: 6,  bodyDamage: 17,  headDamage: 25,  maxRange: 26,  pellets: 12, hipfireSpread: 0.19,  adsSpread: 0.16,  adsMaxRange: 26,  aimProfile: { hipfire: { spread: 0.19,  maxRange: 26 },  ads: { spread: 0.16,  maxRange: 26 } } },
     sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1450, reloadMs: 2100, magazineSize: 5,  bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1,  hipfireSpread: 0.32,  adsSpread: 0.0,   adsMaxRange: 160, aimProfile: { hipfire: { spread: 0.32,  maxRange: 160 }, ads: { spread: 0.0,   maxRange: 160 } }, infiniteRange: true },
-    seekergun:  { name: 'Seeker',         primitiveType: 'projectile_homing', automatic: true,  cooldownMs: 380,  bodyDamage: 72,  headDamage: 72,  maxRange: 28,  pellets: 1,  hipfireSpread: 0,     adsSpread: 0,     adsMaxRange: 28,  aimProfile: { hipfire: { spread: 0,     maxRange: 28 },  ads: { spread: 0,     maxRange: 28 } } }
   },
   defaultWeaponLoadout: ['machinegun', 'shotgun'],
   selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
   throwableCategories: {
-    grenade: { label: 'Grenades', items: ['frag', 'seeker', 'molotov'], previewType: 'trajectory' },
+    grenade: { label: 'Grenades', items: ['frag', 'plasma', 'molotov'], previewType: 'trajectory' },
     blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
   },
   throwables: {
-    order: ['frag', 'seeker', 'molotov', 'knife'],
+    order: ['frag', 'plasma', 'molotov', 'knife'],
     frag: {
       id: 'frag', category: 'grenade', label: 'Frag', speed: 18, upward: 5.2, gravity: 19, fuse: 2.2, radius: 6.8, damage: 125, regen: 10, bounce: true,
       bounceVelocityDamping: 0.4,
@@ -90,13 +89,13 @@ export const gameplayTuning = {
       bounceMaxCount: 2,
       bounceStopSpeedSq: 2.5
     },
-    seeker: {
-      id: 'seeker', category: 'grenade', label: 'Plasma Grenade', speed: 16, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 10,
+    plasma: {
+      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 16, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 10,
       homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
     },
-    seekershot: {
-      id: 'seekershot', label: 'Seeker Shot', speed: 31, upward: 0.4, gravity: 4.5, fuse: 1.8, radius: 4.2, damage: 72,
-      homingBoost: 4.0, homingLerp: 4.6, lockHalfAngleDeg: 20
+    missile: {
+      id: 'missile', label: 'Missile', speed: 38, upward: 0.2, gravity: 0.8, fuse: 1.25, radius: 2.4, damage: 90,
+      homingBoost: 6.0, homingLerp: 8.4, lockHalfAngleDeg: 12, acquireRange: 7.5, hitRadius: 0.9
     },
     molotov: {
       id: 'molotov', category: 'grenade', label: 'Molotov', speed: 17, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.8,
@@ -112,7 +111,7 @@ export const gameplayTuning = {
       description: 'Single-target lift and stun in reticle box.',
       debugSummary: 'Square = choke target box.',
       tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 15000, range: 28, minDot: 0.05, duration: 1.5,
+      cooldownMs: 15000, range: 28, minDot: 0.05, duration: 2.0,
       liftHeight: 1.75, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 315, targetTolerance: 1.6
     },
     hook: {
@@ -130,6 +129,14 @@ export const gameplayTuning = {
       tunableParams: ['healAmount', 'cooldownMs'],
       cooldownMs: 15000, duration: 0.85, healAmount: 150
     },
+    missile: {
+      id: 'missile', slot: 'either', name: 'Missile',
+      description: 'Fast guided micro-rocket that bends toward nearby targets.',
+      debugSummary: 'Fires from muzzle and gently seeks toward nearby hostile hitboxes.',
+      tunableParams: ['range', 'cooldownMs', 'damage', 'radius', 'travelSpeed', 'acquireRange', 'catchRadius', 'lockHalfAngleDeg', 'homingBoost', 'homingLerp'],
+      cooldownMs: 900, range: 34, damage: 90, radius: 2.4, travelSpeed: 38, acquireRange: 7.5, catchRadius: 1.25,
+      lockHalfAngleDeg: 12, homingBoost: 6.0, homingLerp: 8.4, gravity: 0.8, fuse: 1.25
+    },
     deadeye: {
       id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
@@ -138,7 +145,7 @@ export const gameplayTuning = {
       cooldownMs: 15000, range: 70, duration: 1.5, maxTargets: 2, minDot: 0.22, damage: 180
     }
   },
-  defaultAbilityLoadout: { slot1: 'choke', slot2: 'deadeye' }
+  defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
 };
 
 export function getClassPreset(classId) {

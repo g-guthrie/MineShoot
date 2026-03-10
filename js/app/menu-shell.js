@@ -100,6 +100,13 @@
         var pauseOpenBtnEl = document.getElementById('open-manual-btn');
         var hudOpenBtnEl = document.getElementById('hud-manual-btn');
 
+        function editableTarget(target) {
+            var node = target || null;
+            var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
+            if (node && node.isContentEditable) return true;
+            return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+        }
+
         function openDocs(event) {
             if (event) {
                 event.preventDefault();
@@ -123,6 +130,7 @@
             window.__mayhemDocsKeyBound = true;
             document.addEventListener('keydown', function (event) {
                 if (event.code !== 'KeyI') return;
+                if (editableTarget(event.target)) return;
                 openDocs(event);
             });
         }

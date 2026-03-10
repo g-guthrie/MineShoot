@@ -210,7 +210,7 @@
             hookPullState: null,
             justBeenHookedUntil: 0,
             chokeVictimState: null,
-            seekerNeedleState: null
+            trackingNeedleState: null
         };
 
         bodyHitbox.userData.enemyRef = enemy;
@@ -269,6 +269,7 @@
                 choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
                 startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0,
                 adsActive: !!engaging,
+                worldSpeed: enemy.moveSpeed,
                 movingForward: speedNorm > 0.05
             });
         }
@@ -675,7 +676,7 @@
         enemy.respawnTimer = localMatchResult
             ? (typeof localMatchResult.respawnDelaySec === 'number' ? Number(localMatchResult.respawnDelaySec || 0) : -1)
             : 5.0;
-        enemy.seekerNeedleState = null;
+        enemy.trackingNeedleState = null;
     };
 
     GameEnemy.respawn = function (enemy) {
@@ -706,7 +707,7 @@
         enemy.hookPullState = null;
         enemy.justBeenHookedUntil = 0;
         enemy.chokeVictimState = null;
-        enemy.seekerNeedleState = null;
+        enemy.trackingNeedleState = null;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
         resetFireCooldown(enemy);

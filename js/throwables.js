@@ -1,5 +1,5 @@
 /**
- * throwables.js - Frag/seeker/molotov/knife logic with regen inventory
+ * throwables.js - Frag/plasma/molotov/knife logic with regen inventory
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameThrowables
  */
 (function () {
@@ -15,7 +15,6 @@
     var netFireZoneMap = {};
     var predictedByClientId = {};
     var localThrowSeq = 1;
-    var lastSeekerShotMeta = null;
     var debugInstantCooldowns = false;
     var debugPreviewVolumesEnabled = false;
     var debugTelemetry = {
@@ -63,12 +62,12 @@
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableDistanceTuning()
         : {
             fragRadius: 5.4,
-            seekerRadius: 5.0,
-            seekerShotRadius: 4.6,
+            plasmaRadius: 5.0,
+            missileRadius: 2.4,
             molotovFireRadius: 3.2,
-            seekerAcquireRange: 18,
-            seekerAcquireHalfAngleDeg: 35,
-            seekerStickExplodeDelay: 0.65
+            plasmaAcquireRange: 18,
+            plasmaAcquireHalfAngleDeg: 35,
+            plasmaStickExplodeDelay: 0.65
         };
     var throwableMechanicsTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning()
@@ -85,17 +84,16 @@
 
     var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
     var sharedThrowables = sharedTuning.throwables || {};
-    var throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || ['frag', 'seeker', 'molotov', 'knife'];
+    var throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || ['frag', 'plasma', 'molotov', 'knife'];
     var throwableCategories = sharedTuning.throwableCategories || {
-        grenade: { label: 'Grenades', items: ['frag', 'molotov'], previewType: 'trajectory' },
-        sticky:  { label: 'Sticky', items: ['seeker'], previewType: 'cone' },
+        grenade: { label: 'Grenades', items: ['frag', 'plasma', 'molotov'], previewType: 'trajectory' },
         blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
     };
     var selectedThrowableId = 'frag';
 
     function buildDefsFromShared() {
         var out = {};
-        var ids = ['frag', 'seeker', 'seekershot', 'plasma_stream', 'molotov', 'knife'];
+        var ids = ['frag', 'plasma', 'missile', 'molotov', 'knife'];
         for (var i = 0; i < ids.length; i++) {
             var id = ids[i];
             var src = sharedThrowables[id];
@@ -105,12 +103,12 @@
                 if (Object.prototype.hasOwnProperty.call(src, k)) def[k] = src[k];
             }
             if (id === 'frag') def.radius = throwableDistanceTuning.fragRadius;
-            if (id === 'seeker') {
-                def.radius = throwableDistanceTuning.seekerRadius;
-                def.acquireHalfAngleDeg = throwableDistanceTuning.seekerAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 35;
-                def.stickExplodeDelay = throwableDistanceTuning.seekerStickExplodeDelay || def.stickExplodeDelay || 0.65;
+            if (id === 'plasma') {
+                def.radius = throwableDistanceTuning.plasmaRadius;
+                def.acquireHalfAngleDeg = throwableDistanceTuning.plasmaAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 35;
+                def.stickExplodeDelay = throwableDistanceTuning.plasmaStickExplodeDelay || def.stickExplodeDelay || 0.65;
             }
-            if (id === 'seekershot') def.radius = throwableDistanceTuning.seekerShotRadius;
+            if (id === 'missile') def.radius = throwableDistanceTuning.missileRadius;
             if (id === 'molotov') def.fireRadius = throwableDistanceTuning.molotovFireRadius;
             out[id] = def;
         }
@@ -189,7 +187,7 @@
     }
 
     function refillExplosives() {
-        var ids = ['frag', 'seeker', 'molotov'];
+        var ids = ['frag', 'plasma', 'molotov'];
         for (var i = 0; i < ids.length; i++) {
             var inv = inventory[ids[i]];
             if (!inv) continue;
@@ -205,9 +203,9 @@
                 new THREE.MeshLambertMaterial({ color: 0x2f7f2f })
             );
         }
-        if (type === 'seeker' || type === 'seekershot' || type === 'plasma_stream') {
-            var color = (type === 'plasma_stream') ? 0x66ddff : 0x22aabb;
-            var emissive = (type === 'plasma_stream') ? 0x114466 : 0x112222;
+        if (type === 'plasma' || type === 'missile') {
+            var color = (type === 'missile') ? 0xffb066 : 0x22aabb;
+            var emissive = (type === 'missile') ? 0x442200 : 0x112222;
             return new THREE.Mesh(
                 new THREE.BoxGeometry(0.2, 0.2, 0.2),
                 new THREE.MeshLambertMaterial({ color: color, emissive: emissive })
@@ -1030,7 +1028,7 @@
 
         p.age += dt;
 
-        if (p.type === 'seeker' && p.stickyUntil > 0) {
+        if (p.type === 'plasma' && p.stickyUntil > 0) {
             if (p.stuckEnemy && p.stuckEnemy.alive && p.stuckEnemy.group && p.stuckEnemy.group.position) {
                 p.mesh.position.copy(p.stuckEnemy.group.position).add(p.stuckOffset);
             }
@@ -1041,8 +1039,8 @@
             return;
         }
 
-        var isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream');
-        if (isSeekerLike && p.age > 0.03) {
+        var isTrackingProjectile = (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream');
+        if (isTrackingProjectile && p.age > 0.03) {
             var targetEnemy = null;
             var targetPoint = null;
             var nearestDist = Infinity;
@@ -1050,13 +1048,13 @@
             var currentDir = (p.velocity.lengthSq() > 0.0001)
                 ? p.velocity.clone().normalize()
                 : (p.launchDir ? p.launchDir.clone() : new THREE.Vector3(0, 0, -1));
-            var halfAngleDeg = (p.type === 'seekershot' || p.type === 'plasma_stream')
+            var halfAngleDeg = (p.type === 'missile' || p.type === 'plasma_stream')
                 ? ((typeof def.lockHalfAngleDeg === 'number') ? def.lockHalfAngleDeg : 30)
-                : ((typeof def.acquireHalfAngleDeg === 'number') ? def.acquireHalfAngleDeg : (throwableDistanceTuning.seekerAcquireHalfAngleDeg || 35));
+                : ((typeof def.acquireHalfAngleDeg === 'number') ? def.acquireHalfAngleDeg : (throwableDistanceTuning.plasmaAcquireHalfAngleDeg || 35));
             var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
-            var maxAcquireRange = (p.type === 'seekershot' || p.type === 'plasma_stream')
+            var maxAcquireRange = (p.type === 'missile' || p.type === 'plasma_stream')
                 ? ((typeof def.acquireRange === 'number') ? def.acquireRange : 24)
-                : (throwableDistanceTuning.seekerAcquireRange || 18);
+                : (throwableDistanceTuning.plasmaAcquireRange || 18);
 
             for (var ei = 0; ei < enemies.length; ei++) {
                 var enemy = enemies[ei];
@@ -1136,7 +1134,7 @@
                     return;
                 }
 
-                if (p.type === 'seeker') {
+                if (p.type === 'plasma') {
                     p.mesh.position.copy(hit.point);
                     p.velocity.set(0, 0, 0);
                     p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
@@ -1179,8 +1177,8 @@
                 return;
             }
 
-            if (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream') {
-                if (p.type === 'seeker') {
+            if (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream') {
+                if (p.type === 'plasma') {
                     p.mesh.position.copy(hit.point);
                     p.velocity.set(0, 0, 0);
                     p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
@@ -1220,7 +1218,7 @@
             return;
         }
 
-        if ((p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream') && p.age >= def.fuse) {
+        if ((p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream') && p.age >= def.fuse) {
             if (p.type === 'plasma_stream') {
                 removeProjectile(index);
             } else {
@@ -1352,7 +1350,6 @@
         debugTelemetry.lastRejectClientThrowId = '';
         debugTelemetry.lastReconcileClientThrowId = '';
         debugTelemetry.predictedCount = 0;
-        lastSeekerShotMeta = null;
         resetInventory();
     };
 
@@ -1392,8 +1389,8 @@
         return getThrowableState();
     };
 
-    GameThrowables.getSeekerShotTuning = function () {
-        var def = defs.seekershot;
+    GameThrowables.getMissileTuning = function () {
+        var def = defs.missile;
         if (!def) return null;
         return {
             speed: def.speed,
@@ -1407,7 +1404,7 @@
 
     /**
      * Throw a specific type if charge is available
-     * @param {string} type - frag|seeker|molotov|knife
+     * @param {string} type - frag|plasma|molotov|knife
      * @param {THREE.Camera} camera
      * @returns {Object} { ok, reason, state }
      */
@@ -1632,11 +1629,10 @@
         }
     };
 
-    GameThrowables.fireSeekerShot = function (camera, lockTarget, clientShotId, options) {
+    GameThrowables.fireAbilityMissile = function (camera, options) {
         if (!sceneRef || !camera) return false;
         options = options || {};
-        var weaponId = 'seekergun';
-        var projectileType = 'seekershot';
+        var projectileType = 'missile';
         camera.getWorldDirection(tmpForward);
         var muzzle = null;
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getMuzzleWorldPosition) {
@@ -1645,23 +1641,21 @@
         var origin = muzzle && typeof muzzle.x === 'number'
             ? muzzle.clone().addScaledVector(tmpForward, 0.1)
             : camera.position.clone().addScaledVector(tmpForward, 0.75);
-        var shotId = clientShotId || ('cseek-' + Date.now().toString(36) + '-' + (localThrowSeq++).toString(36));
         var intent = buildThrowIntent(camera, {
             origin: origin,
             direction: tmpForward.clone()
         });
         if (!intent) return false;
 
-        var shouldPredict = true;
+        var shouldPredict = false;
         if (typeof options.predictLocal === 'boolean') {
             shouldPredict = options.predictLocal;
-        } else if (
+        } else if (!(
             globalThis.__MAYHEM_RUNTIME.GameNet &&
             globalThis.__MAYHEM_RUNTIME.GameNet.isActive &&
             globalThis.__MAYHEM_RUNTIME.GameNet.isActive()
-        ) {
-            // Multiplayer seeker shots are server-authoritative to avoid dual-stream visuals.
-            shouldPredict = false;
+        )) {
+            shouldPredict = true;
         }
 
         if (shouldPredict) {
@@ -1669,36 +1663,16 @@
                 intent: intent,
                 origin: origin,
                 direction: tmpForward.clone(),
-                targetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : '',
                 predicted: true,
-                clientThrowId: shotId
+                clientThrowId: 'missile-' + Date.now().toString(36) + '-' + (localThrowSeq++).toString(36)
             });
             if (!ok) return false;
-
-            predictedByClientId[shotId] = {
-                type: projectileType,
-                createdAt: Date.now(),
-                authoritativeSeen: false
-            };
         }
-        lastSeekerShotMeta = {
-            clientShotId: shotId,
-            weaponId: weaponId,
-            lockTargetId: lockTarget && lockTarget.targetId ? lockTarget.targetId : '',
-            throwIntent: {
-                origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },
-                direction: { x: intent.direction.x, y: intent.direction.y, z: intent.direction.z },
-                aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
-            }
+        return {
+            origin: { x: intent.origin.x, y: intent.origin.y, z: intent.origin.z },
+            direction: { x: intent.direction.x, y: intent.direction.y, z: intent.direction.z },
+            aimPoint: intent.aimPoint ? { x: intent.aimPoint.x, y: intent.aimPoint.y, z: intent.aimPoint.z } : null
         };
-        return true;
-    };
-
-    GameThrowables.consumeLastSeekerShotMeta = function () {
-        if (!lastSeekerShotMeta) return null;
-        var meta = lastSeekerShotMeta;
-        lastSeekerShotMeta = null;
-        return meta;
     };
 
     /**
@@ -1791,7 +1765,7 @@
         return defs[type] || null;
     };
 
-    GameThrowables.checkSeekerLockInCone = function (camera) {
+    GameThrowables.checkPlasmaLockInCone = function (camera) {
         if (!camera || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return false;
         var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies();
         if (!enemies || !enemies.length) return false;
@@ -1800,10 +1774,10 @@
         var forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
 
-        var seekerDef = defs['seeker'];
-        var halfAngleDeg = (seekerDef && seekerDef.acquireHalfAngleDeg) ? seekerDef.acquireHalfAngleDeg : 35;
+        var plasmaDef = defs['plasma'];
+        var halfAngleDeg = (plasmaDef && plasmaDef.acquireHalfAngleDeg) ? plasmaDef.acquireHalfAngleDeg : 35;
         var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
-        var maxRange = throwableDistanceTuning.seekerAcquireRange || 18;
+        var maxRange = throwableDistanceTuning.plasmaAcquireRange || 18;
 
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];

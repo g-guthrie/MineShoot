@@ -25,8 +25,7 @@ export function createMovementInputState() {
     right: false,
     jump: false,
     sprint: false,
-    adsActive: false,
-    cameraMode: 'third'
+    adsActive: false
   };
 }
 
@@ -39,8 +38,7 @@ export function hasIntentInputMessage(msg) {
     typeof msg.right === 'boolean' ||
     typeof msg.jump === 'boolean' ||
     typeof msg.sprint === 'boolean' ||
-    typeof msg.adsActive === 'boolean' ||
-    typeof msg.cameraMode === 'string'
+    typeof msg.adsActive === 'boolean'
   );
 }
 

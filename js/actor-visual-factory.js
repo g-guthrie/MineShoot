@@ -7,35 +7,54 @@
 
     var GameActorVisualFactory = {};
     var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
+    var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
+
+    function readVec3(value, fallback) {
+        return {
+            x: (value && typeof value.x === 'number') ? value.x : fallback.x,
+            y: (value && typeof value.y === 'number') ? value.y : fallback.y,
+            z: (value && typeof value.z === 'number') ? value.z : fallback.z
+        };
+    }
 
     function createFallbackVisual(bodyColor, skinColor, legColor) {
         var group = new THREE.Group();
         var bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
         var limbMat = new THREE.MeshLambertMaterial({ color: legColor });
         var skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
+        var torsoSize = readVec3(entityConstants.AVATAR_TORSO_SIZE, { x: 0.8, y: 1.0, z: 0.5 });
+        var torsoCenter = readVec3(entityConstants.AVATAR_TORSO_CENTER_OFFSET, { x: 0, y: 1.3, z: 0 });
+        var headSize = readVec3(entityConstants.AVATAR_HEAD_SIZE, { x: 0.55, y: 0.55, z: 0.55 });
+        var headCenter = readVec3(entityConstants.AVATAR_HEAD_CENTER_OFFSET, { x: 0, y: 2.1, z: 0 });
+        var armSize = readVec3(entityConstants.AVATAR_ARM_SIZE, { x: 0.22, y: 0.85, z: 0.22 });
+        var armLeftCenter = readVec3(entityConstants.AVATAR_ARM_LEFT_CENTER_OFFSET, { x: -0.52, y: 1.25, z: 0 });
+        var armRightCenter = readVec3(entityConstants.AVATAR_ARM_RIGHT_CENTER_OFFSET, { x: 0.52, y: 1.25, z: 0 });
+        var legSize = readVec3(entityConstants.AVATAR_LEG_SIZE, { x: 0.28, y: 0.9, z: 0.28 });
+        var legLeftCenter = readVec3(entityConstants.AVATAR_LEG_LEFT_CENTER_OFFSET, { x: -0.18, y: 0.45, z: 0 });
+        var legRightCenter = readVec3(entityConstants.AVATAR_LEG_RIGHT_CENTER_OFFSET, { x: 0.18, y: 0.45, z: 0 });
 
-        var body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), bodyMat);
-        body.position.y = 1.0;
+        var body = new THREE.Mesh(new THREE.BoxGeometry(torsoSize.x, torsoSize.y, torsoSize.z), bodyMat);
+        body.position.set(torsoCenter.x, torsoCenter.y, torsoCenter.z);
         group.add(body);
 
-        var head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), skinMat);
-        head.position.y = 1.8;
+        var head = new THREE.Mesh(new THREE.BoxGeometry(headSize.x, headSize.y, headSize.z), skinMat);
+        head.position.set(headCenter.x, headCenter.y, headCenter.z);
         group.add(head);
 
-        var armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-        armL.position.set(-0.45, 1.0, 0);
+        var armL = new THREE.Mesh(new THREE.BoxGeometry(armSize.x, armSize.y, armSize.z), skinMat);
+        armL.position.set(armLeftCenter.x, armLeftCenter.y, armLeftCenter.z);
         group.add(armL);
 
-        var armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.85, 0.22), skinMat);
-        armR.position.set(0.45, 1.0, 0);
+        var armR = new THREE.Mesh(new THREE.BoxGeometry(armSize.x, armSize.y, armSize.z), skinMat);
+        armR.position.set(armRightCenter.x, armRightCenter.y, armRightCenter.z);
         group.add(armR);
 
-        var legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-        legL.position.set(-0.18, 0.45, 0);
+        var legL = new THREE.Mesh(new THREE.BoxGeometry(legSize.x, legSize.y, legSize.z), limbMat);
+        legL.position.set(legLeftCenter.x, legLeftCenter.y, legLeftCenter.z);
         group.add(legL);
 
-        var legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.9, 0.28), limbMat);
-        legR.position.set(0.18, 0.45, 0);
+        var legR = new THREE.Mesh(new THREE.BoxGeometry(legSize.x, legSize.y, legSize.z), limbMat);
+        legR.position.set(legRightCenter.x, legRightCenter.y, legRightCenter.z);
         group.add(legR);
 
         return group;
@@ -125,8 +144,8 @@
 
         function syncHitboxes(rootPosition) {
             if (!rootPosition) return;
-            if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxY ? entityPoints.entityBodyHitboxY(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);
-            if (headHitbox) headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxY ? entityPoints.entityHeadHitboxY(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
+            if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxYFromFeet ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);
+            if (headHitbox) headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxYFromFeet ? entityPoints.entityHeadHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
         }
 
         function setHitboxVisibility(visible) {

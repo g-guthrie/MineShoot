@@ -33,7 +33,6 @@
 
     var PRIMITIVE_HITSCAN_SINGLE = 'hitscan_single';
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
-    var PRIMITIVE_PROJECTILE_HOMING = 'projectile_homing';
     var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
 
     var combatTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning;
@@ -130,35 +129,10 @@
         return null;
     }
 
-    function sharedSeekProfiles() {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
-        if (shared.seekProfiles) return shared.seekProfiles;
-        return null;
-    }
-
     function sharedSeekCore() {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
         if (shared.seekCore) return shared.seekCore;
         return null;
-    }
-
-    function seekProfileForWeapon(weaponId) {
-        var profiles = sharedSeekProfiles();
-        if (!profiles) return null;
-        if (weaponId === 'seekergun') return profiles.seekergun_shot || null;
-        return null;
-    }
-
-    function resolveSeekAimProfile(profile, adsActive) {
-        if (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.resolveSeekAimProfile) {
-            return globalThis.__MAYHEM_RUNTIME.GameShared.resolveSeekAimProfile(profile, adsActive);
-        }
-        if (!profile) return null;
-        return {
-            maxRange: adsActive ? (profile.adsMaxRange || profile.maxRange) : (profile.hipfireMaxRange || profile.maxRange),
-            lockBoxPx: adsActive ? (profile.adsLockBoxPx || profile.lockBoxPx) : (profile.hipfireLockBoxPx || profile.lockBoxPx),
-            coneHalfAngleDeg: adsActive ? (profile.adsConeHalfAngleDeg || profile.coneHalfAngleDeg) : (profile.hipfireConeHalfAngleDeg || profile.coneHalfAngleDeg)
-        };
     }
 
     function adsState() {
@@ -224,24 +198,6 @@
                 return hasLineOfSight(camera, worldPos, maxRange);
             }
         });
-    }
-
-    function fireHomingProjectile(camera, weapon) {
-        var profile = seekProfileForWeapon(weapon && weapon.id ? weapon.id : '');
-        var adsActive = isAdsActiveForWeapon(weapon.id);
-        var seekAim = resolveSeekAimProfile(profile, adsActive) || {};
-        var boxSize = Number(seekAim.lockBoxPx || getSeekergunReticleSizePx());
-        var lock = selectSeekLock(camera, Number(seekAim.maxRange || weapon.maxRange), boxSize, {
-            ownerTypes: ['enemy', 'net'],
-            coneHalfAngleDeg: seekAim.coneHalfAngleDeg || (profile && typeof profile.coneHalfAngleDeg === 'number' ? profile.coneHalfAngleDeg : 180)
-        });
-        var seekerLock = lock && lock.candidate ? lock.candidate.rawTarget : null;
-        if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot) {
-            return !!globalThis.__MAYHEM_RUNTIME.GameThrowables.fireSeekerShot(camera, seekerLock || null, '', {
-                weaponId: weapon.id || 'seekergun'
-            });
-        }
-        return false;
     }
 
     function fireHitscanPattern(camera, weapon, onHit, onMiss) {
@@ -314,7 +270,6 @@
 
     function shouldDrawTracerForShot(weapon) {
         if (!weapon || !weapon.id) return false;
-        if (weapon.id === 'seekergun') return false;
         if (weapon.id === 'machinegun') return true;
         return true;
     }
@@ -483,7 +438,6 @@
     function getEffectiveMaxRange(weapon) {
         var baseRange = Number(weapon && weapon.maxRange || 0);
         if (!weapon || baseRange <= 0) return 0;
-        if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) return baseRange;
         if (!isAdsActiveForWeapon(weapon.id)) return baseRange;
         return Number(weapon.adsMaxRange || baseRange);
     }
@@ -542,7 +496,7 @@
     }
 
     function getWeaponSpreadMetrics(weapon) {
-        if (!weapon || weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
+        if (!weapon) {
             return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
         }
 
@@ -582,13 +536,6 @@
 
     function getShotgunReticleSizePx() {
         return getWeaponSpreadRadiusPx(weapons.shotgun || getCurrentWeaponData()) * 2;
-    }
-
-    function getSeekergunReticleSizePx() {
-        var state = adsState();
-        var profile = seekProfileForWeapon('seekergun');
-        var seekAim = resolveSeekAimProfile(profile, !!(state && state.active && state.weaponId === 'seekergun'));
-        return Number(seekAim && seekAim.lockBoxPx) || 260;
     }
 
     function getBloomCircleSizePx(weapon) {
@@ -726,27 +673,6 @@
         return lock && lock.candidate ? lock.candidate.rawTarget : null;
     }
 
-    function getSeekerTelemetry(camera, maxRange, boxSizePx, coneHalfAngleDeg) {
-        var lock = selectSeekLock(camera, maxRange, boxSizePx, {
-            ownerTypes: ['enemy', 'net'],
-            coneHalfAngleDeg: coneHalfAngleDeg
-        });
-
-        return {
-            hasLock: !!(lock && lock.hasLock),
-            lockTargetId: lock && lock.lockTargetId ? lock.lockTargetId : '',
-            nearestTargetId: lock && lock.nearestTargetId ? lock.nearestTargetId : '',
-            nearestNorm: lock && isFinite(lock.nearestNorm) ? lock.nearestNorm : -1,
-            lockNorm: lock && isFinite(lock.lockNorm) ? lock.lockNorm : -1,
-            reticleSizePx: boxSizePx,
-            reticleHalfNdcX: lock && lock.reticleHalfNdcX ? lock.reticleHalfNdcX : 0,
-            reticleHalfNdcY: lock && lock.reticleHalfNdcY ? lock.reticleHalfNdcY : 0,
-            maxRange: maxRange,
-            coneHalfAngleDeg: coneHalfAngleDeg,
-            candidateCount: lock && typeof lock.candidateCount === 'number' ? lock.candidateCount : 0
-        };
-    }
-
     function resolvePlasmaMuzzle(camera) {
         var forward = plasmaForward;
         if (camera && camera.getWorldDirection) {
@@ -873,12 +799,7 @@
         }
 
         lastFireTime = now;
-        var fired = false;
-        if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
-            fired = fireHomingProjectile(camera, weapon);
-        } else {
-            fired = fireHitscanPattern(camera, weapon, onHit, onMiss);
-        }
+        var fired = fireHitscanPattern(camera, weapon, onHit, onMiss);
         if (fired) {
             consumeAmmoForShot(weapon, now);
         }
@@ -1027,6 +948,24 @@
         return null;
     };
 
+    GameHitscan.syncAmmoStateFromNetwork = function (weaponAmmoStateMap) {
+        if (!weaponAmmoStateMap || typeof weaponAmmoStateMap !== 'object') return false;
+        var now = performance.now();
+        for (var weaponId in weaponAmmoStateMap) {
+            if (!Object.prototype.hasOwnProperty.call(weaponAmmoStateMap, weaponId)) continue;
+            var entry = weaponAmmoStateMap[weaponId];
+            var localState = ensureWeaponAmmoState(weaponId);
+            var weapon = weapons[weaponId];
+            if (!entry || !localState || !weapon) continue;
+            localState.ammoInMag = Math.max(0, Number(entry.ammoInMag || 0));
+            localState.reloadUntil = entry.reloading
+                ? now + Math.max(0, Math.round(Number(entry.reloadRemaining || 0) * 1000))
+                : 0;
+            localState.reloadedFlashUntil = Math.max(0, Math.round(Number(entry.reloadedFlashRemaining || 0) * 1000)) + now;
+        }
+        return true;
+    };
+
     GameHitscan.getHudState = function () {
         return hudStateForWeapon(getCurrentWeaponData(), performance.now());
     };
@@ -1036,31 +975,12 @@
         return isReloadingWeapon(weapon, performance.now());
     };
 
-    GameHitscan.applySeekerReject = function (payload) {
-        return payload || null;
-    };
-
     GameHitscan.syncPlasmaStateFromNet = function (_state) {};
-
-    GameHitscan.getSeekergunDebugInfo = function (camera) {
-        if (!camera) return null;
-        var weapon = getCurrentWeaponData();
-        if (!weapon || weapon.id !== 'seekergun') return null;
-        var state = adsState();
-        var profile = seekProfileForWeapon('seekergun');
-        var seekAim = resolveSeekAimProfile(profile, !!(state && state.active && state.weaponId === 'seekergun'));
-        return getSeekerTelemetry(
-            camera,
-            Number(seekAim && seekAim.maxRange) || weapon.maxRange,
-            Number(seekAim && seekAim.lockBoxPx) || getSeekergunReticleSizePx(),
-            Number(seekAim && seekAim.coneHalfAngleDeg) || 20
-        );
-    };
 
     GameHitscan.selectLockTargetByBox = function (camera, maxRange, boxSizePx, options) {
         if (!camera) return null;
         var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getCurrentWeaponData().maxRange;
-        var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : getSeekergunReticleSizePx();
+        var size = (typeof boxSizePx === 'number' && boxSizePx > 1) ? boxSizePx : 60;
         var target = selectSeekTargetByBox(camera, range, size, options || null);
         if (!target) return null;
         return {

@@ -211,13 +211,6 @@
         return shared && shared.abilityCatalog ? shared.abilityCatalog : {};
     }
 
-    function isLocalFirstPersonCameraActive() {
-        var player = globalThis.__MAYHEM_RUNTIME.GamePlayer;
-        if (!player || !player.getCameraMode) return false;
-        var cameraMode = player.getCameraMode();
-        return !!cameraMode && cameraMode.effective === 'first';
-    }
-
     function buildAbilityDebugText(loadout, _tuning) {
         if (!loadout) return '';
         var catalog = currentAbilityCatalogMap();
@@ -919,38 +912,6 @@
         }
     }
 
-    function handleNetworkDamageFeedback(feedback) {
-        if (!feedback) return;
-        var isShotgun = feedback.weaponId === 'shotgun';
-        var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
-
-        if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('bulletImpact', {
-                killed: !!feedback.killed,
-                hitType: feedback.hitType || 'body',
-                weapon: feedback.weaponId || ''
-            });
-        }
-        if (feedback.killed) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.showKillMarker();
-            globalThis.__MAYHEM_RUNTIME.GameUI.addKill();
-        } else {
-            globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker();
-        }
-
-        if (feedback.worldPos && typeof feedback.damage === 'number' && feedback.damage > 0) {
-            var wp = feedback.worldPos;
-            globalThis.__MAYHEM_RUNTIME.GameUI.showDamageNumber(
-                new THREE.Vector3(wp.x, wp.y, wp.z),
-                feedback.damage,
-                !!feedback.killed,
-                camera,
-                feedback.hitType || 'body',
-                damageNumberSpread
-            );
-        }
-    }
-
     function tryPlayerFire() {
         if (!canUseLocalAction('weapon')) return;
         if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet) {
@@ -988,36 +949,10 @@
             if (
                 multiplayerMode &&
                 activeWeapon &&
-                activeWeapon.id !== 'seekergun' &&
                 globalThis.__MAYHEM_RUNTIME.GameNet &&
                 globalThis.__MAYHEM_RUNTIME.GameNet.sendFire
             ) {
                 globalThis.__MAYHEM_RUNTIME.GameNet.sendFire(activeWeapon.id, shotToken);
-            }
-
-            if (
-                multiplayerMode &&
-                activeWeapon &&
-                activeWeapon.id === 'seekergun' &&
-                globalThis.__MAYHEM_RUNTIME.GameNet &&
-                globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot
-            ) {
-                var seekerShotMeta = (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.consumeLastSeekerShotMeta)
-                    ? globalThis.__MAYHEM_RUNTIME.GameThrowables.consumeLastSeekerShotMeta()
-                    : null;
-                if (seekerShotMeta) {
-                    var netLockTargetId = '';
-                    var seekerIntent = null;
-                    var clientShotId = '';
-                    if (seekerShotMeta.lockTargetId && String(seekerShotMeta.lockTargetId).indexOf('net:') === 0) {
-                        netLockTargetId = String(seekerShotMeta.lockTargetId).slice(4);
-                    }
-                    seekerIntent = seekerShotMeta.throwIntent || null;
-                    clientShotId = String(seekerShotMeta.clientShotId || '');
-                    var seekerWeaponId = 'seekergun';
-                    var adsActive = !!(globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState().active);
-                    globalThis.__MAYHEM_RUNTIME.GameNet.sendSeekerShot(netLockTargetId, seekerIntent, clientShotId, seekerWeaponId, adsActive);
-                }
             }
 
             globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
@@ -1165,7 +1100,15 @@
     }
 
     function setupDocsControls() {
+        function editableTarget(target) {
+            var node = target || null;
+            var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
+            if (node && node.isContentEditable) return true;
+            return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+        }
+
         document.addEventListener('keydown', function (e) {
+            if (editableTarget(e.target)) return;
             if (e.code === 'KeyI') {
                 e.preventDefault();
                 if (depGet('GameRuntimeLoader') && depGet('GameRuntimeLoader').toggleDocs) {
@@ -1179,20 +1122,6 @@
             if (e.code === 'Escape' && globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen()) {
                 globalThis.__MAYHEM_RUNTIME.GameDocs.close();
             }
-        });
-    }
-
-    function setupCameraControls() {
-        document.addEventListener('keydown', function (e) {
-            if (e.code !== 'KeyV' || e.repeat) return;
-            if (!hasInputCapture()) return;
-            if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.toggleCameraMode) return;
-
-            e.preventDefault();
-            var result = globalThis.__MAYHEM_RUNTIME.GamePlayer.toggleCameraMode();
-            var requestedMode = result && result.requested === 'first' ? 'First-person' : 'Third-person';
-            var effectiveMode = result && result.effective === result.requested;
-            setTransientDebug((effectiveMode ? 'Camera: ' : 'Camera requested: ') + requestedMode, 1000);
         });
     }
 
@@ -1301,8 +1230,8 @@
         if (GT) {
             if (GT.clearTrajectoryPreview) GT.clearTrajectoryPreview();
         }
-        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(false, false);
+        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(false, false);
         }
     }
 
@@ -1312,8 +1241,8 @@
             if (GT) {
                 if (GT.clearTrajectoryPreview) GT.clearTrajectoryPreview();
             }
-            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(false, false);
+            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
+                globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(false, false);
             }
             return;
         }
@@ -1328,13 +1257,13 @@
             GT2.updateTrajectoryPreview(armedThrowableType, camera);
         } else if (previewType === 'cone') {
             var hasTarget = false;
-            if (GT2.checkSeekerLockInCone) {
-                hasTarget = GT2.checkSeekerLockInCone(camera);
+            if (GT2.checkPlasmaLockInCone) {
+                hasTarget = GT2.checkPlasmaLockInCone(camera);
             }
-            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
+            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
                 var def = GT2.getThrowableDef ? GT2.getThrowableDef(armedThrowableType) : null;
                 var halfAngleDeg = (def && def.acquireHalfAngleDeg) ? def.acquireHalfAngleDeg : 35;
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(true, hasTarget, halfAngleDeg, {
+                globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(true, hasTarget, halfAngleDeg, {
                     fov: camera && camera.fov ? camera.fov : 60,
                     aspect: camera && camera.aspect ? camera.aspect : (window.innerWidth / Math.max(1, window.innerHeight))
                 });
@@ -1479,6 +1408,21 @@
                             }
                         };
                     }
+                } else if (slotAbilityId === 'missile' && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile) {
+                    var projectileIntent = globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile(camera, {
+                        predictLocal: false,
+                        abilityId: 'missile'
+                    });
+                    if (projectileIntent) {
+                        castData = {
+                            aimPoint: projectileIntent.aimPoint ? {
+                                x: projectileIntent.aimPoint.x,
+                                y: projectileIntent.aimPoint.y,
+                                z: projectileIntent.aimPoint.z
+                            } : null,
+                            projectileIntent: projectileIntent
+                        };
+                    }
                 } else if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget) {
                     var aim = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, 90);
                     if (aim && aim.point) {
@@ -1493,6 +1437,14 @@
                 }
                 var sendFn = globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityCast || globalThis.__MAYHEM_RUNTIME.GameNet.sendClassCast;
                 sendFn(castSlot, castData);
+                if (slotAbilityId === 'missile') {
+                    if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation) {
+                        globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
+                    }
+                    if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play && document.hasFocus()) {
+                        globalThis.__MAYHEM_RUNTIME.GameAudio.play('fire', { weapon: 'missile' });
+                    }
+                }
                 return;
             }
 
@@ -1620,7 +1572,6 @@
             setupPointerLock();
             showGameplayPrompt();
             setupShooting();
-            setupCameraControls();
             setupWeaponControls();
             setupThrowableControls();
             setupAbilityControls();
@@ -1729,54 +1680,6 @@
                 }
             }
 
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeClassCastResult) {
-                var castResult = null;
-                do {
-                    castResult = globalThis.__MAYHEM_RUNTIME.GameNet.consumeClassCastResult();
-                    if (castResult) {
-                        if (castResult.t === 'class_cast_ok') {
-                            setTransientDebug((castResult.kind || 'Ability') + ' cast!', 800);
-                        } else if (castResult.t === 'class_cast_reject') {
-                            setTransientDebug('Ability failed: ' + (castResult.reason || 'rejected'), 700);
-                        }
-                    }
-                } while (castResult);
-            }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeDamageFeedback) {
-                var damageFeedback = null;
-                do {
-                    damageFeedback = globalThis.__MAYHEM_RUNTIME.GameNet.consumeDamageFeedback();
-                    if (damageFeedback) {
-                        handleNetworkDamageFeedback(damageFeedback);
-                    }
-                } while (damageFeedback);
-            }
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeIncomingDamageFeedback) {
-                var incomingDamageFeedback = null;
-                do {
-                    incomingDamageFeedback = globalThis.__MAYHEM_RUNTIME.GameNet.consumeIncomingDamageFeedback();
-                    if (incomingDamageFeedback && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.showIncomingFeedback) {
-                        globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.showIncomingFeedback(
-                            incomingDamageFeedback.sourcePos,
-                            incomingDamageFeedback.damage,
-                            incomingDamageFeedback.hitType
-                        );
-                    }
-                } while (incomingDamageFeedback);
-            }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeSeekerReject) {
-                var seekerReject = null;
-                do {
-                    seekerReject = globalThis.__MAYHEM_RUNTIME.GameNet.consumeSeekerReject();
-                    if (!seekerReject) continue;
-                    if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject) {
-                        globalThis.__MAYHEM_RUNTIME.GameHitscan.applySeekerReject(seekerReject);
-                    }
-                } while (seekerReject);
-            }
-
             if (globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
                 var abilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
                 if (abilityState) {
@@ -1814,42 +1717,14 @@
             var notice = globalThis.__MAYHEM_RUNTIME.GameNet.consumeNotice();
             if (notice) setTransientDebug(notice, 900);
 
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowAck && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.confirmPredictedThrow) {
-                var throwAck = null;
-                do {
-                    throwAck = globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowAck();
-                    if (throwAck && throwAck.clientThrowId) {
-                        globalThis.__MAYHEM_RUNTIME.GameThrowables.confirmPredictedThrow(throwAck.clientThrowId);
-                    }
-                } while (throwAck);
+            if (globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync && globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.syncGameplayFeedback) {
+                globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.syncGameplayFeedback({
+                    dt: dt,
+                    selfState: selfState,
+                    camera: camera,
+                    setTransientDebug: setTransientDebug
+                });
             }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowReject && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.rejectPredictedThrow) {
-                var throwReject = null;
-                do {
-                    throwReject = globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowReject();
-                    if (throwReject && throwReject.clientThrowId) {
-                        globalThis.__MAYHEM_RUNTIME.GameThrowables.rejectPredictedThrow(throwReject.clientThrowId);
-                    }
-                } while (throwReject);
-            }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.getAuthoritativeThrowableState && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.syncAuthoritativeState) {
-                globalThis.__MAYHEM_RUNTIME.GameThrowables.syncAuthoritativeState(
-                    globalThis.__MAYHEM_RUNTIME.GameNet.getAuthoritativeThrowableState(),
-                    selfState ? selfState.id : ''
-                );
-            }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowableEvent && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.applyNetworkEvent) {
-                var throwEvent = null;
-                do {
-                    throwEvent = globalThis.__MAYHEM_RUNTIME.GameNet.consumeThrowableEvent();
-                    if (throwEvent) globalThis.__MAYHEM_RUNTIME.GameThrowables.applyNetworkEvent(throwEvent);
-                } while (throwEvent);
-            }
-
-            globalThis.__MAYHEM_RUNTIME.GameThrowables.update(dt, function () {});
             if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState) {
                 globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(activeMatchState, selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
             }
@@ -1903,19 +1778,8 @@
             updateMenuSessionPanel(localMatchState, localSelfState);
         }
 
-        if (currentWeapon && currentWeapon.id === 'seekergun' && !armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
-            var seekerInfo = globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo(camera);
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(
-                !!seekerInfo,
-                !!(seekerInfo && seekerInfo.hasLock),
-                seekerInfo ? seekerInfo.coneHalfAngleDeg : 20,
-                {
-                    fov: camera && camera.fov ? camera.fov : 60,
-                    aspect: camera && camera.aspect ? camera.aspect : (window.innerWidth / Math.max(1, window.innerHeight))
-                }
-            );
-        } else if (!armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle(false, false);
+        if (!armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(false, false);
         }
 
         currentAimTargetId = '';
@@ -1924,7 +1788,7 @@
             currentAimTargetId = centerTarget.targetId;
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(currentWeapon && currentWeapon.id !== 'shotgun' && currentWeapon.id !== 'seekergun' && centerTarget && centerTarget.hitbox));
+            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(currentWeapon && currentWeapon.id !== 'shotgun' && centerTarget && centerTarget.hitbox));
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState) {
             globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState(!!(currentWeapon && currentWeapon.id === 'shotgun' && centerTarget && centerTarget.hitbox));
@@ -2071,14 +1935,6 @@
         renderHookEffects();
         camera.layers.set(0);
         renderer.render(scene, camera);
-        if (isLocalFirstPersonCameraActive()) {
-            renderer.autoClear = false;
-            renderer.clearDepth();
-            camera.layers.set(1);
-            renderer.render(scene, camera);
-            renderer.autoClear = true;
-            camera.layers.set(0);
-        }
     }
 
     function runtimeProfile() {

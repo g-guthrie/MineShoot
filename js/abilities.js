@@ -33,6 +33,17 @@
             catchRadius: 'hookCatchRadius',
             travelSpeed: 'hookTravelSpeed'
         },
+        missile: {
+            range: 'missileRange',
+            damage: 'missileDamage',
+            radius: 'missileRadius',
+            travelSpeed: 'missileTravelSpeed',
+            acquireRange: 'missileAcquireRange',
+            catchRadius: 'missileCatchRadius',
+            lockHalfAngleDeg: 'missileLockHalfAngleDeg',
+            homingBoost: 'missileHomingBoost',
+            homingLerp: 'missileHomingLerp'
+        },
         heal: {
             duration: 'healDuration',
             healAmount: 'healAmount'
@@ -529,9 +540,35 @@
         return { ok: true, kind: 'heal_start' };
     }
 
+    function castMissile(slotIndex, camera, _playerPos, _rotation, _onEnemyHit, notifier) {
+        var now = nowMs();
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
+        if (!cfg) return { ok: false, message: 'Missile not configured.' };
+        if (!debugMode && now < cooldownUntilForSlot(slotIndex)) {
+            return { ok: false, message: 'Missile is cooling down.' };
+        }
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameThrowables || !globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile) {
+            return { ok: false, message: 'Missile launch unavailable.' };
+        }
+        var ok = globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile(camera, {
+            abilityId: 'missile'
+        });
+        if (!ok) return { ok: false, message: 'Missile launch failed.' };
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('fire', { weapon: 'missile' });
+        }
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        if (notifier) notifier('Missile away.', 500);
+        return { ok: true, kind: 'missile_launch' };
+    }
+
     var abilityHandlers = {
         choke: castChoke,
         hook: castHook,
+        missile: castMissile,
         heal: castHeal,
         deadeye: castDeadeye
     };

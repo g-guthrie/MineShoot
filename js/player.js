@@ -1,5 +1,5 @@
 /**
- * player.js - WASD movement, switchable first/third-person camera, variable jump, weapon model
+ * player.js - WASD movement, third-person camera, variable jump, weapon model
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GamePlayer
  */
 (function () {
@@ -108,10 +108,8 @@
     var cameraKickPitch = 0;
     var cameraKickYaw = 0;
     var cameraKickRoll = 0;
+    var firePoseKick = 0;
     var lastReplayAckSeq = 0;
-    var requestedCameraMode = 'third';
-    var authoritativeCameraMode = 'third';
-    var hasAuthoritativeCameraMode = false;
     var avatarAliveVisible = true;
     var statusState = {
         stunUntil: 0,
@@ -286,24 +284,7 @@
         }
     }
 
-    function normalizeCameraMode(mode) {
-        return String(mode || '').toLowerCase() === 'first' ? 'first' : 'third';
-    }
-
-    function isFirstPersonCameraMode(mode) {
-        return normalizeCameraMode(mode) === 'first';
-    }
-
-    function effectiveCameraMode() {
-        var net = globalThis.__MAYHEM_RUNTIME.GameNet;
-        var networkAuthoritative = !!(net && net.isActive && net.isActive());
-        if (networkAuthoritative && hasAuthoritativeCameraMode) {
-            return authoritativeCameraMode;
-        }
-        return requestedCameraMode;
-    }
-
-    function syncAvatarVisibility(firstPersonMode, sniperMode) {
+    function syncAvatarVisibility(sniperMode) {
         if (!avatarGroup) return;
 
         var avatarVisible = avatarAliveVisible && (!sniperMode || scopeBlend < 0.55);
@@ -313,27 +294,18 @@
             return;
         }
 
-        if (avatarRigApi.setFirstPersonActive) {
-            avatarRigApi.setFirstPersonActive(!!firstPersonMode && avatarVisible);
-        }
-
         if (!avatarVisible) {
             return;
         }
 
         var rig = avatarRigApi.rig;
-        var hideFullBody = !!firstPersonMode;
-
-        if (rig.thirdPerson) rig.thirdPerson.visible = !hideFullBody;
-        if (rig.firstPerson) rig.firstPerson.visible = hideFullBody;
-        if (rig.headMesh) rig.headMesh.visible = !hideFullBody;
-        if (rig.bodyMesh) rig.bodyMesh.visible = !hideFullBody;
-        if (rig.legLMesh) rig.legLMesh.visible = !hideFullBody;
-        if (rig.legRMesh) rig.legRMesh.visible = !hideFullBody;
-        if (rig.armLMesh) rig.armLMesh.visible = !hideFullBody;
-        if (rig.armRMesh) rig.armRMesh.visible = !hideFullBody;
-        if (rig.fpArmLMesh) rig.fpArmLMesh.visible = hideFullBody;
-        if (rig.fpArmRMesh) rig.fpArmRMesh.visible = hideFullBody;
+        if (rig.thirdPerson) rig.thirdPerson.visible = true;
+        if (rig.headMesh) rig.headMesh.visible = true;
+        if (rig.bodyMesh) rig.bodyMesh.visible = true;
+        if (rig.legLMesh) rig.legLMesh.visible = true;
+        if (rig.legRMesh) rig.legRMesh.visible = true;
+        if (rig.armLMesh) rig.armLMesh.visible = true;
+        if (rig.armRMesh) rig.armRMesh.visible = true;
     }
 
     function resetRecoilState() {
@@ -344,6 +316,7 @@
         cameraKickPitch = 0;
         cameraKickYaw = 0;
         cameraKickRoll = 0;
+        firePoseKick = 0;
     }
 
     function applyUnifiedGunOffsets(dt) {
@@ -360,6 +333,7 @@
         var recoilBlend = Math.min(1, dt * 18);
         gunRecoil += (0 - gunRecoil) * recoilBlend;
         palmRecoil += (0 - palmRecoil) * recoilBlend;
+        firePoseKick += (0 - firePoseKick) * Math.min(1, dt * 20);
 
         var cameraKickPitchBlend = Math.min(1, dt * 14);
         var cameraKickYawBlend = Math.min(1, dt * 16);
@@ -368,6 +342,9 @@
         cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
         cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
 
+        if (rig.gunBasePos) {
+            rig.gun.position.copy(rig.gunBasePos);
+        }
         rig.gun.position.x += gunBobX;
         rig.gun.position.y += gunBobY;
         rig.gun.position.z += gunRecoil;
@@ -376,22 +353,35 @@
         } else if (rig.palmLeft) {
             rig.palmLeft.rotation.x += palmRecoil;
         }
+        if (rig.armR) rig.armR.rotation.x += firePoseKick * 0.05;
+        if (rig.armL) rig.armL.rotation.x += firePoseKick * 0.035;
     }
 
     function updateAvatarAnimation(dt, speed) {
         if (avatarRigApi && avatarRigApi.updateLocomotion) {
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
+            var activeWeaponState = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
+                ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
+                : null;
+            var reloadPct = 0;
+            if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
+                reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
+            }
             avatarRigApi.updateAimPitch(pitch + (cameraKickPitch * 0.35));
             avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded, {
                 hooked: isHookPulled(),
                 choked: isChoked(),
                 startedAt: statusState.chokeStartedAt || 0,
                 adsActive: isAdsActive(),
+                reloading: !!(activeWeaponState && activeWeaponState.reloading),
+                reloadPct: reloadPct,
+                worldSpeed: speed,
                 movingForward: !!keys.forward,
                 movingBackward: !!keys.backward,
                 movingLeft: !!keys.left,
                 movingRight: !!keys.right
             });
+            if (avatarRigApi.applyFirePose) avatarRigApi.applyFirePose(dt);
             if (avatarRigApi.applyChokeGripPose) avatarRigApi.applyChokeGripPose(dt);
         }
     }
@@ -542,7 +532,7 @@
 
     function setAliveVisual(active) {
         avatarAliveVisible = !!active;
-        syncAvatarVisibility(isFirstPersonCameraMode(effectiveCameraMode()), isSniperScopeWeapon());
+        syncAvatarVisibility(isSniperScopeWeapon());
         if (bodyHitbox) bodyHitbox.visible = !!active && hitboxVisible;
         if (headHitbox) headHitbox.visible = !!active && hitboxVisible;
     }
@@ -620,7 +610,6 @@
     function updateCameraFromPlayer(dt) {
         if (!camera) return;
 
-        var firstPersonMode = isFirstPersonCameraMode(effectiveCameraMode());
         var renderYaw = yaw + cameraKickYaw;
         var renderPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch + cameraKickPitch));
         var cosPitch = Math.cos(renderPitch);
@@ -638,13 +627,14 @@
         scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
         if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
         if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
+        var scopedEyeMode = sniperMode && scopeBlend > 0.55;
 
-        syncAvatarVisibility(firstPersonMode, sniperMode);
+        syncAvatarVisibility(sniperMode);
         updateAvatarPose();
 
         viewTarget.set(playerX + forwardX * 20, posY + forwardY * 20, playerZ + forwardZ * 20);
         viewTarget.y += chokeLift;
-        if (firstPersonMode) {
+        if (scopedEyeMode) {
             if (avatarRigApi && avatarRigApi.getEyeWorldPosition) {
                 avatarRigApi.getEyeWorldPosition(eyeWorld);
                 viewOrigin.copy(eyeWorld);
@@ -687,7 +677,7 @@
             camera.position.copy(viewDesired);
             thirdCameraInitialized = true;
         } else {
-            camera.position.lerp(viewDesired, Math.min(1, dt * (firstPersonMode ? FIRST_PERSON_SMOOTH : THIRD_SMOOTH)));
+            camera.position.lerp(viewDesired, Math.min(1, dt * (scopedEyeMode ? FIRST_PERSON_SMOOTH : THIRD_SMOOTH)));
         }
         var scopedFov = sniperMode ? SNIPER_SCOPE_FOV : ADS_FOV;
         var targetFov = CAMERA_FOV + ((scopedFov - CAMERA_FOV) * scopeBlend);
@@ -1115,6 +1105,7 @@
         cameraKickPitch += recoil.pitch * scopeMultiplier;
         cameraKickYaw += yawKick;
         cameraKickRoll += rollKick;
+        firePoseKick += 1 * scopeMultiplier;
 
         if (avatarRigApi.setMuzzleVisible) {
             avatarRigApi.setMuzzleVisible(true);
@@ -1128,44 +1119,11 @@
         if (avatarRigApi.rig) {
             if (avatarRigApi.rig.armR) avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR;
             if (avatarRigApi.rig.armL) avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL;
-            if (avatarRigApi.rig.fpArmR) avatarRigApi.rig.fpArmR.rotation.x += recoil.x * recoil.armR;
-            if (avatarRigApi.rig.fpArmL) avatarRigApi.rig.fpArmL.rotation.x += recoil.x * recoil.armL;
         }
     };
 
     GamePlayer.isExperimentalCameraView = function () {
         return true;
-    };
-
-    GamePlayer.setAuthoritativeCameraMode = function (mode) {
-        authoritativeCameraMode = normalizeCameraMode(mode);
-        hasAuthoritativeCameraMode = true;
-        return authoritativeCameraMode;
-    };
-
-    GamePlayer.setCameraMode = function (mode) {
-        requestedCameraMode = normalizeCameraMode(mode);
-        if (!(globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive())) {
-            authoritativeCameraMode = requestedCameraMode;
-            hasAuthoritativeCameraMode = true;
-        }
-        return {
-            requested: requestedCameraMode,
-            effective: effectiveCameraMode()
-        };
-    };
-
-    GamePlayer.toggleCameraMode = function () {
-        var nextMode = isFirstPersonCameraMode(effectiveCameraMode()) ? 'third' : 'first';
-        return GamePlayer.setCameraMode(nextMode);
-    };
-
-    GamePlayer.getCameraMode = function () {
-        return {
-            requested: requestedCameraMode,
-            authoritative: authoritativeCameraMode,
-            effective: effectiveCameraMode()
-        };
     };
 
     GamePlayer.setWeaponModel = function (weaponId) {
@@ -1266,8 +1224,7 @@
             right: !!keys.right,
             jump: !!keys.jump,
             sprint: !!keys.sprint,
-            adsActive: !!isAdsActive(),
-            cameraMode: requestedCameraMode
+            adsActive: !!isAdsActive()
         };
     };
 

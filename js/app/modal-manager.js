@@ -54,11 +54,19 @@
         return activeId ? registry[activeId] || null : null;
     }
 
+    function editableTarget(target) {
+        var node = target || null;
+        var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
+        if (node && node.isContentEditable) return true;
+        return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+    }
+
     function bindGlobalListeners() {
         if (listenersBound) return;
         listenersBound = true;
 
         window.addEventListener('keydown', function (event) {
+            if (editableTarget(event.target)) return;
             if (event.key !== 'Escape') return;
             if (!activeId) return;
             GameModalManager.close(activeId);

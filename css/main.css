@@ -2932,7 +2932,7 @@ canvas {
     box-shadow: 0 0 18px rgba(120, 0, 0, 0.28);
 }
 
-#seeker-reticle {
+#tracking-reticle {
     position: fixed;
     pointer-events: none;
     z-index: 12;
@@ -2942,16 +2942,16 @@ canvas {
     box-shadow:
         0 0 8px rgba(80, 200, 230, 0.5),
         inset 0 0 6px rgba(80, 200, 230, 0.15);
-    animation: seekerPulse 1.2s ease-in-out infinite;
+    animation: trackingPulse 1.2s ease-in-out infinite;
 }
-#seeker-reticle.has-lock {
+#tracking-reticle.has-lock {
     border-color: rgba(255, 160, 50, 0.95);
     box-shadow:
         0 0 12px rgba(255, 140, 30, 0.7),
         inset 0 0 8px rgba(255, 140, 30, 0.2);
-    animation: seekerLockPulse 0.6s ease-in-out infinite;
+    animation: trackingLockPulse 0.6s ease-in-out infinite;
 }
-#seeker-reticle-label {
+#tracking-reticle-label {
     position: absolute;
     bottom: -22px;
     left: 50%;
@@ -2965,13 +2965,13 @@ canvas {
     white-space: nowrap;
     text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
 }
-#seeker-reticle.has-lock #seeker-reticle-label {
+#tracking-reticle.has-lock #tracking-reticle-label {
     color: rgba(255, 160, 50, 0.95);
 }
-#seeker-reticle-corner-tl,
-#seeker-reticle-corner-tr,
-#seeker-reticle-corner-bl,
-#seeker-reticle-corner-br {
+#tracking-reticle-corner-tl,
+#tracking-reticle-corner-tr,
+#tracking-reticle-corner-bl,
+#tracking-reticle-corner-br {
     position: absolute;
     width: 8px;
     height: 8px;
@@ -2979,21 +2979,21 @@ canvas {
     border-style: solid;
     border-width: 0;
 }
-#seeker-reticle.has-lock #seeker-reticle-corner-tl,
-#seeker-reticle.has-lock #seeker-reticle-corner-tr,
-#seeker-reticle.has-lock #seeker-reticle-corner-bl,
-#seeker-reticle.has-lock #seeker-reticle-corner-br {
+#tracking-reticle.has-lock #tracking-reticle-corner-tl,
+#tracking-reticle.has-lock #tracking-reticle-corner-tr,
+#tracking-reticle.has-lock #tracking-reticle-corner-bl,
+#tracking-reticle.has-lock #tracking-reticle-corner-br {
     border-color: rgba(255, 160, 50, 0.95);
 }
-#seeker-reticle-corner-tl { top: -2px; left: -2px; border-top-width: 2px; border-left-width: 2px; }
-#seeker-reticle-corner-tr { top: -2px; right: -2px; border-top-width: 2px; border-right-width: 2px; }
-#seeker-reticle-corner-bl { bottom: -2px; left: -2px; border-bottom-width: 2px; border-left-width: 2px; }
-#seeker-reticle-corner-br { bottom: -2px; right: -2px; border-bottom-width: 2px; border-right-width: 2px; }
-@keyframes seekerPulse {
+#tracking-reticle-corner-tl { top: -2px; left: -2px; border-top-width: 2px; border-left-width: 2px; }
+#tracking-reticle-corner-tr { top: -2px; right: -2px; border-top-width: 2px; border-right-width: 2px; }
+#tracking-reticle-corner-bl { bottom: -2px; left: -2px; border-bottom-width: 2px; border-left-width: 2px; }
+#tracking-reticle-corner-br { bottom: -2px; right: -2px; border-bottom-width: 2px; border-right-width: 2px; }
+@keyframes trackingPulse {
     0%, 100% { opacity: 0.7; }
     50% { opacity: 1; }
 }
-@keyframes seekerLockPulse {
+@keyframes trackingLockPulse {
     0%, 100% { opacity: 0.85; }
     50% { opacity: 1; }
 }

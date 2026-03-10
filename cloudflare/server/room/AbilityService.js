@@ -199,9 +199,29 @@ export function castHeal(_room, player, cfg, _msg, now) {
   return { ok: true, kind: 'ability_heal_start' };
 }
 
+export function castMissile(room, player, cfg, msg, _now) {
+  const projectile = room.spawnProjectile(
+    player,
+    'missile',
+    '',
+    msg && msg.projectileIntent ? msg.projectileIntent : null,
+    {}
+  );
+  if (!projectile) return { ok: false };
+  room.broadcast({
+    t: MSG_S2C.THROW_SPAWN,
+    projectileId: projectile.id,
+    ownerId: projectile.ownerId,
+    clientThrowId: projectile.clientThrowId || '',
+    throwableId: projectile.type
+  });
+  return { ok: true, kind: 'ability_missile_launch', payload: { projectileId: projectile.id } };
+}
+
 export function castAbility(room, player, abilityId, cfg, msg, now) {
   if (abilityId === 'choke') return castChoke(room, player, cfg, msg, now);
   if (abilityId === 'hook') return castHook(room, player, cfg, msg, now);
+  if (abilityId === 'missile') return castMissile(room, player, cfg, msg, now);
   if (abilityId === 'heal') return castHeal(room, player, cfg, msg, now);
   if (abilityId === 'deadeye') return castDeadeye(room, player, cfg, msg, now);
   return { ok: false };

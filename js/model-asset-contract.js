@@ -40,20 +40,6 @@
         'camera-anchor'
     ];
 
-    var FIRST_PERSON_NODE_NAMES = [
-        'first-person',
-        'first-person/bob-root',
-        'first-person/arm-left',
-        'first-person/arm-left-geo',
-        'first-person/hand-left',
-        'first-person/hand-left-anchor',
-        'first-person/arm-right',
-        'first-person/arm-right-geo',
-        'first-person/hand-right',
-        'first-person/hand-right-anchor',
-        'first-person/weapon-mount-anchor'
-    ];
-
     var THIRD_PERSON_ANIMATION_NAMES = [
         'idle-upper', 'idle-lower', 'walk-upper', 'walk-lower', 'run-upper', 'run-lower',
         'sneak-upper', 'sneak-lower', 'sneak-idle-upper', 'sneak-idle-lower', 'climbing',
@@ -74,14 +60,6 @@
         'mining-loop', 'crouch-walk', 'crouch-idle', 'sit', 'sit-chair'
     ];
 
-    var FIRST_PERSON_ANIMATION_NAMES = [
-        'glock-idle', 'glock-aim', 'glock-shoot', 'glock-reload', 'glock-walk-bob',
-        'glock-run-bob', 'm4a4-idle', 'm4a4-aim', 'm4a4-shoot', 'm4a4-reload',
-        'm4a4-walk-bob', 'm4a4-run-bob', 'mp7-idle', 'mp7-aim', 'mp7-reload', 'mp7-shoot',
-        'mp7-walk-bob', 'sway', 'draw', 'melee-idle', 'melee-punch-left',
-        'melee-punch-right', 'idle-base', 'glider-start', 'glider-loop', 'ledge-pull', 'mp7-run'
-    ];
-
     var WEAPON_ANCHOR_NAMES = [
         'grip-anchor',
         'support-anchor',
@@ -97,13 +75,6 @@
             manifestPath: '/assets/models/manifests/player-third-person.contract.json',
             requiredNodes: THIRD_PERSON_NODE_NAMES.slice(),
             requiredAnimations: THIRD_PERSON_ANIMATION_NAMES.slice()
-        },
-        playerFirstPerson: {
-            id: 'player-first-person',
-            modelPath: '/assets/models/players/player-first-person.glb',
-            manifestPath: '/assets/models/manifests/player-first-person.contract.json',
-            requiredNodes: FIRST_PERSON_NODE_NAMES.slice(),
-            requiredAnimations: FIRST_PERSON_ANIMATION_NAMES.slice()
         },
         weapons: {
             pistol: {
@@ -160,16 +131,8 @@
         return cloneArray(THIRD_PERSON_NODE_NAMES);
     };
 
-    GameModelAssetContract.getFirstPersonNodeNames = function () {
-        return cloneArray(FIRST_PERSON_NODE_NAMES);
-    };
-
     GameModelAssetContract.getThirdPersonAnimationNames = function () {
         return cloneArray(THIRD_PERSON_ANIMATION_NAMES);
-    };
-
-    GameModelAssetContract.getFirstPersonAnimationNames = function () {
-        return cloneArray(FIRST_PERSON_ANIMATION_NAMES);
     };
 
     GameModelAssetContract.getWeaponAnchorNames = function () {
@@ -182,10 +145,6 @@
 
     GameModelAssetContract.validatePlayerThirdPerson = function (actualNodes, actualAnimations) {
         return validateEntry(DEFAULT_MODEL_REGISTRY.playerThirdPerson, actualNodes, actualAnimations);
-    };
-
-    GameModelAssetContract.validatePlayerFirstPerson = function (actualNodes, actualAnimations) {
-        return validateEntry(DEFAULT_MODEL_REGISTRY.playerFirstPerson, actualNodes, actualAnimations);
     };
 
     GameModelAssetContract.validateWeapon = function (weaponId, actualNodes) {

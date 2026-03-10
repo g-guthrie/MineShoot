@@ -16,8 +16,6 @@ import {
   dot3,
   clamp
 } from '../transport.js';
-import { getSeekProfileByWeaponId, resolveSeekAimProfile } from '../../../shared/seek-profiles.js';
-import { selectSeekTarget } from '../../../shared/seek-core.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
 import { buildWorldCollisionData } from '../../../shared/world-collision.js';
@@ -108,6 +106,7 @@ const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
 const WORLD_RAY_EPSILON = 0.001;
+const RELOADED_FLASH_HOLD_MS = 900;
 
 function intersectRayAabb(origin, dir, box, maxDistance) {
   if (!box || !box.min || !box.max) return null;
@@ -239,6 +238,22 @@ function canEntityUseWeapon(entity, weaponId) {
     if (loadout[i] === id) return true;
   }
   return false;
+}
+
+function createWeaponAmmoRuntime(loadout) {
+  const ammo = {};
+  const ids = Array.isArray(loadout) ? loadout : DEFAULT_WEAPON_LOADOUT;
+  for (let i = 0; i < ids.length; i++) {
+    const weaponId = String(ids[i] || '');
+    const stats = WEAPON_STATS[weaponId];
+    if (!stats || !(Number(stats.magazineSize || 0) > 0)) continue;
+    ammo[weaponId] = {
+      ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
+      reloadUntil: 0,
+      reloadedFlashUntil: 0
+    };
+  }
+  return ammo;
 }
 
 export class GlobalArenaRoom extends DurableObject {
@@ -1081,7 +1096,6 @@ export class GlobalArenaRoom extends DurableObject {
       z: 0,
       yaw: Number(opts.yaw || 0),
       pitch: Number(opts.pitch || 0),
-      cameraMode: 'third',
       hp: MAX_HP,
       hpMax: MAX_HP,
       armor: preset.armorMax,
@@ -1098,6 +1112,7 @@ export class GlobalArenaRoom extends DurableObject {
       lastShotAt: {},
       lastShotTokenByWeapon: {},
       weaponId: DEFAULT_WEAPON_LOADOUT[0],
+      weaponAmmo: createWeaponAmmoRuntime(DEFAULT_WEAPON_LOADOUT),
       moveSpeedNorm: 0,
       sprinting: false,
       velocityY: 0,
@@ -1453,7 +1468,6 @@ export class GlobalArenaRoom extends DurableObject {
     const movementLocked = this.isEntityMovementLocked(player, now);
     if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
-    if (typeof msg.cameraMode === 'string') player.cameraMode = String(msg.cameraMode).toLowerCase() === 'first' ? 'first' : 'third';
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
     if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
 
@@ -1468,7 +1482,6 @@ export class GlobalArenaRoom extends DurableObject {
     player.inputState.jump = !!msg.jump;
     player.inputState.sprint = !!msg.sprint;
     player.inputState.adsActive = !!msg.adsActive;
-    player.inputState.cameraMode = player.cameraMode;
   }
 
   tickAuthoritativePlayerMovement(player, dtSec) {
@@ -1787,7 +1800,6 @@ export class GlobalArenaRoom extends DurableObject {
     const weaponId = String(msg.weaponId || 'rifle');
     const stats = WEAPON_STATS[weaponId];
     if (!stats) return;
-    if (weaponId === 'plasma') return;
     if (!canEntityUseWeapon(player, weaponId)) return;
     if (weaponId === 'sniper' && !(msg && msg.adsActive)) return;
     player.weaponId = weaponId;
@@ -1795,12 +1807,19 @@ export class GlobalArenaRoom extends DurableObject {
     const now = nowMs();
     const prev = player.lastShotAt[weaponId] || 0;
     const shotToken = String(msg.shotToken || '');
+    const ammoEntry = this.syncWeaponAmmoState(player, weaponId, now);
     if (!player.lastShotTokenByWeapon) player.lastShotTokenByWeapon = {};
     if (shotToken && player.lastShotTokenByWeapon && player.lastShotTokenByWeapon[weaponId] === shotToken) return;
     if ((now - prev) < stats.cooldownMs) return;
+    if (this.reloadRemainingForWeapon(player, weaponId, now) > 0) return;
+    if (ammoEntry && Number(ammoEntry.ammoInMag || 0) <= 0) {
+      this.beginWeaponReload(player, weaponId, now);
+      return;
+    }
     player.lastShotAt[weaponId] = now;
     if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
     player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
+    this.consumeWeaponAmmo(player, weaponId, now);
     const shots = resolveHitscanShot({
       origin: {
         x: Number(player.x || 0),
@@ -1811,6 +1830,7 @@ export class GlobalArenaRoom extends DurableObject {
       weaponStats: { ...stats, id: weaponId },
       falloffBands: WEAPON_FALLOFF[weaponId] || [],
       adsActive: !!(msg && msg.adsActive),
+      viewFovDeg: Number(msg && msg.viewFovDeg),
       shotToken,
       targets: this.getAliveEntities().filter((entity) => this.canTargetEntity(entity, player.id)),
       worldBoxes: this.worldCollidables()
@@ -1836,6 +1856,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player) return;
     const nextLoadout = normalizeWeaponLoadout([msg && msg.slot1, msg && msg.slot2], entityWeaponLoadout(player));
     player.weaponLoadout = nextLoadout;
+    player.weaponAmmo = createWeaponAmmoRuntime(nextLoadout);
     if (!canEntityUseWeapon(player, player.weaponId)) {
       player.weaponId = nextLoadout[0];
     }
@@ -1847,47 +1868,61 @@ export class GlobalArenaRoom extends DurableObject {
     if (!WEAPON_STATS[weaponId]) return;
     if (!canEntityUseWeapon(player, weaponId)) return;
     player.weaponId = weaponId;
-    if (weaponId !== 'plasma') {
-      player.streamHeat = 0;
-      player.streamOverheatedUntil = 0;
-    }
+    player.streamHeat = 0;
+    player.streamOverheatedUntil = 0;
   }
 
-  buildSeekCandidates(player) {
-    const out = [];
-    if (!player) return out;
-    const entities = this.getAliveEntities();
-    for (let i = 0; i < entities.length; i++) {
-      const e = entities[i];
-      if (!this.canTargetEntity(e, player.id)) continue;
-      out.push({
-        id: e.id,
-        ownerType: e.kind || 'entity',
-        corePos: this.entityAimTargetPosition(e),
-        alive: true
-      });
+  syncWeaponAmmoState(entity, weaponId, now = nowMs()) {
+    if (!entity || !weaponId) return null;
+    const stats = WEAPON_STATS[weaponId];
+    if (!stats || !(Number(stats.magazineSize || 0) > 0)) return null;
+    if (!entity.weaponAmmo || typeof entity.weaponAmmo !== 'object') {
+      entity.weaponAmmo = createWeaponAmmoRuntime(entity.weaponLoadout || DEFAULT_WEAPON_LOADOUT);
     }
-    return out;
+    if (!entity.weaponAmmo[weaponId]) {
+      entity.weaponAmmo[weaponId] = {
+        ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
+        reloadUntil: 0,
+        reloadedFlashUntil: 0
+      };
+    }
+    const entry = entity.weaponAmmo[weaponId];
+    if (entry.reloadUntil > 0 && now >= entry.reloadUntil) {
+      entry.reloadUntil = 0;
+      entry.ammoInMag = Math.max(0, Number(stats.magazineSize || 0));
+      entry.reloadedFlashUntil = now + RELOADED_FLASH_HOLD_MS;
+    }
+    return entry;
   }
 
-  resolveSeekLock(player, preferredTargetId, profile, adsActive = false) {
-    if (!player || !player.alive || !profile) return null;
-    const resolved = resolveSeekAimProfile(profile, adsActive) || {};
-    const candidates = this.buildSeekCandidates(player);
-    if (!candidates.length) return null;
-    const preferred = String(preferredTargetId || '');
-    const shortlist = preferred ? candidates.filter((c) => c.id === preferred) : candidates;
-    const lock = selectSeekTarget({
-      origin: this.entityAimTargetPosition(player),
-      forward: this.entityForward(player),
-      candidates: shortlist.length ? shortlist : candidates,
-      maxRange: Number(resolved.maxRange || profile.maxRange || 24),
-      coneHalfAngleDeg: Number(resolved.coneHalfAngleDeg || profile.coneHalfAngleDeg || 35)
-    });
-    if (!lock || !lock.hasLock || !lock.lockTargetId) return null;
-    const target = this.getEntityById(lock.lockTargetId);
-    if (!target || !target.alive || target.id === player.id) return null;
-    return target;
+  reloadRemainingForWeapon(entity, weaponId, now = nowMs()) {
+    const entry = this.syncWeaponAmmoState(entity, weaponId, now);
+    if (!entry) return 0;
+    return Math.max(0, Number(entry.reloadUntil || 0) - now);
+  }
+
+  beginWeaponReload(entity, weaponId, now = nowMs()) {
+    const stats = WEAPON_STATS[weaponId];
+    const entry = this.syncWeaponAmmoState(entity, weaponId, now);
+    if (!stats || !entry) return false;
+    const reloadMs = Math.max(0, Number(stats.reloadMs || 0));
+    if (reloadMs <= 0 || entry.reloadUntil > now) return false;
+    entry.ammoInMag = 0;
+    entry.reloadUntil = now + reloadMs;
+    entry.reloadedFlashUntil = 0;
+    return true;
+  }
+
+  consumeWeaponAmmo(entity, weaponId, now = nowMs()) {
+    const stats = WEAPON_STATS[weaponId];
+    const entry = this.syncWeaponAmmoState(entity, weaponId, now);
+    if (!stats || !entry) return true;
+    entry.ammoInMag = Math.max(0, Number(entry.ammoInMag || stats.magazineSize || 0) - 1);
+    entry.reloadedFlashUntil = 0;
+    if (entry.ammoInMag <= 0) {
+      this.beginWeaponReload(entity, weaponId, now);
+    }
+    return true;
   }
 
   applyPlasmaStreamHeat(player, profile, now) {
@@ -1901,57 +1936,6 @@ export class GlobalArenaRoom extends DurableObject {
       return true;
     }
     return false;
-  }
-
-  handleSeekerShot(player, msg, ws) {
-    if (!player || !player.alive) return;
-    if (!this.canEntityUseWeapon(player)) return;
-
-    const weaponId = 'seekergun';
-    const profile = getSeekProfileByWeaponId('seekergun');
-    if (!profile) {
-      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'invalid' });
-      return;
-    }
-    const stats = WEAPON_STATS.seekergun || { cooldownMs: 320, maxRange: 24 };
-    const cooldownMs = Math.max(1, Number(profile.cooldownMs || stats.cooldownMs || 320));
-    const now = nowMs();
-    const shotKey = 'seekergun';
-    const prev = player.lastShotAt[shotKey] || 0;
-    if ((now - prev) < cooldownMs) {
-      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'cooldown' });
-      return;
-    }
-
-    player.lastShotAt[shotKey] = now;
-    player.weaponId = weaponId;
-    player.muzzleFlashUntil = now + REMOTE_MUZZLE_FLASH_HOLD_MS;
-
-    const rawClientShotId = String(msg && msg.clientShotId ? msg.clientShotId : '');
-    const clientShotId = /^[a-zA-Z0-9_-]{3,96}$/.test(rawClientShotId) ? rawClientShotId : '';
-    const rawLockTargetId = String(msg && msg.lockTargetId ? msg.lockTargetId : '');
-    const adsActive = !!(msg && msg.adsActive);
-    const locked = this.resolveSeekLock(player, rawLockTargetId, profile, adsActive);
-    const projectileType = String(profile.projectileType || 'seekershot');
-    const projectile = this.spawnProjectile(
-      player,
-      projectileType,
-      clientShotId,
-      msg && msg.throwIntent ? msg.throwIntent : null,
-      { lockTargetId: locked ? locked.id : '' }
-    );
-    if (!projectile) {
-      if (ws) this.send(ws, { t: MSG_S2C.SEEKER_REJECT, weaponId, reason: 'invalid' });
-      return;
-    }
-
-    this.broadcast({
-      t: MSG_S2C.THROW_SPAWN,
-      projectileId: projectile.id,
-      ownerId: projectile.ownerId,
-      clientThrowId: projectile.clientThrowId || '',
-      throwableId: projectile.type
-    });
   }
 
   applyClassNow(entity, classId) {
@@ -2113,11 +2097,6 @@ export class GlobalArenaRoom extends DurableObject {
       this.handleWeaponLoadout(player, msg);
       return;
     }
-    if (type === MSG_C2S.SEEKER_SHOT) {
-      if (privateLobbyLocked) return;
-      this.handleSeekerShot(player, msg, ws);
-      return;
-    }
     if (type === MSG_C2S.THROW) {
       if (privateLobbyLocked) return;
       this.handleThrow(player, msg, ws);
@@ -2267,6 +2246,7 @@ export class GlobalArenaRoom extends DurableObject {
     entity.lmsBankState = null;
     entity.throwables = this.createThrowableRuntime();
     entity.lastThrowAt = 0;
+    entity.weaponAmmo = createWeaponAmmoRuntime(entity.weaponLoadout || DEFAULT_WEAPON_LOADOUT);
     entity.inputState = createMovementInputState();
     entity.velocityY = 0;
     entity.isGrounded = true;

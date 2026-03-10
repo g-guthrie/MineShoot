@@ -352,7 +352,7 @@
             playOscBurst(c, { type: 'triangle', startFreq: 240, endFreq: 72, duration: 0.24, vol: 0.06, delay: 0.006 });
             return;
         }
-        if (weapon === 'seekergun' || weapon === 'plasma') {
+        if (weapon === 'missile' || weapon === 'plasma') {
             playOscBurst(c, { type: 'sawtooth', startFreq: 420, endFreq: 980, duration: 0.06, vol: 0.05 });
             playOscBurst(c, { type: 'triangle', startFreq: 960, endFreq: 320, duration: 0.12, vol: 0.04, delay: 0.01 });
             playNoiseBurst(c, { duration: 0.04, vol: 0.022, frequency: 2800, q: 2.1, filterType: 'bandpass', delay: 0.004 });
@@ -371,7 +371,7 @@
 
     function playWeaponFire(c, weaponId) {
         var weapon = String(weaponId || 'rifle');
-        if (weapon === 'seekergun' || weapon === 'plasma') {
+        if (weapon === 'missile' || weapon === 'plasma') {
             playWeaponFireProcedural(c, weapon);
             return;
         }

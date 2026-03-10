@@ -25,12 +25,12 @@
             RT.GamePlayerCombat.syncFromNetwork(selfState);
         }
 
-        if (RT.GamePlayer && RT.GamePlayer.setAliveVisual) {
-            RT.GamePlayer.setAliveVisual(selfState.alive !== false);
+        if (RT.GameHitscan && RT.GameHitscan.syncAmmoStateFromNetwork && selfState.weaponAmmo) {
+            RT.GameHitscan.syncAmmoStateFromNetwork(selfState.weaponAmmo);
         }
 
-        if (RT.GamePlayer && RT.GamePlayer.setAuthoritativeCameraMode) {
-            RT.GamePlayer.setAuthoritativeCameraMode(selfState.cameraMode || 'third');
+        if (RT.GamePlayer && RT.GamePlayer.setAliveVisual) {
+            RT.GamePlayer.setAliveVisual(selfState.alive !== false);
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {

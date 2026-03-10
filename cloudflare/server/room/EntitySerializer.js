@@ -11,6 +11,20 @@ const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 export function toEntityState(entity) {
   const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - nowMs()) / 1000);
   const slot2CooldownRemaining = Math.max(0, ((entity.slot2CooldownUntil || 0) - nowMs()) / 1000);
+  const weaponAmmo = {};
+  if (entity.weaponAmmo && typeof entity.weaponAmmo === 'object') {
+    for (const weaponId in entity.weaponAmmo) {
+      if (!Object.prototype.hasOwnProperty.call(entity.weaponAmmo, weaponId)) continue;
+      const entry = entity.weaponAmmo[weaponId];
+      if (!entry) continue;
+      weaponAmmo[weaponId] = {
+        ammoInMag: Math.max(0, Number(entry.ammoInMag || 0)),
+        reloadRemaining: Math.max(0, ((entry.reloadUntil || 0) - nowMs()) / 1000),
+        reloading: Number(entry.reloadUntil || 0) > nowMs(),
+        reloadedFlashRemaining: Math.max(0, ((entry.reloadedFlashUntil || 0) - nowMs()) / 1000)
+      };
+    }
+  }
   const throwables = {};
   const order = THROWABLE_STATS.order || [];
   for (let i = 0; i < order.length; i++) {
@@ -34,7 +48,6 @@ export function toEntityState(entity) {
     yaw: Number((entity.yaw || 0).toFixed(4)),
     pitch: Number((entity.pitch || 0).toFixed(4)),
     seq: Math.max(0, Number(entity.seq || 0)),
-    cameraMode: String(entity.cameraMode || 'third') === 'first' ? 'first' : 'third',
     weaponId: entity.weaponId || 'rifle',
     moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
     sprinting: !!entity.sprinting,
@@ -66,6 +79,7 @@ export function toEntityState(entity) {
     weaponLoadout: Array.isArray(entity.weaponLoadout) && entity.weaponLoadout.length
       ? entity.weaponLoadout.slice(0, 2)
       : DEFAULT_WEAPON_LOADOUT.slice(),
+    weaponAmmo,
     abilityLoadout: entity.abilityLoadout || DEFAULT_ABILITY_LOADOUT,
     slot1CooldownRemaining,
     slot2CooldownRemaining,

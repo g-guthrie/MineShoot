@@ -63,7 +63,6 @@
     var classCastResultQueue = [];
     var damageFeedbackQueue = [];
     var incomingDamageFeedbackQueue = [];
-    var seekerRejectQueue = [];
 
     var notices = [];
 
@@ -288,45 +287,6 @@
         };
     }
 
-    function setRemoteHealFlash(render, active) {
-        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
-        var visual = render.actorVisual.visual;
-        var parts = visual.userData && visual.userData.bodyParts ? visual.userData.bodyParts : null;
-        var originalColors = visual.userData && visual.userData.originalPartColors ? visual.userData.originalPartColors : [];
-        if (!parts) return;
-        for (var i = 0; i < parts.length; i++) {
-            var part = parts[i];
-            if (!part || !part.material || !part.material.color) continue;
-            if (active) {
-                part.material.color.setHex(0x6dff9a);
-                if (part.material.emissive) part.material.emissive.setHex(0x163d18);
-            } else {
-                part.material.color.setHex(typeof originalColors[i] === 'number' ? originalColors[i] : 0xffffff);
-                if (part.material.emissive) part.material.emissive.setHex(0x000000);
-            }
-        }
-    }
-
-    function setRemoteSpawnShieldVisual(render, active) {
-        if (!render || !render.actorVisual || !render.actorVisual.visual) return;
-        render.actorVisual.visual.traverse(function (node) {
-            if (!node || !node.isMesh || !node.material) return;
-            var mat = node.material;
-            if (mat.__spawnShieldBaseOpacity === undefined) {
-                mat.__spawnShieldBaseOpacity = (typeof mat.opacity === 'number') ? mat.opacity : 1;
-                mat.__spawnShieldBaseTransparent = !!mat.transparent;
-            }
-            if (active) {
-                mat.transparent = true;
-                mat.opacity = Math.min(mat.__spawnShieldBaseOpacity, 0.42);
-            } else {
-                mat.opacity = mat.__spawnShieldBaseOpacity;
-                mat.transparent = mat.__spawnShieldBaseTransparent;
-            }
-            mat.needsUpdate = true;
-        });
-    }
-
     function handleMessage(raw) {
         var msg = null;
         try {
@@ -414,15 +374,6 @@
                 reason: msg.reason || 'rejected'
             });
             if (throwRejectQueue.length > 32) throwRejectQueue.shift();
-            return;
-        }
-
-        if (msg.t === (MSG_S2C.SEEKER_REJECT || 'seeker_reject')) {
-            seekerRejectQueue.push({
-                weaponId: msg.weaponId || 'seekergun',
-                reason: msg.reason || 'invalid'
-            });
-            if (seekerRejectQueue.length > 32) seekerRejectQueue.shift();
             return;
         }
 
@@ -643,12 +594,6 @@
         return true;
     }
 
-    function normalizeAngle(rad) {
-        while (rad > Math.PI) rad -= Math.PI * 2;
-        while (rad < -Math.PI) rad += Math.PI * 2;
-        return rad;
-    }
-
     function getRenderCoreWorldPosition(render, outVec3) {
         if (!render) return null;
         var out = outVec3 || new THREE.Vector3();
@@ -778,7 +723,6 @@
         classCastResultQueue = [];
         damageFeedbackQueue = [];
         incomingDamageFeedbackQueue = [];
-        seekerRejectQueue = [];
         notices = [];
         pendingSpawnSync = null;
         pendingRespawnInfo = null;
@@ -844,7 +788,6 @@
                 hpMax: 500,
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
-                cameraMode: 'third',
                 classId: u.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
                 lmsLives: 0,
@@ -896,8 +839,7 @@
                         right: !!inputState.right,
                         jump: !!inputState.jump,
                         sprint: !!inputState.sprint,
-                        adsActive: !!inputState.adsActive,
-                        cameraMode: inputState.cameraMode ? String(inputState.cameraMode) : 'third'
+                        adsActive: !!inputState.adsActive
                     } : null
                 });
                 if (inputSeqHistory.length > 96) inputSeqHistory.shift();
@@ -913,66 +855,19 @@
                     jump: !!(inputState && inputState.jump),
                     sprint: !!(inputState && inputState.sprint),
                     adsActive: !!(inputState && inputState.adsActive),
-                    cameraMode: (inputState && inputState.cameraMode) ? String(inputState.cameraMode) : 'third',
                     weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
                     inputMode: 'intent'
                 });
             }
         }
 
-        GameNetEntities.getRenderMap().forEach(function (r) {
-            if (!r || !r.group || !r.group.position || !r.group.rotation) return;
-            var lerp = Math.min(1, dt * 10);
-            r.group.position.x += (r.targetX - r.group.position.x) * lerp;
-            r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
-            r.group.position.z += (r.targetZ - r.group.position.z) * lerp;
-
-            var deltaYaw = normalizeAngle(r.targetYaw - r.group.rotation.y);
-            r.group.rotation.y += deltaYaw * lerp;
-
-            if (r.rigApi) {
-                r.rigApi.setWeapon(r.weaponId || 'rifle');
-                r.rigApi.updateAimPitch(r.targetPitch || 0);
-                var chokeVictimState = getChokeVictimStateForEntity(r.id);
-                var hookedNow = !!r.hookPullState || !!(r.justBeenHookedState && r.justBeenHookedState.endsAt > Date.now());
-                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt, false, {
-                    hooked: hookedNow,
-                    choked: chokeVictimState.lift > 0,
-                    startedAt: chokeVictimState.startedAt || 0,
-                    movingForward: (r.moveSpeedNorm || 0) > 0.05
-                });
-                if (r.rigApi.setMuzzleVisible) {
-                    r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
-                }
-                if (r.rigApi.applyThrowPose) r.rigApi.applyThrowPose(dt);
-                if (r.rigApi.applyChokeGripPose) {
-                    if (r.chokeState && r.chokeState.targetId && r.chokeState.endsAt > Date.now()) {
-                        if (!r._chokeGripTriggered) {
-                            r._chokeGripTriggered = true;
-                            r.rigApi.triggerChokeGripPose((r.chokeState.endsAt - Date.now()) / 1000);
-                        }
-                    } else {
-                        r._chokeGripTriggered = false;
-                    }
-                    r.rigApi.applyChokeGripPose(dt);
-                }
-            }
-
-            setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));
-            setRemoteSpawnShieldVisual(r, !!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
-
-            chokeVictimState = getChokeVictimStateForEntity(r.id);
-            if (chokeVictimState.lift > 0) {
-                r.group.position.y += chokeVictimState.lift;
-            }
-
-            if (r.actorVisual && r.actorVisual.syncHitboxes) {
-                r.actorVisual.syncHitboxes(r.group.position);
-            } else if (r.bodyHitbox && r.headHitbox) {
-                r.bodyHitbox.position.set(r.group.position.x, entityPoints.entityBodyHitboxY ? entityPoints.entityBodyHitboxY(r.group.position.y) : (r.group.position.y + 0.7625), r.group.position.z);
-                r.headHitbox.position.set(r.group.position.x, entityPoints.entityHeadHitboxY ? entityPoints.entityHeadHitboxY(r.group.position.y) : (r.group.position.y + 2.0), r.group.position.z);
-            }
-        });
+        if (globalThis.__MAYHEM_RUNTIME.GameNetRemoteSync && globalThis.__MAYHEM_RUNTIME.GameNetRemoteSync.updateRemoteEntities) {
+            globalThis.__MAYHEM_RUNTIME.GameNetRemoteSync.updateRemoteEntities(
+                dt,
+                GameNetEntities.getRenderMap(),
+                getChokeVictimStateForEntity
+            );
+        }
     };
 
     GameNet.sendFire = function (weaponId, shotToken) {
@@ -984,6 +879,11 @@
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
             var adsState = globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();
             if (adsState && adsState.active) payload.adsActive = true;
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera) {
+            var camera = globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera();
+            var cameraFov = Number(camera && camera.fov);
+            if (isFinite(cameraFov) && cameraFov > 0.0001) payload.viewFovDeg = cameraFov;
         }
         if (shotToken) payload.shotToken = String(shotToken);
         return wsSend(payload);
@@ -1074,45 +974,30 @@
         if (castData && castData.lockTargetId) {
             payload.lockTargetId = String(castData.lockTargetId);
         }
-        return wsSend(payload);
-    };
-
-    GameNet.sendAbilityCast = GameNet.sendClassCast;
-
-    GameNet.sendSeekerShot = function (lockTargetId, throwIntent, clientShotId, weaponId, adsActive) {
-        var payload = {
-            t: (MSG_C2S.SEEKER_SHOT || 'seeker_shot')
-        };
-        if (lockTargetId) payload.lockTargetId = String(lockTargetId);
-        if (clientShotId) payload.clientShotId = String(clientShotId);
-        if (weaponId) payload.weaponId = String(weaponId);
-        if (adsActive) payload.adsActive = true;
-        if (throwIntent && throwIntent.origin && throwIntent.direction) {
-            payload.throwIntent = {
+        if (castData && castData.projectileIntent && castData.projectileIntent.origin && castData.projectileIntent.direction) {
+            payload.projectileIntent = {
                 origin: {
-                    x: Number(throwIntent.origin.x || 0),
-                    y: Number(throwIntent.origin.y || 0),
-                    z: Number(throwIntent.origin.z || 0)
+                    x: Number(castData.projectileIntent.origin.x || 0),
+                    y: Number(castData.projectileIntent.origin.y || 0),
+                    z: Number(castData.projectileIntent.origin.z || 0)
                 },
                 direction: {
-                    x: Number(throwIntent.direction.x || 0),
-                    y: Number(throwIntent.direction.y || 0),
-                    z: Number(throwIntent.direction.z || 0)
+                    x: Number(castData.projectileIntent.direction.x || 0),
+                    y: Number(castData.projectileIntent.direction.y || 0),
+                    z: Number(castData.projectileIntent.direction.z || 0)
                 },
-                aimPoint: throwIntent.aimPoint ? {
-                    x: Number(throwIntent.aimPoint.x || 0),
-                    y: Number(throwIntent.aimPoint.y || 0),
-                    z: Number(throwIntent.aimPoint.z || 0)
+                aimPoint: castData.projectileIntent.aimPoint ? {
+                    x: Number(castData.projectileIntent.aimPoint.x || 0),
+                    y: Number(castData.projectileIntent.aimPoint.y || 0),
+                    z: Number(castData.projectileIntent.aimPoint.z || 0)
                 } : null
             };
         }
         return wsSend(payload);
     };
 
-    GameNet.consumeSeekerReject = function () {
-        if (!seekerRejectQueue.length) return null;
-        return seekerRejectQueue.shift();
-    };
+    GameNet.sendAbilityCast = GameNet.sendClassCast;
+
 
     GameNet.consumeClassCastResult = function () {
         if (!classCastResultQueue.length) return null;
@@ -1186,8 +1071,7 @@
                     right: !!entry.inputState.right,
                     jump: !!entry.inputState.jump,
                     sprint: !!entry.inputState.sprint,
-                    adsActive: !!entry.inputState.adsActive,
-                    cameraMode: entry.inputState.cameraMode ? String(entry.inputState.cameraMode) : 'third'
+                    adsActive: !!entry.inputState.adsActive
                 } : null
             });
         }

@@ -86,8 +86,8 @@ export function tickProjectiles(room, dtSec) {
       return;
     }
 
-    const isSeekerLike = (p.type === 'seeker' || p.type === 'seekershot' || p.type === 'plasma_stream');
-    if (isSeekerLike) {
+    const isTrackingProjectile = (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream');
+    if (isTrackingProjectile) {
       const acquireRange = Number(def.acquireRange || 24);
       let target = null;
       if (p.lockTargetId) {
@@ -110,7 +110,7 @@ export function tickProjectiles(room, dtSec) {
           ? normalize3(p.vx, p.vy, p.vz)
           : normalize3(p.launchDirX || 0, p.launchDirY || 0, p.launchDirZ || -1);
         const halfAngleDeg = Number(
-          (p.type === 'seekershot' || p.type === 'plasma_stream')
+          (p.type === 'missile' || p.type === 'plasma_stream')
             ? (def.lockHalfAngleDeg || 30)
             : (def.acquireHalfAngleDeg || 35)
         );
@@ -163,7 +163,7 @@ export function tickProjectiles(room, dtSec) {
         toRemove.push(p.id);
         return;
       }
-      if (p.type === 'seeker') {
+      if (p.type === 'plasma') {
         p.y = groundY;
         if (stickProjectile(p, null, p.x, p.y, p.z)) {
           room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: p.y, z: p.z });
@@ -184,7 +184,7 @@ export function tickProjectiles(room, dtSec) {
       const d = Math.sqrt(dx * dx + dz * dz + dy * dy);
       const hitRadius = Math.max(0.1, Number(p.hitRadius || 1.2));
       if (d > hitRadius) continue;
-      if (p.type === 'seeker') {
+      if (p.type === 'plasma') {
         if (stickProjectile(p, e, p.x, p.y, p.z)) {
           room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
           return;

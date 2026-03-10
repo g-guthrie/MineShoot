@@ -63,3 +63,7 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
     assert.ok(Number(gameplayTuning.weaponStats[weaponId].reloadMs) > 0, weaponId + ' should define reload timing');
   }
 });
+
+test('Vader choke duration includes the extra half-second hold', () => {
+  assert.equal(gameplayTuning.abilityCatalog.choke.duration, 2.0);
+});

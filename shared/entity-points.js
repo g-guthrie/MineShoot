@@ -16,12 +16,20 @@ export function entityAimTargetY(entityY) {
   return entityFeetY(entityY) + ENTITY_AIM_TARGET_OFFSET_Y;
 }
 
+export function entityBodyHitboxYFromFeet(feetY) {
+  return Number(feetY || 0) + BODY_HITBOX_CENTER_OFFSET_Y;
+}
+
+export function entityHeadHitboxYFromFeet(feetY) {
+  return Number(feetY || 0) + HEAD_HITBOX_CENTER_OFFSET_Y;
+}
+
 export function entityBodyHitboxY(entityY) {
-  return entityFeetY(entityY) + BODY_HITBOX_CENTER_OFFSET_Y;
+  return entityBodyHitboxYFromFeet(entityFeetY(entityY));
 }
 
 export function entityHeadHitboxY(entityY) {
-  return entityFeetY(entityY) + HEAD_HITBOX_CENTER_OFFSET_Y;
+  return entityHeadHitboxYFromFeet(entityFeetY(entityY));
 }
 
 export function entityDamagePointY(entityY) {
@@ -40,6 +48,8 @@ runtime.GameShared.entityPoints = {
   MARKER_POINT_OFFSET_Y,
   entityFeetY,
   entityAimTargetY,
+  entityBodyHitboxYFromFeet,
+  entityHeadHitboxYFromFeet,
   entityBodyHitboxY,
   entityHeadHitboxY,
   entityDamagePointY,
