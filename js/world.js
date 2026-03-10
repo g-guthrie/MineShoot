@@ -27,12 +27,17 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     var WORLD_MAX = SHARED_LAYOUT.WORLD_MAX;
     var DEFAULT_SPAWN_PADDING = SHARED_LAYOUT.DEFAULT_SPAWN_PADDING;
 
-    var COMBAT_TUNED_WORLD_SIZE = SHARED_LAYOUT.COMBAT_TUNED_WORLD_SIZE;
-
     var BIOME_ARCTIC = SHARED_LAYOUT.BIOME_ARCTIC;
     var BIOME_URBAN = SHARED_LAYOUT.BIOME_URBAN;
     var BIOME_DESERT = SHARED_LAYOUT.BIOME_DESERT;
     var BIOME_JUNGLE = SHARED_LAYOUT.BIOME_JUNGLE;
+    var BIOME_NUCLEAR = SHARED_LAYOUT.BIOME_NUCLEAR;
+    var BIOME_CITADEL = SHARED_LAYOUT.BIOME_CITADEL;
+    var BIOME_QUARRY = SHARED_LAYOUT.BIOME_QUARRY;
+    var BIOME_BASIN = SHARED_LAYOUT.BIOME_BASIN;
+    var BIOME_RADAR = SHARED_LAYOUT.BIOME_RADAR;
+    var BIOME_GRID_LINE_X = SHARED_LAYOUT.BIOME_GRID_LINE_X.slice();
+    var BIOME_GRID_LINE_Z = SHARED_LAYOUT.BIOME_GRID_LINE_Z.slice();
 
     var DEFAULT_QUADRANT_MAP = SHARED_LAYOUT.DEFAULT_QUADRANT_MAP.slice();
 
@@ -56,6 +61,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     var animatedLeaves = [];
     var animatedIceShimmers = [];
     var animatedFlickers = [];
+    var animatedSteamColumns = [];
     var animatedClouds = [];
     var animClock = 0;
 
@@ -65,6 +71,11 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     GROUND_COLORS[BIOME_URBAN]  = 0x8f969e;
     GROUND_COLORS[BIOME_DESERT] = 0xd6bf7f;
     GROUND_COLORS[BIOME_JUNGLE] = 0x3b7c3f;
+    GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
+    GROUND_COLORS[BIOME_CITADEL] = 0x7d766d;
+    GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
+    GROUND_COLORS[BIOME_BASIN] = 0x658798;
+    GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
 
     function cloneWorldFlags(flags) {
         return {
@@ -103,38 +114,17 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         return WORLD_SEED;
     }
 
-    function getCombatScale() {
-        if (COMBAT_TUNED_WORLD_SIZE <= 0) return 1;
-        return WORLD_SIZE / COMBAT_TUNED_WORLD_SIZE;
-    }
-
-    function scaleCombatDistance(value) {
-        return value * getCombatScale();
-    }
-
     function cloneGenerationStats(stats) {
         if (!stats || typeof stats !== 'object') return null;
-        return {
-            jungle: {
-                trees: Number(stats.jungle && stats.jungle.trees) || 0,
-                bushes: Number(stats.jungle && stats.jungle.bushes) || 0,
-                logs: Number(stats.jungle && stats.jungle.logs) || 0,
-                artifacts: Number(stats.jungle && stats.jungle.artifacts) || 0,
-                borderTrees: Number(stats.jungle && stats.jungle.borderTrees) || 0
-            },
-            arctic: {
-                crystals: Number(stats.arctic && stats.arctic.crystals) || 0,
-                drifts: Number(stats.arctic && stats.arctic.drifts) || 0,
-                foothillCrystals: Number(stats.arctic && stats.arctic.foothillCrystals) || 0,
-                foothillDrifts: Number(stats.arctic && stats.arctic.foothillDrifts) || 0
-            },
-            desert: {
-                rocks: Number(stats.desert && stats.desert.rocks) || 0,
-                cacti: Number(stats.desert && stats.desert.cacti) || 0,
-                ridges: Number(stats.desert && stats.desert.ridges) || 0,
-                mesas: Number(stats.desert && stats.desert.mesas) || 0
+        var copy = {};
+        for (var biomeId in stats) {
+            if (!stats[biomeId] || typeof stats[biomeId] !== 'object') continue;
+            copy[biomeId] = {};
+            for (var key in stats[biomeId]) {
+                copy[biomeId][key] = Number(stats[biomeId][key]) || 0;
             }
-        };
+        }
+        return copy;
     }
 
     function clamp01(value) {
@@ -147,17 +137,19 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         return a + ((b - a) * t);
     }
 
+    function isNearGridSeam(value, seamLines, threshold) {
+        for (var i = 0; i < seamLines.length; i++) {
+            if (Math.abs(value - seamLines[i]) <= threshold) return true;
+        }
+        return false;
+    }
+
     function quadrantBounds(quadrant, padding) {
         return SHARED_LAYOUT.quadrantBounds(quadrant, padding);
     }
 
     function biomeAt(x, z) {
-        var q = (x < WORLD_CENTER ? 'W' : 'E');
-        q = (z < WORLD_CENTER ? 'N' : 'S') + q;
-        for (var i = 0; i < DEFAULT_QUADRANT_MAP.length; i++) {
-            if (DEFAULT_QUADRANT_MAP[i].quadrant === q) return DEFAULT_QUADRANT_MAP[i].biome;
-        }
-        return BIOME_JUNGLE;
+        return SHARED_LAYOUT.biomeAtPosition(x, z, DEFAULT_QUADRANT_MAP);
     }
 
     function biomeBounds(biomeId, padding) {
@@ -166,7 +158,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
                 return quadrantBounds(DEFAULT_QUADRANT_MAP[i].quadrant, padding);
             }
         }
-        return quadrantBounds('SE', padding);
+        return quadrantBounds(DEFAULT_QUADRANT_MAP[DEFAULT_QUADRANT_MAP.length - 1].quadrant, padding);
     }
 
     function pointInBounds(bounds, u, v) {
@@ -259,14 +251,11 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         animatedLeaves = [];
         animatedIceShimmers = [];
         animatedFlickers = [];
+        animatedSteamColumns = [];
         animatedClouds = [];
         animClock = 0;
 
-        generationStats = {
-            jungle: { trees: 0, bushes: 0, logs: 0, artifacts: 0, borderTrees: 0 },
-            arctic: { crystals: 0, drifts: 0, foothillCrystals: 0, foothillDrifts: 0 },
-            desert: { rocks: 0, cacti: 0, ridges: 0, mesas: 0 }
-        };
+        generationStats = {};
 
         var SHARED_TERRAIN = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler)
             ? globalThis.__MAYHEM_RUNTIME.GameShared.terrainSampler
@@ -327,6 +316,22 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             addDecor: addDecor
         };
 
+        var intersections = globalThis.__MAYHEM_RUNTIME.WorldIntersections || {};
+        var seamSpec = (typeof intersections.createSeamSpec === 'function')
+            ? intersections.createSeamSpec({})
+            : { armWidth: 0.36, halfWidth: 0.18, height: 0.08, tintMix: 0.12, tintThreshold: 0.22 };
+
+        var quadrantCtx = {
+            scene: scene,
+            addExclusion: function (x, z, r) { addSpawnExclusionCircle(x, z, r); },
+            addWaterfallSheet: function (data) { animatedWaterfallSheets.push(data); },
+            addMistCard: function (data) { animatedMistCards.push(data); },
+            addLeafSway: function (data) { animatedLeaves.push(data); },
+            addIceShimmer: function (data) { animatedIceShimmers.push(data); },
+            addFlicker: function (data) { animatedFlickers.push(data); },
+            addSteamColumn: function (data) { animatedSteamColumns.push(data); }
+        };
+
         // --- Ground plane with per-biome vertex colors ---
         var groundSeg = Math.max(48, Math.round(WORLD_SIZE * 1.15));
         var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, groundSeg, groundSeg);
@@ -336,7 +341,7 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         var groundPos = groundGeo.attributes.position;
         var groundColors = new Float32Array(groundPos.count * 3);
         var color = new THREE.Color();
-        var seamColor = new THREE.Color(0x666b64);
+        var seamColor = new THREE.Color(0x606763);
 
         var biomeColorCache = {};
         for (var bk in GROUND_COLORS) {
@@ -352,10 +357,10 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             var biomeId = biomeAt(gx, gz);
             color.copy(biomeColorCache[biomeId] || biomeColorCache[BIOME_JUNGLE]);
 
-            if (Math.abs(gx - WORLD_CENTER) <= 0.55 || Math.abs(gz - WORLD_CENTER) <= 0.55) {
-                color.r += (seamColor.r - color.r) * 0.45;
-                color.g += (seamColor.g - color.g) * 0.45;
-                color.b += (seamColor.b - color.b) * 0.45;
+            if (isNearGridSeam(gx, BIOME_GRID_LINE_X, seamSpec.tintThreshold) || isNearGridSeam(gz, BIOME_GRID_LINE_Z, seamSpec.tintThreshold)) {
+                color.r += (seamColor.r - color.r) * seamSpec.tintMix;
+                color.g += (seamColor.g - color.g) * seamSpec.tintMix;
+                color.b += (seamColor.b - color.b) * seamSpec.tintMix;
             }
 
             groundColors[(vi * 3)] = color.r;
@@ -383,21 +388,15 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         lowerGround.receiveShadow = true;
         scene.add(lowerGround);
 
-        // World-owned separator and center intersection.
-        var intersections = globalThis.__MAYHEM_RUNTIME.WorldIntersections || {};
-        var centerIntersection = null;
-        if (typeof intersections.stampIntersection === 'function') {
-            centerIntersection = intersections.stampIntersection({
-                centerX: WORLD_CENTER,
-                centerZ: WORLD_CENTER,
-                span: WORLD_SIZE - (WORLD_MARGIN * 2.2),
+        if (typeof intersections.buildGridDecor === 'function') {
+            intersections.buildGridDecor({
                 place: place,
                 materialLibrary: matLib,
-                seamMaterial: matLib.getLambert({ color: 0x646861 }),
-                seamSpec: (typeof intersections.createSeamSpec === 'function')
-                    ? intersections.createSeamSpec({ armWidth: 1.06, height: 0.16 })
-                    : { armWidth: 1.06, halfWidth: 0.53, height: 0.16 },
-                biomeMap: DEFAULT_QUADRANT_MAP.slice()
+                layout: SHARED_LAYOUT,
+                biomeMap: DEFAULT_QUADRANT_MAP.slice(),
+                seamSpec: seamSpec,
+                seamMaterial: matLib.getLambert({ color: 0x58605d }),
+                fx: quadrantCtx
             });
         }
 
@@ -405,31 +404,37 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
         (function buildBiomeWalls() {
             SHARED_LAYOUT.buildBiomePerimeter(place, {
                 arcticBase: matLib.getLambert({ color: 0x8aafcc }),
-                arcticCap: matLib.getLambert({ color: 0xc8e8f8 }),
-                arcticIce: matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 }),
+                arcticAccent: matLib.getLambert({ color: 0xc8e8f8 }),
+                arcticDetail: matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 }),
                 urbanBase: matLib.getLambert({ color: 0x6a7078 }),
-                urbanRail: matLib.getLambert({ color: 0x3a3e44 }),
-                urbanPaint: matLib.getLambert({ color: 0xc85a3a }),
+                urbanAccent: matLib.getLambert({ color: 0x3a3e44 }),
+                urbanDetail: matLib.getLambert({ color: 0xc85a3a }),
                 desertBase: matLib.getLambert({ color: 0xc49a5c }),
-                desertCap: matLib.getLambert({ color: 0xb07842 }),
+                desertAccent: matLib.getLambert({ color: 0xb07842 }),
+                desertDetail: matLib.getLambert({ color: 0x8a6b4a }),
                 jungleBase: matLib.getLambert({ color: 0x4a5040 }),
-                jungleVine: matLib.getLambert({ color: 0x2d5a28 }),
-                jungleMoss: matLib.getLambert({ color: 0x3d6a32 })
-            });
+                jungleAccent: matLib.getLambert({ color: 0x3d6a32 }),
+                jungleDetail: matLib.getLambert({ color: 0x2d5a28 }),
+                nuclearBase: matLib.getLambert({ color: 0x737a80 }),
+                nuclearAccent: matLib.getLambert({ color: 0xcaa43c }),
+                nuclearDetail: matLib.getLambert({ color: 0x50575d }),
+                citadelBase: matLib.getLambert({ color: 0x6d6961 }),
+                citadelAccent: matLib.getLambert({ color: 0x989086 }),
+                citadelDetail: matLib.getLambert({ color: 0x4b4740 }),
+                quarryBase: matLib.getLambert({ color: 0x866f61 }),
+                quarryAccent: matLib.getLambert({ color: 0xb39984 }),
+                quarryDetail: matLib.getLambert({ color: 0x5e4c40 }),
+                basinBase: matLib.getLambert({ color: 0x69757b }),
+                basinAccent: matLib.getLambert({ color: 0x5aa1b7 }),
+                basinDetail: matLib.getLambert({ color: 0x355965 }),
+                radarBase: matLib.getLambert({ color: 0x8c958e }),
+                radarAccent: matLib.getLambert({ color: 0xc7d5d0 }),
+                radarDetail: matLib.getLambert({ color: 0x56636b })
+            }, DEFAULT_QUADRANT_MAP);
         })();
 
         // --- Quadrant dispatch ---
         var quadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {};
-
-        var quadrantCtx = {
-            scene: scene,
-            addExclusion: function (x, z, r) { addSpawnExclusionCircle(x, z, r); },
-            addWaterfallSheet: function (data) { animatedWaterfallSheets.push(data); },
-            addMistCard: function (data) { animatedMistCards.push(data); },
-            addLeafSway: function (data) { animatedLeaves.push(data); },
-            addIceShimmer: function (data) { animatedIceShimmers.push(data); },
-            addFlicker: function (data) { animatedFlickers.push(data); }
-        };
 
         for (var qi = 0; qi < DEFAULT_QUADRANT_MAP.length; qi++) {
             var entry = DEFAULT_QUADRANT_MAP[qi];
@@ -437,10 +442,11 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             if (typeof builder !== 'function') continue;
             var qBounds = quadrantBounds(entry.quadrant, 6);
             var stats = builder(qBounds, place, quadrantCtx);
-            if (stats && generationStats[entry.biome]) {
-                var target = generationStats[entry.biome];
+            if (stats) {
+                var target = generationStats[entry.biome] || {};
+                generationStats[entry.biome] = target;
                 for (var sk in stats) {
-                    if (typeof stats[sk] === 'number') target[sk] = stats[sk];
+                    if (typeof stats[sk] === 'number') target[sk] = (Number(target[sk]) || 0) + stats[sk];
                 }
             }
         }
@@ -615,6 +621,21 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             flk.material.emissiveIntensity = v;
         }
 
+        for (var sti = 0; sti < animatedSteamColumns.length; sti++) {
+            var steam = animatedSteamColumns[sti];
+            if (!steam || !steam.tiles || !steam.tiles.length) continue;
+            var cycle = Math.max(1.4, Number(steam.cycle || 2.4));
+            for (var stj = 0; stj < steam.tiles.length; stj++) {
+                var steamTile = steam.tiles[stj];
+                if (!steamTile || !steamTile.mesh || !steamTile.material) continue;
+                var local = ((animClock + Number(steamTile.phase || 0)) % cycle) / cycle;
+                steamTile.mesh.position.y = Number(steamTile.baseY || 0) + (local * Number(steam.rise || 3.2));
+                steamTile.mesh.position.x = Number(steamTile.baseX || 0) + Math.sin((animClock * Number(steam.swayFreq || 0.9)) + Number(steamTile.phase || 0)) * Number(steam.swayAmp || 0.18);
+                steamTile.mesh.position.z = Number(steamTile.baseZ || 0) + Math.cos((animClock * Number(steam.swayFreq || 0.9)) + Number(steamTile.phase || 0)) * Number(steam.depthAmp || 0.12);
+                steamTile.material.opacity = Math.max(0, Number(steam.baseOpacity || 0.16) * (1 - local));
+            }
+        }
+
         for (var ci = 0; ci < animatedClouds.length; ci++) {
             var cloud = animatedClouds[ci];
             if (!cloud || !cloud.root) continue;
@@ -649,8 +670,6 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
     GameWorld.getSize = function () { return WORLD_SIZE; };
     GameWorld.getCenter = function () { return WORLD_CENTER; };
     GameWorld.getAreaScale = function () { return WORLD_AREA_SCALE; };
-    GameWorld.getCombatScale = function () { return getCombatScale(); };
-    GameWorld.scaleCombatDistance = function (value) { return scaleCombatDistance(value); };
     GameWorld.getSpawnPadding = function () { return DEFAULT_SPAWN_PADDING; };
     GameWorld.getRandomSpawnPoint = function (padding, options) { return randomSpawnPoint(padding, options); };
     GameWorld.getGroundHeightAt = function (x, z) { return getGroundHeightAt(x, z); };

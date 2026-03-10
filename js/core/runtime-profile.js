@@ -22,7 +22,7 @@
             backendKind: 'cloudflare-prod',
             backendLabel: 'CLOUDFLARE PROD',
             authorityMode: 'networked',
-            authMode: 'guest',
+            authMode: 'public',
             roomStrategy: 'global',
             roomPrefix: '',
             visible: 'always'
@@ -35,7 +35,7 @@
             backendKind: 'cloudflare-prod',
             backendLabel: 'CLOUDFLARE PROD',
             authorityMode: 'networked',
-            authMode: 'guest',
+            authMode: 'public',
             roomStrategy: 'private',
             roomPrefix: 'cf-solo',
             visible: 'always'
@@ -48,7 +48,7 @@
             backendKind: 'local-worker',
             backendLabel: 'LOCAL WORKER',
             authorityMode: 'networked',
-            authMode: 'guest',
+            authMode: 'public',
             roomStrategy: 'fixed',
             roomPrefix: '',
             fixedRoomId: 'local-shared',
@@ -139,7 +139,9 @@
 
     function apiOriginFor(mode) {
         if (!mode || !mode.backendKind) return '';
-        if (mode.backendKind === 'cloudflare-prod' && isHttpEnvironment() && !isLocalEnvironment()) {
+        // Keep browser HTTP API traffic on the same origin so local Vite proxying,
+        // Pages Functions, and production routing all use the same `/api` contract.
+        if (isHttpEnvironment()) {
             return String(window.location.origin || '');
         }
         return backendOriginFor(mode.backendKind);

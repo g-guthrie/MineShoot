@@ -44,37 +44,37 @@
             defaultWallhackRadius: 90
         },
         weapons: {
-            rifle: 100,
+            rifle: 110,
             pistol: 54,
-            machinegun: 40,
-            shotgun: 22,
+            machinegun: 58,
+            shotgun: 26,
             sniper: 99999,
             seekergun: 28
         },
         weaponFalloff: {
             rifle: [
-                { maxDistance: 24, scale: 1.0 },
-                { maxDistance: 42, scale: 0.95 },
-                { maxDistance: 68, scale: 0.87 },
-                { maxDistance: 100, scale: 0.74 }
+                { maxDistance: 32, scale: 1.0 },
+                { maxDistance: 58, scale: 0.95 },
+                { maxDistance: 90, scale: 0.86 },
+                { maxDistance: 120, scale: 0.76 }
             ],
             pistol: [
-                { maxDistance: 12, scale: 1.0 },
-                { maxDistance: 22, scale: 0.84 },
-                { maxDistance: 34, scale: 0.60 },
-                { maxDistance: 54, scale: 0.40 }
+                { maxDistance: 16, scale: 1.0 },
+                { maxDistance: 28, scale: 0.88 },
+                { maxDistance: 42, scale: 0.72 },
+                { maxDistance: 54, scale: 0.56 }
             ],
             machinegun: [
-                { maxDistance: 8, scale: 1.0 },
-                { maxDistance: 15, scale: 0.76 },
-                { maxDistance: 24, scale: 0.50 },
-                { maxDistance: 40, scale: 0.28 }
+                { maxDistance: 16, scale: 1.0 },
+                { maxDistance: 30, scale: 0.92 },
+                { maxDistance: 48, scale: 0.78 },
+                { maxDistance: 72, scale: 0.64 }
             ],
             shotgun: [
-                { maxDistance: 6, scale: 1.0 },
-                { maxDistance: 10, scale: 0.70 },
-                { maxDistance: 15, scale: 0.40 },
-                { maxDistance: 22, scale: 0.15 }
+                { maxDistance: 7, scale: 1.0 },
+                { maxDistance: 12, scale: 0.8 },
+                { maxDistance: 18, scale: 0.55 },
+                { maxDistance: 26, scale: 0.28 }
             ],
             sniper: [
                 { maxDistance: 99999, scale: 1.0 }
@@ -84,10 +84,10 @@
             ]
         },
         throwables: {
-            fragRadius: 5.4,
+            fragRadius: 6.8,
             seekerRadius: 5.0,
             seekerShotRadius: 4.6,
-            molotovFireRadius: 3.2,
+            molotovFireRadius: 3.8,
             seekerAcquireRange: 18,
             seekerAcquireHalfAngleDeg: 35,
             seekerStickExplodeDelay: 0.65
@@ -208,24 +208,17 @@
 
     var BASE = buildBase();
 
-    function scaleDistance(meters) {
-        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.scaleCombatDistance) {
-            return globalThis.__MAYHEM_RUNTIME.GameWorld.scaleCombatDistance(meters);
-        }
-        return meters;
-    }
-
-    function scaledCopy(map) {
+    function copyMap(map) {
         var out = {};
         for (var key in map) {
             if (Object.prototype.hasOwnProperty.call(map, key)) {
-                out[key] = scaleDistance(map[key]);
+                out[key] = map[key];
             }
         }
         return out;
     }
 
-    function normalizeAndScaleFalloffBands(bands) {
+    function normalizeFalloffBands(bands) {
         if (!Array.isArray(bands) || bands.length === 0) return [];
         var out = [];
         for (var i = 0; i < bands.length; i++) {
@@ -235,7 +228,7 @@
             if (!isFinite(maxDistance) || maxDistance <= 0) continue;
             if (!isFinite(scale)) continue;
             out.push({
-                maxDistance: scaleDistance(maxDistance),
+                maxDistance: maxDistance,
                 scale: Math.max(0, scale)
             });
         }
@@ -246,26 +239,26 @@
     GameCombatTuning.getAwarenessTuning = function () {
         return {
             segments: BASE.awareness.segments,
-            radarRange: scaleDistance(BASE.awareness.radarRange),
-            coreRange: scaleDistance(BASE.awareness.coreRange),
-            beaconMinRange: scaleDistance(BASE.awareness.beaconMinRange),
+            radarRange: BASE.awareness.radarRange,
+            coreRange: BASE.awareness.coreRange,
+            beaconMinRange: BASE.awareness.beaconMinRange,
             beaconMaxCount: BASE.awareness.beaconMaxCount
         };
     };
 
     GameCombatTuning.getEnemyTuning = function () {
         return {
-            fireRange: scaleDistance(BASE.enemy.fireRange),
-            headshotNearRange: scaleDistance(BASE.enemy.headshotNearRange),
-            headshotMidRange: scaleDistance(BASE.enemy.headshotMidRange),
-            defaultWallhackRadius: scaleDistance(BASE.enemy.defaultWallhackRadius)
+            fireRange: BASE.enemy.fireRange,
+            headshotNearRange: BASE.enemy.headshotNearRange,
+            headshotMidRange: BASE.enemy.headshotMidRange,
+            defaultWallhackRadius: BASE.enemy.defaultWallhackRadius
         };
     };
 
     GameCombatTuning.getWeaponRange = function (weaponId) {
         var meters = BASE.weapons[weaponId];
         if (typeof meters !== 'number') return 0;
-        return scaleDistance(meters);
+        return meters;
     };
 
     GameCombatTuning.getWeaponFalloffTuning = function (weaponId) {
@@ -273,16 +266,16 @@
         var sharedMap = BASE.weaponFalloff || {};
         var fallbackMap = DEFAULTS.weaponFalloff || {};
         var profile = sharedMap[id] || fallbackMap[id] || [];
-        return normalizeAndScaleFalloffBands(profile);
+        return normalizeFalloffBands(profile);
     };
 
     GameCombatTuning.getThrowableDistanceTuning = function () {
         return {
-            fragRadius: scaleDistance(BASE.throwables.fragRadius),
-            seekerRadius: scaleDistance(BASE.throwables.seekerRadius),
-            seekerShotRadius: scaleDistance(BASE.throwables.seekerShotRadius),
-            molotovFireRadius: scaleDistance(BASE.throwables.molotovFireRadius),
-            seekerAcquireRange: scaleDistance(BASE.throwables.seekerAcquireRange),
+            fragRadius: BASE.throwables.fragRadius,
+            seekerRadius: BASE.throwables.seekerRadius,
+            seekerShotRadius: BASE.throwables.seekerShotRadius,
+            molotovFireRadius: BASE.throwables.molotovFireRadius,
+            seekerAcquireRange: BASE.throwables.seekerAcquireRange,
             seekerAcquireHalfAngleDeg: BASE.throwables.seekerAcquireHalfAngleDeg,
             seekerStickExplodeDelay: BASE.throwables.seekerStickExplodeDelay
         };
@@ -290,13 +283,13 @@
 
     GameCombatTuning.getThrowableMechanicsTuning = function () {
         return {
-            aimRayRange: scaleDistance(BASE.throwableMechanics.aimRayRange),
+            aimRayRange: BASE.throwableMechanics.aimRayRange,
             fragBounceMaxCount: BASE.throwableMechanics.fragBounceMaxCount,
             fragBounceVelocityDamping: BASE.throwableMechanics.fragBounceVelocityDamping,
             fragBounceVerticalDamping: BASE.throwableMechanics.fragBounceVerticalDamping,
             fragBounceStopSpeedSq: BASE.throwableMechanics.fragBounceStopSpeedSq,
             predictedTtlMs: BASE.throwableMechanics.predictedTtlMs,
-            throwIntentOriginMaxOffset: scaleDistance(BASE.throwableMechanics.throwIntentOriginMaxOffset),
+            throwIntentOriginMaxOffset: BASE.throwableMechanics.throwIntentOriginMaxOffset,
             throwIntentDirectionMinDot: BASE.throwableMechanics.throwIntentDirectionMinDot
         };
     };
@@ -305,11 +298,11 @@
         var id = classId || 'abilities';
         var meters = BASE.classWallhackRadius[id];
         if (typeof meters !== 'number') meters = BASE.classWallhackRadius.abilities || 90;
-        return scaleDistance(meters);
+        return meters;
     };
 
     GameCombatTuning.getClassAbilityTuning = function () {
-        return scaledCopy(BASE.classAbilities);
+        return copyMap(BASE.classAbilities);
     };
 
     GameCombatTuning.getRawSharedTuning = function () {
@@ -319,7 +312,6 @@
 
     GameCombatTuning.debugDump = function () {
         return {
-            combatScale: (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getCombatScale) ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCombatScale() : 1,
             awareness: GameCombatTuning.getAwarenessTuning(),
             enemy: GameCombatTuning.getEnemyTuning(),
             weaponRanges: {

@@ -108,7 +108,7 @@
         }
 
         if (combatBeaconsEl) {
-            for (var b = 0; b < 1; b++) {
+            for (var b = 0; b < 4; b++) {
                 var beacon = document.createElement('div');
                 beacon.className = 'combat-beacon-dot';
                 combatBeaconsEl.appendChild(beacon);
@@ -155,6 +155,14 @@
         }
 
         var ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
+        if (String(matchState.gameMode || '') === 'lms') {
+            var lmsLives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
+            var lmsCharge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
+            var chargeGoal = Math.max(1, Number(matchState.lms && matchState.lms.chargePerExtraLife || 2));
+            var remaining = Math.max(0, Number(matchState.lms && matchState.lms.remainingPlayers || 0));
+            killCounterEl.textContent = 'Lives: ' + lmsLives + ' | Charge: ' + lmsCharge + '/' + chargeGoal + ' | Left: ' + remaining;
+            return;
+        }
         if (String(matchState.gameMode || '') === 'tdm') {
             var teamId = String(selfState && selfState.teamId || '');
             var teamProgress = Number(matchState.teamProgress && matchState.teamProgress[teamId] || 0);
@@ -320,17 +328,27 @@
         }
     };
 
-    GameUI.updateCooldown = function (ready, pct) {
+    GameUI.updateCooldown = function (state) {
         if (!cooldownBarEl || !cooldownStatusEl) return;
+        var status = String(state && state.status || 'ready');
+        var pct = Math.max(0, Math.min(1, Number(state && state.pct != null ? state.pct : 1)));
         cooldownBarEl.style.width = (pct * 100) + '%';
-        if (ready) {
+        if (status === 'reloading') {
+            cooldownBarEl.style.background = '#ff5c5c';
+            cooldownStatusEl.textContent = 'RELOADING';
+            cooldownStatusEl.style.color = '#ff5c5c';
+        } else if (status === 'reloaded') {
             cooldownBarEl.style.background = '#4CAF50';
-            cooldownStatusEl.textContent = 'READY';
+            cooldownStatusEl.textContent = 'RELOADED';
             cooldownStatusEl.style.color = '#4CAF50';
-        } else {
+        } else if (status === 'cooldown') {
             cooldownBarEl.style.background = '#FFC107';
             cooldownStatusEl.textContent = 'COOLDOWN';
             cooldownStatusEl.style.color = '#FFC107';
+        } else {
+            cooldownBarEl.style.background = '#4CAF50';
+            cooldownStatusEl.textContent = 'READY';
+            cooldownStatusEl.style.color = '#4CAF50';
         }
     };
 
@@ -340,7 +358,11 @@
         if (weapon.pellets && weapon.pellets > 1) {
             mode = weapon.pellets + ' PELLETS';
         }
-        weaponInfoEl.textContent = weapon.name + ' | ' + mode + ' | ' +
+        var ammo = '';
+        if (weapon.magazineSize && weapon.magazineSize > 0) {
+            ammo = ' | ' + Math.max(0, Number(weapon.ammoInMag || 0)) + '/' + Math.max(1, Number(weapon.magazineSize || 1));
+        }
+        weaponInfoEl.textContent = weapon.name + ammo + ' | ' + mode + ' | ' +
             weapon.bodyDamage + '/' + weapon.headDamage + ' DMG';
     };
 

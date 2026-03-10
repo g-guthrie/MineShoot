@@ -17,6 +17,7 @@
     var localThrowSeq = 1;
     var lastSeekerShotMeta = null;
     var debugInstantCooldowns = false;
+    var debugPreviewVolumesEnabled = false;
     var debugTelemetry = {
         lastIntent: null,
         lastAckClientThrowId: '',
@@ -45,6 +46,8 @@
         dotsNear: null,
         dotsFar: null,
         impact: null,
+        areaSphere: null,
+        areaDisk: null,
         activeType: ''
     };
     var trajectoryPreviewTuning = {
@@ -250,7 +253,8 @@
     }
 
     function buildFireZoneMesh(radius) {
-        return new THREE.Mesh(
+        var root = new THREE.Group();
+        var disk = new THREE.Mesh(
             new THREE.CylinderGeometry(radius, radius, 0.08, 16),
             new THREE.MeshBasicMaterial({
                 color: 0xff7733,
@@ -258,26 +262,115 @@
                 opacity: 0.45
             })
         );
+        root.add(disk);
+
+        var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
+        if (assetFactory && assetFactory.createParticleAsset) {
+            var flame = assetFactory.createParticleAsset('fire', { color: 0xff8833 });
+            if (flame) {
+                flame.position.y = 0.18;
+                flame.scale.set(Math.max(0.85, radius * 0.26), Math.max(0.85, radius * 0.34), Math.max(0.85, radius * 0.26));
+                root.add(flame);
+            }
+        }
+
+        return root;
     }
 
-    function spawnFlash(position, color, baseScale, life) {
-        if (!sceneRef) return;
+    function collectFadeMaterials(root) {
+        var mats = [];
+
+        function push(mat) {
+            if (!mat) return;
+            if (Array.isArray(mat)) {
+                for (var i = 0; i < mat.length; i++) push(mat[i]);
+                return;
+            }
+            if (mats.indexOf(mat) !== -1) return;
+            mat.transparent = true;
+            mats.push(mat);
+        }
+
+        if (!root) return mats;
+        if (root.material) push(root.material);
+        if (root.traverse) {
+            root.traverse(function (node) {
+                if (!node || !node.material) return;
+                push(node.material);
+            });
+        }
+        return mats;
+    }
+
+    function spawnFlashObject(object3d, position, baseScale, life, options) {
+        if (!sceneRef || !object3d) return;
+        options = options || {};
+        var fadeMaterials = collectFadeMaterials(object3d);
+        object3d.position.copy(position);
+        object3d.scale.set(baseScale, baseScale, baseScale);
+        sceneRef.add(object3d);
+        impactFlashes.push({
+            mesh: object3d,
+            materials: fadeMaterials,
+            baseMaterialOpacities: fadeMaterials.map(function (mat) {
+                return (typeof mat.opacity === 'number') ? mat.opacity : 1;
+            }),
+            life: life,
+            maxLife: life,
+            startScale: Number(baseScale || 0.2),
+            endScale: Number(options.endScale || (baseScale * 2.0)),
+            startOpacity: Number(options.opacity || 0.85)
+        });
+    }
+
+    function spawnFlash(position, color, baseScale, life, options) {
+        options = options || {};
         var flash = new THREE.Mesh(
-            new THREE.SphereGeometry(0.4, 8, 8),
+            new THREE.SphereGeometry(Number(options.geometryRadius || 0.4), 8, 8),
             new THREE.MeshBasicMaterial({
                 color: color,
                 transparent: true,
-                opacity: 0.85
+                opacity: Number(options.opacity || 0.85),
+                wireframe: !!options.wireframe,
+                depthTest: options.depthTest !== false,
+                depthWrite: !!options.depthWrite
             })
         );
-        flash.position.copy(position);
-        flash.scale.set(baseScale, baseScale, baseScale);
-        sceneRef.add(flash);
-        impactFlashes.push({
-            mesh: flash,
-            life: life,
-            maxLife: life
+        spawnFlashObject(flash, position, baseScale, life, options);
+    }
+
+    function spawnExplosionBurst(position, color, radius) {
+        var blastRadius = Math.max(0.6, Number(radius || 1.2));
+        spawnFlash(position, color, Math.max(0.28, blastRadius * 0.18), 0.18, {
+            endScale: Math.max(0.9, blastRadius * 0.8),
+            opacity: 0.92,
+            depthTest: false
         });
+        spawnFlash(position, color, Math.max(0.18, blastRadius * 0.12), 0.26, {
+            geometryRadius: 0.5,
+            endScale: Math.max(1.4, blastRadius * 2.05),
+            opacity: 0.3,
+            wireframe: true,
+            depthTest: false
+        });
+
+        var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
+        if (assetFactory && assetFactory.createParticleAsset) {
+            var sparks = assetFactory.createParticleAsset('sparks', { color: color });
+            if (sparks) {
+                spawnFlashObject(sparks, position, Math.max(0.4, blastRadius * 0.24), 0.16, {
+                    endScale: Math.max(0.95, blastRadius * 0.9),
+                    opacity: 0.92
+                });
+            }
+            var fire = assetFactory.createParticleAsset('fire', { color: color });
+            if (fire) {
+                spawnFlashObject(fire, position, Math.max(0.24, blastRadius * 0.15), 0.22, {
+                    endScale: Math.max(1.15, blastRadius * 1.35),
+                    opacity: 0.74
+                });
+            }
+        }
     }
 
     function getDefaultThrowOrigin(camera, forward, right, up) {
@@ -523,6 +616,8 @@
         if (trajectoryPreview.dotsNear) trajectoryPreview.dotsNear.visible = false;
         if (trajectoryPreview.dotsFar) trajectoryPreview.dotsFar.visible = false;
         if (trajectoryPreview.impact) trajectoryPreview.impact.visible = false;
+        if (trajectoryPreview.areaSphere) trajectoryPreview.areaSphere.visible = false;
+        if (trajectoryPreview.areaDisk) trajectoryPreview.areaDisk.visible = false;
     }
 
     function ensureTrajectoryPreviewMeshes() {
@@ -589,6 +684,42 @@
             sceneRef.add(trajectoryPreview.impact);
         }
 
+        if (!trajectoryPreview.areaSphere) {
+            trajectoryPreview.areaSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(1, 18, 14),
+                new THREE.MeshBasicMaterial({
+                    color: 0xffd480,
+                    transparent: true,
+                    opacity: 0.12,
+                    wireframe: true,
+                    depthTest: false,
+                    depthWrite: false
+                })
+            );
+            trajectoryPreview.areaSphere.visible = false;
+            trajectoryPreview.areaSphere.renderOrder = 59;
+            trajectoryPreview.areaSphere.layers.set(0);
+            sceneRef.add(trajectoryPreview.areaSphere);
+        }
+
+        if (!trajectoryPreview.areaDisk) {
+            trajectoryPreview.areaDisk = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1, 0.05, 28),
+                new THREE.MeshBasicMaterial({
+                    color: 0xff7a33,
+                    transparent: true,
+                    opacity: 0.2,
+                    wireframe: true,
+                    depthTest: false,
+                    depthWrite: false
+                })
+            );
+            trajectoryPreview.areaDisk.visible = false;
+            trajectoryPreview.areaDisk.renderOrder = 59;
+            trajectoryPreview.areaDisk.layers.set(0);
+            sceneRef.add(trajectoryPreview.areaDisk);
+        }
+
         return true;
     }
 
@@ -597,6 +728,34 @@
             return { lineNear: 0xb77730, lineFar: 0xffffff, impact: 0xff8a3d };
         }
         return { lineNear: 0x98a4b8, lineFar: 0xffffff, impact: 0xffffff };
+    }
+
+    function updateTrajectoryAreaPreview(type, sim, previewColors) {
+        if (!trajectoryPreview.areaSphere || !trajectoryPreview.areaDisk) return;
+        trajectoryPreview.areaSphere.visible = false;
+        trajectoryPreview.areaDisk.visible = false;
+        if (!debugPreviewVolumesEnabled || !sim || !sim.impactPoint) return;
+
+        if (type === 'frag') {
+            var fragRadius = Math.max(0.2, Number(defs.frag && defs.frag.radius || 0));
+            if (trajectoryPreview.areaSphere.material && trajectoryPreview.areaSphere.material.color) {
+                trajectoryPreview.areaSphere.material.color.setHex(previewColors.impact);
+            }
+            trajectoryPreview.areaSphere.position.copy(sim.impactPoint);
+            trajectoryPreview.areaSphere.scale.set(fragRadius, fragRadius, fragRadius);
+            trajectoryPreview.areaSphere.visible = true;
+            return;
+        }
+
+        if (type === 'molotov') {
+            var fireRadius = Math.max(0.2, Number(defs.molotov && defs.molotov.fireRadius || 0));
+            if (trajectoryPreview.areaDisk.material && trajectoryPreview.areaDisk.material.color) {
+                trajectoryPreview.areaDisk.material.color.setHex(previewColors.impact);
+            }
+            trajectoryPreview.areaDisk.position.set(sim.impactPoint.x, sim.impactPoint.y + 0.03, sim.impactPoint.z);
+            trajectoryPreview.areaDisk.scale.set(fireRadius, 1, fireRadius);
+            trajectoryPreview.areaDisk.visible = true;
+        }
     }
 
     function splitPreviewPoints(points) {
@@ -776,6 +935,7 @@
         } else {
             trajectoryPreview.impact.visible = false;
         }
+        updateTrajectoryAreaPreview(type, sim, previewColors);
 
         return {
             type: type,
@@ -804,7 +964,7 @@
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
-        spawnFlash(position, 0xffaa22, 0.2, 0.18);
+        spawnExplosionBurst(position, 0xffaa22, radius);
 
         var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
         for (var i = 0; i < enemies.length; i++) {
@@ -853,7 +1013,7 @@
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
-        spawnFlash(position, 0xff6622, 0.25, 0.2);
+        spawnExplosionBurst(position, 0xff6622, defs.molotov.fireRadius || 3.2);
     }
 
     function removeProjectile(index) {
@@ -1124,8 +1284,15 @@
             }
 
             var t = 1 - (flash.life / flash.maxLife);
-            flash.mesh.scale.set(0.2 + t * 1.8, 0.2 + t * 1.8, 0.2 + t * 1.8);
-            flash.mesh.material.opacity = Math.max(0, 0.85 * (1 - t));
+            var scale = flash.startScale + ((flash.endScale - flash.startScale) * t);
+            flash.mesh.scale.set(scale, scale, scale);
+            if (flash.materials && flash.materials.length) {
+                for (var m = 0; m < flash.materials.length; m++) {
+                    flash.materials[m].opacity = Math.max(0, (flash.baseMaterialOpacities[m] || 1) * flash.startOpacity * (1 - t));
+                }
+            } else if (flash.mesh.material) {
+                flash.mesh.material.opacity = Math.max(0, flash.startOpacity * (1 - t));
+            }
         }
     }
 
@@ -1159,9 +1326,17 @@
         if (trajectoryPreview.impact && trajectoryPreview.impact.parent) {
             trajectoryPreview.impact.parent.remove(trajectoryPreview.impact);
         }
+        if (trajectoryPreview.areaSphere && trajectoryPreview.areaSphere.parent) {
+            trajectoryPreview.areaSphere.parent.remove(trajectoryPreview.areaSphere);
+        }
+        if (trajectoryPreview.areaDisk && trajectoryPreview.areaDisk.parent) {
+            trajectoryPreview.areaDisk.parent.remove(trajectoryPreview.areaDisk);
+        }
         trajectoryPreview.dotsNear = null;
         trajectoryPreview.dotsFar = null;
         trajectoryPreview.impact = null;
+        trajectoryPreview.areaSphere = null;
+        trajectoryPreview.areaDisk = null;
         trajectoryPreview.activeType = '';
 
         sceneRef = scene;
@@ -1445,7 +1620,11 @@
             return;
         }
         if (event.t === 'throw_explode') {
-            spawnFlash(new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)), 0xffaa22, 0.2, 0.18);
+            spawnExplosionBurst(
+                new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)),
+                0xffaa22,
+                Number(event.radius || defs.frag.radius || 5.4)
+            );
             return;
         }
         if (event.t === 'aoe_end' && event.zoneId) {
@@ -1541,6 +1720,7 @@
 
     GameThrowables.setDebugMode = function (enabled) {
         debugInstantCooldowns = !!enabled;
+        debugPreviewVolumesEnabled = !!enabled;
         if (debugInstantCooldowns) {
             for (var i = 0; i < throwableOrder.length; i++) {
                 var inv = inventory[throwableOrder[i]];
@@ -1549,6 +1729,8 @@
                     inv.cooldownRemaining = 0;
                 }
             }
+        } else {
+            clearTrajectoryPreview();
         }
     };
 

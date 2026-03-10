@@ -198,6 +198,7 @@
             if (!target || target.alive === false || !target.worldPos || !target.enemyRef || !target.hitbox) continue;
             var distSq = distanceSqXYZ(target.worldPos, point);
             if (distSq > bestDistSq) continue;
+            if (!deadeyeHasLOS(makeVector3Like(point), makeVector3Like(target.worldPos), Math.sqrt(distSq) + 0.25)) continue;
             best = target;
             bestDistSq = distSq;
         }
@@ -274,6 +275,10 @@
         return { targets: markers };
     }
 
+    function widenedChokeWidth(lockBoxPx) {
+        return Math.max(24, Number(lockBoxPx || 180) * 1.2);
+    }
+
     function getChokeRectSize(camera, cfg) {
         var deadeyeDef = getAbilityDef('deadeye') || {};
         var deadeyeMinDot = Number(deadeyeDef.minDot || 0.22);
@@ -287,7 +292,7 @@
             height = Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight));
         }
         return {
-            width: Math.max(24, Number(cfg && cfg.lockBoxPx || 180)),
+            width: widenedChokeWidth(cfg && cfg.lockBoxPx),
             height: height
         };
     }
@@ -341,7 +346,7 @@
         var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
         if (count <= 0) {
             deadeyeState = null;
-            setSharedCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownForSlot(slotIndex, debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
             return { ok: false, message: 'No Deadeye locks acquired.' };
         }
 
@@ -365,7 +370,7 @@
         }
 
         deadeyeState = null;
-        setSharedCooldown(debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : nowMs() + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
         return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
     }
@@ -392,6 +397,10 @@
         if (!target || !target.hitbox) {
             return { ok: false, message: 'No target in choke reticle.' };
         }
+        var chokeResult = null;
+        if (Number(cfg.castDamage || 0) > 0 && globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) {
+            chokeResult = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(target.hitbox, cfg.castDamage || 0);
+        }
         if (target.enemyRef && globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun) {
             globalThis.__MAYHEM_RUNTIME.GameEnemy.applyStun(target.enemyRef, cfg.duration || 1.6);
             target.enemyRef.chokeVictimState = {
@@ -404,7 +413,15 @@
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose) {
             globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose(cfg.duration || 1.6);
         }
-        setSharedCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        if (chokeResult && onEnemyHit) {
+            onEnemyHit({
+                hitPoint: makeVector3Like(target.worldPos),
+                damage: cfg.castDamage || 0,
+                hitType: 'body',
+                result: chokeResult
+            });
+        }
         if (notifier) notifier('Choke cast.', 700);
         return { ok: true, kind: 'choke' };
     }
@@ -448,7 +465,7 @@
             hitAt: now + travelMs,
             endsAt: now + travelMs
         }
-        setSharedCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Chain Hook out.', 550);
         return { ok: true, kind: 'hook_start' };
     }
@@ -507,7 +524,7 @@
             healAmount: Number(cfg.healAmount || 150),
             applied: false
         };
-        setSharedCooldown(debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+        setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (notifier) notifier('Healing...', 450);
         return { ok: true, kind: 'heal_start' };
     }
@@ -672,7 +689,8 @@
                             hookState.playerPos,
                             hookState.playerYaw || 0,
                             hookState.pullDistance || 3.2,
-                            Number((hookState.travelSpeed || 26))
+                            Number((hookState.travelSpeed || 26)),
+                            Number((hookState.stunDuration || 0))
                         );
                     }
                     hookState.phase = 'latched';

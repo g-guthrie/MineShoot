@@ -1,23 +1,15 @@
 import { json, sanitizeRoomId } from './transport.js';
-import { getSessionFromRequest } from './auth.js';
-import {
-  createPrivateRoomRecord,
-  getPrivateRoomById,
-  touchPrivateRoomById
-} from './private-rooms.js';
+import { resolveActor } from './party.js';
+import { handlePrivateRoomLobby } from './private-room-lobby.js';
 import {
   PUBLIC_ROOM_PREFIX,
-  PRIVATE_ROOM_PREFIX,
   DEFAULT_PUBLIC_ROOM_COUNT,
   PUBLIC_ROOM_START_THRESHOLD,
   PUBLIC_ROOM_SOFT_TARGET,
-  DEFAULT_PUBLIC_ROOM_CAPACITY,
-  PRIVATE_ROOM_CODE_LENGTH
+  DEFAULT_PUBLIC_ROOM_CAPACITY
 } from '../../shared/matchmaking-config.js';
 import {
-  privateRoomIdFromCode,
-  privateRoomCodeFromId,
-  normalizePrivateRoomId
+  privateRoomCodeFromId
 } from '../../shared/private-room-codes.js';
 
 function clampInt(value, min, max, fallback) {
@@ -36,6 +28,7 @@ function randomToken(length) {
 
 function normalizePublicGameMode(raw) {
   const mode = String(raw || 'ffa').trim().toLowerCase();
+  if (mode === 'lms') return 'lms';
   return mode === 'tdm' ? 'tdm' : 'ffa';
 }
 
@@ -108,11 +101,17 @@ async function allocateQuickMatch(env, requestedGameMode) {
     };
   }));
 
-  const selected =
-    chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
-    chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
-    chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
-    chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity);
+  const selected = gameMode === 'lms'
+    ? (
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD)
+    )
+    : (
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+      chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+      chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity)
+    );
 
   if (selected) {
     return buildRoomPayload(selected.roomId, 'public', {
@@ -132,32 +131,54 @@ async function allocateQuickMatch(env, requestedGameMode) {
   });
 }
 
-async function createPrivateRoom(env, request) {
-  const session = await getSessionFromRequest(env, request).catch(() => null);
-  for (let attempt = 0; attempt < 12; attempt++) {
-    const roomCode = randomToken(PRIVATE_ROOM_CODE_LENGTH).toUpperCase();
-    const roomId = privateRoomIdFromCode(roomCode);
-    try {
-      await createPrivateRoomRecord(env, roomId, roomCode, session && session.userId ? session.userId : '');
-      return buildRoomPayload(roomId, 'private');
-    } catch (_err) {
-      // Retry on rare code collisions or transient insert conflicts.
-    }
+async function delegatePrivateRoomAction(env, request, body, action) {
+  const actor = await resolveActor(env, request, body).catch(() => null);
+  if (!actor) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Private room requests require an actor identity.'
+    };
   }
-  throw new Error('Private room creation failed.');
-}
-
-async function joinPrivateRoom(env, rawRoomCode) {
-  const roomId = normalizePrivateRoomId(rawRoomCode);
-  if (!roomId || roomId === 'global') {
-    return { ok: false, reason: 'invalid' };
+  const delegatedBody = {
+    ...body,
+    action,
+    actorId: actor.id,
+    displayName: actor.displayName
+  };
+  const delegatedRequest = new Request('https://internal.test/api/private-room', {
+    method: 'POST',
+    headers: request.headers,
+    body: JSON.stringify(delegatedBody)
+  });
+  const response = await handlePrivateRoomLobby(env, delegatedRequest);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || !payload.ok) {
+    return {
+      ok: false,
+      status: response.status || 400,
+      error: (payload && payload.error) || 'Private room request failed.'
+    };
   }
-  const room = await getPrivateRoomById(env, roomId);
-  if (!room || !room.room_id) {
-    return { ok: false, reason: 'not_found' };
+  const room = payload.state && payload.state.room ? payload.state.room : null;
+  if (!room || !room.roomId) {
+    return {
+      ok: false,
+      status: 502,
+      error: 'Private room response missing room state.'
+    };
   }
-  await touchPrivateRoomById(env, room.room_id);
-  return { ok: true, payload: buildRoomPayload(room.room_id, 'private') };
+  return {
+    ok: true,
+    payload: buildRoomPayload(room.roomId, 'private', {
+      roomCode: room.roomCode,
+      gameMode: room.roomMode,
+      roomPhase: room.roomPhase,
+      state: payload.state,
+      movedCount: Number(payload.movedCount || 0),
+      skippedCount: Number(payload.skippedCount || 0)
+    })
+  };
 }
 
 export async function handleMatchmaking(env, request) {
@@ -178,15 +199,18 @@ export async function handleMatchmaking(env, request) {
   }
 
   if (action === 'private') {
-    const payload = await createPrivateRoom(env, request);
-    return json(payload);
+    const result = await delegatePrivateRoomAction(env, request, body, 'create');
+    if (!result.ok) {
+      return json({ ok: false, error: result.error }, result.status || 400);
+    }
+    return json(result.payload);
   }
 
   if (action === 'join') {
-    const result = await joinPrivateRoom(env, body.roomCode || body.roomId || '');
+    const result = await delegatePrivateRoomAction(env, request, body, 'join');
     if (!result.ok) {
-      if (result.reason === 'not_found') {
-        return json({ ok: false, error: 'Private room code not found.' }, 404);
+      if (result.status) {
+        return json({ ok: false, error: result.error || 'Private room join failed.' }, result.status);
       }
       return json({ ok: false, error: 'Enter a valid private room code.' }, 400);
     }

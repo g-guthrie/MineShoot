@@ -89,8 +89,20 @@
         return enemyWeaponPool[Math.floor(Math.random() * enemyWeaponPool.length)];
     }
 
+    function cloneVisualForRevealGhost(visual) {
+        if (!visual || !visual.clone) return null;
+        var originalUserData = visual.userData;
+        visual.userData = {};
+        try {
+            return visual.clone(true);
+        } finally {
+            visual.userData = originalUserData;
+        }
+    }
+
     function createRevealGhost(visual) {
-        var ghost = visual.clone(true);
+        var ghost = cloneVisualForRevealGhost(visual);
+        if (!ghost) return null;
         var mats = [];
 
         ghost.traverse(function (node) {
@@ -123,6 +135,7 @@
     function createEnemy(scene, index) {
         var color = skinColors[index % skinColors.length];
         var weaponId = randomEnemyWeapon();
+        var localMatchId = 'guest-bot-' + String(index + 1);
         var group = new THREE.Group();
         var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
         var actorVisual = actorFactory && actorFactory.create ? actorFactory.create({
@@ -132,7 +145,7 @@
             skinColor: 0xd2a77d,
             legColor: 0x333333,
             weaponId: weaponId,
-            targetId: 'enemy:' + index,
+            targetId: localMatchId,
             hitboxOpacity: hitboxVisible ? 0.3 : 0,
             includeRevealGhost: true
         }) : null;
@@ -167,6 +180,8 @@
             armorMax: 100,
             alive: true,
             index: index,
+            localMatchId: localMatchId,
+            displayName: 'BOT_' + String(index + 1),
             color: color,
             weaponType: weaponId,
             rig: visual.userData.rig || null,
@@ -193,6 +208,7 @@
             slowTimer: 0,
             slowMultiplier: 1,
             hookPullState: null,
+            justBeenHookedUntil: 0,
             chokeVictimState: null,
             seekerNeedleState: null
         };
@@ -249,9 +265,11 @@
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
             enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt, false, {
-                hooked: !!enemy.hookPullState,
+                hooked: !!enemy.hookPullState || Number(enemy.justBeenHookedUntil || 0) > Date.now(),
                 choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
-                startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0
+                startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0,
+                adsActive: !!engaging,
+                movingForward: speedNorm > 0.05
             });
         }
     }
@@ -310,6 +328,10 @@
             if (dist <= 0.08) {
                 enemy.group.position.x = desiredX;
                 enemy.group.position.z = desiredZ;
+                if (Number(pull.postHookStunDuration || 0) > 0) {
+                    enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
+                    GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
+                }
                 enemy.hookPullState = null;
             } else {
                 enemy.group.position.x += (toX / dist) * step;
@@ -525,8 +547,27 @@
             enemies.push(enemy);
             hitboxArray.push(enemy.bodyHitbox);
             hitboxArray.push(enemy.headHitbox);
+            if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
+                globalThis.__MAYHEM_RUNTIME.GameLocalMatch.registerEnemy(enemy);
+            }
         }
     };
+
+    function chokeLiftAt(state, now) {
+        if (!state) return 0;
+        var stamp = Number(now || Date.now());
+        var startedAt = Number(state.startedAt || 0);
+        var endsAt = Number(state.endsAt || 0);
+        if (!(endsAt > stamp)) return 0;
+        var maxLift = Number(state.liftHeight || 1.0);
+        if (!(endsAt > startedAt)) return maxLift;
+        var progress = Math.max(0, Math.min(1, (stamp - startedAt) / (endsAt - startedAt)));
+        if (progress <= 0) return 0;
+        if (progress >= 1) return 0;
+        if (progress < 0.24) return maxLift * Math.sin((progress / 0.24) * (Math.PI * 0.5));
+        if (progress > 0.76) return maxLift * Math.cos(((progress - 0.76) / 0.24) * (Math.PI * 0.5));
+        return maxLift;
+    }
 
     /**
      * @param {number} dt
@@ -551,13 +592,16 @@
                 updateStatusTimers(enemy, dt);
                 updateAI(enemy, dt);
                 var engaging = updateCombat(enemy, dt, playerPos, onPlayerHit);
-                enemy.group.position.y = enemy.chokeVictimState ? Number(enemy.chokeVictimState.liftHeight || 1.0) : 0;
+                enemy.group.position.y = chokeLiftAt(enemy.chokeVictimState, Date.now());
                 updateEnemyAnimation(enemy, dt, engaging);
                 updateRevealGhost(enemy, playerPos, camera, dt);
                 updateFlash(enemy, dt);
                 updateMuzzleFlash(enemy, dt);
                 syncHitboxPositions(enemy);
             } else {
+                if (enemy.respawnTimer < 0) {
+                    continue;
+                }
                 enemy.respawnTimer -= dt;
                 if (enemy.respawnTimer <= 0) {
                     GameEnemy.respawn(enemy);
@@ -614,16 +658,23 @@
     };
 
     GameEnemy.kill = function (enemy) {
+        var localMatchResult = null;
+        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
+            localMatchResult = globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyKilled(enemy);
+        }
         enemy.alive = false;
         enemy.group.visible = false;
         enemy.muzzleFlashTimer = 0;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
         enemy.chokeVictimState = null;
+        enemy.justBeenHookedUntil = 0;
 
         removeHitboxes(enemy);
 
-        enemy.respawnTimer = 5.0;
+        enemy.respawnTimer = localMatchResult
+            ? (typeof localMatchResult.respawnDelaySec === 'number' ? Number(localMatchResult.respawnDelaySec || 0) : -1)
+            : 5.0;
         enemy.seekerNeedleState = null;
     };
 
@@ -653,11 +704,15 @@
         enemy.slowTimer = 0;
         enemy.slowMultiplier = 1;
         enemy.hookPullState = null;
+        enemy.justBeenHookedUntil = 0;
         enemy.chokeVictimState = null;
         enemy.seekerNeedleState = null;
         if (enemy.weaponMuzzle) enemy.weaponMuzzle.visible = false;
         if (enemy.revealGhost) enemy.revealGhost.visible = false;
         resetFireCooldown(enemy);
+        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
+            globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyRespawn(enemy);
+        }
 
         addHitboxes(enemy);
         syncHitboxPositions(enemy);
@@ -714,14 +769,14 @@
         return true;
     };
 
-    GameEnemy.pullTarget = function (enemy, playerPos, playerYaw, pullDistance, pullSpeed) {
+    GameEnemy.pullTarget = function (enemy, playerPos, playerYaw, pullDistance, pullSpeed, stunDuration) {
         if (!enemy || !enemy.alive || !playerPos) return false;
         enemy.hookPullState = {
             pullDistance: Math.max(1.5, Number(pullDistance || 3.2)),
             pullSpeed: Math.max(8, Number(pullSpeed || 26)),
-            facingYaw: Math.atan2(playerPos.x - enemy.group.position.x, playerPos.z - enemy.group.position.z) + Math.PI
+            facingYaw: Math.atan2(playerPos.x - enemy.group.position.x, playerPos.z - enemy.group.position.z) + Math.PI,
+            postHookStunDuration: Math.max(0, Number(stunDuration || 0))
         };
-        GameEnemy.applyStun(enemy, 1.0);
         return true;
     };
 

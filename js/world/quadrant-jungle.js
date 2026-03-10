@@ -1,3 +1,5 @@
+import { pointInBounds as pt } from './biome-utils.js';
+
 /**
  * quadrant-jungle.js - Jungle / forest biome quadrant builder.
  * Plug-and-play: call buildJungleQuadrant(bounds, place, ctx) to populate any quadrant.
@@ -39,15 +41,6 @@
             firefly:    new THREE.MeshStandardMaterial({ color: 0xeedd44, emissive: 0xeedd44, emissiveIntensity: 0.8, transparent: true, opacity: 0.7 })
         };
         return MATS;
-    }
-
-    function pt(bounds, u, v) {
-        u = Math.max(0, Math.min(1, u));
-        v = Math.max(0, Math.min(1, v));
-        return {
-            x: bounds.minX + (bounds.maxX - bounds.minX) * u,
-            z: bounds.minZ + (bounds.maxZ - bounds.minZ) * v
-        };
     }
 
     // --- Buttress roots radiating from trunk base ---
@@ -254,32 +247,54 @@
     }
 
     function buildWaterfall(cx, cz, place, mats, ctx) {
-        // Taller rock face
-        place.addBlock(cx, 2.5, cz, 4.2, 5.0, 2.2, mats.stone, true);
-        // Stepped shelf at top (pour-over lip)
-        place.addBlock(cx, 5.2, cz + 0.4, 4.8, 0.5, 2.8, mats.mossy, true);
-        place.addBlock(cx, 5.6, cz - 0.2, 3.6, 0.35, 2.0, mats.stone, false);
+        // Main cliff mass: much taller and chunkier so the fall reads from across the map.
+        var rockStacks = [
+            { dx: 0.0, dy: 4.8, dz: 0.1, w: 7.6, h: 9.6, d: 3.4, moss: false },
+            { dx: -2.8, dy: 3.9, dz: 0.3, w: 2.3, h: 7.8, d: 2.6, moss: false },
+            { dx: 2.9, dy: 4.1, dz: 0.4, w: 2.5, h: 8.2, d: 2.7, moss: false },
+            { dx: -4.5, dy: 2.9, dz: 0.5, w: 2.1, h: 5.8, d: 2.2, moss: true },
+            { dx: 4.6, dy: 3.0, dz: 0.6, w: 2.0, h: 6.0, d: 2.1, moss: true },
+            { dx: -1.3, dy: 6.2, dz: -0.2, w: 3.0, h: 2.6, d: 2.2, moss: true },
+            { dx: 1.5, dy: 6.6, dz: -0.1, w: 2.6, h: 2.2, d: 1.9, moss: true }
+        ];
+        for (var rs = 0; rs < rockStacks.length; rs++) {
+            var stack = rockStacks[rs];
+            place.addBlock(
+                cx + stack.dx,
+                stack.dy,
+                cz + stack.dz,
+                stack.w,
+                stack.h,
+                stack.d,
+                stack.moss ? mats.mossy : mats.stone,
+                true
+            );
+        }
 
-        // Rocks framing the pour-over (asymmetric)
-        place.addBlock(cx - 1.6, 5.4, cz + 0.8, 1.0, 0.6, 0.8, mats.mossy, false);
-        place.addBlock(cx + 1.4, 5.3, cz + 0.6, 0.8, 0.5, 0.7, mats.stone, false);
-        place.addBlock(cx + 0.3, 5.5, cz + 0.9, 0.6, 0.4, 0.5, mats.mossy, false);
+        // Crown shelves and pour-over lip.
+        place.addBlock(cx - 0.2, 9.8, cz + 0.4, 8.8, 0.55, 3.4, mats.mossy, true);
+        place.addBlock(cx + 0.6, 10.4, cz - 0.25, 5.2, 0.4, 2.1, mats.stone, true);
+        place.addBlock(cx - 3.0, 8.8, cz + 0.95, 1.6, 0.5, 1.1, mats.mossy, false);
+        place.addBlock(cx + 2.8, 9.0, cz + 0.85, 1.4, 0.45, 1.0, mats.stone, false);
+        place.addBlock(cx + 0.2, 10.2, cz + 1.0, 1.3, 0.35, 0.9, mats.mossy, false);
 
-        // Side rocks creating a natural channel
-        place.addBlock(cx - 2.4, 2.0, cz + 0.5, 1.2, 2.5, 1.0, mats.stone, true);
-        place.addBlock(cx + 2.2, 1.6, cz + 0.3, 1.0, 2.0, 0.9, mats.stone, true);
-        place.addBlock(cx - 2.4, 3.4, cz + 0.5, 1.4, 0.3, 1.2, mats.mossy, false);
-        place.addBlock(cx + 2.2, 2.8, cz + 0.3, 1.2, 0.25, 1.0, mats.mossy, false);
+        // Base buttresses and channel walls.
+        place.addBlock(cx - 3.6, 2.1, cz + 1.1, 1.7, 4.2, 1.4, mats.stone, true);
+        place.addBlock(cx + 3.4, 2.3, cz + 1.0, 1.6, 4.6, 1.3, mats.stone, true);
+        place.addBlock(cx - 2.0, 1.1, cz + 2.6, 2.1, 2.2, 1.8, mats.mossy, true);
+        place.addBlock(cx + 2.2, 1.2, cz + 2.8, 2.0, 2.4, 1.8, mats.mossy, true);
+        place.addBlock(cx - 5.0, 0.7, cz + 2.2, 1.4, 1.4, 1.2, mats.stone, true);
+        place.addBlock(cx + 5.1, 0.8, cz + 2.0, 1.3, 1.6, 1.2, mats.stone, true);
 
-        // Chunky retro waterfall: block columns with slow stepped palette changes.
-        var tileColumns = 4;
-        var tileRows = 8;
-        var tileW = 0.56;
-        var tileH = 0.54;
-        var tileGapY = 0.06;
-        var baseX = cx - 0.9;
-        var baseY = 4.95;
-        var frontZ = cz + 1.18;
+        // Chunky retro waterfall: taller stepped sheet with wider lip.
+        var tileColumns = 5;
+        var tileRows = 13;
+        var tileW = 0.64;
+        var tileH = 0.72;
+        var tileGapY = 0.07;
+        var baseX = cx - 1.35;
+        var baseY = 9.2;
+        var frontZ = cz + 1.72;
         var waterfallTiles = [];
         for (var col = 0; col < tileColumns; col++) {
             for (var row = 0; row < tileRows; row++) {
@@ -288,7 +303,7 @@
                 tileMat.opacity = 0.66;
                 tileMat.color.setHex((row + col) % 2 === 0 ? 0x5eb6cf : 0x3d8fb3);
                 var tile = place.addBlock(
-                    baseX + (col * 0.6),
+                    baseX + (col * 0.7),
                     baseY - (row * (tileH + tileGapY)),
                     frontZ,
                     tileW,
@@ -307,27 +322,24 @@
         }
         ctx.addWaterfallSheet({
             tiles: waterfallTiles,
-            stepInterval: 0.5,
+            stepInterval: 0.42,
             darkColor: 0x3d8fb3,
             lightColor: 0x74d6f2
         });
 
-        // Basin pool (wider)
-        place.addBlock(cx, -0.01, cz + 3.0, 4.0, 0.08, 3.0, mats.water, false);
-        // Spray blocks at basin edges
-        place.addBlock(cx - 1.2, 0.06, cz + 3.8, 0.6, 0.08, 0.4, mats.water, false);
-        place.addBlock(cx + 1.0, 0.05, cz + 4.0, 0.5, 0.06, 0.35, mats.water, false);
+        // Basin and stepped outflow.
+        place.addBlock(cx, -0.02, cz + 4.35, 6.0, 0.1, 4.6, mats.water, false);
+        place.addBlock(cx - 0.2, 0.02, cz + 6.3, 4.4, 0.08, 2.2, mats.water, false);
+        place.addBlock(cx - 2.7, 0.12, cz + 5.2, 1.1, 0.24, 0.9, mats.stone, false);
+        place.addBlock(cx + 2.4, 0.14, cz + 5.5, 1.0, 0.28, 0.8, mats.mossy, false);
+        place.addBlock(cx + 0.5, 0.10, cz + 6.8, 0.9, 0.2, 0.7, mats.stone, false);
+        place.addBlock(cx - 1.4, 0.08, cz + 4.8, 0.7, 0.18, 0.5, mats.mossy, false);
 
-        // Splash rocks in basin
-        place.addBlock(cx - 0.9, 0.1, cz + 3.4, 0.5, 0.2, 0.4, mats.stone, false);
-        place.addBlock(cx + 0.7, 0.08, cz + 3.7, 0.4, 0.16, 0.3, mats.mossy, false);
-        place.addBlock(cx + 0.1, 0.06, cz + 4.2, 0.3, 0.12, 0.25, mats.stone, false);
-
-        // 3 mist cards at different angles and phases
+        // Mist cards scaled up to the larger drop.
         var mistConfigs = [
-            { x: cx,       z: cz + 3.0, y: 0.6, w: 3.2, h: 1.4, rotX: -0.3, phase: 2.45, opacity: 0.18 },
-            { x: cx - 0.8, z: cz + 3.5, y: 0.4, w: 2.0, h: 1.0, rotX: -0.15, phase: 4.1, opacity: 0.12 },
-            { x: cx + 0.6, z: cz + 3.8, y: 0.5, w: 1.8, h: 0.8, rotX: -0.4, phase: 0.8, opacity: 0.10 }
+            { x: cx,       z: cz + 4.3, y: 1.5, w: 5.4, h: 2.4, rotX: -0.36, phase: 2.45, opacity: 0.2 },
+            { x: cx - 1.4, z: cz + 4.9, y: 1.0, w: 3.3, h: 1.6, rotX: -0.22, phase: 4.1, opacity: 0.14 },
+            { x: cx + 1.1, z: cz + 5.3, y: 1.2, w: 2.8, h: 1.2, rotX: -0.42, phase: 0.8, opacity: 0.12 }
         ];
         for (var mi = 0; mi < mistConfigs.length; mi++) {
             var mc = mistConfigs[mi];
@@ -341,7 +353,7 @@
             ctx.addMistCard({ mesh: mistMesh, baseOpacity: mc.opacity, phase: mc.phase });
         }
 
-        ctx.addExclusion(cx, cz, 4.0);
+        ctx.addExclusion(cx, cz + 2.8, 6.6);
     }
 
     // --- Rope bridge: high overhead walkway between two trees ---
@@ -493,11 +505,11 @@
 
     function buildJungleQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
-        var center = pt(bounds, 0.50, 0.48);
+        var center = pt(bounds, 0.67, 0.56);
 
         buildShrine(center.x, center.z, place, mats, ctx);
 
-        var wfPt = pt(bounds, 0.20, 0.35);
+        var wfPt = pt(bounds, 0.19, 0.24);
         buildWaterfall(wfPt.x, wfPt.z, place, mats, ctx);
 
         // ============================================================
@@ -506,9 +518,11 @@
 
         // Type D: Giant ancient trees (towering pillars of the forest)
         var giants = [
-            { u: 0.12, v: 0.12, s: 1.15 },
-            { u: 0.88, v: 0.85, s: 1.05 },
-            { u: 0.85, v: 0.12, s: 1.1 }
+            { u: 0.08, v: 0.12, s: 1.18 },
+            { u: 0.28, v: 0.10, s: 1.08 },
+            { u: 0.30, v: 0.32, s: 1.12 },
+            { u: 0.88, v: 0.82, s: 1.08 },
+            { u: 0.84, v: 0.16, s: 1.1 }
         ];
         for (var gi = 0; gi < giants.length; gi++) {
             var gp = pt(bounds, giants[gi].u, giants[gi].v);
@@ -518,22 +532,24 @@
 
         // Type A: Canopy trees -- wide scale range for dramatic height contrast
         var canopyTrees = [
-            // Tall sentinels (s >= 1.6)
-            { u: 0.08, v: 0.45, s: 1.9 },
-            { u: 0.92, v: 0.55, s: 1.8 },
-            { u: 0.50, v: 0.08, s: 1.7 },
-            // Medium canopy (s 1.0-1.5)
-            { u: 0.18, v: 0.14, s: 1.3 },
-            { u: 0.14, v: 0.80, s: 1.4 },
-            { u: 0.58, v: 0.90, s: 1.2 },
-            { u: 0.72, v: 0.30, s: 1.1 },
-            { u: 0.30, v: 0.70, s: 1.0 },
-            { u: 0.82, v: 0.68, s: 1.3 },
-            // Short canopy (s 0.7-0.9) -- understory layer
-            { u: 0.25, v: 0.18, s: 0.8 },
-            { u: 0.75, v: 0.82, s: 0.7 },
-            { u: 0.65, v: 0.15, s: 0.75 },
-            { u: 0.15, v: 0.65, s: 0.85 }
+            // Waterfall sentinels and canopy ring.
+            { u: 0.11, v: 0.42, s: 1.95 },
+            { u: 0.38, v: 0.22, s: 1.7 },
+            { u: 0.36, v: 0.40, s: 1.45 },
+            { u: 0.18, v: 0.46, s: 1.2 },
+            { u: 0.28, v: 0.44, s: 1.05 },
+            // Shrine-side and border coverage.
+            { u: 0.56, v: 0.12, s: 1.55 },
+            { u: 0.56, v: 0.90, s: 1.25 },
+            { u: 0.76, v: 0.34, s: 1.18 },
+            { u: 0.82, v: 0.64, s: 1.35 },
+            { u: 0.44, v: 0.74, s: 1.1 },
+            { u: 0.18, v: 0.74, s: 1.22 },
+            // Lower canopy layer.
+            { u: 0.40, v: 0.14, s: 0.85 },
+            { u: 0.74, v: 0.80, s: 0.78 },
+            { u: 0.64, v: 0.22, s: 0.8 },
+            { u: 0.16, v: 0.60, s: 0.88 }
         ];
         for (var t = 0; t < canopyTrees.length; t++) {
             var tp = pt(bounds, canopyTrees[t].u, canopyTrees[t].v);
@@ -542,20 +558,25 @@
 
         // Type B: Bushy trees -- more of them, wider scale range
         var bushyTrees = [
-            { u: 0.34, v: 0.12, s: 1.1 },
-            { u: 0.62, v: 0.14, s: 0.8 },
-            { u: 0.32, v: 0.88, s: 0.9 },
-            { u: 0.84, v: 0.82, s: 0.7 },
-            { u: 0.42, v: 0.72, s: 1.0 },
-            // Waterfall cluster
-            { u: 0.15, v: 0.28, s: 0.8 },
-            { u: 0.25, v: 0.30, s: 1.2 },
-            { u: 0.18, v: 0.42, s: 0.6 },
-            // Additional edge density
-            { u: 0.06, v: 0.70, s: 1.3 },
-            { u: 0.94, v: 0.30, s: 0.9 },
-            { u: 0.50, v: 0.92, s: 1.1 },
-            { u: 0.70, v: 0.08, s: 0.7 }
+            { u: 0.36, v: 0.12, s: 1.0 },
+            { u: 0.62, v: 0.18, s: 0.82 },
+            { u: 0.30, v: 0.88, s: 0.95 },
+            { u: 0.84, v: 0.84, s: 0.72 },
+            { u: 0.48, v: 0.74, s: 1.05 },
+            // Waterfall approach cluster.
+            { u: 0.13, v: 0.30, s: 0.95 },
+            { u: 0.23, v: 0.34, s: 1.15 },
+            { u: 0.18, v: 0.50, s: 0.7 },
+            { u: 0.31, v: 0.52, s: 0.84 },
+            // Shrine corridor blockers.
+            { u: 0.48, v: 0.42, s: 0.88 },
+            { u: 0.56, v: 0.48, s: 0.92 },
+            { u: 0.74, v: 0.54, s: 0.86 },
+            // Additional edge density.
+            { u: 0.06, v: 0.70, s: 1.25 },
+            { u: 0.94, v: 0.30, s: 0.95 },
+            { u: 0.52, v: 0.94, s: 1.08 },
+            { u: 0.72, v: 0.08, s: 0.74 }
         ];
         for (var bt = 0; bt < bushyTrees.length; bt++) {
             var btp = pt(bounds, bushyTrees[bt].u, bushyTrees[bt].v);
@@ -564,12 +585,12 @@
 
         // Type C: Saplings -- fill gaps, especially mid-zone
         var saplings = [
-            { u: 0.26, v: 0.24 }, { u: 0.74, v: 0.22 },
-            { u: 0.22, v: 0.72 }, { u: 0.78, v: 0.74 },
-            { u: 0.48, v: 0.84 },
-            { u: 0.38, v: 0.35 }, { u: 0.62, v: 0.65 },
-            { u: 0.12, v: 0.55 }, { u: 0.88, v: 0.45 },
-            { u: 0.40, v: 0.15 }
+            { u: 0.26, v: 0.22 }, { u: 0.76, v: 0.22 },
+            { u: 0.22, v: 0.74 }, { u: 0.78, v: 0.76 },
+            { u: 0.50, v: 0.86 },
+            { u: 0.42, v: 0.38 }, { u: 0.62, v: 0.66 },
+            { u: 0.12, v: 0.58 }, { u: 0.88, v: 0.46 },
+            { u: 0.34, v: 0.18 }, { u: 0.34, v: 0.56 }, { u: 0.58, v: 0.34 }
         ];
         for (var sp = 0; sp < saplings.length; sp++) {
             var spp = pt(bounds, saplings[sp].u, saplings[sp].v);
@@ -580,14 +601,13 @@
         // UNDERGROWTH -- dense fern layer
         // ============================================================
         var ferns = [
-            { u: 0.20, v: 0.28 }, { u: 0.40, v: 0.18 }, { u: 0.60, v: 0.22 },
-            { u: 0.75, v: 0.40 }, { u: 0.80, v: 0.70 }, { u: 0.25, v: 0.65 },
-            { u: 0.55, v: 0.75 }, { u: 0.35, v: 0.55 }, { u: 0.65, v: 0.60 },
-            { u: 0.15, v: 0.42 }, { u: 0.88, v: 0.38 }, { u: 0.45, v: 0.40 },
-            // Additional density
-            { u: 0.10, v: 0.20 }, { u: 0.90, v: 0.80 }, { u: 0.30, v: 0.15 },
-            { u: 0.70, v: 0.85 }, { u: 0.08, v: 0.60 }, { u: 0.92, v: 0.40 },
-            { u: 0.42, v: 0.28 }, { u: 0.58, v: 0.72 }
+            { u: 0.18, v: 0.26 }, { u: 0.38, v: 0.18 }, { u: 0.60, v: 0.22 },
+            { u: 0.75, v: 0.40 }, { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 },
+            { u: 0.56, v: 0.74 }, { u: 0.35, v: 0.56 }, { u: 0.64, v: 0.62 },
+            { u: 0.15, v: 0.44 }, { u: 0.88, v: 0.38 }, { u: 0.48, v: 0.42 },
+            { u: 0.11, v: 0.18 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
+            { u: 0.70, v: 0.86 }, { u: 0.08, v: 0.62 }, { u: 0.92, v: 0.42 },
+            { u: 0.42, v: 0.28 }, { u: 0.58, v: 0.72 }, { u: 0.28, v: 0.52 }, { u: 0.44, v: 0.52 }
         ];
         for (var f = 0; f < ferns.length; f++) {
             var fp = pt(bounds, ferns[f].u, ferns[f].v);
@@ -598,11 +618,12 @@
         // LOGS
         // ============================================================
         var logs = [
-            { u: 0.26, v: 0.50, ax: true },
-            { u: 0.74, v: 0.48, ax: false },
-            { u: 0.50, v: 0.35, ax: true },
-            { u: 0.52, v: 0.76, ax: false },
-            { u: 0.38, v: 0.62, ax: true }
+            { u: 0.28, v: 0.58, ax: true },
+            { u: 0.74, v: 0.50, ax: false },
+            { u: 0.48, v: 0.40, ax: true },
+            { u: 0.54, v: 0.78, ax: false },
+            { u: 0.40, v: 0.66, ax: true },
+            { u: 0.34, v: 0.48, ax: false }
         ];
         for (var l = 0; l < logs.length; l++) {
             var lp = pt(bounds, logs[l].u, logs[l].v);
@@ -613,14 +634,14 @@
         // MUSHROOMS
         // ============================================================
         var mushrooms = [
-            { u: 0.27, v: 0.51, red: true },
-            { u: 0.25, v: 0.49, red: false },
-            { u: 0.73, v: 0.47, red: true },
-            { u: 0.51, v: 0.23, red: false },
-            { u: 0.53, v: 0.77, red: true },
-            { u: 0.37, v: 0.61, red: false },
-            { u: 0.60, v: 0.65, red: true },
-            { u: 0.30, v: 0.38, red: false }
+            { u: 0.29, v: 0.59, red: true },
+            { u: 0.27, v: 0.57, red: false },
+            { u: 0.73, v: 0.49, red: true },
+            { u: 0.50, v: 0.23, red: false },
+            { u: 0.54, v: 0.79, red: true },
+            { u: 0.39, v: 0.63, red: false },
+            { u: 0.60, v: 0.67, red: true },
+            { u: 0.33, v: 0.44, red: false }
         ];
         for (var mi = 0; mi < mushrooms.length; mi++) {
             var mp = pt(bounds, mushrooms[mi].u, mushrooms[mi].v);
@@ -630,43 +651,48 @@
         // ============================================================
         // ROPE BRIDGE -- anchored between giant tree (0.12,0.12) and sentinel (0.50,0.08)
         // ============================================================
-        var bridgePosA = pt(bounds, giants[0].u, giants[0].v);
-        var bridgePosB = pt(bounds, canopyTrees[2].u, canopyTrees[2].v);
-        buildRopeBridge(bridgePosA, bridgePosB, 4.5, place, mats);
+        var bridgePosA = pt(bounds, 0.72, 0.66);
+        var bridgePosB = pt(bounds, 0.86, 0.78);
+        buildRopeBridge(bridgePosA, bridgePosB, 3.8, place, mats);
 
         // ============================================================
         // GROUND VINES -- snaking between trees at ground level
         // ============================================================
-        var gv1a = pt(bounds, 0.18, 0.14);
-        var gv1b = pt(bounds, 0.34, 0.12);
+        var gv1a = pt(bounds, 0.18, 0.16);
+        var gv1b = pt(bounds, 0.34, 0.14);
         addGroundVine(gv1a.x, gv1a.z, gv1b.x, gv1b.z, place, mats);
 
-        var gv2a = pt(bounds, 0.14, 0.80);
-        var gv2b = pt(bounds, 0.32, 0.88);
+        var gv2a = pt(bounds, 0.16, 0.78);
+        var gv2b = pt(bounds, 0.32, 0.86);
         addGroundVine(gv2a.x, gv2a.z, gv2b.x, gv2b.z, place, mats);
 
-        var gv3a = pt(bounds, 0.82, 0.68);
-        var gv3b = pt(bounds, 0.88, 0.85);
+        var gv3a = pt(bounds, 0.78, 0.64);
+        var gv3b = pt(bounds, 0.88, 0.82);
         addGroundVine(gv3a.x, gv3a.z, gv3b.x, gv3b.z, place, mats);
 
-        var gv4a = pt(bounds, 0.60, 0.30);
-        var gv4b = pt(bounds, 0.72, 0.38);
+        var gv4a = pt(bounds, 0.46, 0.40);
+        var gv4b = pt(bounds, 0.62, 0.46);
         addGroundVine(gv4a.x, gv4a.z, gv4b.x, gv4b.z, place, mats);
 
         // ============================================================
         // FALLEN PILLAR near shrine (toppled column)
         // ============================================================
-        place.addRamp(center.x + 6.0, 0.35, center.z - 2.5, 0.7, 0.7, 4.0, mats.stone, 0.3, 0.08, false);
-        place.addBlock(center.x + 7.8, 0.15, center.z - 2.8, 0.9, 0.3, 0.9, mats.mossy, false);
-        place.addBlock(center.x + 4.2, 0.5, center.z - 2.2, 0.8, 0.4, 0.8, mats.stone, false);
+        place.addRamp(center.x - 5.4, 0.42, center.z - 3.1, 0.9, 0.8, 4.8, mats.stone, 0.18, 0.08, false);
+        place.addBlock(center.x - 3.1, 0.18, center.z - 3.5, 0.95, 0.34, 0.95, mats.mossy, false);
+        place.addBlock(center.x - 6.8, 0.54, center.z - 2.8, 0.85, 0.44, 0.85, mats.stone, false);
+
+        // Corridor blockers between shrine and waterfall so the jungle is not one open field.
+        place.addBlock(center.x - 8.4, 0.7, center.z - 0.4, 1.6, 1.4, 1.2, mats.stone, true);
+        place.addBlock(center.x - 10.4, 0.55, center.z + 1.2, 1.2, 1.1, 1.0, mats.mossy, true);
+        place.addRamp(center.x - 6.4, 0.42, center.z + 2.4, 1.0, 0.7, 3.2, mats.log, 1.05, -0.06, true);
 
         // ============================================================
         // MOSS PATCHES on ground
         // ============================================================
-        place.addBlock(wfPt.x + 2.0, 0.03, wfPt.z + 1.5, 1.5, 0.04, 1.2, mats.mossy, false);
-        place.addBlock(wfPt.x - 1.5, 0.03, wfPt.z + 3.0, 1.2, 0.04, 0.9, mats.fern, false);
-        place.addBlock(center.x - 3.0, 0.03, center.z + 3.5, 1.8, 0.04, 1.4, mats.mossy, false);
-        place.addBlock(center.x + 4.0, 0.03, center.z - 1.5, 1.0, 0.04, 1.6, mats.fern, false);
+        place.addBlock(wfPt.x + 2.2, 0.03, wfPt.z + 2.2, 1.9, 0.04, 1.5, mats.mossy, false);
+        place.addBlock(wfPt.x - 2.0, 0.03, wfPt.z + 4.6, 1.6, 0.04, 1.2, mats.fern, false);
+        place.addBlock(center.x - 3.4, 0.03, center.z + 3.1, 2.1, 0.04, 1.6, mats.mossy, false);
+        place.addBlock(center.x + 3.6, 0.03, center.z - 1.7, 1.2, 0.04, 1.8, mats.fern, false);
 
         var totalTrees = giants.length + canopyTrees.length + bushyTrees.length + saplings.length;
         return {

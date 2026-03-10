@@ -16,6 +16,15 @@ export function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+export function normalizeOpaqueId(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  if (/^(usr_|gst_|ses_|pty_|ply_|pub_|private-)/i.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+  return trimmed;
+}
+
 export function sanitizeRoomId(raw) {
   const sanitized = sanitizeProtocolRoomId(raw);
   return sanitized || DEFAULT_ROOM_ID;

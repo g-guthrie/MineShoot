@@ -19,7 +19,6 @@
 
     var currentAimTargetId = '';
     var multiplayerMode = false;
-    var forceGuestNetMode = false;
     var forcedRoomId = 'global';
     var activeRuntimeMode = null;
     var startupDebugNotice = '';
@@ -48,6 +47,10 @@
 
     function depRequire(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
+    }
+
+    function menuLoadoutApi() {
+        return depGet('GameMenuLoadout');
     }
 
     function cappedPixelRatio() {
@@ -208,6 +211,13 @@
         return shared && shared.abilityCatalog ? shared.abilityCatalog : {};
     }
 
+    function isLocalFirstPersonCameraActive() {
+        var player = globalThis.__MAYHEM_RUNTIME.GamePlayer;
+        if (!player || !player.getCameraMode) return false;
+        var cameraMode = player.getCameraMode();
+        return !!cameraMode && cameraMode.effective === 'first';
+    }
+
     function buildAbilityDebugText(loadout, _tuning) {
         if (!loadout) return '';
         var catalog = currentAbilityCatalogMap();
@@ -252,7 +262,7 @@
         var deadeyeMinDot = Number(((currentAbilityCatalogMap().deadeye || {}).minDot) || 0.22);
         var rect = deadeyeDebugRectSizePx(camera, deadeyeMinDot);
         return {
-            width: Math.max(24, Number(((currentAbilityCatalogMap().choke || {}).lockBoxPx) || 180)),
+            width: Math.max(24, Number(((currentAbilityCatalogMap().choke || {}).lockBoxPx) || 180) * 1.2),
             height: rect ? rect.height : 180
         };
     }
@@ -347,6 +357,9 @@
         if (!multiplayerMode || !globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState) {
             return true;
         }
+        if (globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase && globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase() === 'lobby') {
+            return false;
+        }
         var matchState = globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState();
         return !(matchState && matchState.ended);
     }
@@ -355,6 +368,12 @@
         var els = ensureMenuSessionEls();
         if (els.playBtn) els.playBtn.style.display = show ? 'inline-block' : 'none';
         if (els.backBtn) els.backBtn.style.display = show ? 'inline-block' : 'none';
+    }
+
+    function showGameplayPrompt() {
+        if (overlay) overlay.style.display = 'flex';
+        isPlaying = false;
+        setResumeButtonsVisible(canResumeGameplay());
     }
 
     function formatSecondsRemaining(ms) {
@@ -370,6 +389,10 @@
         var winnerId = String(matchState.winnerId || '');
         if (!winnerId) return 'WINNER LOCKED';
         if (selfState && winnerId === String(selfState.id || '')) return 'YOU';
+        if (!multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getEntityName) {
+            var localWinnerName = globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getEntityName(winnerId);
+            if (localWinnerName) return String(localWinnerName).toUpperCase();
+        }
         if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getEntityName) {
             var winnerName = globalThis.__MAYHEM_RUNTIME.GameNet.getEntityName(winnerId);
             if (winnerName) return String(winnerName).toUpperCase();
@@ -389,15 +412,23 @@
 
         var kills = Math.max(0, Number(selfState && selfState.kills || 0));
         var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
+        var lives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
+        var charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
         var respawnState = (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState)
             ? globalThis.__MAYHEM_RUNTIME.GameNet.getRespawnState()
             : null;
 
         els.stats.hidden = false;
-        els.kd.textContent = 'KILLS ' + kills + ' | DEATHS ' + deaths;
+        els.kd.textContent = String(matchState && matchState.gameMode || '') === 'lms'
+            ? ('LIVES ' + lives + ' | CHARGE ' + charge)
+            : ('KILLS ' + kills + ' | DEATHS ' + deaths);
 
         if (!matchState || !matchState.started) {
-            els.status.textContent = 'WAITING FOR MATCH START';
+            if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase && globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase() === 'lobby') {
+                els.status.textContent = 'PRIVATE ROOM LOBBY';
+            } else {
+                els.status.textContent = 'WAITING FOR MATCH START';
+            }
         } else if (matchState.ended) {
             els.status.textContent = winnerLabel(matchState, selfState) + ' WON | RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
         } else if (respawnState && respawnState.active) {
@@ -408,6 +439,15 @@
             var enemyTeamId = teamId === 'alpha' ? 'bravo' : 'alpha';
             var enemyScore = Number(matchState.teamProgress && matchState.teamProgress[enemyTeamId] || 0);
             els.status.textContent = 'TDM ' + teamScore.toFixed(0) + ' - ' + enemyScore.toFixed(0) + ' | TARGET ' + Number(matchState.targetProgress || 0).toFixed(0);
+        } else if (String(matchState.gameMode || '') === 'lms') {
+            var lmsLives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
+            var lmsCharge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
+            var lmsInfo = matchState.lms || null;
+            var beaconLabel = lmsInfo && lmsInfo.activeBeacon && lmsInfo.activeBeacon.label ? String(lmsInfo.activeBeacon.label) : '---';
+            var beaconClock = lmsInfo && Number(lmsInfo.nextRotateAt || 0) > 0
+                ? formatSecondsRemaining(Number(lmsInfo.nextRotateAt || 0) - Date.now())
+                : '0.0s';
+            els.status.textContent = 'LMS ' + lmsLives + ' LIFE | CHARGE ' + lmsCharge + '/' + Number(lmsInfo && lmsInfo.chargePerExtraLife || 2) + ' | BEACON ' + beaconLabel + ' ' + beaconClock;
         } else {
             els.status.textContent = 'FFA ' + kills + ' / ' + Number(matchState.targetProgress || 0).toFixed(0) + ' | LEAD ' + Number(matchState.leaderProgress || 0).toFixed(0);
         }
@@ -555,6 +595,11 @@
     }
 
     function compactMenuWeaponSlots() {
+        var menuLoadout = menuLoadoutApi();
+        if (menuLoadout && menuLoadout.getWeaponSlots) {
+            menuWeaponSlots = menuLoadout.getWeaponSlots().slice(0, 2);
+            return;
+        }
         var available = availableMenuWeaponIds();
         var availableMap = {};
         for (var i = 0; i < available.length; i++) {
@@ -571,6 +616,12 @@
     }
 
     function syncMenuWeaponSlotsToRuntime() {
+        var menuLoadout = menuLoadoutApi();
+        if (menuLoadout && menuLoadout.syncToRuntime) {
+            menuWeaponSlots = menuLoadout.getWeaponSlots().slice(0, 2);
+            menuLoadout.syncToRuntime(multiplayerMode);
+            return menuWeaponSlots.slice();
+        }
         compactMenuWeaponSlots();
         var equipped = [];
         for (var i = 0; i < menuWeaponSlots.length; i++) {
@@ -589,6 +640,10 @@
     }
 
     function currentAbilityMenuLoadout() {
+        var menuLoadout = menuLoadoutApi();
+        if (menuLoadout && menuLoadout.getAbilityLoadout) {
+            return menuLoadout.getAbilityLoadout();
+        }
         if (!globalThis.__MAYHEM_RUNTIME.GameAbilities || !globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout) {
             return { slot1: '', slot2: '' };
         }
@@ -600,6 +655,10 @@
     }
 
     function validateMenuSelections() {
+        var menuLoadout = menuLoadoutApi();
+        if (menuLoadout && menuLoadout.validateSelections) {
+            return menuLoadout.validateSelections();
+        }
         compactMenuWeaponSlots();
         var abilities = currentAbilityMenuLoadout();
         var missingWeapons = [];
@@ -817,9 +876,12 @@
         var selected = globalThis.__MAYHEM_RUNTIME.GameAbilities.setClass(profileId);
         if (!selected) return null;
 
-        if (selected.loadoutWeapon || (menuWeaponSlots && menuWeaponSlots.length > 0)) {
-            var preferredWeapon = (menuWeaponSlots && menuWeaponSlots.length > 0)
-                ? menuWeaponSlots[0]
+        var currentMenuWeapons = menuLoadoutApi() && menuLoadoutApi().getWeaponSlots
+            ? menuLoadoutApi().getWeaponSlots()
+            : menuWeaponSlots;
+        if (selected.loadoutWeapon || (currentMenuWeapons && currentMenuWeapons.length > 0)) {
+            var preferredWeapon = (currentMenuWeapons && currentMenuWeapons.length > 0)
+                ? currentMenuWeapons[0]
                 : selected.loadoutWeapon;
             applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(preferredWeapon));
         }
@@ -1037,6 +1099,14 @@
             }
         }
 
+        globalThis.__MAYHEM_RUNTIME.GameSession = globalThis.__MAYHEM_RUNTIME.GameSession || {};
+        globalThis.__MAYHEM_RUNTIME.GameSession.startGameplayFromMenu = function (event) {
+            return requestPlayStart(event);
+        };
+        globalThis.__MAYHEM_RUNTIME.GameSession.showGameplayPrompt = function () {
+            showGameplayPrompt();
+        };
+
         if (playBtn) {
             playBtn.addEventListener('click', requestPlayStart);
             playBtn.addEventListener('pointerup', requestPlayStart);
@@ -1097,8 +1167,10 @@
     function setupDocsControls() {
         document.addEventListener('keydown', function (e) {
             if (e.code === 'KeyI') {
-                if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.toggle) {
-                    e.preventDefault();
+                e.preventDefault();
+                if (depGet('GameRuntimeLoader') && depGet('GameRuntimeLoader').toggleDocs) {
+                    depGet('GameRuntimeLoader').toggleDocs();
+                } else if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.toggle) {
                     globalThis.__MAYHEM_RUNTIME.GameDocs.toggle();
                 }
                 return;
@@ -1107,6 +1179,20 @@
             if (e.code === 'Escape' && globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen()) {
                 globalThis.__MAYHEM_RUNTIME.GameDocs.close();
             }
+        });
+    }
+
+    function setupCameraControls() {
+        document.addEventListener('keydown', function (e) {
+            if (e.code !== 'KeyV' || e.repeat) return;
+            if (!hasInputCapture()) return;
+            if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.toggleCameraMode) return;
+
+            e.preventDefault();
+            var result = globalThis.__MAYHEM_RUNTIME.GamePlayer.toggleCameraMode();
+            var requestedMode = result && result.requested === 'first' ? 'First-person' : 'Third-person';
+            var effectiveMode = result && result.effective === result.requested;
+            setTransientDebug((effectiveMode ? 'Camera: ' : 'Camera requested: ') + requestedMode, 1000);
         });
     }
 
@@ -1362,6 +1448,25 @@
                             z: chokeTarget.worldPos.z
                         } : null
                     };
+                } else if (slotAbilityId === 'hook' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
+                    var hookTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
+                        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning()
+                        : {};
+                    var hookTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(
+                        camera,
+                        Number(hookTuning.hookRange || 24),
+                        Math.max(2, Number(hookTuning.hookReticleRadiusPx || 52) * 2),
+                        { ownerType: 'net' }
+                    );
+                    if (hookTarget && hookTarget.worldPos) {
+                        castData = {
+                            aimPoint: {
+                                x: hookTarget.worldPos.x,
+                                y: hookTarget.worldPos.y,
+                                z: hookTarget.worldPos.z
+                            }
+                        };
+                    }
                 } else if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget) {
                     var aim = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, 90);
                     if (aim && aim.point) {
@@ -1461,6 +1566,11 @@
                 }
             } else {
                 var enemyCount = depRequire('GameWorld').getRecommendedEnemyCount ? depRequire('GameWorld').getRecommendedEnemyCount() : DEFAULT_ENEMY_COUNT;
+                if (depGet('GameLocalMatch') && depGet('GameLocalMatch').init) {
+                    depGet('GameLocalMatch').init({
+                        gameMode: (activeRuntimeMode && activeRuntimeMode.gameMode) ? activeRuntimeMode.gameMode : 'ffa'
+                    });
+                }
                 depRequire('GameEnemy').init(scene, enemyCount);
                 depRequire('GameUI').updateThrowableInfo(depRequire('GameThrowables').getState());
             }
@@ -1468,6 +1578,10 @@
             depRequire('GameAbilities').init(scene);
 
             applyAbilityProfile('abilities');
+
+            if (menuLoadoutApi() && menuLoadoutApi().syncToRuntime) {
+                menuLoadoutApi().syncToRuntime(multiplayerMode);
+            }
 
             globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.init({
                 isPlaying: function () { return isPlaying; },
@@ -1481,11 +1595,20 @@
             applyDebugVisuals(false);
 
             syncMenuWeaponSlotsToRuntime();
-            applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon());
+            var syncedWeapons = menuLoadoutApi() && menuLoadoutApi().getWeaponSlots
+                ? menuLoadoutApi().getWeaponSlots()
+                : menuWeaponSlots;
+            if (syncedWeapons && syncedWeapons[0]) {
+                applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(syncedWeapons[0]));
+            } else {
+                applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon());
+            }
 
             runtimeInitialized = true;
             setupPointerLock();
+            showGameplayPrompt();
             setupShooting();
+            setupCameraControls();
             setupWeaponControls();
             setupThrowableControls();
             setupAbilityControls();
@@ -1557,6 +1680,9 @@
         var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon();
         if (currentWeapon) {
             syncReticleWithWeapon(currentWeapon);
+            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateWeaponInfo) {
+                globalThis.__MAYHEM_RUNTIME.GameUI.updateWeaponInfo(currentWeapon);
+            }
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSniperScope && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getScopeState) {
             globalThis.__MAYHEM_RUNTIME.GameUI.updateSniperScope(globalThis.__MAYHEM_RUNTIME.GamePlayer.getScopeState());
@@ -1594,17 +1720,23 @@
                 if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual) {
                     globalThis.__MAYHEM_RUNTIME.GamePlayer.setAliveVisual(selfState.alive !== false);
                 }
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAuthoritativeCameraMode) {
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setAuthoritativeCameraMode(selfState.cameraMode || 'third');
+                }
                 if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState) {
-                    var selfChokeVictimState = { lift: 0, startedAt: 0, endsAt: 0 };
+                    var selfChokeVictimState = { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
                     if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity && selfState.id) {
                         selfChokeVictimState = globalThis.__MAYHEM_RUNTIME.GameNet.getChokeVictimStateForEntity(selfState.id) || selfChokeVictimState;
                     }
                     globalThis.__MAYHEM_RUNTIME.GamePlayer.setStatusState({
                         stunUntil: Number(selfState.stunUntil || 0),
-                        hookPullUntil: selfState.hookPullState ? Number(selfState.hookPullState.endsAt || 0) : 0,
+                        hookPullUntil: Math.max(
+                            selfState.hookPullState ? Number(selfState.hookPullState.endsAt || 0) : 0,
+                            selfState.justBeenHookedState ? Number(selfState.justBeenHookedState.endsAt || 0) : 0
+                        ),
                         chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
                         chokeUntil: Number(selfChokeVictimState.endsAt || 0),
-                        chokeLift: Number(selfChokeVictimState.lift || 0),
+                        chokeLift: Number(selfChokeVictimState.liftHeight || 0),
                         spawnShieldUntil: Number(selfState.spawnShieldUntil || 0)
                     });
                     if (globalThis.__MAYHEM_RUNTIME.GamePlayer.setActionRestrictions) {
@@ -1627,6 +1759,25 @@
                     globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion
                 ) {
                     globalThis.__MAYHEM_RUNTIME.GamePlayer.applyAuthoritativeMotion(selfState);
+                } else if (
+                    selfState.alive !== false &&
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer &&
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.reconcileAuthoritativeMotion
+                ) {
+                    var inputSyncState = globalThis.__MAYHEM_RUNTIME.GameNet.getInputSyncState
+                        ? globalThis.__MAYHEM_RUNTIME.GameNet.getInputSyncState()
+                        : null;
+                    var pendingInputs = globalThis.__MAYHEM_RUNTIME.GameNet.getPendingInputSamples
+                        ? globalThis.__MAYHEM_RUNTIME.GameNet.getPendingInputSamples()
+                        : [];
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.reconcileAuthoritativeMotion(selfState, {
+                        dt: dt,
+                        pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
+                        lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
+                        lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
+                        pendingInputs: pendingInputs,
+                        snapshotAt: Date.now()
+                    });
                 }
                 if (globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState) {
                     globalThis.__MAYHEM_RUNTIME.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
@@ -1686,12 +1837,16 @@
                 var abilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
                 if (abilityState) {
                     var hudState = globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState();
-                    var sharedCooldown = Math.max(
-                        Number(abilityState.abilityCooldownRemaining || 0),
-                        Number(abilityState.ultimateCooldownRemaining || 0)
+                    hudState.slot1Cooldown = Number(
+                        abilityState.slot1CooldownRemaining != null
+                            ? abilityState.slot1CooldownRemaining
+                            : abilityState.abilityCooldownRemaining || 0
                     );
-                    hudState.slot1Cooldown = sharedCooldown;
-                    hudState.slot2Cooldown = sharedCooldown;
+                    hudState.slot2Cooldown = Number(
+                        abilityState.slot2CooldownRemaining != null
+                            ? abilityState.slot2CooldownRemaining
+                            : abilityState.ultimateCooldownRemaining || 0
+                    );
                     hudState.extra = '';
                     if (abilityState.deadeyeState && abilityState.deadeyeState.maxLocks > 0) {
                         hudState.extra = 'DEADEYE ' + abilityState.deadeyeState.lockCount + '/' + abilityState.deadeyeState.maxLocks;
@@ -1756,6 +1911,9 @@
             }
             updateMenuSessionPanel(activeMatchState, selfState || globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState());
         } else {
+            if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.tick) {
+                globalThis.__MAYHEM_RUNTIME.GameLocalMatch.tick(dt);
+            }
             globalThis.__MAYHEM_RUNTIME.GameAbilities.update(
                 dt,
                 camera,
@@ -1780,8 +1938,25 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
             globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmor(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmorMax());
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(null, null);
-            updateMenuSessionPanel(null, null);
+            var localMatchState = globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getMatchState
+                ? globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getMatchState()
+                : null;
+            var localSelfState = globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getSelfState
+                ? globalThis.__MAYHEM_RUNTIME.GameLocalMatch.getSelfState()
+                : null;
+            if (localMatchState && localMatchState.ended && Number(localMatchState.endedAt || 0) > 0) {
+                if (lastHandledMatchEndAt !== Number(localMatchState.endedAt || 0)) {
+                    lastHandledMatchEndAt = Number(localMatchState.endedAt || 0);
+                    if (document.pointerLockElement && document.exitPointerLock) {
+                        document.exitPointerLock();
+                    }
+                    setTransientDebug(winnerLabel(localMatchState, localSelfState) + ' won the round.', 1800);
+                }
+            } else {
+                lastHandledMatchEndAt = 0;
+            }
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateMatchStatus(localMatchState, localSelfState);
+            updateMenuSessionPanel(localMatchState, localSelfState);
         }
 
         if (currentWeapon && currentWeapon.id === 'seekergun' && !armedThrowableType && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getSeekergunDebugInfo && globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSeekerReticle) {
@@ -1800,10 +1975,7 @@
         }
 
         currentAimTargetId = '';
-        var centerTargetRange = (currentWeapon && typeof currentWeapon.maxRange === 'number')
-            ? currentWeapon.maxRange
-            : 220;
-        var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, centerTargetRange);
+        var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera);
         if (centerTarget && centerTarget.targetId) {
             currentAimTargetId = centerTarget.targetId;
         }
@@ -1825,12 +1997,19 @@
             }
         }
 
-        var cdRemaining = globalThis.__MAYHEM_RUNTIME.GameHitscan.cooldownRemaining();
-        var cdTotal = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCooldown();
-        var cdReady = cdRemaining <= 0;
-        var cdPct = cdReady ? 1 : (1 - cdRemaining / cdTotal);
+        var weaponHudState = globalThis.__MAYHEM_RUNTIME.GameHitscan.getHudState
+            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getHudState()
+            : {
+                status: globalThis.__MAYHEM_RUNTIME.GameHitscan.cooldownRemaining() <= 0 ? 'ready' : 'cooldown',
+                pct: (function () {
+                    var total = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCooldown();
+                    var remaining = globalThis.__MAYHEM_RUNTIME.GameHitscan.cooldownRemaining();
+                    if (remaining <= 0 || total <= 0) return 1;
+                    return 1 - (remaining / total);
+                })()
+            };
 
-        globalThis.__MAYHEM_RUNTIME.GameUI.updateCooldown(cdReady, cdPct);
+        globalThis.__MAYHEM_RUNTIME.GameUI.updateCooldown(weaponHudState);
         globalThis.__MAYHEM_RUNTIME.GameUI.updateDamageEffects(dt);
         if (!multiplayerMode) {
             globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(globalThis.__MAYHEM_RUNTIME.GameAbilities.getHudState());
@@ -1946,7 +2125,16 @@
             globalThis.__MAYHEM_RUNTIME.GameUI.updateDeadeyeReticle(camera, deadeyeStateForUi);
         }
         renderHookEffects();
+        camera.layers.set(0);
         renderer.render(scene, camera);
+        if (isLocalFirstPersonCameraActive()) {
+            renderer.autoClear = false;
+            renderer.clearDepth();
+            camera.layers.set(1);
+            renderer.render(scene, camera);
+            renderer.autoClear = true;
+            camera.layers.set(0);
+        }
     }
 
     function runtimeProfile() {
@@ -1988,6 +2176,20 @@
             ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
             : null;
         return (protocol && protocol.matchmakingPath) ? protocol.matchmakingPath : '/api/matchmaking';
+    }
+
+    function partyPath() {
+        var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
+            : null;
+        return (protocol && protocol.partyPath) ? protocol.partyPath : '/api/party';
+    }
+
+    function privateRoomPath() {
+        var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
+            : null;
+        return (protocol && protocol.privateRoomPath) ? protocol.privateRoomPath : '/api/private-room';
     }
 
     function roomCodeFromRoomId(roomId) {
@@ -2045,6 +2247,9 @@
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
                 return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
             }
+            if (String(mode.gameMode || 'ffa').toLowerCase() === 'lms') {
+                return 'Connecting to Last Man Standing: ' + mode.roomId + '...';
+            }
             return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_cloudflare') {
@@ -2053,7 +2258,9 @@
         if (mode.id === 'single_dev_server') {
             return 'Connecting to Local Dev Room: ' + mode.roomId + '...';
         }
-        return 'Starting Offline Sandbox...';
+        return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
+            ? 'Starting Offline Sandbox: LMS...'
+            : 'Starting Offline Sandbox: FFA...';
     }
 
     function startupNoticeForMode(mode) {
@@ -2064,6 +2271,9 @@
             }
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
                 return 'Team Deathmatch joined room ' + mode.roomId + '.';
+            }
+            if (String(mode.gameMode || 'ffa').toLowerCase() === 'lms') {
+                return 'Last Man Standing joined room ' + mode.roomId + '.';
             }
             return 'Free For All joined room ' + mode.roomId + '.';
         }
@@ -2076,422 +2286,125 @@
         if (mode.id === 'single_dev_server') {
             return 'Local Dev Room (Bots): shared local-worker room ' + mode.roomId + '.';
         }
-        return 'Offline Sandbox: local simulation only.';
+        return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
+            ? 'Offline Sandbox LMS: local simulated players.'
+            : 'Offline Sandbox FFA: local simulated players.';
+    }
+
+    function prepareMenuUi() {
+        setRuntimeIndicator(null);
+        if (menuLoadoutApi() && menuLoadoutApi().init) {
+            menuLoadoutApi().init();
+        } else {
+            setupMenuWeaponLoadout();
+            setupMenuThrowableLoadout();
+            setupMenuAbilityLoadout();
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameNetAuth && globalThis.__MAYHEM_RUNTIME.GameNetAuth.initMenuAuth) {
+            globalThis.__MAYHEM_RUNTIME.GameNetAuth.initMenuAuth();
+        }
+    }
+
+    function launchModeById(modeId, options) {
+        options = options || {};
+        var runtime = runtimeProfile();
+        var authApi = globalThis.__MAYHEM_RUNTIME.GameNetAuth || null;
+        var selectedMode = runtime && runtime.selectMode ? runtime.selectMode(modeId) : activeModeById(modeId);
+        if (!selectedMode) {
+            return { ok: false, error: 'Unknown runtime mode.' };
+        }
+
+        if (options.roomId) {
+            selectedMode.roomId = String(options.roomId);
+        }
+        if (options.gameMode) {
+            selectedMode.gameMode = String(options.gameMode);
+        }
+
+        activeRuntimeMode = selectedMode;
+
+        if (selectedMode.authorityMode === 'networked') {
+            forcedRoomId = selectedMode.roomId || 'global';
+            if (authApi && authApi.setAuthVisible) {
+                authApi.setAuthVisible(false);
+            }
+            if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
+                globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
+            }
+            startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
+        } else {
+            forcedRoomId = 'global';
+            if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
+                globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
+            }
+            startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
+        }
+
+        syncMenuWeaponSlotsToRuntime();
+
+        try {
+            initGame();
+        } catch (err) {
+            var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
+            var overlayEl = document.getElementById('overlay');
+            if (overlayEl) overlayEl.style.display = 'flex';
+            var dbg = document.getElementById('debug-info');
+            if (dbg) dbg.textContent = 'Startup error: ' + msg;
+            console.error('Startup error:', err);
+            activeRuntimeMode = null;
+            autoStartNoLock = false;
+            startupDebugNotice = '';
+            forcedRoomId = 'global';
+            if (runtime && runtime.clearSelectedMode) {
+                runtime.clearSelectedMode();
+            }
+            return { ok: false, error: msg };
+        }
+
+        return {
+            ok: true,
+            mode: selectedMode
+        };
+    }
+
+    function getActivityState() {
+        if (!activeRuntimeMode || !runtimeInitialized) return 'menu';
+        if (
+            multiplayerMode &&
+            globalThis.__MAYHEM_RUNTIME.GameNet &&
+            globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase &&
+            globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase() === 'lobby'
+        ) {
+            return 'private_room_lobby';
+        }
+        return 'in_match';
     }
 
     function boot() {
         scheduleMenuBootRelease();
 
-        function safeInit() {
-            try {
-                initGame();
-                return true;
-            } catch (err) {
-                var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
-                var overlayEl = document.getElementById('overlay');
-                if (overlayEl) overlayEl.style.display = 'flex';
-                var dbg = document.getElementById('debug-info');
-                if (dbg) dbg.textContent = 'Startup error: ' + msg;
-                console.error('Startup error:', err);
-                return false;
-            }
-        }
-
-        var runtime = runtimeProfile();
-        var authApi = globalThis.__MAYHEM_RUNTIME.GameNetAuth || null;
-        var modeButtonsWrap = document.getElementById('mode-buttons');
-        var altModeToggle = document.getElementById('alt-mode-toggle');
-        var controlsMenu = document.getElementById('controls-menu');
-        var controlsToggle = document.getElementById('controls-toggle');
-        var primaryPlayBtn = document.getElementById('primary-play-btn');
-        var tdmPlayBtn = document.getElementById('tdm-play-btn');
-        var sandboxPlayBtn = document.getElementById('sandbox-play-btn');
-        var createPrivateRoomBtn = document.getElementById('create-private-room-btn');
-        var privateRoomInput = document.getElementById('private-room-input');
-        var joinPrivateRoomBtn = document.getElementById('join-private-room-btn');
-        var roomAccessStatus = document.getElementById('room-access-status');
-        var roomSharePanel = document.getElementById('room-share-panel');
-        var roomShareCode = document.getElementById('room-share-code');
-        var copyRoomCodeBtn = document.getElementById('copy-room-code-btn');
-        var roomCodeBadge = document.getElementById('room-code-badge');
-        var roomCodeBadgeValue = document.getElementById('room-code-badge-value');
-        var modeButtons = Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]'));
-        var modeSubtitle = document.getElementById('mode-subtitle');
-        var playBtn = document.getElementById('play-btn');
-        var backModeBtn = document.getElementById('back-mode-btn');
-        var started = false;
-        var altModesOpen = false;
-        var controlsOpen = false;
-        var roomActionInFlight = false;
-        var startPending = false;
-        setRuntimeIndicator(null);
-        setupMenuWeaponLoadout();
-        setupMenuThrowableLoadout();
-        setupMenuAbilityLoadout();
-        if (authApi && authApi.initMenuAuth) {
-            authApi.initMenuAuth();
-        }
-
-        function setRoomAccessStatus(text, isErr) {
-            if (!roomAccessStatus) return;
-            roomAccessStatus.textContent = text || '';
-            roomAccessStatus.style.color = isErr ? '#ff9797' : '#98f5b6';
-        }
-
-        function setPrivateRoomShare(roomId) {
-            if (!roomSharePanel || !roomShareCode) return;
-            if (!roomId) {
-                roomSharePanel.hidden = true;
-                roomShareCode.textContent = '------';
-                if (roomCodeBadge && roomCodeBadgeValue) {
-                    roomCodeBadge.hidden = true;
-                    roomCodeBadgeValue.textContent = '------';
+        if (globalThis.__MAYHEM_RUNTIME.GameLobbyController && globalThis.__MAYHEM_RUNTIME.GameLobbyController.init) {
+            globalThis.__MAYHEM_RUNTIME.GameLobbyController.init({
+                prepareMenu: prepareMenuUi,
+                setRuntimeIndicator: setRuntimeIndicator,
+                launchModeById: launchModeById,
+                getActivityState: function () {
+                    if (!activeRuntimeMode || !runtimeInitialized) return 'menu';
+                    if (
+                        multiplayerMode &&
+                        globalThis.__MAYHEM_RUNTIME.GameNet &&
+                        globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase &&
+                        globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase() === 'lobby'
+                    ) {
+                        return 'private_room_lobby';
+                    }
+                    return 'in_match';
                 }
-                return;
-            }
-            var roomCode = roomCodeFromRoomId(roomId);
-            roomShareCode.textContent = roomCode;
-            roomSharePanel.hidden = false;
-            if (roomCodeBadge && roomCodeBadgeValue) {
-                roomCodeBadgeValue.textContent = roomCode;
-                roomCodeBadge.hidden = false;
-            }
-        }
-
-        function setRoomActionBusy(busy, message) {
-            roomActionInFlight = !!busy;
-            if (primaryPlayBtn) primaryPlayBtn.disabled = roomActionInFlight;
-            if (tdmPlayBtn) tdmPlayBtn.disabled = roomActionInFlight;
-            if (sandboxPlayBtn) sandboxPlayBtn.disabled = roomActionInFlight;
-            if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = roomActionInFlight;
-            if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = roomActionInFlight;
-            if (privateRoomInput) privateRoomInput.disabled = roomActionInFlight;
-            if (busy) {
-                setRoomAccessStatus(message || 'Working...', false);
-            }
-        }
-
-        function setAltModesOpen(open) {
-            altModesOpen = !!open;
-            if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-            if (altModeToggle) altModeToggle.setAttribute('aria-expanded', altModesOpen ? 'true' : 'false');
-        }
-
-        function setControlsOpen(open) {
-            controlsOpen = !!open;
-            if (controlsMenu) controlsMenu.hidden = !controlsOpen;
-            if (controlsToggle) controlsToggle.setAttribute('aria-expanded', controlsOpen ? 'true' : 'false');
-        }
-
-        function syncModeButtonVisibility() {
-            var visible = {};
-            var modes = availableModes();
-            for (var i = 0; i < modes.length; i++) {
-                visible[modes[i].id] = true;
-            }
-            var visibleCount = 0;
-            for (var n = 0; n < modeButtons.length; n++) {
-                var btn = modeButtons[n];
-                var modeId = String(btn.dataset.modeId || '');
-                var show = !!visible[modeId];
-                btn.style.display = show ? '' : 'none';
-                btn.disabled = false;
-                if (show) visibleCount += 1;
-            }
-            if (visibleCount <= 0) setAltModesOpen(false);
-        }
-
-        function disableModeButtons() {
-            for (var i = 0; i < modeButtons.length; i++) {
-                modeButtons[i].disabled = true;
-            }
-            if (altModeToggle) altModeToggle.disabled = true;
-            if (controlsToggle) controlsToggle.disabled = true;
-            if (primaryPlayBtn) primaryPlayBtn.disabled = true;
-            if (tdmPlayBtn) tdmPlayBtn.disabled = true;
-            if (sandboxPlayBtn) sandboxPlayBtn.disabled = true;
-            if (createPrivateRoomBtn) createPrivateRoomBtn.disabled = true;
-            if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = true;
-            if (privateRoomInput) privateRoomInput.disabled = true;
-        }
-
-        function startWithMode(modeId, options) {
-            options = options || {};
-            if (started || startPending) return;
-            var selectedMode = runtime && runtime.selectMode ? runtime.selectMode(modeId) : activeModeById(modeId);
-            if (!selectedMode) return;
-            startPending = true;
-
-            function proceedStart() {
-                if (!startPending || started) return;
-                startPending = false;
-
-                if (options.roomId) {
-                    selectedMode.roomId = String(options.roomId);
-                }
-                if (options.gameMode) {
-                    selectedMode.gameMode = String(options.gameMode);
-                }
-                if (selectedMode.id === 'single_cloudflare' && isShareCodeRoomId(selectedMode.roomId)) {
-                    setPrivateRoomShare(selectedMode.roomId);
-                } else {
-                    setPrivateRoomShare('');
-                }
-
-                started = true;
-                activeRuntimeMode = selectedMode;
-
-                if (modeButtonsWrap) modeButtonsWrap.hidden = true;
-                if (controlsMenu) controlsMenu.hidden = true;
-                if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
-                if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
-                if (sandboxPlayBtn) sandboxPlayBtn.style.display = 'none';
-                if (createPrivateRoomBtn) createPrivateRoomBtn.style.display = 'none';
-                if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
-                if (privateRoomInput) privateRoomInput.style.display = 'none';
-                if (playBtn) playBtn.style.display = 'none';
-                if (backModeBtn) backModeBtn.style.display = 'none';
-                disableModeButtons();
-                if (modeSubtitle) {
-                    modeSubtitle.textContent = options.subtitle || startupSubtitleForMode(selectedMode);
-                }
-                setRuntimeIndicator(selectedMode);
-
-                autoStartNoLock = true;
-
-                if (selectedMode.authorityMode === 'networked') {
-                    var useGuestIdentity = !(authApi && authApi.isLoggedIn && authApi.isLoggedIn());
-                    forceGuestNetMode = useGuestIdentity;
-                    forcedRoomId = selectedMode.roomId || 'global';
-                    if (useGuestIdentity && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode) {
-                        globalThis.__MAYHEM_RUNTIME.GameNet.enableGuestMode();
-                    }
-                    if (!useGuestIdentity && authApi && authApi.setAuthVisible) {
-                        authApi.setAuthVisible(false);
-                    }
-                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                        globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
-                    }
-                    startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
-                } else {
-                    forceGuestNetMode = false;
-                    forcedRoomId = 'global';
-                    if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                        globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
-                    }
-                    startupDebugNotice = options.notice || startupNoticeForMode(selectedMode);
-                }
-
-                syncMenuWeaponSlotsToRuntime();
-                if (!safeInit()) {
-                    started = false;
-                    activeRuntimeMode = null;
-                    autoStartNoLock = false;
-                    startupDebugNotice = '';
-                    forceGuestNetMode = false;
-                    forcedRoomId = 'global';
-                    if (runtime && runtime.clearSelectedMode) {
-                        runtime.clearSelectedMode();
-                    }
-                    if (primaryPlayBtn) {
-                        primaryPlayBtn.disabled = false;
-                        primaryPlayBtn.style.display = '';
-                    }
-                    if (tdmPlayBtn) {
-                        tdmPlayBtn.disabled = false;
-                        tdmPlayBtn.style.display = '';
-                    }
-                    if (sandboxPlayBtn) {
-                        sandboxPlayBtn.disabled = false;
-                        sandboxPlayBtn.style.display = '';
-                    }
-                    if (createPrivateRoomBtn) {
-                        createPrivateRoomBtn.disabled = false;
-                        createPrivateRoomBtn.style.display = '';
-                    }
-                    if (joinPrivateRoomBtn) {
-                        joinPrivateRoomBtn.disabled = false;
-                        joinPrivateRoomBtn.style.display = '';
-                    }
-                    if (privateRoomInput) {
-                        privateRoomInput.disabled = false;
-                        privateRoomInput.style.display = '';
-                    }
-                    if (altModeToggle) altModeToggle.disabled = false;
-                    if (controlsToggle) controlsToggle.disabled = false;
-                    if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-                    if (controlsMenu) controlsMenu.hidden = !controlsOpen;
-                    if (playBtn) playBtn.style.display = 'none';
-                    if (backModeBtn) backModeBtn.style.display = 'none';
-                    if (modeSubtitle) modeSubtitle.textContent = '';
-                    setRuntimeIndicator(null);
-                    setPrivateRoomShare('');
-                    syncModeButtonVisibility();
-                }
-            }
-
-            if (selectedMode.authorityMode === 'networked' && authApi && authApi.ensureMenuSession) {
-                authApi.ensureMenuSession()
-                    .catch(function () {
-                        return null;
-                    })
-                    .finally(proceedStart);
-                return;
-            }
-
-            proceedStart();
-        }
-
-        function requestMatchmaking(action, extra) {
-            var payload = extra || {};
-            payload.action = action;
-            return fetch(resolveApiUrl(matchmakingPath()), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(payload)
-            })
-                .then(function (response) {
-                    return response.json().catch(function () { return null; }).then(function (body) {
-                        return { ok: response.ok, body: body };
-                    });
-                })
-                .then(function (result) {
-                    if (!result.body || !result.body.ok) {
-                        throw new Error((result.body && result.body.error) || 'Room request failed.');
-                    }
-                    return result.body;
-                });
-        }
-
-        function startAllocatedRoom(payload) {
-            if (!payload || !payload.roomId) {
-                setRoomAccessStatus('Room request failed.', true);
-                return;
-            }
-
-            if (payload.privacy === 'private') {
-                setPrivateRoomShare(payload.roomId);
-                setRoomAccessStatus('Private room ready. Share code ' + roomCodeFromRoomId(payload.roomId) + '.', false);
-            } else {
-                setPrivateRoomShare('');
-                setRoomAccessStatus('Joined ' + String((payload.gameMode || 'ffa')).toUpperCase() + ' room ' + String(payload.roomId).toUpperCase() + '.', false);
-            }
-
-            startWithMode(payload.modeId || 'cloud_multiplayer', {
-                roomId: payload.roomId,
-                gameMode: payload.gameMode || 'ffa'
             });
-        }
-
-        function beginRoomAction(action, extra, pendingText) {
-            if (roomActionInFlight || started) return;
-            setRoomActionBusy(true, pendingText);
-            requestMatchmaking(action, extra)
-                .then(function (payload) {
-                    setRoomActionBusy(false, '');
-                    startAllocatedRoom(payload);
-                })
-                .catch(function (err) {
-                    setRoomActionBusy(false, '');
-                    setRoomAccessStatus((err && err.message) ? err.message : 'Room request failed.', true);
-                });
-        }
-
-        syncModeButtonVisibility();
-        setAltModesOpen(false);
-        setControlsOpen(false);
-        setPrivateRoomShare('');
-
-        if (altModeToggle) {
-            altModeToggle.addEventListener('click', function () {
-                setControlsOpen(false);
-                setAltModesOpen(!altModesOpen);
-            });
-        }
-
-        if (controlsToggle) {
-            controlsToggle.addEventListener('click', function () {
-                setAltModesOpen(false);
-                setControlsOpen(!controlsOpen);
-            });
-        }
-
-        if (primaryPlayBtn) {
-            primaryPlayBtn.addEventListener('click', function () {
-                beginRoomAction('quick', { gameMode: 'ffa' }, 'Finding an FFA room...');
-            });
-        }
-
-        if (tdmPlayBtn) {
-            tdmPlayBtn.addEventListener('click', function () {
-                beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...');
-            });
-        }
-
-        if (sandboxPlayBtn) {
-            sandboxPlayBtn.addEventListener('click', function () {
-                startWithMode('single_full_sandbox');
-            });
-        }
-
-        if (createPrivateRoomBtn) {
-            createPrivateRoomBtn.addEventListener('click', function () {
-                beginRoomAction('private', {}, 'Creating private room...');
-            });
-        }
-
-        if (joinPrivateRoomBtn) {
-            joinPrivateRoomBtn.addEventListener('click', function () {
-                var roomCode = privateRoomInput ? privateRoomInput.value.trim() : '';
-                if (!roomCode) {
-                    setRoomAccessStatus('Enter a private room code.', true);
-                    return;
-                }
-                beginRoomAction('join', { roomCode: roomCode }, 'Joining private room...');
-            });
-        }
-
-        if (privateRoomInput) {
-            privateRoomInput.addEventListener('keydown', function (event) {
-                if (event.key !== 'Enter') return;
-                event.preventDefault();
-                if (joinPrivateRoomBtn) joinPrivateRoomBtn.click();
-            });
-        }
-
-        if (copyRoomCodeBtn) {
-            copyRoomCodeBtn.addEventListener('click', function () {
-                if (!roomShareCode || !roomShareCode.textContent) return;
-                var text = roomShareCode.textContent;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text)
-                        .then(function () {
-                            setRoomAccessStatus('Copied room code ' + text + '.', false);
-                        })
-                        .catch(function () {
-                            setRoomAccessStatus('Copy failed. Room code: ' + text + '.', true);
-                        });
-                    return;
-                }
-                setRoomAccessStatus('Room code: ' + text + '.', false);
-            });
-        }
-
-        for (var i = 0; i < modeButtons.length; i++) {
-            modeButtons[i].addEventListener('click', function () {
-                startWithMode(String(this.dataset.modeId || ''));
-            });
-        }
-
-        if (requestedModeId()) {
-            startWithMode(requestedModeId());
             return;
         }
 
-        if (modeButtons.length === 0) {
-            startWithMode('cloud_multiplayer');
-        }
+        prepareMenuUi();
     }
 
     if (document.readyState === 'loading') {
@@ -2499,4 +2412,9 @@
     } else {
         boot();
     }
+
+    globalThis.__MAYHEM_RUNTIME.GameMain = {
+        launchModeById: launchModeById,
+        getActivityState: getActivityState
+    };
 })();

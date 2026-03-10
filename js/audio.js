@@ -1,16 +1,52 @@
 /**
- * audio.js - Procedural sound effects via Web Audio API (no asset files)
+ * audio.js - Web Audio runtime with sampled weapon fire and procedural fallback sounds
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAudio
  */
 (function () {
     'use strict';
 
     var GameAudio = {};
+    var sharedRecipes = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.assetRecipes) || {};
     var ctx = null;
     var unlockInFlight = false;
     var pendingPlaybacks = [];
     var muted = false;
     var noiseBuffer = null;
+    var sampleCache = {};
+    var sampleLoaders = {};
+    var sampleWarmupStarted = false;
+    var WEAPON_SAMPLE_DEFS = {
+        pistol: {
+            url: '/assets/audio/weapons/pistol.mp3',
+            gain: 0.72,
+            playbackRateMin: 0.98,
+            playbackRateMax: 1.04
+        },
+        rifle: {
+            url: '/assets/audio/weapons/rifle.mp3',
+            gain: 0.66,
+            playbackRateMin: 0.97,
+            playbackRateMax: 1.03
+        },
+        machinegun: {
+            url: '/assets/audio/weapons/rifle.mp3',
+            gain: 0.45,
+            playbackRateMin: 1.16,
+            playbackRateMax: 1.26
+        },
+        shotgun: {
+            url: '/assets/audio/weapons/shotgun.mp3',
+            gain: 0.9,
+            playbackRateMin: 0.98,
+            playbackRateMax: 1.02
+        },
+        sniper: {
+            url: '/assets/audio/weapons/sniper.mp3',
+            gain: 0.82,
+            playbackRateMin: 0.96,
+            playbackRateMax: 1.0
+        }
+    };
 
     function loadMutedPreference() {
         try {
@@ -44,6 +80,7 @@
             pendingPlaybacks.length = 0;
             return;
         }
+        preloadWeaponSamples(c);
         var queue = pendingPlaybacks.slice();
         pendingPlaybacks.length = 0;
         for (var i = 0; i < queue.length; i++) {
@@ -136,6 +173,98 @@
         current.connect(destination);
     }
 
+    function randomBetween(min, max) {
+        if (max <= min) return min;
+        return min + (Math.random() * (max - min));
+    }
+
+    function getFetch() {
+        if (typeof window === 'undefined' || typeof window.fetch !== 'function') return null;
+        return window.fetch.bind(window);
+    }
+
+    function decodeAudioData(c, arrayBuffer) {
+        if (!c || !arrayBuffer) return Promise.resolve(null);
+        return new Promise(function (resolve, reject) {
+            try {
+                var clonedBuffer = arrayBuffer.slice(0);
+                var maybePromise = c.decodeAudioData(clonedBuffer, resolve, reject);
+                if (maybePromise && typeof maybePromise.then === 'function') {
+                    maybePromise.then(resolve).catch(reject);
+                }
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    function loadSampleBuffer(c, url) {
+        if (!c || !url) return Promise.resolve(null);
+        if (Object.prototype.hasOwnProperty.call(sampleCache, url)) {
+            return Promise.resolve(sampleCache[url]);
+        }
+        if (sampleLoaders[url]) return sampleLoaders[url];
+        var fetcher = getFetch();
+        if (!fetcher) return Promise.resolve(null);
+        sampleLoaders[url] = fetcher(url)
+            .then(function (response) {
+                if (!response || !response.ok) {
+                    throw new Error('Failed to fetch sample: ' + url);
+                }
+                return response.arrayBuffer();
+            })
+            .then(function (arrayBuffer) {
+                return decodeAudioData(c, arrayBuffer);
+            })
+            .then(function (buffer) {
+                sampleCache[url] = buffer || null;
+                return sampleCache[url];
+            })
+            .catch(function () {
+                sampleCache[url] = null;
+                return null;
+            })
+            .then(function (result) {
+                delete sampleLoaders[url];
+                return result;
+            }, function (err) {
+                delete sampleLoaders[url];
+                throw err;
+            });
+        return sampleLoaders[url];
+    }
+
+    function preloadWeaponSamples(c) {
+        if (sampleWarmupStarted || !c || c.state !== 'running') return;
+        sampleWarmupStarted = true;
+        var seen = {};
+        for (var weaponId in WEAPON_SAMPLE_DEFS) {
+            if (!Object.prototype.hasOwnProperty.call(WEAPON_SAMPLE_DEFS, weaponId)) continue;
+            var sampleDef = WEAPON_SAMPLE_DEFS[weaponId];
+            if (!sampleDef || !sampleDef.url || seen[sampleDef.url]) continue;
+            seen[sampleDef.url] = true;
+            loadSampleBuffer(c, sampleDef.url);
+        }
+    }
+
+    function playSampleBuffer(c, sampleDef) {
+        if (!c || !sampleDef || !sampleDef.url) return false;
+        var buffer = sampleCache[sampleDef.url];
+        if (!buffer) {
+            loadSampleBuffer(c, sampleDef.url);
+            return false;
+        }
+        var source = c.createBufferSource();
+        var gain = c.createGain();
+        source.buffer = buffer;
+        source.playbackRate.setValueAtTime(randomBetween(sampleDef.playbackRateMin || 1, sampleDef.playbackRateMax || 1), c.currentTime);
+        gain.gain.setValueAtTime(sampleDef.gain !== undefined ? sampleDef.gain : 1, c.currentTime);
+        source.connect(gain);
+        gain.connect(c.destination);
+        source.start(c.currentTime);
+        return true;
+    }
+
     function playOscBurst(c, opts) {
         if (!c) return;
         opts = opts || {};
@@ -188,7 +317,7 @@
         source.stop(end + 0.02);
     }
 
-    function playWeaponFire(c, weaponId) {
+    function playWeaponFireProcedural(c, weaponId) {
         var weapon = String(weaponId || 'rifle');
         if (weapon === 'pistol') {
             playNoiseBurst(c, { duration: 0.02, vol: 0.06, frequency: 4200, q: 1.8, filterType: 'highpass' });
@@ -232,6 +361,18 @@
         playNoiseBurst(c, { duration: 0.045, vol: 0.05, frequency: 2600, q: 1.2, filterType: 'bandpass' });
         playOscBurst(c, { type: 'square', startFreq: 680, endFreq: 180, duration: 0.07, vol: 0.065 });
         playOscBurst(c, { type: 'triangle', startFreq: 170, endFreq: 95, duration: 0.11, vol: 0.04, delay: 0.004 });
+    }
+
+    function playWeaponFire(c, weaponId) {
+        var weapon = String(weaponId || 'rifle');
+        if (weapon === 'seekergun' || weapon === 'plasma') {
+            playWeaponFireProcedural(c, weapon);
+            return;
+        }
+        if (playSampleBuffer(c, WEAPON_SAMPLE_DEFS[weapon] || WEAPON_SAMPLE_DEFS.rifle)) {
+            return;
+        }
+        playWeaponFireProcedural(c, weapon);
     }
 
     function playKillFinisher(c, head) {
@@ -301,6 +442,89 @@
         playOscBurst(c, { type: 'square', startFreq: 210, endFreq: 120, duration: 0.05, vol: 0.012, delay: 0.004 });
     }
 
+    function playThemeSong(c) {
+        var notes = [
+            { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.16, delay: 0.00, vol: 0.03 },
+            { type: 'triangle', startFreq: 494, endFreq: 494, duration: 0.16, delay: 0.12, vol: 0.03 },
+            { type: 'triangle', startFreq: 587, endFreq: 587, duration: 0.18, delay: 0.24, vol: 0.034 },
+            { type: 'sine', startFreq: 784, endFreq: 784, duration: 0.24, delay: 0.38, vol: 0.04 }
+        ];
+        for (var i = 0; i < notes.length; i++) {
+            playOscBurst(c, notes[i]);
+        }
+        playNoiseBurst(c, { duration: 0.12, vol: 0.012, frequency: 2200, q: 1.4, filterType: 'bandpass', delay: 0.02 });
+    }
+
+    function playSwordClash(c) {
+        playNoiseBurst(c, { duration: 0.045, vol: 0.05, frequency: 3600, q: 2.4, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.11, vol: 0.04, frequency: 2100, q: 1.8, filterType: 'bandpass', delay: 0.002 });
+        playOscBurst(c, { type: 'square', startFreq: 1260, endFreq: 620, duration: 0.09, vol: 0.03, delay: 0.001 });
+    }
+
+    function playPunchHit(c) {
+        playNoiseBurst(c, { duration: 0.06, vol: 0.036, frequency: 880, q: 0.72, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 146, endFreq: 86, duration: 0.08, vol: 0.03 });
+    }
+
+    function playLevelUpNoise(c) {
+        playOscBurst(c, { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.08, vol: 0.028 });
+        playOscBurst(c, { type: 'triangle', startFreq: 523, endFreq: 523, duration: 0.1, vol: 0.03, delay: 0.08 });
+        playOscBurst(c, { type: 'sine', startFreq: 659, endFreq: 784, duration: 0.16, vol: 0.038, delay: 0.16 });
+    }
+
+    function playAmbientWeather(c) {
+        playNoiseBurst(c, { duration: 0.34, vol: 0.026, frequency: 720, q: 0.6, filterType: 'lowpass' });
+        playNoiseBurst(c, { duration: 0.22, vol: 0.012, frequency: 2200, q: 1.2, filterType: 'bandpass', delay: 0.03 });
+        playOscBurst(c, { type: 'sine', startFreq: 78, endFreq: 62, duration: 0.28, vol: 0.01, delay: 0.05 });
+    }
+
+    function playDoorOpen(c) {
+        playNoiseBurst(c, { duration: 0.08, vol: 0.028, frequency: 460, q: 0.7, filterType: 'lowpass' });
+        playNoiseBurst(c, { duration: 0.05, vol: 0.018, frequency: 1800, q: 1.4, filterType: 'bandpass', delay: 0.01 });
+        playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 120, duration: 0.12, vol: 0.016 });
+    }
+
+    function playPigOink(c) {
+        playOscBurst(c, { type: 'square', startFreq: 310, endFreq: 230, duration: 0.12, vol: 0.028 });
+        playOscBurst(c, { type: 'square', startFreq: 250, endFreq: 180, duration: 0.09, vol: 0.02, delay: 0.03 });
+    }
+
+    function playZombieGrowl(c) {
+        playNoiseBurst(c, { duration: 0.16, vol: 0.018, frequency: 620, q: 0.9, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 118, endFreq: 74, duration: 0.18, vol: 0.026 });
+        playOscBurst(c, { type: 'triangle', startFreq: 92, endFreq: 64, duration: 0.22, vol: 0.022, delay: 0.02 });
+    }
+
+    function playZombieHurt(c) {
+        playNoiseBurst(c, { duration: 0.12, vol: 0.022, frequency: 880, q: 1.0, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 82, duration: 0.12, vol: 0.024 });
+    }
+
+    function playPortalIdle(c) {
+        playOscBurst(c, { type: 'sine', startFreq: 240, endFreq: 220, duration: 0.26, vol: 0.014 });
+        playOscBurst(c, { type: 'triangle', startFreq: 480, endFreq: 420, duration: 0.22, vol: 0.01, delay: 0.04 });
+    }
+
+    function playPortalTravel(c) {
+        playNoiseBurst(c, { duration: 0.08, vol: 0.024, frequency: 2400, q: 1.8, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 240, endFreq: 920, duration: 0.1, vol: 0.03 });
+    }
+
+    function playPortalTeleport(c) {
+        playNoiseBurst(c, { duration: 0.18, vol: 0.03, frequency: 1200, q: 0.8, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 920, endFreq: 210, duration: 0.22, vol: 0.04 });
+    }
+
+    function playFireIgnite(c) {
+        playNoiseBurst(c, { duration: 0.06, vol: 0.05, frequency: 2600, q: 1.6, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.14, vol: 0.025, frequency: 980, q: 0.8, filterType: 'bandpass', delay: 0.01 });
+    }
+
+    function playFireBurning(c) {
+        playNoiseBurst(c, { duration: 0.22, vol: 0.02, frequency: 1400, q: 0.9, filterType: 'bandpass' });
+        playNoiseBurst(c, { duration: 0.18, vol: 0.012, frequency: 3200, q: 1.8, filterType: 'highpass', delay: 0.03 });
+    }
+
     GameAudio.play = function (soundId, options) {
         if (muted) return;
         options = options || {};
@@ -319,6 +543,48 @@
                 case 'playerHit':
                     playPlayerHit(c);
                     break;
+                case 'themeSong':
+                    playThemeSong(c);
+                    break;
+                case 'swordClash':
+                    playSwordClash(c);
+                    break;
+                case 'punchHit':
+                    playPunchHit(c);
+                    break;
+                case 'levelUpNoise':
+                    playLevelUpNoise(c);
+                    break;
+                case 'ambientWeather':
+                    playAmbientWeather(c);
+                    break;
+                case 'doorOpen':
+                    playDoorOpen(c);
+                    break;
+                case 'pigOink':
+                    playPigOink(c);
+                    break;
+                case 'zombieGrowl':
+                    playZombieGrowl(c);
+                    break;
+                case 'zombieHurt':
+                    playZombieHurt(c);
+                    break;
+                case 'portalIdle':
+                    playPortalIdle(c);
+                    break;
+                case 'portalTravel':
+                    playPortalTravel(c);
+                    break;
+                case 'portalTeleport':
+                    playPortalTeleport(c);
+                    break;
+                case 'fireIgnite':
+                    playFireIgnite(c);
+                    break;
+                case 'fireBurning':
+                    playFireBurning(c);
+                    break;
                 case 'explosion':
                     playNoiseBurst(c, { duration: 0.25, vol: 0.11, frequency: 640, q: 0.55, filterType: 'lowpass' });
                     playOscBurst(c, { type: 'sawtooth', startFreq: 110, endFreq: 42, duration: 0.22, vol: 0.12 });
@@ -330,6 +596,15 @@
                     break;
             }
         });
+    };
+
+    GameAudio.playAssetCue = function (soundId, options) {
+        GameAudio.play(soundId, options);
+    };
+
+    GameAudio.getAssetCueIds = function () {
+        var defs = sharedRecipes && sharedRecipes.definitions ? sharedRecipes.definitions.sound : null;
+        return defs ? Object.keys(defs) : ['themeSong', 'swordClash', 'punchHit', 'levelUpNoise', 'ambientWeather'];
     };
 
     GameAudio.unlock = function () {

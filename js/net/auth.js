@@ -16,8 +16,29 @@
     var user = null;
     var guestMode = false;
     var ownProfile = null;
+    var publicSessionUser = null;
+    var menuGuestUser = null;
     var uiBound = false;
     var sessionFetchPromise = null;
+    var socketPlayerId = '';
+    var SOCKET_PLAYER_ID_KEY = 'mayhem.arena.playerId';
+    var PUBLIC_SESSION_USER_KEY = 'mayhem.arena.publicUser';
+    var runtimeTabToken = '';
+    var arenaIdentityReadyPromise = null;
+    var identityChannel = null;
+
+    function randomToken(prefix) {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+            return String(prefix || '') + globalThis.crypto.randomUUID().replace(/-/g, '');
+        }
+        return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function emitAuthChanged() {
+        if (window && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('mayhem-auth-changed'));
+        }
+    }
 
     function runtimeProfile() {
         return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
@@ -30,7 +51,15 @@
 
     function authMode() {
         var mode = selectedMode();
-        return (mode && mode.authMode) ? mode.authMode : 'guest';
+        return (mode && mode.authMode) ? mode.authMode : 'public';
+    }
+
+    function sessionStore() {
+        try {
+            return window.sessionStorage || null;
+        } catch (_err) {
+            return null;
+        }
     }
 
     function resolveApiUrl(path) {
@@ -68,12 +97,193 @@
         return fetch(resolveApiUrl(url), cfg);
     }
 
-    function makeGuestUser() {
-        var nonce = Math.random().toString(36).slice(2, 8).toUpperCase();
+    function makeSocketPlayerId() {
+        return randomToken('ply_').slice(0, 28);
+    }
+
+    function getSocketPlayerId() {
+        var store;
+        if (!socketPlayerId) {
+            store = sessionStore();
+            if (store) {
+                socketPlayerId = String(store.getItem(SOCKET_PLAYER_ID_KEY) || '').trim();
+            }
+            if (!socketPlayerId) {
+                socketPlayerId = makeSocketPlayerId();
+                if (store) {
+                    try {
+                        store.setItem(SOCKET_PLAYER_ID_KEY, socketPlayerId);
+                    } catch (_err) {
+                        // no-op
+                    }
+                }
+            }
+        }
+        return socketPlayerId;
+    }
+
+    function makePublicSessionUser() {
+        var numericId = Math.floor(100000 + (Math.random() * 900000));
         return {
-            id: 'guest-' + Date.now().toString(36) + '-' + nonce.toLowerCase(),
-            username: 'Guest-' + nonce,
+            id: getSocketPlayerId(),
+            username: 'PLAYER ' + String(numericId),
             classId: 'abilities'
+        };
+    }
+
+    function makeMenuGuestUser() {
+        var numericId = Math.floor(100000 + (Math.random() * 900000));
+        return {
+            id: 'gst_' + randomToken('').slice(0, 8).toLowerCase(),
+            username: 'PLAYER ' + String(numericId),
+            classId: 'abilities'
+        };
+    }
+
+    function writePublicSessionUser(nextUser) {
+        var store = sessionStore();
+        publicSessionUser = nextUser || makePublicSessionUser();
+        publicSessionUser.id = getSocketPlayerId();
+        publicSessionUser.username = String(publicSessionUser.username || makePublicSessionUser().username);
+        publicSessionUser.classId = String(publicSessionUser.classId || 'abilities');
+        if (store) {
+            try {
+                store.setItem(PUBLIC_SESSION_USER_KEY, JSON.stringify(publicSessionUser));
+            } catch (_err) {
+                // no-op
+            }
+        }
+        return publicSessionUser;
+    }
+
+    function regenerateArenaIdentity() {
+        var store = sessionStore();
+        socketPlayerId = makeSocketPlayerId();
+        if (store) {
+            try {
+                store.setItem(SOCKET_PLAYER_ID_KEY, socketPlayerId);
+            } catch (_err) {
+                // no-op
+            }
+        }
+        return writePublicSessionUser(null);
+    }
+
+    function ensureIdentityChannel() {
+        if (identityChannel || typeof BroadcastChannel !== 'function') return identityChannel;
+        identityChannel = new BroadcastChannel('mayhem-arena-identity');
+        identityChannel.addEventListener('message', function (event) {
+            var data = event && event.data ? event.data : null;
+            if (!data || data.type !== 'identity_probe') return;
+            if (!data.playerId || data.tabToken === runtimeTabToken) return;
+            if (String(data.playerId) !== String(getSocketPlayerId())) return;
+            identityChannel.postMessage({
+                type: 'identity_claimed',
+                probeId: String(data.probeId || ''),
+                playerId: String(data.playerId),
+                responderTabToken: runtimeTabToken
+            });
+        });
+        return identityChannel;
+    }
+
+    function ensureRuntimeTabToken() {
+        if (!runtimeTabToken) {
+            runtimeTabToken = randomToken('tab_');
+        }
+        return runtimeTabToken;
+    }
+
+    function probeArenaIdentity() {
+        var channel = ensureIdentityChannel();
+        var currentIdentity = getSocketIdentity();
+        if (!channel || !currentIdentity || !currentIdentity.id) {
+            return Promise.resolve(currentIdentity);
+        }
+
+        ensureRuntimeTabToken();
+
+        return new Promise(function (resolve) {
+            var probeId = randomToken('probe_');
+            var conflictDetected = false;
+            var settled = false;
+
+            function cleanup() {
+                if (settled) return;
+                settled = true;
+                channel.removeEventListener('message', onMessage);
+            }
+
+            function onMessage(event) {
+                var data = event && event.data ? event.data : null;
+                if (!data || data.type !== 'identity_claimed') return;
+                if (String(data.probeId || '') !== probeId) return;
+                if (String(data.playerId || '') !== String(getSocketPlayerId())) return;
+                if (String(data.responderTabToken || '') === runtimeTabToken) return;
+                conflictDetected = true;
+            }
+
+            channel.addEventListener('message', onMessage);
+            channel.postMessage({
+                type: 'identity_probe',
+                probeId: probeId,
+                playerId: String(currentIdentity.id),
+                tabToken: runtimeTabToken
+            });
+
+            window.setTimeout(function () {
+                cleanup();
+                if (conflictDetected) {
+                    resolve(regenerateArenaIdentity());
+                    return;
+                }
+                resolve(getSocketIdentity());
+            }, 40);
+        });
+    }
+
+    function getSocketIdentity() {
+        if (!publicSessionUser) {
+            var store = sessionStore();
+            if (store) {
+                try {
+                    publicSessionUser = JSON.parse(store.getItem(PUBLIC_SESSION_USER_KEY) || 'null');
+                } catch (_err) {
+                    publicSessionUser = null;
+                }
+            }
+            if (!publicSessionUser || typeof publicSessionUser !== 'object') {
+                publicSessionUser = makePublicSessionUser();
+            }
+            writePublicSessionUser(publicSessionUser);
+        }
+        return publicSessionUser;
+    }
+
+    function getMenuGuestUser() {
+        if (!menuGuestUser) {
+            menuGuestUser = makeMenuGuestUser();
+        }
+        return menuGuestUser;
+    }
+
+    function getPartyIdentity() {
+        if (user && !guestMode) {
+            return {
+                id: String(user.id || ''),
+                username: String(user.username || user.displayName || 'PLAYER'),
+                classId: String(user.classId || 'abilities'),
+                label: 'PLAYER ID',
+                kind: 'account'
+            };
+        }
+        var guest = getMenuGuestUser();
+        return {
+            id: String(guest.id || ''),
+            username: String(guest.username || 'PLAYER'),
+            classId: String(guest.classId || 'abilities'),
+            label: 'GUEST ID',
+            kind: 'guest'
         };
     }
 
@@ -83,6 +293,12 @@
 
     function authToggleBtn() {
         return document.getElementById('account-toggle-btn');
+    }
+
+    function authModalManager() {
+        return globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameModalManager
+            ? globalThis.__MAYHEM_RUNTIME.GameModalManager
+            : null;
     }
 
     function setAuthStatus(msg, isErr) {
@@ -95,7 +311,16 @@
     function setAuthVisible(visible) {
         var overlay = authOverlay();
         var toggle = authToggleBtn();
-        if (overlay) overlay.hidden = !visible;
+        var modalManager = authModalManager();
+        if (modalManager && overlay) {
+            if (visible) {
+                modalManager.open('auth', toggle || document.activeElement || null);
+            } else {
+                modalManager.close('auth');
+            }
+        } else if (overlay) {
+            overlay.hidden = !visible;
+        }
         if (toggle) toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
     }
 
@@ -169,6 +394,7 @@
         guestMode = false;
         user = nextUser || null;
         renderAuthPanel();
+        emitAuthChanged();
     }
 
     function loadOwnProfile() {
@@ -231,6 +457,8 @@
         var localBtn = document.getElementById('auth-local-btn');
         var closeBtn = document.getElementById('auth-close-btn');
         var toggleBtn = authToggleBtn();
+        var overlayEl = authOverlay();
+        var modalManager = authModalManager();
 
         function lockForm(lock) {
             if (usernameInput) usernameInput.disabled = lock;
@@ -238,6 +466,20 @@
             if (playBtn) playBtn.disabled = lock;
             if (logoutBtn) logoutBtn.disabled = lock;
             if (localBtn) localBtn.disabled = lock;
+        }
+
+        if (modalManager && overlayEl) {
+            modalManager.register('auth', {
+                element: overlayEl,
+                initialFocus: usernameInput || closeBtn || overlayEl,
+                restoreFocus: toggleBtn || null,
+                onOpen: function () {
+                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+                },
+                onClose: function () {
+                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                }
+            });
         }
 
         if (form) {
@@ -277,6 +519,9 @@
                 var nextVisible = !!(authOverlay() && authOverlay().hidden);
                 renderAuthPanel();
                 setAuthVisible(nextVisible);
+                if (nextVisible && usernameInput && !user) {
+                    usernameInput.focus();
+                }
                 if (nextVisible && user && !guestMode) {
                     loadOwnProfile();
                 }
@@ -303,6 +548,7 @@
                 setAuthStatus('Bypassed login. Starting local mode...', false);
                 renderAuthPanel();
                 setAuthVisible(false);
+                emitAuthChanged();
             });
         }
 
@@ -339,6 +585,7 @@
             setAuthVisible(false);
             setAuthStatus('', false);
             renderAuthPanel();
+            emitAuthChanged();
             return Promise.resolve();
         }
 
@@ -350,6 +597,7 @@
                 setAuthVisible(true);
                 setAuthStatus('Logged out. ' + AUTH_COOKIE_HELP, false);
                 renderAuthPanel();
+                emitAuthChanged();
             });
     };
 
@@ -370,26 +618,48 @@
     };
 
     GameNetAuth.enableGuestMode = function () {
-        if (user && !guestMode) {
-            renderAuthPanel();
-            return user;
-        }
-        guestMode = true;
-        if (!user) {
-            user = makeGuestUser();
-        }
-        ownProfile = null;
-        setAuthVisible(false);
-        setAuthStatus('', false);
-        renderAuthPanel();
-        return user;
+        return getSocketIdentity();
     };
 
     GameNetAuth.getCurrentUser = function () {
-        if (guestMode && !user) {
-            user = makeGuestUser();
+        if (user && !guestMode) {
+            return user;
         }
-        return user;
+        var identity = getPartyIdentity();
+        if (!identity) return null;
+        return {
+            id: String(identity.id || ''),
+            username: String(identity.username || identity.id || 'PLAYER'),
+            classId: String(identity.classId || 'abilities')
+        };
+    };
+
+    GameNetAuth.getOwnProfile = function () {
+        return ownProfile;
+    };
+
+    GameNetAuth.getSocketPlayerId = function () {
+        return getSocketPlayerId();
+    };
+
+    GameNetAuth.getSocketIdentity = function () {
+        return getSocketIdentity();
+    };
+
+    GameNetAuth.getPartyIdentity = function () {
+        return getPartyIdentity();
+    };
+
+    GameNetAuth.enablePublicMode = function () {
+        return getSocketIdentity();
+    };
+
+    GameNetAuth.ensureArenaIdentity = function () {
+        if (arenaIdentityReadyPromise) return arenaIdentityReadyPromise;
+        arenaIdentityReadyPromise = probeArenaIdentity().finally(function () {
+            arenaIdentityReadyPromise = null;
+        });
+        return arenaIdentityReadyPromise;
     };
 
     GameNetAuth.clearUser = function () {
@@ -397,6 +667,7 @@
         user = null;
         ownProfile = null;
         renderAuthPanel();
+        emitAuthChanged();
     };
 
     GameNetAuth.setUser = function (u) {
@@ -432,8 +703,8 @@
             onAuthed(null);
             return;
         }
-        if (modeAuth === 'guest') {
-            onAuthed(GameNetAuth.enableGuestMode());
+        if (modeAuth === 'public' || modeAuth === 'guest') {
+            onAuthed(getSocketIdentity());
             return;
         }
 

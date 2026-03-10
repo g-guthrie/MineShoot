@@ -72,6 +72,12 @@ For frontend-only iteration without the Worker runtime, use:
 npm run dev:frontend
 ```
 
+Generated directory notes:
+
+- `dist/` is the primary Vite build output.
+- `.wrangler/` stores local Worker state and logs.
+- `.cf-deploy/` is a quarantined legacy asset bundle kept only for compatibility/manual staging.
+
 ## 9) Offline local multiplayer dev
 
 Run the local Worker + local Pages stack:
@@ -88,5 +94,6 @@ For guest flow testing, open two tabs and click `Multiplayer` in both tabs.
 
 Notes:
 
-- This runs the Worker locally with static assets (`--assets .`) so frontend + `/api` + WebSocket are all same-origin.
+- This runs the Worker locally with static assets from `.cf-deploy/`, which is kept as a quarantined legacy compatibility bundle.
+- `dist/` remains the main frontend build output; `.cf-deploy/` is not the primary source of truth for app code.
 - It gives you real client/server multiplayer behavior offline (same WS/backend model, local runtime).

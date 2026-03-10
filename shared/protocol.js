@@ -1,6 +1,9 @@
 export const DEFAULT_ROOM_ID = 'global';
 export const WS_PATH = '/api/ws';
 export const MATCHMAKING_PATH = '/api/matchmaking';
+export const PARTY_PATH = '/api/party';
+export const PRIVATE_ROOM_PATH = '/api/private-room';
+export const FRIENDS_PATH = '/api/friends';
 export const AUTH_PATH = {
   me: '/api/me',
   login: '/api/auth/login',
@@ -67,6 +70,9 @@ export const protocol = {
   world: WORLD_DEFAULTS,
   wsPath: WS_PATH,
   matchmakingPath: MATCHMAKING_PATH,
+  partyPath: PARTY_PATH,
+  privateRoomPath: PRIVATE_ROOM_PATH,
+  friendsPath: FRIENDS_PATH,
   authPath: AUTH_PATH,
   profilePath: PROFILE_PATH,
   msg: {

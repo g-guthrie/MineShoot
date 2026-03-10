@@ -1,6 +1,7 @@
 export const PUBLIC_ROOM_PREFIX = {
   ffa: 'ffa',
-  tdm: 'tdm'
+  tdm: 'tdm',
+  lms: 'lms'
 };
 
 export const PRIVATE_ROOM_PREFIX = 'private';

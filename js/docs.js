@@ -103,6 +103,11 @@
         }
     }
 
+    function sharedDataCatalog() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
+        return shared || {};
+    }
+
     function findById(list, id) {
         if (!list || !list.length || !id) return null;
         for (var i = 0; i < list.length; i++) {
@@ -119,10 +124,39 @@
     }
 
     function getData() {
+        var shared = sharedDataCatalog();
+        var sharedWeapons = [];
+        var sharedAbilities = [];
+        var sharedThrowables = [];
+        var weaponStats = shared.weaponStats || {};
+        var abilityDefs = shared.abilityCatalog || {};
+        var throwableDefs = shared.throwables || {};
+
+        for (var weaponId in weaponStats) {
+            if (!Object.prototype.hasOwnProperty.call(weaponStats, weaponId)) continue;
+            sharedWeapons.push(Object.assign({ id: weaponId }, weaponStats[weaponId]));
+        }
+        for (var abilityId in abilityDefs) {
+            if (!Object.prototype.hasOwnProperty.call(abilityDefs, abilityId)) continue;
+            sharedAbilities.push(Object.assign({ id: abilityId }, abilityDefs[abilityId]));
+        }
+        var throwableOrder = (throwableDefs.order && throwableDefs.order.slice()) || [];
+        for (var i = 0; i < throwableOrder.length; i++) {
+            var throwableId = throwableOrder[i];
+            if (!throwableDefs[throwableId]) continue;
+            sharedThrowables.push(Object.assign({ id: throwableId }, throwableDefs[throwableId]));
+        }
+
         return {
-            abilities: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog),
-            weapons: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog),
-            throwables: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog)
+            abilities: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog).length
+                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog)
+                : sharedAbilities,
+            weapons: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog).length
+                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog)
+                : sharedWeapons,
+            throwables: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog).length
+                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog)
+                : sharedThrowables
         };
     }
 
@@ -142,11 +176,11 @@
 
     function weaponSpecial(weapon) {
         if (!weapon) return '--';
-        if (weapon.id === 'shotgun') return '12 deterministic hitscan pellets with hard spread box';
+        if (weapon.id === 'shotgun') return 'Point-blank burst monster; huge chunks up close without a full-health one-shot';
         if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
-        if (weapon.id === 'machinegun') return 'Automatic suppression baseline with predictable recoil-free taping';
-        if (weapon.id === 'rifle') return 'Best precision consistency from mid to long range';
-        if (weapon.id === 'pistol') return 'Close-range precision sidearm with high headshot payoff';
+        if (weapon.id === 'machinegun') return 'Automatic lane holder; ADS now trades mobility for real mid-range stability';
+        if (weapon.id === 'rifle') return 'Scout-style precision rifle with stronger headshot reward';
+        if (weapon.id === 'pistol') return 'Hand cannon sidearm built for mid-range headshots';
         return 'Balanced baseline weapon';
     }
 
@@ -255,7 +289,8 @@
         lines.push('DAMAGE B/H  : ' + fNum(w.bodyDamage) + ' / ' + fNum(w.headDamage));
         lines.push('COOLDOWN    : ' + fNum(w.cooldown) + 'ms');
         lines.push('ROF         : ' + fRateMs(w.cooldown));
-        lines.push('MAX RANGE   : ' + fNum(w.maxRange));
+        lines.push('RANGE H/A   : ' + fNum(w.maxRange) + ' / ' + fNum(w.adsMaxRange != null ? w.adsMaxRange : w.maxRange));
+        lines.push('SPREAD H/A  : ' + fNum(w.hipfireSpread) + ' / ' + fNum(w.adsSpread != null ? w.adsSpread : w.hipfireSpread));
         lines.push('PELLETS     : ' + fNum(w.pellets));
         lines.push('SPECIAL     : ' + weaponSpecial(w));
         lines.push('');
@@ -459,20 +494,28 @@
         contentEl.textContent = buildContent(state.activePage, data);
     }
 
-    function openPanel() {
+    function openPanel(triggerEl) {
         if (!panelEl) return;
-        panelEl.style.display = 'flex';
-        panelEl.setAttribute('aria-hidden', 'false');
         if (document.pointerLockElement && document.exitPointerLock) {
             document.exitPointerLock();
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.open) {
+            globalThis.__MAYHEM_RUNTIME.GameModalManager.open('docs', triggerEl || pauseOpenBtnEl || hudOpenBtnEl || document.activeElement || null);
+        } else {
+            panelEl.hidden = false;
+            panelEl.setAttribute('aria-hidden', 'false');
         }
         GameDocs.refresh();
     }
 
     function closePanel() {
         if (!panelEl) return;
-        panelEl.style.display = 'none';
-        panelEl.setAttribute('aria-hidden', 'true');
+        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.close) {
+            globalThis.__MAYHEM_RUNTIME.GameModalManager.close('docs');
+        } else {
+            panelEl.hidden = true;
+            panelEl.setAttribute('aria-hidden', 'true');
+        }
     }
 
     GameDocs.init = function () {
@@ -498,27 +541,19 @@
             });
         }
 
-        if (pauseOpenBtnEl) {
-            pauseOpenBtnEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                GameDocs.toggle();
-            });
-        }
-
-        if (hudOpenBtnEl) {
-            hudOpenBtnEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                GameDocs.toggle();
-            });
-        }
-
         panelEl.addEventListener('click', function (e) {
             e.stopPropagation();
         });
 
-        panelEl.style.display = 'none';
+        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.register) {
+            globalThis.__MAYHEM_RUNTIME.GameModalManager.register('docs', {
+                element: panelEl,
+                initialFocus: closeBtnEl || panelEl,
+                restoreFocus: pauseOpenBtnEl || hudOpenBtnEl || null
+            });
+        }
+
+        panelEl.hidden = true;
         panelEl.setAttribute('aria-hidden', 'true');
 
         isInited = true;
@@ -530,9 +565,9 @@
         render();
     };
 
-    GameDocs.open = function () {
+    GameDocs.open = function (triggerEl) {
         if (!isInited) return;
-        openPanel();
+        openPanel(triggerEl);
     };
 
     GameDocs.close = function () {
@@ -542,7 +577,7 @@
 
     GameDocs.toggle = function () {
         if (!isInited) return;
-        if (panelEl && panelEl.style.display !== 'none') {
+        if (GameDocs.isOpen()) {
             closePanel();
         } else {
             openPanel();
@@ -550,7 +585,10 @@
     };
 
     GameDocs.isOpen = function () {
-        return !!panelEl && panelEl.style.display !== 'none';
+        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.isOpen) {
+            return globalThis.__MAYHEM_RUNTIME.GameModalManager.isOpen('docs');
+        }
+        return !!panelEl && !panelEl.hidden;
     };
 
     globalThis.__MAYHEM_RUNTIME.GameDocs = GameDocs;

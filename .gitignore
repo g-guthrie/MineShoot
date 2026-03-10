@@ -2,3 +2,5 @@ node_modules/
 dist/
 .hermes-flow/
 .wrangler/
+test-results/
+.codex/*.png

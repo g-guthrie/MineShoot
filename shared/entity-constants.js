@@ -5,6 +5,7 @@
 
 export var EYE_HEIGHT = 1.6;
 export var PLAYER_RADIUS = 0.35;
+export var PLAYER_HEIGHT = 1.7;
 
 export var DEFAULT_HP = 500;
 export var DEFAULT_HP_MAX = 500;
@@ -31,6 +32,7 @@ runtime.__MAYHEM_RUNTIME.GameShared = runtime.__MAYHEM_RUNTIME.GameShared || {};
 runtime.__MAYHEM_RUNTIME.GameShared.entityConstants = {
   EYE_HEIGHT: EYE_HEIGHT,
   PLAYER_RADIUS: PLAYER_RADIUS,
+  PLAYER_HEIGHT: PLAYER_HEIGHT,
   DEFAULT_HP: DEFAULT_HP,
   DEFAULT_HP_MAX: DEFAULT_HP_MAX,
   DEFAULT_ARMOR: DEFAULT_ARMOR,

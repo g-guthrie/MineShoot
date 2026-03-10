@@ -41,8 +41,20 @@
         return group;
     }
 
+    function cloneVisualForRevealGhost(visual) {
+        if (!visual || !visual.clone) return null;
+        var originalUserData = visual.userData;
+        visual.userData = {};
+        try {
+            return visual.clone(true);
+        } finally {
+            visual.userData = originalUserData;
+        }
+    }
+
     function createRevealGhost(visual) {
-        var ghost = visual.clone(true);
+        var ghost = cloneVisualForRevealGhost(visual);
+        if (!ghost) return null;
         var mats = [];
 
         ghost.traverse(function (node) {

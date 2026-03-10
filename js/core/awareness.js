@@ -62,7 +62,7 @@
         for (var i = 0; i < SEGMENTS; i++) segments[i] = 0;
         var coreIntensity = 0;
         var targets = collectTargets();
-        var quadrants = [
+        var offRadarQuadrants = [
             { angleRad: Math.PI * 0.25, count: 0, minDist: Infinity },
             { angleRad: Math.PI * 0.75, count: 0, minDist: Infinity },
             { angleRad: -Math.PI * 0.75, count: 0, minDist: Infinity },
@@ -91,24 +91,21 @@
             if (dist <= CORE_RANGE) {
                 coreIntensity = Math.max(coreIntensity, Math.max(0, 1 - (dist / CORE_RANGE)));
             }
-            var quadrant = quadrants[quadrantIndexFromAngle(angle)];
-            quadrant.count++;
-            if (dist < quadrant.minDist) quadrant.minDist = dist;
+            if (dist > RADAR_RANGE) {
+                var quadrant = offRadarQuadrants[quadrantIndexFromAngle(angle)];
+                quadrant.count++;
+                if (dist < quadrant.minDist) quadrant.minDist = dist;
+            }
         }
 
         var beacons = [];
-        var bestQuadrant = null;
-        for (var q = 0; q < quadrants.length; q++) {
-            var candidate = quadrants[q];
+        for (var q = 0; q < offRadarQuadrants.length; q++) {
+            var candidate = offRadarQuadrants[q];
             if (candidate.count <= 0) continue;
-            if (!bestQuadrant || candidate.count > bestQuadrant.count || (candidate.count === bestQuadrant.count && candidate.minDist < bestQuadrant.minDist)) {
-                bestQuadrant = candidate;
-            }
-        }
-        if (bestQuadrant) {
             beacons.push({
-                angleRad: bestQuadrant.angleRad,
-                intensity: Math.max(0.45, Math.min(1, 0.4 + bestQuadrant.count * 0.12))
+                angleRad: candidate.angleRad,
+                intensity: Math.max(0.35, Math.min(1, candidate.count >= 4 ? 1 : (0.28 + candidate.count * 0.18))),
+                count: candidate.count
             });
         }
 

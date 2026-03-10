@@ -9,6 +9,8 @@ const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { sl
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
 export function toEntityState(entity) {
+  const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - nowMs()) / 1000);
+  const slot2CooldownRemaining = Math.max(0, ((entity.slot2CooldownUntil || 0) - nowMs()) / 1000);
   const throwables = {};
   const order = THROWABLE_STATS.order || [];
   for (let i = 0; i < order.length; i++) {
@@ -31,9 +33,15 @@ export function toEntityState(entity) {
     z: Number(entity.z.toFixed(3)),
     yaw: Number((entity.yaw || 0).toFixed(4)),
     pitch: Number((entity.pitch || 0).toFixed(4)),
+    seq: Math.max(0, Number(entity.seq || 0)),
+    cameraMode: String(entity.cameraMode || 'third') === 'first' ? 'first' : 'third',
     weaponId: entity.weaponId || 'rifle',
     moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
     sprinting: !!entity.sprinting,
+    velocityY: Number((entity.velocityY || 0).toFixed(4)),
+    isGrounded: !!entity.isGrounded,
+    jumpHoldTimer: Number((entity.jumpHoldTimer || 0).toFixed(4)),
+    jumpHeldLast: !!entity.jumpHeldLast,
     hp: Number(entity.hp.toFixed(2)),
     hpMax: Number(entity.hpMax.toFixed(2)),
     armor: Number(entity.armor.toFixed(2)),
@@ -41,6 +49,13 @@ export function toEntityState(entity) {
     kills: Math.max(0, Number(entity.kills || 0)),
     deaths: Math.max(0, Number(entity.deaths || 0)),
     progressScore: Number((entity.progressScore || 0).toFixed(3)),
+    lmsLives: Math.max(0, Number(entity.lmsLives || 0)),
+    lmsCharge: Math.max(0, Number(entity.lmsCharge || 0)),
+    lmsBankState: entity.lmsBankState ? {
+      beaconId: entity.lmsBankState.beaconId || '',
+      startedAt: Number(entity.lmsBankState.startedAt || 0),
+      endsAt: Number(entity.lmsBankState.endsAt || 0)
+    } : null,
     teamId: entity.teamId || '',
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,
@@ -52,8 +67,10 @@ export function toEntityState(entity) {
       ? entity.weaponLoadout.slice(0, 2)
       : DEFAULT_WEAPON_LOADOUT.slice(),
     abilityLoadout: entity.abilityLoadout || DEFAULT_ABILITY_LOADOUT,
-    abilityCooldownRemaining: Math.max(0, ((entity.abilityCooldownUntil || 0) - nowMs()) / 1000),
-    ultimateCooldownRemaining: Math.max(0, ((entity.ultimateCooldownUntil || 0) - nowMs()) / 1000),
+    slot1CooldownRemaining,
+    slot2CooldownRemaining,
+    abilityCooldownRemaining: slot1CooldownRemaining,
+    ultimateCooldownRemaining: slot2CooldownRemaining,
     stunUntil: entity.stunUntil || 0,
     slowUntil: entity.slowUntil || 0,
     chokeState: entity.chokeState ? {
@@ -67,6 +84,10 @@ export function toEntityState(entity) {
       startedAt: entity.chokeVictimState.startedAt || 0,
       endsAt: entity.chokeVictimState.endsAt || 0,
       liftHeight: entity.chokeVictimState.liftHeight || 1.0
+    } : null,
+    justBeenHookedState: entity.justBeenHookedState ? {
+      startedAt: entity.justBeenHookedState.startedAt || 0,
+      endsAt: entity.justBeenHookedState.endsAt || 0
     } : null,
     hookPullState: entity.hookPullState ? {
       sourceId: entity.hookPullState.sourceId || '',

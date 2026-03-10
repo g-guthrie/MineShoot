@@ -94,6 +94,7 @@
             weaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
             chokeVictimState: entity.chokeVictimState || null,
+            justBeenHookedState: entity.justBeenHookedState || null,
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
             hookState: entity.hookState || null,
@@ -135,6 +136,7 @@
     GameNetEntities.updateFromSnapshot = function (entity) {
         if (!sceneRef) return;
         var r = GameNetEntities.ensureRemote(entity);
+        if (!r || !r.group) return;
         r.targetX = entity.x;
         r.targetY = entity.y || 1.6;
         r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
@@ -158,14 +160,15 @@
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
         r.chokeState = entity.chokeState || null;
         r.chokeVictimState = entity.chokeVictimState || null;
+        r.justBeenHookedState = entity.justBeenHookedState || null;
         r.hookState = entity.hookState || null;
         r.hookPullState = entity.hookPullState || null;
         r.healState = entity.healState || null;
         r.abilityLoadout = entity.abilityLoadout || null;
 
         r.group.visible = !!entity.alive;
-        r.bodyHitbox.visible = !!entity.alive;
-        r.headHitbox.visible = !!entity.alive;
+        if (r.bodyHitbox) r.bodyHitbox.visible = !!entity.alive;
+        if (r.headHitbox) r.headHitbox.visible = !!entity.alive;
     };
 
     GameNetEntities.getHitboxArray = function () {

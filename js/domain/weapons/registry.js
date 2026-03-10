@@ -18,6 +18,7 @@
                 position: visual.gunPos || [0, 0, 0],
                 rotation: visual.gunRot || [0, 0, 0]
             },
+            model: visual.model || null,
             parts: {
                 body: visual.body || null,
                 barrel: visual.barrel || null,
@@ -56,28 +57,46 @@
             stock:  { p: [0, -0.04, 0.14], s: [1.0, 1.0, 1.0], c: 0x7a512d },
             grip:   { p: [0, -0.1, 0.02], s: [1.0, 1.0, 1.0], c: 0x7a512d },
             handlePos: [0, -0.1, 0.08],
+            supportPos: [-0.05, -0.03, -0.34],
             barrelTipPos: [0, 0.02, -0.56]
         }),
         pistol: buildVisualEntry('hitscan', {
             gunPos: [0.0, 0.03, 0.06],
             gunRot: [0.12, 0.05, 0],
+            model: {
+                kind: 'embedded-gltf',
+                url: '/assets/models/weapons/desert-eagle.gltf',
+                center: true,
+                position: [0.01, -0.035, -0.02],
+                rotation: [0, 0, 0],
+                scale: [0.4, 0.4, 0.4]
+            },
             body:   { p: [0, -0.02, -0.06], s: [0.75, 0.85, 0.7], c: 0x3a3a3a },
             barrel: { p: [0, 0.0, -0.24], s: [0.68, 0.68, 0.65], c: 0x2c2c2c },
             stock:  { p: [0, -0.05, 0.09], s: [0.52, 0.85, 0.72], c: 0x6f4d32 },
             grip:   { p: [0, -0.14, -0.01], s: [0.9, 1.1, 1.25], c: 0x6f4d32 },
-            handlePos: [0, -0.14, 0.01],
-            barrelTipPos: [0, 0.0, -0.33]
+            handlePos: [0, -0.135, 0.02],
+            supportPos: [-0.02, -0.055, -0.1],
+            barrelTipPos: [0, 0.005, -0.44]
         }),
         machinegun: buildVisualEntry('hitscan', {
             gunPos: [0.0, 0.02, 0.08],
             gunRot: [0, 0, 0],
+            model: {
+                kind: 'embedded-gltf',
+                url: '/assets/models/weapons/ak-47.gltf',
+                center: true,
+                position: [0.0, -0.01, -0.05],
+                rotation: [0, 0, 0],
+                scale: [0.27, 0.27, 0.27]
+            },
             body:   { p: [0, 0.0, -0.08], s: [1.38, 1.05, 1.32], c: 0x2b2b2b },
             barrel: { p: [0, 0.03, -0.52], s: [1.18, 1.0, 1.62], c: 0x191919 },
             stock:  { p: [0, -0.03, 0.19], s: [1.2, 1.05, 1.18], c: 0x565656 },
             grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.08, 1.0], c: 0x565656 },
-            handlePos: [0, -0.11, 0.1],
-            coil: true,
-            barrelTipPos: [0, 0.03, -0.82]
+            handlePos: [0, -0.08, 0.1],
+            supportPos: [-0.08, -0.03, -0.32],
+            barrelTipPos: [0, 0.02, -0.9]
         }),
         shotgun: buildVisualEntry('hitscan', {
             gunPos: [0.0, 0.02, 0.06],
@@ -88,6 +107,7 @@
             grip:   { p: [0, -0.1, 0.02], s: [1.02, 1.06, 1.02], c: 0x8a5a2d },
             handlePos: [0, -0.1, 0.08],
             pump: true,
+            supportPos: [-0.05, -0.03, -0.44],
             barrelTipPos: [0, 0.02, -0.86]
         }),
         sniper: buildVisualEntry('hitscan', {
@@ -99,6 +119,7 @@
             grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5d3c1f },
             handlePos: [0, -0.11, 0.11],
             scope: true,
+            supportPos: [-0.05, -0.02, -0.56],
             barrelTipPos: [0, 0.02, -1.34]
         }),
         seekergun: buildVisualEntry('seekerProjectile', {
@@ -111,6 +132,7 @@
             handlePos: [0, -0.11, 0.06],
             scope: true,
             coil: true,
+            supportPos: [-0.05, -0.02, -0.34],
             barrelTipPos: [0, 0.04, -0.72]
         })
     };

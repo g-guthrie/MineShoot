@@ -6,6 +6,7 @@ import {
   HEAD_HITBOX_CENTER_OFFSET_Y
 } from './entity-constants.js';
 import { applyFalloff } from './damage.js';
+import { resolveWeaponAimProfile } from './gameplay-tuning.js';
 
 const CAMERA_FOV_DEG = 75;
 const ADS_FOV_DEG = 56;
@@ -56,12 +57,10 @@ function weaponFovDeg(weaponId, adsActive) {
 }
 
 function spreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
-  const spread = Math.max(0, Number(weaponStats && weaponStats.hipfireSpread || 0));
+  const aim = resolveWeaponAimProfile(weaponStats, adsActive);
+  const spread = Math.max(0, Number(aim && aim.spread || 0));
   if (spread <= 0.00001) return { x: 0, y: 0 };
-  const adsMult = Math.max(0, Number(weaponStats && weaponStats.adsSpreadMultiplier != null ? weaponStats.adsSpreadMultiplier : 1));
-  const spreadScale = adsActive ? adsMult : 1;
-  if (spreadScale <= 0.00001) return { x: 0, y: 0 };
-  const maxRadius = spread * spreadScale;
+  const maxRadius = spread;
   const angle = seededUnit(shotToken, pelletIndex * 2) * Math.PI * 2;
   const radius = Math.sqrt(seededUnit(shotToken, pelletIndex * 2 + 1)) * maxRadius;
   return {
@@ -148,12 +147,9 @@ function entityHitboxes(entity) {
 }
 
 function effectiveRange(weaponStats, adsActive) {
-  let range = Number(weaponStats && weaponStats.maxRange || 0);
-  if (weaponStats && weaponStats.infiniteRange) return Infinity;
-  if (adsActive) {
-    range *= Math.max(1, Number(weaponStats && weaponStats.adsHitscanRangeMultiplier || 1));
-  }
-  return Math.max(0, range);
+  const aim = resolveWeaponAimProfile(weaponStats, adsActive);
+  if (aim && aim.maxRange === Infinity) return Infinity;
+  return Math.max(0, Number(aim && aim.maxRange || 0));
 }
 
 export function resolveHitscanShot(options) {

@@ -30,12 +30,14 @@
     var reconnectTimer = null;
     var transport = null;
     var sceneRef = null;
+    var connectAttemptSeq = 0;
 
     var roomId = 'global';
     var selfId = '';
     var selfState = null;
     var matchState = null;
     var gameMode = '';
+    var privateRoomPhase = '';
     var worldMeta = null;
     var worldMismatchNotified = false;
     var pendingSpawnSync = null;
@@ -44,6 +46,9 @@
     var pendingWeaponLoadout = null;
 
     var inputSeq = 1;
+    var lastInputSeqSent = 0;
+    var lastInputSeqAcked = 0;
+    var inputSeqHistory = [];
     var inputSendTimer = 0;
     var INPUT_SEND_INTERVAL = 0.05;
 
@@ -107,12 +112,19 @@
             : ((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + WS_URL);
         var params = new URLSearchParams();
         params.set('room', String(roomId || 'global'));
-        var u = GameNetAuth.getUser();
+        if (GameNetAuth.getSocketPlayerId) {
+            params.set('pid', String(GameNetAuth.getSocketPlayerId() || ''));
+        }
+        var actor = GameNetAuth.getPartyIdentity ? GameNetAuth.getPartyIdentity() : null;
+        if (actor && actor.id) {
+            params.set('actorId', String(actor.id));
+            params.set('actorName', String(actor.username || actor.id));
+        }
+        var u = GameNetAuth.getSocketIdentity ? GameNetAuth.getSocketIdentity() : GameNetAuth.getUser();
         if (u && u.id) {
             params.set('uid', String(u.id));
             params.set('username', String(u.username || u.id));
             params.set('classId', String(u.classId || 'abilities'));
-            if (GameNetAuth.isGuest()) params.set('guest', '1');
         }
         return endpoint + '?' + params.toString();
     }
@@ -132,6 +144,14 @@
         if (!sceneRef) return;
         if (entity.id === selfId) {
             selfState = entity;
+            if (typeof entity.seq === 'number' && isFinite(entity.seq)) {
+                lastInputSeqAcked = Math.max(lastInputSeqAcked, Math.floor(Number(entity.seq || 0)));
+                if (inputSeqHistory.length > 0) {
+                    inputSeqHistory = inputSeqHistory.filter(function (entry) {
+                        return entry && Number(entry.seq || 0) > lastInputSeqAcked;
+                    });
+                }
+            }
             if (!initialSpawnApplied && entity && typeof entity.x === 'number' && typeof entity.z === 'number') {
                 pendingSpawnSync = {
                     x: Number(entity.x || 0),
@@ -321,6 +341,7 @@
             selfId = msg.selfId || selfId;
             roomId = sanitizeRoomId(msg.roomId || roomId || 'global');
             gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
+            privateRoomPhase = String(msg.privateRoomPhase || privateRoomPhase || '').toLowerCase();
             matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : null;
             pendingRespawnInfo = null;
 
@@ -366,6 +387,7 @@
 
         if (msg.t === (MSG_S2C.SNAPSHOT || 'snapshot')) {
             gameMode = String(msg.gameMode || gameMode || '').toLowerCase();
+            privateRoomPhase = String(msg.privateRoomPhase || privateRoomPhase || '').toLowerCase();
             matchState = (msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : matchState;
             applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || [], {
                 delta: !!msg.delta,
@@ -485,6 +507,8 @@
             pushNotice('Ability loadout synced.');
             if (selfState) {
                 selfState.classId = msg.classId || selfState.classId;
+                selfState.slot1CooldownRemaining = 0;
+                selfState.slot2CooldownRemaining = 0;
                 selfState.abilityCooldownRemaining = 0;
                 selfState.ultimateCooldownRemaining = 0;
             }
@@ -498,6 +522,8 @@
             pushNotice('Ability loadout synced.');
             if (selfState) {
                 selfState.classId = msg.classId || selfState.classId;
+                selfState.slot1CooldownRemaining = 0;
+                selfState.slot2CooldownRemaining = 0;
                 selfState.abilityCooldownRemaining = 0;
                 selfState.ultimateCooldownRemaining = 0;
             }
@@ -522,56 +548,73 @@
     }
 
     function connectWs() {
-        if (!active || !GameNetAuth.getUser()) return;
+        var socketIdentity = GameNetAuth.getSocketIdentity ? GameNetAuth.getSocketIdentity() : GameNetAuth.getUser();
+        var attemptSeq = ++connectAttemptSeq;
+        if (!active || !socketIdentity) return;
         clearReconnectTimer();
 
-        if (globalThis.__MAYHEM_RUNTIME.GameNetTransport && globalThis.__MAYHEM_RUNTIME.GameNetTransport.create) {
-            transport = globalThis.__MAYHEM_RUNTIME.GameNetTransport.create({
-                endpoint: wsEndpoint,
-                isActive: function () { return active; },
-                reconnectMs: 1200,
-                onOpen: function (socket) {
-                    ws = socket;
-                    connected = true;
-                    socket.send(JSON.stringify({ t: (MSG_C2S.JOIN_ROOM || 'join_room') }));
-                },
-                onMessage: handleMessage,
-                onClose: function () {
-                    connected = false;
-                    ws = null;
-                },
-                onError: function () {
-                    connected = false;
-                }
+        function openConnection() {
+            if (!active || attemptSeq !== connectAttemptSeq) return;
+
+            if (globalThis.__MAYHEM_RUNTIME.GameNetTransport && globalThis.__MAYHEM_RUNTIME.GameNetTransport.create) {
+                transport = globalThis.__MAYHEM_RUNTIME.GameNetTransport.create({
+                    endpoint: wsEndpoint,
+                    isActive: function () { return active; },
+                    reconnectMs: 1200,
+                    onOpen: function (socket) {
+                        ws = socket;
+                        connected = true;
+                    },
+                    onMessage: handleMessage,
+                    onClose: function () {
+                        connected = false;
+                        ws = null;
+                    },
+                    onError: function () {
+                        connected = false;
+                    }
+                });
+                transport.connect();
+                return;
+            }
+
+            var endpoint = wsEndpoint();
+            ws = new WebSocket(endpoint);
+
+            ws.addEventListener('open', function () {
+                connected = true;
             });
-            transport.connect();
+
+            ws.addEventListener('message', function (event) {
+                handleMessage(event.data);
+            });
+
+            ws.addEventListener('close', function () {
+                connected = false;
+                ws = null;
+                if (!active) return;
+                reconnectTimer = setTimeout(function () {
+                    connectWs();
+                }, 1200);
+            });
+
+            ws.addEventListener('error', function () {
+                connected = false;
+            });
+        }
+
+        if (GameNetAuth.ensureArenaIdentity) {
+            GameNetAuth.ensureArenaIdentity()
+                .then(function () {
+                    openConnection();
+                })
+                .catch(function () {
+                    openConnection();
+                });
             return;
         }
 
-        var endpoint = wsEndpoint();
-        ws = new WebSocket(endpoint);
-
-        ws.addEventListener('open', function () {
-            connected = true;
-            ws.send(JSON.stringify({ t: (MSG_C2S.JOIN_ROOM || 'join_room') }));
-        });
-
-        ws.addEventListener('message', function (event) {
-            handleMessage(event.data);
-        });
-
-        ws.addEventListener('close', function () {
-            connected = false;
-            ws = null;
-            if (!active) return;
-            reconnectTimer = setTimeout(function () {
-                connectWs();
-            }, 1200);
-        });
-
-        ws.addEventListener('error', function () {
-            connected = false;
-        });
+        openConnection();
     }
 
     function wsSend(msg) {
@@ -617,23 +660,43 @@
         return out;
     }
 
+    function chokeLiftAt(state, now) {
+        if (!state) return 0;
+        var stamp = Number(now || Date.now());
+        var startedAt = Number(state.startedAt || 0);
+        var endsAt = Number(state.endsAt || 0);
+        if (!(endsAt > stamp)) return 0;
+        var maxLift = Number(state.liftHeight || 1.0);
+        if (!(endsAt > startedAt)) return maxLift;
+        var progress = Math.max(0, Math.min(1, (stamp - startedAt) / (endsAt - startedAt)));
+        if (progress <= 0) return 0;
+        if (progress >= 1) return 0;
+        if (progress < 0.24) return maxLift * Math.sin((progress / 0.24) * (Math.PI * 0.5));
+        if (progress > 0.76) return maxLift * Math.cos(((progress - 0.76) / 0.24) * (Math.PI * 0.5));
+        return maxLift;
+    }
+
     function getChokeVictimStateForEntity(entityId) {
-        if (!entityId) return { lift: 0, startedAt: 0 };
+        if (!entityId) return { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
         var now = Date.now();
         if (selfState && selfState.id === entityId && selfState.chokeVictimState && selfState.chokeVictimState.endsAt > now) {
             return {
-                lift: Number(selfState.chokeVictimState.liftHeight || 1.0),
-                startedAt: Number(selfState.chokeVictimState.startedAt || 0)
+                lift: chokeLiftAt(selfState.chokeVictimState, now),
+                liftHeight: Number(selfState.chokeVictimState.liftHeight || 1.0),
+                startedAt: Number(selfState.chokeVictimState.startedAt || 0),
+                endsAt: Number(selfState.chokeVictimState.endsAt || 0)
             };
         }
         var render = GameNetEntities.getRenderMap().get(entityId);
         if (render && render.chokeVictimState && render.chokeVictimState.endsAt > now) {
             return {
-                lift: Number(render.chokeVictimState.liftHeight || 1.0),
-                startedAt: Number(render.chokeVictimState.startedAt || 0)
+                lift: chokeLiftAt(render.chokeVictimState, now),
+                liftHeight: Number(render.chokeVictimState.liftHeight || 1.0),
+                startedAt: Number(render.chokeVictimState.startedAt || 0),
+                endsAt: Number(render.chokeVictimState.endsAt || 0)
             };
         }
-        return { lift: 0, startedAt: 0 };
+        return { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
     }
 
     GameNet.requireAuth = function (onAuthed) {
@@ -641,11 +704,17 @@
     };
 
     GameNet.getCurrentUser = function () {
+        if (GameNetAuth.getSocketIdentity) return GameNetAuth.getSocketIdentity();
         return GameNetAuth.getCurrentUser();
     };
 
-    GameNet.enableGuestMode = function () {
+    GameNet.enablePublicMode = function () {
+        if (GameNetAuth.enablePublicMode) return GameNetAuth.enablePublicMode();
         return GameNetAuth.enableGuestMode();
+    };
+
+    GameNet.enableGuestMode = function () {
+        return GameNet.enablePublicMode();
     };
 
     GameNet.setRoomId = function (nextRoomId) {
@@ -708,18 +777,23 @@
         throwableEventQueue = [];
         classCastResultQueue = [];
         damageFeedbackQueue = [];
+        incomingDamageFeedbackQueue = [];
         seekerRejectQueue = [];
+        notices = [];
         pendingSpawnSync = null;
         pendingRespawnInfo = null;
         initialSpawnApplied = false;
         pendingWeaponLoadout = null;
+        lastInputSeqSent = 0;
+        lastInputSeqAcked = 0;
+        inputSeqHistory = [];
         selfState = null;
         selfId = '';
         matchState = null;
         gameMode = '';
+        privateRoomPhase = '';
         worldMeta = null;
         worldMismatchNotified = false;
-        GameNetAuth.clearUser();
     };
 
     GameNet.isActive = function () {
@@ -761,7 +835,7 @@
     };
 
     GameNet.getSelfState = function () {
-        var u = GameNetAuth.getUser();
+        var u = GameNetAuth.getSocketIdentity ? GameNetAuth.getSocketIdentity() : GameNetAuth.getUser();
         if (!selfState && u) {
             var defaults = classStats(u.classId || 'abilities');
             return {
@@ -770,8 +844,11 @@
                 hpMax: 500,
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
+                cameraMode: 'third',
                 classId: u.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
+                lmsLives: 0,
+                lmsCharge: 0,
                 throwables: null,
                 kills: 0,
                 deaths: 0,
@@ -798,24 +875,53 @@
                 var anim = (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState)
                     ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState()
                     : null;
-                wsSend({
-                    t: (MSG_C2S.INPUT || 'input'),
-                    seq: inputSeq++,
-                    x: playerPos.x,
-                    y: playerPos.y,
-                    z: playerPos.z,
+                var inputState = (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getNetworkInputState)
+                    ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getNetworkInputState()
+                    : null;
+                var seq = inputSeq++;
+                var sentAt = Date.now();
+                var previousSample = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
+                var dtMs = previousSample ? Math.max(1, sentAt - Number(previousSample.at || sentAt)) : Math.round(INPUT_SEND_INTERVAL * 1000);
+                lastInputSeqSent = seq;
+                inputSeqHistory.push({
+                    seq: seq,
+                    at: sentAt,
+                    dtMs: dtMs,
                     yaw: rotation.yaw || 0,
                     pitch: rotation.pitch || 0,
-                    sprint: !!(anim && anim.sprinting),
-                    jump: false,
+                    inputState: inputState ? {
+                        forward: !!inputState.forward,
+                        backward: !!inputState.backward,
+                        left: !!inputState.left,
+                        right: !!inputState.right,
+                        jump: !!inputState.jump,
+                        sprint: !!inputState.sprint,
+                        adsActive: !!inputState.adsActive,
+                        cameraMode: inputState.cameraMode ? String(inputState.cameraMode) : 'third'
+                    } : null
+                });
+                if (inputSeqHistory.length > 96) inputSeqHistory.shift();
+                wsSend({
+                    t: (MSG_C2S.INPUT || 'input'),
+                    seq: seq,
+                    yaw: rotation.yaw || 0,
+                    pitch: rotation.pitch || 0,
+                    forward: !!(inputState && inputState.forward),
+                    backward: !!(inputState && inputState.backward),
+                    left: !!(inputState && inputState.left),
+                    right: !!(inputState && inputState.right),
+                    jump: !!(inputState && inputState.jump),
+                    sprint: !!(inputState && inputState.sprint),
+                    adsActive: !!(inputState && inputState.adsActive),
+                    cameraMode: (inputState && inputState.cameraMode) ? String(inputState.cameraMode) : 'third',
                     weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
-                    moveSpeedNorm: anim && typeof anim.moveSpeedNorm === 'number' ? anim.moveSpeedNorm : 0,
-                    sprinting: !!(anim && anim.sprinting)
+                    inputMode: 'intent'
                 });
             }
         }
 
         GameNetEntities.getRenderMap().forEach(function (r) {
+            if (!r || !r.group || !r.group.position || !r.group.rotation) return;
             var lerp = Math.min(1, dt * 10);
             r.group.position.x += (r.targetX - r.group.position.x) * lerp;
             r.group.position.y += ((r.targetFootY || 0) - r.group.position.y) * lerp;
@@ -828,10 +934,12 @@
                 r.rigApi.setWeapon(r.weaponId || 'rifle');
                 r.rigApi.updateAimPitch(r.targetPitch || 0);
                 var chokeVictimState = getChokeVictimStateForEntity(r.id);
+                var hookedNow = !!r.hookPullState || !!(r.justBeenHookedState && r.justBeenHookedState.endsAt > Date.now());
                 r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt, false, {
-                    hooked: !!r.hookPullState,
+                    hooked: hookedNow,
                     choked: chokeVictimState.lift > 0,
-                    startedAt: chokeVictimState.startedAt || 0
+                    startedAt: chokeVictimState.startedAt || 0,
+                    movingForward: (r.moveSpeedNorm || 0) > 0.05
                 });
                 if (r.rigApi.setMuzzleVisible) {
                     r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
@@ -1032,6 +1140,8 @@
     GameNet.getSelfAbilityState = function () {
         if (!selfState) return null;
         return {
+            slot1CooldownRemaining: selfState.slot1CooldownRemaining || 0,
+            slot2CooldownRemaining: selfState.slot2CooldownRemaining || 0,
             abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
             ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
             weaponLoadout: selfState.weaponLoadout || null,
@@ -1047,6 +1157,43 @@
         return matchState ? JSON.parse(JSON.stringify(matchState)) : null;
     };
 
+    GameNet.getInputSyncState = function () {
+        var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
+        return {
+            lastSentSeq: lastInputSeqSent,
+            lastAckedSeq: lastInputSeqAcked,
+            pendingInputCount: inputSeqHistory.length,
+            latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0
+        };
+    };
+
+    GameNet.getPendingInputSamples = function () {
+        if (!inputSeqHistory.length) return [];
+        var out = [];
+        for (var i = 0; i < inputSeqHistory.length; i++) {
+            var entry = inputSeqHistory[i];
+            if (!entry) continue;
+            out.push({
+                seq: Number(entry.seq || 0),
+                at: Number(entry.at || 0),
+                dtMs: Math.max(1, Number(entry.dtMs || Math.round(INPUT_SEND_INTERVAL * 1000))),
+                yaw: Number(entry.yaw || 0),
+                pitch: Number(entry.pitch || 0),
+                inputState: entry.inputState ? {
+                    forward: !!entry.inputState.forward,
+                    backward: !!entry.inputState.backward,
+                    left: !!entry.inputState.left,
+                    right: !!entry.inputState.right,
+                    jump: !!entry.inputState.jump,
+                    sprint: !!entry.inputState.sprint,
+                    adsActive: !!entry.inputState.adsActive,
+                    cameraMode: entry.inputState.cameraMode ? String(entry.inputState.cameraMode) : 'third'
+                } : null
+            });
+        }
+        return out;
+    };
+
     GameNet.getRespawnState = function () {
         if (!pendingRespawnInfo || !pendingRespawnInfo.active) return null;
         return {
@@ -1058,6 +1205,10 @@
 
     GameNet.getGameMode = function () {
         return gameMode || '';
+    };
+
+    GameNet.getPrivateRoomPhase = function () {
+        return privateRoomPhase || '';
     };
 
     GameNet.getEntityName = function (entityId) {

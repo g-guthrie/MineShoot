@@ -40,22 +40,65 @@
     var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
     var sharedWeaponStats = sharedTuning.weaponStats || {};
 
+    function resolveWeaponAimProfileLocal(weaponStats, adsActive) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        if (shared.resolveWeaponAimProfile) {
+            return shared.resolveWeaponAimProfile(weaponStats, adsActive);
+        }
+        var stats = weaponStats || {};
+        var hipfireSpread = Math.max(0, Number(stats.hipfireSpread || 0));
+        var hipfireRange = Math.max(0, Number(stats.maxRange || 0));
+        if (!adsActive) {
+            return { spread: hipfireSpread, maxRange: hipfireRange };
+        }
+        return {
+            spread: Math.max(0, Number(stats.adsSpread != null ? stats.adsSpread : (hipfireSpread * Math.max(0, Number(stats.adsSpreadMultiplier != null ? stats.adsSpreadMultiplier : 1))))),
+            maxRange: Math.max(hipfireRange, Number(stats.adsMaxRange != null ? stats.adsMaxRange : (hipfireRange * Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1)))))
+        };
+    }
+
     function buildWeaponFromShared(id) {
         var s = sharedWeaponStats[id] || {};
-        var maxRange = (combatTuning && combatTuning.getWeaponRange) ? combatTuning.getWeaponRange(id) : (s.maxRange || 0);
+        var baseRange = (combatTuning && combatTuning.getWeaponRange) ? combatTuning.getWeaponRange(id) : (s.maxRange || 0);
+        var hipAim = resolveWeaponAimProfileLocal({
+            hipfireSpread: Number(s.hipfireSpread || 0),
+            maxRange: baseRange,
+            adsSpread: s.adsSpread,
+            adsMaxRange: s.adsMaxRange,
+            adsSpreadMultiplier: s.adsSpreadMultiplier,
+            adsHitscanRangeMultiplier: s.adsHitscanRangeMultiplier,
+            aimProfile: s.aimProfile,
+            infiniteRange: !!s.infiniteRange
+        }, false);
+        var adsAim = resolveWeaponAimProfileLocal({
+            hipfireSpread: Number(s.hipfireSpread || 0),
+            maxRange: baseRange,
+            adsSpread: s.adsSpread,
+            adsMaxRange: s.adsMaxRange,
+            adsSpreadMultiplier: s.adsSpreadMultiplier,
+            adsHitscanRangeMultiplier: s.adsHitscanRangeMultiplier,
+            aimProfile: s.aimProfile,
+            infiniteRange: !!s.infiniteRange
+        }, true);
         return {
             id: id,
             name: s.name || id,
             primitiveType: s.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
             automatic: !!s.automatic,
             cooldown: Number(s.cooldownMs || 0),
+            reloadMs: Math.max(0, Number(s.reloadMs || 0)),
+            magazineSize: Math.max(0, Number(s.magazineSize || 0)),
             bodyDamage: Number(s.bodyDamage || 0),
             headDamage: Number(s.headDamage || 0),
             pellets: Number(s.pellets || 1),
-            hipfireSpread: Number(s.hipfireSpread || 0),
-            maxRange: maxRange,
-            adsSpreadMultiplier: Number(typeof s.adsSpreadMultiplier === 'number' ? s.adsSpreadMultiplier : 0),
-            adsHitscanRangeMultiplier: Number(s.adsHitscanRangeMultiplier || 1)
+            hipfireSpread: Number(hipAim.spread || 0),
+            adsSpread: Number(adsAim.spread || 0),
+            maxRange: hipAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(hipAim.maxRange || 0),
+            adsMaxRange: adsAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(adsAim.maxRange || 0),
+            adsSpreadMultiplier: Number(hipAim.spread > 0 ? (Number(adsAim.spread || 0) / hipAim.spread) : 0),
+            adsHitscanRangeMultiplier: Number(hipAim.maxRange > 0 ? (Number(adsAim.maxRange || hipAim.maxRange) / hipAim.maxRange) : 1),
+            hipfireBloomScale: Number(s.hipfireBloomScale != null ? s.hipfireBloomScale : 1),
+            adsBloomScale: Number(s.adsBloomScale != null ? s.adsBloomScale : 1)
         };
     }
 
@@ -76,6 +119,8 @@
 
     var currentWeaponId = 'rifle';
     var lastFireTime = 0;
+    var weaponAmmoState = {};
+    var RELOADED_FLASH_MS = 900;
     function ensureTracerScene(camera) {
         if (tracerScene) return tracerScene;
         if (camera && camera.parent) {
@@ -338,12 +383,109 @@
         return weapons[currentWeaponId] || weapons.rifle;
     }
 
+    function ensureWeaponAmmoState(weaponId) {
+        var weapon = weapons[weaponId];
+        if (!weapon) return null;
+        if (!weaponAmmoState[weaponId]) {
+            weaponAmmoState[weaponId] = {
+                ammoInMag: weapon.magazineSize > 0 ? weapon.magazineSize : 0,
+                reloadUntil: 0,
+                reloadedFlashUntil: 0
+            };
+        }
+        return weaponAmmoState[weaponId];
+    }
+
+    function syncWeaponAmmoState(weaponId, now) {
+        var weapon = weapons[weaponId];
+        var state = ensureWeaponAmmoState(weaponId);
+        if (!weapon || !state || weapon.magazineSize <= 0) return state;
+        if (state.reloadUntil > 0 && now >= state.reloadUntil) {
+            state.reloadUntil = 0;
+            state.ammoInMag = weapon.magazineSize;
+            state.reloadedFlashUntil = now + RELOADED_FLASH_MS;
+        }
+        return state;
+    }
+
+    function getAmmoInMag(weapon, now) {
+        if (!weapon || weapon.magazineSize <= 0) return 0;
+        var state = syncWeaponAmmoState(weapon.id, now);
+        return Math.max(0, Number(state && state.ammoInMag || 0));
+    }
+
+    function reloadRemainingForWeapon(weapon, now) {
+        if (!weapon || weapon.magazineSize <= 0) return 0;
+        var state = syncWeaponAmmoState(weapon.id, now);
+        return Math.max(0, Number(state && state.reloadUntil || 0) - now);
+    }
+
+    function isReloadingWeapon(weapon, now) {
+        return reloadRemainingForWeapon(weapon, now) > 0;
+    }
+
+    function beginReload(weapon, now) {
+        if (!weapon || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
+        var state = syncWeaponAmmoState(weapon.id, now);
+        if (!state || state.reloadUntil > now) return false;
+        state.ammoInMag = 0;
+        state.reloadUntil = now + weapon.reloadMs;
+        state.reloadedFlashUntil = 0;
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
+        }
+        return true;
+    }
+
+    function consumeAmmoForShot(weapon, now) {
+        if (!weapon || weapon.magazineSize <= 0) return;
+        var state = syncWeaponAmmoState(weapon.id, now);
+        if (!state) return;
+        state.ammoInMag = Math.max(0, Number(state.ammoInMag || weapon.magazineSize) - 1);
+        state.reloadedFlashUntil = 0;
+        if (state.ammoInMag <= 0) {
+            beginReload(weapon, now);
+        }
+    }
+
+    function hudStateForWeapon(weapon, now) {
+        var state = syncWeaponAmmoState(weapon.id, now);
+        var reloadRemaining = reloadRemainingForWeapon(weapon, now);
+        if (reloadRemaining > 0) {
+            return {
+                status: 'reloading',
+                ready: false,
+                pct: weapon.reloadMs > 0 ? (1 - (reloadRemaining / weapon.reloadMs)) : 1
+            };
+        }
+        var cooldownRemaining = Math.max(0, weapon.cooldown - (now - lastFireTime));
+        if (cooldownRemaining > 0) {
+            return {
+                status: 'cooldown',
+                ready: false,
+                pct: weapon.cooldown > 0 ? (1 - (cooldownRemaining / weapon.cooldown)) : 1
+            };
+        }
+        if (state && state.reloadedFlashUntil > now) {
+            return {
+                status: 'reloaded',
+                ready: true,
+                pct: 1
+            };
+        }
+        return {
+            status: 'ready',
+            ready: true,
+            pct: 1
+        };
+    }
+
     function getEffectiveMaxRange(weapon) {
         var baseRange = Number(weapon && weapon.maxRange || 0);
         if (!weapon || baseRange <= 0) return 0;
         if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) return baseRange;
         if (!isAdsActiveForWeapon(weapon.id)) return baseRange;
-        return baseRange * Math.max(1, Number(weapon.adsHitscanRangeMultiplier || 1));
+        return Number(weapon.adsMaxRange || baseRange);
     }
 
     function getDamageForType(weapon, hitType) {
@@ -372,16 +514,58 @@
     function getWeaponSpreadMultiplier(weapon) {
         if (!weapon || !weapon.id) return 0;
         if (!isAdsActiveForWeapon(weapon.id)) return 1;
-        return Math.max(0, Number(weapon.adsSpreadMultiplier || 0));
+        if (weapon.hipfireSpread <= 0.00001) return 0;
+        return Math.max(0, Number((weapon.adsSpread || 0) / weapon.hipfireSpread));
+    }
+
+    function getActiveAimSpread(weapon) {
+        if (!weapon) return 0;
+        var aim = resolveWeaponAimProfileLocal(weapon, isAdsActiveForWeapon(weapon.id));
+        return Math.max(0, Number(aim && aim.spread || 0));
+    }
+
+    function getBloomDisplayScale(weapon) {
+        if (!weapon) return 1;
+        var adsActive = isAdsActiveForWeapon(weapon.id);
+        var scale = adsActive ? weapon.adsBloomScale : weapon.hipfireBloomScale;
+        scale = Number(scale);
+        return isFinite(scale) && scale >= 0 ? scale : 1;
+    }
+
+    function currentViewAspect() {
+        var player = globalThis.__MAYHEM_RUNTIME.GamePlayer;
+        var camera = player && player.getCamera ? player.getCamera() : null;
+        if (camera && isFinite(Number(camera.aspect)) && Number(camera.aspect) > 0.0001) {
+            return Number(camera.aspect);
+        }
+        return window.innerWidth / Math.max(1, window.innerHeight);
+    }
+
+    function getWeaponSpreadMetrics(weapon) {
+        if (!weapon || weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
+            return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
+        }
+
+        var spread = getActiveAimSpread(weapon) * getBloomDisplayScale(weapon);
+        if (spread <= 0.00001) {
+            return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
+        }
+
+        var aspect = currentViewAspect();
+        var radiusYpx = spread * (window.innerHeight * 0.5);
+        var radiusXpx = spread * (window.innerWidth * 0.5) / Math.max(aspect, 0.0001);
+        var radiusPx = Math.max(radiusXpx, radiusYpx);
+
+        return {
+            radiusPx: radiusPx,
+            radiusXpx: radiusXpx,
+            radiusYpx: radiusYpx,
+            spread: spread
+        };
     }
 
     function getWeaponSpreadRadiusPx(weapon) {
-        if (!weapon || weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) return 0;
-        var spread = Math.max(0, Number(weapon.hipfireSpread || 0));
-        if (spread <= 0.00001) return 0;
-        var spreadScale = getWeaponSpreadMultiplier(weapon);
-        if (spreadScale <= 0.00001) return 0;
-        return spread * spreadScale * Math.min(window.innerWidth, window.innerHeight) * 0.5;
+        return getWeaponSpreadMetrics(weapon).radiusPx;
     }
 
     function getWeaponSpreadNdcOffset(weapon) {
@@ -672,6 +856,14 @@
     GameHitscan.fire = function (camera, onHit, onMiss) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
+        syncWeaponAmmoState(weapon.id, now);
+        if (weapon.magazineSize > 0 && getAmmoInMag(weapon, now) <= 0) {
+            beginReload(weapon, now);
+            return false;
+        }
+        if (isReloadingWeapon(weapon, now)) {
+            return false;
+        }
         if (weapon.id === 'sniper' && !isAdsActiveForWeapon('sniper')) {
             return false;
         }
@@ -681,26 +873,41 @@
         }
 
         lastFireTime = now;
+        var fired = false;
         if (weapon.primitiveType === PRIMITIVE_PROJECTILE_HOMING) {
-            return fireHomingProjectile(camera, weapon);
+            fired = fireHomingProjectile(camera, weapon);
+        } else {
+            fired = fireHitscanPattern(camera, weapon, onHit, onMiss);
         }
-        return fireHitscanPattern(camera, weapon, onHit, onMiss);
+        if (fired) {
+            consumeAmmoForShot(weapon, now);
+        }
+        return fired;
     };
 
     GameHitscan.getCurrentWeapon = function () {
         var weapon = getCurrentWeaponData();
+        var now = performance.now();
+        var ammoState = syncWeaponAmmoState(weapon.id, now);
         return {
             id: weapon.id,
             name: weapon.name,
             primitiveType: weapon.primitiveType || PRIMITIVE_HITSCAN_SINGLE,
             automatic: weapon.automatic,
             cooldown: weapon.cooldown,
+            reloadMs: weapon.reloadMs,
+            magazineSize: weapon.magazineSize,
+            ammoInMag: weapon.magazineSize > 0 ? getAmmoInMag(weapon, now) : 0,
+            reloading: weapon.magazineSize > 0 ? (Number(ammoState && ammoState.reloadUntil || 0) > now) : false,
+            reloadRemaining: reloadRemainingForWeapon(weapon, now),
             bodyDamage: weapon.bodyDamage,
             headDamage: weapon.headDamage,
             pellets: weapon.pellets,
             hipfireSpread: weapon.hipfireSpread,
+            adsSpread: weapon.adsSpread,
             adsSpreadMultiplier: weapon.adsSpreadMultiplier,
             maxRange: getEffectiveMaxRange(weapon),
+            adsMaxRange: Number(weapon.adsMaxRange || weapon.maxRange || 0),
             adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1)
         };
     };
@@ -788,10 +995,19 @@
 
     GameHitscan.canFire = function () {
         var weapon = getCurrentWeaponData();
+        var now = performance.now();
+        syncWeaponAmmoState(weapon.id, now);
+        if (weapon.magazineSize > 0 && getAmmoInMag(weapon, now) <= 0) {
+            beginReload(weapon, now);
+            return false;
+        }
+        if (isReloadingWeapon(weapon, now)) {
+            return false;
+        }
         if (weapon.id === 'sniper' && !isAdsActiveForWeapon('sniper')) {
             return false;
         }
-        return (performance.now() - lastFireTime) >= weapon.cooldown;
+        return (now - lastFireTime) >= weapon.cooldown;
     };
 
     GameHitscan.cooldownRemaining = function () {
@@ -807,7 +1023,17 @@
     };
 
     GameHitscan.tick = function (_dt) {
+        syncWeaponAmmoState(currentWeaponId, performance.now());
         return null;
+    };
+
+    GameHitscan.getHudState = function () {
+        return hudStateForWeapon(getCurrentWeaponData(), performance.now());
+    };
+
+    GameHitscan.isAdsBlocked = function () {
+        var weapon = getCurrentWeaponData();
+        return isReloadingWeapon(weapon, performance.now());
     };
 
     GameHitscan.applySeekerReject = function (payload) {
@@ -921,12 +1147,18 @@
                 family: weaponDomain ? weaponDomain.family : '',
                 automatic: !!weapon.automatic,
                 cooldown: weapon.cooldown,
+                reloadMs: weapon.reloadMs,
+                magazineSize: weapon.magazineSize,
                 bodyDamage: weapon.bodyDamage,
                 headDamage: weapon.headDamage,
                 pellets: weapon.pellets,
                 hipfireSpread: weapon.hipfireSpread,
+                adsSpread: weapon.adsSpread,
                 adsSpreadMultiplier: weapon.adsSpreadMultiplier,
-                maxRange: weapon.maxRange
+                hipfireBloomScale: Number(weapon.hipfireBloomScale != null ? weapon.hipfireBloomScale : 1),
+                adsBloomScale: Number(weapon.adsBloomScale != null ? weapon.adsBloomScale : 1),
+                maxRange: weapon.maxRange,
+                adsMaxRange: weapon.adsMaxRange
             });
         }
         return out;
@@ -935,6 +1167,11 @@
     GameHitscan.getSpreadRadiusPx = function (weaponId) {
         var weapon = (typeof weaponId === 'string') ? weapons[weaponId] : weaponId;
         return getWeaponSpreadRadiusPx(weapon);
+    };
+
+    GameHitscan.getSpreadMetrics = function (weaponId) {
+        var weapon = (typeof weaponId === 'string') ? weapons[weaponId] : weaponId;
+        return getWeaponSpreadMetrics(weapon);
     };
 
     globalThis.__MAYHEM_RUNTIME.GameHitscan = GameHitscan;

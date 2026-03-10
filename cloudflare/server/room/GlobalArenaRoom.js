@@ -21,7 +21,13 @@ import { selectSeekTarget } from '../../../shared/seek-core.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
 import { buildWorldCollisionData } from '../../../shared/world-collision.js';
-import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
+import { EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS } from '../../../shared/entity-constants.js';
+import {
+  createMovementInputState,
+  hasIntentInputMessage,
+  stepAuthoritativeMovement
+} from '../../../shared/authoritative-movement.js';
+import { LMS_MODE_ID, lmsRules, buildLmsBeaconAnchors } from '../../../shared/lms-mode.js';
 import {
   PUBLIC_ROOM_START_THRESHOLD,
   PUBLIC_ROOM_SOFT_TARGET,
@@ -72,6 +78,8 @@ const DISCONNECT_GRACE_MS = 15000;
 const MAX_HP = 500;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
+const PLAYER_HEIGHT_WU = PLAYER_HEIGHT;
+const PLAYER_RADIUS_WU = PLAYER_RADIUS;
 const THROWABLE_SPAWN_FORWARD_WU = 0.55;
 const THROWABLE_SPAWN_LEFT_WU = 0.34;
 const THROWABLE_SPAWN_HEIGHT_WU = 1.0;
@@ -82,12 +90,15 @@ const LOCAL_SHARED_ROOM_NAME = 'local-shared';
 const SOLO_CLOUDFLARE_ROOM_PREFIX = 'cf-solo-';
 const PUBLIC_FFA_ROOM_PREFIX = 'ffa-';
 const PUBLIC_TDM_ROOM_PREFIX = 'tdm-';
+const PUBLIC_LMS_ROOM_PREFIX = 'lms-';
 const PRIVATE_SHARE_ROOM_PREFIX = PRIVATE_ROOM_ID_PREFIX;
 const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
 const GAME_MODE_FFA = 'ffa';
 const GAME_MODE_TDM = 'tdm';
+const GAME_MODE_LMS = LMS_MODE_ID;
+const ROOM_PHASE_ACTIVE = 'active';
 const TDM_TEAM_A = 'alpha';
 const TDM_TEAM_B = 'bravo';
 const FFA_TARGET_PROGRESS = 10;
@@ -96,6 +107,38 @@ const MATCH_RESET_DELAY_MS = 5000;
 const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
+const WORLD_RAY_EPSILON = 0.001;
+
+function intersectRayAabb(origin, dir, box, maxDistance) {
+  if (!box || !box.min || !box.max) return null;
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  const axes = ['x', 'y', 'z'];
+  for (let i = 0; i < axes.length; i++) {
+    const axis = axes[i];
+    const o = Number(origin && origin[axis] || 0);
+    const d = Number(dir && dir[axis] || 0);
+    const min = Number(box.min[axis] || 0);
+    const max = Number(box.max[axis] || 0);
+    if (Math.abs(d) < 0.000001) {
+      if (o < min || o > max) return null;
+      continue;
+    }
+    let t1 = (min - o) / d;
+    let t2 = (max - o) / d;
+    if (t1 > t2) {
+      const swap = t1;
+      t1 = t2;
+      t2 = swap;
+    }
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+    if (tmin > tmax) return null;
+  }
+  const hitDistance = tmin >= 0 ? tmin : tmax;
+  if (hitDistance < 0 || hitDistance > maxDistance) return null;
+  return hitDistance;
+}
 
 function classPreset(classId) {
   return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
@@ -111,12 +154,18 @@ function cloneWorldFlags(flags) {
 function detectGameMode(roomName) {
   const room = String(roomName || '');
   if (room.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return GAME_MODE_TDM;
+  if (room.startsWith(PUBLIC_LMS_ROOM_PREFIX)) return GAME_MODE_LMS;
   if (room.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return GAME_MODE_FFA;
   return '';
 }
 
 function isPublicMatchRoom(roomName) {
-  return detectGameMode(roomName) === GAME_MODE_FFA || detectGameMode(roomName) === GAME_MODE_TDM;
+  const mode = detectGameMode(roomName);
+  return mode === GAME_MODE_FFA || mode === GAME_MODE_TDM || mode === GAME_MODE_LMS;
+}
+
+function isPrivateMatchRoom(roomName) {
+  return String(roomName || '').startsWith(PRIVATE_SHARE_ROOM_PREFIX);
 }
 
 function emptyMatchState(gameMode) {
@@ -128,11 +177,22 @@ function emptyMatchState(gameMode) {
     endedAt: 0,
     resetAt: 0,
     matchBaselinePlayerCount: 0,
-    targetProgress: gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : FFA_TARGET_PROGRESS,
+    targetProgress: gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : (gameMode === GAME_MODE_FFA ? FFA_TARGET_PROGRESS : 0),
     leaderProgress: 0,
     leaderId: '',
     winnerId: '',
     winnerTeam: '',
+    lms: gameMode === GAME_MODE_LMS ? {
+      startingLives: lmsRules.startingLives,
+      maxLives: lmsRules.maxLives,
+      chargePerExtraLife: lmsRules.chargePerExtraLife,
+      remainingPlayers: 0,
+      finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
+      bankingEnabled: false,
+      warmupEndsAt: 0,
+      nextRotateAt: 0,
+      activeBeacon: null
+    } : null,
     teamProgress: {
       [TDM_TEAM_A]: 0,
       [TDM_TEAM_B]: 0
@@ -187,6 +247,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.ctx = ctx;
     this.env = env;
     this.clients = new Map();
+    this.activeSocketByUserId = new Map();
     this.players = new Map();
     this.bots = new Map();
     this.tickHandle = null;
@@ -208,6 +269,14 @@ export class GlobalArenaRoom extends DurableObject {
     this.nextFireZoneSeq = 1;
     this.gameMode = detectGameMode(this.roomName);
     this.matchState = emptyMatchState(this.gameMode);
+    this.lmsBeaconAnchors = [];
+    this.privateRoomConfig = {
+      roomMode: '',
+      roomPhase: ROOM_PHASE_ACTIVE,
+      hostActorId: '',
+      teams: new Map()
+    };
+    this.configureLmsBeaconAnchors();
   }
 
   refreshWorldMeta() {
@@ -229,6 +298,224 @@ export class GlobalArenaRoom extends DurableObject {
       worldProfileVersion: this.worldProfileVersion,
       worldFlags: cloneWorldFlags(this.worldFlags)
     });
+    this.configureLmsBeaconAnchors();
+    if (!isPrivateMatchRoom(this.roomName)) {
+      this.privateRoomConfig = {
+        roomMode: '',
+        roomPhase: ROOM_PHASE_ACTIVE,
+        hostActorId: '',
+        teams: new Map()
+      };
+    }
+  }
+
+  configureLmsBeaconAnchors() {
+    this.lmsBeaconAnchors = buildLmsBeaconAnchors({
+      boundsMin: this.boundsMin || 2,
+      boundsMax: this.boundsMax || 110
+    });
+  }
+
+  modeEntities() {
+    const out = [];
+    for (const player of this.players.values()) {
+      if (player) out.push(player);
+    }
+    for (const bot of this.bots.values()) {
+      if (bot) out.push(bot);
+    }
+    return out;
+  }
+
+  lmsMatchEntities() {
+    return this.modeEntities().filter((entity) => !!entity);
+  }
+
+  currentLmsBeacon() {
+    if (!this.matchState || !this.matchState.lms) return null;
+    const index = Number(this.matchState.lms.activeBeaconIndex || 0);
+    if (!this.lmsBeaconAnchors.length) return null;
+    return this.lmsBeaconAnchors[Math.max(0, Math.min(this.lmsBeaconAnchors.length - 1, index))] || null;
+  }
+
+  syncLmsPublicState() {
+    if (!this.matchState || !this.matchState.lms) return;
+    const lms = this.matchState.lms;
+    const beacon = this.currentLmsBeacon();
+    lms.activeBeacon = beacon ? {
+      id: beacon.id,
+      label: beacon.label,
+      x: Number(beacon.x.toFixed(3)),
+      z: Number(beacon.z.toFixed(3))
+    } : null;
+    lms.remainingPlayers = this.lmsRemainingPlayers();
+    lms.bankingEnabled = !!(lms.warmupEndsAt && nowMs() >= lms.warmupEndsAt) &&
+      lms.remainingPlayers > Number(lms.finalBankingCutoffRemaining || lmsRules.finalBankingCutoffRemaining);
+  }
+
+  initializeLmsMatchState(now = nowMs()) {
+    if (this.gameMode !== GAME_MODE_LMS || !this.matchState) return;
+    const entities = this.lmsMatchEntities();
+    this.matchState.lms = {
+      startingLives: lmsRules.startingLives,
+      maxLives: lmsRules.maxLives,
+      chargePerExtraLife: lmsRules.chargePerExtraLife,
+      remainingPlayers: 0,
+      finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
+      warmupEndsAt: now + lmsRules.beaconWarmupMs,
+      nextRotateAt: now + lmsRules.beaconRotateMs,
+      activeBeaconIndex: this.lmsBeaconAnchors.length ? 0 : -1,
+      activeBeacon: null,
+      bankingEnabled: false
+    };
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      entity.teamId = '';
+      entity.progressScore = lmsRules.startingLives;
+      entity.lmsLives = lmsRules.startingLives;
+      entity.lmsCharge = 0;
+      entity.lmsBankState = null;
+      entity.hp = entity.hpMax;
+      entity.armor = entity.armorMax;
+      entity.alive = true;
+      entity.respawnAt = 0;
+      entity.lastDamageAt = 0;
+      entity.chokeState = null;
+      entity.chokeVictimState = null;
+      entity.justBeenHookedState = null;
+      entity.hookState = null;
+      entity.hookPullState = null;
+      entity.healState = null;
+      entity.slot1CooldownUntil = 0;
+      entity.slot2CooldownUntil = 0;
+      entity.abilityCooldownUntil = 0;
+      entity.ultimateCooldownUntil = 0;
+      entity.lastShotAt = {};
+      entity.lastShotTokenByWeapon = {};
+      entity.throwables = this.createThrowableRuntime();
+      entity.lastThrowAt = 0;
+      this.spawnEntityRandomly(entity);
+      this.applySpawnShield(entity);
+    }
+    this.syncLmsPublicState();
+  }
+
+  ensureLmsStartedState() {
+    if (this.gameMode !== GAME_MODE_LMS || !this.matchState || !this.matchState.started || this.matchState.ended) return;
+    if (!this.matchState.lms || !this.matchState.lms.activeBeacon) {
+      this.initializeLmsMatchState(this.matchState.startedAt || nowMs());
+    }
+  }
+
+  lmsRemainingPlayers() {
+    let remaining = 0;
+    const entities = this.lmsMatchEntities();
+    for (let i = 0; i < entities.length; i++) {
+      if (Number(entities[i].lmsLives || 0) > 0) remaining++;
+    }
+    return remaining;
+  }
+
+  lmsWinnerId() {
+    const entities = this.lmsMatchEntities();
+    for (let i = 0; i < entities.length; i++) {
+      if (Number(entities[i].lmsLives || 0) > 0) return entities[i].id;
+    }
+    return '';
+  }
+
+  maybeRotateLmsBeacon(now = nowMs()) {
+    if (!this.matchState || !this.matchState.lms || !this.lmsBeaconAnchors.length) return;
+    const lms = this.matchState.lms;
+    if (now < Number(lms.nextRotateAt || 0)) return;
+    this.rotateLmsBeacon(now);
+  }
+
+  rotateLmsBeacon(now = nowMs()) {
+    if (!this.matchState || !this.matchState.lms || !this.lmsBeaconAnchors.length) return;
+    const lms = this.matchState.lms;
+    const nextIndex = (Number(lms.activeBeaconIndex || 0) + 1) % this.lmsBeaconAnchors.length;
+    lms.activeBeaconIndex = nextIndex;
+    lms.nextRotateAt = now + lmsRules.beaconRotateMs;
+    for (const entity of this.lmsMatchEntities()) {
+      if (entity) entity.lmsBankState = null;
+    }
+    this.syncLmsPublicState();
+  }
+
+  syncPrivateRoomMatchState() {
+    if (!isPrivateMatchRoom(this.roomName)) return;
+    const requestedMode = String((this.privateRoomConfig && this.privateRoomConfig.roomMode) || '');
+    const nextMode = requestedMode === GAME_MODE_TDM
+      ? GAME_MODE_TDM
+      : (requestedMode === GAME_MODE_LMS ? GAME_MODE_LMS : GAME_MODE_FFA);
+    this.gameMode = nextMode;
+    this.matchState = emptyMatchState(this.gameMode);
+    this.matchState.started = String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || '') === 'active';
+    this.matchState.startedAt = this.matchState.started ? nowMs() : 0;
+    const teams = (this.privateRoomConfig && this.privateRoomConfig.teams) || new Map();
+    for (const player of this.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      player.teamId = this.gameMode === GAME_MODE_TDM
+        ? String(teams.get(player.actorId || player.id) || TDM_TEAM_A)
+        : '';
+      player.progressScore = 0;
+    }
+  }
+
+  privateConfigEquals(nextConfig) {
+    const currentTeams = (this.privateRoomConfig && this.privateRoomConfig.teams) || new Map();
+    const nextTeams = (nextConfig && nextConfig.teams) || new Map();
+    if (String((this.privateRoomConfig && this.privateRoomConfig.roomMode) || '') !== String((nextConfig && nextConfig.roomMode) || '')) return false;
+    if (String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || '') !== String((nextConfig && nextConfig.roomPhase) || '')) return false;
+    if (String((this.privateRoomConfig && this.privateRoomConfig.hostActorId) || '') !== String((nextConfig && nextConfig.hostActorId) || '')) return false;
+    if (currentTeams.size !== nextTeams.size) return false;
+    for (const [actorId, teamId] of nextTeams.entries()) {
+      if (String(currentTeams.get(actorId) || '') !== String(teamId || '')) return false;
+    }
+    return true;
+  }
+
+  applyPrivateRoomConfig(config) {
+    if (!config || !isPrivateMatchRoom(this.roomName)) return;
+    const teams = new Map();
+    const teamEntries = Array.isArray(config.teams) ? config.teams : [];
+    for (let i = 0; i < teamEntries.length; i++) {
+      const entry = teamEntries[i];
+      if (!entry || !entry.actorId) continue;
+      teams.set(String(entry.actorId), String(entry.teamId || TDM_TEAM_A) === TDM_TEAM_B ? TDM_TEAM_B : TDM_TEAM_A);
+    }
+    const nextConfig = {
+      roomMode: String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_TDM
+        ? GAME_MODE_TDM
+        : (String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_LMS ? GAME_MODE_LMS : GAME_MODE_FFA),
+      roomPhase: String(config.roomPhase || 'lobby') === 'active' ? 'active' : 'lobby',
+      hostActorId: String(config.hostActorId || ''),
+      teams
+    };
+    const syncMode = String(config.syncMode || 'lobby_update') === 'hydrate' ? 'hydrate' : 'lobby_update';
+    const changed = !this.privateConfigEquals(nextConfig);
+    this.privateRoomConfig = nextConfig;
+    if (!changed) {
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        player.teamId = String(teams.get(player.actorId || player.id) || TDM_TEAM_A);
+      }
+      return;
+    }
+    if (
+      syncMode === 'hydrate' &&
+      this.matchState &&
+      this.gameMode === nextConfig.roomMode &&
+      this.matchState.started === (nextConfig.roomPhase === 'active')
+    ) {
+      for (const player of this.players.values()) {
+        if (!player || player.fixtureType === 'sim_player') continue;
+        player.teamId = String(teams.get(player.actorId || player.id) || TDM_TEAM_A);
+      }
+      return;
+    }
+    this.syncPrivateRoomMatchState();
   }
 
   buildWelcomePayload(selfId) {
@@ -237,6 +524,7 @@ export class GlobalArenaRoom extends DurableObject {
       selfId,
       roomId: this.roomName,
       gameMode: this.gameMode || '',
+      privateRoomPhase: isPrivateMatchRoom(this.roomName) ? String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || ROOM_PHASE_ACTIVE) : '',
       matchState: this.serializeMatchState(),
       tickRate: Math.round(1000 / ROOM_SIM_TICK_MS),
       worldSeed: this.worldSeed,
@@ -271,12 +559,38 @@ export class GlobalArenaRoom extends DurableObject {
     }
   }
 
+  socketForUserId(userId, excludeWs = null) {
+    for (const [clientWs, meta] of this.clients.entries()) {
+      if (clientWs === excludeWs) continue;
+      if (!meta || meta.userId !== userId) continue;
+      return clientWs;
+    }
+    return null;
+  }
+
+  closeDuplicateSockets(userId, keepWs) {
+    for (const [clientWs, meta] of this.clients.entries()) {
+      if (clientWs === keepWs) continue;
+      if (!meta || meta.userId !== userId) continue;
+      try {
+        clientWs.close(4001, 'Superseded by a newer connection');
+      } catch (_err) {
+        // no-op
+      }
+    }
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     this.roomName = sanitizeRoomId(url.searchParams.get('roomId') || this.roomName || this.env.ROOM_NAME || 'global');
     this.refreshWorldMeta();
 
     if (request.headers.get('Upgrade') !== 'websocket') {
+      if (url.pathname === '/private-config' && request.method === 'POST') {
+        const body = await request.json().catch(() => null);
+        this.applyPrivateRoomConfig(body || {});
+        return json({ ok: true, roomId: this.roomName, gameMode: this.gameMode || '' });
+      }
       if (url.pathname === '/state') {
         return json({
           ok: true,
@@ -300,9 +614,14 @@ export class GlobalArenaRoom extends DurableObject {
     const userId = url.searchParams.get('userId');
     const username = url.searchParams.get('username') || 'player';
     const classId = 'abilities';
+    const actorId = String(url.searchParams.get('actorId') || request.headers.get('X-Actor-Id') || userId || '').trim();
+    const actorName = String(url.searchParams.get('actorName') || request.headers.get('X-Actor-Name') || username || '').trim();
 
     if (!userId) {
       return new Response('Missing userId', { status: 400 });
+    }
+    if (isPrivateMatchRoom(this.roomName) && this.privateRoomConfig && this.privateRoomConfig.teams.size > 0 && !this.privateRoomConfig.teams.has(actorId)) {
+      return new Response('Private room access denied.', { status: 403 });
     }
 
     const pair = new WebSocketPair();
@@ -310,10 +629,12 @@ export class GlobalArenaRoom extends DurableObject {
     const server = pair[1];
 
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ userId, username, classId });
+    server.serializeAttachment({ userId, username, classId, actorId, actorName });
 
-    this.ensurePlayer(userId, username, classId);
-    this.clients.set(server, { userId });
+    this.ensurePlayer(userId, username, classId, actorId, actorName);
+    this.clients.set(server, { userId, actorId });
+    this.activeSocketByUserId.set(userId, server);
+    this.closeDuplicateSockets(userId, server);
     this.startPublicMatchIfReady();
     this.ensureTick();
 
@@ -334,6 +655,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.roomName === 'global') return false;
     if (this.roomName.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return false;
     if (this.roomName.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return false;
+    if (this.roomName.startsWith(PUBLIC_LMS_ROOM_PREFIX)) return false;
     if (this.roomName.startsWith(PRIVATE_SHARE_ROOM_PREFIX)) return false;
     return false;
   }
@@ -357,6 +679,17 @@ export class GlobalArenaRoom extends DurableObject {
       leaderId: match.leaderId || '',
       winnerId: match.winnerId || '',
       winnerTeam: match.winnerTeam || '',
+      lms: match.lms ? {
+        startingLives: Number(match.lms.startingLives || lmsRules.startingLives),
+        maxLives: Number(match.lms.maxLives || lmsRules.maxLives),
+        chargePerExtraLife: Number(match.lms.chargePerExtraLife || lmsRules.chargePerExtraLife),
+        remainingPlayers: Number(match.lms.remainingPlayers || 0),
+        finalBankingCutoffRemaining: Number(match.lms.finalBankingCutoffRemaining || lmsRules.finalBankingCutoffRemaining),
+        warmupEndsAt: Number(match.lms.warmupEndsAt || 0),
+        nextRotateAt: Number(match.lms.nextRotateAt || 0),
+        bankingEnabled: !!match.lms.bankingEnabled,
+        activeBeacon: match.lms.activeBeacon ? { ...match.lms.activeBeacon } : null
+      } : null,
       teamProgress: {
         [TDM_TEAM_A]: Number((match.teamProgress && match.teamProgress[TDM_TEAM_A]) || 0),
         [TDM_TEAM_B]: Number((match.teamProgress && match.teamProgress[TDM_TEAM_B]) || 0)
@@ -370,10 +703,13 @@ export class GlobalArenaRoom extends DurableObject {
 
   connectedHumanIds() {
     const ids = [];
+    const seen = new Set();
     for (const meta of this.clients.values()) {
       if (!meta || !meta.userId) continue;
       const player = this.players.get(meta.userId);
       if (!player || player.fixtureType === 'sim_player') continue;
+      if (seen.has(player.id)) continue;
+      seen.add(player.id);
       ids.push(player.id);
     }
     return ids;
@@ -419,6 +755,11 @@ export class GlobalArenaRoom extends DurableObject {
       player.progressScore = 0;
       return;
     }
+    if (this.gameMode === GAME_MODE_LMS) {
+      player.teamId = '';
+      player.progressScore = Number(player.lmsLives || 0);
+      return;
+    }
     if (this.gameMode === GAME_MODE_TDM) {
       const teamId = this.assignPlayerToCurrentTeam(player);
       const teamProgress = (this.matchState && this.matchState.teamProgress)
@@ -442,7 +783,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.matchState.resetAt = 0;
     this.matchState.winnerId = '';
     this.matchState.winnerTeam = '';
-    this.matchState.targetProgress = this.gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : FFA_TARGET_PROGRESS;
+    this.matchState.targetProgress = this.gameMode === GAME_MODE_TDM ? TDM_TARGET_PROGRESS : (this.gameMode === GAME_MODE_FFA ? FFA_TARGET_PROGRESS : 0);
     this.matchState.matchBaselinePlayerCount = connectedCount;
     this.matchState.teamProgress = {
       [TDM_TEAM_A]: 0,
@@ -459,6 +800,8 @@ export class GlobalArenaRoom extends DurableObject {
         player.teamId = '';
         player.progressScore = Math.max(0, Number(player.kills || 0));
       }
+    } else if (this.gameMode === GAME_MODE_LMS) {
+      this.initializeLmsMatchState(now);
     } else if (this.gameMode === GAME_MODE_TDM) {
       for (const player of this.players.values()) {
         if (!player || player.fixtureType === 'sim_player') continue;
@@ -482,9 +825,15 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   maybeResetPublicMatch() {
-    if (!this.isPublicMatchRoom() || !this.matchState || !this.matchState.ended) return false;
+    if (!this.matchState || !this.matchState.ended) return false;
     if ((this.matchState.resetAt || 0) > nowMs()) return false;
+    const shouldAutoStartPrivate = isPrivateMatchRoom(this.roomName) &&
+      String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || '') === ROOM_PHASE_ACTIVE;
     this.matchState = emptyMatchState(this.gameMode);
+    if (shouldAutoStartPrivate) {
+      this.matchState.started = true;
+      this.matchState.startedAt = nowMs();
+    }
     for (const player of this.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
       player.progressScore = 0;
@@ -492,8 +841,18 @@ export class GlobalArenaRoom extends DurableObject {
       player.kills = 0;
       player.deaths = 0;
       player.plannedSpawnPoint = null;
+      player.lmsLives = 0;
+      player.lmsCharge = 0;
+      player.lmsBankState = null;
     }
-    this.startPublicMatchIfReady();
+    if (shouldAutoStartPrivate) {
+      this.syncPrivateRoomMatchState();
+      if (this.gameMode === GAME_MODE_LMS) {
+        this.initializeLmsMatchState(this.matchState.startedAt || nowMs());
+      }
+    } else {
+      this.startPublicMatchIfReady();
+    }
     return true;
   }
 
@@ -514,6 +873,25 @@ export class GlobalArenaRoom extends DurableObject {
       this.matchState.leaderProgress = Number(leaderProgress.toFixed(3));
       return;
     }
+    if (this.gameMode === GAME_MODE_LMS) {
+      let leaderId = '';
+      let leaderProgress = 0;
+      const entities = this.lmsMatchEntities();
+      for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i];
+        const lives = Math.max(0, Number(entity.lmsLives || 0));
+        const charge = Math.max(0, Number(entity.lmsCharge || 0));
+        const progress = lives + (charge * 0.01);
+        if (progress >= leaderProgress) {
+          leaderProgress = progress;
+          leaderId = entity.id;
+        }
+      }
+      this.syncLmsPublicState();
+      this.matchState.leaderId = leaderId;
+      this.matchState.leaderProgress = Number(leaderProgress.toFixed(2));
+      return;
+    }
     const alpha = Number((this.matchState.teamProgress && this.matchState.teamProgress[TDM_TEAM_A]) || 0);
     const bravo = Number((this.matchState.teamProgress && this.matchState.teamProgress[TDM_TEAM_B]) || 0);
     this.matchState.leaderId = '';
@@ -521,7 +899,8 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   finishPublicMatch(winnerId, winnerTeam) {
-    if (!this.isPublicMatchRoom() || !this.matchState || this.matchState.ended) return false;
+    if (!this.matchState || this.matchState.ended) return false;
+    if (this.gameMode !== GAME_MODE_FFA && this.gameMode !== GAME_MODE_TDM && this.gameMode !== GAME_MODE_LMS) return false;
     const now = nowMs();
     this.matchState.ended = true;
     this.matchState.endedAt = now;
@@ -532,7 +911,8 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   recordElimination(sourceId, targetId) {
-    if (!this.isPublicMatchRoom() || !this.matchState || !this.matchState.started || this.matchState.ended) return;
+    if (!this.matchState || !this.matchState.started || this.matchState.ended) return;
+    if (this.gameMode !== GAME_MODE_FFA && this.gameMode !== GAME_MODE_TDM && this.gameMode !== GAME_MODE_LMS) return;
     const source = this.getEntityById(sourceId);
     const target = this.getEntityById(targetId);
     if (!source || !target || source.id === target.id) return;
@@ -545,6 +925,29 @@ export class GlobalArenaRoom extends DurableObject {
       this.updateLeaderProgress();
       if (Number(source.kills || 0) >= Number(this.matchState.targetProgress || FFA_TARGET_PROGRESS)) {
         this.finishPublicMatch(source.id, '');
+      }
+      return;
+    }
+
+    if (this.gameMode === GAME_MODE_LMS) {
+      target.lmsLives = Math.max(0, Number(target.lmsLives || lmsRules.startingLives) - 1);
+      target.lmsCharge = 0;
+      target.lmsBankState = null;
+      target.progressScore = target.lmsLives;
+      source.lmsCharge = Math.min(
+        lmsRules.chargePerExtraLife,
+        Math.max(0, Number(source.lmsCharge || 0)) + lmsRules.chargePerElimination
+      );
+      source.progressScore = Math.max(0, Number(source.lmsLives || 0));
+      if (target.lmsLives <= 0) {
+        target.respawnAt = 0;
+      } else {
+        target.respawnAt = nowMs() + lmsRules.respawnDelayMs;
+      }
+      this.syncLmsPublicState();
+      this.updateLeaderProgress();
+      if (this.lmsRemainingPlayers() <= 1) {
+        this.finishPublicMatch(this.lmsWinnerId(), '');
       }
       return;
     }
@@ -584,14 +987,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   connectedHumanCount() {
-    let count = 0;
-    for (const meta of this.clients.values()) {
-      if (!meta || !meta.userId) continue;
-      const player = this.players.get(meta.userId);
-      if (!player || player.fixtureType === 'sim_player') continue;
-      count++;
-    }
-    return count;
+    return this.connectedHumanIds().length;
   }
 
   simulatedPlayerCount() {
@@ -642,6 +1038,10 @@ export class GlobalArenaRoom extends DurableObject {
     entity.z = Number(spawn.z || 0);
     if (entity.kind === 'player') {
       entity.y = this.terrainEyeYAt(entity.x, entity.z);
+      entity.velocityY = 0;
+      entity.isGrounded = true;
+      entity.jumpHoldTimer = 0;
+      entity.jumpHeldLast = false;
     } else if (!Number.isFinite(entity.y)) {
       entity.y = PLAYER_EYE_HEIGHT_WU;
     }
@@ -668,6 +1068,8 @@ export class GlobalArenaRoom extends DurableObject {
     const preset = classPreset(nextClassId);
     const p = {
       id: userId,
+      actorId: String(opts.actorId || userId || ''),
+      actorName: String(opts.actorName || username || userId || 'player'),
       kind: 'player',
       username,
       classId: nextClassId,
@@ -679,6 +1081,7 @@ export class GlobalArenaRoom extends DurableObject {
       z: 0,
       yaw: Number(opts.yaw || 0),
       pitch: Number(opts.pitch || 0),
+      cameraMode: 'third',
       hp: MAX_HP,
       hpMax: MAX_HP,
       armor: preset.armorMax,
@@ -690,11 +1093,17 @@ export class GlobalArenaRoom extends DurableObject {
       spawnShieldUntil: 0,
       lastDamageAt: 0,
       seq: 0,
+      inputMode: 'intent',
+      inputState: createMovementInputState(),
       lastShotAt: {},
       lastShotTokenByWeapon: {},
       weaponId: DEFAULT_WEAPON_LOADOUT[0],
       moveSpeedNorm: 0,
       sprinting: false,
+      velocityY: 0,
+      isGrounded: true,
+      jumpHoldTimer: 0,
+      jumpHeldLast: false,
       streamHeat: 0,
       streamOverheatedUntil: 0,
       muzzleFlashUntil: 0,
@@ -703,8 +1112,13 @@ export class GlobalArenaRoom extends DurableObject {
       kills: 0,
       deaths: 0,
       progressScore: 0,
+      lmsLives: 0,
+      lmsCharge: 0,
+      lmsBankState: null,
       teamId: '',
       disconnectedAt: 0,
+      slot1CooldownUntil: 0,
+      slot2CooldownUntil: 0,
       abilityCooldownUntil: 0,
       ultimateCooldownUntil: 0,
       weaponLockUntil: 0,
@@ -716,6 +1130,7 @@ export class GlobalArenaRoom extends DurableObject {
       deadeye: null,
       chokeState: null,
       chokeVictimState: null,
+      justBeenHookedState: null,
       hookState: null,
       hookPullState: null,
       healState: null
@@ -777,21 +1192,40 @@ export class GlobalArenaRoom extends DurableObject {
     ensureBots(this);
   }
 
-  ensurePlayer(userId, username, classId) {
+  ensurePlayer(userId, username, classId, actorId = '', actorName = '') {
     if (this.players.has(userId)) {
       const p = this.players.get(userId);
       p.username = username || p.username;
+      p.actorId = String(actorId || p.actorId || p.id || '');
+      p.actorName = String(actorName || p.actorName || username || p.username || p.id || 'player');
       p.disconnectedAt = 0;
       this.enforceEntityTerrainFloor(p);
+      if (isPrivateMatchRoom(this.roomName) && this.privateRoomConfig && this.privateRoomConfig.teams) {
+        p.teamId = String(this.privateRoomConfig.teams.get(p.actorId || p.id) || TDM_TEAM_A);
+      }
       if (this.isPublicMatchRoom() && this.gameMode === GAME_MODE_TDM && !p.teamId) {
         this.applyJoinBaseline(p);
+      }
+      if (this.gameMode === GAME_MODE_LMS && this.matchState && this.matchState.started && !this.matchState.ended && Number(p.lmsLives || 0) <= 0) {
+        p.lmsLives = lmsRules.startingLives;
+        p.progressScore = p.lmsLives;
       }
       return p;
     }
 
-    const p = this.buildPlayerEntity(userId, username, classId);
+    const p = this.buildPlayerEntity(userId, username, classId, {
+      actorId,
+      actorName
+    });
     p.disconnectedAt = 0;
+    if (isPrivateMatchRoom(this.roomName) && this.privateRoomConfig && this.privateRoomConfig.teams) {
+      p.teamId = String(this.privateRoomConfig.teams.get(p.actorId || p.id) || TDM_TEAM_A);
+    }
     this.applyJoinBaseline(p);
+    if (this.gameMode === GAME_MODE_LMS && this.matchState && this.matchState.started && !this.matchState.ended) {
+      p.lmsLives = lmsRules.startingLives;
+      p.progressScore = p.lmsLives;
+    }
     this.players.set(userId, p);
     return p;
   }
@@ -1016,38 +1450,51 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
 
     const now = nowMs();
-    const actionLocked = this.isEntityMovementLocked(player, now);
-    let slowMult = 1;
-    if (!actionLocked) {
-      slowMult = (player.slowUntil || 0) > now
-        ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
-        : 1;
-      if (typeof msg.x === 'number') {
-        const targetX = clamp(msg.x, this.boundsMin, this.boundsMax);
-        player.x = player.x + ((targetX - player.x) * slowMult);
-      }
-      if (typeof msg.z === 'number') {
-        const targetZ = clamp(msg.z, this.boundsMin, this.boundsMax);
-        player.z = player.z + ((targetZ - player.z) * slowMult);
-      }
-      if (typeof msg.y === 'number') {
-        const floorEyeY = this.terrainEyeYAt(player.x, player.z);
-        const targetY = clamp(msg.y, floorEyeY, 16);
-        player.y = player.y + ((targetY - player.y) * slowMult);
-      }
-    }
-    if (!actionLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (!actionLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
+    const movementLocked = this.isEntityMovementLocked(player, now);
+    if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
+    if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
+    if (typeof msg.cameraMode === 'string') player.cameraMode = String(msg.cameraMode).toLowerCase() === 'first' ? 'first' : 'third';
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
     if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
-    if (!actionLocked) {
-      if (typeof msg.moveSpeedNorm === 'number') player.moveSpeedNorm = clamp(msg.moveSpeedNorm, 0, 1.4);
-      if (typeof msg.sprinting === 'boolean') player.sprinting = msg.sprinting;
-      if (typeof msg.sprint === 'boolean') player.sprinting = msg.sprint;
-    } else {
-      player.moveSpeedNorm = 0;
-      player.sprinting = false;
-    }
+
+    if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
+
+    player.inputMode = 'intent';
+    player.inputState = player.inputState || createMovementInputState();
+    player.inputState.forward = !!msg.forward;
+    player.inputState.backward = !!msg.backward;
+    player.inputState.left = !!msg.left;
+    player.inputState.right = !!msg.right;
+    player.inputState.jump = !!msg.jump;
+    player.inputState.sprint = !!msg.sprint;
+    player.inputState.adsActive = !!msg.adsActive;
+    player.inputState.cameraMode = player.cameraMode;
+  }
+
+  tickAuthoritativePlayerMovement(player, dtSec) {
+    if (!player || !player.alive) return;
+
+    const now = nowMs();
+    const slowMult = (player.slowUntil || 0) > now
+      ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
+      : 1;
+    const boundsPad = PLAYER_RADIUS_WU;
+    stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), {
+      dtSec: Math.max(0, Number(dtSec || 0)) * slowMult,
+      bounds: {
+        minX: this.boundsMin,
+        maxX: this.boundsMax,
+        minZ: this.boundsMin,
+        maxZ: this.boundsMax
+      },
+      collisionBoxes: this.worldCollidables(),
+      getGroundHeightAt: (x, z) => this.terrainFeetYAt(x, z),
+      movementLocked: this.isEntityMovementLocked(player, now),
+      eyeHeight: PLAYER_EYE_HEIGHT_WU,
+      playerHeight: PLAYER_HEIGHT_WU,
+      playerRadius: boundsPad,
+      epsilon: WORLD_RAY_EPSILON
+    });
     this.enforceEntityTerrainFloor(player);
   }
 
@@ -1074,8 +1521,81 @@ export class GlobalArenaRoom extends DurableObject {
     return !this.isEntitySpawnShielded(entity);
   }
 
+  worldCollidables() {
+    return this.worldCollision && Array.isArray(this.worldCollision.collidables)
+      ? this.worldCollision.collidables
+      : [];
+  }
+
+  firstWorldHitDistance(origin, dir, maxDistance) {
+    const boxes = this.worldCollidables();
+    let nearest = Number(maxDistance);
+    for (let i = 0; i < boxes.length; i++) {
+      const hitDistance = intersectRayAabb(origin, dir, boxes[i], nearest);
+      if (hitDistance != null && hitDistance < nearest) {
+        nearest = hitDistance;
+      }
+    }
+    return Number.isFinite(nearest) ? nearest : Number(maxDistance);
+  }
+
+  hasWorldLineOfSight(origin, targetPos, maxRange = Infinity) {
+    if (!origin || !targetPos) return false;
+    const dx = Number(targetPos.x || 0) - Number(origin.x || 0);
+    const dy = Number(targetPos.y || 0) - Number(origin.y || 0);
+    const dz = Number(targetPos.z || 0) - Number(origin.z || 0);
+    const distance = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+    if (distance <= WORLD_RAY_EPSILON || distance > Number(maxRange || Infinity)) return false;
+    const dir = normalize3(dx, dy, dz);
+    const worldHitDistance = this.firstWorldHitDistance(origin, dir, distance);
+    return worldHitDistance >= (distance - 0.02);
+  }
+
+  readClassAimPoint(player, rawAimPoint, maxRange) {
+    if (!player || !rawAimPoint || typeof rawAimPoint !== 'object') return null;
+    const range = Math.max(1, Number(maxRange || 24));
+    const point = {
+      x: Number(rawAimPoint.x),
+      y: Number(rawAimPoint.y),
+      z: Number(rawAimPoint.z)
+    };
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return null;
+    if (distance3(player, point) > (range + 1.5)) return null;
+    const forward = this.entityForward(player);
+    const to = normalize3(point.x - player.x, point.y - player.y, point.z - player.z);
+    if (dot3(to, forward) < -0.2) return null;
+    return point;
+  }
+
+  clampWorldAimPoint(origin, desiredPoint, maxRange) {
+    if (!origin || !desiredPoint) return desiredPoint;
+    const dx = Number(desiredPoint.x || 0) - Number(origin.x || 0);
+    const dy = Number(desiredPoint.y || 0) - Number(origin.y || 0);
+    const dz = Number(desiredPoint.z || 0) - Number(origin.z || 0);
+    const distance = Math.min(
+      Math.max(0, Math.sqrt((dx * dx) + (dy * dy) + (dz * dz))),
+      Math.max(0, Number(maxRange || 0))
+    );
+    if (distance <= WORLD_RAY_EPSILON) return desiredPoint;
+    const dir = normalize3(dx, dy, dz);
+    const worldHitDistance = this.firstWorldHitDistance(origin, dir, distance);
+    const hitBlocked = worldHitDistance < (distance - 0.02);
+    const clampedDistance = hitBlocked
+      ? Math.max(0, worldHitDistance - 0.05)
+      : distance;
+    return {
+      x: origin.x + (dir.x * clampedDistance),
+      y: origin.y + (dir.y * clampedDistance),
+      z: origin.z + (dir.z * clampedDistance)
+    };
+  }
+
   isEntityChoked(entity, now = nowMs()) {
     return !!(entity && entity.alive && entity.chokeVictimState && (entity.chokeVictimState.endsAt || 0) > now);
+  }
+
+  isEntityJustBeenHooked(entity, now = nowMs()) {
+    return !!(entity && entity.alive && entity.justBeenHookedState && (entity.justBeenHookedState.endsAt || 0) > now);
   }
 
   isEntityActionRestricted(entity, actionType, now = nowMs()) {
@@ -1100,7 +1620,10 @@ export class GlobalArenaRoom extends DurableObject {
 
   isEntityMovementLocked(entity, now = nowMs()) {
     if (!entity || !entity.alive) return false;
-    return ((entity.stunUntil || 0) > now) || !!entity.hookPullState || this.isEntityChoked(entity, now);
+    return ((entity.stunUntil || 0) > now) ||
+      !!entity.hookPullState ||
+      this.isEntityChoked(entity, now) ||
+      this.isEntityJustBeenHooked(entity, now);
   }
 
   isEntityActionLocked(entity, now = nowMs()) {
@@ -1165,7 +1688,18 @@ export class GlobalArenaRoom extends DurableObject {
     target.slowMultiplier = Math.max(0.1, Math.min(1, Number(multiplier || 1)));
   }
 
-  pullEntityToward(player, target, pullDistance, pullSpeed) {
+  applyJustBeenHooked(target, durationSec) {
+    if (!target || !target.alive) return;
+    const startedAt = nowMs();
+    const endsAt = startedAt + Math.max(0, Math.round(Number(durationSec || 0) * 1000));
+    target.justBeenHookedState = {
+      startedAt,
+      endsAt
+    };
+    target.stunUntil = Math.max(target.stunUntil || 0, endsAt);
+  }
+
+  pullEntityToward(player, target, pullDistance, pullSpeed, stunDuration = 1.0) {
     if (!player || !target || !player.alive || !target.alive) return false;
     const dx = player.x - target.x;
     const dz = player.z - target.z;
@@ -1178,11 +1712,11 @@ export class GlobalArenaRoom extends DurableObject {
       sourceId: player.id,
       pullDistance: desiredDist,
       pullSpeed: speed,
+      postHookStunDuration: Math.max(0, Number(stunDuration || 0)),
       startedAt: nowMs(),
       endsAt: nowMs() + durationMs,
       facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
     };
-    this.applyTimedStun(target, 1.0);
     return true;
   }
 
@@ -1191,7 +1725,7 @@ export class GlobalArenaRoom extends DurableObject {
     return hits.length > 0 ? hits[0].entity : null;
   }
 
-  resolveLockedHostile(player, lockTargetId, range, minDot) {
+  resolveLockedHostile(player, lockTargetId, range, minDot, options = null) {
     if (!player || !player.alive || !lockTargetId) return null;
     const target = this.getEntityById(String(lockTargetId));
     if (!this.canTargetEntity(target, player.id)) return null;
@@ -1204,15 +1738,36 @@ export class GlobalArenaRoom extends DurableObject {
       target.z - player.z
     );
     if (dot3(to, forward) < Number(minDot || -1)) return null;
+    const opts = options || {};
+    if (opts.requireLos) {
+      const origin = this.entityAimTargetPosition(player);
+      const targetPos = this.entityAimTargetPosition(target);
+      if (!this.hasWorldLineOfSight(origin, targetPos, Number(range || 0))) return null;
+    }
+    if (opts.aimPoint && Number(opts.targetTolerance || 0) > 0) {
+      const aimPoint = this.readClassAimPoint(player, opts.aimPoint, range);
+      if (!aimPoint) return null;
+      const targetPos = this.entityAimTargetPosition(target);
+      if (distance3(targetPos, aimPoint) > Number(opts.targetTolerance || 0)) return null;
+    }
     return target;
   }
 
   deadeyeCandidates(player, range, minDot, maxTargets) {
     const hits = this.hostilesInCone(player, range, minDot);
-    return hits.slice(0, Math.max(1, maxTargets || 1)).map((hit) => ({
-      id: hit.entity.id,
-      dist: hit.dist
-    }));
+    const origin = this.entityAimTargetPosition(player);
+    const out = [];
+    for (let i = 0; i < hits.length; i++) {
+      const hit = hits[i];
+      const targetPos = this.entityAimTargetPosition(hit.entity);
+      if (!this.hasWorldLineOfSight(origin, targetPos, range)) continue;
+      out.push({
+        id: hit.entity.id,
+        dist: hit.dist
+      });
+      if (out.length >= Math.max(1, maxTargets || 1)) break;
+    }
+    return out;
   }
 
   resolveClassAimPoint(player, msg, maxRange) {
@@ -1220,20 +1775,8 @@ export class GlobalArenaRoom extends DurableObject {
     const forward = this.entityForward(player);
     const eye = this.entityAimTargetPosition(player);
     const fallback = addScaled3(eye, forward, range);
-    const raw = msg && msg.aimPoint;
-    if (!raw || typeof raw !== 'object') return fallback;
-
-    const point = {
-      x: Number(raw.x),
-      y: Number(raw.y),
-      z: Number(raw.z)
-    };
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return fallback;
-    if (distance3(player, point) > (range + 1.5)) return fallback;
-
-    const to = normalize3(point.x - player.x, point.y - player.y, point.z - player.z);
-    if (dot3(to, forward) < -0.2) return fallback;
-    return point;
+    const point = this.readClassAimPoint(player, msg && msg.aimPoint, range);
+    return point || fallback;
   }
 
   handleFire(player, msg) {
@@ -1270,9 +1813,7 @@ export class GlobalArenaRoom extends DurableObject {
       adsActive: !!(msg && msg.adsActive),
       shotToken,
       targets: this.getAliveEntities().filter((entity) => this.canTargetEntity(entity, player.id)),
-      worldBoxes: this.worldCollision && Array.isArray(this.worldCollision.collidables)
-        ? this.worldCollision.collidables
-        : []
+      worldBoxes: this.worldCollidables()
     });
     for (let i = 0; i < shots.length; i++) {
       const shot = shots[i];
@@ -1422,6 +1963,8 @@ export class GlobalArenaRoom extends DurableObject {
     entity.armor = Math.max(0, Math.min(Number(entity.armor || 0), preset.armorMax));
     entity.wallhackRadius = preset.wallhackRadius;
 
+    entity.slot1CooldownUntil = 0;
+    entity.slot2CooldownUntil = 0;
     entity.abilityCooldownUntil = 0;
     entity.ultimateCooldownUntil = 0;
     entity.weaponLockUntil = 0;
@@ -1540,20 +2083,25 @@ export class GlobalArenaRoom extends DurableObject {
 
     const meta = this.clients.get(ws) || ws.deserializeAttachment();
     if (!meta || !meta.userId) return;
+    if (this.activeSocketByUserId.get(meta.userId) !== ws) return;
 
     const player = this.players.get(meta.userId);
     if (!player) return;
 
     const type = String(msg.t || '');
+    const privateLobbyLocked = isPrivateMatchRoom(this.roomName) &&
+      String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || ROOM_PHASE_ACTIVE) !== ROOM_PHASE_ACTIVE;
     if (type === MSG_C2S.JOIN_ROOM) {
       this.send(ws, this.buildWelcomePayload(player.id));
       return;
     }
     if (type === MSG_C2S.INPUT) {
+      if (privateLobbyLocked) return;
       this.handleInput(player, msg);
       return;
     }
     if (type === MSG_C2S.FIRE) {
+      if (privateLobbyLocked) return;
       this.handleFire(player, msg);
       return;
     }
@@ -1566,10 +2114,12 @@ export class GlobalArenaRoom extends DurableObject {
       return;
     }
     if (type === MSG_C2S.SEEKER_SHOT) {
+      if (privateLobbyLocked) return;
       this.handleSeekerShot(player, msg, ws);
       return;
     }
     if (type === MSG_C2S.THROW) {
+      if (privateLobbyLocked) return;
       this.handleThrow(player, msg, ws);
       return;
     }
@@ -1578,6 +2128,7 @@ export class GlobalArenaRoom extends DurableObject {
       return;
     }
     if (type === MSG_C2S.CLASS_CAST) {
+      if (privateLobbyLocked) return;
       handleClassCast(this, player, msg, ws);
       return;
     }
@@ -1591,9 +2142,19 @@ export class GlobalArenaRoom extends DurableObject {
     this.clients.delete(ws);
 
     if (meta && meta.userId) {
-      const player = this.players.get(meta.userId);
-      if (player) {
-        player.disconnectedAt = nowMs();
+      if (this.activeSocketByUserId.get(meta.userId) === ws) {
+        const replacement = this.socketForUserId(meta.userId, ws);
+        if (replacement) {
+          this.activeSocketByUserId.set(meta.userId, replacement);
+          const player = this.players.get(meta.userId);
+          if (player) player.disconnectedAt = 0;
+        } else {
+          this.activeSocketByUserId.delete(meta.userId);
+          const player = this.players.get(meta.userId);
+          if (player) {
+            player.disconnectedAt = nowMs();
+          }
+        }
       }
     }
 
@@ -1634,8 +2195,56 @@ export class GlobalArenaRoom extends DurableObject {
     }
   }
 
+  tickLmsMode(now = nowMs()) {
+    if (this.gameMode !== GAME_MODE_LMS || !this.matchState || !this.matchState.started || this.matchState.ended) return;
+    this.ensureLmsStartedState();
+    this.maybeRotateLmsBeacon(now);
+    this.syncLmsPublicState();
+    if (this.lmsRemainingPlayers() <= 1) {
+      this.finishPublicMatch(this.lmsWinnerId(), '');
+      return;
+    }
+    const beacon = this.currentLmsBeacon();
+    const lms = this.matchState.lms;
+    if (!beacon || !lms) return;
+
+    for (const entity of this.lmsMatchEntities()) {
+      if (!entity || !entity.alive || Number(entity.lmsLives || 0) <= 0) {
+        if (entity) entity.lmsBankState = null;
+        continue;
+      }
+      const hasCharge = Number(entity.lmsCharge || 0) >= lmsRules.chargePerExtraLife;
+      const canGainLife = Number(entity.lmsLives || 0) < lmsRules.startingLives;
+      const dx = Number(entity.x || 0) - beacon.x;
+      const dz = Number(entity.z || 0) - beacon.z;
+      const inRange = Math.sqrt((dx * dx) + (dz * dz)) <= lmsRules.beaconBankRadius;
+      const interrupted = entity.lmsBankState && Number(entity.lastDamageAt || 0) > Number(entity.lmsBankState.startedAt || 0);
+      if (!lms.bankingEnabled || !hasCharge || !canGainLife || !inRange || interrupted) {
+        entity.lmsBankState = null;
+        continue;
+      }
+      if (!entity.lmsBankState || entity.lmsBankState.beaconId !== beacon.id) {
+        entity.lmsBankState = {
+          beaconId: beacon.id,
+          startedAt: now,
+          endsAt: now + lmsRules.beaconChannelMs
+        };
+        continue;
+      }
+      if (now < Number(entity.lmsBankState.endsAt || 0)) continue;
+      entity.lmsCharge = Math.max(0, Number(entity.lmsCharge || 0) - lmsRules.chargePerExtraLife);
+      entity.lmsLives = Math.min(lmsRules.startingLives, Number(entity.lmsLives || 0) + 1);
+      entity.progressScore = entity.lmsLives;
+      entity.lmsBankState = null;
+      this.rotateLmsBeacon(now);
+      break;
+    }
+    this.updateLeaderProgress();
+  }
+
   respawnIfNeeded(entity) {
     if (entity.alive) return;
+    if (this.gameMode === GAME_MODE_LMS && Number(entity.lmsLives || 0) <= 0) return;
     if ((entity.respawnAt || 0) > nowMs()) return;
 
     entity.hp = entity.hpMax;
@@ -1655,8 +2264,16 @@ export class GlobalArenaRoom extends DurableObject {
     entity.lastShotAt = {};
     entity.lastShotTokenByWeapon = {};
     entity.muzzleFlashUntil = 0;
+    entity.lmsBankState = null;
     entity.throwables = this.createThrowableRuntime();
     entity.lastThrowAt = 0;
+    entity.inputState = createMovementInputState();
+    entity.velocityY = 0;
+    entity.isGrounded = true;
+    entity.jumpHoldTimer = 0;
+    entity.jumpHeldLast = false;
+    entity.slot1CooldownUntil = 0;
+    entity.slot2CooldownUntil = 0;
     entity.abilityCooldownUntil = 0;
     entity.ultimateCooldownUntil = 0;
     entity.weaponLockUntil = 0;
@@ -1668,6 +2285,7 @@ export class GlobalArenaRoom extends DurableObject {
     entity.deadeye = null;
     entity.chokeState = null;
     entity.chokeVictimState = null;
+    entity.justBeenHookedState = null;
     entity.hookState = null;
     entity.hookPullState = null;
     entity.healState = null;
@@ -1682,6 +2300,7 @@ export class GlobalArenaRoom extends DurableObject {
   tickPlayers(dtSec) {
     for (const player of this.players.values()) {
       this.respawnIfNeeded(player);
+      this.tickAuthoritativePlayerMovement(player, dtSec);
       this.regenArmor(player, dtSec);
       this.tickStreamState(player, dtSec);
       this.tickThrowableRegen(player, dtSec);
@@ -1725,6 +2344,7 @@ export class GlobalArenaRoom extends DurableObject {
       serverTime: nowMs(),
       delta: !forceFull,
       gameMode: this.gameMode || '',
+      privateRoomPhase: isPrivateMatchRoom(this.roomName) ? String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || ROOM_PHASE_ACTIVE) : '',
       matchState: this.serializeMatchState(),
       entities: forceFull ? entities : changedEntities,
       removedEntityIds,
@@ -1744,6 +2364,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.startPublicMatchIfReady();
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
+    this.tickLmsMode(now);
     tickProjectiles(this, dtSec);
     tickFireZones(this, dtSec);
     this.updateLeaderProgress();
