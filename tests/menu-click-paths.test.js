@@ -3,6 +3,30 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
+const HARNESS_MODULE_PATHS = [
+  '../js/app/lobby-party-view.js',
+  '../js/app/lobby-friends-view.js',
+  '../js/app/lobby-private-room-view.js',
+  '../js/app/lobby-clickables.js',
+  '../js/app/lobby-sync-runtime.js',
+  '../js/app/lobby-controller.js'
+];
+
+let harnessModuleCodePromise = null;
+const MAX_VISITED_STATES_PER_SEED = 24;
+
+async function loadHarnessModuleCode() {
+  if (!harnessModuleCodePromise) {
+    harnessModuleCodePromise = Promise.all(
+      HARNESS_MODULE_PATHS.map(async (modulePath) => ({
+        modulePath,
+        code: await fs.readFile(new URL(modulePath, import.meta.url), 'utf8')
+      }))
+    );
+  }
+  return harnessModuleCodePromise;
+}
+
 class FakeElement {
   constructor(tagName = 'div', id = '', registry = null) {
     this.tagName = String(tagName || 'div').toUpperCase();
@@ -428,6 +452,12 @@ async function createHarness(seedName, options = {}) {
       list.push(handler);
       windowListeners.set(type, list);
     },
+    removeEventListener(type, handler) {
+      const list = windowListeners.get(type) || [];
+      const next = list.filter((entry) => entry !== handler);
+      if (next.length) windowListeners.set(type, next);
+      else windowListeners.delete(type);
+    },
     dispatchEvent(event) {
       const type = event && event.type ? event.type : '';
       const list = windowListeners.get(type) || [];
@@ -442,6 +472,7 @@ async function createHarness(seedName, options = {}) {
   const backend = {
     seed,
     quickCounter: 0,
+    privateRoomGetCount: 0,
     refreshFriends() {
       if (this.seed.friendsState && this.seed.accountUser) {
         this.seed.friendsState.self.friendCount = this.seed.friendsState.friends.length;
@@ -460,6 +491,7 @@ async function createHarness(seedName, options = {}) {
     },
     partyPost(payload) {
       const action = String(payload.action || '');
+      const previousState = this.makePartyState();
       if (action === 'lock') {
         this.seed.partyState.party.joinLocked = !!payload.locked;
       } else if (action === 'leave') {
@@ -471,6 +503,9 @@ async function createHarness(seedName, options = {}) {
           this.seed.partyState.party.members.push(createPartyMember(targetId, targetId));
           this.seed.partyState.party.memberCount = this.seed.partyState.party.members.length;
         }
+      }
+      if (action === 'lock' && optionsArg.staleLockPostResponse) {
+        return { state: previousState };
       }
       return { state: this.makePartyState() };
     },
@@ -533,6 +568,12 @@ async function createHarness(seedName, options = {}) {
           teamId: 'alpha',
           isHost: true
         };
+        if (optionsArg.stalePrivateRoomJoinPostResponse) {
+          const staleState = this.makePrivateRoomState();
+          staleState.room.roomMode = 'ffa';
+          staleState.room.roomPhase = 'active';
+          return { state: staleState, movedCount: 1, skippedCount: 0 };
+        }
         return { state: this.makePrivateRoomState(), movedCount: 1, skippedCount: 0 };
       }
       if (!this.seed.privateRoomState) this.seed.privateRoomState = defaultPrivateRoomState(this.seed.identity.id, true);
@@ -561,7 +602,10 @@ async function createHarness(seedName, options = {}) {
       if (url.pathname === '/api/party' && method === 'POST') return Promise.resolve(this.partyPost(body || {}));
       if (url.pathname === '/api/friends' && method === 'GET') return Promise.resolve({ friends: this.makeFriendsState() });
       if (url.pathname === '/api/friends' && method === 'POST') return Promise.resolve(this.friendsPost(body || {}));
-      if (url.pathname === '/api/private-room' && method === 'GET') return Promise.resolve({ state: this.makePrivateRoomState() });
+      if (url.pathname === '/api/private-room' && method === 'GET') {
+        this.privateRoomGetCount += 1;
+        return Promise.resolve({ state: this.makePrivateRoomState() });
+      }
       if (url.pathname === '/api/private-room' && method === 'POST') return Promise.resolve(this.privateRoomPost(body || {}));
       if (url.pathname === '/api/matchmaking' && method === 'POST') {
         const action = String(body && body.action || '');
@@ -622,15 +666,9 @@ async function createHarness(seedName, options = {}) {
     Promise
   };
   const context = vm.createContext(sandbox);
-  const modulePaths = [
-    '../js/app/lobby-party-view.js',
-    '../js/app/lobby-friends-view.js',
-    '../js/app/lobby-private-room-view.js',
-    '../js/app/lobby-controller.js'
-  ];
-  for (let i = 0; i < modulePaths.length; i++) {
-    const code = await fs.readFile(new URL(modulePaths[i], import.meta.url), 'utf8');
-    vm.runInContext(code, context);
+  const moduleSources = await loadHarnessModuleCode();
+  for (let i = 0; i < moduleSources.length; i++) {
+    vm.runInContext(moduleSources[i].code, context);
   }
   sandbox.globalThis.__MAYHEM_RUNTIME.GameLobbyController.init({
     prepareMenu() {},
@@ -648,18 +686,23 @@ async function createHarness(seedName, options = {}) {
     getActivityState() { return 'menu'; }
   });
 
+  async function drainMicrotasks(rounds = 20) {
+    for (let i = 0; i < rounds; i++) {
+      await Promise.resolve();
+    }
+  }
+
   async function flush() {
-    await Promise.resolve();
-    await Promise.resolve();
+    await drainMicrotasks();
     while (timeoutQueue.length) {
       const batch = timeoutQueue.splice(0, timeoutQueue.length);
       for (let i = 0; i < batch.length; i++) {
         const handler = batch[i] && batch[i].handler;
         if (typeof handler === 'function') handler();
       }
-      await Promise.resolve();
-      await Promise.resolve();
+      await drainMicrotasks();
     }
+    await drainMicrotasks();
   }
 
   await flush();
@@ -668,7 +711,9 @@ async function createHarness(seedName, options = {}) {
     const keys = [
       'mode-buttons', 'controls-menu', 'sandbox-ruleset-panel', 'party-social-view', 'friends-social-view', 'private-room-view',
       'party-roster-overlay', 'friends-overlay', 'social-tab-room-btn', 'mode-subtitle', 'menu-party-id-value', 'party-join-lock-note',
-      'party-roster-preview-shell',
+      'party-roster-preview-shell', 'party-join-lock-btn', 'view-party-btn', 'leave-party-btn',
+      'view-friends-btn', 'refresh-friends-btn', 'private-room-mode-ffa-btn', 'private-room-mode-tdm-btn',
+      'private-room-mode-lms-btn', 'private-room-randomize-btn', 'private-room-start-btn', 'private-room-summary',
       'room-access-status', 'party-status', 'friends-status', 'private-room-status'
     ];
     const dom = {};
@@ -782,6 +827,7 @@ async function createHarness(seedName, options = {}) {
     snapshot,
     actions,
     dispatchWindow,
+    privateRoomGetCount() { return backend.privateRoomGetCount; },
     gameplayPromptCount() { return gameplayPromptCount; },
     startGameplayCount() { return startGameplayCount; }
   };
@@ -798,7 +844,7 @@ async function traverseSeed(seedName) {
     if (seen.has(current.snapshot)) continue;
     seen.add(current.snapshot);
     visitedStates += 1;
-    if (visitedStates > 120) break;
+    if (visitedStates > MAX_VISITED_STATES_PER_SEED) break;
     const currentActions = current.harness.actions();
     for (let i = 0; i < currentActions.length; i++) {
       const nextHarness = await createHarness(seedName);
@@ -857,19 +903,96 @@ test('party preview shell remains visible when party data exists, including solo
   assert.equal(partySnapshot.dom['party-roster-preview-shell'].hidden, false);
 });
 
-test('silent party sync failures do not surface retry spam in the social panel', async () => {
+test('controller keeps leader lock and private-room controls interactive from a single state owner', async () => {
+  const leaderHarness = await createHarness('guest_idle');
+  let snap = JSON.parse(leaderHarness.snapshot());
+  assert.equal(snap.dom['party-join-lock-btn'].disabled, false);
+  assert.equal(snap.dom['view-party-btn'].disabled, true);
+  assert.equal(snap.dom['leave-party-btn'].disabled, true);
+  assert.equal(snap.dom['social-tab-room-btn'].hidden, true);
+
+  const toggleLock = leaderHarness.actions().find((action) => action.name === 'party-join-lock-btn');
+  assert.ok(toggleLock, 'Expected party lock action');
+  await toggleLock.run();
+
+  snap = JSON.parse(leaderHarness.snapshot());
+  assert.equal(snap.partyLocked, true);
+  assert.equal(snap.dom['party-join-lock-note'].text, 'JOINS LOCKED');
+  assert.equal(snap.dom['party-join-lock-btn'].disabled, false);
+
+  const hostHarness = await createHarness('account_private_room_host');
+  snap = JSON.parse(hostHarness.snapshot());
+  assert.equal(snap.dom['social-tab-room-btn'].hidden, false);
+  assert.equal(snap.dom['private-room-view'].hidden, false);
+  assert.equal(snap.dom['private-room-mode-ffa-btn'].disabled, false);
+  assert.equal(snap.dom['private-room-mode-tdm-btn'].disabled, false);
+  assert.equal(snap.dom['private-room-mode-lms-btn'].disabled, false);
+  assert.equal(snap.dom['private-room-randomize-btn'].disabled, false);
+  assert.equal(snap.dom['private-room-start-btn'].disabled, false);
+});
+
+test('silent party sync failures surface an offline state instead of collapsing to a blank shell', async () => {
   const harness = await createHarness('guest_idle', { failPartyGet: true, failFriendsGet: true });
   let snap = JSON.parse(harness.snapshot());
-  assert.equal(snap.dom['party-status'].text, '');
+  assert.match(snap.dom['party-status'].text, /PARTY .*RETRYING/);
   assert.equal(snap.dom['friends-status'].text, '');
-  assert.equal(snap.dom['party-roster-preview-shell'].hidden, true);
+  assert.equal(snap.dom['party-roster-preview-shell'].hidden, false);
 
   await harness.dispatchWindow('focus');
 
   snap = JSON.parse(harness.snapshot());
-  assert.equal(snap.dom['party-status'].text, '');
+  assert.match(snap.dom['party-status'].text, /PARTY .*RETRYING/);
   assert.equal(snap.dom['friends-status'].text, '');
-  assert.equal(snap.dom['party-roster-preview-shell'].hidden, true);
+  assert.equal(snap.dom['party-roster-preview-shell'].hidden, false);
+});
+
+test('silent private room sync failures keep the room surface visible and marked unavailable', async () => {
+  const harness = await createHarness('account_private_room_host', { failPrivateRoomGet: true });
+  let snap = JSON.parse(harness.snapshot());
+  assert.equal(snap.dom['social-tab-room-btn'].hidden, false);
+  assert.equal(snap.dom['private-room-view'].hidden, false);
+  assert.match(snap.dom['private-room-status'].text, /PRIVATE ROOM .*RETRYING/);
+
+  await harness.dispatchWindow('focus');
+
+  snap = JSON.parse(harness.snapshot());
+  assert.equal(snap.dom['social-tab-room-btn'].hidden, false);
+  assert.equal(snap.dom['private-room-view'].hidden, false);
+  assert.match(snap.dom['private-room-status'].text, /PRIVATE ROOM .*RETRYING/);
+});
+
+test('focus refresh does not double-fetch private room state', async () => {
+  const harness = await createHarness('account_private_room_host');
+  const initialCount = harness.privateRoomGetCount();
+
+  await harness.dispatchWindow('focus');
+
+  assert.equal(harness.privateRoomGetCount(), initialCount + 1);
+});
+
+test('party lock action reconciles stale post payloads against canonical party state', async () => {
+  const harness = await createHarness('account_friendable_party', { staleLockPostResponse: true });
+  const toggleLock = harness.actions().find((action) => action.name === 'party-join-lock-btn');
+  assert.ok(toggleLock, 'Expected party lock action');
+
+  await toggleLock.run();
+
+  const snap = JSON.parse(harness.snapshot());
+  assert.equal(snap.partyLocked, true);
+  assert.equal(snap.dom['party-join-lock-note'].text, 'JOINS LOCKED');
+  assert.equal(snap.dom['party-status'].text, 'Party locked.');
+});
+
+test('private room join reconciles stale post payloads against canonical room state', async () => {
+  const harness = await createHarness('guest_idle', { stalePrivateRoomJoinPostResponse: true });
+  const joinRoom = harness.actions().find((action) => action.name === 'join-room-filled');
+  assert.ok(joinRoom, 'Expected private room join action');
+
+  await joinRoom.run();
+
+  const snap = JSON.parse(harness.snapshot());
+  assert.equal(snap.privateRoom && snap.privateRoom.mode, 'tdm');
+  assert.match(snap.dom['private-room-summary'].text, /MODE TDM/);
 });
 
 test('sandbox launch preps the prompt and immediately starts gameplay when runtime is ready', async () => {

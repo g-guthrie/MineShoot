@@ -37,9 +37,9 @@ export const gameplayTuning = {
     ],
     machinegun: [
       { maxDistance: 16, scale: 1.0 },
-      { maxDistance: 30, scale: 0.92 },
-      { maxDistance: 48, scale: 0.78 },
-      { maxDistance: 72, scale: 0.64 }
+      { maxDistance: 30, scale: 0.95 },
+      { maxDistance: 48, scale: 0.84 },
+      { maxDistance: 72, scale: 0.7 }
     ],
     shotgun: [
       { maxDistance: 7, scale: 1.0 },
@@ -69,8 +69,8 @@ export const gameplayTuning = {
   },
   weaponStats: {
     rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 260,  reloadMs: 1550, magazineSize: 15, bodyDamage: 44,  headDamage: 104, maxRange: 110, pellets: 1,  hipfireSpread: 0.016, adsSpread: 0.0,   adsMaxRange: 132, aimProfile: { hipfire: { spread: 0.016, maxRange: 110 }, ads: { spread: 0.0,   maxRange: 132 } } },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 360,  reloadMs: 1350, magazineSize: 12, bodyDamage: 46,  headDamage: 132, maxRange: 54,  pellets: 1,  hipfireSpread: 0.024, adsSpread: 0.018, adsMaxRange: 60,  aimProfile: { hipfire: { spread: 0.024, maxRange: 54 },  ads: { spread: 0.018, maxRange: 60 } } },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   reloadMs: 2200, magazineSize: 40, bodyDamage: 15,  headDamage: 23,  maxRange: 58,  pellets: 1,  hipfireSpread: 0.046, adsSpread: 0.03,  adsMaxRange: 72,  aimProfile: { hipfire: { spread: 0.046, maxRange: 58 },  ads: { spread: 0.03,  maxRange: 72 } } },
+    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 360,  reloadMs: 1350, magazineSize: 12, bodyDamage: 46,  headDamage: 150, maxRange: 54,  pellets: 1,  hipfireSpread: 0.024, adsSpread: 0.018, adsMaxRange: 60,  aimProfile: { hipfire: { spread: 0.024, maxRange: 54 },  ads: { spread: 0.018, maxRange: 60 } } },
+    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   reloadMs: 1850, magazineSize: 40, bodyDamage: 15,  headDamage: 23,  maxRange: 58,  pellets: 1,  hipfireSpread: 0.046, adsSpread: 0.03,  adsMaxRange: 72,  aimProfile: { hipfire: { spread: 0.046, maxRange: 58 },  ads: { spread: 0.03,  maxRange: 72 } } },
     shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 1000, reloadMs: 1850, magazineSize: 6,  bodyDamage: 17,  headDamage: 25,  maxRange: 26,  pellets: 12, hipfireSpread: 0.19,  adsSpread: 0.16,  adsMaxRange: 26,  aimProfile: { hipfire: { spread: 0.19,  maxRange: 26 },  ads: { spread: 0.16,  maxRange: 26 } } },
     sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1450, reloadMs: 2100, magazineSize: 5,  bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1,  hipfireSpread: 0.32,  adsSpread: 0.0,   adsMaxRange: 160, aimProfile: { hipfire: { spread: 0.32,  maxRange: 160 }, ads: { spread: 0.0,   maxRange: 160 } }, infiniteRange: true },
   },
@@ -160,6 +160,18 @@ export function getWeaponStats(weaponId) {
   return gameplayTuning.weaponStats[weaponId] || null;
 }
 
+export function getWeaponFalloffProfile(weaponId) {
+  const profile = gameplayTuning.weaponFalloff[String(weaponId || '')];
+  if (!Array.isArray(profile) || profile.length === 0) return [];
+  return profile
+    .map((band) => ({
+      maxDistance: Number(band && band.maxDistance),
+      scale: Number(band && band.scale)
+    }))
+    .filter((band) => Number.isFinite(band.maxDistance) && band.maxDistance > 0 && Number.isFinite(band.scale))
+    .sort((a, b) => a.maxDistance - b.maxDistance);
+}
+
 export function resolveWeaponAimProfile(weaponStats, adsActive) {
   const stats = weaponStats || {};
   if (stats.infiniteRange) {
@@ -221,13 +233,64 @@ export function getAbilityCatalog() {
 }
 
 export function getDefaultAbilityLoadout() {
-  return gameplayTuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+  return gameplayTuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' };
+}
+
+function resolveAbilityChoice(requestedId, blockedId, fallbacks, catalogIds, catalog) {
+  const choices = [requestedId];
+  if (Array.isArray(fallbacks)) {
+    for (let i = 0; i < fallbacks.length; i++) {
+      choices.push(fallbacks[i]);
+    }
+  }
+  if (Array.isArray(catalogIds)) {
+    for (let i = 0; i < catalogIds.length; i++) {
+      choices.push(catalogIds[i]);
+    }
+  }
+
+  const blocked = String(blockedId || '');
+  for (let i = 0; i < choices.length; i++) {
+    const id = String(choices[i] || '');
+    if (!id || id === blocked || !catalog[id]) continue;
+    return id;
+  }
+  return '';
+}
+
+export function normalizeAbilityLoadout(slot1, slot2) {
+  const catalog = getAbilityCatalog();
+  const catalogIds = Object.keys(catalog);
+  const defaults = getDefaultAbilityLoadout() || {};
+  const normalizedSlot1 = resolveAbilityChoice(
+    slot1,
+    '',
+    [defaults.slot1, defaults.slot2],
+    catalogIds,
+    catalog
+  );
+  const normalizedSlot2 = resolveAbilityChoice(
+    slot2,
+    normalizedSlot1,
+    [defaults.slot2, defaults.slot1],
+    catalogIds,
+    catalog
+  );
+
+  return {
+    slot1: normalizedSlot1,
+    slot2: normalizedSlot2
+  };
 }
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
+runtime.GameShared.getWeaponStats = getWeaponStats;
+runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
 runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;
+runtime.GameShared.getDefaultAbilityLoadout = getDefaultAbilityLoadout;
+runtime.GameShared.normalizeAbilityLoadout = normalizeAbilityLoadout;
 runtime.GameShared.resolveWeaponAimProfile = resolveWeaponAimProfile;

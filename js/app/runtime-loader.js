@@ -62,7 +62,7 @@
 
     GameRuntimeLoader.loadDocsRuntime = function () {
         if (!docsPromise) {
-            docsPromise = import('./docs-runtime.js').then(function () {
+            docsPromise = import('../docs.js').then(function () {
                 if (runtime.GameDocs && runtime.GameDocs.init) {
                     runtime.GameDocs.init();
                 }

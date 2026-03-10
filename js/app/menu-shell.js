@@ -51,14 +51,6 @@
         }
     }
 
-    function roomCodeFromRoomId(roomId) {
-        var helper = runtime.GameShared && runtime.GameShared.privateRoomCodes;
-        if (helper && helper.privateRoomCodeFromId) {
-            return helper.privateRoomCodeFromId(roomId);
-        }
-        return String(roomId || '').toUpperCase();
-    }
-
     function isShareCodeRoomId(roomId) {
         return String(roomId || '').toLowerCase().indexOf('private-') === 0;
     }
@@ -67,7 +59,11 @@
         if (!mode || !mode.roomId) return '';
         var prefix = mode.gameMode ? String(mode.gameMode).toUpperCase() + ' ' : '';
         if (mode.id === 'single_cloudflare' && isShareCodeRoomId(mode.roomId)) {
-            return prefix + 'CODE ' + roomCodeFromRoomId(mode.roomId);
+            var roomCodeHelper = runtime.GameShared && runtime.GameShared.privateRoomCodes;
+            var roomCode = roomCodeHelper && roomCodeHelper.privateRoomCodeFromId
+                ? roomCodeHelper.privateRoomCodeFromId(mode.roomId)
+                : String(mode.roomId || '').toUpperCase();
+            return prefix + 'CODE ' + roomCode;
         }
         return prefix + 'ROOM ' + String(mode.roomId).toUpperCase();
     }

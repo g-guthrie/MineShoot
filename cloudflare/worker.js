@@ -6,11 +6,11 @@ import { handleFriends } from './server/friends.js';
 import { handleProfileMe, handleProfileUpdate, handlePublicProfile } from './server/profile.js';
 import { handleWsUpgrade } from './server/ws-upgrade.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
-import { getSharedTuningWu } from './lib/shared-tuning.js';
-import { getSharedProtocol } from './lib/shared-protocol.js';
+import { gameplayTuning } from '../shared/gameplay-tuning.js';
+import { protocol } from '../shared/protocol.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const SHARED_PROTOCOL = getSharedProtocol();
+const GAMEPLAY_TUNING_WU = gameplayTuning;
+const SHARED_PROTOCOL = protocol;
 const AUTH_PATH = SHARED_PROTOCOL.authPath || {};
 const PROFILE_PATH = SHARED_PROTOCOL.profilePath || {};
 const WS_PATH = SHARED_PROTOCOL.wsPath || '/api/ws';

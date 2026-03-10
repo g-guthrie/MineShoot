@@ -261,10 +261,13 @@
     }
 
     function updateEnemyAnimation(enemy, dt, engaging) {
-        if (enemy.rigApi && enemy.rigApi.updateLocomotion) {
+        if (enemy.rigApi && enemy.rigApi.updateAnimation) {
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
-            enemy.rigApi.updateAimPitch(engaging ? -0.05 : 0);
-            enemy.rigApi.updateLocomotion(speedNorm, speedNorm > 0.85, dt, false, {
+            enemy.rigApi.updateAnimation(dt, {
+                speedNorm: speedNorm,
+                sprinting: speedNorm > 0.85,
+                airborne: false,
+                aimPitch: engaging ? -0.05 : 0,
                 hooked: !!enemy.hookPullState || Number(enemy.justBeenHookedUntil || 0) > Date.now(),
                 choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
                 startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0,

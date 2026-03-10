@@ -1,13 +1,11 @@
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
-import { getSharedProtocol } from '../../lib/shared-protocol.js';
 import { nowMs } from '../transport.js';
 import { applyDistanceFalloffDamage } from '../sim/combat.js';
+import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
+import { protocol } from '../../../shared/protocol.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
+const WEAPON_FALLOFF = gameplayTuning.weaponFalloff || {};
 
-const SHARED_PROTOCOL = getSharedProtocol();
-const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
+const MSG_S2C = protocol.msg.s2c;
 
 export function applyWeaponFalloff(weaponId, baseDamage, distance) {
   const id = String(weaponId || '');
@@ -114,7 +112,7 @@ export function broadcastDeathRespawn(room, target) {
 }
 
 export function projectileDamageHit(room, projectile, target, hitType) {
-  const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
+  const THROWABLE_STATS = gameplayTuning.throwables;
   const def = THROWABLE_STATS[projectile.type];
   if (!def || !target) return;
   const owner = room.getEntityById(projectile.ownerId);
@@ -135,7 +133,7 @@ export function projectileDamageHit(room, projectile, target, hitType) {
 }
 
 export function explodeProjectile(room, projectile, x, y, z) {
-  const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
+  const THROWABLE_STATS = gameplayTuning.throwables;
   const def = THROWABLE_STATS[projectile.type];
   if (!def) return;
   if (projectile.type === 'molotov') {

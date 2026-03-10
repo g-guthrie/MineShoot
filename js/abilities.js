@@ -7,7 +7,9 @@
 
     var GameAbilities = {};
 
-    var DEFAULT_ABILITY_LOADOUT = { slot1: 'choke', slot2: 'deadeye' };
+    var DEFAULT_ABILITY_LOADOUT = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.getDefaultAbilityLoadout)
+        ? globalThis.__MAYHEM_RUNTIME.GameShared.getDefaultAbilityLoadout()
+        : { slot1: 'choke', slot2: 'missile' };
     var abilityLoadout = cloneLoadout(DEFAULT_ABILITY_LOADOUT);
     var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
     var deadeyeState = null;
@@ -75,6 +77,14 @@
             slot1: loadout && loadout.slot1 ? loadout.slot1 : DEFAULT_ABILITY_LOADOUT.slot1,
             slot2: loadout && loadout.slot2 ? loadout.slot2 : DEFAULT_ABILITY_LOADOUT.slot2
         };
+    }
+
+    function normalizedLoadout(slot1, slot2) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || null;
+        if (shared && typeof shared.normalizeAbilityLoadout === 'function') {
+            return shared.normalizeAbilityLoadout(slot1, slot2);
+        }
+        return cloneLoadout({ slot1: slot1, slot2: slot2 });
     }
 
     function slotKeyForIndex(slotIndex) {
@@ -181,6 +191,104 @@
         applyNumericOverrides(out, getClassAbilityTuning(), abilityTuningFields[id]);
 
         return out;
+    }
+
+    function plainVec3(v) {
+        if (!v) return null;
+        var x = Number(v.x);
+        var y = Number(v.y);
+        var z = Number(v.z);
+        if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+        return { x: x, y: y, z: z };
+    }
+
+    function aimPointFromCenterTarget(camera) {
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget) {
+            return null;
+        }
+        var aim = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, 90);
+        return aim && aim.point ? plainVec3(aim.point) : null;
+    }
+
+    function prepareNetChokeCast(slotIndex, camera) {
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
+        if (!cfg) return { ok: false, message: 'Choke not configured.' };
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect) {
+            return { ok: false, message: 'Choke targeting unavailable.' };
+        }
+        var chokeRect = getChokeRectSize(camera, cfg);
+        var chokeTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect(
+            camera,
+            Number(cfg.range || 24),
+            chokeRect.width,
+            chokeRect.height,
+            { ownerType: 'net' }
+        );
+        if (!chokeTarget || !chokeTarget.targetId || String(chokeTarget.targetId).indexOf('net:') !== 0) {
+            return { ok: false, message: 'No target for Force Choke.' };
+        }
+        return {
+            ok: true,
+            castData: {
+                lockTargetId: String(chokeTarget.targetId).slice(4),
+                aimPoint: plainVec3(chokeTarget.worldPos)
+            }
+        };
+    }
+
+    function prepareNetHookCast(slotIndex, camera) {
+        var cfg = getConfigForAbility(getAbilityIdForSlot(slotIndex));
+        if (!cfg) return { ok: false, message: 'Hook not configured.' };
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameHitscan || !globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
+            return { ok: false, message: 'Hook targeting unavailable.' };
+        }
+        var hookTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(
+            camera,
+            Number(cfg.range || 24),
+            Math.max(2, Number(cfg.reticleRadiusPx || 52) * 2),
+            { ownerType: 'net' }
+        );
+        return {
+            ok: true,
+            castData: hookTarget && hookTarget.worldPos
+                ? { aimPoint: plainVec3(hookTarget.worldPos) }
+                : null
+        };
+    }
+
+    function prepareNetMissileCast(_slotIndex, camera) {
+        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameThrowables || !globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile) {
+            return { ok: false, message: 'Missile launch unavailable.' };
+        }
+        var projectileIntent = globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile(camera, {
+            predictLocal: false,
+            abilityId: 'missile'
+        });
+        return {
+            ok: true,
+            castData: projectileIntent ? {
+                aimPoint: plainVec3(projectileIntent.aimPoint),
+                projectileIntent: projectileIntent
+            } : null,
+            commit: function () {
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction) {
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction('fire');
+                }
+                if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play && document.hasFocus()) {
+                    globalThis.__MAYHEM_RUNTIME.GameAudio.play('fire', { weapon: 'missile' });
+                }
+            }
+        };
+    }
+
+    function prepareNetGenericCast(camera) {
+        return {
+            ok: true,
+            castData: (function () {
+                var aimPoint = aimPointFromCenterTarget(camera);
+                return aimPoint ? { aimPoint: aimPoint } : null;
+            })()
+        };
     }
 
     function makeVector3Like(v) {
@@ -421,8 +529,8 @@
                 liftHeight: Number(cfg.liftHeight || 1.0)
             };
         }
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerChokeGripPose(cfg.duration || 1.6);
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction('choke_grip', { duration: cfg.duration || 1.6 });
         }
         setCooldownForSlot(slotIndex, debugMode ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
         if (chokeResult && onEnemyHit) {
@@ -554,8 +662,8 @@
             abilityId: 'missile'
         });
         if (!ok) return { ok: false, message: 'Missile launch failed.' };
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction('fire');
         }
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('fire', { weapon: 'missile' });
@@ -578,7 +686,7 @@
 
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
         if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
-            abilityLoadout = cloneLoadout(shared.defaultAbilityLoadout);
+            abilityLoadout = normalizedLoadout(shared.defaultAbilityLoadout.slot1, shared.defaultAbilityLoadout.slot2);
         }
     };
 
@@ -612,18 +720,9 @@
             return GameAbilities.getLoadout();
         }
         var ownKey = slotKeyForIndex(slotIndex);
-        var otherKey = ownKey === 'slot1' ? 'slot2' : 'slot1';
-        abilityLoadout[ownKey] = id;
-        if (abilityLoadout[otherKey] === id) {
-            var replacement = '';
-            for (var catalogId in catalog) {
-                if (!Object.prototype.hasOwnProperty.call(catalog, catalogId)) continue;
-                if (catalogId === id) continue;
-                replacement = catalogId;
-                break;
-            }
-            abilityLoadout[otherKey] = replacement;
-        }
+        var nextSlot1 = ownKey === 'slot1' ? id : abilityLoadout.slot1;
+        var nextSlot2 = ownKey === 'slot2' ? id : abilityLoadout.slot2;
+        abilityLoadout = normalizedLoadout(nextSlot1, nextSlot2);
         hasExplicitLoadoutSelection = true;
         resetAbilityRuntimeState();
         return buildLoadoutState();
@@ -633,12 +732,11 @@
         var catalog = getCatalog();
         var firstId = slot1OrActive && catalog[slot1OrActive] ? slot1OrActive : '';
         var secondId = slot2 && catalog[slot2] ? slot2 : '';
-        if (firstId && secondId) {
-            abilityLoadout.slot1 = firstId;
-            abilityLoadout.slot2 = secondId;
-            hasExplicitLoadoutSelection = true;
-        } else if (firstId) {
-            abilityLoadout.slot1 = firstId;
+        if (firstId || secondId) {
+            abilityLoadout = normalizedLoadout(
+                firstId || abilityLoadout.slot1,
+                secondId || abilityLoadout.slot2
+            );
             hasExplicitLoadoutSelection = true;
         }
         resetAbilityRuntimeState();
@@ -707,6 +805,40 @@
             return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
         return handler(Number(slot) === 2 ? 2 : 1, camera, _playerPos, _rotation, onEnemyHit, notifier);
+    };
+
+    GameAbilities.prepareNetCast = function (slot, camera) {
+        var castSlot = Number(slot) === 2 ? 2 : 1;
+        var abilityId = getAbilityIdForSlot(castSlot);
+        if (!abilityId) return { ok: false, message: 'Unknown ability: ' + abilityId };
+
+        var prepared = null;
+        if (abilityId === 'choke') {
+            prepared = prepareNetChokeCast(castSlot, camera);
+        } else if (abilityId === 'hook') {
+            prepared = prepareNetHookCast(castSlot, camera);
+        } else if (abilityId === 'missile') {
+            prepared = prepareNetMissileCast(castSlot, camera);
+        } else {
+            prepared = prepareNetGenericCast(camera);
+        }
+
+        if (!prepared || prepared.ok === false) {
+            return {
+                ok: false,
+                slot: castSlot,
+                abilityId: abilityId,
+                message: prepared && prepared.message ? prepared.message : ('Unable to prepare cast for ' + abilityId + '.')
+            };
+        }
+
+        return {
+            ok: true,
+            slot: castSlot,
+            abilityId: abilityId,
+            castData: prepared.castData || null,
+            commit: typeof prepared.commit === 'function' ? prepared.commit : null
+        };
     };
 
     GameAbilities.update = function (_dt, camera, _playerPos, _rotation, onEnemyHit, notifier) {

@@ -22,11 +22,24 @@
         return 90;
     }
 
+    function sharedClassPreset(classId) {
+        var shared = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
+        var presets = shared.classPresets || {};
+        return presets[classId] || presets.abilities || null;
+    }
+
     function classStats(classId) {
-        var defs = {
-            abilities: { armorMax: 90, wallhackRadius: classWallhackRadiusFor('abilities') }
+        var preset = sharedClassPreset(classId);
+        return {
+            armorMax: preset && Number(preset.armorMax || 0) > 0 ? Number(preset.armorMax) : 90,
+            wallhackRadius: preset && Number(preset.wallhackRadius || 0) > 0
+                ? Number(preset.wallhackRadius)
+                : classWallhackRadiusFor(classId)
         };
-        return defs[classId] || defs.abilities;
+    }
+
+    function readAbilityFx(entity) {
+        return (entity && entity.abilityFx && typeof entity.abilityFx === 'object') ? entity.abilityFx : null;
     }
 
     function createRemoteVisual(entity) {
@@ -65,6 +78,7 @@
         sceneRef.add(group);
         hitboxArray.push(bodyHitbox);
         hitboxArray.push(headHitbox);
+        var abilityFx = readAbilityFx(entity);
 
         return {
             id: entity.id,
@@ -91,15 +105,23 @@
             wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
+            isGrounded: entity.isGrounded !== false,
+            velocityY: Number(entity.velocityY || 0),
+            _prevIsGrounded: entity.isGrounded !== false,
             weaponId: entity.weaponId || 'rifle',
+            _appliedWeaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
-            chokeVictimState: entity.chokeVictimState || null,
-            justBeenHookedState: entity.justBeenHookedState || null,
+            chokeVictimState: abilityFx ? (abilityFx.chokeVictim || null) : null,
+            hookedUntil: abilityFx ? Number(abilityFx.hookedUntil || 0) : 0,
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
-            hookState: entity.hookState || null,
-            hookPullState: entity.hookPullState || null,
-            healState: entity.healState || null
+            hookState: abilityFx ? (abilityFx.hookVisual || null) : null,
+            chokeState: abilityFx && Number(abilityFx.chokeCasterUntil || 0) > 0
+                ? { endsAt: Number(abilityFx.chokeCasterUntil || 0) }
+                : null,
+            healState: abilityFx && Number(abilityFx.healUntil || 0) > 0
+                ? { endsAt: Number(abilityFx.healUntil || 0) }
+                : null
         };
     }
 
@@ -154,16 +176,22 @@
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
+        r.isGrounded = entity.isGrounded !== false;
+        r.velocityY = Number(entity.velocityY || 0);
         r.weaponId = entity.weaponId || 'rifle';
         r.streamHeat = entity.streamHeat || 0;
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
-        r.chokeState = entity.chokeState || null;
-        r.chokeVictimState = entity.chokeVictimState || null;
-        r.justBeenHookedState = entity.justBeenHookedState || null;
-        r.hookState = entity.hookState || null;
-        r.hookPullState = entity.hookPullState || null;
-        r.healState = entity.healState || null;
+        var abilityFx = readAbilityFx(entity);
+        r.chokeState = abilityFx && Number(abilityFx.chokeCasterUntil || 0) > 0
+            ? { endsAt: Number(abilityFx.chokeCasterUntil || 0) }
+            : null;
+        r.chokeVictimState = abilityFx ? (abilityFx.chokeVictim || null) : null;
+        r.hookedUntil = abilityFx ? Number(abilityFx.hookedUntil || 0) : 0;
+        r.hookState = abilityFx ? (abilityFx.hookVisual || null) : null;
+        r.healState = abilityFx && Number(abilityFx.healUntil || 0) > 0
+            ? { endsAt: Number(abilityFx.healUntil || 0) }
+            : null;
         r.abilityLoadout = entity.abilityLoadout || null;
 
         r.group.visible = !!entity.alive;

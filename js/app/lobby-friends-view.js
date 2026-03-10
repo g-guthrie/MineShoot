@@ -176,21 +176,16 @@
         function applyFriendsState(nextState) {
             ctx.setState(normalizeFriendsState(nextState));
             var friendsState = ctx.getState();
-            if (ctx.viewFriendsBtn) ctx.viewFriendsBtn.disabled = !ctx.isLoggedIn();
-            if (ctx.refreshFriendsBtn) ctx.refreshFriendsBtn.disabled = !ctx.isLoggedIn();
             if (!ctx.isLoggedIn()) {
                 setFriendsPreviewEmpty('Log in to save friends.');
                 renderFriendsModal();
                 ctx.updateSocialSubtitle();
-                ctx.applyPartyState(ctx.getPartyState());
                 return;
             }
             if (!friendsState.friends.length) {
                 setFriendsPreviewEmpty('No friends saved. Add party members with + FRIEND.');
                 renderFriendsModal();
                 ctx.updateSocialSubtitle();
-                ctx.applyPartyState(ctx.getPartyState());
-                ctx.syncDynamicActionDisabled();
                 return;
             }
             if (ctx.friendsPreview) {
@@ -208,27 +203,22 @@
             }
             renderFriendsModal();
             ctx.updateSocialSubtitle();
-            ctx.applyPartyState(ctx.getPartyState());
-            ctx.syncDynamicActionDisabled();
         }
 
-        function setUnavailable(message, err) {
+        function setUnavailable(message) {
             if (!ctx.isLoggedIn()) {
                 applyFriendsState(null);
                 return;
             }
-            ctx.setState(null);
-            setFriendsPreviewEmpty('Friends service unavailable. Retrying...');
-            if (ctx.friendsModalContent) {
-                ctx.friendsModalContent.textContent = 'FRIENDS SERVICE UNAVAILABLE. RETRYING...';
+            if (ctx.getState() && Array.isArray(ctx.getState().friends) && ctx.getState().friends.length) {
+                applyFriendsState(ctx.getState());
+                return;
             }
-            if (ctx.viewFriendsBtn) ctx.viewFriendsBtn.disabled = false;
-            if (ctx.refreshFriendsBtn) ctx.refreshFriendsBtn.disabled = false;
-            ctx.setStatus(message, true);
+            setFriendsPreviewEmpty(message || 'Friends service unavailable. Retrying...');
+            if (ctx.friendsModalContent) {
+                ctx.friendsModalContent.textContent = String(message || 'Friends service unavailable. Retrying...').toUpperCase();
+            }
             ctx.updateSocialSubtitle();
-            ctx.applyPartyState(ctx.getPartyState());
-            ctx.syncDynamicActionDisabled();
-            ctx.logSyncError('friends', err);
         }
 
         return {

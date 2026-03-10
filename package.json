@@ -1,7 +1,6 @@
 {
   "name": "mineshoot",
   "version": "1.0.0",
-  "main": "index.js",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "vite": "^6.4.1",
@@ -12,6 +11,8 @@
     "dev:frontend": "vite --host 127.0.0.1 --port 3000",
     "dev:frontend:test": "./scripts/e2e-frontend.sh",
     "dev:e2e:worker": "./scripts/e2e-worker.sh",
+    "blender:check": "zsh -lic 'Blender --version'",
+    "blender:export": "./scripts/blender-export.sh",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "test:smoke": "node --experimental-default-type=module --test tests/*.test.js",

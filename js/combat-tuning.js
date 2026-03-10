@@ -1,5 +1,5 @@
 /**
- * combat-tuning.js - Canonical combat distance tuning (meters/world-units)
+ * combat-tuning.js - Compatibility combat tuning facade over shared tuning.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameCombatTuning
  */
 (function () {
@@ -42,46 +42,6 @@
             headshotNearRange: 12,
             headshotMidRange: 22,
             defaultWallhackRadius: 90
-        },
-        weapons: {
-            rifle: 110,
-            pistol: 54,
-            machinegun: 58,
-            shotgun: 26,
-            sniper: 99999,
-            missile: 34
-        },
-        weaponFalloff: {
-            rifle: [
-                { maxDistance: 32, scale: 1.0 },
-                { maxDistance: 58, scale: 0.95 },
-                { maxDistance: 90, scale: 0.86 },
-                { maxDistance: 120, scale: 0.76 }
-            ],
-            pistol: [
-                { maxDistance: 16, scale: 1.0 },
-                { maxDistance: 28, scale: 0.88 },
-                { maxDistance: 42, scale: 0.72 },
-                { maxDistance: 54, scale: 0.56 }
-            ],
-            machinegun: [
-                { maxDistance: 16, scale: 1.0 },
-                { maxDistance: 30, scale: 0.92 },
-                { maxDistance: 48, scale: 0.78 },
-                { maxDistance: 72, scale: 0.64 }
-            ],
-            shotgun: [
-                { maxDistance: 7, scale: 1.0 },
-                { maxDistance: 12, scale: 0.8 },
-                { maxDistance: 18, scale: 0.55 },
-                { maxDistance: 26, scale: 0.28 }
-            ],
-            sniper: [
-                { maxDistance: 99999, scale: 1.0 }
-            ],
-            missile: [
-                { maxDistance: 34, scale: 1.0 }
-            ]
         },
         throwables: {
             fragRadius: 6.8,
@@ -153,7 +113,6 @@
         var shared = sharedTuning();
         if (!shared) return deepCopy(DEFAULTS);
 
-        var weapons = shared.weaponStats || {};
         var throwables = shared.throwables || {};
         var classPresets = shared.classPresets || {};
         var catalog = shared.abilityCatalog || {};
@@ -165,15 +124,6 @@
         return {
             awareness: shared.awareness || deepCopy(DEFAULTS.awareness),
             enemy: shared.enemy || deepCopy(DEFAULTS.enemy),
-            weapons: {
-                rifle: Number(weapons.rifle && weapons.rifle.maxRange) || DEFAULTS.weapons.rifle,
-                pistol: Number(weapons.pistol && weapons.pistol.maxRange) || DEFAULTS.weapons.pistol,
-                machinegun: Number(weapons.machinegun && weapons.machinegun.maxRange) || DEFAULTS.weapons.machinegun,
-                shotgun: Number(weapons.shotgun && weapons.shotgun.maxRange) || DEFAULTS.weapons.shotgun,
-                sniper: Number(weapons.sniper && weapons.sniper.maxRange) || DEFAULTS.weapons.sniper,
-                missile: DEFAULTS.weapons.missile
-            },
-            weaponFalloff: shared.weaponFalloff || deepCopy(DEFAULTS.weaponFalloff),
             throwables: {
                 fragRadius: Number(throwables.frag && throwables.frag.radius) || DEFAULTS.throwables.fragRadius,
                 plasmaRadius: Number(throwables.plasma && throwables.plasma.radius) || DEFAULTS.throwables.plasmaRadius,
@@ -274,17 +224,17 @@
     };
 
     GameCombatTuning.getWeaponRange = function (weaponId) {
-        var meters = BASE.weapons[weaponId];
-        if (typeof meters !== 'number') return 0;
-        return meters;
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var stats = shared.getWeaponStats ? shared.getWeaponStats(weaponId) : null;
+        return Math.max(0, Number(stats && stats.maxRange || 0));
     };
 
     GameCombatTuning.getWeaponFalloffTuning = function (weaponId) {
-        var id = String(weaponId || '');
-        var sharedMap = BASE.weaponFalloff || {};
-        var fallbackMap = DEFAULTS.weaponFalloff || {};
-        var profile = sharedMap[id] || fallbackMap[id] || [];
-        return normalizeFalloffBands(profile);
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        if (shared.getWeaponFalloffProfile) {
+            return normalizeFalloffBands(shared.getWeaponFalloffProfile(weaponId));
+        }
+        return [];
     };
 
     GameCombatTuning.getThrowableDistanceTuning = function () {
@@ -329,25 +279,20 @@
     };
 
     GameCombatTuning.debugDump = function () {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var weaponIds = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : [];
+        var weaponRanges = {};
+        var weaponFalloff = {};
+        for (var i = 0; i < weaponIds.length; i++) {
+            var weaponId = String(weaponIds[i] || '');
+            weaponRanges[weaponId] = GameCombatTuning.getWeaponRange(weaponId);
+            weaponFalloff[weaponId] = GameCombatTuning.getWeaponFalloffTuning(weaponId);
+        }
         return {
             awareness: GameCombatTuning.getAwarenessTuning(),
             enemy: GameCombatTuning.getEnemyTuning(),
-            weaponRanges: {
-                rifle: GameCombatTuning.getWeaponRange('rifle'),
-                pistol: GameCombatTuning.getWeaponRange('pistol'),
-                machinegun: GameCombatTuning.getWeaponRange('machinegun'),
-                shotgun: GameCombatTuning.getWeaponRange('shotgun'),
-                sniper: GameCombatTuning.getWeaponRange('sniper'),
-                missile: GameCombatTuning.getWeaponRange('missile')
-            },
-            weaponFalloff: {
-                rifle: GameCombatTuning.getWeaponFalloffTuning('rifle'),
-                pistol: GameCombatTuning.getWeaponFalloffTuning('pistol'),
-                machinegun: GameCombatTuning.getWeaponFalloffTuning('machinegun'),
-                shotgun: GameCombatTuning.getWeaponFalloffTuning('shotgun'),
-                sniper: GameCombatTuning.getWeaponFalloffTuning('sniper'),
-                missile: GameCombatTuning.getWeaponFalloffTuning('missile')
-            },
+            weaponRanges: weaponRanges,
+            weaponFalloff: weaponFalloff,
             throwables: GameCombatTuning.getThrowableDistanceTuning(),
             classWallhackRadius: {
                 abilities: GameCombatTuning.getClassWallhackRadius('abilities')

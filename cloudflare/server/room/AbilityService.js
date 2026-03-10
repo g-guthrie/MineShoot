@@ -1,19 +1,17 @@
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
-import { getSharedProtocol } from '../../lib/shared-protocol.js';
 import { nowMs } from '../transport.js';
 import { buildDeadeyeState } from '../sim/abilities.js';
+import { gameplayTuning, getDefaultAbilityLoadout } from '../../../shared/gameplay-tuning.js';
+import { normalizeClassCastPayload, protocol } from '../../../shared/protocol.js';
 import {
   applyDamageFromSource,
   broadcastDamageEvent,
   broadcastDeathRespawn
 } from './CombatService.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const ABILITY_CATALOG = gameplayTuning.abilityCatalog || {};
+const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 
-const SHARED_PROTOCOL = getSharedProtocol();
-const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
+const MSG_S2C = protocol.msg.s2c;
 
 function hookHeadPosition(state, now) {
   if (!state || !state.startPos || !state.endPos) return null;
@@ -229,11 +227,12 @@ export function castAbility(room, player, abilityId, cfg, msg, now) {
 
 export function handleClassCast(room, player, msg, ws) {
   if (!player || !player.alive) return;
+  const normalizedMsg = normalizeClassCastPayload(msg && msg.slot, msg);
   if (room && typeof room.canEntityUseAbility === 'function' && !room.canEntityUseAbility(player)) {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', slot: Number(msg && msg.slot || 0), classId: 'abilities' });
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', slot: Number(normalizedMsg.slot || 0), classId: 'abilities' });
     return;
   }
-  const slot = Number(msg.slot || 0);
+  const slot = Number(normalizedMsg.slot || 0);
   if (slot !== 1 && slot !== 2) return;
   const now = nowMs();
 
@@ -265,7 +264,7 @@ export function handleClassCast(room, player, msg, ws) {
     return;
   }
 
-  const result = castAbility(room, player, abilityId, cfg, msg, now);
+  const result = castAbility(room, player, abilityId, cfg, normalizedMsg, now);
   if (result.ok) {
     const cooldownUntil = now + Math.max(0, cfg.cooldownMs || 0);
     if (slot === 2) {

@@ -352,9 +352,9 @@
             'ABILITY LOADOUT        = shared by all players',
             '',
             'Distance/range values are normalized in world units',
-            'through js/combat-tuning.js (single tuning source).',
-            'Weapon, enemy, radar, ability, and throwable range values',
-            'should be adjusted there before per-module fine tuning.'
+            'through shared/gameplay-tuning.js (single gameplay source).',
+            'Compatibility readers like js/combat-tuning.js should mirror',
+            'shared values instead of redefining weapon numbers.'
         ].join('\n');
     }
 

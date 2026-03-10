@@ -35,8 +35,8 @@
     var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
     var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
 
-    var combatTuning = globalThis.__MAYHEM_RUNTIME.GameCombatTuning;
-    var sharedTuning = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
+    var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+    var sharedTuning = shared.gameplayTuning || {};
     var sharedWeaponStats = sharedTuning.weaponStats || {};
 
     function resolveWeaponAimProfileLocal(weaponStats, adsActive) {
@@ -58,10 +58,9 @@
 
     function buildWeaponFromShared(id) {
         var s = sharedWeaponStats[id] || {};
-        var baseRange = (combatTuning && combatTuning.getWeaponRange) ? combatTuning.getWeaponRange(id) : (s.maxRange || 0);
         var hipAim = resolveWeaponAimProfileLocal({
             hipfireSpread: Number(s.hipfireSpread || 0),
-            maxRange: baseRange,
+            maxRange: Number(s.maxRange || 0),
             adsSpread: s.adsSpread,
             adsMaxRange: s.adsMaxRange,
             adsSpreadMultiplier: s.adsSpreadMultiplier,
@@ -71,7 +70,7 @@
         }, false);
         var adsAim = resolveWeaponAimProfileLocal({
             hipfireSpread: Number(s.hipfireSpread || 0),
-            maxRange: baseRange,
+            maxRange: Number(s.maxRange || 0),
             adsSpread: s.adsSpread,
             adsMaxRange: s.adsMaxRange,
             adsSpreadMultiplier: s.adsSpreadMultiplier,
@@ -101,7 +100,28 @@
         };
     }
 
-    var weaponCatalogOrder = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
+    function selectableWeaponIds() {
+        if (shared.getSelectableWeaponIds) {
+            return shared.getSelectableWeaponIds().filter(function (id) {
+                return !!sharedWeaponStats[String(id || '')];
+            });
+        }
+        var ids = [];
+        for (var id in sharedWeaponStats) {
+            if (Object.prototype.hasOwnProperty.call(sharedWeaponStats, id)) ids.push(id);
+        }
+        return ids;
+    }
+
+    function weaponFalloffProfile(weaponId) {
+        if (shared.getWeaponFalloffProfile) {
+            return shared.getWeaponFalloffProfile(weaponId);
+        }
+        var profile = sharedTuning.weaponFalloff && sharedTuning.weaponFalloff[String(weaponId || '')];
+        return Array.isArray(profile) ? profile.slice() : [];
+    }
+
+    var weaponCatalogOrder = selectableWeaponIds();
     var weaponOrder = weaponCatalogOrder.slice();
     var weapons = {};
     for (var wi = 0; wi < weaponCatalogOrder.length; wi++) {
@@ -111,12 +131,10 @@
     var weaponFalloffTuning = {};
     for (var fi = 0; fi < weaponCatalogOrder.length; fi++) {
         var fid = weaponCatalogOrder[fi];
-        weaponFalloffTuning[fid] = (combatTuning && combatTuning.getWeaponFalloffTuning)
-            ? combatTuning.getWeaponFalloffTuning(fid)
-            : ((sharedTuning.weaponFalloff && sharedTuning.weaponFalloff[fid]) || []);
+        weaponFalloffTuning[fid] = weaponFalloffProfile(fid);
     }
 
-    var currentWeaponId = 'rifle';
+    var currentWeaponId = weaponOrder[0] || 'rifle';
     var lastFireTime = 0;
     var weaponAmmoState = {};
     var RELOADED_FLASH_MS = 900;
@@ -895,11 +913,7 @@
     };
 
     GameHitscan.getAllWeaponIds = function () {
-        var ids = [];
-        for (var key in weapons) {
-            if (Object.prototype.hasOwnProperty.call(weapons, key)) ids.push(key);
-        }
-        return ids;
+        return weaponCatalogOrder.slice();
     };
 
     GameHitscan.getHeadDamage = function () {

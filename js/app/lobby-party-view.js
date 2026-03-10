@@ -8,6 +8,10 @@
     var GameLobbyPartyView = {};
 
     GameLobbyPartyView.create = function (ctx) {
+        function currentState() {
+            return ctx.getState();
+        }
+
         function setPartyPreviewVisible(visible) {
             if (ctx.partyRosterPreviewShell) {
                 ctx.partyRosterPreviewShell.hidden = !visible;
@@ -24,7 +28,7 @@
         }
 
         function renderPartyRosterModal() {
-            var partyState = ctx.getState();
+            var partyState = currentState();
             if (!ctx.partyRosterModalContent) return;
             if (!partyState || !partyState.party || !Array.isArray(partyState.party.members)) {
                 ctx.partyRosterModalContent.textContent = 'NO PARTY DATA';
@@ -75,26 +79,14 @@
 
         function applyPartyState(nextState) {
             ctx.setState(nextState || null);
-            var partyState = ctx.getState();
+            var partyState = currentState();
             if (!partyState || !partyState.party) {
                 setPartyPreviewVisible(false);
                 setPartyPreviewEmpty('Party link standby.');
-                if (ctx.viewPartyBtn) ctx.viewPartyBtn.disabled = true;
-                if (ctx.leavePartyBtn) ctx.leavePartyBtn.disabled = true;
-                if (ctx.partyJoinLockBtn) {
-                    ctx.partyJoinLockBtn.disabled = true;
-                    ctx.partyJoinLockBtn.classList.remove('locked');
-                    ctx.partyJoinLockBtn.setAttribute('aria-pressed', 'false');
-                    ctx.partyJoinLockBtn.title = 'Party join lock unavailable.';
-                }
-                if (ctx.partyJoinLockIcon) ctx.partyJoinLockIcon.textContent = '[_/]';
-                if (ctx.partyJoinLockNote) ctx.partyJoinLockNote.textContent = 'JOINS OPEN';
-                ctx.syncDynamicActionDisabled();
                 return;
             }
 
-            var party = partyState.party;
-            var members = Array.isArray(party.members) ? party.members : [];
+            var members = Array.isArray(partyState.party.members) ? partyState.party.members : [];
             var shouldShowPreview = true;
             setPartyPreviewVisible(shouldShowPreview);
             if (ctx.partyRosterPreview && shouldShowPreview) {
@@ -153,45 +145,20 @@
                 ctx.partyRosterPreview.innerHTML = '';
             }
 
-            if (ctx.partyJoinLockBtn) {
-                var isLocked = !!party.joinLocked;
-                ctx.partyJoinLockBtn.disabled = !party.isLeader;
-                ctx.partyJoinLockBtn.classList.toggle('locked', isLocked);
-                ctx.partyJoinLockBtn.setAttribute('aria-pressed', isLocked ? 'true' : 'false');
-                ctx.partyJoinLockBtn.title = party.isLeader
-                    ? (isLocked ? 'Unlock party joins.' : 'Lock party joins.')
-                    : 'Only the party lead can change join lock.';
-                if (ctx.partyJoinLockIcon) ctx.partyJoinLockIcon.textContent = isLocked ? '[###]' : '[_/]';
-                if (ctx.partyJoinLockNote) {
-                    ctx.partyJoinLockNote.textContent = party.isLeader
-                        ? (isLocked ? 'JOINS LOCKED' : 'JOINS OPEN')
-                        : 'LEAD ONLY';
-                }
-            }
-
-            if (ctx.viewPartyBtn) ctx.viewPartyBtn.disabled = members.length <= 1;
-            if (ctx.leavePartyBtn) ctx.leavePartyBtn.disabled = members.length <= 1;
             renderPartyRosterModal();
-            ctx.syncDynamicActionDisabled();
         }
 
-        function setUnavailable(message, err) {
-            ctx.setState(null);
-            setPartyPreviewVisible(false);
-            setPartyPreviewEmpty('Party service unavailable. Retrying...');
-            if (ctx.viewPartyBtn) ctx.viewPartyBtn.disabled = true;
-            if (ctx.leavePartyBtn) ctx.leavePartyBtn.disabled = true;
-            if (ctx.partyJoinLockBtn) {
-                ctx.partyJoinLockBtn.disabled = true;
-                ctx.partyJoinLockBtn.classList.remove('locked');
-                ctx.partyJoinLockBtn.setAttribute('aria-pressed', 'false');
-                ctx.partyJoinLockBtn.title = 'Party service unavailable.';
+        function setUnavailable(message) {
+            var partyState = currentState();
+            if (partyState && partyState.party) {
+                applyPartyState(partyState);
+                return;
             }
-            if (ctx.partyJoinLockIcon) ctx.partyJoinLockIcon.textContent = '[_/]';
-            if (ctx.partyJoinLockNote) ctx.partyJoinLockNote.textContent = 'SERVICE OFFLINE';
-            ctx.setStatus(message, true);
-            ctx.syncDynamicActionDisabled();
-            ctx.logSyncError('party', err);
+            setPartyPreviewVisible(true);
+            setPartyPreviewEmpty(message || 'Party service unavailable. Retrying...');
+            if (ctx.partyRosterModalContent) {
+                ctx.partyRosterModalContent.textContent = String(message || 'Party service unavailable. Retrying...').toUpperCase();
+            }
         }
 
         return {

@@ -65,32 +65,48 @@
             r.group.rotation.y += deltaYaw * lerp;
 
             if (r.rigApi) {
-                r.rigApi.setWeapon(r.weaponId || 'rifle');
-                r.rigApi.updateAimPitch(r.targetPitch || 0);
+                var nextWeaponId = r.weaponId || 'rifle';
+                if (r._appliedWeaponId !== nextWeaponId) {
+                    r.rigApi.setWeapon(nextWeaponId);
+                    r._appliedWeaponId = nextWeaponId;
+                }
                 var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
-                var hookedNow = !!r.hookPullState || !!(r.justBeenHookedState && r.justBeenHookedState.endsAt > Date.now());
-                r.rigApi.updateLocomotion(r.moveSpeedNorm || 0, !!r.sprinting, dt, false, {
-                    hooked: hookedNow,
-                    choked: chokeVictimState.lift > 0,
-                    startedAt: chokeVictimState.startedAt || 0,
-                    worldSpeed: (r.moveSpeedNorm || 0) * 14,
-                    movingForward: (r.moveSpeedNorm || 0) > 0.05
-                });
+                var hookedNow = Number(r.hookedUntil || 0) > Date.now();
+                if (r.rigApi.updateAnimation) {
+                    r.rigApi.updateAnimation(dt, {
+                        speedNorm: r.moveSpeedNorm || 0,
+                        sprinting: !!r.sprinting,
+                        airborne: r.isGrounded === false,
+                        aimPitch: r.targetPitch || 0,
+                        hooked: hookedNow,
+                        choked: chokeVictimState.lift > 0,
+                        startedAt: chokeVictimState.startedAt || 0,
+                        worldSpeed: (r.moveSpeedNorm || 0) * 14,
+                        movingForward: (r.moveSpeedNorm || 0) > 0.05
+                    });
+                }
+                if (r.rigApi.triggerAction) {
+                    var jumpStarted = r._prevIsGrounded !== false && r.isGrounded === false && Number(r.velocityY || 0) > 0.1;
+                    if (jumpStarted) {
+                        r.rigApi.triggerAction('jump');
+                    }
+                }
                 if (r.rigApi.setMuzzleVisible) {
                     r.rigApi.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
                 }
-                if (r.rigApi.applyThrowPose) r.rigApi.applyThrowPose(dt);
-                if (r.rigApi.applyChokeGripPose) {
-                    if (r.chokeState && r.chokeState.targetId && r.chokeState.endsAt > Date.now()) {
+                if (r.rigApi.triggerAction) {
+                    if (r.chokeState && r.chokeState.endsAt > Date.now()) {
                         if (!r._chokeGripTriggered) {
                             r._chokeGripTriggered = true;
-                            r.rigApi.triggerChokeGripPose((r.chokeState.endsAt - Date.now()) / 1000);
+                            r.rigApi.triggerAction('choke_grip', {
+                                duration: (r.chokeState.endsAt - Date.now()) / 1000
+                            });
                         }
                     } else {
                         r._chokeGripTriggered = false;
                     }
-                    r.rigApi.applyChokeGripPose(dt);
                 }
+                r._prevIsGrounded = r.isGrounded !== false;
             }
 
             setRemoteHealFlash(r, !!(r.healState && r.healState.endsAt > Date.now()));

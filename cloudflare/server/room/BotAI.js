@@ -1,76 +1,17 @@
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
-import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { nowMs, clamp } from '../transport.js';
 import { tickClassAbilityState } from './AbilityService.js';
+import { createBotEntity } from './EntityLifecycle.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
-const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
-const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
+const THROWABLE_STATS = gameplayTuning.throwables;
 
-const MAX_HP = 500;
 const THROWABLE_BOT_THROW_COOLDOWN_S = 2.8;
 
-function classPreset(classId) {
-  return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
-}
-
 export function createBot(room, index) {
-  const id = `bot-${index + 1}`;
-  const classId = 'abilities';
-  const preset = classPreset(classId);
-  return {
-    id,
-    kind: 'bot',
-    username: `BOT_${index + 1}`,
-    classId,
-    abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
-    weaponLoadout: DEFAULT_WEAPON_LOADOUT.slice(),
-    x: 10 + Math.random() * 90,
-    y: 1.6,
-    z: 10 + Math.random() * 90,
-    yaw: Math.random() * Math.PI * 2,
-    pitch: 0,
-    hp: MAX_HP,
-    hpMax: MAX_HP,
-    armor: preset.armorMax,
-    armorMax: preset.armorMax,
-    wallhackRadius: preset.wallhackRadius,
-    alive: true,
-    respawnAt: 0,
-    lastDamageAt: 0,
-    weaponId: DEFAULT_WEAPON_LOADOUT[0],
-    lastShotAt: {},
-    lastShotTokenByWeapon: {},
-    moveSpeedNorm: 0,
-    sprinting: false,
-    streamHeat: 0,
-    streamOverheatedUntil: 0,
-    muzzleFlashUntil: 0,
-    throwables: room.createThrowableRuntime(),
-    lastThrowAt: 0,
-    lmsLives: 0,
-    lmsCharge: 0,
-    lmsBankState: null,
-    slot1CooldownUntil: 0,
-    slot2CooldownUntil: 0,
-    abilityCooldownUntil: 0,
-    ultimateCooldownUntil: 0,
-    weaponLockUntil: 0,
-    throwableLockUntil: 0,
-    abilityLockUntil: 0,
-    stunUntil: 0,
-    slowUntil: 0,
-    slowMultiplier: 1,
-    deadeye: null,
-    chokeState: null,
-    justBeenHookedState: null,
-    aiDirX: Math.cos(Math.random() * Math.PI * 2),
-    aiDirZ: Math.sin(Math.random() * Math.PI * 2),
-    aiSpeed: 2.2,
-    aiTurnTimer: 1 + Math.random() * 3
-  };
+  return createBotEntity(index, {
+    eyeHeight: 1.6,
+    createThrowableRuntime: () => room.createThrowableRuntime()
+  });
 }
 
 export function ensureBots(room) {

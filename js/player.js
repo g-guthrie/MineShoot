@@ -358,7 +358,7 @@
     }
 
     function updateAvatarAnimation(dt, speed) {
-        if (avatarRigApi && avatarRigApi.updateLocomotion) {
+        if (avatarRigApi && avatarRigApi.updateAnimation) {
             var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
             var activeWeaponState = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
                 ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
@@ -367,8 +367,11 @@
             if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
                 reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
             }
-            avatarRigApi.updateAimPitch(pitch + (cameraKickPitch * 0.35));
-            avatarRigApi.updateLocomotion(speedNorm, sprinting, dt, !isGrounded, {
+            avatarRigApi.updateAnimation(dt, {
+                speedNorm: speedNorm,
+                sprinting: sprinting,
+                airborne: !isGrounded,
+                aimPitch: pitch + (cameraKickPitch * 0.35),
                 hooked: isHookPulled(),
                 choked: isChoked(),
                 startedAt: statusState.chokeStartedAt || 0,
@@ -381,8 +384,6 @@
                 movingLeft: !!keys.left,
                 movingRight: !!keys.right
             });
-            if (avatarRigApi.applyFirePose) avatarRigApi.applyFirePose(dt);
-            if (avatarRigApi.applyChokeGripPose) avatarRigApi.applyChokeGripPose(dt);
         }
     }
 
@@ -1031,6 +1032,9 @@
             velocityY = JUMP_VELOCITY;
             isGrounded = false;
             jumpHoldTimer = MAX_JUMP_HOLD;
+            if (avatarRigApi && avatarRigApi.triggerAction) {
+                avatarRigApi.triggerAction('jump');
+            }
         }
         if (!movementLocked && jumpJustReleased && velocityY > 0) {
             velocityY *= JUMP_RELEASE_MULT;
@@ -1082,7 +1086,7 @@
         updateCameraFromPlayer(dt);
     };
 
-    GamePlayer.fireAnimation = function () {
+    function triggerFireAction() {
         if (!avatarRigApi || !avatarRigApi.rig || !avatarRigApi.rig.gun) return;
 
         // Recoil layering here follows the same high-level MIT-licensed pattern
@@ -1113,14 +1117,17 @@
                 avatarRigApi.setMuzzleVisible(false);
             }, recoil.muzzleMs);
         }
-        if (avatarRigApi.triggerFirePose) {
-            avatarRigApi.triggerFirePose(recoil.muzzleMs / 1000, 0.9 + (Math.abs(recoil.z) * 4));
+        if (avatarRigApi.triggerAction) {
+            avatarRigApi.triggerAction('fire', {
+                duration: recoil.muzzleMs / 1000,
+                strength: 0.9 + (Math.abs(recoil.z) * 4)
+            });
         }
         if (avatarRigApi.rig) {
             if (avatarRigApi.rig.armR) avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR;
             if (avatarRigApi.rig.armL) avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL;
         }
-    };
+    }
 
     GamePlayer.isExperimentalCameraView = function () {
         return true;
@@ -1294,16 +1301,14 @@
         setHealFlash(!!active);
     };
 
-    GamePlayer.triggerChokeGripPose = function (duration) {
-        if (!avatarRigApi || !avatarRigApi.triggerChokeGripPose) return false;
-        avatarRigApi.triggerChokeGripPose(duration);
-        return true;
-    };
-
-    GamePlayer.triggerThrowPose = function () {
-        if (!avatarRigApi || !avatarRigApi.triggerThrowPose) return false;
-        avatarRigApi.triggerThrowPose();
-        return true;
+    GamePlayer.triggerAction = function (action, options) {
+        var kind = String(action || '').toLowerCase();
+        if (kind === 'fire') {
+            triggerFireAction();
+            return true;
+        }
+        if (!avatarRigApi || !avatarRigApi.triggerAction) return false;
+        return !!avatarRigApi.triggerAction(kind, options || null);
     };
 
     GamePlayer.setSpawnShield = function (active) {

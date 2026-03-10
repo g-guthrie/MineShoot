@@ -1,9 +1,17 @@
 import { DurableObject } from 'cloudflare:workers';
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
-import { getSharedProtocol } from '../../lib/shared-protocol.js';
-import { createSharedTerrainSampler } from '../../lib/shared-terrain.js';
-import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
-import { getSelectableWeaponIds } from '../../../shared/gameplay-tuning.js';
+import {
+  gameplayTuning,
+  getDefaultAbilityLoadout,
+  getDefaultWeaponLoadout,
+  getSelectableWeaponIds,
+  normalizeAbilityLoadout
+} from '../../../shared/gameplay-tuning.js';
+import {
+  buildExpectedWorldMeta,
+  cloneWorldFlags,
+  normalizeThrowPayload,
+  protocol
+} from '../../../shared/protocol.js';
 import { entityAimTargetY } from '../../../shared/entity-points.js';
 import {
   nowMs,
@@ -19,6 +27,7 @@ import {
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
 import { buildWorldCollisionData } from '../../../shared/world-collision.js';
+import { createTerrainSampler } from '../../../shared/terrain-sampler.js';
 import { EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS } from '../../../shared/entity-constants.js';
 import {
   createMovementInputState,
@@ -36,6 +45,11 @@ import {
 import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
 import { ensureBots, tickBots } from './BotAI.js';
 import {
+  createPlayerEntity,
+  resetEntityForLmsRound,
+  resetEntityForRespawn
+} from './EntityLifecycle.js';
+import {
   applyDamageFromSource,
   broadcastDamageEvent,
   broadcastDeathRespawn
@@ -43,37 +57,22 @@ import {
 import { tickProjectiles, tickFireZones } from './ProjectileService.js';
 import { handleClassCast, tickClassAbilityState } from './AbilityService.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const SHARED_PROTOCOL = getSharedProtocol();
+const GAMEPLAY_TUNING_WU = gameplayTuning;
+const SHARED_PROTOCOL = protocol;
 const MSG_C2S = SHARED_PROTOCOL.msg.c2s;
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
-const SHARED_WORLD_DEFAULTS = SHARED_PROTOCOL.world || {};
 
-const WORLD_PROFILE_VERSION = Math.max(1, Number(SHARED_WORLD_DEFAULTS.profileVersion || 6));
-const WORLD_SEED_PREFIX = String(SHARED_WORLD_DEFAULTS.seedPrefix || 'room-env-v6-static');
-const WORLD_FLAGS = {
-  envV2: !!(SHARED_WORLD_DEFAULTS.flags && SHARED_WORLD_DEFAULTS.flags.envV2),
-  terrainPhysicsV2: (SHARED_WORLD_DEFAULTS.flags)
-    ? !!SHARED_WORLD_DEFAULTS.flags.terrainPhysicsV2
-    : true
-};
-
-const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
 const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
-const CLASS_DEFAULT_WEAPON = {
-  abilities: 'rifle'
-};
 
 const ROOM_SIM_TICK_MS = 33;
 const ROOM_SNAPSHOT_TICK_MS = 33;
 const ROOM_FULL_RESYNC_MS = 1000;
 const DISCONNECT_GRACE_MS = 15000;
-const MAX_HP = 500;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const PLAYER_HEIGHT_WU = PLAYER_HEIGHT;
@@ -137,17 +136,6 @@ function intersectRayAabb(origin, dir, box, maxDistance) {
   const hitDistance = tmin >= 0 ? tmin : tmax;
   if (hitDistance < 0 || hitDistance > maxDistance) return null;
   return hitDistance;
-}
-
-function classPreset(classId) {
-  return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
-}
-
-function cloneWorldFlags(flags) {
-  return {
-    envV2: !!(flags && flags.envV2),
-    terrainPhysicsV2: !!(flags && flags.terrainPhysicsV2)
-  };
 }
 
 function detectGameMode(roomName) {
@@ -271,9 +259,11 @@ export class GlobalArenaRoom extends DurableObject {
     this.lastFullSnapshotAt = 0;
     this.lastBroadcastEntityState = new Map();
     this.roomName = env.ROOM_NAME || 'global';
-    this.worldSeed = '';
-    this.worldProfileVersion = WORLD_PROFILE_VERSION;
-    this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
+    const initialWorldMeta = buildExpectedWorldMeta(this.roomName, SHARED_PROTOCOL.world);
+    this.roomName = initialWorldMeta.roomId;
+    this.worldSeed = initialWorldMeta.worldSeed;
+    this.worldProfileVersion = initialWorldMeta.worldProfileVersion;
+    this.worldFlags = cloneWorldFlags(initialWorldMeta.worldFlags);
     this.worldCollision = null;
     this.refreshWorldMeta();
     this.boundsMin = 2;
@@ -296,14 +286,16 @@ export class GlobalArenaRoom extends DurableObject {
 
   refreshWorldMeta() {
     this.roomName = sanitizeRoomId(this.roomName || this.env.ROOM_NAME || 'global');
+    const worldMeta = buildExpectedWorldMeta(this.roomName, SHARED_PROTOCOL.world);
+    this.roomName = worldMeta.roomId;
     this.gameMode = detectGameMode(this.roomName);
     if (!this.matchState || this.matchState.gameMode !== this.gameMode) {
       this.matchState = emptyMatchState(this.gameMode);
     }
-    this.worldSeed = `${WORLD_SEED_PREFIX}-${this.roomName}`;
-    this.worldProfileVersion = WORLD_PROFILE_VERSION;
-    this.worldFlags = cloneWorldFlags(WORLD_FLAGS);
-    this.terrainSampler = createSharedTerrainSampler({
+    this.worldSeed = worldMeta.worldSeed;
+    this.worldProfileVersion = worldMeta.worldProfileVersion;
+    this.worldFlags = cloneWorldFlags(worldMeta.worldFlags);
+    this.terrainSampler = createTerrainSampler({
       worldSeed: this.worldSeed,
       worldProfileVersion: this.worldProfileVersion,
       worldFlags: cloneWorldFlags(this.worldFlags)
@@ -385,30 +377,13 @@ export class GlobalArenaRoom extends DurableObject {
     };
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i];
-      entity.teamId = '';
-      entity.progressScore = lmsRules.startingLives;
-      entity.lmsLives = lmsRules.startingLives;
-      entity.lmsCharge = 0;
-      entity.lmsBankState = null;
-      entity.hp = entity.hpMax;
-      entity.armor = entity.armorMax;
-      entity.alive = true;
-      entity.respawnAt = 0;
-      entity.lastDamageAt = 0;
-      entity.chokeState = null;
-      entity.chokeVictimState = null;
-      entity.justBeenHookedState = null;
-      entity.hookState = null;
-      entity.hookPullState = null;
-      entity.healState = null;
-      entity.slot1CooldownUntil = 0;
-      entity.slot2CooldownUntil = 0;
-      entity.abilityCooldownUntil = 0;
-      entity.ultimateCooldownUntil = 0;
-      entity.lastShotAt = {};
-      entity.lastShotTokenByWeapon = {};
-      entity.throwables = this.createThrowableRuntime();
-      entity.lastThrowAt = 0;
+      resetEntityForLmsRound(entity, {
+        startingLives: lmsRules.startingLives,
+        createThrowableRuntime: () => this.createThrowableRuntime(),
+        createWeaponAmmoRuntime,
+        createMovementInputState,
+        zeroAim: entity.fixtureType === 'sim_player'
+      });
       this.spawnEntityRandomly(entity);
       this.applySpawnShield(entity);
     }
@@ -728,17 +703,6 @@ export class GlobalArenaRoom extends DurableObject {
       ids.push(player.id);
     }
     return ids;
-  }
-
-  currentFfaAverageProgress() {
-    const connectedIds = this.connectedHumanIds();
-    if (!connectedIds.length) return 0;
-    let total = 0;
-    for (let i = 0; i < connectedIds.length; i++) {
-      const player = this.players.get(connectedIds[i]);
-      total += Number((player && player.progressScore) || 0);
-    }
-    return total / connectedIds.length;
   }
 
   assignPlayerToCurrentTeam(player) {
@@ -1077,79 +1041,21 @@ export class GlobalArenaRoom extends DurableObject {
     return entity.plannedSpawnPoint;
   }
 
-  buildPlayerEntity(userId, username, classId, options = null) {
+  buildPlayerEntity(userId, username, _classId, options = null) {
     const opts = options || {};
-    const nextClassId = 'abilities';
-    const preset = classPreset(nextClassId);
-    const p = {
+    const p = createPlayerEntity({
       id: userId,
+      username,
       actorId: String(opts.actorId || userId || ''),
       actorName: String(opts.actorName || username || userId || 'player'),
-      kind: 'player',
-      username,
-      classId: nextClassId,
       fixtureType: opts.fixtureType || '',
-      abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
-      weaponLoadout: DEFAULT_WEAPON_LOADOUT.slice(),
-      x: 0,
-      y: PLAYER_EYE_HEIGHT_WU,
-      z: 0,
       yaw: Number(opts.yaw || 0),
       pitch: Number(opts.pitch || 0),
-      hp: MAX_HP,
-      hpMax: MAX_HP,
-      armor: preset.armorMax,
-      armorMax: preset.armorMax,
-      wallhackRadius: preset.wallhackRadius,
-      alive: true,
-      respawnAt: 0,
-      plannedSpawnPoint: null,
-      spawnShieldUntil: 0,
-      lastDamageAt: 0,
-      seq: 0,
-      inputMode: 'intent',
-      inputState: createMovementInputState(),
-      lastShotAt: {},
-      lastShotTokenByWeapon: {},
-      weaponId: DEFAULT_WEAPON_LOADOUT[0],
-      weaponAmmo: createWeaponAmmoRuntime(DEFAULT_WEAPON_LOADOUT),
-      moveSpeedNorm: 0,
-      sprinting: false,
-      velocityY: 0,
-      isGrounded: true,
-      jumpHoldTimer: 0,
-      jumpHeldLast: false,
-      streamHeat: 0,
-      streamOverheatedUntil: 0,
-      muzzleFlashUntil: 0,
-      throwables: this.createThrowableRuntime(),
-      lastThrowAt: 0,
-      kills: 0,
-      deaths: 0,
-      progressScore: 0,
-      lmsLives: 0,
-      lmsCharge: 0,
-      lmsBankState: null,
-      teamId: '',
-      disconnectedAt: 0,
-      slot1CooldownUntil: 0,
-      slot2CooldownUntil: 0,
-      abilityCooldownUntil: 0,
-      ultimateCooldownUntil: 0,
-      weaponLockUntil: 0,
-      throwableLockUntil: 0,
-      abilityLockUntil: 0,
-      stunUntil: 0,
-      slowUntil: 0,
-      slowMultiplier: 1,
-      deadeye: null,
-      chokeState: null,
-      chokeVictimState: null,
-      justBeenHookedState: null,
-      hookState: null,
-      hookPullState: null,
-      healState: null
-    };
+      eyeHeight: PLAYER_EYE_HEIGHT_WU,
+      createMovementInputState,
+      createWeaponAmmoRuntime,
+      createThrowableRuntime: () => this.createThrowableRuntime()
+    });
 
     this.spawnEntityRandomly(p);
     this.applySpawnShield(p);
@@ -1938,52 +1844,16 @@ export class GlobalArenaRoom extends DurableObject {
     return false;
   }
 
-  applyClassNow(entity, classId) {
-    if (!entity || !CLASS_PRESETS[classId]) return false;
-    entity.classId = classId;
-
-    const preset = classPreset(classId);
-    entity.armorMax = preset.armorMax;
-    entity.armor = Math.max(0, Math.min(Number(entity.armor || 0), preset.armorMax));
-    entity.wallhackRadius = preset.wallhackRadius;
-
-    entity.slot1CooldownUntil = 0;
-    entity.slot2CooldownUntil = 0;
-    entity.abilityCooldownUntil = 0;
-    entity.ultimateCooldownUntil = 0;
-    entity.weaponLockUntil = 0;
-    entity.throwableLockUntil = 0;
-    entity.abilityLockUntil = 0;
-    entity.deadeye = null;
-    entity.chokeState = null;
-
-    const defaultWeapon = CLASS_DEFAULT_WEAPON[classId] || 'rifle';
-    entity.weaponLoadout = normalizeWeaponLoadout(entity.weaponLoadout, DEFAULT_WEAPON_LOADOUT);
-    if (WEAPON_STATS[defaultWeapon] && canEntityUseWeapon(entity, defaultWeapon)) {
-      entity.weaponId = defaultWeapon;
-    } else {
-      entity.weaponId = entity.weaponLoadout[0];
-    }
-    entity.streamHeat = 0;
-    entity.streamOverheatedUntil = 0;
-    return true;
-  }
-
   handleClassQueue(player, msg, ws) {
     if (!player) return;
-    const slot1 = String(msg && msg.slot1 || '');
-    const slot2 = String(msg && msg.slot2 || '');
-    player.abilityLoadout = player.abilityLoadout || {};
-    if (!slot1) {
-      player.abilityLoadout.slot1 = '';
-    } else if (ABILITY_CATALOG[slot1]) {
-      player.abilityLoadout.slot1 = slot1;
-    }
-    if (!slot2) {
-      player.abilityLoadout.slot2 = '';
-    } else if (ABILITY_CATALOG[slot2]) {
-      player.abilityLoadout.slot2 = slot2;
-    }
+    const nextLoadout = normalizeAbilityLoadout(
+      msg && msg.slot1,
+      msg && msg.slot2
+    );
+    player.abilityLoadout = {
+      slot1: nextLoadout.slot1,
+      slot2: nextLoadout.slot2
+    };
     this.send(ws, {
       t: MSG_S2C.CLASS_CHANGED,
       classId: 'abilities',
@@ -1996,14 +1866,15 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
     if (!this.canEntityUseThrowable(player)) return;
     const throwableId = String(msg.throwableId || '');
-    const clientThrowId = String(msg.clientThrowId || '');
+    const throwPayload = normalizeThrowPayload(throwableId, msg.clientThrowId || '', msg.throwIntent || null);
+    const clientThrowId = throwPayload.clientThrowId;
     const def = THROWABLE_STATS[throwableId];
     if (!def) return;
     if (!this.consumeThrowCharge(player, throwableId)) {
       this.send(ws, { t: MSG_S2C.THROW_REJECT, throwableId, clientThrowId, reason: 'cooldown_or_empty' });
       return;
     }
-    const projectile = this.spawnProjectile(player, throwableId, clientThrowId, msg.throwIntent || null);
+    const projectile = this.spawnProjectile(player, throwableId, clientThrowId, throwPayload.throwIntent || null);
     if (!projectile) {
       const inv = player.throwables && player.throwables[throwableId];
       if (inv) inv.charges = Math.min(inv.maxCharges, inv.charges + 1);
@@ -2019,45 +1890,6 @@ export class GlobalArenaRoom extends DurableObject {
       clientThrowId: projectile.clientThrowId || '',
       throwableId: projectile.type
     });
-  }
-
-  spawnAbilityProjectile(player, projectileDef) {
-    if (!player || !projectileDef) return null;
-    const forward = this.entityForward(player);
-    const right = this.entityRight(player);
-    const core = this.entityCorePosition(player);
-    let origin = addScaled3(core, forward, THROWABLE_SPAWN_FORWARD_WU);
-    origin = addScaled3(origin, right, -THROWABLE_SPAWN_LEFT_WU);
-    const now = nowMs();
-    const id = `proj_${this.nextProjectileSeq++}`;
-    const projectile = {
-      id,
-      ownerId: player.id,
-      clientThrowId: '',
-      x: origin.x,
-      y: origin.y,
-      z: origin.z,
-      vx: projectileDef.vx,
-      vy: projectileDef.vy,
-      vz: projectileDef.vz,
-      age: 0,
-      alive: true,
-      bounces: 0,
-      type: projectileDef.type,
-      hitRadius: projectileDef.hitRadius || 1.2,
-      lifeSec: projectileDef.lifeSec || 1.2,
-      damageBody: projectileDef.damageBody || 80,
-      damageHead: projectileDef.damageHead || projectileDef.damageBody || 80,
-      returnToOwner: !!projectileDef.returnToOwner,
-      returnSpeed: projectileDef.returnSpeed || 0,
-      maxDistance: projectileDef.maxDistance || 0,
-      traveled: 0,
-      phase: 'outbound',
-      phaseHits: {},
-      createdAt: now
-    };
-    this.projectiles.set(projectile.id, projectile);
-    return projectile;
   }
 
   webSocketMessage(ws, message) {
@@ -2226,11 +2058,6 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.gameMode === GAME_MODE_LMS && Number(entity.lmsLives || 0) <= 0) return;
     if ((entity.respawnAt || 0) > nowMs()) return;
 
-    entity.hp = entity.hpMax;
-    entity.armor = entity.armorMax;
-    entity.alive = true;
-    entity.respawnAt = 0;
-    entity.lastDamageAt = 0;
     if (entity.plannedSpawnPoint) {
       this.applyEntitySpawnPoint(entity, entity.plannedSpawnPoint);
       entity.plannedSpawnPoint = null;
@@ -2238,43 +2065,12 @@ export class GlobalArenaRoom extends DurableObject {
       this.spawnEntityRandomly(entity);
     }
     this.applySpawnShield(entity);
-    entity.streamHeat = 0;
-    entity.streamOverheatedUntil = 0;
-    entity.lastShotAt = {};
-    entity.lastShotTokenByWeapon = {};
-    entity.muzzleFlashUntil = 0;
-    entity.lmsBankState = null;
-    entity.throwables = this.createThrowableRuntime();
-    entity.lastThrowAt = 0;
-    entity.weaponAmmo = createWeaponAmmoRuntime(entity.weaponLoadout || DEFAULT_WEAPON_LOADOUT);
-    entity.inputState = createMovementInputState();
-    entity.velocityY = 0;
-    entity.isGrounded = true;
-    entity.jumpHoldTimer = 0;
-    entity.jumpHeldLast = false;
-    entity.slot1CooldownUntil = 0;
-    entity.slot2CooldownUntil = 0;
-    entity.abilityCooldownUntil = 0;
-    entity.ultimateCooldownUntil = 0;
-    entity.weaponLockUntil = 0;
-    entity.throwableLockUntil = 0;
-    entity.abilityLockUntil = 0;
-    entity.stunUntil = 0;
-    entity.slowUntil = 0;
-    entity.slowMultiplier = 1;
-    entity.deadeye = null;
-    entity.chokeState = null;
-    entity.chokeVictimState = null;
-    entity.justBeenHookedState = null;
-    entity.hookState = null;
-    entity.hookPullState = null;
-    entity.healState = null;
-    if (entity.fixtureType === 'sim_player') {
-      entity.moveSpeedNorm = 0;
-      entity.sprinting = false;
-      entity.yaw = 0;
-      entity.pitch = 0;
-    }
+    resetEntityForRespawn(entity, {
+      createThrowableRuntime: () => this.createThrowableRuntime(),
+      createWeaponAmmoRuntime,
+      createMovementInputState,
+      zeroAim: entity.fixtureType === 'sim_player'
+    });
   }
 
   tickPlayers(dtSec) {

@@ -88,9 +88,16 @@ async function loadGameNetHarness() {
     JSON
   };
 
-  const code = await fs.readFile(new URL('../js/network.js', import.meta.url), 'utf8');
   const context = vm.createContext(sandbox);
-  vm.runInContext(code, context);
+  for (const path of [
+    '../js/net/message-router.js',
+    '../js/net/runtime-core.js',
+    '../js/net/state-view.js',
+    '../js/network.js'
+  ]) {
+    const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');
+    vm.runInContext(code, context);
+  }
   const GameNet = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;
 
   const sentMessages = [];
@@ -202,4 +209,74 @@ test('GameNet tolerates incomplete remote render entries during private-room syn
   assert.doesNotThrow(() => {
     GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
   });
+});
+
+test('GameNet maps compact abilityFx snapshot state into client selectors', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 1,
+        abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+        slot1CooldownRemaining: 1.25,
+        slot2CooldownRemaining: 5,
+        abilityFx: {
+          chokeCasterUntil: 1250,
+          chokeVictim: { startedAt: 900, endsAt: 1300, liftHeight: 1.5 },
+          hookedUntil: 1500,
+          hookVisual: {
+            phase: 'travel',
+            targetId: '',
+            headPos: { x: 1, y: 2, z: 3 },
+            endsAt: 1400
+          },
+          healUntil: 1600
+        },
+        deadeyeState: {
+          lockCount: 1,
+          maxLocks: 2,
+          nextLockAt: 1200,
+          lockEveryMs: 200,
+          endsAt: 1800,
+          targetIds: ['usr_remote']
+        }
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const abilityState = GameNet.getSelfAbilityState();
+  const chokeVictim = GameNet.getChokeVictimStateForEntity('usr_test');
+
+  assert.equal(abilityState.slot1CooldownRemaining, 1.25);
+  assert.equal(abilityState.chokeState.endsAt, 1250);
+  assert.equal(abilityState.hookState.phase, 'travel');
+  assert.deepEqual(JSON.parse(JSON.stringify(abilityState.hookState.headPos)), { x: 1, y: 2, z: 3 });
+  assert.equal(abilityState.healState.endsAt, 1600);
+  assert.equal(abilityState.deadeyeState.maxLocks, 2);
+  assert.equal(chokeVictim.startedAt, 900);
+  assert.equal(chokeVictim.endsAt, 1300);
+  assert.equal(chokeVictim.liftHeight, 1.5);
 });

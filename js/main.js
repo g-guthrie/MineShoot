@@ -30,7 +30,6 @@
         return shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : [];
     })();
     var menuWeaponSlots = MENU_LOADOUT_DEFAULT.slice();
-    var menuActiveSlot = 0;
     var runtimeInitialized = false;
     var selfHookVisual = null;
     var remoteHookVisuals = new Map();
@@ -39,7 +38,6 @@
     var hookTmpA = new THREE.Vector3();
     var hookTmpB = new THREE.Vector3();
     var lastHandledMatchEndAt = 0;
-    var menuBootReleased = false;
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -55,40 +53,6 @@
 
     function cappedPixelRatio() {
         return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));
-    }
-
-    function releaseMenuBoot() {
-        if (menuBootReleased) return;
-        menuBootReleased = true;
-        if (document.body) {
-            document.body.classList.remove('menu-booting');
-        }
-    }
-
-    function scheduleMenuBootRelease() {
-        function releaseAfterPaint() {
-            if (typeof window.requestAnimationFrame === 'function') {
-                window.requestAnimationFrame(function () {
-                    window.requestAnimationFrame(releaseMenuBoot);
-                });
-                return;
-            }
-            releaseMenuBoot();
-        }
-
-        var fallbackTimer = window.setTimeout(releaseAfterPaint, 700);
-        if (!document.fonts || !document.fonts.ready || typeof document.fonts.ready.then !== 'function') {
-            return;
-        }
-        document.fonts.ready
-            .then(function () {
-                window.clearTimeout(fallbackTimer);
-                releaseAfterPaint();
-            })
-            .catch(function () {
-                window.clearTimeout(fallbackTimer);
-                releaseAfterPaint();
-            });
     }
 
     function createHookVisual() {
@@ -568,25 +532,6 @@
         return ids;
     }
 
-    function weaponNameLookup() {
-        var out = {
-            rifle: 'Rifle',
-            pistol: 'Pistol',
-            machinegun: 'Machine Gun',
-            shotgun: 'Shotgun',
-            sniper: 'Sniper'
-        };
-        if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog) {
-            var catalog = globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog() || [];
-            for (var i = 0; i < catalog.length; i++) {
-                var item = catalog[i];
-                if (!item || !item.id || !item.name) continue;
-                out[item.id] = item.name;
-            }
-        }
-        return out;
-    }
-
     function compactMenuWeaponSlots() {
         var menuLoadout = menuLoadoutApi();
         if (menuLoadout && menuLoadout.getWeaponSlots) {
@@ -605,7 +550,6 @@
             next[n] = availableMap[id] ? id : '';
         }
         menuWeaponSlots = next;
-        if (menuActiveSlot < 0 || menuActiveSlot > 1) menuActiveSlot = 0;
     }
 
     function syncMenuWeaponSlotsToRuntime() {
@@ -666,202 +610,6 @@
         if (missingWeapons.length) parts.push('Missing ' + missingWeapons.join(' and '));
         if (missingAbilities.length) parts.push('Missing ' + missingAbilities.join(' and '));
         return { ok: false, message: parts.join(' | ') };
-    }
-
-    function setupMenuWeaponLoadout() {
-        var primaryBtn = document.getElementById('weapon-slot-primary');
-        var secondaryBtn = document.getElementById('weapon-slot-secondary');
-        var weaponChoiceGrid = document.getElementById('weapon-choice-grid');
-        if (!primaryBtn || !secondaryBtn || !weaponChoiceGrid) return;
-
-        var slotBtns = [primaryBtn, secondaryBtn];
-        if (weaponChoiceGrid.__menuLoadoutBound) {
-            syncMenuWeaponSlotsToRuntime();
-            return;
-        }
-        weaponChoiceGrid.__menuLoadoutBound = true;
-
-        function assignWeaponToSlot(activeSlot, weaponId) {
-            var nextSlots = syncMenuWeaponSlotsToRuntime();
-            var selectedId = String(weaponId || '');
-            var active = activeSlot === 1 ? 1 : 0;
-            var other = active === 0 ? 1 : 0;
-            if (!selectedId) return false;
-            if (nextSlots[active] === selectedId) return false;
-            if (nextSlots[other] === selectedId) {
-                nextSlots[other] = '';
-            }
-            nextSlots[active] = selectedId;
-            menuWeaponSlots = nextSlots.slice(0, 2);
-            syncMenuWeaponSlotsToRuntime();
-            return true;
-        }
-
-        function render() {
-            var slots = syncMenuWeaponSlotsToRuntime();
-            var names = weaponNameLookup();
-            var available = availableMenuWeaponIds();
-
-            for (var i = 0; i < slotBtns.length; i++) {
-                var btn = slotBtns[i];
-                var slotId = slots[i] || '';
-                var title = 'SLOT ' + (i + 1) + ' :: ' + (slotId ? String(names[slotId] || slotId).toUpperCase() : 'UNEQUIPPED');
-                btn.textContent = title;
-                btn.classList.toggle('active', i === menuActiveSlot);
-            }
-
-            weaponChoiceGrid.innerHTML = '';
-            for (var n = 0; n < available.length; n++) {
-                var weaponId = available[n];
-                var choice = document.createElement('button');
-                choice.type = 'button';
-                choice.className = 'weapon-choice-btn';
-                choice.dataset.weaponId = weaponId;
-                choice.textContent = String(names[weaponId] || weaponId).toUpperCase();
-                if (slots[menuActiveSlot] === weaponId) {
-                    choice.classList.add('active');
-                }
-                var otherSlot = menuActiveSlot === 0 ? 1 : 0;
-                if (slots[otherSlot] === weaponId) {
-                    choice.classList.add('owned-other');
-                }
-                choice.addEventListener('click', function () {
-                    var selectedId = String(this.dataset.weaponId || '');
-                    if (!selectedId) return;
-                    if (!assignWeaponToSlot(menuActiveSlot, selectedId)) return;
-                    if (runtimeInitialized && globalThis.__MAYHEM_RUNTIME.GameHitscan) {
-                        applyWeapon(globalThis.__MAYHEM_RUNTIME.GameHitscan.setWeapon(selectedId));
-                    }
-                    render();
-                });
-                weaponChoiceGrid.appendChild(choice);
-            }
-        }
-
-        primaryBtn.addEventListener('click', function () {
-            menuActiveSlot = 0;
-            render();
-        });
-        secondaryBtn.addEventListener('click', function () {
-            menuActiveSlot = 1;
-            render();
-        });
-
-        render();
-    }
-
-    var menuActiveThrowableCategory = 'grenade';
-
-    function setupMenuThrowableLoadout() {
-        var catTabs = document.getElementById('throwable-category-tabs');
-        var choiceGrid = document.getElementById('throwable-choice-grid');
-        if (!catTabs || !choiceGrid) return;
-        if (choiceGrid.__throwableMenuBound) return;
-        choiceGrid.__throwableMenuBound = true;
-
-        var GT = globalThis.__MAYHEM_RUNTIME.GameThrowables;
-        if (!GT || !GT.getCategories) return;
-
-        function render() {
-            var categories = GT.getCategories();
-            var selected = GT.getSelectedThrowable ? GT.getSelectedThrowable() : 'frag';
-
-            catTabs.innerHTML = '';
-            for (var catId in categories) {
-                if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
-                var cat = categories[catId];
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'throwable-cat-btn';
-                btn.dataset.catId = catId;
-                btn.textContent = cat.label.toUpperCase();
-                if (catId === menuActiveThrowableCategory) btn.classList.add('active');
-                btn.addEventListener('click', function () {
-                    menuActiveThrowableCategory = this.dataset.catId;
-                    render();
-                });
-                catTabs.appendChild(btn);
-            }
-
-            choiceGrid.innerHTML = '';
-            var activeCat = categories[menuActiveThrowableCategory];
-            if (!activeCat) return;
-            for (var i = 0; i < activeCat.items.length; i++) {
-                var item = activeCat.items[i];
-                var choice = document.createElement('button');
-                choice.type = 'button';
-                choice.className = 'throwable-choice-btn';
-                choice.dataset.throwableId = item.id;
-                choice.textContent = item.label.toUpperCase();
-                if (selected === item.id) choice.classList.add('active');
-                choice.addEventListener('click', function () {
-                    var id = this.dataset.throwableId;
-                    if (GT.setSelectedThrowable) GT.setSelectedThrowable(id);
-                    render();
-                });
-                choiceGrid.appendChild(choice);
-            }
-        }
-
-        render();
-    }
-
-    function setupMenuAbilityLoadout() {
-        var abilityGrid1 = document.getElementById('ability-slot1-grid');
-        var abilityGrid2 = document.getElementById('ability-slot2-grid');
-        if (!abilityGrid1 || !abilityGrid2) return;
-        if (abilityGrid1.__abilityMenuBound) return;
-        abilityGrid1.__abilityMenuBound = true;
-
-        var GA = globalThis.__MAYHEM_RUNTIME.GameAbilities;
-        if (!GA || !GA.getCatalog || !GA.getLoadout || !GA.setLoadoutSlot) return;
-
-        function assignAbilityToSlot(slotIndex, abilityId) {
-            var loadout = GA.getLoadout() || {};
-            var ownKey = slotIndex === 2 ? 'slot2' : 'slot1';
-            if (String(loadout[ownKey] || '') === String(abilityId || '')) {
-                return false;
-            }
-            GA.setLoadoutSlot(slotIndex, abilityId);
-            return true;
-        }
-
-        function render() {
-            var catalog = GA.getCatalog();
-            var loadout = GA.getLoadout();
-            abilityGrid1.innerHTML = '';
-            abilityGrid2.innerHTML = '';
-
-            function appendChoices(slotIndex, gridEl, selectedId, blockedId) {
-                for (var i = 0; i < catalog.length; i++) {
-                    var def = catalog[i];
-                    if (!def || !def.id) continue;
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'ability-choice-btn';
-                    btn.dataset.abilityId = def.id;
-                    btn.textContent = def.name.toUpperCase();
-                    if (def.id === selectedId) btn.classList.add('active');
-                    if (def.id === blockedId) btn.classList.add('owned-other');
-                    btn.addEventListener('click', function () {
-                        var id = this.dataset.abilityId;
-                        if (!assignAbilityToSlot(slotIndex, id)) return;
-                        if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout) {
-                            var updated = GA.getLoadout();
-                            globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityLoadout(updated.slot1, updated.slot2);
-                        }
-                        globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(GA.getHudState());
-                        render();
-                    });
-                    gridEl.appendChild(btn);
-                }
-            }
-
-            appendChoices(1, abilityGrid1, loadout.slot1, loadout.slot2);
-            appendChoices(2, abilityGrid2, loadout.slot2, loadout.slot1);
-        }
-
-        render();
     }
 
     function applyAbilityProfile(profileId) {
@@ -955,7 +703,7 @@
                 globalThis.__MAYHEM_RUNTIME.GameNet.sendFire(activeWeapon.id, shotToken);
             }
 
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.triggerAction('fire');
             if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
                 var w = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon();
                 if (document.hasFocus()) {
@@ -1281,8 +1029,8 @@
         var audioApi = globalThis.__MAYHEM_RUNTIME.GameAudio || null;
 
         function triggerLocalThrowFeedback() {
-            if (playerApi && playerApi.triggerThrowPose) {
-                playerApi.triggerThrowPose();
+            if (playerApi && playerApi.triggerAction) {
+                playerApi.triggerAction('throw');
             }
             if (audioApi && audioApi.play) {
                 audioApi.play('throw');
@@ -1361,89 +1109,19 @@
 
             if (multiplayerMode && globalThis.__MAYHEM_RUNTIME.GameNet &&
                 (globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityCast || globalThis.__MAYHEM_RUNTIME.GameNet.sendClassCast)) {
-                var castData = null;
-                var loadout = globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout
-                    ? globalThis.__MAYHEM_RUNTIME.GameAbilities.getLoadout() : {};
-                var castSlot = Number(slotIndex) === 2 ? 2 : 1;
-                var slotAbilityId = castSlot === 2 ? loadout.slot2 : loadout.slot1;
-
-                if (slotAbilityId === 'choke' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect) {
-                    var classTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
-                        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning()
-                        : {};
-                    var chokeRect = chokeRectSizePx(camera);
-                    var chokeRange = Number(classTuning.chokeRange || 24);
-                    var chokeTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByRect(camera, chokeRange, chokeRect.width, chokeRect.height, {
-                        ownerType: 'net'
-                    });
-                    if (!chokeTarget || !chokeTarget.targetId || String(chokeTarget.targetId).indexOf('net:') !== 0) {
-                        setTransientDebug('No target for Force Choke.', 700);
-                        return;
+                var preparedCast = globalThis.__MAYHEM_RUNTIME.GameAbilities.prepareNetCast
+                    ? globalThis.__MAYHEM_RUNTIME.GameAbilities.prepareNetCast(slotIndex, camera)
+                    : { ok: true, slot: Number(slotIndex) === 2 ? 2 : 1, castData: null, commit: null };
+                if (!preparedCast || preparedCast.ok === false) {
+                    if (preparedCast && preparedCast.message) {
+                        setTransientDebug(preparedCast.message, 700);
                     }
-
-                    castData = {
-                        lockTargetId: String(chokeTarget.targetId).slice(4),
-                        aimPoint: chokeTarget.worldPos ? {
-                            x: chokeTarget.worldPos.x,
-                            y: chokeTarget.worldPos.y,
-                            z: chokeTarget.worldPos.z
-                        } : null
-                    };
-                } else if (slotAbilityId === 'hook' && globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox) {
-                    var hookTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning)
-                        ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassAbilityTuning()
-                        : {};
-                    var hookTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.selectLockTargetByBox(
-                        camera,
-                        Number(hookTuning.hookRange || 24),
-                        Math.max(2, Number(hookTuning.hookReticleRadiusPx || 52) * 2),
-                        { ownerType: 'net' }
-                    );
-                    if (hookTarget && hookTarget.worldPos) {
-                        castData = {
-                            aimPoint: {
-                                x: hookTarget.worldPos.x,
-                                y: hookTarget.worldPos.y,
-                                z: hookTarget.worldPos.z
-                            }
-                        };
-                    }
-                } else if (slotAbilityId === 'missile' && globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile) {
-                    var projectileIntent = globalThis.__MAYHEM_RUNTIME.GameThrowables.fireAbilityMissile(camera, {
-                        predictLocal: false,
-                        abilityId: 'missile'
-                    });
-                    if (projectileIntent) {
-                        castData = {
-                            aimPoint: projectileIntent.aimPoint ? {
-                                x: projectileIntent.aimPoint.x,
-                                y: projectileIntent.aimPoint.y,
-                                z: projectileIntent.aimPoint.z
-                            } : null,
-                            projectileIntent: projectileIntent
-                        };
-                    }
-                } else if (globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget) {
-                    var aim = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera, 90);
-                    if (aim && aim.point) {
-                        castData = {
-                            aimPoint: {
-                                x: aim.point.x,
-                                y: aim.point.y,
-                                z: aim.point.z
-                            }
-                        };
-                    }
+                    return;
                 }
                 var sendFn = globalThis.__MAYHEM_RUNTIME.GameNet.sendAbilityCast || globalThis.__MAYHEM_RUNTIME.GameNet.sendClassCast;
-                sendFn(castSlot, castData);
-                if (slotAbilityId === 'missile') {
-                    if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation) {
-                        globalThis.__MAYHEM_RUNTIME.GamePlayer.fireAnimation();
-                    }
-                    if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play && document.hasFocus()) {
-                        globalThis.__MAYHEM_RUNTIME.GameAudio.play('fire', { weapon: 'missile' });
-                    }
+                sendFn(preparedCast.slot, preparedCast.castData);
+                if (preparedCast.commit) {
+                    preparedCast.commit();
                 }
                 return;
             }
@@ -2091,20 +1769,6 @@
             : 'Offline Sandbox FFA: local simulated players.';
     }
 
-    function prepareMenuUi() {
-        setRuntimeIndicator(null);
-        if (menuLoadoutApi() && menuLoadoutApi().init) {
-            menuLoadoutApi().init();
-        } else {
-            setupMenuWeaponLoadout();
-            setupMenuThrowableLoadout();
-            setupMenuAbilityLoadout();
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameNetAuth && globalThis.__MAYHEM_RUNTIME.GameNetAuth.initMenuAuth) {
-            globalThis.__MAYHEM_RUNTIME.GameNetAuth.initMenuAuth();
-        }
-    }
-
     function launchModeById(modeId, options) {
         options = options || {};
         var runtime = runtimeProfile();
@@ -2178,39 +1842,6 @@
             return 'private_room_lobby';
         }
         return 'in_match';
-    }
-
-    function boot() {
-        scheduleMenuBootRelease();
-
-        if (globalThis.__MAYHEM_RUNTIME.GameLobbyController && globalThis.__MAYHEM_RUNTIME.GameLobbyController.init) {
-            globalThis.__MAYHEM_RUNTIME.GameLobbyController.init({
-                prepareMenu: prepareMenuUi,
-                setRuntimeIndicator: setRuntimeIndicator,
-                launchModeById: launchModeById,
-                getActivityState: function () {
-                    if (!activeRuntimeMode || !runtimeInitialized) return 'menu';
-                    if (
-                        multiplayerMode &&
-                        globalThis.__MAYHEM_RUNTIME.GameNet &&
-                        globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase &&
-                        globalThis.__MAYHEM_RUNTIME.GameNet.getPrivateRoomPhase() === 'lobby'
-                    ) {
-                        return 'private_room_lobby';
-                    }
-                    return 'in_match';
-                }
-            });
-            return;
-        }
-
-        prepareMenuUi();
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', boot);
-    } else {
-        boot();
     }
 
     globalThis.__MAYHEM_RUNTIME.GameMain = {

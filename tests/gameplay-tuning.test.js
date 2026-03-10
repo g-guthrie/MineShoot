@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { gameplayTuning } from '../shared/gameplay-tuning.js';
+import {
+  gameplayTuning,
+  getSelectableWeaponIds,
+  getWeaponFalloffProfile,
+  normalizeAbilityLoadout
+} from '../shared/gameplay-tuning.js';
 import { DEFAULT_HP_MAX, DEFAULT_ARMOR_MAX } from '../shared/entity-constants.js';
 
 const FULL_HEALTH_DURABILITY = DEFAULT_HP_MAX + DEFAULT_ARMOR_MAX;
@@ -64,6 +69,26 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
   }
 });
 
+test('shared weapon helpers expose the selectable loadout order and falloff profiles', () => {
+  assert.deepEqual(getSelectableWeaponIds(), ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper']);
+
+  const machinegunFalloff = getWeaponFalloffProfile('machinegun');
+  assert.deepEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
+  assert.notEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
+});
+
 test('Vader choke duration includes the extra half-second hold', () => {
   assert.equal(gameplayTuning.abilityCatalog.choke.duration, 2.0);
+});
+
+test('ability loadout normalization repairs invalid and duplicate picks', () => {
+  assert.deepEqual(
+    normalizeAbilityLoadout('missile', 'missile'),
+    { slot1: 'missile', slot2: 'choke' }
+  );
+
+  assert.deepEqual(
+    normalizeAbilityLoadout('not-real', ''),
+    { slot1: 'choke', slot2: 'missile' }
+  );
 });

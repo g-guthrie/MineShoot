@@ -26,6 +26,7 @@
     var runtimeTabToken = '';
     var arenaIdentityReadyPromise = null;
     var identityChannel = null;
+    var authUi = null;
 
     function randomToken(prefix) {
         if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
@@ -336,107 +337,40 @@
         };
     }
 
-    function authOverlay() {
-        return document.getElementById('auth-overlay');
-    }
-
-    function authToggleBtn() {
-        return document.getElementById('account-toggle-btn');
-    }
-
-    function authModalManager() {
-        return globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameModalManager
-            ? globalThis.__MAYHEM_RUNTIME.GameModalManager
-            : null;
+    function authUiApi() {
+        if (authUi) return authUi;
+        var factory = globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameAuthUi;
+        if (!factory || typeof factory.create !== 'function') return null;
+        authUi = factory.create({
+            getUser: function () { return user; },
+            isGuest: function () { return guestMode; },
+            getOwnProfile: function () { return ownProfile; },
+            login: function (username, pin) { return GameNetAuth.login(username, pin); },
+            logout: function () { return GameNetAuth.logout(); },
+            localMode: function () {
+                guestMode = true;
+                user = null;
+                ownProfile = null;
+                emitAuthChanged();
+            },
+            loadProfile: function () { return loadOwnProfile(); }
+        });
+        return authUi;
     }
 
     function setAuthStatus(msg, isErr) {
-        var el = document.getElementById('auth-status');
-        if (!el) return;
-        el.textContent = msg || '';
-        el.style.color = isErr ? '#ff9a9a' : '#d4ffd4';
+        var ui = authUiApi();
+        if (ui && ui.setStatus) ui.setStatus(msg, isErr);
     }
 
     function setAuthVisible(visible) {
-        var overlay = authOverlay();
-        var toggle = authToggleBtn();
-        var modalManager = authModalManager();
-        if (modalManager && overlay) {
-            if (visible) {
-                modalManager.open('auth', toggle || document.activeElement || null);
-            } else {
-                modalManager.close('auth');
-            }
-        } else if (overlay) {
-            overlay.hidden = !visible;
-        }
-        if (toggle) toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
-    }
-
-    function localEnvironment() {
-        var host = String(window.location.hostname || '').toLowerCase();
-        return window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '::1';
-    }
-
-    function formatClassName(classId) {
-        return String(classId || 'abilities').replace(/[_-]+/g, ' ').toUpperCase();
-    }
-
-    function syncAuthCta() {
-        var toggle = authToggleBtn();
-        if (toggle) {
-            toggle.textContent = (user && !guestMode)
-                ? String(user.username || 'PLAYER')
-                : 'LOGIN';
-        }
-    }
-
-    function renderProfileSummary() {
-        var profileName = document.getElementById('auth-profile-name');
-        var profileSummary = document.getElementById('auth-profile-summary');
-        var profileClass = document.getElementById('auth-profile-class');
-        var profileKills = document.getElementById('auth-profile-kills');
-        var profileDeaths = document.getElementById('auth-profile-deaths');
-        var profileDamage = document.getElementById('auth-profile-damage');
-        var profile = ownProfile || {};
-        var summaryUser = user || {};
-
-        if (profileName) {
-            profileName.textContent = String(profile.displayName || summaryUser.displayName || summaryUser.username || 'PLAYER');
-        }
-        if (profileSummary) {
-            profileSummary.textContent = profile.enabled
-                ? 'Profile is live. Later this slot can hold personalized home screen data.'
-                : 'Signed in and ready. For now this mainly reserves your username.';
-        }
-        if (profileClass) profileClass.textContent = formatClassName(profile.classId || summaryUser.classId || 'abilities');
-        if (profileKills) profileKills.textContent = String(Number(profile.kills != null ? profile.kills : summaryUser.kills) || 0);
-        if (profileDeaths) profileDeaths.textContent = String(Number(profile.deaths != null ? profile.deaths : summaryUser.deaths) || 0);
-        if (profileDamage) {
-            profileDamage.textContent =
-                String(Number(profile.damageDone != null ? profile.damageDone : summaryUser.damageDone) || 0) +
-                ' / ' +
-                String(Number(profile.damageTaken != null ? profile.damageTaken : summaryUser.damageTaken) || 0);
-        }
+        var ui = authUiApi();
+        if (ui && ui.setVisible) ui.setVisible(visible);
     }
 
     function renderAuthPanel() {
-        var loginView = document.getElementById('auth-login-view');
-        var profileView = document.getElementById('auth-profile-view');
-        var localBtn = document.getElementById('auth-local-btn');
-        var loggedIn = !!(user && !guestMode);
-
-        if (loginView) loginView.hidden = loggedIn;
-        if (profileView) profileView.hidden = !loggedIn;
-        if (localBtn) localBtn.style.display = localEnvironment() ? '' : 'none';
-
-        if (!loggedIn) {
-            ownProfile = null;
-        } else {
-            renderProfileSummary();
-        }
-
-        syncAuthCta();
+        var ui = authUiApi();
+        if (ui && ui.render) ui.render();
     }
 
     function rememberSignedInUser(nextUser) {
@@ -497,110 +431,8 @@
     function bindMenuAuthUi() {
         if (uiBound) return;
         uiBound = true;
-
-        var form = document.getElementById('auth-form');
-        var usernameInput = document.getElementById('auth-username');
-        var pinInput = document.getElementById('auth-pin');
-        var playBtn = document.getElementById('auth-play-btn');
-        var logoutBtn = document.getElementById('auth-logout-btn');
-        var localBtn = document.getElementById('auth-local-btn');
-        var closeBtn = document.getElementById('auth-close-btn');
-        var toggleBtn = authToggleBtn();
-        var overlayEl = authOverlay();
-        var modalManager = authModalManager();
-
-        function lockForm(lock) {
-            if (usernameInput) usernameInput.disabled = lock;
-            if (pinInput) pinInput.disabled = lock;
-            if (playBtn) playBtn.disabled = lock;
-            if (logoutBtn) logoutBtn.disabled = lock;
-            if (localBtn) localBtn.disabled = lock;
-        }
-
-        if (modalManager && overlayEl) {
-            modalManager.register('auth', {
-                element: overlayEl,
-                initialFocus: usernameInput || closeBtn || overlayEl,
-                restoreFocus: toggleBtn || null,
-                onOpen: function () {
-                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
-                },
-                onClose: function () {
-                    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-                }
-            });
-        }
-
-        if (form) {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                var username = usernameInput ? usernameInput.value.trim() : '';
-                var pin = pinInput ? pinInput.value.trim() : '';
-                if (!username) {
-                    setAuthStatus('Enter a username.', true);
-                    return;
-                }
-                if (!/^\d{4}$/.test(pin)) {
-                    setAuthStatus('PIN must be exactly 4 digits.', true);
-                    return;
-                }
-
-                lockForm(true);
-                setAuthStatus('Signing in...', false);
-                GameNetAuth.login(username, pin)
-                    .then(function () {
-                        setAuthStatus('Welcome, ' + String(user && user.username || username) + '!', false);
-                        return loadOwnProfile();
-                    })
-                    .then(function () {
-                        lockForm(false);
-                        setAuthVisible(false);
-                    })
-                    .catch(function (err) {
-                        lockForm(false);
-                        setAuthStatus((err && err.message) ? err.message : 'Login failed.', true);
-                    });
-            });
-        }
-
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', function () {
-                var nextVisible = !!(authOverlay() && authOverlay().hidden);
-                renderAuthPanel();
-                setAuthVisible(nextVisible);
-                if (nextVisible && usernameInput && !user) {
-                    usernameInput.focus();
-                }
-                if (nextVisible && user && !guestMode) {
-                    loadOwnProfile();
-                }
-            });
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function () {
-                setAuthVisible(false);
-            });
-        }
-
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function () {
-                GameNetAuth.logout();
-            });
-        }
-
-        if (localBtn) {
-            localBtn.addEventListener('click', function () {
-                guestMode = true;
-                user = null;
-                ownProfile = null;
-                setAuthStatus('Bypassed login. Starting local mode...', false);
-                renderAuthPanel();
-                setAuthVisible(false);
-                emitAuthChanged();
-            });
-        }
-
+        var ui = authUiApi();
+        if (ui && ui.bind) ui.bind();
         renderAuthPanel();
     }
 

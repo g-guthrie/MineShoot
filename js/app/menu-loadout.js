@@ -12,7 +12,7 @@
 
     var selectableWeaponIds = (shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper']);
     var defaultWeaponLoadout = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : ['machinegun', 'shotgun'];
-    var defaultAbilityLoadout = tuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+    var defaultAbilityLoadout = shared.getDefaultAbilityLoadout ? shared.getDefaultAbilityLoadout() : (tuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' });
     var throwableCategories = tuning.throwableCategories || {};
     var throwableDefs = tuning.throwables || {};
     var abilityCatalog = tuning.abilityCatalog || {};
@@ -86,6 +86,24 @@
     }
 
     function currentRuntimeAbilityLoadout() {
+        normalizeAbilityState();
+        return {
+            slot1: String(state.abilityLoadout.slot1 || ''),
+            slot2: String(state.abilityLoadout.slot2 || '')
+        };
+    }
+
+    function normalizeAbilityState() {
+        if (!shared.normalizeAbilityLoadout) {
+            return {
+                slot1: String(state.abilityLoadout && state.abilityLoadout.slot1 || ''),
+                slot2: String(state.abilityLoadout && state.abilityLoadout.slot2 || '')
+            };
+        }
+        state.abilityLoadout = shared.normalizeAbilityLoadout(
+            state.abilityLoadout && state.abilityLoadout.slot1,
+            state.abilityLoadout && state.abilityLoadout.slot2
+        );
         return {
             slot1: String(state.abilityLoadout.slot1 || ''),
             slot2: String(state.abilityLoadout.slot2 || '')
@@ -107,6 +125,7 @@
         if (runtime.GameThrowables && runtime.GameThrowables.setSelectedThrowable && state.selectedThrowableId) {
             runtime.GameThrowables.setSelectedThrowable(state.selectedThrowableId);
         }
+        normalizeAbilityState();
         if (runtime.GameAbilities && runtime.GameAbilities.setLoadoutSlot) {
             runtime.GameAbilities.setLoadoutSlot(1, state.abilityLoadout.slot1 || '');
             runtime.GameAbilities.setLoadoutSlot(2, state.abilityLoadout.slot2 || '');
@@ -125,6 +144,7 @@
         var missingAbilities = [];
         if (!state.weaponSlots[0]) missingWeapons.push('weapon slot 1');
         if (!state.weaponSlots[1]) missingWeapons.push('weapon slot 2');
+        normalizeAbilityState();
         if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot R');
         if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot F');
         if (!missingWeapons.length && !missingAbilities.length) return { ok: true, message: '' };
@@ -274,6 +294,7 @@
             var ownKey = slotIndex === 2 ? 'slot2' : 'slot1';
             if (String(state.abilityLoadout[ownKey] || '') === String(abilityId || '')) return false;
             state.abilityLoadout[ownKey] = String(abilityId || '');
+            normalizeAbilityState();
             return true;
         }
 
@@ -299,6 +320,7 @@
         }
 
         function render() {
+            normalizeAbilityState();
             abilityGrid1.innerHTML = '';
             abilityGrid2.innerHTML = '';
             appendChoices(1, abilityGrid1, state.abilityLoadout.slot1, state.abilityLoadout.slot2);

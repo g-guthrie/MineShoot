@@ -16,6 +16,9 @@
     function syncPlayerState(selfState, dt) {
         if (!selfState) return;
         var RT = runtime();
+        var selfAbilityFx = (selfState.abilityFx && typeof selfState.abilityFx === 'object')
+            ? selfState.abilityFx
+            : null;
 
         if (RT.GameAbilities && RT.GameAbilities.clearQueuedClass) {
             RT.GameAbilities.clearQueuedClass();
@@ -40,10 +43,7 @@
             }
             RT.GamePlayer.setStatusState({
                 stunUntil: Number(selfState.stunUntil || 0),
-                hookPullUntil: Math.max(
-                    selfState.hookPullState ? Number(selfState.hookPullState.endsAt || 0) : 0,
-                    selfState.justBeenHookedState ? Number(selfState.justBeenHookedState.endsAt || 0) : 0
-                ),
+                hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
                 chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
                 chokeUntil: Number(selfChokeVictimState.endsAt || 0),
                 chokeLift: Number(selfChokeVictimState.liftHeight || 0),
@@ -66,7 +66,7 @@
         }
 
         if (
-            selfState.hookPullState &&
+            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
             RT.GamePlayer &&
             RT.GamePlayer.applyAuthoritativeMotion
         ) {

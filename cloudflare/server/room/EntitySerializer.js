@@ -1,12 +1,51 @@
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
-import { getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { gameplayTuning, getDefaultAbilityLoadout, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import { nowMs } from '../transport.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
+const THROWABLE_STATS = gameplayTuning.throwables;
+const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
+
+function cloneVec3(value) {
+  if (!value || typeof value !== 'object') return null;
+  const x = Number(value.x);
+  const y = Number(value.y);
+  const z = Number(value.z);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+  return { x, y, z };
+}
+
+function buildAbilityFx(entity) {
+  const chokeVictim = entity.chokeVictimState
+    ? {
+        startedAt: Number(entity.chokeVictimState.startedAt || 0),
+        endsAt: Number(entity.chokeVictimState.endsAt || 0),
+        liftHeight: Number(entity.chokeVictimState.liftHeight || 1.0)
+      }
+    : null;
+  const hookVisual = entity.hookState
+    ? {
+        phase: entity.hookState.phase || 'travel',
+        targetId: entity.hookState.targetId || '',
+        headPos: cloneVec3(entity.hookState.headPos || null),
+        endsAt: Number(entity.hookState.endsAt || 0)
+      }
+    : null;
+  const hookedUntil = Math.max(
+    Number(entity.hookPullState && entity.hookPullState.endsAt || 0),
+    Number(entity.justBeenHookedState && entity.justBeenHookedState.endsAt || 0)
+  );
+  const chokeCasterUntil = Number(entity.chokeState && entity.chokeState.endsAt || 0);
+  const healUntil = Number(entity.healState && entity.healState.endsAt || 0);
+
+  return {
+    chokeCasterUntil,
+    chokeVictim,
+    hookedUntil,
+    hookVisual,
+    healUntil
+  };
+}
 
 export function toEntityState(entity) {
   const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - nowMs()) / 1000);
@@ -80,53 +119,14 @@ export function toEntityState(entity) {
       ? entity.weaponLoadout.slice(0, 2)
       : DEFAULT_WEAPON_LOADOUT.slice(),
     weaponAmmo,
-    abilityLoadout: entity.abilityLoadout || DEFAULT_ABILITY_LOADOUT,
+    abilityLoadout: entity.abilityLoadout || { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
     slot1CooldownRemaining,
     slot2CooldownRemaining,
     abilityCooldownRemaining: slot1CooldownRemaining,
     ultimateCooldownRemaining: slot2CooldownRemaining,
+    abilityFx: buildAbilityFx(entity),
     stunUntil: entity.stunUntil || 0,
     slowUntil: entity.slowUntil || 0,
-    chokeState: entity.chokeState ? {
-      targetId: entity.chokeState.targetId || '',
-      startedAt: entity.chokeState.startedAt || 0,
-      endsAt: entity.chokeState.endsAt || 0,
-      liftHeight: entity.chokeState.liftHeight || 1.0
-    } : null,
-    chokeVictimState: entity.chokeVictimState ? {
-      sourceId: entity.chokeVictimState.sourceId || '',
-      startedAt: entity.chokeVictimState.startedAt || 0,
-      endsAt: entity.chokeVictimState.endsAt || 0,
-      liftHeight: entity.chokeVictimState.liftHeight || 1.0
-    } : null,
-    justBeenHookedState: entity.justBeenHookedState ? {
-      startedAt: entity.justBeenHookedState.startedAt || 0,
-      endsAt: entity.justBeenHookedState.endsAt || 0
-    } : null,
-    hookPullState: entity.hookPullState ? {
-      sourceId: entity.hookPullState.sourceId || '',
-      pullDistance: entity.hookPullState.pullDistance || 3.2,
-      pullSpeed: entity.hookPullState.pullSpeed || 26,
-      facingYaw: entity.hookPullState.facingYaw || 0,
-      startedAt: entity.hookPullState.startedAt || 0,
-      endsAt: entity.hookPullState.endsAt || 0
-    } : null,
-    hookState: entity.hookState ? {
-      targetId: entity.hookState.targetId || '',
-      phase: entity.hookState.phase || 'travel',
-      startPos: entity.hookState.startPos || null,
-      endPos: entity.hookState.endPos || null,
-      headPos: entity.hookState.headPos || null,
-      catchRadius: entity.hookState.catchRadius || 1.8,
-      startedAt: entity.hookState.startedAt || 0,
-      hitAt: entity.hookState.hitAt || 0,
-      endsAt: entity.hookState.endsAt || 0
-    } : null,
-    healState: entity.healState ? {
-      startedAt: entity.healState.startedAt || 0,
-      endsAt: entity.healState.endsAt || 0,
-      healAmount: entity.healState.healAmount || 100
-    } : null,
     deadeyeState: entity.deadeye ? {
       lockCount: entity.deadeye.lockIndex || 0,
       maxLocks: entity.deadeye.maxLocks || (entity.deadeye.queue ? entity.deadeye.queue.length : 0),
