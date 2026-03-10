@@ -77,3 +77,28 @@ test('buildNetworkDeadeyeUiState falls back to a screen-center reticle when mark
     ]
   });
 });
+
+test('buildNetworkHudState centralizes multiplayer ability HUD shaping', async () => {
+  const boundary = await loadBoundary();
+
+  const state = boundary.buildNetworkHudState(
+    { slot1: 'choke', slot2: 'missile' },
+    {
+      slot1CooldownRemaining: 1.25,
+      slot2CooldownRemaining: 5,
+      deadeyeState: {
+        lockCount: 1,
+        maxLocks: 2
+      }
+    }
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state)), {
+    name: 'Abilities',
+    slot1Name: 'Vader Choke',
+    slot1Cooldown: 1.25,
+    slot2Name: 'Missile',
+    slot2Cooldown: 5,
+    extra: 'DEADEYE 1/2'
+  });
+});

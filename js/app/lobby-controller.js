@@ -24,36 +24,16 @@
         return '';
     }
 
-    function roomCodeFromRoomId(roomId) {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
-        var helper = shared.privateRoomCodes;
-        if (helper && helper.privateRoomCodeFromId) {
-            return helper.privateRoomCodeFromId(roomId);
-        }
-        return String(roomId || '').toUpperCase();
+    function runtimeModeUi() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeModeUi || null;
     }
 
-    function startupSubtitleForMode(mode) {
-        if (!mode) return 'Select runtime mode';
-        if (mode.id === 'cloud_multiplayer') {
-            if (mode.roomId === 'global') return 'Connecting to Public Lobby: ' + mode.roomId + '...';
-            if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
-                return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
-            }
-            if (String(mode.gameMode || 'ffa').toLowerCase() === 'lms') {
-                return 'Connecting to Last Man Standing: ' + mode.roomId + '...';
-            }
-            return 'Connecting to Free For All: ' + mode.roomId + '...';
+    function roomCodeFromRoomId(roomId) {
+        var modeUi = runtimeModeUi();
+        if (modeUi && modeUi.roomCodeFromRoomId) {
+            return modeUi.roomCodeFromRoomId(roomId);
         }
-        if (mode.id === 'single_cloudflare') {
-            return 'Connecting to Solo Cloudflare room: ' + mode.roomId + '...';
-        }
-        if (mode.id === 'single_dev_server') {
-            return 'Connecting to Local Dev Room: ' + mode.roomId + '...';
-        }
-        return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
-            ? 'Starting Offline Sandbox: LMS...'
-            : 'Starting Offline Sandbox: FFA...';
+        return String(roomId || '').toUpperCase();
     }
 
     GameLobbyController.init = function (options) {
@@ -131,11 +111,7 @@
         var privateRoomTeamBravo = document.getElementById('private-room-team-bravo');
 
         var started = false;
-        var altModesOpen = false;
-        var controlsOpen = false;
-        var controllerBusy = false;
         var startPending = false;
-        var socialView = 'party';
         var sandboxWarmPromise = null;
         var sandboxRuntimeReady = !(runtime.GameRuntimeLoader && runtime.GameRuntimeLoader.loadGameplayRuntime);
         var partyView = null;
@@ -204,40 +180,110 @@
             privateRoomStatusEl.style.color = isErr ? '#ffb3a6' : '#ffd7af';
         }
 
-        function setSandboxButtonsEnabled(enabled) {
-            if (sandboxFfaBtn) sandboxFfaBtn.disabled = !enabled;
-            if (sandboxLmsBtn) sandboxLmsBtn.disabled = !enabled;
+        var lobbyUiFactory = runtime.GameLobbyControllerUi;
+        if (!lobbyUiFactory || !lobbyUiFactory.create) {
+            throw new Error('GameLobbyControllerUi is required before GameLobbyController.init.');
         }
+        var lobbyUi = lobbyUiFactory.create({
+            elements: {
+                modeButtonsWrap: modeButtonsWrap,
+                altModeToggle: altModeToggle,
+                controlsMenu: controlsMenu,
+                controlsToggle: controlsToggle,
+                primaryPlayBtn: primaryPlayBtn,
+                tdmPlayBtn: tdmPlayBtn,
+                lmsPlayBtn: lmsPlayBtn,
+                sandboxPlayBtn: sandboxPlayBtn,
+                sandboxRulesetPanel: sandboxRulesetPanel,
+                sandboxFfaBtn: sandboxFfaBtn,
+                sandboxLmsBtn: sandboxLmsBtn,
+                createRoomBtn: createRoomBtn,
+                joinPrivateRoomBtn: joinPrivateRoomBtn,
+                privateRoomInput: privateRoomInput,
+                joinPartyBtn: joinPartyBtn,
+                partyIdInput: partyIdInput,
+                socialTabPartyBtn: socialTabPartyBtn,
+                socialTabFriendsBtn: socialTabFriendsBtn,
+                socialTabRoomBtn: socialTabRoomBtn,
+                partySocialView: partySocialView,
+                friendsSocialView: friendsSocialView,
+                privateRoomView: privateRoomView,
+                viewPartyBtn: viewPartyBtn,
+                leavePartyBtn: leavePartyBtn,
+                partyJoinLockBtn: partyJoinLockBtn,
+                partyJoinLockIcon: partyJoinLockIcon,
+                partyJoinLockNote: partyJoinLockNote,
+                viewFriendsBtn: viewFriendsBtn,
+                refreshFriendsBtn: refreshFriendsBtn,
+                privateRoomModeFfaBtn: privateRoomModeFfaBtn,
+                privateRoomModeTdmBtn: privateRoomModeTdmBtn,
+                privateRoomModeLmsBtn: privateRoomModeLmsBtn,
+                privateRoomRandomizeBtn: privateRoomRandomizeBtn,
+                privateRoomStartBtn: privateRoomStartBtn,
+                modeButtons: modeButtons
+            },
+            isSessionBusy: function () {
+                return !!(session && session.isBusy && session.isBusy());
+            },
+            getCapabilities: function () {
+                return session && session.getCapabilities ? session.getCapabilities() : {
+                    hasParty: false,
+                    partyMemberCount: 0,
+                    canTogglePartyJoinLock: false,
+                    partyJoinLocked: false,
+                    partyJoinLockTitle: 'Party join lock unavailable.',
+                    partyJoinLockNote: 'JOINS OPEN',
+                    canViewPartyRoster: false,
+                    canLeaveParty: false,
+                    hasPrivateRoom: false,
+                    privateRoomPhase: '',
+                    privateRoomMode: '',
+                    canEditPrivateRoom: false,
+                    canRandomizeTeams: false,
+                    canStartPrivateRoom: false
+                };
+            },
+            hasPrivateRoom: function () {
+                return !!(session && session.hasPrivateRoomState && session.hasPrivateRoomState());
+            },
+            isLoggedIn: isLoggedIn,
+            isSandboxRuntimeReady: function () {
+                return sandboxRuntimeReady;
+            },
+            getAvailableModes: availableModes,
+            setRoomAccessStatus: setRoomAccessStatus,
+            setFriendsStatus: setFriendsStatus
+        });
 
         function isUiBusy() {
-            return !!(controllerBusy || (session && session.isBusy && session.isBusy()));
+            return lobbyUi.isUiBusy();
         }
 
         function warmSandboxRuntime() {
             var loader = runtime.GameRuntimeLoader;
             if (!loader || !loader.loadGameplayRuntime) {
                 sandboxRuntimeReady = true;
-                setSandboxButtonsEnabled(!isUiBusy());
+                lobbyUi.syncMenuControlState();
                 return Promise.resolve(null);
             }
             if (loader.isGameplayRuntimeReady && loader.isGameplayRuntimeReady()) {
                 sandboxRuntimeReady = true;
-                setSandboxButtonsEnabled(!isUiBusy());
+                lobbyUi.syncMenuControlState();
                 return Promise.resolve(runtime.GameMain || null);
             }
             if (sandboxWarmPromise) return sandboxWarmPromise;
 
             sandboxRuntimeReady = false;
-            setSandboxButtonsEnabled(false);
+            lobbyUi.syncMenuControlState();
             sandboxWarmPromise = loader.loadGameplayRuntime()
                 .then(function (gameMain) {
                     sandboxRuntimeReady = !!(gameMain && gameMain.launchModeById);
-                    setSandboxButtonsEnabled(!isUiBusy() && sandboxRuntimeReady);
+                    lobbyUi.syncMenuControlState();
                     return gameMain || null;
                 })
                 .catch(function (err) {
                     sandboxRuntimeReady = false;
-                    setSandboxButtonsEnabled(false);
+                    lobbyUi.syncMenuControlState();
                     throw err;
                 })
                 .finally(function () {
@@ -301,130 +347,6 @@
             return !friendEntryByUserId(member.accountUserId);
         }
 
-        function activeSocialView() {
-            if (socialView === 'room' && session && session.hasPrivateRoomState && !session.hasPrivateRoomState()) {
-                return 'party';
-            }
-            return socialView;
-        }
-
-        function currentMenuControlState() {
-            var capabilities = session && session.getCapabilities ? session.getCapabilities() : {
-                hasParty: false,
-                partyMemberCount: 0,
-                canTogglePartyJoinLock: false,
-                partyJoinLocked: false,
-                partyJoinLockTitle: 'Party join lock unavailable.',
-                partyJoinLockNote: 'JOINS OPEN',
-                canViewPartyRoster: false,
-                canLeaveParty: false,
-                hasPrivateRoom: false,
-                privateRoomPhase: '',
-                privateRoomMode: '',
-                canEditPrivateRoom: false,
-                canRandomizeTeams: false,
-                canStartPrivateRoom: false
-            };
-
-            return Object.assign({}, capabilities, {
-                socialView: activeSocialView()
-            });
-        }
-
-        function syncDynamicActionDisabled() {
-            var buttons = document.querySelectorAll('.party-preview-add, .friend-preview-btn, .party-modal-action');
-            var disabled = isUiBusy();
-            for (var i = 0; i < buttons.length; i++) {
-                buttons[i].disabled = disabled;
-            }
-        }
-
-        function syncMenuControlState() {
-            var controlState = currentMenuControlState();
-            var busy = isUiBusy();
-            var nextSocialView = controlState.socialView;
-
-            if (partySocialView) partySocialView.hidden = nextSocialView !== 'party';
-            if (friendsSocialView) friendsSocialView.hidden = nextSocialView !== 'friends';
-            if (privateRoomView) privateRoomView.hidden = !controlState.hasPrivateRoom || nextSocialView !== 'room';
-
-            if (primaryPlayBtn) primaryPlayBtn.disabled = busy;
-            if (tdmPlayBtn) tdmPlayBtn.disabled = busy;
-            if (lmsPlayBtn) lmsPlayBtn.disabled = busy;
-            if (sandboxPlayBtn) sandboxPlayBtn.disabled = busy;
-            if (createRoomBtn) createRoomBtn.disabled = busy;
-            if (joinPrivateRoomBtn) joinPrivateRoomBtn.disabled = busy;
-            if (privateRoomInput) privateRoomInput.disabled = busy;
-            if (joinPartyBtn) joinPartyBtn.disabled = busy;
-            if (partyIdInput) partyIdInput.disabled = busy;
-            setSandboxButtonsEnabled(!busy && sandboxRuntimeReady);
-
-            if (socialTabPartyBtn) {
-                socialTabPartyBtn.classList.toggle('active', nextSocialView === 'party');
-                socialTabPartyBtn.setAttribute('aria-pressed', nextSocialView === 'party' ? 'true' : 'false');
-                socialTabPartyBtn.disabled = busy;
-            }
-            if (socialTabFriendsBtn) {
-                socialTabFriendsBtn.classList.toggle('active', nextSocialView === 'friends');
-                socialTabFriendsBtn.setAttribute('aria-pressed', nextSocialView === 'friends' ? 'true' : 'false');
-                socialTabFriendsBtn.disabled = busy;
-            }
-            if (socialTabRoomBtn) {
-                socialTabRoomBtn.hidden = !controlState.hasPrivateRoom;
-                socialTabRoomBtn.classList.toggle('active', nextSocialView === 'room');
-                socialTabRoomBtn.setAttribute('aria-pressed', nextSocialView === 'room' ? 'true' : 'false');
-                socialTabRoomBtn.disabled = busy || !controlState.hasPrivateRoom;
-            }
-            if (viewPartyBtn) viewPartyBtn.disabled = busy || !controlState.canViewPartyRoster;
-            if (leavePartyBtn) leavePartyBtn.disabled = busy || !controlState.canLeaveParty;
-            if (partyJoinLockBtn) {
-                partyJoinLockBtn.disabled = busy || !controlState.canTogglePartyJoinLock;
-                partyJoinLockBtn.classList.toggle('locked', controlState.partyJoinLocked);
-                partyJoinLockBtn.setAttribute('aria-pressed', controlState.partyJoinLocked ? 'true' : 'false');
-                partyJoinLockBtn.title = controlState.partyJoinLockTitle;
-            }
-            if (partyJoinLockIcon) partyJoinLockIcon.textContent = controlState.partyJoinLocked ? '[###]' : '[_/]';
-            if (partyJoinLockNote) partyJoinLockNote.textContent = controlState.partyJoinLockNote;
-            if (viewFriendsBtn) viewFriendsBtn.disabled = busy || !isLoggedIn();
-            if (refreshFriendsBtn) refreshFriendsBtn.disabled = busy || !isLoggedIn();
-            if (privateRoomModeFfaBtn) {
-                privateRoomModeFfaBtn.classList.toggle('active', controlState.privateRoomMode === 'ffa');
-                privateRoomModeFfaBtn.disabled = busy || !controlState.canEditPrivateRoom;
-            }
-            if (privateRoomModeTdmBtn) {
-                privateRoomModeTdmBtn.classList.toggle('active', controlState.privateRoomMode === 'tdm');
-                privateRoomModeTdmBtn.disabled = busy || !controlState.canEditPrivateRoom;
-            }
-            if (privateRoomModeLmsBtn) {
-                privateRoomModeLmsBtn.classList.toggle('active', controlState.privateRoomMode === 'lms');
-                privateRoomModeLmsBtn.disabled = busy || !controlState.canEditPrivateRoom;
-            }
-            if (privateRoomRandomizeBtn) privateRoomRandomizeBtn.disabled = busy || !controlState.canRandomizeTeams;
-            if (privateRoomStartBtn) {
-                privateRoomStartBtn.style.display = controlState.hasPrivateRoom && controlState.privateRoomPhase === 'lobby' ? '' : 'none';
-                privateRoomStartBtn.disabled = busy || !controlState.canStartPrivateRoom;
-            }
-            syncDynamicActionDisabled();
-        }
-
-        function setSocialView(nextView) {
-            if (nextView === 'friends') socialView = 'friends';
-            else if (nextView === 'room') socialView = 'room';
-            else socialView = 'party';
-            syncMenuControlState();
-            if (activeSocialView() === 'friends' && !isLoggedIn()) {
-                setFriendsStatus('Log in to sync your friend list.', true);
-            }
-        }
-
-        function setControllerBusy(nextBusy, message) {
-            controllerBusy = !!nextBusy;
-            if (controllerBusy) {
-                setRoomAccessStatus(message || 'Working...', false);
-            }
-            syncMenuControlState();
-        }
-
         function renderPartyRosterModal() {
             if (partyView && partyView.renderModal) partyView.renderModal();
         }
@@ -461,26 +383,26 @@
             setPrivateRoomStatus: setPrivateRoomStatus,
             onBusyChange: function (busy, message) {
                 if (busy) setRoomAccessStatus(message || 'Working...', false);
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onPartyIdentityChange: updatePartyIdentityDisplay,
             onSocialUpdate: updateSocialSubtitle,
             onPartyStateChanged: function (nextState) {
                 if (partyView && partyView.applyState) partyView.applyState(nextState);
                 updatePartyIdentityDisplay();
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onPartyUnavailable: function (message) {
                 if (partyView && partyView.setUnavailable) partyView.setUnavailable(message);
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onFriendsStateChanged: function (nextState) {
                 if (friendsView && friendsView.applyState) friendsView.applyState(nextState);
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onFriendsUnavailable: function (message) {
                 if (friendsView && friendsView.setUnavailable) friendsView.setUnavailable(message);
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onPrivateRoomStateChanged: function (nextState, meta) {
                 var previousState = meta && meta.previousState ? meta.previousState : null;
@@ -488,25 +410,25 @@
                 var hasLoadedPrivateRoom = !!(nextState && nextState.room);
                 var hasPrivateRoom = session && session.hasPrivateRoomState && session.hasPrivateRoomState();
 
-                if (!hasPrivateRoom && socialView === 'room') {
-                    socialView = 'party';
+                if (!hasPrivateRoom && lobbyUi.getSocialView() === 'room') {
+                    lobbyUi.setSocialView('party');
                 } else if (!hadLoadedPrivateRoom && hasLoadedPrivateRoom) {
-                    socialView = 'room';
+                    lobbyUi.setSocialView('room');
                 }
 
                 if (privateRoomViewController && privateRoomViewController.applyState) {
                     privateRoomViewController.applyState(nextState);
                 }
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             onPrivateRoomUnavailable: function (message) {
                 if (session && session.hasPrivateRoomState && session.hasPrivateRoomState()) {
-                    socialView = 'room';
+                    lobbyUi.setSocialView('room');
                 }
                 if (privateRoomViewController && privateRoomViewController.setUnavailable) {
                     privateRoomViewController.setUnavailable(message);
                 }
-                syncMenuControlState();
+                lobbyUi.syncMenuControlState();
             },
             launchAssignedPrivateRoom: function (state) {
                 if (started || !state || !state.self || !state.self.privateRoom) return;
@@ -550,7 +472,7 @@
             performFriendAction: function (action, targetUserId, pendingText, successText) {
                 if (!session || !session.performFriendAction) return Promise.resolve(null);
                 return session.performFriendAction(action, targetUserId, pendingText, successText).then(function (body) {
-                    if (body && body.state) setSocialView('party');
+                    if (body && body.state) lobbyUi.setSocialView('party');
                     return body;
                 });
             }
@@ -570,94 +492,20 @@
             }
         }) : null;
 
-        function setAltModesOpen(open) {
-            altModesOpen = !!open;
-            if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-            if (altModeToggle) altModeToggle.setAttribute('aria-expanded', altModesOpen ? 'true' : 'false');
-        }
-
-        function setControlsOpen(open) {
-            controlsOpen = !!open;
-            if (controlsMenu) controlsMenu.hidden = !controlsOpen;
-            if (controlsToggle) controlsToggle.setAttribute('aria-expanded', controlsOpen ? 'true' : 'false');
-        }
-
-        function syncModeButtonVisibility() {
-            var visible = {};
-            var modes = availableModes();
-            for (var i = 0; i < modes.length; i++) visible[modes[i].id] = true;
-            var visibleCount = 0;
-            for (var n = 0; n < modeButtons.length; n++) {
-                var btn = modeButtons[n];
-                var modeId = String(btn.dataset.modeId || '');
-                var show = !!visible[modeId];
-                btn.style.display = show ? '' : 'none';
-                btn.disabled = false;
-                if (show) visibleCount += 1;
-            }
-            if (visibleCount <= 0) setAltModesOpen(false);
-        }
-
-        function hideStartUi() {
-            if (modeButtonsWrap) modeButtonsWrap.hidden = true;
-            if (controlsMenu) controlsMenu.hidden = true;
-            if (primaryPlayBtn) primaryPlayBtn.style.display = 'none';
-            if (tdmPlayBtn) tdmPlayBtn.style.display = 'none';
-            if (lmsPlayBtn) lmsPlayBtn.style.display = 'none';
-            if (sandboxPlayBtn) sandboxPlayBtn.style.display = 'none';
-            if (sandboxRulesetPanel) sandboxRulesetPanel.hidden = true;
-            if (createRoomBtn) createRoomBtn.style.display = 'none';
-            if (joinPrivateRoomBtn) joinPrivateRoomBtn.style.display = 'none';
-            if (privateRoomInput) privateRoomInput.style.display = 'none';
-        }
-
-        function restoreStartUi() {
-            if (primaryPlayBtn) {
-                primaryPlayBtn.disabled = false;
-                primaryPlayBtn.style.display = '';
-            }
-            if (tdmPlayBtn) {
-                tdmPlayBtn.disabled = false;
-                tdmPlayBtn.style.display = '';
-            }
-            if (lmsPlayBtn) {
-                lmsPlayBtn.disabled = false;
-                lmsPlayBtn.style.display = '';
-            }
-            if (sandboxPlayBtn) {
-                sandboxPlayBtn.disabled = false;
-                sandboxPlayBtn.style.display = '';
-            }
-            if (sandboxRulesetPanel) sandboxRulesetPanel.hidden = true;
-            if (createRoomBtn) {
-                createRoomBtn.disabled = false;
-                createRoomBtn.style.display = '';
-            }
-            if (joinPrivateRoomBtn) {
-                joinPrivateRoomBtn.disabled = false;
-                joinPrivateRoomBtn.style.display = '';
-            }
-            if (privateRoomInput) {
-                privateRoomInput.disabled = false;
-                privateRoomInput.style.display = '';
-            }
-            if (altModeToggle) altModeToggle.disabled = false;
-            if (controlsToggle) controlsToggle.disabled = false;
-            if (modeButtonsWrap) modeButtonsWrap.hidden = !altModesOpen;
-            if (controlsMenu) controlsMenu.hidden = !controlsOpen;
-        }
-
         function handleLaunchResult(result) {
             startPending = false;
             if (!result || !result.ok) {
                 setRoomAccessStatus((result && result.error) ? result.error : 'Mode launch failed.', true);
-                restoreStartUi();
+                lobbyUi.restoreStartUi();
                 return false;
             }
             started = true;
-            hideStartUi();
+            lobbyUi.hideStartUi();
             if (modeSubtitle) {
-                modeSubtitle.textContent = startupSubtitleForMode(result.mode);
+                var modeUi = runtimeModeUi();
+                modeSubtitle.textContent = modeUi && modeUi.startupSubtitleForMode
+                    ? modeUi.startupSubtitleForMode(result.mode)
+                    : '';
             }
             if (typeof options.setRuntimeIndicator === 'function') {
                 options.setRuntimeIndicator(result.mode);
@@ -678,7 +526,7 @@
                     .catch(function (err) {
                         startPending = false;
                         setRoomAccessStatus((err && err.message) ? err.message : 'Mode launch failed.', true);
-                        restoreStartUi();
+                        lobbyUi.restoreStartUi();
                         return false;
                     });
             }
@@ -715,14 +563,14 @@
 
         function beginRoomAction(action, extra, pendingText) {
             if (isUiBusy() || started) return;
-            setControllerBusy(true, pendingText);
+            lobbyUi.setControllerBusy(true, pendingText);
             requestMatchmaking(action, extra)
                 .then(function (payload) {
-                    setControllerBusy(false, '');
+                    lobbyUi.setControllerBusy(false, '');
                     startAllocatedRoom(payload);
                 })
                 .catch(function (err) {
-                    setControllerBusy(false, '');
+                    lobbyUi.setControllerBusy(false, '');
                     setRoomAccessStatus((err && err.message) ? err.message : 'Room request failed.', true);
                 });
         }
@@ -801,7 +649,7 @@
                     .catch(function (err) {
                         startPending = false;
                         setRoomAccessStatus((err && err.message) ? err.message : 'Mode launch failed.', true);
-                        restoreStartUi();
+                        lobbyUi.restoreStartUi();
                     });
                 return;
             }
@@ -812,11 +660,11 @@
             }
         }
 
-        syncModeButtonVisibility();
-        setAltModesOpen(false);
-        setControlsOpen(false);
-        setSandboxButtonsEnabled(sandboxRuntimeReady);
-        setSocialView('party');
+        lobbyUi.syncModeButtonVisibility();
+        lobbyUi.setAltModesOpen(false);
+        lobbyUi.setControlsOpen(false);
+        lobbyUi.syncMenuControlState();
+        lobbyUi.setSocialView('party');
         setPrivateRoomShare('');
         updatePartyIdentityDisplay();
         updateSocialSubtitle();
@@ -865,10 +713,10 @@
                 copyRoomCodeBtn: copyRoomCodeBtn,
                 roomShareCode: roomShareCode,
                 modeButtons: modeButtons,
-                isAltModesOpen: function () { return altModesOpen; },
-                setAltModesOpen: setAltModesOpen,
-                isControlsOpen: function () { return controlsOpen; },
-                setControlsOpen: setControlsOpen,
+                isAltModesOpen: lobbyUi.isAltModesOpen,
+                setAltModesOpen: lobbyUi.setAltModesOpen,
+                isControlsOpen: lobbyUi.isControlsOpen,
+                setControlsOpen: lobbyUi.setControlsOpen,
                 beginRoomAction: beginRoomAction,
                 warmSandboxRuntime: warmSandboxRuntime,
                 setRoomAccessStatus: setRoomAccessStatus,
@@ -903,7 +751,7 @@
                     if (!session || !session.runPartyAction) return Promise.resolve(null);
                     return session.runPartyAction(action, payload, pendingText);
                 },
-                setSocialView: setSocialView,
+                setSocialView: lobbyUi.setSocialView,
                 isLoggedIn: isLoggedIn,
                 refreshFriendsState: function (silent) {
                     if (!session || !session.refreshFriendsState) return Promise.resolve(null);

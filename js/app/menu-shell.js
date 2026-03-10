@@ -51,38 +51,11 @@
         }
     }
 
-    function isShareCodeRoomId(roomId) {
-        return String(roomId || '').toLowerCase().indexOf('private-') === 0;
-    }
-
-    function runtimeRoomLabel(mode) {
-        if (!mode || !mode.roomId) return '';
-        var prefix = mode.gameMode ? String(mode.gameMode).toUpperCase() + ' ' : '';
-        if (mode.id === 'single_cloudflare' && isShareCodeRoomId(mode.roomId)) {
-            var roomCodeHelper = runtime.GameShared && runtime.GameShared.privateRoomCodes;
-            var roomCode = roomCodeHelper && roomCodeHelper.privateRoomCodeFromId
-                ? roomCodeHelper.privateRoomCodeFromId(mode.roomId)
-                : String(mode.roomId || '').toUpperCase();
-            return prefix + 'CODE ' + roomCode;
-        }
-        return prefix + 'ROOM ' + String(mode.roomId).toUpperCase();
-    }
-
     function setRuntimeIndicator(mode) {
-        var el = document.getElementById('runtime-indicator');
-        if (!el) return;
-        if (!mode) {
-            el.textContent = 'PROFILE :: STANDBY';
-            return;
+        var helper = runtime.GameRuntimeModeUi || null;
+        if (helper && helper.setRuntimeIndicator) {
+            helper.setRuntimeIndicator(mode, { debugActive: false });
         }
-        var parts = [
-            String(mode.label || '').toUpperCase(),
-            String(mode.backendLabel || '').toUpperCase()
-        ];
-        if (mode.roomId) {
-            parts.push(runtimeRoomLabel(mode));
-        }
-        el.textContent = 'PROFILE :: ' + parts.join(' :: ');
     }
 
     function currentGameplayActivityState() {

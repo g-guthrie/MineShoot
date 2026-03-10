@@ -8,21 +8,21 @@
     'use strict';
 
     var GameNet = {};
-    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
 
-    var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
-    var MSG = (PROTOCOL && PROTOCOL.msg) ? PROTOCOL.msg : { c2s: {}, s2c: {} };
-    var MSG_C2S = MSG.c2s || {};
-    var MSG_S2C = MSG.s2c || {};
+    var PROTOCOL = globalThis.__MAYHEM_RUNTIME.GameShared.protocol;
+    var MSG = PROTOCOL.msg;
+    var MSG_C2S = MSG.c2s;
+    var MSG_S2C = MSG.s2c;
 
-    var WS_URL = (PROTOCOL && PROTOCOL.wsPath) ? PROTOCOL.wsPath : '/api/ws';
+    var WS_URL = PROTOCOL.wsPath;
 
     var GameNetAuth = globalThis.__MAYHEM_RUNTIME.GameNetAuth;
     var GameNetEntities = globalThis.__MAYHEM_RUNTIME.GameNetEntities;
-
-    function runtimeProfile() {
-        return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
+    var runtimeAccessFactory = globalThis.__MAYHEM_RUNTIME.GameNetRuntimeAccess;
+    if (!runtimeAccessFactory || !runtimeAccessFactory.create) {
+        throw new Error('GameNetRuntimeAccess is required before GameNet initialization.');
     }
+    var runtimeAccess = runtimeAccessFactory.create();
 
     var active = false;
     var connected = false;
@@ -65,35 +65,10 @@
     var incomingDamageFeedbackQueue = [];
 
     var notices = [];
-
-    function cloneWorldFlags(flags) {
-        if (PROTOCOL && typeof PROTOCOL.cloneWorldFlags === 'function') {
-            return PROTOCOL.cloneWorldFlags(flags);
-        }
-        return {
-            envV2: !!(flags && flags.envV2),
-            terrainPhysicsV2: !!(flags && flags.terrainPhysicsV2)
-        };
-    }
-
-    function protocolWorldConfig() {
-        return (PROTOCOL && PROTOCOL.world) ? PROTOCOL.world : null;
-    }
+    var cloneWorldFlags = PROTOCOL.cloneWorldFlags;
 
     function buildExpectedWorldMeta(roomName) {
-        if (PROTOCOL && typeof PROTOCOL.buildExpectedWorldMeta === 'function') {
-            return PROTOCOL.buildExpectedWorldMeta(roomName, protocolWorldConfig());
-        }
-        var cfg = protocolWorldConfig();
-        var profileVersion = Math.max(1, Math.round(Number(cfg && cfg.profileVersion) || 6));
-        var prefix = String((cfg && cfg.seedPrefix) || 'room-env-v6-static');
-        var normalizedRoom = sanitizeRoomId(roomName || roomId || 'global');
-        return {
-            roomId: normalizedRoom,
-            worldSeed: prefix + '-' + normalizedRoom,
-            worldProfileVersion: profileVersion,
-            worldFlags: cloneWorldFlags((cfg && cfg.flags) ? cfg.flags : { envV2: true, terrainPhysicsV2: true })
-        };
+        return PROTOCOL.buildExpectedWorldMeta(roomName || roomId || 'global', PROTOCOL.world);
     }
 
     function classStats(classId) {
@@ -111,39 +86,14 @@
     }
 
     function wsEndpoint() {
-        var runtime = runtimeProfile();
-        var endpoint = (runtime && runtime.resolveWsUrl)
-            ? runtime.resolveWsUrl(WS_URL)
-            : ((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + WS_URL);
-        var params = new URLSearchParams();
-        params.set('room', String(roomId || 'global'));
-        if (GameNetAuth.getSocketPlayerId) {
-            params.set('pid', String(GameNetAuth.getSocketPlayerId() || ''));
-        }
-        var actor = GameNetAuth.getPartyIdentity ? GameNetAuth.getPartyIdentity() : null;
-        if (actor && actor.id) {
-            params.set('actorId', String(actor.id));
-            params.set('actorName', String(actor.username || actor.id));
-        }
-        var u = GameNetAuth.getSocketIdentity ? GameNetAuth.getSocketIdentity() : GameNetAuth.getUser();
-        if (u && u.id) {
-            params.set('uid', String(u.id));
-            params.set('username', String(u.username || u.id));
-            params.set('classId', String(u.classId || 'abilities'));
-        }
-        return endpoint + '?' + params.toString();
+        return runtimeAccess.buildWsEndpoint({
+            wsPath: WS_URL,
+            roomId: roomId,
+            authApi: GameNetAuth
+        });
     }
 
-    function sanitizeRoomId(raw) {
-        if (PROTOCOL && typeof PROTOCOL.sanitizeRoomId === 'function') {
-            return PROTOCOL.sanitizeRoomId(raw);
-        }
-        var id = String(raw || '').toLowerCase().trim();
-        id = id.replace(/[^a-z0-9-]/g, '');
-        if (!id) return 'global';
-        if (id.length > 32) id = id.slice(0, 32);
-        return id;
-    }
+    var sanitizeRoomId = PROTOCOL.sanitizeRoomId;
 
     function updateRemoteFromSnapshot(entity) {
         if (!sceneRef) return;
@@ -173,13 +123,15 @@
     function applyPendingSpawnSync() {
         if (!pendingSpawnSync) return;
         if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return;
-        if (!globalThis.__MAYHEM_RUNTIME.GamePlayer || !globalThis.__MAYHEM_RUNTIME.GamePlayer.respawn) return;
-        globalThis.__MAYHEM_RUNTIME.GamePlayer.respawn(
+        var playerApi = runtimeAccess.getPlayerApi();
+        if (!playerApi || !playerApi.respawn) return;
+        playerApi.respawn(
             Number(pendingSpawnSync.x || 0),
             Number(pendingSpawnSync.z || 0)
         );
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayerCombat && globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.setInvulnTimer) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
+        var playerCombatApi = runtimeAccess.getPlayerCombatApi();
+        if (playerCombatApi && playerCombatApi.setInvulnTimer) {
+            playerCombatApi.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
         }
         if (pendingSpawnSync.kind === 'initial') {
             initialSpawnApplied = true;
@@ -254,11 +206,13 @@
     function damagePointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
-            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
+        if (entityId === selfId) {
+            var playerApi = runtimeAccess.getPlayerApi();
+            var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition() : null;
+            if (!selfPos) return null;
             return {
                 x: selfPos.x,
-                y: entityPoints.entityDamagePointY ? entityPoints.entityDamagePointY(selfPos.y) : (selfPos.y + 1.06),
+                y: runtimeAccess.damagePointY(selfPos.y),
                 z: selfPos.z
             };
         }
@@ -267,7 +221,7 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: entityPoints.entityDamagePointY ? entityPoints.entityDamagePointY(render.group.position.y) : (render.group.position.y + 1.06),
+            y: runtimeAccess.damagePointY(render.group.position.y),
             z: render.group.position.z
         };
     }
@@ -275,11 +229,13 @@
     function markerPointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
-            var selfPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
+        if (entityId === selfId) {
+            var playerApi = runtimeAccess.getPlayerApi();
+            var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition() : null;
+            if (!selfPos) return null;
             return {
                 x: selfPos.x,
-                y: entityPoints.entityMarkerPointY ? entityPoints.entityMarkerPointY(selfPos.y) : (selfPos.y + 2.25),
+                y: runtimeAccess.markerPointY(selfPos.y),
                 z: selfPos.z
             };
         }
@@ -288,18 +244,8 @@
         if (!render || !render.group) return null;
         return {
             x: render.group.position.x,
-            y: entityPoints.entityMarkerPointY ? entityPoints.entityMarkerPointY(render.group.position.y) : (render.group.position.y + 2.25),
+            y: runtimeAccess.markerPointY(render.group.position.y),
             z: render.group.position.z
-        };
-    }
-
-    function normalizeWeaponLoadoutPayload(slot1, slot2) {
-        if (PROTOCOL && typeof PROTOCOL.normalizeWeaponLoadoutPayload === 'function') {
-            return PROTOCOL.normalizeWeaponLoadoutPayload(slot1, slot2);
-        }
-        return {
-            slot1: String(slot1 || ''),
-            slot2: String(slot2 || '')
         };
     }
 
@@ -307,7 +253,7 @@
         var pending = pendingWeaponLoadout;
         if (!pending) return false;
         if (!wsSend({
-            t: (MSG_C2S.WEAPON_LOADOUT || 'weapon_loadout'),
+            t: MSG_C2S.WEAPON_LOADOUT,
             slot1: pending.slot1,
             slot2: pending.slot2
         })) return false;
@@ -327,7 +273,7 @@
     }
 
     function getChokeVictimStateForEntity(entityId) {
-        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+        var abilityFxView = runtimeAccess.getAbilityFxApi();
         var emptyState = abilityFxView && abilityFxView.emptyChokeVictimState
             ? abilityFxView.emptyChokeVictimState()
             : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
@@ -379,11 +325,7 @@
         setWorldMeta: function (value) { worldMeta = value; },
         getWorldMismatchNotified: function () { return worldMismatchNotified; },
         setWorldMismatchNotified: function (value) { worldMismatchNotified = !!value; },
-        getActiveWorldMeta: function () {
-            return globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getWorldMeta
-                ? globalThis.__MAYHEM_RUNTIME.GameWorld.getWorldMeta()
-                : null;
-        },
+        getActiveWorldMeta: runtimeAccess.getActiveWorldMeta,
         throwAckQueue: throwAckQueue,
         throwRejectQueue: throwRejectQueue,
         throwableEventQueue: throwableEventQueue,
@@ -415,10 +357,7 @@
         getPrivateRoomPhase: function () { return privateRoomPhase; },
         getRemoteProjectileState: function () { return remoteProjectileState; },
         getRemoteFireZoneState: function () { return remoteFireZoneState; },
-        getCurrentUser: function () {
-            if (GameNetAuth.getSocketIdentity) return GameNetAuth.getSocketIdentity();
-            return GameNetAuth.getUser ? GameNetAuth.getUser() : null;
-        },
+        getCurrentUser: function () { return runtimeAccess.getCurrentUser(GameNetAuth); },
         getRenderCoreWorldPosition: getRenderCoreWorldPosition,
         markerPointForEntityId: markerPointForEntityId,
         getChokeVictimStateForEntity: getChokeVictimStateForEntity,
@@ -434,15 +373,13 @@
     var runtimeCore = globalThis.__MAYHEM_RUNTIME.GameNetRuntimeCore.create({
         isActive: function () { return active; },
         setConnected: function (value) { connected = !!value; },
-        getSocketIdentity: function () {
-            return GameNetAuth.getSocketIdentity ? GameNetAuth.getSocketIdentity() : GameNetAuth.getUser();
-        },
+        getSocketIdentity: function () { return runtimeAccess.getSocketIdentity(GameNetAuth); },
         nextConnectAttemptSeq: function () {
             connectAttemptSeq += 1;
             return connectAttemptSeq;
         },
         getConnectAttemptSeq: function () { return connectAttemptSeq; },
-        getTransportApi: function () { return globalThis.__MAYHEM_RUNTIME.GameNetTransport || null; },
+        getTransportApi: runtimeAccess.getTransportApi,
         getTransport: function () { return transport; },
         setTransport: function (value) { transport = value; },
         getReconnectTimer: function () { return reconnectTimer; },
@@ -460,7 +397,7 @@
         getInputSendTimer: function () { return inputSendTimer; },
         setInputSendTimer: function (value) { inputSendTimer = value; },
         getInputSendInterval: function () { return INPUT_SEND_INTERVAL; },
-        getPlayerApi: function () { return globalThis.__MAYHEM_RUNTIME.GamePlayer || null; },
+        getPlayerApi: runtimeAccess.getPlayerApi,
         nextInputSeq: function () {
             var current = inputSeq;
             inputSeq += 1;
@@ -468,8 +405,8 @@
         },
         getInputSeqHistory: function () { return inputSeqHistory; },
         setLastInputSeqSent: function (value) { lastInputSeqSent = value; },
-        getInputMessageType: function () { return MSG_C2S.INPUT || 'input'; },
-        getRemoteSyncApi: function () { return globalThis.__MAYHEM_RUNTIME.GameNetRemoteSync || null; },
+        getInputMessageType: function () { return MSG_C2S.INPUT; },
+        getRemoteSyncApi: runtimeAccess.getRemoteSyncApi,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
         getChokeVictimStateForEntity: getChokeVictimStateForEntity
     });
@@ -560,46 +497,26 @@
     GameNet.update = runtimeCore.update;
 
     GameNet.sendFire = function (weaponId, shotToken) {
-        if (!weaponId) return false;
-        var payload = {
-            t: (MSG_C2S.FIRE || 'fire'),
-            weaponId: String(weaponId)
-        };
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
-            var adsState = globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();
-            if (adsState && adsState.active) payload.adsActive = true;
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera) {
-            var camera = globalThis.__MAYHEM_RUNTIME.GamePlayer.getCamera();
-            var cameraFov = Number(camera && camera.fov);
-            if (isFinite(cameraFov) && cameraFov > 0.0001) payload.viewFovDeg = cameraFov;
-        }
-        if (shotToken) payload.shotToken = String(shotToken);
+        var payload = runtimeAccess.buildFirePayload(MSG_C2S.FIRE, weaponId, shotToken);
+        if (!payload) return false;
         return wsSend(payload);
     };
 
     GameNet.sendEquipWeapon = function (weaponId) {
         if (!weaponId) return false;
         return wsSend({
-            t: (MSG_C2S.EQUIP_WEAPON || 'equip_weapon'),
+            t: MSG_C2S.EQUIP_WEAPON,
             weaponId: String(weaponId)
         });
     };
 
     GameNet.sendWeaponLoadout = function (slot1, slot2) {
-        pendingWeaponLoadout = normalizeWeaponLoadoutPayload(slot1, slot2);
+        pendingWeaponLoadout = PROTOCOL.normalizeWeaponLoadoutPayload(slot1, slot2);
         return flushPendingWeaponLoadout();
     };
 
     GameNet.sendThrow = function (throwableId, clientThrowId, throwIntent) {
-        var payload = (PROTOCOL && typeof PROTOCOL.normalizeThrowPayload === 'function')
-            ? PROTOCOL.normalizeThrowPayload(throwableId, clientThrowId, throwIntent)
-            : {
-                t: (MSG_C2S.THROW || 'throw'),
-                throwableId: String(throwableId || ''),
-                clientThrowId: String(clientThrowId || '')
-            };
-        return wsSend(payload);
+        return wsSend(PROTOCOL.normalizeThrowPayload(throwableId, clientThrowId, throwIntent));
     };
 
     GameNet.consumeThrowAck = stateView.consumeThrowAck;
@@ -608,20 +525,12 @@
     GameNet.getAuthoritativeThrowableState = stateView.getAuthoritativeThrowableState;
 
     GameNet.sendAbilityLoadout = function (slot1, slot2) {
-        var payload = (PROTOCOL && typeof PROTOCOL.normalizeAbilityLoadoutPayload === 'function')
-            ? PROTOCOL.normalizeAbilityLoadoutPayload(slot1, slot2)
-            : { t: (MSG_C2S.CLASS_QUEUE || 'class_queue'), slot1: String(slot1 || ''), slot2: String(slot2 || '') };
-        return wsSend(payload);
+        return wsSend(PROTOCOL.normalizeAbilityLoadoutPayload(slot1, slot2));
     };
 
-    GameNet.sendClassCast = function (slot, castData) {
-        var payload = (PROTOCOL && typeof PROTOCOL.normalizeClassCastPayload === 'function')
-            ? PROTOCOL.normalizeClassCastPayload(slot, castData)
-            : { t: (MSG_C2S.CLASS_CAST || 'class_cast'), slot: Number(slot || 0) };
-        return wsSend(payload);
+    GameNet.sendAbilityCast = function (slot, castData) {
+        return wsSend(PROTOCOL.normalizeClassCastPayload(slot, castData));
     };
-
-    GameNet.sendAbilityCast = GameNet.sendClassCast;
 
 
     GameNet.consumeClassCastResult = stateView.consumeClassCastResult;

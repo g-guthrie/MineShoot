@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import {
+  buildExpectedWorldMeta,
+  cloneWorldFlags,
+  normalizeAbilityLoadoutPayload,
+  normalizeClassCastPayload,
+  normalizeThrowPayload,
+  normalizeWeaponLoadoutPayload,
+  sanitizeRoomId
+} from '../shared/protocol.js';
 
 async function loadGameNetHarness() {
   const renderMap = new Map();
@@ -9,6 +18,18 @@ async function loadGameNetHarness() {
     GameShared: {
       protocol: {
         wsPath: '/api/ws',
+        world: {
+          profileVersion: 6,
+          seedPrefix: 'room-env-v6-static',
+          flags: { envV2: true, terrainPhysicsV2: true }
+        },
+        sanitizeRoomId,
+        cloneWorldFlags,
+        buildExpectedWorldMeta,
+        normalizeWeaponLoadoutPayload,
+        normalizeThrowPayload,
+        normalizeAbilityLoadoutPayload,
+        normalizeClassCastPayload,
         msg: {
           c2s: { INPUT: 'input' },
           s2c: { WELCOME: 'welcome', SNAPSHOT: 'snapshot' }
@@ -91,6 +112,7 @@ async function loadGameNetHarness() {
   const context = vm.createContext(sandbox);
   for (const path of [
     '../js/ability-fx.js',
+    '../js/net/runtime-access.js',
     '../js/net/message-router.js',
     '../js/net/runtime-core.js',
     '../js/net/state-view.js',

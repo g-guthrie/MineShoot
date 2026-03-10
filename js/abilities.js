@@ -233,6 +233,13 @@
             : { name: 'Abilities', slot1Name: '', slot1Cooldown: 0, slot2Name: '', slot2Cooldown: 0, extra: '' };
     };
 
+    GameAbilities.getNetworkHudState = function (abilityState) {
+        var boundary = abilityBoundary();
+        return boundary && boundary.buildNetworkHudState
+            ? boundary.buildNetworkHudState(abilityLoadout, abilityState)
+            : { name: 'Abilities', slot1Name: '', slot1Cooldown: 0, slot2Name: '', slot2Cooldown: 0, extra: '' };
+    };
+
     GameAbilities.setClass = function (_id) {
         return {
             id: 'abilities',

@@ -8,7 +8,7 @@ function makeWeaponStats(overrides = {}) {
     id: 'rifle',
     pellets: 1,
     hipfireSpread: 0.01,
-    adsSpread: 0.01,
+    adsFovDeg: 56,
     maxRange: 100,
     adsMaxRange: 100,
     bodyDamage: 10,
@@ -56,4 +56,38 @@ test('sniper spread honors deeper scoped FOV values', () => {
 
   assert.ok(Math.abs(scopedShot.point.x) < Math.abs(hipfireShot.point.x));
   assert.ok(Math.abs(scopedShot.point.y - 1.6) < Math.abs(hipfireShot.point.y - 1.6));
+});
+
+test('ADS can resolve hitscan shots with perfect accuracy', () => {
+  const shots = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makeWeaponStats({
+      id: 'rifle',
+      hipfireSpread: 0.01,
+      aimProfile: {
+        hipfire: { spread: 0.01, maxRange: 100 },
+        ads: { spread: 0, maxRange: 100 }
+      }
+    }),
+    adsActive: true,
+    viewFovDeg: 56,
+    shotToken: 'perfect-ads',
+    targets: [{ x: 0, y: 1.6, z: -50 }],
+    worldBoxes: []
+  });
+
+  assert.equal(shots.length, 1);
+  assert.equal(shots[0].point.x, 0);
+  assert.equal(shots[0].point.y, 1.6);
+});
+
+test('hitscan clamp honors per-weapon ADS FOV tuning', () => {
+  const weaponStats = makeWeaponStats({ adsFovDeg: 64 });
+  const zoomedShot = resolveSingleShot(64, weaponStats);
+  const overZoomedShot = resolveSingleShot(24, weaponStats);
+
+  assert.equal(overZoomedShot.point.x, zoomedShot.point.x);
+  assert.equal(overZoomedShot.point.y, zoomedShot.point.y);
+  assert.equal(overZoomedShot.point.z, zoomedShot.point.z);
 });

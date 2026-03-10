@@ -136,9 +136,6 @@ export function castChoke(room, player, cfg, msg, now) {
     endsAt: endsAt,
     liftHeight: cfg.liftHeight || 1.0
   };
-  player.weaponLockUntil = Math.max(Number(player.weaponLockUntil || 0), endsAt);
-  player.throwableLockUntil = Math.max(Number(player.throwableLockUntil || 0), endsAt);
-  player.abilityLockUntil = Math.max(Number(player.abilityLockUntil || 0), endsAt);
   player.chokeState = {
     targetId: target.id,
     startedAt: now,

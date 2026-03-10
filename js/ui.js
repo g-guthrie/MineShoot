@@ -366,16 +366,33 @@
         abilityInfoEl.textContent = slot1 + ' | ' + slot2 + extra;
     };
 
-    GameUI.updateReticle = function (weapon, spec) {
+    GameUI.updateReticle = function (weapon, spec, adsState) {
         if (!crosshairEl || !bloomReticleEl || !shotgunReticleEl || !weapon) return;
+
+        var isSniper = !!(adsState && adsState.sniper);
+        var blend = Math.max(0, Math.min(1, Number(adsState && adsState.blend) || 0));
+        var scoped = isSniper && blend > 0.02;
+
+        if (sniperScopeEl) {
+            sniperScopeEl.style.display = scoped ? 'block' : 'none';
+            sniperScopeEl.style.opacity = scoped ? blend.toFixed(3) : '0';
+        }
+
+        if (scoped) {
+            crosshairEl.style.display = 'none';
+            if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
+            else bloomReticleEl.style.display = 'none';
+            shotgunReticleEl.style.display = 'none';
+            return;
+        }
 
         if (weapon.id !== 'shotgun') {
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
             if (bloomReticle && bloomReticle.updateForWeapon) {
                 bloomReticle.updateForWeapon(weapon, {
-                    adsActive: !!(spec && spec.adsActive),
-                    scoped: false
+                    adsActive: !!(adsState && adsState.active),
+                    scoped: scoped
                 });
             } else {
                 bloomReticleEl.style.display = 'none';
@@ -413,28 +430,6 @@
         }
         var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
         throwableInfoEl.textContent = 'Q ' + entry.label + ': ' + entry.charges + cd;
-    };
-
-    GameUI.updateSniperScope = function (state) {
-        if (!sniperScopeEl || !crosshairEl || !bloomReticleEl || !shotgunReticleEl) return;
-        var isSniper = !!(state && state.sniper);
-        var blend = Math.max(0, Math.min(1, Number(state && state.blend) || 0));
-        var active = isSniper && blend > 0.02;
-
-        sniperScopeEl.style.display = active ? 'block' : 'none';
-        sniperScopeEl.style.opacity = active ? blend.toFixed(3) : '0';
-
-        if (active) {
-            crosshairEl.style.display = 'none';
-            if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
-            else bloomReticleEl.style.display = 'none';
-            shotgunReticleEl.style.display = 'none';
-            return;
-        }
-
-        if (isSniper) {
-            crosshairEl.style.display = 'block';
-        }
     };
 
     GameUI.updatePlasmaState = function (_state) {};

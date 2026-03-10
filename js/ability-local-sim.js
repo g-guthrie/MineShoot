@@ -264,13 +264,6 @@
                     liftHeight: Number(cfg.liftHeight || 1.0)
                 };
             }
-            if (RT.GamePlayer && RT.GamePlayer.setActionRestrictions) {
-                RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: endsAt,
-                    throwableUntil: endsAt,
-                    abilityUntil: endsAt
-                });
-            }
             if (RT.GamePlayer && RT.GamePlayer.triggerAction) {
                 RT.GamePlayer.triggerAction('choke_grip', { duration: cfg.duration || 1.6 });
             }

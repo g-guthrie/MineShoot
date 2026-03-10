@@ -212,20 +212,49 @@
         return Math.max(0, (Number(until || 0) - Number(now || Date.now())) / 1000);
     }
 
-    function buildHudState(loadout, cooldownUntilBySlot, deadeyeState, now) {
+    function buildAbilityHudState(loadout, slot1Cooldown, slot2Cooldown, extra) {
         var slot1Def = getAbilityDef(loadout && loadout.slot1);
         var slot2Def = getAbilityDef(loadout && loadout.slot2);
-        var cooldowns = cooldownUntilBySlot || {};
         return {
             name: 'Abilities',
             slot1Name: slot1Def ? slot1Def.name : (loadout && loadout.slot1) || '',
-            slot1Cooldown: cooldownSec(cooldowns.slot1 || 0, now),
+            slot1Cooldown: Math.max(0, Number(slot1Cooldown || 0)),
             slot2Name: slot2Def ? slot2Def.name : (loadout && loadout.slot2) || '',
-            slot2Cooldown: cooldownSec(cooldowns.slot2 || 0, now),
-            extra: deadeyeState && deadeyeState.active
+            slot2Cooldown: Math.max(0, Number(slot2Cooldown || 0)),
+            extra: extra || ''
+        };
+    }
+
+    function buildHudState(loadout, cooldownUntilBySlot, deadeyeState, now) {
+        var cooldowns = cooldownUntilBySlot || {};
+        return buildAbilityHudState(
+            loadout,
+            cooldownSec(cooldowns.slot1 || 0, now),
+            cooldownSec(cooldowns.slot2 || 0, now),
+            deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''
-        };
+        );
+    }
+
+    function buildNetworkHudState(loadout, abilityState) {
+        var state = abilityState || {};
+        return buildAbilityHudState(
+            loadout,
+            Number(
+                state.slot1CooldownRemaining != null
+                    ? state.slot1CooldownRemaining
+                    : state.abilityCooldownRemaining || 0
+            ),
+            Number(
+                state.slot2CooldownRemaining != null
+                    ? state.slot2CooldownRemaining
+                    : state.ultimateCooldownRemaining || 0
+            ),
+            state.deadeyeState && state.deadeyeState.maxLocks > 0
+                ? ('DEADEYE ' + Number(state.deadeyeState.lockCount || 0) + '/' + Number(state.deadeyeState.maxLocks || 0))
+                : ''
+        );
     }
 
     function buildDeadeyeUiState(state, now) {
@@ -291,6 +320,7 @@
         buildDeadeyeUiState: buildDeadeyeUiState,
         buildNetworkDeadeyeUiState: buildNetworkDeadeyeUiState,
         buildHudState: buildHudState,
+        buildNetworkHudState: buildNetworkHudState,
         buildLoadoutState: buildLoadoutState,
         getAbilityDef: getAbilityDef,
         getCatalog: getCatalog,

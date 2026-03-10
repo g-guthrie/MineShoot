@@ -1,3 +1,12 @@
+const DEFAULT_CAMERA_FOV_DEG = 75;
+const DEFAULT_ADS_FOV_DEG = 56;
+const DEFAULT_SNIPER_SCOPE_FOV_DEG = 24;
+const DEFAULT_WEAPON_PRESENTATION = {
+  tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
+  recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
+  audioSample: null
+};
+
 export const gameplayTuning = {
   awareness: {
     segments: 8,
@@ -68,11 +77,56 @@ export const gameplayTuning = {
     abilities: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
-    rifle:      { name: 'Rifle',          primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 260,  reloadMs: 1550, magazineSize: 15, bodyDamage: 44,  headDamage: 104, maxRange: 110, pellets: 1,  hipfireSpread: 0.016, adsSpread: 0.0,   adsMaxRange: 132, aimProfile: { hipfire: { spread: 0.016, maxRange: 110 }, ads: { spread: 0.0,   maxRange: 132 } } },
-    pistol:     { name: 'Pistol',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 360,  reloadMs: 1350, magazineSize: 12, bodyDamage: 46,  headDamage: 150, maxRange: 54,  pellets: 1,  hipfireSpread: 0.024, adsSpread: 0.018, adsMaxRange: 60,  aimProfile: { hipfire: { spread: 0.024, maxRange: 54 },  ads: { spread: 0.018, maxRange: 60 } } },
-    machinegun: { name: 'Machine Gun',    primitiveType: 'hitscan_single',    automatic: true,  cooldownMs: 82,   reloadMs: 1850, magazineSize: 40, bodyDamage: 15,  headDamage: 23,  maxRange: 58,  pellets: 1,  hipfireSpread: 0.046, adsSpread: 0.03,  adsMaxRange: 72,  aimProfile: { hipfire: { spread: 0.046, maxRange: 58 },  ads: { spread: 0.03,  maxRange: 72 } } },
-    shotgun:    { name: 'Shotgun',        primitiveType: 'hitscan_multi',     automatic: false, cooldownMs: 1000, reloadMs: 1850, magazineSize: 6,  bodyDamage: 17,  headDamage: 25,  maxRange: 26,  pellets: 12, hipfireSpread: 0.19,  adsSpread: 0.16,  adsMaxRange: 26,  aimProfile: { hipfire: { spread: 0.19,  maxRange: 26 },  ads: { spread: 0.16,  maxRange: 26 } } },
-    sniper:     { name: 'Sniper',         primitiveType: 'hitscan_single',    automatic: false, cooldownMs: 1450, reloadMs: 2100, magazineSize: 5,  bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1,  hipfireSpread: 0.32,  adsSpread: 0.0,   adsMaxRange: 160, aimProfile: { hipfire: { spread: 0.32,  maxRange: 160 }, ads: { spread: 0.0,   maxRange: 160 } }, infiniteRange: true },
+    rifle: {
+      name: 'Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 260, reloadMs: 1550, magazineSize: 15,
+      bodyDamage: 44, headDamage: 104, maxRange: 110, pellets: 1, hipfireSpread: 0.016, adsFovDeg: 56, adsMaxRange: 132,
+      aimProfile: { hipfire: { spread: 0.016, maxRange: 110 }, ads: { spread: 0, maxRange: 132 } },
+      presentation: {
+        tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
+        recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
+        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 }
+      }
+    },
+    pistol: {
+      name: 'Pistol', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 360, reloadMs: 1350, magazineSize: 12,
+      bodyDamage: 46, headDamage: 150, maxRange: 54, pellets: 1, hipfireSpread: 0.024, adsFovDeg: 56, adsMaxRange: 60,
+      aimProfile: { hipfire: { spread: 0.024, maxRange: 54 }, ads: { maxRange: 60 } },
+      presentation: {
+        tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
+        recoil: { z: -0.04, x: -0.08, pitch: 0.014, yaw: 0.007, roll: 0.005, armR: 0.2, armL: 0.08, muzzleMs: 60 },
+        audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 }
+      }
+    },
+    machinegun: {
+      name: 'Machine Gun', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 82, reloadMs: 1850, magazineSize: 40,
+      bodyDamage: 15, headDamage: 23, maxRange: 58, pellets: 1, hipfireSpread: 0.046, adsFovDeg: 56, adsMaxRange: 72,
+      aimProfile: { hipfire: { spread: 0.046, maxRange: 58 }, ads: { maxRange: 72 } },
+      presentation: {
+        tracer: { life: 0.075, speed: 260, segmentLength: 1.25 },
+        recoil: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 },
+        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 }
+      }
+    },
+    shotgun: {
+      name: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 1000, reloadMs: 1850, magazineSize: 6,
+      bodyDamage: 17, headDamage: 25, maxRange: 26, pellets: 12, hipfireSpread: 0.19, adsFovDeg: 56, adsMaxRange: 26,
+      aimProfile: { hipfire: { spread: 0.19, maxRange: 26 }, ads: { maxRange: 26 } },
+      presentation: {
+        tracer: { life: 0.1, speed: 230, segmentLength: 1.9 },
+        recoil: { z: -0.09, x: -0.16, pitch: 0.03, yaw: 0.012, roll: 0.008, armR: 0.26, armL: 0.12, muzzleMs: 70 },
+        audioSample: { url: '/assets/audio/weapons/shotgun.mp3', gain: 0.98, playbackRateMin: 0.97, playbackRateMax: 1.02 }
+      }
+    },
+    sniper: {
+      name: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1450, reloadMs: 2100, magazineSize: 5,
+      bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1, hipfireSpread: 0.32, adsFovDeg: 24, adsMaxRange: 160,
+      aimProfile: { hipfire: { spread: 0.32, maxRange: 160 }, ads: { spread: 0, maxRange: 160 } }, infiniteRange: true,
+      presentation: {
+        tracer: { life: 0.12, speed: 320, segmentLength: 2.6 },
+        recoil: { z: -0.12, x: -0.2, pitch: 0.04, yaw: 0.01, roll: 0.007, armR: 0.3, armL: 0.12, muzzleMs: 90 },
+        audioSample: { url: '/assets/audio/weapons/sniper.mp3', gain: 0.82, playbackRateMin: 0.96, playbackRateMax: 1.0 }
+      }
+    },
   },
   defaultWeaponLoadout: ['machinegun', 'shotgun'],
   selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
@@ -160,6 +214,46 @@ export function getWeaponStats(weaponId) {
   return gameplayTuning.weaponStats[weaponId] || null;
 }
 
+export function getWeaponPresentation(weaponId) {
+  const stats = gameplayTuning.weaponStats[String(weaponId || '')] || gameplayTuning.weaponStats.rifle || {};
+  const raw = stats.presentation || {};
+  const tracer = raw.tracer || {};
+  const recoil = raw.recoil || {};
+  const audioSample = raw.audioSample || null;
+  return {
+    tracer: {
+      life: Number.isFinite(Number(tracer.life)) ? Number(tracer.life) : DEFAULT_WEAPON_PRESENTATION.tracer.life,
+      speed: Number.isFinite(Number(tracer.speed)) ? Number(tracer.speed) : DEFAULT_WEAPON_PRESENTATION.tracer.speed,
+      segmentLength: Number.isFinite(Number(tracer.segmentLength)) ? Number(tracer.segmentLength) : DEFAULT_WEAPON_PRESENTATION.tracer.segmentLength
+    },
+    recoil: {
+      z: Number.isFinite(Number(recoil.z)) ? Number(recoil.z) : DEFAULT_WEAPON_PRESENTATION.recoil.z,
+      x: Number.isFinite(Number(recoil.x)) ? Number(recoil.x) : DEFAULT_WEAPON_PRESENTATION.recoil.x,
+      pitch: Number.isFinite(Number(recoil.pitch)) ? Number(recoil.pitch) : DEFAULT_WEAPON_PRESENTATION.recoil.pitch,
+      yaw: Number.isFinite(Number(recoil.yaw)) ? Number(recoil.yaw) : DEFAULT_WEAPON_PRESENTATION.recoil.yaw,
+      roll: Number.isFinite(Number(recoil.roll)) ? Number(recoil.roll) : DEFAULT_WEAPON_PRESENTATION.recoil.roll,
+      armR: Number.isFinite(Number(recoil.armR)) ? Number(recoil.armR) : DEFAULT_WEAPON_PRESENTATION.recoil.armR,
+      armL: Number.isFinite(Number(recoil.armL)) ? Number(recoil.armL) : DEFAULT_WEAPON_PRESENTATION.recoil.armL,
+      muzzleMs: Number.isFinite(Number(recoil.muzzleMs)) ? Number(recoil.muzzleMs) : DEFAULT_WEAPON_PRESENTATION.recoil.muzzleMs
+    },
+    audioSample: audioSample && audioSample.url ? {
+      url: String(audioSample.url),
+      gain: Number.isFinite(Number(audioSample.gain)) ? Number(audioSample.gain) : 1,
+      playbackRateMin: Number.isFinite(Number(audioSample.playbackRateMin)) ? Number(audioSample.playbackRateMin) : 1,
+      playbackRateMax: Number.isFinite(Number(audioSample.playbackRateMax)) ? Number(audioSample.playbackRateMax) : 1
+    } : null
+  };
+}
+
+export function resolveWeaponAdsFovDeg(weaponStats) {
+  const stats = weaponStats || {};
+  const raw = Number(stats.adsFovDeg);
+  if (Number.isFinite(raw) && raw > 0.0001) {
+    return Math.max(1, Math.min(DEFAULT_CAMERA_FOV_DEG, raw));
+  }
+  return stats.id === 'sniper' ? DEFAULT_SNIPER_SCOPE_FOV_DEG : DEFAULT_ADS_FOV_DEG;
+}
+
 export function getWeaponFalloffProfile(weaponId) {
   const profile = gameplayTuning.weaponFalloff[String(weaponId || '')];
   if (!Array.isArray(profile) || profile.length === 0) return [];
@@ -174,28 +268,13 @@ export function getWeaponFalloffProfile(weaponId) {
 
 export function resolveWeaponAimProfile(weaponStats, adsActive) {
   const stats = weaponStats || {};
-  if (stats.infiniteRange) {
-    return {
-      spread: adsActive ? Number(stats.adsSpread || 0) : Number(stats.hipfireSpread || 0),
-      maxRange: Infinity
-    };
-  }
-
+  const baseHipfireSpread = Math.max(0, Number(stats.hipfireSpread || 0));
   const aimProfile = stats.aimProfile || {};
   const hipfire = aimProfile.hipfire || {};
   const ads = aimProfile.ads || {};
-  const hipfireSpread = Math.max(0, Number(hipfire.spread != null ? hipfire.spread : stats.hipfireSpread || 0));
+  const hipfireSpread = Math.max(0, Number(hipfire.spread != null ? hipfire.spread : baseHipfireSpread));
+  const adsSpread = Math.max(0, Number(ads.spread != null ? ads.spread : hipfireSpread));
   const hipfireRange = Math.max(0, Number(hipfire.maxRange != null ? hipfire.maxRange : stats.maxRange || 0));
-  const adsSpread = Math.max(
-    0,
-    Number(
-      ads.spread != null
-        ? ads.spread
-        : (stats.adsSpread != null
-          ? stats.adsSpread
-          : (hipfireSpread * Math.max(0, Number(stats.adsSpreadMultiplier != null ? stats.adsSpreadMultiplier : 1))))
-    )
-  );
   const adsRange = Math.max(
     hipfireRange,
     Number(
@@ -206,10 +285,12 @@ export function resolveWeaponAimProfile(weaponStats, adsActive) {
           : (hipfireRange * Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1))))
     )
   );
+  const resolvedHipfireRange = stats.infiniteRange ? Infinity : hipfireRange;
+  const resolvedAdsRange = stats.infiniteRange ? Infinity : adsRange;
 
   return adsActive
-    ? { spread: adsSpread, maxRange: adsRange }
-    : { spread: hipfireSpread, maxRange: hipfireRange };
+    ? { spread: adsSpread, maxRange: resolvedAdsRange }
+    : { spread: hipfireSpread, maxRange: resolvedHipfireRange };
 }
 
 export function getDefaultWeaponLoadout() {
@@ -288,6 +369,8 @@ runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
 runtime.GameShared.getWeaponStats = getWeaponStats;
+runtime.GameShared.getWeaponPresentation = getWeaponPresentation;
+runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;
 runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
 runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;

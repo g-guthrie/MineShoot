@@ -68,6 +68,33 @@
         rig.gun.rotation.set(rig.gunBaseRot.x, rig.gunBaseRot.y, rig.gunBaseRot.z);
     }
 
+    function pointArmAtTarget(armGroup, targetVec, parentGroup, extraX, extraY, extraZ) {
+        pointArmAtTarget._cache = pointArmAtTarget._cache || {
+            armDown: new THREE.Vector3(0, -1, 0),
+            shoulderWorld: new THREE.Vector3(),
+            parentLocalA: new THREE.Vector3(),
+            parentLocalB: new THREE.Vector3(),
+            aimDir: new THREE.Vector3(),
+            aimQuat: new THREE.Quaternion(),
+            aimEuler: new THREE.Euler()
+        };
+        var cache = pointArmAtTarget._cache;
+        if (!armGroup || !targetVec || !parentGroup) return;
+        armGroup.getWorldPosition(cache.shoulderWorld);
+        cache.parentLocalA.copy(cache.shoulderWorld);
+        cache.parentLocalB.copy(targetVec);
+        parentGroup.worldToLocal(cache.parentLocalA);
+        parentGroup.worldToLocal(cache.parentLocalB);
+        cache.aimDir.copy(cache.parentLocalB).sub(cache.parentLocalA);
+        if (cache.aimDir.lengthSq() < 0.000001) return;
+        cache.aimDir.normalize();
+        cache.aimQuat.setFromUnitVectors(cache.armDown, cache.aimDir);
+        cache.aimEuler.setFromQuaternion(cache.aimQuat, 'XYZ');
+        armGroup.rotation.x = cache.aimEuler.x + (extraX || 0);
+        armGroup.rotation.y = cache.aimEuler.y + (extraY || 0);
+        armGroup.rotation.z = cache.aimEuler.z + (extraZ || 0);
+    }
+
     function getSupportPoseForWeapon(weaponId, aimPitch, walkSwing, adsActive) {
         if (weaponId !== 'sniper') return null;
 
@@ -116,26 +143,47 @@
         var reach = Math.sin(t * Math.PI);
         var wiggle = Math.sin(t * Math.PI * 5) * reach;
         var longGun = weaponId === 'rifle' || weaponId === 'machinegun' || weaponId === 'shotgun' || weaponId === 'sniper';
-        var supportBias = longGun ? 1 : 0;
 
         return {
-            armX: 0.9 + (reach * 0.42) + (wiggle * 0.08),
-            armY: -0.14 - (reach * (0.18 + (supportBias * 0.06))),
-            armZ: -0.28 - (reach * (0.22 + (supportBias * 0.1))) - (wiggle * 0.05),
-            palmX: LEFT_PALM_NEUTRAL.x - 0.03 - (supportBias * 0.02),
-            palmY: LEFT_PALM_NEUTRAL.y + (reach * 0.18),
-            palmZ: LEFT_PALM_NEUTRAL.z - 0.14 - (supportBias * 0.05),
+            armX: longGun ? 0.1 + (wiggle * 0.02) : 0.04 + (wiggle * 0.015),
+            armY: -0.02 - (reach * (longGun ? 0.06 : 0.03)),
+            armZ: -0.05 - (reach * (longGun ? 0.08 : 0.04)),
+            palmX: LEFT_PALM_NEUTRAL.x - 0.015,
+            palmY: LEFT_PALM_NEUTRAL.y + (reach * 0.08),
+            palmZ: LEFT_PALM_NEUTRAL.z - (longGun ? 0.07 : 0.04),
             gunYaw: wiggle * 0.012,
             gunRoll: wiggle * 0.02,
-            rightArmX: reach * 0.05
+            rightArmX: reach * 0.05,
+            targetOffsetX: longGun ? -0.02 : -0.005,
+            targetOffsetY: 0.03 + (reach * (longGun ? 0.05 : 0.03)),
+            targetOffsetZ: (longGun ? 0.14 : 0.07) + (wiggle * 0.03),
+            aimX: longGun ? 0.1 : 0.06,
+            aimY: longGun ? -0.05 : -0.03,
+            aimZ: longGun ? -0.04 : -0.02
         };
     }
 
-    function applyReloadPose(rig, weaponId, reloadPct) {
+    function applyReloadPose(rig, weaponId, reloadPct, modelRoot) {
         if (!rig || !rig.armL || !rig.gun) return;
 
         var pose = getReloadPoseForWeapon(weaponId, reloadPct);
         applyLeftArmPose(rig, pose);
+        if (rig.supportAnchor && modelRoot) {
+            var reloadTarget = new THREE.Vector3(
+                rig.supportBasePos.x + Number(pose.targetOffsetX || 0),
+                rig.supportBasePos.y + Number(pose.targetOffsetY || 0),
+                rig.supportBasePos.z + Number(pose.targetOffsetZ || 0)
+            );
+            rig.gun.localToWorld(reloadTarget);
+            pointArmAtTarget(
+                rig.armL,
+                reloadTarget,
+                modelRoot,
+                pose.aimX,
+                pose.aimY,
+                pose.aimZ
+            );
+        }
         rig.gun.rotation.y += pose.gunYaw;
         rig.gun.rotation.z += pose.gunRoll;
         if (rig.armR) {
@@ -578,7 +626,7 @@
             }
 
             if (animState && animState.reloading && rig.weaponClass !== 'melee') {
-                applyReloadPose(rig, rig.weaponId, animState.reloadPct);
+                applyReloadPose(rig, rig.weaponId, animState.reloadPct, modelRoot);
             }
         }
 

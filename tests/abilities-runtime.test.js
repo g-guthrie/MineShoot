@@ -301,15 +301,16 @@ test('deadeye candidate acquisition uses the player eye origin instead of raw ca
   assert.equal(start.kind, 'deadeye_start');
 });
 
-test('local choke applies action lock for its hold duration', async () => {
+test('local choke only applies the lifted state to the victim', async () => {
   const restrictionCalls = [];
+  const enemyRef = {};
   const abilities = await loadAbilitiesRuntime({
     GameHitscan: {
       selectLockTargetByRect() {
         return {
           hitbox: {},
           worldPos: { x: 1, y: 2, z: 3 },
-          enemyRef: {}
+          enemyRef
         };
       }
     },
@@ -328,8 +329,7 @@ test('local choke applies action lock for its hold duration', async () => {
   const result = abilities.triggerAbility(1, { fov: 60 }, null, null, null, null);
 
   assert.equal(result.ok, true);
-  assert.equal(restrictionCalls.length, 1);
-  assert.ok(restrictionCalls[0].weaponUntil > 0);
-  assert.equal(restrictionCalls[0].weaponUntil, restrictionCalls[0].throwableUntil);
-  assert.equal(restrictionCalls[0].weaponUntil, restrictionCalls[0].abilityUntil);
+  assert.equal(restrictionCalls.length, 0);
+  assert.equal(enemyRef.chokeVictimState.sourceId, 'player');
+  assert.ok(enemyRef.chokeVictimState.endsAt > enemyRef.chokeVictimState.startedAt);
 });

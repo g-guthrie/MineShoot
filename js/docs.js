@@ -290,7 +290,8 @@
         lines.push('COOLDOWN    : ' + fNum(w.cooldown) + 'ms');
         lines.push('ROF         : ' + fRateMs(w.cooldown));
         lines.push('RANGE H/A   : ' + fNum(w.maxRange) + ' / ' + fNum(w.adsMaxRange != null ? w.adsMaxRange : w.maxRange));
-        lines.push('SPREAD H/A  : ' + fNum(w.hipfireSpread) + ' / ' + fNum(w.adsSpread != null ? w.adsSpread : w.hipfireSpread));
+        lines.push('SPREAD      : ' + fNum(w.hipfireSpread));
+        lines.push('ADS FOV     : ' + fNum(w.adsFovDeg != null ? w.adsFovDeg : (w.id === 'sniper' ? 24 : 56)));
         lines.push('PELLETS     : ' + fNum(w.pellets));
         lines.push('SPECIAL     : ' + weaponSpecial(w));
         lines.push('');

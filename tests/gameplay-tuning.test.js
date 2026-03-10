@@ -5,7 +5,10 @@ import {
   gameplayTuning,
   getSelectableWeaponIds,
   getWeaponFalloffProfile,
-  normalizeAbilityLoadout
+  getWeaponPresentation,
+  normalizeAbilityLoadout,
+  resolveWeaponAdsFovDeg,
+  resolveWeaponAimProfile
 } from '../shared/gameplay-tuning.js';
 import { DEFAULT_HP_MAX, DEFAULT_ARMOR_MAX } from '../shared/entity-constants.js';
 
@@ -77,6 +80,34 @@ test('shared weapon helpers expose the selectable loadout order and falloff prof
   const machinegunFalloff = getWeaponFalloffProfile('machinegun');
   assert.deepEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
   assert.notEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
+});
+
+test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs', () => {
+  const rifle = getWeaponPresentation('rifle');
+  const sniper = getWeaponPresentation('sniper');
+
+  assert.equal(rifle.tracer.speed, 280);
+  assert.equal(rifle.recoil.muzzleMs, 60);
+  assert.equal(rifle.audioSample.url, '/assets/audio/weapons/rifle.mp3');
+  assert.equal(sniper.tracer.segmentLength, 2.6);
+  assert.equal(sniper.recoil.pitch, 0.04);
+  assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper.mp3');
+});
+
+test('ADS aim profiles can tighten spread independently from hipfire', () => {
+  const rifle = gameplayTuning.weaponStats.rifle;
+  const shotgun = gameplayTuning.weaponStats.shotgun;
+  const sniper = gameplayTuning.weaponStats.sniper;
+
+  assert.equal(resolveWeaponAimProfile(rifle, false).spread, rifle.hipfireSpread);
+  assert.equal(resolveWeaponAimProfile(rifle, true).spread, 0);
+  assert.equal(resolveWeaponAimProfile(shotgun, false).spread, shotgun.hipfireSpread);
+  assert.equal(resolveWeaponAimProfile(shotgun, true).spread, shotgun.hipfireSpread);
+  assert.equal(resolveWeaponAimProfile(sniper, false).spread, sniper.hipfireSpread);
+  assert.equal(resolveWeaponAimProfile(sniper, true).spread, 0);
+  assert.equal(resolveWeaponAimProfile(sniper, true).maxRange, Infinity);
+  assert.equal(resolveWeaponAdsFovDeg(shotgun), 56);
+  assert.equal(resolveWeaponAdsFovDeg(sniper), 24);
 });
 
 test('Vader choke duration includes the extra half-second hold', () => {

@@ -8,6 +8,7 @@ const HARNESS_MODULE_PATHS = [
   '../js/app/lobby-friends-view.js',
   '../js/app/lobby-private-room-view.js',
   '../js/app/lobby-clickables.js',
+  '../js/app/lobby-controller-ui.js',
   '../js/app/lobby-session.js',
   '../js/app/lobby-controller.js'
 ];

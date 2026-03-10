@@ -6,11 +6,9 @@ import {
   HEAD_HITBOX_CENTER_OFFSET_Y
 } from './entity-constants.js';
 import { applyFalloff } from './damage.js';
-import { resolveWeaponAimProfile } from './gameplay-tuning.js';
+import { resolveWeaponAdsFovDeg, resolveWeaponAimProfile } from './gameplay-tuning.js';
 
 const CAMERA_FOV_DEG = 75;
-const ADS_FOV_DEG = 56;
-const SNIPER_SCOPE_FOV_DEG = 24;
 const DEFAULT_ASPECT = 16 / 9;
 
 function clampNumber(value, min, max) {
@@ -56,21 +54,17 @@ function seededUnit(seed, salt) {
   return ((x >>> 0) / 4294967296);
 }
 
-function weaponFovDeg(weaponId, adsActive) {
+function weaponFovDeg(weaponStats, adsActive) {
   if (!adsActive) return CAMERA_FOV_DEG;
-  return weaponId === 'sniper' ? SNIPER_SCOPE_FOV_DEG : ADS_FOV_DEG;
+  return resolveWeaponAdsFovDeg(weaponStats);
 }
 
-function weaponScopedFovDeg(weaponId) {
-  return weaponId === 'sniper' ? SNIPER_SCOPE_FOV_DEG : ADS_FOV_DEG;
-}
-
-function resolveViewFovDeg(weaponId, viewFovDeg) {
-  const fallback = weaponFovDeg(weaponId, false);
+function resolveViewFovDeg(weaponStats, viewFovDeg) {
+  const fallback = weaponFovDeg(weaponStats, false);
   const raw = Number(viewFovDeg);
   if (!Number.isFinite(raw) || raw <= 0.0001) return fallback;
 
-  const scoped = weaponScopedFovDeg(weaponId);
+  const scoped = weaponFovDeg(weaponStats, true);
   return clampNumber(raw, Math.min(CAMERA_FOV_DEG, scoped), Math.max(CAMERA_FOV_DEG, scoped));
 }
 
@@ -95,7 +89,7 @@ function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotTok
   const offset = spreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
   if (offset.x === 0 && offset.y === 0) return baseForward;
 
-  const fovY = resolveViewFovDeg(weaponStats && weaponStats.id || '', viewFovDeg) * Math.PI / 180;
+  const fovY = resolveViewFovDeg(weaponStats, viewFovDeg) * Math.PI / 180;
   const tanHalfY = Math.tan(fovY * 0.5);
   const tanHalfX = tanHalfY * DEFAULT_ASPECT;
   return normalizeVec3(addVec3(

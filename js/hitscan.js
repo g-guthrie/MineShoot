@@ -39,45 +39,19 @@
     var sharedTuning = shared.gameplayTuning || {};
     var sharedWeaponStats = sharedTuning.weaponStats || {};
 
-    function resolveWeaponAimProfileLocal(weaponStats, adsActive) {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+    function resolveSharedWeaponAimProfile(weaponStats, adsActive) {
         if (shared.resolveWeaponAimProfile) {
             return shared.resolveWeaponAimProfile(weaponStats, adsActive);
         }
-        var stats = weaponStats || {};
-        var hipfireSpread = Math.max(0, Number(stats.hipfireSpread || 0));
-        var hipfireRange = Math.max(0, Number(stats.maxRange || 0));
-        if (!adsActive) {
-            return { spread: hipfireSpread, maxRange: hipfireRange };
-        }
-        return {
-            spread: Math.max(0, Number(stats.adsSpread != null ? stats.adsSpread : (hipfireSpread * Math.max(0, Number(stats.adsSpreadMultiplier != null ? stats.adsSpreadMultiplier : 1))))),
-            maxRange: Math.max(hipfireRange, Number(stats.adsMaxRange != null ? stats.adsMaxRange : (hipfireRange * Math.max(1, Number(stats.adsHitscanRangeMultiplier || 1)))))
-        };
+        throw new Error('GameHitscan requires GameShared.resolveWeaponAimProfile before initialization.');
     }
 
     function buildWeaponFromShared(id) {
         var s = sharedWeaponStats[id] || {};
-        var hipAim = resolveWeaponAimProfileLocal({
-            hipfireSpread: Number(s.hipfireSpread || 0),
-            maxRange: Number(s.maxRange || 0),
-            adsSpread: s.adsSpread,
-            adsMaxRange: s.adsMaxRange,
-            adsSpreadMultiplier: s.adsSpreadMultiplier,
-            adsHitscanRangeMultiplier: s.adsHitscanRangeMultiplier,
-            aimProfile: s.aimProfile,
-            infiniteRange: !!s.infiniteRange
-        }, false);
-        var adsAim = resolveWeaponAimProfileLocal({
-            hipfireSpread: Number(s.hipfireSpread || 0),
-            maxRange: Number(s.maxRange || 0),
-            adsSpread: s.adsSpread,
-            adsMaxRange: s.adsMaxRange,
-            adsSpreadMultiplier: s.adsSpreadMultiplier,
-            adsHitscanRangeMultiplier: s.adsHitscanRangeMultiplier,
-            aimProfile: s.aimProfile,
-            infiniteRange: !!s.infiniteRange
-        }, true);
+        var hipAim = resolveSharedWeaponAimProfile(s, false);
+        var adsAim = resolveSharedWeaponAimProfile(s, true);
+        var presentation = shared.getWeaponPresentation ? shared.getWeaponPresentation(id) : null;
+        var tracer = presentation && presentation.tracer ? presentation.tracer : {};
         return {
             id: id,
             name: s.name || id,
@@ -91,10 +65,13 @@
             pellets: Number(s.pellets || 1),
             hipfireSpread: Number(hipAim.spread || 0),
             adsSpread: Number(adsAim.spread || 0),
+            adsFovDeg: Number(s.adsFovDeg || 0),
             maxRange: hipAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(hipAim.maxRange || 0),
             adsMaxRange: adsAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(adsAim.maxRange || 0),
-            adsSpreadMultiplier: Number(hipAim.spread > 0 ? (Number(adsAim.spread || 0) / hipAim.spread) : 0),
             adsHitscanRangeMultiplier: Number(hipAim.maxRange > 0 ? (Number(adsAim.maxRange || hipAim.maxRange) / hipAim.maxRange) : 1),
+            tracerLife: Number(tracer.life || 0),
+            tracerSpeed: Number(tracer.speed || 0),
+            tracerSegmentLength: Number(tracer.segmentLength || 0),
             hipfireBloomScale: Number(s.hipfireBloomScale != null ? s.hipfireBloomScale : 1),
             adsBloomScale: Number(s.adsBloomScale != null ? s.adsBloomScale : 1)
         };
@@ -231,7 +208,7 @@
                 i,
                 onHit,
                 shouldTraceThisPellet ? function (traceEnd) {
-                    spawnTracer(camera, weapon.id, traceEnd);
+                    spawnTracer(camera, weapon, traceEnd);
                 } : null
             );
             anyHit = anyHit || hit;
@@ -293,28 +270,19 @@
     }
 
 
-    function tracerLifeForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 0.075;
-        if (weaponId === 'shotgun') return 0.1;
-        if (weaponId === 'sniper') return 0.12;
-        return 0.11;
+    function tracerLifeForWeapon(weapon) {
+        return Math.max(0.01, Number(weapon && weapon.tracerLife || 0.11));
     }
 
-    function tracerSpeedForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 260;
-        if (weaponId === 'shotgun') return 230;
-        if (weaponId === 'sniper') return 320;
-        return 280;
+    function tracerSpeedForWeapon(weapon) {
+        return Math.max(1, Number(weapon && weapon.tracerSpeed || 280));
     }
 
-    function tracerSegmentLengthForWeapon(weaponId) {
-        if (weaponId === 'machinegun') return 1.25;
-        if (weaponId === 'shotgun') return 1.9;
-        if (weaponId === 'sniper') return 2.6;
-        return 2.1;
+    function tracerSegmentLengthForWeapon(weapon) {
+        return Math.max(0.05, Number(weapon && weapon.tracerSegmentLength || 2.1));
     }
 
-    function spawnTracer(camera, weaponId, endPoint) {
+    function spawnTracer(camera, weapon, endPoint) {
         if (!camera || !endPoint) return;
         var idx = allocTracer(camera);
         if (idx === null) return;
@@ -331,11 +299,11 @@
         tracer.tail.copy(tracer.origin);
         tracer.traveled = 0;
         tracer.maxDistance = len;
-        tracer.segmentLength = tracerSegmentLengthForWeapon(weaponId);
-        tracer.speed = tracerSpeedForWeapon(weaponId);
+        tracer.segmentLength = tracerSegmentLengthForWeapon(weapon);
+        tracer.speed = tracerSpeedForWeapon(weapon);
         tracer.framesAlive = 0;
 
-        tracer.maxLife = tracerLifeForWeapon(weaponId);
+        tracer.maxLife = tracerLifeForWeapon(weapon);
         tracer.life = tracer.maxLife;
     }
 
@@ -483,17 +451,10 @@
         return Math.max(1, Math.round(damage * tailScale));
     }
 
-    function getWeaponSpreadMultiplier(weapon) {
-        if (!weapon || !weapon.id) return 0;
-        if (!isAdsActiveForWeapon(weapon.id)) return 1;
-        if (weapon.hipfireSpread <= 0.00001) return 0;
-        return Math.max(0, Number((weapon.adsSpread || 0) / weapon.hipfireSpread));
-    }
-
     function getActiveAimSpread(weapon) {
         if (!weapon) return 0;
-        var aim = resolveWeaponAimProfileLocal(weapon, isAdsActiveForWeapon(weapon.id));
-        return Math.max(0, Number(aim && aim.spread || 0));
+        var adsActive = isAdsActiveForWeapon(weapon.id);
+        return Math.max(0, Number(adsActive ? weapon.adsSpread : weapon.hipfireSpread || 0));
     }
 
     function getBloomDisplayScale(weapon) {
@@ -843,8 +804,8 @@
             headDamage: weapon.headDamage,
             pellets: weapon.pellets,
             hipfireSpread: weapon.hipfireSpread,
-            adsSpread: weapon.adsSpread,
-            adsSpreadMultiplier: weapon.adsSpreadMultiplier,
+            adsSpread: Number(weapon.adsSpread || 0),
+            adsFovDeg: Number(weapon.adsFovDeg || 0),
             maxRange: getEffectiveMaxRange(weapon),
             adsMaxRange: Number(weapon.adsMaxRange || weapon.maxRange || 0),
             adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1)
@@ -1084,8 +1045,8 @@
                 headDamage: weapon.headDamage,
                 pellets: weapon.pellets,
                 hipfireSpread: weapon.hipfireSpread,
-                adsSpread: weapon.adsSpread,
-                adsSpreadMultiplier: weapon.adsSpreadMultiplier,
+                adsSpread: Number(weapon.adsSpread || 0),
+                adsFovDeg: Number(weapon.adsFovDeg || 0),
                 hipfireBloomScale: Number(weapon.hipfireBloomScale != null ? weapon.hipfireBloomScale : 1),
                 adsBloomScale: Number(weapon.adsBloomScale != null ? weapon.adsBloomScale : 1),
                 maxRange: weapon.maxRange,

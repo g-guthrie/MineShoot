@@ -38,16 +38,35 @@ test('sniper support pose keeps the left arm tucked near the rifle fore-end', as
   assert.ok(pose.targetX < 0.18);
 });
 
-test('reload pose is available for every firearm and includes wiggle offsets', async () => {
+test('reload pose is available for every firearm and keeps the support hand anchored near the weapon', async () => {
   const avatarRig = await loadAvatarRig();
   const weaponIds = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
 
   for (const weaponId of weaponIds) {
     const pose = avatarRig._test.getReloadPoseForWeapon(weaponId, 0.35);
     assert.ok(pose, weaponId + ' should produce a reload pose');
-  assert.ok(pose.armX > 0.95, weaponId + ' should lift the left arm across the weapon');
-  assert.notEqual(pose.gunRoll, 0, weaponId + ' should add reload wiggle');
+    assert.ok(Math.abs(pose.armX) < 0.2, weaponId + ' should not throw the shoulder across the torso');
+    assert.ok(pose.targetOffsetZ > 0, weaponId + ' should pull the support hand back toward the receiver');
+    assert.notEqual(pose.gunRoll, 0, weaponId + ' should add reload wiggle');
   }
+});
+
+test('reload animation keeps the left shoulder on the weapon side instead of floating across the torso', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    adsActive: false,
+    reloading: true,
+    reloadPct: 0.35
+  });
+
+  assert.ok(api.rig.armL.position.x < -0.2);
+  assert.ok(api.rig.armL.position.x > -0.8);
 });
 
 test('built-in weapon visuals keep the sniper support anchor tucked under the fore-end', async () => {

@@ -15,38 +15,16 @@
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
-    var WEAPON_SAMPLE_DEFS = {
-        pistol: {
-            url: '/assets/audio/weapons/pistol.mp3',
-            gain: 0.72,
-            playbackRateMin: 0.98,
-            playbackRateMax: 1.04
-        },
-        rifle: {
-            url: '/assets/audio/weapons/rifle.mp3',
-            gain: 0.66,
-            playbackRateMin: 0.97,
-            playbackRateMax: 1.03
-        },
-        machinegun: {
-            url: '/assets/audio/weapons/rifle.mp3',
-            gain: 0.45,
-            playbackRateMin: 1.16,
-            playbackRateMax: 1.26
-        },
-        shotgun: {
-            url: '/assets/audio/weapons/shotgun.mp3',
-            gain: 0.98,
-            playbackRateMin: 0.97,
-            playbackRateMax: 1.02
-        },
-        sniper: {
-            url: '/assets/audio/weapons/sniper.mp3',
-            gain: 0.82,
-            playbackRateMin: 0.96,
-            playbackRateMax: 1.0
-        }
-    };
+
+    function weaponPresentationFor(weaponId) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+    }
+
+    function weaponSampleDef(weaponId) {
+        var presentation = weaponPresentationFor(weaponId) || weaponPresentationFor('rifle');
+        return presentation && presentation.audioSample ? presentation.audioSample : null;
+    }
 
     function loadMutedPreference() {
         try {
@@ -238,9 +216,10 @@
         if (sampleWarmupStarted || !c || c.state !== 'running') return;
         sampleWarmupStarted = true;
         var seen = {};
-        for (var weaponId in WEAPON_SAMPLE_DEFS) {
-            if (!Object.prototype.hasOwnProperty.call(WEAPON_SAMPLE_DEFS, weaponId)) continue;
-            var sampleDef = WEAPON_SAMPLE_DEFS[weaponId];
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var weaponIds = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper'];
+        for (var i = 0; i < weaponIds.length; i++) {
+            var sampleDef = weaponSampleDef(weaponIds[i]);
             if (!sampleDef || !sampleDef.url || seen[sampleDef.url]) continue;
             seen[sampleDef.url] = true;
             loadSampleBuffer(c, sampleDef.url);
@@ -375,7 +354,7 @@
             playWeaponFireProcedural(c, weapon);
             return;
         }
-        if (playSampleBuffer(c, WEAPON_SAMPLE_DEFS[weapon] || WEAPON_SAMPLE_DEFS.rifle)) {
+        if (playSampleBuffer(c, weaponSampleDef(weapon))) {
             if (weapon === 'shotgun') {
                 playShotgunKickAccent(c);
             }

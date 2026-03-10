@@ -6,8 +6,8 @@ cd "$ROOT_DIR"
 
 WRANGLER_BIN="${WRANGLER_BIN:-$ROOT_DIR/scripts/wrangler.sh}"
 WORKER_PORT="${WORKER_PORT:-8787}"
-# Legacy compatibility asset bundle. Current frontend builds still target dist/.
-ASSET_DIR="${ASSET_DIR:-$ROOT_DIR/.cf-deploy}"
+# Current frontend build output.
+ASSET_DIR="${ASSET_DIR:-$ROOT_DIR/dist}"
 
 WORKER_LOG="${WORKER_LOG:-$ROOT_DIR/.wrangler/offline-worker.log}"
 
@@ -15,7 +15,7 @@ mkdir -p "$ROOT_DIR/.wrangler"
 
 if [[ ! -f "$ASSET_DIR/index.html" ]]; then
   echo "Missing local asset bundle at $ASSET_DIR"
-  echo "Build and stage the legacy compatibility bundle first."
+  echo "Build the frontend first with: npm run build"
   exit 1
 fi
 

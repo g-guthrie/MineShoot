@@ -10,6 +10,8 @@
     var camera = null;
     var yaw = 0;
     var pitch = 0;
+    var playerWorld = null;
+    var playerView = null;
 
     var sharedGameplay = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
     var movementTuning = sharedGameplay && sharedGameplay.movement ? sharedGameplay.movement : {};
@@ -21,6 +23,20 @@
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
         var selected = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
         return Array.isArray(selected) && selected.length ? selected : ['rifle'];
+    }
+
+    function adsFovForWeapon(weaponId) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var weaponStats = shared.getWeaponStats ? shared.getWeaponStats(weaponId) : null;
+        if (shared.resolveWeaponAdsFovDeg) {
+            return Number(shared.resolveWeaponAdsFovDeg(weaponStats || { id: weaponId })) || ADS_FOV;
+        }
+        return weaponId === 'sniper' ? SNIPER_SCOPE_FOV : ADS_FOV;
+    }
+
+    function weaponPresentationFor(weaponId) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
     }
 
     var EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
@@ -68,18 +84,6 @@
     var sprintPressedLastFrame = false;
     var sprintQueued = false;
     var scopeHeld = false;
-    var scopeBlend = 0;
-
-    var thirdCameraInitialized = false;
-    var viewOrigin = new THREE.Vector3();
-    var viewDesired = new THREE.Vector3();
-    var viewTarget = new THREE.Vector3();
-    var adsDesired = new THREE.Vector3();
-    var viewDir = new THREE.Vector3();
-    var eyeWorld = new THREE.Vector3();
-    var plasmaForwardDir = new THREE.Vector3();
-    var throwableRightDir = new THREE.Vector3();
-    var viewRay = new THREE.Raycaster();
 
     var keys = {
         forward: false,
@@ -89,6 +93,7 @@
         jump: false,
         sprint: false
     };
+    var inputBound = false;
 
     var currentWeaponId = 'rifle';
 
@@ -105,14 +110,6 @@
     var lastMoveSpeedNorm = 0;
     var loadoutSlots = selectableWeaponIds();
 
-    var gunBobX = 0;
-    var gunBobY = 0;
-    var gunRecoil = 0;
-    var palmRecoil = 0;
-    var cameraKickPitch = 0;
-    var cameraKickYaw = 0;
-    var cameraKickRoll = 0;
-    var firePoseKick = 0;
     var lastReplayAckSeq = 0;
     var avatarAliveVisible = true;
     var statusState = {
@@ -143,6 +140,35 @@
 
     function nowMs() {
         return Date.now();
+    }
+
+    function worldHelper() {
+        if (playerWorld) return playerWorld;
+        var helper = globalThis.__MAYHEM_RUNTIME.GamePlayerWorld || null;
+        if (!helper || !helper.create) return null;
+        playerWorld = helper.create({
+            playerRadius: PLAYER_RADIUS,
+            playerHeight: PLAYER_HEIGHT,
+            epsilon: EPSILON
+        });
+        return playerWorld;
+    }
+
+    function viewHelper() {
+        if (playerView) return playerView;
+        var helper = globalThis.__MAYHEM_RUNTIME.GamePlayerView || null;
+        if (!helper || !helper.create) return null;
+        playerView = helper.create({
+            getCurrentWeaponState: function () {
+                return globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
+                    ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
+                    : null;
+            },
+            getWeaponPresentation: function (weaponId) {
+                return weaponPresentationFor(weaponId);
+            }
+        });
+        return playerView;
     }
 
     function isStunned(now) {
@@ -291,235 +317,44 @@
     }
 
     function syncAvatarVisibility(sniperMode) {
-        if (!avatarGroup) return;
-
-        var avatarVisible = avatarAliveVisible && (!sniperMode || scopeBlend < 0.55);
-        avatarGroup.visible = avatarVisible;
-
-        if (!avatarRigApi || !avatarRigApi.rig) {
-            return;
-        }
-
-        if (!avatarVisible) {
-            return;
-        }
-
-        var rig = avatarRigApi.rig;
-        if (rig.headMesh) rig.headMesh.visible = true;
-        if (rig.bodyMesh) rig.bodyMesh.visible = true;
-        if (rig.legLMesh) rig.legLMesh.visible = true;
-        if (rig.legRMesh) rig.legRMesh.visible = true;
-        if (rig.armLMesh) rig.armLMesh.visible = true;
-        if (rig.armRMesh) rig.armRMesh.visible = true;
+        var view = viewHelper();
+        if (!view || !view.syncAvatarVisibility) return;
+        view.syncAvatarVisibility({
+            avatarGroup: avatarGroup,
+            avatarRigApi: avatarRigApi,
+            avatarAliveVisible: avatarAliveVisible,
+            sniperMode: !!sniperMode
+        });
     }
 
     function resetRecoilState() {
-        gunBobX = 0;
-        gunBobY = 0;
-        gunRecoil = 0;
-        palmRecoil = 0;
-        cameraKickPitch = 0;
-        cameraKickYaw = 0;
-        cameraKickRoll = 0;
-        firePoseKick = 0;
+        var view = viewHelper();
+        if (view && view.resetRecoilState) view.resetRecoilState();
     }
 
     function applyUnifiedGunOffsets(dt) {
-        if (!avatarRigApi || !avatarRigApi.rig) return;
-        var rig = avatarRigApi.rig;
-        if (!rig.gun) return;
-
-        var targetBobX = 0;
-        var targetBobY = 0;
-        var bobBlend = Math.min(1, dt * 12);
-        gunBobX += (targetBobX - gunBobX) * bobBlend;
-        gunBobY += (targetBobY - gunBobY) * bobBlend;
-
-        var recoilBlend = Math.min(1, dt * 18);
-        gunRecoil += (0 - gunRecoil) * recoilBlend;
-        palmRecoil += (0 - palmRecoil) * recoilBlend;
-        firePoseKick += (0 - firePoseKick) * Math.min(1, dt * 20);
-
-        var cameraKickPitchBlend = Math.min(1, dt * 14);
-        var cameraKickYawBlend = Math.min(1, dt * 16);
-        var cameraKickRollBlend = Math.min(1, dt * 12);
-        cameraKickPitch += (0 - cameraKickPitch) * cameraKickPitchBlend;
-        cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
-        cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
-
-        if (rig.gunBasePos) {
-            rig.gun.position.copy(rig.gunBasePos);
-        }
-        rig.gun.position.x += gunBobX;
-        rig.gun.position.y += gunBobY;
-        rig.gun.position.z += gunRecoil;
-        if (rig.palmRight) {
-            rig.palmRight.rotation.x += palmRecoil;
-        } else if (rig.palmLeft) {
-            rig.palmLeft.rotation.x += palmRecoil;
-        }
-        if (rig.armR) rig.armR.rotation.x += firePoseKick * 0.05;
-        if (rig.armL) rig.armL.rotation.x += firePoseKick * 0.035;
+        var view = viewHelper();
+        if (view && view.applyUnifiedGunOffsets) view.applyUnifiedGunOffsets(dt, avatarRigApi);
     }
 
     function updateAvatarAnimation(dt, speed) {
-        if (actorVisual && actorVisual.updateAnimation) {
-            var speedNorm = Math.max(0, Math.min(1.4, speed / RUN_SPEED));
-            var activeWeaponState = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
-                ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
-                : null;
-            var reloadPct = 0;
-            if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
-                reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
-            }
-            actorVisual.updateAnimation(dt, {
-                speedNorm: speedNorm,
-                sprinting: sprinting,
-                airborne: !isGrounded,
-                aimPitch: pitch + (cameraKickPitch * 0.35),
-                hooked: isHookPulled(),
-                choked: isChoked(),
-                startedAt: statusState.chokeStartedAt || 0,
-                adsActive: isAdsActive(),
-                reloading: !!(activeWeaponState && activeWeaponState.reloading),
-                reloadPct: reloadPct,
-                worldSpeed: speed,
-                movingForward: !!keys.forward,
-                movingBackward: !!keys.backward,
-                movingLeft: !!keys.left,
-                movingRight: !!keys.right
-            });
-        }
-    }
-
-    function getWorldBounds() {
-        return globalThis.__MAYHEM_RUNTIME.GameWorld.getBounds();
-    }
-
-    function getDefaultSpawnPoint() {
-        var bounds = getWorldBounds();
-        var centerX = (typeof bounds.centerX === 'number')
-            ? bounds.centerX
-            : ((bounds.min + bounds.max) * 0.5);
-        var centerZ = (typeof bounds.centerZ === 'number')
-            ? bounds.centerZ
-            : ((bounds.min + bounds.max) * 0.5);
-        var minZ = (typeof bounds.minZ === 'number') ? bounds.minZ : bounds.min;
-        var maxZ = (typeof bounds.maxZ === 'number') ? bounds.maxZ : bounds.max;
-        var z = Math.min(maxZ - 4, centerZ + Math.max(6, (maxZ - minZ) * 0.34));
-        return { x: centerX, z: z };
-    }
-
-    function getSpawnThreatPoints() {
-        var points = [];
-        if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
-            var localTargets = globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || [];
-            for (var i = 0; i < localTargets.length; i++) {
-                var localTarget = localTargets[i];
-                if (!localTarget || !localTarget.worldPos) continue;
-                points.push({
-                    x: Number(localTarget.worldPos.x || 0),
-                    z: Number(localTarget.worldPos.z || 0)
-                });
-            }
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets) {
-            var netTargets = globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets() || [];
-            for (var n = 0; n < netTargets.length; n++) {
-                var netTarget = netTargets[n];
-                if (!netTarget || !netTarget.worldPos) continue;
-                points.push({
-                    x: Number(netTarget.worldPos.x || 0),
-                    z: Number(netTarget.worldPos.z || 0)
-                });
-            }
-        }
-        return points;
-    }
-
-    function getCollisionBoxes() {
-        if (!globalThis.__MAYHEM_RUNTIME.GameWorld || !globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables) return [];
-
-        var meshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables();
-        if (!meshes || meshes.length === 0) return [];
-
-        var boxes = [];
-        for (var i = 0; i < meshes.length; i++) {
-            var mesh = meshes[i];
-            if (!mesh) continue;
-            if (!mesh.userData) mesh.userData = {};
-
-            var box = mesh.userData.collisionBox;
-            if (!box) {
-                mesh.updateMatrixWorld(true);
-                box = new THREE.Box3().setFromObject(mesh);
-                mesh.userData.collisionBox = box;
-            }
-            boxes.push(box);
-        }
-        return boxes;
-    }
-
-    function getGroundHeightAt(x, z) {
-        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getGroundHeightAt) {
-            return globalThis.__MAYHEM_RUNTIME.GameWorld.getGroundHeightAt(x, z);
-        }
-        return 0;
-    }
-
-    function intersectsXZ(x, z, radius, box) {
-        var closestX = Math.max(box.min.x, Math.min(x, box.max.x));
-        var closestZ = Math.max(box.min.z, Math.min(z, box.max.z));
-        var dx = x - closestX;
-        var dz = z - closestZ;
-        return ((dx * dx + dz * dz) < (radius * radius));
-    }
-
-    function isBlockedAt(nextX, nextZ, feetY) {
-        var boxes = getCollisionBoxes();
-        if (boxes.length === 0) return false;
-
-        var headY = feetY + PLAYER_HEIGHT;
-        for (var i = 0; i < boxes.length; i++) {
-            var box = boxes[i];
-            if (headY <= box.min.y + EPSILON || feetY >= box.max.y - EPSILON) continue;
-            if (intersectsXZ(nextX, nextZ, PLAYER_RADIUS, box)) return true;
-        }
-        return false;
-    }
-
-    function findLandingSurfaceY(x, z, currentFeetY, nextFeetY) {
-        var boxes = getCollisionBoxes();
-        var baseGroundY = getGroundHeightAt(x, z);
-        if (boxes.length === 0) return baseGroundY;
-
-        var best = null;
-        for (var i = 0; i < boxes.length; i++) {
-            var box = boxes[i];
-            var top = box.max.y;
-            if (!intersectsXZ(x, z, PLAYER_RADIUS * 0.9, box)) continue;
-            if (top <= currentFeetY + EPSILON && top >= nextFeetY - EPSILON) {
-                if (best === null || top > best) best = top;
-            }
-        }
-        if (best === null || best < baseGroundY) return baseGroundY;
-        return best;
-    }
-
-    function findCeilingY(x, z, currentHeadY, nextHeadY) {
-        var boxes = getCollisionBoxes();
-        if (boxes.length === 0) return null;
-
-        var best = null;
-        for (var i = 0; i < boxes.length; i++) {
-            var box = boxes[i];
-            var bottom = box.min.y;
-            if (!intersectsXZ(x, z, PLAYER_RADIUS * 0.9, box)) continue;
-            if (bottom >= currentHeadY - EPSILON && bottom <= nextHeadY + EPSILON) {
-                if (best === null || bottom < best) best = bottom;
-            }
-        }
-        return best;
+        var view = viewHelper();
+        if (!view || !view.updateAvatarAnimation) return;
+        view.updateAvatarAnimation(dt, speed, {
+            actorVisual: actorVisual,
+            runSpeed: RUN_SPEED,
+            sprinting: sprinting,
+            isGrounded: isGrounded,
+            pitch: pitch,
+            hooked: isHookPulled(),
+            choked: isChoked(),
+            chokeStartedAt: statusState.chokeStartedAt || 0,
+            adsActive: isAdsActive(),
+            movingForward: !!keys.forward,
+            movingBackward: !!keys.backward,
+            movingLeft: !!keys.left,
+            movingRight: !!keys.right
+        });
     }
 
     function updateAvatarPose() {
@@ -593,86 +428,51 @@
     }
 
     function updateCameraFromPlayer(dt) {
-        if (!camera) return;
-
-        var renderYaw = yaw + cameraKickYaw;
-        var renderPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch + cameraKickPitch));
-        var cosPitch = Math.cos(renderPitch);
-        var forwardX = -Math.sin(renderYaw) * cosPitch;
-        var forwardY = Math.sin(renderPitch);
-        var forwardZ = -Math.cos(renderYaw) * cosPitch;
-        var rightX = Math.cos(renderYaw);
-        var rightZ = -Math.sin(renderYaw);
-
-        var chokeLift = activeChokeLift();
-        var adsActive = isAdsActive();
-        var sniperMode = isSniperScopeWeapon();
-        var targetScopeBlend = adsActive ? 1 : 0;
-        var blendSpeed = sniperMode ? SNIPER_SCOPE_BLEND_SPEED : ADS_BLEND_SPEED;
-        scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
-        if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
-        if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
-        var scopedEyeMode = sniperMode && scopeBlend > 0.55;
-
-        syncAvatarVisibility(sniperMode);
-        updateAvatarPose();
-
-        viewTarget.set(playerX + forwardX * 20, posY + forwardY * 20, playerZ + forwardZ * 20);
-        viewTarget.y += chokeLift;
-        if (scopedEyeMode) {
-            if (avatarRigApi && avatarRigApi.getEyeWorldPosition) {
-                avatarRigApi.getEyeWorldPosition(eyeWorld);
-                viewOrigin.copy(eyeWorld);
-            } else {
-                viewOrigin.set(playerX, posY + chokeLift, playerZ);
-            }
-            viewDesired.copy(viewOrigin);
-        } else {
-            viewOrigin.set(playerX, posY + 0.3 + chokeLift, playerZ);
-            viewDesired.set(
-                playerX + (rightX * CAMERA_SHOULDER) - (forwardX * CAMERA_DIST),
-                posY + THIRD_HEIGHT + chokeLift,
-                playerZ + (rightZ * CAMERA_SHOULDER) - (forwardZ * CAMERA_DIST)
-            );
-            adsDesired.set(
-                playerX + (rightX * (sniperMode ? SNIPER_SCOPE_SHOULDER : ADS_SHOULDER)) - (forwardX * (sniperMode ? SNIPER_SCOPE_DIST : ADS_DIST)),
-                posY + (sniperMode ? SNIPER_SCOPE_HEIGHT : ADS_HEIGHT) + chokeLift,
-                playerZ + (rightZ * (sniperMode ? SNIPER_SCOPE_SHOULDER : ADS_SHOULDER)) - (forwardZ * (sniperMode ? SNIPER_SCOPE_DIST : ADS_DIST))
-            );
-            viewDesired.lerp(adsDesired, scopeBlend);
-
-            var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
-            if (worldMeshes && worldMeshes.length > 0) {
-                viewDir.copy(viewDesired).sub(viewOrigin);
-                var dist = viewDir.length();
-                if (dist > 0.001) {
-                    viewDir.divideScalar(dist);
-                    viewRay.set(viewOrigin, viewDir);
-                    viewRay.far = dist;
-                    var hits = viewRay.intersectObjects(worldMeshes, false);
-                    if (hits.length > 0) {
-                        var safeDist = Math.max(0.8, hits[0].distance - 0.2);
-                        viewDesired.copy(viewOrigin).addScaledVector(viewDir, safeDist);
-                    }
-                }
-            }
-        }
-
-        if (!thirdCameraInitialized) {
-            camera.position.copy(viewDesired);
-            thirdCameraInitialized = true;
-        } else {
-            camera.position.lerp(viewDesired, Math.min(1, dt * (scopedEyeMode ? FIRST_PERSON_SMOOTH : THIRD_SMOOTH)));
-        }
-        var scopedFov = sniperMode ? SNIPER_SCOPE_FOV : ADS_FOV;
-        var targetFov = CAMERA_FOV + ((scopedFov - CAMERA_FOV) * scopeBlend);
-        camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 16);
-        camera.updateProjectionMatrix();
-        camera.lookAt(viewTarget);
-        camera.rotation.z += cameraKickRoll;
+        var view = viewHelper();
+        if (!view || !view.updateCamera) return;
+        view.updateCamera(dt, {
+            camera: camera,
+            playerX: playerX,
+            playerZ: playerZ,
+            posY: posY,
+            yaw: yaw,
+            pitch: pitch,
+            currentWeaponId: currentWeaponId,
+            avatarGroup: avatarGroup,
+            avatarRigApi: avatarRigApi,
+            avatarAliveVisible: avatarAliveVisible,
+            sniperMode: isSniperScopeWeapon(),
+            adsActive: isAdsActive(),
+            chokeLift: activeChokeLift(),
+            updateAvatarPose: updateAvatarPose,
+            getWorldCollidables: function () {
+                return globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables
+                    ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables()
+                    : [];
+            },
+            pitchLimit: PITCH_LIMIT,
+            cameraShoulder: CAMERA_SHOULDER,
+            cameraDist: CAMERA_DIST,
+            thirdHeight: THIRD_HEIGHT,
+            sniperScopeShoulder: SNIPER_SCOPE_SHOULDER,
+            adsShoulder: ADS_SHOULDER,
+            sniperScopeDist: SNIPER_SCOPE_DIST,
+            adsDist: ADS_DIST,
+            sniperScopeHeight: SNIPER_SCOPE_HEIGHT,
+            adsHeight: ADS_HEIGHT,
+            sniperScopeBlendSpeed: SNIPER_SCOPE_BLEND_SPEED,
+            adsBlendSpeed: ADS_BLEND_SPEED,
+            firstPersonSmooth: FIRST_PERSON_SMOOTH,
+            thirdSmooth: THIRD_SMOOTH,
+            cameraFov: CAMERA_FOV,
+            adsFov: ADS_FOV,
+            adsFovForWeapon: adsFovForWeapon
+        });
     }
 
     function setupInput() {
+        if (inputBound) return;
+        inputBound = true;
         document.addEventListener('keydown', function (e) {
             switch (e.code) {
                 case 'KeyW': keys.forward = true; break;
@@ -717,7 +517,8 @@
         document.addEventListener('mousemove', function (e) {
             if (!hasInputCapture()) return;
             var sensitivityMult = isSniperScopeWeapon() ? SNIPER_SCOPE_SENSITIVITY_MULT : ADS_SENSITIVITY_MULT;
-            var sensitivity = MOUSE_SENSITIVITY * (1 - (scopeBlend * (1 - sensitivityMult)));
+            var blend = viewHelper() && viewHelper().getScopeBlend ? viewHelper().getScopeBlend() : 0;
+            var sensitivity = MOUSE_SENSITIVITY * (1 - (blend * (1 - sensitivityMult)));
             yaw -= (e.movementX || 0) * sensitivity;
             pitch -= (e.movementY || 0) * sensitivity;
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
@@ -781,7 +582,7 @@
         if (typeof state.y === 'number' && isFinite(state.y)) {
             posY = Number(state.y);
         } else {
-            posY = getGroundHeightAt(playerX, playerZ) + EYE_HEIGHT;
+            posY = worldHelper().getGroundHeightAt(playerX, playerZ) + EYE_HEIGHT;
         }
         velocityY = 0;
         isGrounded = true;
@@ -824,6 +625,7 @@
         if (!camera || !state) return false;
         var helper = movementHelper();
         var reconcile = reconciliationHelper();
+        var world = worldHelper();
         if (!helper || !helper.stepAuthoritativeMovement || !reconcile || !reconcile.replayMotionState) {
             return applyAuthoritativeMotion(state);
         }
@@ -833,9 +635,9 @@
         if (ackSeq > 0) lastReplayAckSeq = ackSeq;
         var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs.slice() : [], {
             stepMovement: helper.stepAuthoritativeMovement,
-            bounds: getWorldBounds(),
-            collisionBoxes: getCollisionBoxes(),
-            getGroundHeightAt: getGroundHeightAt,
+            bounds: world.getWorldBounds(),
+            collisionBoxes: world.getCollisionBoxes(),
+            getGroundHeightAt: world.getGroundHeightAt,
             movementLocked: function () { return isMovementLocked(); },
             eyeHeight: EYE_HEIGHT,
             playerHeight: PLAYER_HEIGHT,
@@ -903,7 +705,8 @@
 
     GamePlayer.init = function (scene) {
         sceneRef = scene;
-        var bounds = getWorldBounds();
+        var world = worldHelper();
+        var bounds = world.getWorldBounds();
         var worldSpan = (typeof bounds.size === 'number')
             ? bounds.size
             : Math.max(
@@ -915,11 +718,7 @@
         camera.rotation.order = 'YXZ';
         scene.add(camera);
 
-        var spawn = (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint)
-            ? globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(
-                globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding ? globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding() : 8
-            )
-            : getDefaultSpawnPoint();
+        var spawn = world.getRandomSpawnPoint(world.getSpawnPadding(8)) || world.getDefaultSpawnPoint();
         playerX = spawn.x;
         playerZ = spawn.z;
         posY = EYE_HEIGHT;
@@ -939,6 +738,7 @@
         if (!camera) return;
         if (!hasInputCapture()) return;
         clearExpiredStatusState(nowMs());
+        var world = worldHelper();
 
         var jumpJustPressed = keys.jump && !jumpPressedLastFrame;
         var jumpJustReleased = !keys.jump && jumpPressedLastFrame;
@@ -983,7 +783,7 @@
             moveZ = 0;
         }
 
-        var bounds = getWorldBounds();
+        var bounds = world.getWorldBounds();
         var currentFeetY = posY - EYE_HEIGHT;
         var minBoundX = (typeof bounds.minX === 'number' ? bounds.minX : bounds.min) + PLAYER_RADIUS;
         var maxBoundX = (typeof bounds.maxX === 'number' ? bounds.maxX : bounds.max) - PLAYER_RADIUS;
@@ -994,11 +794,11 @@
 
         var nextX = playerX + moveX;
         nextX = Math.max(minBoundX, Math.min(maxBoundX, nextX));
-        if (!isBlockedAt(nextX, playerZ, currentFeetY)) playerX = nextX;
+        if (!world.isBlockedAt(nextX, playerZ, currentFeetY)) playerX = nextX;
 
         var nextZ = playerZ + moveZ;
         nextZ = Math.max(minBoundZ, Math.min(maxBoundZ, nextZ));
-        if (!isBlockedAt(playerX, nextZ, currentFeetY)) playerZ = nextZ;
+        if (!world.isBlockedAt(playerX, nextZ, currentFeetY)) playerZ = nextZ;
 
         var movedX = playerX - startX;
         var movedZ = playerZ - startZ;
@@ -1036,7 +836,7 @@
         var nextFeetY = currentFeetY + (velocityY * dt);
 
         if (velocityY <= 0) {
-            var landingY = findLandingSurfaceY(playerX, playerZ, currentFeetY, nextFeetY);
+            var landingY = world.findLandingSurfaceY(playerX, playerZ, currentFeetY, nextFeetY);
             if (nextFeetY <= landingY + EPSILON) {
                 nextFeetY = landingY;
                 velocityY = 0;
@@ -1048,7 +848,7 @@
         } else {
             var currentHeadY = currentFeetY + PLAYER_HEIGHT;
             var nextHeadY = nextFeetY + PLAYER_HEIGHT;
-            var ceilingY = findCeilingY(playerX, playerZ, currentHeadY, nextHeadY);
+            var ceilingY = world.findCeilingY(playerX, playerZ, currentHeadY, nextHeadY);
             if (ceilingY !== null && nextHeadY >= ceilingY - EPSILON) {
                 nextFeetY = ceilingY - PLAYER_HEIGHT;
                 velocityY = 0;
@@ -1057,7 +857,7 @@
             isGrounded = false;
         }
 
-        var baseGround = getGroundHeightAt(playerX, playerZ);
+        var baseGround = world.getGroundHeightAt(playerX, playerZ);
         if (nextFeetY < baseGround) {
             nextFeetY = baseGround;
             velocityY = 0;
@@ -1073,51 +873,13 @@
     };
 
     function triggerFireAction() {
-        if (!avatarRigApi || !avatarRigApi.rig || !avatarRigApi.rig.gun) return;
-
-        // Recoil layering here follows the same high-level MIT-licensed pattern
-        // used in HYTOPIA's examples: camera-attached viewmodel + per-shot feedback.
-        // This implementation is local to this project and not a verbatim copy.
-        var recoilByWeapon = {
-            pistol: { z: -0.04, x: -0.08, pitch: 0.014, yaw: 0.007, roll: 0.005, armR: 0.2, armL: 0.08, muzzleMs: 60 },
-            rifle: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
-            machinegun: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 },
-            shotgun: { z: -0.09, x: -0.16, pitch: 0.03, yaw: 0.012, roll: 0.008, armR: 0.26, armL: 0.12, muzzleMs: 70 },
-            sniper: { z: -0.12, x: -0.2, pitch: 0.04, yaw: 0.01, roll: 0.007, armR: 0.3, armL: 0.12, muzzleMs: 90 },
-        };
-        var recoil = recoilByWeapon[currentWeaponId] || recoilByWeapon.rifle;
-        var scopeMultiplier = 1 - (scopeBlend * 0.2);
-        var yawKick = (Math.random() - 0.5) * recoil.yaw * scopeMultiplier;
-        var rollKick = -yawKick * (recoil.roll / Math.max(recoil.yaw, 0.0001));
-
-        gunRecoil += recoil.z * scopeMultiplier;
-        palmRecoil += recoil.x * scopeMultiplier;
-        cameraKickPitch += recoil.pitch * scopeMultiplier;
-        cameraKickYaw += yawKick;
-        cameraKickRoll += rollKick;
-        firePoseKick += 1 * scopeMultiplier;
-
-        if (actorVisual && actorVisual.setMuzzleVisible) {
-            actorVisual.setMuzzleVisible(true);
-            setTimeout(function () {
-                if (actorVisual && actorVisual.setMuzzleVisible) actorVisual.setMuzzleVisible(false);
-            }, recoil.muzzleMs);
-        }
-        if (actorVisual && actorVisual.triggerAction) {
-            actorVisual.triggerAction('fire', {
-                duration: recoil.muzzleMs / 1000,
-                strength: 0.9 + (Math.abs(recoil.z) * 4)
-            });
-        } else if (avatarRigApi.triggerAction) {
-            avatarRigApi.triggerAction('fire', {
-                duration: recoil.muzzleMs / 1000,
-                strength: 0.9 + (Math.abs(recoil.z) * 4)
-            });
-        }
-        if (avatarRigApi.rig) {
-            if (avatarRigApi.rig.armR) avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR;
-            if (avatarRigApi.rig.armL) avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL;
-        }
+        var view = viewHelper();
+        if (!view || !view.triggerFireAction) return;
+        view.triggerFireAction({
+            currentWeaponId: currentWeaponId,
+            actorVisual: actorVisual,
+            avatarRigApi: avatarRigApi
+        });
     }
 
     GamePlayer.isExperimentalCameraView = function () {
@@ -1145,70 +907,52 @@
     };
 
     GamePlayer.getMuzzleWorldPosition = function () {
-        if (actorVisual && actorVisual.getMuzzleWorldPosition) {
-            return actorVisual.getMuzzleWorldPosition();
-        }
-        if (avatarRigApi && avatarRigApi.getMuzzleWorldPosition) {
-            return avatarRigApi.getMuzzleWorldPosition();
-        }
-        if (!camera) return null;
-        camera.getWorldDirection(plasmaForwardDir);
-        return camera.position.clone().addScaledVector(plasmaForwardDir, 0.65);
+        var view = viewHelper();
+        return view && view.getMuzzleWorldPosition
+            ? view.getMuzzleWorldPosition({ actorVisual: actorVisual, avatarRigApi: avatarRigApi, camera: camera })
+            : null;
     };
 
     GamePlayer.getCoreWorldPosition = function () {
-        if (actorVisual && actorVisual.getCoreWorldPosition) {
-            return actorVisual.getCoreWorldPosition();
-        }
-        if (!camera) return null;
-        return camera.position.clone().setY(camera.position.y - 0.6);
+        var view = viewHelper();
+        return view && view.getCoreWorldPosition
+            ? view.getCoreWorldPosition({ actorVisual: actorVisual, camera: camera })
+            : null;
     };
 
     GamePlayer.getEyeWorldPosition = function () {
-        if (actorVisual && actorVisual.getEyeWorldPosition) {
-            return actorVisual.getEyeWorldPosition();
-        }
-        if (avatarRigApi && avatarRigApi.getEyeWorldPosition) {
-            return avatarRigApi.getEyeWorldPosition();
-        }
-        if (!camera) return null;
-        return camera.position.clone();
+        var view = viewHelper();
+        return view && view.getEyeWorldPosition
+            ? view.getEyeWorldPosition({ actorVisual: actorVisual, avatarRigApi: avatarRigApi, camera: camera })
+            : null;
     };
 
     GamePlayer.getThrowableOriginWorldPosition = function () {
-        if (actorVisual && actorVisual.getThrowableOriginWorldPosition) {
-            return actorVisual.getThrowableOriginWorldPosition();
-        }
-        if (!camera) return null;
-        camera.getWorldDirection(plasmaForwardDir);
-        throwableRightDir.set(1, 0, 0).applyQuaternion(camera.quaternion);
-        return camera.position.clone()
-            .addScaledVector(plasmaForwardDir, 0.55)
-            .addScaledVector(throwableRightDir, -0.34)
-            .setY(camera.position.y - 0.58);
+        var view = viewHelper();
+        return view && view.getThrowableOriginWorldPosition
+            ? view.getThrowableOriginWorldPosition({ actorVisual: actorVisual, camera: camera })
+            : null;
     };
 
     GamePlayer.getEquippedWeaponId = function () {
         return currentWeaponId;
     };
 
-    GamePlayer.getScopeState = function () {
-        return {
-            weaponId: currentWeaponId,
-            active: isAdsActive() && scopeBlend > 0.02,
-            scoped: isSniperScopeWeapon() && scopeBlend > 0.7,
-            sniper: isSniperScopeWeapon(),
-            blend: scopeBlend
-        };
-    };
-
     GamePlayer.getAdsState = function () {
-        return {
-            weaponId: currentWeaponId,
-            active: isAdsActive(),
-            blend: scopeBlend,
-            sniper: isSniperScopeWeapon()
-        };
+        var view = viewHelper();
+        return view && view.getAdsState
+            ? view.getAdsState({
+                currentWeaponId: currentWeaponId,
+                adsActive: isAdsActive(),
+                sniperMode: isSniperScopeWeapon()
+            })
+            : {
+                weaponId: currentWeaponId,
+                active: isAdsActive(),
+                blend: 0,
+                sniper: isSniperScopeWeapon(),
+                scopeActive: false
+            };
     };
 
     GamePlayer.setAdsEnabled = function (enabled) {
@@ -1266,6 +1010,12 @@
         }
         if (next.length > 0) {
             loadoutSlots = next;
+            if (loadoutSlots.indexOf(currentWeaponId) === -1) {
+                currentWeaponId = loadoutSlots[0];
+                scopeHeld = false;
+                resetRecoilState();
+                applyAvatarWeaponPose();
+            }
         }
         return { slots: loadoutSlots.slice() };
     };
@@ -1377,7 +1127,7 @@
 
     GamePlayer.respawn = function (x, z) {
         if (!camera) return false;
-        return setSpawnPosition(x, z, getGroundHeightAt(x, z));
+        return setSpawnPosition(x, z, worldHelper().getGroundHeightAt(x, z));
     };
 
     GamePlayer.applyAuthoritativeMotion = function (state) {
@@ -1393,38 +1143,35 @@
     };
 
     GamePlayer.respawnRandom = function () {
+        var world = worldHelper();
         if (!camera) {
-            var defaultSpawn = getDefaultSpawnPoint();
+            var defaultSpawn = world.getDefaultSpawnPoint();
             return new THREE.Vector2(defaultSpawn.x, defaultSpawn.z);
         }
 
-        var bounds = getWorldBounds();
-        var spawnPadding = (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding)
-            ? globalThis.__MAYHEM_RUNTIME.GameWorld.getSpawnPadding()
-            : 4;
+        var bounds = world.getWorldBounds();
+        var spawnPadding = world.getSpawnPadding(4);
         var minX = (typeof bounds.minX === 'number' ? bounds.minX : bounds.min) + spawnPadding;
         var maxX = (typeof bounds.maxX === 'number' ? bounds.maxX : bounds.max) - spawnPadding;
         var minZ = (typeof bounds.minZ === 'number' ? bounds.minZ : bounds.min) + spawnPadding;
         var maxZ = (typeof bounds.maxZ === 'number' ? bounds.maxZ : bounds.max) - spawnPadding;
 
         for (var i = 0; i < 40; i++) {
-            var randomSpawn = (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint)
-                ? globalThis.__MAYHEM_RUNTIME.GameWorld.getRandomSpawnPoint(spawnPadding, {
-                    avoidPoints: getSpawnThreatPoints(),
-                    minClearance: 14
-                })
-                : null;
+            var randomSpawn = world.getRandomSpawnPoint(spawnPadding, {
+                avoidPoints: world.getSpawnThreatPoints(),
+                minClearance: 14
+            });
             var x = randomSpawn ? randomSpawn.x : (minX + Math.random() * (maxX - minX));
             var z = randomSpawn ? randomSpawn.z : (minZ + Math.random() * (maxZ - minZ));
-            var groundY = getGroundHeightAt(x, z);
-            if (!isBlockedAt(x, z, groundY)) {
+            var groundY = world.getGroundHeightAt(x, z);
+            if (!world.isBlockedAt(x, z, groundY)) {
                 setSpawnPosition(x, z, groundY);
                 return new THREE.Vector2(x, z);
             }
         }
 
-        var spawn = getDefaultSpawnPoint();
-        setSpawnPosition(spawn.x, spawn.z, getGroundHeightAt(spawn.x, spawn.z));
+        var spawn = world.getDefaultSpawnPoint();
+        setSpawnPosition(spawn.x, spawn.z, world.getGroundHeightAt(spawn.x, spawn.z));
         return new THREE.Vector2(spawn.x, spawn.z);
     };
 
