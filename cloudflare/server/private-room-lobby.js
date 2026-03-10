@@ -10,6 +10,7 @@ import {
   assignActorToPrivateRoom,
   getPrivateRoomMembers,
   getPrivateRoomMember,
+  deletePrivateRoom,
   removeActorFromPrivateRoom,
   moveActorToPrivateRoomTeam
 } from './private-rooms.js';
@@ -131,6 +132,10 @@ async function detachActorFromPrivateRoom(env, actorId) {
   const roomId = String(existing.room_id || '');
   await removeActorFromPrivateRoom(env, actorId);
   const remaining = await getPrivateRoomMembers(env, roomId);
+  if (remaining.length === 0) {
+    await deletePrivateRoom(env, roomId);
+    return roomId;
+  }
   const roomState = await getPrivateRoomState(env, roomId);
   if (roomState && String(roomState.host_actor_id || '') === String(actorId || '')) {
     await setPrivateRoomState(env, roomId, { hostActorId: remaining.length > 0 ? String(remaining[0].actor_id || '') : '' });

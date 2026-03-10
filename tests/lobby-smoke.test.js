@@ -432,6 +432,47 @@ test('joining a full private room fails without ejecting the caller from their c
   assert.equal(state.state.room.roomId, sourceRoomId);
 });
 
+test('empty private rooms are deleted when the last member leaves', async () => {
+  const env = createFakeEnv();
+
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'SOLO900',
+    displayName: 'SOLO900',
+    activityState: 'menu',
+    action: 'create'
+  })));
+
+  const roomCode = created.state.room.roomCode;
+  const roomId = created.state.room.roomId;
+
+  const left = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'SOLO900',
+    displayName: 'SOLO900',
+    activityState: 'private_room_lobby',
+    action: 'leave'
+  })));
+  assert.equal(left.ok, true);
+  assert.equal(left.state, null);
+
+  const state = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room?actorId=SOLO900&displayName=SOLO900', 'GET')));
+  assert.equal(state.ok, true);
+  assert.equal(state.state, null);
+
+  const rejoin = await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'INTRUDER9',
+    displayName: 'INTRUDER9',
+    activityState: 'menu',
+    action: 'join',
+    roomCode: roomCode
+  }));
+  const rejoinBody = await jsonBody(rejoin);
+  assert.equal(rejoin.status, 404);
+  assert.match(rejoinBody.error, /not found/i);
+
+  assert.equal(env.__state.privateRooms.has(roomId), false);
+  assert.equal(env.__state.privateRoomState.has(roomId), false);
+});
+
 test('legacy matchmaking private create requires actor identity instead of returning unusable success', async () => {
   const env = createFakeEnv();
 

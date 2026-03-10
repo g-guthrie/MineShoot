@@ -182,6 +182,22 @@ export async function moveActorToPrivateRoomTeam(env, actorId, teamId) {
   ).bind(String(existing.actor_id || ''), String(teamId || 'alpha') === 'bravo' ? 'bravo' : 'alpha').run();
 }
 
+export async function deletePrivateRoom(env, roomId) {
+  if (!isPrivateRoomId(roomId)) return false;
+  await ensurePrivateRoomTable(env);
+  const normalizedRoomId = sanitizeRoomId(roomId);
+  await env.DB.prepare(
+    'DELETE FROM private_room_members WHERE room_id = ?1'
+  ).bind(normalizedRoomId).run();
+  await env.DB.prepare(
+    'DELETE FROM private_room_state WHERE room_id = ?1'
+  ).bind(normalizedRoomId).run();
+  await env.DB.prepare(
+    'DELETE FROM private_rooms WHERE room_id = ?1'
+  ).bind(normalizedRoomId).run();
+  return true;
+}
+
 export async function getPrivateRoomById(env, roomId) {
   if (!isPrivateRoomId(roomId)) return null;
   await ensurePrivateRoomTable(env);

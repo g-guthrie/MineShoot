@@ -219,6 +219,23 @@ export function createFakeEnv() {
       state.privateRoomMembers.delete(String(args[0]));
       return;
     }
+    if (q.indexOf('delete from private_room_members where room_id') >= 0) {
+      const roomId = String(args[0]);
+      state.privateRoomMembers.forEach(function (member, key) {
+        if (String(member.room_id || '') === roomId) {
+          state.privateRoomMembers.delete(String(key));
+        }
+      });
+      return;
+    }
+    if (q.indexOf('delete from private_room_state where room_id') >= 0) {
+      state.privateRoomState.delete(String(args[0]));
+      return;
+    }
+    if (q.indexOf('delete from private_rooms where room_id') >= 0) {
+      state.privateRooms.delete(String(args[0]));
+      return;
+    }
     if (q.indexOf('update private_room_members set team_id') >= 0) {
       const member = state.privateRoomMembers.get(String(args[0]));
       if (member) member.team_id = String(args[1] || member.team_id);
