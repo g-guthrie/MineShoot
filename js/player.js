@@ -576,8 +576,9 @@
         return true;
     }
 
-    function applyAuthoritativeMotion(state) {
+    function applyAuthoritativeMotion(state, options) {
         if (!camera || !state) return false;
+        var opts = options || {};
         var x = Number(state.x);
         var z = Number(state.z);
         if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
@@ -594,10 +595,10 @@
         isGrounded = true;
         jumpHoldTimer = 0;
 
-        if (typeof state.yaw === 'number' && isFinite(state.yaw)) {
+        if (!opts.preserveViewAngles && typeof state.yaw === 'number' && isFinite(state.yaw)) {
             yaw = Number(state.yaw);
         }
-        if (typeof state.pitch === 'number' && isFinite(state.pitch)) {
+        if (!opts.preserveViewAngles && typeof state.pitch === 'number' && isFinite(state.pitch)) {
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Number(state.pitch)));
         }
 
@@ -607,15 +608,18 @@
         return true;
     }
 
-    function applyMotionState(state, dt) {
+    function applyMotionState(state, dt, options) {
         if (!state) return false;
+        var opts = options || {};
         playerX = Number(state.x || 0);
         playerZ = Number(state.z || 0);
         posY = Number(state.y || EYE_HEIGHT);
-        yaw = (typeof state.yaw === 'number' && isFinite(state.yaw)) ? Number(state.yaw) : yaw;
-        pitch = (typeof state.pitch === 'number' && isFinite(state.pitch))
-            ? Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Number(state.pitch)))
-            : pitch;
+        if (!opts.preserveViewAngles) {
+            yaw = (typeof state.yaw === 'number' && isFinite(state.yaw)) ? Number(state.yaw) : yaw;
+            pitch = (typeof state.pitch === 'number' && isFinite(state.pitch))
+                ? Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Number(state.pitch)))
+                : pitch;
+        }
         velocityY = Number(state.velocityY || 0);
         isGrounded = !!state.isGrounded;
         jumpHoldTimer = Number(state.jumpHoldTimer || 0);
@@ -633,7 +637,7 @@
         var reconcile = reconciliationHelper();
         var world = worldHelper();
         if (!helper || !helper.stepAuthoritativeMovement || !reconcile || !reconcile.replayMotionState) {
-            return applyAuthoritativeMotion(state);
+            return applyAuthoritativeMotion(state, { preserveViewAngles: true });
         }
 
         var opts = options || {};
@@ -652,7 +656,7 @@
             fallbackYaw: yaw,
             fallbackPitch: pitch
         });
-        return applyMotionState(motionState, opts.dt);
+        return applyMotionState(motionState, opts.dt, { preserveViewAngles: true });
     }
 
     function hasMovementIntentInput() {
@@ -688,7 +692,7 @@
         }
 
         if (opts.force || horizontalDistSq >= (hardSnapDistance * hardSnapDistance)) {
-            return applyAuthoritativeMotion(state);
+            return applyMotionState(state, dt, { preserveViewAngles: true });
         }
 
         if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
