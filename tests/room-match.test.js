@@ -7,6 +7,7 @@ import {
   finishPublicMatch,
   maybeResetPublicMatch,
   recordElimination,
+  resetPublicRoomToIdle,
   startPublicMatchIfReady,
   syncPrivateRoomMatchState,
   updateLeaderProgress
@@ -216,4 +217,45 @@ test('lms elimination marks players out of round when they lose their last life'
   assert.equal(room.players.get('u2').outOfRound, true);
   assert.equal(room.players.get('u2').respawnAt, 0);
   assert.deepEqual(room.finishCalls, [{ winnerId: 'u1', winnerTeam: '' }]);
+});
+
+test('empty public rooms reset stale LMS match state back to idle', () => {
+  const room = {
+    roomName: 'lms-01',
+    gameMode: 'lms',
+    players: new Map([
+      ['u1', {
+        id: 'u1',
+        fixtureType: '',
+        teamId: '',
+        progressScore: 4,
+        kills: 3,
+        deaths: 2,
+        plannedSpawnPoint: { x: 10, z: 11 },
+        lmsLives: 4,
+        lmsCharge: 1,
+        lmsBankState: { beaconId: 'beacon_1' },
+        outOfRound: true
+      }]
+    ]),
+    matchState: Object.assign(emptyMatchState('lms'), {
+      started: false,
+      lms: Object.assign(emptyMatchState('lms').lms, {
+        activeBeacon: { id: 'beacon_1', label: 'ARCTIC', x: 20, z: 20 }
+      })
+    }),
+    isPublicMatchRoom() { return true; }
+  };
+
+  assert.equal(resetPublicRoomToIdle(room, {
+    emptyMatchState,
+    isPrivateMatchRoom: () => false
+  }), true);
+
+  assert.equal(room.matchState.started, false);
+  assert.equal(room.matchState.lms.activeBeacon, null);
+  assert.equal(room.players.get('u1').lmsLives, 0);
+  assert.equal(room.players.get('u1').lmsCharge, 0);
+  assert.equal(room.players.get('u1').outOfRound, false);
+  assert.equal(room.players.get('u1').plannedSpawnPoint, null);
 });

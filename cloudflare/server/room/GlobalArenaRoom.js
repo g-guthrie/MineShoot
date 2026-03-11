@@ -71,6 +71,7 @@ import {
   finishPublicMatch as finishRoomPublicMatch,
   maybeResetPublicMatch as maybeResetRoomPublicMatch,
   recordElimination as recordRoomElimination,
+  resetPublicRoomToIdle as resetRoomPublicToIdle,
   startPublicMatchIfReady as startRoomPublicMatchIfReady,
   syncPrivateRoomMatchState as syncRoomPrivateRoomMatchState,
   updateLeaderProgress as updateRoomLeaderProgress
@@ -546,6 +547,13 @@ export class GlobalArenaRoom extends DurableObject {
       if (!player || player.fixtureType === 'sim_player') continue;
       return;
     }
+    resetRoomPublicToIdle(this, {
+      emptyMatchState,
+      isPrivateMatchRoom
+    });
+    this.projectiles.clear();
+    this.fireZones.clear();
+    this.lastBroadcastEntityState = new Map();
     if (this.tickHandle) {
       clearInterval(this.tickHandle);
       this.tickHandle = null;
