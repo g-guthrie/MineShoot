@@ -226,3 +226,26 @@ Definition of done for production pushes:
 - GitHub `main` contains the commit you expect
 - Worker deploy succeeded
 - Pages site is live with the new frontend behavior you changed
+
+## 11) Local post-push status banner
+
+Use this wrapper if you want a local terminal summary after pushing:
+
+```bash
+npm run push:main
+```
+
+It pushes `main`, then watches:
+
+- the `Deploy Worker` GitHub Action
+- the latest Cloudflare Pages production deployment for this commit
+
+For Pages status checks from your terminal, set your Cloudflare token locally first:
+
+```bash
+export CLOUDFLARE_API_TOKEN="your-token-here"
+```
+
+The local status script is:
+
+- [scripts/deploy-status.sh](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/scripts/deploy-status.sh)

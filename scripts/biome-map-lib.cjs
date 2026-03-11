@@ -291,12 +291,13 @@ const BIOME_SPECS = {
       northWall: 'N',
       pocket: 'P',
       rubble: 'R',
-      ruin: 'A',
+      arch: 'A',
+      outcrop: 'O',
+      filler: 'I',
       fossil: 'F',
       cactus: 'C',
       bush: 'b',
       bone: 'o',
-      fence: 'f',
       dune: 'D',
       tumbleweed: 't',
       rock: 'r'
@@ -312,25 +313,28 @@ const BIOME_SPECS = {
         ...uvPoints(bounds, 'rubble', [
           { u: 0.66, v: 0.34 }, { u: 0.70, v: 0.48 }, { u: 0.76, v: 0.56 }, { u: 0.84, v: 0.66 }
         ], 'rubble'),
-        ...uvPoints(bounds, 'ruin', [{ u: 0.36, v: 0.24 }, { u: 0.22, v: 0.30 }], 'ruin'),
+        ...uvPoints(bounds, 'arch', [{ u: 0.12, v: 0.52 }], 'arch'),
+        ...uvPoints(bounds, 'outcrop', [{ u: 0.56, v: 0.88 }], 'outcrop'),
+        ...uvPoints(bounds, 'filler', [
+          { u: 0.86, v: 0.12 }, { u: 0.82, v: 0.18 }, { u: 0.78, v: 0.24 },
+          { u: 0.92, v: 0.34 }, { u: 0.88, v: 0.46 }, { u: 0.86, v: 0.60 }, { u: 0.90, v: 0.72 }
+        ], 'filler'),
         uvPoint(bounds, 'fossil', 0.18, 0.72, 'fossil-ribs'),
         ...uvPoints(bounds, 'cactus', [
           { u: 0.12, v: 0.56 }, { u: 0.20, v: 0.86 }, { u: 0.34, v: 0.66 }, { u: 0.46, v: 0.78 },
           { u: 0.58, v: 0.70 }, { u: 0.66, v: 0.52 }, { u: 0.78, v: 0.64 }, { u: 0.84, v: 0.86 }
         ], 'cactus'),
         ...uvPoints(bounds, 'bush', [
-          { u: 0.24, v: 0.58 }, { u: 0.36, v: 0.48 }, { u: 0.42, v: 0.30 },
-          { u: 0.58, v: 0.62 }, { u: 0.74, v: 0.56 }, { u: 0.30, v: 0.74 }
+          { u: 0.24, v: 0.58 }, { u: 0.58, v: 0.62 }, { u: 0.74, v: 0.56 }
         ], 'bush'),
         ...uvPoints(bounds, 'bone', [{ u: 0.60, v: 0.66 }, { u: 0.64, v: 0.68 }, { u: 0.24, v: 0.24 }], 'bone'),
-        uvPoint(bounds, 'fence', 0.14, 0.48, 'fence'),
         ...uvPoints(bounds, 'dune', [
-          { u: 0.46, v: 0.90 }, { u: 0.16, v: 0.16 }, { u: 0.40, v: 0.22 }, { u: 0.70, v: 0.74 }
+          { u: 0.40, v: 0.90 }, { u: 0.16, v: 0.16 }, { u: 0.40, v: 0.22 }
         ], 'dune'),
-        ...uvPoints(bounds, 'tumbleweed', [{ u: 0.32, v: 0.18 }, { u: 0.62, v: 0.76 }, { u: 0.18, v: 0.88 }], 'tumbleweed'),
+        ...uvPoints(bounds, 'tumbleweed', [{ u: 0.32, v: 0.18 }, { u: 0.24, v: 0.86 }], 'tumbleweed'),
         ...uvPoints(bounds, 'rock', [
-          { u: 0.26, v: 0.26 }, { u: 0.34, v: 0.58 }, { u: 0.46, v: 0.48 }, { u: 0.62, v: 0.58 },
-          { u: 0.72, v: 0.34 }, { u: 0.76, v: 0.78 }, { u: 0.20, v: 0.70 }
+          { u: 0.26, v: 0.26 }, { u: 0.46, v: 0.48 }, { u: 0.62, v: 0.58 },
+          { u: 0.72, v: 0.34 }, { u: 0.20, v: 0.70 }
         ], 'rock')
       ];
     }
