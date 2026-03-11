@@ -109,7 +109,7 @@ read_pages_status() {
       const match = deployments.find((entry) => {
         const commit = String(entry?.deployment_trigger?.metadata?.commit_hash || '');
         if (!commit) return false;
-        return head.startsWith(commit) || commit.startsWith(head) || shortHead === commit || head.startsWith(shortHead);
+        return head === commit || head.startsWith(commit) || commit.startsWith(shortHead);
       }) || null;
       if (!match) {
         console.log(JSON.stringify({ found: false }));
