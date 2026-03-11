@@ -93,7 +93,30 @@
                     selectedWeaponId: String(sessionState.runtimeSnapshot.combat.selectedWeaponId || ''),
                     weaponCatalog: Array.isArray(sessionState.runtimeSnapshot.combat.weaponCatalog) ? sessionState.runtimeSnapshot.combat.weaponCatalog.slice() : [],
                     fireCooldownRemainingMs: Number(sessionState.runtimeSnapshot.combat.fireCooldownRemainingMs || 0),
+                    reloadRemainingMs: Number(sessionState.runtimeSnapshot.combat.reloadRemainingMs || 0),
+                    ammoInMag: Number(sessionState.runtimeSnapshot.combat.ammoInMag || 0),
+                    magazineSize: Number(sessionState.runtimeSnapshot.combat.magazineSize || 0),
+                    automatic: !!sessionState.runtimeSnapshot.combat.automatic,
+                    cooldownMs: Number(sessionState.runtimeSnapshot.combat.cooldownMs || 0),
+                    canFire: !!sessionState.runtimeSnapshot.combat.canFire,
                     lastShotAt: Number(sessionState.runtimeSnapshot.combat.lastShotAt || 0)
+                } : null,
+                abilities: sessionState.runtimeSnapshot.abilities ? {
+                    loadout: sessionState.runtimeSnapshot.abilities.loadout ? {
+                        slot1: String(sessionState.runtimeSnapshot.abilities.loadout.slot1 || ''),
+                        slot2: String(sessionState.runtimeSnapshot.abilities.loadout.slot2 || '')
+                    } : null,
+                    hud: sessionState.runtimeSnapshot.abilities.hud ? {
+                        slot1Name: String(sessionState.runtimeSnapshot.abilities.hud.slot1Name || ''),
+                        slot2Name: String(sessionState.runtimeSnapshot.abilities.hud.slot2Name || ''),
+                        slot1CooldownMs: Number(sessionState.runtimeSnapshot.abilities.hud.slot1CooldownMs || 0),
+                        slot2CooldownMs: Number(sessionState.runtimeSnapshot.abilities.hud.slot2CooldownMs || 0)
+                    } : null,
+                    lastCast: sessionState.runtimeSnapshot.abilities.lastCast ? {
+                        slot: String(sessionState.runtimeSnapshot.abilities.lastCast.slot || ''),
+                        abilityId: String(sessionState.runtimeSnapshot.abilities.lastCast.abilityId || ''),
+                        castAt: Number(sessionState.runtimeSnapshot.abilities.lastCast.castAt || 0)
+                    } : null
                 } : null,
                 statusText: String(sessionState.runtimeSnapshot.statusText || '')
             } : null

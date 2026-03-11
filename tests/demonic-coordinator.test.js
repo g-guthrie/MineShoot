@@ -5,9 +5,11 @@ import vm from 'node:vm';
 
 async function loadDemonicCoordinator() {
   const inputCode = await fs.readFile(new URL('../demonic/gameplay/input/runtime.js', import.meta.url), 'utf8');
+  const bindingsCode = await fs.readFile(new URL('../demonic/gameplay/input/bindings.js', import.meta.url), 'utf8');
   const playerCode = await fs.readFile(new URL('../demonic/gameplay/player/runtime.js', import.meta.url), 'utf8');
   const worldCode = await fs.readFile(new URL('../demonic/gameplay/world/runtime.js', import.meta.url), 'utf8');
   const combatCode = await fs.readFile(new URL('../demonic/gameplay/combat/runtime.js', import.meta.url), 'utf8');
+  const abilitiesCode = await fs.readFile(new URL('../demonic/gameplay/abilities/runtime.js', import.meta.url), 'utf8');
   const cameraCode = await fs.readFile(new URL('../demonic/gameplay/camera/runtime.js', import.meta.url), 'utf8');
   const coordinatorCode = await fs.readFile(new URL('../demonic/runtime/coordinator.js', import.meta.url), 'utf8');
 
@@ -19,15 +21,24 @@ async function loadDemonicCoordinator() {
         },
         getWeaponStats(weaponId) {
           return {
-            machinegun: { cooldownMs: 82, adsFovDeg: 56 },
-            shotgun: { cooldownMs: 1000, adsFovDeg: 56 }
-          }[weaponId] || { cooldownMs: 250, adsFovDeg: 56 };
+            machinegun: { id: 'machinegun', cooldownMs: 82, reloadMs: 1388, magazineSize: 3, adsFovDeg: 56, automatic: true },
+            shotgun: { id: 'shotgun', cooldownMs: 0, reloadMs: 1850, magazineSize: 2, adsFovDeg: 56, automatic: false }
+          }[weaponId] || { id: weaponId, cooldownMs: 250, reloadMs: 1200, magazineSize: 1, adsFovDeg: 56, automatic: false };
         },
         resolveWeaponAdsFovDeg(weaponStats) {
           return Number(weaponStats && weaponStats.adsFovDeg || 56);
         },
         getSelectableWeaponIds() {
           return ['machinegun', 'shotgun'];
+        },
+        getDefaultAbilityLoadout() {
+          return { slot1: 'choke', slot2: 'missile' };
+        },
+        getAbilityCatalog() {
+          return {
+            choke: { id: 'choke', name: 'Vader Choke', cooldownMs: 15000 },
+            missile: { id: 'missile', name: 'Missile', cooldownMs: 900 }
+          };
         }
       }
     },
@@ -50,6 +61,14 @@ async function loadDemonicCoordinator() {
         }
       }
     },
+    document: {
+      addEventListener() {},
+      removeEventListener() {}
+    },
+    window: {
+      addEventListener() {},
+      removeEventListener() {}
+    },
     globalThis: null,
     console
   };
@@ -57,9 +76,11 @@ async function loadDemonicCoordinator() {
 
   const context = vm.createContext(sandbox);
   vm.runInContext(inputCode, context);
+  vm.runInContext(bindingsCode, context);
   vm.runInContext(playerCode, context);
   vm.runInContext(worldCode, context);
   vm.runInContext(combatCode, context);
+  vm.runInContext(abilitiesCode, context);
   vm.runInContext(cameraCode, context);
   vm.runInContext(coordinatorCode, context);
   return sandbox.__DEMONIC_RUNTIME.GameRuntimeCoordinator;
@@ -84,24 +105,49 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.world.worldSeed, 'demonic-seed-a');
   assert.equal(started.combat.selectedWeaponId, 'machinegun');
   assert.equal(typeof started.camera.fov, 'number');
+  assert.equal(started.abilities.loadout.slot1, 'choke');
   assert.ok(latest);
   assert.equal(latest.player.jogSpeed, 8);
   assert.equal(latest.combat.weaponCatalog[1], 'shotgun');
 
   coordinator.setInputState({ moveForward: true, sprint: true, ads: false });
-  const afterInput = coordinator.getSnapshot();
-  assert.equal(afterInput.input.moveForward, true);
-
   coordinator.start();
   const afterMotion = coordinator.getSnapshot();
+  assert.equal(afterMotion.input.moveForward, true);
   assert.ok(afterMotion.player.speed >= 8);
+  assert.ok(afterMotion.player.z < started.player.z);
 
   const fired = coordinator.fire();
   assert.equal(fired, true);
   const afterFire = coordinator.getSnapshot();
   assert.equal(afterFire.combat.fireCooldownRemainingMs > 0, true);
+  assert.equal(afterFire.combat.ammoInMag, 2);
 
   const equipped = coordinator.equipWeapon('shotgun');
   assert.equal(equipped, true);
   assert.equal(coordinator.getSnapshot().combat.selectedWeaponId, 'shotgun');
+
+  const cycled = coordinator.cycleWeapon(1);
+  assert.equal(cycled.combat.selectedWeaponId, 'machinegun');
+
+  const reloadCoordinator = coordinatorApi.create({
+    mode: { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' },
+    context: { gameMode: 'ffa', roomId: '' },
+    onUpdate() {}
+  });
+  reloadCoordinator.start();
+  reloadCoordinator.equipWeapon('shotgun');
+  reloadCoordinator.fire();
+  reloadCoordinator.start();
+  reloadCoordinator.fire();
+  reloadCoordinator.start();
+  const afterEmpty = reloadCoordinator.getSnapshot();
+  assert.equal(afterEmpty.combat.reloadRemainingMs > 0, true);
+
+  const reloaded = reloadCoordinator.reload();
+  assert.equal(reloaded, false);
+
+  const abilityResult = coordinator.triggerAbility(1);
+  assert.equal(abilityResult.ok, true);
+  assert.equal(coordinator.getSnapshot().abilities.lastCast.abilityId, 'choke');
 });

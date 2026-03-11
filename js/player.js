@@ -771,7 +771,7 @@
         var dx = x - playerX;
         var dz = z - playerZ;
         var horizontalDistSq = (dx * dx) + (dz * dz);
-        var hardSnapDistance = Number(opts.hardSnapDistance || 1.35);
+        var hardSnapDistance = Number(opts.hardSnapDistance || 2.25);
         var softCorrectDistance = Number(opts.softCorrectDistance || 0.2);
         var pendingInputCount = Math.max(0, Number(opts.pendingInputCount || 0));
         var ackDrift = Math.max(0, Number(opts.lastSentSeq || 0) - Number(opts.lastAckedSeq || 0));
@@ -795,7 +795,11 @@
             });
         }
 
-        if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
+        if (movingIntent) {
+            return false;
+        }
+
+        if (!canCorrectWhileMoving || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
             return false;
         }
 

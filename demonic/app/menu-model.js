@@ -14,8 +14,11 @@ export function buildDemonicMenuModel(options = {}) {
     ? shared.getSandboxGameModes()
     : [];
 
-  const defaultRuntimeModeId = runtimeModes.some((mode) => mode.id === 'single_full_sandbox')
-    ? 'single_full_sandbox'
+  const preferredRuntimeModeId = typeof shared.getPreferredDemonicRuntimeModeId === 'function'
+    ? shared.getPreferredDemonicRuntimeModeId()
+    : '';
+  const defaultRuntimeModeId = runtimeModes.some((mode) => mode.id === preferredRuntimeModeId)
+    ? preferredRuntimeModeId
     : (runtimeModes[0] ? runtimeModes[0].id : '');
   const defaultGameModeId = typeof shared.getDefaultGameMode === 'function'
     ? shared.getDefaultGameMode()
@@ -43,9 +46,9 @@ export function buildDemonicMenuModel(options = {}) {
       gameLabel: selectedGameMode ? selectedGameMode.label : 'No game mode',
       authorityLabel: selectedRuntimeMode ? selectedRuntimeMode.authorityMode : 'unknown',
       backendLabel: selectedRuntimeMode ? selectedRuntimeMode.backendLabel : 'unknown',
-      note: selectedRuntimeMode && selectedRuntimeMode.id === 'single_full_sandbox'
-        ? 'Best path for early Demonic parity work: local, fast, and isolated.'
-        : 'This launch surface is scaffolded now; Demonic gameplay runtime wiring comes next.'
+      note: selectedRuntimeMode && selectedRuntimeMode.authoritativeTesting
+        ? 'Preferred Demonic parity lane: authoritative Cloudflare-backed testing to avoid sandbox drift.'
+        : 'Fallback path only. Use Cloudflare-backed modes for parity validation and signoff.'
     }
   };
 }

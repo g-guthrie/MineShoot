@@ -124,6 +124,10 @@
                     '<button class="demonic-action" type="button" data-role="toggle-sprint">TOGGLE SPRINT</button>' +
                     '<button class="demonic-action" type="button" data-role="toggle-ads">TOGGLE ADS</button>' +
                     '<button class="demonic-action" type="button" data-role="fire-weapon">FIRE</button>' +
+                    '<button class="demonic-action" type="button" data-role="reload-weapon">RELOAD</button>' +
+                    '<button class="demonic-action" type="button" data-role="cycle-weapon">CYCLE WEAPON</button>' +
+                    '<button class="demonic-action" type="button" data-role="ability-slot-1">ABILITY 1</button>' +
+                    '<button class="demonic-action" type="button" data-role="ability-slot-2">ABILITY 2</button>' +
                     '<button class="demonic-action" type="button" data-role="equip-machinegun">EQUIP MG</button>' +
                     '<button class="demonic-action" type="button" data-role="equip-shotgun">EQUIP SG</button>' +
                 '</div>' +
@@ -131,7 +135,14 @@
                     '\nplayer.speed :: ' + escapeHtml(Number(state.runtimeSnapshot.player && state.runtimeSnapshot.player.speed || 0).toFixed(2)) +
                     '\nfov :: ' + escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.fov || 0).toFixed(2)) +
                     '\nweapon :: ' + escapeHtml(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.selectedWeaponId || '') +
-                    '\ncooldown :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.fireCooldownRemainingMs || 0).toFixed(0)) + 'ms</pre>' : '') +
+                    '\nammo :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.ammoInMag || 0).toFixed(0)) + '/' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.magazineSize || 0).toFixed(0)) +
+                    '\ncooldown :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.fireCooldownRemainingMs || 0).toFixed(0)) + 'ms' +
+                    '\nreload :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.reloadRemainingMs || 0).toFixed(0)) + 'ms' +
+                    '\nability1 :: ' + escapeHtml(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot1Name || '') +
+                    ' (' + escapeHtml(Number(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot1CooldownMs || 0).toFixed(0)) + 'ms)' +
+                    '\nability2 :: ' + escapeHtml(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot2Name || '') +
+                    ' (' + escapeHtml(Number(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot2CooldownMs || 0).toFixed(0)) + 'ms)' +
+                    '</pre>' : '') +
                 '<div class="demonic-action-row">' +
                     '<button class="demonic-action" type="button" data-role="return-menu">RETURN TO DEMONIC MENU STATE</button>' +
                 '</div>' +
@@ -210,6 +221,30 @@
         render();
     }
 
+    function reloadRuntimeWeapon() {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.reload) return;
+        runtimeInstance.reload();
+        syncRuntimeSnapshot();
+        render();
+    }
+
+    function cycleRuntimeWeapon() {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.cycleWeapon) return;
+        runtimeInstance.cycleWeapon(1);
+        syncRuntimeSnapshot();
+        render();
+    }
+
+    function triggerRuntimeAbility(slotIndex) {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.triggerAbility) return;
+        runtimeInstance.triggerAbility(slotIndex);
+        syncRuntimeSnapshot();
+        render();
+    }
+
     function render() {
         document.body.classList.add('app-demonic');
 
@@ -225,7 +260,7 @@
                     '<div class="demonic-hero-grid">' +
                         '<div class="demonic-hero-copy">' +
                             '<pre class="demonic-logo"> ____  _____ __  __  ___  _   _ ___ ____\n|  _ \\| ____|  \\/  |/ _ \\| \\ | |_ _/ ___|\n| | | |  _| | |\\/| | | | |  \\| || | |    \n| |_| | |___| |  | | |_| | |\\  || | |___ \n|____/|_____|_|  |_|\\___/|_| \\_|___\\____|</pre>' +
-                            '<p class="demonic-tagline">Demonic is now a real sibling menu path, driven by the same shared registries Mayhem uses for modes and rulesets.</p>' +
+                            '<p class="demonic-tagline">Demonic is now a real sibling menu path, driven by the same shared registries Mayhem uses for modes and rulesets. Cloudflare-backed testing is the preferred parity lane.</p>' +
                             '<div class="demonic-action-row">' +
                                 '<a class="demonic-action demonic-action-primary" href="/">RETURN TO MAYHEM</a>' +
                                 '<a class="demonic-action" href="/docs/demonic-master-plan.md">OPEN MASTER PLAN</a>' +
@@ -259,7 +294,7 @@
                             }).join('') + '</div>' +
                             '<div class="demonic-sandbox-note">' +
                                 (model.supportsSandbox
-                                    ? 'Sandbox-ready ruleset: ' + escapeHtml(model.selectedGameMode && model.selectedGameMode.shortLabel || '')
+                                    ? 'Sandbox-capable ruleset: ' + escapeHtml(model.selectedGameMode && model.selectedGameMode.shortLabel || '') + ' :: use Cloudflare for parity signoff.'
                                     : 'Selected ruleset is not sandbox-capable.') +
                             '</div>' +
                         '</article>' +
@@ -344,12 +379,28 @@
                         fireRuntimeWeapon();
                         return;
                     }
+                    if (target.dataset && target.dataset.role === 'reload-weapon') {
+                        reloadRuntimeWeapon();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'cycle-weapon') {
+                        cycleRuntimeWeapon();
+                        return;
+                    }
                     if (target.dataset && target.dataset.role === 'equip-machinegun') {
                         equipRuntimeWeapon('machinegun');
                         return;
                     }
                     if (target.dataset && target.dataset.role === 'equip-shotgun') {
                         equipRuntimeWeapon('shotgun');
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'ability-slot-1') {
+                        triggerRuntimeAbility(1);
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'ability-slot-2') {
+                        triggerRuntimeAbility(2);
                         return;
                     }
                     target = target.parentNode;

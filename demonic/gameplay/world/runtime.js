@@ -8,6 +8,7 @@
             modeId: String(context && context.mode && context.mode.id || ''),
             roomId: String(context && context.context && context.context.roomId || ''),
             worldSeed: 'demonic-seed-a',
+            groundHeight: 0,
             bounds: {
                 min: 0,
                 max: 100,
@@ -23,6 +24,7 @@
                     modeId: String(state.modeId || ''),
                     roomId: String(state.roomId || ''),
                     worldSeed: String(state.worldSeed || ''),
+                    groundHeight: Number(state.groundHeight || 0),
                     bounds: {
                         min: Number(state.bounds.min || 0),
                         max: Number(state.bounds.max || 0),

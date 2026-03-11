@@ -10,26 +10,56 @@
             context: options.context || {}
         };
         var inputApi = demonicRuntime.GameInputRuntime || null;
+        var inputBindingsApi = demonicRuntime.GameInputBindings || null;
         var playerApi = demonicRuntime.GamePlayerRuntime || null;
         var worldApi = demonicRuntime.GameWorldRuntime || null;
         var combatApi = demonicRuntime.GameCombatRuntime || null;
+        var abilityApi = demonicRuntime.GameAbilityRuntime || null;
         var cameraApi = demonicRuntime.GameCameraRuntime || null;
         var loopApi = demonicRuntime.GameLoop || null;
 
         var input = inputApi && inputApi.create ? inputApi.create(context) : null;
-        var player = playerApi && playerApi.create ? playerApi.create({
+        var world = worldApi && worldApi.create ? worldApi.create(context) : null;
+        var combat = combatApi && combatApi.create ? combatApi.create({
+            context: context.context || {},
             getInputSnapshot: function () {
                 return input && input.getSnapshot ? input.getSnapshot() : {};
             }
         }) : null;
-        var world = worldApi && worldApi.create ? worldApi.create(context) : null;
-        var combat = combatApi && combatApi.create ? combatApi.create(context) : null;
+        var abilities = abilityApi && abilityApi.create ? abilityApi.create(context) : null;
+        var player = playerApi && playerApi.create ? playerApi.create({
+            getInputSnapshot: function () {
+                return input && input.getSnapshot ? input.getSnapshot() : {};
+            },
+            consumeLookDelta: function () {
+                return input && input.consumeLookDelta ? input.consumeLookDelta() : { x: 0, y: 0 };
+            },
+            getWorldSnapshot: function () {
+                return world && world.getSnapshot ? world.getSnapshot() : null;
+            }
+        }) : null;
         var camera = cameraApi && cameraApi.create ? cameraApi.create({
             getPlayerSnapshot: function () {
                 return player && player.getSnapshot ? player.getSnapshot() : {};
             },
             getCombatSnapshot: function () {
                 return combat && combat.getSnapshot ? combat.getSnapshot() : {};
+            }
+        }) : null;
+        var bindings = inputBindingsApi && inputBindingsApi.create ? inputBindingsApi.create({
+            input: input,
+            onFire: function () {
+                if (combat && combat.fire && combat.fire()) {
+                    if (camera && camera.addFireKick) camera.addFireKick(0.12);
+                }
+            },
+            onEquipWeapon: function (slotIndex) {
+                var snapshot = combat && combat.getSnapshot ? combat.getSnapshot() : null;
+                var catalog = snapshot && Array.isArray(snapshot.weaponCatalog) ? snapshot.weaponCatalog : [];
+                var weaponId = catalog[Number(slotIndex || 0)] || '';
+                if (weaponId && combat && combat.setWeapon) {
+                    combat.setWeapon(weaponId);
+                }
             }
         }) : null;
         var tickCount = 0;
@@ -42,6 +72,7 @@
                 if (world && world.update) world.update(dt);
                 if (player && player.update) player.update(dt);
                 if (combat && combat.update) combat.update(dt);
+                if (abilities && abilities.update) abilities.update(dt);
                 if (camera && camera.update) camera.update(dt);
                 if (typeof options.onUpdate === 'function') options.onUpdate(getSnapshot());
             }
@@ -62,17 +93,20 @@
                 player: player && player.getSnapshot ? player.getSnapshot() : null,
                 world: world && world.getSnapshot ? world.getSnapshot() : null,
                 combat: combat && combat.getSnapshot ? combat.getSnapshot() : null,
+                abilities: abilities && abilities.getSnapshot ? abilities.getSnapshot() : null,
                 camera: camera && camera.getSnapshot ? camera.getSnapshot() : null
             };
         }
 
         return {
             start: function () {
+                if (bindings && bindings.bind) bindings.bind();
                 if (loop && loop.start) loop.start();
                 return getSnapshot();
             },
             stop: function () {
                 if (loop && loop.stop) loop.stop();
+                if (bindings && bindings.unbind) bindings.unbind();
                 return getSnapshot();
             },
             setInputState: function (patch) {
@@ -86,8 +120,21 @@
                 }
                 return fired;
             },
+            reload: function () {
+                return !!(combat && combat.reload && combat.reload());
+            },
+            triggerAbility: function (slotIndex) {
+                return abilities && abilities.trigger ? abilities.trigger(slotIndex) : { ok: false, reason: 'ability_runtime_missing' };
+            },
             equipWeapon: function (weaponId) {
                 return !!(combat && combat.setWeapon && combat.setWeapon(weaponId));
+            },
+            cycleWeapon: function (delta) {
+                if (combat && combat.cycleWeapon) {
+                    combat.cycleWeapon(delta);
+                    return getSnapshot();
+                }
+                return getSnapshot();
             },
             getSnapshot: getSnapshot
         };

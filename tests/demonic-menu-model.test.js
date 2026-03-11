@@ -8,12 +8,13 @@ import {
   getDefaultGameMode
 } from '../shared/game-modes.js';
 
-test('demonic menu model prefers offline sandbox as the default runtime when available', () => {
+test('demonic menu model prefers a Cloudflare-authoritative runtime when available', () => {
   const model = buildDemonicMenuModel({
     runtimeProfile: {
       getAvailableModes() {
         return [
           { id: 'cloud_multiplayer', label: 'Public Lobby', authorityMode: 'networked', backendLabel: 'CLOUDFLARE PROD' },
+          { id: 'single_cloudflare', label: 'Solo Cloudflare (Bots)', authorityMode: 'networked', backendLabel: 'CLOUDFLARE PROD', authoritativeTesting: true, preferredForDemonicTesting: true },
           { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' }
         ];
       }
@@ -21,7 +22,10 @@ test('demonic menu model prefers offline sandbox as the default runtime when ava
     shared: {
       getQuickPlayGameModes,
       getSandboxGameModes,
-      getDefaultGameMode
+      getDefaultGameMode,
+      getPreferredDemonicRuntimeModeId() {
+        return 'single_cloudflare';
+      }
     },
     modeRegistry: {
       getRuntimeModes(profile) {
@@ -31,9 +35,10 @@ test('demonic menu model prefers offline sandbox as the default runtime when ava
     workstreams: []
   });
 
-  assert.equal(model.selectedRuntimeModeId, 'single_full_sandbox');
+  assert.equal(model.selectedRuntimeModeId, 'single_cloudflare');
   assert.equal(model.selectedGameModeId, 'ffa');
   assert.equal(model.supportsSandbox, true);
+  assert.match(model.launchSummary.note, /Cloudflare-backed/i);
 });
 
 test('demonic menu model keeps explicit selections when provided', () => {

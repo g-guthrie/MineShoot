@@ -1,8 +1,12 @@
 import '../platform/bootstrap.js';
 import '../platform/loop.js';
+import '../gameplay/input/runtime.js';
+import '../gameplay/input/bindings.js';
 import '../gameplay/world/runtime.js';
 import '../gameplay/player/runtime.js';
+import '../gameplay/camera/runtime.js';
 import '../gameplay/combat/runtime.js';
+import '../gameplay/abilities/runtime.js';
 import './runtime-state.js';
 import './coordinator.js';
 import './match-runtime.js';

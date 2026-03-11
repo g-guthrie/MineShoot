@@ -269,6 +269,46 @@ test('player update uses shared authoritative movement when available', async ()
   assert.equal(player.getPosition().y, 5.6);
 });
 
+test('reconcileAuthoritativeMotion does not apply soft correction while local movement intent is active', async () => {
+  const listeners = {};
+  const player = await loadPlayerHarness({
+    __document: {
+      pointerLockElement: {},
+      addEventListener(type, handler) {
+        listeners[type] = listeners[type] || [];
+        listeners[type].push(handler);
+      },
+      removeEventListener() {}
+    }
+  });
+
+  const scene = new THREE.Scene();
+  player.init(scene);
+  for (const handler of (listeners.keydown || [])) {
+    handler({ code: 'KeyW', preventDefault() {} });
+  }
+  player.update(0.016);
+  const before = player.getPosition();
+
+  player.reconcileAuthoritativeMotion({
+    x: before.x + 0.4,
+    y: before.y,
+    z: before.z + 0.4,
+    yaw: 0,
+    pitch: 0
+  }, {
+    dt: 0.016,
+    pendingInputCount: 0,
+    lastSentSeq: 10,
+    lastAckedSeq: 10,
+    pendingInputs: []
+  });
+
+  const after = player.getPosition();
+  assert.equal(after.x, before.x);
+  assert.equal(after.z, before.z);
+});
+
 test('fire action is a no-op when the player view rig is not initialized', async () => {
   const player = await loadPlayerHarness();
 

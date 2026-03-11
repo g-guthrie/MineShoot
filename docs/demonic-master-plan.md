@@ -89,6 +89,7 @@ MAYHEM (unchanged)                    DEMONIC (parallel rebuild)
 - Any subsystem in `Demonic` must be testable without booting the whole game.
 - Shared contracts should be reused where parity matters: IDs, mode registry, tuning semantics, and protocol shapes.
 - New gameplay modes must be defined once and flow automatically into sandbox-capable surfaces.
+- Cloudflare-authoritative modes are the primary parity and signoff lane for Demonic. Local sandbox is for environmental iteration and narrow experiments only.
 
 ## Canonical Mode Rule
 
@@ -541,6 +542,7 @@ Defaults:
 - `Mayhem` remains the default path
 - `Demonic` is parallel-only until parity is accepted
 - runtime mode surface is preserved, including sandbox
+- Demonic should prefer `single_cloudflare` for parity testing when available
 - new modes should auto-flow from one mode registry into sandbox and menu surfaces
 - IDs remain stable in v1
 

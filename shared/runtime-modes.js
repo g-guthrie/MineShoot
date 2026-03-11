@@ -12,7 +12,9 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: '',
     fixedRoomId: '',
     visible: 'always',
-    supportsDemonic: true
+    supportsDemonic: true,
+    authoritativeTesting: true,
+    preferredForDemonicTesting: false
   },
   single_cloudflare: {
     id: 'single_cloudflare',
@@ -27,7 +29,9 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: 'cf-solo',
     fixedRoomId: '',
     visible: 'always',
-    supportsDemonic: true
+    supportsDemonic: true,
+    authoritativeTesting: true,
+    preferredForDemonicTesting: true
   },
   single_dev_server: {
     id: 'single_dev_server',
@@ -42,7 +46,9 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: '',
     fixedRoomId: 'local-shared',
     visible: 'local-only',
-    supportsDemonic: true
+    supportsDemonic: true,
+    authoritativeTesting: false,
+    preferredForDemonicTesting: false
   },
   single_full_sandbox: {
     id: 'single_full_sandbox',
@@ -57,7 +63,9 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: '',
     fixedRoomId: '',
     visible: 'always',
-    supportsDemonic: true
+    supportsDemonic: true,
+    authoritativeTesting: false,
+    preferredForDemonicTesting: false
   }
 };
 
@@ -76,7 +84,9 @@ function cloneRuntimeMode(mode) {
     roomPrefix: String(source.roomPrefix || ''),
     fixedRoomId: String(source.fixedRoomId || ''),
     visible: String(source.visible || 'always'),
-    supportsDemonic: source.supportsDemonic !== false
+    supportsDemonic: source.supportsDemonic !== false,
+    authoritativeTesting: !!source.authoritativeTesting,
+    preferredForDemonicTesting: !!source.preferredForDemonicTesting
   };
 }
 
@@ -97,6 +107,11 @@ export function getDefaultRuntimeModeId() {
   return 'cloud_multiplayer';
 }
 
+export function getPreferredDemonicRuntimeModeId() {
+  const preferred = allRuntimeModes().find((mode) => mode.preferredForDemonicTesting);
+  return preferred ? preferred.id : getDefaultRuntimeModeId();
+}
+
 export function normalizeRuntimeModeId(modeId) {
   const normalized = String(modeId || '').trim().toLowerCase();
   return RUNTIME_MODE_DEFS[normalized] ? normalized : getDefaultRuntimeModeId();
@@ -107,4 +122,5 @@ runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.getRuntimeModeCatalog = getRuntimeModeCatalog;
 runtime.GameShared.getRuntimeMode = getRuntimeMode;
 runtime.GameShared.getDefaultRuntimeModeId = getDefaultRuntimeModeId;
+runtime.GameShared.getPreferredDemonicRuntimeModeId = getPreferredDemonicRuntimeModeId;
 runtime.GameShared.normalizeRuntimeModeId = normalizeRuntimeModeId;
