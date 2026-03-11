@@ -51,7 +51,8 @@
             weaponId: entity.weaponId || 'rifle',
             targetId: 'net:' + entity.id,
             netEntityId: entity.id,
-            hitboxOpacity: hitboxVisible ? 0.3 : 0
+            hitboxOpacity: hitboxVisible ? 0.3 : 0,
+            includeRevealGhost: true
         });
         var group = actorVisual.root || actorVisual.visual;
         var rigApi = actorVisual.rigApi;
@@ -84,6 +85,7 @@
             ? abilityFxView.buildSnapshotAbilityState(entity)
             : {
                 chokeVictimState: null,
+                hookedStartedAt: 0,
                 hookedUntil: 0,
                 hookState: null,
                 chokeState: null,
@@ -124,6 +126,8 @@
             _appliedWeaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
             chokeVictimState: snapshotAbilityState.chokeVictimState,
+            deadeyeMark: null,
+            hookedStartedAt: snapshotAbilityState.hookedStartedAt,
             hookedUntil: snapshotAbilityState.hookedUntil,
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
@@ -198,6 +202,7 @@
             ? abilityFxView.buildSnapshotAbilityState(entity)
             : {
                 chokeVictimState: null,
+                hookedStartedAt: 0,
                 hookedUntil: 0,
                 hookState: null,
                 chokeState: null,
@@ -205,6 +210,7 @@
             };
         r.chokeState = snapshotAbilityState.chokeState;
         r.chokeVictimState = snapshotAbilityState.chokeVictimState;
+        r.hookedStartedAt = snapshotAbilityState.hookedStartedAt;
         r.hookedUntil = snapshotAbilityState.hookedUntil;
         r.hookState = snapshotAbilityState.hookState;
         r.healState = snapshotAbilityState.healState;
@@ -257,6 +263,14 @@
             return render.actorVisual.getCoreWorldPosition(outVec3);
         }
         return null;
+    };
+
+    GameNetEntities.setDeadeyeHighlights = function (markMap) {
+        var marks = markMap || {};
+        renderMap.forEach(function (render, entityId) {
+            if (!render) return;
+            render.deadeyeMark = marks[entityId] || null;
+        });
     };
 
     GameNetEntities.classStats = classStats;

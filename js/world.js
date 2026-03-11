@@ -440,8 +440,14 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             var entry = DEFAULT_QUADRANT_MAP[qi];
             var builder = quadrants[entry.biome];
             if (typeof builder !== 'function') continue;
+            var rawBounds = quadrantBounds(entry.quadrant, 0);
             var qBounds = quadrantBounds(entry.quadrant, 6);
-            var stats = builder(qBounds, place, quadrantCtx);
+            var builderCtx = Object.assign({}, quadrantCtx, {
+                biomeEntry: entry,
+                rawBounds: rawBounds,
+                paddedBounds: qBounds
+            });
+            var stats = builder(qBounds, place, builderCtx);
             if (stats) {
                 var target = generationStats[entry.biome] || {};
                 generationStats[entry.biome] = target;

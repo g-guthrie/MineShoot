@@ -68,8 +68,9 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.deepEqual(state.abilityFx, {
     chokeCasterUntil: 1400,
     chokeVictim: { startedAt: 1100, endsAt: 1500, liftHeight: 1.6 },
+    hookedStartedAt: 1250,
     hookedUntil: 1700,
-    hookVisual: { phase: 'travel', targetId: '', headPos: { x: 7, y: 8, z: 9 }, endsAt: 1800 },
+    hookVisual: { phase: 'travel', targetId: '', headPos: { x: 7, y: 8, z: 9 }, attachPos: null, endsAt: 1800 },
     healUntil: 1900
   });
   assert.equal(state.weaponLockUntil, 0);

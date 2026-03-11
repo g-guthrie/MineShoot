@@ -133,6 +133,7 @@ export const MSG_S2C = {
   AOE_END: 'aoe_end',
   DAMAGE_EVENT: 'damage_event',
   DEATH_RESPAWN: 'death_respawn',
+  ABILITY_EVENT: 'ability_event',
   CLASS_CAST_OK: 'class_cast_ok',
   CLASS_CAST_REJECT: 'class_cast_reject',
   CLASS_CHANGED: 'class_changed',

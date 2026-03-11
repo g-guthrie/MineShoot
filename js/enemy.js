@@ -175,7 +175,9 @@
             slowTimer: 0,
             slowMultiplier: 1,
             hookPullState: null,
+            justBeenHookedStartedAt: 0,
             justBeenHookedUntil: 0,
+            deadeyeMark: null,
             chokeVictimState: null,
             trackingNeedleState: null
         };
@@ -237,6 +239,9 @@
                 airborne: false,
                 aimPitch: engaging ? -0.05 : 0,
                 hooked: !!enemy.hookPullState || Number(enemy.justBeenHookedUntil || 0) > Date.now(),
+                hookStartedAt: enemy.hookPullState
+                    ? Number(enemy.hookPullState.startedAt || 0)
+                    : Number(enemy.justBeenHookedStartedAt || 0),
                 choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
                 startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0,
                 adsActive: !!engaging,
@@ -302,6 +307,7 @@
                 enemy.group.position.x = desiredX;
                 enemy.group.position.z = desiredZ;
                 if (Number(pull.postHookStunDuration || 0) > 0) {
+                    enemy.justBeenHookedStartedAt = Date.now();
                     enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
                     GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
                 }
@@ -314,6 +320,7 @@
                 sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
                 if (sourceDist <= (targetDist + 0.08)) {
                     if (Number(pull.postHookStunDuration || 0) > 0) {
+                        enemy.justBeenHookedStartedAt = Date.now();
                         enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
                         GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
                     }
@@ -408,6 +415,20 @@
     function updateRevealGhost(enemy, playerPos, camera, dt) {
         if (!enemy.actorVisual || !enemy.revealGhost) return;
 
+        if (enemy.alive && enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()) {
+            enemy.actorVisual.setRevealGhostState(false);
+            return;
+        }
+
+        if (enemy.alive && enemy.deadeyeMark) {
+            var deadeyePulse = 0.06 * Math.sin((performance.now() * 0.016) + enemy.index);
+            var deadeyeOpacity = enemy.deadeyeMark.locked
+                ? 0.46
+                : (0.24 + (Math.max(0, Math.min(1, Number(enemy.deadeyeMark.progress || 0))) * 0.18));
+            enemy.actorVisual.setRevealGhostState(true, deadeyeOpacity + deadeyePulse, 0xffc46d);
+            return;
+        }
+
         if (!enemy.alive || !playerPos || !camera) {
             enemy.actorVisual.setRevealGhostState(false);
             return;
@@ -444,7 +465,7 @@
 
         var blocked = revealRaycaster.intersectObjects(worldMeshes, false).length > 0;
         var pulse = 0.04 * Math.sin(performance.now() * 0.012 + enemy.index);
-        enemy.actorVisual.setRevealGhostState(blocked, 0.26 + pulse);
+        enemy.actorVisual.setRevealGhostState(blocked, 0.26 + pulse, 0x65d8ff);
     }
 
     function updateMuzzleFlash(enemy, dt) {
@@ -616,7 +637,9 @@
         if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
         if (enemy.actorVisual && enemy.actorVisual.setRevealGhostState) enemy.actorVisual.setRevealGhostState(false);
         enemy.chokeVictimState = null;
+        enemy.justBeenHookedStartedAt = 0;
         enemy.justBeenHookedUntil = 0;
+        enemy.deadeyeMark = null;
 
         removeHitboxes(enemy);
 
@@ -645,7 +668,9 @@
         enemy.slowTimer = 0;
         enemy.slowMultiplier = 1;
         enemy.hookPullState = null;
+        enemy.justBeenHookedStartedAt = 0;
         enemy.justBeenHookedUntil = 0;
+        enemy.deadeyeMark = null;
         enemy.chokeVictimState = null;
         enemy.trackingNeedleState = null;
         if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
@@ -697,6 +722,16 @@
             });
         }
         return out;
+    };
+
+    GameEnemy.setDeadeyeHighlights = function (markMap) {
+        var marks = markMap || {};
+        for (var i = 0; i < enemies.length; i++) {
+            var enemy = enemies[i];
+            if (!enemy) continue;
+            var targetId = (enemy.bodyHitbox && enemy.bodyHitbox.userData && enemy.bodyHitbox.userData.targetId) || ('enemy:' + enemy.index);
+            enemy.deadeyeMark = marks[targetId] || null;
+        }
     };
 
     GameEnemy.applyStun = function (enemy, duration) {

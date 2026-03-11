@@ -76,7 +76,7 @@ export function tickProjectiles(room, dtSec) {
 
     if ((p.lifeSec > 0 && p.age >= p.lifeSec) || (p.fuseSec > 0 && p.age >= p.fuseSec)) {
       if (p.type === 'knife' || p.type === 'plasma_stream') {
-        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'despawn', x: p.x, y: p.y, z: p.z });
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'despawn', x: p.x, y: p.y, z: p.z });
       } else {
         explodeProjectile(room, p, p.x, p.y, p.z);
       }
@@ -157,14 +157,14 @@ export function tickProjectiles(room, dtSec) {
       }
     } else if (p.y <= groundY) {
       if (p.type === 'knife' || p.type === 'plasma_stream') {
-        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: groundY, z: p.z });
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: groundY, z: p.z });
         toRemove.push(p.id);
         return;
       }
       if (p.type === 'plasma') {
         p.y = groundY;
         if (stickProjectile(p, null, p.x, p.y, p.z)) {
-          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'world', x: p.x, y: p.y, z: p.z });
+          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: p.y, z: p.z });
           return;
         }
       }
@@ -184,20 +184,20 @@ export function tickProjectiles(room, dtSec) {
       if (d > hitRadius) continue;
       if (p.type === 'plasma') {
         if (stickProjectile(p, e, p.x, p.y, p.z)) {
-          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
+          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
           return;
         }
       }
       if (p.type === 'plasma_stream') {
         projectileDamageHit(room, p, e, 'body');
-        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
         toRemove.push(p.id);
         return;
       }
       if (p.type === 'knife') {
         const isHead = dy > KNIFE_HEADSHOT_HEIGHT_DELTA_WU;
         projectileDamageHit(room, p, e, isHead ? 'head' : 'body');
-        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
         toRemove.push(p.id);
         return;
       }

@@ -176,3 +176,53 @@ test('remote sync flips jump leg tilt when backward input starts the jump', asyn
   assert.equal(calls[0].action, 'jump');
   assert.equal(calls[0].options.reverseLegTilt, true);
 });
+
+test('remote sync does not force the reveal ghost on for choked victims', async () => {
+  const remoteSync = await loadRemoteSync();
+  const revealCalls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    deadeyeMark: { locked: true, progress: 1 },
+    actorVisual: {
+      updateAnimation() {},
+      setMuzzleVisible() {},
+      setRevealGhostState(visible, opacity, colorHex) {
+        revealCalls.push({ visible, opacity, colorHex });
+      }
+    },
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation() {},
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 1.2, startedAt: 1000 };
+  });
+
+  assert.equal(revealCalls.length > 0, true);
+  assert.equal(revealCalls.at(-1).visible, false);
+});

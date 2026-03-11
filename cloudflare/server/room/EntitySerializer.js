@@ -16,6 +16,8 @@ function cloneVec3(value) {
 }
 
 function buildAbilityFx(entity) {
+  const hookPullEndsAt = Number(entity.hookPullState && entity.hookPullState.endsAt || 0);
+  const justBeenHookedEndsAt = Number(entity.justBeenHookedState && entity.justBeenHookedState.endsAt || 0);
   const chokeVictim = entity.chokeVictimState
     ? {
         startedAt: Number(entity.chokeVictimState.startedAt || 0),
@@ -28,19 +30,21 @@ function buildAbilityFx(entity) {
         phase: entity.hookState.phase || 'travel',
         targetId: entity.hookState.targetId || '',
         headPos: cloneVec3(entity.hookState.headPos || null),
+        attachPos: cloneVec3(entity.hookState.attachPos || null),
         endsAt: Number(entity.hookState.endsAt || 0)
       }
     : null;
-  const hookedUntil = Math.max(
-    Number(entity.hookPullState && entity.hookPullState.endsAt || 0),
-    Number(entity.justBeenHookedState && entity.justBeenHookedState.endsAt || 0)
-  );
+  const hookedUntil = Math.max(hookPullEndsAt, justBeenHookedEndsAt);
+  const hookedStartedAt = hookPullEndsAt >= justBeenHookedEndsAt
+    ? Number(entity.hookPullState && entity.hookPullState.startedAt || 0)
+    : Number(entity.justBeenHookedState && entity.justBeenHookedState.startedAt || 0);
   const chokeCasterUntil = Number(entity.chokeState && entity.chokeState.endsAt || 0);
   const healUntil = Number(entity.healState && entity.healState.endsAt || 0);
 
   return {
     chokeCasterUntil,
     chokeVictim,
+    hookedStartedAt,
     hookedUntil,
     hookVisual,
     healUntil

@@ -83,7 +83,7 @@ export const gameplayTuning = {
       hipfireBloomScale: 2.5, adsBloomScale: 1,
       aimProfile: { hipfire: { spread: 0.024, maxRange: 110 }, ads: { spread: 0, maxRange: 132 } },
       presentation: {
-        tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
+        tracer: { life: 0.11, speed: 280, segmentLength: 1.25 },
         recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
         audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 }
       }
@@ -94,7 +94,7 @@ export const gameplayTuning = {
       aimProfile: { hipfire: { spread: 0.156, maxRange: 24 }, ads: { spread: 0.156, maxRange: 28 } },
       singleHitFromPellets: true,
       presentation: {
-        tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
+        tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
         recoil: { z: -0.04, x: -0.08, pitch: 0.014, yaw: 0.007, roll: 0.005, armR: 0.2, armL: 0.08, muzzleMs: 60 },
         audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 }
       }
@@ -104,7 +104,7 @@ export const gameplayTuning = {
       bodyDamage: 15, headDamage: 23, maxRange: 58, pellets: 1, hipfireSpread: 0.046, adsSpread: 0.046, adsFovDeg: 56, adsMaxRange: 72,
       aimProfile: { hipfire: { spread: 0.046, maxRange: 58 }, ads: { spread: 0.046, maxRange: 72 } },
       presentation: {
-        tracer: { life: 0.075, speed: 260, segmentLength: 1.25 },
+        tracer: { life: 0.075, speed: 260, segmentLength: 1.0 },
         recoil: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 },
         audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 }
       }

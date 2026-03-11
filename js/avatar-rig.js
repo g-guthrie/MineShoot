@@ -523,6 +523,7 @@
             var choked = !!(animState && animState.choked);
             var chokeStartedAt = choked ? Number(animState.startedAt || 0) : 0;
             var hooked = !!(animState && animState.hooked);
+            var hookStartedAt = hooked ? Number(animState.hookStartedAt || 0) : 0;
             var legAmp = 0.12 + speedNorm * 0.55;
             if (legAmp > 0.72) legAmp = 0.72;
             var worldSpeed = animState && typeof animState.worldSpeed === 'number'
@@ -536,20 +537,21 @@
             resetSupportHandPose(rig);
             resetGunMountPose(rig);
             if (hooked && !choked) {
-                var hookPhase = Date.now() * 0.018;
-                rig.legL.rotation.x = -0.32 + (Math.sin(hookPhase) * 0.12);
-                rig.legR.rotation.x = -0.22 + (Math.sin(hookPhase + 1.5) * 0.12);
-                rig.legL.rotation.z = 0.03;
-                rig.legR.rotation.z = -0.03;
+                var hookStamp = Date.now();
+                var hookPhase = hookStartedAt ? ((hookStamp - hookStartedAt) * 0.02) : (hookStamp * 0.018);
+                rig.legL.rotation.x = -0.28 + (Math.sin(hookPhase) * 0.16);
+                rig.legR.rotation.x = -0.16 + (Math.sin(hookPhase + 1.3) * 0.16);
+                rig.legL.rotation.z = 0.06 + (Math.sin(hookPhase + 0.4) * 0.035);
+                rig.legR.rotation.z = -0.06 + (Math.sin(hookPhase + 1.8) * 0.035);
                 rig.legL.position.x = AVATAR_LEG_LEFT_CENTER_OFFSET.x;
                 rig.legR.position.x = AVATAR_LEG_RIGHT_CENTER_OFFSET.x;
-                rig.armL.rotation.x = -0.42 + (Math.sin(hookPhase + 0.8) * 0.14);
-                rig.armL.rotation.y = -0.08;
-                rig.armL.rotation.z = -0.18;
-                rig.armR.rotation.x = 0.86 + (Math.sin(hookPhase + 2.0) * 0.12);
-                rig.armR.rotation.y = 0;
-                rig.armR.rotation.z = 0.04;
-                rig.palmRight.rotation.x = 0;
+                rig.armL.rotation.x = -0.54 + (Math.sin(hookPhase + 0.8) * 0.16);
+                rig.armL.rotation.y = -0.12;
+                rig.armL.rotation.z = -0.28;
+                rig.armR.rotation.x = 0.98 + (Math.sin(hookPhase + 2.0) * 0.14);
+                rig.armR.rotation.y = 0.06;
+                rig.armR.rotation.z = 0.08;
+                rig.palmRight.rotation.x = -0.08;
                 return;
             }
             if (choked) {

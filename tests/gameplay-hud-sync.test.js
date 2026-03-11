@@ -15,7 +15,9 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     hookReticle: [],
     deadeyeRect: [],
     abilityDebugPanel: [],
-    deadeyeReticle: []
+    deadeyeReticle: [],
+    deadeyeHighlights: [],
+    chokeAudio: []
   };
   const runtime = {
     GameShared: {
@@ -44,13 +46,21 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     GameAbilities: {
       getHudState() { return { slot1Cooldown: 3, slot2Cooldown: 5 }; },
       getLoadout() { return { slot1: 'choke', slot2: 'deadeye' }; },
+      getChokeState() { return { endsAt: 1400 }; },
       getHealState() { return { endsAt: 1500 }; },
       getDeadeyeState() { return { targets: [{ id: 'a' }] }; },
       getChokeRectSize() { return { width: 240, height: 180 }; }
     },
     GamePlayer: {
       setHealFlash(value) { calls.healFlash.push(value); },
-      setStatusState(value) { calls.statusState.push(value); }
+      setStatusState(value) { calls.statusState.push(value); },
+      isChoked() { return false; }
+    },
+    GameAudio: {
+      setChokeAudioState(value) { calls.chokeAudio.push(JSON.parse(JSON.stringify(value))); }
+    },
+    GameEnemy: {
+      setDeadeyeHighlights(value) { calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
     },
     GamePlayerCombat: {
       isInvulnerable() { return true; }
@@ -102,6 +112,8 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
   assert.equal(harness.calls.abilityDebugPanel[0].visible, true);
   assert.ok(harness.calls.abilityDebugPanel[0].text.includes('VADER CHOKE'));
   assert.deepEqual(harness.calls.deadeyeReticle[0].state, { targets: [{ id: 'a' }] });
+  assert.deepEqual(harness.calls.deadeyeHighlights[0], {});
+  assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
 });
 
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {
@@ -110,6 +122,7 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
       getSelfAbilityState() {
         return {
           abilityLoadout: { slot1: 'deadeye', slot2: 'choke' },
+          chokeState: { endsAt: 1400 },
           deadeyeState: {
             maxLocks: 2,
             lockCount: 1,
@@ -117,15 +130,19 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
           }
         };
       },
-      getEntityMarkerWorldPos(id) {
+      damagePointForEntityId(id) {
         if (id === 'usr_remote') return { x: 1, y: 2, z: 3 };
         return null;
       }
+    },
+    GameNetEntities: {
+      setDeadeyeHighlights(value) { harness.calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
     },
     GameAbilityBoundary: {
       buildNetworkDeadeyeUiState(state, resolveTargetWorldPos) {
         return {
           targets: [{
+            targetId: state.targetIds[0],
             worldPos: resolveTargetWorldPos(state.targetIds[0]),
             locked: true,
             progress: 1
@@ -134,7 +151,8 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
       }
     }
   });
-
+  harness.calls.chokeAudio.length = 0;
+  harness.calls.deadeyeHighlights.length = 0;
   harness.hudSync.update({
     camera: { fov: 60, aspect: 16 / 9 },
     dt: 0.05,
@@ -144,6 +162,10 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
 
   assert.equal(harness.calls.abilityInfo.length, 0);
   assert.deepEqual(harness.calls.deadeyeReticle[0].state, {
-    targets: [{ worldPos: { x: 1, y: 2, z: 3 }, locked: true, progress: 1 }]
+    targets: [{ targetId: 'usr_remote', worldPos: { x: 1, y: 2, z: 3 }, locked: true, progress: 1 }]
   });
+  assert.deepEqual(harness.calls.deadeyeHighlights[0], {
+    usr_remote: { locked: true, progress: 1 }
+  });
+  assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
 });

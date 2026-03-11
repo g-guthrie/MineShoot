@@ -44,6 +44,7 @@
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
                 stunUntil: Math.max(Number(selfState.stunUntil || 0), outOfRoundLockUntil),
+                hookPullStartedAt: Number(selfAbilityFx ? (selfAbilityFx.hookedStartedAt || 0) : 0),
                 hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
                 chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
                 chokeUntil: Number(selfChokeVictimState.endsAt || 0),

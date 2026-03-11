@@ -579,6 +579,9 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.18, v: 0.04, s: 1.18 },
             { u: 0.36, v: 0.14, s: 1.08 },
             { u: 0.62, v: 0.10, s: 1.02 },
+            { u: 0.72, v: 0.34, s: 1.04 },
+            { u: 0.72, v: 0.76, s: 1.06 },
+            { u: 0.48, v: 0.90, s: 1.12 },
             { u: 0.98, v: 0.52, s: 1.02 },
             { u: 0.90, v: 0.92, s: 1.08 },
             { u: 0.84, v: 0.04, s: 1.1 }
@@ -604,13 +607,8 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.28, v: 0.94, s: 1.08 },
             { u: 0.10, v: 0.90, s: 1.18 },
             // Inner layer spread wider with fewer clumps.
-            { u: 0.24, v: 0.28, s: 1.18 },
-            { u: 0.46, v: 0.22, s: 1.05 },
             { u: 0.68, v: 0.26, s: 1.18 },
-            { u: 0.76, v: 0.52, s: 1.18 },
-            { u: 0.60, v: 0.72, s: 1.02 },
-            { u: 0.34, v: 0.68, s: 1.1 },
-            { u: 0.48, v: 0.50, s: 0.92 }
+            { u: 0.34, v: 0.68, s: 1.1 }
         ];
         for (var t = 0; t < canopyTrees.length; t++) {
             var tp = pt(bounds, canopyTrees[t].u, canopyTrees[t].v);
@@ -620,16 +618,11 @@ import { pointInBounds as pt } from './biome-utils.js';
         // Type B: Bushy trees -- more of them, wider scale range
         var bushyTrees = [
             { u: 0.18, v: 0.16, s: 0.9 },
-            { u: 0.34, v: 0.06, s: 0.82 },
-            { u: 0.68, v: 0.10, s: 0.88 },
             { u: 0.90, v: 0.26, s: 0.95 },
             { u: 0.88, v: 0.60, s: 0.72 },
             { u: 0.70, v: 0.88, s: 1.05 },
             { u: 0.34, v: 0.90, s: 0.95 },
-            { u: 0.08, v: 0.68, s: 1.0 },
-            { u: 0.22, v: 0.48, s: 0.84 },
             { u: 0.56, v: 0.36, s: 0.92 },
-            { u: 0.62, v: 0.58, s: 0.86 },
             { u: 0.42, v: 0.76, s: 0.88 }
         ];
         for (var bt = 0; bt < bushyTrees.length; bt++) {
@@ -639,11 +632,9 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type C: Saplings -- fill gaps, especially mid-zone
         var saplings = [
-            { u: 0.14, v: 0.10 }, { u: 0.40, v: 0.14 },
-            { u: 0.78, v: 0.14 }, { u: 0.92, v: 0.46 },
-            { u: 0.76, v: 0.86 }, { u: 0.44, v: 0.86 },
-            { u: 0.16, v: 0.84 }, { u: 0.24, v: 0.58 },
-            { u: 0.54, v: 0.22 }, { u: 0.62, v: 0.78 }
+            { u: 0.92, v: 0.46 },
+            { u: 0.16, v: 0.84 },
+            { u: 0.62, v: 0.78 }
         ];
         for (var sp = 0; sp < saplings.length; sp++) {
             var spp = pt(bounds, saplings[sp].u, saplings[sp].v);
@@ -651,16 +642,13 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
 
         // ============================================================
-        // UNDERGROWTH -- dense fern layer
+        // UNDERGROWTH -- lighter fern layer so the floor reads cleaner
         // ============================================================
         var ferns = [
-            { u: 0.18, v: 0.26 }, { u: 0.38, v: 0.18 }, { u: 0.60, v: 0.22 },
-            { u: 0.75, v: 0.40 }, { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 },
-            { u: 0.56, v: 0.74 }, { u: 0.35, v: 0.56 }, { u: 0.64, v: 0.62 },
-            { u: 0.15, v: 0.44 }, { u: 0.88, v: 0.38 },
-            { u: 0.11, v: 0.18 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
-            { u: 0.70, v: 0.86 }, { u: 0.08, v: 0.62 }, { u: 0.92, v: 0.42 },
-            { u: 0.42, v: 0.28 }, { u: 0.58, v: 0.72 }, { u: 0.44, v: 0.52 }
+            { u: 0.18, v: 0.26 }, { u: 0.60, v: 0.22 }, { u: 0.75, v: 0.40 },
+            { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 }, { u: 0.56, v: 0.74 },
+            { u: 0.88, v: 0.38 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
+            { u: 0.70, v: 0.86 }, { u: 0.42, v: 0.28 }
         ];
         for (var f = 0; f < ferns.length; f++) {
             var fp = pt(bounds, ferns[f].u, ferns[f].v);
@@ -673,8 +661,7 @@ import { pointInBounds as pt } from './biome-utils.js';
         var logs = [
             { u: 0.28, v: 0.58, ax: true },
             { u: 0.74, v: 0.50, ax: false },
-            { u: 0.54, v: 0.78, ax: false },
-            { u: 0.40, v: 0.66, ax: true }
+            { u: 0.54, v: 0.78, ax: false }
         ];
         for (var l = 0; l < logs.length; l++) {
             var lp = pt(bounds, logs[l].u, logs[l].v);
@@ -686,12 +673,13 @@ import { pointInBounds as pt } from './biome-utils.js';
         // ============================================================
         var mushrooms = [
             { u: 0.29, v: 0.59, red: true },
-            { u: 0.27, v: 0.57, red: false },
+            { u: 0.26, v: 0.61, red: false },
             { u: 0.73, v: 0.49, red: true },
+            { u: 0.76, v: 0.53, red: false },
             { u: 0.50, v: 0.23, red: false },
             { u: 0.54, v: 0.79, red: true },
-            { u: 0.60, v: 0.67, red: true },
-            { u: 0.33, v: 0.44, red: false }
+            { u: 0.58, v: 0.77, red: false },
+            { u: 0.86, v: 0.72, red: true }
         ];
         for (var mi = 0; mi < mushrooms.length; mi++) {
             var mp = pt(bounds, mushrooms[mi].u, mushrooms[mi].v);
@@ -701,10 +689,6 @@ import { pointInBounds as pt } from './biome-utils.js';
         // ============================================================
         // GROUND VINES -- snaking between trees at ground level
         // ============================================================
-        var gv1a = pt(bounds, 0.18, 0.16);
-        var gv1b = pt(bounds, 0.34, 0.14);
-        addGroundVine(gv1a.x, gv1a.z, gv1b.x, gv1b.z, place, mats);
-
         var gv2a = pt(bounds, 0.16, 0.78);
         var gv2b = pt(bounds, 0.32, 0.86);
         addGroundVine(gv2a.x, gv2a.z, gv2b.x, gv2b.z, place, mats);
@@ -712,10 +696,6 @@ import { pointInBounds as pt } from './biome-utils.js';
         var gv3a = pt(bounds, 0.78, 0.64);
         var gv3b = pt(bounds, 0.88, 0.82);
         addGroundVine(gv3a.x, gv3a.z, gv3b.x, gv3b.z, place, mats);
-
-        var gv4a = pt(bounds, 0.46, 0.40);
-        var gv4b = pt(bounds, 0.62, 0.46);
-        addGroundVine(gv4a.x, gv4a.z, gv4b.x, gv4b.z, place, mats);
 
         // ============================================================
         // FALLEN PILLAR near shrine (toppled column)

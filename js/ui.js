@@ -15,6 +15,8 @@
     var weaponInfoEl, throwableInfoEl;
     var abilityInfoEl;
     var cooldownBarEl, cooldownStatusEl;
+    var sprintSpeedLinesEl;
+    var sprintSpeedLineEls = [];
     var damageVignetteEl, damageIndicatorEl;
     var damageTicks = [];
     var damageTickTimers = [];
@@ -78,6 +80,7 @@
         abilityInfoEl = document.getElementById('ability-info');
         cooldownBarEl = document.getElementById('cooldown-bar');
         cooldownStatusEl = document.getElementById('cooldown-status');
+        sprintSpeedLinesEl = document.getElementById('sprint-speed-lines');
         damageVignetteEl = document.getElementById('damage-vignette');
         damageIndicatorEl = document.getElementById('damage-indicator');
 
@@ -123,6 +126,30 @@
         }
 
         deadeyeReticlePool = [];
+        sprintSpeedLineEls = [];
+        if (sprintSpeedLinesEl) {
+            sprintSpeedLinesEl.innerHTML = '';
+            var speedLineSpecs = [
+                { side: 'left', top: '14%', delay: '0.00s', duration: '0.78s' },
+                { side: 'left', top: '30%', delay: '0.18s', duration: '0.88s' },
+                { side: 'left', top: '68%', delay: '0.11s', duration: '0.82s' },
+                { side: 'left', top: '84%', delay: '0.27s', duration: '0.92s' },
+                { side: 'right', top: '18%', delay: '0.09s', duration: '0.86s' },
+                { side: 'right', top: '38%', delay: '0.23s', duration: '0.8s' },
+                { side: 'right', top: '62%', delay: '0.05s', duration: '0.9s' },
+                { side: 'right', top: '82%', delay: '0.31s', duration: '0.84s' }
+            ];
+            for (var s = 0; s < speedLineSpecs.length; s++) {
+                var spec = speedLineSpecs[s];
+                var line = document.createElement('div');
+                line.className = 'sprint-speed-line ' + spec.side;
+                line.style.top = spec.top;
+                line.style.animationDelay = spec.delay;
+                line.style.animationDuration = spec.duration;
+                sprintSpeedLinesEl.appendChild(line);
+                sprintSpeedLineEls.push(line);
+            }
+        }
     };
 
     GameUI.showHitMarker = function () {
@@ -490,6 +517,27 @@
 
         if (damageVignetteEl) {
             damageVignetteEl.style.opacity = (damageFlashLevel * 0.62).toFixed(3);
+        }
+    };
+
+    GameUI.updateSprintEffects = function (state) {
+        if (!sprintSpeedLinesEl) return;
+        state = state || {};
+        var intensity = Math.max(0, Math.min(1, Number(state.intensity || 0)));
+        var blocked = !!state.adsActive || !!state.scopeActive || !!state.sniper || !!state.hidden;
+        if (intensity <= 0.03 || blocked) {
+            sprintSpeedLinesEl.style.display = 'none';
+            sprintSpeedLinesEl.style.opacity = '0';
+            return;
+        }
+
+        sprintSpeedLinesEl.style.display = 'block';
+        sprintSpeedLinesEl.style.opacity = (0.16 + (intensity * 0.52)).toFixed(3);
+        for (var i = 0; i < sprintSpeedLineEls.length; i++) {
+            var line = sprintSpeedLineEls[i];
+            var weight = 0.55 + (((i % 4) / 4) * 0.45);
+            line.style.opacity = (0.12 + (intensity * weight * 0.78)).toFixed(3);
+            line.style.width = Math.round(140 + (intensity * (110 + ((i % 3) * 24)))) + 'px';
         }
     };
 

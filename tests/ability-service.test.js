@@ -5,6 +5,7 @@ import { castChoke, castHook, tickClassAbilityState } from '../cloudflare/server
 import { pullEntityToward } from '../cloudflare/server/room/RoomCombatRuntime.js';
 
 test('castChoke leaves the caster action timers alone and applies lift to the victim', () => {
+  const broadcasts = [];
   const player = {
     id: 'usr_vader',
     alive: true,
@@ -22,6 +23,9 @@ test('castChoke leaves the caster action timers alone and applies lift to the vi
     },
     applyTimedStun(entity, duration) {
       entity.stunDuration = duration;
+    },
+    broadcast(payload) {
+      broadcasts.push(payload);
     }
   };
 
@@ -49,6 +53,12 @@ test('castChoke leaves the caster action timers alone and applies lift to the vi
   assert.equal(target.chokeVictimState.startedAt, 1000);
   assert.equal(target.chokeVictimState.endsAt, 2600);
   assert.equal(target.chokeVictimState.liftHeight, 1.25);
+  assert.deepEqual(broadcasts, [{
+    t: 'ability_event',
+    abilityId: 'choke',
+    sourceId: player.id,
+    targetId: target.id
+  }]);
 });
 
 test('missed server hook retracts toward the current origin before clearing', () => {
@@ -168,6 +178,89 @@ test('hook pull releases once the target reaches the caster while following live
     assert.equal(target.hookPullState, null);
     assert.equal(target.z, -9.2);
     assert.equal(target.justBeenHookedDuration, 0.5);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('landed server hook preserves an attachment point and retracts after the pull beat', () => {
+  const realNow = Date.now;
+  const timeState = { now: 1000 };
+  Date.now = function () {
+    return timeState.now;
+  };
+
+  try {
+    const player = {
+      id: 'usr_hook',
+      alive: true,
+      x: 0,
+      y: 1.2,
+      z: 0
+    };
+    const target = {
+      id: 'usr_target',
+      alive: true,
+      x: 0,
+      y: 1.2,
+      z: -3
+    };
+    const room = {
+      boundsMin: -50,
+      boundsMax: 50,
+      entityCorePosition(entity) {
+        return { x: entity.x, y: entity.y, z: entity.z };
+      },
+      entityAimTargetPosition(entity) {
+        return { x: entity.x, y: entity.y, z: entity.z };
+      },
+      resolveClassAimPoint() {
+        return { x: 0, y: 1.2, z: -3 };
+      },
+      clampWorldAimPoint(_start, aimPoint) {
+        return aimPoint;
+      },
+      getAliveEntities() {
+        return [target];
+      },
+      canTargetEntity(entity) {
+        return entity === target;
+      },
+      hasWorldLineOfSight() {
+        return true;
+      },
+      broadcast() {},
+      pullEntityToward() {},
+      getEntityById(id) {
+        if (id === player.id) return player;
+        if (id === target.id) return target;
+        return null;
+      }
+    };
+
+    castHook(room, player, {
+      range: 24,
+      catchRadius: 1.6,
+      pullDistance: 3.2,
+      stunDuration: 0.5,
+      castDamage: 35,
+      travelSpeed: 24
+    }, {}, timeState.now);
+
+    timeState.now = 1100;
+    tickClassAbilityState(room, player);
+    assert.equal(player.hookState.phase, 'latched');
+    assert.deepEqual(player.hookState.attachPos, { x: 0, y: 1.2, z: -3 });
+
+    player.z = 1;
+    timeState.now = 1270;
+    tickClassAbilityState(room, player);
+    assert.equal(player.hookState.phase, 'retract');
+
+    timeState.now = 1320;
+    tickClassAbilityState(room, player);
+    assert.ok(player.hookState.headPos.z > -3);
+    assert.ok(player.hookState.headPos.z < 1);
   } finally {
     Date.now = realNow;
   }

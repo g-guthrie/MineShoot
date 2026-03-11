@@ -148,7 +148,7 @@ export function explodeProjectile(room, projectile, x, y, z) {
       life: def.fireDuration,
       tickTimer: 0
     });
-    room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: projectile.id, impactType: 'molotov', x, y, z });
+    room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: projectile.id, impactType: 'molotov', projectileType: projectile.type, x, y, z });
     return;
   }
   const radius = def.radius || 0;
@@ -176,5 +176,5 @@ export function explodeProjectile(room, projectile, x, y, z) {
       broadcastDeathRespawn(room, e);
     }
   }
-  room.broadcast({ t: MSG_S2C.THROW_EXPLODE, projectileId: projectile.id, x, y, z, radius });
+  room.broadcast({ t: MSG_S2C.THROW_EXPLODE, projectileId: projectile.id, projectileType: projectile.type, x, y, z, radius });
 }

@@ -51,7 +51,14 @@ export function buildWorldCollisionData(worldMeta) {
     const entry = DEFAULT_QUADRANT_MAP[qi];
     const builder = quadrants[entry.biome];
     if (typeof builder !== 'function') continue;
-    builder(quadrantBounds(entry.quadrant, 6), recorder.place, recorder.ctx);
+    const rawBounds = quadrantBounds(entry.quadrant, 0);
+    const paddedBounds = quadrantBounds(entry.quadrant, 6);
+    builder(paddedBounds, recorder.place, {
+      ...recorder.ctx,
+      biomeEntry: entry,
+      rawBounds,
+      paddedBounds
+    });
   }
 
   return {

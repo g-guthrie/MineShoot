@@ -1,0 +1,71 @@
+Citadel biome authored-feature map
+Biome: citadel
+Bounds x:[62, 104] z:[62, 104]  grid:14x14
+Features: 20 high-level placements across 17/196 cells (8.7% occupied)
+
+Dominant feature map
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  S  .  .  .  .  .  . 
+ 3 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  T  .  .  r  .  T  .  .  .  . 
+ 5 | .  .  .  .  .  .  .  r  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 7 | .  .  S  .  r  r  .  *  r  r  .  S  .  . 
+ 8 | .  .  .  .  .  .  .  r  .  .  .  .  .  . 
+ 9 | .  .  .  .  T  .  .  r  .  T  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+11 | .  .  .  .  .  .  .  S  .  .  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Density heatmap
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+ 3 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  1  .  .  1  .  1  .  .  .  . 
+ 5 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 7 | .  .  1  .  1  1  .  4  1  1  .  1  .  . 
+ 8 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+ 9 | .  .  .  .  1  .  .  1  .  1  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+11 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Legend
+  B base
+  b beacon
+  r ramp
+  R ring
+  P spire
+  S stair
+  T tower
+  * mixed cell
+
+Counts by feature kind
+  base             1
+  beacon           1
+  ramp             8
+  ring             1
+  spire            1
+  stair            4
+  tower            4
+
+Top dense cells
+  r7 c7  count=4  kinds=base,beacon,ring,spire  labels=beacon, citadel-base, inner-ring, spire
+  r2 c7  count=1  kinds=stair  labels=north-stair
+  r4 c4  count=1  kinds=tower  labels=corner-tower-1
+  r4 c7  count=1  kinds=ramp  labels=north-ramp
+  r4 c9  count=1  kinds=tower  labels=corner-tower-2
+  r5 c7  count=1  kinds=ramp  labels=inner-north-ramp
+  r7 c2  count=1  kinds=stair  labels=west-stair
+  r7 c4  count=1  kinds=ramp  labels=west-ramp
+  r7 c5  count=1  kinds=ramp  labels=inner-west-ramp
+  r7 c8  count=1  kinds=ramp  labels=inner-east-ramp
+  r7 c9  count=1  kinds=ramp  labels=east-ramp
+  r7 c11  count=1  kinds=stair  labels=east-stair

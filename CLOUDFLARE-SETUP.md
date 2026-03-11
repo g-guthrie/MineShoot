@@ -102,6 +102,15 @@ Notes:
 
 Use this exact flow when you want to push current work to production again.
 
+Important:
+
+- A "push" is not complete when only the Worker/backend is deployed.
+- A "push" is only complete when all three are true:
+  1. `main` is pushed to GitHub
+  2. the Worker/backend deploy is live
+  3. the Pages/frontend deploy is live and serving the new build
+- If the frontend is still serving the previous Pages build, treat the push as incomplete.
+
 ### A) Verify locally
 
 Build first:
@@ -142,6 +151,8 @@ git commit -m "Describe the change"
 git push origin main
 ```
 
+Do not stop here. This only triggers the Pages/frontend deploy. It does not mean the new frontend is already live.
+
 ### C) Deploy the Worker/backend
 
 Deploy the Worker with the repo-local Wrangler wrapper:
@@ -167,6 +178,12 @@ That means:
 - pushing `main` is the Pages/frontend deploy trigger
 - `wrangler deploy` updates the Worker/backend/API side
 
+Important:
+
+- `git push origin main` only starts the Pages deploy.
+- You still need to verify that the Pages site is actually serving the new frontend before calling the push complete.
+- If Pages is delayed, still building, or failed, the push is not done.
+
 ### E) Quick verification
 
 Check both endpoints respond:
@@ -176,8 +193,28 @@ curl -I https://mayhem.gguthrie-minecraft-fps.workers.dev/
 curl -I https://mayhem-9uj.pages.dev/
 ```
 
+Then verify the live frontend actually contains the expected change, not just a `200`:
+
+```bash
+curl -s https://mayhem-9uj.pages.dev/ | rg "some-expected-marker-from-your-change"
+```
+
+Examples:
+
+- a new button id
+- a changed button label
+- a new asset hash if you know which bundle changed
+
+If the expected marker is missing, the Pages/frontend deploy has not gone live yet.
+
 If you want to verify the exact pushed commit:
 
 ```bash
 git rev-parse --short HEAD
 ```
+
+Definition of done for production pushes:
+
+- GitHub `main` contains the commit you expect
+- Worker deploy succeeded
+- Pages site is live with the new frontend behavior you changed

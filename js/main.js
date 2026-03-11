@@ -802,6 +802,22 @@
                 globalThis.__MAYHEM_RUNTIME.GameUI.updateWeaponInfo(currentWeapon);
             }
         }
+        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSprintEffects) {
+            var sprintAdsState = globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState
+                ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState()
+                : null;
+            var sprintAnimState = globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState
+                ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState()
+                : null;
+            globalThis.__MAYHEM_RUNTIME.GameUI.updateSprintEffects({
+                intensity: globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting && globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()
+                    ? Number(sprintAnimState && sprintAnimState.moveSpeedNorm || 0)
+                    : 0,
+                adsActive: !!(sprintAdsState && sprintAdsState.active),
+                scopeActive: !!(sprintAdsState && sprintAdsState.scopeActive),
+                sniper: !!(sprintAdsState && sprintAdsState.sniper)
+            });
+        }
         if (controlsApi && controlsApi.isTriggerHeld && controlsApi.isTriggerHeld() && hasInputCapture() && currentWeapon && currentWeapon.automatic && !globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) {
             tryPlayerFire();
         }

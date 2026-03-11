@@ -270,6 +270,7 @@
             if (state.targets[i].dead) continue;
             var locked = i < state.lockCount;
             markers.push({
+                targetId: state.targets[i].targetId || '',
                 worldPos: plainVec3(state.targets[i].worldPos),
                 progress: locked ? 1 : (i === state.lockCount ? lockProgress : 0),
                 locked: locked
@@ -300,6 +301,7 @@
                 : null;
             if (!worldPos) continue;
             markers.push({
+                targetId: targetId,
                 worldPos: worldPos,
                 progress: markerProgress,
                 locked: locked

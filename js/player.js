@@ -114,6 +114,7 @@
     var avatarAliveVisible = true;
     var statusState = {
         stunUntil: 0,
+        hookPullStartedAt: 0,
         hookPullUntil: 0,
         chokeStartedAt: 0,
         chokeUntil: 0,
@@ -225,6 +226,7 @@
         var stamp = Number(now || nowMs());
         if (!isStunned(stamp)) statusState.stunUntil = 0;
         if (!isHookPulled(stamp)) statusState.hookPullUntil = 0;
+        if (!isHookPulled(stamp)) statusState.hookPullStartedAt = 0;
         if (!isChoked(stamp)) {
             statusState.chokeStartedAt = 0;
             statusState.chokeUntil = 0;
@@ -239,6 +241,7 @@
     function applyStatusState(patch) {
         patch = patch || {};
         if (typeof patch.stunUntil === 'number') statusState.stunUntil = Number(patch.stunUntil || 0);
+        if (typeof patch.hookPullStartedAt === 'number') statusState.hookPullStartedAt = Number(patch.hookPullStartedAt || 0);
         if (typeof patch.hookPullUntil === 'number') statusState.hookPullUntil = Number(patch.hookPullUntil || 0);
         if (typeof patch.chokeStartedAt === 'number') statusState.chokeStartedAt = Number(patch.chokeStartedAt || 0);
         if (typeof patch.chokeUntil === 'number') statusState.chokeUntil = Number(patch.chokeUntil || 0);
@@ -347,6 +350,7 @@
             isGrounded: isGrounded,
             pitch: pitch,
             hooked: isHookPulled(),
+            hookPullStartedAt: statusState.hookPullStartedAt || 0,
             choked: isChoked(),
             chokeStartedAt: statusState.chokeStartedAt || 0,
             adsActive: isAdsActive(),
@@ -443,6 +447,8 @@
             avatarAliveVisible: avatarAliveVisible,
             sniperMode: isSniperScopeWeapon(),
             adsActive: isAdsActive(),
+            choked: isChoked(),
+            chokeStartedAt: statusState.chokeStartedAt || 0,
             chokeLift: activeChokeLift(),
             updateAvatarPose: updateAvatarPose,
             getWorldCollidables: function () {
@@ -1037,6 +1043,7 @@
     GamePlayer.setStatusState = function (state) {
         applyStatusState({
             stunUntil: state && state.stunUntil ? Number(state.stunUntil || 0) : 0,
+            hookPullStartedAt: state && state.hookPullStartedAt ? Number(state.hookPullStartedAt || 0) : 0,
             hookPullUntil: state && state.hookPullUntil ? Number(state.hookPullUntil || 0) : 0,
             chokeStartedAt: state && state.chokeStartedAt ? Number(state.chokeStartedAt || 0) : 0,
             chokeUntil: state && state.chokeUntil ? Number(state.chokeUntil || 0) : 0,

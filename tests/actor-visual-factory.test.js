@@ -119,3 +119,34 @@ test('actor visual boundary owns a root wrapper, syncs transform, and cleans it 
   assert.equal(actor.bodyHitbox.parent, null);
   assert.equal(actor.headHitbox.parent, null);
 });
+
+test('reveal ghost can be tinted per ability state without affecting the base actor materials', async () => {
+  const factory = await loadActorVisualFactory();
+  const actor = factory.create({ ownerType: 'enemy', targetId: 'enemy-a', weaponId: 'rifle', includeRevealGhost: true });
+
+  actor.setRevealGhostState(true, 0.4, 0xff6a7a);
+
+  const revealMaterials = actor.revealGhost.userData.revealMaterials;
+  assert.ok(revealMaterials.length > 0);
+  assert.equal(revealMaterials[0].color.getHex(), 0xff6a7a);
+  assert.equal(revealMaterials[0].opacity, 0.4);
+  assert.notEqual(firstBodyPart(actor).material.color.getHex(), 0xff6a7a);
+});
+
+test('choke FX stays localized to the real body instead of requiring a duplicate silhouette', async () => {
+  const factory = await loadActorVisualFactory();
+  const actor = factory.create({ ownerType: 'enemy', targetId: 'enemy-b', weaponId: 'rifle', includeRevealGhost: true });
+
+  actor.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    choked: true,
+    startedAt: 1000
+  });
+
+  assert.equal(actor.chokeFx.visible, true);
+  assert.equal(actor.revealGhost.visible, false);
+  assert.ok(actor.chokeFx.userData.parts.throatGlow.material.opacity > 0);
+});

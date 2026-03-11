@@ -25,6 +25,7 @@
             phase: state.phase || 'travel',
             targetId: state.targetId || '',
             headPos: cloneVec3(state.headPos || null),
+            attachPos: cloneVec3(state.attachPos || null),
             endsAt: Number(state.endsAt || 0)
         };
     }
@@ -75,6 +76,7 @@
         return {
             abilityFx: abilityFx,
             chokeVictimState: abilityFx ? (abilityFx.chokeVictim || null) : null,
+            hookedStartedAt: abilityFx ? Number(abilityFx.hookedStartedAt || 0) : 0,
             hookedUntil: abilityFx ? Number(abilityFx.hookedUntil || 0) : 0,
             hookState: abilityFx ? cloneHookVisual(abilityFx.hookVisual || null) : null,
             chokeState: abilityFx ? timedState(abilityFx.chokeCasterUntil) : null,
@@ -84,6 +86,9 @@
 
     function resolveHookVisualEnd(state, resolveTargetPosition) {
         if (!state || typeof state !== 'object') return null;
+        if (state.phase === 'latched' && state.attachPos) {
+            return cloneVec3(state.attachPos);
+        }
         if (state.phase === 'latched' && state.targetId && typeof resolveTargetPosition === 'function') {
             return cloneVec3(resolveTargetPosition(state.targetId));
         }

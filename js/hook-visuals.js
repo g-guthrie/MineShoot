@@ -11,31 +11,62 @@
     var sceneRef = null;
     var selfHookVisual = null;
     var remoteHookVisuals = new Map();
-    var hookTmpStart = new THREE.Vector3();
-    var hookTmpA = new THREE.Vector3();
-    var hookTmpB = new THREE.Vector3();
+    var hookTmpPos = new THREE.Vector3();
+    var hookTmpDir = new THREE.Vector3();
+    var hookTmpLook = new THREE.Vector3();
+
+    function createChainSegment(index) {
+        var seg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.075, 0.075, 1),
+            new THREE.MeshLambertMaterial({ color: index % 2 === 0 ? 0xc9d1d9 : 0x909aa6 })
+        );
+        seg.renderOrder = 55;
+        seg.visible = false;
+        seg.scale.z = 0.3;
+        return seg;
+    }
+
+    function createHookHead() {
+        var head = new THREE.Group();
+        var bodyMat = new THREE.MeshLambertMaterial({ color: 0x6e7884 });
+        var tipMat = new THREE.MeshLambertMaterial({ color: 0xe8b96f });
+        var prongMat = new THREE.MeshLambertMaterial({ color: 0xaeb7c0 });
+
+        var shaft = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.48), bodyMat);
+        head.add(shaft);
+
+        var collar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.08), bodyMat);
+        collar.position.z = -0.18;
+        head.add(collar);
+
+        var tip = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 5), tipMat);
+        tip.rotation.x = Math.PI * 0.5;
+        tip.position.z = 0.34;
+        head.add(tip);
+
+        for (var i = 0; i < 2; i++) {
+            var prong = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.24), prongMat);
+            prong.position.set(i === 0 ? -0.1 : 0.1, 0, 0.16);
+            prong.rotation.y = i === 0 ? -0.78 : 0.78;
+            head.add(prong);
+        }
+
+        head.renderOrder = 56;
+        head.visible = false;
+        return head;
+    }
 
     function createHookVisual() {
         if (!sceneRef) return null;
 
         var chainSegments = [];
-        for (var i = 0; i < 9; i++) {
-            var seg = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.08, 0.56),
-                new THREE.MeshLambertMaterial({ color: 0xb7bcc4 })
-            );
-            seg.renderOrder = 55;
-            seg.visible = false;
+        for (var i = 0; i < 12; i++) {
+            var seg = createChainSegment(i);
             sceneRef.add(seg);
             chainSegments.push(seg);
         }
 
-        var head = new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.28, 0.62),
-            new THREE.MeshLambertMaterial({ color: 0x8a8f96 })
-        );
-        head.renderOrder = 56;
-        head.visible = false;
+        var head = createHookHead();
         sceneRef.add(head);
 
         return {
@@ -63,36 +94,37 @@
             hideHookVisual(visual);
             return;
         }
-        if (!visual.seeded) {
-            visual.currentStart.copy(start);
-            visual.currentEnd.copy(end);
-            visual.seeded = true;
-        } else {
-            visual.currentStart.lerp(start, 0.38);
-            visual.currentEnd.lerp(end, 0.32);
-        }
 
-        hookTmpA.copy(visual.currentEnd).sub(visual.currentStart);
-        var len = hookTmpA.length();
+        visual.currentStart.copy(start);
+        visual.currentEnd.copy(end);
+        visual.seeded = true;
+
+        hookTmpDir.copy(visual.currentEnd).sub(visual.currentStart);
+        var len = hookTmpDir.length();
         if (len <= 0.00001) {
             hideHookVisual(visual);
             return;
         }
-        hookTmpA.normalize();
+        hookTmpDir.normalize();
 
         var segmentCount = visual.chainSegments ? visual.chainSegments.length : 0;
+        var segmentSpacing = len / Math.max(1, segmentCount);
+        var segmentLength = Math.max(0.18, segmentSpacing * 0.82);
         for (var i = 0; i < segmentCount; i++) {
             var seg = visual.chainSegments[i];
             var t = (i + 0.5) / segmentCount;
-            hookTmpStart.copy(visual.currentStart).lerp(visual.currentEnd, t);
-            seg.position.copy(hookTmpStart);
-            seg.lookAt(hookTmpB.copy(hookTmpStart).add(hookTmpA));
+            hookTmpPos.copy(visual.currentStart).lerp(visual.currentEnd, t);
+            seg.position.copy(hookTmpPos);
+            seg.lookAt(hookTmpLook.copy(hookTmpPos).add(hookTmpDir));
+            seg.scale.z = segmentLength;
+            seg.scale.x = 1 + ((i % 2 === 0) ? 0.04 : -0.04);
+            seg.scale.y = 1 + ((i % 2 === 0) ? -0.04 : 0.04);
             seg.visible = true;
         }
 
         visual.head.visible = true;
         visual.head.position.copy(visual.currentEnd);
-        visual.head.lookAt(hookTmpB.copy(visual.currentEnd).add(hookTmpA));
+        visual.head.lookAt(hookTmpLook.copy(visual.currentEnd).add(hookTmpDir));
     }
 
     function ensureSelfHookVisual() {
@@ -128,14 +160,21 @@
         var targets = runtime.GameEnemy.getLockTargets() || [];
         for (var i = 0; i < targets.length; i++) {
             var target = targets[i];
-            if (target && target.targetId === targetId && target.worldPos) return target.worldPos;
+            if (target && String(target.targetId || '') === String(targetId) && target.worldPos) return target.worldPos;
         }
         return null;
     }
 
-    function netEntityCoreById(targetId) {
-        if (!targetId || !runtime.GameNet || !runtime.GameNet.getEntityMarkerWorldPos) return null;
-        return runtime.GameNet.getEntityMarkerWorldPos(targetId);
+    function netEntityHookAttachById(targetId) {
+        if (!targetId) return null;
+        if (runtime.GameNetEntities && runtime.GameNetEntities.getCoreWorldPosition) {
+            var core = runtime.GameNetEntities.getCoreWorldPosition(targetId, new THREE.Vector3());
+            if (core) return core;
+        }
+        if (runtime.GameNet && runtime.GameNet.getEntityMarkerWorldPos) {
+            return runtime.GameNet.getEntityMarkerWorldPos(targetId);
+        }
+        return null;
     }
 
     function hookVisualEndWorldPosition(state, resolveTargetPosition) {
@@ -167,7 +206,7 @@
         var selfStart = playerHookOriginWorldPosition();
         var selfEnd = hookVisualEndWorldPosition(
             selfState,
-            multiplayerMode ? netEntityCoreById : localEnemyCoreByTargetId
+            multiplayerMode ? netEntityHookAttachById : localEnemyCoreByTargetId
         );
         setHookVisual(selfVisual, selfStart, selfEnd);
     }
@@ -182,7 +221,7 @@
                 var start = runtime.GameNetEntities.getHookOriginWorldPosition
                     ? runtime.GameNetEntities.getHookOriginWorldPosition(entityId, new THREE.Vector3())
                     : new THREE.Vector3(render.group.position.x, render.group.position.y + 1.0, render.group.position.z);
-                var end = hookVisualEndWorldPosition(hookState, netEntityCoreById);
+                var end = hookVisualEndWorldPosition(hookState, netEntityHookAttachById);
                 var visual = ensureRemoteHookVisual(entityId);
                 setHookVisual(visual, start, end);
                 activeRemote[entityId] = true;

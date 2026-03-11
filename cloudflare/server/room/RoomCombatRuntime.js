@@ -447,15 +447,27 @@ export function resolveLockedHostile(room, player, lockTargetId, range, minDot, 
 export function deadeyeCandidates(room, player, range, minDot, maxTargets) {
   const hits = room.hostilesInCone(player, range, minDot);
   const origin = room.entityAimTargetPosition(player);
+  const forward = room.entityForward(player);
   const out = [];
   for (let i = 0; i < hits.length; i++) {
     const hit = hits[i];
     const targetPos = room.entityAimTargetPosition(hit.entity);
     if (!room.hasWorldLineOfSight(origin, targetPos, range)) continue;
-    out.push({ id: hit.entity.id, dist: hit.dist });
-    if (out.length >= Math.max(1, maxTargets || 1)) break;
+    const dx = targetPos.x - origin.x;
+    const dy = targetPos.y - origin.y;
+    const dz = targetPos.z - origin.z;
+    const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz)) || 1;
+    out.push({
+      id: hit.entity.id,
+      dist: hit.dist,
+      dot: ((forward.x * dx) + (forward.y * dy) + (forward.z * dz)) / dist
+    });
   }
-  return out;
+  out.sort((a, b) => {
+    if (Math.abs((b.dot || 0) - (a.dot || 0)) > 0.0001) return (b.dot || 0) - (a.dot || 0);
+    return a.dist - b.dist;
+  });
+  return out.slice(0, Math.max(1, maxTargets || 1));
 }
 
 export function resolveClassAimPoint(room, player, msg, maxRange, deps) {

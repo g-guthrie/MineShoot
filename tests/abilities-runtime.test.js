@@ -273,6 +273,87 @@ test('local missed hook retracts toward the current player origin instead of dis
   assert.equal(abilities.getHookState(), null);
 });
 
+test('local landed hook keeps the attachment point on the victim before retracting', async () => {
+  const timeState = { now: 1000 };
+  const targetPos = new THREE.Vector3(0, 1.2, -3);
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameHitscan: {
+      peekCenterTarget() {
+        return {
+          point: new THREE.Vector3(0, 1.2, -3)
+        };
+      }
+    },
+    GamePlayer: {
+      getThrowableOriginWorldPosition() {
+        return new THREE.Vector3(0, 1.2, 0);
+      }
+    },
+    GameEnemy: {
+      getLockTargets() {
+        return [{
+          targetId: 'enemy:1',
+          worldPos: targetPos.clone(),
+          hitbox: {},
+          enemyRef: {}
+        }];
+      },
+      damage() {
+        return { killed: false };
+      },
+      pullTarget() {}
+    },
+    GameWorld: {
+      getCollidables() {
+        return [];
+      }
+    }
+  }, {
+    Date: {
+      now() {
+        return timeState.now;
+      }
+    }
+  });
+
+  abilities.setLoadout('hook', 'missile');
+  const result = abilities.triggerAbility(
+    1,
+    camera,
+    { x: 0, y: 0, z: 0 },
+    { yaw: 0 },
+    null,
+    null
+  );
+
+  assert.equal(result.ok, true);
+
+  timeState.now = 1100;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(abilities.getHookState().phase, 'latched');
+  assert.deepEqual(JSON.parse(JSON.stringify(abilities.getHookState().attachPos)), {
+    x: 0,
+    y: 1.2,
+    z: -3
+  });
+
+  targetPos.z = -2;
+  timeState.now = 1270;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(abilities.getHookState().phase, 'retract');
+
+  timeState.now = 1320;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.ok(abilities.getHookState().headPos.z > -2);
+  assert.ok(abilities.getHookState().headPos.z < 0);
+});
+
 test('clearTransientState drops local heal effects', async () => {
   const abilities = await loadAbilitiesRuntime({});
 
@@ -364,8 +445,45 @@ test('deadeye candidate acquisition uses the player eye origin instead of raw ca
   assert.equal(start.kind, 'deadeye_start');
 });
 
+test('deadeye candidate order prefers the target nearest the crosshair over the closest body', async () => {
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameEnemy: {
+      getLockTargets() {
+        return [{
+          targetId: 'enemy:near',
+          worldPos: new THREE.Vector3(3, 1.6, -5),
+          hitbox: {}
+        }, {
+          targetId: 'enemy:center',
+          worldPos: new THREE.Vector3(0, 1.6, -10),
+          hitbox: {}
+        }];
+      }
+    },
+    GameWorld: {
+      getCollidables() {
+        return [];
+      }
+    }
+  });
+
+  abilities.setLoadout('deadeye', 'missile');
+  const start = abilities.triggerAbility(1, camera, null, null, null, null);
+
+  assert.equal(start.ok, true);
+  assert.equal(abilities.getDeadeyeState().targets[0].targetId, 'enemy:center');
+  assert.equal(abilities.getDeadeyeState().targets[1].targetId, 'enemy:near');
+});
+
 test('local choke only applies the lifted state to the victim', async () => {
   const restrictionCalls = [];
+  const audioCalls = [];
   const enemyRef = {};
   const abilities = await loadAbilitiesRuntime({
     GameHitscan: {
@@ -385,6 +503,11 @@ test('local choke only applies the lifted state to the victim', async () => {
         restrictionCalls.push(JSON.parse(JSON.stringify(state)));
       },
       triggerAction() {}
+    },
+    GameAudio: {
+      play(name) {
+        audioCalls.push(name);
+      }
     }
   });
 
@@ -395,4 +518,5 @@ test('local choke only applies the lifted state to the victim', async () => {
   assert.equal(restrictionCalls.length, 0);
   assert.equal(enemyRef.chokeVictimState.sourceId, 'player');
   assert.ok(enemyRef.chokeVictimState.endsAt > enemyRef.chokeVictimState.startedAt);
+  assert.deepEqual(audioCalls, ['chokeCast']);
 });

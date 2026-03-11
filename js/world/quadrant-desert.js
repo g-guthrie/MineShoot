@@ -237,57 +237,160 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addDecor(x, 0.5, z, geo, mats.tumbleweed);
     }
 
-    function buildDesertQuadrant(bounds, place, ctx) {
-        var mats = ensureMats();
-        var center = pt(bounds, 0.44, 0.56);
+    function addRubbleCluster(x, z, scale, place, mats) {
+        var s = Math.max(0.7, scale || 1.0);
+        place.addBlock(x, 0.35 * s, z, 2.4 * s, 0.7 * s, 1.9 * s, mats.rubble, true);
+        place.addBlock(x - 0.8 * s, 0.62 * s, z + 0.35 * s, 1.1 * s, 0.55 * s, 0.95 * s, mats.darkRock, true);
+        place.addBlock(x + 0.7 * s, 0.42 * s, z - 0.4 * s, 0.9 * s, 0.38 * s, 0.8 * s, mats.mesa, false);
+    }
 
-        buildRidge(center.x, center.z, place, mats);
-        ctx.addExclusion(center.x - 0.8, center.z + 0.3, 8.4);
+    function buildCornerMesaCrown(bounds, place, mats) {
+        var mainBaseW = 11.0;
+        var mainBaseD = 12.0;
+        var mainBase = {
+            x: bounds.maxX - (mainBaseW * 0.5),
+            z: bounds.minZ + (mainBaseD * 0.5)
+        };
+        place.addBlock(mainBase.x, 4.0, mainBase.z, mainBaseW, 8.0, mainBaseD, mats.darkRock, true);
 
-        var archPt = pt(bounds, 0.76, 0.24);
-        buildGateRuins(archPt.x, archPt.z, place, mats);
-        ctx.addExclusion(archPt.x, archPt.z, 6.0);
+        var northSpineW = 6.4;
+        var northSpineD = 7.8;
+        var northSpine = {
+            x: bounds.maxX - 9.2 - (northSpineW * 0.5),
+            z: bounds.minZ + (northSpineD * 0.5)
+        };
+        place.addBlock(northSpine.x, 7.2, northSpine.z, northSpineW, 14.4, northSpineD, mats.mesa, true);
+        place.addBlock(northSpine.x - 0.8, 14.1, northSpine.z + 0.4, 4.0, 4.2, 4.4, mats.sandstone, true);
 
-        var mesaPts = [
-            { u: 0.20, v: 0.22, butte: true },
-            { u: 0.78, v: 0.74, butte: false },
-            { u: 0.54, v: 0.84, butte: false }
+        var eastSpireW = 5.8;
+        var eastSpireD = 6.0;
+        var eastSpire = {
+            x: bounds.maxX - (eastSpireW * 0.5),
+            z: bounds.minZ + 8.6 + (eastSpireD * 0.5)
+        };
+        place.addBlock(eastSpire.x, 9.0, eastSpire.z, eastSpireW, 18.0, eastSpireD, mats.mesa, true);
+        place.addBlock(eastSpire.x - 0.2, 17.6, eastSpire.z - 0.5, 3.0, 3.2, 3.2, mats.darkRock, true);
+        place.addBlock(eastSpire.x - 0.6, 21.5, eastSpire.z - 0.6, 1.9, 1.4, 2.2, mats.sandstone, false);
+
+        var saddleW = 8.0;
+        var saddleD = 5.6;
+        var saddle = {
+            x: bounds.maxX - 5.6 - (saddleW * 0.5),
+            z: bounds.minZ + 7.2 + (saddleD * 0.5)
+        };
+        place.addBlock(saddle.x, 5.4, saddle.z, saddleW, 10.8, saddleD, mats.mesa, true);
+
+        var brokenNeedleW = 3.8;
+        var brokenNeedleD = 4.4;
+        var brokenNeedle = {
+            x: bounds.maxX - 13.4 - (brokenNeedleW * 0.5),
+            z: bounds.minZ + 2.2 + (brokenNeedleD * 0.5)
+        };
+        place.addBlock(brokenNeedle.x, 6.4, brokenNeedle.z, brokenNeedleW, 12.8, brokenNeedleD, mats.darkRock, true);
+        place.addBlock(brokenNeedle.x + 0.3, 12.8, brokenNeedle.z + 0.2, 2.0, 1.6, 2.4, mats.sandstone, false);
+
+        // Playable shelves exist only on the inner faces.
+        place.addBlock(bounds.maxX - 9.8, 7.2, bounds.minZ + 12.2, 4.6, 0.8, 3.8, mats.sandstone, true);
+        place.addBlock(bounds.maxX - 13.8, 11.0, bounds.minZ + 10.8, 3.6, 0.7, 2.8, mats.sandstone, true);
+        place.addRamp(bounds.maxX - 12.8, 2.1, bounds.minZ + 13.8, 4.4, 1.2, 7.0, mats.darkRock, 1.06, -0.18, true);
+        place.addRamp(bounds.maxX - 10.0, 4.8, bounds.minZ + 14.0, 3.2, 1.0, 4.8, mats.mesa, 0.92, -0.16, true);
+
+        // Inner buttresses and toe rubble create the readable transition into the biome.
+        place.addRamp(bounds.maxX - 5.4, 2.2, bounds.minZ + 16.0, 7.6, 1.4, 6.2, mats.darkRock, Math.PI, -0.18, true);
+        place.addRamp(bounds.maxX - 10.8, 1.9, bounds.minZ + 15.8, 5.8, 1.1, 4.8, mats.mesa, Math.PI * 1.04, -0.18, true);
+        addRubbleCluster(bounds.maxX - 14.6, bounds.minZ + 17.2, 1.15, place, mats);
+        addRubbleCluster(bounds.maxX - 10.0, bounds.minZ + 18.1, 0.95, place, mats);
+        addRubbleCluster(bounds.maxX - 5.2, bounds.minZ + 17.3, 0.9, place, mats);
+
+        // Fracture lines and cutouts to stop the silhouette from reading as one monolith.
+        place.addBlock(bounds.maxX - 6.0, 10.0, bounds.minZ + 5.4, 0.55, 7.2, 8.0, mats.darkRock, false);
+        place.addBlock(bounds.maxX - 10.8, 7.0, bounds.minZ + 10.8, 4.0, 1.1, 0.45, mats.darkRock, false);
+        place.addBlock(bounds.maxX - 14.2, 6.2, bounds.minZ + 4.4, 0.45, 4.2, 4.0, mats.darkRock, false);
+    }
+
+    function buildEastShelfBand(bounds, place, mats) {
+        var segments = [
+            { v: 0.30, w: 6.8, h: 16.0, d: 6.8, shelfY: 6.8, cut: 3.0 },
+            { v: 0.46, w: 7.6, h: 20.0, d: 7.6, shelfY: 8.4, cut: 2.4 },
+            { v: 0.64, w: 6.2, h: 13.0, d: 6.4, shelfY: 6.0, cut: 3.4 },
+            { v: 0.82, w: 5.0, h: 10.0, d: 5.4, shelfY: 4.6, cut: 2.2 }
         ];
-        for (var m = 0; m < mesaPts.length; m++) {
-            var mp = pt(bounds, mesaPts[m].u, mesaPts[m].v);
-            if (mesaPts[m].butte) {
-                buildButte(mp.x, mp.z, place, mats);
-                ctx.addExclusion(mp.x, mp.z, 4.8);
-            } else {
-                addSmallMesa(mp.x, mp.z, place, mats);
-                ctx.addExclusion(mp.x, mp.z, 3.2);
-            }
+        for (var i = 0; i < segments.length; i++) {
+            var seg = segments[i];
+            var z = pt(bounds, 0.0, seg.v).z;
+            var x = bounds.maxX - (seg.w * 0.5);
+            place.addBlock(x, seg.h * 0.5, z, seg.w, seg.h, seg.d, mats.mesa, true);
+            place.addBlock(bounds.maxX - (seg.cut * 0.5), seg.h * 0.52, z - (seg.d * 0.18), seg.cut, seg.h * 0.54, seg.d * 0.7, mats.darkRock, false);
+            place.addBlock(bounds.maxX - 4.8, seg.shelfY, z + 0.2, 4.2, 0.7, 3.2, mats.sandstone, true);
+            place.addRamp(bounds.maxX - 6.8, 1.7 + (i * 0.35), z + 1.1, 3.8, 1.0, 5.2, mats.darkRock, Math.PI * 0.5, -0.18, true);
+            place.addBlock(bounds.maxX - 2.4, seg.h + 0.2, z, 2.6, 0.4, seg.d * 0.78, mats.sandstone, true);
+            addRubbleCluster(bounds.maxX - 7.8, z + (seg.d * 0.66), 0.8 + (i * 0.08), place, mats);
+        }
+    }
+
+    function buildNorthCrumbleBand(bounds, place, mats) {
+        var segments = [
+            { u: 0.20, w: 5.2, h: 10.5, d: 5.8 },
+            { u: 0.34, w: 4.2, h: 13.0, d: 4.4 },
+            { u: 0.50, w: 6.0, h: 16.0, d: 5.2 },
+            { u: 0.66, w: 4.8, h: 11.6, d: 4.6 },
+            { u: 0.78, w: 5.6, h: 9.4, d: 4.0 }
+        ];
+        for (var i = 0; i < segments.length; i++) {
+            var seg = segments[i];
+            var x = pt(bounds, seg.u, 0.0).x;
+            var z = bounds.minZ + (seg.d * 0.5);
+            place.addBlock(x, seg.h * 0.5, z, seg.w, seg.h, seg.d, mats.mesa, true);
+            place.addBlock(x + 0.2, seg.h + 0.16, z, seg.w * 0.68, 0.32, seg.d * 0.72, mats.sandstone, true);
+            place.addBlock(x - (seg.w * 0.16), seg.h * 0.56, z + (seg.d * 0.12), 0.45, seg.h * 0.46, seg.d * 0.84, mats.darkRock, false);
         }
 
-        var fossilPt = pt(bounds, 0.20, 0.70);
+        // Break the wall with a readable ruined notch instead of a clean continuous line.
+        var notch = pt(bounds, 0.36, 0.24);
+        buildArch(notch.x, notch.z, place, mats);
+        addRubbleCluster(notch.x - 3.2, notch.z + 2.3, 0.85, place, mats);
+        addRubbleCluster(notch.x + 3.0, notch.z + 1.8, 0.75, place, mats);
+    }
+
+    function buildDesertQuadrant(bounds, place, ctx) {
+        var mats = ensureMats();
+        var wallBounds = (ctx && ctx.rawBounds) ? ctx.rawBounds : bounds;
+        buildCornerMesaCrown(wallBounds, place, mats);
+        ctx.addExclusion(wallBounds.maxX - 7.4, wallBounds.minZ + 8.8, 12.0);
+
+        buildEastShelfBand(wallBounds, place, mats);
+        ctx.addExclusion(wallBounds.maxX - 4.6, pt(wallBounds, 0.0, 0.30).z, 4.8);
+        ctx.addExclusion(wallBounds.maxX - 4.8, pt(wallBounds, 0.0, 0.46).z, 5.2);
+        ctx.addExclusion(wallBounds.maxX - 4.4, pt(wallBounds, 0.0, 0.64).z, 4.2);
+
+        buildNorthCrumbleBand(wallBounds, place, mats);
+        ctx.addExclusion(pt(wallBounds, 0.54, 0.0).x, wallBounds.minZ + 2.8, 5.2);
+
+        var fossilPt = pt(bounds, 0.18, 0.72);
         buildFossilRibs(fossilPt.x, fossilPt.z, place, mats);
 
-        var shelfA = pt(bounds, 0.64, 0.44);
-        buildRockShelf(shelfA.x, shelfA.z, 1.02, place, mats);
+        var shelfA = pt(bounds, 0.62, 0.58);
+        buildRockShelf(shelfA.x, shelfA.z, 0.84, place, mats);
         ctx.addExclusion(shelfA.x, shelfA.z, 4.0);
 
-        var shelfB = pt(bounds, 0.30, 0.36);
-        buildRockShelf(shelfB.x, shelfB.z, -0.72, place, mats);
-        ctx.addExclusion(shelfB.x, shelfB.z, 3.6);
+        var shelfB = pt(bounds, 0.28, 0.42);
+        buildRockShelf(shelfB.x, shelfB.z, -0.88, place, mats);
+        ctx.addExclusion(shelfB.x, shelfB.z, 3.8);
+
+        var accentArch = pt(bounds, 0.22, 0.30);
+        buildGateRuins(accentArch.x, accentArch.z, place, mats);
+        ctx.addExclusion(accentArch.x, accentArch.z, 4.8);
 
         // Cacti with character -- arms, spines, flowers
         var cacti = [
-            { u: 0.12, v: 0.50, tall: true,  flower: true },
-            { u: 0.72, v: 0.18, tall: false, flower: false },
-            { u: 0.14, v: 0.84, tall: true,  flower: false },
-            { u: 0.86, v: 0.52, tall: false, flower: true },
-            { u: 0.56, v: 0.12, tall: true,  flower: false },
-            { u: 0.42, v: 0.88, tall: false, flower: false },
-            { u: 0.90, v: 0.82, tall: true,  flower: true },
-            { u: 0.36, v: 0.68, tall: false, flower: true },
-            { u: 0.68, v: 0.40, tall: true,  flower: false },
-            { u: 0.30, v: 0.54, tall: true, flower: false },
-            { u: 0.58, v: 0.64, tall: false, flower: true }
+            { u: 0.12, v: 0.56, tall: true,  flower: true },
+            { u: 0.20, v: 0.86, tall: true,  flower: false },
+            { u: 0.34, v: 0.66, tall: false, flower: true },
+            { u: 0.46, v: 0.78, tall: true,  flower: false },
+            { u: 0.58, v: 0.70, tall: false, flower: false },
+            { u: 0.66, v: 0.52, tall: true,  flower: false },
+            { u: 0.78, v: 0.64, tall: false, flower: true },
+            { u: 0.84, v: 0.86, tall: true,  flower: true }
         ];
         for (var c = 0; c < cacti.length; c++) {
             var cp = pt(bounds, cacti[c].u, cacti[c].v);
@@ -296,14 +399,12 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Dry bushes with more variety
         var bushes = [
-            { u: 0.30, v: 0.42 },
-            { u: 0.60, v: 0.72 },
-            { u: 0.46, v: 0.28 },
-            { u: 0.72, v: 0.54 },
-            { u: 0.24, v: 0.62 },
-            { u: 0.85, v: 0.36 },
-            { u: 0.18, v: 0.28 },
-            { u: 0.54, v: 0.52 }
+            { u: 0.24, v: 0.58 },
+            { u: 0.36, v: 0.48 },
+            { u: 0.42, v: 0.30 },
+            { u: 0.58, v: 0.62 },
+            { u: 0.74, v: 0.56 },
+            { u: 0.30, v: 0.74 }
         ];
         for (var b = 0; b < bushes.length; b++) {
             var bp = pt(bounds, bushes[b].u, bushes[b].v);
@@ -311,48 +412,45 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
 
         // Skull and bones (narrative detail)
-        var skullPt = pt(bounds, 0.64, 0.60);
+        var skullPt = pt(bounds, 0.60, 0.66);
         addSkull(skullPt.x, skullPt.z, place, mats);
-        var bonesPt = pt(bounds, 0.67, 0.62);
+        var bonesPt = pt(bounds, 0.64, 0.68);
         addBones(bonesPt.x, bonesPt.z, place, mats);
 
-        var bones2 = pt(bounds, 0.28, 0.20);
+        var bones2 = pt(bounds, 0.24, 0.24);
         addBones(bones2.x, bones2.z, place, mats);
 
         // Ruined fence/corral fragment instead of the old floating slats.
-        var fencePt = pt(bounds, 0.10, 0.44);
+        var fencePt = pt(bounds, 0.14, 0.48);
         buildFenceRuins(fencePt.x, fencePt.z, place, mats);
 
         // Sand dune berms and shelves break the flat firing lines.
-        var dune1 = pt(bounds, 0.52, 0.90);
+        var dune1 = pt(bounds, 0.46, 0.90);
         addSandDune(dune1.x, dune1.z, 7.2, 3.8, place, mats);
-        var dune2 = pt(bounds, 0.88, 0.48);
-        addSandDune(dune2.x, dune2.z, 4.6, 5.8, place, mats);
-        var dune3 = pt(bounds, 0.14, 0.14);
-        addSandDune(dune3.x, dune3.z, 4.2, 2.8, place, mats);
-        var dune4 = pt(bounds, 0.44, 0.24);
-        addSandDune(dune4.x, dune4.z, 5.4, 2.6, place, mats);
-        var dune5 = pt(bounds, 0.72, 0.62);
-        addSandDune(dune5.x, dune5.z, 3.8, 2.2, place, mats);
+        var dune2 = pt(bounds, 0.16, 0.16);
+        addSandDune(dune2.x, dune2.z, 4.8, 3.0, place, mats);
+        var dune3 = pt(bounds, 0.40, 0.22);
+        addSandDune(dune3.x, dune3.z, 5.4, 2.6, place, mats);
+        var dune4 = pt(bounds, 0.70, 0.74);
+        addSandDune(dune4.x, dune4.z, 3.8, 2.4, place, mats);
 
         // Tumbleweeds
-        var tw1 = pt(bounds, 0.42, 0.20);
+        var tw1 = pt(bounds, 0.32, 0.18);
         addTumbleweed(tw1.x, tw1.z, place, mats);
-        var tw2 = pt(bounds, 0.75, 0.65);
+        var tw2 = pt(bounds, 0.62, 0.76);
         addTumbleweed(tw2.x, tw2.z, place, mats);
-        var tw3 = pt(bounds, 0.20, 0.88);
+        var tw3 = pt(bounds, 0.18, 0.88);
         addTumbleweed(tw3.x, tw3.z, place, mats);
 
         // Scattered ground rocks near features
         var rocks = [
-            { u: 0.52, v: 0.42, w: 0.6, h: 0.34, d: 0.44 },
-            { u: 0.46, v: 0.58, w: 0.44, h: 0.24, d: 0.38 },
-            { u: 0.76, v: 0.30, w: 0.7, h: 0.3, d: 0.55 },
-            { u: 0.24, v: 0.24, w: 0.42, h: 0.2, d: 0.34 },
-            { u: 0.78, v: 0.78, w: 0.5, h: 0.25, d: 0.45 },
-            { u: 0.55, v: 0.72, w: 0.36, h: 0.18, d: 0.28 },
-            { u: 0.20, v: 0.68, w: 0.38, h: 0.2, d: 0.32 },
-            { u: 0.66, v: 0.54, w: 0.34, h: 0.18, d: 0.3 }
+            { u: 0.26, v: 0.26, w: 0.42, h: 0.2, d: 0.34 },
+            { u: 0.34, v: 0.58, w: 0.5, h: 0.25, d: 0.4 },
+            { u: 0.46, v: 0.48, w: 0.6, h: 0.34, d: 0.44 },
+            { u: 0.62, v: 0.58, w: 0.44, h: 0.24, d: 0.38 },
+            { u: 0.72, v: 0.34, w: 0.7, h: 0.3, d: 0.55 },
+            { u: 0.76, v: 0.78, w: 0.5, h: 0.25, d: 0.45 },
+            { u: 0.20, v: 0.70, w: 0.38, h: 0.2, d: 0.32 }
         ];
         for (var ri = 0; ri < rocks.length; ri++) {
             var rk = rocks[ri];
@@ -363,8 +461,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         return {
             rocks: rocks.length,
             cacti: cacti.length,
-            ridges: 3,
-            mesas: mesaPts.length + 2
+            cliffs: 3,
+            mesas: 5
         };
     }
 

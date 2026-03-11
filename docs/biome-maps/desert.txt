@@ -1,0 +1,85 @@
+Desert biome authored-feature map
+Biome: desert
+Bounds x:[116, 158] z:[8, 50]  grid:14x14
+Features: 46 high-level placements across 49/196 cells (25.0% occupied)
+
+Dominant feature map
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  D  N  *  N  N  .  N  N  N  .  M  . 
+ 3 | .  .  .  *  .  *  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  A  .  b  .  .  .  R  *  .  .  E 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  E 
+ 6 | .  f  .  .  .  b  r  .  .  R  .  P  .  E 
+ 7 | .  C  .  .  .  .  .  .  .  C  *  .  .  . 
+ 8 | .  .  .  b  r  .  .  .  *  .  C  P  .  E 
+ 9 | .  .  r  .  C  .  .  .  *  .  .  R  .  E 
+10 | .  .  F  .  b  .  C  .  t  D  r  .  .  E 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  P  . 
+12 | .  .  *  .  .  .  D  .  .  .  .  C  .  E 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Density heatmap
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  1  1  2  1  1  .  1  1  1  .  1  . 
+ 3 | .  .  .  2  .  2  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  1  .  1  .  .  .  1  2  .  .  1 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  1 
+ 6 | .  1  .  .  .  1  1  .  .  1  .  1  .  1 
+ 7 | .  1  .  .  .  .  .  .  .  1  2  .  .  . 
+ 8 | .  .  .  1  1  .  .  .  2  .  1  1  .  1 
+ 9 | .  .  1  .  1  .  .  .  3  .  .  1  .  1 
+10 | .  .  1  .  1  .  1  .  1  1  1  .  .  1 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  1  . 
+12 | .  .  2  .  .  .  1  .  .  .  .  1  .  1 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Legend
+  o bone
+  b bush
+  C cactus
+  M crown
+  D dune
+  E eastWall
+  f fence
+  F fossil
+  N northWall
+  P pocket
+  r rock
+  R rubble
+  A ruin
+  t tumbleweed
+  * mixed cell
+
+Counts by feature kind
+  bone             3
+  bush             6
+  cactus           8
+  crown            1
+  dune             4
+  eastWall         1
+  fence            1
+  fossil           1
+  northWall        1
+  pocket           4
+  rock             7
+  rubble           4
+  ruin             2
+  tumbleweed       3
+
+Top dense cells
+  r9 c8  count=3  kinds=bone,cactus  labels=bone-1, bone-2, cactus-5
+  r2 c4  count=2  kinds=northWall,tumbleweed  labels=north-crumble-band, tumbleweed-1
+  r3 c3  count=2  kinds=bone,rock  labels=bone-3, rock-1
+  r3 c5  count=2  kinds=dune,ruin  labels=dune-3, ruin-1
+  r4 c10  count=2  kinds=pocket,rock  labels=rock-5, shelf-pocket-1
+  r7 c10  count=2  kinds=bush,rubble  labels=bush-5, rubble-3
+  r8 c8  count=2  kinds=bush,rock  labels=bush-4, rock-4
+  r12 c2  count=2  kinds=cactus,tumbleweed  labels=cactus-2, tumbleweed-3
+  r2 c2  count=1  kinds=dune  labels=dune-2
+  r2 c3  count=1  kinds=northWall  labels=north-crumble-band
+  r2 c5  count=1  kinds=northWall  labels=north-crumble-band
+  r2 c6  count=1  kinds=northWall  labels=north-crumble-band

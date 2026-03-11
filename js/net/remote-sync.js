@@ -52,6 +52,7 @@
                         airborne: r.isGrounded === false,
                         aimPitch: r.targetPitch || 0,
                         hooked: hookedNow,
+                        hookStartedAt: Number(r.hookedStartedAt || 0),
                         choked: chokeVictimState.lift > 0,
                         startedAt: chokeVictimState.startedAt || 0,
                         worldSpeed: (r.moveSpeedNorm || 0) * 14,
@@ -94,6 +95,19 @@
             }
 
             var finalChokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0 };
+            if (r.actorVisual && r.actorVisual.setRevealGhostState) {
+                if (finalChokeVictimState.lift > 0) {
+                    r.actorVisual.setRevealGhostState(false);
+                } else if (r.deadeyeMark) {
+                    var deadeyePulse = 0.05 * Math.sin((Date.now() * 0.016) + String(r.id || '').length);
+                    var deadeyeOpacity = r.deadeyeMark.locked
+                        ? 0.44
+                        : (0.22 + (Math.max(0, Math.min(1, Number(r.deadeyeMark.progress || 0))) * 0.18));
+                    r.actorVisual.setRevealGhostState(true, deadeyeOpacity + deadeyePulse, 0xffc46d);
+                } else {
+                    r.actorVisual.setRevealGhostState(false);
+                }
+            }
             if (finalChokeVictimState.lift > 0) {
                 r.group.position.y += finalChokeVictimState.lift;
             }

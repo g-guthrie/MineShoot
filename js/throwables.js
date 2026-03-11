@@ -35,6 +35,8 @@
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
     var tmpNetVec = new THREE.Vector3();
+    var tmpVisualDir = new THREE.Vector3();
+    var tmpVisualLook = new THREE.Vector3();
     var tmpForwardAxis = new THREE.Vector3(0, 0, -1);
     var tmpSpinAxis = new THREE.Vector3(0, 0, 1);
     var trajPos = new THREE.Vector3();
@@ -203,28 +205,86 @@
                 new THREE.MeshLambertMaterial({ color: 0x2f7f2f })
             );
         }
-        if (type === 'plasma' || type === 'missile') {
-            var color = (type === 'missile') ? 0xffb066 : 0x22aabb;
-            var emissive = (type === 'missile') ? 0x442200 : 0x112222;
+        if (type === 'plasma') {
             return new THREE.Mesh(
                 new THREE.BoxGeometry(0.2, 0.2, 0.2),
-                new THREE.MeshLambertMaterial({ color: color, emissive: emissive })
+                new THREE.MeshLambertMaterial({ color: 0x22aabb, emissive: 0x112222 })
             );
+        }
+        if (type === 'missile') {
+            var missile = new THREE.Group();
+            var bodyMat = new THREE.MeshLambertMaterial({ color: 0xbdc6cf });
+            var noseMat = new THREE.MeshLambertMaterial({ color: 0xffb870, emissive: 0x332010 });
+            var finMat = new THREE.MeshLambertMaterial({ color: 0x5f6773 });
+            var exhaustMat = new THREE.MeshBasicMaterial({
+                color: 0xffb25f,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false
+            });
+
+            var body = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.5), bodyMat);
+            missile.add(body);
+
+            var nose = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.18, 6), noseMat);
+            nose.rotation.x = Math.PI * 0.5;
+            nose.position.z = 0.34;
+            missile.add(nose);
+
+            var collar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.08), finMat);
+            collar.position.z = -0.12;
+            missile.add(collar);
+
+            for (var i = 0; i < 4; i++) {
+                var fin = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, 0.14), finMat);
+                fin.position.z = -0.18;
+                fin.rotation.z = (Math.PI * 0.5) * i;
+                missile.add(fin);
+            }
+
+            var exhaust = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 5), exhaustMat);
+            exhaust.rotation.x = -Math.PI * 0.5;
+            exhaust.position.z = -0.36;
+            missile.add(exhaust);
+
+            missile.userData.projectileType = 'missile';
+            missile.userData.exhaust = exhaust;
+            return missile;
         }
         if (type === 'molotov') {
             var group = new THREE.Group();
+            var bottleMat = new THREE.MeshLambertMaterial({ color: 0x6d3f1f });
+            var glassMat = new THREE.MeshLambertMaterial({ color: 0x9b5a2a });
+            var ragMat = new THREE.MeshLambertMaterial({ color: 0xffb15f, emissive: 0x4a2100 });
             var bottle = new THREE.Mesh(
                 new THREE.BoxGeometry(0.15, 0.22, 0.15),
-                new THREE.MeshLambertMaterial({ color: 0x6d3f1f })
+                bottleMat
             );
             bottle.position.y = 0.01;
             group.add(bottle);
+            var neck = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.12, 0.08),
+                glassMat
+            );
+            neck.position.y = 0.16;
+            group.add(neck);
             var rag = new THREE.Mesh(
                 new THREE.BoxGeometry(0.08, 0.06, 0.08),
-                new THREE.MeshLambertMaterial({ color: 0xffaa33 })
+                ragMat
             );
-            rag.position.y = 0.14;
+            rag.position.y = 0.24;
             group.add(rag);
+            var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
+            if (assetFactory && assetFactory.createParticleAsset) {
+                var flame = assetFactory.createParticleAsset('fire', { color: 0xff8b3d });
+                if (flame) {
+                    flame.position.y = 0.32;
+                    flame.scale.set(0.42, 0.62, 0.42);
+                    group.add(flame);
+                    group.userData.flame = flame;
+                }
+            }
+            group.userData.projectileType = 'molotov';
             return group;
         }
         // knife
@@ -261,10 +321,23 @@
             })
         );
         root.add(disk);
+        var ring = new THREE.Mesh(
+            new THREE.TorusGeometry(Math.max(0.24, radius * 0.72), 0.03, 6, 28),
+            new THREE.MeshBasicMaterial({
+                color: 0xffaa55,
+                transparent: true,
+                opacity: 0.24,
+                depthWrite: false
+            })
+        );
+        ring.rotation.x = Math.PI * 0.5;
+        ring.position.y = 0.06;
+        root.add(ring);
 
         var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
+        var flame = null;
         if (assetFactory && assetFactory.createParticleAsset) {
-            var flame = assetFactory.createParticleAsset('fire', { color: 0xff8833 });
+            flame = assetFactory.createParticleAsset('fire', { color: 0xff8833 });
             if (flame) {
                 flame.position.y = 0.18;
                 flame.scale.set(Math.max(0.85, radius * 0.26), Math.max(0.85, radius * 0.34), Math.max(0.85, radius * 0.26));
@@ -272,6 +345,11 @@
             }
         }
 
+        root.userData.zoneParts = {
+            disk: disk,
+            ring: ring,
+            flame: flame
+        };
         return root;
     }
 
@@ -367,6 +445,64 @@
                     endScale: Math.max(1.15, blastRadius * 1.35),
                     opacity: 0.74
                 });
+            }
+        }
+    }
+
+    function effectPaletteForProjectileType(type) {
+        if (type === 'missile') {
+            return {
+                flash: 0xffb15c,
+                explosion: 0xff9a2f
+            };
+        }
+        if (type === 'plasma' || type === 'plasma_stream') {
+            return {
+                flash: 0x66ddff,
+                explosion: 0x59d7ff
+            };
+        }
+        if (type === 'molotov') {
+            return {
+                flash: 0xff7a33,
+                explosion: 0xff6622
+            };
+        }
+        return {
+            flash: 0xffffff,
+            explosion: 0xffaa22
+        };
+    }
+
+    function orientProjectileVisual(mesh, velocity, age) {
+        if (!mesh || !velocity) return;
+        tmpVisualDir.copy(velocity);
+        if (tmpVisualDir.lengthSq() <= 0.00001) return;
+        tmpVisualDir.normalize();
+        mesh.lookAt(tmpVisualLook.copy(mesh.position).add(tmpVisualDir));
+
+        var projectileType = mesh.userData && mesh.userData.projectileType ? String(mesh.userData.projectileType) : '';
+        if (projectileType === 'missile') {
+            var roll = Number(age || 0) * 18;
+            mesh.rotateZ(Math.sin(roll) * 0.045);
+            var exhaust = mesh.userData.exhaust || null;
+            if (exhaust) {
+                var pulse = 0.92 + (Math.sin((Number(age || 0) * 32)) * 0.16);
+                exhaust.scale.set(pulse, pulse, 1.15 + (Math.cos((Number(age || 0) * 26)) * 0.18));
+                if (exhaust.material) {
+                    exhaust.material.opacity = 0.68 + (Math.sin((Number(age || 0) * 38)) * 0.18);
+                }
+            }
+            return;
+        }
+
+        if (projectileType === 'molotov') {
+            mesh.rotateZ(Number(age || 0) * 0.34);
+            mesh.rotateX(0.025 + (Math.sin(Number(age || 0) * 7.2) * 0.012));
+            var flame = mesh.userData.flame || null;
+            if (flame) {
+                var flamePulse = 0.92 + (Math.sin(Number(age || 0) * 18) * 0.18);
+                flame.scale.set(0.42 * flamePulse, 0.62 + (Math.sin(Number(age || 0) * 15) * 0.12), 0.42 * flamePulse);
             }
         }
     }
@@ -471,6 +607,9 @@
 
         var mesh = createThrowableMesh(type);
         mesh.position.copy(origin);
+        if (!mesh.userData) mesh.userData = {};
+        mesh.userData.projectileType = type;
+        orientProjectileVisual(mesh, vel, 0);
         sceneRef.add(mesh);
 
         projectiles.push({
@@ -951,10 +1090,11 @@
     }
 
     function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
+        var palette = effectPaletteForProjectileType(source);
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
-        spawnExplosionBurst(position, 0xffaa22, radius);
+        spawnExplosionBurst(position, palette.explosion, radius);
 
         var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
         for (var i = 0; i < enemies.length; i++) {
@@ -981,29 +1121,47 @@
     function createFireZone(position) {
         if (!sceneRef) return;
 
-        var fireMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(defs.molotov.fireRadius, defs.molotov.fireRadius, 0.08, 16),
-            new THREE.MeshBasicMaterial({
-                color: 0xff7733,
-                transparent: true,
-                opacity: 0.45
-            })
-        );
-        fireMesh.position.set(position.x, 0.04, position.z);
+        var fireMesh = buildFireZoneMesh(defs.molotov.fireRadius);
+        var groundY = Number(position && position.y || 0);
+        fireMesh.position.set(position.x, groundY + 0.04, position.z);
         sceneRef.add(fireMesh);
 
         fireZones.push({
             mesh: fireMesh,
-            center: new THREE.Vector3(position.x, 0, position.z),
+            center: new THREE.Vector3(position.x, groundY, position.z),
             radius: defs.molotov.fireRadius,
             life: defs.molotov.fireDuration,
+            maxLife: defs.molotov.fireDuration,
             tickTimer: 0
         });
 
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
-            globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireIgnite');
         }
-        spawnExplosionBurst(position, 0xff6622, defs.molotov.fireRadius || 3.2);
+        spawnExplosionBurst(position, effectPaletteForProjectileType('molotov').explosion, defs.molotov.fireRadius || 3.2);
+    }
+
+    function updateFireZoneVisual(zone, now, lifeRatio) {
+        if (!zone || !zone.mesh || !zone.mesh.userData || !zone.mesh.userData.zoneParts) return;
+        var parts = zone.mesh.userData.zoneParts;
+        var pulse = 0.88 + (Math.sin((Number(now || 0) * 0.008) + zone.radius) * 0.12);
+        var lifeBlend = Math.max(0.25, Math.min(1, Number(lifeRatio || 1)));
+        if (parts.disk && parts.disk.material) {
+            parts.disk.material.opacity = 0.22 + (lifeBlend * 0.24);
+            parts.disk.scale.set(0.98 + (pulse * 0.04), 1, 0.98 + (pulse * 0.04));
+        }
+        if (parts.ring && parts.ring.material) {
+            parts.ring.material.opacity = 0.12 + (lifeBlend * 0.18);
+            parts.ring.scale.set(0.94 + (pulse * 0.14), 0.94 + (pulse * 0.14), 1);
+            parts.ring.rotation.z = Math.sin(Number(now || 0) * 0.0018) * 0.18;
+        }
+        if (parts.flame) {
+            parts.flame.scale.set(
+                Math.max(0.85, zone.radius * (0.22 + (pulse * 0.05))),
+                Math.max(0.95, zone.radius * (0.3 + (pulse * 0.08))),
+                Math.max(0.85, zone.radius * (0.22 + (pulse * 0.05)))
+            );
+        }
     }
 
     function removeProjectile(index) {
@@ -1024,6 +1182,7 @@
             if (p.stuckEnemy && p.stuckEnemy.alive && p.stuckEnemy.group && p.stuckEnemy.group.position) {
                 p.mesh.position.copy(p.stuckEnemy.group.position).add(p.stuckOffset);
             }
+            orientProjectileVisual(p.mesh, p.velocity, p.age);
             if (p.age >= p.stickyUntil) {
                 explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
                 removeProjectile(index);
@@ -1199,6 +1358,8 @@
             p.mesh.position.copy(tmpEnd);
         }
 
+        orientProjectileVisual(p.mesh, p.velocity, p.age);
+
         if (p.type === 'knife' && p.age >= def.life) {
             removeProjectile(index);
             return;
@@ -1231,6 +1392,7 @@
             var z = fireZones[i];
             z.life -= dt;
             z.tickTimer -= dt;
+            updateFireZoneVisual(z, Date.now(), z.maxLife > 0 ? (z.life / z.maxLife) : 1);
 
             if (z.tickTimer <= 0) {
                 z.tickTimer += defs.molotov.fireTickRate;
@@ -1239,7 +1401,9 @@
                     var enemy = enemies[j];
                     if (!enemy || !enemy.alive) continue;
 
-                    var d = enemy.group.position.distanceTo(z.center);
+                    var dx = enemy.group.position.x - z.center.x;
+                    var dz = enemy.group.position.z - z.center.z;
+                    var d = Math.sqrt((dx * dx) + (dz * dz));
                     if (d > z.radius) continue;
 
                     var dmg = defs.molotov.fireTickDamage;
@@ -1568,11 +1732,15 @@
             var entry = netProjectileMap[p.id];
             if (!entry) {
                 var mesh = createThrowableMesh(p.type);
+                if (!mesh.userData) mesh.userData = {};
+                mesh.userData.projectileType = p.type;
                 sceneRef.add(mesh);
                 entry = { id: p.id, mesh: mesh, type: p.type };
                 netProjectileMap[p.id] = entry;
             }
             entry.mesh.position.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
+            tmpNetVec.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
+            orientProjectileVisual(entry.mesh, tmpNetVec, Number(p.age || 0));
         }
 
         for (var key in netProjectileMap) {
@@ -1588,12 +1756,14 @@
             var zone = netFireZoneMap[zoneState.id];
             if (!zone) {
                 var zoneMesh = buildFireZoneMesh(Number(zoneState.radius || defs.molotov.fireRadius || 3));
-                zoneMesh.position.set(Number(zoneState.x || 0), 0.04, Number(zoneState.z || 0));
+                zoneMesh.position.set(Number(zoneState.x || 0), Number(zoneState.y || 0) + 0.04, Number(zoneState.z || 0));
                 sceneRef.add(zoneMesh);
-                zone = { id: zoneState.id, mesh: zoneMesh };
+                zone = { id: zoneState.id, mesh: zoneMesh, radius: Number(zoneState.radius || defs.molotov.fireRadius || 3) };
                 netFireZoneMap[zoneState.id] = zone;
             }
-            zone.mesh.position.set(Number(zoneState.x || 0), 0.04, Number(zoneState.z || 0));
+            zone.radius = Number(zoneState.radius || defs.molotov.fireRadius || 3);
+            zone.mesh.position.set(Number(zoneState.x || 0), Number(zoneState.y || 0) + 0.04, Number(zoneState.z || 0));
+            updateFireZoneVisual(zone, Date.now(), 1);
         }
 
         for (var zk in netFireZoneMap) {
@@ -1605,13 +1775,20 @@
     GameThrowables.applyNetworkEvent = function (event) {
         if (!event || !event.t) return;
         if (event.t === 'throw_impact') {
-            spawnFlash(new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)), 0xffffff, 0.1, 0.1);
+            var impactPalette = effectPaletteForProjectileType(event.projectileType || event.throwableId || '');
+            spawnFlash(
+                new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)),
+                impactPalette.flash,
+                event.projectileType === 'missile' ? 0.14 : 0.1,
+                event.projectileType === 'missile' ? 0.12 : 0.1
+            );
             return;
         }
         if (event.t === 'throw_explode') {
+            var explosionPalette = effectPaletteForProjectileType(event.projectileType || event.throwableId || '');
             spawnExplosionBurst(
                 new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)),
-                0xffaa22,
+                explosionPalette.explosion,
                 Number(event.radius || defs.frag.radius || 5.4)
             );
             return;

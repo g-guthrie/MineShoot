@@ -16,6 +16,7 @@
             AOE_END: 'aoe_end',
             DAMAGE_EVENT: 'damage_event',
             DEATH_RESPAWN: 'death_respawn',
+            ABILITY_EVENT: 'ability_event',
             CLASS_CAST_OK: 'class_cast_ok',
             CLASS_CAST_REJECT: 'class_cast_reject',
             CLASS_CHANGED: 'class_changed',
@@ -211,6 +212,11 @@
 
             if (msg.t === (msgTypes.DEATH_RESPAWN || 'death_respawn')) {
                 handleDeathRespawn(msg, opts);
+                return;
+            }
+
+            if (msg.t === (msgTypes.ABILITY_EVENT || 'ability_event')) {
+                pushBounded(opts.abilityEventQueue, msg, 32);
                 return;
             }
 

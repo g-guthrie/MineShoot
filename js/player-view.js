@@ -21,6 +21,7 @@
         var cameraKickYaw = 0;
         var cameraKickRoll = 0;
         var firePoseKick = 0;
+        var sprintFovBlend = 0;
 
         var viewOrigin = new THREE.Vector3();
         var viewDesired = new THREE.Vector3();
@@ -111,6 +112,7 @@
                 airborne: !state.isGrounded,
                 aimPitch: state.pitch + (cameraKickPitch * 0.35),
                 hooked: !!state.hooked,
+                hookStartedAt: state.hookPullStartedAt || 0,
                 choked: !!state.choked,
                 startedAt: state.chokeStartedAt || 0,
                 adsActive: !!state.adsActive,
@@ -135,12 +137,29 @@
             var forwardZ = -Math.cos(renderYaw) * cosPitch;
             var rightX = Math.cos(renderYaw);
             var rightZ = -Math.sin(renderYaw);
+            var chokeOffsetX = 0;
+            var chokeOffsetZ = 0;
+            var chokeRoll = 0;
+            if (state.choked) {
+                var chokeStamp = Date.now();
+                var chokePhase = state.chokeStartedAt
+                    ? ((chokeStamp - state.chokeStartedAt) * 0.012)
+                    : (chokeStamp * 0.012);
+                chokeOffsetX = Math.sin(chokePhase) * 0.08;
+                chokeOffsetZ = Math.cos(chokePhase * 0.8) * 0.04;
+                chokeRoll = Math.sin(chokePhase * 0.9) * 0.028;
+            }
 
             var targetScopeBlend = state.adsActive ? 1 : 0;
             var blendSpeed = state.sniperMode ? state.sniperScopeBlendSpeed : state.adsBlendSpeed;
             scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
             if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
             if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
+            var targetSprintFovBlend = (!state.adsActive && !state.sniperMode && state.sprinting)
+                ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
+                : 0;
+            sprintFovBlend += (targetSprintFovBlend - sprintFovBlend) * Math.min(1, dt * 10);
+            if (Math.abs(sprintFovBlend) < 0.001) sprintFovBlend = 0;
 
             var scopedEyeMode = state.sniperMode && scopeBlend > 0.55;
             syncAvatarVisibility(state);
@@ -148,6 +167,8 @@
 
             viewTarget.set(state.playerX + forwardX * 20, state.posY + forwardY * 20, state.playerZ + forwardZ * 20);
             viewTarget.y += state.chokeLift;
+            viewTarget.x += rightX * chokeOffsetX;
+            viewTarget.z += rightZ * chokeOffsetX;
             if (scopedEyeMode) {
                 if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
                     state.avatarRigApi.getEyeWorldPosition(eyeWorld);
@@ -156,6 +177,8 @@
                     viewOrigin.set(state.playerX, state.posY + state.chokeLift, state.playerZ);
                 }
                 viewDesired.copy(viewOrigin);
+                viewDesired.x += rightX * chokeOffsetX;
+                viewDesired.z += rightZ * chokeOffsetX;
             } else {
                 viewOrigin.set(state.playerX, state.posY + 0.3 + state.chokeLift, state.playerZ);
                 viewDesired.set(
@@ -163,11 +186,15 @@
                     state.posY + state.thirdHeight + state.chokeLift,
                     state.playerZ + (rightZ * state.cameraShoulder) - (forwardZ * state.cameraDist)
                 );
+                viewDesired.x += rightX * chokeOffsetX;
+                viewDesired.z += rightZ * chokeOffsetX + chokeOffsetZ;
                 adsDesired.set(
                     state.playerX + (rightX * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardX * (state.sniperMode ? state.sniperScopeDist : state.adsDist)),
                     state.posY + (state.sniperMode ? state.sniperScopeHeight : state.adsHeight) + state.chokeLift,
                     state.playerZ + (rightZ * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardZ * (state.sniperMode ? state.sniperScopeDist : state.adsDist))
                 );
+                adsDesired.x += rightX * chokeOffsetX;
+                adsDesired.z += rightZ * chokeOffsetX + chokeOffsetZ;
                 viewDesired.lerp(adsDesired, scopeBlend);
 
                 var worldMeshes = state.getWorldCollidables ? state.getWorldCollidables() : [];
@@ -195,11 +222,12 @@
             }
 
             var scopedFov = state.adsFovForWeapon ? state.adsFovForWeapon(state.currentWeaponId) : state.adsFov;
-            var targetFov = state.cameraFov + ((scopedFov - state.cameraFov) * scopeBlend);
+            var sprintFovBoost = Number(state.cameraFov || 75) * 0.04;
+            var targetFov = state.cameraFov + (sprintFovBoost * sprintFovBlend) + ((scopedFov - state.cameraFov) * scopeBlend);
             state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
-            state.camera.rotation.z += cameraKickRoll;
+            state.camera.rotation.z += cameraKickRoll + chokeRoll;
         }
 
         function triggerFireAction(state) {

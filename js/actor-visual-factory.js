@@ -42,7 +42,65 @@
         ghost.scale.set(1.05, 1.05, 1.05);
         ghost.userData.revealMaterials = mats;
         ghost.userData.baseOpacity = 0.26;
+        ghost.userData.baseColor = 0x65d8ff;
         return ghost;
+    }
+
+    function createChokeFx() {
+        var group = new THREE.Group();
+        var glowMat = new THREE.MeshBasicMaterial({
+            color: 0xff6a7a,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false
+        });
+        var ringMat = new THREE.MeshBasicMaterial({
+            color: 0xff8a96,
+            transparent: true,
+            opacity: 0,
+            wireframe: true,
+            depthWrite: false
+        });
+
+        var chestGlow = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 10), glowMat.clone());
+        chestGlow.position.set(0, 1.1, 0);
+        chestGlow.scale.set(1.0, 1.35, 0.9);
+        group.add(chestGlow);
+
+        var throatGlow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat.clone());
+        throatGlow.position.set(0, 1.5, 0.02);
+        throatGlow.scale.set(0.9, 1.25, 0.9);
+        group.add(throatGlow);
+
+        var ringUpper = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.018, 5, 20), ringMat.clone());
+        ringUpper.position.set(0, 1.48, 0.01);
+        ringUpper.rotation.x = Math.PI * 0.5;
+        group.add(ringUpper);
+
+        var ringChest = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.015, 5, 22), ringMat.clone());
+        ringChest.position.set(0, 1.08, 0);
+        ringChest.rotation.x = Math.PI * 0.5;
+        group.add(ringChest);
+
+        var wisps = [];
+        for (var i = 0; i < 3; i++) {
+            var wisp = new THREE.Mesh(
+                new THREE.SphereGeometry(0.045 + (i * 0.01), 6, 6),
+                glowMat.clone()
+            );
+            group.add(wisp);
+            wisps.push(wisp);
+        }
+
+        group.visible = false;
+        group.userData.parts = {
+            chestGlow: chestGlow,
+            throatGlow: throatGlow,
+            ringUpper: ringUpper,
+            ringChest: ringChest,
+            wisps: wisps
+        };
+        return group;
     }
 
     GameActorVisualFactory.create = function (opts) {
@@ -102,6 +160,8 @@
         if (revealGhost) {
             root.add(revealGhost);
         }
+        var chokeFx = createChokeFx();
+        root.add(chokeFx);
         if (revealGhost && revealGhost.userData) {
             revealState.materials = Array.isArray(revealGhost.userData.revealMaterials) ? revealGhost.userData.revealMaterials : [];
             revealState.baseOpacity = Number(revealGhost.userData.baseOpacity || 0.26);
@@ -212,13 +272,53 @@
             });
         }
 
-        function setRevealGhostState(visible, opacity) {
+        function setRevealGhostState(visible, opacity, colorHex) {
             if (!revealGhost) return;
             revealGhost.visible = !!visible && alive;
             if (!revealGhost.visible) return;
             var nextOpacity = (typeof opacity === 'number' && isFinite(opacity)) ? opacity : revealState.baseOpacity;
+            var nextColor = (typeof colorHex === 'number' && isFinite(colorHex))
+                ? colorHex
+                : (revealGhost.userData ? Number(revealGhost.userData.baseColor || 0x65d8ff) : 0x65d8ff);
             for (var i = 0; i < revealState.materials.length; i++) {
                 revealState.materials[i].opacity = nextOpacity;
+                if (revealState.materials[i].color) revealState.materials[i].color.setHex(nextColor);
+            }
+        }
+
+        function setChokeFxState(active, startedAt) {
+            if (!chokeFx || !chokeFx.userData || !chokeFx.userData.parts) return;
+            var parts = chokeFx.userData.parts;
+            chokeFx.visible = !!active && alive;
+            if (!chokeFx.visible) return;
+
+            var stamp = Date.now();
+            var phase = startedAt ? ((stamp - startedAt) * 0.014) : (stamp * 0.014);
+            var pulse = 0.62 + (Math.sin(phase * 1.7) * 0.18);
+            var ringPulse = 0.84 + (Math.sin(phase * 1.3) * 0.12);
+
+            parts.chestGlow.material.opacity = 0.14 + (pulse * 0.12);
+            parts.throatGlow.material.opacity = 0.18 + (pulse * 0.16);
+            parts.chestGlow.scale.set(1.0 + (pulse * 0.08), 1.3 + (pulse * 0.12), 0.9 + (pulse * 0.08));
+            parts.throatGlow.scale.set(0.88 + (pulse * 0.06), 1.2 + (pulse * 0.12), 0.88 + (pulse * 0.06));
+
+            parts.ringUpper.material.opacity = 0.3 + (pulse * 0.18);
+            parts.ringChest.material.opacity = 0.16 + (pulse * 0.12);
+            parts.ringUpper.scale.set(ringPulse, ringPulse, 1);
+            parts.ringChest.scale.set(0.92 + (pulse * 0.1), 0.92 + (pulse * 0.1), 1);
+            parts.ringUpper.rotation.z = Math.sin(phase * 0.8) * 0.24;
+            parts.ringChest.rotation.z = Math.cos(phase * 0.7) * 0.18;
+
+            for (var i = 0; i < parts.wisps.length; i++) {
+                var wisp = parts.wisps[i];
+                var wispPhase = phase + (i * 2.1);
+                var radius = 0.16 + (i * 0.04);
+                wisp.position.set(
+                    Math.cos(wispPhase) * radius,
+                    1.18 + (i * 0.14) + Math.sin(wispPhase * 1.6) * 0.05,
+                    Math.sin(wispPhase) * radius * 0.6
+                );
+                wisp.material.opacity = 0.12 + (0.08 * (1 + Math.sin(wispPhase * 2.0)));
             }
         }
 
@@ -256,6 +356,7 @@
             if (rigApi && rigApi.updateAnimation) {
                 rigApi.updateAnimation(dt, animState);
             }
+            setChokeFxState(!!(animState && animState.choked), Number(animState && animState.startedAt || 0));
         }
 
         function triggerAction(action, options) {
@@ -283,6 +384,7 @@
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
             revealGhost: revealGhost,
+            chokeFx: chokeFx,
             syncHitboxes: syncHitboxes,
             setPosition: setPosition,
             setYaw: setYaw,
@@ -292,6 +394,7 @@
             setDamageFlash: setDamageFlash,
             setSpawnShield: setSpawnShield,
             setRevealGhostState: setRevealGhostState,
+            setChokeFxState: setChokeFxState,
             setHitboxVisibility: setHitboxVisibility,
             setWeapon: setWeapon,
             updateAnimation: updateAnimation,

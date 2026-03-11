@@ -24,6 +24,7 @@
 
         var hookState = null;
         var healState = null;
+        var chokeCasterState = null;
         var deadeyeState = null;
         var losRaycaster = new THREE.Raycaster();
         var losDir = new THREE.Vector3();
@@ -60,10 +61,15 @@
             healState = null;
         }
 
+        function clearChokeCasterState() {
+            chokeCasterState = null;
+        }
+
         function clearTransientState() {
             deadeyeState = null;
             clearHookState();
             clearHealState();
+            clearChokeCasterState();
         }
 
         function currentHookOriginWorldPosition(fallback) {
@@ -78,7 +84,7 @@
         function hookHeadWorldPosition(state, now) {
             if (!state) return null;
             if (state.phase === 'retract') {
-                var retractStart = makeVector3Like(state.retractStartPos || state.endPos || state.headPos || state.startPos);
+                var retractStart = makeVector3Like(state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
                 var retractEnd = currentHookOriginWorldPosition(state.startPos);
                 if (!retractStart || !retractEnd) return null;
                 var retractStartedAt = Number(state.retractStartedAt || 0);
@@ -101,7 +107,8 @@
             var retractDuration = Math.max(120, Number(state.hitAt || 0) - Number(state.startedAt || 0));
             state.phase = 'retract';
             state.targetId = '';
-            state.retractStartPos = makeVector3Like(state.endPos || state.headPos || state.startPos);
+            state.retractStartPos = makeVector3Like(state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
+            state.attachPos = null;
             state.retractStartedAt = now;
             state.headPos = makeVector3Like(state.retractStartPos);
             state.endsAt = now + retractDuration;
@@ -150,6 +157,19 @@
             return best;
         }
 
+        function findHookTargetById(targetId) {
+            var enemyApi = runtime().GameEnemy;
+            if (!targetId || !enemyApi || !enemyApi.getLockTargets) return null;
+            var list = enemyApi.getLockTargets() || [];
+            for (var i = 0; i < list.length; i++) {
+                var target = list[i];
+                if (target && String(target.targetId || '') === String(targetId) && target.alive !== false) {
+                    return target;
+                }
+            }
+            return null;
+        }
+
         function collectDeadeyeCandidates(camera, range, minDot, maxTargets) {
             var enemyApi = runtime().GameEnemy;
             if (!camera || !enemyApi || !enemyApi.getLockTargets) return [];
@@ -176,10 +196,14 @@
                     targetId: String(target.targetId || ''),
                     worldPos: worldPos,
                     hitbox: target.hitbox,
-                    dist: dist
+                    dist: dist,
+                    dot: forward.dot(to)
                 });
             }
-            out.sort(function (a, b) { return a.dist - b.dist; });
+            out.sort(function (a, b) {
+                if (Math.abs((b.dot || 0) - (a.dot || 0)) > 0.0001) return (b.dot || 0) - (a.dot || 0);
+                return a.dist - b.dist;
+            });
             return out.slice(0, Math.max(1, maxTargets));
         }
 
@@ -294,8 +318,15 @@
                     liftHeight: Number(cfg.liftHeight || 1.0)
                 };
             }
+            chokeCasterState = {
+                startedAt: now,
+                endsAt: endsAt
+            };
             if (RT.GamePlayer && RT.GamePlayer.triggerAction) {
                 RT.GamePlayer.triggerAction('choke_grip', { duration: cfg.duration || 1.6 });
+            }
+            if (RT.GameAudio && RT.GameAudio.play) {
+                RT.GameAudio.play('chokeCast');
             }
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (chokeResult && onEnemyHit) {
@@ -350,6 +381,7 @@
                 startPos: startPos,
                 endPos: endPos,
                 headPos: startPos.clone(),
+                attachPos: null,
                 startedAt: now,
                 hitAt: now + travelMs,
                 endsAt: now + travelMs
@@ -478,8 +510,9 @@
                         }
                         hookState.phase = 'latched';
                         hookState.targetId = String(hookTarget.targetId || '');
+                        hookState.attachPos = makeVector3Like(hookTarget.worldPos);
                         hookState.headPos = makeVector3Like(hookTarget.worldPos);
-                        hookState.endsAt = now + 260;
+                        hookState.endsAt = now + 140;
                         if (hookResult && onEnemyHit) {
                             onEnemyHit({
                                 hitPoint: makeVector3Like(hookTarget.worldPos),
@@ -492,6 +525,19 @@
                     } else if (now >= (hookState.hitAt || 0)) {
                         beginHookRetract(hookState, now);
                         if (notifier) notifier('Hook missed.', 500);
+                    }
+                } else if (hookState.phase === 'latched') {
+                    var liveHookTarget = findHookTargetById(hookState.targetId);
+                    if (!liveHookTarget) {
+                        hookState.retractStartPos = makeVector3Like(hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
+                        beginHookRetract(hookState, now);
+                    } else {
+                        hookState.attachPos = makeVector3Like(liveHookTarget.worldPos);
+                        hookState.headPos = makeVector3Like(liveHookTarget.worldPos);
+                        if (now >= (hookState.endsAt || 0)) {
+                            hookState.retractStartPos = makeVector3Like(hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
+                            beginHookRetract(hookState, now);
+                        }
                     }
                 } else if (hookState.phase === 'retract') {
                     hookState.headPos = hookHeadWorldPosition(hookState, now) || hookState.headPos || hookState.startPos;
@@ -508,6 +554,9 @@
                     healState.applied = true;
                 }
                 clearHealState();
+            }
+            if (chokeCasterState && now >= (chokeCasterState.endsAt || 0)) {
+                clearChokeCasterState();
             }
             if (!deadeyeState || !deadeyeState.active) return;
 
@@ -537,6 +586,7 @@
                 startPos: hookState.startPos ? makeVector3Like(hookState.startPos) : null,
                 endPos: hookState.endPos ? makeVector3Like(hookState.endPos) : null,
                 headPos: hookState.headPos ? makeVector3Like(hookState.headPos) : null,
+                attachPos: hookState.attachPos ? makeVector3Like(hookState.attachPos) : null,
                 catchRadius: Number(hookState.catchRadius || 1.8),
                 startedAt: hookState.startedAt || 0,
                 hitAt: hookState.hitAt || 0,
@@ -552,10 +602,18 @@
             } : null;
         }
 
+        function getChokeState() {
+            return chokeCasterState ? {
+                startedAt: chokeCasterState.startedAt || 0,
+                endsAt: chokeCasterState.endsAt || 0
+            } : null;
+        }
+
         function getSnapshot() {
             return {
                 deadeyeActive: !!(deadeyeState && deadeyeState.active),
                 deadeyeState: deadeyeState,
+                chokeState: getChokeState(),
                 healState: getHealState(),
                 hookState: getHookState()
             };

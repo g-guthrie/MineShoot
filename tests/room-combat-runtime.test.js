@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  deadeyeCandidates,
   handleFire,
   handleThrow,
   reloadRemainingForWeapon,
@@ -210,4 +211,31 @@ test('spawnProjectile uses the full aim vector so trajectory changes with pitch'
   assert.equal(projectile.vx, 0);
   assert.equal(projectile.vy, 18.7);
   assert.equal(projectile.vz, -18);
+});
+
+test('deadeyeCandidates prefers the target closest to the player aim line over raw distance', () => {
+  const centered = { id: 'center', alive: true, x: 0, y: 1.7, z: -10 };
+  const offCenterNear = { id: 'near', alive: true, x: 3, y: 1.7, z: -5 };
+  const player = { id: 'p1', alive: true, x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 };
+  const room = {
+    hostilesInCone() {
+      return [
+        { entity: offCenterNear, dist: 5.83 },
+        { entity: centered, dist: 10 }
+      ];
+    },
+    entityAimTargetPosition(entity) {
+      return { x: entity.x, y: entity.y, z: entity.z };
+    },
+    entityForward() {
+      return { x: 0, y: 0, z: -1 };
+    },
+    hasWorldLineOfSight() {
+      return true;
+    }
+  };
+
+  const picks = deadeyeCandidates(room, player, 70, 0.22, 2);
+
+  assert.deepEqual(picks.map((item) => item.id), ['center', 'near']);
 });

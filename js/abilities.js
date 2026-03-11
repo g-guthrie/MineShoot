@@ -314,6 +314,11 @@
         return snapshot ? snapshot.healState : null;
     };
 
+    GameAbilities.getChokeState = function () {
+        var snapshot = localSimSnapshot();
+        return snapshot ? snapshot.chokeState : null;
+    };
+
     GameAbilities.clearTransientState = function () {
         clearTransientStates();
     };

@@ -60,6 +60,7 @@
     var throwAckQueue = [];
     var throwRejectQueue = [];
     var throwableEventQueue = [];
+    var abilityEventQueue = [];
     var classCastResultQueue = [];
     var damageFeedbackQueue = [];
     var incomingDamageFeedbackQueue = [];
@@ -329,6 +330,7 @@
         throwAckQueue: throwAckQueue,
         throwRejectQueue: throwRejectQueue,
         throwableEventQueue: throwableEventQueue,
+        abilityEventQueue: abilityEventQueue,
         classCastResultQueue: classCastResultQueue,
         damageFeedbackQueue: damageFeedbackQueue,
         incomingDamageFeedbackQueue: incomingDamageFeedbackQueue
@@ -347,6 +349,7 @@
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
         getSelfState: function () { return selfState; },
         getSelfId: function () { return selfId; },
+        getMatchState: function () { return matchState; },
         getSnapshotMap: function () { return snapshotMap; },
         getInputSeqHistory: function () { return inputSeqHistory; },
         getLastInputSeqSent: function () { return lastInputSeqSent; },
@@ -525,6 +528,7 @@
     GameNet.consumeThrowAck = stateView.consumeThrowAck;
     GameNet.consumeThrowReject = stateView.consumeThrowReject;
     GameNet.consumeThrowableEvent = stateView.consumeThrowableEvent;
+    GameNet.consumeAbilityEvent = stateView.consumeAbilityEvent;
     GameNet.getAuthoritativeThrowableState = stateView.getAuthoritativeThrowableState;
 
     GameNet.sendAbilityLoadout = function (slot1, slot2) {
@@ -539,6 +543,7 @@
     GameNet.consumeClassCastResult = stateView.consumeClassCastResult;
     GameNet.consumeDamageFeedback = stateView.consumeDamageFeedback;
     GameNet.consumeIncomingDamageFeedback = stateView.consumeIncomingDamageFeedback;
+    GameNet.damagePointForEntityId = damagePointForEntityId;
     GameNet.getEntityMarkerWorldPos = stateView.getEntityMarkerWorldPos;
     GameNet.getChokeVictimStateForEntity = stateView.getChokeVictimStateForEntity;
     GameNet.getSelfAbilityState = stateView.getSelfAbilityState;

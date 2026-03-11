@@ -73,6 +73,17 @@
         return null;
     }
 
+    function currentChokeCasterState(multiplayerMode) {
+        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
+            var netAbility = runtime.GameNet.getSelfAbilityState();
+            return netAbility ? netAbility.chokeState : null;
+        }
+        if (runtime.GameAbilities && runtime.GameAbilities.getChokeState) {
+            return runtime.GameAbilities.getChokeState();
+        }
+        return null;
+    }
+
     function currentDeadeyeUiState(multiplayerMode) {
         var abilityBoundary = runtime.GameAbilityBoundary || null;
         if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
@@ -82,9 +93,13 @@
                     ? abilityBoundary.buildNetworkDeadeyeUiState(
                         abilState.deadeyeState,
                         function (targetId) {
-                            return runtime.GameNet.getEntityMarkerWorldPos
-                                ? runtime.GameNet.getEntityMarkerWorldPos(targetId)
-                                : null;
+                            return runtime.GameNet.damagePointForEntityId
+                                ? runtime.GameNet.damagePointForEntityId(targetId)
+                                : (
+                                    runtime.GameNet.getEntityMarkerWorldPos
+                                        ? runtime.GameNet.getEntityMarkerWorldPos(targetId)
+                                        : null
+                                );
                         },
                         Date.now()
                     )
@@ -95,6 +110,31 @@
         return runtime.GameAbilities && runtime.GameAbilities.getDeadeyeState
             ? runtime.GameAbilities.getDeadeyeState()
             : null;
+    }
+
+    function syncDeadeyeHighlights(multiplayerMode, deadeyeState) {
+        var markMap = {};
+        if (deadeyeState && Array.isArray(deadeyeState.targets)) {
+            for (var i = 0; i < deadeyeState.targets.length; i++) {
+                var target = deadeyeState.targets[i];
+                if (!target || !target.targetId) continue;
+                markMap[String(target.targetId)] = {
+                    locked: !!target.locked,
+                    progress: Number(target.progress || 0)
+                };
+            }
+        }
+
+        if (multiplayerMode) {
+            if (runtime.GameNetEntities && runtime.GameNetEntities.setDeadeyeHighlights) {
+                runtime.GameNetEntities.setDeadeyeHighlights(markMap);
+            }
+            return;
+        }
+
+        if (runtime.GameEnemy && runtime.GameEnemy.setDeadeyeHighlights) {
+            runtime.GameEnemy.setDeadeyeHighlights(markMap);
+        }
     }
 
     GameGameplayHudSync.update = function (options) {
@@ -118,6 +158,14 @@
         if (runtime.GamePlayer && runtime.GamePlayer.setHealFlash) {
             var selfHealState = currentHealState(multiplayerMode);
             runtime.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
+        }
+
+        if (runtime.GameAudio && runtime.GameAudio.setChokeAudioState) {
+            var selfChokeCasterState = currentChokeCasterState(multiplayerMode);
+            runtime.GameAudio.setChokeAudioState({
+                casterActive: !!(selfChokeCasterState && selfChokeCasterState.endsAt > Date.now()),
+                victimActive: !!(runtime.GamePlayer && runtime.GamePlayer.isChoked && runtime.GamePlayer.isChoked())
+            });
         }
 
         if (!multiplayerMode && runtime.GamePlayer && runtime.GamePlayer.setStatusState) {
@@ -172,8 +220,10 @@
             );
         }
 
+        var deadeyeUiState = currentDeadeyeUiState(multiplayerMode);
+        syncDeadeyeHighlights(multiplayerMode, deadeyeUiState);
         if (runtime.GameUI && runtime.GameUI.updateDeadeyeReticle) {
-            runtime.GameUI.updateDeadeyeReticle(camera, currentDeadeyeUiState(multiplayerMode));
+            runtime.GameUI.updateDeadeyeReticle(camera, deadeyeUiState);
         }
     };
 

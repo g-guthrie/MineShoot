@@ -44,7 +44,8 @@ function beginHookRetract(state, now) {
   const retractDuration = Math.max(120, Number(state.hitAt || 0) - Number(state.startedAt || 0));
   state.phase = 'retract';
   state.targetId = '';
-  state.retractStartPos = state.endPos || state.headPos || state.startPos;
+  state.retractStartPos = state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos;
+  state.attachPos = null;
   state.retractStartedAt = now;
   state.headPos = state.retractStartPos;
   state.endsAt = now + retractDuration;
@@ -170,6 +171,12 @@ export function castChoke(room, player, cfg, msg, now) {
     dotPerTick: Math.max(0, Math.round(cfg.dotPerTick || 0)),
     liftHeight: cfg.liftHeight || 1.0
   };
+  room.broadcast({
+    t: MSG_S2C.ABILITY_EVENT,
+    abilityId: 'choke',
+    sourceId: player.id,
+    targetId: target.id
+  });
   return { ok: true, kind: 'ability_choke', payload: { targetId: target.id } };
 }
 
@@ -200,6 +207,7 @@ export function castHook(room, player, cfg, _msg, now) {
     startPos,
     endPos,
     headPos: startPos,
+    attachPos: null,
     catchRadius: Number(cfg.catchRadius || 1.6),
     pullDistance: Number(cfg.pullDistance || 3.2),
     stunDuration: Number(cfg.stunDuration || 0.5),
@@ -396,6 +404,7 @@ export function tickClassAbilityState(room, entity) {
       state.headPos = hookHeadPosition(state, now) || state.headPos || state.startPos;
       const target = closestHostileToHookPoint(room, entity, state.headPos, state.catchRadius);
       if (target) {
+        const attachPos = room.entityCorePosition(target);
         const out = applyDamageFromSource(entity, target, state.castDamage || 40, {
           hitType: 'body',
           sourceKind: 'ability',
@@ -416,10 +425,24 @@ export function tickClassAbilityState(room, entity) {
         );
         state.phase = 'latched';
         state.targetId = target.id;
-        state.headPos = room.entityAimTargetPosition(target);
-        state.endsAt = now + 260;
+        state.attachPos = attachPos;
+        state.headPos = attachPos;
+        state.endsAt = now + 140;
       } else if (now >= (state.hitAt || 0)) {
         beginHookRetract(state, now);
+      }
+    } else if (state.phase === 'latched') {
+      const target = room.getEntityById(String(state.targetId || ''));
+      if (!target || !target.alive) {
+        state.retractStartPos = state.attachPos || state.headPos || state.endPos || state.startPos;
+        beginHookRetract(state, now);
+      } else {
+        state.attachPos = room.entityCorePosition(target);
+        state.headPos = state.attachPos || state.headPos || state.startPos;
+        if (now >= (state.endsAt || 0)) {
+          state.retractStartPos = state.attachPos || state.headPos || state.endPos || state.startPos;
+          beginHookRetract(state, now);
+        }
       }
     } else if (state.phase === 'retract') {
       state.headPos = hookHeadPosition(state, now, room.entityCorePosition(entity)) || state.headPos || state.startPos;

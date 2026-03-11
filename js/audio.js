@@ -15,6 +15,10 @@
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
+    var chokeLoops = {
+        caster: null,
+        victim: null
+    };
 
     function weaponPresentationFor(weaponId) {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
@@ -226,6 +230,39 @@
         }
     }
 
+    function playSampleLayer(c, buffer, opts) {
+        if (!c || !buffer) return false;
+        opts = opts || {};
+        var start = c.currentTime + (opts.delay || 0);
+        var source = c.createBufferSource();
+        var gain = c.createGain();
+        var nodes = [];
+        source.buffer = buffer;
+        source.playbackRate.setValueAtTime(
+            Number(
+                opts.playbackRate !== undefined
+                    ? opts.playbackRate
+                    : randomBetween(opts.playbackRateMin || 1, opts.playbackRateMax || 1)
+            ),
+            start
+        );
+        if (opts.filterType) {
+            var filter = c.createBiquadFilter();
+            filter.type = opts.filterType;
+            filter.frequency.setValueAtTime(Math.max(40, Number(opts.frequency || 1200)), start);
+            filter.Q.setValueAtTime(Math.max(0.0001, Number(opts.q || 0.7)), start);
+            nodes.push(filter);
+        }
+        gain.gain.setValueAtTime(opts.gain !== undefined ? opts.gain : 1, start);
+        nodes.push(gain);
+        connectNodeChain(source, nodes, c.destination);
+        source.start(start);
+        if (opts.duration) {
+            source.stop(start + Math.max(0.01, Number(opts.duration)));
+        }
+        return true;
+    }
+
     function playSampleBuffer(c, sampleDef) {
         if (!c || !sampleDef || !sampleDef.url) return false;
         var buffer = sampleCache[sampleDef.url];
@@ -233,15 +270,11 @@
             loadSampleBuffer(c, sampleDef.url);
             return false;
         }
-        var source = c.createBufferSource();
-        var gain = c.createGain();
-        source.buffer = buffer;
-        source.playbackRate.setValueAtTime(randomBetween(sampleDef.playbackRateMin || 1, sampleDef.playbackRateMax || 1), c.currentTime);
-        gain.gain.setValueAtTime(sampleDef.gain !== undefined ? sampleDef.gain : 1, c.currentTime);
-        source.connect(gain);
-        gain.connect(c.destination);
-        source.start(c.currentTime);
-        return true;
+        return playSampleLayer(c, buffer, {
+            gain: sampleDef.gain !== undefined ? sampleDef.gain : 1,
+            playbackRateMin: sampleDef.playbackRateMin || 1,
+            playbackRateMax: sampleDef.playbackRateMax || 1
+        });
     }
 
     function playOscBurst(c, opts) {
@@ -320,9 +353,12 @@
             return;
         }
         if (weapon === 'shotgun') {
-            playNoiseBurst(c, { duration: 0.12, vol: 0.09, frequency: 1500, q: 0.7, filterType: 'bandpass' });
-            playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 52, duration: 0.22, vol: 0.13 });
-            playOscBurst(c, { type: 'square', startFreq: 520, endFreq: 110, duration: 0.08, vol: 0.06, delay: 0.002 });
+            playNoiseBurst(c, { duration: 0.018, vol: 0.055, frequency: 4200, q: 1.8, filterType: 'highpass' });
+            playNoiseBurst(c, { duration: 0.075, vol: 0.078, frequency: 1650, q: 0.95, filterType: 'bandpass', delay: 0.001 });
+            playNoiseBurst(c, { duration: 0.11, vol: 0.03, frequency: 520, q: 0.7, filterType: 'lowpass', delay: 0.004 });
+            playOscBurst(c, { type: 'sawtooth', startFreq: 340, endFreq: 120, duration: 0.055, vol: 0.05, attack: 0.001 });
+            playOscBurst(c, { type: 'triangle', startFreq: 152, endFreq: 54, duration: 0.19, vol: 0.09, attack: 0.001, delay: 0.001 });
+            playOscBurst(c, { type: 'sine', startFreq: 84, endFreq: 44, duration: 0.23, vol: 0.05, attack: 0.0012, delay: 0.004 });
             return;
         }
         if (weapon === 'sniper') {
@@ -343,9 +379,57 @@
     }
 
     function playShotgunKickAccent(c) {
-        playNoiseBurst(c, { duration: 0.028, vol: 0.03, frequency: 2400, q: 2.2, filterType: 'highpass' });
-        playOscBurst(c, { type: 'triangle', startFreq: 144, endFreq: 58, duration: 0.15, vol: 0.05, attack: 0.001, delay: 0.001 });
-        playOscBurst(c, { type: 'sine', startFreq: 78, endFreq: 46, duration: 0.2, vol: 0.03, attack: 0.0012, delay: 0.003 });
+        playNoiseBurst(c, { duration: 0.014, vol: 0.022, frequency: 4600, q: 2.1, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.045, vol: 0.028, frequency: 1600, q: 1.0, filterType: 'bandpass', delay: 0.001 });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 320, endFreq: 120, duration: 0.05, vol: 0.022, attack: 0.0009, delay: 0.001 });
+        playOscBurst(c, { type: 'triangle', startFreq: 142, endFreq: 56, duration: 0.16, vol: 0.04, attack: 0.001, delay: 0.001 });
+        playOscBurst(c, { type: 'sine', startFreq: 80, endFreq: 44, duration: 0.21, vol: 0.026, attack: 0.0012, delay: 0.004 });
+    }
+
+    function playShotgunFireSample(c, sampleDef) {
+        if (!c || !sampleDef || !sampleDef.url) return false;
+        var buffer = sampleCache[sampleDef.url];
+        if (!buffer) {
+            loadSampleBuffer(c, sampleDef.url);
+            return false;
+        }
+        var gain = sampleDef.gain !== undefined ? sampleDef.gain : 1;
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.74,
+            playbackRateMin: sampleDef.playbackRateMin || 1,
+            playbackRateMax: sampleDef.playbackRateMax || 1
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.12,
+            playbackRateMin: 1.04,
+            playbackRateMax: 1.1,
+            filterType: 'highpass',
+            frequency: 2400,
+            q: 0.85,
+            duration: 0.085
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.13,
+            playbackRateMin: 0.98,
+            playbackRateMax: 1.03,
+            filterType: 'bandpass',
+            frequency: 760,
+            q: 0.72,
+            duration: 0.16,
+            delay: 0.001
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.17,
+            playbackRateMin: 0.93,
+            playbackRateMax: 0.98,
+            filterType: 'lowpass',
+            frequency: 180,
+            q: 0.65,
+            duration: 0.22,
+            delay: 0.002
+        });
+        playShotgunKickAccent(c);
+        return true;
     }
 
     function playWeaponFire(c, weaponId) {
@@ -354,10 +438,10 @@
             playWeaponFireProcedural(c, weapon);
             return;
         }
+        if (weapon === 'shotgun' && playShotgunFireSample(c, weaponSampleDef(weapon))) {
+            return;
+        }
         if (playSampleBuffer(c, weaponSampleDef(weapon))) {
-            if (weapon === 'shotgun') {
-                playShotgunKickAccent(c);
-            }
             return;
         }
         playWeaponFireProcedural(c, weapon);
@@ -513,6 +597,88 @@
         playNoiseBurst(c, { duration: 0.18, vol: 0.012, frequency: 3200, q: 1.8, filterType: 'highpass', delay: 0.03 });
     }
 
+    function playChokeCast(c) {
+        playNoiseBurst(c, { duration: 0.045, vol: 0.03, frequency: 2600, q: 2.2, filterType: 'bandpass' });
+        playNoiseBurst(c, { duration: 0.09, vol: 0.024, frequency: 980, q: 0.9, filterType: 'lowpass', delay: 0.004 });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 220, endFreq: 540, duration: 0.08, vol: 0.028, attack: 0.001 });
+        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 86, duration: 0.16, vol: 0.018, delay: 0.01 });
+    }
+
+    function stopChokeLoop(role) {
+        var loop = chokeLoops[role];
+        if (!loop) return;
+        chokeLoops[role] = null;
+        try {
+            loop.gain.gain.cancelScheduledValues(loop.ctx.currentTime);
+            loop.gain.gain.setValueAtTime(Math.max(0.0001, loop.gain.gain.value || 0.0001), loop.ctx.currentTime);
+            loop.gain.gain.exponentialRampToValueAtTime(0.0001, loop.ctx.currentTime + 0.08);
+        } catch (_err) {
+            // noop
+        }
+        try { loop.primary.stop(loop.ctx.currentTime + 0.12); } catch (_err2) {}
+        try { if (loop.secondary) loop.secondary.stop(loop.ctx.currentTime + 0.12); } catch (_err3) {}
+        try { if (loop.noise) loop.noise.stop(loop.ctx.currentTime + 0.12); } catch (_err4) {}
+    }
+
+    function startChokeLoop(c, role) {
+        if (!c || chokeLoops[role]) return;
+        var master = c.createGain();
+        var filter = c.createBiquadFilter();
+        var primary = c.createOscillator();
+        var secondary = c.createOscillator();
+        var lfo = c.createOscillator();
+        var lfoGain = c.createGain();
+        var noise = c.createBufferSource();
+        var noiseGain = c.createGain();
+        var buffer = ensureNoiseBuffer(c);
+
+        filter.type = role === 'victim' ? 'bandpass' : 'lowpass';
+        filter.frequency.setValueAtTime(role === 'victim' ? 720 : 460, c.currentTime);
+        filter.Q.setValueAtTime(role === 'victim' ? 1.4 : 0.8, c.currentTime);
+
+        primary.type = role === 'victim' ? 'sawtooth' : 'triangle';
+        primary.frequency.setValueAtTime(role === 'victim' ? 118 : 92, c.currentTime);
+
+        secondary.type = 'sine';
+        secondary.frequency.setValueAtTime(role === 'victim' ? 236 : 184, c.currentTime);
+
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(role === 'victim' ? 6.2 : 4.4, c.currentTime);
+        lfoGain.gain.setValueAtTime(role === 'victim' ? 0.026 : 0.018, c.currentTime);
+        lfo.connect(lfoGain);
+        lfoGain.connect(master.gain);
+
+        noise.buffer = buffer;
+        noise.loop = true;
+        noise.playbackRate.setValueAtTime(role === 'victim' ? 0.7 : 0.54, c.currentTime);
+        noiseGain.gain.setValueAtTime(role === 'victim' ? 0.008 : 0.005, c.currentTime);
+
+        primary.connect(filter);
+        secondary.connect(filter);
+        noise.connect(noiseGain);
+        noiseGain.connect(filter);
+        filter.connect(master);
+        master.connect(c.destination);
+
+        master.gain.setValueAtTime(0.0001, c.currentTime);
+        master.gain.exponentialRampToValueAtTime(role === 'victim' ? 0.034 : 0.022, c.currentTime + 0.08);
+
+        primary.start(c.currentTime);
+        secondary.start(c.currentTime);
+        lfo.start(c.currentTime);
+        noise.start(c.currentTime);
+
+        chokeLoops[role] = {
+            ctx: c,
+            gain: master,
+            filter: filter,
+            primary: primary,
+            secondary: secondary,
+            lfo: lfo,
+            noise: noise
+        };
+    }
+
     GameAudio.play = function (soundId, options) {
         if (muted) return;
         options = options || {};
@@ -573,6 +739,9 @@
                 case 'fireBurning':
                     playFireBurning(c);
                     break;
+                case 'chokeCast':
+                    playChokeCast(c);
+                    break;
                 case 'explosion':
                     playNoiseBurst(c, { duration: 0.25, vol: 0.11, frequency: 640, q: 0.55, filterType: 'lowpass' });
                     playOscBurst(c, { type: 'sawtooth', startFreq: 110, endFreq: 42, duration: 0.22, vol: 0.12 });
@@ -601,12 +770,31 @@
 
     GameAudio.setMuted = function (nextMuted) {
         muted = !!nextMuted;
+        if (muted) {
+            stopChokeLoop('caster');
+            stopChokeLoop('victim');
+        }
         saveMutedPreference();
         return muted;
     };
 
     GameAudio.isMuted = function () {
         return !!muted;
+    };
+
+    GameAudio.setChokeAudioState = function (state) {
+        state = state || {};
+        if (muted) {
+            stopChokeLoop('caster');
+            stopChokeLoop('victim');
+            return;
+        }
+        unlock(function (c) {
+            if (!!state.casterActive) startChokeLoop(c, 'caster');
+            else stopChokeLoop('caster');
+            if (!!state.victimActive) startChokeLoop(c, 'victim');
+            else stopChokeLoop('victim');
+        });
     };
 
     loadMutedPreference();

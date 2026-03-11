@@ -41,6 +41,33 @@
         }
     }
 
+    function handleAbilityEvent(event, selfState) {
+        if (!event || event.abilityId !== 'choke') return;
+        var RT = runtime();
+        if (!RT.GameAudio || !RT.GameAudio.play || !RT.GameNet) return;
+
+        var selfId = selfState && selfState.id ? String(selfState.id) : '';
+        var sourceId = String(event.sourceId || '');
+        var targetId = String(event.targetId || '');
+        var shouldHear = sourceId && selfId && sourceId === selfId;
+        if (!shouldHear && targetId && selfId && targetId === selfId) {
+            shouldHear = true;
+        }
+        if (!shouldHear && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GameNet.damagePointForEntityId) {
+            var selfPos = RT.GamePlayer.getPosition();
+            var sourcePos = RT.GameNet.damagePointForEntityId(sourceId);
+            if (selfPos && sourcePos) {
+                var dx = Number(selfPos.x || 0) - Number(sourcePos.x || 0);
+                var dy = Number(selfPos.y || 0) - Number(sourcePos.y || 0);
+                var dz = Number(selfPos.z || 0) - Number(sourcePos.z || 0);
+                shouldHear = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz)) <= 26;
+            }
+        }
+        if (shouldHear) {
+            RT.GameAudio.play('chokeCast');
+        }
+    }
+
     function syncGameplayFeedback(options) {
         var opts = options || {};
         var RT = runtime();
@@ -69,6 +96,14 @@
                 damageFeedback = RT.GameNet.consumeDamageFeedback();
                 if (damageFeedback) handleNetworkDamageFeedback(damageFeedback, camera);
             } while (damageFeedback);
+        }
+
+        if (RT.GameNet && RT.GameNet.consumeAbilityEvent) {
+            var abilityEvent = null;
+            do {
+                abilityEvent = RT.GameNet.consumeAbilityEvent();
+                if (abilityEvent) handleAbilityEvent(abilityEvent, selfState);
+            } while (abilityEvent);
         }
 
         if (RT.GameNet && RT.GameNet.consumeIncomingDamageFeedback && RT.GamePlayerCombat && RT.GamePlayerCombat.showIncomingFeedback) {

@@ -1,0 +1,68 @@
+Nuclear biome authored-feature map
+Biome: nuclear
+Bounds x:[116, 158] z:[62, 104]  grid:14x14
+Features: 11 high-level placements across 11/196 cells (5.6% occupied)
+
+Dominant feature map
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  L  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  T  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  T  L  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  b  .  .  .  .  .  .  .  . 
+ 7 | .  .  .  P  .  .  C  .  .  P  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  b  .  .  .  .  . 
+ 9 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  .  Y  .  .  . 
+11 | .  L  .  .  .  .  .  .  .  .  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Density heatmap
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  1  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  1  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  1  1  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  1  .  .  .  .  .  .  .  . 
+ 7 | .  .  .  1  .  .  1  .  .  1  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  1  .  .  .  .  . 
+ 9 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  .  1  .  .  . 
+11 | .  1  .  .  .  .  .  .  .  .  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Legend
+  b beacon
+  C campus
+  L lane
+  P pipe
+  T tower
+  Y yard
+  * mixed cell
+
+Counts by feature kind
+  beacon           2
+  campus           1
+  lane             3
+  pipe             2
+  tower            2
+  yard             1
+
+Top dense cells
+  r1 c6  count=1  kinds=lane  labels=north-lane
+  r3 c2  count=1  kinds=tower  labels=cooling-tower-1
+  r4 c11  count=1  kinds=tower  labels=cooling-tower-2
+  r4 c12  count=1  kinds=lane  labels=east-lane
+  r6 c5  count=1  kinds=beacon  labels=beacon-a
+  r7 c3  count=1  kinds=pipe  labels=west-pipe
+  r7 c6  count=1  kinds=campus  labels=reactor-campus
+  r7 c9  count=1  kinds=pipe  labels=east-pipe
+  r8 c8  count=1  kinds=beacon  labels=beacon-b
+  r10 c10  count=1  kinds=yard  labels=control-yard
+  r11 c1  count=1  kinds=lane  labels=west-lane

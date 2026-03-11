@@ -3095,6 +3095,61 @@ canvas {
         radial-gradient(circle at center, rgba(255, 0, 0, 0) 52%, rgba(255, 0, 0, 0.34) 86%, rgba(255, 0, 0, 0.46) 100%);
 }
 
+#sprint-speed-lines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9;
+    display: none;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.sprint-speed-line {
+    position: absolute;
+    width: 24vw;
+    max-width: 340px;
+    min-width: 120px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0));
+    filter: blur(0.4px);
+    mix-blend-mode: screen;
+    opacity: 0;
+    transform-origin: center;
+    animation: sprintSpeedLineDrift 0.82s linear infinite;
+}
+
+.sprint-speed-line.left {
+    left: -4vw;
+}
+
+.sprint-speed-line.right {
+    right: -4vw;
+}
+
+.sprint-speed-line.left {
+    transform: rotate(-12deg);
+}
+
+.sprint-speed-line.right {
+    transform: rotate(12deg);
+}
+
+@keyframes sprintSpeedLineDrift {
+    0% {
+        opacity: 0;
+        transform: translateX(0) scaleX(0.72);
+    }
+    18% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(3.8vw) scaleX(1.12);
+    }
+}
+
 #damage-indicator {
     position: fixed;
     top: 0;

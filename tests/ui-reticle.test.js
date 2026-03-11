@@ -161,3 +161,28 @@ test('reticle update reuses the circle reticle path for shotgun and pistol', asy
   assert.equal(harness.getElement('bloom-reticle').style.display, 'none');
   assert.equal(harness.bloomState.hideCalls >= 2, true);
 });
+
+test('sprint effects stay peripheral and hide while scoped or stationary', async () => {
+  const harness = await loadUiHarness();
+
+  harness.GameUI.updateSprintEffects({
+    intensity: 0.72,
+    adsActive: false,
+    scopeActive: false,
+    sniper: false
+  });
+
+  assert.equal(harness.getElement('sprint-speed-lines').style.display, 'block');
+  assert.equal(harness.getElement('sprint-speed-lines').children.length, 8);
+  assert.notEqual(harness.getElement('sprint-speed-lines').style.opacity, '0');
+
+  harness.GameUI.updateSprintEffects({
+    intensity: 0.72,
+    adsActive: true,
+    scopeActive: true,
+    sniper: true
+  });
+
+  assert.equal(harness.getElement('sprint-speed-lines').style.display, 'none');
+  assert.equal(harness.getElement('sprint-speed-lines').style.opacity, '0');
+});

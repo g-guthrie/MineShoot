@@ -1,0 +1,66 @@
+Quarry biome authored-feature map
+Biome: quarry
+Bounds x:[8, 50] z:[116, 158]  grid:14x14
+Features: 9 high-level placements across 9/196 cells (4.6% occupied)
+
+Dominant feature map
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  D  .  .  .  .  .  .  .  C  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  .  r  .  .  .  .  .  . 
+ 7 | .  .  .  .  .  P  .  .  .  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 9 | .  .  .  r  .  .  .  .  r  .  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  W  .  .  .  . 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+12 | .  R  .  .  .  .  .  .  .  .  .  .  R  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Density heatmap
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  1  .  .  .  .  .  .  .  1  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+ 7 | .  .  .  .  .  1  .  .  .  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 9 | .  .  .  1  .  .  .  .  1  .  .  .  .  . 
+10 | .  .  .  .  .  .  .  .  .  1  .  .  .  . 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+12 | .  1  .  .  .  .  .  .  .  .  .  .  1  . 
+13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+
+Legend
+  W catwalk
+  C crane
+  D drill
+  P pit
+  r ramp
+  R ridge
+  * mixed cell
+
+Counts by feature kind
+  catwalk          1
+  crane            1
+  drill            1
+  pit              1
+  ramp             3
+  ridge            2
+
+Top dense cells
+  r3 c2  count=1  kinds=drill  labels=drill
+  r3 c10  count=1  kinds=crane  labels=crane
+  r6 c7  count=1  kinds=ramp  labels=ramp-b
+  r7 c5  count=1  kinds=pit  labels=quarry-pit
+  r9 c3  count=1  kinds=ramp  labels=ramp-c
+  r9 c8  count=1  kinds=ramp  labels=ramp-a
+  r10 c9  count=1  kinds=catwalk  labels=catwalk
+  r12 c1  count=1  kinds=ridge  labels=ridge-1
+  r12 c12  count=1  kinds=ridge  labels=ridge-2

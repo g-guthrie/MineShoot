@@ -52,8 +52,8 @@ test('buildNetworkDeadeyeUiState centralizes network reticle shaping', async () 
 
   assert.deepEqual(JSON.parse(JSON.stringify(state)), {
     targets: [
-      { worldPos: { x: 1, y: 2, z: 3 }, progress: 1, locked: true },
-      { worldPos: { x: 4, y: 5, z: 6 }, progress: 0.5, locked: false }
+      { targetId: 'a', worldPos: { x: 1, y: 2, z: 3 }, progress: 1, locked: true },
+      { targetId: 'b', worldPos: { x: 4, y: 5, z: 6 }, progress: 0.5, locked: false }
     ]
   });
 });

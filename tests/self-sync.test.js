@@ -74,12 +74,14 @@ test('GameNetSelfSync uses authoritative lock timers instead of deriving choke l
         endsAt: 1300,
         liftHeight: 1.5
       },
+      hookedStartedAt: 1150,
       hookedUntil: 1500
     }
   }, 0.05);
 
   assert.deepEqual(harness.statusCalls.at(-1), {
     stunUntil: 0,
+    hookPullStartedAt: 1150,
     hookPullUntil: 1500,
     chokeStartedAt: 900,
     chokeUntil: 1300,
@@ -120,6 +122,7 @@ test('GameNetSelfSync locks the player out for the rest of an LMS round when out
 
   assert.deepEqual(harness.statusCalls.at(-1), {
     stunUntil: 86401000,
+    hookPullStartedAt: 0,
     hookPullUntil: 0,
     chokeStartedAt: 0,
     chokeUntil: 0,

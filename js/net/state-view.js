@@ -221,6 +221,7 @@
             consumeThrowAck: function () { return shiftQueue(opts.throwAckQueue); },
             consumeThrowReject: function () { return shiftQueue(opts.throwRejectQueue); },
             consumeThrowableEvent: function () { return shiftQueue(opts.throwableEventQueue); },
+            consumeAbilityEvent: function () { return shiftQueue(opts.abilityEventQueue); },
             consumeClassCastResult: function () { return shiftQueue(opts.classCastResultQueue); },
             consumeDamageFeedback: function () { return shiftQueue(opts.damageFeedbackQueue); },
             consumeIncomingDamageFeedback: function () { return shiftQueue(opts.incomingDamageFeedbackQueue); }
