@@ -5,7 +5,10 @@
     var demonicRuntime = globalThis.__DEMONIC_RUNTIME = globalThis.__DEMONIC_RUNTIME || {};
     var shellState = {
         runtimeModeId: '',
-        gameModeId: ''
+        gameModeId: '',
+        launchPending: false,
+        launchError: '',
+        launchResult: null
     };
 
     function escapeHtml(value) {
@@ -84,6 +87,79 @@
         };
     }
 
+    function currentSessionState() {
+        var session = demonicRuntime.GameSession || null;
+        return session && session.getState ? session.getState() : null;
+    }
+
+    function renderSessionPanel() {
+        var state = currentSessionState();
+        if (!state || state.phase !== 'in_match') {
+            if (shellState.launchError) {
+                return '<article class="demonic-panel demonic-runtime-panel"><h3>Runtime Status</h3><p class="demonic-runtime-error">' + escapeHtml(shellState.launchError) + '</p></article>';
+            }
+            return '<article class="demonic-panel demonic-runtime-panel"><h3>Runtime Status</h3><p class="demonic-runtime-copy">Demonic gameplay runtime is scaffolded. Launching now exercises the parallel session boundary and records launch context, but does not yet boot the rebuilt gameplay stack.</p></article>';
+        }
+
+        return '' +
+            '<article class="demonic-panel demonic-runtime-panel">' +
+                '<h3>Runtime Status</h3>' +
+                '<pre>phase    :: ' + escapeHtml(state.phase) + '\nmode     :: ' + escapeHtml(state.mode && state.mode.id) + '\nruleset  :: ' + escapeHtml(state.context && state.context.gameMode) + '\nbackend  :: ' + escapeHtml(state.mode && state.mode.backendLabel) + '</pre>' +
+                '<p class="demonic-runtime-copy">The Demonic session boundary is active. Next step is swapping this scaffolded session for the real rebuilt match runtime.</p>' +
+                '<div class="demonic-action-row">' +
+                    '<button class="demonic-action" type="button" data-role="return-menu">RETURN TO DEMONIC MENU STATE</button>' +
+                '</div>' +
+            '</article>';
+    }
+
+    function launchSelectedMode() {
+        var loader = demonicRuntime.GameRuntimeLoader || null;
+        if (!loader || !loader.loadGameplayRuntime) {
+            shellState.launchError = 'Demonic runtime loader unavailable.';
+            render();
+            return;
+        }
+
+        shellState.launchPending = true;
+        shellState.launchError = '';
+        render();
+
+        loader.loadGameplayRuntime()
+            .then(function (gameMain) {
+                if (!gameMain || !gameMain.launchModeById) {
+                    throw new Error('Demonic gameplay runtime unavailable.');
+                }
+                return gameMain.launchModeById(shellState.runtimeModeId, {
+                    gameMode: shellState.gameModeId
+                });
+            })
+            .then(function (result) {
+                shellState.launchPending = false;
+                if (!result || !result.ok) {
+                    shellState.launchError = (result && result.error) ? result.error : 'Demonic launch failed.';
+                    shellState.launchResult = null;
+                } else {
+                    shellState.launchError = '';
+                    shellState.launchResult = result;
+                }
+                render();
+            })
+            .catch(function (err) {
+                shellState.launchPending = false;
+                shellState.launchError = (err && err.message) ? err.message : 'Demonic launch failed.';
+                shellState.launchResult = null;
+                render();
+            });
+    }
+
+    function returnToMenuState() {
+        var gameMain = demonicRuntime.GameMain || null;
+        if (gameMain && gameMain.returnToMenu) gameMain.returnToMenu();
+        shellState.launchError = '';
+        shellState.launchResult = null;
+        render();
+    }
+
     function render() {
         document.body.classList.add('app-demonic');
 
@@ -145,10 +221,13 @@
                                 escapeHtml(model.launchSummary.authorityLabel) + '\nbackend   :: ' +
                                 escapeHtml(model.launchSummary.backendLabel) + '</pre>' +
                             '<p>' + escapeHtml(model.launchSummary.note) + '</p>' +
-                            '<button class="demonic-action demonic-action-disabled" type="button" disabled>DEMONIC GAMEPLAY RUNTIME PENDING</button>' +
+                            '<button class="demonic-action demonic-action-primary" type="button" data-role="launch-runtime"' + (shellState.launchPending ? ' disabled' : '') + '>' +
+                                (shellState.launchPending ? 'LAUNCHING DEMONIC RUNTIME...' : 'LAUNCH DEMONIC SESSION') +
+                            '</button>' +
                         '</article>' +
                     '</div>' +
                 '</section>' +
+                '<section class="demonic-section">' + renderSessionPanel() + '</section>' +
                 '<section class="demonic-section">' +
                     '<div class="demonic-section-head">' +
                         '<h2>Subsystem Map</h2>' +
@@ -183,6 +262,14 @@
                     if (target.dataset && target.dataset.role === 'game-mode') {
                         shellState.gameModeId = String(target.dataset.id || '');
                         render();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'launch-runtime') {
+                        launchSelectedMode();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'return-menu') {
+                        returnToMenuState();
                         return;
                     }
                     target = target.parentNode;

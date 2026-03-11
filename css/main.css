@@ -48,6 +48,15 @@ body.app-demonic #demonic-root {
     display: block;
 }
 
+#demonic-runtime-host[hidden] {
+    display: none;
+}
+
+#demonic-runtime-host {
+    width: min(1240px, 100%);
+    margin: 0 auto 22px;
+}
+
 .demonic-shell {
     min-height: 100vh;
     padding: 32px 24px 48px;
@@ -344,6 +353,43 @@ body.app-demonic #demonic-root {
     background: rgba(31, 16, 45, 0.72);
     color: #a98fbb;
     cursor: not-allowed;
+}
+
+.demonic-runtime-copy,
+.demonic-runtime-error {
+    margin: 0;
+    font: 500 14px/1.6 'Rajdhani', sans-serif;
+}
+
+.demonic-runtime-copy {
+    color: #cab4d6;
+}
+
+.demonic-runtime-error {
+    color: #ffb7dd;
+}
+
+.demonic-runtime-stage {
+    padding: 18px;
+    border: 1px solid rgba(219, 164, 255, 0.28);
+    background: linear-gradient(180deg, rgba(47, 19, 68, 0.86), rgba(13, 8, 20, 0.94));
+}
+
+.demonic-runtime-stage-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: #efc8ff;
+    font: 700 11px/1 'Orbitron', sans-serif;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.demonic-runtime-stage pre {
+    margin: 0;
+    color: #f5ddff;
+    font: 700 13px/1.45 'Courier New', monospace;
 }
 
 #extra-mode-buttons,
