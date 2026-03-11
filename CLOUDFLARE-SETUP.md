@@ -155,7 +155,14 @@ Do not stop here. This only triggers the Pages/frontend deploy. It does not mean
 
 ### C) Deploy the Worker/backend
 
-Deploy the Worker with the repo-local Wrangler wrapper:
+`main` pushes can deploy the Worker automatically through GitHub Actions if these repo secrets are set:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+The workflow lives at [.github/workflows/deploy-worker.yml](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/.github/workflows/deploy-worker.yml).
+
+Manual fallback:
 
 ```bash
 ./scripts/wrangler.sh deploy
@@ -176,7 +183,8 @@ Current frontend URL:
 That means:
 
 - pushing `main` is the Pages/frontend deploy trigger
-- `wrangler deploy` updates the Worker/backend/API side
+- if the GitHub Action secrets are set, the same push also deploys the Worker/backend/API side
+- without those secrets, use `./scripts/wrangler.sh deploy`
 
 Important:
 
