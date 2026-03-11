@@ -126,25 +126,25 @@
     }
 
     function addStrip(ctx, center, width, height, depth, material, solid) {
-        ctx.place.addBlock(center.x, height * 0.5, center.z, width, height, depth, material, solid !== false);
+        ctx.place.addBlock(center.x, height * 0.5, center.z, width, height, depth, material, solid === true);
     }
 
     function buildArcticEdge(ctx) {
         var p0 = pointOnEdge(ctx.bounds, ctx.edge, 0.22, 0.8);
         var p1 = pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.65);
         var p2 = pointOnEdge(ctx.bounds, ctx.edge, 0.78, 0.8);
-        ctx.place.addBlock(p0.x, 0.38, p0.z, 0.95, 0.76, 0.85, ctx.palette.base, true);
+        ctx.place.addBlock(p0.x, 0.38, p0.z, 0.95, 0.76, 0.85, ctx.palette.base, false);
         ctx.place.addBlock(p1.x, 0.55, p1.z, 1.2, 1.1, 0.95, ctx.palette.accent, false);
-        ctx.place.addBlock(p2.x, 0.34, p2.z, 0.85, 0.68, 0.78, ctx.palette.base, true);
+        ctx.place.addBlock(p2.x, 0.34, p2.z, 0.85, 0.68, 0.78, ctx.palette.base, false);
     }
 
     function buildUrbanEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), 0.55, 0.26, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.66, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), 0.55, 0.26, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.66, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.2, 0.9).x, 0.7, pointOnEdge(ctx.bounds, ctx.edge, 0.2, 0.9).z, 0.22, 1.4, 0.22, ctx.palette.detail, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.8, 0.9).x, 0.7, pointOnEdge(ctx.bounds, ctx.edge, 0.8, 0.9).z, 0.22, 1.4, 0.22, ctx.palette.detail, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), (ctx.bounds.maxX - ctx.bounds.minX) * 0.66, 0.26, 0.55, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), (ctx.bounds.maxX - ctx.bounds.minX) * 0.66, 0.26, 0.55, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.2, 0.9).x, 0.7, pointOnEdge(ctx.bounds, ctx.edge, 0.2, 0.9).z, 0.22, 1.4, 0.22, ctx.palette.detail, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.8, 0.9).x, 0.7, pointOnEdge(ctx.bounds, ctx.edge, 0.8, 0.9).z, 0.22, 1.4, 0.22, ctx.palette.detail, false);
         }
@@ -163,9 +163,9 @@
 
     function buildJungleEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), 0.92, 0.18, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.7, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), 0.92, 0.18, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.7, ctx.palette.base, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), (ctx.bounds.maxX - ctx.bounds.minX) * 0.7, 0.18, 0.92, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), (ctx.bounds.maxX - ctx.bounds.minX) * 0.7, 0.18, 0.92, ctx.palette.base, false);
         }
         var vineA = pointOnEdge(ctx.bounds, ctx.edge, 0.28, 1.05);
         var vineB = pointOnEdge(ctx.bounds, ctx.edge, 0.74, 1.05);
@@ -175,10 +175,10 @@
 
     function buildNuclearEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48), 0.7, 0.32, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.72, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48), 0.7, 0.32, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.72, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48).x, 0.16, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48).z, 0.12, 0.12, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.64, ctx.palette.accent, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48), (ctx.bounds.maxX - ctx.bounds.minX) * 0.72, 0.32, 0.7, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48), (ctx.bounds.maxX - ctx.bounds.minX) * 0.72, 0.32, 0.7, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48).x, 0.16, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.48).z, (ctx.bounds.maxX - ctx.bounds.minX) * 0.64, 0.12, 0.12, ctx.palette.accent, false);
         }
         var postA = pointOnEdge(ctx.bounds, ctx.edge, 0.18, 0.82);
@@ -189,21 +189,21 @@
 
     function buildCitadelEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.55), 1.1, 0.44, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.62, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.55), 1.1, 0.44, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.62, ctx.palette.base, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.55), (ctx.bounds.maxX - ctx.bounds.minX) * 0.62, 0.44, 1.1, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.55), (ctx.bounds.maxX - ctx.bounds.minX) * 0.62, 0.44, 1.1, ctx.palette.base, false);
         }
         var crenelA = pointOnEdge(ctx.bounds, ctx.edge, 0.32, 0.88);
         var crenelB = pointOnEdge(ctx.bounds, ctx.edge, 0.68, 0.88);
-        ctx.place.addBlock(crenelA.x, 0.84, crenelA.z, 0.8, 0.72, 0.8, ctx.palette.accent, true);
-        ctx.place.addBlock(crenelB.x, 0.84, crenelB.z, 0.8, 0.72, 0.8, ctx.palette.accent, true);
+        ctx.place.addBlock(crenelA.x, 0.84, crenelA.z, 0.8, 0.72, 0.8, ctx.palette.accent, false);
+        ctx.place.addBlock(crenelB.x, 0.84, crenelB.z, 0.8, 0.72, 0.8, ctx.palette.accent, false);
     }
 
     function buildQuarryEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), 1.45, 0.36, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.72, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), 1.45, 0.36, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.72, ctx.palette.base, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), (ctx.bounds.maxX - ctx.bounds.minX) * 0.72, 0.36, 1.45, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.72), (ctx.bounds.maxX - ctx.bounds.minX) * 0.72, 0.36, 1.45, ctx.palette.base, false);
         }
         ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.24, 1.0).x, 0.3, pointOnEdge(ctx.bounds, ctx.edge, 0.24, 1.0).z, 0.62, 0.6, 0.54, ctx.palette.detail, false);
         ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.74, 0.96).x, 0.42, pointOnEdge(ctx.bounds, ctx.edge, 0.74, 0.96).z, 0.9, 0.84, 0.72, ctx.palette.accent, false);
@@ -211,19 +211,19 @@
 
     function buildBasinEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6), 0.9, 0.24, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.76, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6), 0.9, 0.24, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.76, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).x, 0.08, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).z, 0.5, 0.08, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.62, ctx.palette.accent, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6), (ctx.bounds.maxX - ctx.bounds.minX) * 0.76, 0.24, 0.9, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6), (ctx.bounds.maxX - ctx.bounds.minX) * 0.76, 0.24, 0.9, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).x, 0.08, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).z, (ctx.bounds.maxX - ctx.bounds.minX) * 0.62, 0.08, 0.5, ctx.palette.accent, false);
         }
     }
 
     function buildRadarEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), 0.64, 0.26, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.66, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), 0.64, 0.26, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.66, ctx.palette.base, false);
         } else {
-            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), (ctx.bounds.maxX - ctx.bounds.minX) * 0.66, 0.26, 0.64, ctx.palette.base, true);
+            addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.45), (ctx.bounds.maxX - ctx.bounds.minX) * 0.66, 0.26, 0.64, ctx.palette.base, false);
         }
         var mast = pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.9);
         ctx.place.addBlock(mast.x, 1.0, mast.z, 0.18, 2.0, 0.18, ctx.palette.detail, false);

@@ -13,6 +13,8 @@ import {
   updateLeaderProgress
 } from '../cloudflare/server/room/RoomMatch.js';
 import { publicRoomStartThresholdForMode } from '../shared/matchmaking-config.js';
+import { buildWorldCollisionData } from '../shared/world-collision.js';
+import { protocol } from '../shared/protocol.js';
 
 function emptyMatchState(gameMode) {
   return {
@@ -148,6 +150,27 @@ test('public FFA rooms start immediately with one connected player', () => {
   }), true);
   assert.equal(room.matchState.started, true);
   assert.equal(room.matchState.startedAt, 321);
+});
+
+test('world seam samples remain traversable across biome borders', () => {
+  const worldMeta = protocol.buildExpectedWorldMeta('ffa-01', protocol.world);
+  const data = buildWorldCollisionData(worldMeta);
+
+  function blocked(x, z) {
+    return data.collidables.some((box) => (
+      x > (box.min.x - 0.35) &&
+      x < (box.max.x + 0.35) &&
+      z > (box.min.z - 0.35) &&
+      z < (box.max.z + 0.35) &&
+      1.7 > box.min.y &&
+      0 < box.max.y
+    ));
+  }
+
+  assert.equal(blocked(56, 70), false);
+  assert.equal(blocked(70, 56), false);
+  assert.equal(blocked(110, 70), false);
+  assert.equal(blocked(70, 110), false);
 });
 
 test('leader, finish, elimination, and reset helpers preserve match outcomes', () => {
