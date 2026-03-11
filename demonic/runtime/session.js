@@ -59,7 +59,17 @@
                     fov: Number(sessionState.runtimeSnapshot.camera.fov || 0),
                     scopeBlend: Number(sessionState.runtimeSnapshot.camera.scopeBlend || 0),
                     sprintBlend: Number(sessionState.runtimeSnapshot.camera.sprintBlend || 0),
-                    recoilKick: Number(sessionState.runtimeSnapshot.camera.recoilKick || 0)
+                    recoilKick: Number(sessionState.runtimeSnapshot.camera.recoilKick || 0),
+                    position: sessionState.runtimeSnapshot.camera.position ? {
+                        x: Number(sessionState.runtimeSnapshot.camera.position.x || 0),
+                        y: Number(sessionState.runtimeSnapshot.camera.position.y || 0),
+                        z: Number(sessionState.runtimeSnapshot.camera.position.z || 0)
+                    } : null,
+                    target: sessionState.runtimeSnapshot.camera.target ? {
+                        x: Number(sessionState.runtimeSnapshot.camera.target.x || 0),
+                        y: Number(sessionState.runtimeSnapshot.camera.target.y || 0),
+                        z: Number(sessionState.runtimeSnapshot.camera.target.z || 0)
+                    } : null
                 } : null,
                 player: sessionState.runtimeSnapshot.player ? {
                     x: Number(sessionState.runtimeSnapshot.player.x || 0),
@@ -117,6 +127,13 @@
                         abilityId: String(sessionState.runtimeSnapshot.abilities.lastCast.abilityId || ''),
                         castAt: Number(sessionState.runtimeSnapshot.abilities.lastCast.castAt || 0)
                     } : null
+                } : null,
+                hud: sessionState.runtimeSnapshot.hud ? {
+                    weaponInfo: String(sessionState.runtimeSnapshot.hud.weaponInfo || ''),
+                    abilityInfo: String(sessionState.runtimeSnapshot.hud.abilityInfo || ''),
+                    cooldownStatus: String(sessionState.runtimeSnapshot.hud.cooldownStatus || ''),
+                    cooldownMs: Number(sessionState.runtimeSnapshot.hud.cooldownMs || 0),
+                    movementInfo: String(sessionState.runtimeSnapshot.hud.movementInfo || '')
                 } : null,
                 statusText: String(sessionState.runtimeSnapshot.statusText || '')
             } : null

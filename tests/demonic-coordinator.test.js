@@ -11,6 +11,7 @@ async function loadDemonicCoordinator() {
   const combatCode = await fs.readFile(new URL('../demonic/gameplay/combat/runtime.js', import.meta.url), 'utf8');
   const abilitiesCode = await fs.readFile(new URL('../demonic/gameplay/abilities/runtime.js', import.meta.url), 'utf8');
   const cameraCode = await fs.readFile(new URL('../demonic/gameplay/camera/runtime.js', import.meta.url), 'utf8');
+  const hudCode = await fs.readFile(new URL('../demonic/gameplay/hud/runtime.js', import.meta.url), 'utf8');
   const coordinatorCode = await fs.readFile(new URL('../demonic/runtime/coordinator.js', import.meta.url), 'utf8');
 
   const sandbox = {
@@ -82,6 +83,7 @@ async function loadDemonicCoordinator() {
   vm.runInContext(combatCode, context);
   vm.runInContext(abilitiesCode, context);
   vm.runInContext(cameraCode, context);
+  vm.runInContext(hudCode, context);
   vm.runInContext(coordinatorCode, context);
   return sandbox.__DEMONIC_RUNTIME.GameRuntimeCoordinator;
 }
@@ -106,6 +108,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.combat.selectedWeaponId, 'machinegun');
   assert.equal(typeof started.camera.fov, 'number');
   assert.equal(started.abilities.loadout.slot1, 'choke');
+  assert.equal(typeof started.hud.weaponInfo, 'string');
   assert.ok(latest);
   assert.equal(latest.player.jogSpeed, 8);
   assert.equal(latest.combat.weaponCatalog[1], 'shotgun');
@@ -116,12 +119,14 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(afterMotion.input.moveForward, true);
   assert.ok(afterMotion.player.speed >= 8);
   assert.ok(afterMotion.player.z < started.player.z);
+  assert.equal(afterMotion.hud.movementInfo, 'SPRINT');
 
   const fired = coordinator.fire();
   assert.equal(fired, true);
   const afterFire = coordinator.getSnapshot();
   assert.equal(afterFire.combat.fireCooldownRemainingMs > 0, true);
   assert.equal(afterFire.combat.ammoInMag, 2);
+  assert.equal(afterFire.hud.weaponInfo.includes('MACHINEGUN'), true);
 
   const equipped = coordinator.equipWeapon('shotgun');
   assert.equal(equipped, true);
@@ -150,4 +155,15 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   const abilityResult = coordinator.triggerAbility(1);
   assert.equal(abilityResult.ok, true);
   assert.equal(coordinator.getSnapshot().abilities.lastCast.abilityId, 'choke');
+
+  const autoCoordinator = coordinatorApi.create({
+    mode: { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' },
+    context: { gameMode: 'ffa', roomId: '' },
+    onUpdate() {}
+  });
+  autoCoordinator.start();
+  autoCoordinator.setInputState({ triggerHeld: true });
+  autoCoordinator.start();
+  const afterAuto = autoCoordinator.getSnapshot();
+  assert.equal(afterAuto.combat.ammoInMag < 3, true);
 });

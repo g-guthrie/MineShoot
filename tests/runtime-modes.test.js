@@ -23,4 +23,6 @@ test('runtime mode helpers normalize unknown ids safely', () => {
   assert.equal(normalizeRuntimeModeId('single_dev_server'), 'single_dev_server');
   assert.equal(normalizeRuntimeModeId('unknown'), 'cloud_multiplayer');
   assert.equal(getRuntimeMode('single_full_sandbox').backendKind, 'sandbox');
+  assert.equal(getRuntimeMode('single_cloudflare').authoritativeTesting, true);
+  assert.equal(getRuntimeMode('single_cloudflare').preferredForDemonicTesting, true);
 });

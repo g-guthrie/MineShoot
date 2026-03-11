@@ -7,6 +7,7 @@ import '../gameplay/player/runtime.js';
 import '../gameplay/camera/runtime.js';
 import '../gameplay/combat/runtime.js';
 import '../gameplay/abilities/runtime.js';
+import '../gameplay/hud/runtime.js';
 import './runtime-state.js';
 import './coordinator.js';
 import './match-runtime.js';

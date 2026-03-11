@@ -134,6 +134,9 @@
                 (state.runtimeSnapshot ? '<pre>player.z :: ' + escapeHtml(Number(state.runtimeSnapshot.player && state.runtimeSnapshot.player.z || 0).toFixed(2)) +
                     '\nplayer.speed :: ' + escapeHtml(Number(state.runtimeSnapshot.player && state.runtimeSnapshot.player.speed || 0).toFixed(2)) +
                     '\nfov :: ' + escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.fov || 0).toFixed(2)) +
+                    '\ncamera :: ' + escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.position && state.runtimeSnapshot.camera.position.x || 0).toFixed(2)) + ', ' +
+                        escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.position && state.runtimeSnapshot.camera.position.y || 0).toFixed(2)) + ', ' +
+                        escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.position && state.runtimeSnapshot.camera.position.z || 0).toFixed(2)) +
                     '\nweapon :: ' + escapeHtml(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.selectedWeaponId || '') +
                     '\nammo :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.ammoInMag || 0).toFixed(0)) + '/' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.magazineSize || 0).toFixed(0)) +
                     '\ncooldown :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.fireCooldownRemainingMs || 0).toFixed(0)) + 'ms' +
@@ -142,6 +145,8 @@
                     ' (' + escapeHtml(Number(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot1CooldownMs || 0).toFixed(0)) + 'ms)' +
                     '\nability2 :: ' + escapeHtml(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot2Name || '') +
                     ' (' + escapeHtml(Number(state.runtimeSnapshot.abilities && state.runtimeSnapshot.abilities.hud && state.runtimeSnapshot.abilities.hud.slot2CooldownMs || 0).toFixed(0)) + 'ms)' +
+                    '\nhud.weapon :: ' + escapeHtml(state.runtimeSnapshot.hud && state.runtimeSnapshot.hud.weaponInfo || '') +
+                    '\nhud.move :: ' + escapeHtml(state.runtimeSnapshot.hud && state.runtimeSnapshot.hud.movementInfo || '') +
                     '</pre>' : '') +
                 '<div class="demonic-action-row">' +
                     '<button class="demonic-action" type="button" data-role="return-menu">RETURN TO DEMONIC MENU STATE</button>' +

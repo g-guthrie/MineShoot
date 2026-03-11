@@ -19,6 +19,17 @@
         var sprintBlend = 0;
         var recoilKick = 0;
         var currentFov = 75;
+        var cameraPosition = { x: 0, y: 0, z: 0 };
+        var lookTarget = { x: 0, y: 0, z: 0 };
+        var THIRD_HEIGHT = 0.7;
+        var CAMERA_DIST = 4.4 * 0.85;
+        var CAMERA_SHOULDER = 1.35 * 1.3;
+        var ADS_DIST = 1.72;
+        var ADS_SHOULDER = 2;
+        var ADS_HEIGHT = 0.46;
+        var SNIPER_SCOPE_DIST = 0.14;
+        var SNIPER_SCOPE_SHOULDER = 0.08;
+        var SNIPER_SCOPE_HEIGHT = 0.12;
 
         function playerSnapshot() {
             return options.getPlayerSnapshot ? options.getPlayerSnapshot() : {};
@@ -41,6 +52,36 @@
 
                 var adsFov = adsFovForWeapon(combat.selectedWeaponId || 'rifle');
                 currentFov += (((75 + (75 * 0.04 * sprintBlend)) + ((adsFov - 75) * scopeBlend)) - currentFov) * Math.min(1, dt * 16);
+
+                var yaw = Number(player.yaw || 0);
+                var pitch = Number(player.pitch || 0);
+                var cosPitch = Math.cos(pitch);
+                var forwardX = -Math.sin(yaw) * cosPitch;
+                var forwardY = Math.sin(pitch);
+                var forwardZ = -Math.cos(yaw) * cosPitch;
+                var rightX = Math.cos(yaw);
+                var rightZ = -Math.sin(yaw);
+                var sniperMode = String(combat.selectedWeaponId || '') === 'sniper';
+
+                var baseX = Number(player.x || 0);
+                var baseY = Number(player.y || 0);
+                var baseZ = Number(player.z || 0);
+                var thirdX = baseX + (rightX * CAMERA_SHOULDER) - (forwardX * CAMERA_DIST);
+                var thirdY = baseY + THIRD_HEIGHT;
+                var thirdZ = baseZ + (rightZ * CAMERA_SHOULDER) - (forwardZ * CAMERA_DIST);
+                var adsShoulder = sniperMode ? SNIPER_SCOPE_SHOULDER : ADS_SHOULDER;
+                var adsDist = sniperMode ? SNIPER_SCOPE_DIST : ADS_DIST;
+                var adsHeight = sniperMode ? SNIPER_SCOPE_HEIGHT : ADS_HEIGHT;
+                var adsX = baseX + (rightX * adsShoulder) - (forwardX * adsDist);
+                var adsY = baseY + adsHeight;
+                var adsZ = baseZ + (rightZ * adsShoulder) - (forwardZ * adsDist);
+
+                cameraPosition.x = thirdX + ((adsX - thirdX) * scopeBlend);
+                cameraPosition.y = thirdY + ((adsY - thirdY) * scopeBlend);
+                cameraPosition.z = thirdZ + ((adsZ - thirdZ) * scopeBlend);
+                lookTarget.x = baseX + forwardX * 20;
+                lookTarget.y = baseY + forwardY * 20;
+                lookTarget.z = baseZ + forwardZ * 20;
             },
             addFireKick: function (amount) {
                 recoilKick += Number(amount || 0);
@@ -50,7 +91,17 @@
                     fov: Number(currentFov || 75),
                     scopeBlend: Number(scopeBlend || 0),
                     sprintBlend: Number(sprintBlend || 0),
-                    recoilKick: Number(recoilKick || 0)
+                    recoilKick: Number(recoilKick || 0),
+                    position: {
+                        x: Number(cameraPosition.x || 0),
+                        y: Number(cameraPosition.y || 0),
+                        z: Number(cameraPosition.z || 0)
+                    },
+                    target: {
+                        x: Number(lookTarget.x || 0),
+                        y: Number(lookTarget.y || 0),
+                        z: Number(lookTarget.z || 0)
+                    }
                 };
             }
         };

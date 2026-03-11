@@ -40,6 +40,7 @@ import {
   createMatchState,
   targetProgressForGameMode
 } from '../../../shared/match-rules.js';
+import { WORLD_MIN, WORLD_MAX } from '../../../shared/world-layout.js';
 import {
   PUBLIC_ROOM_START_THRESHOLD,
   publicRoomStartThresholdForMode,
@@ -333,8 +334,8 @@ export class GlobalArenaRoom extends DurableObject {
     this.worldFlags = cloneWorldFlags(initialWorldMeta.worldFlags);
     this.worldCollision = null;
     this.refreshWorldMeta();
-    this.boundsMin = 2;
-    this.boundsMax = 110;
+    this.boundsMin = WORLD_MIN;
+    this.boundsMax = WORLD_MAX;
     this.projectiles = new Map();
     this.fireZones = new Map();
     this.nextProjectileSeq = 1;

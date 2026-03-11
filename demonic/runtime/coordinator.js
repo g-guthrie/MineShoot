@@ -16,6 +16,7 @@
         var combatApi = demonicRuntime.GameCombatRuntime || null;
         var abilityApi = demonicRuntime.GameAbilityRuntime || null;
         var cameraApi = demonicRuntime.GameCameraRuntime || null;
+        var hudApi = demonicRuntime.GameHudRuntime || null;
         var loopApi = demonicRuntime.GameLoop || null;
 
         var input = inputApi && inputApi.create ? inputApi.create(context) : null;
@@ -46,6 +47,17 @@
                 return combat && combat.getSnapshot ? combat.getSnapshot() : {};
             }
         }) : null;
+        var hud = hudApi && hudApi.create ? hudApi.create({
+            getCombatSnapshot: function () {
+                return combat && combat.getSnapshot ? combat.getSnapshot() : {};
+            },
+            getAbilitySnapshot: function () {
+                return abilities && abilities.getSnapshot ? abilities.getSnapshot() : {};
+            },
+            getPlayerSnapshot: function () {
+                return player && player.getSnapshot ? player.getSnapshot() : {};
+            }
+        }) : null;
         var bindings = inputBindingsApi && inputBindingsApi.create ? inputBindingsApi.create({
             input: input,
             onFire: function () {
@@ -74,6 +86,14 @@
                 if (combat && combat.update) combat.update(dt);
                 if (abilities && abilities.update) abilities.update(dt);
                 if (camera && camera.update) camera.update(dt);
+                if (hud && hud.update) hud.update(dt);
+                var inputState = input && input.getSnapshot ? input.getSnapshot() : null;
+                var combatState = combat && combat.getSnapshot ? combat.getSnapshot() : null;
+                if (inputState && inputState.triggerHeld && combatState && combatState.automatic && combatState.canFire) {
+                    if (combat && combat.fire && combat.fire()) {
+                        if (camera && camera.addFireKick) camera.addFireKick(0.06);
+                    }
+                }
                 if (typeof options.onUpdate === 'function') options.onUpdate(getSnapshot());
             }
         }) : null;
@@ -94,7 +114,8 @@
                 world: world && world.getSnapshot ? world.getSnapshot() : null,
                 combat: combat && combat.getSnapshot ? combat.getSnapshot() : null,
                 abilities: abilities && abilities.getSnapshot ? abilities.getSnapshot() : null,
-                camera: camera && camera.getSnapshot ? camera.getSnapshot() : null
+                camera: camera && camera.getSnapshot ? camera.getSnapshot() : null,
+                hud: hud && hud.getSnapshot ? hud.getSnapshot() : null
             };
         }
 
