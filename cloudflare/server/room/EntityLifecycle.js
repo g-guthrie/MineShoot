@@ -70,6 +70,7 @@ export function createPlayerEntity(options = {}) {
     spawnShieldUntil: 0,
     lastDamageAt: 0,
     seq: 0,
+    pendingInputSeq: 0,
     inputMode: 'intent',
     inputState: typeof options.createMovementInputState === 'function'
       ? options.createMovementInputState()

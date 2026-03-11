@@ -8,6 +8,7 @@
         var player = state.player || {};
         var combat = state.combat || {};
         var world = state.world || {};
+        var net = state.net || {};
         return '' +
             '<div class="demonic-runtime-stage">' +
                 '<div class="demonic-runtime-stage-head">' +
@@ -23,6 +24,7 @@
                     'player    :: (' + Number(player.x || 0).toFixed(1) + ', ' + Number(player.z || 0).toFixed(1) + ')\n' +
                     'weapon    :: ' + String(combat.selectedWeaponId || 'none') + '\n' +
                     'worldSeed :: ' + String(world.worldSeed || 'unset') + '\n' +
+                    'authority :: ' + String(net.status || 'unknown') + '\n' +
                     'status    :: ' + String(state.statusText || 'initializing') +
                 '</pre>' +
             '</div>';
@@ -46,6 +48,7 @@
             elapsedMs: 0,
             player: null,
             world: null,
+            net: null,
             combat: null,
             statusText: 'bootstrapping coordinator'
         };
@@ -68,6 +71,7 @@
                         snapshot.elapsedMs = Number(nextSnapshot && nextSnapshot.elapsedMs || 0);
                         snapshot.player = nextSnapshot && nextSnapshot.player ? nextSnapshot.player : null;
                         snapshot.world = nextSnapshot && nextSnapshot.world ? nextSnapshot.world : null;
+                        snapshot.net = nextSnapshot && nextSnapshot.net ? nextSnapshot.net : null;
                         snapshot.combat = nextSnapshot && nextSnapshot.combat ? nextSnapshot.combat : null;
                         snapshot.statusText = snapshot.tickCount < 3
                             ? 'warming runtime lane'
@@ -83,6 +87,7 @@
                 snapshot.elapsedMs = Number(startedSnapshot && startedSnapshot.elapsedMs || 0);
                 snapshot.player = startedSnapshot && startedSnapshot.player ? startedSnapshot.player : null;
                 snapshot.world = startedSnapshot && startedSnapshot.world ? startedSnapshot.world : null;
+                snapshot.net = startedSnapshot && startedSnapshot.net ? startedSnapshot.net : null;
                 snapshot.combat = startedSnapshot && startedSnapshot.combat ? startedSnapshot.combat : null;
             }
             render();
@@ -97,6 +102,7 @@
                 snapshot.elapsedMs = Number(stopped && stopped.elapsedMs || snapshot.elapsedMs || 0);
                 snapshot.player = stopped && stopped.player ? stopped.player : snapshot.player;
                 snapshot.world = stopped && stopped.world ? stopped.world : snapshot.world;
+                snapshot.net = stopped && stopped.net ? stopped.net : snapshot.net;
                 snapshot.combat = stopped && stopped.combat ? stopped.combat : snapshot.combat;
             }
             snapshot.phase = 'stopped';
@@ -120,7 +126,17 @@
                     modeId: String(snapshot.world.modeId || ''),
                     roomId: String(snapshot.world.roomId || ''),
                     worldSeed: String(snapshot.world.worldSeed || ''),
+                    groundHeight: Number(snapshot.world.groundHeight || 0),
                     bounds: snapshot.world.bounds ? Object.assign({}, snapshot.world.bounds) : null
+                } : null,
+                net: snapshot.net ? {
+                    authorityMode: String(snapshot.net.authorityMode || ''),
+                    backendKind: String(snapshot.net.backendKind || ''),
+                    roomId: String(snapshot.net.roomId || ''),
+                    authoritative: !!snapshot.net.authoritative,
+                    apiBase: String(snapshot.net.apiBase || ''),
+                    wsBase: String(snapshot.net.wsBase || ''),
+                    status: String(snapshot.net.status || '')
                 } : null,
                 combat: snapshot.combat ? {
                     gameMode: String(snapshot.combat.gameMode || ''),

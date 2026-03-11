@@ -904,7 +904,9 @@ export class GlobalArenaRoom extends DurableObject {
     const movementLocked = this.isEntityMovementLocked(player, now);
     if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
-    if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
+    if (typeof msg.seq === 'number') {
+      player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
+    }
     if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
 
     if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
@@ -944,6 +946,9 @@ export class GlobalArenaRoom extends DurableObject {
       playerRadius: boundsPad,
       epsilon: WORLD_RAY_EPSILON
     });
+    if (Number(player.pendingInputSeq || 0) > Number(player.seq || 0)) {
+      player.seq = Number(player.pendingInputSeq || 0);
+    }
     this.enforceEntityTerrainFloor(player);
   }
 

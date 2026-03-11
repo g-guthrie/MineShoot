@@ -8,10 +8,12 @@ async function loadDemonicCoordinator() {
   const bindingsCode = await fs.readFile(new URL('../demonic/gameplay/input/bindings.js', import.meta.url), 'utf8');
   const playerCode = await fs.readFile(new URL('../demonic/gameplay/player/runtime.js', import.meta.url), 'utf8');
   const worldCode = await fs.readFile(new URL('../demonic/gameplay/world/runtime.js', import.meta.url), 'utf8');
+  const netCode = await fs.readFile(new URL('../demonic/gameplay/net/runtime.js', import.meta.url), 'utf8');
   const combatCode = await fs.readFile(new URL('../demonic/gameplay/combat/runtime.js', import.meta.url), 'utf8');
   const abilitiesCode = await fs.readFile(new URL('../demonic/gameplay/abilities/runtime.js', import.meta.url), 'utf8');
   const cameraCode = await fs.readFile(new URL('../demonic/gameplay/camera/runtime.js', import.meta.url), 'utf8');
   const hudCode = await fs.readFile(new URL('../demonic/gameplay/hud/runtime.js', import.meta.url), 'utf8');
+  const presentationCode = await fs.readFile(new URL('../demonic/gameplay/presentation/runtime.js', import.meta.url), 'utf8');
   const coordinatorCode = await fs.readFile(new URL('../demonic/runtime/coordinator.js', import.meta.url), 'utf8');
 
   const sandbox = {
@@ -41,6 +43,14 @@ async function loadDemonicCoordinator() {
             missile: { id: 'missile', name: 'Missile', cooldownMs: 900 }
           };
         }
+      }
+    },
+    GameRuntimeProfile: {
+      resolveApiUrl(path) {
+        return 'https://mayhem.test' + String(path || '');
+      },
+      resolveWsUrl(path) {
+        return 'wss://mayhem.test' + String(path || '');
       }
     },
     __DEMONIC_RUNTIME: {
@@ -80,10 +90,12 @@ async function loadDemonicCoordinator() {
   vm.runInContext(bindingsCode, context);
   vm.runInContext(playerCode, context);
   vm.runInContext(worldCode, context);
+  vm.runInContext(netCode, context);
   vm.runInContext(combatCode, context);
   vm.runInContext(abilitiesCode, context);
   vm.runInContext(cameraCode, context);
   vm.runInContext(hudCode, context);
+  vm.runInContext(presentationCode, context);
   vm.runInContext(coordinatorCode, context);
   return sandbox.__DEMONIC_RUNTIME.GameRuntimeCoordinator;
 }
@@ -105,10 +117,12 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.input.moveForward, false);
   assert.equal(started.player.runSpeed, 14);
   assert.equal(started.world.worldSeed, 'demonic-seed-a');
+  assert.equal(started.net.authorityMode, 'offline');
   assert.equal(started.combat.selectedWeaponId, 'machinegun');
   assert.equal(typeof started.camera.fov, 'number');
   assert.equal(started.abilities.loadout.slot1, 'choke');
   assert.equal(typeof started.hud.weaponInfo, 'string');
+  assert.equal(started.presentation.pose, 'idle');
   assert.ok(latest);
   assert.equal(latest.player.jogSpeed, 8);
   assert.equal(latest.combat.weaponCatalog[1], 'shotgun');
@@ -120,6 +134,8 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.ok(afterMotion.player.speed >= 8);
   assert.ok(afterMotion.player.z < started.player.z);
   assert.equal(afterMotion.hud.movementInfo, 'SPRINT');
+  assert.equal(afterMotion.net.status, 'local fallback lane');
+  assert.equal(afterMotion.presentation.pose, 'sprint');
 
   const fired = coordinator.fire();
   assert.equal(fired, true);
@@ -127,6 +143,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(afterFire.combat.fireCooldownRemainingMs > 0, true);
   assert.equal(afterFire.combat.ammoInMag, 2);
   assert.equal(afterFire.hud.weaponInfo.includes('MACHINEGUN'), true);
+  assert.equal(afterFire.presentation.weaponPresentation.weaponId, 'machinegun');
 
   const equipped = coordinator.equipWeapon('shotgun');
   assert.equal(equipped, true);
@@ -155,6 +172,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   const abilityResult = coordinator.triggerAbility(1);
   assert.equal(abilityResult.ok, true);
   assert.equal(coordinator.getSnapshot().abilities.lastCast.abilityId, 'choke');
+  assert.equal(coordinator.getSnapshot().presentation.abilityPresentation.slot1Active, true);
 
   const autoCoordinator = coordinatorApi.create({
     mode: { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' },
@@ -166,4 +184,23 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   autoCoordinator.start();
   const afterAuto = autoCoordinator.getSnapshot();
   assert.equal(afterAuto.combat.ammoInMag < 3, true);
+
+  const cloudCoordinator = coordinatorApi.create({
+    mode: {
+      id: 'single_cloudflare',
+      label: 'Solo Cloudflare (Bots)',
+      authorityMode: 'networked',
+      backendKind: 'cloudflare-prod',
+      backendLabel: 'CLOUDFLARE PROD',
+      roomId: 'cf-room-1'
+    },
+    context: { gameMode: 'ffa', roomId: 'cf-room-1' },
+    onUpdate() {}
+  });
+  cloudCoordinator.start();
+  const cloudSnapshot = cloudCoordinator.getSnapshot();
+  assert.equal(cloudSnapshot.net.authoritative, true);
+  assert.equal(cloudSnapshot.net.roomId, 'cf-room-1');
+  assert.match(cloudSnapshot.net.status, /authoritative/i);
+  assert.equal(typeof cloudSnapshot.presentation.reticle.type, 'string');
 });

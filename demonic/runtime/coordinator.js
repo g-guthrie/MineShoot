@@ -13,14 +13,17 @@
         var inputBindingsApi = demonicRuntime.GameInputBindings || null;
         var playerApi = demonicRuntime.GamePlayerRuntime || null;
         var worldApi = demonicRuntime.GameWorldRuntime || null;
+        var netApi = demonicRuntime.GameNetRuntime || null;
         var combatApi = demonicRuntime.GameCombatRuntime || null;
         var abilityApi = demonicRuntime.GameAbilityRuntime || null;
         var cameraApi = demonicRuntime.GameCameraRuntime || null;
         var hudApi = demonicRuntime.GameHudRuntime || null;
+        var presentationApi = demonicRuntime.GamePresentationRuntime || null;
         var loopApi = demonicRuntime.GameLoop || null;
 
         var input = inputApi && inputApi.create ? inputApi.create(context) : null;
         var world = worldApi && worldApi.create ? worldApi.create(context) : null;
+        var net = netApi && netApi.create ? netApi.create(context) : null;
         var combat = combatApi && combatApi.create ? combatApi.create({
             context: context.context || {},
             getInputSnapshot: function () {
@@ -58,6 +61,20 @@
                 return player && player.getSnapshot ? player.getSnapshot() : {};
             }
         }) : null;
+        var presentation = presentationApi && presentationApi.create ? presentationApi.create({
+            getPlayerSnapshot: function () {
+                return player && player.getSnapshot ? player.getSnapshot() : {};
+            },
+            getCombatSnapshot: function () {
+                return combat && combat.getSnapshot ? combat.getSnapshot() : {};
+            },
+            getAbilitySnapshot: function () {
+                return abilities && abilities.getSnapshot ? abilities.getSnapshot() : {};
+            },
+            getCameraSnapshot: function () {
+                return camera && camera.getSnapshot ? camera.getSnapshot() : {};
+            }
+        }) : null;
         var bindings = inputBindingsApi && inputBindingsApi.create ? inputBindingsApi.create({
             input: input,
             onFire: function () {
@@ -82,11 +99,13 @@
                 tickCount += 1;
                 elapsedMs += dt * 1000;
                 if (world && world.update) world.update(dt);
+                if (net && net.update) net.update(dt);
                 if (player && player.update) player.update(dt);
                 if (combat && combat.update) combat.update(dt);
                 if (abilities && abilities.update) abilities.update(dt);
                 if (camera && camera.update) camera.update(dt);
                 if (hud && hud.update) hud.update(dt);
+                if (presentation && presentation.update) presentation.update(dt);
                 var inputState = input && input.getSnapshot ? input.getSnapshot() : null;
                 var combatState = combat && combat.getSnapshot ? combat.getSnapshot() : null;
                 if (inputState && inputState.triggerHeld && combatState && combatState.automatic && combatState.canFire) {
@@ -112,10 +131,12 @@
                 input: input && input.getSnapshot ? input.getSnapshot() : null,
                 player: player && player.getSnapshot ? player.getSnapshot() : null,
                 world: world && world.getSnapshot ? world.getSnapshot() : null,
+                net: net && net.getSnapshot ? net.getSnapshot() : null,
                 combat: combat && combat.getSnapshot ? combat.getSnapshot() : null,
                 abilities: abilities && abilities.getSnapshot ? abilities.getSnapshot() : null,
                 camera: camera && camera.getSnapshot ? camera.getSnapshot() : null,
-                hud: hud && hud.getSnapshot ? hud.getSnapshot() : null
+                hud: hud && hud.getSnapshot ? hud.getSnapshot() : null,
+                presentation: presentation && presentation.getSnapshot ? presentation.getSnapshot() : null
             };
         }
 
