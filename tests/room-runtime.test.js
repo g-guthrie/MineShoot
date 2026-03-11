@@ -5,6 +5,7 @@ import {
   applyEntitySpawnPoint,
   applySpawnShield,
   buildPlayerEntity,
+  chooseEntitySpawnPoint,
   ensurePlayer,
   respawnIfNeeded,
   syncRoomFixtures,
@@ -158,4 +159,30 @@ test('room runtime respawns dead entities and ticks live players through shared 
   assert.equal(player.spawnShieldUntil, 1500);
   assert.equal(player.x, 7);
   assert.equal(player.z, 8);
+});
+
+test('authoritative spawn selection avoids blocked boxes and exclusion zones', () => {
+  const room = makeRoom();
+  room.boundsMin = 0;
+  room.boundsMax = 100;
+  room.worldCollision = {
+    collidables: [
+      {
+        min: { x: 5, y: 0, z: 5 },
+        max: { x: 35, y: 8, z: 35 }
+      }
+    ],
+    spawnExclusionZones: [
+      { x: 82, z: 82, radius: 6 }
+    ]
+  };
+
+  const spawn = chooseEntitySpawnPoint(room, { id: 'u3', alive: true }, {
+    spawnPadding: 8,
+    spawnMinClearance: 14
+  });
+
+  assert.ok(spawn, 'expected a spawn point');
+  assert.equal(spawn.x > 5 && spawn.x < 35 && spawn.z > 5 && spawn.z < 35, false);
+  assert.equal(((spawn.x - 82) ** 2) + ((spawn.z - 82) ** 2) <= ((6.85) ** 2), false);
 });

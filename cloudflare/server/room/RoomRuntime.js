@@ -36,6 +36,42 @@ export function buildSpawnAvoidPoints(room, entity) {
   return avoidPoints;
 }
 
+function isSpawnExcluded(room, x, z, padding = 0) {
+  const zones = room && room.worldCollision && Array.isArray(room.worldCollision.spawnExclusionZones)
+    ? room.worldCollision.spawnExclusionZones
+    : [];
+  const pad = Number(padding || 0);
+  for (let i = 0; i < zones.length; i++) {
+    const zone = zones[i];
+    if (!zone) continue;
+    const dx = Number(x || 0) - Number(zone.x || 0);
+    const dz = Number(z || 0) - Number(zone.z || 0);
+    const radius = Math.max(0, Number(zone.radius || 0)) + pad;
+    if ((dx * dx) + (dz * dz) <= (radius * radius)) return true;
+  }
+  return false;
+}
+
+function isSpawnBlocked(room, x, z, padding = 0) {
+  const boxes = room && room.worldCollision && Array.isArray(room.worldCollision.collidables)
+    ? room.worldCollision.collidables
+    : [];
+  const pad = Number(padding || 0);
+  for (let i = 0; i < boxes.length; i++) {
+    const box = boxes[i];
+    if (!box || !box.min || !box.max) continue;
+    if (
+      Number(x || 0) > (Number(box.min.x || 0) - pad) &&
+      Number(x || 0) < (Number(box.max.x || 0) + pad) &&
+      Number(z || 0) > (Number(box.min.z || 0) - pad) &&
+      Number(z || 0) < (Number(box.max.z || 0) + pad)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function chooseEntitySpawnPoint(room, entity, deps) {
   deps = deps || {};
   return chooseSpawnPoint({
@@ -45,7 +81,9 @@ export function chooseEntitySpawnPoint(room, entity, deps) {
     minGroundY: -0.15,
     minClearance: Number(deps.spawnMinClearance || 14),
     avoidPoints: buildSpawnAvoidPoints(room, entity),
-    getGroundHeightAt: (x, z) => terrainFeetYAt(room, x, z)
+    getGroundHeightAt: (x, z) => terrainFeetYAt(room, x, z),
+    isExcluded: (x, z) => isSpawnExcluded(room, x, z, Number(deps.spawnExclusionPadding || 0.85)),
+    isBlocked: (x, z) => isSpawnBlocked(room, x, z, Number(deps.spawnBlockPadding || 1.15))
   });
 }
 
