@@ -82,7 +82,6 @@
     var jumpHoldTimer = 0;
     var jumpPressedLastFrame = false;
     var sprintPressedLastFrame = false;
-    var sprintQueued = false;
     var scopeHeld = false;
 
     var keys = {
@@ -478,6 +477,88 @@
         pendingViewSync = false;
     }
 
+    function tryStepSharedLocalMovement(dt, world) {
+        var helper = movementHelper();
+        if (!helper || !helper.stepAuthoritativeMovement || !world) return null;
+
+        var jumpJustPressed = !!keys.jump && !jumpPressedLastFrame;
+        if (jumpJustPressed && isAdsActive()) {
+            scopeHeld = false;
+        }
+
+        var adsActive = isAdsActive();
+        var movementLocked = isMovementLocked();
+        var startX = playerX;
+        var startZ = playerZ;
+        var wasGrounded = !!isGrounded;
+        var motionState = {
+            x: playerX,
+            y: posY,
+            z: playerZ,
+            yaw: yaw,
+            pitch: pitch,
+            moveSpeedNorm: lastMoveSpeedNorm,
+            sprinting: !!sprinting,
+            velocityY: velocityY,
+            isGrounded: !!isGrounded,
+            jumpHoldTimer: jumpHoldTimer,
+            jumpHeldLast: !!jumpPressedLastFrame
+        };
+
+        helper.stepAuthoritativeMovement(motionState, {
+            forward: !!keys.forward,
+            backward: !!keys.backward,
+            left: !!keys.left,
+            right: !!keys.right,
+            jump: !!keys.jump,
+            sprint: !!keys.sprint,
+            adsActive: !!adsActive
+        }, {
+            dtSec: dt,
+            bounds: world.getWorldBounds(),
+            collisionBoxes: world.getCollisionBoxes(),
+            getGroundHeightAt: world.getGroundHeightAt,
+            movementLocked: movementLocked,
+            eyeHeight: EYE_HEIGHT,
+            playerHeight: PLAYER_HEIGHT,
+            playerRadius: PLAYER_RADIUS,
+            epsilon: EPSILON
+        });
+
+        playerX = Number(motionState.x || 0);
+        playerZ = Number(motionState.z || 0);
+        posY = Number(motionState.y || EYE_HEIGHT);
+        velocityY = Number(motionState.velocityY || 0);
+        isGrounded = !!motionState.isGrounded;
+        jumpHoldTimer = Number(motionState.jumpHoldTimer || 0);
+        jumpPressedLastFrame = !!motionState.jumpHeldLast;
+        sprintPressedLastFrame = !!keys.sprint;
+        lastMoveSpeedNorm = Number(motionState.moveSpeedNorm || 0);
+        sprinting = !!motionState.sprinting;
+
+        var movedX = playerX - startX;
+        var movedZ = playerZ - startZ;
+        var horizontalSpeed = Math.sqrt(movedX * movedX + movedZ * movedZ) / Math.max(dt, 0.0001);
+        isMoving = horizontalSpeed > 0.06;
+
+        if (wasGrounded && !isGrounded && velocityY > 0 && !movementLocked) {
+            var reverseJumpLegTilt = !!keys.backward && !keys.forward;
+            if (actorVisual && actorVisual.triggerAction) {
+                actorVisual.triggerAction('jump', {
+                    reverseLegTilt: reverseJumpLegTilt
+                });
+            } else if (avatarRigApi && avatarRigApi.triggerAction) {
+                avatarRigApi.triggerAction('jump', {
+                    reverseLegTilt: reverseJumpLegTilt
+                });
+            }
+        }
+
+        return {
+            horizontalSpeed: horizontalSpeed
+        };
+    }
+
     function setupInput() {
         if (inputBound) return;
         inputBound = true;
@@ -770,6 +851,15 @@
         if (!hasInputCapture()) return;
         clearExpiredStatusState(nowMs());
         var world = worldHelper();
+        var sharedMovementStep = tryStepSharedLocalMovement(dt, world);
+
+        if (sharedMovementStep) {
+            updateAvatarPose();
+            updateAvatarAnimation(dt, sharedMovementStep.horizontalSpeed);
+            applyUnifiedGunOffsets(dt);
+            updateCameraFromPlayer(dt);
+            return;
+        }
 
         var jumpJustPressed = keys.jump && !jumpPressedLastFrame;
         var jumpJustReleased = !keys.jump && jumpPressedLastFrame;
@@ -784,16 +874,8 @@
         var rightZ = -Math.sin(yaw);
         var movementLocked = isMovementLocked();
         var adsActive = isAdsActive();
-        if (movementLocked) {
-            sprintQueued = false;
-            keys.sprint = false;
-        }
-        if (sprintJustReleased) {
-            sprintQueued = false;
-        } else if (!movementLocked && sprintJustPressed && isGrounded) {
-            sprintQueued = true;
-        }
-        var sprintAllowed = !movementLocked && !adsActive && keys.sprint && sprintQueued;
+        if (movementLocked) keys.sprint = false;
+        var sprintAllowed = !movementLocked && !adsActive && keys.sprint;
         var speedCap = adsActive ? (JOG_SPEED * ADS_MOVE_MULT) : (sprintAllowed ? RUN_SPEED : JOG_SPEED);
 
         var moveX = 0;

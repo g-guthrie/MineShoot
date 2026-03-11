@@ -1,5 +1,6 @@
 import '../../shared/gameplay-tuning.js';
 import '../../shared/game-modes.js';
+import '../../shared/runtime-modes.js';
 import '../../shared/protocol.js';
 import '../../shared/private-room-codes.js';
 import '../core/runtime-profile.js';

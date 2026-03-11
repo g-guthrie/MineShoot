@@ -197,6 +197,12 @@ body.app-demonic #demonic-root {
     gap: 14px;
 }
 
+.demonic-launch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
 .demonic-mode-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
@@ -210,6 +216,7 @@ body.app-demonic #demonic-root {
 }
 
 .demonic-mode-card,
+.demonic-panel,
 .demonic-subsystem-card,
 .demonic-work-card {
     padding: 16px;
@@ -232,12 +239,74 @@ body.app-demonic #demonic-root {
     gap: 10px;
 }
 
+.demonic-panel {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+}
+
+.demonic-panel h3 {
+    margin: 0;
+    color: #f8ddff;
+    font: 700 14px/1 'Orbitron', sans-serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
 .demonic-mode-card h3,
 .demonic-subsystem-card h3,
 .demonic-work-card h3 {
     font-size: 14px;
     letter-spacing: 1px;
     text-transform: uppercase;
+}
+
+.demonic-select-grid {
+    display: grid;
+    gap: 10px;
+}
+
+.demonic-select-btn {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid rgba(205, 152, 255, 0.24);
+    background: rgba(29, 12, 42, 0.88);
+    color: #f3ddff;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.demonic-select-btn:hover,
+.demonic-select-btn:focus-visible {
+    border-color: rgba(241, 198, 255, 0.54);
+    background: rgba(44, 18, 63, 0.96);
+    transform: translateY(-1px);
+}
+
+.demonic-select-btn.active {
+    border-color: rgba(244, 209, 255, 0.86);
+    background: linear-gradient(180deg, rgba(112, 54, 168, 0.92), rgba(57, 22, 91, 0.98));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.demonic-select-btn strong,
+.demonic-select-kicker {
+    font-family: 'Orbitron', sans-serif;
+    text-transform: uppercase;
+}
+
+.demonic-select-btn strong {
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+
+.demonic-select-kicker {
+    color: #d8b5ff;
+    font-size: 10px;
+    letter-spacing: 2px;
 }
 
 .demonic-mode-badges {
@@ -262,6 +331,21 @@ body.app-demonic #demonic-root {
     font: 700 13px/1.3 'Courier New', monospace;
 }
 
+.demonic-summary-panel pre,
+.demonic-sandbox-note {
+    margin: 0;
+    color: #e9d6ff;
+    font: 700 13px/1.45 'Courier New', monospace;
+}
+
+.demonic-action-disabled {
+    width: 100%;
+    border-color: rgba(200, 150, 255, 0.18);
+    background: rgba(31, 16, 45, 0.72);
+    color: #a98fbb;
+    cursor: not-allowed;
+}
+
 #extra-mode-buttons,
 #extra-sandbox-mode-buttons {
     display: contents;
@@ -278,6 +362,10 @@ body.app-demonic #demonic-root {
     }
 
     .demonic-hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .demonic-launch-grid {
         grid-template-columns: 1fr;
     }
 

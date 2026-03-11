@@ -215,6 +215,60 @@ test('authoritative motion can defer camera sync until the end of the frame', as
   assert.equal(updateCameraCalls, baselineCalls + 1);
 });
 
+test('player update uses shared authoritative movement when available', async () => {
+  let stepCalls = 0;
+  const documentObj = {
+    pointerLockElement: {},
+    addEventListener() {},
+    removeEventListener() {}
+  };
+  const player = await loadPlayerHarness({
+    __document: documentObj,
+    GameShared: {
+      gameplayTuning: {
+        movement: {},
+        weaponStats: {
+          rifle: { adsFovDeg: 56 },
+          sniper: { adsFovDeg: 24 }
+        }
+      },
+      entityConstants: {},
+      authoritativeMovement: {
+        stepAuthoritativeMovement(entity) {
+          stepCalls += 1;
+          entity.x = 12;
+          entity.z = 34;
+          entity.y = 5.6;
+          entity.velocityY = 0;
+          entity.isGrounded = true;
+          entity.jumpHoldTimer = 0;
+          entity.jumpHeldLast = false;
+          entity.moveSpeedNorm = 0.5;
+          entity.sprinting = false;
+        }
+      },
+      getWeaponStats(weaponId) {
+        return this.gameplayTuning.weaponStats[weaponId] || null;
+      },
+      resolveWeaponAdsFovDeg(weaponStats) {
+        return Number(weaponStats && weaponStats.adsFovDeg || 56);
+      },
+      getSelectableWeaponIds() {
+        return ['rifle', 'sniper'];
+      }
+    }
+  });
+
+  const scene = new THREE.Scene();
+  player.init(scene);
+  player.update(0.016);
+
+  assert.equal(stepCalls, 1);
+  assert.equal(player.getPosition().x, 12);
+  assert.equal(player.getPosition().z, 34);
+  assert.equal(player.getPosition().y, 5.6);
+});
+
 test('fire action is a no-op when the player view rig is not initialized', async () => {
   const player = await loadPlayerHarness();
 

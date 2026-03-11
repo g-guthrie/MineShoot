@@ -5,69 +5,14 @@
     var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
         ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
         : null;
+    var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
 
     var PROD_WORKER_ORIGIN = 'https://mayhem.gguthrie-minecraft-fps.workers.dev';
     var LOCAL_WORKER_ORIGIN = 'http://127.0.0.1:8787';
     var ROOM_STORAGE_PREFIX = 'mayhem.runtime.room.';
-    var DEFAULT_MODE_ID = 'cloud_multiplayer';
+    var DEFAULT_MODE_ID = (shared.getDefaultRuntimeModeId && shared.getDefaultRuntimeModeId()) || 'cloud_multiplayer';
 
     var selectedModeId = '';
-
-    var MODE_DEFS = {
-        cloud_multiplayer: {
-            id: 'cloud_multiplayer',
-            label: 'Public Lobby',
-            menuTitle: 'PUBLIC LOBBY',
-            menuDesc: 'Shared Cloudflare lobby for public preview play.',
-            backendKind: 'cloudflare-prod',
-            backendLabel: 'CLOUDFLARE PROD',
-            authorityMode: 'networked',
-            authMode: 'public',
-            roomStrategy: 'global',
-            roomPrefix: '',
-            visible: 'always'
-        },
-        single_cloudflare: {
-            id: 'single_cloudflare',
-            label: 'Solo Cloudflare (Bots)',
-            menuTitle: 'SOLO CLOUDFLARE (BOTS)',
-            menuDesc: 'Private Cloudflare test room with bots enabled.',
-            backendKind: 'cloudflare-prod',
-            backendLabel: 'CLOUDFLARE PROD',
-            authorityMode: 'networked',
-            authMode: 'public',
-            roomStrategy: 'private',
-            roomPrefix: 'cf-solo',
-            visible: 'always'
-        },
-        single_dev_server: {
-            id: 'single_dev_server',
-            label: 'Local Dev Room (Bots)',
-            menuTitle: 'LOCAL DEV ROOM (BOTS)',
-            menuDesc: 'Shared local Wrangler room with bots enabled.',
-            backendKind: 'local-worker',
-            backendLabel: 'LOCAL WORKER',
-            authorityMode: 'networked',
-            authMode: 'public',
-            roomStrategy: 'fixed',
-            roomPrefix: '',
-            fixedRoomId: 'local-shared',
-            visible: 'local-only'
-        },
-        single_full_sandbox: {
-            id: 'single_full_sandbox',
-            label: 'Offline Sandbox',
-            menuTitle: 'OFFLINE SANDBOX',
-            menuDesc: 'Offline experimental sandbox. Not authoritative.',
-            backendKind: 'sandbox',
-            backendLabel: 'OFFLINE SANDBOX',
-            authorityMode: 'offline',
-            authMode: 'none',
-            roomStrategy: 'none',
-            roomPrefix: '',
-            visible: 'always'
-        }
-    };
 
     function sanitizeRoomId(raw) {
         if (protocol && typeof protocol.sanitizeRoomId === 'function') {
@@ -78,6 +23,15 @@
         if (!id) return 'global';
         if (id.length > 32) id = id.slice(0, 32);
         return id;
+    }
+
+    function runtimeModeCatalog() {
+        return shared.getRuntimeModeCatalog ? shared.getRuntimeModeCatalog() || [] : [];
+    }
+
+    function runtimeModeDef(modeId) {
+        if (shared.getRuntimeMode) return shared.getRuntimeMode(modeId);
+        return null;
     }
 
     function cloneMode(mode) {
@@ -206,7 +160,7 @@
     }
 
     function isModeVisible(modeId) {
-        var def = MODE_DEFS[modeId];
+        var def = runtimeModeDef(modeId);
         if (!def) return false;
         if (def.visible === 'local-only') return isLocalEnvironment();
         return true;
@@ -228,8 +182,9 @@
     }
 
     function resolveMode(modeId) {
-        var def = MODE_DEFS[modeId];
-        if (!def || !isModeVisible(modeId)) return null;
+        var normalizedModeId = shared.normalizeRuntimeModeId ? shared.normalizeRuntimeModeId(modeId) : String(modeId || '');
+        var def = runtimeModeDef(normalizedModeId);
+        if (!def || !isModeVisible(normalizedModeId)) return null;
 
         var backendOrigin = backendOriginFor(def.backendKind);
         return cloneMode({
@@ -280,12 +235,11 @@
     };
 
     GameRuntimeProfile.getAvailableModes = function () {
-        return [
-            resolveMode('cloud_multiplayer'),
-            resolveMode('single_cloudflare'),
-            resolveMode('single_dev_server'),
-            resolveMode('single_full_sandbox')
-        ].filter(Boolean);
+        return runtimeModeCatalog()
+            .map(function (mode) {
+                return resolveMode(mode && mode.id);
+            })
+            .filter(Boolean);
     };
 
     GameRuntimeProfile.getMode = function (modeId) {
