@@ -90,7 +90,7 @@
             grip:   { p: [0, -0.11, 0.01], s: [1.0, 1.0, 1.0], c: 0x5d3c1f },
             handlePos: [0, -0.11, 0.11],
             scope: true,
-            supportPos: [-0.035, 0.005, -0.42],
+            supportPos: [-0.055, -0.055, -0.42],
             barrelTipPos: [0, 0.02, -1.34]
         })
     };

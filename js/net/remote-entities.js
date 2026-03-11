@@ -115,6 +115,8 @@
             wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
+            movingForward: !!entity.movingForward,
+            movingBackward: !!entity.movingBackward,
             isGrounded: entity.isGrounded !== false,
             velocityY: Number(entity.velocityY || 0),
             _prevIsGrounded: entity.isGrounded !== false,
@@ -183,6 +185,8 @@
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
+        r.movingForward = !!entity.movingForward;
+        r.movingBackward = !!entity.movingBackward;
         r.isGrounded = entity.isGrounded !== false;
         r.velocityY = Number(entity.velocityY || 0);
         r.weaponId = entity.weaponId || 'rifle';

@@ -363,11 +363,8 @@
         }
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) return;
         if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.isDeadeyeActive()) return;
-        var shotToken = '';
-        if (multiplayerMode) {
-            netShotCounter = (netShotCounter + 1) % 1000000;
-            shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
-        }
+        netShotCounter = (netShotCounter + 1) % 1000000;
+        var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
         var fired = globalThis.__MAYHEM_RUNTIME.GameHitscan.fire(
             camera,
             function (hitboxMesh, hitPoint, distance, hitType, damage, weapon) {
@@ -379,7 +376,8 @@
                 var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hitboxMesh, damage);
                 handleEnemyHit(hitPoint, damage, hitType, result);
             },
-            function () {}
+            function () {},
+            shotToken
         );
 
         if (fired) {
@@ -691,14 +689,30 @@
 
         currentAimTargetId = '';
         var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera);
-        if (centerTarget && centerTarget.targetId) {
+        var areaTarget = (currentWeapon && currentWeapon.autoLock && globalThis.__MAYHEM_RUNTIME.GameHitscan.peekAutoLockTarget)
+            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.peekAutoLockTarget(camera)
+            : null;
+        if (currentWeapon && currentWeapon.autoLock) {
+            if (areaTarget && areaTarget.targetId) currentAimTargetId = areaTarget.targetId;
+        } else if (centerTarget && centerTarget.targetId) {
             currentAimTargetId = centerTarget.targetId;
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(currentWeapon && currentWeapon.id !== 'shotgun' && centerTarget && centerTarget.hitbox));
+            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(
+                currentWeapon &&
+                currentWeapon.id !== 'shotgun' &&
+                !currentWeapon.autoLock &&
+                !currentWeapon.singleHitFromPellets &&
+                centerTarget &&
+                centerTarget.hitbox
+            ));
         }
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState(!!(currentWeapon && currentWeapon.id === 'shotgun' && centerTarget && centerTarget.hitbox));
+            globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState(!!(
+                currentWeapon &&
+                (((currentWeapon.id === 'shotgun' || currentWeapon.singleHitFromPellets) && centerTarget && centerTarget.hitbox) ||
+                    (currentWeapon.autoLock && areaTarget && areaTarget.hitbox))
+            ));
         }
 
         globalThis.__MAYHEM_RUNTIME.GameOverhead.update(camera, playerPos, currentAimTargetId);

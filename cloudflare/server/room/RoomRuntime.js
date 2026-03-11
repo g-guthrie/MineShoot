@@ -189,10 +189,6 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
     if (room.isPublicMatchRoom() && room.gameMode === gameModeTdm && !player.teamId) {
       room.applyJoinBaseline(player);
     }
-    if (room.gameMode === gameModeLms && room.matchState && room.matchState.started && !room.matchState.ended && Number(player.lmsLives || 0) <= 0) {
-      player.lmsLives = lmsRules.startingLives;
-      player.progressScore = player.lmsLives;
-    }
     return player;
   }
 
@@ -205,10 +201,6 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
     player.teamId = String(room.privateRoomConfig.teams.get(player.actorId || player.id) || teamAlpha);
   }
   room.applyJoinBaseline(player);
-  if (room.gameMode === gameModeLms && room.matchState && room.matchState.started && !room.matchState.ended) {
-    player.lmsLives = lmsRules.startingLives;
-    player.progressScore = player.lmsLives;
-  }
   room.players.set(userId, player);
   return player;
 }

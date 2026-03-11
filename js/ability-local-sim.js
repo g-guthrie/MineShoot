@@ -66,8 +66,27 @@
             clearHealState();
         }
 
+        function currentHookOriginWorldPosition(fallback) {
+            var player = runtime().GamePlayer || null;
+            if (player && player.getThrowableOriginWorldPosition) {
+                var liveOrigin = player.getThrowableOriginWorldPosition();
+                if (liveOrigin) return makeVector3Like(liveOrigin);
+            }
+            return makeVector3Like(fallback);
+        }
+
         function hookHeadWorldPosition(state, now) {
-            if (!state || !state.startPos || !state.endPos) return null;
+            if (!state) return null;
+            if (state.phase === 'retract') {
+                var retractStart = makeVector3Like(state.retractStartPos || state.endPos || state.headPos || state.startPos);
+                var retractEnd = currentHookOriginWorldPosition(state.startPos);
+                if (!retractStart || !retractEnd) return null;
+                var retractStartedAt = Number(state.retractStartedAt || 0);
+                var retractEndsAt = Math.max(retractStartedAt + 1, Number(state.endsAt || retractStartedAt + 1));
+                var retractT = Math.max(0, Math.min(1, (Number(now || nowMs()) - retractStartedAt) / (retractEndsAt - retractStartedAt)));
+                return retractStart.lerp(retractEnd, retractT);
+            }
+            if (!state.startPos || !state.endPos) return null;
             var start = makeVector3Like(state.startPos);
             var end = makeVector3Like(state.endPos);
             if (!start || !end) return null;
@@ -75,6 +94,17 @@
             var hitAt = Math.max(startAt + 1, Number(state.hitAt || startAt + 1));
             var t = Math.max(0, Math.min(1, (Number(now || nowMs()) - startAt) / (hitAt - startAt)));
             return start.lerp(end, t);
+        }
+
+        function beginHookRetract(state, now) {
+            if (!state) return;
+            var retractDuration = Math.max(120, Number(state.hitAt || 0) - Number(state.startedAt || 0));
+            state.phase = 'retract';
+            state.targetId = '';
+            state.retractStartPos = makeVector3Like(state.endPos || state.headPos || state.startPos);
+            state.retractStartedAt = now;
+            state.headPos = makeVector3Like(state.retractStartPos);
+            state.endsAt = now + retractDuration;
         }
 
         function deadeyeOriginWorldPosition(camera) {
@@ -460,8 +490,13 @@
                         }
                         if (notifier) notifier('Chain Hook landed.', 700);
                     } else if (now >= (hookState.hitAt || 0)) {
-                        clearHookState();
+                        beginHookRetract(hookState, now);
                         if (notifier) notifier('Hook missed.', 500);
+                    }
+                } else if (hookState.phase === 'retract') {
+                    hookState.headPos = hookHeadWorldPosition(hookState, now) || hookState.headPos || hookState.startPos;
+                    if (now >= (hookState.endsAt || 0)) {
+                        clearHookState();
                     }
                 } else if (now >= (hookState.endsAt || 0)) {
                     clearHookState();

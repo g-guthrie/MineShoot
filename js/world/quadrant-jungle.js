@@ -247,68 +247,80 @@ import { pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildWaterfall(cx, cz, place, mats, ctx) {
-        // Main cliff mass: much taller and chunkier so the fall reads from across the map.
-        var rockStacks = [
-            { dx: 0.0, dy: 4.8, dz: 0.1, w: 7.6, h: 9.6, d: 3.4, moss: false },
-            { dx: -2.8, dy: 3.9, dz: 0.3, w: 2.3, h: 7.8, d: 2.6, moss: false },
-            { dx: 2.9, dy: 4.1, dz: 0.4, w: 2.5, h: 8.2, d: 2.7, moss: false },
-            { dx: -4.5, dy: 2.9, dz: 0.5, w: 2.1, h: 5.8, d: 2.2, moss: true },
-            { dx: 4.6, dy: 3.0, dz: 0.6, w: 2.0, h: 6.0, d: 2.1, moss: true },
-            { dx: -1.3, dy: 6.2, dz: -0.2, w: 3.0, h: 2.6, d: 2.2, moss: true },
-            { dx: 1.5, dy: 6.6, dz: -0.1, w: 2.6, h: 2.2, d: 1.9, moss: true }
-        ];
-        for (var rs = 0; rs < rockStacks.length; rs++) {
-            var stack = rockStacks[rs];
-            place.addBlock(
-                cx + stack.dx,
-                stack.dy,
-                cz + stack.dz,
-                stack.w,
-                stack.h,
-                stack.d,
-                stack.moss ? mats.mossy : mats.stone,
-                true
+        var widthScale = 2.775;
+        var heightScale = 4.625;
+        var depthScale = 1.85;
+        function sx(value) {
+            return value * widthScale;
+        }
+        function sy(value) {
+            return value * heightScale;
+        }
+        function sz(value) {
+            return value * depthScale;
+        }
+        function addWallBlock(localX, y, localZ, w, h, d, material, solid) {
+            return place.addBlock(
+                cx + localZ,
+                y,
+                cz - localX,
+                d,
+                h,
+                w,
+                material,
+                solid
             );
         }
 
-        // Crown shelves and pour-over lip.
-        place.addBlock(cx - 0.2, 9.8, cz + 0.4, 8.8, 0.55, 3.4, mats.mossy, true);
-        place.addBlock(cx + 0.6, 10.4, cz - 0.25, 5.2, 0.4, 2.1, mats.stone, true);
-        place.addBlock(cx - 3.0, 8.8, cz + 0.95, 1.6, 0.5, 1.1, mats.mossy, false);
-        place.addBlock(cx + 2.8, 9.0, cz + 0.85, 1.4, 0.45, 1.0, mats.stone, false);
-        place.addBlock(cx + 0.2, 10.2, cz + 1.0, 1.3, 0.35, 0.9, mats.mossy, false);
+        // Border-mounted hero waterfall rotated to face inward toward the jungle center.
+        addWallBlock(0, sy(2.5), 0, sx(4.2), sy(5.0), sz(2.2), mats.stone, true);
 
-        // Base buttresses and channel walls.
-        place.addBlock(cx - 3.6, 2.1, cz + 1.1, 1.7, 4.2, 1.4, mats.stone, true);
-        place.addBlock(cx + 3.4, 2.3, cz + 1.0, 1.6, 4.6, 1.3, mats.stone, true);
-        place.addBlock(cx - 2.0, 1.1, cz + 2.6, 2.1, 2.2, 1.8, mats.mossy, true);
-        place.addBlock(cx + 2.2, 1.2, cz + 2.8, 2.0, 2.4, 1.8, mats.mossy, true);
-        place.addBlock(cx - 5.0, 0.7, cz + 2.2, 1.4, 1.4, 1.2, mats.stone, true);
-        place.addBlock(cx + 5.1, 0.8, cz + 2.0, 1.3, 1.6, 1.2, mats.stone, true);
+        // Stepped top shelf and pour-over lip.
+        addWallBlock(0, sy(5.2), sz(0.4), sx(4.8), sy(0.5), sz(2.8), mats.mossy, true);
+        addWallBlock(0, sy(5.6), -sz(0.2), sx(3.6), sy(0.35), sz(2.0), mats.stone, false);
 
-        // Chunky retro waterfall: taller stepped sheet with wider lip.
-        var tileColumns = 5;
-        var tileRows = 13;
-        var tileW = 0.64;
+        // Framing rocks around the top lip.
+        addWallBlock(-sx(1.6), sy(5.4), sz(0.8), sx(1.0), sy(0.6), sz(0.8), mats.mossy, false);
+        addWallBlock(sx(1.4), sy(5.3), sz(0.6), sx(0.8), sy(0.5), sz(0.7), mats.stone, false);
+        addWallBlock(sx(0.3), sy(5.5), sz(0.9), sx(0.6), sy(0.4), sz(0.5), mats.mossy, false);
+        addWallBlock(-sx(2.2), sy(4.6), sz(0.2), sx(1.4), sy(0.55), sz(1.0), mats.stone, false);
+        addWallBlock(sx(2.3), sy(4.8), sz(0.15), sx(1.3), sy(0.52), sz(0.95), mats.stone, false);
+
+        // Side channel walls and lower buttresses scaled up from the original layout.
+        addWallBlock(-sx(2.4), sy(2.0), sz(0.5), sx(1.2), sy(2.5), sz(1.0), mats.stone, true);
+        addWallBlock(sx(2.2), sy(1.6), sz(0.3), sx(1.0), sy(2.0), sz(0.9), mats.stone, true);
+        addWallBlock(-sx(2.4), sy(3.4), sz(0.5), sx(1.4), sy(0.3), sz(1.2), mats.mossy, false);
+        addWallBlock(sx(2.2), sy(2.8), sz(0.3), sx(1.2), sy(0.25), sz(1.0), mats.mossy, false);
+        addWallBlock(-sx(3.5), sy(1.1), sz(1.7), sx(1.2), sy(1.5), sz(1.1), mats.stone, true);
+        addWallBlock(sx(3.3), sy(1.0), sz(1.6), sx(1.1), sy(1.4), sz(1.0), mats.stone, true);
+        addWallBlock(-sx(4.15), sy(0.72), sz(2.25), sx(0.95), sy(0.44), sz(0.8), mats.stone, true);
+        addWallBlock(sx(4.0), sy(0.66), sz(2.35), sx(0.88), sy(0.4), sz(0.74), mats.mossy, true);
+
+        // Big blocky waterfall sheet with the older 80s palette stepping.
+        var tileColumns = 9;
+        var tileRows = 30;
+        var tileW = 0.76;
         var tileH = 0.72;
-        var tileGapY = 0.07;
-        var baseX = cx - 1.35;
-        var baseY = 9.2;
-        var frontZ = cz + 1.72;
+        var tileGapY = 0.06;
+        var columnSpacing = 0.82;
+        var rowSpacing = tileH + tileGapY;
+        var baseY = sy(4.82);
+        var frontX = cx + sz(1.36);
+        var baseZ = cz + ((((tileColumns - 1) * columnSpacing) * 0.5));
         var waterfallTiles = [];
         for (var col = 0; col < tileColumns; col++) {
             for (var row = 0; row < tileRows; row++) {
                 var tileMat = mats.water.clone();
                 tileMat.transparent = true;
                 tileMat.opacity = 0.66;
-                tileMat.color.setHex((row + col) % 2 === 0 ? 0x5eb6cf : 0x3d8fb3);
+                tileMat.color.setHex((row + col) % 2 === 0 ? 0x78e7ff : 0x279dff);
                 var tile = place.addBlock(
-                    baseX + (col * 0.7),
-                    baseY - (row * (tileH + tileGapY)),
-                    frontZ,
-                    tileW,
+                    frontX,
+                    baseY - (row * rowSpacing),
+                    baseZ - (col * columnSpacing),
+                    0.18,
                     tileH,
-                    0.12,
+                    tileW,
                     tileMat,
                     false
                 );
@@ -322,24 +334,39 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
         ctx.addWaterfallSheet({
             tiles: waterfallTiles,
-            stepInterval: 0.42,
-            darkColor: 0x3d8fb3,
-            lightColor: 0x74d6f2
+            stepInterval: 0.72,
+            rowDirection: -1,
+            darkColor: 0x279dff,
+            lightColor: 0x96f6ff,
+            rowCount: tileRows,
+            pulseInterval: 4.8,
+            pulseDuration: 1.9765625,
+            pulseWidth: 1.25,
+            pulseColumnSkew: 0.38,
+            pulseLightColor: 0xc8ffff
         });
 
-        // Basin and stepped outflow.
-        place.addBlock(cx, -0.02, cz + 4.35, 6.0, 0.1, 4.6, mats.water, false);
-        place.addBlock(cx - 0.2, 0.02, cz + 6.3, 4.4, 0.08, 2.2, mats.water, false);
-        place.addBlock(cx - 2.7, 0.12, cz + 5.2, 1.1, 0.24, 0.9, mats.stone, false);
-        place.addBlock(cx + 2.4, 0.14, cz + 5.5, 1.0, 0.28, 0.8, mats.mossy, false);
-        place.addBlock(cx + 0.5, 0.10, cz + 6.8, 0.9, 0.2, 0.7, mats.stone, false);
-        place.addBlock(cx - 1.4, 0.08, cz + 4.8, 0.7, 0.18, 0.5, mats.mossy, false);
+        // Thin source lip so the tile sheet reads as water pouring over the cliff.
+        addWallBlock(sx(0.02), sy(4.9), sz(1.12), sx(5.6), sy(0.08), sz(0.32), mats.water, false);
 
-        // Mist cards scaled up to the larger drop.
+        // Basin and stepped outflow scaled to match the larger cliff.
+        addWallBlock(0, -0.02, sz(4.9), sx(6.9), 0.1, sz(4.9), mats.water, false);
+        addWallBlock(-sx(0.1), 0.03, sz(7.1), sx(5.4), 0.08, sz(2.6), mats.water, false);
+        addWallBlock(-sx(2.2), 0.12, sz(5.5), sx(0.95), sy(0.05), sz(0.7), mats.stone, false);
+        addWallBlock(sx(1.8), 0.1, sz(5.95), sx(0.84), sy(0.04), sz(0.6), mats.mossy, false);
+        addWallBlock(sx(0.3), 0.08, sz(6.6), sx(0.8), sy(0.035), sz(0.55), mats.stone, false);
+        addWallBlock(-sx(3.0), 0.16, sz(3.9), sx(0.9), sy(0.07), sz(0.85), mats.stone, false);
+        addWallBlock(sx(3.2), 0.18, sz(4.2), sx(1.05), sy(0.08), sz(0.88), mats.mossy, false);
+        addWallBlock(-sx(3.8), 0.22, sz(5.0), sx(1.2), sy(0.09), sz(1.0), mats.stone, false);
+        addWallBlock(sx(4.1), 0.24, sz(5.3), sx(1.15), sy(0.1), sz(0.95), mats.stone, false);
+        addWallBlock(-sx(2.6), 0.3, sz(6.0), sx(0.75), sy(0.12), sz(0.62), mats.mossy, false);
+        addWallBlock(sx(2.5), 0.28, sz(6.35), sx(0.72), sy(0.11), sz(0.58), mats.stone, false);
+
+        // Mist cards scaled up with the huge retro fall.
         var mistConfigs = [
-            { x: cx,       z: cz + 4.3, y: 1.5, w: 5.4, h: 2.4, rotX: -0.36, phase: 2.45, opacity: 0.2 },
-            { x: cx - 1.4, z: cz + 4.9, y: 1.0, w: 3.3, h: 1.6, rotX: -0.22, phase: 4.1, opacity: 0.14 },
-            { x: cx + 1.1, z: cz + 5.3, y: 1.2, w: 2.8, h: 1.2, rotX: -0.42, phase: 0.8, opacity: 0.12 }
+            { x: cx + sz(4.8), z: cz,            y: 1.7, w: 8.2, h: 2.8, rotX: -0.34, phase: 2.45, opacity: 0.2 },
+            { x: cx + sz(5.5), z: cz + sx(0.42), y: 1.25, w: 4.6, h: 1.8, rotX: -0.2, phase: 4.1, opacity: 0.13 },
+            { x: cx + sz(6.0), z: cz - sx(0.34), y: 1.35, w: 4.0, h: 1.5, rotX: -0.4, phase: 0.8, opacity: 0.11 }
         ];
         for (var mi = 0; mi < mistConfigs.length; mi++) {
             var mc = mistConfigs[mi];
@@ -349,11 +376,12 @@ import { pointInBounds as pt } from './biome-utils.js';
             var mistMesh = new THREE.Mesh(mistGeo, mistMat);
             mistMesh.position.set(mc.x, mc.y, mc.z);
             mistMesh.rotation.x = mc.rotX;
+            mistMesh.rotation.y = -Math.PI * 0.5;
             ctx.scene.add(mistMesh);
             ctx.addMistCard({ mesh: mistMesh, baseOpacity: mc.opacity, phase: mc.phase });
         }
 
-        ctx.addExclusion(cx, cz + 2.8, 6.6);
+        ctx.addExclusion(cx + sz(4.6), cz, 9.4);
     }
 
     // --- Rope bridge: high overhead walkway between two trees ---
@@ -503,14 +531,44 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
     }
 
+    function addEnvironmentAsset(assetId, x, y, z, rotY, scale, ctx, options) {
+        var factory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory;
+        if (!factory || typeof factory.create !== 'function') return null;
+        var asset = factory.create('environment', assetId, options || {});
+        if (!asset) return null;
+        asset.position.set(x, y, z);
+        if (rotY) asset.rotation.y = rotY;
+        if (scale != null) {
+            asset.scale.set(scale, scale, scale);
+        }
+        ctx.scene.add(asset);
+        return asset;
+    }
+
     function buildJungleQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
         var center = pt(bounds, 0.67, 0.56);
 
         buildShrine(center.x, center.z, place, mats, ctx);
 
-        var wfPt = pt(bounds, 0.19, 0.24);
+        var wfPt = {
+            x: bounds.minX + 2.75,
+            z: pt(bounds, 0, 0.34).z
+        };
         buildWaterfall(wfPt.x, wfPt.z, place, mats, ctx);
+
+        addEnvironmentAsset('waterfallCrownTree', bounds.minX + 1.55, 0, wfPt.z - 10.8, 0.18, 1, ctx);
+        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.6, 0, wfPt.z + 10.4, -0.24, 1, ctx);
+        addEnvironmentAsset('waterfallWallTree', bounds.minX + 1.45, 0, wfPt.z - 19.5, 0.1, 0.96, ctx);
+        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.52, 0, wfPt.z + 24.8, -0.16, 0.94, ctx);
+        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.3, 0, bounds.maxZ - 4.6, Math.PI * 0.5, 0.94, ctx);
+        addEnvironmentAsset('waterfallCrownTree', bounds.maxX - 2.4, 0, bounds.maxZ - 2.5, -0.34, 0.92, ctx);
+        ctx.addExclusion(bounds.minX + 2.2, wfPt.z - 10.8, 4.6);
+        ctx.addExclusion(bounds.minX + 2.2, wfPt.z + 10.4, 4.2);
+        ctx.addExclusion(bounds.minX + 1.95, wfPt.z - 19.5, 3.8);
+        ctx.addExclusion(bounds.minX + 2.0, wfPt.z + 24.8, 4.1);
+        ctx.addExclusion(bounds.minX + 1.85, bounds.maxZ - 4.6, 4.1);
+        ctx.addExclusion(bounds.maxX - 2.1, bounds.maxZ - 2.2, 4.3);
 
         // ============================================================
         // TREES -- 4 types, dramatic height variation, dense edges
@@ -518,9 +576,10 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type D: Giant ancient trees (towering pillars of the forest)
         var giants = [
-            { u: 0.08, v: 0.12, s: 1.18 },
-            { u: 0.28, v: 0.10, s: 1.08 },
-            { u: 0.30, v: 0.32, s: 1.12 },
+            { u: 0.06, v: 0.20, s: 1.18 },
+            { u: 0.46, v: 0.18, s: 1.08 },
+            { u: 0.42, v: 0.34, s: 1.02 },
+            { u: 0.98, v: 0.54, s: 1.02 },
             { u: 0.88, v: 0.82, s: 1.08 },
             { u: 0.84, v: 0.16, s: 1.1 }
         ];
@@ -532,21 +591,24 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type A: Canopy trees -- wide scale range for dramatic height contrast
         var canopyTrees = [
-            // Waterfall sentinels and canopy ring.
-            { u: 0.11, v: 0.42, s: 1.95 },
-            { u: 0.38, v: 0.22, s: 1.7 },
-            { u: 0.36, v: 0.40, s: 1.45 },
-            { u: 0.18, v: 0.46, s: 1.2 },
-            { u: 0.28, v: 0.44, s: 1.05 },
+            // Waterfall wall composition: tall flanks with shorter trees stepping away.
+            { u: 0.09, v: 0.30, s: 1.95 },
+            { u: 0.15, v: 0.24, s: 1.55 },
+            { u: 0.22, v: 0.37, s: 1.2 },
+            { u: 0.40, v: 0.26, s: 1.7 },
+            { u: 0.54, v: 0.38, s: 1.02 },
             // Shrine-side and border coverage.
             { u: 0.56, v: 0.12, s: 1.55 },
             { u: 0.56, v: 0.90, s: 1.25 },
+            { u: 0.66, v: 0.46, s: 1.28 },
+            { u: 0.70, v: 0.62, s: 1.18 },
             { u: 0.76, v: 0.34, s: 1.18 },
+            { u: 0.975, v: 0.40, s: 1.22 },
             { u: 0.82, v: 0.64, s: 1.35 },
             { u: 0.44, v: 0.74, s: 1.1 },
             { u: 0.18, v: 0.74, s: 1.22 },
             // Lower canopy layer.
-            { u: 0.40, v: 0.14, s: 0.85 },
+            { u: 0.60, v: 0.18, s: 0.85 },
             { u: 0.74, v: 0.80, s: 0.78 },
             { u: 0.64, v: 0.22, s: 0.8 },
             { u: 0.16, v: 0.60, s: 0.88 }
@@ -563,11 +625,6 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.30, v: 0.88, s: 0.95 },
             { u: 0.84, v: 0.84, s: 0.72 },
             { u: 0.48, v: 0.74, s: 1.05 },
-            // Waterfall approach cluster.
-            { u: 0.13, v: 0.30, s: 0.95 },
-            { u: 0.23, v: 0.34, s: 1.15 },
-            { u: 0.18, v: 0.50, s: 0.7 },
-            { u: 0.31, v: 0.52, s: 0.84 },
             // Shrine corridor blockers.
             { u: 0.48, v: 0.42, s: 0.88 },
             { u: 0.56, v: 0.48, s: 0.92 },
@@ -588,9 +645,9 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.26, v: 0.22 }, { u: 0.76, v: 0.22 },
             { u: 0.22, v: 0.74 }, { u: 0.78, v: 0.76 },
             { u: 0.50, v: 0.86 },
-            { u: 0.42, v: 0.38 }, { u: 0.62, v: 0.66 },
+            { u: 0.62, v: 0.66 },
             { u: 0.12, v: 0.58 }, { u: 0.88, v: 0.46 },
-            { u: 0.34, v: 0.18 }, { u: 0.34, v: 0.56 }, { u: 0.58, v: 0.34 }
+            { u: 0.34, v: 0.18 }, { u: 0.58, v: 0.34 }
         ];
         for (var sp = 0; sp < saplings.length; sp++) {
             var spp = pt(bounds, saplings[sp].u, saplings[sp].v);
@@ -604,10 +661,10 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.18, v: 0.26 }, { u: 0.38, v: 0.18 }, { u: 0.60, v: 0.22 },
             { u: 0.75, v: 0.40 }, { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 },
             { u: 0.56, v: 0.74 }, { u: 0.35, v: 0.56 }, { u: 0.64, v: 0.62 },
-            { u: 0.15, v: 0.44 }, { u: 0.88, v: 0.38 }, { u: 0.48, v: 0.42 },
+            { u: 0.15, v: 0.44 }, { u: 0.88, v: 0.38 },
             { u: 0.11, v: 0.18 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
             { u: 0.70, v: 0.86 }, { u: 0.08, v: 0.62 }, { u: 0.92, v: 0.42 },
-            { u: 0.42, v: 0.28 }, { u: 0.58, v: 0.72 }, { u: 0.28, v: 0.52 }, { u: 0.44, v: 0.52 }
+            { u: 0.42, v: 0.28 }, { u: 0.58, v: 0.72 }, { u: 0.44, v: 0.52 }
         ];
         for (var f = 0; f < ferns.length; f++) {
             var fp = pt(bounds, ferns[f].u, ferns[f].v);
@@ -620,10 +677,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         var logs = [
             { u: 0.28, v: 0.58, ax: true },
             { u: 0.74, v: 0.50, ax: false },
-            { u: 0.48, v: 0.40, ax: true },
             { u: 0.54, v: 0.78, ax: false },
-            { u: 0.40, v: 0.66, ax: true },
-            { u: 0.34, v: 0.48, ax: false }
+            { u: 0.40, v: 0.66, ax: true }
         ];
         for (var l = 0; l < logs.length; l++) {
             var lp = pt(bounds, logs[l].u, logs[l].v);
@@ -639,7 +694,6 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.73, v: 0.49, red: true },
             { u: 0.50, v: 0.23, red: false },
             { u: 0.54, v: 0.79, red: true },
-            { u: 0.39, v: 0.63, red: false },
             { u: 0.60, v: 0.67, red: true },
             { u: 0.33, v: 0.44, red: false }
         ];
@@ -647,13 +701,6 @@ import { pointInBounds as pt } from './biome-utils.js';
             var mp = pt(bounds, mushrooms[mi].u, mushrooms[mi].v);
             addMushroom(mp.x, mp.z, place, mats, mushrooms[mi].red);
         }
-
-        // ============================================================
-        // ROPE BRIDGE -- anchored between giant tree (0.12,0.12) and sentinel (0.50,0.08)
-        // ============================================================
-        var bridgePosA = pt(bounds, 0.72, 0.66);
-        var bridgePosB = pt(bounds, 0.86, 0.78);
-        buildRopeBridge(bridgePosA, bridgePosB, 3.8, place, mats);
 
         // ============================================================
         // GROUND VINES -- snaking between trees at ground level

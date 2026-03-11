@@ -4,6 +4,8 @@
     var RT = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var sharedLms = RT.GameShared && RT.GameShared.lmsMode ? RT.GameShared.lmsMode : null;
     var sharedMatchRules = RT.GameShared && RT.GameShared.matchRules ? RT.GameShared.matchRules : null;
+    var MATCH_TEAM_ALPHA = sharedMatchRules && sharedMatchRules.teamAlpha ? sharedMatchRules.teamAlpha : 'alpha';
+    var MATCH_TEAM_BRAVO = sharedMatchRules && sharedMatchRules.teamBravo ? sharedMatchRules.teamBravo : 'bravo';
     var lmsRules = sharedLms && sharedLms.rules ? sharedLms.rules : {
         startingLives: 4,
         maxLives: 4,
@@ -24,6 +26,7 @@
         if (sharedMatchRules && sharedMatchRules.targetProgressForGameMode) {
             return Number(sharedMatchRules.targetProgressForGameMode(mode) || 0);
         }
+        if (String(mode || '') === 'tdm') return 10;
         return String(mode || '') === 'ffa' ? 10 : 0;
     }
 
@@ -94,6 +97,7 @@
             id: String(id || ''),
             username: String(username || id || 'PLAYER'),
             alive: true,
+            teamId: '',
             kills: 0,
             deaths: 0,
             progressScore: 0,
@@ -168,6 +172,13 @@
             });
             matchState.leaderId = lmsLeader;
             matchState.leaderProgress = Number(Math.max(0, lmsBest).toFixed(2));
+            return;
+        }
+        if (modeId === 'tdm') {
+            var alphaProgress = Number((matchState.teamProgress && matchState.teamProgress[MATCH_TEAM_ALPHA]) || 0);
+            var bravoProgress = Number((matchState.teamProgress && matchState.teamProgress[MATCH_TEAM_BRAVO]) || 0);
+            matchState.leaderId = '';
+            matchState.leaderProgress = Number(Math.max(alphaProgress, bravoProgress).toFixed(3));
         }
     }
 
@@ -182,12 +193,13 @@
         syncLmsState();
     }
 
-    function finishMatch(winnerId) {
+    function finishMatch(winnerId, winnerTeam) {
         if (!matchState || matchState.ended) return;
         matchState.ended = true;
         matchState.endedAt = nowMs();
         matchState.resetAt = matchState.endedAt + matchResetDelayMs;
         matchState.winnerId = String(winnerId || '');
+        matchState.winnerTeam = String(winnerTeam || '');
         resetAt = matchState.resetAt;
     }
 
@@ -201,6 +213,9 @@
         nextBeaconRotateAt = nowMs() + lmsRules.beaconRotateMs;
         participants.forEach(function (entry) {
             entry.alive = true;
+            entry.teamId = modeId === 'tdm'
+                ? (entry.id === SELF_ID ? MATCH_TEAM_ALPHA : (entry.teamId || MATCH_TEAM_BRAVO))
+                : '';
             entry.kills = 0;
             entry.deaths = 0;
             entry.progressScore = 0;
@@ -208,6 +223,9 @@
             entry.lmsCharge = 0;
             entry.lmsBankState = null;
         });
+        if (modeId === 'tdm') {
+            recomputeTdmState();
+        }
         if (RT.GamePlayer) {
             if (RT.GamePlayer.setAliveVisual) RT.GamePlayer.setAliveVisual(true);
             if (RT.GamePlayer.setStatusState) RT.GamePlayer.setStatusState({ stunUntil: 0, spawnShieldUntil: nowMs() + 1000 });
@@ -230,9 +248,35 @@
         return participants.get(String(enemy.localMatchId || '')) || null;
     }
 
+    function teamProgress(teamId) {
+        return Number(matchState && matchState.teamProgress && matchState.teamProgress[teamId] || 0);
+    }
+
+    function recomputeTdmState() {
+        if (!matchState || modeId !== 'tdm') return;
+        var alphaSize = 0;
+        var bravoSize = 0;
+        participants.forEach(function (entry) {
+            if (!entry) return;
+            if (entry.teamId === MATCH_TEAM_ALPHA) alphaSize++;
+            else if (entry.teamId === MATCH_TEAM_BRAVO) bravoSize++;
+        });
+        matchState.teamBaselineSize[MATCH_TEAM_ALPHA] = Math.max(1, alphaSize);
+        matchState.teamBaselineSize[MATCH_TEAM_BRAVO] = Math.max(1, bravoSize);
+        matchState.teamProgress[MATCH_TEAM_ALPHA] = 0;
+        matchState.teamProgress[MATCH_TEAM_BRAVO] = 0;
+        participants.forEach(function (entry) {
+            if (!entry) return;
+            entry.progressScore = entry.teamId === MATCH_TEAM_ALPHA
+                ? teamProgress(MATCH_TEAM_ALPHA)
+                : teamProgress(MATCH_TEAM_BRAVO);
+        });
+    }
+
     function ensureSelf() {
         if (!selfState) {
             selfState = baseParticipant(SELF_ID, 'PLAYER');
+            selfState.teamId = modeId === 'tdm' ? MATCH_TEAM_ALPHA : '';
             participants.set(selfState.id, selfState);
         }
     }
@@ -250,7 +294,8 @@
 
     GameLocalMatch.init = function (options) {
         options = options || {};
-        modeId = String(options.gameMode || 'ffa').toLowerCase() === 'lms' ? 'lms' : 'ffa';
+        var requestedMode = String(options.gameMode || 'ffa').toLowerCase();
+        modeId = requestedMode === 'lms' ? 'lms' : (requestedMode === 'tdm' ? 'tdm' : 'ffa');
         active = true;
         participants = new Map();
         enemyById = new Map();
@@ -263,6 +308,9 @@
         pendingSelfRespawnAt = 0;
         resetAt = 0;
         pendingBankById = {};
+        if (modeId === 'tdm') {
+            recomputeTdmState();
+        }
         updateLeader();
     };
 
@@ -292,9 +340,15 @@
         var id = String(enemy.localMatchId || ('guest-bot-' + String((enemy.index || 0) + 1)));
         enemy.localMatchId = id;
         var entry = baseParticipant(id, enemy.displayName || ('BOT_' + String((enemy.index || 0) + 1)));
+        if (modeId === 'tdm') {
+            entry.teamId = (Math.max(0, Number(enemy.index || 0)) % 2 === 0) ? MATCH_TEAM_BRAVO : MATCH_TEAM_ALPHA;
+        }
         participants.set(id, entry);
         enemyById.set(id, enemy);
         matchState.matchBaselinePlayerCount = participants.size;
+        if (modeId === 'tdm') {
+            recomputeTdmState();
+        }
         updateLeader();
         return entry;
     };
@@ -319,6 +373,20 @@
                 return { respawnDelaySec: null };
             }
             return { respawnDelaySec: target.alive ? (lmsRules.respawnDelayMs / 1000) : null };
+        }
+        if (modeId === 'tdm') {
+            var selfTeam = String(selfState.teamId || MATCH_TEAM_ALPHA);
+            var baseline = Math.max(1, Number((matchState.teamBaselineSize && matchState.teamBaselineSize[selfTeam]) || 1));
+            matchState.teamProgress[selfTeam] = Number((teamProgress(selfTeam) + (1 / baseline)).toFixed(3));
+            participants.forEach(function (entry) {
+                if (!entry || entry.teamId !== selfTeam) return;
+                entry.progressScore = matchState.teamProgress[selfTeam];
+            });
+            updateLeader();
+            if (matchState.teamProgress[selfTeam] >= Number(matchState.targetProgress || targetProgressForMode(modeId) || 10)) {
+                finishMatch('', selfTeam);
+            }
+            return { respawnDelaySec: 5.0 };
         }
 
         selfState.progressScore = selfState.kills;
@@ -366,6 +434,22 @@
                 });
             }
             return { useManagedRespawn: true };
+        }
+        if (modeId === 'tdm') {
+            if (attacker && attacker.teamId) {
+                var attackerTeam = String(attacker.teamId);
+                var attackerBaseline = Math.max(1, Number((matchState.teamBaselineSize && matchState.teamBaselineSize[attackerTeam]) || 1));
+                matchState.teamProgress[attackerTeam] = Number((teamProgress(attackerTeam) + (1 / attackerBaseline)).toFixed(3));
+                participants.forEach(function (entry) {
+                    if (!entry || entry.teamId !== attackerTeam) return;
+                    entry.progressScore = matchState.teamProgress[attackerTeam];
+                });
+                if (matchState.teamProgress[attackerTeam] >= Number(matchState.targetProgress || targetProgressForMode(modeId) || 10)) {
+                    finishMatch('', attackerTeam);
+                }
+            }
+            updateLeader();
+            return { useManagedRespawn: false };
         }
 
         if (attacker) attacker.progressScore = attacker.kills;

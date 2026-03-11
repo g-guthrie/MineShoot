@@ -93,6 +93,32 @@
                 var cameraFov = Number(camera && camera.fov);
                 if (isFinite(cameraFov) && cameraFov > 0.0001) payload.viewFovDeg = cameraFov;
             }
+            if (playerApi && playerApi.getRotation) {
+                var rot = playerApi.getRotation();
+                var yaw = Number(rot && rot.yaw || 0);
+                var pitch = Number(rot && rot.pitch || 0);
+                var x = -Math.sin(yaw) * Math.cos(pitch);
+                var y = Math.sin(-pitch);
+                var z = -Math.cos(yaw) * Math.cos(pitch);
+                var len = Math.sqrt((x * x) + (y * y) + (z * z)) || 1;
+                if (isFinite(len) && len > 0.000001) {
+                    payload.aimForward = {
+                        x: x / len,
+                        y: y / len,
+                        z: z / len
+                    };
+                }
+            }
+            if (playerApi && playerApi.getCamera) {
+                var fireCamera = playerApi.getCamera();
+                if (fireCamera && isFinite(Number(fireCamera.position && fireCamera.position.x)) && isFinite(Number(fireCamera.position && fireCamera.position.y)) && isFinite(Number(fireCamera.position && fireCamera.position.z))) {
+                    payload.aimOrigin = {
+                        x: Number(fireCamera.position.x || 0),
+                        y: Number(fireCamera.position.y || 0),
+                        z: Number(fireCamera.position.z || 0)
+                    };
+                }
+            }
             if (shotToken) payload.shotToken = String(shotToken);
             return payload;
         }

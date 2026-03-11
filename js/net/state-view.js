@@ -190,6 +190,8 @@
                     ownerType: 'net',
                     worldPos: worldPos,
                     hitbox: r.bodyHitbox || null,
+                    bodyHitbox: r.bodyHitbox || null,
+                    headHitbox: r.headHitbox || null,
                     alive: true,
                     netEntityId: r.id
                 });

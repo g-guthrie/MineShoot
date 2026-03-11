@@ -17,6 +17,25 @@ function makeWeaponStats(overrides = {}) {
   };
 }
 
+function makePistolStats(overrides = {}) {
+  return makeWeaponStats({
+    id: 'pistol',
+    bodyDamage: 46,
+    headDamage: 150,
+    hipfireSpread: 0.06,
+    adsFovDeg: 56,
+    maxRange: 24,
+    adsMaxRange: 28,
+    pellets: 12,
+    singleHitFromPellets: true,
+    aimProfile: {
+      hipfire: { spread: 0.06, maxRange: 24 },
+      ads: { spread: 0.035, maxRange: 28 }
+    },
+    ...overrides
+  });
+}
+
 function resolveSingleShot(viewFovDeg, weaponStats = makeWeaponStats()) {
   const shots = resolveHitscanShot({
     origin: { x: 0, y: 1.6, z: 0 },
@@ -90,4 +109,74 @@ test('hitscan clamp honors per-weapon ADS FOV tuning', () => {
   assert.equal(overZoomedShot.point.x, zoomedShot.point.x);
   assert.equal(overZoomedShot.point.y, zoomedShot.point.y);
   assert.equal(overZoomedShot.point.z, zoomedShot.point.z);
+});
+
+test('pistol keeps only one winning pellet even when many pellets can hit', () => {
+  const shots = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makePistolStats({
+      hipfireSpread: 0.12,
+      aimProfile: {
+        hipfire: { spread: 0.12, maxRange: 24 },
+        ads: { spread: 0.08, maxRange: 28 }
+      }
+    }),
+    shotToken: 'single-winner',
+    targets: [{ id: 'big-target', x: 0, y: 1.6, z: -10 }],
+    worldBoxes: []
+  });
+
+  assert.equal(shots.length, 1);
+  assert.equal(shots[0].mode, 'circle_scan');
+  assert.equal(shots[0].sampleIndex >= 0, true);
+});
+
+test('pistol range cap prevents pellet hits beyond max range', () => {
+  const shots = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makePistolStats(),
+    shotToken: 'too-far',
+    targets: [{
+      id: 'far-target',
+      x: 0,
+      y: 1.6,
+      z: -40
+    }],
+    worldBoxes: []
+  });
+
+  assert.equal(shots.length, 0);
+});
+
+test('pistol can still naturally resolve a head hit from the winning pellet', () => {
+  const shots = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makePistolStats({
+      hipfireSpread: 0.01,
+      aimProfile: {
+        hipfire: { spread: 0.01, maxRange: 24 },
+        ads: { spread: 0.005, maxRange: 28 }
+      }
+    }),
+    shotToken: 'natural-head',
+    targets: [{
+      id: 'close-head',
+      bodyBox: {
+        min: { x: 0.55, y: 1.0, z: -8.4 },
+        max: { x: 1.35, y: 2.05, z: -7.6 }
+      },
+      headBox: {
+        min: { x: -0.12, y: 1.45, z: -8.25 },
+        max: { x: 0.12, y: 1.8, z: -7.95 }
+      }
+    }],
+    worldBoxes: []
+  });
+
+  assert.equal(shots.length, 1);
+  assert.equal(shots[0].hitType, 'head');
+  assert.equal(shots[0].sampleIndex >= 0, true);
 });

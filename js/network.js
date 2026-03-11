@@ -443,6 +443,9 @@
     };
 
     GameNet.shutdown = function () {
+        if (connected) {
+            wsSend({ t: MSG_C2S.LEAVE_ROOM });
+        }
         active = false;
         runtimeCore.shutdownConnection();
 

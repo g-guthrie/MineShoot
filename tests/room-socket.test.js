@@ -37,6 +37,34 @@ test('room socket message replays welcome payload for join-room', () => {
   assert.deepEqual(sent, [{ target: ws, payload: { t: 'welcome', selfId: 'u1' } }]);
 });
 
+test('room socket leave-room removes the player immediately', () => {
+  const ws = createSocket();
+  const room = {
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    snapshots: [],
+    stopTickCalls: 0,
+    broadcastSnapshot(forceFull) { this.snapshots.push(forceFull); },
+    stopTickIfEmpty() { this.stopTickCalls += 1; }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'leave_room' }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { LEAVE_ROOM: 'leave_room', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(room.clients.has(ws), false);
+  assert.equal(room.activeSocketByUserId.has('u1'), false);
+  assert.equal(room.players.has('u1'), false);
+  assert.deepEqual(room.snapshots, [true]);
+  assert.equal(room.stopTickCalls, 1);
+});
+
 test('room socket message blocks live actions while a private room is still in lobby', () => {
   const ws = createSocket();
   let fireCount = 0;

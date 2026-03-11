@@ -664,13 +664,35 @@ export function handleFire(room, player, msg, deps) {
   if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
   player.muzzleFlashUntil = now + remoteMuzzleFlashHoldMs;
   room.consumeWeaponAmmo(player, weaponId, now);
+  let aimForward = room.entityForward(player);
+  if (msg && msg.aimForward && typeof msg.aimForward === 'object') {
+    const rawX = Number(msg.aimForward.x || 0);
+    const rawY = Number(msg.aimForward.y || 0);
+    const rawZ = Number(msg.aimForward.z || 0);
+    const len = Math.sqrt((rawX * rawX) + (rawY * rawY) + (rawZ * rawZ));
+    if (Number.isFinite(len) && len > 0.000001) {
+      const normalized = { x: rawX / len, y: rawY / len, z: rawZ / len };
+      const authoritativeForward = room.entityForward(player);
+      const dot = (normalized.x * authoritativeForward.x) + (normalized.y * authoritativeForward.y) + (normalized.z * authoritativeForward.z);
+      if (dot >= 0.1) {
+        aimForward = normalized;
+      }
+    }
+  }
+  const aimOrigin = (msg && msg.aimOrigin && typeof msg.aimOrigin === 'object')
+    ? {
+        x: Number.isFinite(Number(msg.aimOrigin.x)) ? Number(msg.aimOrigin.x) : Number(player.x || 0),
+        y: Number.isFinite(Number(msg.aimOrigin.y)) ? Number(msg.aimOrigin.y) : Number(player.y || playerEyeHeight),
+        z: Number.isFinite(Number(msg.aimOrigin.z)) ? Number(msg.aimOrigin.z) : Number(player.z || 0)
+      }
+    : {
+        x: Number(player.x || 0),
+        y: Number(player.y || playerEyeHeight),
+        z: Number(player.z || 0)
+      };
   const shots = resolveHitscanShot({
-    origin: {
-      x: Number(player.x || 0),
-      y: Number(player.y || playerEyeHeight),
-      z: Number(player.z || 0)
-    },
-    forward: room.entityForward(player),
+    aimOrigin,
+    aimForward,
     weaponStats: { ...stats, id: weaponId },
     falloffBands: weaponFalloff[weaponId] || [],
     adsActive: !!(msg && msg.adsActive),

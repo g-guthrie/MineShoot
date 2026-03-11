@@ -131,3 +131,33 @@ test('reticle update owns sniper ADS overlay without a separate scope pass', asy
     }
   });
 });
+
+test('reticle update reuses the circle reticle path for shotgun and pistol', async () => {
+  const harness = await loadUiHarness();
+
+  harness.GameUI.updateReticle(
+    { id: 'shotgun' },
+    { type: 'circle', size: 280 },
+    { active: false, blend: 0, sniper: false }
+  );
+
+  assert.equal(harness.getElement('crosshair').style.display, 'none');
+  assert.equal(harness.getElement('shotgun-reticle').style.display, 'block');
+  assert.equal(harness.getElement('shotgun-reticle').style.width, '280px');
+  assert.equal(harness.getElement('shotgun-reticle').style.height, '280px');
+  assert.equal(harness.getElement('bloom-reticle').style.display, 'none');
+
+  harness.GameUI.setDebugVisuals(true);
+  harness.GameUI.updateReticle(
+    { id: 'pistol', pellets: 12 },
+    { type: 'circle', size: 190 },
+    { active: true, blend: 0, sniper: false }
+  );
+
+  assert.equal(harness.getElement('crosshair').style.display, 'none');
+  assert.equal(harness.getElement('shotgun-reticle').style.display, 'block');
+  assert.equal(harness.getElement('shotgun-reticle').style.width, '190px');
+  assert.equal(harness.getElement('shotgun-reticle').style.height, '190px');
+  assert.equal(harness.getElement('bloom-reticle').style.display, 'none');
+  assert.equal(harness.bloomState.hideCalls >= 2, true);
+});

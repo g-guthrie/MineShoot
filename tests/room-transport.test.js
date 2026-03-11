@@ -170,3 +170,84 @@ test('websocket room requests are handled by the transport helper, including dup
     globalThis.WebSocketPair = originalPair;
   }
 });
+
+test('active LMS rooms reject fresh websocket joins without blocking reconnects', async () => {
+  const originalResponse = globalThis.Response;
+  const originalPair = globalThis.WebSocketPair;
+
+  class FakeResponse {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.webSocket = init.webSocket;
+    }
+
+    async text() {
+      return String(this.body || '');
+    }
+  }
+
+  globalThis.Response = FakeResponse;
+  globalThis.WebSocketPair = class {
+    constructor() {
+      this[0] = { label: 'client' };
+      this[1] = {
+        label: 'server',
+        serializeAttachment() {},
+        deserializeAttachment() { return null; }
+      };
+    }
+  };
+
+  try {
+    const room = {
+      env: { ROOM_NAME: 'lms-01' },
+      roomName: 'lms-01',
+      gameMode: 'lms',
+      matchState: { started: true, ended: false },
+      bots: new Map(),
+      players: new Map(),
+      privateRoomConfig: { teams: new Map() },
+      clients: new Map(),
+      activeSocketByUserId: new Map(),
+      ctx: { acceptWebSocket() { throw new Error('should not accept new join'); } },
+      refreshWorldMeta() {},
+      syncRoomFixtures() {},
+      ensurePlayer() { throw new Error('should not create a new player'); },
+      startPublicMatchIfReady() {},
+      ensureTick() {},
+      buildWelcomePayload() { return {}; },
+      send() {},
+      broadcastSnapshot() {}
+    };
+
+    const denied = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=lms-01&userId=u1&username=PLAYER&actorId=a1', {
+        headers: { Upgrade: 'websocket' }
+      })
+    );
+
+    assert.equal(denied.status, 409);
+    assert.equal(await denied.text(), 'LMS match already in progress.');
+
+    room.players.set('u1', { id: 'u1' });
+    let ensured = 0;
+    let accepted = 0;
+    room.ctx.acceptWebSocket = function () { accepted += 1; };
+    room.ensurePlayer = function () { ensured += 1; };
+    const allowed = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=lms-01&userId=u1&username=PLAYER&actorId=a1', {
+        headers: { Upgrade: 'websocket' }
+      })
+    );
+
+    assert.equal(allowed.status, 101);
+    assert.equal(accepted, 1);
+    assert.equal(ensured, 1);
+  } finally {
+    globalThis.Response = originalResponse;
+    globalThis.WebSocketPair = originalPair;
+  }
+});

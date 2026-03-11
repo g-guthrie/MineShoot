@@ -68,6 +68,15 @@ function handleWebSocketRequest(room, request, url) {
   if (room.privateRoomConfig && room.privateRoomConfig.teams.size > 0 && !room.privateRoomConfig.teams.has(actorId)) {
     return new Response('Private room access denied.', { status: 403 });
   }
+  if (
+    String(room.gameMode || '').toLowerCase() === 'lms' &&
+    room.matchState &&
+    room.matchState.started &&
+    !room.matchState.ended &&
+    !room.players.has(userId)
+  ) {
+    return new Response('LMS match already in progress.', { status: 409 });
+  }
 
   const pair = new WebSocketPair();
   const client = pair[0];

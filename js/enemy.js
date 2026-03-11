@@ -287,17 +287,18 @@
                 return;
             }
             var targetDist = Math.max(1.5, Number(pull.pullDistance || 3.2));
-            var forwardX = -Math.sin(sourceRot.yaw || 0);
-            var forwardZ = -Math.cos(sourceRot.yaw || 0);
             var patrolBounds = getPatrolBounds();
-            var desiredX = Math.max(patrolBounds.minX, Math.min(patrolBounds.maxX, sourcePos.x + (forwardX * targetDist)));
-            var desiredZ = Math.max(patrolBounds.minZ, Math.min(patrolBounds.maxZ, sourcePos.z + (forwardZ * targetDist)));
+            var desiredX = Math.max(patrolBounds.minX, Math.min(patrolBounds.maxX, sourcePos.x + (-Math.sin(sourceRot.yaw || 0) * targetDist)));
+            var desiredZ = Math.max(patrolBounds.minZ, Math.min(patrolBounds.maxZ, sourcePos.z + (-Math.cos(sourceRot.yaw || 0) * targetDist)));
             var toX = desiredX - enemy.group.position.x;
             var toZ = desiredZ - enemy.group.position.z;
             var dist = Math.sqrt((toX * toX) + (toZ * toZ));
+            var sourceDx = sourcePos.x - enemy.group.position.x;
+            var sourceDz = sourcePos.z - enemy.group.position.z;
+            var sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
             var baseStep = Math.max(0.001, Number(pull.pullSpeed || 26)) * dt;
             var step = Math.min(dist, Math.max(baseStep * 0.45, dist * 0.24));
-            if (dist <= 0.08) {
+            if (sourceDist <= (targetDist + 0.08) || dist <= 0.08 || Date.now() >= Number(pull.endsAt || 0)) {
                 enemy.group.position.x = desiredX;
                 enemy.group.position.z = desiredZ;
                 if (Number(pull.postHookStunDuration || 0) > 0) {
@@ -308,6 +309,16 @@
             } else {
                 enemy.group.position.x += (toX / dist) * step;
                 enemy.group.position.z += (toZ / dist) * step;
+                sourceDx = sourcePos.x - enemy.group.position.x;
+                sourceDz = sourcePos.z - enemy.group.position.z;
+                sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
+                if (sourceDist <= (targetDist + 0.08)) {
+                    if (Number(pull.postHookStunDuration || 0) > 0) {
+                        enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
+                        GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
+                    }
+                    enemy.hookPullState = null;
+                }
             }
             pull.facingYaw = Math.atan2(sourcePos.x - enemy.group.position.x, sourcePos.z - enemy.group.position.z) + Math.PI;
             if (enemy.actorVisual && enemy.actorVisual.setYaw) enemy.actorVisual.setYaw(pull.facingYaw);
@@ -679,6 +690,8 @@
                 ownerType: 'enemy',
                 worldPos: corePos,
                 hitbox: enemy.bodyHitbox || null,
+                bodyHitbox: enemy.bodyHitbox || null,
+                headHitbox: enemy.headHitbox || null,
                 alive: true,
                 enemyRef: enemy
             });
@@ -701,9 +714,18 @@
 
     GameEnemy.pullTarget = function (enemy, playerPos, playerYaw, pullDistance, pullSpeed, stunDuration) {
         if (!enemy || !enemy.alive || !playerPos) return false;
+        var desiredDist = Math.max(1.5, Number(pullDistance || 3.2));
+        var speed = Math.max(8, Number(pullSpeed || 26));
+        var dx = Number(playerPos.x || 0) - enemy.group.position.x;
+        var dz = Number(playerPos.z || 0) - enemy.group.position.z;
+        var currentDist = Math.sqrt((dx * dx) + (dz * dz));
+        var travelDist = Math.max(0, currentDist - desiredDist);
+        var durationMs = Math.max(120, Math.round((travelDist / speed) * 1000));
         enemy.hookPullState = {
-            pullDistance: Math.max(1.5, Number(pullDistance || 3.2)),
-            pullSpeed: Math.max(8, Number(pullSpeed || 26)),
+            pullDistance: desiredDist,
+            pullSpeed: speed,
+            startedAt: Date.now(),
+            endsAt: Date.now() + durationMs,
             facingYaw: Math.atan2(playerPos.x - enemy.group.position.x, playerPos.z - enemy.group.position.z) + Math.PI,
             postHookStunDuration: Math.max(0, Number(stunDuration || 0))
         };

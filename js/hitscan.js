@@ -38,6 +38,46 @@
     var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
     var sharedTuning = shared.gameplayTuning || {};
     var sharedWeaponStats = sharedTuning.weaponStats || {};
+    var hitboxBoundsBox = new THREE.Box3();
+    var LOCAL_CIRCLE_SCAN_PATTERN = buildLocalCircleScanPattern(4);
+    function sharedHitscanAuthority() {
+        var sharedRuntime = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        return sharedRuntime.hitscanAuthority || null;
+    }
+
+    function buildLocalCircleScanPattern(radiusSteps) {
+        var out = [];
+        var steps = Math.max(1, Number(radiusSteps || 1));
+        for (var gy = -steps; gy <= steps; gy++) {
+            for (var gx = -steps; gx <= steps; gx++) {
+                var nx = gx / steps;
+                var ny = gy / steps;
+                var r2 = (nx * nx) + (ny * ny);
+                if (r2 > 1.000001) continue;
+                out.push({ x: nx, y: ny, r2: r2 });
+            }
+        }
+        out.sort(function (a, b) {
+            if (Math.abs(a.r2 - b.r2) > 1e-9) return a.r2 - b.r2;
+            if (Math.abs(a.y - b.y) > 1e-9) return a.y - b.y;
+            return a.x - b.x;
+        });
+        return out;
+    }
+
+    function cloneAutoLockConfig(raw) {
+        if (!raw || raw.enabled === false) return null;
+        return {
+            enabled: true,
+            hipfireConeHalfAngleDeg: Number(raw.hipfireConeHalfAngleDeg || 0),
+            adsConeHalfAngleDeg: Number(raw.adsConeHalfAngleDeg || 0),
+            minTargetOverlap: Number((raw.minTargetOverlap != null ? raw.minTargetOverlap : raw.minBodyOverlap) || 0),
+            headOverlapWeight: Number(raw.headOverlapWeight || 0),
+            hipfireHeadshotChanceMax: Number(raw.hipfireHeadshotChanceMax || 0),
+            adsHeadshotChanceMax: Number(raw.adsHeadshotChanceMax || 0),
+            headshotAlignmentExponent: Number(raw.headshotAlignmentExponent || 0)
+        };
+    }
 
     function resolveSharedWeaponAimProfile(weaponStats, adsActive) {
         if (shared.resolveWeaponAimProfile) {
@@ -73,7 +113,9 @@
             tracerSpeed: Number(tracer.speed || 0),
             tracerSegmentLength: Number(tracer.segmentLength || 0),
             hipfireBloomScale: Number(s.hipfireBloomScale != null ? s.hipfireBloomScale : 1),
-            adsBloomScale: Number(s.adsBloomScale != null ? s.adsBloomScale : 1)
+            adsBloomScale: Number(s.adsBloomScale != null ? s.adsBloomScale : 1),
+            autoLock: cloneAutoLockConfig(s.autoLock),
+            singleHitFromPellets: !!s.singleHitFromPellets
         };
     }
 
@@ -282,14 +324,18 @@
         return Math.max(0.05, Number(weapon && weapon.tracerSegmentLength || 2.1));
     }
 
-    function spawnTracer(camera, weapon, endPoint) {
+    function spawnTracer(camera, weapon, endPoint, originOverride) {
         if (!camera || !endPoint) return;
         var idx = allocTracer(camera);
         if (idx === null) return;
         var tracer = tracerPool[idx];
 
-        resolvePlasmaMuzzle(camera);
-        tracerStart.copy(plasmaMuzzle);
+        if (originOverride && typeof originOverride.x === 'number') {
+            tracerStart.copy(originOverride);
+        } else {
+            resolvePlasmaMuzzle(camera);
+            tracerStart.copy(plasmaMuzzle);
+        }
         tracer.origin.copy(tracerStart);
         tracer.dir.copy(endPoint).sub(tracerStart);
         var len = tracer.dir.length();
@@ -517,13 +563,60 @@
         return getWeaponSpreadRadiusPx(weapons.shotgun || getCurrentWeaponData()) * 2;
     }
 
-    function getBloomCircleSizePx(weapon) {
-        if (!weapon || weapon.id === 'shotgun') return 0;
+    function getCircleReticleSizePx(weapon) {
+        if (!weapon) return 0;
+        if (getAutoLockConfig(weapon)) return getAutoLockReticleSizePx(weapon);
         return getWeaponSpreadRadiusPx(weapon) * 2;
+    }
+
+    function getAutoLockConfig(weapon) {
+        return weapon && weapon.autoLock && weapon.autoLock.enabled !== false ? weapon.autoLock : null;
+    }
+
+    function getViewFovDeg() {
+        var player = globalThis.__MAYHEM_RUNTIME.GamePlayer;
+        var camera = player && player.getCamera ? player.getCamera() : null;
+        var fov = Number(camera && camera.fov);
+        return isFinite(fov) && fov > 0.0001 ? fov : 75;
+    }
+
+    function getAutoLockConeHalfAngleDeg(weapon) {
+        var cfg = getAutoLockConfig(weapon);
+        if (!cfg) return 0;
+        return isAdsActiveForWeapon(weapon.id)
+            ? Math.max(0, Number(cfg.adsConeHalfAngleDeg || cfg.hipfireConeHalfAngleDeg || 0))
+            : Math.max(0, Number(cfg.hipfireConeHalfAngleDeg || cfg.adsConeHalfAngleDeg || 0));
+    }
+
+    function getAutoLockReticleSizePx(weapon) {
+        var halfAngleDeg = getAutoLockConeHalfAngleDeg(weapon);
+        if (!(halfAngleDeg > 0)) return 0;
+        var viewFovDeg = getViewFovDeg();
+        var radiusRatio = Math.tan((halfAngleDeg * Math.PI) / 180) / Math.max(0.0001, Math.tan((viewFovDeg * Math.PI) / 360));
+        return Math.max(0, radiusRatio) * window.innerHeight;
+    }
+
+    function getBloomCircleSizePx(weapon) {
+        if (!weapon || weapon.id === 'shotgun' || weapon.singleHitFromPellets || getAutoLockConfig(weapon)) return 0;
+        return getWeaponSpreadRadiusPx(weapon) * 2;
+    }
+
+    function usesSharedShotResolution(weapon) {
+        return !!(weapon && getAutoLockConfig(weapon));
     }
 
     function getPelletNdcOffset(weapon, pelletIndex) {
         return getWeaponSpreadNdcOffset(weapon);
+    }
+
+    function getCircleSampleNdcOffset(weapon, sample) {
+        var metrics = getWeaponSpreadMetrics(weapon);
+        var radiusXpx = Number(metrics && metrics.radiusXpx || 0);
+        var radiusYpx = Number(metrics && metrics.radiusYpx || 0);
+        return {
+            x: (Number(sample && sample.x || 0) * radiusXpx) / (window.innerWidth * 0.5),
+            y: (Number(sample && sample.y || 0) * radiusYpx) / (window.innerHeight * 0.5)
+        };
     }
 
     function getLockTargets() {
@@ -553,6 +646,114 @@
         }
 
         return out;
+    }
+
+    function worldCollisionBoxes() {
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        var out = [];
+        for (var i = 0; i < worldMeshes.length; i++) {
+            var mesh = worldMeshes[i];
+            if (!mesh) continue;
+            var box = mesh.userData && mesh.userData.collisionBox ? mesh.userData.collisionBox : null;
+            if (!box) {
+                mesh.updateMatrixWorld(true);
+                box = hitboxBoundsBox.setFromObject(mesh);
+            }
+            if (!box || !box.min || !box.max) continue;
+            out.push({
+                min: { x: Number(box.min.x || 0), y: Number(box.min.y || 0), z: Number(box.min.z || 0) },
+                max: { x: Number(box.max.x || 0), y: Number(box.max.y || 0), z: Number(box.max.z || 0) }
+            });
+        }
+        return out;
+    }
+
+    function plainBoxFromHitbox(hitbox) {
+        if (!hitbox) return null;
+        hitbox.updateMatrixWorld(true);
+        var box = hitboxBoundsBox.setFromObject(hitbox);
+        if (!box || !box.min || !box.max) return null;
+        return {
+            min: { x: Number(box.min.x || 0), y: Number(box.min.y || 0), z: Number(box.min.z || 0) },
+            max: { x: Number(box.max.x || 0), y: Number(box.max.y || 0), z: Number(box.max.z || 0) }
+        };
+    }
+
+    function authorityTargetFromLockTarget(target) {
+        if (!target || !target.worldPos) return null;
+        var bodyHitbox = target.bodyHitbox || target.hitbox || null;
+        var headHitbox = target.headHitbox || (target.enemyRef && target.enemyRef.headHitbox) || null;
+        return {
+            targetId: target.targetId || '',
+            ownerType: target.ownerType || 'unknown',
+            x: Number(target.worldPos.x || 0),
+            y: Number(target.worldPos.y || 0),
+            z: Number(target.worldPos.z || 0),
+            worldPos: target.worldPos && target.worldPos.clone ? target.worldPos.clone() : target.worldPos,
+            bodyHitbox: bodyHitbox,
+            headHitbox: headHitbox,
+            hitbox: bodyHitbox || headHitbox || null,
+            enemyRef: target.enemyRef || null,
+            bodyBox: plainBoxFromHitbox(bodyHitbox),
+            headBox: plainBoxFromHitbox(headHitbox)
+        };
+    }
+
+    function buildLocalShotContext(camera, weapon, shotToken) {
+        if (!camera || !weapon) return null;
+        var lockTargets = getLockTargets() || [];
+        var targets = [];
+        for (var i = 0; i < lockTargets.length; i++) {
+            var target = lockTargets[i];
+            if (!target || target.alive === false || !target.worldPos) continue;
+            var plain = authorityTargetFromLockTarget(target);
+            if (plain) targets.push(plain);
+        }
+        resolvePlasmaMuzzle(camera);
+        camera.getWorldDirection(plasmaForward);
+        return {
+            aimOrigin: {
+                x: Number(camera.position.x || 0),
+                y: Number(camera.position.y || 0),
+                z: Number(camera.position.z || 0)
+            },
+            aimForward: {
+                x: plasmaForward.x,
+                y: plasmaForward.y,
+                z: plasmaForward.z
+            },
+            tracerOrigin: {
+                x: plasmaMuzzle.x,
+                y: plasmaMuzzle.y,
+                z: plasmaMuzzle.z
+            },
+            weaponStats: weapon,
+            falloffBands: weaponFalloffTuning[weapon.id] || [],
+            adsActive: isAdsActiveForWeapon(weapon.id),
+            viewFovDeg: getViewFovDeg(),
+            shotToken: String(shotToken || ''),
+            targets: targets,
+            worldBoxes: worldCollisionBoxes()
+        };
+    }
+
+    function resolveAutoLockPreview(camera, weapon) {
+        var authority = sharedHitscanAuthority();
+        if (!camera || !weapon || !authority || !authority.resolveAutoLockPreview) return null;
+        var options = buildLocalShotContext(camera, weapon, 'preview');
+        if (!options) return null;
+        return authority.resolveAutoLockPreview(options);
+    }
+
+    function resolveAutoLockShotFromContext(shotContext) {
+        var authority = sharedHitscanAuthority();
+        if (!shotContext || !authority || !authority.resolveHitscanShot) return [];
+        return authority.resolveHitscanShot(shotContext);
+    }
+
+    function resolveAutoLockShot(camera, weapon, shotToken) {
+        if (!camera || !weapon) return [];
+        return resolveAutoLockShotFromContext(buildLocalShotContext(camera, weapon, shotToken));
     }
 
     function lockTargetPassesFilter(target, options) {
@@ -669,11 +870,12 @@
         return plasmaMuzzle;
     }
 
-    function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
+    function traceSinglePellet(camera, weapon, pelletIndex) {
         var targetsHitboxes = getCombatHitboxes();
         var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var allTargets = targetsHitboxes.concat(worldMeshes);
         var ndcOffset = getPelletNdcOffset(weapon, pelletIndex);
+        var pelletScore = (ndcOffset.x * ndcOffset.x) + (ndcOffset.y * ndcOffset.y);
         var effectiveRange = getEffectiveMaxRange(weapon);
 
         screenPoint.set(ndcOffset.x, ndcOffset.y);
@@ -682,17 +884,21 @@
 
         var intersects = raycaster.intersectObjects(allTargets, false);
         if (intersects.length === 0) {
-            if (onTrace) {
-                tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, effectiveRange);
-                onTrace(tracerMissEnd);
-            }
-            return false;
+            tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, effectiveRange);
+            return {
+                hit: false,
+                traceEnd: tracerMissEnd.clone(),
+                pelletScore: pelletScore
+            };
         }
 
         var hit = intersects[0];
-        if (onTrace) onTrace(hit.point);
         if (targetsHitboxes.indexOf(hit.object) === -1) {
-            return false;
+            return {
+                hit: false,
+                traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
+                pelletScore: pelletScore
+            };
         }
 
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getRotation && globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition) {
@@ -703,7 +909,11 @@
             if (hitFromPlayer.lengthSq() > 0.0001) {
                 hitFromPlayer.normalize();
                 if (playerForward.dot(hitFromPlayer) <= 0.1) {
-                    return false;
+                    return {
+                        hit: false,
+                        traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
+                        pelletScore: pelletScore
+                    };
                 }
             }
         }
@@ -712,10 +922,191 @@
         var damage = getDamageForType(weapon, hitType);
         damage = applyDistanceFalloff(weapon, damage, hit.distance);
 
+        return {
+            hit: true,
+            hitbox: hit.object,
+            hitPoint: hit.point.clone ? hit.point.clone() : hit.point,
+            distance: hit.distance,
+            hitType: hitType,
+            damage: damage,
+            pelletScore: pelletScore,
+            traceEnd: hit.point.clone ? hit.point.clone() : hit.point
+        };
+    }
+
+    function fireSinglePellet(camera, weapon, pelletIndex, onHit, onTrace) {
+        var traced = traceSinglePellet(camera, weapon, pelletIndex);
+        if (!traced) return false;
+        if (onTrace && traced.traceEnd) onTrace(traced.traceEnd);
+        if (!traced.hit) return false;
+
         if (onHit) {
-            onHit(hit.object, hit.point, hit.distance, hitType, damage, weapon);
+            onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon);
         }
 
+        return true;
+    }
+
+    function fireSingleWinnerPelletPattern(camera, weapon, onHit, onMiss) {
+        var pellets = Math.max(1, Number(weapon && weapon.pellets || 1));
+        var bestHit = null;
+        var bestMiss = null;
+        for (var i = 0; i < pellets; i++) {
+            var traced = traceSinglePellet(camera, weapon, i);
+            if (!traced) continue;
+            if (traced.hit) {
+                if (!bestHit || traced.pelletScore < bestHit.pelletScore || (traced.pelletScore === bestHit.pelletScore && traced.distance < bestHit.distance)) {
+                    bestHit = traced;
+                }
+            } else if (!bestMiss || traced.pelletScore < bestMiss.pelletScore) {
+                bestMiss = traced;
+            }
+        }
+
+        if (bestHit) {
+            if (bestHit.traceEnd) spawnTracer(camera, weapon, bestHit.traceEnd);
+            if (onHit) onHit(bestHit.hitbox, bestHit.hitPoint, bestHit.distance, bestHit.hitType, bestHit.damage, weapon);
+            return true;
+        }
+
+        if (bestMiss && bestMiss.traceEnd) spawnTracer(camera, weapon, bestMiss.traceEnd);
+        if (onMiss) onMiss();
+        return true;
+    }
+
+    function traceCircleSample(camera, weapon, sample) {
+        var targetsHitboxes = getCombatHitboxes();
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        var allTargets = targetsHitboxes.concat(worldMeshes);
+        var ndcOffset = getCircleSampleNdcOffset(weapon, sample);
+        var effectiveRange = getEffectiveMaxRange(weapon);
+
+        screenPoint.set(ndcOffset.x, ndcOffset.y);
+        raycaster.setFromCamera(screenPoint, camera);
+        raycaster.far = effectiveRange;
+
+        var intersects = raycaster.intersectObjects(allTargets, false);
+        if (intersects.length === 0) {
+            tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, effectiveRange);
+            return {
+                hit: false,
+                traceEnd: tracerMissEnd.clone(),
+                sampleRadiusSq: Number(sample && sample.r2 || 0)
+            };
+        }
+
+        var hit = intersects[0];
+        if (targetsHitboxes.indexOf(hit.object) === -1) {
+            return {
+                hit: false,
+                traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
+                sampleRadiusSq: Number(sample && sample.r2 || 0)
+            };
+        }
+
+        var hitType = hit.object.userData.type || 'body';
+        var damage = getDamageForType(weapon, hitType);
+        damage = applyDistanceFalloff(weapon, damage, hit.distance);
+        return {
+            hit: true,
+            hitbox: hit.object,
+            hitPoint: hit.point.clone ? hit.point.clone() : hit.point,
+            distance: hit.distance,
+            hitType: hitType,
+            damage: damage,
+            traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
+            sampleRadiusSq: Number(sample && sample.r2 || 0)
+        };
+    }
+
+    function findBestCircleScanHit(camera, weapon) {
+        var bestMiss = null;
+        for (var i = 0; i < LOCAL_CIRCLE_SCAN_PATTERN.length; i++) {
+            var traced = traceCircleSample(camera, weapon, LOCAL_CIRCLE_SCAN_PATTERN[i]);
+            if (!traced) continue;
+            if (traced.hit) return traced;
+            if (!bestMiss || traced.sampleRadiusSq < bestMiss.sampleRadiusSq) bestMiss = traced;
+        }
+        return bestMiss;
+    }
+
+    function fireCircleScanPattern(camera, weapon, onHit, onMiss) {
+        var traced = findBestCircleScanHit(camera, weapon);
+        if (!traced) {
+            if (onMiss) onMiss();
+            return true;
+        }
+        if (traced.traceEnd) spawnTracer(camera, weapon, traced.traceEnd);
+        if (!traced.hit) {
+            if (onMiss) onMiss();
+            return true;
+        }
+        if (onHit) onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon);
+        return true;
+    }
+
+    function autoLockMissPoint(camera, weapon) {
+        if (!camera || !weapon) return null;
+        var effectiveRange = getEffectiveMaxRange(weapon);
+        resolvePlasmaMuzzle(camera);
+        camera.getWorldDirection(plasmaForward);
+        losRaycaster.set(plasmaMuzzle, plasmaForward);
+        losRaycaster.far = effectiveRange;
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        var hits = losRaycaster.intersectObjects(worldMeshes, false);
+        if (hits.length > 0 && hits[0] && hits[0].point) return hits[0].point;
+        return plasmaMuzzle.clone().addScaledVector(plasmaForward, effectiveRange);
+    }
+
+    function fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken) {
+        var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+        var shots = resolveAutoLockShotFromContext(shotContext);
+        if (!shots || shots.length === 0) {
+            var missPoint = autoLockMissPoint(camera, weapon);
+            if (missPoint) {
+                spawnTracer(
+                    camera,
+                    weapon,
+                    missPoint,
+                    shotContext && shotContext.tracerOrigin
+                        ? new THREE.Vector3(shotContext.tracerOrigin.x, shotContext.tracerOrigin.y, shotContext.tracerOrigin.z)
+                        : null
+                );
+            }
+            if (onMiss) onMiss();
+            return true;
+        }
+
+        var shot = shots[0];
+        var target = shot && shot.target ? shot.target : null;
+        var hitbox = target
+            ? (shot.hitType === 'head'
+                ? (target.headHitbox || target.hitbox || target.bodyHitbox || null)
+                : (target.bodyHitbox || target.hitbox || target.headHitbox || null))
+            : null;
+
+        if (shot.point) {
+            spawnTracer(
+                camera,
+                weapon,
+                new THREE.Vector3(shot.point.x, shot.point.y, shot.point.z),
+                shotContext && shotContext.tracerOrigin
+                    ? new THREE.Vector3(shotContext.tracerOrigin.x, shotContext.tracerOrigin.y, shotContext.tracerOrigin.z)
+                    : null
+            );
+        }
+        if (onHit && hitbox && shot.point) {
+            onHit(
+                hitbox,
+                new THREE.Vector3(shot.point.x, shot.point.y, shot.point.z),
+                Number(shot.distance || 0),
+                shot.hitType || 'body',
+                Number(shot.damage || 0),
+                weapon
+            );
+        } else if (!hitbox && onMiss) {
+            onMiss();
+        }
         return true;
     }
 
@@ -758,7 +1149,7 @@
      * @param {Function} onMiss - callback()
      * @returns {boolean} whether a shot was fired
      */
-    GameHitscan.fire = function (camera, onHit, onMiss) {
+    GameHitscan.fire = function (camera, onHit, onMiss, shotToken) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
         syncWeaponAmmoState(weapon.id, now);
@@ -778,7 +1169,11 @@
         }
 
         lastFireTime = now;
-        var fired = fireHitscanPattern(camera, weapon, onHit, onMiss);
+        var fired = getAutoLockConfig(weapon)
+            ? fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken)
+            : (weapon.singleHitFromPellets
+                ? fireCircleScanPattern(camera, weapon, onHit, onMiss)
+                : fireHitscanPattern(camera, weapon, onHit, onMiss));
         if (fired) {
             consumeAmmoForShot(weapon, now);
         }
@@ -808,21 +1203,24 @@
             adsFovDeg: Number(weapon.adsFovDeg || 0),
             maxRange: getEffectiveMaxRange(weapon),
             adsMaxRange: Number(weapon.adsMaxRange || weapon.maxRange || 0),
-            adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1)
+            adsHitscanRangeMultiplier: Number(weapon.adsHitscanRangeMultiplier || 1),
+            autoLock: weapon.autoLock ? { enabled: weapon.autoLock.enabled !== false } : null,
+            singleHitFromPellets: !!weapon.singleHitFromPellets
         };
     };
 
     GameHitscan.getReticleSpec = function (weaponId) {
         var id = weaponId || currentWeaponId;
-        if (id !== 'shotgun') return null;
-
-        return {
-            type: 'shotgun',
-            size: getShotgunReticleSizePx(),
-            spreadRadiusPx: getWeaponSpreadRadiusPx(weapons[id]),
-            bloomSize: 0,
-            adsActive: isAdsActiveForWeapon(id)
-        };
+        var weapon = weapons[id];
+        if (!weapon) return null;
+        if (getAutoLockConfig(weapon) || weapon.singleHitFromPellets || id === 'shotgun') {
+            return {
+                type: 'circle',
+                size: getCircleReticleSizePx(weapon),
+                adsActive: isAdsActiveForWeapon(id)
+            };
+        }
+        return null;
     };
 
     GameHitscan.getWeaponOrder = function () {
@@ -915,7 +1313,34 @@
     GameHitscan.peekCenterTarget = function (camera, maxRange) {
         var weapon = getCurrentWeaponData();
         var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : getEffectiveMaxRange(weapon);
+        if (weapon && weapon.singleHitFromPellets) {
+            var traced = findBestCircleScanHit(camera, weapon);
+            if (!traced || !traced.hit) return null;
+            return {
+                hitbox: traced.hitbox,
+                hitType: traced.hitType || 'body',
+                targetId: traced.hitbox && traced.hitbox.userData ? traced.hitbox.userData.targetId || '' : '',
+                distance: traced.distance,
+                point: traced.hitPoint
+            };
+        }
         return castCenter(camera, range);
+    };
+
+    GameHitscan.peekAutoLockTarget = function (camera) {
+        var weapon = getCurrentWeaponData();
+        if (!getAutoLockConfig(weapon)) return null;
+        var preview = resolveAutoLockPreview(camera, weapon);
+        if (!preview || preview.kind !== 'lock' || !preview.target) return null;
+        return {
+            targetId: preview.target.targetId || '',
+            ownerType: preview.target.ownerType || 'unknown',
+            worldPos: preview.body && preview.body.point
+                ? new THREE.Vector3(preview.body.point.x, preview.body.point.y, preview.body.point.z)
+                : (preview.target.worldPos && preview.target.worldPos.clone ? preview.target.worldPos.clone() : null),
+            hitbox: preview.target.bodyHitbox || preview.target.hitbox || null,
+            enemyRef: preview.target.enemyRef || null
+        };
     };
 
     GameHitscan.tick = function (_dt) {
@@ -963,6 +1388,8 @@
             ownerType: target.ownerType || 'unknown',
             worldPos: target.worldPos && target.worldPos.clone ? target.worldPos.clone() : null,
             hitbox: target.hitbox || null,
+            bodyHitbox: target.bodyHitbox || target.hitbox || null,
+            headHitbox: target.headHitbox || null,
             enemyRef: target.enemyRef || null
         };
     };
@@ -979,6 +1406,8 @@
             ownerType: target.ownerType || 'unknown',
             worldPos: target.worldPos && target.worldPos.clone ? target.worldPos.clone() : null,
             hitbox: target.hitbox || null,
+            bodyHitbox: target.bodyHitbox || target.hitbox || null,
+            headHitbox: target.headHitbox || null,
             enemyRef: target.enemyRef || null
         };
     };
@@ -1050,7 +1479,9 @@
                 hipfireBloomScale: Number(weapon.hipfireBloomScale != null ? weapon.hipfireBloomScale : 1),
                 adsBloomScale: Number(weapon.adsBloomScale != null ? weapon.adsBloomScale : 1),
                 maxRange: weapon.maxRange,
-                adsMaxRange: weapon.adsMaxRange
+                adsMaxRange: weapon.adsMaxRange,
+                autoLock: weapon.autoLock ? { enabled: weapon.autoLock.enabled !== false } : null,
+                singleHitFromPellets: !!weapon.singleHitFromPellets
             });
         }
         return out;

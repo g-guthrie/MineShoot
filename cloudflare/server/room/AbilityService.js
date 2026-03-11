@@ -13,8 +13,22 @@ const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 
 const MSG_S2C = protocol.msg.s2c;
 
-function hookHeadPosition(state, now) {
-  if (!state || !state.startPos || !state.endPos) return null;
+function hookHeadPosition(state, now, liveOrigin) {
+  if (!state) return null;
+  if (state.phase === 'retract') {
+    const retractStart = state.retractStartPos || state.endPos || state.headPos || state.startPos;
+    const retractEnd = liveOrigin || state.startPos;
+    if (!retractStart || !retractEnd) return null;
+    const retractStartedAt = Number(state.retractStartedAt || 0);
+    const retractEndsAt = Math.max(retractStartedAt + 1, Number(state.endsAt || retractStartedAt + 1));
+    const retractT = Math.max(0, Math.min(1, (Number(now || nowMs()) - retractStartedAt) / (retractEndsAt - retractStartedAt)));
+    return {
+      x: retractStart.x + ((retractEnd.x - retractStart.x) * retractT),
+      y: retractStart.y + ((retractEnd.y - retractStart.y) * retractT),
+      z: retractStart.z + ((retractEnd.z - retractStart.z) * retractT)
+    };
+  }
+  if (!state.startPos || !state.endPos) return null;
   const startAt = Number(state.startedAt || 0);
   const hitAt = Math.max(startAt + 1, Number(state.hitAt || startAt + 1));
   const t = Math.max(0, Math.min(1, (Number(now || nowMs()) - startAt) / (hitAt - startAt)));
@@ -23,6 +37,17 @@ function hookHeadPosition(state, now) {
     y: state.startPos.y + ((state.endPos.y - state.startPos.y) * t),
     z: state.startPos.z + ((state.endPos.z - state.startPos.z) * t)
   };
+}
+
+function beginHookRetract(state, now) {
+  if (!state) return;
+  const retractDuration = Math.max(120, Number(state.hitAt || 0) - Number(state.startedAt || 0));
+  state.phase = 'retract';
+  state.targetId = '';
+  state.retractStartPos = state.endPos || state.headPos || state.startPos;
+  state.retractStartedAt = now;
+  state.headPos = state.retractStartPos;
+  state.endsAt = now + retractDuration;
 }
 
 function distanceSq3(a, b) {
@@ -301,16 +326,19 @@ export function tickClassAbilityState(room, entity) {
     if (!source || !source.alive) {
       entity.hookPullState = null;
     } else {
-      const forward = room.entityForward(source);
       const targetDist = Math.max(1.5, Number(pull.pullDistance || 3.2));
+      const forward = room.entityForward(source);
       const desiredX = Math.max(room.boundsMin, Math.min(room.boundsMax, source.x + (forward.x * targetDist)));
       const desiredZ = Math.max(room.boundsMin, Math.min(room.boundsMax, source.z + (forward.z * targetDist)));
       const toX = desiredX - entity.x;
       const toZ = desiredZ - entity.z;
       const dist = Math.sqrt((toX * toX) + (toZ * toZ));
+      const sourceDx = source.x - entity.x;
+      const sourceDz = source.z - entity.z;
+      const sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
       const baseStep = Math.max(0.001, Number(pull.pullSpeed || 26)) * (1 / 20);
       const step = Math.min(dist, Math.max(baseStep * 0.45, dist * 0.24));
-      if (dist <= 0.08 || now >= (pull.endsAt || 0)) {
+      if (sourceDist <= (targetDist + 0.08) || dist <= 0.08 || now >= (pull.endsAt || 0)) {
         entity.x = desiredX;
         entity.z = desiredZ;
         room.applyJustBeenHooked(entity, Number(pull.postHookStunDuration || 0));
@@ -318,6 +346,13 @@ export function tickClassAbilityState(room, entity) {
       } else {
         entity.x += (toX / dist) * step;
         entity.z += (toZ / dist) * step;
+        const sourceDxAfter = source.x - entity.x;
+        const sourceDzAfter = source.z - entity.z;
+        const sourceDistAfter = Math.sqrt((sourceDxAfter * sourceDxAfter) + (sourceDzAfter * sourceDzAfter));
+        if (sourceDistAfter <= (targetDist + 0.08)) {
+          room.applyJustBeenHooked(entity, Number(pull.postHookStunDuration || 0));
+          entity.hookPullState = null;
+        }
       }
       entity.yaw = Math.atan2(source.x - entity.x, source.z - entity.z) + Math.PI;
       entity.moveSpeedNorm = 0;
@@ -384,6 +419,11 @@ export function tickClassAbilityState(room, entity) {
         state.headPos = room.entityAimTargetPosition(target);
         state.endsAt = now + 260;
       } else if (now >= (state.hitAt || 0)) {
+        beginHookRetract(state, now);
+      }
+    } else if (state.phase === 'retract') {
+      state.headPos = hookHeadPosition(state, now, room.entityCorePosition(entity)) || state.headPos || state.startPos;
+      if (now >= (state.endsAt || 0)) {
         entity.hookState = null;
       }
     } else if (now >= (state.endsAt || 0)) {

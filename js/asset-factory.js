@@ -519,6 +519,115 @@
         return finalize(group, 'environment', 'rocks');
     }
 
+    function createWaterfallCrownTree(options) {
+        options = options || {};
+        var group = new THREE.Group();
+        var trunk = getLambert({ color: 0x402a18 });
+        var bark = getLambert({ color: 0x5a3b24 });
+        var root = getLambert({ color: 0x4b321f });
+        var leafMain = getLambert({ color: 0x1d5b29 });
+        var leafLight = getLambert({ color: 0x2f7a38 });
+        var leafDeep = getLambert({ color: 0x143b18 });
+
+        add(group, box(1.8, 13.6, 1.8, trunk), 0, 6.8, 0);
+        add(group, box(2.3, 2.6, 2.1, bark), 0, 12.8, 0.15);
+        add(group, box(1.2, 2.4, 1.1, bark), -1.05, 9.8, 0.0);
+        add(group, box(1.0, 2.0, 1.0, bark), 0.95, 10.6, 0.25);
+
+        add(group, box(2.2, 0.75, 1.1, root), -1.0, 0.34, 0.75);
+        add(group, box(2.0, 0.65, 1.0, root), 0.9, 0.28, 0.7);
+        add(group, box(1.4, 0.55, 2.0, root), -0.2, 0.24, -0.9);
+
+        add(group, box(7.8, 4.2, 7.0, leafMain), 0.15, 16.4, 0.4);
+        add(group, box(6.6, 3.4, 5.8, leafLight), -1.6, 18.6, 0.8);
+        add(group, box(6.0, 3.1, 5.6, leafLight), 1.9, 18.2, -0.2);
+        add(group, box(4.8, 2.4, 4.5, leafDeep), 0.2, 20.5, 0.6);
+        add(group, box(3.4, 1.8, 3.2, leafDeep), -0.5, 22.0, 0.0);
+        add(group, box(5.2, 2.1, 3.6, leafMain), 0.0, 14.8, 2.3);
+
+        return finalize(group, 'environment', 'waterfallCrownTree');
+    }
+
+    function createWaterfallBranchTree(options) {
+        options = options || {};
+        var group = new THREE.Group();
+        var trunk = getLambert({ color: 0x3d2818 });
+        var bark = getLambert({ color: 0x583824 });
+        var branch = getLambert({ color: 0x6b452b });
+        var leafMain = getLambert({ color: 0x205c2b });
+        var leafLight = getLambert({ color: 0x337d3f });
+        var leafDeep = getLambert({ color: 0x173d1c });
+
+        add(group, box(1.6, 11.8, 1.6, trunk), 0, 5.9, 0);
+
+        add(group, box(1.5, 2.2, 1.5, bark), 0.15, 12.4, 0.1);
+
+        var branchA = box(1.02, 1.02, 6.2, branch);
+        branchA.position.set(2.0, 14.5, -1.0);
+        branchA.rotation.z = -0.76;
+        branchA.rotation.x = 0.12;
+        branchA.rotation.y = -0.08;
+        group.add(branchA);
+
+        var branchB = box(0.9, 0.9, 4.9, bark);
+        branchB.position.set(-1.45, 13.7, 1.25);
+        branchB.rotation.z = 0.52;
+        branchB.rotation.x = -0.08;
+        branchB.rotation.y = 0.1;
+        group.add(branchB);
+
+        add(group, box(1.9, 0.65, 1.0, bark), -0.9, 0.3, 0.8);
+        add(group, box(1.6, 0.58, 1.1, bark), 1.0, 0.26, -0.75);
+        add(group, box(1.1, 0.5, 1.5, bark), 0.0, 0.22, 1.15);
+
+        add(group, box(5.0, 3.3, 4.8, leafMain), 3.3, 15.6, -2.4);
+        add(group, box(4.2, 2.9, 3.8, leafLight), 4.4, 17.5, -3.0);
+        add(group, box(4.2, 2.7, 3.9, leafMain), -2.9, 14.6, 2.4);
+        add(group, box(3.3, 2.4, 3.2, leafLight), -3.7, 16.0, 3.0);
+        add(group, box(3.4, 2.2, 3.0, leafDeep), 1.3, 18.3, -0.3);
+        add(group, box(2.5, 1.8, 2.5, leafDeep), 0.3, 19.9, 0.3);
+
+        return finalize(group, 'environment', 'waterfallBranchTree');
+    }
+
+    function createWaterfallWallTree(options) {
+        options = options || {};
+        var group = new THREE.Group();
+        var trunk = getLambert({ color: 0x402a18 });
+        var bark = getLambert({ color: 0x5b3923 });
+        var root = getLambert({ color: 0x4a311d });
+        var leafMain = getLambert({ color: 0x1f5b2a });
+        var leafLight = getLambert({ color: 0x347c3e });
+        var leafDeep = getLambert({ color: 0x153a1a });
+
+        add(group, box(1.45, 10.6, 1.45, trunk), 0, 5.3, 0);
+        add(group, box(1.75, 2.0, 1.6, bark), 0.08, 10.9, 0.05);
+
+        var armA = box(0.86, 0.86, 4.2, bark);
+        armA.position.set(1.15, 12.9, -0.6);
+        armA.rotation.z = -0.48;
+        armA.rotation.x = 0.1;
+        group.add(armA);
+
+        var armB = box(0.72, 0.72, 3.4, bark);
+        armB.position.set(-0.95, 11.9, 0.75);
+        armB.rotation.z = 0.34;
+        armB.rotation.x = -0.05;
+        group.add(armB);
+
+        add(group, box(1.6, 0.55, 0.9, root), -0.7, 0.22, 0.65);
+        add(group, box(1.45, 0.5, 0.92, root), 0.75, 0.2, -0.62);
+        add(group, box(0.9, 0.4, 1.3, root), 0.0, 0.18, 0.95);
+
+        add(group, box(4.4, 2.8, 4.0, leafMain), 1.1, 13.7, -0.3);
+        add(group, box(3.6, 2.4, 3.2, leafLight), -1.4, 15.5, 1.0);
+        add(group, box(3.2, 2.2, 3.0, leafDeep), 1.8, 16.4, -1.2);
+        add(group, box(2.6, 1.8, 2.4, leafDeep), -0.2, 17.6, 0.2);
+        add(group, box(2.8, 1.6, 2.2, leafMain), 0.2, 11.6, 1.7);
+
+        return finalize(group, 'environment', 'waterfallWallTree');
+    }
+
     function createGrasses() {
         var group = new THREE.Group();
         var mat = transparentBasic(0x79b34d, 0.88);
@@ -776,6 +885,9 @@
         },
         environment: {
             rocks: createRocks,
+            waterfallCrownTree: createWaterfallCrownTree,
+            waterfallBranchTree: createWaterfallBranchTree,
+            waterfallWallTree: createWaterfallWallTree,
             grasses: createGrasses,
             flowers: createFlowers,
             swarmOfBugs: createSwarmOfBugs,

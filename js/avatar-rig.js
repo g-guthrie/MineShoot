@@ -42,6 +42,12 @@
     var HEAD_EYE_Y = 0.06;
     var HEAD_EYE_Z = -0.282;
     var HEAD_EYE_X = 0.12;
+    var FIREARM_AIM_PITCH_SHOULDER_FACTOR = 0.7;
+    var FIREARM_AIM_PITCH_WRIST_FACTOR = 0.3;
+    var FIREARM_SPRINT_AIM_PITCH_SHOULDER_FACTOR = 0.55;
+    var FIREARM_SPRINT_AIM_PITCH_WRIST_FACTOR = 0.25;
+    var AIRBORNE_ARM_SIDE_SPLAY = -15 * DEG_TO_RAD;
+    var AIRBORNE_ARM_SWEEP = 15 * DEG_TO_RAD;
     var LEFT_PALM_NEUTRAL = { x: -0.01, y: -0.84, z: -0.03 };
     var RIGHT_PALM_SOCKET = { x: 0.015, y: -0.98, z: -0.01 };
     var HANDLE_ANCHOR_NAME = 'weaponHandleAnchor';
@@ -66,6 +72,12 @@
     function resetGunMountPose(rig) {
         if (!rig || !rig.gun || !rig.gunBaseRot) return;
         rig.gun.rotation.set(rig.gunBaseRot.x, rig.gunBaseRot.y, rig.gunBaseRot.z);
+    }
+
+    function applyFirearmAimPitch(rig, shoulderBase, shoulderFactor, wristFactor) {
+        if (!rig || !rig.armR || !rig.palmRight) return;
+        rig.armR.rotation.x = shoulderBase + (rig.aimPitch * Number(shoulderFactor || 0));
+        rig.palmRight.rotation.x = rig.aimPitch * Number(wristFactor || 0);
     }
 
     function pointArmAtTarget(armGroup, targetVec, parentGroup, extraX, extraY, extraZ) {
@@ -104,19 +116,19 @@
 
         return {
             // Keep the sniper support hand tucked under the fore-end instead of
-            // reaching across the entire torso.
-            armX: 0.78 + (aim * 0.1) + (adsTighten * 0.03),
-            armY: -0.22 - (Math.abs(walk) * 0.03) - (adsTighten * 0.01),
-            armZ: -0.34 - (adsTighten * 0.03),
-            palmX: -0.015,
-            palmY: -0.87,
-            palmZ: -0.13 - (adsTighten * 0.015),
-            palmRotX: 0.03,
-            palmRotY: -0.02,
-            palmRotZ: -0.1,
-            targetX: 0.14 + (aim * 0.08) + (adsTighten * 0.015),
-            targetY: -0.03,
-            targetZ: -0.12 - (adsTighten * 0.015)
+            // reaching across the entire torso or curling over the top rail.
+            armX: 0.72 + (aim * 0.08) + (adsTighten * 0.02),
+            armY: -0.28 - (Math.abs(walk) * 0.035) - (adsTighten * 0.015),
+            armZ: -0.32 - (adsTighten * 0.025),
+            palmX: -0.02,
+            palmY: -0.93,
+            palmZ: -0.16 - (adsTighten * 0.015),
+            palmRotX: 0.08,
+            palmRotY: -0.03,
+            palmRotZ: -0.16,
+            targetX: 0.1 + (aim * 0.07) + (adsTighten * 0.012),
+            targetY: -0.08,
+            targetZ: -0.1 - (adsTighten * 0.015)
         };
     }
 
@@ -561,18 +573,23 @@
                 return;
             }
             if (airborne) {
+                var forwardPressed = !!(animState && animState.movingForward);
+                var backwardPressed = !!(animState && animState.movingBackward);
+                var airborneArmSweep = 0;
+                if (forwardPressed !== backwardPressed) {
+                    airborneArmSweep = forwardPressed ? -AIRBORNE_ARM_SWEEP : AIRBORNE_ARM_SWEEP;
+                }
                 rig.legL.rotation.x = 0;
                 rig.legR.rotation.x = 0;
                 rig.legL.rotation.z = 0;
                 rig.legR.rotation.z = 0;
                 rig.legL.position.x = AVATAR_LEG_LEFT_CENTER_OFFSET.x;
                 rig.legR.position.x = AVATAR_LEG_RIGHT_CENTER_OFFSET.x;
-                rig.armL.rotation.x = 0;
+                rig.armL.rotation.x = airborneArmSweep;
                 rig.armL.rotation.y = 0;
-                rig.armL.rotation.z = 0;
-                rig.armR.rotation.x = 1.05 + (rig.aimPitch * 0.25);
+                rig.armL.rotation.z = AIRBORNE_ARM_SIDE_SPLAY;
+                applyFirearmAimPitch(rig, 1.05, FIREARM_AIM_PITCH_SHOULDER_FACTOR, FIREARM_AIM_PITCH_WRIST_FACTOR);
                 rig.armR.rotation.z = -0.08;
-                rig.palmRight.rotation.x = 0;
             } else {
                 rig.legL.rotation.x = walkSwing;
                 rig.legR.rotation.x = -walkSwing;
@@ -588,23 +605,16 @@
                     rig.armL.rotation.y = 0;
                     rig.armL.rotation.z = -0.04;
                     rig.palmRight.rotation.x = 0;
-                } else if (sprinting) {
-                    // Keep firearms in a low-ready carry while sprinting. Reusing
-                    // the melee arm-pump leaves the weapon mount nearly vertical,
-                    // which is especially obvious on remote players and bots.
-                    rig.armR.rotation.x = 0.84 + (Math.abs(walkSwing) * 0.12);
-                    rig.armR.rotation.y = 0;
-                    rig.armR.rotation.z = -0.14;
-                    rig.armL.rotation.x = 0.52 + (walkSwing * 0.12);
-                    rig.armL.rotation.y = -0.08;
-                    rig.armL.rotation.z = -0.12;
-                    rig.palmRight.rotation.x = 0;
                 } else {
-                    var shoulderAim = rig.aimPitch * 0.35;
+                    var locomotionSwing = sprinting ? (walkSwing * 1.16) : walkSwing;
+                    var rightArmCarrySwing = -locomotionSwing * 0.0675;
+                    var rightWristSwing = locomotionSwing * 0.03375;
                     var armBase = 75 * DEG_TO_RAD;
-                    var supportPose = getSupportPoseForWeapon(rig.weaponId, rig.aimPitch, walkSwing, !!(animState && animState.adsActive));
-                    rig.armR.rotation.x = armBase + shoulderAim;
+                    var supportPose = getSupportPoseForWeapon(rig.weaponId, rig.aimPitch, locomotionSwing, !!(animState && animState.adsActive));
+                    applyFirearmAimPitch(rig, armBase, FIREARM_AIM_PITCH_SHOULDER_FACTOR, FIREARM_AIM_PITCH_WRIST_FACTOR);
+                    rig.armR.rotation.x += rightArmCarrySwing;
                     rig.armR.rotation.z = -0.08;
+                    rig.palmRight.rotation.x += rightWristSwing;
                     if (supportPose) {
                         applyLeftArmPose(rig, supportPose);
                         rig.supportAnchor.getWorldPosition(targetWorld);
@@ -617,11 +627,10 @@
                             supportPose.targetZ
                         );
                     } else {
-                        rig.armL.rotation.x = walkSwing * 0.65;
+                        rig.armL.rotation.x = locomotionSwing * 0.65;
                         rig.armL.rotation.y = 0;
                         rig.armL.rotation.z = 0;
                     }
-                    rig.palmRight.rotation.x = 0;
                 }
             }
 

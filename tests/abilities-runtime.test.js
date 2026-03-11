@@ -210,6 +210,69 @@ test('local hook uses the center-target world point when available', async () =>
   });
 });
 
+test('local missed hook retracts toward the current player origin instead of disappearing', async () => {
+  const timeState = { now: 1000 };
+  const hookOrigin = new THREE.Vector3(0, 1.2, 0);
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameHitscan: {
+      peekCenterTarget() {
+        return {
+          point: new THREE.Vector3(0, 1.2, -3)
+        };
+      }
+    },
+    GamePlayer: {
+      getThrowableOriginWorldPosition() {
+        return hookOrigin.clone();
+      }
+    },
+    GameEnemy: {
+      getLockTargets() {
+        return [];
+      }
+    }
+  }, {
+    Date: {
+      now() {
+        return timeState.now;
+      }
+    }
+  });
+
+  abilities.setLoadout('hook', 'missile');
+  const result = abilities.triggerAbility(
+    1,
+    camera,
+    { x: 0, y: 0, z: 0 },
+    { yaw: 0 },
+    null,
+    null
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(abilities.getHookState().phase, 'travel');
+
+  timeState.now = 1125;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(abilities.getHookState().phase, 'retract');
+
+  hookOrigin.z = 2;
+  timeState.now = 1180;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.ok(abilities.getHookState().headPos.z > -1);
+  assert.ok(abilities.getHookState().headPos.z < 0);
+
+  timeState.now = 1250;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(abilities.getHookState(), null);
+});
+
 test('clearTransientState drops local heal effects', async () => {
   const abilities = await loadAbilitiesRuntime({});
 

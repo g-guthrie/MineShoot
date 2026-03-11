@@ -36,6 +36,8 @@ test('remote sync turns a grounded-to-airborne transition into a jump action tri
     targetPitch: 0,
     moveSpeedNorm: 0,
     sprinting: false,
+    movingForward: false,
+    movingBackward: false,
     isGrounded: true,
     velocityY: 0,
     hookedUntil: 0,
@@ -72,4 +74,52 @@ test('remote sync turns a grounded-to-airborne transition into a jump action tri
 
   assert.equal(jumpTriggers.length, 1);
   assert.equal(latestUpdate.animState.airborne, true);
+  assert.equal(latestUpdate.animState.movingForward, false);
+  assert.equal(latestUpdate.animState.movingBackward, false);
+});
+
+test('remote sync forwards airborne movement intent to animation', async () => {
+  const remoteSync = await loadRemoteSync();
+  const calls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0.7,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: true,
+    isGrounded: false,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].movingForward, false);
+  assert.equal(calls[0].movingBackward, true);
 });

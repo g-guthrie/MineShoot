@@ -90,6 +90,8 @@ export function toEntityState(entity) {
     weaponId: entity.weaponId || 'rifle',
     moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
     sprinting: !!entity.sprinting,
+    movingForward: !!(entity.inputState && entity.inputState.forward),
+    movingBackward: !!(entity.inputState && entity.inputState.backward),
     velocityY: Number((entity.velocityY || 0).toFixed(4)),
     isGrounded: !!entity.isGrounded,
     jumpHoldTimer: Number((entity.jumpHoldTimer || 0).toFixed(4)),

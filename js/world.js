@@ -575,12 +575,39 @@ import { chooseSpawnPoint } from '../shared/spawn-logic.js';
             if (sheet.tiles && sheet.tiles.length) {
                 var stepInterval = Math.max(0.1, Number(sheet.stepInterval || 0.5));
                 var step = Math.floor(animClock / stepInterval);
+                var rowDirection = Number(sheet.rowDirection || 1);
+                var pulseInterval = Math.max(0, Number(sheet.pulseInterval || 0));
+                var pulseDuration = Math.max(0.12, Number(sheet.pulseDuration || 0.9));
+                var pulseWidth = Math.max(0.45, Number(sheet.pulseWidth || 1.4));
+                var pulseSkew = Number(sheet.pulseColumnSkew || 0.45);
+                var pulsePhase = Number(sheet.pulsePhase || 0);
+                var pulseRow = -1000;
+                var pulseActive = false;
+                var pulseLightColor = Number(sheet.pulseLightColor || sheet.lightColor || 0x74d6f2);
+                if (pulseInterval > 0) {
+                    var cyclePos = (animClock + pulsePhase) % pulseInterval;
+                    if (cyclePos < pulseDuration) {
+                        pulseActive = true;
+                        pulseRow = (cyclePos / pulseDuration) * (Math.max(1, Number(sheet.rowCount || 1)) + (pulseWidth * 2));
+                    }
+                }
                 for (var ti = 0; ti < sheet.tiles.length; ti++) {
                     var tile = sheet.tiles[ti];
                     if (!tile || !tile.material) continue;
-                    var on = ((step + tile.row + (tile.column * 2)) % 4) < 2;
-                    tile.material.color.setHex(on ? Number(sheet.lightColor || 0x74d6f2) : Number(sheet.darkColor || 0x3d8fb3));
-                    tile.material.opacity = on ? 0.78 : 0.5;
+                    var on = ((step + (tile.row * rowDirection) + (tile.column * 2)) % 4) < 2;
+                    var color = on ? Number(sheet.lightColor || 0x74d6f2) : Number(sheet.darkColor || 0x3d8fb3);
+                    var opacity = on ? 0.78 : 0.5;
+                    if (pulseActive) {
+                        var pulseCenter = pulseRow + (tile.column * pulseSkew);
+                        var pulseDist = Math.abs(tile.row - pulseCenter);
+                        if (pulseDist < pulseWidth) {
+                            var pulseMix = 1 - (pulseDist / pulseWidth);
+                            color = pulseMix > 0.38 ? pulseLightColor : color;
+                            opacity = Math.max(opacity, 0.58 + (pulseMix * 0.28));
+                        }
+                    }
+                    tile.material.color.setHex(color);
+                    tile.material.opacity = opacity;
                 }
                 continue;
             }

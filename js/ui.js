@@ -209,10 +209,6 @@
     GameUI.setDebugVisuals = function (enabled) {
         debugVisualsOn = !!enabled;
         if (!shotgunReticleEl) return;
-        var dots = shotgunReticleEl.querySelectorAll('.pellet-dot');
-        for (var i = 0; i < dots.length; i++) {
-            dots[i].style.display = debugVisualsOn ? 'block' : 'none';
-        }
         if (bloomReticle && bloomReticle.setDebugEnabled) {
             bloomReticle.setDebugEnabled(debugVisualsOn);
         } else if (bloomReticleEl && !debugVisualsOn) {
@@ -386,7 +382,7 @@
             return;
         }
 
-        if (weapon.id !== 'shotgun') {
+        if (!(spec && spec.type === 'circle')) {
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
             if (bloomReticle && bloomReticle.updateForWeapon) {

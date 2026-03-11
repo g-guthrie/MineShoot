@@ -449,18 +449,10 @@
             baseDir.normalize();
         }
 
-        var horizontalDir = baseDir.clone();
-        horizontalDir.y = 0;
-        if (horizontalDir.lengthSq() > 0.00001) {
-            horizontalDir.normalize();
-        } else {
-            horizontalDir.set(0, 0, -1);
-        }
-
         var speed = Math.max(0, Number(def.speed || 0));
         var upward = Math.max(0, Number(def.upward || 0));
-        var vel = horizontalDir.multiplyScalar(speed);
-        vel.y = (baseDir.y * speed) + (useExplicitDirection ? (upward * 0.15) : upward);
+        var vel = baseDir.multiplyScalar(speed);
+        vel.y += useExplicitDirection ? (upward * 0.15) : upward;
         return vel;
     }
 

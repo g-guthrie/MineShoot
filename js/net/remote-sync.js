@@ -55,7 +55,8 @@
                         choked: chokeVictimState.lift > 0,
                         startedAt: chokeVictimState.startedAt || 0,
                         worldSpeed: (r.moveSpeedNorm || 0) * 14,
-                        movingForward: (r.moveSpeedNorm || 0) > 0.05
+                        movingForward: !!r.movingForward,
+                        movingBackward: !!r.movingBackward
                     });
                 }
                 var triggerApi = (r.actorVisual && r.actorVisual.triggerAction) ? r.actorVisual : r.rigApi;
