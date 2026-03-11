@@ -13,6 +13,63 @@
     <button id="hud-manual-btn" type="button">MANUAL</button>
     <!-- Overlay -->
     <div id="overlay">
+        <div id="postgame-flow" hidden>
+            <section id="postgame-celebration" class="postgame-screen" hidden>
+                <div class="postgame-kicker">FINAL KILLCAM :: WINNER LOCKED</div>
+                <div id="postgame-winner-banner">WINNER</div>
+                <div id="postgame-result-banner">VICTORY</div>
+                <div id="postgame-ghost-stage" aria-hidden="true">
+                    <pre class="postgame-ghost">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                    <pre class="postgame-ghost postgame-ghost-mid">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                    <pre class="postgame-ghost">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                </div>
+                <div id="postgame-celebration-note">THE CROWD LOVES A HORRIBLE LITTLE GHOST.</div>
+            </section>
+            <section id="postgame-results" class="postgame-screen" hidden>
+                <div class="postgame-kicker">POST ACTION REPORT</div>
+                <div id="postgame-results-title">ROUND RESULTS</div>
+                <div id="postgame-results-grid">
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Outcome</span>
+                        <span id="postgame-results-outcome" class="postgame-stat-value">VICTORY</span>
+                    </div>
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Winner</span>
+                        <span id="postgame-results-winner" class="postgame-stat-value">YOU</span>
+                    </div>
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Mode</span>
+                        <span id="postgame-results-mode" class="postgame-stat-value">FFA</span>
+                    </div>
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Your Line</span>
+                        <span id="postgame-results-line" class="postgame-stat-value">0 / 0</span>
+                    </div>
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Objective</span>
+                        <span id="postgame-results-objective" class="postgame-stat-value">GOAL 0</span>
+                    </div>
+                    <div class="postgame-stat-card">
+                        <span class="postgame-stat-label">Round State</span>
+                        <span id="postgame-results-state" class="postgame-stat-value">RESET 0.0S</span>
+                    </div>
+                </div>
+                <div id="postgame-results-summary">Summary unavailable.</div>
+                <button id="postgame-continue-btn" type="button">CONTINUE</button>
+            </section>
+        </div>
         <div id="menu-stage">
             <div id="menu-shell">
             <div id="menu-header">
@@ -198,6 +255,15 @@
                                     </div>
                                     <div id="friends-social-view" hidden>
                                         <div id="friends-status" aria-live="polite"></div>
+                                        <div id="friends-quick-row">
+                                            <input id="friend-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="FRIEND USER ID">
+                                            <button id="add-friend-btn" type="button">ADD FRIEND</button>
+                                        </div>
+                                        <div id="friends-filter-row">
+                                            <button id="friends-filter-joinable-btn" class="friends-filter-btn active" type="button" aria-pressed="true">JOINABLE</button>
+                                            <button id="friends-filter-online-btn" class="friends-filter-btn" type="button" aria-pressed="false">ONLINE</button>
+                                            <button id="friends-filter-all-btn" class="friends-filter-btn" type="button" aria-pressed="false">ALL</button>
+                                        </div>
                                         <div id="friends-preview-shell">
                                             <div id="friends-preview-title">SAVED FRIENDS</div>
                                             <div id="friends-preview"></div>

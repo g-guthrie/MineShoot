@@ -72,6 +72,7 @@
                 wallhackRadius: defaults.wallhackRadius,
                 lmsLives: 0,
                 lmsCharge: 0,
+                outOfRound: false,
                 throwables: null,
                 kills: 0,
                 deaths: 0,

@@ -102,6 +102,10 @@ export function formatMatchHudCounter(matchState, selfState) {
 
   const mode = normalizeMatchGameMode(match.gameMode);
   if (mode === MATCH_GAME_MODE_LMS) {
+    if (selfState && selfState.outOfRound && !match.ended) {
+      const remaining = Math.max(0, Number(match.lms && match.lms.remainingPlayers || 0));
+      return 'OUT | Left: ' + remaining;
+    }
     const lmsLives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
     const lmsCharge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
     const chargeGoal = Math.max(1, Number(match.lms && match.lms.chargePerExtraLife || lmsRules.chargePerExtraLife));
@@ -168,6 +172,10 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
   }
 
   if (mode === MATCH_GAME_MODE_LMS) {
+    if (selfState && selfState.outOfRound) {
+      const remainingOut = Math.max(0, Number(match.lms && match.lms.remainingPlayers || 0));
+      return 'OUT OF ROUND | LEFT ' + remainingOut;
+    }
     const lives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
     const charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
     const lms = match.lms || null;

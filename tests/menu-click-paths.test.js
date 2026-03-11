@@ -918,7 +918,7 @@ test('controller keeps leader lock and private-room controls interactive from a 
 
   snap = JSON.parse(leaderHarness.snapshot());
   assert.equal(snap.partyLocked, true);
-  assert.equal(snap.dom['party-join-lock-note'].text, 'JOINS LOCKED');
+  assert.equal(snap.dom['party-join-lock-note'].text, 'PARTY CLOSED');
   assert.equal(snap.dom['party-join-lock-btn'].disabled, false);
 
   const hostHarness = await createHarness('account_private_room_host');
@@ -980,7 +980,7 @@ test('party lock action reconciles stale post payloads against canonical party s
 
   const snap = JSON.parse(harness.snapshot());
   assert.equal(snap.partyLocked, true);
-  assert.equal(snap.dom['party-join-lock-note'].text, 'JOINS LOCKED');
+  assert.equal(snap.dom['party-join-lock-note'].text, 'PARTY CLOSED');
   assert.equal(snap.dom['party-status'].text, 'Party locked.');
 });
 

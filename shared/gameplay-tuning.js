@@ -83,7 +83,7 @@ export const gameplayTuning = {
       hipfireBloomScale: 2.5, adsBloomScale: 1,
       aimProfile: { hipfire: { spread: 0.024, maxRange: 110 }, ads: { spread: 0, maxRange: 132 } },
       presentation: {
-        tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
+        tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
         recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
         audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 }
       }

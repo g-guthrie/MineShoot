@@ -24,6 +24,13 @@
     var runtimeInitialized = false;
     var controlsApi = null;
     var lastHandledMatchEndAt = 0;
+    var postGameState = {
+        active: false,
+        phase: '',
+        matchEndedAt: 0,
+        snapshot: null,
+        timer: null
+    };
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -53,8 +60,177 @@
         };
     }
 
+    function ensurePostGameEls() {
+        return {
+            flow: document.getElementById('postgame-flow'),
+            celebration: document.getElementById('postgame-celebration'),
+            winnerBanner: document.getElementById('postgame-winner-banner'),
+            resultBanner: document.getElementById('postgame-result-banner'),
+            celebrationNote: document.getElementById('postgame-celebration-note'),
+            results: document.getElementById('postgame-results'),
+            resultsOutcome: document.getElementById('postgame-results-outcome'),
+            resultsWinner: document.getElementById('postgame-results-winner'),
+            resultsMode: document.getElementById('postgame-results-mode'),
+            resultsLine: document.getElementById('postgame-results-line'),
+            resultsObjective: document.getElementById('postgame-results-objective'),
+            resultsState: document.getElementById('postgame-results-state'),
+            resultsSummary: document.getElementById('postgame-results-summary'),
+            continueBtn: document.getElementById('postgame-continue-btn'),
+            menuStage: document.getElementById('menu-stage')
+        };
+    }
+
+    function cloneMatchData(value) {
+        return value ? JSON.parse(JSON.stringify(value)) : null;
+    }
+
+    function clearPostGameTimer() {
+        if (postGameState.timer) {
+            clearTimeout(postGameState.timer);
+            postGameState.timer = null;
+        }
+    }
+
+    function isPrivateRoomSession(snapshot) {
+        var phase = snapshot && snapshot.privateRoomPhase ? String(snapshot.privateRoomPhase) : '';
+        return !!phase || !!(activeRuntimeMode && activeRuntimeMode.roomStrategy === 'private');
+    }
+
+    function didSelfWin(matchState, selfState) {
+        if (!matchState || !selfState) return false;
+        if (String(matchState.gameMode || '') === 'tdm') {
+            return String(selfState.teamId || '') === String(matchState.winnerTeam || '');
+        }
+        return String(matchState.winnerId || '') === String(selfState.id || '');
+    }
+
+    function modeDisplayName(matchState) {
+        var mode = String(matchState && matchState.gameMode || '').toUpperCase();
+        if (mode === 'TDM') return 'TEAM DEATHMATCH';
+        if (mode === 'LMS') return 'LAST MAN STANDING';
+        return mode || 'FREE FOR ALL';
+    }
+
+    function objectiveSummary(matchState, selfState) {
+        var mode = String(matchState && matchState.gameMode || '');
+        if (mode === 'tdm') {
+            var teamId = String(selfState && selfState.teamId || '');
+            var teamProgress = Number(matchState && matchState.teamProgress && matchState.teamProgress[teamId] || 0);
+            return 'TEAM ' + teamProgress + ' / ' + Number(matchState && matchState.targetProgress || 0);
+        }
+        if (mode === 'lms') {
+            return 'LEFT ' + Math.max(0, Number(matchState && matchState.lms && matchState.lms.remainingPlayers || 0));
+        }
+        return 'GOAL ' + Number(matchState && matchState.targetProgress || 0);
+    }
+
+    function resultsSummary(matchState, selfState) {
+        var rules = sharedMatchRules();
+        if (rules && rules.formatMatchHudCounter) {
+            return rules.formatMatchHudCounter(matchState, selfState);
+        }
+        return 'Kills: ' + Math.max(0, Number(selfState && selfState.kills || 0));
+    }
+
+    function hidePostGameFlow() {
+        var els = ensurePostGameEls();
+        clearPostGameTimer();
+        postGameState.active = false;
+        postGameState.phase = '';
+        postGameState.snapshot = null;
+        if (els.flow) els.flow.hidden = true;
+        if (els.celebration) els.celebration.hidden = true;
+        if (els.results) els.results.hidden = true;
+        if (els.menuStage) els.menuStage.hidden = false;
+    }
+
+    function completePostGameFlow() {
+        var snapshot = postGameState.snapshot;
+        hidePostGameFlow();
+        if (isPrivateRoomSession(snapshot)) {
+            if (overlay) overlay.style.display = 'flex';
+            isPlaying = false;
+            setResumeButtonsVisible(canResumeGameplay());
+            return;
+        }
+        if (globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile && globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode) {
+            globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode();
+        }
+        window.location.href = window.location.pathname;
+    }
+
+    function showPostGameResults() {
+        var els = ensurePostGameEls();
+        var snapshot = postGameState.snapshot || {};
+        var matchState = snapshot.matchState || null;
+        var selfState = snapshot.selfState || null;
+        var winner = winnerLabel(matchState, selfState) || 'PLAYER';
+        var won = didSelfWin(matchState, selfState);
+        var kills = Math.max(0, Number(selfState && selfState.kills || 0));
+        var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
+
+        postGameState.phase = 'results';
+        clearPostGameTimer();
+        if (els.celebration) els.celebration.hidden = true;
+        if (els.results) els.results.hidden = false;
+        if (els.resultsOutcome) els.resultsOutcome.textContent = won ? 'VICTORY' : 'DEFEAT';
+        if (els.resultsWinner) els.resultsWinner.textContent = winner;
+        if (els.resultsMode) els.resultsMode.textContent = modeDisplayName(matchState);
+        if (els.resultsLine) els.resultsLine.textContent = kills + ' / ' + deaths;
+        if (els.resultsObjective) els.resultsObjective.textContent = objectiveSummary(matchState, selfState);
+        if (els.resultsState) els.resultsState.textContent = matchState && matchState.ended
+            ? ('RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now()))
+            : 'ROUND COMPLETE';
+        if (els.resultsSummary) els.resultsSummary.textContent = resultsSummary(matchState, selfState);
+        if (els.continueBtn) {
+            els.continueBtn.textContent = isPrivateRoomSession(snapshot) ? 'RETURN TO ROOM' : 'MAIN MENU';
+        }
+    }
+
+    function beginPostGameFlow(matchContext) {
+        var matchState = matchContext ? matchContext.matchState : null;
+        if (!matchState || !matchState.ended || !Number(matchState.endedAt || 0)) return;
+        if (postGameState.active && postGameState.matchEndedAt === Number(matchState.endedAt || 0)) return;
+
+        var els = ensurePostGameEls();
+        var selfState = matchContext ? matchContext.selfState : null;
+        var winner = winnerLabel(matchState, selfState) || 'PLAYER';
+        var won = didSelfWin(matchState, selfState);
+
+        postGameState.active = true;
+        postGameState.phase = 'celebration';
+        postGameState.matchEndedAt = Number(matchState.endedAt || 0);
+        postGameState.snapshot = {
+            matchState: cloneMatchData(matchState),
+            selfState: cloneMatchData(selfState),
+            respawnState: cloneMatchData(matchContext ? matchContext.respawnState : null),
+            privateRoomPhase: matchContext ? String(matchContext.privateRoomPhase || '') : ''
+        };
+
+        clearPostGameTimer();
+        if (document.pointerLockElement && document.exitPointerLock) {
+            document.exitPointerLock();
+        }
+        if (overlay) overlay.style.display = 'flex';
+        isPlaying = false;
+        setResumeButtonsVisible(false);
+        if (els.menuStage) els.menuStage.hidden = true;
+        if (els.flow) els.flow.hidden = false;
+        if (els.results) els.results.hidden = true;
+        if (els.celebration) els.celebration.hidden = false;
+        if (els.winnerBanner) els.winnerBanner.textContent = winner;
+        if (els.resultBanner) els.resultBanner.textContent = won ? 'VICTORY' : 'DEFEAT';
+        if (els.celebrationNote) {
+            els.celebrationNote.textContent = won
+                ? 'YOUR GHOST CREW IS DOING A SICK LITTLE WIN DANCE.'
+                : (winner + ' GETS THE TROPHY. YOUR GHOSTS ARE FORCED TO APPLAUD.');
+        }
+        postGameState.timer = setTimeout(showPostGameResults, 2600);
+    }
+
     function canResumeGameplay() {
         if (!runtimeInitialized) return false;
+        if (postGameState.active) return false;
         if (!multiplayerMode) return true;
         var matchContext = readMatchContext();
         if (matchContext.privateRoomPhase === 'lobby') return false;
@@ -187,14 +363,14 @@
         if (matchState && matchState.ended && Number(matchState.endedAt || 0) > 0) {
             if (lastHandledMatchEndAt !== Number(matchState.endedAt || 0)) {
                 lastHandledMatchEndAt = Number(matchState.endedAt || 0);
-                if (document.pointerLockElement && document.exitPointerLock) {
-                    document.exitPointerLock();
-                }
-                setTransientDebug(winnerLabel(matchState, selfState) + ' won the round.', 1800);
+                beginPostGameFlow(matchContext);
             }
             return;
         }
         lastHandledMatchEndAt = 0;
+        if (!postGameState.active) {
+            hidePostGameFlow();
+        }
     }
 
     function setTransientDebug(text, ms) {
@@ -406,6 +582,7 @@
         var playBtn = document.getElementById('play-btn');
         var backModeBtn = document.getElementById('back-mode-btn');
         var modeButtonsWrap = document.getElementById('mode-buttons');
+        var postGameEls = ensurePostGameEls();
         var lastStartRequest = 0;
 
         function showResumeControl(show) {
@@ -495,6 +672,34 @@
                 window.location.href = window.location.pathname;
             });
         }
+
+        if (postGameEls.celebration) {
+            postGameEls.celebration.addEventListener('click', function () {
+                if (postGameState.active && postGameState.phase === 'celebration') {
+                    showPostGameResults();
+                }
+            });
+        }
+
+        if (postGameEls.continueBtn) {
+            postGameEls.continueBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                completePostGameFlow();
+            });
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (!postGameState.active) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                if (postGameState.phase === 'celebration') {
+                    showPostGameResults();
+                } else {
+                    completePostGameFlow();
+                }
+            }
+        });
 
         document.addEventListener('pointerlockchange', function () {
             if (document.pointerLockElement === renderer.domElement) {

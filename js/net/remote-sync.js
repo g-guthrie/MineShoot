@@ -63,7 +63,9 @@
                 if (triggerApi && triggerApi.triggerAction) {
                     var jumpStarted = r._prevIsGrounded !== false && r.isGrounded === false && Number(r.velocityY || 0) > 0.1;
                     if (jumpStarted) {
-                        triggerApi.triggerAction('jump');
+                        triggerApi.triggerAction('jump', {
+                            reverseLegTilt: !!r.movingBackward && !r.movingForward
+                        });
                     }
                 }
                 if (r.actorVisual && r.actorVisual.setMuzzleVisible) {

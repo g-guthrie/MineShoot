@@ -183,3 +183,37 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
   assert.equal(room.startPublicMatchIfReadyCalled, 1);
   assert.equal(room.players.get('u1').kills, 0);
 });
+
+test('lms elimination marks players out of round when they lose their last life', () => {
+  const room = {
+    roomName: 'lms-01',
+    gameMode: 'lms',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', lmsLives: 2, lmsCharge: 0, progressScore: 2, kills: 0, deaths: 0 }],
+      ['u2', { id: 'u2', fixtureType: '', lmsLives: 1, lmsCharge: 0, progressScore: 1, kills: 0, deaths: 0, outOfRound: false, respawnAt: 0 }]
+    ]),
+    matchState: Object.assign(emptyMatchState('lms'), { started: true }),
+    getEntityById(id) { return this.players.get(id) || null; },
+    syncLmsPublicState() {},
+    updateLeaderProgress() {},
+    lmsRemainingPlayers() { return 1; },
+    lmsWinnerId() { return 'u1'; },
+    finishCalls: [],
+    finishPublicMatch(winnerId, winnerTeam) { this.finishCalls.push({ winnerId, winnerTeam }); }
+  };
+
+  recordElimination(room, {
+    nowMs: () => 100,
+    lmsRules: { startingLives: 3, chargePerExtraLife: 100, chargePerElimination: 30, respawnDelayMs: 1500 },
+    ffaTargetProgress: 3,
+    tdmTargetProgress: 10,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    gameModeLms: 'lms'
+  }, 'u1', 'u2');
+
+  assert.equal(room.players.get('u2').lmsLives, 0);
+  assert.equal(room.players.get('u2').outOfRound, true);
+  assert.equal(room.players.get('u2').respawnAt, 0);
+  assert.deepEqual(room.finishCalls, [{ winnerId: 'u1', winnerTeam: '' }]);
+});

@@ -286,6 +286,151 @@ canvas {
     z-index: 1;
 }
 
+#postgame-flow {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(circle at top, rgba(210, 244, 223, 0.08), transparent 46%),
+        linear-gradient(180deg, rgba(4, 10, 6, 0.9), rgba(0, 0, 0, 0.94));
+}
+
+#postgame-flow[hidden] {
+    display: none !important;
+}
+
+.postgame-screen {
+    width: min(900px, 94vw);
+    border: 1px solid rgba(132, 188, 146, 0.46);
+    background: linear-gradient(180deg, rgba(9, 24, 12, 0.95), rgba(3, 9, 5, 0.96));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+    color: #d8ffe1;
+    text-align: center;
+    padding: 28px 24px 24px;
+}
+
+.postgame-kicker {
+    color: #8dc79a;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+#postgame-winner-banner,
+#postgame-results-title {
+    margin-top: 16px;
+    color: #f4ffef;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(32px, 5vw, 58px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#postgame-result-banner {
+    margin-top: 8px;
+    color: #93ffab;
+    font-family: 'Rajdhani', 'Courier New', monospace;
+    font-size: clamp(18px, 2.6vw, 28px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+#postgame-ghost-stage {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 28px;
+    margin: 26px 0 18px;
+}
+
+.postgame-ghost {
+    margin: 0;
+    color: #dcffe4;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(22px, 2.5vw, 30px);
+    line-height: 0.92;
+    text-shadow: 0 0 18px rgba(146, 255, 179, 0.34);
+    animation: postgameGhostFloat 1.8s ease-in-out infinite;
+}
+
+.postgame-ghost-mid {
+    transform-origin: center bottom;
+    animation-duration: 1.25s;
+    animation-name: postgameGhostChampion;
+}
+
+#postgame-celebration-note,
+#postgame-results-summary {
+    color: #a8c9ae;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+}
+
+#postgame-results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 22px 0 18px;
+}
+
+.postgame-stat-card {
+    border: 1px solid rgba(112, 160, 120, 0.45);
+    background: rgba(10, 26, 14, 0.72);
+    padding: 12px 14px;
+    text-align: left;
+}
+
+.postgame-stat-label {
+    display: block;
+    color: #86af8e;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.postgame-stat-value {
+    display: block;
+    margin-top: 5px;
+    color: #f0fff4;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: 18px;
+}
+
+#postgame-continue-btn {
+    margin-top: 22px;
+    border: 1px solid #8ab58d;
+    background: linear-gradient(180deg, rgba(25, 54, 30, 0.98), rgba(8, 24, 12, 0.98));
+    color: #eefff1;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: 14px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 12px 26px;
+    cursor: pointer;
+}
+
+#postgame-continue-btn:hover {
+    background: linear-gradient(180deg, rgba(34, 72, 40, 0.98), rgba(10, 31, 15, 0.98));
+}
+
+@keyframes postgameGhostFloat {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+@keyframes postgameGhostChampion {
+    0%, 100% { transform: translateY(0) scale(1.02); }
+    40% { transform: translateY(-18px) scale(1.08); }
+    70% { transform: translateY(-8px) scale(1.04); }
+}
+
 .visually-hidden {
     position: absolute !important;
     width: 1px;
@@ -1153,6 +1298,7 @@ canvas {
     font-family: 'Courier New', monospace;
     font-size: 10px;
     text-transform: uppercase;
+    cursor: default;
 }
 
 .private-room-member.host {
@@ -1188,6 +1334,13 @@ canvas {
 .private-room-member-move:hover {
     border-color: #ffce8a;
     background: rgba(112, 61, 18, 0.88);
+}
+
+.private-room-member-direction {
+    margin-top: 4px;
+    color: #ddb59b;
+    font-size: 9px;
+    letter-spacing: 0.08em;
 }
 
 .private-room-empty {
@@ -1258,6 +1411,69 @@ canvas {
     display: grid;
     gap: 6px;
     align-content: start;
+}
+
+#friends-quick-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+#friend-id-input {
+    min-width: 0;
+    border: 1px solid rgba(190, 102, 102, 0.38);
+    background: rgba(34, 12, 12, 0.84);
+    color: #ffe3e3;
+    padding: 8px 10px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+}
+
+#add-friend-btn {
+    border: 1px solid rgba(255, 160, 108, 0.42);
+    background: rgba(66, 22, 12, 0.92);
+    color: #ffd4bf;
+    padding: 8px 11px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+#add-friend-btn:hover {
+    border-color: #ffb58e;
+    background: rgba(90, 30, 16, 0.96);
+    color: #fff1e6;
+}
+
+#friends-filter-row {
+    display: inline-flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.friends-filter-btn {
+    border: 1px solid rgba(167, 84, 84, 0.36);
+    background: rgba(40, 14, 14, 0.8);
+    color: #f7c9c9;
+    padding: 5px 9px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.friends-filter-btn.active,
+.friends-filter-btn:hover {
+    border-color: rgba(255, 171, 120, 0.6);
+    background: rgba(78, 28, 18, 0.92);
+    color: #fff0e3;
 }
 
 .party-preview-line,
@@ -1357,6 +1573,18 @@ canvas {
     border-color: rgba(190, 102, 102, 0.38);
     background: rgba(55, 18, 18, 0.9);
     color: #ffcccc;
+}
+
+.friend-preview-btn.join {
+    border-color: rgba(122, 201, 140, 0.42);
+    background: rgba(15, 54, 21, 0.9);
+    color: #d8ffe1;
+}
+
+.friend-preview-btn.join:hover {
+    border-color: #9debb0;
+    background: rgba(18, 72, 28, 0.96);
+    color: #f0fff4;
 }
 
 .friend-preview-badges {

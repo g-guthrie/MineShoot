@@ -90,6 +90,11 @@
         var partySocialView = document.getElementById('party-social-view');
         var friendsSocialView = document.getElementById('friends-social-view');
         var friendsStatusEl = document.getElementById('friends-status');
+        var friendIdInput = document.getElementById('friend-id-input');
+        var addFriendBtn = document.getElementById('add-friend-btn');
+        var friendsFilterJoinableBtn = document.getElementById('friends-filter-joinable-btn');
+        var friendsFilterOnlineBtn = document.getElementById('friends-filter-online-btn');
+        var friendsFilterAllBtn = document.getElementById('friends-filter-all-btn');
         var friendsPreview = document.getElementById('friends-preview');
         var viewFriendsBtn = document.getElementById('view-friends-btn');
         var refreshFriendsBtn = document.getElementById('refresh-friends-btn');
@@ -215,6 +220,11 @@
                 partyJoinLockNote: partyJoinLockNote,
                 viewFriendsBtn: viewFriendsBtn,
                 refreshFriendsBtn: refreshFriendsBtn,
+                addFriendBtn: addFriendBtn,
+                friendIdInput: friendIdInput,
+                friendsFilterJoinableBtn: friendsFilterJoinableBtn,
+                friendsFilterOnlineBtn: friendsFilterOnlineBtn,
+                friendsFilterAllBtn: friendsFilterAllBtn,
                 privateRoomModeFfaBtn: privateRoomModeFfaBtn,
                 privateRoomModeTdmBtn: privateRoomModeTdmBtn,
                 privateRoomModeLmsBtn: privateRoomModeLmsBtn,
@@ -467,6 +477,9 @@
             setState: noop,
             friendsPreview: friendsPreview,
             friendsModalContent: friendsModalContent,
+            friendsFilterJoinableBtn: friendsFilterJoinableBtn,
+            friendsFilterOnlineBtn: friendsFilterOnlineBtn,
+            friendsFilterAllBtn: friendsFilterAllBtn,
             isLoggedIn: isLoggedIn,
             updateSocialSubtitle: updateSocialSubtitle,
             performFriendAction: function (action, targetUserId, pendingText, successText) {
@@ -477,6 +490,7 @@
                 });
             }
         }) : null;
+        if (friendsView && friendsView.syncFilters) friendsView.syncFilters();
 
         privateRoomViewController = privateRoomViewFactory && privateRoomViewFactory.create ? privateRoomViewFactory.create({
             getState: function () { return session && session.getPrivateRoomState ? session.getPrivateRoomState() : null; },
@@ -733,10 +747,15 @@
                 menuPartyIdValue: menuPartyIdValue,
                 partyIdInput: partyIdInput,
                 joinPartyBtn: joinPartyBtn,
+                addFriendBtn: addFriendBtn,
+                friendIdInput: friendIdInput,
                 socialTabPartyBtn: socialTabPartyBtn,
                 socialTabFriendsBtn: socialTabFriendsBtn,
                 socialTabRoomBtn: socialTabRoomBtn,
                 partyJoinLockBtn: partyJoinLockBtn,
+                friendsFilterJoinableBtn: friendsFilterJoinableBtn,
+                friendsFilterOnlineBtn: friendsFilterOnlineBtn,
+                friendsFilterAllBtn: friendsFilterAllBtn,
                 leavePartyBtn: leavePartyBtn,
                 viewPartyBtn: viewPartyBtn,
                 viewFriendsBtn: viewFriendsBtn,
@@ -747,15 +766,23 @@
                 friendsOverlay: friendsOverlay,
                 modalManager: modalManager,
                 setPartyStatus: setPartyStatus,
+                setFriendsStatus: setFriendsStatus,
                 runPartyAction: function (action, payload, pendingText) {
                     if (!session || !session.runPartyAction) return Promise.resolve(null);
                     return session.runPartyAction(action, payload, pendingText);
+                },
+                performFriendAction: function (action, targetUserId, pendingText, successText) {
+                    if (!session || !session.performFriendAction) return Promise.resolve(null);
+                    return session.performFriendAction(action, targetUserId, pendingText, successText);
                 },
                 setSocialView: lobbyUi.setSocialView,
                 isLoggedIn: isLoggedIn,
                 refreshFriendsState: function (silent) {
                     if (!session || !session.refreshFriendsState) return Promise.resolve(null);
                     return session.refreshFriendsState(silent);
+                },
+                setFriendsFilter: function (nextFilter) {
+                    if (friendsView && friendsView.setFilter) friendsView.setFilter(nextFilter);
                 },
                 hasPrivateRoom: function () {
                     return !!(session && session.hasPrivateRoomState && session.hasPrivateRoomState());

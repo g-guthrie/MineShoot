@@ -99,6 +99,7 @@ export function createPlayerEntity(options = {}) {
     lmsLives: 0,
     lmsCharge: 0,
     lmsBankState: null,
+    outOfRound: false,
     teamId: '',
     disconnectedAt: 0
   };
@@ -148,6 +149,7 @@ export function createBotEntity(index, options = {}) {
     lmsLives: 0,
     lmsCharge: 0,
     lmsBankState: null,
+    outOfRound: false,
     aiDirX: Math.cos(Math.random() * Math.PI * 2),
     aiDirZ: Math.sin(Math.random() * Math.PI * 2),
     aiSpeed: 2.2,
@@ -176,6 +178,7 @@ export function resetEntityForRespawn(entity, options = {}) {
     ? options.createThrowableRuntime()
     : {};
   entity.lastThrowAt = 0;
+  entity.outOfRound = false;
 
   if (typeof options.createWeaponAmmoRuntime === 'function') {
     entity.weaponAmmo = options.createWeaponAmmoRuntime(entity.weaponLoadout || cloneWeaponLoadout());
@@ -211,5 +214,6 @@ export function resetEntityForLmsRound(entity, options = {}) {
   entity.lmsLives = Math.max(0, Number(options.startingLives || 0));
   entity.lmsCharge = 0;
   entity.lmsBankState = null;
+  entity.outOfRound = false;
   return entity;
 }

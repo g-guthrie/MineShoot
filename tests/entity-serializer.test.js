@@ -32,6 +32,7 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     progressScore: 0,
     lmsLives: 0,
     lmsCharge: 0,
+    outOfRound: true,
     teamId: '',
     wallhackRadius: 90,
     alive: true,
@@ -74,6 +75,7 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.equal(state.weaponLockUntil, 0);
   assert.equal(state.throwableLockUntil, 0);
   assert.equal(state.abilityLockUntil, 0);
+  assert.equal(state.outOfRound, true);
   assert.equal(state.movingForward, true);
   assert.equal(state.movingBackward, false);
   assert.equal(state.chokeState, undefined);

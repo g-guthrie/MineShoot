@@ -153,6 +153,15 @@
             ctx.runPartyAction('join', { targetId: targetId }, 'Joining party...');
         });
 
+        bindClick(ctx.addFriendBtn, function () {
+            var targetUserId = ctx.friendIdInput ? ctx.friendIdInput.value.trim() : '';
+            if (!targetUserId) {
+                ctx.setFriendsStatus('Enter a friend user ID.', true);
+                return;
+            }
+            ctx.performFriendAction('add', targetUserId, 'Saving friend...', 'Friend saved.');
+        });
+
         bindClick(ctx.socialTabPartyBtn, function () {
             ctx.setSocialView('party');
         });
@@ -201,6 +210,18 @@
             ctx.refreshFriendsState(false);
         });
 
+        bindClick(ctx.friendsFilterJoinableBtn, function () {
+            if (ctx.setFriendsFilter) ctx.setFriendsFilter('joinable');
+        });
+
+        bindClick(ctx.friendsFilterOnlineBtn, function () {
+            if (ctx.setFriendsFilter) ctx.setFriendsFilter('online');
+        });
+
+        bindClick(ctx.friendsFilterAllBtn, function () {
+            if (ctx.setFriendsFilter) ctx.setFriendsFilter('all');
+        });
+
         bindClick(ctx.partyRosterCloseBtn, function () {
             if (ctx.modalManager) ctx.modalManager.close('party-roster');
             else if (ctx.partyRosterOverlay) ctx.partyRosterOverlay.hidden = true;
@@ -209,6 +230,10 @@
         bindClick(ctx.friendsCloseBtn, function () {
             if (ctx.modalManager) ctx.modalManager.close('friends');
             else if (ctx.friendsOverlay) ctx.friendsOverlay.hidden = true;
+        });
+
+        bindEnter(ctx.friendIdInput, function () {
+            if (ctx.addFriendBtn) ctx.addFriendBtn.click();
         });
     };
 

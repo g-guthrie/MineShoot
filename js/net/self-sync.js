@@ -13,6 +13,13 @@
         if (!selfState) return;
         var RT = runtime();
         var abilityFxView = RT.GameAbilityFx || null;
+        var matchState = RT.GameNet && RT.GameNet.getMatchState
+            ? RT.GameNet.getMatchState()
+            : null;
+        var spectatorLockUntil = Date.now() + 86400000;
+        var outOfRoundLockUntil = selfState.outOfRound && matchState && !matchState.ended
+            ? Math.max(Number(matchState.resetAt || 0), spectatorLockUntil)
+            : 0;
         var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(selfState)
             : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
@@ -36,7 +43,7 @@
                 ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, Date.now())
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
-                stunUntil: Number(selfState.stunUntil || 0),
+                stunUntil: Math.max(Number(selfState.stunUntil || 0), outOfRoundLockUntil),
                 hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
                 chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
                 chokeUntil: Number(selfChokeVictimState.endsAt || 0),
@@ -46,9 +53,9 @@
 
             if (RT.GamePlayer.setActionRestrictions) {
                 RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: Number(selfState.weaponLockUntil || 0),
-                    throwableUntil: Number(selfState.throwableLockUntil || 0),
-                    abilityUntil: Number(selfState.abilityLockUntil || 0)
+                    weaponUntil: Math.max(Number(selfState.weaponLockUntil || 0), outOfRoundLockUntil),
+                    throwableUntil: Math.max(Number(selfState.throwableLockUntil || 0), outOfRoundLockUntil),
+                    abilityUntil: Math.max(Number(selfState.abilityLockUntil || 0), outOfRoundLockUntil)
                 });
             }
         }

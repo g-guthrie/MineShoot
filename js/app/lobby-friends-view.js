@@ -8,6 +8,51 @@
     var GameLobbyFriendsView = {};
 
     GameLobbyFriendsView.create = function (ctx) {
+        var activeFilter = 'joinable';
+
+        function normalizedFilter() {
+            if (activeFilter === 'all') return 'all';
+            if (activeFilter === 'online') return 'online';
+            return 'joinable';
+        }
+
+        function setActiveFilter(nextFilter) {
+            activeFilter = String(nextFilter || '').toLowerCase();
+            if (activeFilter !== 'all' && activeFilter !== 'online') activeFilter = 'joinable';
+            syncFilterButtons();
+            applyFriendsState(ctx.getState());
+        }
+
+        function syncFilterButtons() {
+            if (ctx.friendsFilterJoinableBtn) {
+                var joinable = normalizedFilter() === 'joinable';
+                ctx.friendsFilterJoinableBtn.classList.toggle('active', joinable);
+                ctx.friendsFilterJoinableBtn.setAttribute('aria-pressed', joinable ? 'true' : 'false');
+            }
+            if (ctx.friendsFilterOnlineBtn) {
+                var online = normalizedFilter() === 'online';
+                ctx.friendsFilterOnlineBtn.classList.toggle('active', online);
+                ctx.friendsFilterOnlineBtn.setAttribute('aria-pressed', online ? 'true' : 'false');
+            }
+            if (ctx.friendsFilterAllBtn) {
+                var all = normalizedFilter() === 'all';
+                ctx.friendsFilterAllBtn.classList.toggle('active', all);
+                ctx.friendsFilterAllBtn.setAttribute('aria-pressed', all ? 'true' : 'false');
+            }
+        }
+
+        function filteredFriends(friends) {
+            var list = Array.isArray(friends) ? friends.slice() : [];
+            var filter = normalizedFilter();
+            if (filter === 'all') return list;
+            if (filter === 'online') {
+                return list.filter(function (friend) { return !!(friend && friend.online); });
+            }
+            return list.filter(function (friend) {
+                return !!(friend && (friend.canJoin || friend.incomingInvite));
+            });
+        }
+
         function setFriendsPreviewEmpty(text) {
             if (!ctx.friendsPreview) return;
             ctx.friendsPreview.innerHTML = '';
@@ -57,7 +102,7 @@
                 var acceptBtn = document.createElement('button');
                 acceptBtn.type = 'button';
                 acceptBtn.className = 'friend-preview-btn';
-                acceptBtn.textContent = 'ACCEPT';
+                acceptBtn.textContent = 'ACCEPT INVITE';
                 acceptBtn.addEventListener('click', function () {
                     ctx.performFriendAction('accept_invite', friend.userId, 'Joining invited party...', 'Joined ' + String(friend.displayName || friend.username || 'FRIEND').toUpperCase() + '.');
                 });
@@ -77,8 +122,8 @@
                 if (friend.canJoin) {
                     var joinBtn = document.createElement('button');
                     joinBtn.type = 'button';
-                    joinBtn.className = 'friend-preview-btn';
-                    joinBtn.textContent = 'JOIN';
+                    joinBtn.className = 'friend-preview-btn join';
+                    joinBtn.textContent = 'JOIN PARTY';
                     joinBtn.addEventListener('click', function () {
                         ctx.performFriendAction('join', friend.userId, 'Joining friend party...', 'Joined ' + String(friend.displayName || friend.username || 'FRIEND').toUpperCase() + '.');
                     });
@@ -89,7 +134,7 @@
                     var inviteBtn = document.createElement('button');
                     inviteBtn.type = 'button';
                     inviteBtn.className = 'friend-preview-btn secondary';
-                    inviteBtn.textContent = friend.outgoingInvite ? 'INVITED' : 'INVITE';
+                    inviteBtn.textContent = friend.outgoingInvite ? 'INVITED' : 'INVITE TO PARTY';
                     inviteBtn.disabled = !!friend.outgoingInvite;
                     inviteBtn.addEventListener('click', function () {
                         ctx.performFriendAction('invite', friend.userId, 'Sending invite...', 'Invite sent to ' + String(friend.displayName || friend.username || 'FRIEND').toUpperCase() + '.');
@@ -127,14 +172,19 @@
             var friendsState = ctx.getState();
             if (!ctx.friendsModalContent) return;
             ctx.friendsModalContent.innerHTML = '';
+            var visibleFriends = filteredFriends(friendsState && friendsState.friends);
             if (!friendsState || !Array.isArray(friendsState.friends) || !friendsState.friends.length) {
                 ctx.friendsModalContent.textContent = ctx.isLoggedIn()
                     ? 'NO FRIENDS SAVED YET. ADD A PARTY MEMBER WITH + FRIEND.'
                     : 'LOG IN TO SAVE AND MANAGE FRIENDS.';
                 return;
             }
-            for (var i = 0; i < friendsState.friends.length; i++) {
-                ctx.friendsModalContent.appendChild(renderFriendRow(friendsState.friends[i], false));
+            if (!visibleFriends.length) {
+                ctx.friendsModalContent.textContent = 'NO FRIENDS MATCH THIS FILTER.';
+                return;
+            }
+            for (var i = 0; i < visibleFriends.length; i++) {
+                ctx.friendsModalContent.appendChild(renderFriendRow(visibleFriends[i], false));
             }
         }
 
@@ -153,16 +203,20 @@
                 ctx.updateSocialSubtitle();
                 return;
             }
+            var visibleFriends = filteredFriends(friendsState.friends);
             if (ctx.friendsPreview) {
                 ctx.friendsPreview.innerHTML = '';
-                var previewCount = Math.min(4, friendsState.friends.length);
-                for (var i = 0; i < previewCount; i++) {
-                    ctx.friendsPreview.appendChild(renderFriendRow(friendsState.friends[i], true));
+                if (!visibleFriends.length) {
+                    setFriendsPreviewEmpty('No friends match this filter.');
                 }
-                if (friendsState.friends.length > previewCount) {
+                var previewCount = Math.min(4, visibleFriends.length);
+                for (var i = 0; i < previewCount; i++) {
+                    ctx.friendsPreview.appendChild(renderFriendRow(visibleFriends[i], true));
+                }
+                if (visibleFriends.length > previewCount) {
                     var more = document.createElement('div');
                     more.className = 'party-preview-empty';
-                    more.textContent = '+' + String(friendsState.friends.length - previewCount) + ' MORE FRIENDS';
+                    more.textContent = '+' + String(visibleFriends.length - previewCount) + ' MORE FRIENDS';
                     ctx.friendsPreview.appendChild(more);
                 }
             }
@@ -189,7 +243,9 @@
         return {
             applyState: applyFriendsState,
             setUnavailable: setUnavailable,
-            renderModal: renderFriendsModal
+            renderModal: renderFriendsModal,
+            setFilter: setActiveFilter,
+            syncFilters: syncFilterButtons
         };
     };
 

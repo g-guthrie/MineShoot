@@ -286,8 +286,10 @@ export function recordElimination(room, deps, sourceId, targetId) {
     source.progressScore = Math.max(0, Number(source.lmsLives || 0));
     if (target.lmsLives <= 0) {
       target.respawnAt = 0;
+      target.outOfRound = true;
     } else {
       target.respawnAt = nowMs() + lmsRules.respawnDelayMs;
+      target.outOfRound = false;
     }
     room.syncLmsPublicState();
     room.updateLeaderProgress();

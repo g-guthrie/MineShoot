@@ -110,6 +110,7 @@ export function toEntityState(entity) {
       startedAt: Number(entity.lmsBankState.startedAt || 0),
       endsAt: Number(entity.lmsBankState.endsAt || 0)
     } : null,
+    outOfRound: !!entity.outOfRound,
     teamId: entity.teamId || '',
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,

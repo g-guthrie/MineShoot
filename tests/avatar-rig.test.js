@@ -117,6 +117,30 @@ test('jump action trigger layers a takeoff pose on top of airborne animation', a
   assert.equal(api.rig.armL.position.x, baselineArmX);
 });
 
+test('jump action can reverse the takeoff leg tilt for backward jumps', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: true,
+    aimPitch: 0
+  });
+  const baselineLegRotation = api.rig.legL.rotation.x;
+
+  api.triggerAction('jump', { reverseLegTilt: true });
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: true,
+    aimPitch: 0
+  });
+
+  assert.ok(api.rig.legL.rotation.x > baselineLegRotation);
+  assert.ok(api.rig.legR.rotation.x > baselineLegRotation);
+});
+
 test('airborne animation keeps the left arm splayed and lets forward/back input sweep it live', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });

@@ -766,21 +766,24 @@
 
         var jumpPoseTimer = 0;
         var jumpPoseDuration = 0.18;
+        var jumpPoseLegTiltDir = -1;
         function applyJumpAction(dt) {
             if (jumpPoseTimer <= 0) return;
             jumpPoseTimer -= dt;
             if (jumpPoseTimer < 0) jumpPoseTimer = 0;
             var t = jumpPoseDuration > 0 ? (jumpPoseTimer / jumpPoseDuration) : 0;
             var amount = Math.max(0, Math.min(1, t));
-            rig.legL.rotation.x -= 0.42 * amount;
-            rig.legR.rotation.x -= 0.42 * amount;
+            rig.legL.rotation.x += 0.42 * amount * jumpPoseLegTiltDir;
+            rig.legR.rotation.x += 0.42 * amount * jumpPoseLegTiltDir;
             rig.armL.rotation.x += 0.12 * amount;
             rig.armR.rotation.x += 0.08 * amount;
         }
 
-        function startJumpAction(duration) {
+        function startJumpAction(duration, options) {
+            var opts = options || {};
             jumpPoseDuration = Math.max(0.08, Number(duration || 0.18));
             jumpPoseTimer = jumpPoseDuration;
+            jumpPoseLegTiltDir = opts.reverseLegTilt ? 1 : -1;
         }
 
         function triggerAction(action, options) {
@@ -799,7 +802,7 @@
                 return true;
             }
             if (kind === 'jump') {
-                startJumpAction(opts.duration);
+                startJumpAction(opts.duration, opts);
                 return true;
             }
             return false;

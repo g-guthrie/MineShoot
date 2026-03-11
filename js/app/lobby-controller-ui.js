@@ -84,6 +84,8 @@
             if (elements.privateRoomInput) elements.privateRoomInput.disabled = busy;
             if (elements.joinPartyBtn) elements.joinPartyBtn.disabled = busy;
             if (elements.partyIdInput) elements.partyIdInput.disabled = busy;
+            if (elements.addFriendBtn) elements.addFriendBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
+            if (elements.friendIdInput) elements.friendIdInput.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
             setSandboxButtonsEnabled(!busy && sandboxRuntimeReady());
 
             if (elements.socialTabPartyBtn) {
@@ -114,6 +116,9 @@
             if (elements.partyJoinLockNote) elements.partyJoinLockNote.textContent = controlState.partyJoinLockNote;
             if (elements.viewFriendsBtn) elements.viewFriendsBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
             if (elements.refreshFriendsBtn) elements.refreshFriendsBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
+            if (elements.friendsFilterJoinableBtn) elements.friendsFilterJoinableBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
+            if (elements.friendsFilterOnlineBtn) elements.friendsFilterOnlineBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
+            if (elements.friendsFilterAllBtn) elements.friendsFilterAllBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
             if (elements.privateRoomModeFfaBtn) {
                 elements.privateRoomModeFfaBtn.classList.toggle('active', controlState.privateRoomMode === 'ffa');
                 elements.privateRoomModeFfaBtn.disabled = busy || !controlState.canEditPrivateRoom;

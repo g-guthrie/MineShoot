@@ -40,7 +40,7 @@
             summary.textContent =
                 'PARTY ' + String(partyState.party.id || '').toUpperCase() +
                 ' :: LEAD ' + String(partyState.party.leaderId || '').toUpperCase() +
-                ' :: LOCK ' + (partyState.party.joinLocked ? 'ENGAGED' : 'OPEN') +
+                ' :: PRIVACY ' + (partyState.party.joinLocked ? 'CLOSED' : 'OPEN') +
                 ' :: ' + String(partyState.party.memberCount || 0) + '/16';
             ctx.partyRosterModalContent.appendChild(summary);
             for (var i = 0; i < partyState.party.members.length; i++) {

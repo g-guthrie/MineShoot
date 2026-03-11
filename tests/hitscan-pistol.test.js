@@ -225,3 +225,44 @@ test('pistol local fire spends the shot and misses when targets are out of range
   assert.equal(misses, 1);
   assert.equal(beforeAmmo - afterAmmo, 1);
 });
+
+test('tracer renderer uses traveled head-tail distance on early frames', async () => {
+  const harness = await loadHitscanHarness();
+  const configuredSegmentLength = getWeaponPresentation('pistol').tracer.segmentLength;
+  const tracerSpeed = getWeaponPresentation('pistol').tracer.speed;
+
+  const fired = harness.GameHitscan.fire(
+    harness.camera,
+    () => {},
+    () => {},
+    'tracer-scale'
+  );
+  assert.equal(fired, true);
+
+  const dt = 1 / 200;
+  harness.GameHitscan.updateTracers(dt);
+
+  const tracerMesh = harness.camera.parent.children.find((child) => child && child.isInstancedMesh);
+  assert.ok(tracerMesh);
+
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  let foundActiveTracer = false;
+
+  for (let i = 0; i < tracerMesh.count; i++) {
+    tracerMesh.getMatrixAt(i, matrix);
+    if (!matrix.elements.some((value) => Math.abs(value) > 1e-6)) continue;
+    matrix.decompose(position, quaternion, scale);
+    foundActiveTracer = true;
+    break;
+  }
+
+  assert.equal(foundActiveTracer, true);
+
+  const expectedVisibleLength = Math.min(configuredSegmentLength, tracerSpeed * dt) * 0.82;
+  assert.ok(scale.y > 0.05);
+  assert.ok(scale.y <= expectedVisibleLength + 0.05);
+  assert.ok(scale.y < (configuredSegmentLength * 0.82) - 0.2);
+});

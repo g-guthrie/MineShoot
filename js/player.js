@@ -816,10 +816,15 @@
             velocityY = JUMP_VELOCITY;
             isGrounded = false;
             jumpHoldTimer = MAX_JUMP_HOLD;
+            var reverseJumpLegTilt = !!keys.backward && !keys.forward;
             if (actorVisual && actorVisual.triggerAction) {
-                actorVisual.triggerAction('jump');
+                actorVisual.triggerAction('jump', {
+                    reverseLegTilt: reverseJumpLegTilt
+                });
             } else if (avatarRigApi && avatarRigApi.triggerAction) {
-                avatarRigApi.triggerAction('jump');
+                avatarRigApi.triggerAction('jump', {
+                    reverseLegTilt: reverseJumpLegTilt
+                });
             }
         }
         if (!movementLocked && jumpJustReleased && velocityY > 0) {

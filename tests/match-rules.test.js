@@ -104,4 +104,19 @@ test('shared match rules format lms lives, charge, and beacon state', () => {
     formatMenuMatchStatus(matchState, selfState, { nowMs: () => 7000 }),
     'LMS 1 LIFE | CHARGE 1/2 | LEFT 3 | BEACON B2 5.0s'
   );
+
+  const outState = {
+    id: 'u3',
+    lmsLives: 0,
+    lmsCharge: 0,
+    outOfRound: true
+  };
+  assert.equal(
+    formatMatchHudCounter(matchState, outState),
+    'OUT | Left: 3'
+  );
+  assert.equal(
+    formatMenuMatchStatus(matchState, outState, { nowMs: () => 7000 }),
+    'OUT OF ROUND | LEFT 3'
+  );
 });

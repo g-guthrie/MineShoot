@@ -53,10 +53,14 @@
                 card.appendChild(idLine);
 
                 if (canEdit) {
+                    var direction = document.createElement('div');
+                    direction.className = 'private-room-member-direction';
+                    direction.textContent = destinationTeamId === 'bravo' ? 'HOST MOVE TARGET :: TEAM 2' : 'HOST MOVE TARGET :: TEAM 1';
+                    card.appendChild(direction);
                     var moveBtn = document.createElement('button');
                     moveBtn.type = 'button';
                     moveBtn.className = 'private-room-member-move';
-                    moveBtn.textContent = destinationTeamId === 'bravo' ? 'MOVE -> TEAM 2' : 'MOVE -> TEAM 1';
+                    moveBtn.textContent = destinationTeamId === 'bravo' ? 'SEND TO TEAM 2' : 'SEND TO TEAM 1';
                     moveBtn.addEventListener('click', (function (memberId, nextTeamId) {
                         return function () {
                             ctx.moveMember(memberId, nextTeamId);
@@ -89,6 +93,12 @@
                     ' :: MODE ' + String(room.roomMode || 'ffa').toUpperCase() +
                     ' :: ' + String(room.memberCount || 0) + '/16' +
                     ' :: ' + (String(room.roomPhase || '') === 'active' ? 'LIVE' : 'LOBBY');
+            }
+
+            if (ctx.privateRoomRandomizeBtn) {
+                ctx.privateRoomRandomizeBtn.textContent = String(room.roomMode || '') === 'tdm'
+                    ? 'AUTO BALANCE'
+                    : 'RANDOMIZE';
             }
 
             setPrivateRoomTeamList(ctx.privateRoomTeamAlpha, room.teams ? room.teams.alpha : [], isHost && String(room.roomPhase || '') === 'lobby', 'bravo');

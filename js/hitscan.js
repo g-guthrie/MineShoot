@@ -1445,9 +1445,10 @@
                 continue;
             }
 
+            var visibleLength = t.head.distanceTo(t.tail);
             tracerTmpPos.copy(tracerMeshMid);
             tracerTmpQuat.setFromUnitVectors(tracerMeshUp, t.dir);
-            tracerTmpScale.set(1, Math.max(0.05, t.segmentLength * 0.82), 1);
+            tracerTmpScale.set(1, Math.max(0.05, visibleLength * 0.82), 1);
             tracerTmpMatrix.compose(tracerTmpPos, tracerTmpQuat, tracerTmpScale);
             tracerInstancedMesh.setMatrixAt(i, tracerTmpMatrix);
             matrixDirty = true;

@@ -129,17 +129,17 @@
             var privateRoomMode = String(privateRoom && privateRoom.roomMode || '');
             var isPrivateRoomHost = !!(privateRoomSelf && privateRoomSelf.isHost);
             var partyJoinLockTitle = 'Party join lock unavailable.';
-            var partyJoinLockNote = 'JOINS OPEN';
+            var partyJoinLockNote = 'PARTY OPEN';
 
             if (partyStateAvailability === 'unavailable') {
                 partyJoinLockTitle = 'Party service unavailable.';
                 partyJoinLockNote = 'SERVICE OFFLINE';
             } else if (hasParty) {
                 partyJoinLockTitle = canTogglePartyJoinLock
-                    ? (partyJoinLocked ? 'Unlock party joins.' : 'Lock party joins.')
-                    : 'Only the party lead can change join lock.';
+                    ? (partyJoinLocked ? 'Open party joins for your group.' : 'Close party joins to your group.')
+                    : 'Only the party lead can change party privacy.';
                 partyJoinLockNote = canTogglePartyJoinLock
-                    ? (partyJoinLocked ? 'JOINS LOCKED' : 'JOINS OPEN')
+                    ? (partyJoinLocked ? 'PARTY CLOSED' : 'PARTY OPEN')
                     : 'LEAD ONLY';
             }
 
