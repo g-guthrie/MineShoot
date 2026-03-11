@@ -27,6 +27,10 @@ test('demonic menu model prefers a Cloudflare-authoritative runtime when availab
         return 'single_cloudflare';
       }
     },
+    displaySettings: {
+      getFpsOptions() { return [30, 60, 120]; },
+      getTargetFps() { return 60; }
+    },
     modeRegistry: {
       getRuntimeModes(profile) {
         return profile.getAvailableModes();
@@ -38,6 +42,7 @@ test('demonic menu model prefers a Cloudflare-authoritative runtime when availab
   assert.equal(model.selectedRuntimeModeId, 'single_cloudflare');
   assert.equal(model.selectedGameModeId, 'ffa');
   assert.equal(model.supportsSandbox, true);
+  assert.equal(model.selectedFps, 60);
   assert.match(model.launchSummary.note, /Cloudflare-backed/i);
 });
 
@@ -55,6 +60,10 @@ test('demonic menu model keeps explicit selections when provided', () => {
       getSandboxGameModes,
       getDefaultGameMode
     },
+    displaySettings: {
+      getFpsOptions() { return [30, 60, 120]; },
+      getTargetFps() { return 120; }
+    },
     modeRegistry: {
       getRuntimeModes(profile) {
         return profile.getAvailableModes();
@@ -67,5 +76,6 @@ test('demonic menu model keeps explicit selections when provided', () => {
 
   assert.equal(model.selectedRuntimeModeId, 'single_cloudflare');
   assert.equal(model.selectedGameModeId, 'tdm');
+  assert.equal(model.selectedFps, 120);
   assert.equal(model.launchSummary.gameLabel, 'Team Deathmatch');
 });

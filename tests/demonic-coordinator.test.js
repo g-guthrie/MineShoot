@@ -123,6 +123,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.abilities.loadout.slot1, 'choke');
   assert.equal(typeof started.hud.weaponInfo, 'string');
   assert.equal(started.presentation.pose, 'idle');
+  assert.equal(started.display.targetFps, 60);
   assert.ok(latest);
   assert.equal(latest.player.jogSpeed, 8);
   assert.equal(latest.combat.weaponCatalog[1], 'shotgun');

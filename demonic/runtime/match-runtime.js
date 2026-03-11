@@ -35,6 +35,8 @@
 
         var bootstrap = demonicRuntime.GameBootstrap || null;
         var host = bootstrap && bootstrap.showRuntimeHost ? bootstrap.showRuntimeHost() : null;
+        var statusHost = bootstrap && bootstrap.getRuntimeStatusHost ? bootstrap.getRuntimeStatusHost() : host;
+        var sceneHost = bootstrap && bootstrap.getRuntimeSceneHost ? bootstrap.getRuntimeSceneHost() : null;
         var mode = options.mode || null;
         var context = options.context || {};
         var coordinatorApi = demonicRuntime.GameRuntimeCoordinator || null;
@@ -50,12 +52,17 @@
             world: null,
             net: null,
             combat: null,
+            abilities: null,
+            camera: null,
+            hud: null,
+            presentation: null,
+            actor: null,
             statusText: 'bootstrapping coordinator'
         };
 
         function render() {
-            if (!host) return;
-            host.innerHTML = createStatusMarkup(snapshot);
+            if (!statusHost) return;
+            statusHost.innerHTML = createStatusMarkup(snapshot);
         }
 
         function start() {
@@ -65,6 +72,7 @@
                 ? coordinatorApi.create({
                     mode: mode,
                     context: context,
+                    sceneHost: sceneHost,
                     onUpdate: function (nextSnapshot) {
                         snapshot.phase = String(nextSnapshot && nextSnapshot.phase || 'running');
                         snapshot.tickCount = Number(nextSnapshot && nextSnapshot.tickCount || 0);
@@ -73,6 +81,11 @@
                         snapshot.world = nextSnapshot && nextSnapshot.world ? nextSnapshot.world : null;
                         snapshot.net = nextSnapshot && nextSnapshot.net ? nextSnapshot.net : null;
                         snapshot.combat = nextSnapshot && nextSnapshot.combat ? nextSnapshot.combat : null;
+                        snapshot.abilities = nextSnapshot && nextSnapshot.abilities ? nextSnapshot.abilities : null;
+                        snapshot.camera = nextSnapshot && nextSnapshot.camera ? nextSnapshot.camera : null;
+                        snapshot.hud = nextSnapshot && nextSnapshot.hud ? nextSnapshot.hud : null;
+                        snapshot.presentation = nextSnapshot && nextSnapshot.presentation ? nextSnapshot.presentation : null;
+                        snapshot.actor = nextSnapshot && nextSnapshot.actor ? nextSnapshot.actor : null;
                         snapshot.statusText = snapshot.tickCount < 3
                             ? 'warming runtime lane'
                             : 'runtime skeleton active';
@@ -89,6 +102,11 @@
                 snapshot.world = startedSnapshot && startedSnapshot.world ? startedSnapshot.world : null;
                 snapshot.net = startedSnapshot && startedSnapshot.net ? startedSnapshot.net : null;
                 snapshot.combat = startedSnapshot && startedSnapshot.combat ? startedSnapshot.combat : null;
+                snapshot.abilities = startedSnapshot && startedSnapshot.abilities ? startedSnapshot.abilities : null;
+                snapshot.camera = startedSnapshot && startedSnapshot.camera ? startedSnapshot.camera : null;
+                snapshot.hud = startedSnapshot && startedSnapshot.hud ? startedSnapshot.hud : null;
+                snapshot.presentation = startedSnapshot && startedSnapshot.presentation ? startedSnapshot.presentation : null;
+                snapshot.actor = startedSnapshot && startedSnapshot.actor ? startedSnapshot.actor : null;
             }
             render();
             return getSnapshot();
@@ -104,6 +122,11 @@
                 snapshot.world = stopped && stopped.world ? stopped.world : snapshot.world;
                 snapshot.net = stopped && stopped.net ? stopped.net : snapshot.net;
                 snapshot.combat = stopped && stopped.combat ? stopped.combat : snapshot.combat;
+                snapshot.abilities = stopped && stopped.abilities ? stopped.abilities : snapshot.abilities;
+                snapshot.camera = stopped && stopped.camera ? stopped.camera : snapshot.camera;
+                snapshot.hud = stopped && stopped.hud ? stopped.hud : snapshot.hud;
+                snapshot.presentation = stopped && stopped.presentation ? stopped.presentation : snapshot.presentation;
+                snapshot.actor = stopped && stopped.actor ? stopped.actor : snapshot.actor;
             }
             snapshot.phase = 'stopped';
             snapshot.statusText = 'runtime halted';
@@ -142,8 +165,20 @@
                     gameMode: String(snapshot.combat.gameMode || ''),
                     selectedWeaponId: String(snapshot.combat.selectedWeaponId || ''),
                     weaponCatalog: Array.isArray(snapshot.combat.weaponCatalog) ? snapshot.combat.weaponCatalog.slice() : [],
-                    fireCooldownRemainingMs: Number(snapshot.combat.fireCooldownRemainingMs || 0)
+                    fireCooldownRemainingMs: Number(snapshot.combat.fireCooldownRemainingMs || 0),
+                    reloadRemainingMs: Number(snapshot.combat.reloadRemainingMs || 0),
+                    ammoInMag: Number(snapshot.combat.ammoInMag || 0),
+                    magazineSize: Number(snapshot.combat.magazineSize || 0),
+                    automatic: !!snapshot.combat.automatic,
+                    cooldownMs: Number(snapshot.combat.cooldownMs || 0),
+                    canFire: !!snapshot.combat.canFire,
+                    lastShotAt: Number(snapshot.combat.lastShotAt || 0)
                 } : null,
+                abilities: snapshot.abilities ? JSON.parse(JSON.stringify(snapshot.abilities)) : null,
+                camera: snapshot.camera ? JSON.parse(JSON.stringify(snapshot.camera)) : null,
+                hud: snapshot.hud ? JSON.parse(JSON.stringify(snapshot.hud)) : null,
+                presentation: snapshot.presentation ? JSON.parse(JSON.stringify(snapshot.presentation)) : null,
+                actor: snapshot.actor ? JSON.parse(JSON.stringify(snapshot.actor)) : null,
                 statusText: String(snapshot.statusText || '')
             };
         }

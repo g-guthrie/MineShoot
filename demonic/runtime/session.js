@@ -145,6 +145,10 @@
                     cooldownMs: Number(sessionState.runtimeSnapshot.hud.cooldownMs || 0),
                     movementInfo: String(sessionState.runtimeSnapshot.hud.movementInfo || '')
                 } : null,
+                display: sessionState.runtimeSnapshot.display ? {
+                    targetFps: Number(sessionState.runtimeSnapshot.display.targetFps || 0),
+                    fpsLabel: String(sessionState.runtimeSnapshot.display.fpsLabel || '')
+                } : null,
                 presentation: sessionState.runtimeSnapshot.presentation ? {
                     pose: String(sessionState.runtimeSnapshot.presentation.pose || ''),
                     reticle: sessionState.runtimeSnapshot.presentation.reticle ? {

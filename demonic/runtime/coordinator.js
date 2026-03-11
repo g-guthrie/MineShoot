@@ -19,6 +19,9 @@
         var cameraApi = demonicRuntime.GameCameraRuntime || null;
         var hudApi = demonicRuntime.GameHudRuntime || null;
         var presentationApi = demonicRuntime.GamePresentationRuntime || null;
+        var actorApi = demonicRuntime.GameActorRuntime || null;
+        var sceneApi = demonicRuntime.GameSceneRuntime || null;
+        var displaySettings = demonicRuntime.DisplaySettings || null;
         var loopApi = demonicRuntime.GameLoop || null;
 
         var input = inputApi && inputApi.create ? inputApi.create(context) : null;
@@ -75,6 +78,32 @@
                 return camera && camera.getSnapshot ? camera.getSnapshot() : {};
             }
         }) : null;
+        var actor = actorApi && actorApi.create ? actorApi.create({
+            getPlayerSnapshot: function () {
+                return player && player.getSnapshot ? player.getSnapshot() : {};
+            },
+            getCombatSnapshot: function () {
+                return combat && combat.getSnapshot ? combat.getSnapshot() : {};
+            },
+            getPresentationSnapshot: function () {
+                return presentation && presentation.getSnapshot ? presentation.getSnapshot() : {};
+            }
+        }) : null;
+        var scene = sceneApi && sceneApi.create ? sceneApi.create({
+            host: options.sceneHost || null,
+            getActorSnapshot: function () {
+                return actor && actor.getSnapshot ? actor.getSnapshot() : {};
+            },
+            getHudSnapshot: function () {
+                return hud && hud.getSnapshot ? hud.getSnapshot() : {};
+            },
+            getPresentationSnapshot: function () {
+                return presentation && presentation.getSnapshot ? presentation.getSnapshot() : {};
+            },
+            getNetSnapshot: function () {
+                return net && net.getSnapshot ? net.getSnapshot() : {};
+            }
+        }) : null;
         var bindings = inputBindingsApi && inputBindingsApi.create ? inputBindingsApi.create({
             input: input,
             onFire: function () {
@@ -95,6 +124,9 @@
         var elapsedMs = 0;
 
         var loop = loopApi && loopApi.create ? loopApi.create({
+            getTargetFps: function () {
+                return displaySettings && displaySettings.getTargetFps ? displaySettings.getTargetFps() : 60;
+            },
             onFrame: function (dt) {
                 tickCount += 1;
                 elapsedMs += dt * 1000;
@@ -106,6 +138,8 @@
                 if (camera && camera.update) camera.update(dt);
                 if (hud && hud.update) hud.update(dt);
                 if (presentation && presentation.update) presentation.update(dt);
+                if (actor && actor.update) actor.update(dt);
+                if (scene && scene.update) scene.update(dt);
                 var inputState = input && input.getSnapshot ? input.getSnapshot() : null;
                 var combatState = combat && combat.getSnapshot ? combat.getSnapshot() : null;
                 if (inputState && inputState.triggerHeld && combatState && combatState.automatic && combatState.canFire) {
@@ -136,7 +170,14 @@
                 abilities: abilities && abilities.getSnapshot ? abilities.getSnapshot() : null,
                 camera: camera && camera.getSnapshot ? camera.getSnapshot() : null,
                 hud: hud && hud.getSnapshot ? hud.getSnapshot() : null,
-                presentation: presentation && presentation.getSnapshot ? presentation.getSnapshot() : null
+                presentation: presentation && presentation.getSnapshot ? presentation.getSnapshot() : null,
+                actor: actor && actor.getSnapshot ? actor.getSnapshot() : null,
+                display: {
+                    targetFps: displaySettings && displaySettings.getTargetFps ? displaySettings.getTargetFps() : 60,
+                    fpsLabel: displaySettings && displaySettings.fpsLabel
+                        ? displaySettings.fpsLabel(displaySettings.getTargetFps ? displaySettings.getTargetFps() : 60)
+                        : '60 FPS'
+                }
             };
         }
 
@@ -149,6 +190,7 @@
             stop: function () {
                 if (loop && loop.stop) loop.stop();
                 if (bindings && bindings.unbind) bindings.unbind();
+                if (scene && scene.destroy) scene.destroy();
                 return getSnapshot();
             },
             setInputState: function (patch) {

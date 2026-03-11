@@ -29,6 +29,18 @@
             '</button>';
     }
 
+    function fpsButtonMarkup(value, activeValue) {
+        var settings = demonicRuntime.DisplaySettings || null;
+        var fps = Number(value || 0);
+        var isActive = fps === Number(activeValue || 0);
+        var label = settings && settings.fpsLabel ? settings.fpsLabel(fps) : (fps > 0 ? (fps + ' FPS') : 'UNLIMITED');
+        return '' +
+            '<button class="demonic-select-btn' + (isActive ? ' active' : '') + '" type="button" data-role="fps-cap" data-id="' + escapeHtml(fps) + '">' +
+                '<span class="demonic-select-kicker">DISPLAY</span>' +
+                '<strong>' + escapeHtml(label) + '</strong>' +
+            '</button>';
+    }
+
     function workstreamMarkup(item) {
         return '' +
             '<article class="demonic-work-card">' +
@@ -54,6 +66,7 @@
                 runtimeProfile: runtime.GameRuntimeProfile || null,
                 shared: runtime.GameShared || {},
                 modeRegistry: demonicRuntime.ModeRegistry || null,
+                displaySettings: demonicRuntime.DisplaySettings || null,
                 workstreams: demonicRuntime.Workstreams && Array.isArray(demonicRuntime.Workstreams.items)
                     ? demonicRuntime.Workstreams.items
                     : [],
@@ -152,6 +165,7 @@
                     '\npose :: ' + escapeHtml(state.runtimeSnapshot.presentation && state.runtimeSnapshot.presentation.pose || '') +
                     '\nreticle :: ' + escapeHtml(state.runtimeSnapshot.presentation && state.runtimeSnapshot.presentation.reticle && state.runtimeSnapshot.presentation.reticle.type || '') +
                     ' [' + escapeHtml(state.runtimeSnapshot.presentation && state.runtimeSnapshot.presentation.reticle && state.runtimeSnapshot.presentation.reticle.label || '') + ']' +
+                    '\nfps :: ' + escapeHtml(state.runtimeSnapshot.display && state.runtimeSnapshot.display.fpsLabel || '') +
                     '</pre>' : '') +
                 '<div class="demonic-action-row">' +
                     '<button class="demonic-action" type="button" data-role="return-menu">RETURN TO DEMONIC MENU STATE</button>' +
@@ -255,6 +269,14 @@
         render();
     }
 
+    function setDisplayFps(value) {
+        var settings = demonicRuntime.DisplaySettings || null;
+        if (!settings || !settings.setTargetFps) return;
+        settings.setTargetFps(Number(value || 60));
+        syncRuntimeSnapshot();
+        render();
+    }
+
     function render() {
         document.body.classList.add('app-demonic');
 
@@ -308,13 +330,21 @@
                                     : 'Selected ruleset is not sandbox-capable.') +
                             '</div>' +
                         '</article>' +
+                        '<article class="demonic-panel">' +
+                            '<h3>Display FPS</h3>' +
+                            '<div class="demonic-select-grid">' + model.fpsOptions.map(function (fps) {
+                                return fpsButtonMarkup(fps, model.selectedFps);
+                            }).join('') + '</div>' +
+                            '<div class="demonic-sandbox-note">Default is 60 FPS. Keep this dynamic so deployment targets can change without loop refactors.</div>' +
+                        '</article>' +
                         '<article class="demonic-panel demonic-summary-panel">' +
                             '<h3>Launch Summary</h3>' +
                             '<pre>runtime -> ruleset -> match runtime\n   ' +
                                 escapeHtml(model.launchSummary.runtimeLabel) + ' -> ' +
                                 escapeHtml(model.launchSummary.gameLabel) + '\n\nauthority :: ' +
                                 escapeHtml(model.launchSummary.authorityLabel) + '\nbackend   :: ' +
-                                escapeHtml(model.launchSummary.backendLabel) + '</pre>' +
+                                escapeHtml(model.launchSummary.backendLabel) + '\nframe cap :: ' +
+                                escapeHtml((demonicRuntime.DisplaySettings && demonicRuntime.DisplaySettings.fpsLabel) ? demonicRuntime.DisplaySettings.fpsLabel(model.selectedFps) : String(model.selectedFps)) + '</pre>' +
                             '<p>' + escapeHtml(model.launchSummary.note) + '</p>' +
                             '<button class="demonic-action demonic-action-primary" type="button" data-role="launch-runtime"' + (shellState.launchPending ? ' disabled' : '') + '>' +
                                 (shellState.launchPending ? 'LAUNCHING DEMONIC RUNTIME...' : 'LAUNCH DEMONIC SESSION') +
@@ -357,6 +387,10 @@
                     if (target.dataset && target.dataset.role === 'game-mode') {
                         shellState.gameModeId = String(target.dataset.id || '');
                         render();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'fps-cap') {
+                        setDisplayFps(Number(target.dataset.id || 60));
                         return;
                     }
                     if (target.dataset && target.dataset.role === 'launch-runtime') {

@@ -93,11 +93,13 @@ import {
 } from './RoomLms.js';
 import {
   applyEntitySpawnPoint as applyRoomEntitySpawnPoint,
+  applyPendingInputAck as applyRoomPendingInputAck,
   applySpawnShield as applyRoomSpawnShield,
   buildPlayerEntity as buildRoomPlayerEntity,
   chooseEntitySpawnPoint as chooseRoomEntitySpawnPoint,
   enforceEntityTerrainFloor as enforceRoomEntityTerrainFloor,
   ensurePlayer as ensureRoomPlayer,
+  queueAuthoritativeInput as queueRoomAuthoritativeInput,
   planEntityRespawn as planRoomEntityRespawn,
   respawnIfNeeded as respawnRoomEntityIfNeeded,
   spawnEntityRandomly as spawnRoomEntityRandomly,
@@ -901,25 +903,13 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
 
     const now = nowMs();
-    const movementLocked = this.isEntityMovementLocked(player, now);
-    if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
-    if (typeof msg.seq === 'number') {
-      player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
-    }
-    if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
-
     if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
-
-    player.inputMode = 'intent';
-    player.inputState = player.inputState || createMovementInputState();
-    player.inputState.forward = !!msg.forward;
-    player.inputState.backward = !!msg.backward;
-    player.inputState.left = !!msg.left;
-    player.inputState.right = !!msg.right;
-    player.inputState.jump = !!msg.jump;
-    player.inputState.sprint = !!msg.sprint;
-    player.inputState.adsActive = !!msg.adsActive;
+    queueRoomAuthoritativeInput(player, msg, {
+      movementLocked: this.isEntityMovementLocked(player, now),
+      canEntityUseWeapon,
+      clamp,
+      createMovementInputState
+    });
   }
 
   tickAuthoritativePlayerMovement(player, dtSec) {
@@ -946,9 +936,7 @@ export class GlobalArenaRoom extends DurableObject {
       playerRadius: boundsPad,
       epsilon: WORLD_RAY_EPSILON
     });
-    if (Number(player.pendingInputSeq || 0) > Number(player.seq || 0)) {
-      player.seq = Number(player.pendingInputSeq || 0);
-    }
+    applyRoomPendingInputAck(player);
     this.enforceEntityTerrainFloor(player);
   }
 

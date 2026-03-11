@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  applyPendingInputAck,
   applyEntitySpawnPoint,
   applySpawnShield,
   buildPlayerEntity,
   chooseEntitySpawnPoint,
   ensurePlayer,
+  queueAuthoritativeInput,
   respawnIfNeeded,
   syncRoomFixtures,
   terrainFeetYAt,
@@ -112,6 +114,40 @@ test('room runtime terrain and spawn helpers keep player positions grounded', ()
   assert.equal(player.z, 5);
   assert.equal(player.y, 10.7);
   assert.equal(player.isGrounded, true);
+});
+
+test('room runtime queues input seqs and only applies the ack after authoritative movement', () => {
+  const player = {
+    seq: 4,
+    pendingInputSeq: 4,
+    yaw: 0,
+    pitch: 0,
+    inputState: {}
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 7,
+    yaw: 0.25,
+    pitch: 0.5,
+    forward: true,
+    jump: true,
+    adsActive: false
+  }, {
+    movementLocked: false,
+    canEntityUseWeapon() { return true; },
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(player.seq, 4);
+  assert.equal(player.pendingInputSeq, 7);
+  assert.equal(player.yaw, 0.25);
+  assert.equal(player.inputState.forward, true);
+  assert.equal(player.inputState.jump, true);
+
+  applyPendingInputAck(player);
+
+  assert.equal(player.seq, 7);
 });
 
 test('room runtime ensures players and simulated fixtures through one boundary', () => {

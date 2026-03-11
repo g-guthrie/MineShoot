@@ -2,6 +2,7 @@ export function buildDemonicMenuModel(options = {}) {
   const runtimeProfile = options.runtimeProfile || null;
   const shared = options.shared || {};
   const modeRegistry = options.modeRegistry || null;
+  const displaySettings = options.displaySettings || null;
   const workstreams = Array.isArray(options.workstreams) ? options.workstreams : [];
 
   const runtimeModes = modeRegistry && typeof modeRegistry.getRuntimeModes === 'function'
@@ -30,6 +31,12 @@ export function buildDemonicMenuModel(options = {}) {
   const selectedRuntimeMode = runtimeModes.find((mode) => mode.id === selectedRuntimeModeId) || runtimeModes[0] || null;
   const selectedGameMode = gameModes.find((mode) => mode.id === selectedGameModeId) || gameModes[0] || null;
   const supportsSandbox = sandboxModes.some((mode) => mode.id === selectedGameModeId);
+  const fpsOptions = displaySettings && typeof displaySettings.getFpsOptions === 'function'
+    ? displaySettings.getFpsOptions()
+    : [60];
+  const selectedFps = displaySettings && typeof displaySettings.getTargetFps === 'function'
+    ? displaySettings.getTargetFps()
+    : 60;
 
   return {
     runtimeModes,
@@ -41,6 +48,8 @@ export function buildDemonicMenuModel(options = {}) {
     selectedRuntimeMode,
     selectedGameMode,
     supportsSandbox,
+    fpsOptions,
+    selectedFps,
     launchSummary: {
       runtimeLabel: selectedRuntimeMode ? selectedRuntimeMode.label : 'No runtime mode',
       gameLabel: selectedGameMode ? selectedGameMode.label : 'No game mode',

@@ -2,6 +2,7 @@ import '../../shared/protocol.js';
 import '../../shared/gameplay-tuning.js';
 import '../../shared/runtime-modes.js';
 import '../../js/core/runtime-profile.js';
+import '../platform/display-settings.js';
 import { getDemonicRuntimeModes } from '../shared-compat/runtime-modes.js';
 import { buildDemonicMenuModel } from './menu-model.js';
 import { DEMONIC_WORKSTREAMS } from './workstreams.js';

@@ -243,6 +243,44 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
   return player;
 }
 
+export function queueAuthoritativeInput(player, msg, deps) {
+  deps = deps || {};
+  const canEntityUseWeapon = deps.canEntityUseWeapon;
+  const clamp = deps.clamp;
+  const createMovementInputState = deps.createMovementInputState;
+  const movementLocked = !!deps.movementLocked;
+  if (!player || !msg) return;
+
+  if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
+  if (!movementLocked && typeof msg.pitch === 'number' && clamp) player.pitch = clamp(msg.pitch, -1.55, 1.55);
+  if (typeof msg.seq === 'number') {
+    player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
+  }
+  if (typeof msg.weaponId === 'string' && (!canEntityUseWeapon || canEntityUseWeapon(player, msg.weaponId))) {
+    player.weaponId = msg.weaponId;
+  }
+
+  player.inputMode = 'intent';
+  player.inputState = player.inputState || (createMovementInputState ? createMovementInputState() : null) || {};
+  player.inputState.forward = !!msg.forward;
+  player.inputState.backward = !!msg.backward;
+  player.inputState.left = !!msg.left;
+  player.inputState.right = !!msg.right;
+  player.inputState.jump = !!msg.jump;
+  player.inputState.sprint = !!msg.sprint;
+  player.inputState.adsActive = !!msg.adsActive;
+}
+
+export function applyPendingInputAck(entity) {
+  if (!entity) return 0;
+  const pendingSeq = Number(entity.pendingInputSeq || 0);
+  const currentSeq = Number(entity.seq || 0);
+  if (pendingSeq > currentSeq) {
+    entity.seq = pendingSeq;
+  }
+  return Number(entity.seq || 0);
+}
+
 export function respawnIfNeeded(room, entity, deps) {
   deps = deps || {};
   const nowMs = deps.nowMs;

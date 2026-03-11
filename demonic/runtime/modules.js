@@ -1,4 +1,5 @@
 import '../platform/bootstrap.js';
+import '../platform/display-settings.js';
 import '../platform/loop.js';
 import '../gameplay/input/runtime.js';
 import '../gameplay/input/bindings.js';
@@ -10,6 +11,8 @@ import '../gameplay/combat/runtime.js';
 import '../gameplay/abilities/runtime.js';
 import '../gameplay/hud/runtime.js';
 import '../gameplay/presentation/runtime.js';
+import '../gameplay/presentation/actor-runtime.js';
+import '../gameplay/presentation/scene-runtime.js';
 import './runtime-state.js';
 import './coordinator.js';
 import './match-runtime.js';
