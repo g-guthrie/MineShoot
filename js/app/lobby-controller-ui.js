@@ -30,12 +30,26 @@
         var altModesOpen = false;
         var controlsOpen = false;
 
+        function currentLaunchState() {
+            var launchState = opts.getLaunchState ? opts.getLaunchState() : null;
+            if (!launchState) {
+                return {
+                    phase: 'menu_idle',
+                    hasRuntime: false,
+                    busy: false,
+                    inPrivateRoomLobby: false
+                };
+            }
+            return launchState;
+        }
+
         function sandboxRuntimeReady() {
             return !!(opts.isSandboxRuntimeReady && opts.isSandboxRuntimeReady());
         }
 
         function isUiBusy() {
-            return !!(controllerBusy || (opts.isSessionBusy && opts.isSessionBusy()));
+            var launchState = currentLaunchState();
+            return !!(controllerBusy || launchState.busy || (opts.isSessionBusy && opts.isSessionBusy()));
         }
 
         function setSandboxButtonsEnabled(enabled) {
@@ -68,8 +82,19 @@
 
         function syncMenuControlState() {
             var controlState = currentMenuControlState();
+            var launchState = currentLaunchState();
             var busy = isUiBusy();
             var nextSocialView = controlState.socialView;
+
+            if (elements.menuSessionActions) {
+                elements.menuSessionActions.hidden = !launchState.hasRuntime;
+            }
+
+            if (launchState.phase === 'menu_idle' || launchState.phase === 'launch_error') {
+                restoreStartUi();
+            } else {
+                hideStartUi();
+            }
 
             if (elements.partySocialView) elements.partySocialView.hidden = nextSocialView !== 'party';
             if (elements.friendsSocialView) elements.friendsSocialView.hidden = nextSocialView !== 'friends';
@@ -253,6 +278,7 @@
             isAltModesOpen: function () { return !!altModesOpen; },
             isControlsOpen: function () { return !!controlsOpen; },
             syncModeButtonVisibility: syncModeButtonVisibility,
+            getLaunchState: currentLaunchState,
             hideStartUi: hideStartUi,
             restoreStartUi: restoreStartUi
         };

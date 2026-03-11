@@ -5,6 +5,7 @@ import {
   PUBLIC_ROOM_PREFIX,
   DEFAULT_PUBLIC_ROOM_COUNT,
   PUBLIC_ROOM_START_THRESHOLD,
+  publicRoomStartThresholdForMode,
   PUBLIC_ROOM_SOFT_TARGET,
   DEFAULT_PUBLIC_ROOM_CAPACITY
 } from '../../shared/matchmaking-config.js';
@@ -80,6 +81,7 @@ function chooseBestRoom(entries, predicate) {
 
 async function allocateQuickMatch(env, requestedGameMode) {
   const gameMode = normalizePublicGameMode(requestedGameMode);
+  const startThreshold = publicRoomStartThresholdForMode(gameMode);
   const roomCount = clampInt(env.PUBLIC_ROOM_COUNT, 1, 24, DEFAULT_PUBLIC_ROOM_COUNT);
   const roomCapacity = clampInt(env.PUBLIC_ROOM_CAPACITY, PUBLIC_ROOM_SOFT_TARGET, 32, DEFAULT_PUBLIC_ROOM_CAPACITY);
   const roomIds = [];
@@ -103,13 +105,13 @@ async function allocateQuickMatch(env, requestedGameMode) {
 
   const selected = gameMode === 'lms'
     ? (
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD)
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold)
     )
     : (
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
       chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_START_THRESHOLD) ||
+      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold) ||
       chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity)
     );
 

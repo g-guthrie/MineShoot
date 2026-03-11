@@ -12,3 +12,14 @@ export const PUBLIC_ROOM_SOFT_TARGET = 12;
 export const DEFAULT_PUBLIC_ROOM_CAPACITY = 16;
 export const PUBLIC_ROOM_HARD_CAP = DEFAULT_PUBLIC_ROOM_CAPACITY;
 export const PRIVATE_ROOM_CODE_LENGTH = 6;
+
+export const PUBLIC_ROOM_START_THRESHOLDS = {
+  ffa: 1,
+  tdm: 2,
+  lms: 2
+};
+
+export function publicRoomStartThresholdForMode(gameMode) {
+  const mode = String(gameMode || 'ffa').trim().toLowerCase();
+  return PUBLIC_ROOM_START_THRESHOLDS[mode] || PUBLIC_ROOM_START_THRESHOLD;
+}

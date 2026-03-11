@@ -7,6 +7,7 @@ const HARNESS_MODULE_PATHS = [
   '../js/app/lobby-party-view.js',
   '../js/app/lobby-friends-view.js',
   '../js/app/lobby-private-room-view.js',
+  '../js/app/menu-launch-orchestrator.js',
   '../js/app/lobby-clickables.js',
   '../js/app/lobby-controller-ui.js',
   '../js/app/lobby-session.js',
@@ -380,7 +381,7 @@ async function createHarness(seedName, options = {}) {
     'friends-overlay', 'friends-close-btn', 'friends-modal-content', 'party-roster-overlay', 'party-roster-modal-content',
     'party-roster-close-btn', 'party-link-view', 'private-room-view', 'private-room-status', 'private-room-summary',
     'private-room-mode-ffa-btn', 'private-room-mode-tdm-btn', 'private-room-mode-lms-btn', 'private-room-randomize-btn',
-    'private-room-start-btn', 'private-room-team-alpha', 'private-room-team-bravo'
+    'private-room-start-btn', 'private-room-team-alpha', 'private-room-team-bravo', 'menu-session-actions'
   ];
   const elements = {};
   for (let i = 0; i < ids.length; i++) {
@@ -627,6 +628,9 @@ async function createHarness(seedName, options = {}) {
 
   let gameplayPromptCount = 0;
   let startGameplayCount = 0;
+  let prepareLaunchCount = 0;
+  let inputCapturePromptCount = 0;
+  let returnToMenuCount = 0;
   const runtime = {
     GameLobbyApi: {
       resolveApiUrl(path) { return path; },
@@ -643,9 +647,31 @@ async function createHarness(seedName, options = {}) {
       getOwnProfile() { return seed.accountUser ? { displayName: seed.accountUser.displayName } : null; }
     },
     GameSession: {
-      startGameplayFromMenu() {
-        startGameplayCount += 1;
+      prepareLaunch() {
+        prepareLaunchCount += 1;
       },
+      enterGameplay() {
+        startGameplayCount += 1;
+        return Promise.resolve({
+          ok: true,
+          entered: optionsArg.enterGameplayEntered !== false
+        });
+      },
+      resumeGameplay() {
+        startGameplayCount += 1;
+        return Promise.resolve({
+          ok: true,
+          entered: optionsArg.enterGameplayEntered !== false
+        });
+      },
+      showInputCapturePrompt() {
+        inputCapturePromptCount += 1;
+      },
+      hideInputCapturePrompt() {},
+      returnToMenu() {
+        returnToMenuCount += 1;
+      },
+      startGameplayFromMenu() {},
       showGameplayPrompt() {
         gameplayPromptCount += 1;
       }
@@ -715,7 +741,7 @@ async function createHarness(seedName, options = {}) {
       'party-roster-preview-shell', 'party-join-lock-btn', 'view-party-btn', 'leave-party-btn',
       'view-friends-btn', 'refresh-friends-btn', 'private-room-mode-ffa-btn', 'private-room-mode-tdm-btn',
       'private-room-mode-lms-btn', 'private-room-randomize-btn', 'private-room-start-btn', 'private-room-summary',
-      'room-access-status', 'party-status', 'friends-status', 'private-room-status'
+      'room-access-status', 'party-status', 'friends-status', 'private-room-status', 'menu-session-actions'
     ];
     const dom = {};
     for (let i = 0; i < keys.length; i++) {
@@ -830,7 +856,10 @@ async function createHarness(seedName, options = {}) {
     dispatchWindow,
     privateRoomGetCount() { return backend.privateRoomGetCount; },
     gameplayPromptCount() { return gameplayPromptCount; },
-    startGameplayCount() { return startGameplayCount; }
+    startGameplayCount() { return startGameplayCount; },
+    prepareLaunchCount() { return prepareLaunchCount; },
+    inputCapturePromptCount() { return inputCapturePromptCount; },
+    returnToMenuCount() { return returnToMenuCount; }
   };
 }
 
@@ -1002,8 +1031,9 @@ test('sandbox launch preps the prompt and immediately starts gameplay when runti
   assert.ok(launchSandbox, 'Expected sandbox launch action');
   await launchSandbox.run();
 
+  assert.equal(harness.prepareLaunchCount(), 1);
   assert.equal(harness.startGameplayCount(), 1);
-  assert.equal(harness.gameplayPromptCount(), 1);
+  assert.equal(harness.inputCapturePromptCount(), 0);
 });
 
 test('quick match launch preps the prompt and immediately starts gameplay after room allocation', async () => {
@@ -1012,6 +1042,21 @@ test('quick match launch preps the prompt and immediately starts gameplay after 
   assert.ok(launchQuickMatch, 'Expected quick match action');
   await launchQuickMatch.run();
 
+  assert.equal(harness.prepareLaunchCount(), 1);
   assert.equal(harness.startGameplayCount(), 1);
-  assert.equal(harness.gameplayPromptCount(), 1);
+  assert.equal(harness.inputCapturePromptCount(), 0);
+});
+
+test('launch flow falls back to explicit input capture prompt when gameplay entry is blocked', async () => {
+  const harness = await createHarness('guest_idle', { enterGameplayEntered: false });
+  const launchQuickMatch = harness.actions().find((action) => action.name === 'primary-play-btn');
+  assert.ok(launchQuickMatch, 'Expected quick match action');
+  await launchQuickMatch.run();
+
+  const snap = JSON.parse(harness.snapshot());
+  assert.equal(harness.prepareLaunchCount(), 1);
+  assert.equal(harness.startGameplayCount(), 1);
+  assert.equal(harness.inputCapturePromptCount(), 1);
+  assert.equal(snap.dom['room-access-status'].text, 'Match ready. Click ENTER MATCH.');
+  assert.equal(snap.dom['menu-session-actions'].hidden, false);
 });

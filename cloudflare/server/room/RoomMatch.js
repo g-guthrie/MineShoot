@@ -107,6 +107,7 @@ export function startPublicMatchIfReady(room, deps) {
   const gameModeFfa = deps.gameModeFfa || 'ffa';
   const gameModeTdm = deps.gameModeTdm || 'tdm';
   const gameModeLms = deps.gameModeLms || 'lms';
+  const publicRoomStartThresholdForMode = deps.publicRoomStartThresholdForMode;
   const teamAlpha = deps.teamAlpha || 'alpha';
   const teamBravo = deps.teamBravo || 'bravo';
 
@@ -114,7 +115,10 @@ export function startPublicMatchIfReady(room, deps) {
   if (!room.matchState) room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
   if (room.matchState.started || room.matchState.ended) return false;
   const connectedCount = room.connectedHumanCount();
-  if (connectedCount < Number(deps.publicRoomStartThreshold || 2)) return false;
+  const startThreshold = publicRoomStartThresholdForMode
+    ? Number(publicRoomStartThresholdForMode(room.gameMode))
+    : Number(deps.publicRoomStartThreshold || 2);
+  if (connectedCount < startThreshold) return false;
   const now = nowMs();
   room.matchState.started = true;
   room.matchState.ended = false;

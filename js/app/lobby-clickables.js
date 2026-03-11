@@ -52,19 +52,27 @@
         });
 
         bindClick(ctx.primaryPlayBtn, function (event) {
-            ctx.beginRoomAction('quick', { gameMode: 'ffa' }, 'Finding an FFA room...', event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'ffa', event: event });
+            }
         });
 
         bindClick(ctx.tdmPlayBtn, function (event) {
-            ctx.beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...', event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'tdm', event: event });
+            }
         });
 
         bindClick(ctx.lmsPlayBtn, function (event) {
-            ctx.beginRoomAction('quick', { gameMode: 'lms' }, 'Finding an LMS room...', event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'lms', event: event });
+            }
         });
 
         bindClick(ctx.sandboxPlayBtn, function (event) {
-            ctx.launchSelectedSandbox(event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'START_SANDBOX', gameMode: ctx.getSelectedSandboxMode ? ctx.getSelectedSandboxMode() : 'ffa', event: event });
+            }
         });
 
         bindClick(ctx.sandboxModeCycleBtn, function () {
@@ -92,7 +100,9 @@
         });
 
         bindClick(ctx.createRoomBtn, function (event) {
-            ctx.beginPrivateRoomCreate(event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'CREATE_PRIVATE_ROOM', event: event });
+            }
         });
 
         bindClick(ctx.joinPrivateRoomBtn, function (event) {
@@ -101,7 +111,9 @@
                 ctx.setRoomAccessStatus('Enter a private room code.', true);
                 return;
             }
-            ctx.beginPrivateRoomJoin(roomCode, event);
+            if (ctx.dispatchAction) {
+                ctx.dispatchAction({ type: 'JOIN_PRIVATE_ROOM', roomCode: roomCode, event: event });
+            }
         });
 
         bindEnter(ctx.privateRoomInput, function () {
@@ -127,7 +139,9 @@
         if (Array.isArray(ctx.modeButtons)) {
             for (var i = 0; i < ctx.modeButtons.length; i++) {
                 bindClick(ctx.modeButtons[i], function (event) {
-                    ctx.launchMode(String(this.dataset.modeId || ''), {}, event);
+                    if (ctx.dispatchAction) {
+                        ctx.dispatchAction({ type: 'START_DIRECT_MODE', modeId: String(this.dataset.modeId || ''), event: event });
+                    }
                 });
             }
         }
@@ -260,8 +274,8 @@
             if (ctx.randomizePrivateRoomTeams) ctx.randomizePrivateRoomTeams();
         });
 
-        bindClick(ctx.privateRoomStartBtn, function () {
-            if (ctx.startPrivateRoomMatch) ctx.startPrivateRoomMatch();
+        bindClick(ctx.privateRoomStartBtn, function (event) {
+            if (ctx.startPrivateRoomMatch) ctx.startPrivateRoomMatch(event);
         });
     };
 

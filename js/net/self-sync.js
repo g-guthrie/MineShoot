@@ -5,8 +5,29 @@
 (function () {
     'use strict';
 
+    var lastMotionSyncKey = '';
+
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
+    }
+
+    function buildMotionSyncKey(selfState) {
+        if (!selfState || typeof selfState !== 'object') return '';
+        var precision = function (value) {
+            return Math.round(Number(value || 0) * 1000);
+        };
+        return [
+            String(selfState.id || ''),
+            Number(selfState.seq || 0),
+            precision(selfState.x),
+            precision(selfState.y),
+            precision(selfState.z),
+            precision(selfState.yaw),
+            precision(selfState.pitch),
+            precision(selfState.velocityY),
+            selfState.isGrounded ? '1' : '0',
+            selfState.alive === false ? '0' : '1'
+        ].join('|');
     }
 
     function syncPlayerState(selfState, dt) {
@@ -25,6 +46,8 @@
             : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
                 ? selfState.abilityFx
                 : null);
+        var motionSyncKey = buildMotionSyncKey(selfState);
+        var motionChanged = motionSyncKey !== lastMotionSyncKey;
 
         if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork) {
             RT.GamePlayerCombat.syncFromNetwork(selfState);
@@ -67,7 +90,9 @@
             RT.GamePlayer.applyAuthoritativeMotion
         ) {
             RT.GamePlayer.applyAuthoritativeMotion(selfState);
+            lastMotionSyncKey = motionSyncKey;
         } else if (
+            motionChanged &&
             selfState.alive !== false &&
             RT.GamePlayer &&
             RT.GamePlayer.reconcileAuthoritativeMotion
@@ -86,6 +111,7 @@
                 pendingInputs: pendingInputs,
                 snapshotAt: Date.now()
             });
+            lastMotionSyncKey = motionSyncKey;
         }
 
         if (RT.GameThrowables && RT.GameThrowables.setNetworkInventoryState && RT.GameUI && RT.GameUI.updateThrowableInfo) {

@@ -42,6 +42,7 @@ import {
 } from '../../../shared/match-rules.js';
 import {
   PUBLIC_ROOM_START_THRESHOLD,
+  publicRoomStartThresholdForMode,
   PRIVATE_ROOM_ID_PREFIX
 } from '../../../shared/matchmaking-config.js';
 
@@ -619,6 +620,7 @@ export class GlobalArenaRoom extends DurableObject {
       emptyMatchState,
       nowMs,
       publicRoomStartThreshold: PUBLIC_ROOM_START_THRESHOLD,
+      publicRoomStartThresholdForMode,
       ffaTargetProgress: FFA_TARGET_PROGRESS,
       tdmTargetProgress: TDM_TARGET_PROGRESS,
       gameModeFfa: GAME_MODE_FFA,

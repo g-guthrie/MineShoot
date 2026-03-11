@@ -303,6 +303,91 @@ canvas {
     display: none !important;
 }
 
+#launch-handoff {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(circle at top, rgba(210, 244, 223, 0.06), transparent 42%),
+        linear-gradient(180deg, rgba(4, 10, 6, 0.94), rgba(0, 0, 0, 0.96));
+}
+
+#launch-handoff[hidden] {
+    display: none !important;
+}
+
+#launch-handoff-screen {
+    width: min(640px, 92vw);
+    border: 1px solid rgba(132, 188, 146, 0.42);
+    background: linear-gradient(180deg, rgba(9, 24, 12, 0.96), rgba(3, 9, 5, 0.97));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.54);
+    color: #d8ffe1;
+    text-align: center;
+    padding: 30px 26px 24px;
+}
+
+#launch-handoff-kicker {
+    color: #8dc79a;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+}
+
+#launch-handoff-title {
+    margin-top: 14px;
+    color: #f4ffef;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(28px, 4vw, 46px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#launch-handoff-copy {
+    margin-top: 12px;
+    color: #a8c9ae;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+#launch-handoff-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+#launch-enter-btn,
+#launch-cancel-btn {
+    border: 1px solid #8ab58d;
+    background: linear-gradient(180deg, rgba(25, 54, 30, 0.98), rgba(8, 24, 12, 0.98));
+    color: #eefff1;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 24px;
+    cursor: pointer;
+}
+
+#launch-enter-btn:hover,
+#launch-cancel-btn:hover {
+    background: linear-gradient(180deg, rgba(34, 72, 40, 0.98), rgba(10, 31, 15, 0.98));
+}
+
+#launch-cancel-btn {
+    border-color: rgba(154, 247, 191, 0.45);
+    background: linear-gradient(180deg, rgba(14, 34, 18, 0.96), rgba(6, 17, 9, 0.98));
+    color: #c7f7d4;
+}
+
 .postgame-screen {
     width: min(900px, 94vw);
     border: 1px solid rgba(132, 188, 146, 0.46);

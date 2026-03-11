@@ -6,6 +6,7 @@ import vm from 'node:vm';
 async function loadSelfSyncHarness(runtimeOverrides = {}) {
   const statusCalls = [];
   const actionRestrictionCalls = [];
+  let reconcileCalls = 0;
   const runtime = {
     GameNet: {
       getMatchState() { return null; }
@@ -18,7 +19,9 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
       setActionRestrictions(state) {
         actionRestrictionCalls.push(JSON.parse(JSON.stringify(state)));
       },
-      reconcileAuthoritativeMotion() {}
+      reconcileAuthoritativeMotion() {
+        reconcileCalls += 1;
+      }
     },
     GamePlayerCombat: {
       syncFromNetwork() {}
@@ -52,6 +55,7 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
     syncPlayerState: sandbox.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState,
     statusCalls,
     actionRestrictionCalls,
+    reconcileCalls: function () { return reconcileCalls; },
     timeState
   };
 }
@@ -134,4 +138,43 @@ test('GameNetSelfSync locks the player out for the rest of an LMS round when out
     throwableUntil: 86401000,
     abilityUntil: 86401000
   });
+});
+
+test('GameNetSelfSync does not re-run authoritative reconciliation for identical snapshots every frame', async () => {
+  const harness = await loadSelfSyncHarness({
+    GameNet: {
+      getMatchState() { return null; },
+      getInputSyncState() {
+        return {
+          pendingInputCount: 0,
+          lastSentSeq: 10,
+          lastAckedSeq: 10
+        };
+      },
+      getPendingInputSamples() { return []; }
+    }
+  });
+
+  const selfState = {
+    id: 'usr_test',
+    seq: 10,
+    x: 4,
+    y: 1.6,
+    z: 8,
+    yaw: 0.25,
+    pitch: 0.05,
+    velocityY: 0,
+    isGrounded: true,
+    alive: true,
+    abilityFx: null
+  };
+
+  harness.syncPlayerState(selfState, 0.016);
+  harness.syncPlayerState(selfState, 0.016);
+
+  assert.equal(harness.reconcileCalls(), 1);
+
+  harness.syncPlayerState(Object.assign({}, selfState, { seq: 11, x: 4.25 }), 0.016);
+
+  assert.equal(harness.reconcileCalls(), 2);
 });
