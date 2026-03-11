@@ -725,9 +725,7 @@
         scene.add(camera);
 
         var spawn = world.getRandomSpawnPoint(world.getSpawnPadding(8)) || world.getDefaultSpawnPoint();
-        playerX = spawn.x;
-        playerZ = spawn.z;
-        posY = EYE_HEIGHT;
+        setSpawnPosition(spawn.x, spawn.z, world.getGroundHeightAt(spawn.x, spawn.z));
 
         ensureHitboxes();
 

@@ -1005,3 +1005,13 @@ test('sandbox launch preps the prompt and immediately starts gameplay when runti
   assert.equal(harness.startGameplayCount(), 1);
   assert.equal(harness.gameplayPromptCount(), 1);
 });
+
+test('quick match launch preps the prompt and immediately starts gameplay after room allocation', async () => {
+  const harness = await createHarness('guest_idle');
+  const launchQuickMatch = harness.actions().find((action) => action.name === 'primary-play-btn');
+  assert.ok(launchQuickMatch, 'Expected quick match action');
+  await launchQuickMatch.run();
+
+  assert.equal(harness.startGameplayCount(), 1);
+  assert.equal(harness.gameplayPromptCount(), 1);
+});

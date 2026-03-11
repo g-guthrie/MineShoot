@@ -51,16 +51,16 @@
             ctx.setControlsOpen(!ctx.isControlsOpen());
         });
 
-        bindClick(ctx.primaryPlayBtn, function () {
-            ctx.beginRoomAction('quick', { gameMode: 'ffa' }, 'Finding an FFA room...');
+        bindClick(ctx.primaryPlayBtn, function (event) {
+            ctx.beginRoomAction('quick', { gameMode: 'ffa' }, 'Finding an FFA room...', event);
         });
 
-        bindClick(ctx.tdmPlayBtn, function () {
-            ctx.beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...');
+        bindClick(ctx.tdmPlayBtn, function (event) {
+            ctx.beginRoomAction('quick', { gameMode: 'tdm' }, 'Finding a TDM room...', event);
         });
 
-        bindClick(ctx.lmsPlayBtn, function () {
-            ctx.beginRoomAction('quick', { gameMode: 'lms' }, 'Finding an LMS room...');
+        bindClick(ctx.lmsPlayBtn, function (event) {
+            ctx.beginRoomAction('quick', { gameMode: 'lms' }, 'Finding an LMS room...', event);
         });
 
         bindClick(ctx.sandboxPlayBtn, function (event) {
@@ -91,17 +91,17 @@
             if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
         });
 
-        bindClick(ctx.createRoomBtn, function () {
-            ctx.beginPrivateRoomCreate();
+        bindClick(ctx.createRoomBtn, function (event) {
+            ctx.beginPrivateRoomCreate(event);
         });
 
-        bindClick(ctx.joinPrivateRoomBtn, function () {
+        bindClick(ctx.joinPrivateRoomBtn, function (event) {
             var roomCode = ctx.privateRoomInput ? ctx.privateRoomInput.value.trim() : '';
             if (!roomCode) {
                 ctx.setRoomAccessStatus('Enter a private room code.', true);
                 return;
             }
-            ctx.beginPrivateRoomJoin(roomCode);
+            ctx.beginPrivateRoomJoin(roomCode, event);
         });
 
         bindEnter(ctx.privateRoomInput, function () {
@@ -126,8 +126,8 @@
 
         if (Array.isArray(ctx.modeButtons)) {
             for (var i = 0; i < ctx.modeButtons.length; i++) {
-                bindClick(ctx.modeButtons[i], function () {
-                    ctx.launchMode(String(this.dataset.modeId || ''));
+                bindClick(ctx.modeButtons[i], function (event) {
+                    ctx.launchMode(String(this.dataset.modeId || ''), {}, event);
                 });
             }
         }

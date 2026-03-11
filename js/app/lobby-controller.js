@@ -561,13 +561,19 @@
             return true;
         }
 
-        function launchMode(modeId, launchOptions) {
+        function launchMode(modeId, launchOptions, triggerEvent) {
             if (started || startPending) return Promise.resolve(false);
             startPending = true;
             var result = options.launchModeById ? options.launchModeById(modeId, launchOptions || {}) : { ok: false, error: 'Launch unavailable.' };
             if (result && typeof result.then === 'function') {
                 return result
-                    .then(handleLaunchResult)
+                    .then(function (payload) {
+                        if (!handleLaunchResult(payload)) return false;
+                        if (triggerEvent && runtime.GameSession && runtime.GameSession.startGameplayFromMenu) {
+                            runtime.GameSession.startGameplayFromMenu(triggerEvent);
+                        }
+                        return true;
+                    })
                     .catch(function (err) {
                         startPending = false;
                         setRoomAccessStatus((err && err.message) ? err.message : 'Mode launch failed.', true);
@@ -575,7 +581,11 @@
                         return false;
                     });
             }
-            return Promise.resolve(handleLaunchResult(result));
+            if (!handleLaunchResult(result)) return Promise.resolve(false);
+            if (triggerEvent && runtime.GameSession && runtime.GameSession.startGameplayFromMenu) {
+                runtime.GameSession.startGameplayFromMenu(triggerEvent);
+            }
+            return Promise.resolve(true);
         }
 
         function requestMatchmaking(action, extra) {
@@ -588,7 +598,7 @@
             });
         }
 
-        function startAllocatedRoom(payload) {
+        function startAllocatedRoom(payload, triggerEvent) {
             if (!payload || !payload.roomId) {
                 setRoomAccessStatus('Room request failed.', true);
                 return;
@@ -603,16 +613,16 @@
             launchMode(payload.modeId || 'cloud_multiplayer', {
                 roomId: payload.roomId,
                 gameMode: payload.gameMode || 'ffa'
-            });
+            }, triggerEvent);
         }
 
-        function beginRoomAction(action, extra, pendingText) {
+        function beginRoomAction(action, extra, pendingText, triggerEvent) {
             if (isUiBusy() || started) return;
             lobbyUi.setControllerBusy(true, pendingText);
             requestMatchmaking(action, extra)
                 .then(function (payload) {
                     lobbyUi.setControllerBusy(false, '');
-                    startAllocatedRoom(payload);
+                    startAllocatedRoom(payload, triggerEvent);
                 })
                 .catch(function (err) {
                     lobbyUi.setControllerBusy(false, '');
@@ -620,7 +630,7 @@
                 });
         }
 
-        function handlePrivateRoomResult(result, successText) {
+        function handlePrivateRoomResult(result, successText, triggerEvent) {
             if (!result || !result.state || !result.state.room) {
                 throw new Error('Private room response missing room state.');
             }
@@ -631,23 +641,23 @@
                 launchMode('single_cloudflare', {
                     roomId: room.roomId,
                     gameMode: room.roomMode || 'ffa'
-                });
+                }, triggerEvent);
             }
         }
 
-        function beginPrivateRoomCreate() {
+        function beginPrivateRoomCreate(triggerEvent) {
             if (isUiBusy() || started || !session || !session.createPrivateRoom) return;
             setRoomAccessStatus('Creating room...', false);
             session.createPrivateRoom()
                 .then(function (result) {
-                    handlePrivateRoomResult(result, 'Room ' + String(result.state.room.roomCode || '').toUpperCase() + ' ready.');
+                    handlePrivateRoomResult(result, 'Room ' + String(result.state.room.roomCode || '').toUpperCase() + ' ready.', triggerEvent);
                 })
                 .catch(function (err) {
                     setRoomAccessStatus((err && err.message) ? err.message : 'Private room creation failed.', true);
                 });
         }
 
-        function beginPrivateRoomJoin(roomCode) {
+        function beginPrivateRoomJoin(roomCode, triggerEvent) {
             if (isUiBusy() || started || !session || !session.joinPrivateRoom) return;
             setRoomAccessStatus('Joining private room...', false);
             session.joinPrivateRoom(roomCode)
@@ -657,7 +667,7 @@
                     var message = 'Joined room ' + String(result.state.room.roomCode || '').toUpperCase() + '.';
                     if (moved > 1) message += ' Pulled ' + String(moved - 1) + ' party member' + (moved === 2 ? '' : 's') + '.';
                     if (skipped > 0) message += ' ' + String(skipped) + ' member' + (skipped === 1 ? '' : 's') + ' stayed behind.';
-                    handlePrivateRoomResult(result, message);
+                    handlePrivateRoomResult(result, message, triggerEvent);
                 })
                 .catch(function (err) {
                     setRoomAccessStatus((err && err.message) ? err.message : 'Private room join failed.', true);

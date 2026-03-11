@@ -10,7 +10,7 @@
     var gameplayPromise = null;
     var docsPromise = null;
     var threeScriptPromise = null;
-    var threeScriptUrl = '/vendor/three.min.js';
+    var threeScriptUrl = new URL(/* @vite-ignore */ '../../vendor/three.min.js', import.meta.url).toString();
 
     function loadThreeGlobal() {
         if (globalThis.THREE) return Promise.resolve(globalThis.THREE);

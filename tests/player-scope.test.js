@@ -154,6 +154,32 @@ test('player init binds movement input listeners only once across repeated init 
   assert.equal(windowCounts.get('blur'), 1);
 });
 
+test('player init places the spawn at terrain height instead of eye height alone', async () => {
+  const player = await loadPlayerHarness({
+    GamePlayerWorld: {
+      create() {
+        return {
+          getWorldBounds() { return { minX: 0, maxX: 50, minZ: 0, maxZ: 50, size: 50 }; },
+          getDefaultSpawnPoint() { return { x: 25, z: 42 }; },
+          getSpawnThreatPoints() { return []; },
+          getRandomSpawnPoint() { return { x: 5, z: 6 }; },
+          getSpawnPadding() { return 8; },
+          getGroundHeightAt() { return 7; },
+          getCollisionBoxes() { return []; },
+          isBlockedAt() { return false; },
+          findLandingSurfaceY(_x, _z, _currentFeetY, nextFeetY) { return Math.min(7, nextFeetY); },
+          findCeilingY() { return null; }
+        };
+      }
+    }
+  });
+
+  const scene = new THREE.Scene();
+  player.init(scene);
+
+  assert.equal(player.getPosition().y, 8.6);
+});
+
 test('fire action is a no-op when the player view rig is not initialized', async () => {
   const player = await loadPlayerHarness();
 
