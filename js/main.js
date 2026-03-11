@@ -1075,6 +1075,10 @@
             syncMatchHud(localMatchContext);
         }
 
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.flushDeferredViewSync) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.flushDeferredViewSync(dt);
+        }
+
         if ((!controlsApi || !controlsApi.hasArmedThrowablePreview || !controlsApi.hasArmedThrowablePreview()) &&
             globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
             globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(false, false);

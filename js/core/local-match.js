@@ -49,6 +49,15 @@
         return Date.now();
     }
 
+    function normalizeModeId(mode) {
+        var shared = RT.GameShared || {};
+        if (shared.normalizeGameMode) {
+            return String(shared.normalizeGameMode(mode, { allowSandboxOnly: true }) || 'ffa');
+        }
+        var requested = String(mode || 'ffa').toLowerCase();
+        return requested === 'lms' ? 'lms' : (requested === 'tdm' ? 'tdm' : 'ffa');
+    }
+
     function copy(obj) {
         return obj ? JSON.parse(JSON.stringify(obj)) : null;
     }
@@ -294,8 +303,7 @@
 
     GameLocalMatch.init = function (options) {
         options = options || {};
-        var requestedMode = String(options.gameMode || 'ffa').toLowerCase();
-        modeId = requestedMode === 'lms' ? 'lms' : (requestedMode === 'tdm' ? 'tdm' : 'ffa');
+        modeId = normalizeModeId(options.gameMode || 'ffa');
         active = true;
         participants = new Map();
         enemyById = new Map();

@@ -47,6 +47,20 @@
             return !!(opts.isSandboxRuntimeReady && opts.isSandboxRuntimeReady());
         }
 
+        function setDisabled(items, disabled) {
+            if (!Array.isArray(items)) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i]) items[i].disabled = !!disabled;
+            }
+        }
+
+        function setDisplay(items, value) {
+            if (!Array.isArray(items)) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i] && items[i].style) items[i].style.display = value;
+            }
+        }
+
         function isUiBusy() {
             var launchState = currentLaunchState();
             return !!(controllerBusy || launchState.busy || (opts.isSessionBusy && opts.isSessionBusy()));
@@ -55,6 +69,7 @@
         function setSandboxButtonsEnabled(enabled) {
             if (elements.sandboxFfaBtn) elements.sandboxFfaBtn.disabled = !enabled;
             if (elements.sandboxLmsBtn) elements.sandboxLmsBtn.disabled = !enabled;
+            setDisabled(elements.sandboxModeButtons, !enabled);
         }
 
         function activeSocialView() {
@@ -103,6 +118,7 @@
             if (elements.primaryPlayBtn) elements.primaryPlayBtn.disabled = busy;
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.disabled = busy;
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.disabled = busy;
+            setDisabled(elements.quickMatchButtons, busy);
             if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.disabled = busy;
             if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.disabled = busy;
             if (elements.createRoomBtn) elements.createRoomBtn.disabled = busy;
@@ -218,6 +234,7 @@
             if (elements.primaryPlayBtn) elements.primaryPlayBtn.style.display = 'none';
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.style.display = 'none';
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.style.display = 'none';
+            setDisplay(elements.quickMatchButtons, 'none');
             if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.style.display = 'none';
             if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.style.display = 'none';
             if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
@@ -239,6 +256,8 @@
                 elements.lmsPlayBtn.disabled = false;
                 elements.lmsPlayBtn.style.display = '';
             }
+            setDisplay(elements.quickMatchButtons, '');
+            setDisabled(elements.quickMatchButtons, false);
             if (elements.sandboxPlayBtn) {
                 elements.sandboxPlayBtn.disabled = false;
                 elements.sandboxPlayBtn.style.display = '';

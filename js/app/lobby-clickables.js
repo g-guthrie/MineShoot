@@ -41,6 +41,9 @@
     }
 
     GameLobbyClickables.bindLaunchSurface = function (ctx) {
+        var quickButtons = Array.isArray(ctx.quickMatchButtons) ? ctx.quickMatchButtons.filter(Boolean) : [];
+        var sandboxButtons = Array.isArray(ctx.sandboxModeButtons) ? ctx.sandboxModeButtons.filter(Boolean) : [];
+
         bindClick(ctx.altModeToggle, function () {
             ctx.setControlsOpen(false);
             ctx.setAltModesOpen(!ctx.isAltModesOpen());
@@ -51,23 +54,31 @@
             ctx.setControlsOpen(!ctx.isControlsOpen());
         });
 
-        bindClick(ctx.primaryPlayBtn, function (event) {
-            if (ctx.dispatchAction) {
-                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'ffa', event: event });
-            }
-        });
+        function dispatchQuickMatch(button, event, fallbackMode) {
+            if (!ctx.dispatchAction) return;
+            var gameMode = String(button && button.dataset && button.dataset.gameMode || fallbackMode || 'ffa');
+            ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: gameMode, event: event });
+        }
 
-        bindClick(ctx.tdmPlayBtn, function (event) {
-            if (ctx.dispatchAction) {
-                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'tdm', event: event });
+        if (quickButtons.length) {
+            for (var i = 0; i < quickButtons.length; i++) {
+                bindClick(quickButtons[i], function (event) {
+                    dispatchQuickMatch(this, event, 'ffa');
+                });
             }
-        });
+        } else {
+            bindClick(ctx.primaryPlayBtn, function (event) {
+                dispatchQuickMatch(this, event, 'ffa');
+            });
 
-        bindClick(ctx.lmsPlayBtn, function (event) {
-            if (ctx.dispatchAction) {
-                ctx.dispatchAction({ type: 'START_QUICK_MATCH', gameMode: 'lms', event: event });
-            }
-        });
+            bindClick(ctx.tdmPlayBtn, function (event) {
+                dispatchQuickMatch(this, event, 'tdm');
+            });
+
+            bindClick(ctx.lmsPlayBtn, function (event) {
+                dispatchQuickMatch(this, event, 'lms');
+            });
+        }
 
         bindClick(ctx.sandboxPlayBtn, function (event) {
             if (ctx.dispatchAction) {
@@ -89,15 +100,24 @@
             }
         });
 
-        bindClick(ctx.sandboxFfaBtn, function () {
-            ctx.setSelectedSandboxMode('ffa');
-            if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
-        });
+        if (sandboxButtons.length) {
+            for (var n = 0; n < sandboxButtons.length; n++) {
+                bindClick(sandboxButtons[n], function () {
+                    ctx.setSelectedSandboxMode(String(this && this.dataset && this.dataset.gameMode || 'ffa'));
+                    if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
+                });
+            }
+        } else {
+            bindClick(ctx.sandboxFfaBtn, function () {
+                ctx.setSelectedSandboxMode('ffa');
+                if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
+            });
 
-        bindClick(ctx.sandboxLmsBtn, function () {
-            ctx.setSelectedSandboxMode('lms');
-            if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
-        });
+            bindClick(ctx.sandboxLmsBtn, function () {
+                ctx.setSelectedSandboxMode('lms');
+                if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
+            });
+        }
 
         bindClick(ctx.createRoomBtn, function (event) {
             if (ctx.dispatchAction) {

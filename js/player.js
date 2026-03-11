@@ -109,6 +109,7 @@
     var sprinting = false;
     var lastMoveSpeedNorm = 0;
     var loadoutSlots = selectableWeaponIds();
+    var pendingViewSync = false;
 
     var lastReplayAckSeq = 0;
     var avatarAliveVisible = true;
@@ -474,6 +475,7 @@
             adsFov: ADS_FOV,
             adsFovForWeapon: adsFovForWeapon
         });
+        pendingViewSync = false;
     }
 
     function setupInput() {
@@ -604,7 +606,11 @@
 
         resetRecoilState();
         updateAvatarPose();
-        updateCameraFromPlayer(1 / 60);
+        if (opts.deferViewSync) {
+            pendingViewSync = true;
+        } else {
+            updateCameraFromPlayer(1 / 60);
+        }
         return true;
     }
 
@@ -627,7 +633,11 @@
         lastMoveSpeedNorm = Number(state.moveSpeedNorm || 0);
         sprinting = !!state.sprinting;
         updateAvatarPose();
-        updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))));
+        if (opts.deferViewSync) {
+            pendingViewSync = true;
+        } else {
+            updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))));
+        }
         return true;
     }
 
@@ -636,11 +646,14 @@
         var helper = movementHelper();
         var reconcile = reconciliationHelper();
         var world = worldHelper();
+        var opts = options || {};
         if (!helper || !helper.stepAuthoritativeMovement || !reconcile || !reconcile.replayMotionState) {
-            return applyAuthoritativeMotion(state, { preserveViewAngles: true });
+            return applyAuthoritativeMotion(state, {
+                preserveViewAngles: true,
+                deferViewSync: !!opts.deferViewSync
+            });
         }
 
-        var opts = options || {};
         var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
         if (ackSeq > 0) lastReplayAckSeq = ackSeq;
         var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs.slice() : [], {
@@ -656,7 +669,10 @@
             fallbackYaw: yaw,
             fallbackPitch: pitch
         });
-        return applyMotionState(motionState, opts.dt, { preserveViewAngles: true });
+        return applyMotionState(motionState, opts.dt, {
+            preserveViewAngles: true,
+            deferViewSync: !!opts.deferViewSync
+        });
     }
 
     function hasMovementIntentInput() {
@@ -692,7 +708,10 @@
         }
 
         if (opts.force || horizontalDistSq >= (hardSnapDistance * hardSnapDistance)) {
-            return applyMotionState(state, dt, { preserveViewAngles: true });
+            return applyMotionState(state, dt, {
+                preserveViewAngles: true,
+                deferViewSync: !!opts.deferViewSync
+            });
         }
 
         if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
@@ -709,7 +728,11 @@
         }
 
         updateAvatarPose();
-        updateCameraFromPlayer(dt);
+        if (opts.deferViewSync) {
+            pendingViewSync = true;
+        } else {
+            updateCameraFromPlayer(dt);
+        }
         return true;
     }
 
@@ -917,6 +940,12 @@
 
     GamePlayer.getRotation = function () {
         return { yaw: yaw, pitch: pitch };
+    };
+
+    GamePlayer.flushDeferredViewSync = function (dt) {
+        if (!pendingViewSync) return false;
+        updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))));
+        return true;
     };
 
     GamePlayer.getMuzzleWorldPosition = function () {
@@ -1144,8 +1173,8 @@
         return setSpawnPosition(x, z, worldHelper().getGroundHeightAt(x, z));
     };
 
-    GamePlayer.applyAuthoritativeMotion = function (state) {
-        return applyAuthoritativeMotion(state);
+    GamePlayer.applyAuthoritativeMotion = function (state, options) {
+        return applyAuthoritativeMotion(state, options);
     };
 
     GamePlayer.reconcileAuthoritativeMotion = function (state, options) {

@@ -89,7 +89,7 @@
             RT.GamePlayer &&
             RT.GamePlayer.applyAuthoritativeMotion
         ) {
-            RT.GamePlayer.applyAuthoritativeMotion(selfState);
+            RT.GamePlayer.applyAuthoritativeMotion(selfState, { deferViewSync: true });
             lastMotionSyncKey = motionSyncKey;
         } else if (
             motionChanged &&
@@ -109,7 +109,8 @@
                 lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
                 lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
                 pendingInputs: pendingInputs,
-                snapshotAt: Date.now()
+                snapshotAt: Date.now(),
+                deferViewSync: true
             });
             lastMotionSyncKey = motionSyncKey;
         }

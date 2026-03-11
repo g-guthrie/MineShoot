@@ -5,7 +5,6 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 
 async function loadPlayerHarness(runtimeOverrides = {}) {
-  const viewCode = await fs.readFile(new URL('../js/player-view.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../js/player.js', import.meta.url), 'utf8');
   const documentObj = runtimeOverrides.__document || {
     pointerLockElement: null,
@@ -105,7 +104,10 @@ async function loadPlayerHarness(runtimeOverrides = {}) {
     }
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(viewCode, vm.createContext(sandbox));
+  if (!runtimeOverrides.GamePlayerView) {
+    const viewCode = await fs.readFile(new URL('../js/player-view.js', import.meta.url), 'utf8');
+    vm.runInContext(viewCode, vm.createContext(sandbox));
+  }
   vm.runInContext(code, vm.createContext(sandbox));
   return sandbox.__MAYHEM_RUNTIME.GamePlayer;
 }
@@ -178,6 +180,39 @@ test('player init places the spawn at terrain height instead of eye height alone
   player.init(scene);
 
   assert.equal(player.getPosition().y, 8.6);
+});
+
+test('authoritative motion can defer camera sync until the end of the frame', async () => {
+  let updateCameraCalls = 0;
+  const player = await loadPlayerHarness({
+    GamePlayerView: {
+      create() {
+        return {
+          updateCamera() {
+            updateCameraCalls += 1;
+          }
+        };
+      }
+    }
+  });
+
+  const scene = new THREE.Scene();
+  player.init(scene);
+  const baselineCalls = updateCameraCalls;
+
+  player.applyAuthoritativeMotion({
+    x: 9,
+    y: 1.6,
+    z: 9,
+    yaw: 0,
+    pitch: 0
+  }, { deferViewSync: true });
+
+  assert.equal(updateCameraCalls, baselineCalls);
+
+  player.flushDeferredViewSync(0.016);
+
+  assert.equal(updateCameraCalls, baselineCalls + 1);
 });
 
 test('fire action is a no-op when the player view rig is not initialized', async () => {

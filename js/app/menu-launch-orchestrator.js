@@ -8,6 +8,14 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameMenuLaunchOrchestrator = {};
 
+    function normalizeGameMode(gameMode, allowSandboxOnly) {
+        var shared = runtime.GameShared || {};
+        if (shared.normalizeGameMode) {
+            return String(shared.normalizeGameMode(gameMode, { allowSandboxOnly: !!allowSandboxOnly }) || 'ffa');
+        }
+        return String(gameMode || 'ffa').toLowerCase();
+    }
+
     function cloneContext(context) {
         var source = context || {};
         return {
@@ -213,6 +221,7 @@
         }
 
         function startQuickMatch(gameMode, triggerEvent) {
+            var resolvedGameMode = normalizeGameMode(gameMode, false);
             if (!ctx.requestMatchmaking) {
                 setError('Matchmaking unavailable.');
                 return Promise.resolve(false);
@@ -220,13 +229,13 @@
             launchContext = Object.assign(emptyContext(), cloneContext({
                 launchKind: 'public_match',
                 requiresNetwork: true,
-                gameMode: String(gameMode || 'ffa')
+                gameMode: resolvedGameMode
             }));
             runtimeReady = false;
             activityState = 'menu';
             if (ctx.hideInputCapturePrompt) ctx.hideInputCapturePrompt();
             setPhase('quick_match_matchmaking');
-            return Promise.resolve(ctx.requestMatchmaking('quick', { gameMode: String(gameMode || 'ffa') }))
+            return Promise.resolve(ctx.requestMatchmaking('quick', { gameMode: resolvedGameMode }))
                 .then(function (payload) {
                     if (!payload || !payload.roomId) {
                         setError('Room request failed.');
@@ -234,14 +243,14 @@
                     }
                     return launchRuntime(payload.modeId || 'cloud_multiplayer', {
                         roomId: payload.roomId,
-                        gameMode: payload.gameMode || gameMode || 'ffa'
+                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode, false)
                     }, {
                         launchKind: 'public_match',
                         requiresNetwork: true,
                         roomId: payload.roomId,
                         roomCode: payload.roomCode || '',
                         roomPhase: payload.roomPhase || '',
-                        gameMode: payload.gameMode || gameMode || 'ffa'
+                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode, false)
                     }, triggerEvent);
                 })
                 .catch(function (err) {
@@ -251,12 +260,13 @@
         }
 
         function startSandbox(gameMode, triggerEvent) {
+            var resolvedGameMode = normalizeGameMode(gameMode, true);
             return launchRuntime('single_full_sandbox', {
-                gameMode: String(gameMode || 'ffa')
+                gameMode: resolvedGameMode
             }, {
                 launchKind: 'sandbox',
                 requiresNetwork: false,
-                gameMode: String(gameMode || 'ffa')
+                gameMode: resolvedGameMode
             }, triggerEvent);
         }
 

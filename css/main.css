@@ -262,6 +262,11 @@ body.app-demonic #demonic-root {
     font: 700 13px/1.3 'Courier New', monospace;
 }
 
+#extra-mode-buttons,
+#extra-sandbox-mode-buttons {
+    display: contents;
+}
+
 @media (max-width: 900px) {
     .demonic-shell {
         padding: 18px 14px 28px;
@@ -1182,7 +1187,8 @@ canvas {
 }
 
 #tdm-play-btn,
-#lms-play-btn {
+#lms-play-btn,
+.quick-mode-btn {
     width: 100%;
     padding: 9px 16px;
     border: 1px solid #158f3d;
@@ -1198,7 +1204,8 @@ canvas {
 }
 
 #tdm-play-btn:hover,
-#lms-play-btn:hover {
+#lms-play-btn:hover,
+.quick-mode-btn:hover {
     border-color: #5bff95;
     background: linear-gradient(180deg, rgba(8, 48, 19, 0.96), rgba(3, 20, 9, 0.98));
     box-shadow: 0 0 24px rgba(0, 66, 37, 0.24);
@@ -1273,12 +1280,13 @@ canvas {
 
 #sandbox-ruleset-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 8px;
 }
 
 #sandbox-ffa-btn,
-#sandbox-lms-btn {
+#sandbox-lms-btn,
+.sandbox-mode-btn {
     border: 1px solid #7d65b8;
     background: rgba(28, 18, 49, 0.92);
     color: #eadfff;
@@ -1291,14 +1299,16 @@ canvas {
 }
 
 #sandbox-ffa-btn:hover,
-#sandbox-lms-btn:hover {
+#sandbox-lms-btn:hover,
+.sandbox-mode-btn:hover {
     border-color: #d3bcff;
     background: rgba(41, 26, 70, 0.96);
     color: #fff7ff;
 }
 
 #sandbox-ffa-btn.active,
-#sandbox-lms-btn.active {
+#sandbox-lms-btn.active,
+.sandbox-mode-btn.active {
     border-color: #efe2ff;
     background: linear-gradient(180deg, rgba(78, 48, 126, 0.98), rgba(50, 29, 86, 1));
     color: #ffffff;
@@ -4091,7 +4101,9 @@ canvas {
 
     #tdm-play-btn,
     #lms-play-btn,
-    #sandbox-play-btn {
+    #sandbox-play-btn,
+    .quick-mode-btn,
+    .sandbox-mode-btn {
         font-size: 12px;
         letter-spacing: 2px;
         padding: 7px 10px;
