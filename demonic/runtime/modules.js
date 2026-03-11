@@ -1,5 +1,10 @@
 import '../platform/bootstrap.js';
+import '../platform/loop.js';
+import '../gameplay/world/runtime.js';
+import '../gameplay/player/runtime.js';
+import '../gameplay/combat/runtime.js';
 import './runtime-state.js';
+import './coordinator.js';
 import './match-runtime.js';
 import './session.js';
 import './main.js';

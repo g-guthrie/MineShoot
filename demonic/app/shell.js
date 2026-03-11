@@ -92,6 +92,19 @@
         return session && session.getState ? session.getState() : null;
     }
 
+    function currentRuntimeInstance() {
+        var runtimeState = demonicRuntime.GameRuntimeState || null;
+        return runtimeState && runtimeState.getCurrentRuntime ? runtimeState.getCurrentRuntime() : null;
+    }
+
+    function syncRuntimeSnapshot() {
+        var runtimeInstance = currentRuntimeInstance();
+        var session = demonicRuntime.GameSession || null;
+        if (runtimeInstance && runtimeInstance.getSnapshot && session && session.syncRuntimeSnapshot) {
+            session.syncRuntimeSnapshot(runtimeInstance.getSnapshot());
+        }
+    }
+
     function renderSessionPanel() {
         var state = currentSessionState();
         if (!state || state.phase !== 'in_match') {
@@ -106,6 +119,19 @@
                 '<h3>Runtime Status</h3>' +
                 '<pre>phase    :: ' + escapeHtml(state.phase) + '\nmode     :: ' + escapeHtml(state.mode && state.mode.id) + '\nruleset  :: ' + escapeHtml(state.context && state.context.gameMode) + '\nbackend  :: ' + escapeHtml(state.mode && state.mode.backendLabel) + '</pre>' +
                 '<p class="demonic-runtime-copy">The Demonic session boundary is active. Next step is swapping this scaffolded session for the real rebuilt match runtime.</p>' +
+                '<div class="demonic-runtime-controls">' +
+                    '<button class="demonic-action" type="button" data-role="toggle-forward">TOGGLE FORWARD</button>' +
+                    '<button class="demonic-action" type="button" data-role="toggle-sprint">TOGGLE SPRINT</button>' +
+                    '<button class="demonic-action" type="button" data-role="toggle-ads">TOGGLE ADS</button>' +
+                    '<button class="demonic-action" type="button" data-role="fire-weapon">FIRE</button>' +
+                    '<button class="demonic-action" type="button" data-role="equip-machinegun">EQUIP MG</button>' +
+                    '<button class="demonic-action" type="button" data-role="equip-shotgun">EQUIP SG</button>' +
+                '</div>' +
+                (state.runtimeSnapshot ? '<pre>player.z :: ' + escapeHtml(Number(state.runtimeSnapshot.player && state.runtimeSnapshot.player.z || 0).toFixed(2)) +
+                    '\nplayer.speed :: ' + escapeHtml(Number(state.runtimeSnapshot.player && state.runtimeSnapshot.player.speed || 0).toFixed(2)) +
+                    '\nfov :: ' + escapeHtml(Number(state.runtimeSnapshot.camera && state.runtimeSnapshot.camera.fov || 0).toFixed(2)) +
+                    '\nweapon :: ' + escapeHtml(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.selectedWeaponId || '') +
+                    '\ncooldown :: ' + escapeHtml(Number(state.runtimeSnapshot.combat && state.runtimeSnapshot.combat.fireCooldownRemainingMs || 0).toFixed(0)) + 'ms</pre>' : '') +
                 '<div class="demonic-action-row">' +
                     '<button class="demonic-action" type="button" data-role="return-menu">RETURN TO DEMONIC MENU STATE</button>' +
                 '</div>' +
@@ -157,6 +183,30 @@
         if (gameMain && gameMain.returnToMenu) gameMain.returnToMenu();
         shellState.launchError = '';
         shellState.launchResult = null;
+        render();
+    }
+
+    function updateRuntimeInput(patch) {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.setInputState) return;
+        runtimeInstance.setInputState(patch || null);
+        syncRuntimeSnapshot();
+        render();
+    }
+
+    function fireRuntimeWeapon() {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.fire) return;
+        runtimeInstance.fire();
+        syncRuntimeSnapshot();
+        render();
+    }
+
+    function equipRuntimeWeapon(weaponId) {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.equipWeapon) return;
+        runtimeInstance.equipWeapon(weaponId);
+        syncRuntimeSnapshot();
         render();
     }
 
@@ -270,6 +320,36 @@
                     }
                     if (target.dataset && target.dataset.role === 'return-menu') {
                         returnToMenuState();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'toggle-forward') {
+                        var sessionState = currentSessionState();
+                        var active = !!(sessionState && sessionState.runtimeSnapshot && sessionState.runtimeSnapshot.input && sessionState.runtimeSnapshot.input.moveForward);
+                        updateRuntimeInput({ moveForward: !active, moveBackward: false });
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'toggle-sprint') {
+                        var sessionStateSprint = currentSessionState();
+                        var sprintActive = !!(sessionStateSprint && sessionStateSprint.runtimeSnapshot && sessionStateSprint.runtimeSnapshot.input && sessionStateSprint.runtimeSnapshot.input.sprint);
+                        updateRuntimeInput({ sprint: !sprintActive });
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'toggle-ads') {
+                        var sessionStateAds = currentSessionState();
+                        var adsActive = !!(sessionStateAds && sessionStateAds.runtimeSnapshot && sessionStateAds.runtimeSnapshot.input && sessionStateAds.runtimeSnapshot.input.ads);
+                        updateRuntimeInput({ ads: !adsActive });
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'fire-weapon') {
+                        fireRuntimeWeapon();
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'equip-machinegun') {
+                        equipRuntimeWeapon('machinegun');
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'equip-shotgun') {
+                        equipRuntimeWeapon('shotgun');
                         return;
                     }
                     target = target.parentNode;

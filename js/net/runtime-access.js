@@ -109,13 +109,30 @@
                     };
                 }
             }
-            if (playerApi && playerApi.getCamera) {
+            var fireOrigin = null;
+            if (playerApi && playerApi.getEyeWorldPosition) {
+                fireOrigin = playerApi.getEyeWorldPosition();
+            }
+            if ((!fireOrigin || !isFinite(Number(fireOrigin.x)) || !isFinite(Number(fireOrigin.y)) || !isFinite(Number(fireOrigin.z))) && playerApi && playerApi.getCamera) {
                 var fireCamera = playerApi.getCamera();
-                if (fireCamera && isFinite(Number(fireCamera.position && fireCamera.position.x)) && isFinite(Number(fireCamera.position && fireCamera.position.y)) && isFinite(Number(fireCamera.position && fireCamera.position.z))) {
+                if (fireCamera && fireCamera.position) {
+                    fireOrigin = fireCamera.position;
+                }
+            }
+            if (fireOrigin && isFinite(Number(fireOrigin.x)) && isFinite(Number(fireOrigin.y)) && isFinite(Number(fireOrigin.z))) {
+                payload.aimOrigin = {
+                    x: Number(fireOrigin.x || 0),
+                    y: Number(fireOrigin.y || 0),
+                    z: Number(fireOrigin.z || 0)
+                };
+            }
+            if (!payload.aimOrigin && playerApi && playerApi.getCamera) {
+                var fallbackCamera = playerApi.getCamera();
+                if (fallbackCamera && isFinite(Number(fallbackCamera.position && fallbackCamera.position.x)) && isFinite(Number(fallbackCamera.position && fallbackCamera.position.y)) && isFinite(Number(fallbackCamera.position && fallbackCamera.position.z))) {
                     payload.aimOrigin = {
-                        x: Number(fireCamera.position.x || 0),
-                        y: Number(fireCamera.position.y || 0),
-                        z: Number(fireCamera.position.z || 0)
+                        x: Number(fallbackCamera.position.x || 0),
+                        y: Number(fallbackCamera.position.y || 0),
+                        z: Number(fallbackCamera.position.z || 0)
                     };
                 }
             }

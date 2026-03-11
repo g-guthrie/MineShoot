@@ -80,6 +80,9 @@ async function loadGameNetHarness() {
           adsActive: false
         };
       },
+      getEyeWorldPosition() {
+        return { x: 10, y: 11, z: 12 };
+      },
       respawn() {}
     },
     GameNetTransport: null
@@ -174,6 +177,20 @@ test('GameNet records sent input samples with timing metadata', async () => {
   assert.equal(pending.length, 2);
   assert.equal(pending[0].dtMs, 50);
   assert.equal(pending[1].dtMs, 60);
+});
+
+test('GameNet fire payload uses player eye origin before falling back to camera position', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages } = harness;
+
+  GameNet.sendFire('rifle', 'shot-1');
+
+  assert.equal(sentMessages.length, 1);
+  assert.deepEqual(sentMessages[0].aimOrigin, {
+    x: 10,
+    y: 11,
+    z: 12
+  });
 });
 
 test('GameNet prunes acked input samples from self snapshots', async () => {

@@ -392,6 +392,12 @@ body.app-demonic #demonic-root {
     font: 700 13px/1.45 'Courier New', monospace;
 }
 
+.demonic-runtime-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
 #extra-mode-buttons,
 #extra-sandbox-mode-buttons {
     display: contents;
