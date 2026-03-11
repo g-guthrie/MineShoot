@@ -96,7 +96,7 @@
                             '<p class="demonic-tagline">Copy the current game, keep the feel, rebuild the internals, and leave Mayhem untouched.</p>' +
                             '<div class="demonic-action-row">' +
                                 '<a class="demonic-action demonic-action-primary" href="/">RETURN TO MAYHEM</a>' +
-                                '<a class="demonic-action" href="/docs/demonic-workstreams.md">OPEN WORKSTREAM MAP</a>' +
+                                '<a class="demonic-action" href="/docs/demonic-master-plan.md">OPEN MASTER PLAN</a>' +
                             '</div>' +
                         '</div>' +
                         '<aside class="demonic-status-panel">' +
