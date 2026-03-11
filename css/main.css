@@ -843,6 +843,13 @@ canvas {
     transform: translateY(-1px);
 }
 
+#sandbox-launch-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: stretch;
+}
+
 #sandbox-play-btn {
     width: 100%;
     padding: 9px 16px;
@@ -858,10 +865,31 @@ canvas {
     transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
+#sandbox-mode-cycle-btn {
+    min-width: 44px;
+    padding: 9px 10px;
+    border: 1px solid #856dc2;
+    background: linear-gradient(180deg, rgba(34, 21, 58, 0.98), rgba(18, 12, 31, 1));
+    color: #f0dcff;
+    font-size: 14px;
+    letter-spacing: 2px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    text-shadow: 0 0 8px rgba(180, 118, 255, 0.22);
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
 #sandbox-play-btn:hover {
     border-color: #c9a6ff;
     background: linear-gradient(180deg, rgba(34, 21, 58, 0.98), rgba(18, 12, 31, 1));
     box-shadow: 0 0 24px rgba(180, 118, 255, 0.18);
+    transform: translateY(-1px);
+}
+
+#sandbox-mode-cycle-btn:hover {
+    border-color: #d9c4ff;
+    background: linear-gradient(180deg, rgba(46, 28, 78, 1), rgba(24, 15, 42, 1));
+    box-shadow: 0 0 20px rgba(180, 118, 255, 0.18);
     transform: translateY(-1px);
 }
 
@@ -905,6 +933,14 @@ canvas {
     border-color: #d3bcff;
     background: rgba(41, 26, 70, 0.96);
     color: #fff7ff;
+}
+
+#sandbox-ffa-btn.active,
+#sandbox-lms-btn.active {
+    border-color: #efe2ff;
+    background: linear-gradient(180deg, rgba(78, 48, 126, 0.98), rgba(50, 29, 86, 1));
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 #create-private-room-btn,

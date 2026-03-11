@@ -79,6 +79,7 @@
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.disabled = busy;
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.disabled = busy;
             if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.disabled = busy;
+            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.disabled = busy;
             if (elements.createRoomBtn) elements.createRoomBtn.disabled = busy;
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.disabled = busy;
             if (elements.privateRoomInput) elements.privateRoomInput.disabled = busy;
@@ -193,6 +194,7 @@
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.style.display = 'none';
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.style.display = 'none';
             if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.style.display = 'none';
+            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.style.display = 'none';
             if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
             if (elements.createRoomBtn) elements.createRoomBtn.style.display = 'none';
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.style.display = 'none';
@@ -215,6 +217,10 @@
             if (elements.sandboxPlayBtn) {
                 elements.sandboxPlayBtn.disabled = false;
                 elements.sandboxPlayBtn.style.display = '';
+            }
+            if (elements.sandboxModeCycleBtn) {
+                elements.sandboxModeCycleBtn.disabled = false;
+                elements.sandboxModeCycleBtn.style.display = '';
             }
             if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
             if (elements.createRoomBtn) {

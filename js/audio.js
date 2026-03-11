@@ -344,8 +344,8 @@
 
     function playShotgunKickAccent(c) {
         playNoiseBurst(c, { duration: 0.028, vol: 0.03, frequency: 2400, q: 2.2, filterType: 'highpass' });
-        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 64, duration: 0.12, vol: 0.032, attack: 0.0012, delay: 0.001 });
-        playOscBurst(c, { type: 'sine', startFreq: 84, endFreq: 52, duration: 0.16, vol: 0.018, attack: 0.0015, delay: 0.004 });
+        playOscBurst(c, { type: 'triangle', startFreq: 144, endFreq: 58, duration: 0.15, vol: 0.05, attack: 0.001, delay: 0.001 });
+        playOscBurst(c, { type: 'sine', startFreq: 78, endFreq: 46, duration: 0.2, vol: 0.03, attack: 0.0012, delay: 0.003 });
     }
 
     function playWeaponFire(c, weaponId) {

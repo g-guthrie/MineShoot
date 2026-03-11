@@ -1414,7 +1414,7 @@
 
     GameHitscan.updateTracers = function (dt) {
         if (!dt || !tracerPoolReady || tracerPool.length === 0) return;
-        var simDt = Math.min(dt, 1 / 30);
+        var simDt = Math.min(dt, 1 / 15);
         var matrixDirty = false;
         for (var i = 0; i < tracerPool.length; i++) {
             var t = tracerPool[i];

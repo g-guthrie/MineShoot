@@ -371,7 +371,7 @@ async function createHarness(seedName, options = {}) {
   const seed = createScenario(seedName);
   const ids = [
     'mode-buttons', 'alt-mode-toggle', 'controls-menu', 'controls-toggle', 'primary-play-btn', 'tdm-play-btn', 'lms-play-btn',
-    'sandbox-play-btn', 'sandbox-ruleset-panel', 'sandbox-ffa-btn', 'sandbox-lms-btn', 'create-private-room-btn', 'private-room-input',
+    'sandbox-play-btn', 'sandbox-mode-cycle-btn', 'sandbox-ruleset-panel', 'sandbox-ffa-btn', 'sandbox-lms-btn', 'create-private-room-btn', 'private-room-input',
     'join-private-room-btn', 'room-access-status', 'room-share-panel', 'room-share-code', 'copy-room-code-btn', 'room-code-badge',
     'room-code-badge-value', 'mode-subtitle', 'menu-party-id-btn', 'menu-party-id-label', 'menu-party-id-value', 'party-join-lock-btn',
     'party-join-lock-icon', 'party-join-lock-note', 'social-tab-party-btn', 'social-tab-friends-btn', 'social-tab-room-btn',
@@ -998,12 +998,8 @@ test('private room join reconciles stale post payloads against canonical room st
 
 test('sandbox launch preps the prompt and immediately starts gameplay when runtime is ready', async () => {
   const harness = await createHarness('guest_idle');
-  const openSandbox = harness.actions().find((action) => action.name === 'sandbox-play-btn');
-  assert.ok(openSandbox, 'Expected sandbox toggle action');
-  await openSandbox.run();
-
-  const launchSandbox = harness.actions().find((action) => action.name === 'sandbox-ffa-btn');
-  assert.ok(launchSandbox, 'Expected sandbox FFA action');
+  const launchSandbox = harness.actions().find((action) => action.name === 'sandbox-play-btn');
+  assert.ok(launchSandbox, 'Expected sandbox launch action');
   await launchSandbox.run();
 
   assert.equal(harness.startGameplayCount(), 1);

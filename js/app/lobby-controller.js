@@ -56,6 +56,7 @@
         var tdmPlayBtn = document.getElementById('tdm-play-btn');
         var lmsPlayBtn = document.getElementById('lms-play-btn');
         var sandboxPlayBtn = document.getElementById('sandbox-play-btn');
+        var sandboxModeCycleBtn = document.getElementById('sandbox-mode-cycle-btn');
         var sandboxRulesetPanel = document.getElementById('sandbox-ruleset-panel');
         var sandboxFfaBtn = document.getElementById('sandbox-ffa-btn');
         var sandboxLmsBtn = document.getElementById('sandbox-lms-btn');
@@ -119,6 +120,7 @@
         var startPending = false;
         var sandboxWarmPromise = null;
         var sandboxRuntimeReady = !(runtime.GameRuntimeLoader && runtime.GameRuntimeLoader.loadGameplayRuntime);
+        var selectedSandboxMode = 'ffa';
         var partyView = null;
         var friendsView = null;
         var privateRoomViewController = null;
@@ -300,6 +302,35 @@
                     sandboxWarmPromise = null;
                 });
             return sandboxWarmPromise;
+        }
+
+        function normalizeSandboxMode(mode) {
+            return String(mode || '').toLowerCase() === 'lms' ? 'lms' : 'ffa';
+        }
+
+        function syncSandboxSelectionUi() {
+            var mode = normalizeSandboxMode(selectedSandboxMode);
+            if (sandboxPlayBtn) {
+                sandboxPlayBtn.textContent = mode === 'lms' ? 'OFFLINE SANDBOX :: LMS' : 'OFFLINE SANDBOX :: FFA';
+            }
+            if (sandboxModeCycleBtn) {
+                sandboxModeCycleBtn.title = mode === 'lms'
+                    ? 'Sandbox selector. Current ruleset: LMS.'
+                    : 'Sandbox selector. Current ruleset: FFA.';
+            }
+            if (sandboxFfaBtn) sandboxFfaBtn.classList.toggle('active', mode === 'ffa');
+            if (sandboxLmsBtn) sandboxLmsBtn.classList.toggle('active', mode === 'lms');
+        }
+
+        function setSelectedSandboxMode(mode, silent) {
+            selectedSandboxMode = normalizeSandboxMode(mode);
+            syncSandboxSelectionUi();
+            if (!silent) {
+                setRoomAccessStatus(
+                    selectedSandboxMode === 'lms' ? 'Sandbox ruleset set to LMS.' : 'Sandbox ruleset set to FFA.',
+                    false
+                );
+            }
         }
 
         function setPrivateRoomShare(roomId) {
@@ -634,12 +665,13 @@
         }
 
         function launchSandboxRuleset(gameMode, event) {
+            gameMode = normalizeSandboxMode(gameMode);
             if (started || startPending) return;
             if (!sandboxRuntimeReady) {
                 setRoomAccessStatus('Preparing sandbox runtime...', false);
                 warmSandboxRuntime()
                     .then(function () {
-                        setRoomAccessStatus('Sandbox ready. Select a ruleset again to enter.', false);
+                        launchSandboxRuleset(gameMode, event);
                     })
                     .catch(function (err) {
                         setRoomAccessStatus((err && err.message) ? err.message : 'Sandbox failed to load.', true);
@@ -674,11 +706,16 @@
             }
         }
 
+        function launchSelectedSandbox(event) {
+            launchSandboxRuleset(selectedSandboxMode, event);
+        }
+
         lobbyUi.syncModeButtonVisibility();
         lobbyUi.setAltModesOpen(false);
         lobbyUi.setControlsOpen(false);
         lobbyUi.syncMenuControlState();
         lobbyUi.setSocialView('party');
+        syncSandboxSelectionUi();
         setPrivateRoomShare('');
         updatePartyIdentityDisplay();
         updateSocialSubtitle();
@@ -718,6 +755,7 @@
                 tdmPlayBtn: tdmPlayBtn,
                 lmsPlayBtn: lmsPlayBtn,
                 sandboxPlayBtn: sandboxPlayBtn,
+                sandboxModeCycleBtn: sandboxModeCycleBtn,
                 sandboxRulesetPanel: sandboxRulesetPanel,
                 sandboxFfaBtn: sandboxFfaBtn,
                 sandboxLmsBtn: sandboxLmsBtn,
@@ -734,7 +772,9 @@
                 beginRoomAction: beginRoomAction,
                 warmSandboxRuntime: warmSandboxRuntime,
                 setRoomAccessStatus: setRoomAccessStatus,
+                launchSelectedSandbox: launchSelectedSandbox,
                 launchSandboxRuleset: launchSandboxRuleset,
+                setSelectedSandboxMode: setSelectedSandboxMode,
                 beginPrivateRoomCreate: beginPrivateRoomCreate,
                 beginPrivateRoomJoin: beginPrivateRoomJoin,
                 launchMode: launchMode

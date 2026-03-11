@@ -97,3 +97,87 @@ Notes:
 - This runs the Worker locally with static assets from `.cf-deploy/`, which is kept as a quarantined legacy compatibility bundle.
 - `dist/` remains the main frontend build output; `.cf-deploy/` is not the primary source of truth for app code.
 - It gives you real client/server multiplayer behavior offline (same WS/backend model, local runtime).
+
+## 10) Repeatable deploy checklist
+
+Use this exact flow when you want to push current work to production again.
+
+### A) Verify locally
+
+Build first:
+
+```bash
+npm run build
+```
+
+Run the targeted tests you care about, or at minimum the current smoke path:
+
+```bash
+node --experimental-default-type=module --test tests/menu-click-paths.test.js
+```
+
+For a local Cloudflare-style run before shipping:
+
+```bash
+npm run dev
+```
+
+Open:
+
+- `http://127.0.0.1:8787/`
+
+### B) Push to `main`
+
+Check the worktree:
+
+```bash
+git status -sb
+```
+
+Commit and push:
+
+```bash
+git add -A
+git commit -m "Describe the change"
+git push origin main
+```
+
+### C) Deploy the Worker/backend
+
+Deploy the Worker with the repo-local Wrangler wrapper:
+
+```bash
+./scripts/wrangler.sh deploy
+```
+
+Expected backend URL for this project:
+
+- `https://mayhem.gguthrie-minecraft-fps.workers.dev`
+
+### D) Pages/frontend note
+
+The frontend Pages deploy is Git-driven from `main`.
+
+Current frontend URL:
+
+- `https://mayhem-9uj.pages.dev/`
+
+That means:
+
+- pushing `main` is the Pages/frontend deploy trigger
+- `wrangler deploy` updates the Worker/backend/API side
+
+### E) Quick verification
+
+Check both endpoints respond:
+
+```bash
+curl -I https://mayhem.gguthrie-minecraft-fps.workers.dev/
+curl -I https://mayhem-9uj.pages.dev/
+```
+
+If you want to verify the exact pushed commit:
+
+```bash
+git rev-parse --short HEAD
+```

@@ -576,12 +576,12 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type D: Giant ancient trees (towering pillars of the forest)
         var giants = [
-            { u: 0.06, v: 0.20, s: 1.18 },
-            { u: 0.46, v: 0.18, s: 1.08 },
-            { u: 0.42, v: 0.34, s: 1.02 },
-            { u: 0.98, v: 0.54, s: 1.02 },
-            { u: 0.88, v: 0.82, s: 1.08 },
-            { u: 0.84, v: 0.16, s: 1.1 }
+            { u: 0.18, v: 0.04, s: 1.18 },
+            { u: 0.36, v: 0.14, s: 1.08 },
+            { u: 0.62, v: 0.10, s: 1.02 },
+            { u: 0.98, v: 0.52, s: 1.02 },
+            { u: 0.90, v: 0.92, s: 1.08 },
+            { u: 0.84, v: 0.04, s: 1.1 }
         ];
         for (var gi = 0; gi < giants.length; gi++) {
             var gp = pt(bounds, giants[gi].u, giants[gi].v);
@@ -591,27 +591,26 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type A: Canopy trees -- wide scale range for dramatic height contrast
         var canopyTrees = [
-            // Waterfall wall composition: tall flanks with shorter trees stepping away.
-            { u: 0.09, v: 0.30, s: 1.95 },
-            { u: 0.15, v: 0.24, s: 1.55 },
-            { u: 0.22, v: 0.37, s: 1.2 },
-            { u: 0.40, v: 0.26, s: 1.7 },
-            { u: 0.54, v: 0.38, s: 1.02 },
-            // Shrine-side and border coverage.
-            { u: 0.56, v: 0.12, s: 1.55 },
-            { u: 0.56, v: 0.90, s: 1.25 },
-            { u: 0.66, v: 0.46, s: 1.28 },
-            { u: 0.70, v: 0.62, s: 1.18 },
-            { u: 0.76, v: 0.34, s: 1.18 },
-            { u: 0.975, v: 0.40, s: 1.22 },
-            { u: 0.82, v: 0.64, s: 1.35 },
-            { u: 0.44, v: 0.74, s: 1.1 },
-            { u: 0.18, v: 0.74, s: 1.22 },
-            // Lower canopy layer.
-            { u: 0.60, v: 0.18, s: 0.85 },
-            { u: 0.74, v: 0.80, s: 0.78 },
-            { u: 0.64, v: 0.22, s: 0.8 },
-            { u: 0.16, v: 0.60, s: 0.88 }
+            // Outer layer pushed to the actual padded biome edges.
+            { u: 0.12, v: 0.06, s: 1.55 },
+            { u: 0.32, v: 0.04, s: 1.35 },
+            { u: 0.54, v: 0.03, s: 1.6 },
+            { u: 0.78, v: 0.05, s: 1.22 },
+            { u: 0.96, v: 0.18, s: 1.22 },
+            { u: 0.97, v: 0.40, s: 1.22 },
+            { u: 0.95, v: 0.70, s: 1.35 },
+            { u: 0.82, v: 0.96, s: 1.1 },
+            { u: 0.56, v: 0.95, s: 1.22 },
+            { u: 0.28, v: 0.94, s: 1.08 },
+            { u: 0.10, v: 0.90, s: 1.18 },
+            // Inner layer spread wider with fewer clumps.
+            { u: 0.24, v: 0.28, s: 1.18 },
+            { u: 0.46, v: 0.22, s: 1.05 },
+            { u: 0.68, v: 0.26, s: 1.18 },
+            { u: 0.76, v: 0.52, s: 1.18 },
+            { u: 0.60, v: 0.72, s: 1.02 },
+            { u: 0.34, v: 0.68, s: 1.1 },
+            { u: 0.48, v: 0.50, s: 0.92 }
         ];
         for (var t = 0; t < canopyTrees.length; t++) {
             var tp = pt(bounds, canopyTrees[t].u, canopyTrees[t].v);
@@ -620,20 +619,18 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type B: Bushy trees -- more of them, wider scale range
         var bushyTrees = [
-            { u: 0.36, v: 0.12, s: 1.0 },
-            { u: 0.62, v: 0.18, s: 0.82 },
-            { u: 0.30, v: 0.88, s: 0.95 },
-            { u: 0.84, v: 0.84, s: 0.72 },
-            { u: 0.48, v: 0.74, s: 1.05 },
-            // Shrine corridor blockers.
-            { u: 0.48, v: 0.42, s: 0.88 },
-            { u: 0.56, v: 0.48, s: 0.92 },
-            { u: 0.74, v: 0.54, s: 0.86 },
-            // Additional edge density.
-            { u: 0.06, v: 0.70, s: 1.25 },
-            { u: 0.94, v: 0.30, s: 0.95 },
-            { u: 0.52, v: 0.94, s: 1.08 },
-            { u: 0.72, v: 0.08, s: 0.74 }
+            { u: 0.18, v: 0.16, s: 0.9 },
+            { u: 0.34, v: 0.06, s: 0.82 },
+            { u: 0.68, v: 0.10, s: 0.88 },
+            { u: 0.90, v: 0.26, s: 0.95 },
+            { u: 0.88, v: 0.60, s: 0.72 },
+            { u: 0.70, v: 0.88, s: 1.05 },
+            { u: 0.34, v: 0.90, s: 0.95 },
+            { u: 0.08, v: 0.68, s: 1.0 },
+            { u: 0.22, v: 0.48, s: 0.84 },
+            { u: 0.56, v: 0.36, s: 0.92 },
+            { u: 0.62, v: 0.58, s: 0.86 },
+            { u: 0.42, v: 0.76, s: 0.88 }
         ];
         for (var bt = 0; bt < bushyTrees.length; bt++) {
             var btp = pt(bounds, bushyTrees[bt].u, bushyTrees[bt].v);
@@ -642,12 +639,11 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Type C: Saplings -- fill gaps, especially mid-zone
         var saplings = [
-            { u: 0.26, v: 0.22 }, { u: 0.76, v: 0.22 },
-            { u: 0.22, v: 0.74 }, { u: 0.78, v: 0.76 },
-            { u: 0.50, v: 0.86 },
-            { u: 0.62, v: 0.66 },
-            { u: 0.12, v: 0.58 }, { u: 0.88, v: 0.46 },
-            { u: 0.34, v: 0.18 }, { u: 0.58, v: 0.34 }
+            { u: 0.14, v: 0.10 }, { u: 0.40, v: 0.14 },
+            { u: 0.78, v: 0.14 }, { u: 0.92, v: 0.46 },
+            { u: 0.76, v: 0.86 }, { u: 0.44, v: 0.86 },
+            { u: 0.16, v: 0.84 }, { u: 0.24, v: 0.58 },
+            { u: 0.54, v: 0.22 }, { u: 0.62, v: 0.78 }
         ];
         for (var sp = 0; sp < saplings.length; sp++) {
             var spp = pt(bounds, saplings[sp].u, saplings[sp].v);

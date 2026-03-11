@@ -63,7 +63,11 @@
             ctx.beginRoomAction('quick', { gameMode: 'lms' }, 'Finding an LMS room...');
         });
 
-        bindClick(ctx.sandboxPlayBtn, function () {
+        bindClick(ctx.sandboxPlayBtn, function (event) {
+            ctx.launchSelectedSandbox(event);
+        });
+
+        bindClick(ctx.sandboxModeCycleBtn, function () {
             if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = !ctx.sandboxRulesetPanel.hidden;
             if (ctx.sandboxRulesetPanel && !ctx.sandboxRulesetPanel.hidden) {
                 ctx.setRoomAccessStatus('Preparing sandbox runtime...', false);
@@ -77,12 +81,14 @@
             }
         });
 
-        bindClick(ctx.sandboxFfaBtn, function (event) {
-            ctx.launchSandboxRuleset('ffa', event);
+        bindClick(ctx.sandboxFfaBtn, function () {
+            ctx.setSelectedSandboxMode('ffa');
+            if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
         });
 
-        bindClick(ctx.sandboxLmsBtn, function (event) {
-            ctx.launchSandboxRuleset('lms', event);
+        bindClick(ctx.sandboxLmsBtn, function () {
+            ctx.setSelectedSandboxMode('lms');
+            if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
         });
 
         bindClick(ctx.createRoomBtn, function () {
