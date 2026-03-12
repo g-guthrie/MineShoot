@@ -29,6 +29,13 @@ export function clearClientDiagnostics() {
   events.length = 0;
 }
 
+export function getLatestClientDiagnostic(type) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].type === type) return events[i];
+  }
+  return null;
+}
+
 export function installGlobalClientDiagnostics(target = globalThis) {
   if (handlersInstalled || !target || typeof target.addEventListener !== 'function') return false;
   handlersInstalled = true;

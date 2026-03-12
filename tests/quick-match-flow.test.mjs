@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   clearClientDiagnostics,
-  getClientDiagnostics
+  getClientDiagnostics,
+  getLatestClientDiagnostic
 } from '../js/runtime/diagnostics/client-diagnostics.mjs';
 import { createQuickMatchFlow } from '../js/app/quick-match-flow.mjs';
 
@@ -54,6 +55,7 @@ test('quick match flow deduplicates concurrent launches and records success diag
 test('quick match flow resets UI and records diagnostics on failure', async () => {
   clearClientDiagnostics();
   const events = [];
+  let errorMessage = '';
 
   const flow = createQuickMatchFlow({
     requestPointerLock() {
@@ -70,6 +72,9 @@ test('quick match flow resets UI and records diagnostics on failure', async () =
     },
     exitPointerLock() {
       events.push('exit');
+    },
+    onError(err) {
+      errorMessage = err && err.message ? String(err.message) : '';
     }
   });
 
@@ -78,9 +83,11 @@ test('quick match flow resets UI and records diagnostics on failure', async () =
     'button:LOADING',
     'indicator:PROFILE :: LOADING',
     'button:PLAY',
-    'indicator:PROFILE :: STANDBY',
+    'indicator:PROFILE :: ERROR',
     'exit'
   ]);
   const diagnostics = getClientDiagnostics().map((event) => event.type);
   assert.deepEqual(diagnostics, ['quick_match_begin', 'quick_match_error']);
+  assert.match(errorMessage, /runtime entry is unavailable/i);
+  assert.equal(typeof getLatestClientDiagnostic('quick_match_error').details.elapsedMs, 'number');
 });

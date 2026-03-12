@@ -1,6 +1,7 @@
 import { createQuickMatchFlow } from './app/quick-match-flow.mjs';
 import {
   installGlobalClientDiagnostics,
+  getLatestClientDiagnostic,
   recordClientDiagnostic
 } from './runtime/diagnostics/client-diagnostics.mjs';
 
@@ -47,8 +48,30 @@ const quickMatchFlow = createQuickMatchFlow({
     if (document.exitPointerLock && document.pointerLockElement) {
       document.exitPointerLock();
     }
+  },
+  onError(err) {
+    const message = err && err.message ? String(err.message) : 'STARTUP FAILED';
+    setRuntimeIndicator(`ERROR :: ${message.toUpperCase().slice(0, 64)}`);
   }
 });
+
+function preloadRuntime() {
+  import('./app/index.js')
+    .then(function (app) {
+      if (app && typeof app.preloadGameRuntime === 'function') {
+        return app.preloadGameRuntime();
+      }
+      return null;
+    })
+    .then(function () {
+      recordClientDiagnostic('quick_match_preloaded');
+    })
+    .catch(function (err) {
+      recordClientDiagnostic('quick_match_preload_error', {
+        message: err && err.message ? String(err.message) : 'Unknown preload error'
+      });
+    });
+}
 
 if (playBtn) {
   playBtn.addEventListener('click', function (e) {
@@ -57,7 +80,15 @@ if (playBtn) {
       console.error(err);
     });
   });
+  playBtn.addEventListener('mouseenter', preloadRuntime, { once: true });
+  playBtn.addEventListener('touchstart', preloadRuntime, { once: true, passive: true });
 }
 
 installGlobalClientDiagnostics(window);
 setRuntimeIndicator(null);
+
+if ('requestIdleCallback' in window) {
+  window.requestIdleCallback(preloadRuntime, { timeout: 1200 });
+} else {
+  window.setTimeout(preloadRuntime, 150);
+}

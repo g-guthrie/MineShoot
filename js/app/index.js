@@ -7,6 +7,10 @@ async function loadGameRuntime() {
   return runtimeLoadPromise;
 }
 
+export function preloadGameRuntime() {
+  return loadGameRuntime();
+}
+
 export async function startQuickMatch() {
   const runtimeModule = await loadGameRuntime();
   if (!runtimeModule || typeof runtimeModule.startQuickMatch !== 'function') {

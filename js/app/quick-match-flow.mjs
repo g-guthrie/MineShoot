@@ -6,6 +6,7 @@ export function createQuickMatchFlow(options = {}) {
   const setRuntimeIndicator = typeof options.setRuntimeIndicator === 'function' ? options.setRuntimeIndicator : function noop() {};
   const loadApp = typeof options.loadApp === 'function' ? options.loadApp : function noopLoad() { return Promise.resolve(null); };
   const exitPointerLock = typeof options.exitPointerLock === 'function' ? options.exitPointerLock : function noop() {};
+  const onError = typeof options.onError === 'function' ? options.onError : function noop() {};
 
   let launchPromise = null;
 
@@ -13,6 +14,7 @@ export function createQuickMatchFlow(options = {}) {
     beginQuickMatch() {
       if (launchPromise) return launchPromise;
 
+      const startedAt = performance.now();
       requestPointerLock();
       setPlayButtonState(true, 'LOADING');
       setRuntimeIndicator('PROFILE :: LOADING');
@@ -26,15 +28,19 @@ export function createQuickMatchFlow(options = {}) {
           if (!app || typeof app.startQuickMatch !== 'function') {
             throw new Error('Game runtime entry is unavailable.');
           }
-          recordClientDiagnostic('quick_match_runtime_loaded');
+          recordClientDiagnostic('quick_match_runtime_loaded', {
+            elapsedMs: Math.round(performance.now() - startedAt)
+          });
           return app.startQuickMatch();
         })
         .catch(function handleError(err) {
           setPlayButtonState(false, 'PLAY');
-          setRuntimeIndicator('PROFILE :: STANDBY');
+          setRuntimeIndicator('PROFILE :: ERROR');
           exitPointerLock();
+          onError(err);
           recordClientDiagnostic('quick_match_error', {
-            message: err && err.message ? String(err.message) : 'Unknown quick match error'
+            message: err && err.message ? String(err.message) : 'Unknown quick match error',
+            elapsedMs: Math.round(performance.now() - startedAt)
           });
           throw err;
         })
