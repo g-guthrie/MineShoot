@@ -11,17 +11,6 @@ body {
     cursor: none;
 }
 
-body.menu-booting #overlay,
-body.menu-booting #hud-manual-btn {
-    opacity: 0;
-    pointer-events: none;
-}
-
-body:not(.menu-booting) #overlay,
-body:not(.menu-booting) #hud-manual-btn {
-    transition: opacity 120ms ease-out;
-}
-
 #hud-manual-btn {
     position: fixed;
     top: 16px;
@@ -1026,105 +1015,6 @@ canvas {
     text-shadow: 0 0 4px rgba(255, 145, 72, 0.32);
 }
 
-#ability-slot-panel {
-    border: 1px solid #004225;
-    background: rgba(0, 20, 8, 0.58);
-    padding: 6px 6px 5px;
-}
-
-#ability-slot-title {
-    color: #d29cff;
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-    border-bottom: 1px solid #0a3517;
-    padding-bottom: 4px;
-}
-
-.ability-slot-section {
-    margin-bottom: 5px;
-}
-
-.ability-slot-label {
-    color: #b476ff;
-    font-size: 9px;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    margin-bottom: 3px;
-}
-
-.ability-choice-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 3px;
-    margin-bottom: 3px;
-}
-
-.ability-choice-btn {
-    border: 1px solid #004225;
-    background: rgba(3, 14, 5, 0.9);
-    color: #0a7728;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    padding: 3px 4px;
-    cursor: pointer;
-}
-
-.ability-choice-btn:hover {
-    background: rgba(66, 28, 92, 0.24);
-    color: #d29cff;
-}
-
-.ability-choice-btn.active {
-    border-color: #b476ff;
-    color: #f0dcff;
-    background: rgba(66, 28, 92, 0.38);
-    text-shadow: 0 0 4px rgba(180, 118, 255, 0.32);
-}
-
-.ability-choice-btn.owned-other {
-    border-color: #e16060;
-    color: #ffcaca;
-    background: rgba(98, 26, 26, 0.34);
-    text-shadow: 0 0 4px rgba(225, 96, 96, 0.28);
-}
-
-#ability-slot1-grid .ability-choice-btn.active {
-    border-color: #5ca8ff;
-    color: #dff0ff;
-    background: rgba(18, 56, 90, 0.38);
-    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
-}
-
-#ability-slot1-grid .ability-choice-btn:hover {
-    background: rgba(18, 56, 90, 0.24);
-    color: #7bc4ff;
-}
-
-#ability-slot2-grid .ability-choice-btn.active {
-    border-color: #5ca8ff;
-    color: #dff0ff;
-    background: rgba(18, 56, 90, 0.38);
-    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
-}
-
-#ability-slot2-grid .ability-choice-btn:hover {
-    background: rgba(18, 56, 90, 0.24);
-    color: #7bc4ff;
-}
-
-#ability-slot-note {
-    color: #0a7728;
-    font-size: 10px;
-    line-height: 1.35;
-}
-
-#ability-slot2-grid {
-    margin-bottom: 4px;
-}
-
 #throwable-slot-note {
     color: #0a7728;
     font-size: 10px;
@@ -1516,113 +1406,6 @@ canvas {
     height: 1px;
 }
 
-#choke-reticle {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 190px;
-    height: 190px;
-    border: 2px solid rgba(126, 215, 255, 0.85);
-    border-radius: 6px;
-    box-shadow: 0 0 14px rgba(100, 180, 255, 0.35), inset 0 0 8px rgba(100, 180, 255, 0.15);
-    z-index: 10;
-    pointer-events: none;
-    display: none;
-}
-
-#hook-reticle {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 104px;
-    height: 104px;
-    border: 2px solid rgba(214, 228, 238, 0.88);
-    border-radius: 50%;
-    box-shadow: 0 0 12px rgba(200, 210, 220, 0.22), inset 0 0 8px rgba(220, 230, 240, 0.08);
-    z-index: 10;
-    pointer-events: none;
-    display: none;
-}
-
-#deadeye-debug-rect {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border: 2px solid rgba(255, 120, 120, 0.8);
-    box-shadow: 0 0 14px rgba(255, 70, 70, 0.18), inset 0 0 10px rgba(255, 80, 80, 0.06);
-    z-index: 10;
-    pointer-events: none;
-    display: none;
-}
-
-#ability-debug-panel {
-    position: fixed;
-    top: 62px;
-    right: 18px;
-    width: min(320px, 34vw);
-    padding: 9px 11px;
-    border: 1px solid rgba(18, 73, 116, 0.75);
-    background: rgba(4, 12, 18, 0.9);
-    color: #b9ddff;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    line-height: 1.35;
-    white-space: pre-wrap;
-    box-shadow: 0 0 14px rgba(0, 0, 0, 0.22);
-    z-index: 12;
-    pointer-events: none;
-    display: none;
-}
-
-#deadeye-reticles {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 10;
-    pointer-events: none;
-    display: none;
-}
-
-.deadeye-target-reticle {
-    position: absolute;
-    transform: translate(-50%, -50%);
-    width: 220px;
-    height: 220px;
-    border: 2px solid rgba(255, 120, 120, 0.88);
-    border-radius: 50%;
-    box-shadow: 0 0 12px rgba(255, 70, 70, 0.35);
-    background: rgba(255, 90, 90, 0.05);
-}
-
-.deadeye-target-core {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255, 88, 88, 0.95);
-    box-shadow: 0 0 10px rgba(255, 50, 50, 0.55);
-    transition: width 0.08s linear, height 0.08s linear;
-}
-
-.deadeye-target-reticle.locked {
-    border-color: rgba(255, 92, 92, 0.95);
-    box-shadow: 0 0 12px rgba(255, 60, 60, 0.5);
-    background: rgba(255, 70, 70, 0.12);
-}
-
-.deadeye-target-reticle.locked .deadeye-target-core {
-    width: 14px;
-    height: 14px;
-}
-
 /* Hit marker */
 #hitmarker {
     position: fixed;
@@ -1762,15 +1545,6 @@ canvas {
     z-index: 10;
     pointer-events: none;
     user-select: none;
-}
-
-#ability-info {
-    color: #bde8ff;
-    font-size: 13px;
-    line-height: 1.2;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
-    text-align: right;
-    max-width: 46vw;
 }
 
 #throwable-info {
@@ -2246,10 +2020,6 @@ canvas {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    #ability-slot-panel {
-        grid-column: 1 / -1;
-    }
-
     #weapon-choice-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -2447,33 +2217,27 @@ canvas {
     }
 
     #weapon-slot-panel,
-    #throwable-slot-panel,
-    #ability-slot-panel {
+    #throwable-slot-panel {
         padding: 5px 5px 4px;
     }
 
     #weapon-slot-title,
     #throwable-slot-title,
-    #ability-slot-title,
     .menu-separator,
     .menu-footer,
     #weapon-slot-note,
     #throwable-slot-note,
-    #ability-slot-note,
-    .ability-slot-label,
     .weapon-slot-btn,
     .weapon-choice-btn,
     .throwable-cat-btn,
-    .throwable-choice-btn,
-    .ability-choice-btn {
+    .throwable-choice-btn {
         font-size: 9px;
     }
 
     #weapon-slot-buttons,
     #weapon-choice-grid,
     #throwable-category-tabs,
-    #throwable-choice-grid,
-    .ability-choice-grid {
+    #throwable-choice-grid {
         gap: 3px;
     }
 }

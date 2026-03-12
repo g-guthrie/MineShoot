@@ -15,7 +15,7 @@ export async function handleWsUpgrade(env, request, classPresets) {
     const guestName = validUsername(rawGuestName)
       ? rawGuestName
       : `Guest_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    const guestClassId = classPresets && classPresets[rawGuestClassId] ? rawGuestClassId : 'abilities';
+    const guestClassId = classPresets && classPresets[rawGuestClassId] ? rawGuestClassId : 'default';
 
     session = {
       userId: guestId,
@@ -30,7 +30,7 @@ export async function handleWsUpgrade(env, request, classPresets) {
   const doUrl = new URL('https://room/connect');
   doUrl.searchParams.set('userId', session.userId);
   doUrl.searchParams.set('username', session.username);
-  doUrl.searchParams.set('classId', session.classId || 'abilities');
+  doUrl.searchParams.set('classId', session.classId || 'default');
   doUrl.searchParams.set('roomId', roomId);
 
   const headers = new Headers(request.headers);

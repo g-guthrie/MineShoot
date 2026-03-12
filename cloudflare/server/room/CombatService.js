@@ -81,7 +81,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   return applyDamage(target, damage);
 }
 
-export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '') {
+export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '') {
   if (!target || !out) return;
   if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
     room.recordElimination(sourceId, target.id);
@@ -94,6 +94,7 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
     armor: out.armor,
     hitType: hitType === 'head' ? 'head' : 'body',
     weaponId: String(weaponId || ''),
+    shotToken: String(shotToken || ''),
     damage: out.damageApplied || 0,
     killed: !!out.killed
   });

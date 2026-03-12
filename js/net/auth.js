@@ -73,7 +73,7 @@
         return {
             id: 'guest-' + Date.now().toString(36) + '-' + nonce.toLowerCase(),
             username: 'Guest-' + nonce,
-            classId: 'abilities'
+            classId: 'default'
         };
     }
 
@@ -104,10 +104,6 @@
         return window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '::1';
     }
 
-    function formatClassName(classId) {
-        return String(classId || 'abilities').replace(/[_-]+/g, ' ').toUpperCase();
-    }
-
     function syncAuthCta() {
         var toggle = authToggleBtn();
         if (toggle) {
@@ -120,7 +116,6 @@
     function renderProfileSummary() {
         var profileName = document.getElementById('auth-profile-name');
         var profileSummary = document.getElementById('auth-profile-summary');
-        var profileClass = document.getElementById('auth-profile-class');
         var profileKills = document.getElementById('auth-profile-kills');
         var profileDeaths = document.getElementById('auth-profile-deaths');
         var profileDamage = document.getElementById('auth-profile-damage');
@@ -135,7 +130,6 @@
                 ? 'Profile is live. Later this slot can hold personalized home screen data.'
                 : 'Signed in and ready. For now this mainly reserves your username.';
         }
-        if (profileClass) profileClass.textContent = formatClassName(profile.classId || summaryUser.classId || 'abilities');
         if (profileKills) profileKills.textContent = String(Number(profile.kills != null ? profile.kills : summaryUser.kills) || 0);
         if (profileDeaths) profileDeaths.textContent = String(Number(profile.deaths != null ? profile.deaths : summaryUser.deaths) || 0);
         if (profileDamage) {

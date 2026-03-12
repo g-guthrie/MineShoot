@@ -26,7 +26,6 @@ import {
   broadcastDeathRespawn
 } from './CombatService.js';
 import { tickProjectiles, tickFireZones } from './ProjectileService.js';
-import { handleClassCast, tickClassAbilityState } from './AbilityService.js';
 
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const SHARED_PROTOCOL = getSharedProtocol();
@@ -46,11 +45,7 @@ const WORLD_FLAGS = {
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
-const CLASS_DEFAULT_WEAPON = {
-  abilities: 'rifle'
-};
+const DEFAULT_PROFILE_ID = 'default';
 
 const ROOM_SIM_TICK_MS = 33;
 const ROOM_SNAPSHOT_TICK_MS = 33;
@@ -89,7 +84,7 @@ const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
 
 function classPreset(classId) {
-  return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
+  return CLASS_PRESETS[classId] || CLASS_PRESETS[DEFAULT_PROFILE_ID];
 }
 
 function cloneWorldFlags(flags) {
@@ -247,7 +242,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     const userId = url.searchParams.get('userId');
     const username = url.searchParams.get('username') || 'player';
-    const classId = 'abilities';
+    const classId = DEFAULT_PROFILE_ID;
 
     if (!userId) {
       return new Response('Missing userId', { status: 400 });
@@ -612,7 +607,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   buildPlayerEntity(userId, username, classId, options = null) {
     const opts = options || {};
-    const nextClassId = 'abilities';
+    const nextClassId = DEFAULT_PROFILE_ID;
     const preset = classPreset(nextClassId);
     const p = {
       id: userId,
@@ -620,7 +615,6 @@ export class GlobalArenaRoom extends DurableObject {
       username,
       classId: nextClassId,
       fixtureType: opts.fixtureType || '',
-      abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
       x: 0,
       y: PLAYER_EYE_HEIGHT_WU,
       z: 0,
@@ -652,17 +646,9 @@ export class GlobalArenaRoom extends DurableObject {
       progressScore: 0,
       teamId: '',
       disconnectedAt: 0,
-      abilityCooldownUntil: 0,
-      ultimateCooldownUntil: 0,
       stunUntil: 0,
       slowUntil: 0,
-      slowMultiplier: 1,
-      deadeye: null,
-      chokeState: null,
-      chokeVictimState: null,
-      hookState: null,
-      hookPullState: null,
-      healState: null
+      slowMultiplier: 1
     };
 
     this.spawnEntityRandomly(p);
@@ -691,14 +677,14 @@ export class GlobalArenaRoom extends DurableObject {
       const id = DEV_LOCAL_SIM_PLAYER_IDS[i];
       const username = DEV_LOCAL_SIM_PLAYER_NAMES[i];
       if (!this.players.has(id)) {
-        this.players.set(id, this.buildPlayerEntity(id, username, 'abilities', { fixtureType: 'sim_player' }));
+        this.players.set(id, this.buildPlayerEntity(id, username, DEFAULT_PROFILE_ID, { fixtureType: 'sim_player' }));
         continue;
       }
       const player = this.players.get(id);
       player.fixtureType = 'sim_player';
       player.kind = 'player';
       player.username = username;
-      player.classId = 'abilities';
+      player.classId = DEFAULT_PROFILE_ID;
       player.moveSpeedNorm = 0;
       player.sprinting = false;
       player.yaw = 0;
@@ -961,9 +947,7 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const stunned = (player.stunUntil || 0) > now;
-    const hookPulling = !!player.hookPullState;
-    const choked = this.isEntityChoked(player, now);
-    const actionLocked = stunned || hookPulling || choked;
+    const actionLocked = stunned;
     let slowMult = 1;
     if (!actionLocked) {
       slowMult = (player.slowUntil || 0) > now
@@ -1021,13 +1005,9 @@ export class GlobalArenaRoom extends DurableObject {
     return !this.isEntitySpawnShielded(entity);
   }
 
-  isEntityChoked(entity, now = nowMs()) {
-    return !!(entity && entity.alive && entity.chokeVictimState && (entity.chokeVictimState.endsAt || 0) > now);
-  }
-
   isEntityActionLocked(entity, now = nowMs()) {
     if (!entity || !entity.alive) return false;
-    return ((entity.stunUntil || 0) > now) || !!entity.hookPullState || this.isEntityChoked(entity, now);
+    return ((entity.stunUntil || 0) > now);
   }
 
   entityAimTargetPosition(entity) {
@@ -1071,94 +1051,9 @@ export class GlobalArenaRoom extends DurableObject {
     return out;
   }
 
-  applyTimedStun(target, durationSec) {
-    if (!target || !target.alive) return;
-    const until = nowMs() + Math.max(0, Math.round(durationSec * 1000));
-    target.stunUntil = Math.max(target.stunUntil || 0, until);
-  }
-
-  applyTimedSlow(target, durationSec, multiplier) {
-    if (!target || !target.alive) return;
-    const until = nowMs() + Math.max(0, Math.round(durationSec * 1000));
-    target.slowUntil = Math.max(target.slowUntil || 0, until);
-    target.slowMultiplier = Math.max(0.1, Math.min(1, Number(multiplier || 1)));
-  }
-
-  pullEntityToward(player, target, pullDistance, pullSpeed) {
-    if (!player || !target || !player.alive || !target.alive) return false;
-    const dx = player.x - target.x;
-    const dz = player.z - target.z;
-    const currentDist = Math.sqrt((dx * dx) + (dz * dz));
-    const desiredDist = Math.max(1.5, Number(pullDistance || 3.2));
-    const travelDist = Math.max(0, currentDist - desiredDist);
-    const speed = Math.max(8, Number(pullSpeed || 26));
-    const durationMs = Math.max(120, Math.round((travelDist / speed) * 1000));
-    target.hookPullState = {
-      sourceId: player.id,
-      pullDistance: desiredDist,
-      pullSpeed: speed,
-      startedAt: nowMs(),
-      endsAt: nowMs() + durationMs,
-      facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
-    };
-    this.applyTimedStun(target, 1.0);
-    return true;
-  }
-
-  closestHostileInRange(player, range, minDot) {
-    const hits = this.hostilesInCone(player, range, minDot);
-    return hits.length > 0 ? hits[0].entity : null;
-  }
-
-  resolveLockedHostile(player, lockTargetId, range, minDot) {
-    if (!player || !player.alive || !lockTargetId) return null;
-    const target = this.getEntityById(String(lockTargetId));
-    if (!this.canTargetEntity(target, player.id)) return null;
-    if (distance3(player, target) > Math.max(0.5, Number(range || 0))) return null;
-
-    const forward = this.entityForward(player);
-    const to = normalize3(
-      target.x - player.x,
-      ((target.y || PLAYER_EYE_HEIGHT_WU) - player.y),
-      target.z - player.z
-    );
-    if (dot3(to, forward) < Number(minDot || -1)) return null;
-    return target;
-  }
-
-  deadeyeCandidates(player, range, minDot, maxTargets) {
-    const hits = this.hostilesInCone(player, range, minDot);
-    return hits.slice(0, Math.max(1, maxTargets || 1)).map((hit) => ({
-      id: hit.entity.id,
-      dist: hit.dist
-    }));
-  }
-
-  resolveClassAimPoint(player, msg, maxRange) {
-    const range = Math.max(1, Number(maxRange || 24));
-    const forward = this.entityForward(player);
-    const eye = this.entityAimTargetPosition(player);
-    const fallback = addScaled3(eye, forward, range);
-    const raw = msg && msg.aimPoint;
-    if (!raw || typeof raw !== 'object') return fallback;
-
-    const point = {
-      x: Number(raw.x),
-      y: Number(raw.y),
-      z: Number(raw.z)
-    };
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) return fallback;
-    if (distance3(player, point) > (range + 1.5)) return fallback;
-
-    const to = normalize3(point.x - player.x, point.y - player.y, point.z - player.z);
-    if (dot3(to, forward) < -0.2) return fallback;
-    return point;
-  }
-
   handleFire(player, msg) {
     if (!player || !player.alive) return;
     if (this.isEntityActionLocked(player)) return;
-    if (player.deadeye) return;
 
     const weaponId = String(msg.weaponId || 'rifle');
     const stats = WEAPON_STATS[weaponId];
@@ -1220,7 +1115,7 @@ export class GlobalArenaRoom extends DurableObject {
     });
     if (!out) return;
 
-    broadcastDamageEvent(this, player.id, target, out, hitType, weaponId);
+    broadcastDamageEvent(this, player.id, target, out, hitType, weaponId, shotToken);
 
     if (out.killed) {
       broadcastDeathRespawn(this, target);
@@ -1338,50 +1233,6 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  applyClassNow(entity, classId) {
-    if (!entity || !CLASS_PRESETS[classId]) return false;
-    entity.classId = classId;
-
-    const preset = classPreset(classId);
-    entity.armorMax = preset.armorMax;
-    entity.armor = Math.max(0, Math.min(Number(entity.armor || 0), preset.armorMax));
-    entity.wallhackRadius = preset.wallhackRadius;
-
-    entity.abilityCooldownUntil = 0;
-    entity.ultimateCooldownUntil = 0;
-    entity.deadeye = null;
-    entity.chokeState = null;
-
-    const defaultWeapon = CLASS_DEFAULT_WEAPON[classId] || 'rifle';
-    if (WEAPON_STATS[defaultWeapon]) entity.weaponId = defaultWeapon;
-    entity.streamHeat = 0;
-    entity.streamOverheatedUntil = 0;
-    return true;
-  }
-
-  handleClassQueue(player, msg, ws) {
-    if (!player) return;
-    const slot1 = String(msg && msg.slot1 || '');
-    const slot2 = String(msg && msg.slot2 || '');
-    player.abilityLoadout = player.abilityLoadout || {};
-    if (!slot1) {
-      player.abilityLoadout.slot1 = '';
-    } else if (ABILITY_CATALOG[slot1]) {
-      player.abilityLoadout.slot1 = slot1;
-    }
-    if (!slot2) {
-      player.abilityLoadout.slot2 = '';
-    } else if (ABILITY_CATALOG[slot2]) {
-      player.abilityLoadout.slot2 = slot2;
-    }
-    this.send(ws, {
-      t: MSG_S2C.CLASS_CHANGED,
-      classId: 'abilities',
-      weaponId: player.weaponId || 'rifle',
-      abilityLoadout: player.abilityLoadout || DEFAULT_ABILITY_LOADOUT
-    });
-  }
-
   handleThrow(player, msg, ws) {
     if (!player || !player.alive) return;
     if (this.isEntityActionLocked(player)) return;
@@ -1409,45 +1260,6 @@ export class GlobalArenaRoom extends DurableObject {
       clientThrowId: projectile.clientThrowId || '',
       throwableId: projectile.type
     });
-  }
-
-  spawnAbilityProjectile(player, projectileDef) {
-    if (!player || !projectileDef) return null;
-    const forward = this.entityForward(player);
-    const right = this.entityRight(player);
-    const core = this.entityCorePosition(player);
-    let origin = addScaled3(core, forward, THROWABLE_SPAWN_FORWARD_WU);
-    origin = addScaled3(origin, right, -THROWABLE_SPAWN_LEFT_WU);
-    const now = nowMs();
-    const id = `proj_${this.nextProjectileSeq++}`;
-    const projectile = {
-      id,
-      ownerId: player.id,
-      clientThrowId: '',
-      x: origin.x,
-      y: origin.y,
-      z: origin.z,
-      vx: projectileDef.vx,
-      vy: projectileDef.vy,
-      vz: projectileDef.vz,
-      age: 0,
-      alive: true,
-      bounces: 0,
-      type: projectileDef.type,
-      hitRadius: projectileDef.hitRadius || 1.2,
-      lifeSec: projectileDef.lifeSec || 1.2,
-      damageBody: projectileDef.damageBody || 80,
-      damageHead: projectileDef.damageHead || projectileDef.damageBody || 80,
-      returnToOwner: !!projectileDef.returnToOwner,
-      returnSpeed: projectileDef.returnSpeed || 0,
-      maxDistance: projectileDef.maxDistance || 0,
-      traveled: 0,
-      phase: 'outbound',
-      phaseHits: {},
-      createdAt: now
-    };
-    this.projectiles.set(projectile.id, projectile);
-    return projectile;
   }
 
   webSocketMessage(ws, message) {
@@ -1484,14 +1296,6 @@ export class GlobalArenaRoom extends DurableObject {
     }
     if (type === MSG_C2S.THROW) {
       this.handleThrow(player, msg, ws);
-      return;
-    }
-    if (type === MSG_C2S.CLASS_QUEUE) {
-      this.handleClassQueue(player, msg, ws);
-      return;
-    }
-    if (type === MSG_C2S.CLASS_CAST) {
-      handleClassCast(this, player, msg, ws);
       return;
     }
     if (type === MSG_C2S.PING) {
@@ -1570,17 +1374,9 @@ export class GlobalArenaRoom extends DurableObject {
     entity.muzzleFlashUntil = 0;
     entity.throwables = this.createThrowableRuntime();
     entity.lastThrowAt = 0;
-    entity.abilityCooldownUntil = 0;
-    entity.ultimateCooldownUntil = 0;
     entity.stunUntil = 0;
     entity.slowUntil = 0;
     entity.slowMultiplier = 1;
-    entity.deadeye = null;
-    entity.chokeState = null;
-    entity.chokeVictimState = null;
-    entity.hookState = null;
-    entity.hookPullState = null;
-    entity.healState = null;
     if (entity.fixtureType === 'sim_player') {
       entity.moveSpeedNorm = 0;
       entity.sprinting = false;
@@ -1595,7 +1391,6 @@ export class GlobalArenaRoom extends DurableObject {
       this.regenArmor(player, dtSec);
       this.tickStreamState(player, dtSec);
       this.tickThrowableRegen(player, dtSec);
-      tickClassAbilityState(this, player);
     }
   }
 

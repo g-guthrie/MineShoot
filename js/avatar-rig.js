@@ -305,12 +305,9 @@
             rig.aimPitch = Math.max(-1.1, Math.min(1.1, pitch || 0));
         }
 
-        function updateLocomotion(speedNorm, sprinting, dt, airborne, poseState) {
+        function updateLocomotion(speedNorm, sprinting, dt, airborne) {
             speedNorm = Math.max(0, Math.min(1.4, speedNorm || 0));
             airborne = !!airborne;
-            poseState = poseState || null;
-            var choked = !!(poseState && poseState.choked);
-            var chokeStartedAt = choked ? Number(poseState.startedAt || 0) : 0;
             if (speedNorm > 0.02) {
                 rig.gaitPhase += dt * ((sprinting ? 13 : 9) * (0.35 + speedNorm));
             }
@@ -318,26 +315,6 @@
             var legAmp = 0.12 + speedNorm * 0.55;
             if (legAmp > 0.72) legAmp = 0.72;
             var walkSwing = Math.sin(rig.gaitPhase) * legAmp;
-            if (choked) {
-                var stamp = Date.now();
-                var phase = chokeStartedAt ? ((stamp - chokeStartedAt) * 0.012) : (stamp * 0.012);
-                var squirmAmp = 0.55;
-                rig.legL.rotation.x = Math.sin(phase) * squirmAmp;
-                rig.legR.rotation.x = Math.sin(phase + 2.1) * squirmAmp;
-                rig.legL.rotation.z = Math.sin(phase + 0.6) * 0.12;
-                rig.legR.rotation.z = Math.sin(phase + 2.7) * -0.12;
-                rig.legL.position.x = -0.18;
-                rig.legR.position.x = 0.18;
-                rig.armL.rotation.x = Math.sin(phase + 1.0) * squirmAmp;
-                rig.armL.rotation.y = -0.2 + (Math.sin(phase + 0.3) * 0.18);
-                rig.armL.rotation.z = -0.35 + (Math.sin(phase + 1.4) * 0.2);
-                rig.armR.rotation.x = 1.05 + (Math.sin(phase + 1.8) * 0.3);
-                rig.armR.rotation.y = 0;
-                rig.armR.rotation.z = 0.18 + (Math.sin(phase + 2.4) * 0.18);
-                rig.palmRight.rotation.x = 0;
-                rig.gun.rotation.x = rig.gunBaseRot.x;
-                return;
-            }
             if (airborne) {
                 rig.legL.rotation.x = 0;
                 rig.legR.rotation.x = 0;
@@ -484,19 +461,6 @@
             throwPoseTimer = 0.35;
         }
 
-        var chokeGripTimer = 0;
-        function applyChokeGripPose(dt) {
-            if (chokeGripTimer <= 0) return;
-            chokeGripTimer -= dt;
-            if (chokeGripTimer < 0) chokeGripTimer = 0;
-            rig.armR.rotation.x = 1.2;
-            rig.armR.rotation.z = 0.15;
-        }
-
-        function triggerChokeGripPose(duration) {
-            chokeGripTimer = Math.max(0.1, duration || 1.5);
-        }
-
         return {
             root: root,
             rig: rig,
@@ -511,8 +475,6 @@
             setMuzzleVisible: setMuzzleVisible,
             applyThrowPose: applyThrowPose,
             triggerThrowPose: triggerThrowPose,
-            applyChokeGripPose: applyChokeGripPose,
-            triggerChokeGripPose: triggerChokeGripPose,
             getWeaponId: function () { return rig.weaponId; },
             _tmp: tmpVec
         };

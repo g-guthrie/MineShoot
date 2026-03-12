@@ -1,29 +1,27 @@
 import { getSharedTuningWu } from '../../lib/shared-tuning.js';
 import { nowMs, clamp } from '../transport.js';
-import { tickClassAbilityState } from './AbilityService.js';
 
 const GAMEPLAY_TUNING_WU = getSharedTuningWu();
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const DEFAULT_ABILITY_LOADOUT = GAMEPLAY_TUNING_WU.defaultAbilityLoadout || { slot1: 'choke', slot2: 'deadeye' };
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
+const DEFAULT_PROFILE_ID = 'default';
 
 const MAX_HP = 500;
 const THROWABLE_BOT_THROW_COOLDOWN_S = 2.8;
 
 function classPreset(classId) {
-  return CLASS_PRESETS[classId] || CLASS_PRESETS.abilities;
+  return CLASS_PRESETS[classId] || CLASS_PRESETS[DEFAULT_PROFILE_ID];
 }
 
 export function createBot(room, index) {
   const id = `bot-${index + 1}`;
-  const classId = 'abilities';
+  const classId = DEFAULT_PROFILE_ID;
   const preset = classPreset(classId);
   return {
     id,
     kind: 'bot',
     username: `BOT_${index + 1}`,
     classId,
-    abilityLoadout: { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
     x: 10 + Math.random() * 90,
     y: 1.6,
     z: 10 + Math.random() * 90,
@@ -47,13 +45,9 @@ export function createBot(room, index) {
     muzzleFlashUntil: 0,
     throwables: room.createThrowableRuntime(),
     lastThrowAt: 0,
-    abilityCooldownUntil: 0,
-    ultimateCooldownUntil: 0,
     stunUntil: 0,
     slowUntil: 0,
     slowMultiplier: 1,
-    deadeye: null,
-    chokeState: null,
     aiDirX: Math.cos(Math.random() * Math.PI * 2),
     aiDirZ: Math.sin(Math.random() * Math.PI * 2),
     aiSpeed: 2.2,
@@ -128,7 +122,6 @@ export function tickBots(room, dtSec) {
     room.regenArmor(bot, dtSec);
     room.tickStreamState(bot, dtSec);
     room.tickThrowableRegen(bot, dtSec);
-    tickClassAbilityState(room, bot);
 
     if ((nowMs() - (bot.lastThrowAt || 0)) > (THROWABLE_BOT_THROW_COOLDOWN_S * 1000) && players.length > 0 && Math.random() < 0.02) {
       const throwableId = THROWABLE_STATS.order[Math.floor(Math.random() * THROWABLE_STATS.order.length)];
