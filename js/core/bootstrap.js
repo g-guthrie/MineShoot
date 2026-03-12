@@ -1,40 +1,29 @@
-/**
- * bootstrap.js - Shared app bootstrap primitives.
- * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameBootstrap
- */
-(function () {
-    'use strict';
+const MAX_PIXEL_RATIO = 1.75;
 
-    var GameBootstrap = {};
-    var MAX_PIXEL_RATIO = 1.75;
+function cappedPixelRatio() {
+  return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));
+}
 
-    function cappedPixelRatio() {
-        return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));
-    }
+export function createRenderContext() {
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(cappedPixelRatio());
+  document.body.appendChild(renderer.domElement);
 
-    GameBootstrap.createRenderContext = function () {
-        var renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(cappedPixelRatio());
-        document.body.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const clock = new THREE.Clock();
 
-        var scene = new THREE.Scene();
-        var clock = new THREE.Clock();
+  return {
+    renderer,
+    scene,
+    clock
+  };
+}
 
-        return {
-            renderer: renderer,
-            scene: scene,
-            clock: clock
-        };
-    };
-
-    GameBootstrap.installResizeHandler = function (renderer) {
-        window.addEventListener('resize', function () {
-            if (!renderer) return;
-            renderer.setPixelRatio(cappedPixelRatio());
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    };
-
-    globalThis.__MAYHEM_RUNTIME.GameBootstrap = GameBootstrap;
-})();
+export function installResizeHandler(renderer) {
+  window.addEventListener('resize', function onResize() {
+    if (!renderer) return;
+    renderer.setPixelRatio(cappedPixelRatio());
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}

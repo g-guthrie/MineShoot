@@ -1,15 +1,15 @@
+import { pointInBounds as pt } from './biome-utils.js';
+import { GameMaterialLibrary } from './material-library.js';
+
 /**
  * quadrant-urban.js - Urban / skatepark biome quadrant builder.
  * Plug-and-play: call buildUrbanQuadrant(bounds, place, ctx) to populate any quadrant.
  */
-(function () {
-    'use strict';
-
     var MATS = null;
 
     function ensureMats() {
         if (MATS) return MATS;
-        var lib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
+        var lib = GameMaterialLibrary;
         MATS = {
             concrete:      lib.getLambert({ color: 0x7f868d }),
             concreteDark:  lib.getLambert({ color: 0x5a6068 }),
@@ -27,15 +27,6 @@
             lampGlow:      new THREE.MeshStandardMaterial({ color: 0xffe8a0, emissive: 0xffe8a0, emissiveIntensity: 0.6 })
         };
         return MATS;
-    }
-
-    function pt(bounds, u, v) {
-        u = Math.max(0, Math.min(1, u));
-        v = Math.max(0, Math.min(1, v));
-        return {
-            x: bounds.minX + (bounds.maxX - bounds.minX) * u,
-            z: bounds.minZ + (bounds.maxZ - bounds.minZ) * v
-        };
     }
 
     function buildStairSet(cx, cz, place, mats, facingZ) {
@@ -137,85 +128,149 @@
         place.addBlock(cx, offsetY, cz, w, h, 0.15, mat, false);
     }
 
-    function buildUrbanQuadrant(bounds, place, ctx) {
+    function buildSunkenPlaza(cx, cz, place, mats) {
+        // Outer ring and retaining walls.
+        place.addBlock(cx, 0.6, cz, 12.8, 1.2, 10.8, mats.concreteDark, true);
+        place.addBlock(cx, 0.22, cz, 9.4, 0.44, 7.6, mats.asphalt, false);
+        place.addBlock(cx, 1.1, cz - 4.6, 9.8, 1.0, 0.9, mats.concrete, true);
+        place.addBlock(cx, 1.1, cz + 4.6, 9.8, 1.0, 0.9, mats.concrete, true);
+        place.addBlock(cx - 5.6, 1.1, cz, 0.9, 1.0, 8.8, mats.concrete, true);
+        place.addBlock(cx + 5.6, 1.1, cz, 0.9, 1.0, 8.8, mats.concrete, true);
+
+        // Interior islands and bowl steps.
+        place.addBlock(cx, 0.36, cz, 4.2, 0.72, 2.8, mats.concreteLight, true);
+        place.addBlock(cx, 0.82, cz - 0.2, 2.6, 0.22, 1.4, mats.railShiny, false);
+        place.addRamp(cx, 0.32, cz - 3.0, 4.4, 0.42, 2.6, mats.concrete, 0, -0.22, true);
+        place.addRamp(cx, 0.32, cz + 3.0, 4.4, 0.42, 2.6, mats.concrete, Math.PI, -0.22, true);
+        place.addRamp(cx - 3.8, 0.32, cz, 2.8, 0.42, 2.2, mats.concrete, Math.PI * 0.5, -0.22, true);
+        place.addRamp(cx + 3.8, 0.32, cz, 2.8, 0.42, 2.2, mats.concrete, -Math.PI * 0.5, -0.22, true);
+
+        // Side descents.
+        place.addBlock(cx - 4.2, 0.18, cz - 2.6, 1.6, 0.36, 1.0, mats.concreteLight, true);
+        place.addBlock(cx - 4.2, 0.36, cz - 1.5, 1.6, 0.24, 1.0, mats.concrete, true);
+        place.addBlock(cx - 4.2, 0.54, cz - 0.4, 1.6, 0.18, 1.0, mats.concreteDark, true);
+        place.addBlock(cx + 4.1, 0.18, cz + 2.6, 1.6, 0.36, 1.0, mats.concreteLight, true);
+        place.addBlock(cx + 4.1, 0.36, cz + 1.5, 1.6, 0.24, 1.0, mats.concrete, true);
+        place.addBlock(cx + 4.1, 0.54, cz + 0.4, 1.6, 0.18, 1.0, mats.concreteDark, true);
+    }
+
+    function buildBillboardFrame(cx, cz, place, mats) {
+        place.addBlock(cx - 2.8, 5.0, cz, 0.5, 10.0, 0.5, mats.rail, true);
+        place.addBlock(cx + 2.8, 4.7, cz + 0.4, 0.5, 9.4, 0.5, mats.rail, true);
+        place.addBlock(cx, 9.1, cz + 0.2, 6.6, 0.5, 0.7, mats.railShiny, true);
+        place.addBlock(cx, 6.2, cz + 0.55, 6.0, 4.8, 0.22, mats.concreteDark, true);
+        addGraffitiStripe(cx - 1.8, cz + 0.72, 0.28, 1.6, place, mats.paintYellow, 6.5);
+        addGraffitiStripe(cx - 0.4, cz + 0.72, 0.28, 2.2, place, mats.paintBlue, 6.2);
+        addGraffitiStripe(cx + 1.1, cz + 0.72, 0.28, 1.4, place, mats.paint, 6.7);
+        place.addRamp(cx - 2.8, 1.5, cz - 1.2, 0.24, 0.24, 3.2, mats.rail, 0.24, 0.4, false);
+        place.addRamp(cx + 2.8, 1.3, cz - 1.1, 0.24, 0.24, 2.8, mats.rail, -0.18, 0.38, false);
+    }
+
+    function buildShelter(cx, cz, place, mats) {
+        place.addBlock(cx, 2.2, cz, 5.8, 0.4, 4.0, mats.concreteDark, true);
+        place.addBlock(cx - 2.2, 1.1, cz - 1.3, 0.36, 2.2, 0.36, mats.rail, true);
+        place.addBlock(cx + 2.2, 1.1, cz - 1.3, 0.36, 2.2, 0.36, mats.rail, true);
+        place.addBlock(cx - 2.0, 1.1, cz + 1.3, 0.36, 2.2, 0.36, mats.rail, true);
+        place.addBlock(cx + 2.0, 1.1, cz + 1.3, 0.36, 2.2, 0.36, mats.rail, true);
+        place.addBlock(cx, 0.5, cz, 4.8, 1.0, 2.8, mats.concreteLight, true);
+        place.addBlock(cx, 1.35, cz, 4.2, 0.12, 2.2, mats.railShiny, false);
+        addGraffitiStripe(cx - 2.1, cz - 0.7, 0.15, 1.1, place, mats.paintBlue, 1.0);
+        addGraffitiStripe(cx + 2.1, cz + 0.6, 0.15, 0.9, place, mats.paintYellow, 1.2);
+    }
+
+    function buildOverpassFragment(cx, cz, place, mats) {
+        place.addBlock(cx, 3.0, cz, 8.2, 0.8, 3.2, mats.concrete, true);
+        place.addBlock(cx - 3.1, 1.5, cz - 0.8, 0.8, 3.0, 1.2, mats.concreteDark, true);
+        place.addBlock(cx + 2.7, 1.4, cz + 0.7, 0.8, 2.8, 1.2, mats.concreteDark, true);
+        place.addRamp(cx + 4.2, 1.3, cz + 0.6, 2.6, 0.8, 4.8, mats.concrete, 1.12, -0.22, true);
+        place.addBlock(cx - 1.2, 3.55, cz, 3.4, 0.12, 0.18, mats.paintWhite, false);
+        place.addBlock(cx + 2.0, 3.55, cz, 1.4, 0.12, 0.18, mats.paintYellow, false);
+    }
+
+    export function buildUrbanQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
 
-        // Stair set with handrail (the iconic skate element)
-        var stairPt = pt(bounds, 0.30, 0.28);
+        var centerPt = pt(bounds, 0.52, 0.52);
+        buildSunkenPlaza(centerPt.x, centerPt.z, place, mats);
+        ctx.addExclusion(centerPt.x, centerPt.z, 6.4);
+
+        var billboardPt = pt(bounds, 0.80, 0.18);
+        buildBillboardFrame(billboardPt.x, billboardPt.z, place, mats);
+        ctx.addExclusion(billboardPt.x, billboardPt.z, 4.4);
+
+        var shelterPt = pt(bounds, 0.20, 0.74);
+        buildShelter(shelterPt.x, shelterPt.z, place, mats);
+        ctx.addExclusion(shelterPt.x, shelterPt.z, 4.0);
+
+        var overpassPt = pt(bounds, 0.22, 0.26);
+        buildOverpassFragment(overpassPt.x, overpassPt.z, place, mats);
+        ctx.addExclusion(overpassPt.x, overpassPt.z, 4.4);
+
+        // Keep skate DNA, but cluster it around the larger brutalist masses.
+        var stairPt = pt(bounds, 0.62, 0.32);
         buildStairSet(stairPt.x, stairPt.z, place, mats, true);
-        ctx.addExclusion(stairPt.x, stairPt.z + 2.5, 4.0);
+        ctx.addExclusion(stairPt.x, stairPt.z + 2.3, 4.0);
 
-        // Quarter pipe along one edge
-        var qpPt = pt(bounds, 0.72, 0.20);
+        var qpPt = pt(bounds, 0.74, 0.70);
         buildQuarterPipe(qpPt.x, qpPt.z, place, mats);
-        ctx.addExclusion(qpPt.x, qpPt.z + 1.0, 3.5);
+        ctx.addExclusion(qpPt.x, qpPt.z + 1.0, 3.6);
 
-        // Opposing quarter pipe
-        var qp2 = pt(bounds, 0.28, 0.78);
+        var qp2 = pt(bounds, 0.38, 0.80);
         place.addRamp(qp2.x, 0.15, qp2.z, 5.5, 0.3, 1.0, mats.concrete, Math.PI, 0, true);
         place.addRamp(qp2.x, 0.4, qp2.z - 0.7, 5.5, 0.35, 1.0, mats.concrete, Math.PI, 0.08, true);
         place.addRamp(qp2.x, 0.75, qp2.z - 1.3, 5.5, 0.45, 1.0, mats.concrete, Math.PI, 0.18, true);
         place.addRamp(qp2.x, 1.2, qp2.z - 1.8, 5.5, 0.55, 1.0, mats.concrete, Math.PI, 0.30, true);
         place.addBlock(qp2.x, 1.47, qp2.z - 2.0, 5.5, 0.1, 0.1, mats.railShiny, false);
 
-        // Center flat ledge (the grind box)
-        var centerPt = pt(bounds, 0.50, 0.50);
-        buildFlatLedge(centerPt.x, centerPt.z, place, mats, false);
-
-        // Side ledge (rotated)
-        var sidePt = pt(bounds, 0.82, 0.55);
+        var sidePt = pt(bounds, 0.84, 0.52);
         buildFlatLedge(sidePt.x, sidePt.z, place, mats, true);
 
-        // Kicker ramps
-        var kickA = pt(bounds, 0.55, 0.30);
+        var centerLedge = pt(bounds, 0.60, 0.58);
+        buildFlatLedge(centerLedge.x, centerLedge.z, place, mats, false);
+
+        var kickA = pt(bounds, 0.47, 0.34);
         buildKicker(kickA.x, kickA.z, place, mats, 0);
-        var kickB = pt(bounds, 0.45, 0.72);
-        buildKicker(kickB.x, kickB.z, place, mats, Math.PI);
+        var kickB = pt(bounds, 0.68, 0.64);
+        buildKicker(kickB.x, kickB.z, place, mats, Math.PI * 0.5);
 
-        // Manual pad (low flat box for manuals)
-        var manPt = pt(bounds, 0.65, 0.68);
-        place.addBlock(manPt.x, 0.12, manPt.z, 3.5, 0.24, 2.0, mats.concreteLight, true);
-        // Painted line on the pad
-        place.addBlock(manPt.x, 0.262, manPt.z, 3.3, 0.02, 0.08, mats.paintWhite, false);
+        var manPt = pt(bounds, 0.78, 0.42);
+        place.addBlock(manPt.x, 0.12, manPt.z, 3.7, 0.24, 2.1, mats.concreteLight, true);
+        place.addBlock(manPt.x, 0.262, manPt.z, 3.5, 0.02, 0.08, mats.paintWhite, false);
 
-        // Graffiti walls
-        var wallA = pt(bounds, 0.08, 0.50);
-        place.addBlock(wallA.x, 1.4, wallA.z, 0.6, 2.8, 5.5, mats.concrete, true);
-        addGraffitiStripe(wallA.x - 0.32, wallA.z - 1.0, 0.15, 0.8, place, mats.paint, 1.6);
-        addGraffitiStripe(wallA.x - 0.32, wallA.z + 0.5, 0.15, 0.5, place, mats.paintBlue, 1.2);
-        addGraffitiStripe(wallA.x - 0.32, wallA.z + 1.8, 0.15, 1.2, place, mats.paintYellow, 1.8);
-        addGraffitiStripe(wallA.x - 0.32, wallA.z - 0.3, 0.15, 0.3, place, mats.paintWhite, 2.2);
+        // Graffiti walls and blocker slabs.
+        var wallA = pt(bounds, 0.10, 0.52);
+        place.addBlock(wallA.x, 1.8, wallA.z, 0.7, 3.6, 6.2, mats.concrete, true);
+        addGraffitiStripe(wallA.x - 0.37, wallA.z - 1.2, 0.15, 1.0, place, mats.paint, 2.0);
+        addGraffitiStripe(wallA.x - 0.37, wallA.z + 0.4, 0.15, 0.7, place, mats.paintBlue, 1.5);
+        addGraffitiStripe(wallA.x - 0.37, wallA.z + 1.9, 0.15, 1.4, place, mats.paintYellow, 2.1);
 
-        var wallB = pt(bounds, 0.92, 0.50);
-        place.addBlock(wallB.x, 1.4, wallB.z, 0.6, 2.8, 5.5, mats.concrete, true);
-        addGraffitiStripe(wallB.x + 0.32, wallB.z + 1.2, 0.15, 0.6, place, mats.paintBlue, 1.4);
-        addGraffitiStripe(wallB.x + 0.32, wallB.z - 0.8, 0.15, 1.0, place, mats.paint, 1.9);
-        addGraffitiStripe(wallB.x + 0.32, wallB.z + 0.2, 0.15, 0.4, place, mats.paintYellow, 2.4);
+        var wallB = pt(bounds, 0.92, 0.58);
+        place.addBlock(wallB.x, 1.8, wallB.z, 0.7, 3.6, 6.0, mats.concrete, true);
+        addGraffitiStripe(wallB.x + 0.36, wallB.z + 1.0, 0.15, 0.8, place, mats.paintBlue, 1.8);
+        addGraffitiStripe(wallB.x + 0.36, wallB.z - 0.8, 0.15, 1.2, place, mats.paint, 2.0);
+        addGraffitiStripe(wallB.x + 0.36, wallB.z + 0.1, 0.15, 0.5, place, mats.paintYellow, 2.5);
 
-        // Benches
-        var benchA = pt(bounds, 0.15, 0.22);
+        var slabA = pt(bounds, 0.34, 0.46);
+        place.addBlock(slabA.x, 0.55, slabA.z, 3.0, 1.1, 1.3, mats.concreteDark, true);
+        place.addBlock(slabA.x, 1.14, slabA.z, 2.5, 0.12, 1.0, mats.railShiny, false);
+        var slabB = pt(bounds, 0.70, 0.18);
+        place.addBlock(slabB.x, 0.6, slabB.z, 2.6, 1.2, 1.1, mats.concreteDark, true);
+        place.addBlock(slabB.x, 1.24, slabB.z, 2.0, 0.12, 0.9, mats.railShiny, false);
+
+        // Benches and lamps for readable street dressing.
+        var benchA = pt(bounds, 0.14, 0.18);
         buildBench(benchA.x, benchA.z, place, mats);
-        var benchB = pt(bounds, 0.85, 0.82);
+        var benchB = pt(bounds, 0.88, 0.84);
         buildBench(benchB.x, benchB.z, place, mats);
+        var benchC = pt(bounds, 0.54, 0.18);
+        buildBench(benchC.x, benchC.z, place, mats);
 
-        // Street lamps for vertical interest
-        var lampA = pt(bounds, 0.12, 0.35);
+        var lampA = pt(bounds, 0.16, 0.34);
         buildStreetLamp(lampA.x, lampA.z, place, mats, ctx);
-        var lampB = pt(bounds, 0.88, 0.65);
+        var lampB = pt(bounds, 0.86, 0.62);
         buildStreetLamp(lampB.x, lampB.z, place, mats, ctx);
-
-        // Concrete barriers (jersey barriers)
-        var barrA = pt(bounds, 0.38, 0.15);
-        place.addBlock(barrA.x, 0.35, barrA.z, 2.4, 0.7, 0.6, mats.concreteDark, true);
-        place.addBlock(barrA.x, 0.35, barrA.z, 2.0, 0.5, 0.4, mats.concreteLight, false);
-
-        var barrB = pt(bounds, 0.62, 0.85);
-        place.addBlock(barrB.x, 0.35, barrB.z, 2.4, 0.7, 0.6, mats.concreteDark, true);
-        place.addBlock(barrB.x, 0.35, barrB.z, 2.0, 0.5, 0.4, mats.concreteLight, false);
+        var lampC = pt(bounds, 0.58, 0.12);
+        buildStreetLamp(lampC.x, lampC.z, place, mats, ctx);
 
         return {};
     }
-
-    var ns = (globalThis.__MAYHEM_RUNTIME.WorldQuadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {});
-    ns.urban = buildUrbanQuadrant;
-})();

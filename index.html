@@ -9,207 +9,30 @@
     <title>Mayhem</title>
     <link rel="stylesheet" href="/css/main.css">
 </head>
-<body class="menu-booting">
-    <button id="hud-manual-btn" type="button">MANUAL</button>
-    <!-- Overlay -->
+<body>
     <div id="overlay">
         <div id="menu-stage">
             <div id="menu-shell">
-            <div id="menu-header">
-                <h1 class="visually-hidden">MAYHEM</h1>
-                <div id="menu-header-top">
-                    <div id="menu-brand">PIP-ARENA MKIV :: MAYHEM TERMINAL <span id="build-version">v0.1.3</span></div>
-                    <div id="menu-header-controls">
-                        <div id="menu-actions">
-                            <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
-                            <div id="top-mode-panel">
-                                <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">DEV / TEST</button>
-                                <div id="mode-buttons" hidden>
-                                    <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">SOLO CLOUDFLARE (BOTS)</button>
-                                    <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">LOCAL DEV ROOM (BOTS)</button>
-                                </div>
-                            </div>
-                            <div id="top-controls-panel">
-                                <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-menu">CONTROLS</button>
-                                <div id="controls-menu" hidden>
-                                    <div class="controls-menu-grid">
-                                        <span>WASD Move</span>
-                                        <span>Mouse Look</span>
-                                        <span>E Sprint</span>
-                                        <span>RMB / Shift ADS</span>
-                                        <span>Space Jump</span>
-                                        <span>LMB Fire</span>
-                                        <span>1-2 / Wheel Swap</span>
-                                        <span>R Ability</span>
-                                        <span>Q Throwable</span>
-                                        <span>H Dev Visuals</span>
-                                        <span>I Field Manual</span>
-                                        <span>Esc Release Cursor</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <button id="sound-toggle-btn" type="button">SOUND: ON</button>
-                        </div>
-                        <div id="menu-account-panel">
-                            <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">LOGIN</button>
-                            <div id="auth-overlay" hidden>
-                                <div id="auth-panel">
-                                    <button id="auth-close-btn" type="button" aria-label="Close account panel">CLOSE</button>
-                                    <div id="auth-login-view">
-                                        <h2>Optional Profile</h2>
-                                        <p>Create a profile with any unique username and a 4-digit PIN. Or ignore this and hit play.</p>
-                                        <form id="auth-form">
-                                            <input id="auth-username" type="text" maxlength="64" autocomplete="username" placeholder="Username (anything unique)" required>
-                                            <input id="auth-pin" type="password" maxlength="4" inputmode="numeric" pattern="\\d{4}" autocomplete="current-password" placeholder="4-digit PIN" required>
-                                            <button id="auth-play-btn" type="submit">LOGIN / CREATE PROFILE</button>
-                                        </form>
-                                        <div id="auth-status"></div>
-                                        <button id="auth-local-btn" type="button">BYPASS LOGIN (LOCAL DEV)</button>
-                                    </div>
-                                    <div id="auth-profile-view" hidden>
-                                        <div id="auth-profile-kicker">PROFILE ONLINE</div>
-                                        <h2 id="auth-profile-name">PLAYER</h2>
-                                        <p id="auth-profile-summary">Signed in and ready for matchmaking.</p>
-                                        <div id="auth-profile-stats">
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Class</span>
-                                                <span id="auth-profile-class" class="auth-profile-stat-value">ABILITIES</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Kills</span>
-                                                <span id="auth-profile-kills" class="auth-profile-stat-value">0</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Deaths</span>
-                                                <span id="auth-profile-deaths" class="auth-profile-stat-value">0</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Damage</span>
-                                                <span id="auth-profile-damage" class="auth-profile-stat-value">0 / 0</span>
-                                            </div>
-                                        </div>
-                                        <button id="auth-logout-btn" type="button">LOG OUT</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div id="menu-title-stage" aria-hidden="true">
-                    <pre id="menu-title-rubble">      .  .       _     _     .  .           __
-   .        _.-' `-._/ \_.-' `-._        .`  `.
-      __.--'  broken neon slab   `--.__  /  ..  \</pre>
-                    <pre id="menu-title-mayhem"> __  __   ___   __   __  _   _  _____  __  __
+                <div id="menu-header">
+                    <h1 class="visually-hidden">MAYHEM</h1>
+                    <div id="menu-brand">MAYHEM</div>
+                    <div id="menu-title-stage" aria-hidden="true">
+                        <pre id="menu-title-mayhem"> __  __   ___   __   __  _   _  _____  __  __
 |  \/  | / _ \  \ \ / / | | | || ____||  \/  |
 | |\/| || /_\ |  \ V /  | |_| ||  _|  | |\/| |
 | |  | ||  _  |   | |   |  _  || |___ | |  | |
-|_|  |_||_| |_|   |_|   |_| |_||_____||_|  |_|
-  _.-._____.--._____.--._____.--._____.-._</pre>
-                    <pre id="menu-title-skull">   .-.
-  (x x)
-  | O \\
-  |    \\
-  |__.-'
- /|\
-/_|_\\</pre>
-                    <pre id="menu-title-ghost">   .--.
- .(    ).
-(___.__)__)
- /  ..  \\
- \_.--._/</pre>
-                </div>
-                <p id="mode-subtitle"></p>
+|_|  |_||_| |_|   |_|   |_| |_||_____||_|  |_|</pre>
+                    </div>
                 </div>
                 <div id="menu-main">
-                    <div id="matchmaking-panel">
-                    <button id="primary-play-btn" type="button">QUICK MATCH (FFA)</button>
-                    <button id="tdm-play-btn" type="button">TEAM DEATHMATCH</button>
-                    <button id="sandbox-play-btn" type="button">OFFLINE SANDBOX</button>
-                    <div id="private-room-actions">
-                        <button id="create-private-room-btn" type="button">CREATE PRIVATE ROOM</button>
-                        <div id="private-room-join-row">
-                            <input id="private-room-input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ROOM CODE">
-                            <button id="join-private-room-btn" type="button">JOIN ROOM</button>
-                        </div>
-                    </div>
-                    <div id="room-access-status" aria-live="polite"></div>
-                    <div id="room-share-panel" hidden>
-                        <span id="room-share-label">PRIVATE ROOM CODE</span>
-                        <span id="room-share-code">------</span>
-                        <button id="copy-room-code-btn" type="button">COPY</button>
-                    </div>
+                    <button id="play-btn" type="button">PLAY</button>
                 </div>
-                <div id="menu-session-actions">
-                    <div id="menu-session-stats" hidden>
-                        <div id="menu-session-status">MATCH STANDBY</div>
-                        <div id="menu-session-kd">KILLS 0 | DEATHS 0</div>
-                    </div>
-                    <div id="menu-session-buttons">
-                        <button id="play-btn" type="button">RESUME MATCH</button>
-                        <button id="back-mode-btn" type="button">CHANGE MODE</button>
-                    </div>
-                </div>
-                <div class="menu-separator">&#9472;&#9472;&#9472;[ LOADOUT ]&#9472;&#9472;&#9472;</div>
-                <div id="loadout-row">
-                    <div id="weapon-slot-panel">
-                        <div id="weapon-slot-title">&gt; Weapons_</div>
-                        <div id="weapon-slot-buttons">
-                            <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">SLOT 1 :: MACHINE GUN</button>
-                            <button id="weapon-slot-secondary" class="weapon-slot-btn" type="button" data-slot-index="1">SLOT 2 :: SHOTGUN</button>
-                        </div>
-                        <div id="weapon-choice-grid"></div>
-                        <div id="weapon-slot-note">Click a slot, then choose a weapon.</div>
-                    </div>
-                    <div id="throwable-slot-panel">
-                        <div id="throwable-slot-title">&gt; Throwable [Q]_</div>
-                        <div id="throwable-category-tabs"></div>
-                        <div id="throwable-choice-grid"></div>
-                        <div id="throwable-slot-note">Hold Q for preview, release to throw.</div>
-                    </div>
-                    <div id="ability-slot-panel">
-                        <div id="ability-slot-title">&gt; Abilities [R/F]_</div>
-                        <div class="ability-slot-label">SLOT 1 [R]</div>
-                        <div id="ability-slot1-grid" class="ability-choice-grid"></div>
-                        <div class="ability-slot-label">SLOT 2 [F]</div>
-                        <div id="ability-slot2-grid" class="ability-choice-grid"></div>
-                        <div id="ability-slot-note">Pick slot 1 for R and slot 2 for F. Switch anytime from this menu.</div>
-                    </div>
-                </div>
-                <div class="menu-footer">&#9484;&#9472; SYS.OK &#9472;&#9472; ARENA READY &#9472;&#9472; AWAITING INPUT &#9472;&#9488;</div>
             </div>
-        </div>
         </div>
     </div>
 
-    <div id="docs-panel" aria-hidden="true">
-        <div id="docs-terminal">
-            <div id="docs-header">
-                <span id="docs-title">MAYHEM :: OPEN FIELD MANUAL</span>
-                <button id="docs-close-btn" type="button">CLOSE</button>
-            </div>
-            <div id="docs-nav"></div>
-            <div id="docs-main">
-                <div id="docs-subnav"></div>
-                <pre id="docs-content">LOADING MANUAL...</pre>
-            </div>
-            <div id="docs-hint">TAB pages, choose ability/weapon from the left list.</div>
-        </div>
-    </div>
-
-    <!-- HUD Elements -->
     <div id="crosshair">+</div>
     <div id="bloom-reticle"></div>
-    <div id="shotgun-reticle"></div>
-    <div id="sniper-scope">
-        <div id="sniper-scope-vignette"></div>
-        <div id="sniper-scope-ring"></div>
-        <div id="sniper-scope-cross-v"></div>
-        <div id="sniper-scope-cross-h"></div>
-    </div>
-    <div id="choke-reticle"></div>
-    <div id="hook-reticle"></div>
-    <div id="deadeye-debug-rect"></div>
-    <div id="deadeye-reticles"></div>
     <div id="hitmarker">✕</div>
     <div id="kill-counter">Kills: 0</div>
     <div id="health-text">HP: 500</div>
@@ -220,36 +43,14 @@
     <div id="damage-vignette"></div>
     <div id="damage-indicator"></div>
     <div id="damage-numbers"></div>
-    <div id="overhead-bars"></div>
-    <div id="room-code-badge" hidden>
-        <span id="room-code-badge-label">PRIVATE ROOM</span>
-        <span id="room-code-badge-value">------</span>
-    </div>
     <div id="hud-bottom-right">
-        <div id="ability-info">R Choke: READY | F Deadeye: READY</div>
-        <div id="throwable-info">Q Frag: 1</div>
-        <div id="weapon-info">Machine Gun | AUTO | 16/30 DMG</div>
+        <div id="weapon-info">Rifle | SEMI | 32/72 DMG</div>
         <div id="cooldown-status">READY</div>
         <div id="cooldown-container"><div id="cooldown-bar"></div></div>
     </div>
-    <div id="combat-radar">
-        <div id="combat-radar-slices"></div>
-        <div id="combat-radar-core"></div>
-        <div id="combat-radar-cross"></div>
-    </div>
-    <div id="combat-beacons"></div>
     <div id="debug-info"></div>
-    <div id="ability-debug-panel"></div>
     <div id="runtime-indicator">PROFILE :: STANDBY</div>
-    <div id="seeker-reticle">
-        <div id="seeker-reticle-corner-tl"></div>
-        <div id="seeker-reticle-corner-tr"></div>
-        <div id="seeker-reticle-corner-bl"></div>
-        <div id="seeker-reticle-corner-br"></div>
-        <div id="seeker-reticle-label">LOCK</div>
-    </div>
 
-    <script src="js/vendor/three.min.js"></script>
-    <script type="module" src="js/app/index.js"></script>
+    <script type="module" src="/js/shell.js"></script>
 </body>
 </html>

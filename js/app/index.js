@@ -1,53 +1,16 @@
-globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+let runtimeLoadPromise = null;
 
-const orderedModules = [
-  '../../shared/gameplay-tuning.js',
-  '../../shared/protocol.js',
-  '../../shared/terrain-sampler.js',
-  '../../shared/seek-profiles.js',
-  '../../shared/entity-constants.js',
-  '../../shared/damage.js',
-  '../../shared/seek-core.js',
-  '../core/bootstrap.js',
-  '../core/event-bus.js',
-  '../core/mode-flow.js',
-  '../core/runtime-profile.js',
-  '../core/loop.js',
-  '../core/awareness.js',
-  '../net/transport.js',
-  '../net/snapshots.js',
-  '../net/auth.js',
-  '../net/remote-entities.js',
-  '../domain/weapons/registry.js',
-  '../domain/weapons/behaviors.js',
-  '../world/material-library.js',
-  '../world/intersection-builder.js',
-  '../world/quadrant-arctic.js',
-  '../world/quadrant-desert.js',
-  '../world/quadrant-jungle.js',
-  '../world/quadrant-urban.js',
-  '../world.js',
-  '../combat-tuning.js',
-  '../hitbox-factory.js',
-  '../avatar-rig.js',
-  '../actor-visual-factory.js',
-  '../bloom-reticle.js',
-  '../ui.js',
-  '../enemy.js',
-  '../hitscan.js',
-  '../throwables.js',
-  '../audio.js',
-  '../abilities.js',
-  '../player-combat.js',
-  '../player.js',
-  '../network.js',
-  '../overhead.js',
-  '../docs.js',
-  '../main.js'
-];
-
-(async () => {
-  for (const modulePath of orderedModules) {
-    await import(modulePath);
+async function loadGameRuntime() {
+  if (!runtimeLoadPromise) {
+    runtimeLoadPromise = import('./runtime-entry.js');
   }
-})();
+  return runtimeLoadPromise;
+}
+
+export async function startQuickMatch() {
+  const runtimeModule = await loadGameRuntime();
+  if (!runtimeModule || typeof runtimeModule.startQuickMatch !== 'function') {
+    throw new Error('Game launcher failed to initialize.');
+  }
+  return runtimeModule.startQuickMatch();
+}

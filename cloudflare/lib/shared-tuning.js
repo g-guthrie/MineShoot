@@ -10,7 +10,7 @@ export function getSharedTuningWu() {
     throw new Error('GameShared.gameplayTuning is missing.');
   }
 
-  if (!shared.classPresets || !shared.weaponStats || !shared.throwables || !shared.abilityCatalog) {
+  if (!shared.classPresets || !shared.weaponStats) {
     throw new Error('GameShared.gameplayTuning is missing required sections.');
   }
 

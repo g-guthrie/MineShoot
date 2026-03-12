@@ -42,10 +42,7 @@ fi
 echo
 echo "Offline multiplayer dev is running."
 echo "Open: http://127.0.0.1:${WORKER_PORT}/"
-echo "Use the in-game mode menu:"
-echo "  - Single Dev Server for local authoritative client/server testing"
-echo "  - Single Full Sandbox for offline experiments"
-echo "  - Cloudflare modes to target the deployed backend from localhost"
+echo "Use QUICK MATCH (FFA) from the menu."
 echo "Logs:"
 echo "  ${WORKER_LOG}"
 echo

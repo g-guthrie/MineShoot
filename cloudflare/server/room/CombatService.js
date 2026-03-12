@@ -1,10 +1,10 @@
-import { getSharedTuningWu } from '../../lib/shared-tuning.js';
 import { getSharedProtocol } from '../../lib/shared-protocol.js';
 import { nowMs } from '../transport.js';
 import { applyDistanceFalloffDamage } from '../sim/combat.js';
 
-const GAMEPLAY_TUNING_WU = getSharedTuningWu();
-const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
+import { getSharedTuningWu } from '../../lib/shared-tuning.js';
+
+const WEAPON_FALLOFF = (getSharedTuningWu().weaponFalloff) || {};
 
 const SHARED_PROTOCOL = getSharedProtocol();
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
@@ -81,7 +81,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   return applyDamage(target, damage);
 }
 
-export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '') {
+export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '') {
   if (!target || !out) return;
   if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
     room.recordElimination(sourceId, target.id);
@@ -94,6 +94,7 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
     armor: out.armor,
     hitType: hitType === 'head' ? 'head' : 'body',
     weaponId: String(weaponId || ''),
+    shotToken: String(shotToken || ''),
     damage: out.damageApplied || 0,
     killed: !!out.killed
   });
@@ -111,72 +112,4 @@ export function broadcastDeathRespawn(room, target) {
     x: plannedSpawn ? Number(plannedSpawn.x || 0) : undefined,
     z: plannedSpawn ? Number(plannedSpawn.z || 0) : undefined
   });
-}
-
-export function projectileDamageHit(room, projectile, target, hitType) {
-  const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-  const def = THROWABLE_STATS[projectile.type];
-  if (!def || !target) return;
-  const owner = room.getEntityById(projectile.ownerId);
-  const damage = hitType === 'head'
-    ? (def.headDamage || def.damage || 1)
-    : (def.bodyDamage || def.damage || 1);
-  const out = applyDamageFromSource(owner, target, damage, {
-    hitType,
-    weaponId: projectile.type || 'knife',
-    sourceKind: 'throwable',
-    applyOutgoing: false
-  });
-  if (!out) return;
-  broadcastDamageEvent(room, projectile.ownerId, target, out, hitType, projectile.type || 'knife');
-  if (out.killed) {
-    broadcastDeathRespawn(room, target);
-  }
-}
-
-export function explodeProjectile(room, projectile, x, y, z) {
-  const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-  const def = THROWABLE_STATS[projectile.type];
-  if (!def) return;
-  if (projectile.type === 'molotov') {
-    const zoneId = `zone_${room.nextFireZoneSeq++}`;
-    room.fireZones.set(zoneId, {
-      id: zoneId,
-      ownerId: projectile.ownerId,
-      x,
-      y,
-      z,
-      radius: def.fireRadius,
-      life: def.fireDuration,
-      tickTimer: 0
-    });
-    room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: projectile.id, impactType: 'molotov', x, y, z });
-    return;
-  }
-  const radius = def.radius || 0;
-  const damage = def.damage || 0;
-  const owner = room.getEntityById(projectile.ownerId);
-  const entities = room.getAliveEntities();
-  for (let i = 0; i < entities.length; i++) {
-    const e = entities[i];
-    if (!room.canTargetEntity(e, projectile.ownerId)) continue;
-    const dx = e.x - x;
-    const dz = e.z - z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist > radius) continue;
-    const falloff = 1 - (dist / Math.max(0.001, radius));
-    const blastDamage = Math.max(20, Math.round(damage * falloff));
-    const out = applyDamageFromSource(owner, e, blastDamage, {
-      hitType: 'body',
-      weaponId: projectile.type || 'frag',
-      sourceKind: 'throwable',
-      applyOutgoing: false
-    });
-    if (!out) continue;
-    broadcastDamageEvent(room, projectile.ownerId, e, out, 'body', projectile.type || 'frag');
-    if (out.killed) {
-      broadcastDeathRespawn(room, e);
-    }
-  }
-  room.broadcast({ t: MSG_S2C.THROW_EXPLODE, projectileId: projectile.id, x, y, z, radius });
 }

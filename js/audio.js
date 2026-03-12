@@ -1,16 +1,28 @@
-/**
- * audio.js - Procedural sound effects via Web Audio API (no asset files)
- * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAudio
- */
-(function () {
-    'use strict';
+import { getSelectableWeaponIds, getWeaponPresentation } from '../shared/gameplay-tuning.js';
 
-    var GameAudio = {};
-    var ctx = null;
-    var unlockInFlight = false;
-    var pendingPlaybacks = [];
-    var muted = false;
-    var noiseBuffer = null;
+/**
+ * audio.js - Web Audio runtime with sampled weapon fire and procedural fallback sounds
+ */
+
+export const GameAudio = {};
+var sharedRecipes = {};
+var ctx = null;
+var unlockInFlight = false;
+var pendingPlaybacks = [];
+var muted = false;
+var noiseBuffer = null;
+var sampleCache = {};
+var sampleLoaders = {};
+var sampleWarmupStarted = false;
+
+function weaponPresentationFor(weaponId) {
+    return getWeaponPresentation(weaponId);
+}
+
+function weaponSampleDef(weaponId) {
+    var presentation = weaponPresentationFor(weaponId) || weaponPresentationFor('rifle');
+    return presentation && presentation.audioSample ? presentation.audioSample : null;
+}
 
     function loadMutedPreference() {
         try {
@@ -44,6 +56,7 @@
             pendingPlaybacks.length = 0;
             return;
         }
+        preloadWeaponSamples(c);
         var queue = pendingPlaybacks.slice();
         pendingPlaybacks.length = 0;
         for (var i = 0; i < queue.length; i++) {
@@ -136,6 +149,127 @@
         current.connect(destination);
     }
 
+    function randomBetween(min, max) {
+        if (max <= min) return min;
+        return min + (Math.random() * (max - min));
+    }
+
+    function getFetch() {
+        if (typeof window === 'undefined' || typeof window.fetch !== 'function') return null;
+        return window.fetch.bind(window);
+    }
+
+    function decodeAudioData(c, arrayBuffer) {
+        if (!c || !arrayBuffer) return Promise.resolve(null);
+        return new Promise(function (resolve, reject) {
+            try {
+                var clonedBuffer = arrayBuffer.slice(0);
+                var maybePromise = c.decodeAudioData(clonedBuffer, resolve, reject);
+                if (maybePromise && typeof maybePromise.then === 'function') {
+                    maybePromise.then(resolve).catch(reject);
+                }
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    function loadSampleBuffer(c, url) {
+        if (!c || !url) return Promise.resolve(null);
+        if (Object.prototype.hasOwnProperty.call(sampleCache, url)) {
+            return Promise.resolve(sampleCache[url]);
+        }
+        if (sampleLoaders[url]) return sampleLoaders[url];
+        var fetcher = getFetch();
+        if (!fetcher) return Promise.resolve(null);
+        sampleLoaders[url] = fetcher(url)
+            .then(function (response) {
+                if (!response || !response.ok) {
+                    throw new Error('Failed to fetch sample: ' + url);
+                }
+                return response.arrayBuffer();
+            })
+            .then(function (arrayBuffer) {
+                return decodeAudioData(c, arrayBuffer);
+            })
+            .then(function (buffer) {
+                sampleCache[url] = buffer || null;
+                return sampleCache[url];
+            })
+            .catch(function () {
+                sampleCache[url] = null;
+                return null;
+            })
+            .then(function (result) {
+                delete sampleLoaders[url];
+                return result;
+            }, function (err) {
+                delete sampleLoaders[url];
+                throw err;
+            });
+        return sampleLoaders[url];
+    }
+
+    function preloadWeaponSamples(c) {
+        if (sampleWarmupStarted || !c || c.state !== 'running') return;
+        sampleWarmupStarted = true;
+        var seen = {};
+        var weaponIds = getSelectableWeaponIds();
+        for (var i = 0; i < weaponIds.length; i++) {
+            var sampleDef = weaponSampleDef(weaponIds[i]);
+            if (!sampleDef || !sampleDef.url || seen[sampleDef.url]) continue;
+            seen[sampleDef.url] = true;
+            loadSampleBuffer(c, sampleDef.url);
+        }
+    }
+
+    function playSampleLayer(c, buffer, opts) {
+        if (!c || !buffer) return false;
+        opts = opts || {};
+        var start = c.currentTime + (opts.delay || 0);
+        var source = c.createBufferSource();
+        var gain = c.createGain();
+        var nodes = [];
+        source.buffer = buffer;
+        source.playbackRate.setValueAtTime(
+            Number(
+                opts.playbackRate !== undefined
+                    ? opts.playbackRate
+                    : randomBetween(opts.playbackRateMin || 1, opts.playbackRateMax || 1)
+            ),
+            start
+        );
+        if (opts.filterType) {
+            var filter = c.createBiquadFilter();
+            filter.type = opts.filterType;
+            filter.frequency.setValueAtTime(Math.max(40, Number(opts.frequency || 1200)), start);
+            filter.Q.setValueAtTime(Math.max(0.0001, Number(opts.q || 0.7)), start);
+            nodes.push(filter);
+        }
+        gain.gain.setValueAtTime(opts.gain !== undefined ? opts.gain : 1, start);
+        nodes.push(gain);
+        connectNodeChain(source, nodes, c.destination);
+        source.start(start);
+        if (opts.duration) {
+            source.stop(start + Math.max(0.01, Number(opts.duration)));
+        }
+        return true;
+    }
+
+    function playSampleBuffer(c, sampleDef) {
+        if (!c || !sampleDef || !sampleDef.url) return false;
+        var buffer = sampleCache[sampleDef.url];
+        if (!buffer) {
+            loadSampleBuffer(c, sampleDef.url);
+            return false;
+        }
+        return playSampleLayer(c, buffer, {
+            gain: sampleDef.gain !== undefined ? sampleDef.gain : 1,
+            playbackRateMin: sampleDef.playbackRateMin || 1,
+            playbackRateMax: sampleDef.playbackRateMax || 1
+        });
+    }
+
     function playOscBurst(c, opts) {
         if (!c) return;
         opts = opts || {};
@@ -188,7 +322,7 @@
         source.stop(end + 0.02);
     }
 
-    function playWeaponFire(c, weaponId) {
+    function playWeaponFireProcedural(c, weaponId) {
         var weapon = String(weaponId || 'rifle');
         if (weapon === 'pistol') {
             playNoiseBurst(c, { duration: 0.02, vol: 0.06, frequency: 4200, q: 1.8, filterType: 'highpass' });
@@ -212,9 +346,12 @@
             return;
         }
         if (weapon === 'shotgun') {
-            playNoiseBurst(c, { duration: 0.12, vol: 0.09, frequency: 1500, q: 0.7, filterType: 'bandpass' });
-            playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 52, duration: 0.22, vol: 0.13 });
-            playOscBurst(c, { type: 'square', startFreq: 520, endFreq: 110, duration: 0.08, vol: 0.06, delay: 0.002 });
+            playNoiseBurst(c, { duration: 0.018, vol: 0.055, frequency: 4200, q: 1.8, filterType: 'highpass' });
+            playNoiseBurst(c, { duration: 0.075, vol: 0.078, frequency: 1650, q: 0.95, filterType: 'bandpass', delay: 0.001 });
+            playNoiseBurst(c, { duration: 0.11, vol: 0.03, frequency: 520, q: 0.7, filterType: 'lowpass', delay: 0.004 });
+            playOscBurst(c, { type: 'sawtooth', startFreq: 340, endFreq: 120, duration: 0.055, vol: 0.05, attack: 0.001 });
+            playOscBurst(c, { type: 'triangle', startFreq: 152, endFreq: 54, duration: 0.19, vol: 0.09, attack: 0.001, delay: 0.001 });
+            playOscBurst(c, { type: 'sine', startFreq: 84, endFreq: 44, duration: 0.23, vol: 0.05, attack: 0.0012, delay: 0.004 });
             return;
         }
         if (weapon === 'sniper') {
@@ -223,7 +360,7 @@
             playOscBurst(c, { type: 'triangle', startFreq: 240, endFreq: 72, duration: 0.24, vol: 0.06, delay: 0.006 });
             return;
         }
-        if (weapon === 'seekergun' || weapon === 'plasma') {
+        if (weapon === 'missile' || weapon === 'plasma') {
             playOscBurst(c, { type: 'sawtooth', startFreq: 420, endFreq: 980, duration: 0.06, vol: 0.05 });
             playOscBurst(c, { type: 'triangle', startFreq: 960, endFreq: 320, duration: 0.12, vol: 0.04, delay: 0.01 });
             playNoiseBurst(c, { duration: 0.04, vol: 0.022, frequency: 2800, q: 2.1, filterType: 'bandpass', delay: 0.004 });
@@ -232,6 +369,75 @@
         playNoiseBurst(c, { duration: 0.045, vol: 0.05, frequency: 2600, q: 1.2, filterType: 'bandpass' });
         playOscBurst(c, { type: 'square', startFreq: 680, endFreq: 180, duration: 0.07, vol: 0.065 });
         playOscBurst(c, { type: 'triangle', startFreq: 170, endFreq: 95, duration: 0.11, vol: 0.04, delay: 0.004 });
+    }
+
+    function playShotgunKickAccent(c) {
+        playNoiseBurst(c, { duration: 0.014, vol: 0.022, frequency: 4600, q: 2.1, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.045, vol: 0.028, frequency: 1600, q: 1.0, filterType: 'bandpass', delay: 0.001 });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 320, endFreq: 120, duration: 0.05, vol: 0.022, attack: 0.0009, delay: 0.001 });
+        playOscBurst(c, { type: 'triangle', startFreq: 142, endFreq: 56, duration: 0.16, vol: 0.04, attack: 0.001, delay: 0.001 });
+        playOscBurst(c, { type: 'sine', startFreq: 80, endFreq: 44, duration: 0.21, vol: 0.026, attack: 0.0012, delay: 0.004 });
+    }
+
+    function playShotgunFireSample(c, sampleDef) {
+        if (!c || !sampleDef || !sampleDef.url) return false;
+        var buffer = sampleCache[sampleDef.url];
+        if (!buffer) {
+            loadSampleBuffer(c, sampleDef.url);
+            return false;
+        }
+        var gain = sampleDef.gain !== undefined ? sampleDef.gain : 1;
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.74,
+            playbackRateMin: sampleDef.playbackRateMin || 1,
+            playbackRateMax: sampleDef.playbackRateMax || 1
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.12,
+            playbackRateMin: 1.04,
+            playbackRateMax: 1.1,
+            filterType: 'highpass',
+            frequency: 2400,
+            q: 0.85,
+            duration: 0.085
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.13,
+            playbackRateMin: 0.98,
+            playbackRateMax: 1.03,
+            filterType: 'bandpass',
+            frequency: 760,
+            q: 0.72,
+            duration: 0.16,
+            delay: 0.001
+        });
+        playSampleLayer(c, buffer, {
+            gain: gain * 0.17,
+            playbackRateMin: 0.93,
+            playbackRateMax: 0.98,
+            filterType: 'lowpass',
+            frequency: 180,
+            q: 0.65,
+            duration: 0.22,
+            delay: 0.002
+        });
+        playShotgunKickAccent(c);
+        return true;
+    }
+
+    function playWeaponFire(c, weaponId) {
+        var weapon = String(weaponId || 'rifle');
+        if (weapon === 'missile' || weapon === 'plasma') {
+            playWeaponFireProcedural(c, weapon);
+            return;
+        }
+        if (weapon === 'shotgun' && playShotgunFireSample(c, weaponSampleDef(weapon))) {
+            return;
+        }
+        if (playSampleBuffer(c, weaponSampleDef(weapon))) {
+            return;
+        }
+        playWeaponFireProcedural(c, weapon);
     }
 
     function playKillFinisher(c, head) {
@@ -301,6 +507,89 @@
         playOscBurst(c, { type: 'square', startFreq: 210, endFreq: 120, duration: 0.05, vol: 0.012, delay: 0.004 });
     }
 
+    function playThemeSong(c) {
+        var notes = [
+            { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.16, delay: 0.00, vol: 0.03 },
+            { type: 'triangle', startFreq: 494, endFreq: 494, duration: 0.16, delay: 0.12, vol: 0.03 },
+            { type: 'triangle', startFreq: 587, endFreq: 587, duration: 0.18, delay: 0.24, vol: 0.034 },
+            { type: 'sine', startFreq: 784, endFreq: 784, duration: 0.24, delay: 0.38, vol: 0.04 }
+        ];
+        for (var i = 0; i < notes.length; i++) {
+            playOscBurst(c, notes[i]);
+        }
+        playNoiseBurst(c, { duration: 0.12, vol: 0.012, frequency: 2200, q: 1.4, filterType: 'bandpass', delay: 0.02 });
+    }
+
+    function playSwordClash(c) {
+        playNoiseBurst(c, { duration: 0.045, vol: 0.05, frequency: 3600, q: 2.4, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.11, vol: 0.04, frequency: 2100, q: 1.8, filterType: 'bandpass', delay: 0.002 });
+        playOscBurst(c, { type: 'square', startFreq: 1260, endFreq: 620, duration: 0.09, vol: 0.03, delay: 0.001 });
+    }
+
+    function playPunchHit(c) {
+        playNoiseBurst(c, { duration: 0.06, vol: 0.036, frequency: 880, q: 0.72, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 146, endFreq: 86, duration: 0.08, vol: 0.03 });
+    }
+
+    function playLevelUpNoise(c) {
+        playOscBurst(c, { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.08, vol: 0.028 });
+        playOscBurst(c, { type: 'triangle', startFreq: 523, endFreq: 523, duration: 0.1, vol: 0.03, delay: 0.08 });
+        playOscBurst(c, { type: 'sine', startFreq: 659, endFreq: 784, duration: 0.16, vol: 0.038, delay: 0.16 });
+    }
+
+    function playAmbientWeather(c) {
+        playNoiseBurst(c, { duration: 0.34, vol: 0.026, frequency: 720, q: 0.6, filterType: 'lowpass' });
+        playNoiseBurst(c, { duration: 0.22, vol: 0.012, frequency: 2200, q: 1.2, filterType: 'bandpass', delay: 0.03 });
+        playOscBurst(c, { type: 'sine', startFreq: 78, endFreq: 62, duration: 0.28, vol: 0.01, delay: 0.05 });
+    }
+
+    function playDoorOpen(c) {
+        playNoiseBurst(c, { duration: 0.08, vol: 0.028, frequency: 460, q: 0.7, filterType: 'lowpass' });
+        playNoiseBurst(c, { duration: 0.05, vol: 0.018, frequency: 1800, q: 1.4, filterType: 'bandpass', delay: 0.01 });
+        playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 120, duration: 0.12, vol: 0.016 });
+    }
+
+    function playPigOink(c) {
+        playOscBurst(c, { type: 'square', startFreq: 310, endFreq: 230, duration: 0.12, vol: 0.028 });
+        playOscBurst(c, { type: 'square', startFreq: 250, endFreq: 180, duration: 0.09, vol: 0.02, delay: 0.03 });
+    }
+
+    function playZombieGrowl(c) {
+        playNoiseBurst(c, { duration: 0.16, vol: 0.018, frequency: 620, q: 0.9, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 118, endFreq: 74, duration: 0.18, vol: 0.026 });
+        playOscBurst(c, { type: 'triangle', startFreq: 92, endFreq: 64, duration: 0.22, vol: 0.022, delay: 0.02 });
+    }
+
+    function playZombieHurt(c) {
+        playNoiseBurst(c, { duration: 0.12, vol: 0.022, frequency: 880, q: 1.0, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 82, duration: 0.12, vol: 0.024 });
+    }
+
+    function playPortalIdle(c) {
+        playOscBurst(c, { type: 'sine', startFreq: 240, endFreq: 220, duration: 0.26, vol: 0.014 });
+        playOscBurst(c, { type: 'triangle', startFreq: 480, endFreq: 420, duration: 0.22, vol: 0.01, delay: 0.04 });
+    }
+
+    function playPortalTravel(c) {
+        playNoiseBurst(c, { duration: 0.08, vol: 0.024, frequency: 2400, q: 1.8, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 240, endFreq: 920, duration: 0.1, vol: 0.03 });
+    }
+
+    function playPortalTeleport(c) {
+        playNoiseBurst(c, { duration: 0.18, vol: 0.03, frequency: 1200, q: 0.8, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 920, endFreq: 210, duration: 0.22, vol: 0.04 });
+    }
+
+    function playFireIgnite(c) {
+        playNoiseBurst(c, { duration: 0.06, vol: 0.05, frequency: 2600, q: 1.6, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.14, vol: 0.025, frequency: 980, q: 0.8, filterType: 'bandpass', delay: 0.01 });
+    }
+
+    function playFireBurning(c) {
+        playNoiseBurst(c, { duration: 0.22, vol: 0.02, frequency: 1400, q: 0.9, filterType: 'bandpass' });
+        playNoiseBurst(c, { duration: 0.18, vol: 0.012, frequency: 3200, q: 1.8, filterType: 'highpass', delay: 0.03 });
+    }
+
     GameAudio.play = function (soundId, options) {
         if (muted) return;
         options = options || {};
@@ -319,6 +608,48 @@
                 case 'playerHit':
                     playPlayerHit(c);
                     break;
+                case 'themeSong':
+                    playThemeSong(c);
+                    break;
+                case 'swordClash':
+                    playSwordClash(c);
+                    break;
+                case 'punchHit':
+                    playPunchHit(c);
+                    break;
+                case 'levelUpNoise':
+                    playLevelUpNoise(c);
+                    break;
+                case 'ambientWeather':
+                    playAmbientWeather(c);
+                    break;
+                case 'doorOpen':
+                    playDoorOpen(c);
+                    break;
+                case 'pigOink':
+                    playPigOink(c);
+                    break;
+                case 'zombieGrowl':
+                    playZombieGrowl(c);
+                    break;
+                case 'zombieHurt':
+                    playZombieHurt(c);
+                    break;
+                case 'portalIdle':
+                    playPortalIdle(c);
+                    break;
+                case 'portalTravel':
+                    playPortalTravel(c);
+                    break;
+                case 'portalTeleport':
+                    playPortalTeleport(c);
+                    break;
+                case 'fireIgnite':
+                    playFireIgnite(c);
+                    break;
+                case 'fireBurning':
+                    playFireBurning(c);
+                    break;
                 case 'explosion':
                     playNoiseBurst(c, { duration: 0.25, vol: 0.11, frequency: 640, q: 0.55, filterType: 'lowpass' });
                     playOscBurst(c, { type: 'sawtooth', startFreq: 110, endFreq: 42, duration: 0.22, vol: 0.12 });
@@ -332,12 +663,25 @@
         });
     };
 
+    GameAudio.playAssetCue = function (soundId, options) {
+        GameAudio.play(soundId, options);
+    };
+
+    GameAudio.getAssetCueIds = function () {
+        var defs = sharedRecipes && sharedRecipes.definitions ? sharedRecipes.definitions.sound : null;
+        return defs ? Object.keys(defs) : ['themeSong', 'swordClash', 'punchHit', 'levelUpNoise', 'ambientWeather'];
+    };
+
     GameAudio.unlock = function () {
         unlock();
     };
 
     GameAudio.setMuted = function (nextMuted) {
         muted = !!nextMuted;
+        if (muted) {
+            stopChokeLoop('caster');
+            stopChokeLoop('victim');
+        }
         saveMutedPreference();
         return muted;
     };
@@ -346,7 +690,19 @@
         return !!muted;
     };
 
-    loadMutedPreference();
+    GameAudio.setChokeAudioState = function (state) {
+        state = state || {};
+        if (muted) {
+            stopChokeLoop('caster');
+            stopChokeLoop('victim');
+            return;
+        }
+        unlock(function (c) {
+            if (!!state.casterActive) startChokeLoop(c, 'caster');
+            else stopChokeLoop('caster');
+            if (!!state.victimActive) startChokeLoop(c, 'victim');
+            else stopChokeLoop('victim');
+        });
+    };
 
-    globalThis.__MAYHEM_RUNTIME.GameAudio = GameAudio;
-})();
+    loadMutedPreference();

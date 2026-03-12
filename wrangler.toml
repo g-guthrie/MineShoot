@@ -1,3 +1,4 @@
+# Worker deploy config. Pages deploys use wrangler.pages.toml.
 name = "mayhem"
 main = "cloudflare/worker.js"
 compatibility_date = "2025-01-01"

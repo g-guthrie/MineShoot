@@ -1,15 +1,6 @@
 export const DEFAULT_ROOM_ID = 'global';
 export const WS_PATH = '/api/ws';
 export const MATCHMAKING_PATH = '/api/matchmaking';
-export const AUTH_PATH = {
-  me: '/api/me',
-  login: '/api/auth/login',
-  logout: '/api/auth/logout'
-};
-export const PROFILE_PATH = {
-  me: '/api/profile/me',
-  public: '/api/profile'
-};
 
 export const WORLD_DEFAULTS = {
   profileVersion: 6,
@@ -32,29 +23,14 @@ export const MSG_C2S = {
   JOIN_ROOM: 'join_room',
   INPUT: 'input',
   FIRE: 'fire',
-  EQUIP_WEAPON: 'equip_weapon',
-  SEEKER_SHOT: 'seeker_shot',
-  THROW: 'throw',
-  CLASS_QUEUE: 'class_queue',
-  CLASS_CAST: 'class_cast',
   PING: 'ping'
 };
 
 export const MSG_S2C = {
   WELCOME: 'welcome',
   SNAPSHOT: 'snapshot',
-  THROW_SPAWN: 'throw_spawn',
-  THROW_REJECT: 'throw_reject',
-  THROW_IMPACT: 'throw_impact',
-  THROW_EXPLODE: 'throw_explode',
-  AOE_END: 'aoe_end',
   DAMAGE_EVENT: 'damage_event',
-  SEEKER_REJECT: 'seeker_reject',
   DEATH_RESPAWN: 'death_respawn',
-  CLASS_CAST_OK: 'class_cast_ok',
-  CLASS_CAST_REJECT: 'class_cast_reject',
-  CLASS_CHANGED: 'class_changed',
-  CLASS_QUEUED: 'class_queued',
   ERROR: 'error',
   PONG: 'pong'
 };
@@ -66,8 +42,6 @@ export const protocol = {
   world: WORLD_DEFAULTS,
   wsPath: WS_PATH,
   matchmakingPath: MATCHMAKING_PATH,
-  authPath: AUTH_PATH,
-  profilePath: PROFILE_PATH,
   msg: {
     c2s: MSG_C2S,
     s2c: MSG_S2C

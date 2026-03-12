@@ -1,10 +1,9 @@
-const BASE_WORLD_SIZE = 50;
-const WORLD_AREA_SCALE = 5;
-const WORLD_SIZE = Math.round(BASE_WORLD_SIZE * Math.sqrt(WORLD_AREA_SCALE));
-const WORLD_CENTER = WORLD_SIZE * 0.5;
-const WORLD_MARGIN = 2;
-const WORLD_MIN = WORLD_MARGIN;
-const WORLD_MAX = WORLD_SIZE - WORLD_MARGIN;
+import {
+  WORLD_SIZE,
+  WORLD_CENTER,
+  WORLD_MIN,
+  WORLD_MAX
+} from './world-layout.js';
 
 const DEFAULT_WORLD_SEED = 'room-env-v6-static-global';
 const DEFAULT_WORLD_PROFILE_VERSION = 6;
@@ -55,10 +54,6 @@ export function createTerrainSampler(worldMeta) {
     worldMin: WORLD_MIN,
     worldMax: WORLD_MAX,
     worldCenter: WORLD_CENTER,
-    worldAreaScale: WORLD_AREA_SCALE,
-    waterPools: [],
-    // Kept for compatibility with callers that read this field.
-    poolRngStateAfter: 1,
     getGroundHeightAt() {
       return 0;
     }
