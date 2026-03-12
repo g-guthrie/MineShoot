@@ -372,7 +372,7 @@ async function createHarness(seedName, options = {}) {
   const seed = createScenario(seedName);
   const ids = [
     'mode-buttons', 'alt-mode-toggle', 'controls-menu', 'controls-toggle', 'primary-play-btn', 'tdm-play-btn', 'lms-play-btn',
-    'sandbox-play-btn', 'sandbox-mode-cycle-btn', 'sandbox-ruleset-panel', 'sandbox-ffa-btn', 'sandbox-lms-btn', 'create-private-room-btn', 'private-room-input',
+    'create-private-room-btn', 'private-room-input',
     'join-private-room-btn', 'room-access-status', 'room-share-panel', 'room-share-code', 'copy-room-code-btn', 'room-code-badge',
     'room-code-badge-value', 'mode-subtitle', 'menu-party-id-btn', 'menu-party-id-label', 'menu-party-id-value', 'party-join-lock-btn',
     'party-join-lock-icon', 'party-join-lock-note', 'social-tab-party-btn', 'social-tab-friends-btn', 'social-tab-room-btn',
@@ -389,7 +389,6 @@ async function createHarness(seedName, options = {}) {
     const tagName = id.includes('input') ? 'input' : (id.includes('btn') ? 'button' : 'div');
     elements[id] = new FakeElement(tagName, id, registry);
   }
-  elements['sandbox-ruleset-panel'].hidden = true;
   elements['mode-buttons'].hidden = true;
   elements['controls-menu'].hidden = true;
   elements['party-roster-overlay'].hidden = true;
@@ -736,7 +735,7 @@ async function createHarness(seedName, options = {}) {
 
   function snapshot() {
     const keys = [
-      'mode-buttons', 'controls-menu', 'sandbox-ruleset-panel', 'party-social-view', 'friends-social-view', 'private-room-view',
+      'mode-buttons', 'controls-menu', 'party-social-view', 'friends-social-view', 'private-room-view',
       'party-roster-overlay', 'friends-overlay', 'social-tab-room-btn', 'mode-subtitle', 'menu-party-id-value', 'party-join-lock-note',
       'party-roster-preview-shell', 'party-join-lock-btn', 'view-party-btn', 'leave-party-btn',
       'view-friends-btn', 'refresh-friends-btn', 'private-room-mode-ffa-btn', 'private-room-mode-tdm-btn',
@@ -1023,17 +1022,6 @@ test('private room join reconciles stale post payloads against canonical room st
   const snap = JSON.parse(harness.snapshot());
   assert.equal(snap.privateRoom && snap.privateRoom.mode, 'tdm');
   assert.match(snap.dom['private-room-summary'].text, /MODE TDM/);
-});
-
-test('sandbox launch preps the prompt and immediately starts gameplay when runtime is ready', async () => {
-  const harness = await createHarness('guest_idle');
-  const launchSandbox = harness.actions().find((action) => action.name === 'sandbox-play-btn');
-  assert.ok(launchSandbox, 'Expected sandbox launch action');
-  await launchSandbox.run();
-
-  assert.equal(harness.prepareLaunchCount(), 1);
-  assert.equal(harness.startGameplayCount(), 1);
-  assert.equal(harness.inputCapturePromptCount(), 0);
 });
 
 test('quick match launch preps the prompt and immediately starts gameplay after room allocation', async () => {

@@ -43,10 +43,6 @@
             return launchState;
         }
 
-        function sandboxRuntimeReady() {
-            return !!(opts.isSandboxRuntimeReady && opts.isSandboxRuntimeReady());
-        }
-
         function setDisabled(items, disabled) {
             if (!Array.isArray(items)) return;
             for (var i = 0; i < items.length; i++) {
@@ -64,12 +60,6 @@
         function isUiBusy() {
             var launchState = currentLaunchState();
             return !!(controllerBusy || launchState.busy || (opts.isSessionBusy && opts.isSessionBusy()));
-        }
-
-        function setSandboxButtonsEnabled(enabled) {
-            if (elements.sandboxFfaBtn) elements.sandboxFfaBtn.disabled = !enabled;
-            if (elements.sandboxLmsBtn) elements.sandboxLmsBtn.disabled = !enabled;
-            setDisabled(elements.sandboxModeButtons, !enabled);
         }
 
         function activeSocialView() {
@@ -119,8 +109,6 @@
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.disabled = busy;
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.disabled = busy;
             setDisabled(elements.quickMatchButtons, busy);
-            if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.disabled = busy;
-            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.disabled = busy;
             if (elements.createRoomBtn) elements.createRoomBtn.disabled = busy;
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.disabled = busy;
             if (elements.privateRoomInput) elements.privateRoomInput.disabled = busy;
@@ -128,7 +116,6 @@
             if (elements.partyIdInput) elements.partyIdInput.disabled = busy;
             if (elements.addFriendBtn) elements.addFriendBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
             if (elements.friendIdInput) elements.friendIdInput.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
-            setSandboxButtonsEnabled(!busy && sandboxRuntimeReady());
 
             if (elements.socialTabPartyBtn) {
                 elements.socialTabPartyBtn.classList.toggle('active', nextSocialView === 'party');
@@ -235,9 +222,6 @@
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.style.display = 'none';
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.style.display = 'none';
             setDisplay(elements.quickMatchButtons, 'none');
-            if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.style.display = 'none';
-            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.style.display = 'none';
-            if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
             if (elements.createRoomBtn) elements.createRoomBtn.style.display = 'none';
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.style.display = 'none';
             if (elements.privateRoomInput) elements.privateRoomInput.style.display = 'none';
@@ -258,15 +242,6 @@
             }
             setDisplay(elements.quickMatchButtons, '');
             setDisabled(elements.quickMatchButtons, false);
-            if (elements.sandboxPlayBtn) {
-                elements.sandboxPlayBtn.disabled = false;
-                elements.sandboxPlayBtn.style.display = '';
-            }
-            if (elements.sandboxModeCycleBtn) {
-                elements.sandboxModeCycleBtn.disabled = false;
-                elements.sandboxModeCycleBtn.style.display = '';
-            }
-            if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
             if (elements.createRoomBtn) {
                 elements.createRoomBtn.disabled = false;
                 elements.createRoomBtn.style.display = '';
@@ -283,7 +258,6 @@
             if (elements.controlsToggle) elements.controlsToggle.disabled = false;
             if (elements.modeButtonsWrap) elements.modeButtonsWrap.hidden = !altModesOpen;
             if (elements.controlsMenu) elements.controlsMenu.hidden = !controlsOpen;
-            setSandboxButtonsEnabled(!isUiBusy() && sandboxRuntimeReady());
         }
 
         return {

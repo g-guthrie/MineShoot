@@ -106,6 +106,7 @@
             RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
                 dt: dt,
                 pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
+                hasUnsentInputTail: !!(inputSyncState && inputSyncState.hasUnsentInputTail),
                 lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
                 lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
                 pendingInputs: pendingInputs,

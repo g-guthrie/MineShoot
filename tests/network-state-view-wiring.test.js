@@ -86,6 +86,8 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
   };
 
   await loadScript('../js/net/state-view.js', sandbox);
+  await loadScript('../js/net/runtime-state.js', sandbox);
+  await loadScript('../js/net/runtime.js', sandbox);
   await loadScript('../js/network.js', sandbox);
 
   assert.equal(

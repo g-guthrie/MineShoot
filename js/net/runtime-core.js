@@ -8,6 +8,18 @@
     function create(opts) {
         opts = opts || {};
 
+        function cloneInputState(inputState) {
+            return inputState ? {
+                forward: !!inputState.forward,
+                backward: !!inputState.backward,
+                left: !!inputState.left,
+                right: !!inputState.right,
+                jump: !!inputState.jump,
+                sprint: !!inputState.sprint,
+                adsActive: !!inputState.adsActive
+            } : null;
+        }
+
         function clearReconnectTimer() {
             var transport = opts.getTransport();
             if (transport && transport.shutdown) {
@@ -119,6 +131,19 @@
             opts.applyPendingSpawnSync();
 
             var inputSendTimer = opts.getInputSendTimer() - dt;
+            if (playerPos && rotation) {
+                var framePlayerApi = opts.getPlayerApi();
+                var frameInputState = (framePlayerApi && framePlayerApi.getNetworkInputState) ? framePlayerApi.getNetworkInputState() : null;
+                if (opts.pushLocalPredictionSample) {
+                    opts.pushLocalPredictionSample({
+                        at: Date.now(),
+                        dtMs: Math.max(1, Math.round(Math.max(0, Number(dt || 0)) * 1000)),
+                        yaw: rotation.yaw || 0,
+                        pitch: rotation.pitch || 0,
+                        inputState: cloneInputState(frameInputState)
+                    });
+                }
+            }
             if (inputSendTimer <= 0) {
                 inputSendTimer = opts.getInputSendInterval();
                 if (playerPos && rotation) {
@@ -137,17 +162,12 @@
                         dtMs: dtMs,
                         yaw: rotation.yaw || 0,
                         pitch: rotation.pitch || 0,
-                        inputState: inputState ? {
-                            forward: !!inputState.forward,
-                            backward: !!inputState.backward,
-                            left: !!inputState.left,
-                            right: !!inputState.right,
-                            jump: !!inputState.jump,
-                            sprint: !!inputState.sprint,
-                            adsActive: !!inputState.adsActive
-                        } : null
+                        inputState: cloneInputState(inputState)
                     });
                     if (inputSeqHistory.length > 96) inputSeqHistory.shift();
+                    if (opts.clearLocalPredictionSamples) {
+                        opts.clearLocalPredictionSamples();
+                    }
                     wsSend({
                         t: opts.getInputMessageType(),
                         seq: seq,

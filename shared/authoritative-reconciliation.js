@@ -29,6 +29,8 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
   const pendingInputCount = Math.max(0, Number(options.pendingInputCount || 0));
   const lastAckedSeq = Math.max(0, Number(options.lastAckedSeq || 0));
   const lastReplayAckSeq = Math.max(0, Number(options.lastReplayAckSeq || 0));
+  const hasUnsentInputTail = !!options.hasUnsentInputTail;
+  if (hasUnsentInputTail && pendingInputCount > 0) return true;
   return pendingInputCount > 0 && lastAckedSeq > 0 && lastAckedSeq !== lastReplayAckSeq;
 }
 

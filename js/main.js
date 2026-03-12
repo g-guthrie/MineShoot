@@ -5,34 +5,16 @@
     'use strict';
 
     var renderer, scene, clock, camera;
-    var overlay;
-
-    var isPlaying = false;
-
     var debugTimer = null;
-
     var debugVisualsOn = false;
-
-    var DEFAULT_ENEMY_COUNT = 5;
-    var currentAimTargetId = '';
     var multiplayerMode = false;
-    var forcedRoomId = 'global';
-    var activeRuntimeMode = null;
-    var startupDebugNotice = '';
-    var autoStartNoLock = false;
     var netShotCounter = 0;
     var runtimeInitialized = false;
     var controlsApi = null;
-    var lastHandledMatchEndAt = 0;
-    var postGameState = {
-        active: false,
-        phase: '',
-        matchEndedAt: 0,
-        snapshot: null,
-        timer: null
-    };
-    var pendingInputCapture = false;
-    var launchSessionContext = null;
+    var gameSession = null;
+    var runtimeShell = null;
+    var gameplayRuntimeLoop = null;
+    var presentationRuntimeLoop = null;
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -52,90 +34,17 @@
         }
     }
 
-    function ensureMenuSessionEls() {
-        return {
-            stats: document.getElementById('menu-session-stats'),
-            status: document.getElementById('menu-session-status'),
-            kd: document.getElementById('menu-session-kd'),
-            playBtn: document.getElementById('play-btn'),
-            backBtn: document.getElementById('back-mode-btn')
-        };
-    }
-
-    function ensurePostGameEls() {
-        return {
-            flow: document.getElementById('postgame-flow'),
-            celebration: document.getElementById('postgame-celebration'),
-            winnerBanner: document.getElementById('postgame-winner-banner'),
-            resultBanner: document.getElementById('postgame-result-banner'),
-            celebrationNote: document.getElementById('postgame-celebration-note'),
-            results: document.getElementById('postgame-results'),
-            resultsOutcome: document.getElementById('postgame-results-outcome'),
-            resultsWinner: document.getElementById('postgame-results-winner'),
-            resultsMode: document.getElementById('postgame-results-mode'),
-            resultsLine: document.getElementById('postgame-results-line'),
-            resultsObjective: document.getElementById('postgame-results-objective'),
-            resultsState: document.getElementById('postgame-results-state'),
-            resultsSummary: document.getElementById('postgame-results-summary'),
-            continueBtn: document.getElementById('postgame-continue-btn'),
-            menuStage: document.getElementById('menu-stage')
-        };
-    }
-
-    function ensureLaunchHandoffEls() {
-        return {
-            flow: document.getElementById('launch-handoff'),
-            title: document.getElementById('launch-handoff-title'),
-            copy: document.getElementById('launch-handoff-copy'),
-            enterBtn: document.getElementById('launch-enter-btn'),
-            cancelBtn: document.getElementById('launch-cancel-btn'),
-            menuStage: document.getElementById('menu-stage')
-        };
-    }
-
-    function cloneLaunchSessionContext(context) {
-        var source = context || {};
-        return {
-            launchKind: String(source.launchKind || ''),
-            gameMode: String(source.gameMode || ''),
-            roomId: String(source.roomId || ''),
-            roomCode: String(source.roomCode || ''),
-            roomPhase: String(source.roomPhase || ''),
-            modeId: String(source.modeId || ''),
-            requiresNetwork: !!source.requiresNetwork,
-            canResume: !!source.canResume,
-            error: String(source.error || '')
-        };
-    }
-
-    function emitSessionState() {
-        if (!window || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
-        window.dispatchEvent(new CustomEvent('mayhem-session-state', {
-            detail: {
-                runtimeReady: !!runtimeInitialized,
-                inMatch: !!isPlaying,
-                awaitingInputCapture: !!(pendingInputCapture && runtimeInitialized && !isPlaying),
-                canResume: canResumeGameplay(),
-                activityState: getActivityState(),
-                launchContext: cloneLaunchSessionContext(launchSessionContext)
-            }
-        }));
-    }
-
-    function cloneMatchData(value) {
-        return value ? JSON.parse(JSON.stringify(value)) : null;
-    }
-
-    function clearPostGameTimer() {
-        if (postGameState.timer) {
-            clearTimeout(postGameState.timer);
-            postGameState.timer = null;
-        }
+    function sharedMatchRules() {
+        return globalThis.__MAYHEM_RUNTIME &&
+            globalThis.__MAYHEM_RUNTIME.GameShared &&
+            globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
+            : null;
     }
 
     function isPrivateRoomSession(snapshot) {
         var phase = snapshot && snapshot.privateRoomPhase ? String(snapshot.privateRoomPhase) : '';
-        return !!phase || !!(activeRuntimeMode && activeRuntimeMode.roomStrategy === 'private');
+        return !!phase || !!(runtimeShell && runtimeShell.getActiveRuntimeMode && runtimeShell.getActiveRuntimeMode() && runtimeShell.getActiveRuntimeMode().roomStrategy === 'private');
     }
 
     function didSelfWin(matchState, selfState) {
@@ -174,165 +83,8 @@
         return 'Kills: ' + Math.max(0, Number(selfState && selfState.kills || 0));
     }
 
-    function hidePostGameFlow() {
-        var els = ensurePostGameEls();
-        clearPostGameTimer();
-        postGameState.active = false;
-        postGameState.phase = '';
-        postGameState.snapshot = null;
-        if (els.flow) els.flow.hidden = true;
-        if (els.celebration) els.celebration.hidden = true;
-        if (els.results) els.results.hidden = true;
-        if (els.menuStage) els.menuStage.hidden = false;
-        emitSessionState();
-    }
-
-    function completePostGameFlow() {
-        var snapshot = postGameState.snapshot;
-        hidePostGameFlow();
-        if (isPrivateRoomSession(snapshot)) {
-            if (overlay) overlay.style.display = 'flex';
-            isPlaying = false;
-            setResumeButtonsVisible(canResumeGameplay());
-            return;
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile && globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode) {
-            globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode();
-        }
-        window.location.href = window.location.pathname;
-    }
-
-    function showPostGameResults() {
-        var els = ensurePostGameEls();
-        var snapshot = postGameState.snapshot || {};
-        var matchState = snapshot.matchState || null;
-        var selfState = snapshot.selfState || null;
-        var winner = winnerLabel(matchState, selfState) || 'PLAYER';
-        var won = didSelfWin(matchState, selfState);
-        var kills = Math.max(0, Number(selfState && selfState.kills || 0));
-        var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
-
-        postGameState.phase = 'results';
-        clearPostGameTimer();
-        if (els.celebration) els.celebration.hidden = true;
-        if (els.results) els.results.hidden = false;
-        if (els.resultsOutcome) els.resultsOutcome.textContent = won ? 'VICTORY' : 'DEFEAT';
-        if (els.resultsWinner) els.resultsWinner.textContent = winner;
-        if (els.resultsMode) els.resultsMode.textContent = modeDisplayName(matchState);
-        if (els.resultsLine) els.resultsLine.textContent = kills + ' / ' + deaths;
-        if (els.resultsObjective) els.resultsObjective.textContent = objectiveSummary(matchState, selfState);
-        if (els.resultsState) els.resultsState.textContent = matchState && matchState.ended
-            ? ('RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now()))
-            : 'ROUND COMPLETE';
-        if (els.resultsSummary) els.resultsSummary.textContent = resultsSummary(matchState, selfState);
-        if (els.continueBtn) {
-            els.continueBtn.textContent = isPrivateRoomSession(snapshot) ? 'RETURN TO ROOM' : 'MAIN MENU';
-        }
-    }
-
-    function beginPostGameFlow(matchContext) {
-        var matchState = matchContext ? matchContext.matchState : null;
-        if (!matchState || !matchState.ended || !Number(matchState.endedAt || 0)) return;
-        if (postGameState.active && postGameState.matchEndedAt === Number(matchState.endedAt || 0)) return;
-
-        var els = ensurePostGameEls();
-        var selfState = matchContext ? matchContext.selfState : null;
-        var winner = winnerLabel(matchState, selfState) || 'PLAYER';
-        var won = didSelfWin(matchState, selfState);
-
-        postGameState.active = true;
-        postGameState.phase = 'celebration';
-        postGameState.matchEndedAt = Number(matchState.endedAt || 0);
-        postGameState.snapshot = {
-            matchState: cloneMatchData(matchState),
-            selfState: cloneMatchData(selfState),
-            respawnState: cloneMatchData(matchContext ? matchContext.respawnState : null),
-            privateRoomPhase: matchContext ? String(matchContext.privateRoomPhase || '') : ''
-        };
-
-        clearPostGameTimer();
-        if (document.pointerLockElement && document.exitPointerLock) {
-            document.exitPointerLock();
-        }
-        if (overlay) overlay.style.display = 'flex';
-        isPlaying = false;
-        pendingInputCapture = false;
-        hideLaunchHandoff();
-        setResumeButtonsVisible(false);
-        if (els.menuStage) els.menuStage.hidden = true;
-        if (els.flow) els.flow.hidden = false;
-        if (els.results) els.results.hidden = true;
-        if (els.celebration) els.celebration.hidden = false;
-        if (els.winnerBanner) els.winnerBanner.textContent = winner;
-        if (els.resultBanner) els.resultBanner.textContent = won ? 'VICTORY' : 'DEFEAT';
-        if (els.celebrationNote) {
-            els.celebrationNote.textContent = won
-                ? 'YOUR GHOST CREW IS DOING A SICK LITTLE WIN DANCE.'
-                : (winner + ' GETS THE TROPHY. YOUR GHOSTS ARE FORCED TO APPLAUD.');
-        }
-        postGameState.timer = setTimeout(showPostGameResults, 2600);
-        emitSessionState();
-    }
-
-    function canResumeGameplay() {
-        if (!runtimeInitialized) return false;
-        if (postGameState.active) return false;
-        if (!multiplayerMode) return true;
-        var matchContext = readMatchContext();
-        if (matchContext.privateRoomPhase === 'lobby') return false;
-        return !(matchContext.matchState && matchContext.matchState.ended);
-    }
-
-    function setResumeButtonsVisible(show) {
-        var els = ensureMenuSessionEls();
-        if (els.playBtn) els.playBtn.style.display = show ? 'inline-block' : 'none';
-        if (els.backBtn) els.backBtn.style.display = show ? 'inline-block' : 'none';
-    }
-
-    function hideLaunchHandoff() {
-        var els = ensureLaunchHandoffEls();
-        if (els.flow) els.flow.hidden = true;
-        if (!postGameState.active && els.menuStage) els.menuStage.hidden = false;
-    }
-
-    function showLaunchHandoff(context) {
-        var els = ensureLaunchHandoffEls();
-        var modeLabel = String(context && context.gameMode || '').toUpperCase();
-        if (overlay) overlay.style.display = 'flex';
-        isPlaying = false;
-        pendingInputCapture = true;
-        if (els.menuStage) els.menuStage.hidden = true;
-        if (els.flow) els.flow.hidden = false;
-        if (els.title) els.title.textContent = 'ENTER MATCH';
-        if (els.copy) {
-            els.copy.textContent = modeLabel
-                ? ('' + modeLabel + ' READY. CLICK TO CAPTURE THE MOUSE AND DROP INTO THE ARENA.')
-                : 'CLICK TO CAPTURE THE MOUSE AND DROP INTO THE ARENA.';
-        }
-        setResumeButtonsVisible(false);
-        emitSessionState();
-    }
-
-    function showGameplayPrompt() {
-        if (overlay) overlay.style.display = 'flex';
-        isPlaying = false;
-        pendingInputCapture = false;
-        hideLaunchHandoff();
-        setResumeButtonsVisible(canResumeGameplay());
-        emitSessionState();
-    }
-
-    function sharedMatchRules() {
-        return globalThis.__MAYHEM_RUNTIME &&
-            globalThis.__MAYHEM_RUNTIME.GameShared &&
-            globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
-            ? globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
-            : null;
-    }
-
     function currentMatchRuntimeApi() {
-        if (multiplayerMode) return globalThis.__MAYHEM_RUNTIME.GameNet || null;
-        return globalThis.__MAYHEM_RUNTIME.GameLocalMatch || null;
+        return globalThis.__MAYHEM_RUNTIME.GameNet || null;
     }
 
     function readMatchContext() {
@@ -375,15 +127,20 @@
     }
 
     function updateMenuSessionPanel(matchContext) {
-        var els = ensureMenuSessionEls();
-        if (!els.stats || !els.status || !els.kd) return;
+        var statsEl = document.getElementById('menu-session-stats');
+        var statusEl = document.getElementById('menu-session-status');
+        var kdEl = document.getElementById('menu-session-kd');
+        if (!statsEl || !statusEl || !kdEl) return;
 
         var matchState = matchContext ? matchContext.matchState : null;
         var selfState = matchContext ? matchContext.selfState : null;
+        var playing = !!(gameSession && gameSession.isPlaying && gameSession.isPlaying());
 
-        if (!runtimeInitialized || !multiplayerMode) {
-            els.stats.hidden = true;
-            setResumeButtonsVisible(!isPlaying && runtimeInitialized);
+        if (!runtimeInitialized) {
+            statsEl.hidden = true;
+            if (gameSession && gameSession.setResumeButtonsVisible) {
+                gameSession.setResumeButtonsVisible(!playing && runtimeInitialized);
+            }
             return;
         }
 
@@ -393,15 +150,15 @@
         var charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
         var matchRules = sharedMatchRules();
 
-        els.stats.hidden = false;
-        els.kd.textContent = matchRules && matchRules.formatMenuMatchStats
+        statsEl.hidden = false;
+        kdEl.textContent = matchRules && matchRules.formatMenuMatchStats
             ? matchRules.formatMenuMatchStats(matchState, selfState)
             : (String(matchState && matchState.gameMode || '') === 'lms'
                 ? ('LIVES ' + lives + ' | CHARGE ' + charge)
                 : ('KILLS ' + kills + ' | DEATHS ' + deaths));
 
         if (matchRules && matchRules.formatMenuMatchStatus) {
-            els.status.textContent = matchRules.formatMenuMatchStatus(matchState, selfState, {
+            statusEl.textContent = matchRules.formatMenuMatchStatus(matchState, selfState, {
                 nowMs: Date.now,
                 privateRoomPhase: matchContext ? matchContext.privateRoomPhase : '',
                 respawnState: matchContext ? matchContext.respawnState : null,
@@ -409,15 +166,17 @@
             });
         } else {
             if (!matchState || !matchState.started) {
-                els.status.textContent = 'WAITING FOR MATCH START';
+                statusEl.textContent = 'WAITING FOR MATCH START';
             } else if (matchState.ended) {
-                els.status.textContent = winnerLabel(matchState, selfState) + ' WON | RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
+                statusEl.textContent = winnerLabel(matchState, selfState) + ' WON | RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
             } else {
-                els.status.textContent = 'FFA ' + kills + ' / ' + Number(matchState.targetProgress || 0).toFixed(0) + ' | LEAD ' + Number(matchState.leaderProgress || 0).toFixed(0);
+                statusEl.textContent = 'FFA ' + kills + ' / ' + Number(matchState.targetProgress || 0).toFixed(0) + ' | LEAD ' + Number(matchState.leaderProgress || 0).toFixed(0);
             }
         }
 
-        setResumeButtonsVisible(!isPlaying && canResumeGameplay());
+        if (gameSession && gameSession.setResumeButtonsVisible) {
+            gameSession.setResumeButtonsVisible(!playing && gameSession.canResumeGameplay && gameSession.canResumeGameplay());
+        }
     }
 
     function syncMatchHud(matchContext) {
@@ -428,22 +187,6 @@
             );
         }
         updateMenuSessionPanel(matchContext);
-    }
-
-    function handleMatchEndState(matchContext) {
-        var matchState = matchContext ? matchContext.matchState : null;
-        var selfState = matchContext ? matchContext.selfState : null;
-        if (matchState && matchState.ended && Number(matchState.endedAt || 0) > 0) {
-            if (lastHandledMatchEndAt !== Number(matchState.endedAt || 0)) {
-                lastHandledMatchEndAt = Number(matchState.endedAt || 0);
-                beginPostGameFlow(matchContext);
-            }
-            return;
-        }
-        lastHandledMatchEndAt = 0;
-        if (!postGameState.active) {
-            hidePostGameFlow();
-        }
     }
 
     function setTransientDebug(text, ms) {
@@ -480,7 +223,7 @@
 
     function applyDebugVisuals(visible) {
         debugVisualsOn = !!visible;
-        setRuntimeIndicator(activeRuntimeMode);
+        setRuntimeIndicator(runtimeShell && runtimeShell.getActiveRuntimeMode ? runtimeShell.getActiveRuntimeMode() : null);
 
         if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals) {
             globalThis.__MAYHEM_RUNTIME.GameUI.setDebugVisuals(!!visible);
@@ -650,271 +393,63 @@
         }
     }
 
-    function setupPointerLock() {
-        overlay = document.getElementById('overlay');
-        var playBtn = document.getElementById('play-btn');
-        var backModeBtn = document.getElementById('back-mode-btn');
-        var modeButtonsWrap = document.getElementById('mode-buttons');
-        var postGameEls = ensurePostGameEls();
-        var lastStartRequest = 0;
-
-        function showResumeControl(show) {
-            if (!playBtn) return;
-            setResumeButtonsVisible(!!show && canResumeGameplay());
+    function setupGameplaySession() {
+        var sessionFactory = depGet('GameRuntimeSession');
+        if (!sessionFactory || !sessionFactory.create) {
+            throw new Error('GameRuntimeSession is required before gameplay starts.');
         }
 
-        function requestPlayStart(e) {
-            var now = performance.now();
-            if (now - lastStartRequest < 140) return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
-            lastStartRequest = now;
-            if (e) {
-                if (typeof e.button === 'number' && e.button !== 0) {
-                    return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
+        gameSession = sessionFactory.create({
+            isRuntimeReady: function () {
+                return !!runtimeInitialized;
+            },
+            canResumeGameplay: function () {
+                var matchContext = readMatchContext();
+                if (matchContext.privateRoomPhase === 'lobby') return false;
+                return !(matchContext.matchState && matchContext.matchState.ended);
+            },
+            getActivityState: function () {
+                return ensureRuntimeShell().getActivityState();
+            },
+            getPointerLockTarget: function () {
+                return renderer ? renderer.domElement : null;
+            },
+            validateLaunch: validateMenuSelections,
+            beforeGameplayEntry: function () {
+                if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.unlock) {
+                    globalThis.__MAYHEM_RUNTIME.GameAudio.unlock();
                 }
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            if (!canResumeGameplay()) {
-                emitSessionState();
-                return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
-            }
-            var validation = validateMenuSelections();
-            if (!validation.ok) {
-                setTransientDebug(validation.message, 1800);
-                emitSessionState();
-                return Promise.resolve({ ok: false, entered: false, pendingCapture: true, error: validation.message });
-            }
-            if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.unlock) {
-                globalThis.__MAYHEM_RUNTIME.GameAudio.unlock();
-            }
-            if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen()) {
-                globalThis.__MAYHEM_RUNTIME.GameDocs.close();
-            }
-
-            var target = renderer && renderer.domElement;
-            if (!target) {
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                showResumeControl(true);
-                pendingInputCapture = true;
-                emitSessionState();
-                return Promise.resolve({ ok: true, entered: false, pendingCapture: true });
-            }
-            var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
-            if (typeof requestLock !== 'function') {
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                showResumeControl(true);
-                setTransientDebug('Pointer lock is required for gameplay.', 2200);
-                pendingInputCapture = true;
-                emitSessionState();
-                return Promise.resolve({ ok: true, entered: false, pendingCapture: true, error: 'Pointer lock is required for gameplay.' });
-            }
-            try {
-                var maybePromise = requestLock.call(target);
-                if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
-                    return maybePromise.then(function () {
-                        pendingInputCapture = !(document.pointerLockElement === target);
-                        emitSessionState();
-                        return {
-                            ok: true,
-                            entered: document.pointerLockElement === target,
-                            pendingCapture: !(document.pointerLockElement === target)
-                        };
-                    }).catch(function () {
-                        if (!document.pointerLockElement) {
-                            if (overlay) overlay.style.display = 'flex';
-                            isPlaying = false;
-                            showResumeControl(true);
-                            setTransientDebug('Pointer lock denied. Click PLAY to retry.', 2200);
-                        }
-                        pendingInputCapture = true;
-                        emitSessionState();
-                        return {
-                            ok: true,
-                            entered: false,
-                            pendingCapture: true,
-                            error: 'Pointer lock denied.'
-                        };
-                    });
-                }
-                pendingInputCapture = !(document.pointerLockElement === target);
-                emitSessionState();
-                return Promise.resolve({
-                    ok: true,
-                    entered: document.pointerLockElement === target,
-                    pendingCapture: !(document.pointerLockElement === target)
-                });
-            } catch (err) {
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                showResumeControl(true);
-                setTransientDebug('Pointer lock failed. Click PLAY to retry.', 2200);
-                pendingInputCapture = true;
-                emitSessionState();
-                return Promise.resolve({
-                    ok: true,
-                    entered: false,
-                    pendingCapture: true,
-                    error: 'Pointer lock failed.'
-                });
-            }
-        }
-
-        globalThis.__MAYHEM_RUNTIME.GameSession = globalThis.__MAYHEM_RUNTIME.GameSession || {};
-        globalThis.__MAYHEM_RUNTIME.GameSession.prepareLaunch = function (context) {
-            launchSessionContext = cloneLaunchSessionContext(context);
-            pendingInputCapture = false;
-            hideLaunchHandoff();
-            if (overlay) overlay.style.display = 'flex';
-            isPlaying = false;
-            setResumeButtonsVisible(false);
-            emitSessionState();
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.enterGameplay = function (event, context) {
-            if (context) launchSessionContext = cloneLaunchSessionContext(context);
-            return requestPlayStart(event).then(function (result) {
-                if (result && !result.entered) {
-                    showLaunchHandoff(launchSessionContext);
-                }
-                return result;
-            });
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.resumeGameplay = function (event) {
-            return requestPlayStart(event);
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.showInputCapturePrompt = function (context) {
-            if (context) launchSessionContext = cloneLaunchSessionContext(context);
-            showLaunchHandoff(launchSessionContext);
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.hideInputCapturePrompt = function () {
-            pendingInputCapture = false;
-            hideLaunchHandoff();
-            emitSessionState();
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.returnToMenu = function () {
-            if (globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile && globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode) {
-                globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode();
-            }
-            window.location.href = window.location.pathname;
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.startGameplayFromMenu = function (event) {
-            return requestPlayStart(event);
-        };
-        globalThis.__MAYHEM_RUNTIME.GameSession.showGameplayPrompt = function () {
-            showGameplayPrompt();
-        };
-
-        if (playBtn) {
-            playBtn.addEventListener('click', requestPlayStart);
-            playBtn.addEventListener('pointerup', requestPlayStart);
-            playBtn.addEventListener('mousedown', requestPlayStart);
-            playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
-        }
-
-        if (backModeBtn) {
-            backModeBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                globalThis.__MAYHEM_RUNTIME.GameSession.returnToMenu();
-            });
-        }
-
-        if (postGameEls.celebration) {
-            postGameEls.celebration.addEventListener('click', function () {
-                if (postGameState.active && postGameState.phase === 'celebration') {
-                    showPostGameResults();
-                }
-            });
-        }
-
-        if (postGameEls.continueBtn) {
-            postGameEls.continueBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                completePostGameFlow();
-            });
-        }
-
-        var handoffEls = ensureLaunchHandoffEls();
-        if (handoffEls.enterBtn) {
-            handoffEls.enterBtn.addEventListener('click', function (e) {
-                globalThis.__MAYHEM_RUNTIME.GameSession.enterGameplay(e, launchSessionContext);
-            });
-        }
-        if (handoffEls.cancelBtn) {
-            handoffEls.cancelBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                globalThis.__MAYHEM_RUNTIME.GameSession.returnToMenu();
-            });
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (!postGameState.active) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                if (postGameState.phase === 'celebration') {
-                    showPostGameResults();
-                } else {
-                    completePostGameFlow();
-                }
-            }
-        });
-
-        document.addEventListener('pointerlockchange', function () {
-            if (document.pointerLockElement === renderer.domElement) {
-                if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.close) {
+                if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen && globalThis.__MAYHEM_RUNTIME.GameDocs.isOpen()) {
                     globalThis.__MAYHEM_RUNTIME.GameDocs.close();
                 }
-                pendingInputCapture = false;
-                hideLaunchHandoff();
-                if (overlay) overlay.style.display = 'none';
-                isPlaying = true;
-                setResumeButtonsVisible(false);
-            } else {
+            },
+            setTransientDebug: setTransientDebug,
+            releaseTransientInput: function () {
                 if (controlsApi && controlsApi.releaseTransientInput) {
                     controlsApi.releaseTransientInput();
                 }
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                if (!pendingInputCapture) {
-                    hideLaunchHandoff();
-                    setResumeButtonsVisible(canResumeGameplay());
-                } else {
-                    showLaunchHandoff(launchSessionContext);
+            },
+            returnToMenu: function () {
+                if (globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile && globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode) {
+                    globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile.clearSelectedMode();
                 }
-            }
-            emitSessionState();
+                window.location.href = window.location.pathname;
+            },
+            isPrivateRoomSession: isPrivateRoomSession,
+            resolveWinnerLabel: winnerLabel,
+            didSelfWin: didSelfWin,
+            modeDisplayName: modeDisplayName,
+            objectiveSummary: objectiveSummary,
+            resultsSummary: resultsSummary,
+            formatSecondsRemaining: formatSecondsRemaining
         });
-
-        document.addEventListener('pointerlockerror', function () {
-            if (!document.pointerLockElement) {
-                if (controlsApi && controlsApi.releaseTransientInput) {
-                    controlsApi.releaseTransientInput();
-                }
-                if (overlay) overlay.style.display = 'flex';
-                isPlaying = false;
-                showResumeControl(true);
-                setTransientDebug('Pointer lock error. Click PLAY to retry.', 2200);
-                pendingInputCapture = true;
-            }
-            emitSessionState();
-        });
-
-        if (modeButtonsWrap && modeButtonsWrap.style.display !== 'none') {
-            showResumeControl(false);
-        }
-
-        if (autoStartNoLock) {
-            autoStartNoLock = false;
-            requestPlayStart();
-        }
-        emitSessionState();
+        gameSession.bindRuntimeControls();
     }
 
     function initGame() {
         applyBrandingOverrides();
+        var activeRuntimeMode = runtimeShell && runtimeShell.getActiveRuntimeMode ? runtimeShell.getActiveRuntimeMode() : null;
+        var startupDebugNotice = runtimeShell && runtimeShell.getStartupDebugNotice ? runtimeShell.getStartupDebugNotice() : '';
         return depGet('GameGameplayRuntimeBootstrap').start({
             activeRuntimeMode: activeRuntimeMode,
             applyAbilityProfile: applyAbilityProfile,
@@ -923,7 +458,9 @@
             canUseLocalAction: canUseLocalAction,
             handleEnemyHit: handleEnemyHit,
             hasInputCapture: hasInputCapture,
-            isPlaying: function () { return isPlaying; },
+            isPlaying: function () {
+                return !!(gameSession && gameSession.isPlaying && gameSession.isPlaying());
+            },
             setTransientDebug: setTransientDebug,
             startupDebugNotice: startupDebugNotice,
             syncMenuWeaponSlotsToRuntime: syncMenuWeaponSlotsToRuntime,
@@ -939,14 +476,34 @@
             camera = result.camera;
             controlsApi = result.controlsApi || null;
             multiplayerMode = !!result.multiplayerMode;
-            startupDebugNotice = result.startupDebugNotice || '';
             runtimeInitialized = true;
-            setupPointerLock();
+            setupGameplaySession();
+            gameplayRuntimeLoop = depGet('GameGameplayRuntimeLoop').create({
+                controlsApi: controlsApi,
+                getCamera: function () { return camera; },
+                getMultiplayerMode: function () { return multiplayerMode; },
+                getDebugVisualsOn: function () { return debugVisualsOn; },
+                hasInputCapture: hasInputCapture,
+                tryPlayerFire: tryPlayerFire,
+                readMatchContext: readMatchContext,
+                gameSession: gameSession,
+                setTransientDebug: setTransientDebug,
+                syncMatchHud: syncMatchHud,
+                syncReticleWithWeapon: syncReticleWithWeapon
+            });
+            presentationRuntimeLoop = depGet('GamePresentationRuntimeLoop').create({
+                controlsApi: controlsApi,
+                getCamera: function () { return camera; },
+                getRenderer: function () { return renderer; },
+                getScene: function () { return scene; }
+            });
             if (controlsApi && controlsApi.bind) {
                 controlsApi.bind();
             }
             animate();
-            emitSessionState();
+            if (gameSession && gameSession.emitSessionState) {
+                gameSession.emitSessionState();
+            }
         });
     }
 
@@ -960,182 +517,8 @@
 
         var dt = clock.getDelta();
         if (dt > 0.1) dt = 0.1;
-
-        if (globalThis.__MAYHEM_RUNTIME.GameWorld && globalThis.__MAYHEM_RUNTIME.GameWorld.update) {
-            globalThis.__MAYHEM_RUNTIME.GameWorld.update(dt);
-        }
-
-        globalThis.__MAYHEM_RUNTIME.GamePlayer.update(dt);
-
-        var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon();
-        if (currentWeapon) {
-            syncReticleWithWeapon(currentWeapon);
-            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateWeaponInfo) {
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateWeaponInfo(currentWeapon);
-            }
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateSprintEffects) {
-            var sprintAdsState = globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState
-                ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState()
-                : null;
-            var sprintAnimState = globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState
-                ? globalThis.__MAYHEM_RUNTIME.GamePlayer.getAnimNetState()
-                : null;
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateSprintEffects({
-                intensity: globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting && globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()
-                    ? Number(sprintAnimState && sprintAnimState.moveSpeedNorm || 0)
-                    : 0,
-                adsActive: !!(sprintAdsState && sprintAdsState.active),
-                scopeActive: !!(sprintAdsState && sprintAdsState.scopeActive),
-                sniper: !!(sprintAdsState && sprintAdsState.sniper)
-            });
-        }
-        if (controlsApi && controlsApi.isTriggerHeld && controlsApi.isTriggerHeld() && hasInputCapture() && currentWeapon && currentWeapon.automatic && !globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) {
-            tryPlayerFire();
-        }
-
-        if (globalThis.__MAYHEM_RUNTIME.GameHitscan.tick) {
-            globalThis.__MAYHEM_RUNTIME.GameHitscan.tick(dt);
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers) {
-            globalThis.__MAYHEM_RUNTIME.GameHitscan.updateTracers(dt);
-        }
-        globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.tickInvulnTimer(dt);
-        globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.tickArmorRegen(dt);
-
-        var playerPos = globalThis.__MAYHEM_RUNTIME.GamePlayer.getPosition();
-        var playerRot = globalThis.__MAYHEM_RUNTIME.GamePlayer.getRotation();
-        if (controlsApi && controlsApi.updateArmedThrowablePreview) {
-            controlsApi.updateArmedThrowablePreview();
-        }
-
-        if (multiplayerMode) {
-            globalThis.__MAYHEM_RUNTIME.GameNet.update(dt, playerPos, playerRot);
-            var matchContext = readMatchContext();
-            var selfState = matchContext.selfState;
-            if (selfState) {
-                if (globalThis.__MAYHEM_RUNTIME.GameNetSelfSync && globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState) {
-                    globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState(selfState, dt);
-                }
-            }
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState) {
-                var abilityState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfAbilityState();
-                if (abilityState && globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getNetworkHudState) {
-                    globalThis.__MAYHEM_RUNTIME.GameUI.updateAbilityInfo(
-                        globalThis.__MAYHEM_RUNTIME.GameAbilities.getNetworkHudState(abilityState)
-                    );
-                }
-            }
-
-            handleMatchEndState(matchContext);
-
-            var notice = globalThis.__MAYHEM_RUNTIME.GameNet.consumeNotice();
-            if (notice) setTransientDebug(notice, 900);
-
-            if (globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync && globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.syncGameplayFeedback) {
-                globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.syncGameplayFeedback({
-                    dt: dt,
-                    selfState: selfState,
-                    camera: camera,
-                    setTransientDebug: setTransientDebug
-                });
-            }
-            syncMatchHud(matchContext);
-        } else {
-            if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.tick) {
-                globalThis.__MAYHEM_RUNTIME.GameLocalMatch.tick(dt);
-            }
-            globalThis.__MAYHEM_RUNTIME.GameAbilities.update(
-                dt,
-                camera,
-                playerPos,
-                playerRot,
-                function (hitData) {
-                    if (!hitData || !hitData.result) return;
-                    handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result);
-                },
-                setTransientDebug
-            );
-
-            globalThis.__MAYHEM_RUNTIME.GameEnemy.update(dt, playerPos, camera, function (damage, hitType, attackerEnemy) {
-                globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.consumeDamage(damage, hitType, attackerEnemy);
-            });
-
-            globalThis.__MAYHEM_RUNTIME.GameThrowables.update(dt, function (hitData) {
-                if (!hitData || !hitData.result) return;
-                handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result);
-            });
-
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateThrowableInfo(globalThis.__MAYHEM_RUNTIME.GameThrowables.getState());
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateHealth(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getHP(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getMaxHP());
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateArmor(globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmor(), globalThis.__MAYHEM_RUNTIME.GamePlayerCombat.getArmorMax());
-            var localMatchContext = readMatchContext();
-            handleMatchEndState(localMatchContext);
-            syncMatchHud(localMatchContext);
-        }
-
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.flushDeferredViewSync) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.flushDeferredViewSync(dt);
-        }
-
-        if ((!controlsApi || !controlsApi.hasArmedThrowablePreview || !controlsApi.hasArmedThrowablePreview()) &&
-            globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.updateTrackingReticle(false, false);
-        }
-
-        currentAimTargetId = '';
-        var centerTarget = globalThis.__MAYHEM_RUNTIME.GameHitscan.peekCenterTarget(camera);
-        var areaTarget = (currentWeapon && currentWeapon.autoLock && globalThis.__MAYHEM_RUNTIME.GameHitscan.peekAutoLockTarget)
-            ? globalThis.__MAYHEM_RUNTIME.GameHitscan.peekAutoLockTarget(camera)
-            : null;
-        if (currentWeapon && currentWeapon.autoLock) {
-            if (areaTarget && areaTarget.targetId) currentAimTargetId = areaTarget.targetId;
-        } else if (centerTarget && centerTarget.targetId) {
-            currentAimTargetId = centerTarget.targetId;
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setHitscanTargetState(!!(
-                currentWeapon &&
-                currentWeapon.id !== 'shotgun' &&
-                !currentWeapon.autoLock &&
-                !currentWeapon.singleHitFromPellets &&
-                centerTarget &&
-                centerTarget.hitbox
-            ));
-        }
-        if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState) {
-            globalThis.__MAYHEM_RUNTIME.GameUI.setShotgunTargetState(!!(
-                currentWeapon &&
-                (((currentWeapon.id === 'shotgun' || currentWeapon.singleHitFromPellets) && centerTarget && centerTarget.hitbox) ||
-                    (currentWeapon.autoLock && areaTarget && areaTarget.hitbox))
-            ));
-        }
-
-        globalThis.__MAYHEM_RUNTIME.GameOverhead.update(camera, playerPos, currentAimTargetId);
-        if (globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatRadar || globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatBeacons) {
-            var awarenessState = globalThis.__MAYHEM_RUNTIME.GameAwareness.buildState(playerPos, playerRot ? playerRot.yaw : 0);
-            if (globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatRadar) {
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatRadar(awarenessState);
-            }
-            if (globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatBeacons) {
-                globalThis.__MAYHEM_RUNTIME.GameUI.updateCombatBeacons(awarenessState.beacons);
-            }
-        }
-
-        if (depGet('GameGameplayHudSync') && depGet('GameGameplayHudSync').update) {
-            depGet('GameGameplayHudSync').update({
-                camera: camera,
-                dt: dt,
-                multiplayerMode: multiplayerMode,
-                debugVisualsOn: debugVisualsOn
-            });
-        }
-        if (depGet('GameHookVisuals') && depGet('GameHookVisuals').render) {
-            depGet('GameHookVisuals').render(multiplayerMode);
-        }
-        camera.layers.set(0);
-        renderer.render(scene, camera);
+        var frameState = gameplayRuntimeLoop.step(dt);
+        presentationRuntimeLoop.renderFrame(frameState);
     }
 
     function runtimeProfile() {
@@ -1153,85 +536,41 @@
         }
     }
 
-    function launchModeById(modeId, options) {
-        options = options || {};
-        var runtime = runtimeProfile();
-        var authApi = globalThis.__MAYHEM_RUNTIME.GameNetAuth || null;
-        var selectedMode = runtime && runtime.selectMode
-            ? runtime.selectMode(modeId)
-            : (runtime && runtime.getMode ? runtime.getMode(modeId) : null);
-        if (!selectedMode) {
-            return { ok: false, error: 'Unknown runtime mode.' };
+    function ensureRuntimeShell() {
+        if (runtimeShell) return runtimeShell;
+        var shellFactory = depGet('GameRuntimeShell');
+        if (!shellFactory || !shellFactory.create) {
+            throw new Error('GameRuntimeShell is required before gameplay starts.');
         }
-
-        if (options.roomId) {
-            selectedMode.roomId = String(options.roomId);
-        }
-        if (options.gameMode) {
-            selectedMode.gameMode = String(options.gameMode);
-        }
-
-        activeRuntimeMode = selectedMode;
-
-        if (selectedMode.authorityMode === 'networked') {
-            forcedRoomId = selectedMode.roomId || 'global';
-            if (authApi && authApi.setAuthVisible) {
-                authApi.setAuthVisible(false);
-            }
-            if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(forcedRoomId);
-            }
-            startupDebugNotice = options.notice || (runtimeModeUi() && runtimeModeUi().startupNoticeForMode
-                ? runtimeModeUi().startupNoticeForMode(selectedMode)
-                : '');
-        } else {
-            forcedRoomId = 'global';
-            if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
-                globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId('global');
-            }
-            startupDebugNotice = options.notice || (runtimeModeUi() && runtimeModeUi().startupNoticeForMode
-                ? runtimeModeUi().startupNoticeForMode(selectedMode)
-                : '');
-        }
-        return Promise.resolve()
-        .then(function () {
-            return initGame();
-        })
-        .then(function () {
-            return {
-                ok: true,
-                mode: selectedMode
-            };
-        })
-        .catch(function (err) {
-            var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
-            var overlayEl = document.getElementById('overlay');
-            if (overlayEl) overlayEl.style.display = 'flex';
-            var dbg = document.getElementById('debug-info');
-            if (dbg) dbg.textContent = 'Startup error: ' + msg;
-            console.error('Startup error:', err);
-            activeRuntimeMode = null;
-            autoStartNoLock = false;
-            startupDebugNotice = '';
-            forcedRoomId = 'global';
-            if (runtime && runtime.clearSelectedMode) {
-                runtime.clearSelectedMode();
-            }
-            return { ok: false, error: msg };
+        runtimeShell = shellFactory.create({
+            getRuntimeProfile: runtimeProfile,
+            getRuntimeModeUi: runtimeModeUi,
+            getAuthApi: function () { return globalThis.__MAYHEM_RUNTIME.GameNetAuth || null; },
+            setRoomId: function (roomId) {
+                if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId) {
+                    globalThis.__MAYHEM_RUNTIME.GameNet.setRoomId(roomId);
+                }
+            },
+            startRuntime: initGame,
+            onLaunchError: function (message, err) {
+                var overlayEl = document.getElementById('overlay');
+                if (overlayEl) overlayEl.style.display = 'flex';
+                var dbg = document.getElementById('debug-info');
+                if (dbg) dbg.textContent = 'Startup error: ' + message;
+                console.error('Startup error:', err);
+            },
+            isRuntimeReady: function () { return !!runtimeInitialized; },
+            readMatchContext: readMatchContext
         });
-    }
-
-    function getActivityState() {
-        if (!activeRuntimeMode || !runtimeInitialized) return 'menu';
-        var matchContext = readMatchContext();
-        if (multiplayerMode && matchContext.privateRoomPhase === 'lobby') {
-            return 'private_room_lobby';
-        }
-        return 'in_match';
+        return runtimeShell;
     }
 
     globalThis.__MAYHEM_RUNTIME.GameMain = {
-        launchModeById: launchModeById,
-        getActivityState: getActivityState
+        launchModeById: function (modeId, options) {
+            return ensureRuntimeShell().launchModeById(modeId, options);
+        },
+        getActivityState: function () {
+            return ensureRuntimeShell().getActivityState();
+        }
     };
 })();

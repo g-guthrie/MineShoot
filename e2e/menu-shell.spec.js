@@ -28,8 +28,7 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.locator('#docs-close-btn').click();
   await expect(page.locator('#docs-panel')).toBeHidden();
 
-  await page.locator('#sandbox-play-btn').click();
-  await page.locator('#sandbox-ffa-btn').click();
+  await page.locator('#primary-play-btn').click();
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(true);
 });

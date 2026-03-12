@@ -5,7 +5,6 @@ import {
   getRuntimeModeCatalog,
   getRuntimeMode,
   getDefaultRuntimeModeId,
-  getPreferredDemonicRuntimeModeId,
   normalizeRuntimeModeId
 } from '../shared/runtime-modes.js';
 
@@ -13,16 +12,14 @@ test('runtime mode catalog exposes the supported launch surfaces', () => {
   const modes = getRuntimeModeCatalog();
   assert.deepEqual(
     modes.map((mode) => mode.id),
-    ['cloud_multiplayer', 'single_cloudflare', 'single_dev_server', 'single_full_sandbox']
+    ['cloud_multiplayer', 'single_cloudflare', 'single_dev_server']
   );
 });
 
 test('runtime mode helpers normalize unknown ids safely', () => {
   assert.equal(getDefaultRuntimeModeId(), 'cloud_multiplayer');
-  assert.equal(getPreferredDemonicRuntimeModeId(), 'cloud_multiplayer');
   assert.equal(normalizeRuntimeModeId('single_dev_server'), 'single_dev_server');
   assert.equal(normalizeRuntimeModeId('unknown'), 'cloud_multiplayer');
-  assert.equal(getRuntimeMode('single_full_sandbox').backendKind, 'sandbox');
+  assert.equal(getRuntimeMode('cloud_multiplayer').backendKind, 'cloudflare-prod');
   assert.equal(getRuntimeMode('single_cloudflare').authoritativeTesting, true);
-  assert.equal(getRuntimeMode('single_cloudflare').preferredForDemonicTesting, true);
 });

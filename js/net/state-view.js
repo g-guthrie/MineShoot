@@ -13,6 +13,26 @@
     function create(opts) {
         opts = opts || {};
 
+        function clonePendingInputEntry(entry, defaultDtMs) {
+            if (!entry) return null;
+            return {
+                seq: Number(entry.seq || 0),
+                at: Number(entry.at || 0),
+                dtMs: Math.max(1, Number(entry.dtMs || defaultDtMs)),
+                yaw: Number(entry.yaw || 0),
+                pitch: Number(entry.pitch || 0),
+                inputState: entry.inputState ? {
+                    forward: !!entry.inputState.forward,
+                    backward: !!entry.inputState.backward,
+                    left: !!entry.inputState.left,
+                    right: !!entry.inputState.right,
+                    jump: !!entry.inputState.jump,
+                    sprint: !!entry.inputState.sprint,
+                    adsActive: !!entry.inputState.adsActive
+                } : null
+            };
+        }
+
         function getExpectedWorldMeta() {
             var expected = opts.buildExpectedWorldMeta(opts.getRoomId());
             return {
@@ -123,38 +143,34 @@
 
         function getInputSyncState() {
             var inputSeqHistory = opts.getInputSeqHistory();
-            var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
+            var localPredictionSamples = opts.getLocalPredictionSamples ? opts.getLocalPredictionSamples() : [];
+            var latestPending = localPredictionSamples.length > 0
+                ? localPredictionSamples[localPredictionSamples.length - 1]
+                : (inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null);
             return {
                 lastSentSeq: opts.getLastInputSeqSent(),
                 lastAckedSeq: opts.getLastInputSeqAcked(),
-                pendingInputCount: inputSeqHistory.length,
+                pendingInputCount: inputSeqHistory.length + localPredictionSamples.length,
+                hasUnsentInputTail: localPredictionSamples.length > 0,
                 latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0
             };
         }
 
         function getPendingInputSamples() {
             var inputSeqHistory = opts.getInputSeqHistory();
-            if (!inputSeqHistory.length) return [];
+            var localPredictionSamples = opts.getLocalPredictionSamples ? opts.getLocalPredictionSamples() : [];
+            if (!inputSeqHistory.length && !localPredictionSamples.length) return [];
             var out = [];
+            var defaultDtMs = Math.round(opts.getInputSendInterval() * 1000);
             for (var i = 0; i < inputSeqHistory.length; i++) {
-                var entry = inputSeqHistory[i];
+                var entry = clonePendingInputEntry(inputSeqHistory[i], defaultDtMs);
                 if (!entry) continue;
-                out.push({
-                    seq: Number(entry.seq || 0),
-                    at: Number(entry.at || 0),
-                    dtMs: Math.max(1, Number(entry.dtMs || Math.round(opts.getInputSendInterval() * 1000))),
-                    yaw: Number(entry.yaw || 0),
-                    pitch: Number(entry.pitch || 0),
-                    inputState: entry.inputState ? {
-                        forward: !!entry.inputState.forward,
-                        backward: !!entry.inputState.backward,
-                        left: !!entry.inputState.left,
-                        right: !!entry.inputState.right,
-                        jump: !!entry.inputState.jump,
-                        sprint: !!entry.inputState.sprint,
-                        adsActive: !!entry.inputState.adsActive
-                    } : null
-                });
+                out.push(entry);
+            }
+            for (var n = 0; n < localPredictionSamples.length; n++) {
+                var localEntry = clonePendingInputEntry(localPredictionSamples[n], defaultDtMs);
+                if (!localEntry) continue;
+                out.push(localEntry);
             }
             return out;
         }

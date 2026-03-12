@@ -12,9 +12,7 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: '',
     fixedRoomId: '',
     visible: 'always',
-    supportsDemonic: true,
-    authoritativeTesting: true,
-    preferredForDemonicTesting: false
+    authoritativeTesting: true
   },
   single_cloudflare: {
     id: 'single_cloudflare',
@@ -29,9 +27,7 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: 'cf-solo',
     fixedRoomId: '',
     visible: 'always',
-    supportsDemonic: true,
-    authoritativeTesting: true,
-    preferredForDemonicTesting: true
+    authoritativeTesting: true
   },
   single_dev_server: {
     id: 'single_dev_server',
@@ -46,26 +42,7 @@ const RUNTIME_MODE_DEFS = {
     roomPrefix: '',
     fixedRoomId: 'local-shared',
     visible: 'local-only',
-    supportsDemonic: true,
-    authoritativeTesting: false,
-    preferredForDemonicTesting: false
-  },
-  single_full_sandbox: {
-    id: 'single_full_sandbox',
-    label: 'Offline Sandbox',
-    menuTitle: 'OFFLINE SANDBOX',
-    menuDesc: 'Offline experimental sandbox. Not authoritative.',
-    backendKind: 'sandbox',
-    backendLabel: 'OFFLINE SANDBOX',
-    authorityMode: 'offline',
-    authMode: 'none',
-    roomStrategy: 'none',
-    roomPrefix: '',
-    fixedRoomId: '',
-    visible: 'always',
-    supportsDemonic: true,
-    authoritativeTesting: false,
-    preferredForDemonicTesting: false
+    authoritativeTesting: false
   }
 };
 
@@ -84,9 +61,7 @@ function cloneRuntimeMode(mode) {
     roomPrefix: String(source.roomPrefix || ''),
     fixedRoomId: String(source.fixedRoomId || ''),
     visible: String(source.visible || 'always'),
-    supportsDemonic: source.supportsDemonic !== false,
-    authoritativeTesting: !!source.authoritativeTesting,
-    preferredForDemonicTesting: !!source.preferredForDemonicTesting
+    authoritativeTesting: !!source.authoritativeTesting
   };
 }
 
@@ -107,10 +82,6 @@ export function getDefaultRuntimeModeId() {
   return 'cloud_multiplayer';
 }
 
-export function getPreferredDemonicRuntimeModeId() {
-  return 'cloud_multiplayer';
-}
-
 export function normalizeRuntimeModeId(modeId) {
   const normalized = String(modeId || '').trim().toLowerCase();
   return RUNTIME_MODE_DEFS[normalized] ? normalized : getDefaultRuntimeModeId();
@@ -121,5 +92,4 @@ runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.getRuntimeModeCatalog = getRuntimeModeCatalog;
 runtime.GameShared.getRuntimeMode = getRuntimeMode;
 runtime.GameShared.getDefaultRuntimeModeId = getDefaultRuntimeModeId;
-runtime.GameShared.getPreferredDemonicRuntimeModeId = getPreferredDemonicRuntimeModeId;
 runtime.GameShared.normalizeRuntimeModeId = normalizeRuntimeModeId;

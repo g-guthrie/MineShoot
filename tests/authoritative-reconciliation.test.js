@@ -80,4 +80,8 @@ test('replay correction only runs when ack sequence advances with pending input'
     shouldReplayAuthoritativeCorrection({ pendingInputCount: 2, lastAckedSeq: 8, lastReplayAckSeq: 8 }),
     false
   );
+  assert.equal(
+    shouldReplayAuthoritativeCorrection({ pendingInputCount: 1, hasUnsentInputTail: true, lastAckedSeq: 8, lastReplayAckSeq: 8 }),
+    true
+  );
 });

@@ -28,9 +28,6 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
       },
       getHudState() { return {}; }
     },
-    GameLocalMatch: {
-      isActive() { return false; }
-    },
     GameAudio: {
       play() {}
     },
@@ -65,23 +62,4 @@ test('player combat clears transient ability effects when death forces a respawn
   harness.GamePlayerCombat.consumeDamage(999, 'body', null);
 
   assert.equal(harness.getClearTransientCalls(), 2);
-});
-
-test('player combat clears transient ability effects before managed local-match respawn', async () => {
-  const harness = await loadPlayerCombatHarness({
-    GameLocalMatch: {
-      isActive() { return true; },
-      onSelfKilled() {
-        return { useManagedRespawn: true };
-      }
-    }
-  });
-  harness.GamePlayerCombat.init({
-    isPlaying() { return true; },
-    isMultiplayer() { return false; }
-  });
-
-  harness.GamePlayerCombat.consumeDamage(999, 'body', null);
-
-  assert.equal(harness.getClearTransientCalls(), 1);
 });

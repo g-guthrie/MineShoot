@@ -116,9 +116,11 @@ async function loadGameNetHarness() {
   for (const path of [
     '../js/ability-fx.js',
     '../js/net/runtime-access.js',
+    '../js/net/runtime-state.js',
     '../js/net/message-router.js',
     '../js/net/runtime-core.js',
     '../js/net/state-view.js',
+    '../js/net/runtime.js',
     '../js/network.js'
   ]) {
     const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');
@@ -235,6 +237,28 @@ test('GameNet prunes acked input samples from self snapshots', async () => {
   assert.equal(syncState.lastAckedSeq, 1);
   assert.equal(syncState.pendingInputCount, 1);
   assert.equal(pending[0].seq, 2);
+});
+
+test('GameNet includes unsent local prediction frames in pending replay history', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  timeState.now = 1016;
+  GameNet.update(0.016, { x: 0, y: 1.6, z: -0.128 }, { yaw: 0.05, pitch: 0 });
+
+  const syncState = GameNet.getInputSyncState();
+  const pending = GameNet.getPendingInputSamples();
+
+  assert.equal(syncState.pendingInputCount, 2);
+  assert.equal(syncState.hasUnsentInputTail, true);
+  assert.equal(pending.length, 2);
+  assert.equal(pending[0].seq, 1);
+  assert.equal(pending[1].seq, 0);
+  assert.equal(pending[1].dtMs, 16);
+  assert.equal(pending[1].yaw, 0.05);
 });
 
 test('GameNet tolerates incomplete remote render entries during private-room sync', async () => {

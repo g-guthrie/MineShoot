@@ -529,9 +529,6 @@
             enemies.push(enemy);
             if (enemy.bodyHitbox) hitboxArray.push(enemy.bodyHitbox);
             if (enemy.headHitbox) hitboxArray.push(enemy.headHitbox);
-            if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-                globalThis.__MAYHEM_RUNTIME.GameLocalMatch.registerEnemy(enemy);
-            }
         }
     };
 
@@ -626,10 +623,6 @@
     };
 
     GameEnemy.kill = function (enemy) {
-        var localMatchResult = null;
-        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-            localMatchResult = globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyKilled(enemy);
-        }
         enemy.alive = false;
         enemy.group.visible = false;
         enemy.muzzleFlashTimer = 0;
@@ -643,9 +636,7 @@
 
         removeHitboxes(enemy);
 
-        enemy.respawnTimer = localMatchResult
-            ? (typeof localMatchResult.respawnDelaySec === 'number' ? Number(localMatchResult.respawnDelaySec || 0) : -1)
-            : 5.0;
+        enemy.respawnTimer = 5.0;
         enemy.trackingNeedleState = null;
     };
 
@@ -676,10 +667,6 @@
         if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
         if (enemy.actorVisual && enemy.actorVisual.setRevealGhostState) enemy.actorVisual.setRevealGhostState(false);
         resetFireCooldown(enemy);
-        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-            globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyRespawn(enemy);
-        }
-
         addHitboxes(enemy);
         syncHitboxPositions(enemy);
         startWander(enemy);

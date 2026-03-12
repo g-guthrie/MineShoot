@@ -200,7 +200,6 @@
         lines.push('  MULTIPLAYER CLOUDFLARE -> shared deployed room (?room=<id>, default global)');
         lines.push('  SINGLE CLOUDFLARE      -> deployed private room (per tab by default)');
         lines.push('  SINGLE DEV SERVER      -> shared local-worker room for authoritative multiplayer testing');
-        lines.push('  SINGLE FULL SANDBOX    -> offline experimental sandbox');
         lines.push('');
         lines.push('Environment v2 highlights:');
         lines.push('  Grid hidden by default (debug only via ?debugGrid=1)');

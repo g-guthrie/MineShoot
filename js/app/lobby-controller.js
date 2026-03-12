@@ -38,12 +38,6 @@
         return [];
     }
 
-    function sandboxGameModes() {
-        var shared = sharedApi();
-        if (shared.getSandboxGameModes) return shared.getSandboxGameModes() || [];
-        return [];
-    }
-
     function gameModeDef(modeId) {
         var shared = sharedApi();
         if (shared.getGameMode) return shared.getGameMode(modeId);
@@ -54,12 +48,6 @@
         var shared = sharedApi();
         if (shared.getDefaultGameMode) return String(shared.getDefaultGameMode() || 'ffa');
         return 'ffa';
-    }
-
-    function defaultSandboxGameModeId() {
-        var shared = sharedApi();
-        if (shared.getDefaultSandboxGameMode) return String(shared.getDefaultSandboxGameMode() || defaultGameModeId());
-        return defaultGameModeId();
     }
 
     function roomCodeFromRoomId(roomId) {
@@ -90,12 +78,6 @@
         var tdmPlayBtn = document.getElementById('tdm-play-btn');
         var lmsPlayBtn = document.getElementById('lms-play-btn');
         var extraModeButtonsWrap = document.getElementById('extra-mode-buttons');
-        var sandboxPlayBtn = document.getElementById('sandbox-play-btn');
-        var sandboxModeCycleBtn = document.getElementById('sandbox-mode-cycle-btn');
-        var sandboxRulesetPanel = document.getElementById('sandbox-ruleset-panel');
-        var sandboxFfaBtn = document.getElementById('sandbox-ffa-btn');
-        var sandboxLmsBtn = document.getElementById('sandbox-lms-btn');
-        var extraSandboxModeButtonsWrap = document.getElementById('extra-sandbox-mode-buttons');
         var createRoomBtn = document.getElementById('create-private-room-btn');
         var privateRoomInput = document.getElementById('private-room-input');
         var joinPrivateRoomBtn = document.getElementById('join-private-room-btn');
@@ -153,11 +135,7 @@
         var privateRoomTeamBravo = document.getElementById('private-room-team-bravo');
         var menuSessionActions = document.getElementById('menu-session-actions');
 
-        var sandboxWarmPromise = null;
-        var sandboxRuntimeReady = !(runtime.GameRuntimeLoader && runtime.GameRuntimeLoader.loadGameplayRuntime);
         var quickMatchButtons = [primaryPlayBtn, tdmPlayBtn, lmsPlayBtn];
-        var sandboxModeButtons = [sandboxFfaBtn, sandboxLmsBtn];
-        var selectedSandboxMode = defaultSandboxGameModeId();
         var partyView = null;
         var friendsView = null;
         var privateRoomViewController = null;
@@ -197,26 +175,20 @@
             }
         }
 
-        function createModeButton(mode, kind) {
+        function createModeButton(mode) {
             if (!mode || !document || !document.createElement) return null;
             var button = document.createElement('button');
             button.type = 'button';
             button.dataset.gameMode = String(mode.id || '');
-            if (kind === 'sandbox') {
-                button.className = 'sandbox-mode-btn generated-sandbox-mode-btn';
-                button.textContent = String(mode.sandboxButtonLabel || mode.menuButtonLabel || mode.label || mode.id || '').toUpperCase();
-            } else {
-                button.className = 'quick-mode-btn generated-quick-mode-btn';
-                button.textContent = String(mode.menuButtonLabel || mode.label || mode.id || '').toUpperCase();
-            }
+            button.className = 'quick-mode-btn generated-quick-mode-btn';
+            button.textContent = String(mode.menuButtonLabel || mode.label || mode.id || '').toUpperCase();
             return button;
         }
 
         function syncKnownModeLabels() {
             var primaryMode = gameModeDef(defaultGameModeId()) || { primaryButtonLabel: 'QUICK MATCH (FFA)' };
-            var tdmMode = gameModeDef('tdm') || { menuButtonLabel: 'TEAM DEATHMATCH', sandboxButtonLabel: 'SANDBOX TDM' };
-            var lmsMode = gameModeDef('lms') || { menuButtonLabel: 'LAST MAN STANDING', sandboxButtonLabel: 'SANDBOX LMS' };
-            var ffaMode = gameModeDef('ffa') || { sandboxButtonLabel: 'SANDBOX FFA' };
+            var tdmMode = gameModeDef('tdm') || { menuButtonLabel: 'TEAM DEATHMATCH' };
+            var lmsMode = gameModeDef('lms') || { menuButtonLabel: 'LAST MAN STANDING' };
 
             if (primaryPlayBtn) primaryPlayBtn.textContent = String(primaryMode.primaryButtonLabel || primaryMode.menuButtonLabel || 'QUICK MATCH').toUpperCase();
             if (primaryPlayBtn) primaryPlayBtn.dataset.gameMode = String(primaryMode.id || defaultGameModeId());
@@ -224,49 +196,29 @@
             if (tdmPlayBtn) tdmPlayBtn.dataset.gameMode = 'tdm';
             if (lmsPlayBtn) lmsPlayBtn.textContent = String(lmsMode.menuButtonLabel || 'LAST MAN STANDING').toUpperCase();
             if (lmsPlayBtn) lmsPlayBtn.dataset.gameMode = 'lms';
-            if (sandboxFfaBtn) sandboxFfaBtn.textContent = String(ffaMode.sandboxButtonLabel || 'SANDBOX FFA').toUpperCase();
-            if (sandboxFfaBtn) sandboxFfaBtn.dataset.gameMode = 'ffa';
-            if (sandboxLmsBtn) sandboxLmsBtn.textContent = String(lmsMode.sandboxButtonLabel || 'SANDBOX LMS').toUpperCase();
-            if (sandboxLmsBtn) sandboxLmsBtn.dataset.gameMode = 'lms';
         }
 
         function rebuildModeButtons() {
             quickMatchButtons.length = 0;
-            sandboxModeButtons.length = 0;
             if (primaryPlayBtn) quickMatchButtons.push(primaryPlayBtn);
             if (tdmPlayBtn) quickMatchButtons.push(tdmPlayBtn);
             if (lmsPlayBtn) quickMatchButtons.push(lmsPlayBtn);
-            if (sandboxFfaBtn) sandboxModeButtons.push(sandboxFfaBtn);
-            if (sandboxLmsBtn) sandboxModeButtons.push(sandboxLmsBtn);
         }
 
         function renderDerivedGameModeButtons() {
             syncKnownModeLabels();
             rebuildModeButtons();
             clearElementChildren(extraModeButtonsWrap);
-            clearElementChildren(extraSandboxModeButtonsWrap);
 
             var quickModes = quickPlayGameModes();
             for (var i = 0; i < quickModes.length; i++) {
                 var quickMode = quickModes[i];
                 var quickId = String(quickMode && quickMode.id || '');
                 if (!quickId || quickId === defaultGameModeId() || quickId === 'tdm' || quickId === 'lms') continue;
-                var quickBtn = createModeButton(quickMode, 'quick');
+                var quickBtn = createModeButton(quickMode);
                 if (quickBtn && extraModeButtonsWrap && extraModeButtonsWrap.appendChild) {
                     extraModeButtonsWrap.appendChild(quickBtn);
                     quickMatchButtons.push(quickBtn);
-                }
-            }
-
-            var sandboxModes = sandboxGameModes();
-            for (var n = 0; n < sandboxModes.length; n++) {
-                var sandboxMode = sandboxModes[n];
-                var sandboxId = String(sandboxMode && sandboxMode.id || '');
-                if (!sandboxId || sandboxId === 'ffa' || sandboxId === 'lms') continue;
-                var sandboxBtn = createModeButton(sandboxMode, 'sandbox');
-                if (sandboxBtn && extraSandboxModeButtonsWrap && extraSandboxModeButtonsWrap.appendChild) {
-                    extraSandboxModeButtonsWrap.appendChild(sandboxBtn);
-                    sandboxModeButtons.push(sandboxBtn);
                 }
             }
         }
@@ -351,10 +303,6 @@
                 return;
             }
             if (state.phase === 'runtime_loading') {
-                if (context.launchKind === 'sandbox') {
-                    setRoomAccessStatus('Loading sandbox...', false);
-                    return;
-                }
                 if (context.roomId) {
                     setRoomAccessStatus('Entering room ' + String(context.roomId).toUpperCase() + '...', false);
                     return;
@@ -400,12 +348,7 @@
                 primaryPlayBtn: primaryPlayBtn,
                 tdmPlayBtn: tdmPlayBtn,
                 lmsPlayBtn: lmsPlayBtn,
-                sandboxPlayBtn: sandboxPlayBtn,
-                sandboxRulesetPanel: sandboxRulesetPanel,
-                sandboxFfaBtn: sandboxFfaBtn,
-                sandboxLmsBtn: sandboxLmsBtn,
                 quickMatchButtons: quickMatchButtons,
-                sandboxModeButtons: sandboxModeButtons,
                 createRoomBtn: createRoomBtn,
                 joinPrivateRoomBtn: joinPrivateRoomBtn,
                 privateRoomInput: privateRoomInput,
@@ -465,9 +408,6 @@
                 return !!(session && session.hasPrivateRoomState && session.hasPrivateRoomState());
             },
             isLoggedIn: isLoggedIn,
-            isSandboxRuntimeReady: function () {
-                return sandboxRuntimeReady;
-            },
             getAvailableModes: availableModes,
             setRoomAccessStatus: setRoomAccessStatus,
             setFriendsStatus: setFriendsStatus
@@ -475,75 +415,6 @@
 
         function isUiBusy() {
             return lobbyUi.isUiBusy();
-        }
-
-        function warmSandboxRuntime() {
-            var loader = runtime.GameRuntimeLoader;
-            if (!loader || !loader.loadGameplayRuntime) {
-                sandboxRuntimeReady = true;
-                lobbyUi.syncMenuControlState();
-                return Promise.resolve(null);
-            }
-            if (loader.isGameplayRuntimeReady && loader.isGameplayRuntimeReady()) {
-                sandboxRuntimeReady = true;
-                lobbyUi.syncMenuControlState();
-                return Promise.resolve(runtime.GameMain || null);
-            }
-            if (sandboxWarmPromise) return sandboxWarmPromise;
-
-            sandboxRuntimeReady = false;
-            lobbyUi.syncMenuControlState();
-            sandboxWarmPromise = loader.loadGameplayRuntime()
-                .then(function (gameMain) {
-                    sandboxRuntimeReady = !!(gameMain && gameMain.launchModeById);
-                    lobbyUi.syncMenuControlState();
-                    return gameMain || null;
-                })
-                .catch(function (err) {
-                    sandboxRuntimeReady = false;
-                    lobbyUi.syncMenuControlState();
-                    throw err;
-                })
-                .finally(function () {
-                    sandboxWarmPromise = null;
-                });
-            return sandboxWarmPromise;
-        }
-
-        function normalizeSandboxMode(mode) {
-            var shared = sharedApi();
-            if (shared.normalizeGameMode) {
-                return String(shared.normalizeGameMode(mode, { allowSandboxOnly: true }) || defaultSandboxGameModeId());
-            }
-            return defaultSandboxGameModeId();
-        }
-
-        function syncSandboxSelectionUi() {
-            var mode = normalizeSandboxMode(selectedSandboxMode);
-            var modeDef = gameModeDef(mode) || { shortLabel: String(mode || '').toUpperCase() };
-            if (sandboxPlayBtn) {
-                sandboxPlayBtn.textContent = 'OFFLINE SANDBOX :: ' + String(modeDef.shortLabel || mode || 'MODE').toUpperCase();
-            }
-            if (sandboxModeCycleBtn) {
-                sandboxModeCycleBtn.title = 'Sandbox selector. Current ruleset: ' + String(modeDef.shortLabel || mode || 'MODE').toUpperCase() + '.';
-            }
-            for (var i = 0; i < sandboxModeButtons.length; i++) {
-                var button = sandboxModeButtons[i];
-                if (!button || !button.classList) continue;
-                button.classList.toggle('active', String(button.dataset && button.dataset.gameMode || '') === mode);
-            }
-        }
-
-        function setSelectedSandboxMode(mode, silent) {
-            selectedSandboxMode = normalizeSandboxMode(mode);
-            syncSandboxSelectionUi();
-            if (!silent) {
-                var modeDef = gameModeDef(selectedSandboxMode) || { shortLabel: selectedSandboxMode };
-                setRoomAccessStatus(
-                    'Sandbox ruleset set to ' + String(modeDef.shortLabel || selectedSandboxMode || 'MODE').toUpperCase() + '.',
-                    false
-                );
-            }
         }
 
         function setPrivateRoomShare(roomId) {
@@ -863,7 +734,6 @@
             });
         }
         lobbyUi.setSocialView('party');
-        syncSandboxSelectionUi();
         setPrivateRoomShare('');
         updatePartyIdentityDisplay();
         updateSocialSubtitle();
@@ -913,12 +783,6 @@
                 tdmPlayBtn: tdmPlayBtn,
                 lmsPlayBtn: lmsPlayBtn,
                 quickMatchButtons: quickMatchButtons,
-                sandboxPlayBtn: sandboxPlayBtn,
-                sandboxModeCycleBtn: sandboxModeCycleBtn,
-                sandboxRulesetPanel: sandboxRulesetPanel,
-                sandboxFfaBtn: sandboxFfaBtn,
-                sandboxLmsBtn: sandboxLmsBtn,
-                sandboxModeButtons: sandboxModeButtons,
                 createRoomBtn: createRoomBtn,
                 privateRoomInput: privateRoomInput,
                 joinPrivateRoomBtn: joinPrivateRoomBtn,
@@ -931,33 +795,9 @@
                 setControlsOpen: lobbyUi.setControlsOpen,
                 dispatchAction: function (action) {
                     if (!launchOrchestrator || !launchOrchestrator.dispatch) return Promise.resolve(false);
-                    var nextAction = action || {};
-                    if (String(nextAction.type || '').toUpperCase() === 'START_SANDBOX' && !sandboxRuntimeReady) {
-                        setRoomAccessStatus('Preparing sandbox runtime...', false);
-                        return warmSandboxRuntime()
-                            .then(function () {
-                                return launchOrchestrator.dispatch({
-                                    type: 'START_SANDBOX',
-                                    gameMode: normalizeSandboxMode(nextAction.gameMode || selectedSandboxMode),
-                                    event: nextAction.event
-                                });
-                            })
-                            .catch(function (err) {
-                                setRoomAccessStatus((err && err.message) ? err.message : 'Sandbox failed to load.', true);
-                                return false;
-                            });
-                    }
-                    if (String(nextAction.type || '').toUpperCase() === 'START_SANDBOX') {
-                        nextAction.gameMode = normalizeSandboxMode(nextAction.gameMode || selectedSandboxMode);
-                    }
-                    return launchOrchestrator.dispatch(nextAction);
+                    return launchOrchestrator.dispatch(action || {});
                 },
-                warmSandboxRuntime: warmSandboxRuntime,
                 setRoomAccessStatus: setRoomAccessStatus,
-                getSelectedSandboxMode: function () {
-                    return selectedSandboxMode;
-                },
-                setSelectedSandboxMode: setSelectedSandboxMode,
                 launchMode: launchMode
             });
         }

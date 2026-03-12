@@ -42,7 +42,6 @@
 
     GameLobbyClickables.bindLaunchSurface = function (ctx) {
         var quickButtons = Array.isArray(ctx.quickMatchButtons) ? ctx.quickMatchButtons.filter(Boolean) : [];
-        var sandboxButtons = Array.isArray(ctx.sandboxModeButtons) ? ctx.sandboxModeButtons.filter(Boolean) : [];
 
         bindClick(ctx.altModeToggle, function () {
             ctx.setControlsOpen(false);
@@ -77,45 +76,6 @@
 
             bindClick(ctx.lmsPlayBtn, function (event) {
                 dispatchQuickMatch(this, event, 'lms');
-            });
-        }
-
-        bindClick(ctx.sandboxPlayBtn, function (event) {
-            if (ctx.dispatchAction) {
-                ctx.dispatchAction({ type: 'START_SANDBOX', gameMode: ctx.getSelectedSandboxMode ? ctx.getSelectedSandboxMode() : 'ffa', event: event });
-            }
-        });
-
-        bindClick(ctx.sandboxModeCycleBtn, function () {
-            if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = !ctx.sandboxRulesetPanel.hidden;
-            if (ctx.sandboxRulesetPanel && !ctx.sandboxRulesetPanel.hidden) {
-                ctx.setRoomAccessStatus('Preparing sandbox runtime...', false);
-                ctx.warmSandboxRuntime()
-                    .then(function () {
-                        ctx.setRoomAccessStatus('Sandbox ready.', false);
-                    })
-                    .catch(function (err) {
-                        ctx.setRoomAccessStatus((err && err.message) ? err.message : 'Sandbox failed to load.', true);
-                    });
-            }
-        });
-
-        if (sandboxButtons.length) {
-            for (var n = 0; n < sandboxButtons.length; n++) {
-                bindClick(sandboxButtons[n], function () {
-                    ctx.setSelectedSandboxMode(String(this && this.dataset && this.dataset.gameMode || 'ffa'));
-                    if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
-                });
-            }
-        } else {
-            bindClick(ctx.sandboxFfaBtn, function () {
-                ctx.setSelectedSandboxMode('ffa');
-                if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
-            });
-
-            bindClick(ctx.sandboxLmsBtn, function () {
-                ctx.setSelectedSandboxMode('lms');
-                if (ctx.sandboxRulesetPanel) ctx.sandboxRulesetPanel.hidden = true;
             });
         }
 

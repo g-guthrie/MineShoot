@@ -68,19 +68,8 @@
             var camera = runtime.GamePlayer.init(scene);
             runtime.GameThrowables.init(scene);
 
-            if (multiplayerMode) {
-                if (!runtime.GameNet.isActive || !runtime.GameNet.isActive()) {
-                    runtime.GameNet.init(scene);
-                }
-            } else {
-                var enemyCount = runtime.GameWorld.getRecommendedEnemyCount ? runtime.GameWorld.getRecommendedEnemyCount() : 5;
-                if (runtime.GameLocalMatch && runtime.GameLocalMatch.init) {
-                    runtime.GameLocalMatch.init({
-                        gameMode: (options.activeRuntimeMode && options.activeRuntimeMode.gameMode) ? options.activeRuntimeMode.gameMode : 'ffa'
-                    });
-                }
-                runtime.GameEnemy.init(scene, enemyCount);
-                runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
+            if (!runtime.GameNet.isActive || !runtime.GameNet.isActive()) {
+                runtime.GameNet.init(scene);
             }
 
             runtime.GameAbilities.init(scene);
@@ -136,7 +125,7 @@
         }
 
         if (!multiplayerMode) {
-            return Promise.resolve(finalizeWorldBootstrap(null));
+            return Promise.reject(new Error('Non-networked runtime modes are no longer supported.'));
         }
 
         runtime.GameNet.init(scene);

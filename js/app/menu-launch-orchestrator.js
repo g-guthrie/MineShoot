@@ -8,10 +8,10 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameMenuLaunchOrchestrator = {};
 
-    function normalizeGameMode(gameMode, allowSandboxOnly) {
+    function normalizeGameMode(gameMode) {
         var shared = runtime.GameShared || {};
         if (shared.normalizeGameMode) {
-            return String(shared.normalizeGameMode(gameMode, { allowSandboxOnly: !!allowSandboxOnly }) || 'ffa');
+            return String(shared.normalizeGameMode(gameMode) || 'ffa');
         }
         return String(gameMode || 'ffa').toLowerCase();
     }
@@ -221,7 +221,7 @@
         }
 
         function startQuickMatch(gameMode, triggerEvent) {
-            var resolvedGameMode = normalizeGameMode(gameMode, false);
+            var resolvedGameMode = normalizeGameMode(gameMode);
             if (!ctx.requestMatchmaking) {
                 setError('Matchmaking unavailable.');
                 return Promise.resolve(false);
@@ -243,31 +243,20 @@
                     }
                     return launchRuntime(payload.modeId || 'cloud_multiplayer', {
                         roomId: payload.roomId,
-                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode, false)
+                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode)
                     }, {
                         launchKind: 'public_match',
                         requiresNetwork: true,
                         roomId: payload.roomId,
                         roomCode: payload.roomCode || '',
                         roomPhase: payload.roomPhase || '',
-                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode, false)
+                        gameMode: normalizeGameMode(payload.gameMode || resolvedGameMode)
                     }, triggerEvent);
                 })
                 .catch(function (err) {
                     setError((err && err.message) ? err.message : 'Room request failed.');
                     return false;
                 });
-        }
-
-        function startSandbox(gameMode, triggerEvent) {
-            var resolvedGameMode = normalizeGameMode(gameMode, true);
-            return launchRuntime('single_full_sandbox', {
-                gameMode: resolvedGameMode
-            }, {
-                launchKind: 'sandbox',
-                requiresNetwork: false,
-                gameMode: resolvedGameMode
-            }, triggerEvent);
         }
 
         function createPrivateRoom(triggerEvent) {
@@ -350,10 +339,9 @@
         function startDirectMode(modeId, triggerEvent) {
             var id = String(modeId || '');
             var launchKind = id === 'single_cloudflare' ? 'private_room' : 'dev_room';
-            var requiresNetwork = id !== 'single_full_sandbox';
             return launchRuntime(id, {}, {
                 launchKind: launchKind,
-                requiresNetwork: requiresNetwork
+                requiresNetwork: true
             }, triggerEvent);
         }
 
@@ -404,9 +392,6 @@
 
             if (type === 'START_QUICK_MATCH') {
                 return startQuickMatch(action.gameMode || 'ffa', action.event);
-            }
-            if (type === 'START_SANDBOX') {
-                return startSandbox(action.gameMode || 'ffa', action.event);
             }
             if (type === 'CREATE_PRIVATE_ROOM') {
                 return createPrivateRoom(action.event);

@@ -32,7 +32,6 @@
         if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1') return true;
         try {
             var params = new URLSearchParams(window.location.search || '');
-            if (params.get('local') === '1' || params.get('offline') === '1') return true;
             if (params.get('net') === '1') return false;
         } catch (err) {
             // no-op

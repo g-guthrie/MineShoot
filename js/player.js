@@ -782,6 +782,7 @@
 
         if (reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
             pendingInputCount: pendingInputCount,
+            hasUnsentInputTail: !!opts.hasUnsentInputTail,
             lastAckedSeq: Number(opts.lastAckedSeq || 0),
             lastReplayAckSeq: lastReplayAckSeq
         })) {

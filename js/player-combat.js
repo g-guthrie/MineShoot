@@ -94,14 +94,6 @@
             if (RT.GameAbilities && RT.GameAbilities.clearTransientState) {
                 RT.GameAbilities.clearTransientState();
             }
-            if (!isMultiplayer() && RT.GameLocalMatch && RT.GameLocalMatch.isActive && RT.GameLocalMatch.isActive()) {
-                var localDeath = RT.GameLocalMatch.onSelfKilled ? RT.GameLocalMatch.onSelfKilled(attackerEnemy || null) : null;
-                if (localDeath && (localDeath.useManagedRespawn || localDeath.suppressDefaultRespawn)) {
-                    RT.GameUI.updateHealth(playerHP, playerMaxHP);
-                    RT.GameUI.updateArmor(playerArmor, playerArmorMax);
-                    return;
-                }
-            }
             respawn();
             return;
         }
