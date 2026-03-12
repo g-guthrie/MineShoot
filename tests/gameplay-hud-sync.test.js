@@ -6,6 +6,9 @@ import vm from 'node:vm';
 async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
   const code = await fs.readFile(new URL('../js/gameplay-hud-sync.js', import.meta.url), 'utf8');
   const calls = {
+    health: [],
+    armor: [],
+    weaponInfo: [],
     cooldown: [],
     damageEffects: [],
     abilityInfo: [],
@@ -31,9 +34,23 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     GameHitscan: {
       getHudState() {
         return { status: 'ready', pct: 1 };
+      },
+      getCurrentWeapon() {
+        return {
+          id: 'pistol',
+          name: 'Pistol',
+          magazineSize: 12,
+          ammoInMag: 6,
+          automatic: false,
+          bodyDamage: 70,
+          headDamage: 120
+        };
       }
     },
     GameUI: {
+      updateHealth(hp, maxHp) { calls.health.push({ hp, maxHp }); },
+      updateArmor(armor, armorMax) { calls.armor.push({ armor, armorMax }); },
+      updateWeaponInfo(state) { calls.weaponInfo.push(state); },
       updateCooldown(state) { calls.cooldown.push(state); },
       updateDamageEffects(dt) { calls.damageEffects.push(dt); },
       updateAbilityInfo(state) { calls.abilityInfo.push(state); },
@@ -54,6 +71,8 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     GamePlayer: {
       setHealFlash(value) { calls.healFlash.push(value); },
       setStatusState(value) { calls.statusState.push(value); },
+      getEquippedWeaponId() { return 'shotgun'; },
+      setWeaponModel(weaponId) { calls.weaponInfo.push({ syncedWeaponId: weaponId }); },
       isChoked() { return false; }
     },
     GameAudio: {
@@ -63,7 +82,32 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       setDeadeyeHighlights(value) { calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
     },
     GamePlayerCombat: {
-      isInvulnerable() { return true; }
+      getState() {
+        return {
+          hp: 410,
+          hpMax: 500,
+          armor: 55,
+          armorMax: 90,
+          alive: true,
+          invulnerable: true,
+          spawnShieldUntil: 1120,
+          respawn: null
+        };
+      },
+      getCurrentWeaponState() {
+        return {
+          id: 'rifle',
+          name: 'Rifle',
+          magazineSize: 30,
+          ammoInMag: 17,
+          automatic: false,
+          bodyDamage: 48,
+          headDamage: 110
+        };
+      },
+      getWeaponHudState() {
+        return { status: 'reloading', pct: 0.25 };
+      }
     },
     GameCombatTuning: {
       getClassAbilityTuning() { return { hookReticleRadiusPx: 60 }; }
@@ -101,7 +145,19 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
     debugVisualsOn: true
   });
 
-  assert.deepEqual(harness.calls.cooldown[0], { status: 'ready', pct: 1 });
+  assert.deepEqual(harness.calls.weaponInfo[0], { syncedWeaponId: 'rifle' });
+  assert.deepEqual(harness.calls.weaponInfo[1], {
+    id: 'rifle',
+    name: 'Rifle',
+    magazineSize: 30,
+    ammoInMag: 17,
+    automatic: false,
+    bodyDamage: 48,
+    headDamage: 110
+  });
+  assert.deepEqual(harness.calls.cooldown[0], { status: 'reloading', pct: 0.25 });
+  assert.deepEqual(harness.calls.health[0], { hp: 410, maxHp: 500 });
+  assert.deepEqual(harness.calls.armor[0], { armor: 55, armorMax: 90 });
   assert.equal(harness.calls.damageEffects[0], 0.16);
   assert.deepEqual(harness.calls.abilityInfo[0], { slot1Cooldown: 3, slot2Cooldown: 5 });
   assert.equal(harness.calls.healFlash[0], true);
@@ -153,6 +209,8 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
   });
   harness.calls.chokeAudio.length = 0;
   harness.calls.deadeyeHighlights.length = 0;
+  harness.calls.health.length = 0;
+  harness.calls.armor.length = 0;
   harness.hudSync.update({
     camera: { fov: 60, aspect: 16 / 9 },
     dt: 0.05,
@@ -161,6 +219,8 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
   });
 
   assert.equal(harness.calls.abilityInfo.length, 0);
+  assert.deepEqual(harness.calls.health[0], { hp: 410, maxHp: 500 });
+  assert.deepEqual(harness.calls.armor[0], { armor: 55, armorMax: 90 });
   assert.deepEqual(harness.calls.deadeyeReticle[0].state, {
     targets: [{ targetId: 'usr_remote', worldPos: { x: 1, y: 2, z: 3 }, locked: true, progress: 1 }]
   });

@@ -21,14 +21,14 @@
             for (var i = 0; i < entities.length; i++) {
                 var e = entities[i];
                 snapshotMap.set(e.id, e);
-                if (hooks.onEntity) hooks.onEntity(e);
+                if (hooks.onEntity) hooks.onEntity(e, opts);
             }
             var removedIds = Array.isArray(opts.removedEntityIds) ? opts.removedEntityIds : [];
             for (var r = 0; r < removedIds.length; r++) {
                 snapshotMap.delete(removedIds[r]);
             }
 
-            if (hooks.onPrune) hooks.onPrune(snapshotMap);
+            if (hooks.onPrune) hooks.onPrune(snapshotMap, opts);
             if (hooks.onProjectiles) hooks.onProjectiles(Array.isArray(projectiles) ? projectiles.slice() : []);
             if (hooks.onFireZones) hooks.onFireZones(Array.isArray(fireZones) ? fireZones.slice() : []);
         }

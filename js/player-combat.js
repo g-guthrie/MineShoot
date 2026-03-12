@@ -1,5 +1,5 @@
 /**
- * player-combat.js - Player combat state (HP, armor, damage, respawn)
+ * player-combat.js - Player combat state (HP, armor, weapon presentation, respawn)
  * Extracted from main.js to isolate player combat concerns.
  */
 (function () {
@@ -11,11 +11,19 @@
     var playerMaxHP = 500;
     var playerArmor = 90;
     var playerArmorMax = 90;
+    var playerAlive = true;
     var armorRegenDelay = 0;
     var respawnInvulnTimer = 0;
+    var authoritativeSpawnShieldUntil = 0;
+    var respawnAtMs = 0;
+    var weaponLoadout = ['rifle'];
+    var equippedWeaponId = 'rifle';
+    var weaponAmmo = {};
+    var lastWeaponFireAtMs = 0;
 
     var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
     var ARMOR_REGEN_PER_SEC = 12;
+    var RELOADED_FLASH_MS = 900;
 
     var sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
 
@@ -30,6 +38,343 @@
         return _isMultiplayerFn ? _isMultiplayerFn() : false;
     }
 
+    function nowMs() {
+        return Date.now();
+    }
+
+    function clampNumber(value, fallback, min, max) {
+        var num = Number(value);
+        if (!isFinite(num)) num = Number(fallback);
+        if (!isFinite(num)) num = 0;
+        if (typeof min === 'number' && num < min) num = min;
+        if (typeof max === 'number' && num > max) num = max;
+        return num;
+    }
+
+    function weaponTimeMs(now) {
+        var stamp = Number(now);
+        if (isFinite(stamp) && stamp >= 0) return stamp;
+        if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
+            var perfNow = Number(performance.now());
+            if (isFinite(perfNow) && perfNow >= 0) return perfNow;
+        }
+        return nowMs();
+    }
+
+    function sharedWeaponApi() {
+        return RT.GameShared || {};
+    }
+
+    function getAllSelectableWeaponIds() {
+        var shared = sharedWeaponApi();
+        var ids = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
+        if (Array.isArray(ids) && ids.length) {
+            return ids.map(function (id) { return String(id || ''); }).filter(Boolean);
+        }
+        var tuning = shared.gameplayTuning || {};
+        if (Array.isArray(tuning.selectableWeaponIds) && tuning.selectableWeaponIds.length) {
+            return tuning.selectableWeaponIds.map(function (id) { return String(id || ''); }).filter(Boolean);
+        }
+        return ['rifle'];
+    }
+
+    function defaultWeaponLoadout() {
+        var shared = sharedWeaponApi();
+        var defaults = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : null;
+        if (Array.isArray(defaults) && defaults.length) return defaults.slice(0, 2);
+        var tuning = shared.gameplayTuning || {};
+        if (Array.isArray(tuning.defaultWeaponLoadout) && tuning.defaultWeaponLoadout.length) {
+            return tuning.defaultWeaponLoadout.slice(0, 2);
+        }
+        return getAllSelectableWeaponIds().slice(0, 2);
+    }
+
+    function getWeaponStats(weaponId) {
+        var id = String(weaponId || '');
+        if (!id) return null;
+        var shared = sharedWeaponApi();
+        if (shared.getWeaponStats) return shared.getWeaponStats(id);
+        var tuning = shared.gameplayTuning || {};
+        var stats = tuning.weaponStats || {};
+        return stats[id] || null;
+    }
+
+    function isKnownWeaponId(weaponId) {
+        return !!getWeaponStats(weaponId);
+    }
+
+    function sanitizeWeaponLoadout(slots) {
+        var rawSlots = Array.isArray(slots) ? slots : defaultWeaponLoadout();
+        var allowedIds = getAllSelectableWeaponIds();
+        var allowed = {};
+        for (var i = 0; i < allowedIds.length; i++) {
+            allowed[String(allowedIds[i] || '')] = true;
+        }
+        var next = [];
+        var seen = {};
+        for (i = 0; i < rawSlots.length; i++) {
+            var id = String(rawSlots[i] || '');
+            if (!id || seen[id] || !allowed[id]) continue;
+            seen[id] = true;
+            next.push(id);
+            if (next.length >= 2) break;
+        }
+        if (!next.length) {
+            var fallback = defaultWeaponLoadout();
+            for (i = 0; i < fallback.length; i++) {
+                id = String(fallback[i] || '');
+                if (!id || seen[id] || !allowed[id]) continue;
+                seen[id] = true;
+                next.push(id);
+                if (next.length >= 2) break;
+            }
+        }
+        if (!next.length) {
+            for (i = 0; i < allowedIds.length; i++) {
+                id = String(allowedIds[i] || '');
+                if (!id || seen[id]) continue;
+                next.push(id);
+                break;
+            }
+        }
+        if (!next.length) next.push('rifle');
+        return next;
+    }
+
+    function ensureWeaponAmmoState(weaponId) {
+        var id = String(weaponId || '');
+        var stats = getWeaponStats(id);
+        if (!id || !stats) return null;
+        if (!weaponAmmo[id]) {
+            weaponAmmo[id] = {
+                ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
+                reloadUntil: 0,
+                reloadedFlashUntil: 0
+            };
+        }
+        return weaponAmmo[id];
+    }
+
+    function syncWeaponAmmoState(weaponId, now) {
+        var id = String(weaponId || '');
+        var stats = getWeaponStats(id);
+        var state = ensureWeaponAmmoState(id);
+        var stamp = weaponTimeMs(now);
+        if (!id || !stats || !state || Number(stats.magazineSize || 0) <= 0) return state;
+        if (Number(state.reloadUntil || 0) > 0 && stamp >= Number(state.reloadUntil || 0)) {
+            state.reloadUntil = 0;
+            state.ammoInMag = Math.max(0, Number(stats.magazineSize || 0));
+            state.reloadedFlashUntil = stamp + RELOADED_FLASH_MS;
+        }
+        return state;
+    }
+
+    function reloadRemainingForWeapon(weaponId, now) {
+        var state = syncWeaponAmmoState(weaponId, now);
+        return Math.max(0, Number(state && state.reloadUntil || 0) - weaponTimeMs(now));
+    }
+
+    function syncAmmoStateFromSnapshot(weaponAmmoStateMap, now) {
+        if (!weaponAmmoStateMap || typeof weaponAmmoStateMap !== 'object') return false;
+        var stamp = weaponTimeMs(now);
+        for (var weaponId in weaponAmmoStateMap) {
+            if (!Object.prototype.hasOwnProperty.call(weaponAmmoStateMap, weaponId)) continue;
+            var entry = weaponAmmoStateMap[weaponId];
+            var state = ensureWeaponAmmoState(weaponId);
+            var stats = getWeaponStats(weaponId);
+            if (!entry || !state || !stats) continue;
+            var magazineSize = Math.max(0, Number(stats.magazineSize || 0));
+            state.ammoInMag = Math.max(0, Math.min(magazineSize, Number(entry.ammoInMag || 0)));
+            state.reloadUntil = entry.reloading
+                ? stamp + Math.max(0, Math.round(Number(entry.reloadRemaining || 0) * 1000))
+                : 0;
+            state.reloadedFlashUntil = stamp + Math.max(0, Math.round(Number(entry.reloadedFlashRemaining || 0) * 1000));
+        }
+        return true;
+    }
+
+    function buildWeaponState(weaponId, now) {
+        var id = String(weaponId || '');
+        var stats = getWeaponStats(id);
+        if (!stats) return null;
+        var stamp = weaponTimeMs(now);
+        var ammoState = syncWeaponAmmoState(id, stamp);
+        return {
+            id: id,
+            name: String(stats.name || id),
+            automatic: !!stats.automatic,
+            cooldown: Math.max(0, Number(stats.cooldownMs || 0)),
+            reloadMs: Math.max(0, Number(stats.reloadMs || 0)),
+            magazineSize: Math.max(0, Number(stats.magazineSize || 0)),
+            ammoInMag: Math.max(0, Number(ammoState && ammoState.ammoInMag || 0)),
+            reloading: Math.max(0, Number(ammoState && ammoState.reloadUntil || 0) - stamp) > 0,
+            reloadRemaining: reloadRemainingForWeapon(id, stamp),
+            reloadedFlashRemaining: Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - stamp),
+            bodyDamage: Number(stats.bodyDamage || 0),
+            headDamage: Number(stats.headDamage || 0),
+            pellets: Math.max(1, Number(stats.pellets || 1))
+        };
+    }
+
+    function buildWeaponHudState(now) {
+        var currentWeapon = buildWeaponState(equippedWeaponId, now);
+        var stamp = weaponTimeMs(now);
+        if (!currentWeapon) {
+            return {
+                status: 'ready',
+                ready: true,
+                pct: 1
+            };
+        }
+        if (currentWeapon.reloadRemaining > 0) {
+            return {
+                status: 'reloading',
+                ready: false,
+                pct: currentWeapon.reloadMs > 0 ? (1 - (currentWeapon.reloadRemaining / currentWeapon.reloadMs)) : 1
+            };
+        }
+        var cooldownRemaining = Math.max(0, Number(currentWeapon.cooldown || 0) - (stamp - lastWeaponFireAtMs));
+        if (cooldownRemaining > 0) {
+            return {
+                status: 'cooldown',
+                ready: false,
+                pct: currentWeapon.cooldown > 0 ? (1 - (cooldownRemaining / currentWeapon.cooldown)) : 1
+            };
+        }
+        if (currentWeapon.reloadedFlashRemaining > 0) {
+            return {
+                status: 'reloaded',
+                ready: true,
+                pct: 1
+            };
+        }
+        return {
+            status: 'ready',
+            ready: true,
+            pct: 1
+        };
+    }
+
+    function applyWeaponLoadout(nextLoadout, preferredWeaponId) {
+        weaponLoadout = sanitizeWeaponLoadout(nextLoadout);
+        var preferred = String(preferredWeaponId || '');
+        if (preferred && isKnownWeaponId(preferred) && weaponLoadout.indexOf(preferred) !== -1) {
+            equippedWeaponId = preferred;
+        } else if (weaponLoadout.indexOf(equippedWeaponId) === -1) {
+            equippedWeaponId = weaponLoadout[0];
+        }
+        if (!isKnownWeaponId(equippedWeaponId)) {
+            equippedWeaponId = weaponLoadout[0] || 'rifle';
+        }
+        return {
+            slots: weaponLoadout.slice()
+        };
+    }
+
+    function equipWeapon(weaponId) {
+        var id = String(weaponId || '');
+        if (!isKnownWeaponId(id)) return null;
+        equippedWeaponId = id;
+        return buildWeaponState(equippedWeaponId);
+    }
+
+    function beginWeaponReload(weaponId, now) {
+        var id = String(weaponId || '');
+        var stats = getWeaponStats(id);
+        var stamp = weaponTimeMs(now);
+        if (!stats) return false;
+        if (Number(stats.magazineSize || 0) <= 0 || Number(stats.reloadMs || 0) <= 0) return false;
+        var state = syncWeaponAmmoState(id, stamp);
+        if (!state || Number(state.reloadUntil || 0) > stamp) return false;
+        state.ammoInMag = 0;
+        state.reloadUntil = stamp + Math.max(0, Number(stats.reloadMs || 0));
+        state.reloadedFlashUntil = 0;
+        return true;
+    }
+
+    function recordWeaponFire(weaponId, now) {
+        var id = String(weaponId || equippedWeaponId || '');
+        var stats = getWeaponStats(id);
+        var stamp = weaponTimeMs(now);
+        lastWeaponFireAtMs = stamp;
+        if (!stats || Number(stats.magazineSize || 0) <= 0) {
+            return buildWeaponState(id, stamp);
+        }
+        var state = syncWeaponAmmoState(id, stamp);
+        if (!state) return buildWeaponState(id, stamp);
+        state.ammoInMag = Math.max(0, Number(state.ammoInMag || stats.magazineSize || 0) - 1);
+        state.reloadedFlashUntil = 0;
+        if (state.ammoInMag <= 0) {
+            beginWeaponReload(id, stamp);
+        }
+        return buildWeaponState(id, stamp);
+    }
+
+    function syncWeaponState(selfState, now) {
+        if (!selfState || typeof selfState !== 'object') return getCurrentWeaponState(now);
+        var stamp = weaponTimeMs(now);
+        var hasLoadout = Array.isArray(selfState.weaponLoadout);
+        if (hasLoadout) {
+            applyWeaponLoadout(selfState.weaponLoadout, selfState.weaponId);
+        } else if (selfState.weaponId && isKnownWeaponId(selfState.weaponId)) {
+            equippedWeaponId = String(selfState.weaponId || equippedWeaponId);
+        }
+        if (selfState.weaponAmmo && typeof selfState.weaponAmmo === 'object') {
+            syncAmmoStateFromSnapshot(selfState.weaponAmmo, stamp);
+        }
+        if (hasLoadout && weaponLoadout.indexOf(equippedWeaponId) === -1) {
+            equippedWeaponId = weaponLoadout[0] || equippedWeaponId || 'rifle';
+        }
+        return getCurrentWeaponState(stamp);
+    }
+
+    function getCurrentWeaponState(now) {
+        return buildWeaponState(equippedWeaponId, now);
+    }
+
+    function localInvulnerableUntil(now) {
+        if (respawnInvulnTimer <= 0) return 0;
+        return Number(now || nowMs()) + (respawnInvulnTimer * 1000);
+    }
+
+    function effectiveSpawnShieldUntil(now) {
+        return Math.max(
+            authoritativeSpawnShieldUntil,
+            localInvulnerableUntil(now)
+        );
+    }
+
+    function clearRespawnCountdown() {
+        respawnAtMs = 0;
+    }
+
+    function setAlive(alive) {
+        playerAlive = alive !== false;
+        if (playerAlive) clearRespawnCountdown();
+    }
+
+    function buildState(now) {
+        var stamp = Number(now || nowMs());
+        var spawnShieldUntil = effectiveSpawnShieldUntil(stamp);
+        var respawnActive = !playerAlive && respawnAtMs > 0;
+        return {
+            hp: playerHP,
+            hpMax: playerMaxHP,
+            armor: playerArmor,
+            armorMax: playerArmorMax,
+            alive: playerAlive,
+            invulnerable: spawnShieldUntil > stamp,
+            spawnShieldUntil: spawnShieldUntil,
+            respawn: respawnActive
+                ? {
+                    active: true,
+                    respawnAt: respawnAtMs,
+                    remainingMs: Math.max(0, respawnAtMs - stamp)
+                }
+                : null
+        };
+    }
+
     function init(opts) {
         if (opts) {
             if (typeof opts.isPlaying === 'function') _isPlayingFn = opts.isPlaying;
@@ -38,8 +383,14 @@
         sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
         playerHP = playerMaxHP;
         playerArmor = playerArmorMax;
+        playerAlive = true;
         armorRegenDelay = 0;
         respawnInvulnTimer = 0;
+        authoritativeSpawnShieldUntil = 0;
+        respawnAtMs = 0;
+        weaponAmmo = {};
+        lastWeaponFireAtMs = 0;
+        applyWeaponLoadout(defaultWeaponLoadout(), '');
     }
 
     function consumeDamage(rawDamage, hitType, attackerEnemy) {
@@ -97,9 +448,6 @@
             respawn();
             return;
         }
-
-        RT.GameUI.updateHealth(playerHP, playerMaxHP);
-        RT.GameUI.updateArmor(playerArmor, playerArmorMax);
     }
 
     function respawn() {
@@ -107,13 +455,12 @@
             RT.GameAbilities.clearTransientState();
         }
         playerHP = playerMaxHP;
+        setAlive(true);
         if (!isMultiplayer()) {
             playerArmor = playerArmorMax;
         }
         armorRegenDelay = 0;
-
-        RT.GameUI.updateHealth(playerHP, playerMaxHP);
-        RT.GameUI.updateArmor(playerArmor, playerArmorMax);
+        authoritativeSpawnShieldUntil = 0;
 
         if (!isMultiplayer()) {
             RT.GamePlayer.respawnRandom();
@@ -129,7 +476,6 @@
         playerArmorMax = armorMax;
         if (playerArmor > playerArmorMax) playerArmor = playerArmorMax;
         if (playerArmor < 0) playerArmor = 0;
-        RT.GameUI.updateArmor(playerArmor, playerArmorMax);
     }
 
     function tickArmorRegen(dt) {
@@ -150,14 +496,40 @@
         armorRegenDelay = regenTarget.armorRegenDelay;
     }
 
-    function syncFromNetwork(selfState) {
+    function syncAuthoritativeState(selfState) {
         if (!selfState) return;
-        playerHP = selfState.hp;
-        playerMaxHP = selfState.hpMax;
-        playerArmor = selfState.armor;
-        playerArmorMax = selfState.armorMax;
-        RT.GameUI.updateHealth(playerHP, playerMaxHP);
-        RT.GameUI.updateArmor(playerArmor, playerArmorMax);
+        playerMaxHP = clampNumber(selfState.hpMax, playerMaxHP, 1);
+        playerHP = clampNumber(selfState.hp, playerHP, 0, playerMaxHP);
+        playerArmorMax = clampNumber(selfState.armorMax, playerArmorMax, 1);
+        playerArmor = clampNumber(selfState.armor, playerArmor, 0, playerArmorMax);
+        setAlive(selfState.alive !== false);
+        authoritativeSpawnShieldUntil = clampNumber(
+            selfState.spawnShieldUntil,
+            authoritativeSpawnShieldUntil,
+            0
+        );
+    }
+
+    function syncRespawnState(respawnState) {
+        if (playerAlive) {
+            clearRespawnCountdown();
+            return;
+        }
+        if (respawnState && respawnState.active) {
+            respawnAtMs = clampNumber(respawnState.respawnAt, respawnAtMs, 0);
+            return;
+        }
+        if (respawnAtMs > 0) return;
+        clearRespawnCountdown();
+    }
+
+    function syncFromNetwork(selfState, options) {
+        syncAuthoritativeState(selfState);
+        syncWeaponState(selfState, options && options.weaponNow);
+        var respawnState = options && Object.prototype.hasOwnProperty.call(options, 'respawnState')
+            ? options.respawnState
+            : null;
+        syncRespawnState(respawnState);
     }
 
     function heal(amount) {
@@ -165,7 +537,6 @@
         if (value <= 0) return 0;
         var prev = playerHP;
         playerHP = Math.min(playerMaxHP, playerHP + value);
-        RT.GameUI.updateHealth(playerHP, playerMaxHP);
         return Math.max(0, playerHP - prev);
     }
 
@@ -187,10 +558,13 @@
 
     RT.GamePlayerCombat = {
         init: init,
+        getState: function (now) { return buildState(now); },
+        getRespawnState: function (now) { return buildState(now).respawn; },
         getHP: function () { return playerHP; },
         getMaxHP: function () { return playerMaxHP; },
         getArmor: function () { return playerArmor; },
         getArmorMax: function () { return playerArmorMax; },
+        isAlive: function () { return playerAlive; },
         setHP: function (hp) { playerHP = hp; },
         setMaxHP: function (hp) { playerMaxHP = hp; },
         setArmor: function (armor) { playerArmor = armor; },
@@ -201,7 +575,43 @@
         heal: heal,
         showIncomingFeedback: showIncomingFeedback,
         tickArmorRegen: tickArmorRegen,
-        isInvulnerable: function () { return respawnInvulnTimer > 0; },
+        syncAuthoritativeState: syncAuthoritativeState,
+        syncRespawnState: syncRespawnState,
+        syncWeaponState: syncWeaponState,
+        getCurrentWeaponState: function (now) { return getCurrentWeaponState(now); },
+        getWeaponState: function (weaponId, now) { return buildWeaponState(weaponId, now); },
+        getWeaponHudState: function (now) { return buildWeaponHudState(now); },
+        getWeaponLoadout: function () { return { slots: weaponLoadout.slice() }; },
+        setWeaponLoadout: function (loadoutConfig) {
+            var slots = Array.isArray(loadoutConfig)
+                ? loadoutConfig
+                : (loadoutConfig && Array.isArray(loadoutConfig.slots) ? loadoutConfig.slots : null);
+            if (!slots) return { slots: weaponLoadout.slice() };
+            return applyWeaponLoadout(slots);
+        },
+        getEquippedWeaponId: function () { return equippedWeaponId; },
+        equipWeapon: equipWeapon,
+        equipSlot: function (slotIndex) {
+            var idx = Math.max(0, Math.floor(slotIndex || 0));
+            if (idx >= weaponLoadout.length) return null;
+            return equipWeapon(weaponLoadout[idx]);
+        },
+        beginWeaponReload: beginWeaponReload,
+        recordWeaponFire: recordWeaponFire,
+        getCooldownRemaining: function (now) {
+            var currentWeapon = getCurrentWeaponState(now);
+            if (!currentWeapon) return 0;
+            return Math.max(0, Number(currentWeapon.cooldown || 0) - (weaponTimeMs(now) - lastWeaponFireAtMs));
+        },
+        isWeaponReloading: function (weaponId, now) {
+            var state = buildWeaponState(weaponId || equippedWeaponId, now);
+            return !!(state && state.reloading);
+        },
+        isInvulnerable: function () { return effectiveSpawnShieldUntil(nowMs()) > nowMs(); },
+        canUseGameplayActions: function (now) {
+            var state = buildState(now);
+            return !!state.alive && !(state.respawn && state.respawn.active);
+        },
         setInvulnTimer: function (t) { respawnInvulnTimer = Math.max(0, t); },
         tickInvulnTimer: function (dt) {
             if (respawnInvulnTimer > 0) {

@@ -9,6 +9,12 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
+    function netView() {
+        var RT = runtime();
+        var net = RT.GameNet || null;
+        return net && net.view ? net.view : net;
+    }
+
     function handleNetworkDamageFeedback(feedback, camera) {
         if (!feedback) return;
         var RT = runtime();
@@ -44,7 +50,8 @@
     function handleAbilityEvent(event, selfState) {
         if (!event || event.abilityId !== 'choke') return;
         var RT = runtime();
-        if (!RT.GameAudio || !RT.GameAudio.play || !RT.GameNet) return;
+        var viewApi = netView();
+        if (!RT.GameAudio || !RT.GameAudio.play || !viewApi) return;
 
         var selfId = selfState && selfState.id ? String(selfState.id) : '';
         var sourceId = String(event.sourceId || '');
@@ -53,9 +60,9 @@
         if (!shouldHear && targetId && selfId && targetId === selfId) {
             shouldHear = true;
         }
-        if (!shouldHear && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GameNet.damagePointForEntityId) {
+        if (!shouldHear && RT.GamePlayer && RT.GamePlayer.getPosition && viewApi.damagePointForEntityId) {
             var selfPos = RT.GamePlayer.getPosition();
-            var sourcePos = RT.GameNet.damagePointForEntityId(sourceId);
+            var sourcePos = viewApi.damagePointForEntityId(sourceId);
             if (selfPos && sourcePos) {
                 var dx = Number(selfPos.x || 0) - Number(sourcePos.x || 0);
                 var dy = Number(selfPos.y || 0) - Number(sourcePos.y || 0);
@@ -71,15 +78,16 @@
     function syncGameplayFeedback(options) {
         var opts = options || {};
         var RT = runtime();
+        var viewApi = netView();
         var selfState = opts.selfState || null;
         var camera = opts.camera || null;
         var dt = Number(opts.dt || 0);
         var setTransientDebug = typeof opts.setTransientDebug === 'function' ? opts.setTransientDebug : function () {};
 
-        if (RT.GameNet && RT.GameNet.consumeClassCastResult) {
+        if (viewApi && viewApi.consumeClassCastResult) {
             var castResult = null;
             do {
-                castResult = RT.GameNet.consumeClassCastResult();
+                castResult = viewApi.consumeClassCastResult();
                 if (castResult) {
                     if (castResult.t === 'class_cast_ok') {
                         setTransientDebug((castResult.kind || 'Ability') + ' cast!', 800);
@@ -90,26 +98,26 @@
             } while (castResult);
         }
 
-        if (RT.GameNet && RT.GameNet.consumeDamageFeedback) {
+        if (viewApi && viewApi.consumeDamageFeedback) {
             var damageFeedback = null;
             do {
-                damageFeedback = RT.GameNet.consumeDamageFeedback();
+                damageFeedback = viewApi.consumeDamageFeedback();
                 if (damageFeedback) handleNetworkDamageFeedback(damageFeedback, camera);
             } while (damageFeedback);
         }
 
-        if (RT.GameNet && RT.GameNet.consumeAbilityEvent) {
+        if (viewApi && viewApi.consumeAbilityEvent) {
             var abilityEvent = null;
             do {
-                abilityEvent = RT.GameNet.consumeAbilityEvent();
+                abilityEvent = viewApi.consumeAbilityEvent();
                 if (abilityEvent) handleAbilityEvent(abilityEvent, selfState);
             } while (abilityEvent);
         }
 
-        if (RT.GameNet && RT.GameNet.consumeIncomingDamageFeedback && RT.GamePlayerCombat && RT.GamePlayerCombat.showIncomingFeedback) {
+        if (viewApi && viewApi.consumeIncomingDamageFeedback && RT.GamePlayerCombat && RT.GamePlayerCombat.showIncomingFeedback) {
             var incomingDamageFeedback = null;
             do {
-                incomingDamageFeedback = RT.GameNet.consumeIncomingDamageFeedback();
+                incomingDamageFeedback = viewApi.consumeIncomingDamageFeedback();
                 if (incomingDamageFeedback) {
                     RT.GamePlayerCombat.showIncomingFeedback(
                         incomingDamageFeedback.sourcePos,
@@ -120,37 +128,37 @@
             } while (incomingDamageFeedback);
         }
 
-        if (RT.GameNet && RT.GameNet.consumeThrowAck && RT.GameThrowables && RT.GameThrowables.confirmPredictedThrow) {
+        if (viewApi && viewApi.consumeThrowAck && RT.GameThrowables && RT.GameThrowables.confirmPredictedThrow) {
             var throwAck = null;
             do {
-                throwAck = RT.GameNet.consumeThrowAck();
+                throwAck = viewApi.consumeThrowAck();
                 if (throwAck && throwAck.clientThrowId) {
                     RT.GameThrowables.confirmPredictedThrow(throwAck.clientThrowId);
                 }
             } while (throwAck);
         }
 
-        if (RT.GameNet && RT.GameNet.consumeThrowReject && RT.GameThrowables && RT.GameThrowables.rejectPredictedThrow) {
+        if (viewApi && viewApi.consumeThrowReject && RT.GameThrowables && RT.GameThrowables.rejectPredictedThrow) {
             var throwReject = null;
             do {
-                throwReject = RT.GameNet.consumeThrowReject();
+                throwReject = viewApi.consumeThrowReject();
                 if (throwReject && throwReject.clientThrowId) {
                     RT.GameThrowables.rejectPredictedThrow(throwReject.clientThrowId);
                 }
             } while (throwReject);
         }
 
-        if (RT.GameNet && RT.GameNet.getAuthoritativeThrowableState && RT.GameThrowables && RT.GameThrowables.syncAuthoritativeState) {
+        if (viewApi && viewApi.getAuthoritativeThrowableState && RT.GameThrowables && RT.GameThrowables.syncAuthoritativeState) {
             RT.GameThrowables.syncAuthoritativeState(
-                RT.GameNet.getAuthoritativeThrowableState(),
+                viewApi.getAuthoritativeThrowableState(),
                 selfState ? selfState.id : ''
             );
         }
 
-        if (RT.GameNet && RT.GameNet.consumeThrowableEvent && RT.GameThrowables && RT.GameThrowables.applyNetworkEvent) {
+        if (viewApi && viewApi.consumeThrowableEvent && RT.GameThrowables && RT.GameThrowables.applyNetworkEvent) {
             var throwEvent = null;
             do {
-                throwEvent = RT.GameNet.consumeThrowableEvent();
+                throwEvent = viewApi.consumeThrowableEvent();
                 if (throwEvent) RT.GameThrowables.applyNetworkEvent(throwEvent);
             } while (throwEvent);
         }

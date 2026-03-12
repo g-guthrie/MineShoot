@@ -45,8 +45,11 @@
     }
 
     function getCurrentWallhackRadius() {
-        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive() && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
-            var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var netRuntime = net && net.runtime ? net.runtime : net;
+        var netView = net && net.view ? net.view : net;
+        if (netRuntime && netRuntime.isActive && netRuntime.isActive() && netView && netView.getAuthoritativeSelfState) {
+            var selfState = netView.getAuthoritativeSelfState();
             if (selfState && typeof selfState.wallhackRadius === 'number') {
                 return selfState.wallhackRadius;
             }

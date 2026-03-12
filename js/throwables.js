@@ -1299,7 +1299,9 @@
                 }
 
                 if (p.type === 'plasma_stream') {
-                    var netActive = !!(globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive());
+                    var netApi = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+                    var netRuntime = netApi && netApi.runtime ? netApi.runtime : netApi;
+                    var netActive = !!(netRuntime && netRuntime.isActive && netRuntime.isActive());
                     if (!netActive && hit.object && hit.object.userData) {
                         var streamHitType = hit.object.userData.type || 'body';
                         var streamDamage = streamHitType === 'head' ? (def.headDamage || def.damage || 15) : (def.bodyDamage || def.damage || 15);
@@ -1821,8 +1823,8 @@
             shouldPredict = options.predictLocal;
         } else if (!(
             globalThis.__MAYHEM_RUNTIME.GameNet &&
-            globalThis.__MAYHEM_RUNTIME.GameNet.isActive &&
-            globalThis.__MAYHEM_RUNTIME.GameNet.isActive()
+            (globalThis.__MAYHEM_RUNTIME.GameNet.runtime || globalThis.__MAYHEM_RUNTIME.GameNet).isActive &&
+            (globalThis.__MAYHEM_RUNTIME.GameNet.runtime || globalThis.__MAYHEM_RUNTIME.GameNet).isActive()
         )) {
             shouldPredict = true;
         }

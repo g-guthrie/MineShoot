@@ -328,6 +328,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.lastSnapshotAt = 0;
     this.lastFullSnapshotAt = 0;
     this.lastBroadcastEntityState = new Map();
+    this.snapshotHistory = [];
     this.roomName = env.ROOM_NAME || 'global';
     const initialWorldMeta = buildExpectedWorldMeta(this.roomName, SHARED_PROTOCOL.world);
     this.roomName = initialWorldMeta.roomId;
@@ -558,6 +559,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.projectiles.clear();
     this.fireZones.clear();
     this.lastBroadcastEntityState = new Map();
+    this.snapshotHistory = [];
     if (this.tickHandle) {
       clearInterval(this.tickHandle);
       this.tickHandle = null;
@@ -566,6 +568,40 @@ export class GlobalArenaRoom extends DurableObject {
 
   async fetch(request) {
     return handleRoomRequest(this, request);
+  }
+
+  recordSnapshotHistory(serverTime, entities) {
+    const snapshotTime = Math.max(0, Math.round(Number(serverTime || 0)));
+    if (!(snapshotTime > 0)) return;
+    const entitiesById = new Map();
+    const list = Array.isArray(entities) ? entities : [];
+    for (let i = 0; i < list.length; i++) {
+      const entity = list[i];
+      if (!entity || !entity.id) continue;
+      entitiesById.set(String(entity.id), {
+        id: String(entity.id),
+        x: Number(entity.x || 0),
+        y: Number(entity.y || PLAYER_EYE_HEIGHT_WU),
+        z: Number(entity.z || 0),
+        yaw: Number(entity.yaw || 0),
+        pitch: Number(entity.pitch || 0)
+      });
+    }
+    this.snapshotHistory.push({
+      serverTime: snapshotTime,
+      entitiesById
+    });
+    const cutoffTime = snapshotTime - 800;
+    this.snapshotHistory = this.snapshotHistory.filter((entry) => {
+      return entry && Number(entry.serverTime || 0) >= cutoffTime;
+    });
+    if (this.snapshotHistory.length > 24) {
+      this.snapshotHistory = this.snapshotHistory.slice(this.snapshotHistory.length - 24);
+    }
+  }
+
+  getSnapshotHistory() {
+    return Array.isArray(this.snapshotHistory) ? this.snapshotHistory : [];
   }
 
   isDevLocalRoom() {
@@ -920,8 +956,8 @@ export class GlobalArenaRoom extends DurableObject {
       ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
       : 1;
     const boundsPad = PLAYER_RADIUS_WU;
-    let remainingDtSec = Math.max(0, Number(dtSec || 0)) * slowMult;
-    const movementOptions = {
+    stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), {
+      dtSec: Math.max(0, Number(dtSec || 0)) * slowMult,
       bounds: {
         minX: this.boundsMin,
         maxX: this.boundsMax,
@@ -935,39 +971,7 @@ export class GlobalArenaRoom extends DurableObject {
       playerHeight: PLAYER_HEIGHT_WU,
       playerRadius: boundsPad,
       epsilon: WORLD_RAY_EPSILON
-    };
-
-    if (Array.isArray(player.inputQueue) && player.inputQueue.length > 0) {
-      while (remainingDtSec > 0.000001 && player.inputQueue.length > 0) {
-        const sample = player.inputQueue[0];
-        if (!sample || !sample.inputState) {
-          player.inputQueue.shift();
-          continue;
-        }
-        if (typeof sample.remainingDtSec !== 'number' || !Number.isFinite(sample.remainingDtSec) || sample.remainingDtSec <= 0) {
-          sample.remainingDtSec = Math.max(1 / 240, Math.min(0.075, Number(sample.dtMs || 50) / 1000));
-        }
-        const stepDtSec = Math.min(remainingDtSec, sample.remainingDtSec);
-        player.yaw = (typeof sample.yaw === 'number' && Number.isFinite(sample.yaw)) ? Number(sample.yaw) : Number(player.yaw || 0);
-        player.pitch = (typeof sample.pitch === 'number' && Number.isFinite(sample.pitch)) ? Number(sample.pitch) : Number(player.pitch || 0);
-        player.inputState = sample.inputState;
-        stepAuthoritativeMovement(player, sample.inputState, Object.assign({}, movementOptions, {
-          dtSec: stepDtSec
-        }));
-        sample.remainingDtSec -= stepDtSec;
-        remainingDtSec -= stepDtSec;
-        if (sample.remainingDtSec <= 0.000001) {
-          player.seq = Math.max(Number(player.seq || 0), Number(sample.seq || 0));
-          player.inputQueue.shift();
-        }
-      }
-    }
-
-    if (remainingDtSec > 0.000001) {
-      stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), Object.assign({}, movementOptions, {
-        dtSec: remainingDtSec
-      }));
-    }
+    });
 
     applyRoomPendingInputAck(player);
     this.enforceEntityTerrainFloor(player);
@@ -1299,6 +1303,8 @@ export class GlobalArenaRoom extends DurableObject {
     this.fireZones.forEach((z) => {
       fireZones.push(toFireZoneState(z));
     });
+    const serverTime = nowMs();
+    this.recordSnapshotHistory(serverTime, entities);
 
     this.broadcast(buildSnapshotPayload(this, {
       forceFull,
@@ -1309,6 +1315,7 @@ export class GlobalArenaRoom extends DurableObject {
       fireZones
     }, {
       msgType: MSG_S2C.SNAPSHOT,
+      serverTime,
       nowMs,
       isPrivateMatchRoom,
       roomPhaseActive: ROOM_PHASE_ACTIVE,

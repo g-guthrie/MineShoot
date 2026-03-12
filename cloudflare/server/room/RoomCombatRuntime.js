@@ -636,6 +636,105 @@ export function handleThrow(room, player, msg, ws, deps) {
   });
 }
 
+function normalizeAngle(rad) {
+  while (rad > Math.PI) rad -= Math.PI * 2;
+  while (rad < -Math.PI) rad += Math.PI * 2;
+  return rad;
+}
+
+function snapshotHistoryEntries(room) {
+  if (room && typeof room.getSnapshotHistory === 'function') return room.getSnapshotHistory();
+  return Array.isArray(room && room.snapshotHistory) ? room.snapshotHistory : [];
+}
+
+function snapshotHistoryEntity(entry, entityId) {
+  if (!entry || !entityId) return null;
+  if (entry.entitiesById && typeof entry.entitiesById.get === 'function') {
+    return entry.entitiesById.get(String(entityId)) || null;
+  }
+  return null;
+}
+
+function resolveHitscanRenderServerTime(room, msg, deps) {
+  deps = deps || {};
+  const history = snapshotHistoryEntries(room);
+  if (!history.length) return 0;
+  const latest = Math.max(0, Number(history[history.length - 1].serverTime || 0));
+  const oldest = Math.max(0, Number(history[0].serverTime || 0));
+  const maxRewindMs = Math.max(66, Number(deps.maxRenderRewindMs || 250));
+  const minTime = Math.max(oldest, latest - maxRewindMs);
+  const requested = Math.round(Number(msg && msg.renderServerTime || 0));
+  if (!Number.isFinite(requested) || requested <= 0) return latest;
+  return Math.max(minTime, Math.min(requested, latest));
+}
+
+function sampleSnapshotHistoryEntity(room, entityId, renderServerTime) {
+  const history = snapshotHistoryEntries(room);
+  if (!history.length || !entityId || !(renderServerTime > 0)) return null;
+  let prev = null;
+  let next = null;
+  for (let i = 0; i < history.length; i++) {
+    const entry = history[i];
+    const entity = snapshotHistoryEntity(entry, entityId);
+    if (!entity) continue;
+    const entryTime = Math.max(0, Number(entry.serverTime || 0));
+    if (entryTime <= renderServerTime) prev = { time: entryTime, entity };
+    if (entryTime >= renderServerTime) {
+      next = { time: entryTime, entity };
+      break;
+    }
+  }
+  if (!prev && !next) return null;
+  if (!prev || !next || prev.time === next.time) {
+    const sample = (next || prev).entity;
+    return sample ? { ...sample } : null;
+  }
+  const t = Math.max(0, Math.min(1, (renderServerTime - prev.time) / Math.max(1, next.time - prev.time)));
+  return {
+    id: String(entityId),
+    x: Number((Number(prev.entity.x || 0) + ((Number(next.entity.x || 0) - Number(prev.entity.x || 0)) * t)).toFixed(4)),
+    y: Number((Number(prev.entity.y || 0) + ((Number(next.entity.y || 0) - Number(prev.entity.y || 0)) * t)).toFixed(4)),
+    z: Number((Number(prev.entity.z || 0) + ((Number(next.entity.z || 0) - Number(prev.entity.z || 0)) * t)).toFixed(4)),
+    yaw: Number((Number(prev.entity.yaw || 0) + (normalizeAngle(Number(next.entity.yaw || 0) - Number(prev.entity.yaw || 0)) * t)).toFixed(4)),
+    pitch: Number((Number(prev.entity.pitch || 0) + ((Number(next.entity.pitch || 0) - Number(prev.entity.pitch || 0)) * t)).toFixed(4))
+  };
+}
+
+function buildHitscanValidationTargets(room, player, renderServerTime) {
+  const targets = room.getAliveEntities().filter((entity) => room.canTargetEntity(entity, player.id));
+  if (!(renderServerTime > 0)) {
+    return targets.map((entity) => ({
+      id: entity.id,
+      x: Number(entity.x || 0),
+      y: Number(entity.y || 0),
+      z: Number(entity.z || 0),
+      yaw: Number(entity.yaw || 0),
+      pitch: Number(entity.pitch || 0),
+      liveEntity: entity
+    }));
+  }
+  return targets.map((entity) => {
+    const rewound = sampleSnapshotHistoryEntity(room, entity.id, renderServerTime);
+    return rewound ? {
+      id: entity.id,
+      x: Number(rewound.x || entity.x || 0),
+      y: Number(rewound.y || entity.y || 0),
+      z: Number(rewound.z || entity.z || 0),
+      yaw: Number(rewound.yaw || entity.yaw || 0),
+      pitch: Number(rewound.pitch || entity.pitch || 0),
+      liveEntity: entity
+    } : {
+      id: entity.id,
+      x: Number(entity.x || 0),
+      y: Number(entity.y || 0),
+      z: Number(entity.z || 0),
+      yaw: Number(entity.yaw || 0),
+      pitch: Number(entity.pitch || 0),
+      liveEntity: entity
+    };
+  });
+}
+
 export function handleFire(room, player, msg, deps) {
   deps = deps || {};
   const nowMs = deps.nowMs;
@@ -648,6 +747,7 @@ export function handleFire(room, player, msg, deps) {
   const canEquipWeaponId = deps.canEquipWeaponId;
   const playerEyeHeight = Number(deps.playerEyeHeight || 0);
   const remoteMuzzleFlashHoldMs = Number(deps.remoteMuzzleFlashHoldMs || 0);
+  const renderServerTime = resolveHitscanRenderServerTime(room, msg, deps);
 
   if (!player || !player.alive) return;
   if (!room.canEntityUseWeapon(player)) return;
@@ -710,12 +810,14 @@ export function handleFire(room, player, msg, deps) {
     adsActive: !!(msg && msg.adsActive),
     viewFovDeg: Number(msg && msg.viewFovDeg),
     shotToken,
-    targets: room.getAliveEntities().filter((entity) => room.canTargetEntity(entity, player.id)),
+    targets: buildHitscanValidationTargets(room, player, renderServerTime),
     worldBoxes: room.worldCollidables()
   });
   for (let i = 0; i < shots.length; i++) {
     const shot = shots[i];
-    const target = shot ? shot.target : null;
+    const target = shot && shot.target
+      ? (shot.target.liveEntity || shot.target)
+      : null;
     if (!room.canTargetEntity(target, player.id)) continue;
     const out = applyDamageFromSource(player, target, shot.damage, {
       hitType: shot.hitType === 'head' ? 'head' : 'body',

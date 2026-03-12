@@ -11,6 +11,7 @@
         var initialRoomId = String(opts.initialRoomId || 'global');
 
         var snapshotMap = new Map();
+        var remoteSnapshotTimelineMap = new Map();
         var throwAckQueue = [];
         var throwRejectQueue = [];
         var throwableEventQueue = [];
@@ -19,6 +20,13 @@
         var damageFeedbackQueue = [];
         var incomingDamageFeedbackQueue = [];
         var notices = [];
+        var remoteSnapshotTiming = {
+            latestServerTime: 0,
+            latestReceivedAt: 0,
+            clockOffsetMs: 0,
+            clockSampleCount: 0,
+            cadenceMs: 0
+        };
 
         var state = {
             roomId: initialRoomId,
@@ -65,6 +73,7 @@
             state.remoteProjectileState = [];
             state.remoteFireZoneState = [];
             snapshotMap.clear();
+            remoteSnapshotTimelineMap.clear();
             throwAckQueue.length = 0;
             throwRejectQueue.length = 0;
             throwableEventQueue.length = 0;
@@ -73,6 +82,11 @@
             damageFeedbackQueue.length = 0;
             incomingDamageFeedbackQueue.length = 0;
             notices.length = 0;
+            remoteSnapshotTiming.latestServerTime = 0;
+            remoteSnapshotTiming.latestReceivedAt = 0;
+            remoteSnapshotTiming.clockOffsetMs = 0;
+            remoteSnapshotTiming.clockSampleCount = 0;
+            remoteSnapshotTiming.cadenceMs = 0;
         }
 
         function pushNotice(text) {
@@ -109,6 +123,85 @@
 
         function setRemoteFireZoneState(fireZones) {
             state.remoteFireZoneState = Array.isArray(fireZones) ? fireZones.slice() : [];
+        }
+
+        function normalizeRemoteSnapshotNumber(value, fallback) {
+            var parsed = Number(value);
+            return isFinite(parsed) ? parsed : Number(fallback || 0);
+        }
+
+        function recordRemoteSnapshotTiming(serverTime, receivedAt) {
+            var nextServerTime = Math.max(0, Math.round(Number(serverTime || 0)));
+            var nextReceivedAt = Math.max(0, Math.round(Number(receivedAt || Date.now())));
+            if (!(nextServerTime > 0)) return remoteSnapshotTiming.latestServerTime;
+            if (remoteSnapshotTiming.latestServerTime > 0 && nextServerTime > remoteSnapshotTiming.latestServerTime) {
+                var intervalMs = nextServerTime - remoteSnapshotTiming.latestServerTime;
+                if (intervalMs > 0) {
+                    remoteSnapshotTiming.cadenceMs = remoteSnapshotTiming.cadenceMs > 0
+                        ? Number(((remoteSnapshotTiming.cadenceMs * 0.75) + (intervalMs * 0.25)).toFixed(3))
+                        : intervalMs;
+                }
+            }
+            var sampleOffsetMs = nextReceivedAt - nextServerTime;
+            remoteSnapshotTiming.clockOffsetMs = remoteSnapshotTiming.clockSampleCount > 0
+                ? Number(((remoteSnapshotTiming.clockOffsetMs * 0.8) + (sampleOffsetMs * 0.2)).toFixed(3))
+                : sampleOffsetMs;
+            remoteSnapshotTiming.clockSampleCount += 1;
+            remoteSnapshotTiming.latestServerTime = Math.max(remoteSnapshotTiming.latestServerTime, nextServerTime);
+            remoteSnapshotTiming.latestReceivedAt = Math.max(remoteSnapshotTiming.latestReceivedAt, nextReceivedAt);
+            return remoteSnapshotTiming.latestServerTime;
+        }
+
+        function recordRemoteSnapshotEntity(entityId, entity, serverTime) {
+            var id = String(entityId || (entity && entity.id) || '');
+            var snapshotTime = Math.max(0, Math.round(Number(serverTime || 0)));
+            if (!id || !entity || !(snapshotTime > 0)) return [];
+            var sample = {
+                serverTime: snapshotTime,
+                x: normalizeRemoteSnapshotNumber(entity.x, 0),
+                y: normalizeRemoteSnapshotNumber(entity.y, 1.6),
+                z: normalizeRemoteSnapshotNumber(entity.z, 0),
+                yaw: normalizeRemoteSnapshotNumber(entity.yaw, 0),
+                pitch: normalizeRemoteSnapshotNumber(entity.pitch, 0),
+                moveSpeedNorm: normalizeRemoteSnapshotNumber(entity.moveSpeedNorm, 0),
+                sprinting: !!entity.sprinting,
+                movingForward: !!entity.movingForward,
+                movingBackward: !!entity.movingBackward,
+                isGrounded: entity.isGrounded !== false,
+                velocityY: normalizeRemoteSnapshotNumber(entity.velocityY, 0),
+                weaponId: String(entity.weaponId || 'rifle')
+            };
+            var history = remoteSnapshotTimelineMap.get(id);
+            if (!Array.isArray(history)) {
+                history = [];
+                remoteSnapshotTimelineMap.set(id, history);
+            }
+            if (history.length > 0 && Number(history[history.length - 1].serverTime || 0) === snapshotTime) {
+                history[history.length - 1] = sample;
+            } else {
+                history.push(sample);
+            }
+            var latestServerTime = Math.max(remoteSnapshotTiming.latestServerTime, snapshotTime);
+            var cutoffTime = latestServerTime - 750;
+            while (history.length > 0 && Number(history[0].serverTime || 0) < cutoffTime) {
+                history.shift();
+            }
+            while (history.length > 24) {
+                history.shift();
+            }
+            return history;
+        }
+
+        function pruneRemoteSnapshotTimelines(activeIds) {
+            var allow = activeIds instanceof Map ? activeIds : new Map();
+            var staleIds = [];
+            remoteSnapshotTimelineMap.forEach(function (_history, entityId) {
+                if (!allow.has(entityId)) staleIds.push(entityId);
+            });
+            for (var i = 0; i < staleIds.length; i++) {
+                remoteSnapshotTimelineMap.delete(staleIds[i]);
+            }
+            return remoteSnapshotTimelineMap;
         }
 
         function pushLocalPredictionSample(sample) {
@@ -185,6 +278,22 @@
             setSnapshotEntity: function (id, entity) { snapshotMap.set(id, entity); },
             deleteSnapshotEntity: function (id) { snapshotMap.delete(id); },
             replaceSnapshotMap: function (nextMap) { snapshotMap = nextMap instanceof Map ? nextMap : new Map(); },
+            recordRemoteSnapshotTiming: recordRemoteSnapshotTiming,
+            getRemoteSnapshotTiming: function () {
+                return {
+                    latestServerTime: Number(remoteSnapshotTiming.latestServerTime || 0),
+                    latestReceivedAt: Number(remoteSnapshotTiming.latestReceivedAt || 0),
+                    clockOffsetMs: Number(remoteSnapshotTiming.clockOffsetMs || 0),
+                    clockSampleCount: Number(remoteSnapshotTiming.clockSampleCount || 0),
+                    cadenceMs: Number(remoteSnapshotTiming.cadenceMs || 0)
+                };
+            },
+            recordRemoteSnapshotEntity: recordRemoteSnapshotEntity,
+            getRemoteSnapshotTimeline: function (entityId) {
+                var history = remoteSnapshotTimelineMap.get(String(entityId || ''));
+                return Array.isArray(history) ? history : [];
+            },
+            pruneRemoteSnapshotTimelines: pruneRemoteSnapshotTimelines,
             pushNotice: pushNotice,
             consumeNotice: consumeNotice,
             getQueueRefs: queueRefs,

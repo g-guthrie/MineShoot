@@ -10,6 +10,29 @@
         return queue.shift();
     }
 
+    function cloneJsonLike(value) {
+        if (value === null || typeof value !== 'object') return value;
+        if (Array.isArray(value)) {
+            var list = new Array(value.length);
+            for (var i = 0; i < value.length; i++) {
+                list[i] = cloneJsonLike(value[i]);
+            }
+            return list;
+        }
+        var out = {};
+        for (var key in value) {
+            if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+            out[key] = cloneJsonLike(value[key]);
+        }
+        return out;
+    }
+
+    function normalizeAngle(rad) {
+        while (rad > Math.PI) rad -= Math.PI * 2;
+        while (rad < -Math.PI) rad += Math.PI * 2;
+        return rad;
+    }
+
     function create(opts) {
         opts = opts || {};
 
@@ -31,6 +54,93 @@
                     adsActive: !!entry.inputState.adsActive
                 } : null
             };
+        }
+
+        function getRemoteSnapshotTiming() {
+            return opts.getRemoteSnapshotTiming ? opts.getRemoteSnapshotTiming() : null;
+        }
+
+        function getRemotePresentationClock(localNowMs) {
+            var now = Math.max(0, Number(localNowMs || Date.now()));
+            var timing = getRemoteSnapshotTiming();
+            if (!timing || !(Number(timing.latestServerTime || 0) > 0)) return null;
+            var cadenceMs = Math.max(1, Number(timing.cadenceMs || 0) || 33);
+            var renderDelayMs = Math.max(66, Math.min(132, cadenceMs * 3));
+            var estimatedServerNowMs = now - Number(timing.clockOffsetMs || 0);
+            if (!isFinite(estimatedServerNowMs)) {
+                estimatedServerNowMs = Number(timing.latestServerTime || 0);
+            }
+            var renderServerTimeMs = estimatedServerNowMs - renderDelayMs;
+            if (!isFinite(renderServerTimeMs)) {
+                renderServerTimeMs = Number(timing.latestServerTime || 0);
+            }
+            renderServerTimeMs = Math.min(Number(timing.latestServerTime || 0), renderServerTimeMs);
+            return {
+                latestServerTimeMs: Number(timing.latestServerTime || 0),
+                latestReceivedAtMs: Number(timing.latestReceivedAt || 0),
+                clockOffsetMs: Number(timing.clockOffsetMs || 0),
+                cadenceMs: cadenceMs,
+                renderDelayMs: renderDelayMs,
+                estimatedServerNowMs: Number(estimatedServerNowMs.toFixed(3)),
+                renderServerTimeMs: Number(renderServerTimeMs.toFixed(3))
+            };
+        }
+
+        function cloneRemotePresentationSample(sample) {
+            return sample ? {
+                serverTime: Number(sample.serverTime || 0),
+                x: Number(sample.x || 0),
+                y: Number(sample.y || 0),
+                z: Number(sample.z || 0),
+                yaw: Number(sample.yaw || 0),
+                pitch: Number(sample.pitch || 0),
+                moveSpeedNorm: Number(sample.moveSpeedNorm || 0),
+                sprinting: !!sample.sprinting,
+                movingForward: !!sample.movingForward,
+                movingBackward: !!sample.movingBackward,
+                isGrounded: sample.isGrounded !== false,
+                velocityY: Number(sample.velocityY || 0),
+                weaponId: String(sample.weaponId || 'rifle')
+            } : null;
+        }
+
+        function sampleRemoteEntityPresentation(entityId, localNowMs) {
+            var history = opts.getRemoteSnapshotTimeline ? opts.getRemoteSnapshotTimeline(entityId) : null;
+            if (!Array.isArray(history) || history.length === 0) return null;
+            var clock = getRemotePresentationClock(localNowMs);
+            var targetServerTime = clock ? Number(clock.renderServerTimeMs || 0) : Number(history[history.length - 1].serverTime || 0);
+            if (!(targetServerTime > 0)) {
+                return cloneRemotePresentationSample(history[history.length - 1]);
+            }
+            if (history.length === 1 || targetServerTime <= Number(history[0].serverTime || 0)) {
+                return cloneRemotePresentationSample(history[0]);
+            }
+            for (var i = 1; i < history.length; i++) {
+                var prev = history[i - 1];
+                var next = history[i];
+                var prevTime = Number(prev && prev.serverTime || 0);
+                var nextTime = Number(next && next.serverTime || 0);
+                if (targetServerTime > nextTime) continue;
+                var spanMs = Math.max(1, nextTime - prevTime);
+                var t = Math.max(0, Math.min(1, (targetServerTime - prevTime) / spanMs));
+                var base = t < 0.5 ? prev : next;
+                return {
+                    serverTime: Number(targetServerTime.toFixed(3)),
+                    x: Number((Number(prev.x || 0) + ((Number(next.x || 0) - Number(prev.x || 0)) * t)).toFixed(4)),
+                    y: Number((Number(prev.y || 0) + ((Number(next.y || 0) - Number(prev.y || 0)) * t)).toFixed(4)),
+                    z: Number((Number(prev.z || 0) + ((Number(next.z || 0) - Number(prev.z || 0)) * t)).toFixed(4)),
+                    yaw: Number((Number(prev.yaw || 0) + (normalizeAngle(Number(next.yaw || 0) - Number(prev.yaw || 0)) * t)).toFixed(4)),
+                    pitch: Number((Number(prev.pitch || 0) + ((Number(next.pitch || 0) - Number(prev.pitch || 0)) * t)).toFixed(4)),
+                    moveSpeedNorm: Number((Number(prev.moveSpeedNorm || 0) + ((Number(next.moveSpeedNorm || 0) - Number(prev.moveSpeedNorm || 0)) * t)).toFixed(4)),
+                    sprinting: !!(base && base.sprinting),
+                    movingForward: !!(base && base.movingForward),
+                    movingBackward: !!(base && base.movingBackward),
+                    isGrounded: !base || base.isGrounded !== false,
+                    velocityY: Number(base && base.velocityY || 0),
+                    weaponId: String(base && base.weaponId || 'rifle')
+                };
+            }
+            return cloneRemotePresentationSample(history[history.length - 1]);
         }
 
         function getExpectedWorldMeta() {
@@ -76,30 +186,9 @@
             return out;
         }
 
-        function getSelfState() {
+        function getAuthoritativeSelfState() {
             var selfState = opts.getSelfState();
-            if (selfState) return selfState;
-            var user = opts.getCurrentUser();
-            if (!user) return null;
-            var defaults = opts.classStats(user.classId || 'abilities');
-            return {
-                id: user.id,
-                hp: 500,
-                hpMax: 500,
-                armor: defaults.armorMax,
-                armorMax: defaults.armorMax,
-                classId: user.classId || 'abilities',
-                wallhackRadius: defaults.wallhackRadius,
-                lmsLives: 0,
-                lmsCharge: 0,
-                outOfRound: false,
-                throwables: null,
-                kills: 0,
-                deaths: 0,
-                progressScore: 0,
-                teamId: '',
-                alive: true
-            };
+            return selfState ? cloneJsonLike(selfState) : null;
         }
 
         function getAuthoritativeThrowableState() {
@@ -143,34 +232,40 @@
 
         function getInputSyncState() {
             var inputSeqHistory = opts.getInputSeqHistory();
-            var localPredictionSamples = opts.getLocalPredictionSamples ? opts.getLocalPredictionSamples() : [];
-            var latestPending = localPredictionSamples.length > 0
-                ? localPredictionSamples[localPredictionSamples.length - 1]
-                : (inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null);
+            var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
             return {
                 lastSentSeq: opts.getLastInputSeqSent(),
                 lastAckedSeq: opts.getLastInputSeqAcked(),
-                pendingInputCount: inputSeqHistory.length + localPredictionSamples.length,
-                hasUnsentInputTail: localPredictionSamples.length > 0,
+                pendingInputCount: inputSeqHistory.length,
+                hasUnsentInputTail: false,
                 latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0
+            };
+        }
+
+        function getSelfReconciliationState() {
+            var authoritativeState = getAuthoritativeSelfState();
+            if (!authoritativeState) return null;
+            var inputSyncState = getInputSyncState();
+            return {
+                authoritativeState: authoritativeState,
+                pendingInputs: getPendingInputSamples(),
+                pendingInputCount: Number(inputSyncState.pendingInputCount || 0),
+                hasUnsentInputTail: !!inputSyncState.hasUnsentInputTail,
+                lastSentSeq: Number(inputSyncState.lastSentSeq || 0),
+                lastAckedSeq: Number(inputSyncState.lastAckedSeq || 0),
+                latestPendingAgeMs: Number(inputSyncState.latestPendingAgeMs || 0)
             };
         }
 
         function getPendingInputSamples() {
             var inputSeqHistory = opts.getInputSeqHistory();
-            var localPredictionSamples = opts.getLocalPredictionSamples ? opts.getLocalPredictionSamples() : [];
-            if (!inputSeqHistory.length && !localPredictionSamples.length) return [];
+            if (!inputSeqHistory.length) return [];
             var out = [];
             var defaultDtMs = Math.round(opts.getInputSendInterval() * 1000);
             for (var i = 0; i < inputSeqHistory.length; i++) {
                 var entry = clonePendingInputEntry(inputSeqHistory[i], defaultDtMs);
                 if (!entry) continue;
                 out.push(entry);
-            }
-            for (var n = 0; n < localPredictionSamples.length; n++) {
-                var localEntry = clonePendingInputEntry(localPredictionSamples[n], defaultDtMs);
-                if (!localEntry) continue;
-                out.push(localEntry);
             }
             return out;
         }
@@ -220,17 +315,24 @@
             getExpectedWorldMeta: getExpectedWorldMeta,
             getWorldMeta: getWorldMeta,
             getEntityStateList: getEntityStateList,
-            getSelfState: getSelfState,
+            getAuthoritativeSelfState: getAuthoritativeSelfState,
+            getSelfState: getAuthoritativeSelfState,
             getAuthoritativeThrowableState: getAuthoritativeThrowableState,
             getSelfAbilityState: getSelfAbilityState,
             getMatchState: getMatchState,
             getInputSyncState: getInputSyncState,
+            getSelfReconciliationState: getSelfReconciliationState,
             getPendingInputSamples: getPendingInputSamples,
             getRespawnState: getRespawnState,
+            getRemotePresentationClock: getRemotePresentationClock,
+            sampleRemoteEntityPresentation: sampleRemoteEntityPresentation,
             getGameMode: function () { return opts.getGameMode() || ''; },
             getPrivateRoomPhase: function () { return opts.getPrivateRoomPhase() || ''; },
             getEntityName: getEntityName,
             getLockTargets: getLockTargets,
+            damagePointForEntityId: function (entityId) {
+                return opts.damagePointForEntityId ? opts.damagePointForEntityId(entityId) : null;
+            },
             getEntityMarkerWorldPos: function (entityId) { return opts.markerPointForEntityId(entityId); },
             getChokeVictimStateForEntity: function (entityId) { return opts.getChokeVictimStateForEntity(entityId); },
             consumeNotice: function () { return opts.consumeNotice(); },

@@ -269,68 +269,16 @@ export function queueAuthoritativeInput(player, msg, deps) {
   player.inputState.jump = !!msg.jump;
   player.inputState.sprint = !!msg.sprint;
   player.inputState.adsActive = !!msg.adsActive;
-
-  player.inputQueue = Array.isArray(player.inputQueue) ? player.inputQueue : [];
-  player.inputQueue.push({
-    seq: Math.max(0, Number(msg.seq || 0)),
-    dtMs: Math.max(1, Number(msg.dtMs || 0) || 0),
-    yaw: Number(player.yaw || 0),
-    pitch: Number(player.pitch || 0),
-    inputState: {
-      forward: !!player.inputState.forward,
-      backward: !!player.inputState.backward,
-      left: !!player.inputState.left,
-      right: !!player.inputState.right,
-      jump: !!player.inputState.jump,
-      sprint: !!player.inputState.sprint,
-      adsActive: !!player.inputState.adsActive
-    }
-  });
-  if (player.inputQueue.length > 96) {
-    player.inputQueue.splice(0, player.inputQueue.length - 96);
-  }
 }
 
 export function applyPendingInputAck(entity) {
   if (!entity) return 0;
-  if (Array.isArray(entity.inputQueue) && entity.inputQueue.length > 0) {
-    return Number(entity.seq || 0);
-  }
   const pendingSeq = Number(entity.pendingInputSeq || 0);
   const currentSeq = Number(entity.seq || 0);
   if (pendingSeq > currentSeq) {
     entity.seq = pendingSeq;
   }
   return Number(entity.seq || 0);
-}
-
-function consumeQueuedAuthoritativeInput(entity, availableDtSec, stepMovement, movementOptions) {
-  if (!entity || !Array.isArray(entity.inputQueue) || !entity.inputQueue.length) return availableDtSec;
-  let remainingDtSec = Math.max(0, Number(availableDtSec || 0));
-  while (remainingDtSec > 0.000001 && entity.inputQueue.length > 0) {
-    const sample = entity.inputQueue[0];
-    if (!sample || !sample.inputState) {
-      entity.inputQueue.shift();
-      continue;
-    }
-    if (typeof sample.remainingDtSec !== 'number' || !Number.isFinite(sample.remainingDtSec) || sample.remainingDtSec <= 0) {
-      sample.remainingDtSec = Math.max(1 / 240, Math.min(0.075, Number(sample.dtMs || 50) / 1000));
-    }
-    const stepDtSec = Math.min(remainingDtSec, sample.remainingDtSec);
-    entity.yaw = (typeof sample.yaw === 'number' && Number.isFinite(sample.yaw)) ? Number(sample.yaw) : Number(entity.yaw || 0);
-    entity.pitch = (typeof sample.pitch === 'number' && Number.isFinite(sample.pitch)) ? Number(sample.pitch) : Number(entity.pitch || 0);
-    entity.inputState = sample.inputState;
-    stepMovement(entity, sample.inputState, Object.assign({}, movementOptions, {
-      dtSec: stepDtSec
-    }));
-    sample.remainingDtSec -= stepDtSec;
-    remainingDtSec -= stepDtSec;
-    if (sample.remainingDtSec <= 0.000001) {
-      entity.seq = Math.max(Number(entity.seq || 0), Number(sample.seq || 0));
-      entity.inputQueue.shift();
-    }
-  }
-  return remainingDtSec;
 }
 
 export function respawnIfNeeded(room, entity, deps) {

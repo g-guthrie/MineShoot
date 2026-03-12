@@ -131,19 +131,6 @@
             opts.applyPendingSpawnSync();
 
             var inputSendTimer = opts.getInputSendTimer() - dt;
-            if (playerPos && rotation) {
-                var framePlayerApi = opts.getPlayerApi();
-                var frameInputState = (framePlayerApi && framePlayerApi.getNetworkInputState) ? framePlayerApi.getNetworkInputState() : null;
-                if (opts.pushLocalPredictionSample) {
-                    opts.pushLocalPredictionSample({
-                        at: Date.now(),
-                        dtMs: Math.max(1, Math.round(Math.max(0, Number(dt || 0)) * 1000)),
-                        yaw: rotation.yaw || 0,
-                        pitch: rotation.pitch || 0,
-                        inputState: cloneInputState(frameInputState)
-                    });
-                }
-            }
             if (inputSendTimer <= 0) {
                 inputSendTimer = opts.getInputSendInterval();
                 if (playerPos && rotation) {
@@ -165,9 +152,6 @@
                         inputState: cloneInputState(inputState)
                     });
                     if (inputSeqHistory.length > 96) inputSeqHistory.shift();
-                    if (opts.clearLocalPredictionSamples) {
-                        opts.clearLocalPredictionSamples();
-                    }
                     wsSend({
                         t: opts.getInputMessageType(),
                         seq: seq,
@@ -193,7 +177,9 @@
                 remoteSyncApi.updateRemoteEntities(
                     dt,
                     opts.getRenderMap(),
-                    opts.getChokeVictimStateForEntity
+                    opts.getChokeVictimStateForEntity,
+                    opts.sampleRemoteEntityPresentation,
+                    Date.now()
                 );
             }
         }

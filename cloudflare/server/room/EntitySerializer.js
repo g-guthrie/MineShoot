@@ -3,6 +3,7 @@ import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import { nowMs } from '../transport.js';
 
 const THROWABLE_STATS = gameplayTuning.throwables;
+const WEAPON_STATS = gameplayTuning.weaponStats || {};
 const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
@@ -52,19 +53,26 @@ function buildAbilityFx(entity) {
 }
 
 export function toEntityState(entity) {
-  const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - nowMs()) / 1000);
-  const slot2CooldownRemaining = Math.max(0, ((entity.slot2CooldownUntil || 0) - nowMs()) / 1000);
+  const now = nowMs();
+  const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - now) / 1000);
+  const slot2CooldownRemaining = Math.max(0, ((entity.slot2CooldownUntil || 0) - now) / 1000);
   const weaponAmmo = {};
   if (entity.weaponAmmo && typeof entity.weaponAmmo === 'object') {
     for (const weaponId in entity.weaponAmmo) {
       if (!Object.prototype.hasOwnProperty.call(entity.weaponAmmo, weaponId)) continue;
       const entry = entity.weaponAmmo[weaponId];
       if (!entry) continue;
+      const stats = WEAPON_STATS[weaponId];
+      const reloadUntil = Number(entry.reloadUntil || 0);
+      const reloadCompleted = reloadUntil > 0 && reloadUntil <= now;
+      const ammoInMag = reloadCompleted && stats && Number(stats.magazineSize || 0) > 0
+        ? Math.max(0, Number(stats.magazineSize || 0))
+        : Math.max(0, Number(entry.ammoInMag || 0));
       weaponAmmo[weaponId] = {
-        ammoInMag: Math.max(0, Number(entry.ammoInMag || 0)),
-        reloadRemaining: Math.max(0, ((entry.reloadUntil || 0) - nowMs()) / 1000),
-        reloading: Number(entry.reloadUntil || 0) > nowMs(),
-        reloadedFlashRemaining: Math.max(0, ((entry.reloadedFlashUntil || 0) - nowMs()) / 1000)
+        ammoInMag,
+        reloadRemaining: Math.max(0, (reloadUntil - now) / 1000),
+        reloading: reloadUntil > now,
+        reloadedFlashRemaining: Math.max(0, ((entry.reloadedFlashUntil || 0) - now) / 1000)
       };
     }
   }

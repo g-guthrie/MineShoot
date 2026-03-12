@@ -135,3 +135,61 @@ test('toEntityState carries authoritative action lock timers', () => {
   assert.equal(state.throwableLockUntil, 2200);
   assert.equal(state.abilityLockUntil, 2300);
 });
+
+test('toEntityState resolves completed weapon reloads into a full authoritative magazine for snapshots', () => {
+  const originalNow = Date.now;
+  Date.now = () => 2000;
+  try {
+    const state = toEntityState({
+      id: 'usr_test',
+      kind: 'player',
+      username: 'TEST',
+      classId: 'abilities',
+      x: 0,
+      y: 1.6,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      seq: 0,
+      weaponId: 'machinegun',
+      moveSpeedNorm: 0,
+      sprinting: false,
+      velocityY: 0,
+      isGrounded: true,
+      jumpHoldTimer: 0,
+      jumpHeldLast: false,
+      hp: 500,
+      hpMax: 500,
+      armor: 90,
+      armorMax: 90,
+      kills: 0,
+      deaths: 0,
+      progressScore: 0,
+      lmsLives: 0,
+      lmsCharge: 0,
+      teamId: '',
+      wallhackRadius: 90,
+      alive: true,
+      spawnShieldUntil: 0,
+      streamHeat: 0,
+      streamOverheatedUntil: 0,
+      muzzleFlashUntil: 0,
+      weaponLoadout: ['machinegun', 'shotgun'],
+      weaponAmmo: {
+        machinegun: {
+          ammoInMag: 0,
+          reloadUntil: 1900,
+          reloadedFlashUntil: 0
+        }
+      },
+      abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+      throwables: {}
+    });
+
+    assert.equal(state.weaponAmmo.machinegun.ammoInMag, 45);
+    assert.equal(state.weaponAmmo.machinegun.reloading, false);
+    assert.equal(state.weaponAmmo.machinegun.reloadRemaining, 0);
+  } finally {
+    Date.now = originalNow;
+  }
+});

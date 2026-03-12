@@ -89,8 +89,10 @@
     }
 
     function getNetworkDescriptors() {
-        if (!globalThis.__MAYHEM_RUNTIME.GameNet || !globalThis.__MAYHEM_RUNTIME.GameNet.getEntityStateList) return [];
-        var list = globalThis.__MAYHEM_RUNTIME.GameNet.getEntityStateList();
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var netView = net && net.view ? net.view : net;
+        if (!netView || !netView.getEntityStateList) return [];
+        var list = netView.getEntityStateList();
         var out = [];
 
         for (var i = 0; i < list.length; i++) {

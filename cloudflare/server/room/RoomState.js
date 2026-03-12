@@ -71,9 +71,12 @@ export function buildWelcomePayload(room, selfId, deps) {
 export function buildSnapshotPayload(room, snapshot, deps) {
   deps = deps || {};
   snapshot = snapshot || {};
+  const serverTime = Number.isFinite(Number(deps.serverTime))
+    ? Math.round(Number(deps.serverTime))
+    : (deps.nowMs ? deps.nowMs() : 0);
   return {
     t: deps.msgType,
-    serverTime: deps.nowMs ? deps.nowMs() : 0,
+    serverTime,
     delta: !snapshot.forceFull,
     gameMode: room.gameMode || '',
     privateRoomPhase: currentPrivateRoomPhase(room, deps),

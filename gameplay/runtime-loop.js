@@ -12,6 +12,10 @@
         opts = opts || {};
 
         function step(dt) {
+            var net = runtime.GameNet || null;
+            var netRuntime = net && net.runtime ? net.runtime : net;
+            var netView = net && net.view ? net.view : net;
+
             if (runtime.GameWorld && runtime.GameWorld.update) {
                 runtime.GameWorld.update(dt);
             }
@@ -71,17 +75,35 @@
                 opts.controlsApi.updateArmedThrowablePreview();
             }
 
-            runtime.GameNet.update(dt, playerPos, playerRot);
-            var matchContext = opts.readMatchContext ? opts.readMatchContext() : null;
-            var selfState = matchContext ? matchContext.selfState : null;
-            if (selfState) {
-                if (runtime.GameNetSelfSync && runtime.GameNetSelfSync.syncPlayerState) {
-                    runtime.GameNetSelfSync.syncPlayerState(selfState, dt);
+            if (netRuntime && netRuntime.update) {
+                netRuntime.update(dt, playerPos, playerRot);
+            }
+            var selfReconciliationState = netView && netView.getSelfReconciliationState
+                ? netView.getSelfReconciliationState()
+                : null;
+            var selfState = netView && netView.getAuthoritativeSelfState
+                ? netView.getAuthoritativeSelfState()
+                : null;
+            var respawnState = netView && netView.getRespawnState
+                ? netView.getRespawnState()
+                : null;
+            if (selfReconciliationState) {
+                if (runtime.GameNetSelfMotionSync && runtime.GameNetSelfMotionSync.syncPlayerMotion) {
+                    runtime.GameNetSelfMotionSync.syncPlayerMotion(selfReconciliationState, dt);
                 }
             }
+            if (selfState || respawnState) {
+                if (runtime.GameNetSelfSync && runtime.GameNetSelfSync.syncPlayerState) {
+                    runtime.GameNetSelfSync.syncPlayerState(selfState, dt, {
+                        respawnState: respawnState
+                    });
+                }
+            }
+            var matchContext = opts.readMatchContext ? opts.readMatchContext() : null;
+            selfState = matchContext ? matchContext.selfState : selfState;
 
-            if (runtime.GameNet.getSelfAbilityState) {
-                var abilityState = runtime.GameNet.getSelfAbilityState();
+            if (netView && netView.getSelfAbilityState) {
+                var abilityState = netView.getSelfAbilityState();
                 if (abilityState && runtime.GameAbilities && runtime.GameAbilities.getNetworkHudState) {
                     runtime.GameUI.updateAbilityInfo(
                         runtime.GameAbilities.getNetworkHudState(abilityState)
@@ -93,7 +115,7 @@
                 opts.gameSession.syncMatchState(matchContext);
             }
 
-            var notice = runtime.GameNet.consumeNotice();
+            var notice = netView && netView.consumeNotice ? netView.consumeNotice() : '';
             if (notice && opts.setTransientDebug) opts.setTransientDebug(notice, 900);
 
             if (runtime.GameNetFeedbackSync && runtime.GameNetFeedbackSync.syncGameplayFeedback) {

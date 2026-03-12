@@ -50,6 +50,9 @@
         var scene = renderCtx.scene;
         var clock = renderCtx.clock;
         var multiplayerMode = !!(options.activeRuntimeMode && options.activeRuntimeMode.authorityMode === 'networked');
+        var net = runtime.GameNet || null;
+        var netRuntime = net && net.runtime ? net.runtime : net;
+        var netView = net && net.view ? net.view : net;
 
         function finalizeWorldBootstrap(worldMeta) {
             var worldOptions = (worldMeta && worldMeta.worldSeed) ? { worldMeta: worldMeta } : undefined;
@@ -68,8 +71,8 @@
             var camera = runtime.GamePlayer.init(scene);
             runtime.GameThrowables.init(scene);
 
-            if (!runtime.GameNet.isActive || !runtime.GameNet.isActive()) {
-                runtime.GameNet.init(scene);
+            if (netRuntime && (!netRuntime.isActive || !netRuntime.isActive())) {
+                netRuntime.init(scene);
             }
 
             runtime.GameAbilities.init(scene);
@@ -85,7 +88,9 @@
             });
             var initArmor = runtime.GameAbilities.getArmorMax ? runtime.GameAbilities.getArmorMax() : 90;
             runtime.GamePlayerCombat.applyArmorProfile(initArmor);
-            runtime.GameUI.updateHealth(runtime.GamePlayerCombat.getHP(), runtime.GamePlayerCombat.getMaxHP());
+            if (runtime.GameGameplayHudSync && runtime.GameGameplayHudSync.syncSelfCombatHud) {
+                runtime.GameGameplayHudSync.syncSelfCombatHud();
+            }
             runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
 
             options.applyDebugVisuals(false);
@@ -128,20 +133,22 @@
             return Promise.reject(new Error('Non-networked runtime modes are no longer supported.'));
         }
 
-        runtime.GameNet.init(scene);
+        if (netRuntime && netRuntime.init) {
+            netRuntime.init(scene);
+        }
         var metaWaitStartedAt = performance.now();
         var metaTimeoutMs = 1400;
 
         return new Promise(function (resolve) {
             (function waitForWorldMeta() {
-                var receivedMeta = runtime.GameNet.getWorldMeta ? runtime.GameNet.getWorldMeta() : null;
+                var receivedMeta = netView && netView.getWorldMeta ? netView.getWorldMeta() : null;
                 if (receivedMeta && receivedMeta.worldSeed) {
                     resolve(finalizeWorldBootstrap(receivedMeta));
                     return;
                 }
 
                 if ((performance.now() - metaWaitStartedAt) >= metaTimeoutMs) {
-                    var fallbackMeta = runtime.GameNet.getExpectedWorldMeta();
+                    var fallbackMeta = netView && netView.getExpectedWorldMeta ? netView.getExpectedWorldMeta() : null;
                     if (fallbackMeta && fallbackMeta.worldSeed) {
                         options.startupDebugNotice = (options.startupDebugNotice ? options.startupDebugNotice + ' ' : '') + 'World metadata timeout; using expected room profile.';
                     }

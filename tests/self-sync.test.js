@@ -6,7 +6,12 @@ import vm from 'node:vm';
 async function loadSelfSyncHarness(runtimeOverrides = {}) {
   const statusCalls = [];
   const actionRestrictionCalls = [];
+  const authoritativeCombatCalls = [];
+  const respawnCombatCalls = [];
+  const weaponCombatCalls = [];
+  let hitscanSyncCalls = 0;
   let reconcileCalls = 0;
+  let applyCalls = 0;
   const runtime = {
     GameNet: {
       getMatchState() { return null; }
@@ -19,14 +24,29 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
       setActionRestrictions(state) {
         actionRestrictionCalls.push(JSON.parse(JSON.stringify(state)));
       },
+      applyAuthoritativeMotion() {
+        applyCalls += 1;
+      },
       reconcileAuthoritativeMotion() {
         reconcileCalls += 1;
       }
     },
     GamePlayerCombat: {
-      syncFromNetwork() {}
+      syncAuthoritativeState(state) {
+        authoritativeCombatCalls.push(JSON.parse(JSON.stringify(state)));
+      },
+      syncWeaponState(state) {
+        weaponCombatCalls.push(JSON.parse(JSON.stringify(state)));
+      },
+      syncRespawnState(state) {
+        respawnCombatCalls.push(state ? JSON.parse(JSON.stringify(state)) : null);
+      }
     },
-    GameHitscan: {},
+    GameHitscan: {
+      syncAmmoStateFromNetwork() {
+        hitscanSyncCalls += 1;
+      }
+    },
     GameThrowables: {},
     GameUI: {},
     ...runtimeOverrides
@@ -55,7 +75,12 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
     syncPlayerState: sandbox.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState,
     statusCalls,
     actionRestrictionCalls,
+    authoritativeCombatCalls,
+    respawnCombatCalls,
+    weaponCombatCalls,
+    getHitscanSyncCalls: function () { return hitscanSyncCalls; },
     reconcileCalls: function () { return reconcileCalls; },
+    applyCalls: function () { return applyCalls; },
     timeState
   };
 }
@@ -97,6 +122,12 @@ test('GameNetSelfSync uses authoritative lock timers instead of deriving choke l
     throwableUntil: 2200,
     abilityUntil: 2300
   });
+  assert.equal(harness.authoritativeCombatCalls.length, 1);
+  assert.equal(harness.weaponCombatCalls.length, 1);
+  assert.equal(harness.weaponCombatCalls[0].weaponLockUntil, 2100);
+  assert.equal(harness.respawnCombatCalls.length, 1);
+  assert.equal(harness.respawnCombatCalls[0], null);
+  assert.equal(harness.getHitscanSyncCalls(), 0);
 });
 
 test('GameNetSelfSync locks the player out for the rest of an LMS round when out of round', async () => {
@@ -140,41 +171,49 @@ test('GameNetSelfSync locks the player out for the rest of an LMS round when out
   });
 });
 
-test('GameNetSelfSync does not re-run authoritative reconciliation for identical snapshots every frame', async () => {
-  const harness = await loadSelfSyncHarness({
-    GameNet: {
-      getMatchState() { return null; },
-      getInputSyncState() {
-        return {
-          pendingInputCount: 0,
-          lastSentSeq: 10,
-          lastAckedSeq: 10
-        };
-      },
-      getPendingInputSamples() { return []; }
+test('GameNetSelfSync forwards pending respawn countdown into the self combat owner', async () => {
+  const harness = await loadSelfSyncHarness();
+
+  harness.syncPlayerState({
+    id: 'usr_test',
+    alive: false,
+    stunUntil: 0,
+    spawnShieldUntil: 0,
+    abilityFx: null
+  }, 0.016, {
+    respawnState: {
+      active: true,
+      respawnAt: 1800,
+      remainingMs: 800
     }
   });
 
-  const selfState = {
+  assert.deepEqual(harness.respawnCombatCalls.at(-1), {
+    active: true,
+    respawnAt: 1800,
+    remainingMs: 800
+  });
+});
+
+test('GameNetSelfSync does not own authoritative motion correction anymore', async () => {
+  const harness = await loadSelfSyncHarness();
+
+  harness.syncPlayerState({
     id: 'usr_test',
-    seq: 10,
-    x: 4,
+    seq: 5,
+    x: 1,
     y: 1.6,
-    z: 8,
-    yaw: 0.25,
-    pitch: 0.05,
+    z: 2,
+    yaw: 0,
+    pitch: 0,
     velocityY: 0,
     isGrounded: true,
     alive: true,
-    abilityFx: null
-  };
+    abilityFx: {
+      hookedUntil: 1300
+    }
+  }, 0.016);
 
-  harness.syncPlayerState(selfState, 0.016);
-  harness.syncPlayerState(selfState, 0.016);
-
-  assert.equal(harness.reconcileCalls(), 1);
-
-  harness.syncPlayerState(Object.assign({}, selfState, { seq: 11, x: 4.25 }), 0.016);
-
-  assert.equal(harness.reconcileCalls(), 2);
+  assert.equal(harness.applyCalls(), 0);
+  assert.equal(harness.reconcileCalls(), 0);
 });

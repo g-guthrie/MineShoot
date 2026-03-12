@@ -5,60 +5,59 @@
 (function () {
     'use strict';
 
-    var lastMotionSyncKey = '';
-
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
-    function buildMotionSyncKey(selfState) {
-        if (!selfState || typeof selfState !== 'object') return '';
-        var precision = function (value) {
-            return Math.round(Number(value || 0) * 1000);
-        };
-        return [
-            String(selfState.id || ''),
-            Number(selfState.seq || 0),
-            precision(selfState.x),
-            precision(selfState.y),
-            precision(selfState.z),
-            precision(selfState.yaw),
-            precision(selfState.pitch),
-            precision(selfState.velocityY),
-            selfState.isGrounded ? '1' : '0',
-            selfState.alive === false ? '0' : '1'
-        ].join('|');
-    }
-
-    function syncPlayerState(selfState, dt) {
-        if (!selfState) return;
-        var RT = runtime();
-        var abilityFxView = RT.GameAbilityFx || null;
-        var matchState = RT.GameNet && RT.GameNet.getMatchState
-            ? RT.GameNet.getMatchState()
+    function syncPlayerState(selfState, dt, options) {
+        var authoritativeState = selfState || null;
+        var syncOptions = options || {};
+        var respawnState = Object.prototype.hasOwnProperty.call(syncOptions, 'respawnState')
+            ? syncOptions.respawnState
             : null;
+        if (!authoritativeState && !respawnState) return;
+        var RT = runtime();
+        var net = RT.GameNet || null;
+        var netView = net && net.view ? net.view : net;
+        var abilityFxView = RT.GameAbilityFx || null;
+        var matchState = netView && netView.getMatchState
+            ? netView.getMatchState()
+            : null;
+        if (!authoritativeState) {
+            if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncRespawnState) {
+                RT.GamePlayerCombat.syncRespawnState(respawnState);
+            }
+            return;
+        }
         var spectatorLockUntil = Date.now() + 86400000;
-        var outOfRoundLockUntil = selfState.outOfRound && matchState && !matchState.ended
+        var outOfRoundLockUntil = authoritativeState.outOfRound && matchState && !matchState.ended
             ? Math.max(Number(matchState.resetAt || 0), spectatorLockUntil)
             : 0;
         var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
-            ? abilityFxView.readAbilityFx(selfState)
-            : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
-                ? selfState.abilityFx
+            ? abilityFxView.readAbilityFx(authoritativeState)
+            : ((authoritativeState.abilityFx && typeof authoritativeState.abilityFx === 'object')
+                ? authoritativeState.abilityFx
                 : null);
-        var motionSyncKey = buildMotionSyncKey(selfState);
-        var motionChanged = motionSyncKey !== lastMotionSyncKey;
-
-        if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork) {
-            RT.GamePlayerCombat.syncFromNetwork(selfState);
+        if (RT.GamePlayerCombat) {
+            if (RT.GamePlayerCombat.syncAuthoritativeState) {
+                RT.GamePlayerCombat.syncAuthoritativeState(authoritativeState);
+            } else if (RT.GamePlayerCombat.syncFromNetwork) {
+                RT.GamePlayerCombat.syncFromNetwork(authoritativeState);
+            }
+            if (RT.GamePlayerCombat.syncWeaponState) {
+                RT.GamePlayerCombat.syncWeaponState(authoritativeState);
+            }
+            if (RT.GamePlayerCombat.syncRespawnState) {
+                RT.GamePlayerCombat.syncRespawnState(respawnState);
+            }
         }
 
-        if (RT.GameHitscan && RT.GameHitscan.syncAmmoStateFromNetwork && selfState.weaponAmmo) {
-            RT.GameHitscan.syncAmmoStateFromNetwork(selfState.weaponAmmo);
+        if ((!RT.GamePlayerCombat || !RT.GamePlayerCombat.syncWeaponState) && RT.GameHitscan && RT.GameHitscan.syncAmmoStateFromNetwork && authoritativeState.weaponAmmo) {
+            RT.GameHitscan.syncAmmoStateFromNetwork(authoritativeState.weaponAmmo);
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setAliveVisual) {
-            RT.GamePlayer.setAliveVisual(selfState.alive !== false);
+            RT.GamePlayer.setAliveVisual(authoritativeState.alive !== false);
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
@@ -66,58 +65,26 @@
                 ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, Date.now())
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
-                stunUntil: Math.max(Number(selfState.stunUntil || 0), outOfRoundLockUntil),
+                stunUntil: Math.max(Number(authoritativeState.stunUntil || 0), outOfRoundLockUntil),
                 hookPullStartedAt: Number(selfAbilityFx ? (selfAbilityFx.hookedStartedAt || 0) : 0),
                 hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
                 chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
                 chokeUntil: Number(selfChokeVictimState.endsAt || 0),
                 chokeLift: Number(selfChokeVictimState.liftHeight || 0),
-                spawnShieldUntil: Number(selfState.spawnShieldUntil || 0)
+                spawnShieldUntil: Number(authoritativeState.spawnShieldUntil || 0)
             });
 
             if (RT.GamePlayer.setActionRestrictions) {
                 RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: Math.max(Number(selfState.weaponLockUntil || 0), outOfRoundLockUntil),
-                    throwableUntil: Math.max(Number(selfState.throwableLockUntil || 0), outOfRoundLockUntil),
-                    abilityUntil: Math.max(Number(selfState.abilityLockUntil || 0), outOfRoundLockUntil)
+                    weaponUntil: Math.max(Number(authoritativeState.weaponLockUntil || 0), outOfRoundLockUntil),
+                    throwableUntil: Math.max(Number(authoritativeState.throwableLockUntil || 0), outOfRoundLockUntil),
+                    abilityUntil: Math.max(Number(authoritativeState.abilityLockUntil || 0), outOfRoundLockUntil)
                 });
             }
         }
 
-        if (
-            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
-            RT.GamePlayer &&
-            RT.GamePlayer.applyAuthoritativeMotion
-        ) {
-            RT.GamePlayer.applyAuthoritativeMotion(selfState, { deferViewSync: true });
-            lastMotionSyncKey = motionSyncKey;
-        } else if (
-            motionChanged &&
-            selfState.alive !== false &&
-            RT.GamePlayer &&
-            RT.GamePlayer.reconcileAuthoritativeMotion
-        ) {
-            var inputSyncState = RT.GameNet && RT.GameNet.getInputSyncState
-                ? RT.GameNet.getInputSyncState()
-                : null;
-            var pendingInputs = RT.GameNet && RT.GameNet.getPendingInputSamples
-                ? RT.GameNet.getPendingInputSamples()
-                : [];
-            RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
-                dt: dt,
-                pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
-                hasUnsentInputTail: !!(inputSyncState && inputSyncState.hasUnsentInputTail),
-                lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
-                lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
-                pendingInputs: pendingInputs,
-                snapshotAt: Date.now(),
-                deferViewSync: true
-            });
-            lastMotionSyncKey = motionSyncKey;
-        }
-
         if (RT.GameThrowables && RT.GameThrowables.setNetworkInventoryState && RT.GameUI && RT.GameUI.updateThrowableInfo) {
-            RT.GameThrowables.setNetworkInventoryState(selfState.throwables || null);
+            RT.GameThrowables.setNetworkInventoryState(authoritativeState.throwables || null);
             RT.GameUI.updateThrowableInfo(RT.GameThrowables.getState());
         }
     }

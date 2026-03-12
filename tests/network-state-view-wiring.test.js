@@ -87,11 +87,22 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
 
   await loadScript('../js/net/state-view.js', sandbox);
   await loadScript('../js/net/runtime-state.js', sandbox);
+  await loadScript('../js/net/commands.js', sandbox);
   await loadScript('../js/net/runtime.js', sandbox);
   await loadScript('../js/network.js', sandbox);
 
   assert.equal(
-    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState(),
+    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.view.getMatchState(),
     null
   );
+  assert.equal(
+    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.view.getAuthoritativeSelfState(),
+    null
+  );
+  assert.equal(
+    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.view.getSelfReconciliationState(),
+    null
+  );
+  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.commands.sendFire, 'function');
+  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.runtime.update, 'function');
 });

@@ -15,6 +15,11 @@
     var hookTmpDir = new THREE.Vector3();
     var hookTmpLook = new THREE.Vector3();
 
+    function netView() {
+        var net = runtime.GameNet || null;
+        return net && net.view ? net.view : net;
+    }
+
     function createChainSegment(index) {
         var seg = new THREE.Mesh(
             new THREE.BoxGeometry(0.075, 0.075, 1),
@@ -171,8 +176,9 @@
             var core = runtime.GameNetEntities.getCoreWorldPosition(targetId, new THREE.Vector3());
             if (core) return core;
         }
-        if (runtime.GameNet && runtime.GameNet.getEntityMarkerWorldPos) {
-            return runtime.GameNet.getEntityMarkerWorldPos(targetId);
+        var netApi = netView();
+        if (netApi && netApi.getEntityMarkerWorldPos) {
+            return netApi.getEntityMarkerWorldPos(targetId);
         }
         return null;
     }
@@ -188,8 +194,9 @@
 
     function renderSelf(multiplayerMode) {
         var selfState = null;
-        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
-            var netAbility = runtime.GameNet.getSelfAbilityState();
+        var netApi = netView();
+        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
+            var netAbility = netApi.getSelfAbilityState();
             selfState = netAbility ? netAbility.hookState : null;
         } else if (runtime.GameAbilities && runtime.GameAbilities.getHookState) {
             selfState = runtime.GameAbilities.getHookState();

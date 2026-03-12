@@ -110,7 +110,6 @@
     var loadoutSlots = selectableWeaponIds();
     var pendingViewSync = false;
 
-    var lastReplayAckSeq = 0;
     var avatarAliveVisible = true;
     var statusState = {
         stunUntil: 0,
@@ -161,6 +160,10 @@
         if (!helper || !helper.create) return null;
         playerView = helper.create({
             getCurrentWeaponState: function () {
+                var combat = globalThis.__MAYHEM_RUNTIME.GamePlayerCombat;
+                if (combat && combat.getCurrentWeaponState) {
+                    return combat.getCurrentWeaponState();
+                }
                 return globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
                     ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
                     : null;
@@ -722,40 +725,6 @@
         return true;
     }
 
-    function replayAuthoritativeMotion(state, pendingInputs, options) {
-        if (!camera || !state) return false;
-        var helper = movementHelper();
-        var reconcile = reconciliationHelper();
-        var world = worldHelper();
-        var opts = options || {};
-        if (!helper || !helper.stepAuthoritativeMovement || !reconcile || !reconcile.replayMotionState) {
-            return applyAuthoritativeMotion(state, {
-                preserveViewAngles: true,
-                deferViewSync: !!opts.deferViewSync
-            });
-        }
-
-        var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
-        if (ackSeq > 0) lastReplayAckSeq = ackSeq;
-        var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs.slice() : [], {
-            stepMovement: helper.stepAuthoritativeMovement,
-            bounds: world.getWorldBounds(),
-            collisionBoxes: world.getCollisionBoxes(),
-            getGroundHeightAt: world.getGroundHeightAt,
-            movementLocked: function () { return isMovementLocked(); },
-            eyeHeight: EYE_HEIGHT,
-            playerHeight: PLAYER_HEIGHT,
-            playerRadius: PLAYER_RADIUS,
-            epsilon: EPSILON,
-            fallbackYaw: yaw,
-            fallbackPitch: pitch
-        });
-        return applyMotionState(motionState, opts.dt, {
-            preserveViewAngles: true,
-            deferViewSync: !!opts.deferViewSync
-        });
-    }
-
     function hasMovementIntentInput() {
         return !!(keys.forward || keys.backward || keys.left || keys.right || keys.jump || keys.sprint);
     }
@@ -771,24 +740,15 @@
         var dx = x - playerX;
         var dz = z - playerZ;
         var horizontalDistSq = (dx * dx) + (dz * dz);
-        var hardSnapDistance = Number(opts.hardSnapDistance || 2.25);
-        var softCorrectDistance = Number(opts.softCorrectDistance || 0.2);
         var pendingInputCount = Math.max(0, Number(opts.pendingInputCount || 0));
         var ackDrift = Math.max(0, Number(opts.lastSentSeq || 0) - Number(opts.lastAckedSeq || 0));
         var movingIntent = hasMovementIntentInput() && !isMovementLocked();
         var canCorrectWhileMoving = pendingInputCount <= 1 && ackDrift <= 1;
-        var pendingInputs = Array.isArray(opts.pendingInputs) ? opts.pendingInputs : [];
-        var reconcile = reconciliationHelper();
-
-        if (reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
-            pendingInputCount: pendingInputCount,
-            hasUnsentInputTail: !!opts.hasUnsentInputTail,
-            lastAckedSeq: Number(opts.lastAckedSeq || 0),
-            lastReplayAckSeq: lastReplayAckSeq
-        })) {
-            return replayAuthoritativeMotion(state, pendingInputs, opts);
-        }
-
+        var hardSnapDistance = Number(
+            opts.hardSnapDistance ||
+            ((movingIntent || pendingInputCount > 0) ? 2.75 : 1.35)
+        );
+        var softCorrectDistance = Number(opts.softCorrectDistance || 0.2);
         if (opts.force || horizontalDistSq >= (hardSnapDistance * hardSnapDistance)) {
             return applyMotionState(state, dt, {
                 preserveViewAngles: true,
@@ -796,11 +756,7 @@
             });
         }
 
-        if (movingIntent) {
-            return false;
-        }
-
-        if (!canCorrectWhileMoving || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
+        if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
             return false;
         }
 
@@ -1266,10 +1222,6 @@
 
     GamePlayer.reconcileAuthoritativeMotion = function (state, options) {
         return reconcileAuthoritativeMotion(state, options);
-    };
-
-    GamePlayer.replayAuthoritativeMotion = function (state, pendingInputs, options) {
-        return replayAuthoritativeMotion(state, pendingInputs, options);
     };
 
     GamePlayer.respawnRandom = function () {

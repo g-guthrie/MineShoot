@@ -30,6 +30,11 @@
             return !!(opts.getMultiplayerMode && opts.getMultiplayerMode());
         }
 
+        function netCommands() {
+            var net = runtime.GameNet || null;
+            return net && net.commands ? net.commands : net;
+        }
+
         function hasInputCapture() {
             return !!(opts.hasInputCapture && opts.hasInputCapture());
         }
@@ -114,14 +119,15 @@
                 ? throwablesApi.buildThrowIntent(camera)
                 : null);
 
-            if (multiplayerMode() && runtime.GameNet && runtime.GameNet.sendThrow) {
+            var commandsApi = netCommands();
+            if (multiplayerMode() && commandsApi && commandsApi.sendThrow) {
                 var clientThrowId = throwablesApi && throwablesApi.buildClientThrowId
                     ? throwablesApi.buildClientThrowId()
                     : ('cthrow-' + Date.now().toString(36));
                 if (throwablesApi && throwablesApi.throwPredicted) {
                     throwablesApi.throwPredicted(type, camera, clientThrowId, throwIntent);
                 }
-                runtime.GameNet.sendThrow(type, clientThrowId, throwIntent);
+                commandsApi.sendThrow(type, clientThrowId, throwIntent);
                 triggerLocalThrowFeedback();
                 setTransientDebug('Throw sent: ' + type, 650);
                 return { ok: true, sent: true };
@@ -143,7 +149,8 @@
             if (!canUseLocalAction('ability')) return;
 
             var camera = getCamera();
-            if (multiplayerMode() && runtime.GameNet && runtime.GameNet.sendAbilityCast) {
+            var commandsApi = netCommands();
+            if (multiplayerMode() && commandsApi && commandsApi.sendAbilityCast) {
                 var preparedCast = runtime.GameAbilities.prepareNetCast
                     ? runtime.GameAbilities.prepareNetCast(slotIndex, camera)
                     : { ok: true, slot: Number(slotIndex) === 2 ? 2 : 1, castData: null, commit: null };
@@ -153,7 +160,7 @@
                     }
                     return;
                 }
-                runtime.GameNet.sendAbilityCast(preparedCast.slot, preparedCast.castData);
+                commandsApi.sendAbilityCast(preparedCast.slot, preparedCast.castData);
                 if (preparedCast.commit) {
                     preparedCast.commit();
                 }

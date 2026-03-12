@@ -4,6 +4,17 @@ This document captures the major issues that justified the clean Mayhem rewrite,
 
 These are architecture findings, not optional ideas.
 
+## Current Rewrite State
+
+Several high-value extractions are already in place:
+- session, postgame, and pointer-lock lifecycle now live in [js/app/runtime-session.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-session.js)
+- runtime launch shell now lives in [js/app/runtime-shell.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-shell.js)
+- lobby state/actions polling now live in [js/app/lobby-session.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/lobby-session.js)
+- net transport, runtime state, runtime core, and state-view boundaries now exist under [js/net](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net)
+- server room ownership is substantially narrowed under [cloudflare/server/room](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room)
+
+The remaining rewrite pressure is mostly coordinator cleanup, compatibility-facade shrinkage, and presentation/runtime decoupling.
+
 ## 1. Runtime and Game Lifecycle Is Monolithic
 
 Mayhem got right:
@@ -12,8 +23,8 @@ Mayhem got right:
 - The product behavior is real.
 
 Mayhem got wrong:
-- Too much lifecycle ownership lives in [js/main.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/main.js).
-- Launch flow, session state, pointer lock, postgame, runtime boot, and orchestration are tangled together.
+- The worst lifecycle knot has been reduced, but too much gameplay coordination still routes through the `GameMain` compatibility surface.
+- Launch flow, session contracts, runtime boot, HUD/session sync, and frame orchestration still need one explicit app-owned coordinator instead of compatibility glue.
 - Lifecycle ownership is hard to identify or test in isolation.
 
 Rewrite rule:
@@ -29,9 +40,9 @@ Mayhem got right:
 - It proves the browser multiplayer model works.
 
 Mayhem got wrong:
-- `GameNet` is too broad.
+- `GameNet` is still too broad even after state/core/view extraction.
 - Connection lifecycle, transport, selectors, remote entities, notices, and sync logic are spread across too many modules.
-- `runtime-access.js` drifted into hidden dependency injection.
+- `runtime-access.js` is still a hidden dependency bridge and the public facade still exposes too much mixed ownership.
 
 Rewrite rule:
 - One transport owner.
@@ -274,8 +285,8 @@ Rewrite rule:
 
 ## Implementation Priorities Derived From These Findings
 
-1. Break lifecycle ownership out of [js/main.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/main.js).
-2. Narrow `net` ownership into transport, runtime, state-view, and input-history.
+1. Finish breaking lifecycle ownership out of [js/main.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/main.js) by leaving it as a compatibility entrypoint only.
+2. Narrow `GameNet` ownership further so the facade stops acting like the real runtime owner.
 3. Make authoritative self state, predicted self state, and reconciliation explicit.
 4. Split self combat, weapon state, abilities, and throwables into narrow owners with net as transport only.
 5. Move remote entity truth to net/state-view and keep rendering in presentation only.

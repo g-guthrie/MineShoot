@@ -226,3 +226,81 @@ test('remote sync does not force the reveal ghost on for choked victims', async 
   assert.equal(revealCalls.length > 0, true);
   assert.equal(revealCalls.at(-1).visible, false);
 });
+
+test('remote sync applies net-owned presentation samples without extra lerp lag', async () => {
+  const remoteSync = await loadRemoteSync();
+  const weaponCalls = [];
+  const animationCalls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 10,
+    targetY: 1.6,
+    targetFootY: 0,
+    targetZ: -10,
+    targetYaw: 1.5,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    weaponId: 'rifle',
+    _appliedWeaponId: 'rifle',
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon(weaponId) {
+        weaponCalls.push(weaponId);
+      },
+      updateAnimation(_dt, animState) {
+        animationCalls.push(animState);
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(
+    0.016,
+    renderMap,
+    function () { return { lift: 0, startedAt: 0 }; },
+    function (entityId, nowMs) {
+      assert.equal(entityId, 'usr_remote');
+      assert.equal(nowMs, 1500);
+      return {
+        x: 4,
+        y: 1.6,
+        z: -2,
+        yaw: 0.75,
+        pitch: 0.3,
+        moveSpeedNorm: 0.45,
+        sprinting: true,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: false,
+        velocityY: 3.5,
+        weaponId: 'pistol'
+      };
+    },
+    1500
+  );
+
+  assert.equal(render.group.position.x, 4);
+  assert.equal(render.group.position.z, -2);
+  assert.equal(render.group.rotation.y, 0.75);
+  assert.deepEqual(weaponCalls, ['pistol']);
+  assert.equal(animationCalls.length, 1);
+  assert.equal(animationCalls[0].aimPitch, 0.3);
+  assert.equal(animationCalls[0].sprinting, true);
+  assert.equal(animationCalls[0].airborne, true);
+});

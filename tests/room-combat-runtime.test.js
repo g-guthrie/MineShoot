@@ -186,6 +186,76 @@ test('combat runtime applies pistol shared shot results without a special server
   }]);
 });
 
+test('combat runtime rewinds hitscan validation targets to the requested render snapshot time', () => {
+  const target = { id: 't1', alive: true, x: 10, y: 1.7, z: -8, yaw: 0.8, pitch: 0 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  let shotRequest = null;
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 5, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [target]; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; },
+    getSnapshotHistory() {
+      return [
+        {
+          serverTime: 1000,
+          entitiesById: new Map([['t1', { id: 't1', x: 0, y: 1.7, z: -8, yaw: 0, pitch: 0 }]])
+        },
+        {
+          serverTime: 1100,
+          entitiesById: new Map([['t1', { id: 't1', x: 10, y: 1.7, z: -8, yaw: 1, pitch: 0 }]])
+        }
+      ];
+    }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'rewind-1',
+    renderServerTime: 1050
+  }, {
+    nowMs: () => 200,
+    weaponStats: { rifle: { cooldownMs: 100, magazineSize: 30 } },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot(options) {
+      shotRequest = options;
+      return [{
+        target: options.targets[0],
+        damage: 12,
+        hitType: 'body'
+      }];
+    },
+    applyDamageFromSource() { return { killed: false }; },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.ok(shotRequest);
+  assert.equal(shotRequest.targets.length, 1);
+  assert.equal(shotRequest.targets[0].liveEntity, target);
+  assert.equal(shotRequest.targets[0].x, 5);
+  assert.equal(shotRequest.targets[0].z, -8);
+  assert.equal(shotRequest.targets[0].yaw, 0.5);
+});
+
 test('spawnProjectile uses the full aim vector so trajectory changes with pitch', () => {
   const room = {
     projectiles: new Map(),

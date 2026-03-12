@@ -167,10 +167,13 @@
             }
 
             if (msg.t === (msgTypes.SNAPSHOT || 'snapshot')) {
+                var receivedAt = Date.now();
                 opts.setGameMode(String(msg.gameMode || opts.getGameMode() || '').toLowerCase());
                 opts.setPrivateRoomPhase(String(msg.privateRoomPhase || opts.getPrivateRoomPhase() || '').toLowerCase());
                 opts.setMatchState((msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : opts.getMatchState());
                 opts.applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || [], {
+                    serverTime: Math.max(0, Math.round(Number(msg.serverTime || 0))),
+                    receivedAt: receivedAt,
                     delta: !!msg.delta,
                     removedEntityIds: msg.removedEntityIds || []
                 });

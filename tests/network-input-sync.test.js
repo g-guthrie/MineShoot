@@ -56,9 +56,9 @@ async function loadGameNetHarness() {
           applySnapshot(entities, projectiles, fireZones, opts = {}) {
             const list = Array.isArray(entities) ? entities : [];
             for (let i = 0; i < list.length; i++) {
-              if (hooks.onEntity) hooks.onEntity(list[i]);
+              if (hooks.onEntity) hooks.onEntity(list[i], opts);
             }
-            if (hooks.onPrune) hooks.onPrune(new Map(list.map((entity) => [entity.id, entity])));
+            if (hooks.onPrune) hooks.onPrune(new Map(list.map((entity) => [entity.id, entity])), opts);
             if (hooks.onProjectiles) hooks.onProjectiles(Array.isArray(projectiles) ? projectiles : []);
             if (hooks.onFireZones) hooks.onFireZones(Array.isArray(fireZones) ? fireZones : []);
           }
@@ -120,6 +120,7 @@ async function loadGameNetHarness() {
     '../js/net/message-router.js',
     '../js/net/runtime-core.js',
     '../js/net/state-view.js',
+    '../js/net/commands.js',
     '../js/net/runtime.js',
     '../js/network.js'
   ]) {
@@ -185,7 +186,7 @@ test('GameNet fire payload uses player eye origin before falling back to camera 
   const harness = await loadGameNetHarness();
   const { GameNet, sentMessages } = harness;
 
-  GameNet.sendFire('rifle', 'shot-1');
+  GameNet.commands.sendFire('rifle', 'shot-1');
 
   assert.equal(sentMessages.length, 1);
   assert.deepEqual(sentMessages[0].aimOrigin, {
@@ -193,6 +194,77 @@ test('GameNet fire payload uses player eye origin before falling back to camera 
     y: 11,
     z: 12
   });
+});
+
+test('GameNet exposes net-owned remote presentation timing from snapshot serverTime', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1000,
+    delta: false,
+    entities: [{ id: 'usr_remote', x: 0, y: 1.6, z: -8, yaw: 0, pitch: 0 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1033;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1033,
+    delta: true,
+    entities: [{ id: 'usr_remote', x: 3.3, y: 1.6, z: -8, yaw: 0.33, pitch: 0.1 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1066;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1066,
+    delta: true,
+    entities: [{ id: 'usr_remote', x: 6.6, y: 1.6, z: -8, yaw: 0.66, pitch: 0.2 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1120;
+  const clock = GameNet.getRemotePresentationClock();
+  const present = GameNet.sampleRemoteEntityPresentation('usr_remote');
+
+  assert.equal(clock.latestServerTimeMs, 1066);
+  assert.ok(clock.renderServerTimeMs < clock.latestServerTimeMs);
+  assert.ok(present);
+  assert.ok(Math.abs(present.x - ((clock.renderServerTimeMs - 1000) / 10)) < 0.0001);
+  assert.ok(Math.abs(present.yaw - ((clock.renderServerTimeMs - 1000) / 100)) < 0.0002);
+});
+
+test('GameNet fire payload includes the current remote presentation render time', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1000,
+    delta: false,
+    entities: [{ id: 'usr_remote', x: 0, y: 1.6, z: -8, yaw: 0, pitch: 0 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1060;
+  const expectedRenderServerTime = Math.round(GameNet.getRemotePresentationClock().renderServerTimeMs);
+  GameNet.commands.sendFire('rifle', 'shot-rt');
+
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].renderServerTime, expectedRenderServerTime);
 });
 
 test('GameNet prunes acked input samples from self snapshots', async () => {
@@ -239,7 +311,7 @@ test('GameNet prunes acked input samples from self snapshots', async () => {
   assert.equal(pending[0].seq, 2);
 });
 
-test('GameNet includes unsent local prediction frames in pending replay history', async () => {
+test('GameNet only replays sent input samples and does not append an unsent local tail', async () => {
   const harness = await loadGameNetHarness();
   const { GameNet, timeState } = harness;
 
@@ -252,13 +324,77 @@ test('GameNet includes unsent local prediction frames in pending replay history'
   const syncState = GameNet.getInputSyncState();
   const pending = GameNet.getPendingInputSamples();
 
-  assert.equal(syncState.pendingInputCount, 2);
-  assert.equal(syncState.hasUnsentInputTail, true);
-  assert.equal(pending.length, 2);
+  assert.equal(syncState.pendingInputCount, 1);
+  assert.equal(syncState.hasUnsentInputTail, false);
+  assert.equal(pending.length, 1);
   assert.equal(pending[0].seq, 1);
-  assert.equal(pending[1].seq, 0);
-  assert.equal(pending[1].dtMs, 16);
-  assert.equal(pending[1].yaw, 0.05);
+  assert.equal(pending[0].dtMs, 33);
+  assert.equal(pending[0].yaw, 0);
+});
+
+test('GameNet only exposes authoritative self state after room snapshots and returns a defensive copy', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet } = harness;
+
+  assert.equal(GameNet.getAuthoritativeSelfState(), null);
+  assert.equal(GameNet.getSelfReconciliationState(), null);
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 2,
+        y: 1.6,
+        z: 4,
+        yaw: 0.1,
+        pitch: 0.2,
+        seq: 3,
+        hp: 400,
+        abilityFx: {
+          hookedUntil: 1500
+        }
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const state = GameNet.getAuthoritativeSelfState();
+  const reconciliation = GameNet.getSelfReconciliationState();
+
+  assert.equal(state.hp, 400);
+  assert.equal(reconciliation.authoritativeState.seq, 3);
+  assert.equal(reconciliation.pendingInputs.length, 0);
+
+  state.hp = 5;
+  state.abilityFx.hookedUntil = 10;
+  reconciliation.authoritativeState.seq = 99;
+
+  assert.equal(GameNet.getAuthoritativeSelfState().hp, 400);
+  assert.equal(GameNet.getAuthoritativeSelfState().abilityFx.hookedUntil, 1500);
+  assert.equal(GameNet.getSelfReconciliationState().authoritativeState.seq, 3);
+});
+
+test('GameNet exposes explicit runtime, command, view, and remote-entity owners', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet } = harness;
+
+  assert.equal(typeof GameNet.runtime.init, 'function');
+  assert.equal(typeof GameNet.runtime.update, 'function');
+  assert.equal(typeof GameNet.commands.sendFire, 'function');
+  assert.equal(typeof GameNet.view.getMatchState, 'function');
+  assert.equal(typeof GameNet.remoteEntities.getHitboxArray, 'function');
 });
 
 test('GameNet tolerates incomplete remote render entries during private-room sync', async () => {
