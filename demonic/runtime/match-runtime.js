@@ -168,8 +168,13 @@
                     selfState: snapshot.net.selfState ? JSON.parse(JSON.stringify(snapshot.net.selfState)) : null,
                     predictedSelfState: snapshot.net.predictedSelfState ? JSON.parse(JSON.stringify(snapshot.net.predictedSelfState)) : null,
                     matchState: snapshot.net.matchState ? JSON.parse(JSON.stringify(snapshot.net.matchState)) : null,
+                    lastOutgoingFire: snapshot.net.lastOutgoingFire ? JSON.parse(JSON.stringify(snapshot.net.lastOutgoingFire)) : null,
+                    lastConfirmedHit: snapshot.net.lastConfirmedHit ? JSON.parse(JSON.stringify(snapshot.net.lastConfirmedHit)) : null,
+                    lastIncomingDamage: snapshot.net.lastIncomingDamage ? JSON.parse(JSON.stringify(snapshot.net.lastIncomingDamage)) : null,
+                    respawnState: snapshot.net.respawnState ? JSON.parse(JSON.stringify(snapshot.net.respawnState)) : null,
                     status: String(snapshot.net.status || '')
                 } : null,
+                playerCombat: snapshot.playerCombat ? JSON.parse(JSON.stringify(snapshot.playerCombat)) : null,
                 combat: snapshot.combat ? {
                     gameMode: String(snapshot.combat.gameMode || ''),
                     selectedWeaponId: String(snapshot.combat.selectedWeaponId || ''),

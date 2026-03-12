@@ -115,8 +115,13 @@
                     selfState: sessionState.runtimeSnapshot.net.selfState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.selfState)) : null,
                     predictedSelfState: sessionState.runtimeSnapshot.net.predictedSelfState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.predictedSelfState)) : null,
                     matchState: sessionState.runtimeSnapshot.net.matchState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.matchState)) : null,
+                    lastOutgoingFire: sessionState.runtimeSnapshot.net.lastOutgoingFire ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.lastOutgoingFire)) : null,
+                    lastConfirmedHit: sessionState.runtimeSnapshot.net.lastConfirmedHit ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.lastConfirmedHit)) : null,
+                    lastIncomingDamage: sessionState.runtimeSnapshot.net.lastIncomingDamage ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.lastIncomingDamage)) : null,
+                    respawnState: sessionState.runtimeSnapshot.net.respawnState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.respawnState)) : null,
                     status: String(sessionState.runtimeSnapshot.net.status || '')
                 } : null,
+                playerCombat: sessionState.runtimeSnapshot.playerCombat ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.playerCombat)) : null,
                 awareness: sessionState.runtimeSnapshot.awareness ? {
                     segments: Array.isArray(sessionState.runtimeSnapshot.awareness.segments) ? sessionState.runtimeSnapshot.awareness.segments.slice() : [],
                     coreIntensity: Number(sessionState.runtimeSnapshot.awareness.coreIntensity || 0),

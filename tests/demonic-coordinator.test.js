@@ -8,6 +8,7 @@ async function loadDemonicCoordinator() {
   const bindingsCode = await fs.readFile(new URL('../demonic/gameplay/input/bindings.js', import.meta.url), 'utf8');
   const awarenessCode = await fs.readFile(new URL('../demonic/gameplay/awareness/runtime.js', import.meta.url), 'utf8');
   const playerCode = await fs.readFile(new URL('../demonic/gameplay/player/runtime.js', import.meta.url), 'utf8');
+  const playerCombatCode = await fs.readFile(new URL('../demonic/gameplay/player/combat-runtime.js', import.meta.url), 'utf8');
   const worldCode = await fs.readFile(new URL('../demonic/gameplay/world/runtime.js', import.meta.url), 'utf8');
   const netTransportCode = await fs.readFile(new URL('../demonic/gameplay/net/transport.js', import.meta.url), 'utf8');
   const netInputHistoryCode = await fs.readFile(new URL('../demonic/gameplay/net/input-history.js', import.meta.url), 'utf8');
@@ -105,6 +106,7 @@ async function loadDemonicCoordinator() {
   vm.runInContext(bindingsCode, context);
   vm.runInContext(awarenessCode, context);
   vm.runInContext(playerCode, context);
+  vm.runInContext(playerCombatCode, context);
   vm.runInContext(worldCode, context);
   vm.runInContext(netTransportCode, context);
   vm.runInContext(netInputHistoryCode, context);
@@ -142,6 +144,8 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.player.runSpeed, 14);
   assert.equal(started.world.worldSeed, 'demonic-seed-a');
   assert.equal(started.net.authorityMode, 'offline');
+  assert.equal(started.playerCombat.hp, 500);
+  assert.equal(started.playerCombat.alive, true);
   assert.equal(started.combat.selectedWeaponId, 'machinegun');
   assert.equal(typeof started.camera.fov, 'number');
   assert.equal(started.abilities.loadout.slot1, 'choke');
@@ -164,6 +168,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(afterMotion.player.x >= 0, true);
   assert.equal(afterMotion.player.z >= 0, true);
   assert.equal(Array.isArray(afterMotion.hud.awareness.segments), true);
+  assert.equal(afterMotion.hud.vitals.hp, 500);
   assert.equal(afterMotion.net.inputSync.pendingInputCount > 0, true);
 
   const fired = coordinator.fire();

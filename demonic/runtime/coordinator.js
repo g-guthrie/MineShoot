@@ -13,6 +13,7 @@
         var inputBindingsApi = demonicRuntime.GameInputBindings || null;
         var awarenessApi = demonicRuntime.GameAwarenessRuntime || null;
         var playerApi = demonicRuntime.GamePlayerRuntime || null;
+        var playerCombatApi = demonicRuntime.GamePlayerCombatRuntime || null;
         var worldApi = demonicRuntime.GameWorldRuntime || null;
         var netApi = demonicRuntime.GameNetRuntime || null;
         var weaponFeedbackApi = demonicRuntime.GameWeaponFeedbackRuntime || null;
@@ -60,6 +61,11 @@
                 return combat && combat.getSnapshot ? combat.getSnapshot() : null;
             }
         }) : null;
+        var playerCombat = playerCombatApi && playerCombatApi.create ? playerCombatApi.create({
+            getNetSnapshot: function () {
+                return net && net.getSnapshot ? net.getSnapshot() : {};
+            }
+        }) : null;
         var camera = cameraApi && cameraApi.create ? cameraApi.create({
             getPlayerSnapshot: function () {
                 return player && player.getSnapshot ? player.getSnapshot() : {};
@@ -85,6 +91,9 @@
             },
             getPlayerSnapshot: function () {
                 return player && player.getSnapshot ? player.getSnapshot() : {};
+            },
+            getPlayerCombatSnapshot: function () {
+                return playerCombat && playerCombat.getSnapshot ? playerCombat.getSnapshot() : {};
             },
             getAwarenessSnapshot: function () {
                 return awareness && awareness.getSnapshot ? awareness.getSnapshot() : {};
@@ -163,6 +172,30 @@
         }) : null;
         var tickCount = 0;
         var elapsedMs = 0;
+        var localShotCounter = 0;
+
+        function buildAimForward(cameraState, playerState) {
+            var cameraPos = cameraState && cameraState.position ? cameraState.position : null;
+            var cameraTarget = cameraState && cameraState.target ? cameraState.target : null;
+            if (cameraPos && cameraTarget) {
+                var dx = Number(cameraTarget.x || 0) - Number(cameraPos.x || 0);
+                var dy = Number(cameraTarget.y || 0) - Number(cameraPos.y || 0);
+                var dz = Number(cameraTarget.z || 0) - Number(cameraPos.z || 0);
+                var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (len > 0.000001) {
+                    return { x: dx / len, y: dy / len, z: dz / len };
+                }
+            }
+
+            var yaw = Number(playerState && playerState.yaw || 0);
+            var pitch = Number(playerState && playerState.pitch || 0);
+            var cosPitch = Math.cos(pitch);
+            return {
+                x: -Math.sin(yaw) * cosPitch,
+                y: Math.sin(pitch),
+                z: -Math.cos(yaw) * cosPitch
+            };
+        }
 
         var loop = loopApi && loopApi.create ? loopApi.create({
             getTargetFps: function () {
@@ -201,6 +234,7 @@
                     });
                 }
                 if (net && net.setLocalSelfState) {
+                    var playerCombatState = playerCombat && playerCombat.getSnapshot ? playerCombat.getSnapshot() : null;
                     net.setLocalSelfState({
                         x: Number(playerState && playerState.x || 0),
                         y: Number(playerState && playerState.y || 0),
@@ -208,15 +242,31 @@
                         yaw: Number(playerState && playerState.yaw || 0),
                         pitch: Number(playerState && playerState.pitch || 0),
                         weaponId: String(combatState && combatState.selectedWeaponId || ''),
-                        alive: true
+                        alive: !!(playerCombatState ? playerCombatState.alive : true)
                     });
                 }
                 if (net && net.update) net.update(dt);
+                var correction = net && net.consumeAuthoritativeMotionCorrection
+                    ? net.consumeAuthoritativeMotionCorrection()
+                    : null;
+                if (correction && player) {
+                    if (correction.type === 'replay' && player.reconcileAuthoritativeMotion) {
+                        player.reconcileAuthoritativeMotion(correction.selfState, correction);
+                    } else if (correction.selfState && player.applyAuthoritativeMotion) {
+                        player.applyAuthoritativeMotion(correction.selfState);
+                    }
+                }
+                if (playerCombat && playerCombat.update) playerCombat.update(dt);
+                var incomingFeedback = playerCombat && playerCombat.consumeIncomingFeedback ? playerCombat.consumeIncomingFeedback() : null;
+                if (incomingFeedback && damageFeedback && damageFeedback.trigger) {
+                    damageFeedback.trigger(null, incomingFeedback.damage);
+                }
                 if (typeof options.onUpdate === 'function') options.onUpdate(getSnapshot());
             }
         }) : null;
 
         function refreshDerivedState() {
+            if (playerCombat && playerCombat.update) playerCombat.update(0);
             if (camera && camera.update) camera.update(0);
             if (hud && hud.update) hud.update(0);
             if (presentation && presentation.update) presentation.update(0);
@@ -240,6 +290,7 @@
                 player: player && player.getSnapshot ? player.getSnapshot() : null,
                 world: world && world.getSnapshot ? world.getSnapshot() : null,
                 net: net && net.getSnapshot ? net.getSnapshot() : null,
+                playerCombat: playerCombat && playerCombat.getSnapshot ? playerCombat.getSnapshot() : null,
                 awareness: awareness && awareness.getSnapshot ? awareness.getSnapshot() : null,
                 combat: combat && combat.getSnapshot ? combat.getSnapshot() : null,
                 abilities: abilities && abilities.getSnapshot ? abilities.getSnapshot() : null,
@@ -278,10 +329,29 @@
                 return getSnapshot();
             },
             fire: function () {
+                var playerCombatState = playerCombat && playerCombat.getSnapshot ? playerCombat.getSnapshot() : null;
+                if (playerCombatState && (!playerCombatState.alive || playerCombatState.respawnActive)) return false;
                 var fired = combat && combat.fire ? combat.fire() : false;
                 if (fired && weaponFeedback && weaponFeedback.triggerFire) {
                     var cameraState = camera && camera.getSnapshot ? camera.getSnapshot() : { scopeBlend: 0 };
                     weaponFeedback.triggerFire(Number(cameraState.scopeBlend || 0));
+                    var combatState = combat && combat.getSnapshot ? combat.getSnapshot() : null;
+                    var playerState = player && player.getSnapshot ? player.getSnapshot() : null;
+                    localShotCounter = (localShotCounter + 1) % 1000000;
+                    if (net && net.sendFire && options.mode && options.mode.authorityMode === 'networked') {
+                        net.sendFire({
+                            weaponId: String(combatState && combatState.selectedWeaponId || ''),
+                            shotToken: 'd' + Date.now().toString(36) + '-' + localShotCounter.toString(36),
+                            adsActive: !!(playerState && playerState.adsActive),
+                            viewFovDeg: Number(cameraState && cameraState.fov || 0),
+                            aimOrigin: cameraState && cameraState.position ? {
+                                x: Number(cameraState.position.x || 0),
+                                y: Number(cameraState.position.y || 0),
+                                z: Number(cameraState.position.z || 0)
+                            } : null,
+                            aimForward: buildAimForward(cameraState, playerState)
+                        });
+                    }
                 }
                 refreshDerivedState();
                 return fired;
@@ -292,6 +362,10 @@
                 return ok;
             },
             triggerAbility: function (slotIndex) {
+                var playerCombatState = playerCombat && playerCombat.getSnapshot ? playerCombat.getSnapshot() : null;
+                if (playerCombatState && (!playerCombatState.alive || playerCombatState.respawnActive)) {
+                    return { ok: false, reason: 'player_unavailable' };
+                }
                 var result = abilities && abilities.trigger ? abilities.trigger(slotIndex) : { ok: false, reason: 'ability_runtime_missing' };
                 refreshDerivedState();
                 return result;

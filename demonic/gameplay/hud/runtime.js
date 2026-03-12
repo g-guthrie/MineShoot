@@ -18,6 +18,10 @@
             return options.getPlayerSnapshot ? options.getPlayerSnapshot() : {};
         }
 
+        function playerCombatSnapshot() {
+            return options.getPlayerCombatSnapshot ? options.getPlayerCombatSnapshot() : {};
+        }
+
         function awarenessSnapshot() {
             return options.getAwarenessSnapshot ? options.getAwarenessSnapshot() : {};
         }
@@ -52,6 +56,7 @@
                 var combat = combatSnapshot();
                 var abilities = abilitySnapshot();
                 var player = playerSnapshot();
+                var playerCombat = playerCombatSnapshot();
                 var awareness = awarenessSnapshot();
                 var damage = damageSnapshot();
                 var cooldown = cooldownStatus(combat);
@@ -76,6 +81,15 @@
                     cooldownStatus: cooldown.status.toUpperCase(),
                     cooldownMs: Number(cooldown.ms || 0),
                     movementInfo: player.sprinting ? 'SPRINT' : (player.adsActive ? 'ADS' : (player.moving ? 'MOVE' : 'IDLE')),
+                    vitals: {
+                        hp: Number(playerCombat.hp || 0),
+                        hpMax: Number(playerCombat.hpMax || 0),
+                        armor: Number(playerCombat.armor || 0),
+                        armorMax: Number(playerCombat.armorMax || 0),
+                        alive: !!playerCombat.alive,
+                        respawnActive: !!playerCombat.respawnActive,
+                        respawnRemainingMs: Number(playerCombat.respawnRemainingMs || 0)
+                    },
                     awareness: awareness ? JSON.parse(JSON.stringify(awareness)) : null,
                     damage: damage ? JSON.parse(JSON.stringify(damage)) : null
                 };

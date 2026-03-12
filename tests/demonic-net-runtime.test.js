@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { shouldReplayAuthoritativeCorrection } from '../shared/authoritative-reconciliation.js';
 
 async function loadNetRuntime() {
   const transportCode = await fs.readFile(new URL('../demonic/gameplay/net/transport.js', import.meta.url), 'utf8');
@@ -16,9 +17,12 @@ async function loadNetRuntime() {
           defaults: { roomId: 'global' },
           wsPath: '/api/ws',
           msg: {
-            c2s: { INPUT: 'input' },
-            s2c: { WELCOME: 'welcome', SNAPSHOT: 'snapshot', ERROR: 'error' }
+            c2s: { INPUT: 'input', FIRE: 'fire' },
+            s2c: { WELCOME: 'welcome', SNAPSHOT: 'snapshot', DAMAGE_EVENT: 'damage_event', DEATH_RESPAWN: 'death_respawn', ERROR: 'error' }
           }
+        },
+        authoritativeReconciliation: {
+          shouldReplayAuthoritativeCorrection
         }
       },
       GameRuntimeProfile: {
@@ -129,7 +133,44 @@ test('demonic net runtime ingests welcome and snapshot state from the authoritat
       { id: 'usr_test', x: 10, z: 20, seq: 1, weaponId: 'machinegun' }
     ]
   });
+  net.sendFire({
+    weaponId: 'machinegun',
+    shotToken: 'shot-a',
+    adsActive: false,
+    viewFovDeg: 75,
+    aimOrigin: { x: 1, y: 2, z: 3 },
+    aimForward: { x: 0, y: 0, z: -1 }
+  });
+  net.receiveMessage({
+    t: 'damage_event',
+    sourceId: 'usr_test',
+    targetId: 'usr_enemy',
+    damage: 55,
+    hitType: 'body',
+    weaponId: 'machinegun',
+    killed: false
+  });
+  net.receiveMessage({
+    t: 'damage_event',
+    sourceId: 'usr_enemy',
+    targetId: 'usr_test',
+    damage: 80,
+    health: 420,
+    armor: 50,
+    hitType: 'head',
+    weaponId: 'rifle',
+    killed: false
+  });
+  net.receiveMessage({
+    t: 'death_respawn',
+    entityId: 'usr_test',
+    respawnAt: Date.now() + 2000,
+    x: 12,
+    z: 18,
+    classApplied: 'abilities'
+  });
   const snapshot = net.getSnapshot();
+  const correction = net.consumeAuthoritativeMotionCorrection();
 
   assert.equal(snapshot.authoritative, true);
   assert.equal(snapshot.selfId, 'usr_test');
@@ -139,5 +180,12 @@ test('demonic net runtime ingests welcome and snapshot state from the authoritat
   assert.equal(snapshot.inputSync.pendingInputCount >= 0, true);
   assert.equal(snapshot.selfState.id, 'usr_test');
   assert.equal(snapshot.predictedSelfState.weaponId, 'machinegun');
+  assert.equal(correction && correction.type, 'replay');
+  assert.equal(correction && correction.selfState && correction.selfState.id, 'usr_test');
+  assert.equal(snapshot.lastOutgoingFire.shotToken, 'shot-a');
+  assert.equal(snapshot.lastConfirmedHit.targetId, 'usr_enemy');
+  assert.equal(snapshot.lastIncomingDamage.weaponId, 'rifle');
+  assert.equal(snapshot.respawnState.entityId, 'usr_test');
+  assert.equal(snapshot.selfState.alive, false);
   assert.match(snapshot.status, /authoritative cloudflare lane/i);
 });

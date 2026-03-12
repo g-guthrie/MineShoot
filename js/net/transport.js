@@ -35,14 +35,25 @@
                 if (opts.onMessage) opts.onMessage(event.data);
             });
 
-            ws.addEventListener('close', function () {
-                ws = null;
-                if (opts.onClose) opts.onClose();
-                if (closedByShutdown) return;
-                if (opts.isActive && !opts.isActive()) return;
+            function scheduleReconnect() {
                 reconnectTimer = setTimeout(function () {
                     connect();
                 }, opts.reconnectMs || 1200);
+            }
+
+            ws.addEventListener('close', function (event) {
+                ws = null;
+                if (opts.onClose) opts.onClose(event);
+                if (closedByShutdown) return;
+                if (opts.isActive && !opts.isActive()) return;
+                if (event && Number(event.code || 0) === 4001 && typeof opts.onSupersededClose === 'function') {
+                    var recovery = opts.onSupersededClose(event);
+                    if (recovery && typeof recovery.then === 'function') {
+                        recovery.finally(scheduleReconnect);
+                        return;
+                    }
+                }
+                scheduleReconnect();
             });
 
             ws.addEventListener('error', function () {

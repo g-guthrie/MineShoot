@@ -24,6 +24,11 @@
         };
         var selfState = null;
         var matchState = null;
+        var remoteEntities = [];
+        var lastOutgoingFire = null;
+        var lastConfirmedHit = null;
+        var lastIncomingDamage = null;
+        var respawnState = null;
 
         return {
             setRoomState: function (patch) {
@@ -49,11 +54,31 @@
             setMatchState: function (nextState) {
                 matchState = clone(nextState);
             },
+            setRemoteEntities: function (nextState) {
+                remoteEntities = Array.isArray(nextState) ? clone(nextState) : [];
+            },
+            setLastOutgoingFire: function (nextState) {
+                lastOutgoingFire = clone(nextState);
+            },
+            setLastConfirmedHit: function (nextState) {
+                lastConfirmedHit = clone(nextState);
+            },
+            setLastIncomingDamage: function (nextState) {
+                lastIncomingDamage = clone(nextState);
+            },
+            setRespawnState: function (nextState) {
+                respawnState = clone(nextState);
+            },
             getSnapshot: function () {
                 return {
                     roomState: clone(roomState),
                     selfState: clone(selfState),
-                    matchState: clone(matchState)
+                    matchState: clone(matchState),
+                    remoteEntities: clone(remoteEntities),
+                    lastOutgoingFire: clone(lastOutgoingFire),
+                    lastConfirmedHit: clone(lastConfirmedHit),
+                    lastIncomingDamage: clone(lastIncomingDamage),
+                    respawnState: clone(respawnState)
                 };
             }
         };

@@ -21,7 +21,10 @@
 
         function trigger(sourcePos, damage) {
             var player = playerSnapshot();
-            if (!sourcePos) return;
+            if (!sourcePos) {
+                flashLevel = Math.max(flashLevel, 0.22 + Math.min(0.38, Number(damage || 0) / 120));
+                return;
+            }
             var toX = Number(sourcePos.x || 0) - Number(player.x || 0);
             var toZ = Number(sourcePos.z || 0) - Number(player.z || 0);
             var len = Math.sqrt(toX * toX + toZ * toZ);

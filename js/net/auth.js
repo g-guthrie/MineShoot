@@ -543,6 +543,11 @@
         return arenaIdentityReadyPromise;
     };
 
+    GameNetAuth.forceNewArenaIdentity = function () {
+        menuGuestUser = null;
+        return regenerateArenaIdentity();
+    };
+
     GameNetAuth.clearUser = function () {
         guestMode = false;
         user = null;

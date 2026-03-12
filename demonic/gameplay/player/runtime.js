@@ -6,6 +6,8 @@
 
     function create(options) {
         options = options || {};
+        var shared = mayhemRuntime.GameShared || {};
+        var reconciliationApi = shared.authoritativeReconciliation || null;
         var feel = demonicRuntime.FeelTuning || {
             mouseSensitivity: 0.002,
             pitchLimitDeg: 89,
@@ -44,6 +46,7 @@
             jogSpeed: Number(movement.jogSpeed || 8),
             jumpVelocity: Number(movement.jumpVelocity || 8.8)
         };
+        var lastReplayAckSeq = 0;
 
         function inputSnapshot() {
             return options.getInputSnapshot ? options.getInputSnapshot() : {};
@@ -55,6 +58,52 @@
 
         function combatSnapshot() {
             return options.getCombatSnapshot ? options.getCombatSnapshot() : null;
+        }
+
+        function worldReplayOptions() {
+            var world = worldQuery() || null;
+            var bounds = world && world.getBounds ? world.getBounds() : null;
+            return {
+                bounds: bounds || { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
+                collisionBoxes: [],
+                getGroundHeightAt: function (x, z) {
+                    return world && world.getGroundHeightAt ? Number(world.getGroundHeightAt(x, z) || 0) : 0;
+                },
+                movementLocked: false,
+                eyeHeight: 1.6,
+                playerHeight: 1.7,
+                playerRadius: 0.35,
+                epsilon: 0.001,
+                fallbackYaw: Number(state.yaw || 0),
+                fallbackPitch: Number(state.pitch || 0)
+            };
+        }
+
+        function syncFromMotionState(nextState) {
+            if (!nextState) return;
+            state.x = Number(nextState.x || 0);
+            state.y = Number(nextState.y || 0);
+            state.z = Number(nextState.z || 0);
+            state.yaw = Number(nextState.yaw || 0);
+            state.pitch = Number(nextState.pitch || 0);
+            state.verticalVelocity = Number(nextState.velocityY || 0);
+            state.sprinting = !!nextState.sprinting;
+            state.airborne = !nextState.isGrounded;
+            state.moving = Number(nextState.moveSpeedNorm || 0) > 0.01;
+            state.speed = Math.max(0, Number(nextState.moveSpeedNorm || 0)) * Number(state.runSpeed || 0);
+        }
+
+        function toReplayInputState(entry) {
+            var input = entry && entry.inputState ? entry.inputState : {};
+            return {
+                forward: !!input.moveForward,
+                backward: !!input.moveBackward,
+                left: !!input.moveLeft,
+                right: !!input.moveRight,
+                jump: !!input.jumpQueued,
+                sprint: !!input.sprint,
+                adsActive: !!input.ads
+            };
         }
 
         return {
@@ -144,6 +193,38 @@
                     jogSpeed: Number(state.jogSpeed || 0),
                     jumpVelocity: Number(state.jumpVelocity || 0)
                 };
+            },
+            applyAuthoritativeMotion: function (nextState) {
+                if (!reconciliationApi || !reconciliationApi.buildMotionStateFromSnapshot) {
+                    syncFromMotionState(nextState || null);
+                    return;
+                }
+                syncFromMotionState(reconciliationApi.buildMotionStateFromSnapshot(nextState || {}, worldReplayOptions()));
+            },
+            reconcileAuthoritativeMotion: function (nextState, reconciliation) {
+                if (!reconciliationApi || !reconciliationApi.replayMotionState) {
+                    this.applyAuthoritativeMotion(nextState);
+                    return;
+                }
+                var pending = Array.isArray(reconciliation && reconciliation.pendingInputs)
+                    ? reconciliation.pendingInputs.map(function (entry) {
+                        return {
+                            dtMs: Number(entry && entry.dtMs || 0),
+                            yaw: Number(entry && entry.yaw || 0),
+                            pitch: Number(entry && entry.pitch || 0),
+                            inputState: toReplayInputState(entry)
+                        };
+                    })
+                    : [];
+                syncFromMotionState(reconciliationApi.replayMotionState(
+                    nextState || {},
+                    pending,
+                    worldReplayOptions()
+                ));
+                lastReplayAckSeq = Math.max(lastReplayAckSeq, Number(reconciliation && reconciliation.lastAckedSeq || 0));
+            },
+            getLastReplayAckSeq: function () {
+                return Number(lastReplayAckSeq || 0);
             }
         };
     }

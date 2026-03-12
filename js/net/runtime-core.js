@@ -45,6 +45,12 @@
                             opts.setConnected(false);
                             opts.setWs(null);
                         },
+                        onSupersededClose: function () {
+                            if (opts.handleSupersededIdentity) {
+                                return opts.handleSupersededIdentity();
+                            }
+                            return null;
+                        },
                         onError: function () {
                             opts.setConnected(false);
                         }

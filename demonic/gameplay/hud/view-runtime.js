@@ -25,6 +25,23 @@
             '</div>';
     }
 
+    function vitalsMarkup(hud) {
+        var vitals = hud && hud.vitals ? hud.vitals : {};
+        var hp = Math.max(0, Number(vitals.hp || 0));
+        var hpMax = Math.max(1, Number(vitals.hpMax || 1));
+        var armor = Math.max(0, Number(vitals.armor || 0));
+        var armorMax = Math.max(1, Number(vitals.armorMax || 1));
+        var status = vitals.alive === false
+            ? 'DOWN'
+            : (vitals.respawnActive ? 'RESPAWN ' + Math.ceil(Math.max(0, Number(vitals.respawnRemainingMs || 0)) / 1000) : 'STABLE');
+        return '' +
+            '<div class="demonic-hud-card">' +
+                '<span>VITALS</span>' +
+                '<strong>HP ' + hp.toFixed(0) + '/' + hpMax.toFixed(0) + ' :: ARM ' + armor.toFixed(0) + '/' + armorMax.toFixed(0) + '</strong>' +
+                '<em>' + status + '</em>' +
+            '</div>';
+    }
+
     function radarMarkup(awareness) {
         var state = awareness || {};
         var segments = Array.isArray(state.segments) ? state.segments : [];
@@ -89,6 +106,7 @@
             var markup = '' +
                 '<div class="demonic-hud-shell">' +
                     '<div class="demonic-hud-top">' +
+                        vitalsMarkup(hud) +
                         '<div class="demonic-hud-card"><span>WEAPON</span><strong>' + String(hud.weaponInfo || '') + '</strong></div>' +
                         '<div class="demonic-hud-card"><span>ABILITIES</span><strong>' + String(hud.abilityInfo || '') + '</strong></div>' +
                         cooldownMarkup(hud) +

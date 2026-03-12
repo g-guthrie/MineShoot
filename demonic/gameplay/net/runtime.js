@@ -66,6 +66,23 @@
         return endpoint + '?' + params.toString();
     }
 
+    function buildAuthoritativeSelfKey(selfState) {
+        if (!selfState || typeof selfState !== 'object') return '';
+        function precision(value) {
+            return Math.round(Number(value || 0) * 1000);
+        }
+        return [
+            Number(selfState.seq || 0),
+            precision(selfState.x),
+            precision(selfState.y),
+            precision(selfState.z),
+            precision(selfState.yaw),
+            precision(selfState.pitch),
+            precision(selfState.velocityY),
+            selfState.isGrounded ? '1' : '0'
+        ].join('|');
+    }
+
     function create(context) {
         context = context || {};
         var inputHistoryApi = demonicRuntime.GameNetInputHistory || null;
@@ -104,6 +121,8 @@
             pitch: 0,
             weaponId: ''
         };
+        var lastConsumedAuthoritativeKey = '';
+        var lastConsumedReplayAckSeq = 0;
 
         function syncRoomState(patch) {
             if (!stateView || !stateView.setRoomState) return;
@@ -176,6 +195,7 @@
                 });
 
                 var entities = Array.isArray(message.entities) ? message.entities : [];
+                var remotes = [];
                 for (var i = 0; i < entities.length; i++) {
                     var entity = entities[i];
                     if (!entity) continue;
@@ -184,10 +204,57 @@
                         if (inputHistory && typeof inputHistory.acknowledgeThrough === 'function') {
                             inputHistory.acknowledgeThrough(entity.seq);
                         }
-                        break;
+                    } else {
+                        remotes.push(entity);
                     }
                 }
+                if (stateView && stateView.setRemoteEntities) stateView.setRemoteEntities(remotes);
                 setConnectionState('connected');
+                return;
+            }
+
+            if (message.t === s2c.DAMAGE_EVENT) {
+                var targetId = String(message.targetId || '');
+                var sourceId = String(message.sourceId || '');
+                var damageEvent = {
+                    targetId: targetId,
+                    sourceId: sourceId,
+                    damage: Math.max(0, Number(message.damage || 0)),
+                    hitType: message.hitType === 'head' ? 'head' : 'body',
+                    weaponId: String(message.weaponId || ''),
+                    killed: !!message.killed
+                };
+
+                var authority = currentStateViewSnapshot();
+                var currentSelf = authority && authority.selfState ? clone(authority.selfState) : null;
+                if (targetId && targetId === selfId) {
+                    if (!currentSelf) currentSelf = { id: selfId };
+                    if (typeof message.health === 'number') currentSelf.hp = Number(message.health || 0);
+                    if (typeof message.armor === 'number') currentSelf.armor = Number(message.armor || 0);
+                    if (message.killed) currentSelf.alive = false;
+                    if (stateView && stateView.setSelfState) stateView.setSelfState(currentSelf);
+                    if (stateView && stateView.setLastIncomingDamage) stateView.setLastIncomingDamage(damageEvent);
+                }
+
+                if (sourceId && sourceId === selfId && targetId && targetId !== selfId) {
+                    if (stateView && stateView.setLastConfirmedHit) stateView.setLastConfirmedHit(damageEvent);
+                }
+                return;
+            }
+
+            if (message.t === s2c.DEATH_RESPAWN) {
+                if (String(message.entityId || '') !== selfId) return;
+                var nextRespawn = {
+                    entityId: String(message.entityId || ''),
+                    respawnAt: Math.max(Date.now(), Number(message.respawnAt || 0)),
+                    x: typeof message.x === 'number' ? Number(message.x) : null,
+                    z: typeof message.z === 'number' ? Number(message.z) : null,
+                    classApplied: String(message.classApplied || '')
+                };
+                if (stateView && stateView.setRespawnState) stateView.setRespawnState(nextRespawn);
+                var authoritySelf = currentStateViewSnapshot().selfState ? clone(currentStateViewSnapshot().selfState) : { id: selfId };
+                authoritySelf.alive = false;
+                if (stateView && stateView.setSelfState) stateView.setSelfState(authoritySelf);
                 return;
             }
 
@@ -333,7 +400,77 @@
             setAuthoritativeMatchState: function (nextState) {
                 if (stateView && stateView.setMatchState) stateView.setMatchState(nextState || null);
             },
+            sendFire: function (request) {
+                var next = request || {};
+                var payload = {
+                    t: protocol && protocol.msg && protocol.msg.c2s ? protocol.msg.c2s.FIRE : 'fire',
+                    weaponId: String(next.weaponId || ''),
+                    shotToken: String(next.shotToken || ''),
+                    adsActive: !!next.adsActive,
+                    viewFovDeg: Number(next.viewFovDeg || 0),
+                    aimOrigin: next.aimOrigin ? {
+                        x: Number(next.aimOrigin.x || 0),
+                        y: Number(next.aimOrigin.y || 0),
+                        z: Number(next.aimOrigin.z || 0)
+                    } : null,
+                    aimForward: next.aimForward ? {
+                        x: Number(next.aimForward.x || 0),
+                        y: Number(next.aimForward.y || 0),
+                        z: Number(next.aimForward.z || 0)
+                    } : null
+                };
+                if (stateView && stateView.setLastOutgoingFire) {
+                    stateView.setLastOutgoingFire({
+                        weaponId: payload.weaponId,
+                        shotToken: payload.shotToken,
+                        adsActive: payload.adsActive,
+                        viewFovDeg: payload.viewFovDeg
+                    });
+                }
+                if (authorityMode !== 'networked' || !connected || !transport || typeof transport.send !== 'function') {
+                    return false;
+                }
+                return transport.send(payload);
+            },
             receiveMessage: handleMessage,
+            consumeAuthoritativeMotionCorrection: function () {
+                if (authorityMode !== 'networked') return null;
+                var authority = currentStateViewSnapshot();
+                var selfState = authority && authority.selfState ? authority.selfState : null;
+                if (!selfState) return null;
+
+                var inputSync = inputHistory && inputHistory.getSnapshot ? inputHistory.getSnapshot() : null;
+                var pendingInputs = inputSync && Array.isArray(inputSync.pendingInputs) ? inputSync.pendingInputs : [];
+                var currentKey = buildAuthoritativeSelfKey(selfState);
+                var shouldReplay = protocolApi() && mayhemRuntime.GameShared && mayhemRuntime.GameShared.authoritativeReconciliation &&
+                    mayhemRuntime.GameShared.authoritativeReconciliation.shouldReplayAuthoritativeCorrection
+                    ? mayhemRuntime.GameShared.authoritativeReconciliation.shouldReplayAuthoritativeCorrection({
+                        pendingInputCount: inputSync ? Number(inputSync.pendingInputCount || 0) : 0,
+                        lastAckedSeq: inputSync ? Number(inputSync.lastAckedSeq || 0) : 0,
+                        lastReplayAckSeq: Number(lastConsumedReplayAckSeq || 0)
+                    })
+                    : false;
+
+                if (shouldReplay) {
+                    lastConsumedReplayAckSeq = Math.max(lastConsumedReplayAckSeq, Number(inputSync && inputSync.lastAckedSeq || 0));
+                    lastConsumedAuthoritativeKey = currentKey;
+                    return {
+                        type: 'replay',
+                        selfState: clone(selfState),
+                        pendingInputs: clone(pendingInputs),
+                        lastAckedSeq: Number(inputSync && inputSync.lastAckedSeq || 0)
+                    };
+                }
+
+                if (currentKey && currentKey !== lastConsumedAuthoritativeKey) {
+                    lastConsumedAuthoritativeKey = currentKey;
+                    return {
+                        type: 'apply',
+                        selfState: clone(selfState)
+                    };
+                }
+                return null;
+            },
             getSnapshot: function () {
                 var authority = currentStateViewSnapshot();
                 var inputSync = inputHistory && inputHistory.getSnapshot ? inputHistory.getSnapshot() : {
@@ -359,6 +496,11 @@
                     selfState: authority.selfState,
                     predictedSelfState: clone(predictedSelfState),
                     matchState: authority.matchState,
+                    remoteEntities: Array.isArray(authority.remoteEntities) ? clone(authority.remoteEntities) : [],
+                    lastOutgoingFire: authority.lastOutgoingFire,
+                    lastConfirmedHit: authority.lastConfirmedHit,
+                    lastIncomingDamage: authority.lastIncomingDamage,
+                    respawnState: authority.respawnState,
                     status: authorityMode === 'networked'
                         ? (connected
                             ? (authority.selfState ? 'authoritative cloudflare lane' : 'authoritative cloudflare lane awaiting self state')

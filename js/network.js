@@ -394,6 +394,15 @@
         ensureArenaIdentity: function () {
             return GameNetAuth.ensureArenaIdentity ? GameNetAuth.ensureArenaIdentity() : null;
         },
+        handleSupersededIdentity: function () {
+            if (GameNetAuth && GameNetAuth.forceNewArenaIdentity) {
+                return Promise.resolve(GameNetAuth.forceNewArenaIdentity());
+            }
+            if (GameNetAuth && GameNetAuth.ensureArenaIdentity) {
+                return Promise.resolve(GameNetAuth.ensureArenaIdentity());
+            }
+            return null;
+        },
         getPendingRespawnInfo: function () { return pendingRespawnInfo; },
         setPendingRespawnInfo: function (value) { pendingRespawnInfo = value; },
         applyPendingSpawnSync: applyPendingSpawnSync,
