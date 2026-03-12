@@ -141,6 +141,7 @@
                     '<button class="demonic-action" type="button" data-role="cycle-weapon">CYCLE WEAPON</button>' +
                     '<button class="demonic-action" type="button" data-role="ability-slot-1">ABILITY 1</button>' +
                     '<button class="demonic-action" type="button" data-role="ability-slot-2">ABILITY 2</button>' +
+                    '<button class="demonic-action" type="button" data-role="simulate-hit">SIM HIT</button>' +
                     '<button class="demonic-action" type="button" data-role="equip-machinegun">EQUIP MG</button>' +
                     '<button class="demonic-action" type="button" data-role="equip-shotgun">EQUIP SG</button>' +
                 '</div>' +
@@ -213,6 +214,60 @@
             });
     }
 
+    function launchMayhemBridge(event) {
+        var loader = runtime.GameRuntimeLoader || null;
+        if (!loader || !loader.loadGameplayRuntime) {
+            shellState.launchError = 'Playable Mayhem runtime loader unavailable.';
+            render();
+            return;
+        }
+
+        shellState.launchPending = true;
+        shellState.launchError = '';
+        render();
+
+        loader.loadGameplayRuntime()
+            .then(function (gameMain) {
+                if (!gameMain || !gameMain.launchModeById) {
+                    throw new Error('Playable runtime unavailable.');
+                }
+                return gameMain.launchModeById(shellState.runtimeModeId || 'cloud_multiplayer', {
+                    gameMode: shellState.gameModeId || 'ffa'
+                });
+                    })
+            .then(function (result) {
+                if (!result || !result.ok) {
+                    throw new Error((result && result.error) ? result.error : 'Playable launch failed.');
+                }
+                var context = {
+                    launchKind: 'demonic_bridge',
+                    gameMode: shellState.gameModeId || 'ffa',
+                    roomId: result.mode && result.mode.roomId ? result.mode.roomId : '',
+                    roomPhase: '',
+                    modeId: result.mode && result.mode.id ? result.mode.id : (shellState.runtimeModeId || 'cloud_multiplayer'),
+                    requiresNetwork: !!(result.mode && result.mode.authorityMode === 'networked'),
+                    canResume: false,
+                    error: ''
+                };
+                if (runtime.GameSession && runtime.GameSession.prepareLaunch) {
+                    runtime.GameSession.prepareLaunch(context);
+                }
+                document.body.classList.remove('app-demonic');
+                var root = document.getElementById('demonic-root');
+                if (root) root.hidden = true;
+                shellState.launchPending = false;
+                if (runtime.GameSession && runtime.GameSession.enterGameplay) {
+                    return runtime.GameSession.enterGameplay(event || null, context);
+                }
+                return null;
+            })
+            .catch(function (err) {
+                shellState.launchPending = false;
+                shellState.launchError = (err && err.message) ? err.message : 'Playable launch failed.';
+                render();
+            });
+    }
+
     function returnToMenuState() {
         var gameMain = demonicRuntime.GameMain || null;
         if (gameMain && gameMain.returnToMenu) gameMain.returnToMenu();
@@ -269,6 +324,19 @@
         render();
     }
 
+    function triggerRuntimeHit() {
+        var runtimeInstance = currentRuntimeInstance();
+        if (!runtimeInstance || !runtimeInstance.triggerDamageFeedback) return;
+        var session = currentSessionState();
+        var player = session && session.runtimeSnapshot ? session.runtimeSnapshot.player : null;
+        runtimeInstance.triggerDamageFeedback({
+            x: Number(player && player.x || 0) + 8,
+            z: Number(player && player.z || 0) - 6
+        }, 48);
+        syncRuntimeSnapshot();
+        render();
+    }
+
     function setDisplayFps(value) {
         var settings = demonicRuntime.DisplaySettings || null;
         if (!settings || !settings.setTargetFps) return;
@@ -294,6 +362,7 @@
                             '<pre class="demonic-logo"> ____  _____ __  __  ___  _   _ ___ ____\n|  _ \\| ____|  \\/  |/ _ \\| \\ | |_ _/ ___|\n| | | |  _| | |\\/| | | | |  \\| || | |    \n| |_| | |___| |  | | |_| | |\\  || | |___ \n|____/|_____|_|  |_|\\___/|_| \\_|___\\____|</pre>' +
                             '<p class="demonic-tagline">Demonic is now a real sibling menu path, driven by the same shared registries Mayhem uses for modes and rulesets. Cloudflare-backed testing is the preferred parity lane.</p>' +
                             '<div class="demonic-action-row">' +
+                                '<button class="demonic-action demonic-action-primary" type="button" data-role="play-now"' + (shellState.launchPending ? ' disabled' : '') + '>PLAY NOW</button>' +
                                 '<a class="demonic-action demonic-action-primary" href="/">RETURN TO MAYHEM</a>' +
                                 '<a class="demonic-action" href="/docs/demonic-master-plan.md">OPEN MASTER PLAN</a>' +
                             '</div>' +
@@ -389,6 +458,10 @@
                         render();
                         return;
                     }
+                    if (target.dataset && target.dataset.role === 'play-now') {
+                        launchMayhemBridge(event);
+                        return;
+                    }
                     if (target.dataset && target.dataset.role === 'fps-cap') {
                         setDisplayFps(Number(target.dataset.id || 60));
                         return;
@@ -445,6 +518,10 @@
                     }
                     if (target.dataset && target.dataset.role === 'ability-slot-2') {
                         triggerRuntimeAbility(2);
+                        return;
+                    }
+                    if (target.dataset && target.dataset.role === 'simulate-hit') {
+                        triggerRuntimeHit();
                         return;
                     }
                     target = target.parentNode;

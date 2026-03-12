@@ -1,6 +1,7 @@
 import '../../shared/protocol.js';
 import '../../shared/gameplay-tuning.js';
 import '../../shared/runtime-modes.js';
+import '../../js/app/runtime-loader.js';
 import '../../js/core/runtime-profile.js';
 import '../platform/display-settings.js';
 import { getFeelTuning } from '../shared-compat/feel-tuning.js';

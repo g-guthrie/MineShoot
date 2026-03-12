@@ -106,7 +106,25 @@
                     authoritative: !!sessionState.runtimeSnapshot.net.authoritative,
                     apiBase: String(sessionState.runtimeSnapshot.net.apiBase || ''),
                     wsBase: String(sessionState.runtimeSnapshot.net.wsBase || ''),
+                    selfId: String(sessionState.runtimeSnapshot.net.selfId || ''),
+                    tickRate: Number(sessionState.runtimeSnapshot.net.tickRate || 0),
+                    connectionState: String(sessionState.runtimeSnapshot.net.connectionState || ''),
+                    connectionError: String(sessionState.runtimeSnapshot.net.connectionError || ''),
+                    lastServerMessageAt: Number(sessionState.runtimeSnapshot.net.lastServerMessageAt || 0),
+                    inputSync: sessionState.runtimeSnapshot.net.inputSync ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.inputSync)) : null,
+                    selfState: sessionState.runtimeSnapshot.net.selfState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.selfState)) : null,
+                    predictedSelfState: sessionState.runtimeSnapshot.net.predictedSelfState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.predictedSelfState)) : null,
+                    matchState: sessionState.runtimeSnapshot.net.matchState ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.net.matchState)) : null,
                     status: String(sessionState.runtimeSnapshot.net.status || '')
+                } : null,
+                awareness: sessionState.runtimeSnapshot.awareness ? {
+                    segments: Array.isArray(sessionState.runtimeSnapshot.awareness.segments) ? sessionState.runtimeSnapshot.awareness.segments.slice() : [],
+                    coreIntensity: Number(sessionState.runtimeSnapshot.awareness.coreIntensity || 0),
+                    beacons: Array.isArray(sessionState.runtimeSnapshot.awareness.beacons) ? JSON.parse(JSON.stringify(sessionState.runtimeSnapshot.awareness.beacons)) : []
+                } : null,
+                damage: sessionState.runtimeSnapshot.damage ? {
+                    sectors: Array.isArray(sessionState.runtimeSnapshot.damage.sectors) ? sessionState.runtimeSnapshot.damage.sectors.slice() : [],
+                    flashLevel: Number(sessionState.runtimeSnapshot.damage.flashLevel || 0)
                 } : null,
                 combat: sessionState.runtimeSnapshot.combat ? {
                     gameMode: String(sessionState.runtimeSnapshot.combat.gameMode || ''),

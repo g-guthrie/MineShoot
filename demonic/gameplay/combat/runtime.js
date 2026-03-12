@@ -7,6 +7,8 @@
     function create(context) {
         context = context || {};
         var shared = mayhemRuntime.GameShared || {};
+        var hudStateApi = demonicRuntime.GameCombatHudState || null;
+        var hudState = hudStateApi && hudStateApi.create ? hudStateApi.create(context) : null;
         var catalog = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'];
         var selectedWeaponId = String((catalog[0] || 'machinegun'));
         var gameMode = String(context && context.context && context.context.gameMode || 'ffa');
@@ -23,6 +25,26 @@
 
         function weaponStats() {
             return shared.getWeaponStats ? shared.getWeaponStats(selectedWeaponId) : null;
+        }
+
+        function weaponCatalogEntry(id) {
+            var stats = shared.getWeaponStats ? shared.getWeaponStats(id) : null;
+            if (!stats) return null;
+            return {
+                id: String(stats.id || id),
+                name: String(stats.name || id),
+                primitiveType: String(stats.primitiveType || ''),
+                automatic: !!stats.automatic,
+                cooldownMs: Math.max(0, numericOr(stats.cooldownMs, 0)),
+                reloadMs: Math.max(0, numericOr(stats.reloadMs, 0)),
+                magazineSize: Math.max(0, numericOr(stats.magazineSize, 0)),
+                bodyDamage: Math.max(0, numericOr(stats.bodyDamage, 0)),
+                headDamage: Math.max(0, numericOr(stats.headDamage, 0)),
+                pellets: Math.max(1, numericOr(stats.pellets, 1)),
+                hipfireSpread: Math.max(0, numericOr(stats.hipfireSpread, 0)),
+                adsSpread: Math.max(0, numericOr(stats.adsSpread, 0)),
+                adsFovDeg: Math.max(0, numericOr(stats.adsFovDeg, 0))
+            };
         }
 
         function numericOr(value, fallback) {
@@ -43,11 +65,11 @@
         }
 
         function beginReload() {
-            var stats = weaponStats() || {};
-            if (Number(stats.magazineSize || 0) <= 0) return false;
-            if (isReloading()) return false;
-            if (ammoInMagFor(selectedWeaponId) >= Number(stats.magazineSize || 0)) return false;
-            reloadRemainingMs = Math.max(0, Number(stats.reloadMs || 0));
+                var stats = weaponStats() || {};
+                if (Number(stats.magazineSize || 0) <= 0) return false;
+                if (isReloading()) return false;
+                if (ammoInMagFor(selectedWeaponId) >= Number(stats.magazineSize || 0)) return false;
+                reloadRemainingMs = Math.max(0, Number(stats.reloadMs || 0));
             return reloadRemainingMs > 0;
         }
 
@@ -107,18 +129,32 @@
             getSnapshot: function () {
                 var stats = weaponStats() || {};
                 var ammoInMag = ammoInMagFor(selectedWeaponId);
+                var hud = hudState && hudState.build ? hudState.build({
+                    reloadRemainingMs: reloadRemainingMs,
+                    fireCooldownRemainingMs: fireCooldownRemainingMs,
+                    reloadMs: numericOr(stats.reloadMs, 0),
+                    cooldownMs: numericOr(stats.cooldownMs, 0)
+                }) : { status: 'ready', ready: true, pct: 1 };
                 return {
                     gameMode: gameMode,
                     selectedWeaponId: selectedWeaponId,
-                    weaponCatalog: catalog.slice(),
+                    weaponCatalog: catalog.map(weaponCatalogEntry).filter(Boolean),
                     fireCooldownRemainingMs: Number(fireCooldownRemainingMs || 0),
                     reloadRemainingMs: Number(reloadRemainingMs || 0),
                     ammoInMag: Number(ammoInMag || 0),
                     magazineSize: Math.max(0, numericOr(stats.magazineSize, 0)),
                     automatic: !!stats.automatic,
                     cooldownMs: Math.max(0, numericOr(stats.cooldownMs, 0)),
+                    reloadMs: Math.max(0, numericOr(stats.reloadMs, 0)),
+                    bodyDamage: Math.max(0, numericOr(stats.bodyDamage, 0)),
+                    headDamage: Math.max(0, numericOr(stats.headDamage, 0)),
+                    pellets: Math.max(1, numericOr(stats.pellets, 1)),
+                    hipfireSpread: Math.max(0, numericOr(stats.hipfireSpread, 0)),
+                    adsSpread: Math.max(0, numericOr(stats.adsSpread, 0)),
+                    adsFovDeg: Math.max(0, numericOr(stats.adsFovDeg, 0)),
                     lastShotAt: Number(lastShotAt || 0),
-                    canFire: fireCooldownRemainingMs <= 0 && !isReloading()
+                    canFire: fireCooldownRemainingMs <= 0 && !isReloading(),
+                    hudState: hud
                 };
             }
         };

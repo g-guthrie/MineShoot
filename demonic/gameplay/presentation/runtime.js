@@ -5,6 +5,8 @@
 
     function create(options) {
         options = options || {};
+        var reticleApi = demonicRuntime.GameReticleRuntime || null;
+        var reticleRuntime = reticleApi && reticleApi.create ? reticleApi.create(options) : null;
 
         function playerSnapshot() {
             return options.getPlayerSnapshot ? options.getPlayerSnapshot() : {};
@@ -22,27 +24,8 @@
             return options.getCameraSnapshot ? options.getCameraSnapshot() : {};
         }
 
-        function reticleFor(combat, player) {
-            var weaponId = String(combat.selectedWeaponId || '');
-            if (weaponId === 'shotgun') {
-                return {
-                    type: 'circle',
-                    size: 44,
-                    label: 'SHOT SPREAD'
-                };
-            }
-            if (weaponId === 'sniper' && player.adsActive) {
-                return {
-                    type: 'scope',
-                    size: 0,
-                    label: 'SNIPER SCOPE'
-                };
-            }
-            return {
-                type: 'crosshair',
-                size: 18,
-                label: 'STANDARD'
-            };
+        function weaponFeedbackSnapshot() {
+            return options.getWeaponFeedbackSnapshot ? options.getWeaponFeedbackSnapshot() : {};
         }
 
         function poseFor(player, combat) {
@@ -55,14 +38,22 @@
 
         function abilityPose(abilities) {
             if (abilities.activeStates && abilities.activeStates.slot1) {
-                return String(abilities.activeStates.slot1.abilityId || '') === 'heal'
-                    ? 'ability_heal'
-                    : 'ability_slot1';
+                var id = String(abilities.activeStates.slot1.abilityId || '');
+                if (id === 'heal') return 'ability_heal';
+                if (id === 'deadeye') return 'ability_deadeye';
+                if (id === 'choke') return 'ability_choke';
+                if (id === 'hook') return 'ability_hook';
+                if (id === 'missile') return 'ability_missile';
+                return 'ability_slot1';
             }
             if (abilities.activeStates && abilities.activeStates.slot2) {
-                return String(abilities.activeStates.slot2.abilityId || '') === 'deadeye'
-                    ? 'ability_deadeye'
-                    : 'ability_slot2';
+                var slot2Id = String(abilities.activeStates.slot2.abilityId || '');
+                if (slot2Id === 'heal') return 'ability_heal';
+                if (slot2Id === 'deadeye') return 'ability_deadeye';
+                if (slot2Id === 'choke') return 'ability_choke';
+                if (slot2Id === 'hook') return 'ability_hook';
+                if (slot2Id === 'missile') return 'ability_missile';
+                return 'ability_slot2';
             }
             return '';
         }
@@ -74,13 +65,17 @@
                 var combat = combatSnapshot();
                 var abilities = abilitySnapshot();
                 var camera = cameraSnapshot();
+                var feedback = weaponFeedbackSnapshot();
                 var basePose = poseFor(player, combat);
                 var overlayPose = abilityPose(abilities);
+                var reticle = reticleRuntime && reticleRuntime.resolve
+                    ? reticleRuntime.resolve(combat, player, abilities, camera)
+                    : { type: 'crosshair', width: 18, height: 18, label: 'STANDARD' };
                 return {
                     pose: overlayPose || basePose,
                     basePose: basePose,
                     overlayPose: overlayPose,
-                    reticle: reticleFor(combat, player),
+                    reticle: reticle,
                     adsState: {
                         weaponId: String(combat.selectedWeaponId || ''),
                         active: !!player.adsActive,
@@ -90,7 +85,10 @@
                     weaponPresentation: {
                         weaponId: String(combat.selectedWeaponId || ''),
                         recoilKick: Number(camera.recoilKick || 0),
-                        ammoInMag: Number(combat.ammoInMag || 0)
+                        ammoInMag: Number(combat.ammoInMag || 0),
+                        gunKick: Number(feedback.gunKick || 0),
+                        armKick: Number(feedback.armKick || 0),
+                        muzzleVisible: !!feedback.muzzleVisible
                     },
                     abilityPresentation: {
                         slot1Active: !!(abilities.lastCast && abilities.lastCast.slot === 'slot1'),

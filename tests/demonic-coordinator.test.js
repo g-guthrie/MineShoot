@@ -6,12 +6,21 @@ import vm from 'node:vm';
 async function loadDemonicCoordinator() {
   const inputCode = await fs.readFile(new URL('../demonic/gameplay/input/runtime.js', import.meta.url), 'utf8');
   const bindingsCode = await fs.readFile(new URL('../demonic/gameplay/input/bindings.js', import.meta.url), 'utf8');
+  const awarenessCode = await fs.readFile(new URL('../demonic/gameplay/awareness/runtime.js', import.meta.url), 'utf8');
   const playerCode = await fs.readFile(new URL('../demonic/gameplay/player/runtime.js', import.meta.url), 'utf8');
   const worldCode = await fs.readFile(new URL('../demonic/gameplay/world/runtime.js', import.meta.url), 'utf8');
+  const netTransportCode = await fs.readFile(new URL('../demonic/gameplay/net/transport.js', import.meta.url), 'utf8');
+  const netInputHistoryCode = await fs.readFile(new URL('../demonic/gameplay/net/input-history.js', import.meta.url), 'utf8');
+  const netStateViewCode = await fs.readFile(new URL('../demonic/gameplay/net/state-view.js', import.meta.url), 'utf8');
   const netCode = await fs.readFile(new URL('../demonic/gameplay/net/runtime.js', import.meta.url), 'utf8');
+  const combatHudStateCode = await fs.readFile(new URL('../demonic/gameplay/combat/hud-state.js', import.meta.url), 'utf8');
+  const weaponFeedbackCode = await fs.readFile(new URL('../demonic/gameplay/combat/weapon-feedback-runtime.js', import.meta.url), 'utf8');
   const combatCode = await fs.readFile(new URL('../demonic/gameplay/combat/runtime.js', import.meta.url), 'utf8');
+  const abilityTargetingCode = await fs.readFile(new URL('../demonic/gameplay/abilities/targeting.js', import.meta.url), 'utf8');
+  const abilityStateMachineCode = await fs.readFile(new URL('../demonic/gameplay/abilities/state-machine.js', import.meta.url), 'utf8');
   const abilitiesCode = await fs.readFile(new URL('../demonic/gameplay/abilities/runtime.js', import.meta.url), 'utf8');
   const cameraCode = await fs.readFile(new URL('../demonic/gameplay/camera/runtime.js', import.meta.url), 'utf8');
+  const damageCode = await fs.readFile(new URL('../demonic/gameplay/feedback/damage-runtime.js', import.meta.url), 'utf8');
   const hudCode = await fs.readFile(new URL('../demonic/gameplay/hud/runtime.js', import.meta.url), 'utf8');
   const presentationCode = await fs.readFile(new URL('../demonic/gameplay/presentation/runtime.js', import.meta.url), 'utf8');
   const coordinatorCode = await fs.readFile(new URL('../demonic/runtime/coordinator.js', import.meta.url), 'utf8');
@@ -21,6 +30,12 @@ async function loadDemonicCoordinator() {
       GameShared: {
         gameplayTuning: {
           movement: { jogSpeed: 8, runSpeed: 14, jumpVelocity: 8.8 }
+        },
+        getWeaponPresentation(weaponId) {
+          return {
+            machinegun: { recoil: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 } },
+            shotgun: { recoil: { z: -0.09, x: -0.16, pitch: 0.03, yaw: 0.012, roll: 0.008, armR: 0.26, armL: 0.12, muzzleMs: 70 } }
+          }[weaponId] || { recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 } };
         },
         getWeaponStats(weaponId) {
           return {
@@ -88,12 +103,21 @@ async function loadDemonicCoordinator() {
   const context = vm.createContext(sandbox);
   vm.runInContext(inputCode, context);
   vm.runInContext(bindingsCode, context);
+  vm.runInContext(awarenessCode, context);
   vm.runInContext(playerCode, context);
   vm.runInContext(worldCode, context);
+  vm.runInContext(netTransportCode, context);
+  vm.runInContext(netInputHistoryCode, context);
+  vm.runInContext(netStateViewCode, context);
   vm.runInContext(netCode, context);
+  vm.runInContext(combatHudStateCode, context);
+  vm.runInContext(weaponFeedbackCode, context);
   vm.runInContext(combatCode, context);
+  vm.runInContext(abilityTargetingCode, context);
+  vm.runInContext(abilityStateMachineCode, context);
   vm.runInContext(abilitiesCode, context);
   vm.runInContext(cameraCode, context);
+  vm.runInContext(damageCode, context);
   vm.runInContext(hudCode, context);
   vm.runInContext(presentationCode, context);
   vm.runInContext(coordinatorCode, context);
@@ -126,7 +150,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(started.display.targetFps, 60);
   assert.ok(latest);
   assert.equal(latest.player.jogSpeed, 8);
-  assert.equal(latest.combat.weaponCatalog[1], 'shotgun');
+  assert.equal(latest.combat.weaponCatalog[1].id, 'shotgun');
 
   coordinator.setInputState({ moveForward: true, sprint: true, ads: false });
   coordinator.start();
@@ -137,6 +161,10 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(afterMotion.hud.movementInfo, 'SPRINT');
   assert.equal(afterMotion.net.status, 'local fallback lane');
   assert.equal(afterMotion.presentation.pose, 'sprint');
+  assert.equal(afterMotion.player.x >= 0, true);
+  assert.equal(afterMotion.player.z >= 0, true);
+  assert.equal(Array.isArray(afterMotion.hud.awareness.segments), true);
+  assert.equal(afterMotion.net.inputSync.pendingInputCount > 0, true);
 
   const fired = coordinator.fire();
   assert.equal(fired, true);
@@ -145,6 +173,9 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(afterFire.combat.ammoInMag, 2);
   assert.equal(afterFire.hud.weaponInfo.includes('MACHINEGUN'), true);
   assert.equal(afterFire.presentation.weaponPresentation.weaponId, 'machinegun');
+  assert.equal(afterFire.weaponFeedback.gunKick < 0, true);
+  assert.equal(afterFire.combat.bodyDamage >= 0, true);
+  assert.equal(afterFire.combat.hudState.status, 'cooldown');
 
   const equipped = coordinator.equipWeapon('shotgun');
   assert.equal(equipped, true);
@@ -172,9 +203,10 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
 
   const abilityResult = coordinator.triggerAbility(1);
   assert.equal(abilityResult.ok, true);
+  coordinator.start();
   assert.equal(coordinator.getSnapshot().abilities.lastCast.abilityId, 'choke');
   assert.equal(coordinator.getSnapshot().presentation.abilityPresentation.slot1Active, true);
-  assert.equal(coordinator.getSnapshot().presentation.overlayPose, 'ability_slot1');
+  assert.equal(coordinator.getSnapshot().presentation.overlayPose, 'ability_choke');
 
   const autoCoordinator = coordinatorApi.create({
     mode: { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' },
@@ -204,5 +236,16 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(cloudSnapshot.net.authoritative, true);
   assert.equal(cloudSnapshot.net.roomId, 'cf-room-1');
   assert.match(cloudSnapshot.net.status, /authoritative/i);
+  assert.equal(cloudSnapshot.net.selfState, null);
+  assert.equal(cloudSnapshot.net.predictedSelfState.weaponId, 'machinegun');
+  assert.equal(cloudSnapshot.net.connectionState, 'error');
   assert.equal(typeof cloudSnapshot.presentation.reticle.type, 'string');
+  assert.equal(Array.isArray(cloudSnapshot.combat.weaponCatalog), true);
+  assert.equal(typeof cloudSnapshot.combat.weaponCatalog[0].name, 'string');
+  assert.equal(cloudSnapshot.combat.weaponCatalog[1].id, 'shotgun');
+
+  const damageBefore = coordinator.getSnapshot().hud.damage.flashLevel;
+  coordinator.triggerDamageFeedback({ x: 12, z: -8 }, 50);
+  const damageAfter = coordinator.getSnapshot().hud.damage.flashLevel;
+  assert.equal(damageAfter > damageBefore, true);
 });

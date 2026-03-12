@@ -8,12 +8,12 @@ import {
   getDefaultGameMode
 } from '../shared/game-modes.js';
 
-test('demonic menu model prefers a Cloudflare-authoritative runtime when available', () => {
+test('demonic menu model prefers the public Cloudflare lobby as the default playable runtime', () => {
   const model = buildDemonicMenuModel({
     runtimeProfile: {
       getAvailableModes() {
         return [
-          { id: 'cloud_multiplayer', label: 'Public Lobby', authorityMode: 'networked', backendLabel: 'CLOUDFLARE PROD' },
+          { id: 'cloud_multiplayer', label: 'Public Lobby', authorityMode: 'networked', backendLabel: 'CLOUDFLARE PROD', authoritativeTesting: true },
           { id: 'single_cloudflare', label: 'Solo Cloudflare (Bots)', authorityMode: 'networked', backendLabel: 'CLOUDFLARE PROD', authoritativeTesting: true, preferredForDemonicTesting: true },
           { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' }
         ];
@@ -24,7 +24,7 @@ test('demonic menu model prefers a Cloudflare-authoritative runtime when availab
       getSandboxGameModes,
       getDefaultGameMode,
       getPreferredDemonicRuntimeModeId() {
-        return 'single_cloudflare';
+        return 'cloud_multiplayer';
       }
     },
     displaySettings: {
@@ -39,7 +39,7 @@ test('demonic menu model prefers a Cloudflare-authoritative runtime when availab
     workstreams: []
   });
 
-  assert.equal(model.selectedRuntimeModeId, 'single_cloudflare');
+  assert.equal(model.selectedRuntimeModeId, 'cloud_multiplayer');
   assert.equal(model.selectedGameModeId, 'ffa');
   assert.equal(model.supportsSandbox, true);
   assert.equal(model.selectedFps, 60);

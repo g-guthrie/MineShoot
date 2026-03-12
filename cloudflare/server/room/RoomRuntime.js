@@ -293,6 +293,9 @@ export function queueAuthoritativeInput(player, msg, deps) {
 
 export function applyPendingInputAck(entity) {
   if (!entity) return 0;
+  if (Array.isArray(entity.inputQueue) && entity.inputQueue.length > 0) {
+    return Number(entity.seq || 0);
+  }
   const pendingSeq = Number(entity.pendingInputSeq || 0);
   const currentSeq = Number(entity.seq || 0);
   if (pendingSeq > currentSeq) {

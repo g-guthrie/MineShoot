@@ -108,8 +108,7 @@ export function getDefaultRuntimeModeId() {
 }
 
 export function getPreferredDemonicRuntimeModeId() {
-  const preferred = allRuntimeModes().find((mode) => mode.preferredForDemonicTesting);
-  return preferred ? preferred.id : getDefaultRuntimeModeId();
+  return 'cloud_multiplayer';
 }
 
 export function normalizeRuntimeModeId(modeId) {

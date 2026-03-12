@@ -120,6 +120,7 @@ test('room runtime queues input seqs and only applies the ack after authoritativ
   const player = {
     seq: 4,
     pendingInputSeq: 4,
+    inputQueue: [],
     yaw: 0,
     pitch: 0,
     inputState: {}
@@ -145,6 +146,11 @@ test('room runtime queues input seqs and only applies the ack after authoritativ
   assert.equal(player.inputState.forward, true);
   assert.equal(player.inputState.jump, true);
 
+  applyPendingInputAck(player);
+
+  assert.equal(player.seq, 4);
+
+  player.inputQueue = [];
   applyPendingInputAck(player);
 
   assert.equal(player.seq, 7);

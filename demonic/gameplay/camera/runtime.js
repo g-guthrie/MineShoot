@@ -54,16 +54,22 @@
             return options.getCombatSnapshot ? options.getCombatSnapshot() : {};
         }
 
+        function weaponFeedbackSnapshot() {
+            return options.getWeaponFeedbackSnapshot ? options.getWeaponFeedbackSnapshot() : {};
+        }
+
         return {
             update: function (dt) {
                 var player = playerSnapshot();
                 var combat = combatSnapshot();
+                var feedback = weaponFeedbackSnapshot();
                 var targetScope = player.adsActive ? 1 : 0;
                 var targetSprint = (!player.adsActive && player.sprinting) ? 1 : 0;
 
                 scopeBlend += (targetScope - scopeBlend) * Math.min(1, dt * 16);
                 sprintBlend += (targetSprint - sprintBlend) * Math.min(1, dt * 10);
                 recoilKick += (0 - recoilKick) * Math.min(1, dt * 18);
+                recoilKick += Number(feedback.cameraPitchKick || 0);
 
                 var adsFov = adsFovForWeapon(combat.selectedWeaponId || 'rifle');
                 var baseFov = Number(cameraFeel.cameraFov || 75);
@@ -98,9 +104,6 @@
                 lookTarget.x = baseX + forwardX * 20;
                 lookTarget.y = baseY + forwardY * 20;
                 lookTarget.z = baseZ + forwardZ * 20;
-            },
-            addFireKick: function (amount) {
-                recoilKick += Number(amount || 0);
             },
             getSnapshot: function () {
                 return {

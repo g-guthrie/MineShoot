@@ -49,8 +49,8 @@
             return options.getInputSnapshot ? options.getInputSnapshot() : {};
         }
 
-        function worldSnapshot() {
-            return options.getWorldSnapshot ? options.getWorldSnapshot() : null;
+        function worldQuery() {
+            return options.getWorldQuery ? options.getWorldQuery() : null;
         }
 
         function combatSnapshot() {
@@ -60,7 +60,7 @@
         return {
             update: function (dt) {
                 var input = inputSnapshot();
-                var world = worldSnapshot() || { bounds: { min: 0, max: 100 }, groundHeight: 0 };
+                var world = worldQuery() || null;
                 var combat = combatSnapshot() || {};
                 var lookDelta = options.consumeLookDelta ? options.consumeLookDelta() : { x: 0, y: 0 };
                 var sniperScope = String(combat.selectedWeaponId || '') === 'sniper' && !!input.ads;
@@ -100,15 +100,13 @@
                     moveZ = (moveZ / length) * state.speed * dt;
                 }
 
-                var bounds = world.bounds || {};
-                var minX = Number(bounds.minX != null ? bounds.minX : bounds.min || 0);
-                var maxX = Number(bounds.maxX != null ? bounds.maxX : bounds.max || 100);
-                var minZ = Number(bounds.minZ != null ? bounds.minZ : bounds.min || 0);
-                var maxZ = Number(bounds.maxZ != null ? bounds.maxZ : bounds.max || 100);
-                state.x = Math.max(minX, Math.min(maxX, state.x + moveX));
-                state.z = Math.max(minZ, Math.min(maxZ, state.z + moveZ));
+                var clamped = world && world.clampHorizontalPosition
+                    ? world.clampHorizontalPosition(state.x + moveX, state.z + moveZ)
+                    : { x: state.x + moveX, z: state.z + moveZ };
+                state.x = Number(clamped.x || 0);
+                state.z = Number(clamped.z || 0);
 
-                var ground = Number(world.groundHeight || 0) + 1.6;
+                var ground = (world && world.getGroundHeightAt ? Number(world.getGroundHeightAt(state.x, state.z) || 0) : 0) + 1.6;
                 if (jumpQueued && !state.airborne && Math.abs(state.y - ground) < 0.001) {
                     state.verticalVelocity = state.jumpVelocity;
                     state.airborne = true;

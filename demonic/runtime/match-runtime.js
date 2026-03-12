@@ -159,6 +159,15 @@
                     authoritative: !!snapshot.net.authoritative,
                     apiBase: String(snapshot.net.apiBase || ''),
                     wsBase: String(snapshot.net.wsBase || ''),
+                    selfId: String(snapshot.net.selfId || ''),
+                    tickRate: Number(snapshot.net.tickRate || 0),
+                    connectionState: String(snapshot.net.connectionState || ''),
+                    connectionError: String(snapshot.net.connectionError || ''),
+                    lastServerMessageAt: Number(snapshot.net.lastServerMessageAt || 0),
+                    inputSync: snapshot.net.inputSync ? JSON.parse(JSON.stringify(snapshot.net.inputSync)) : null,
+                    selfState: snapshot.net.selfState ? JSON.parse(JSON.stringify(snapshot.net.selfState)) : null,
+                    predictedSelfState: snapshot.net.predictedSelfState ? JSON.parse(JSON.stringify(snapshot.net.predictedSelfState)) : null,
+                    matchState: snapshot.net.matchState ? JSON.parse(JSON.stringify(snapshot.net.matchState)) : null,
                     status: String(snapshot.net.status || '')
                 } : null,
                 combat: snapshot.combat ? {
