@@ -50,7 +50,7 @@
     var lastInputSeqAcked = 0;
     var inputSeqHistory = [];
     var inputSendTimer = 0;
-    var INPUT_SEND_INTERVAL = 0.05;
+    var INPUT_SEND_INTERVAL = (1 / 60);
 
     var snapshotMap = new Map();
     var snapshotHelper = null;

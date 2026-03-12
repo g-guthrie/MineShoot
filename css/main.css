@@ -414,12 +414,23 @@ body.app-demonic #demonic-root {
     background: rgba(34, 15, 49, 0.8);
 }
 
-.demonic-scene-stage {
+.demonic-scene-stage,
+.demonic-live-scene {
     display: grid;
     align-items: center;
     justify-items: center;
     min-height: 220px;
     padding: 14px;
+}
+
+.demonic-live-scene {
+    min-height: 260px;
+}
+
+.demonic-live-scene canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
 }
 
 .demonic-scene-ascii {
