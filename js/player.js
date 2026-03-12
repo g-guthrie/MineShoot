@@ -1,6 +1,8 @@
 import { GameWorld } from './world.js';
 import { GameActorVisualFactory } from './actor-visual-factory.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * player.js - Rifle-only local player motor and camera
  */

@@ -1,5 +1,7 @@
 import { GameWeaponRegistry } from './domain/weapons/registry.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * avatar-rig.js - Shared blocky humanoid rig for player/enemy/remote visuals
  */

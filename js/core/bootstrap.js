@@ -1,3 +1,5 @@
+const THREE = globalThis.THREE;
+
 const MAX_PIXEL_RATIO = 1.75;
 
 function cappedPixelRatio() {

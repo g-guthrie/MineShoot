@@ -3,6 +3,8 @@
  * Keeps separator logic separate from cell-local biome modules.
  */
 
+const THREE = globalThis.THREE;
+
 export var edgeKits = {};
 export var junctionBuilders = {};
 

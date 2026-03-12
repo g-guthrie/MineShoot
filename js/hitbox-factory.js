@@ -1,5 +1,7 @@
 import { HEAD_HITBOX_SIZE, BODY_HITBOX_SIZE } from '../shared/entity-constants.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * hitbox-factory.js - Shared hitbox creation for enemies and remote entities.
  */

@@ -3,6 +3,8 @@ import { protocol as SHARED_PROTOCOL } from '../shared/protocol.js';
 import * as SHARED_LAYOUT from '../shared/world-layout.js';
 import { createTerrainSampler } from '../shared/terrain-sampler.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * world.js - Static authored world layout for open-arena combat.
  * Biome content is provided by plug-and-play quadrant modules in js/world/.

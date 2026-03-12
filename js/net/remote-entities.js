@@ -1,6 +1,8 @@
 import { GameCombatTuning } from '../combat-tuning.js';
 import { GameActorVisualFactory } from '../actor-visual-factory.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * remote-entities.js - Remote player/bot visual & hitbox management
  */

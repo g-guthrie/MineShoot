@@ -1,6 +1,8 @@
 import { pointInBounds as pt } from './biome-utils.js';
 import { GameMaterialLibrary } from './material-library.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * quadrant-citadel.js - Central hero landmark with stacked walkways and a climbable spire.
  */

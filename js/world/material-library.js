@@ -2,6 +2,8 @@
  * material-library.js - Shared material cache for cross-biome deduplication.
  */
 
+const THREE = globalThis.THREE;
+
 var lambertCache = {};
 var basicCache = {};
 var requested = 0;

@@ -8,6 +8,8 @@ import { GamePlayer } from './player.js';
 import { GameWorld } from './world.js';
 import { protocol as PROTOCOL } from '../shared/protocol.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * network.js - GameNet facade over the new client net runtime.
  * Remote entity visuals remain in GameNetEntities and stay presentation-side.

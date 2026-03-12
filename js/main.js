@@ -6,6 +6,8 @@ import { GameUI } from './ui.js';
 import { GameAudio } from './audio.js';
 import { protocol as sharedProtocol } from '../shared/protocol.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * main.js - Multiplayer-only rifle-match orchestration
  */

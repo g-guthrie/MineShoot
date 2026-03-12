@@ -1,6 +1,8 @@
 import { pointInBounds as pt } from './biome-utils.js';
 import { GameMaterialLibrary } from './material-library.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * quadrant-arctic.js - Arctic / ice biome quadrant builder.
  * Plug-and-play: call buildArcticQuadrant(bounds, place, ctx) to populate any quadrant.

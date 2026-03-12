@@ -1,6 +1,8 @@
 import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 import { GameMaterialLibrary } from './material-library.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * quadrant-basin.js - Flood-control basin with channels, pump house, and elevated catwalks.
  */

@@ -1,6 +1,8 @@
 import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 import { GameMaterialLibrary } from './material-library.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * quadrant-radar.js - Sensor yard with dishes, relay mast, and bunker cover.
  */

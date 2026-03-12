@@ -1,6 +1,8 @@
 import { GameAvatarRig } from './avatar-rig.js';
 import { createCombatHitbox } from './hitbox-factory.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * actor-visual-factory.js - Shared avatar + hitbox creation for player/enemy/remote actors.
  */

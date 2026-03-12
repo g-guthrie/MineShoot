@@ -4,6 +4,8 @@ import { GameNet } from './network.js';
 import { GamePlayer } from './player.js';
 import { GameWorld } from './world.js';
 
+const THREE = globalThis.THREE;
+
 /**
  * hitscan.js - Rifle-only hitscan runtime
  */
