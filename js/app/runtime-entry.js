@@ -4,7 +4,10 @@ async function loadRuntimeGraph() {
   if (runtimeGraphPromise) return runtimeGraphPromise;
 
   runtimeGraphPromise = (async function loadRuntimeGraphOnce() {
-    await import('../vendor/three.min.js');
+    const threeModule = await import('../vendor/three.min.js');
+    if (!globalThis.THREE) {
+      globalThis.THREE = threeModule.default || threeModule;
+    }
 
     await import('../../shared/gameplay-tuning.js');
     await import('../../shared/protocol.js');
