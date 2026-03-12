@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 WRANGLER_BIN="${WRANGLER_BIN:-npx}"
 WRANGLER_PKG="${WRANGLER_PKG:-wrangler@3}"
 WORKER_PORT="${WORKER_PORT:-8787}"
-ASSET_DIR="${ASSET_DIR:-$ROOT_DIR/.cf-deploy}"
+ASSET_DIR="${ASSET_DIR:-$ROOT_DIR/.cf-stage-current}"
 
 WORKER_LOG="${WORKER_LOG:-$ROOT_DIR/.wrangler/offline-worker.log}"
 

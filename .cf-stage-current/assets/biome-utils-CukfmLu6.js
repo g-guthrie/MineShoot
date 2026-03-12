@@ -1,1 +1,0 @@
-function e(n,t,m){const c=Math.max(0,Math.min(1,Number(t||0))),i=Math.max(0,Math.min(1,Number(m||0)));return{x:n.minX+(n.maxX-n.minX)*c,z:n.minZ+(n.maxZ-n.minZ)*i}}function o(n){return n&&typeof n.clone=="function"?n.clone():n}export{o as cloneMaterial,e as pointInBounds};

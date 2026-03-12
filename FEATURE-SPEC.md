@@ -1,36 +1,25 @@
-# Feature Spec: MAYHEM Web FPS (Menu + Environment V2)
+# Feature Spec: MAYHEM Web FPS MVP
 
 ## Product Goal
 Fast browser shooter with one-click session entry:
 - Open URL
-- Pick mode
+- Menu is immediately interactive
+- Click `PLAY`
 - Enter a live room quickly on almost any machine
 
-The design priority is low complexity for strong frame pacing and network responsiveness, while still delivering strong visual identity.
+The design priority is low complexity for strong frame pacing and network responsiveness while still delivering strong visual identity.
 
 ## Runtime Architecture
 - Entry HTML: `index.html`
-- Module loader: `js/app/index.js` (ordered dynamic imports)
-- Runtime registry: `globalThis.__MAYHEM_RUNTIME`
+- Startup handoff: `js/shell.js`
+- Runtime composition entry: `js/app/runtime-entry.js`
 - Shared cross-runtime config: `shared/protocol.js`, `shared/gameplay-tuning.js`
 - Server authority: Cloudflare Worker + Durable Object room
 
-## Mode Menu (Current)
-Menu buttons:
-1. `MULTIPLAYER`
-2. `SINGLEPLAYER DEV SERVER`
-3. `SINGLEPLAYER DEV LOCAL`
-
-Behavior:
-- `MULTIPLAYER`:
-  - Runs networked mode with guest auth.
-  - Uses room from `?room=<id>` when provided, else `global`.
-- `SINGLEPLAYER DEV SERVER`:
-  - Runs networked mode against shared room `dev-local`.
-- `SINGLEPLAYER DEV LOCAL`:
-  - Runs local simulation (bots/dev loop), no server authority.
-
-Menu/subtitle/debug text must always match the effective room ID for clarity.
+## Current Menu
+- Single entrypoint: `PLAY`
+- Runtime profile: public authoritative FFA
+- Backend path: Cloudflare Worker matchmaking + Durable Object room
 
 ## Environment V2 (Phases 1-4 Implemented)
 
@@ -88,9 +77,10 @@ Out of scope for this phase:
 - Deterministic seed/profile controls landmark placement.
 - Pixel ratio cap used in renderer bootstrap + resize paths.
 - No post-processing requirement.
+- Startup path should stay lazy and chunked.
 
 ## Acceptance Checklist
-- [ ] Mode menu launches correct runtime path for all three buttons.
+- [ ] `PLAY` launches the public authoritative room path.
 - [ ] Grid hidden by default; visible only with `?debugGrid=1`.
 - [ ] Desert/arctic landmarks spawn deterministically for same world seed.
 - [ ] Waterfall animates continuously without large frame-time spikes.

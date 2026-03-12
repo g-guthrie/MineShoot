@@ -8,7 +8,6 @@ function read(filePath) {
 }
 
 test('app shell only boots the multiplayer rifle slice', () => {
-  const appIndex = read('js/app/index.js');
   const runtimeEntry = read('js/app/runtime-entry.js');
   const player = read('js/player.js');
   const world = read('js/world.js');
@@ -16,17 +15,17 @@ test('app shell only boots the multiplayer rifle slice', () => {
   const intersections = read('js/world/intersection-builder.js');
   const quadrantArctic = read('js/world/quadrant-arctic.js');
   const quadrantJungle = read('js/world/quadrant-jungle.js');
-  assert.doesNotMatch(appIndex, /net\/auth\.js/);
-  assert.doesNotMatch(appIndex, /throwables\.js/);
-  assert.doesNotMatch(appIndex, /enemy\.js/);
-  assert.doesNotMatch(appIndex, /docs\.js/);
-  assert.doesNotMatch(appIndex, /overhead\.js/);
-  assert.doesNotMatch(appIndex, /awareness\.js/);
-  assert.doesNotMatch(appIndex, /seek-profiles\.js/);
-  assert.doesNotMatch(appIndex, /seek-core\.js/);
-  assert.doesNotMatch(appIndex, /core\/event-bus\.js/);
-  assert.doesNotMatch(appIndex, /core\/mode-flow\.js/);
-  assert.doesNotMatch(appIndex, /net\/snapshots\.js/);
+  assert.doesNotMatch(runtimeEntry, /net\/auth\.js/);
+  assert.doesNotMatch(runtimeEntry, /throwables\.js/);
+  assert.doesNotMatch(runtimeEntry, /enemy\.js/);
+  assert.doesNotMatch(runtimeEntry, /docs\.js/);
+  assert.doesNotMatch(runtimeEntry, /overhead\.js/);
+  assert.doesNotMatch(runtimeEntry, /awareness\.js/);
+  assert.doesNotMatch(runtimeEntry, /seek-profiles\.js/);
+  assert.doesNotMatch(runtimeEntry, /seek-core\.js/);
+  assert.doesNotMatch(runtimeEntry, /core\/event-bus\.js/);
+  assert.doesNotMatch(runtimeEntry, /core\/mode-flow\.js/);
+  assert.doesNotMatch(runtimeEntry, /net\/snapshots\.js/);
   assert.match(runtimeEntry, /GameWorld\.configure/);
   assert.match(runtimeEntry, /quadrants:/);
   assert.doesNotMatch(player, /__MAYHEM_RUNTIME\.GameWorld/);

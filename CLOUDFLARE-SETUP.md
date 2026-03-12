@@ -21,6 +21,7 @@ Treat per-deploy `*.pages.dev` preview aliases as temporary, not canonical.
 `wrangler.toml` is the Worker deploy config.
 `wrangler.pages.toml` stores the Pages config values.
 `npm run stage:pages` builds the Vite bundle into `dist/` and stages the deployable Pages asset tree in `.cf-stage-current/`.
+`.cf-stage-current/` is generated output and should not be committed.
 
 The shipped frontend is split into:
 
@@ -58,44 +59,28 @@ npx wrangler deploy --config wrangler.toml
 ## 6) Deploy Pages
 
 ```bash
-./scripts/stage-pages.sh
-cp wrangler.toml /tmp/wrangler.toml.worker.backup
-cp wrangler.pages.toml wrangler.toml
-npx wrangler pages deploy .cf-stage-current --project-name mayhem --branch main --commit-dirty=true
-mv /tmp/wrangler.toml.worker.backup wrangler.toml
+./scripts/deploy-pages.sh
 ```
 
-Wrangler Pages does not support a custom config path for `pages deploy`, so temporarily swap `wrangler.pages.toml` into `wrangler.toml` for the command and then restore the Worker config.
+The deploy script stages `.cf-stage-current/`, swaps the Pages config into `wrangler.toml`, deploys, and then restores the Worker config.
 
 ## 7) Deploy both together
 
 ```bash
 npm test
 npx wrangler deploy --config wrangler.toml
-./scripts/stage-pages.sh
-cp wrangler.toml /tmp/wrangler.toml.worker.backup
-cp wrangler.pages.toml wrangler.toml
-npx wrangler pages deploy .cf-stage-current --project-name mayhem --branch main --commit-dirty=true
-mv /tmp/wrangler.toml.worker.backup wrangler.toml
+./scripts/deploy-pages.sh
 ```
 
-## 8) Route API to Worker
-
-Set a route so your frontend origin can call:
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-- `GET /api/me`
-- `GET /api/ws` (WebSocket)
-
-## 9) Verify multiplayer
+## 8) Verify multiplayer
 
 Open two browser windows to the deployed URL:
-1. Login with two different usernames and 4-digit PINs.
+1. Click `PLAY` in both windows.
 2. Confirm both users appear in the same arena.
-3. Confirm overhead health/armor bars render for bots + other players.
-4. Press `H` and verify hitboxes + wallhack circle hide/show together while silhouettes still work in range.
+3. Confirm remote players replicate movement correctly.
+4. Press `H` and verify hitboxes hide/show together.
 
-## 10) Unified local dev
+## 9) Unified local dev
 
 Run the default dev command:
 
@@ -105,7 +90,7 @@ npm run dev
 
 This is the same Cloudflare Worker + static asset architecture used in production, served locally through Wrangler.
 
-The shipped menu path is now `QUICK MATCH (FFA)` only.
+The shipped menu path is now `PLAY` into public authoritative FFA only.
 
 For frontend-only iteration without the Worker runtime, use:
 
@@ -113,7 +98,7 @@ For frontend-only iteration without the Worker runtime, use:
 npm run dev:frontend
 ```
 
-## 11) Offline local multiplayer dev
+## 10) Offline local multiplayer dev
 
 Run the local Worker + local Pages stack:
 

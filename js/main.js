@@ -290,13 +290,8 @@ function ensureClientStack() {
         renderer.render(scene, camera);
     }
 
-    function runtimeProfile() {
-        return gameRuntimeProfile;
-    }
-
     function resolveApiUrl(apiPath) {
-        var runtime = runtimeProfile();
-        if (runtime && runtime.resolveApiUrl) return runtime.resolveApiUrl(apiPath);
+        if (gameRuntimeProfile && gameRuntimeProfile.resolveApiUrl) return gameRuntimeProfile.resolveApiUrl(apiPath);
         return apiPath;
     }
 
@@ -311,10 +306,9 @@ function ensureClientStack() {
     }
 
     function startAllocatedRoom(payload) {
-        var runtime = runtimeProfile();
         if (!payload || !payload.roomId || started) return;
         started = true;
-        activeRuntimeMode = runtime && runtime.selectMode ? runtime.selectMode('cloud_multiplayer') : null;
+        activeRuntimeMode = gameRuntimeProfile && gameRuntimeProfile.selectMode ? gameRuntimeProfile.selectMode('cloud_multiplayer') : null;
         if (!activeRuntimeMode) {
             launchInFlight = false;
             setPlayButtonBusy(false);

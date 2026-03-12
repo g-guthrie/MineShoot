@@ -2,3 +2,6 @@ node_modules/
 dist/
 .hermes-flow/
 .wrangler/
+.cf-deploy/
+.cf-stage-current/
+test-results/

@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/runtime-entry-CMSDSw3y.js","assets/index-DKV3fUmS.js","assets/index-BmimJvZG.css"])))=>i.map(i=>d[i]);
-import{_ as e}from"./index-DKV3fUmS.js";let i=null;async function r(){return i||(i=e(()=>import("./runtime-entry-CMSDSw3y.js"),__vite__mapDeps([0,1,2]))),i}function a(){return r()}async function o(){const t=await r();if(!t||typeof t.startQuickMatch!="function")throw new Error("Game launcher failed to initialize.");return t.startQuickMatch()}export{a as preloadGameRuntime,o as startQuickMatch};

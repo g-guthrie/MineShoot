@@ -8,8 +8,8 @@ function read(filePath) {
 }
 
 test('app shell no longer loads the ability runtime module', () => {
-  const appIndex = read('js/app/index.js');
-  assert.doesNotMatch(appIndex, /abilities\.js/);
+  const runtimeEntry = read('js/app/runtime-entry.js');
+  assert.doesNotMatch(runtimeEntry, /abilities\.js/);
 });
 
 test('protocol no longer exposes ability queue or cast messages', () => {
@@ -31,7 +31,7 @@ test('shell exposes a PLAY handoff for entering the live match', () => {
   const html = read('index.html');
   const main = read('js/main.js');
   const shell = read('js/shell.js');
-  const appIndex = read('js/app/index.js');
+  const runtimeEntry = read('js/app/runtime-entry.js');
   assert.match(html, /id="play-btn"[^>]*>PLAY</);
   assert.match(html, /type="module"\s+src="\/js\/shell\.js"/);
   assert.doesNotMatch(html, /vendor\/three\.min\.js/);
@@ -40,8 +40,8 @@ test('shell exposes a PLAY handoff for entering the live match', () => {
   assert.doesNotMatch(html, /sound-toggle-btn/);
   assert.doesNotMatch(html, /back-mode-btn/);
   assert.match(shell, /beginQuickMatch/);
-  assert.match(shell, /import\('\.\/app\/index\.js'\)/);
-  assert.doesNotMatch(appIndex, /GameMainLauncher/);
+  assert.match(shell, /import\('\.\/app\/runtime-entry\.js'\)/);
+  assert.doesNotMatch(runtimeEntry, /GameMainLauncher/);
   assert.match(main, /export function startQuickMatch\(/);
   assert.doesNotMatch(main, /GameMainLauncher/);
   assert.match(main, /function requestMatchmaking\(\)/);

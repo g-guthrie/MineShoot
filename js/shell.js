@@ -1,7 +1,6 @@
 import { createQuickMatchFlow } from './app/quick-match-flow.mjs';
 import {
   installGlobalClientDiagnostics,
-  getLatestClientDiagnostic,
   recordClientDiagnostic
 } from './runtime/diagnostics/client-diagnostics.mjs';
 
@@ -42,7 +41,7 @@ const quickMatchFlow = createQuickMatchFlow({
   setRuntimeIndicator: setRuntimeIndicator,
   loadApp() {
     recordClientDiagnostic('quick_match_import_app');
-    return import('./app/index.js');
+    return import('./app/runtime-entry.js');
   },
   exitPointerLock() {
     if (document.exitPointerLock && document.pointerLockElement) {
@@ -56,10 +55,10 @@ const quickMatchFlow = createQuickMatchFlow({
 });
 
 function preloadRuntime() {
-  import('./app/index.js')
+  import('./app/runtime-entry.js')
     .then(function (app) {
-      if (app && typeof app.preloadGameRuntime === 'function') {
-        return app.preloadGameRuntime();
+      if (app && typeof app.startQuickMatch === 'function') {
+        return app;
       }
       return null;
     })
