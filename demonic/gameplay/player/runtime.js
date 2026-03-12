@@ -6,14 +6,27 @@
 
     function create(options) {
         options = options || {};
-        var sharedGameplay = mayhemRuntime.GameShared && mayhemRuntime.GameShared.gameplayTuning
-            ? mayhemRuntime.GameShared.gameplayTuning
-            : {};
-        var movement = sharedGameplay.movement || {};
+        var feel = demonicRuntime.FeelTuning || {
+            mouseSensitivity: 0.002,
+            pitchLimitDeg: 89,
+            movement: {
+                jogSpeed: 8,
+                runSpeed: 14,
+                jumpVelocity: 8.8,
+                gravity: 18,
+                adsMoveMult: 0.4
+            },
+            camera: {
+                adsSensitivityMult: 0.7,
+                sniperScopeSensitivityMult: 0.42
+            }
+        };
+        var movement = feel.movement || {};
+        var cameraFeel = feel.camera || {};
         var ADS_MOVE_MULT = Number(movement.adsMoveMult || 0.4);
         var GRAVITY = Number(movement.gravity || 18);
-        var MOUSE_SENSITIVITY = 0.002;
-        var PITCH_LIMIT = 89 * (Math.PI / 180);
+        var MOUSE_SENSITIVITY = Number(feel.mouseSensitivity || 0.002);
+        var PITCH_LIMIT = Number(feel.pitchLimitDeg || 89) * (Math.PI / 180);
         var state = {
             x: 25,
             y: 1.6,
@@ -40,13 +53,23 @@
             return options.getWorldSnapshot ? options.getWorldSnapshot() : null;
         }
 
+        function combatSnapshot() {
+            return options.getCombatSnapshot ? options.getCombatSnapshot() : null;
+        }
+
         return {
             update: function (dt) {
                 var input = inputSnapshot();
                 var world = worldSnapshot() || { bounds: { min: 0, max: 100 }, groundHeight: 0 };
+                var combat = combatSnapshot() || {};
                 var lookDelta = options.consumeLookDelta ? options.consumeLookDelta() : { x: 0, y: 0 };
-                state.yaw -= Number(lookDelta.x || 0) * MOUSE_SENSITIVITY;
-                state.pitch -= Number(lookDelta.y || 0) * MOUSE_SENSITIVITY;
+                var sniperScope = String(combat.selectedWeaponId || '') === 'sniper' && !!input.ads;
+                var sensitivityMult = sniperScope
+                    ? Number(cameraFeel.sniperScopeSensitivityMult || 0.42)
+                    : (!!input.ads ? Number(cameraFeel.adsSensitivityMult || 0.7) : 1);
+                var effectiveSensitivity = MOUSE_SENSITIVITY * sensitivityMult;
+                state.yaw -= Number(lookDelta.x || 0) * effectiveSensitivity;
+                state.pitch -= Number(lookDelta.y || 0) * effectiveSensitivity;
                 state.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, state.pitch));
 
                 var movingForward = !!input.moveForward && !input.moveBackward;

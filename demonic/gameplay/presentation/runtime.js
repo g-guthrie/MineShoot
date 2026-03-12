@@ -53,6 +53,20 @@
             return 'idle';
         }
 
+        function abilityPose(abilities) {
+            if (abilities.activeStates && abilities.activeStates.slot1) {
+                return String(abilities.activeStates.slot1.abilityId || '') === 'heal'
+                    ? 'ability_heal'
+                    : 'ability_slot1';
+            }
+            if (abilities.activeStates && abilities.activeStates.slot2) {
+                return String(abilities.activeStates.slot2.abilityId || '') === 'deadeye'
+                    ? 'ability_deadeye'
+                    : 'ability_slot2';
+            }
+            return '';
+        }
+
         return {
             update: function (_dt) {},
             getSnapshot: function () {
@@ -60,8 +74,12 @@
                 var combat = combatSnapshot();
                 var abilities = abilitySnapshot();
                 var camera = cameraSnapshot();
+                var basePose = poseFor(player, combat);
+                var overlayPose = abilityPose(abilities);
                 return {
-                    pose: poseFor(player, combat),
+                    pose: overlayPose || basePose,
+                    basePose: basePose,
+                    overlayPose: overlayPose,
                     reticle: reticleFor(combat, player),
                     adsState: {
                         weaponId: String(combat.selectedWeaponId || ''),
@@ -76,7 +94,9 @@
                     },
                     abilityPresentation: {
                         slot1Active: !!(abilities.lastCast && abilities.lastCast.slot === 'slot1'),
-                        slot2Active: !!(abilities.lastCast && abilities.lastCast.slot === 'slot2')
+                        slot2Active: !!(abilities.lastCast && abilities.lastCast.slot === 'slot2'),
+                        slot1AbilityId: String(abilities.activeStates && abilities.activeStates.slot1 && abilities.activeStates.slot1.abilityId || ''),
+                        slot2AbilityId: String(abilities.activeStates && abilities.activeStates.slot2 && abilities.activeStates.slot2.abilityId || '')
                     }
                 };
             }

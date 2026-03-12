@@ -97,9 +97,9 @@ import {
   applySpawnShield as applyRoomSpawnShield,
   buildPlayerEntity as buildRoomPlayerEntity,
   chooseEntitySpawnPoint as chooseRoomEntitySpawnPoint,
+  queueAuthoritativeInput as queueRoomAuthoritativeInput,
   enforceEntityTerrainFloor as enforceRoomEntityTerrainFloor,
   ensurePlayer as ensureRoomPlayer,
-  queueAuthoritativeInput as queueRoomAuthoritativeInput,
   planEntityRespawn as planRoomEntityRespawn,
   respawnIfNeeded as respawnRoomEntityIfNeeded,
   spawnEntityRandomly as spawnRoomEntityRandomly,
@@ -920,8 +920,8 @@ export class GlobalArenaRoom extends DurableObject {
       ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
       : 1;
     const boundsPad = PLAYER_RADIUS_WU;
-    stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), {
-      dtSec: Math.max(0, Number(dtSec || 0)) * slowMult,
+    let remainingDtSec = Math.max(0, Number(dtSec || 0)) * slowMult;
+    const movementOptions = {
       bounds: {
         minX: this.boundsMin,
         maxX: this.boundsMax,
@@ -935,7 +935,40 @@ export class GlobalArenaRoom extends DurableObject {
       playerHeight: PLAYER_HEIGHT_WU,
       playerRadius: boundsPad,
       epsilon: WORLD_RAY_EPSILON
-    });
+    };
+
+    if (Array.isArray(player.inputQueue) && player.inputQueue.length > 0) {
+      while (remainingDtSec > 0.000001 && player.inputQueue.length > 0) {
+        const sample = player.inputQueue[0];
+        if (!sample || !sample.inputState) {
+          player.inputQueue.shift();
+          continue;
+        }
+        if (typeof sample.remainingDtSec !== 'number' || !Number.isFinite(sample.remainingDtSec) || sample.remainingDtSec <= 0) {
+          sample.remainingDtSec = Math.max(1 / 240, Math.min(0.075, Number(sample.dtMs || 50) / 1000));
+        }
+        const stepDtSec = Math.min(remainingDtSec, sample.remainingDtSec);
+        player.yaw = (typeof sample.yaw === 'number' && Number.isFinite(sample.yaw)) ? Number(sample.yaw) : Number(player.yaw || 0);
+        player.pitch = (typeof sample.pitch === 'number' && Number.isFinite(sample.pitch)) ? Number(sample.pitch) : Number(player.pitch || 0);
+        player.inputState = sample.inputState;
+        stepAuthoritativeMovement(player, sample.inputState, Object.assign({}, movementOptions, {
+          dtSec: stepDtSec
+        }));
+        sample.remainingDtSec -= stepDtSec;
+        remainingDtSec -= stepDtSec;
+        if (sample.remainingDtSec <= 0.000001) {
+          player.seq = Math.max(Number(player.seq || 0), Number(sample.seq || 0));
+          player.inputQueue.shift();
+        }
+      }
+    }
+
+    if (remainingDtSec > 0.000001) {
+      stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), Object.assign({}, movementOptions, {
+        dtSec: remainingDtSec
+      }));
+    }
+
     applyRoomPendingInputAck(player);
     this.enforceEntityTerrainFloor(player);
   }

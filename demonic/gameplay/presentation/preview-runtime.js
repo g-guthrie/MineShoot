@@ -79,6 +79,10 @@
 
         scene.add(root);
 
+        function setActorTint(hex) {
+            torso.material.color.setHex(hex);
+        }
+
         return {
             update: function (snapshot) {
                 var state = snapshot || {};
@@ -91,6 +95,7 @@
                 gunBody.material.color.setHex(gunPalette.body);
                 gunBarrel.material.color.setHex(gunPalette.barrel);
                 gunGrip.material.color.setHex(gunPalette.grip);
+                setActorTint(0x4a7fc1);
 
                 legL.rotation.x = 0;
                 legR.rotation.x = 0;
@@ -127,6 +132,22 @@
                     legL.rotation.x = -0.18;
                     legR.rotation.x = -0.18;
                     actor.position.y = 0.36;
+                } else if (pose === 'ability_heal') {
+                    setActorTint(0x6dff9a);
+                    armL.rotation.x = -0.16;
+                    armR.rotation.x = 0.42;
+                    gun.position.set(0.26, 1.12, -0.16);
+                } else if (pose === 'ability_deadeye') {
+                    setActorTint(0xffc46d);
+                    armR.rotation.x = 1.02;
+                    armR.rotation.z = -0.06;
+                    armL.rotation.x = -0.22;
+                    gun.position.set(0.18, 1.3, -0.34);
+                    gun.rotation.set(-1.24, 0.04, 0);
+                } else if (pose === 'ability_slot1' || pose === 'ability_slot2') {
+                    setActorTint(0xc487ff);
+                    armL.rotation.x = -0.2;
+                    armR.rotation.x = 0.7;
                 } else {
                     actor.position.y = 0.3;
                     armR.rotation.x = 0.72;

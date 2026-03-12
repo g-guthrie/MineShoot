@@ -43,6 +43,9 @@
             },
             getWorldSnapshot: function () {
                 return world && world.getSnapshot ? world.getSnapshot() : null;
+            },
+            getCombatSnapshot: function () {
+                return combat && combat.getSnapshot ? combat.getSnapshot() : null;
             }
         }) : null;
         var camera = cameraApi && cameraApi.create ? cameraApi.create({

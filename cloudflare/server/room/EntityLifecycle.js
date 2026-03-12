@@ -75,6 +75,7 @@ export function createPlayerEntity(options = {}) {
     inputState: typeof options.createMovementInputState === 'function'
       ? options.createMovementInputState()
       : null,
+    inputQueue: [],
     lastShotAt: {},
     lastShotTokenByWeapon: {},
     weaponId: weaponLoadout[0],

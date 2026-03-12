@@ -3,6 +3,7 @@ import '../../shared/gameplay-tuning.js';
 import '../../shared/runtime-modes.js';
 import '../../js/core/runtime-profile.js';
 import '../platform/display-settings.js';
+import { getFeelTuning } from '../shared-compat/feel-tuning.js';
 import { getDemonicRuntimeModes } from '../shared-compat/runtime-modes.js';
 import { buildDemonicMenuModel } from './menu-model.js';
 import { DEMONIC_WORKSTREAMS } from './workstreams.js';
@@ -16,6 +17,7 @@ globalThis.__DEMONIC_RUNTIME.ModeRegistry = {
 globalThis.__DEMONIC_RUNTIME.MenuModel = {
   build: buildDemonicMenuModel
 };
+globalThis.__DEMONIC_RUNTIME.FeelTuning = getFeelTuning(globalThis.__MAYHEM_RUNTIME.GameShared || {});
 globalThis.__DEMONIC_RUNTIME.Workstreams = {
   items: DEMONIC_WORKSTREAMS
 };

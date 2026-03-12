@@ -145,6 +145,7 @@
                     wsSend({
                         t: opts.getInputMessageType(),
                         seq: seq,
+                        dtMs: dtMs,
                         yaw: rotation.yaw || 0,
                         pitch: rotation.pitch || 0,
                         forward: !!(inputState && inputState.forward),

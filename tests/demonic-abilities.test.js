@@ -42,4 +42,6 @@ test('demonic ability runtime exposes default loadout and cooldown-backed trigge
   const after = runtime.getSnapshot();
   assert.equal(after.lastCast.abilityId, 'choke');
   assert.equal(after.hud.slot1CooldownMs > 0, true);
+  assert.equal(after.hud.slot1Active, true);
+  assert.equal(after.activeStates.slot1.abilityId, 'choke');
 });

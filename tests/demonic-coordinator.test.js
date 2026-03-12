@@ -174,6 +174,7 @@ test('demonic coordinator combines subsystem snapshots under one runtime contrac
   assert.equal(abilityResult.ok, true);
   assert.equal(coordinator.getSnapshot().abilities.lastCast.abilityId, 'choke');
   assert.equal(coordinator.getSnapshot().presentation.abilityPresentation.slot1Active, true);
+  assert.equal(coordinator.getSnapshot().presentation.overlayPose, 'ability_slot1');
 
   const autoCoordinator = coordinatorApi.create({
     mode: { id: 'single_full_sandbox', label: 'Offline Sandbox', authorityMode: 'offline', backendLabel: 'OFFLINE SANDBOX' },

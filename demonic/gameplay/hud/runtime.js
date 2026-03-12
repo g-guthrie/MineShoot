@@ -44,11 +44,15 @@
                 var abilities = abilitySnapshot();
                 var player = playerSnapshot();
                 var cooldown = cooldownStatus(combat);
+                var slot1Active = !!(abilities.hud && abilities.hud.slot1Active);
+                var slot2Active = !!(abilities.hud && abilities.hud.slot2Active);
                 return {
                     weaponInfo: String(combat.selectedWeaponId || '').toUpperCase() +
                         ' :: ' + Number(combat.ammoInMag || 0) + '/' + Number(combat.magazineSize || 0),
                     abilityInfo: String(abilities.hud && abilities.hud.slot1Name || '').toUpperCase() +
-                        ' / ' + String(abilities.hud && abilities.hud.slot2Name || '').toUpperCase(),
+                        (slot1Active ? ' [ACTIVE]' : '') +
+                        ' / ' + String(abilities.hud && abilities.hud.slot2Name || '').toUpperCase() +
+                        (slot2Active ? ' [ACTIVE]' : ''),
                     cooldownStatus: cooldown.status.toUpperCase(),
                     cooldownMs: Number(cooldown.ms || 0),
                     movementInfo: player.sprinting ? 'SPRINT' : (player.adsActive ? 'ADS' : (player.moving ? 'MOVE' : 'IDLE'))

@@ -15,21 +15,36 @@
 
     function create(options) {
         options = options || {};
+        var feel = demonicRuntime.FeelTuning || {
+            camera: {
+                cameraFov: 75,
+                thirdHeight: 0.7,
+                cameraDist: 4.4 * 0.85,
+                cameraShoulder: 1.35 * 1.3,
+                adsDist: 1.72,
+                adsShoulder: 2,
+                adsHeight: 0.46,
+                sniperScopeDist: 0.14,
+                sniperScopeShoulder: 0.08,
+                sniperScopeHeight: 0.12
+            }
+        };
+        var cameraFeel = feel.camera || {};
         var scopeBlend = 0;
         var sprintBlend = 0;
         var recoilKick = 0;
-        var currentFov = 75;
+        var currentFov = Number(cameraFeel.cameraFov || 75);
         var cameraPosition = { x: 0, y: 0, z: 0 };
         var lookTarget = { x: 0, y: 0, z: 0 };
-        var THIRD_HEIGHT = 0.7;
-        var CAMERA_DIST = 4.4 * 0.85;
-        var CAMERA_SHOULDER = 1.35 * 1.3;
-        var ADS_DIST = 1.72;
-        var ADS_SHOULDER = 2;
-        var ADS_HEIGHT = 0.46;
-        var SNIPER_SCOPE_DIST = 0.14;
-        var SNIPER_SCOPE_SHOULDER = 0.08;
-        var SNIPER_SCOPE_HEIGHT = 0.12;
+        var THIRD_HEIGHT = Number(cameraFeel.thirdHeight || 0.7);
+        var CAMERA_DIST = Number(cameraFeel.cameraDist || (4.4 * 0.85));
+        var CAMERA_SHOULDER = Number(cameraFeel.cameraShoulder || (1.35 * 1.3));
+        var ADS_DIST = Number(cameraFeel.adsDist || 1.72);
+        var ADS_SHOULDER = Number(cameraFeel.adsShoulder || 2);
+        var ADS_HEIGHT = Number(cameraFeel.adsHeight || 0.46);
+        var SNIPER_SCOPE_DIST = Number(cameraFeel.sniperScopeDist || 0.14);
+        var SNIPER_SCOPE_SHOULDER = Number(cameraFeel.sniperScopeShoulder || 0.08);
+        var SNIPER_SCOPE_HEIGHT = Number(cameraFeel.sniperScopeHeight || 0.12);
 
         function playerSnapshot() {
             return options.getPlayerSnapshot ? options.getPlayerSnapshot() : {};
@@ -51,7 +66,8 @@
                 recoilKick += (0 - recoilKick) * Math.min(1, dt * 18);
 
                 var adsFov = adsFovForWeapon(combat.selectedWeaponId || 'rifle');
-                currentFov += (((75 + (75 * 0.04 * sprintBlend)) + ((adsFov - 75) * scopeBlend)) - currentFov) * Math.min(1, dt * 16);
+                var baseFov = Number(cameraFeel.cameraFov || 75);
+                currentFov += (((baseFov + (baseFov * 0.04 * sprintBlend)) + ((adsFov - baseFov) * scopeBlend)) - currentFov) * Math.min(1, dt * 16);
 
                 var yaw = Number(player.yaw || 0);
                 var pitch = Number(player.pitch || 0);

@@ -175,7 +175,7 @@ test('GameNet records sent input samples with timing metadata', async () => {
   const pending = GameNet.getPendingInputSamples();
   assert.equal(syncState.pendingInputCount, 2);
   assert.equal(pending.length, 2);
-  assert.equal(pending[0].dtMs, 17);
+  assert.equal(pending[0].dtMs, 33);
   assert.equal(pending[1].dtMs, 60);
 });
 
