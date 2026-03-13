@@ -293,6 +293,8 @@ test('networked launch waits for authoritative join before exposing the enter-ma
   harness.resolveJoin();
   const result = await launchPromise;
   assert.equal(result.ok, true);
+  assert.equal(harness.element('menu-stage').hidden, true);
+  assert.equal(harness.element('launch-flow').hidden, false);
   assert.equal(harness.element('launch-enter-btn').hidden, false);
   assert.match(harness.element('launch-status').textContent, /Ready to enter FFA room FFA-01\./);
 

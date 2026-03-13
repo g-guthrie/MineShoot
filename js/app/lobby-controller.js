@@ -579,6 +579,9 @@
             lobbyUi.hideStartUi();
             if (result.mode && result.mode.authorityMode === 'networked') {
                 setRoomAccessStatus(readyStatusForMode(result.mode), false);
+                if (runtime.GameSession && runtime.GameSession.showLaunchOverlay) {
+                    runtime.GameSession.showLaunchOverlay('joined_ready', result.mode);
+                }
             }
             if (modeSubtitle) {
                 if (result.mode && result.mode.authorityMode === 'networked') {
