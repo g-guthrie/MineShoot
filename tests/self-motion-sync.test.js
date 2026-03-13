@@ -50,7 +50,7 @@ async function loadSelfMotionSyncHarness(runtimeOverrides = {}) {
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
   for (const path of [
-    '../js/ability-fx.js',
+    '../js/combat/ability-fx.js',
     '../js/net/self-motion-sync.js'
   ]) {
     const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');

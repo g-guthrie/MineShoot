@@ -69,31 +69,31 @@ test('runtime coordinator creates the runtime shell lazily and delegates launch/
   assert.equal(launchCalls, 1);
 });
 
-test('main.js initializes GameMain from GameRuntimeCoordinator', async () => {
-  const code = await readModule('../js/main.js');
-  const createdApi = {
-    launchModeById() { return { ok: true }; },
-    getActivityState() { return 'menu'; }
-  };
-  let createCalls = 0;
-
+test('runtime main registers a GameMain api', async () => {
+  const code = await readModule('../js/runtime/main.js');
   const sandbox = {
-    globalThis: {
-      __MAYHEM_RUNTIME: {
-        GameRuntimeCoordinator: {
-          create() {
-            createCalls += 1;
-            return createdApi;
-          }
-        }
+    console,
+    document: {
+      getElementById() { return null; },
+      querySelector() { return null; }
+    },
+    window: {
+      location: {
+        pathname: '/'
       }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {}
     }
   };
+  sandbox.globalThis.window = sandbox.window;
+  sandbox.globalThis.document = sandbox.document;
 
   vm.runInContext(code, vm.createContext(sandbox));
 
-  assert.equal(createCalls, 1);
-  assert.equal(sandbox.globalThis.__MAYHEM_RUNTIME.GameMain, createdApi);
+  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain, 'object');
+  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain.launchModeById, 'function');
+  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain.getActivityState, 'function');
 });
 
 test('runtime coordinator reads respawn countdown from self combat instead of net selectors', async () => {
