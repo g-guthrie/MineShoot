@@ -8,6 +8,18 @@
     function create(opts) {
         opts = opts || {};
 
+        function cloneInputState(inputState) {
+            return inputState ? {
+                forward: !!inputState.forward,
+                backward: !!inputState.backward,
+                left: !!inputState.left,
+                right: !!inputState.right,
+                jump: !!inputState.jump,
+                sprint: !!inputState.sprint,
+                adsActive: !!inputState.adsActive
+            } : null;
+        }
+
         function clearReconnectTimer() {
             var transport = opts.getTransport();
             if (transport && transport.shutdown) {
@@ -47,6 +59,12 @@
                             opts.setConnected(false);
                             opts.setWs(null);
                             if (opts.onTransportClose) opts.onTransportClose();
+                        },
+                        onSupersededClose: function () {
+                            if (opts.handleSupersededIdentity) {
+                                return opts.handleSupersededIdentity();
+                            }
+                            return null;
                         },
                         onError: function () {
                             opts.setConnected(false);
@@ -155,20 +173,13 @@
                         dtMs: dtMs,
                         yaw: rotation.yaw || 0,
                         pitch: rotation.pitch || 0,
-                        inputState: inputState ? {
-                            forward: !!inputState.forward,
-                            backward: !!inputState.backward,
-                            left: !!inputState.left,
-                            right: !!inputState.right,
-                            jump: !!inputState.jump,
-                            sprint: !!inputState.sprint,
-                            adsActive: !!inputState.adsActive
-                        } : null
+                        inputState: cloneInputState(inputState)
                     });
                     if (inputSeqHistory.length > 96) inputSeqHistory.shift();
                     wsSend({
                         t: opts.getInputMessageType(),
                         seq: seq,
+                        dtMs: dtMs,
                         yaw: rotation.yaw || 0,
                         pitch: rotation.pitch || 0,
                         forward: !!(inputState && inputState.forward),
@@ -190,7 +201,9 @@
                 remoteSyncApi.updateRemoteEntities(
                     dt,
                     opts.getRenderMap(),
-                    opts.getChokeVictimStateForEntity
+                    opts.getChokeVictimStateForEntity,
+                    opts.sampleRemoteEntityPresentation,
+                    Date.now()
                 );
             }
         }

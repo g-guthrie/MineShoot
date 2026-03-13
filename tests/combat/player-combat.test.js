@@ -6,9 +6,25 @@ import vm from 'node:vm';
 async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/combat/player-combat.js', import.meta.url), 'utf8');
   let clearTransientCalls = 0;
+  const timeState = { now: 1000 };
   const runtime = {
     GameShared: {
-      damage: null
+      damage: null,
+      gameplayTuning: {
+        weaponStats: {
+          rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 30, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 },
+          sniper: { name: 'Sniper', cooldownMs: 900, reloadMs: 1800, magazineSize: 5, automatic: false, bodyDamage: 140, headDamage: 240, pellets: 1 }
+        }
+      },
+      getWeaponStats(weaponId) {
+        return this.gameplayTuning.weaponStats[weaponId] || null;
+      },
+      getDefaultWeaponLoadout() {
+        return ['rifle', 'sniper'];
+      },
+      getSelectableWeaponIds() {
+        return ['rifle', 'sniper'];
+      }
     },
     GameUI: {
       updateHealth() {},
@@ -28,9 +44,6 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
       },
       getHudState() { return {}; }
     },
-    GameLocalMatch: {
-      isActive() { return false; }
-    },
     GameAudio: {
       play() {}
     },
@@ -43,7 +56,12 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
-    console
+    console,
+    Date: {
+      now() {
+        return timeState.now;
+      }
+    }
   };
   sandbox.globalThis = sandbox;
   vm.runInContext(code, vm.createContext(sandbox));
@@ -51,7 +69,8 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
     GamePlayerCombat: sandbox.__MAYHEM_RUNTIME.GamePlayerCombat,
     getClearTransientCalls() {
       return clearTransientCalls;
-    }
+    },
+    timeState
   };
 }
 
@@ -67,21 +86,130 @@ test('player combat clears transient ability effects when death forces a respawn
   assert.equal(harness.getClearTransientCalls(), 2);
 });
 
-test('player combat clears transient ability effects before managed local-match respawn', async () => {
-  const harness = await loadPlayerCombatHarness({
-    GameLocalMatch: {
-      isActive() { return true; },
-      onSelfKilled() {
-        return { useManagedRespawn: true };
-      }
-    }
-  });
+test('player combat exposes survivability state and preserves respawn countdown until the server revives the player', async () => {
+  const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
     isPlaying() { return true; },
-    isMultiplayer() { return false; }
+    isMultiplayer() { return true; }
   });
 
-  harness.GamePlayerCombat.consumeDamage(999, 'body', null);
+  harness.GamePlayerCombat.syncAuthoritativeState({
+    hp: 320,
+    hpMax: 500,
+    armor: 45,
+    armorMax: 90,
+    alive: false,
+    spawnShieldUntil: 1400
+  });
+  harness.GamePlayerCombat.syncRespawnState({
+    active: true,
+    respawnAt: 1800
+  });
 
-  assert.equal(harness.getClearTransientCalls(), 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getState(1000))), {
+    hp: 320,
+    hpMax: 500,
+    armor: 45,
+    armorMax: 90,
+    alive: false,
+    invulnerable: true,
+    spawnShieldUntil: 1400,
+    respawn: {
+      active: true,
+      respawnAt: 1800,
+      remainingMs: 800
+    }
+  });
+  assert.equal(harness.GamePlayerCombat.canUseGameplayActions(1000), false);
+
+  harness.timeState.now = 1900;
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getRespawnState())), {
+    active: true,
+    respawnAt: 1800,
+    remainingMs: 0
+  });
+
+  harness.GamePlayerCombat.syncAuthoritativeState({
+    hp: 500,
+    hpMax: 500,
+    armor: 90,
+    armorMax: 90,
+    alive: true,
+    spawnShieldUntil: 0
+  });
+
+  assert.equal(harness.GamePlayerCombat.getRespawnState(1900), null);
+  assert.equal(harness.GamePlayerCombat.canUseGameplayActions(1900), true);
+});
+
+test('player combat owns weapon presentation state and repairs it from authoritative snapshots', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponLoadout())), {
+    slots: ['rifle', 'sniper']
+  });
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'sniper',
+    weaponLoadout: ['sniper', 'rifle'],
+    weaponAmmo: {
+      sniper: {
+        ammoInMag: 1,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0
+      }
+    }
+  }, 1000);
+
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getCurrentWeaponState(1000))), {
+    id: 'sniper',
+    name: 'Sniper',
+    automatic: false,
+    cooldown: 900,
+    reloadMs: 1800,
+    magazineSize: 5,
+    ammoInMag: 1,
+    reloading: false,
+    reloadRemaining: 0,
+    reloadedFlashRemaining: 0,
+    bodyDamage: 140,
+    headDamage: 240,
+    pellets: 1
+  });
+
+  harness.GamePlayerCombat.recordWeaponFire('sniper', 1050);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(1050))), {
+    status: 'reloading',
+    ready: false,
+    pct: 0
+  });
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloading, true);
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'sniper',
+    weaponLoadout: ['sniper', 'rifle'],
+    weaponAmmo: {
+      sniper: {
+        ammoInMag: 5,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0.9
+      }
+    }
+  }, 2200);
+
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2200).ammoInMag, 5);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2200).reloading, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(2200))), {
+    status: 'reloaded',
+    ready: true,
+    pct: 1
+  });
 });

@@ -158,6 +158,11 @@
     var lastFireTime = 0;
     var weaponAmmoState = {};
     var RELOADED_FLASH_MS = 900;
+
+    function combatRuntime() {
+        return globalThis.__MAYHEM_RUNTIME.GamePlayerCombat || null;
+    }
+
     function ensureTracerScene(camera) {
         if (tracerScene) return tracerScene;
         if (camera && camera.parent) {
@@ -176,6 +181,42 @@
     function adsState() {
         if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState) {
             return globalThis.__MAYHEM_RUNTIME.GamePlayer.getAdsState();
+        }
+        return null;
+    }
+
+    function activeWeaponId() {
+        var combat = combatRuntime();
+        if (combat && combat.getEquippedWeaponId) {
+            var equipped = String(combat.getEquippedWeaponId() || '');
+            if (weapons[equipped]) return equipped;
+        }
+        return currentWeaponId;
+    }
+
+    function activeWeaponOrder() {
+        var combat = combatRuntime();
+        if (combat && combat.getWeaponLoadout) {
+            var loadout = combat.getWeaponLoadout();
+            if (loadout && Array.isArray(loadout.slots) && loadout.slots.length) {
+                return loadout.slots.slice();
+            }
+        }
+        return weaponOrder.slice();
+    }
+
+    function currentWeaponPresentationState(now) {
+        var combat = combatRuntime();
+        if (combat && combat.getCurrentWeaponState) {
+            return combat.getCurrentWeaponState(now);
+        }
+        return null;
+    }
+
+    function weaponPresentationState(weaponId, now) {
+        var combat = combatRuntime();
+        if (combat && combat.getWeaponState) {
+            return combat.getWeaponState(weaponId, now);
         }
         return null;
     }
@@ -357,19 +398,21 @@
 
     function getCombatHitboxes() {
         var out = [];
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var netRemote = net && net.remoteEntities ? net.remoteEntities : net;
         if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray) {
             var local = globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray() || [];
             out = out.concat(local);
         }
-        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getHitboxArray) {
-            var net = globalThis.__MAYHEM_RUNTIME.GameNet.getHitboxArray() || [];
-            out = out.concat(net);
+        if (netRemote && netRemote.getHitboxArray) {
+            var netHitboxes = netRemote.getHitboxArray() || [];
+            out = out.concat(netHitboxes);
         }
         return out;
     }
 
     function getCurrentWeaponData() {
-        return weapons[currentWeaponId] || weapons.rifle;
+        return weapons[activeWeaponId()] || weapons.rifle;
     }
 
     function ensureWeaponAmmoState(weaponId) {
@@ -413,12 +456,16 @@
 
     function getAmmoInMag(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0) return 0;
+        var combatState = weaponPresentationState(weapon.id, now);
+        if (combatState) return Math.max(0, Number(combatState.ammoInMag || 0));
         var state = syncWeaponAmmoState(weapon.id, now);
         return Math.max(0, Number(state && state.ammoInMag || 0));
     }
 
     function reloadRemainingForWeapon(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0) return 0;
+        var combatState = weaponPresentationState(weapon.id, now);
+        if (combatState) return Math.max(0, Number(combatState.reloadRemaining || 0));
         var state = syncWeaponAmmoState(weapon.id, now);
         return Math.max(0, Number(state && state.reloadUntil || 0) - now);
     }
@@ -429,6 +476,14 @@
 
     function beginReload(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
+        var combat = combatRuntime();
+        if (combat && combat.beginWeaponReload) {
+            var started = !!combat.beginWeaponReload(weapon.id, now);
+            if (started && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
+                globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
+            }
+            return started;
+        }
         var state = syncWeaponAmmoState(weapon.id, now);
         if (!state || state.reloadUntil > now) return false;
         return applyReloadState(weapon, state, now);
@@ -436,6 +491,11 @@
 
     function consumeAmmoForShot(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0) return;
+        var combat = combatRuntime();
+        if (combat && combat.recordWeaponFire) {
+            combat.recordWeaponFire(weapon.id, now);
+            return;
+        }
         var state = syncWeaponAmmoState(weapon.id, now);
         if (!state) return;
         state.ammoInMag = Math.max(0, Number(state.ammoInMag || weapon.magazineSize) - 1);
@@ -446,6 +506,10 @@
     }
 
     function hudStateForWeapon(weapon, now) {
+        var combat = combatRuntime();
+        if (combat && combat.getWeaponHudState && activeWeaponId() === String(weapon && weapon.id || '')) {
+            return combat.getWeaponHudState(now);
+        }
         var state = syncWeaponAmmoState(weapon.id, now);
         var reloadRemaining = reloadRemainingForWeapon(weapon, now);
         if (reloadRemaining > 0) {
@@ -661,12 +725,14 @@
 
     function getLockTargets() {
         var out = [];
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var netView = net && net.view ? net.view : net;
 
         if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
             out = out.concat(globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || []);
         }
-        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets) {
-            out = out.concat(globalThis.__MAYHEM_RUNTIME.GameNet.getLockTargets() || []);
+        if (netView && netView.getLockTargets) {
+            out = out.concat(netView.getLockTargets() || []);
         }
 
         if (out.length > 0) return out;
@@ -1192,7 +1258,6 @@
     GameHitscan.fire = function (camera, onHit, onMiss, shotToken) {
         var now = performance.now();
         var weapon = getCurrentWeaponData();
-        syncWeaponAmmoState(weapon.id, now);
         if (weapon.magazineSize > 0 && getAmmoInMag(weapon, now) <= 0) {
             beginReload(weapon, now);
             return false;
@@ -1204,7 +1269,10 @@
             return false;
         }
 
-        if (now - lastFireTime < weapon.cooldown) {
+        var combat = combatRuntime();
+        if (combat && combat.getCooldownRemaining) {
+            if (combat.getCooldownRemaining(now) > 0) return false;
+        } else if (now - lastFireTime < weapon.cooldown) {
             return false;
         }
 
@@ -1223,7 +1291,10 @@
     GameHitscan.getCurrentWeapon = function () {
         var weapon = getCurrentWeaponData();
         var now = performance.now();
-        var ammoState = syncWeaponAmmoState(weapon.id, now);
+        var combatState = currentWeaponPresentationState(now);
+        var ammoState = combatState ? {
+            reloadUntil: combatState.reloading ? (now + Math.max(0, Number(combatState.reloadRemaining || 0))) : 0
+        } : syncWeaponAmmoState(weapon.id, now);
         return {
             id: weapon.id,
             name: weapon.name,
@@ -1233,7 +1304,9 @@
             reloadMs: weapon.reloadMs,
             magazineSize: weapon.magazineSize,
             ammoInMag: weapon.magazineSize > 0 ? getAmmoInMag(weapon, now) : 0,
-            reloading: weapon.magazineSize > 0 ? (Number(ammoState && ammoState.reloadUntil || 0) > now) : false,
+            reloading: weapon.magazineSize > 0
+                ? (combatState ? !!combatState.reloading : (Number(ammoState && ammoState.reloadUntil || 0) > now))
+                : false,
             reloadRemaining: reloadRemainingForWeapon(weapon, now),
             bodyDamage: weapon.bodyDamage,
             headDamage: weapon.headDamage,
@@ -1250,7 +1323,7 @@
     };
 
     GameHitscan.getReticleSpec = function (weaponId) {
-        var id = weaponId || currentWeaponId;
+        var id = weaponId || activeWeaponId();
         var weapon = weapons[id];
         if (!weapon) return null;
         if (getAutoLockConfig(weapon) || weapon.singleHitFromPellets || id === 'shotgun') {
@@ -1264,27 +1337,35 @@
     };
 
     GameHitscan.getWeaponOrder = function () {
-        return weaponOrder.slice();
+        return activeWeaponOrder();
     };
 
     GameHitscan.setWeapon = function (weaponId) {
         if (!weapons[weaponId]) return null;
         currentWeaponId = weaponId;
+        var combat = combatRuntime();
+        if (combat && combat.equipWeapon) {
+            var state = combat.equipWeapon(weaponId, performance.now());
+            if (state && state.id && weapons[state.id]) {
+                currentWeaponId = state.id;
+            }
+        }
         return GameHitscan.getCurrentWeapon();
     };
 
     GameHitscan.cycleWeapon = function (delta) {
-        var idx = weaponOrder.indexOf(currentWeaponId);
+        var order = activeWeaponOrder();
+        if (!order.length) return null;
+        var idx = order.indexOf(activeWeaponId());
         if (idx === -1) idx = 0;
 
         if (delta > 0) {
-            idx = (idx + 1) % weaponOrder.length;
+            idx = (idx + 1) % order.length;
         } else {
-            idx = (idx - 1 + weaponOrder.length) % weaponOrder.length;
+            idx = (idx - 1 + order.length) % order.length;
         }
 
-        currentWeaponId = weaponOrder[idx];
-        return GameHitscan.getCurrentWeapon();
+        return GameHitscan.setWeapon(order[idx]);
     };
 
     GameHitscan.setWeaponOrder = function (nextOrder) {
@@ -1299,6 +1380,16 @@
         }
         if (validated.length === 0) return weaponOrder.slice();
         weaponOrder = validated;
+        var combat = combatRuntime();
+        if (combat && combat.setWeaponLoadout) {
+            var loadout = combat.setWeaponLoadout({ slots: validated });
+            if (loadout && Array.isArray(loadout.slots) && loadout.slots.length) {
+                weaponOrder = loadout.slots.slice();
+            }
+            if (combat.getEquippedWeaponId && weapons[combat.getEquippedWeaponId()]) {
+                currentWeaponId = combat.getEquippedWeaponId();
+            }
+        }
         if (weaponOrder.indexOf(currentWeaponId) === -1) {
             currentWeaponId = weaponOrder[0];
         }
@@ -1307,8 +1398,9 @@
 
     GameHitscan.equipSlot = function (slotIndex) {
         var idx = Math.max(0, Math.floor(slotIndex || 0));
-        if (idx >= weaponOrder.length) return null;
-        return GameHitscan.setWeapon(weaponOrder[idx]);
+        var order = activeWeaponOrder();
+        if (idx >= order.length) return null;
+        return GameHitscan.setWeapon(order[idx]);
     };
 
     GameHitscan.getAllWeaponIds = function () {
@@ -1330,7 +1422,6 @@
     GameHitscan.canFire = function () {
         var weapon = getCurrentWeaponData();
         var now = performance.now();
-        syncWeaponAmmoState(weapon.id, now);
         if (weapon.magazineSize > 0 && getAmmoInMag(weapon, now) <= 0) {
             beginReload(weapon, now);
             return false;
@@ -1341,10 +1432,18 @@
         if (weapon.id === 'sniper' && !isAdsActiveForWeapon('sniper')) {
             return false;
         }
+        var combat = combatRuntime();
+        if (combat && combat.getCooldownRemaining) {
+            return combat.getCooldownRemaining(now) <= 0;
+        }
         return (now - lastFireTime) >= weapon.cooldown;
     };
 
     GameHitscan.cooldownRemaining = function () {
+        var combat = combatRuntime();
+        if (combat && combat.getCooldownRemaining) {
+            return Math.max(0, Number(combat.getCooldownRemaining(performance.now()) || 0));
+        }
         var weapon = getCurrentWeaponData();
         var elapsed = performance.now() - lastFireTime;
         return Math.max(0, weapon.cooldown - elapsed);
@@ -1384,11 +1483,24 @@
     };
 
     GameHitscan.tick = function (_dt) {
+        var combat = combatRuntime();
+        if (combat && combat.getCurrentWeaponState) {
+            combat.getCurrentWeaponState(performance.now());
+            return null;
+        }
         syncWeaponAmmoState(currentWeaponId, performance.now());
         return null;
     };
 
     GameHitscan.syncAmmoStateFromNetwork = function (weaponAmmoStateMap) {
+        var combat = combatRuntime();
+        if (combat && combat.syncWeaponState) {
+            return !!combat.syncWeaponState({
+                weaponAmmo: weaponAmmoStateMap,
+                weaponLoadout: activeWeaponOrder(),
+                weaponId: activeWeaponId()
+            }, performance.now());
+        }
         if (!weaponAmmoStateMap || typeof weaponAmmoStateMap !== 'object') return false;
         var now = performance.now();
         for (var weaponId in weaponAmmoStateMap) {

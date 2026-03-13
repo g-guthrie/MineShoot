@@ -8,9 +8,67 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameGameplayHudSync = {};
 
+    function netView() {
+        var net = runtime.GameNet || null;
+        return net && net.view ? net.view : net;
+    }
+
+    function currentSelfCombatState(nowMs) {
+        var combat = runtime.GamePlayerCombat || null;
+        if (!combat) return null;
+        if (combat.getState) {
+            return combat.getState(nowMs);
+        }
+        return {
+            hp: combat.getHP ? combat.getHP() : 0,
+            hpMax: combat.getMaxHP ? combat.getMaxHP() : 1,
+            armor: combat.getArmor ? combat.getArmor() : 0,
+            armorMax: combat.getArmorMax ? combat.getArmorMax() : 1,
+            alive: combat.isAlive ? combat.isAlive() : true,
+            invulnerable: combat.isInvulnerable ? combat.isInvulnerable() : false,
+            spawnShieldUntil: combat.isInvulnerable && combat.isInvulnerable() ? (Number(nowMs || Date.now()) + 120) : 0,
+            respawn: combat.getRespawnState ? combat.getRespawnState(nowMs) : null
+        };
+    }
+
+    function syncSelfCombatHud(nowMs) {
+        var combatState = currentSelfCombatState(nowMs);
+        if (!combatState || !runtime.GameUI) return combatState;
+        if (runtime.GameUI.updateHealth) {
+            runtime.GameUI.updateHealth(combatState.hp, combatState.hpMax);
+        }
+        if (runtime.GameUI.updateArmor) {
+            runtime.GameUI.updateArmor(combatState.armor, combatState.armorMax);
+        }
+        return combatState;
+    }
+
+    function currentWeaponState(nowMs) {
+        var combat = runtime.GamePlayerCombat || null;
+        if (combat && combat.getCurrentWeaponState) {
+            return combat.getCurrentWeaponState(nowMs);
+        }
+        if (runtime.GameHitscan && runtime.GameHitscan.getCurrentWeapon) {
+            return runtime.GameHitscan.getCurrentWeapon();
+        }
+        return null;
+    }
+
+    function currentWeaponHudState(nowMs) {
+        var combat = runtime.GamePlayerCombat || null;
+        if (combat && combat.getWeaponHudState) {
+            return combat.getWeaponHudState(nowMs);
+        }
+        if (runtime.GameHitscan && runtime.GameHitscan.getHudState) {
+            return runtime.GameHitscan.getHudState();
+        }
+        return null;
+    }
+
     function currentAbilityLoadoutState(multiplayerMode) {
-        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
-            var netState = runtime.GameNet.getSelfAbilityState();
+        var netApi = netView();
+        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
+            var netState = netApi.getSelfAbilityState();
             return netState && netState.abilityLoadout ? netState.abilityLoadout : null;
         }
         if (runtime.GameAbilities && runtime.GameAbilities.getLoadout) {
@@ -63,8 +121,9 @@
     }
 
     function currentHealState(multiplayerMode) {
-        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
-            var netSelfAbility = runtime.GameNet.getSelfAbilityState();
+        var netApi = netView();
+        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
+            var netSelfAbility = netApi.getSelfAbilityState();
             return netSelfAbility ? netSelfAbility.healState : null;
         }
         if (runtime.GameAbilities && runtime.GameAbilities.getHealState) {
@@ -74,8 +133,9 @@
     }
 
     function currentChokeCasterState(multiplayerMode) {
-        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
-            var netAbility = runtime.GameNet.getSelfAbilityState();
+        var netApi = netView();
+        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
+            var netAbility = netApi.getSelfAbilityState();
             return netAbility ? netAbility.chokeState : null;
         }
         if (runtime.GameAbilities && runtime.GameAbilities.getChokeState) {
@@ -86,18 +146,19 @@
 
     function currentDeadeyeUiState(multiplayerMode) {
         var abilityBoundary = runtime.GameAbilityBoundary || null;
-        if (multiplayerMode && runtime.GameNet && runtime.GameNet.getSelfAbilityState) {
-            var abilState = runtime.GameNet.getSelfAbilityState();
+        var netApi = netView();
+        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
+            var abilState = netApi.getSelfAbilityState();
             if (abilState && abilState.deadeyeState && abilState.deadeyeState.maxLocks > 0) {
                 return abilityBoundary && abilityBoundary.buildNetworkDeadeyeUiState
                     ? abilityBoundary.buildNetworkDeadeyeUiState(
                         abilState.deadeyeState,
                         function (targetId) {
-                            return runtime.GameNet.damagePointForEntityId
-                                ? runtime.GameNet.damagePointForEntityId(targetId)
+                            return netApi.damagePointForEntityId
+                                ? netApi.damagePointForEntityId(targetId)
                                 : (
-                                    runtime.GameNet.getEntityMarkerWorldPos
-                                        ? runtime.GameNet.getEntityMarkerWorldPos(targetId)
+                                    netApi.getEntityMarkerWorldPos
+                                        ? netApi.getEntityMarkerWorldPos(targetId)
                                         : null
                                 );
                         },
@@ -144,9 +205,21 @@
         var dt = Number(options.dt || 0);
         var multiplayerMode = !!options.multiplayerMode;
         var debugVisualsOn = !!options.debugVisualsOn;
+        var stamp = Date.now();
+        var selfCombatState = syncSelfCombatHud(stamp);
+        var weaponState = currentWeaponState();
+        var weaponHudState = currentWeaponHudState();
 
-        if (runtime.GameUI && runtime.GameUI.updateCooldown && runtime.GameHitscan && runtime.GameHitscan.getHudState) {
-            runtime.GameUI.updateCooldown(runtime.GameHitscan.getHudState());
+        if (runtime.GamePlayer && runtime.GamePlayer.getEquippedWeaponId && runtime.GamePlayer.setWeaponModel && weaponState) {
+            if (runtime.GamePlayer.getEquippedWeaponId() !== weaponState.id) {
+                runtime.GamePlayer.setWeaponModel(weaponState.id);
+            }
+        }
+        if (runtime.GameUI && runtime.GameUI.updateWeaponInfo && weaponState) {
+            runtime.GameUI.updateWeaponInfo(weaponState);
+        }
+        if (runtime.GameUI && runtime.GameUI.updateCooldown && weaponHudState) {
+            runtime.GameUI.updateCooldown(weaponHudState);
         }
         if (runtime.GameUI && runtime.GameUI.updateDamageEffects) {
             runtime.GameUI.updateDamageEffects(dt);
@@ -175,9 +248,7 @@
                 chokeStartedAt: 0,
                 chokeUntil: 0,
                 chokeLift: 0,
-                spawnShieldUntil: (runtime.GamePlayerCombat && runtime.GamePlayerCombat.isInvulnerable && runtime.GamePlayerCombat.isInvulnerable())
-                    ? (Date.now() + 120)
-                    : 0
+                spawnShieldUntil: Number(selfCombatState && selfCombatState.spawnShieldUntil || 0)
             });
         }
 
@@ -226,6 +297,8 @@
             runtime.GameUI.updateDeadeyeReticle(camera, deadeyeUiState);
         }
     };
+
+    GameGameplayHudSync.syncSelfCombatHud = syncSelfCombatHud;
 
     runtime.GameGameplayHudSync = GameGameplayHudSync;
 })();

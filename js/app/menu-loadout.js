@@ -112,6 +112,8 @@
 
     function applyToGameplayRuntime(multiplayerMode) {
         compactWeaponSlots();
+        var net = runtime.GameNet || null;
+        var netCommands = net && net.commands ? net.commands : net;
         var weaponSlots = state.weaponSlots.slice(0, 2).filter(Boolean);
         if (runtime.GameHitscan && runtime.GameHitscan.setWeaponOrder && weaponSlots.length) {
             runtime.GameHitscan.setWeaponOrder(weaponSlots);
@@ -119,8 +121,8 @@
         if (runtime.GamePlayer && runtime.GamePlayer.setLoadout && weaponSlots.length) {
             runtime.GamePlayer.setLoadout({ slots: weaponSlots });
         }
-        if (runtime.GameNet && runtime.GameNet.sendWeaponLoadout && multiplayerMode) {
-            runtime.GameNet.sendWeaponLoadout(state.weaponSlots[0] || '', state.weaponSlots[1] || '');
+        if (netCommands && netCommands.sendWeaponLoadout && multiplayerMode) {
+            netCommands.sendWeaponLoadout(state.weaponSlots[0] || '', state.weaponSlots[1] || '');
         }
         if (runtime.GameThrowables && runtime.GameThrowables.setSelectedThrowable && state.selectedThrowableId) {
             runtime.GameThrowables.setSelectedThrowable(state.selectedThrowableId);
@@ -133,8 +135,8 @@
                 runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
             }
         }
-        if (runtime.GameNet && runtime.GameNet.sendAbilityLoadout && multiplayerMode) {
-            runtime.GameNet.sendAbilityLoadout(state.abilityLoadout.slot1 || '', state.abilityLoadout.slot2 || '');
+        if (netCommands && netCommands.sendAbilityLoadout && multiplayerMode) {
+            netCommands.sendAbilityLoadout(state.abilityLoadout.slot1 || '', state.abilityLoadout.slot2 || '');
         }
     }
 
@@ -208,7 +210,7 @@
                 choice.addEventListener('click', function () {
                     var selectedId = String(this.dataset.weaponId || '');
                     if (!assignWeaponToSlot(state.activeWeaponSlot, selectedId)) return;
-                    applyToGameplayRuntime(!!(runtime.GameNet && runtime.GameNet.isActive && runtime.GameNet.isActive()));
+                    applyToGameplayRuntime(true);
                     render();
                 });
                 weaponChoiceGrid.appendChild(choice);
@@ -271,7 +273,7 @@
                 if (state.selectedThrowableId === item.id) choice.classList.add('active');
                 choice.addEventListener('click', function () {
                     state.selectedThrowableId = String(this.dataset.throwableId || '');
-                    applyToGameplayRuntime(!!(runtime.GameNet && runtime.GameNet.isActive && runtime.GameNet.isActive()));
+                    applyToGameplayRuntime(true);
                     render();
                 });
                 choiceGrid.appendChild(choice);
@@ -312,7 +314,7 @@
                 btn.addEventListener('click', function () {
                     var id = this.dataset.abilityId;
                     if (!assignAbilityToSlot(slotIndex, id)) return;
-                    applyToGameplayRuntime(!!(runtime.GameNet && runtime.GameNet.isActive && runtime.GameNet.isActive()));
+                    applyToGameplayRuntime(true);
                     render();
                 });
                 gridEl.appendChild(btn);

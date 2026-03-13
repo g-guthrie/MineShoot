@@ -45,8 +45,11 @@
     }
 
     function getCurrentWallhackRadius() {
-        if (globalThis.__MAYHEM_RUNTIME.GameNet && globalThis.__MAYHEM_RUNTIME.GameNet.isActive && globalThis.__MAYHEM_RUNTIME.GameNet.isActive() && globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState) {
-            var selfState = globalThis.__MAYHEM_RUNTIME.GameNet.getSelfState();
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var netRuntime = net && net.runtime ? net.runtime : net;
+        var netView = net && net.view ? net.view : net;
+        if (netRuntime && netRuntime.isActive && netRuntime.isActive() && netView && netView.getAuthoritativeSelfState) {
+            var selfState = netView.getAuthoritativeSelfState();
             if (selfState && typeof selfState.wallhackRadius === 'number') {
                 return selfState.wallhackRadius;
             }
@@ -529,9 +532,6 @@
             enemies.push(enemy);
             if (enemy.bodyHitbox) hitboxArray.push(enemy.bodyHitbox);
             if (enemy.headHitbox) hitboxArray.push(enemy.headHitbox);
-            if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-                globalThis.__MAYHEM_RUNTIME.GameLocalMatch.registerEnemy(enemy);
-            }
         }
     };
 
@@ -626,10 +626,6 @@
     };
 
     GameEnemy.kill = function (enemy) {
-        var localMatchResult = null;
-        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-            localMatchResult = globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyKilled(enemy);
-        }
         enemy.alive = false;
         enemy.group.visible = false;
         enemy.muzzleFlashTimer = 0;
@@ -643,9 +639,7 @@
 
         removeHitboxes(enemy);
 
-        enemy.respawnTimer = localMatchResult
-            ? (typeof localMatchResult.respawnDelaySec === 'number' ? Number(localMatchResult.respawnDelaySec || 0) : -1)
-            : 5.0;
+        enemy.respawnTimer = 5.0;
         enemy.trackingNeedleState = null;
     };
 
@@ -676,10 +670,6 @@
         if (enemy.actorVisual && enemy.actorVisual.setMuzzleVisible) enemy.actorVisual.setMuzzleVisible(false);
         if (enemy.actorVisual && enemy.actorVisual.setRevealGhostState) enemy.actorVisual.setRevealGhostState(false);
         resetFireCooldown(enemy);
-        if (globalThis.__MAYHEM_RUNTIME.GameLocalMatch && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive && globalThis.__MAYHEM_RUNTIME.GameLocalMatch.isActive()) {
-            globalThis.__MAYHEM_RUNTIME.GameLocalMatch.onEnemyRespawn(enemy);
-        }
-
         addHitboxes(enemy);
         syncHitboxPositions(enemy);
         startWander(enemy);

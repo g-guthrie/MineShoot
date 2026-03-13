@@ -30,17 +30,36 @@
         var altModesOpen = false;
         var controlsOpen = false;
 
-        function sandboxRuntimeReady() {
-            return !!(opts.isSandboxRuntimeReady && opts.isSandboxRuntimeReady());
+        function currentLaunchState() {
+            var launchState = opts.getLaunchState ? opts.getLaunchState() : null;
+            if (!launchState) {
+                return {
+                    phase: 'menu_idle',
+                    hasRuntime: false,
+                    busy: false,
+                    inPrivateRoomLobby: false
+                };
+            }
+            return launchState;
+        }
+
+        function setDisabled(items, disabled) {
+            if (!Array.isArray(items)) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i]) items[i].disabled = !!disabled;
+            }
+        }
+
+        function setDisplay(items, value) {
+            if (!Array.isArray(items)) return;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i] && items[i].style) items[i].style.display = value;
+            }
         }
 
         function isUiBusy() {
-            return !!(controllerBusy || (opts.isSessionBusy && opts.isSessionBusy()));
-        }
-
-        function setSandboxButtonsEnabled(enabled) {
-            if (elements.sandboxFfaBtn) elements.sandboxFfaBtn.disabled = !enabled;
-            if (elements.sandboxLmsBtn) elements.sandboxLmsBtn.disabled = !enabled;
+            var launchState = currentLaunchState();
+            return !!(controllerBusy || launchState.busy || (opts.isSessionBusy && opts.isSessionBusy()));
         }
 
         function activeSocialView() {
@@ -68,8 +87,19 @@
 
         function syncMenuControlState() {
             var controlState = currentMenuControlState();
+            var launchState = currentLaunchState();
             var busy = isUiBusy();
             var nextSocialView = controlState.socialView;
+
+            if (elements.menuSessionActions) {
+                elements.menuSessionActions.hidden = !launchState.hasRuntime;
+            }
+
+            if (launchState.phase === 'menu_idle' || launchState.phase === 'launch_error') {
+                restoreStartUi();
+            } else {
+                hideStartUi();
+            }
 
             if (elements.partySocialView) elements.partySocialView.hidden = nextSocialView !== 'party';
             if (elements.friendsSocialView) elements.friendsSocialView.hidden = nextSocialView !== 'friends';
@@ -78,8 +108,7 @@
             if (elements.primaryPlayBtn) elements.primaryPlayBtn.disabled = busy;
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.disabled = busy;
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.disabled = busy;
-            if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.disabled = busy;
-            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.disabled = busy;
+            setDisabled(elements.quickMatchButtons, busy);
             if (elements.createRoomBtn) elements.createRoomBtn.disabled = busy;
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.disabled = busy;
             if (elements.privateRoomInput) elements.privateRoomInput.disabled = busy;
@@ -87,7 +116,6 @@
             if (elements.partyIdInput) elements.partyIdInput.disabled = busy;
             if (elements.addFriendBtn) elements.addFriendBtn.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
             if (elements.friendIdInput) elements.friendIdInput.disabled = busy || !(opts.isLoggedIn && opts.isLoggedIn());
-            setSandboxButtonsEnabled(!busy && sandboxRuntimeReady());
 
             if (elements.socialTabPartyBtn) {
                 elements.socialTabPartyBtn.classList.toggle('active', nextSocialView === 'party');
@@ -193,9 +221,7 @@
             if (elements.primaryPlayBtn) elements.primaryPlayBtn.style.display = 'none';
             if (elements.tdmPlayBtn) elements.tdmPlayBtn.style.display = 'none';
             if (elements.lmsPlayBtn) elements.lmsPlayBtn.style.display = 'none';
-            if (elements.sandboxPlayBtn) elements.sandboxPlayBtn.style.display = 'none';
-            if (elements.sandboxModeCycleBtn) elements.sandboxModeCycleBtn.style.display = 'none';
-            if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
+            setDisplay(elements.quickMatchButtons, 'none');
             if (elements.createRoomBtn) elements.createRoomBtn.style.display = 'none';
             if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.style.display = 'none';
             if (elements.privateRoomInput) elements.privateRoomInput.style.display = 'none';
@@ -214,15 +240,8 @@
                 elements.lmsPlayBtn.disabled = false;
                 elements.lmsPlayBtn.style.display = '';
             }
-            if (elements.sandboxPlayBtn) {
-                elements.sandboxPlayBtn.disabled = false;
-                elements.sandboxPlayBtn.style.display = '';
-            }
-            if (elements.sandboxModeCycleBtn) {
-                elements.sandboxModeCycleBtn.disabled = false;
-                elements.sandboxModeCycleBtn.style.display = '';
-            }
-            if (elements.sandboxRulesetPanel) elements.sandboxRulesetPanel.hidden = true;
+            setDisplay(elements.quickMatchButtons, '');
+            setDisabled(elements.quickMatchButtons, false);
             if (elements.createRoomBtn) {
                 elements.createRoomBtn.disabled = false;
                 elements.createRoomBtn.style.display = '';
@@ -239,7 +258,6 @@
             if (elements.controlsToggle) elements.controlsToggle.disabled = false;
             if (elements.modeButtonsWrap) elements.modeButtonsWrap.hidden = !altModesOpen;
             if (elements.controlsMenu) elements.controlsMenu.hidden = !controlsOpen;
-            setSandboxButtonsEnabled(!isUiBusy() && sandboxRuntimeReady());
         }
 
         return {
@@ -253,6 +271,7 @@
             isAltModesOpen: function () { return !!altModesOpen; },
             isControlsOpen: function () { return !!controlsOpen; },
             syncModeButtonVisibility: syncModeButtonVisibility,
+            getLaunchState: currentLaunchState,
             hideStartUi: hideStartUi,
             restoreStartUi: restoreStartUi
         };

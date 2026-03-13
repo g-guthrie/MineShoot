@@ -27,6 +27,30 @@ export function syncPrivateRoomMatchState(room, deps) {
   }
 }
 
+export function resetPublicRoomToIdle(room, deps) {
+  deps = deps || {};
+  const emptyMatchState = deps.emptyMatchState;
+  const isPrivateMatchRoom = deps.isPrivateMatchRoom;
+  if (!room || !room.isPublicMatchRoom || !room.isPublicMatchRoom()) return false;
+  if (isPrivateMatchRoom && isPrivateMatchRoom(room.roomName)) return false;
+
+  room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
+
+  for (const player of room.players.values()) {
+    if (!player || player.fixtureType === 'sim_player') continue;
+    player.teamId = '';
+    player.progressScore = 0;
+    player.kills = 0;
+    player.deaths = 0;
+    player.plannedSpawnPoint = null;
+    player.lmsLives = 0;
+    player.lmsCharge = 0;
+    player.lmsBankState = null;
+    player.outOfRound = false;
+  }
+  return true;
+}
+
 export function assignPlayerToCurrentTeam(room, player, deps) {
   deps = deps || {};
   const teamAlpha = deps.teamAlpha || 'alpha';
@@ -83,6 +107,7 @@ export function startPublicMatchIfReady(room, deps) {
   const gameModeFfa = deps.gameModeFfa || 'ffa';
   const gameModeTdm = deps.gameModeTdm || 'tdm';
   const gameModeLms = deps.gameModeLms || 'lms';
+  const publicRoomStartThresholdForMode = deps.publicRoomStartThresholdForMode;
   const teamAlpha = deps.teamAlpha || 'alpha';
   const teamBravo = deps.teamBravo || 'bravo';
 
@@ -90,7 +115,10 @@ export function startPublicMatchIfReady(room, deps) {
   if (!room.matchState) room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
   if (room.matchState.started || room.matchState.ended) return false;
   const connectedCount = room.connectedHumanCount();
-  if (connectedCount < Number(deps.publicRoomStartThreshold || 2)) return false;
+  const startThreshold = publicRoomStartThresholdForMode
+    ? Number(publicRoomStartThresholdForMode(room.gameMode))
+    : Number(deps.publicRoomStartThreshold || 2);
+  if (connectedCount < startThreshold) return false;
   const now = nowMs();
   room.matchState.started = true;
   room.matchState.ended = false;

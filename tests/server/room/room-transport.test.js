@@ -89,6 +89,32 @@ test('non-websocket room requests delegate private config and state responses th
   assert.deepEqual(applied, [{ roomMode: 'tdm' }]);
 });
 
+test('room transport does not rebuild world metadata on every request when the room id is unchanged', async () => {
+  const room = {
+    env: { ROOM_NAME: 'global' },
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    matchState: { started: false, ended: false },
+    bots: new Map(),
+    worldCollision: { collidables: [] },
+    terrainSampler: { getGroundHeightAt() { return 0; } },
+    refreshWorldMetaCalled: 0,
+    refreshWorldMeta() { this.refreshWorldMetaCalled += 1; },
+    humanPlayerCount() { return 1; },
+    connectedHumanCount() { return 1; },
+    simulatedPlayerCount() { return 0; }
+  };
+
+  const response = await handleRoomRequest(
+    room,
+    new Request('https://room/state?roomId=FFA-01')
+  );
+  const body = await response.json();
+
+  assert.equal(body.roomId, 'ffa-01');
+  assert.equal(room.refreshWorldMetaCalled, 0);
+});
+
 test('websocket room requests are handled by the transport helper, including duplicate socket eviction', async () => {
   const originalResponse = globalThis.Response;
   const originalPair = globalThis.WebSocketPair;

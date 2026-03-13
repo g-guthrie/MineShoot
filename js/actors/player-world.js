@@ -35,6 +35,8 @@
 
         function getSpawnThreatPoints() {
             var points = [];
+            var net = runtime.GameNet || null;
+            var netView = net && net.view ? net.view : net;
             if (runtime.GameEnemy && runtime.GameEnemy.getLockTargets) {
                 var localTargets = runtime.GameEnemy.getLockTargets() || [];
                 for (var i = 0; i < localTargets.length; i++) {
@@ -46,8 +48,8 @@
                     });
                 }
             }
-            if (runtime.GameNet && runtime.GameNet.getLockTargets) {
-                var netTargets = runtime.GameNet.getLockTargets() || [];
+            if (netView && netView.getLockTargets) {
+                var netTargets = netView.getLockTargets() || [];
                 for (var n = 0; n < netTargets.length; n++) {
                     var netTarget = netTargets[n];
                     if (!netTarget || !netTarget.worldPos) continue;

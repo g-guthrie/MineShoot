@@ -34,6 +34,8 @@
     function collectTargets() {
         var out = [];
         var seen = {};
+        var net = RT.GameNet || null;
+        var netView = net && net.view ? net.view : net;
         function appendTargets(list) {
             if (!list || !list.length) return;
             for (var i = 0; i < list.length; i++) {
@@ -51,8 +53,8 @@
         if (RT.GameEnemy && RT.GameEnemy.getLockTargets) {
             appendTargets(RT.GameEnemy.getLockTargets() || []);
         }
-        if (RT.GameNet && RT.GameNet.getLockTargets) {
-            appendTargets(RT.GameNet.getLockTargets() || []);
+        if (netView && netView.getLockTargets) {
+            appendTargets(netView.getLockTargets() || []);
         }
         return out;
     }

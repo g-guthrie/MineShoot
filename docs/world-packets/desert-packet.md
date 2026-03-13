@@ -68,7 +68,9 @@ E = east shelf route
 N = north crumble band
 P = playable shelf pocket
 R = rubble apron / low cover
-A = ruin accent / notch
+I = thin variable-height gap filler
+A = west interior arch
+O = south interior outcrop
 X = blocked or skyline-only mass
 . = open sand
 ```
@@ -79,41 +81,62 @@ X = blocked or skyline-only mass
 North
       west                                              east
         0  1  2  3  4  5  6  7  8  9 10 11 12 13
-  0 | .  .  N  N  N  N  N  N  M  M  M  M  M  X
-  1 | .  .  .  N  N  N  N  R  M  M  M  M  X  X
-  2 | .  .  .  .  .  .  R  P  M  M  M  X  X  E
-  3 | .  .  .  .  .  A  R  P  P  M  M  X  E  E
-  4 | .  .  .  .  .  .  R  R  P  R  M  E  E  E
-  5 | .  .  .  .  .  .  .  R  R  R  R  E  E  E
-  6 | .  .  .  .  .  .  .  .  R  P  R  E  E  E
-  7 | .  .  .  .  .  .  .  .  .  R  R  E  E  E
-  8 | .  .  .  .  .  .  .  .  .  .  R  P  E  E
-  9 | .  .  .  .  .  .  .  .  .  .  .  R  R  E
- 10 | .  .  .  .  .  .  .  .  .  .  .  .  R  R
+  0 | .  .  N  N  N  N  I  N  M  M  M  I  M  X
+  1 | .  .  .  N  I  N  N  .  M  M  I  M  X  X
+  2 | .  .  .  .  .  .  .  P  I  M  M  X  I  E
+  3 | .  .  .  .  .  .  .  P  P  M  I  X  E  E
+  4 | .  .  A  .  .  .  .  .  P  .  .  I  E  E
+  5 | .  .  A  .  .  .  .  .  .  .  .  E  E  E
+  6 | .  .  A  .  .  .  r  .  .  P  .  E  E  E
+  7 | .  .  .  .  .  .  .  .  .  .  .  .  .  .
+  8 | .  .  .  .  .  .  .  .  .  .  .  .  O  .
+  9 | .  .  .  .  .  .  .  .  .  .  .  O  O  .
+ 10 | .  .  F  .  .  .  .  .  .  D  O  O  O  .
  11 | .  .  .  .  .  .  .  .  .  .  .  .  .  .
- 12 | .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 12 | .  .  t  .  .  .  D  .  .  .  .  C  .  .
  13 | .  .  .  .  .  .  .  .  .  .  .  .  .  .
 South
 ```
 
 ### Route Notes
 
-- Main route: rows `5-8`, cols `9-12`; east-side shelf climb toward the mid pockets
-- Secondary route: rows `3-6`, cols `6-9`; rubble apron path skirting the toe of the mesa
-- Flank route: row `3`, col `5`; broken notch / ruin accent that punctures the north crumble band
-- Risky route: direct open sand push through the southwest half; fast, readable, lightly protected
+- Main route: rows `4-6`, cols `11-13`; east-side shelf climb toward the mid pockets
+- Secondary route: rows `8-10`, cols `10-13`; south outcrop cover route along the interior edge
+- Flank route: rows `4-6`, cols `2-3`; west-side arch cover route
+- Risky route: direct open sand push through the center-left interior; fast, readable, lightly protected
 
 ### Cover Notes
 
-- Rubble apron should provide chunky cover at the base of the large masses without becoming a debris maze
+- Thin vertical fillers should break mesa gaps without reading as uniform slop
 - Shelf pockets should have built-in cover lips rather than random prop clutter
-- Open southwest sand should stay relatively clean so the biome keeps a strong contrast between open and sheltered space
+- The west arch and south outcrop should be the two biggest interior-edge reads outside the mesa system
 
 ### Traversal Notes
 
 - The east shelf route should be the clearest climb path in the biome
 - North wall access should be partial and broken, not a clean ascent line
 - Players who reach a mid shelf should always have at least two escape choices back down or across
+
+### Point Construction
+
+- Mesa crown cluster:
+  - main base flush to north/east wall
+  - north spine offset west from corner
+  - east spire flush to east wall
+  - saddle bridging the major peaks
+  - broken needle near the north edge
+- Gap filler set:
+  - 7 thin vertical seam fillers
+  - variable heights from roughly `y 5-14`
+  - mixed sandstone caps on selected fillers only
+- Interior cover set:
+  - west interior arch near `u:0.12 v:0.52`
+  - south interior rock outcrop near `u:0.56 v:0.88`
+- Ground clutter policy:
+  - keep fossil ribs
+  - remove broken fence
+  - reduce bushes, rocks, dunes, tumbleweeds
+  - favor fewer larger reads over many tiny props
 
 ## 4. Elevation / Silhouette Plan
 

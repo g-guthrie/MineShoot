@@ -114,8 +114,15 @@ function handleWebSocketRequest(room, request, url) {
 
 export async function handleRoomRequest(room, request) {
   const url = new URL(request.url);
-  room.roomName = sanitizeRoomId(url.searchParams.get('roomId') || room.roomName || room.env.ROOM_NAME || 'global');
-  room.refreshWorldMeta();
+  const nextRoomId = sanitizeRoomId(url.searchParams.get('roomId') || room.roomName || room.env.ROOM_NAME || 'global');
+  const needsWorldRefresh =
+    String(room.roomName || '') !== String(nextRoomId) ||
+    !room.worldCollision ||
+    !room.terrainSampler;
+  room.roomName = nextRoomId;
+  if (needsWorldRefresh) {
+    room.refreshWorldMeta();
+  }
 
   if (request.headers.get('Upgrade') !== 'websocket') {
     return handleHttpRequest(room, request, url);

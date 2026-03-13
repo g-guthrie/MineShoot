@@ -175,7 +175,14 @@ Do not stop here. This only triggers the Pages/frontend deploy. It does not mean
 
 ### C) Deploy the Worker/backend
 
-Deploy the Worker with the repo-local Wrangler wrapper:
+`main` pushes can deploy the Worker automatically through GitHub Actions if these repo secrets are set:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+The workflow lives at [.github/workflows/deploy-worker.yml](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/.github/workflows/deploy-worker.yml).
+
+Manual fallback:
 
 ```bash
 ./scripts/wrangler.sh deploy
@@ -196,7 +203,8 @@ Current frontend URL:
 That means:
 
 - pushing `main` is the Pages/frontend deploy trigger
-- `wrangler deploy` updates the Worker/backend/API side
+- if the GitHub Action secrets are set, the same push also deploys the Worker/backend/API side
+- without those secrets, use `./scripts/wrangler.sh deploy`
 
 Important:
 
@@ -238,3 +246,26 @@ Definition of done for production pushes:
 - GitHub `main` contains the commit you expect
 - Worker deploy succeeded
 - Pages site is live with the new frontend behavior you changed
+
+## 11) Local post-push status banner
+
+Use this wrapper if you want a local terminal summary after pushing:
+
+```bash
+npm run push:main
+```
+
+It pushes `main`, then watches:
+
+- the `Deploy Worker` GitHub Action
+- the latest Cloudflare Pages production deployment for this commit
+
+For Pages status checks from your terminal, set your Cloudflare token locally first:
+
+```bash
+export CLOUDFLARE_API_TOKEN="your-token-here"
+```
+
+The local status script is:
+
+- [scripts/deploy-status.sh](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/scripts/deploy-status.sh)

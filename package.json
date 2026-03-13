@@ -11,6 +11,8 @@
     "dev:frontend": "vite --host 127.0.0.1 --port 3000",
     "dev:frontend:test": "./scripts/e2e-frontend.sh",
     "dev:e2e:worker": "./scripts/e2e-worker.sh",
+    "deploy:status": "./scripts/deploy-status.sh",
+    "push:main": "./scripts/push-main.sh",
     "blender:check": "zsh -lic 'Blender --version'",
     "blender:export": "./scripts/blender-export.sh",
     "maps:biomes": "node scripts/generate-biome-ascii-maps.js",

@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  applyPendingInputAck,
   applyEntitySpawnPoint,
   applySpawnShield,
   buildPlayerEntity,
+  chooseEntitySpawnPoint,
   ensurePlayer,
+  queueAuthoritativeInput,
   respawnIfNeeded,
   syncRoomFixtures,
   terrainFeetYAt,
@@ -113,6 +116,39 @@ test('room runtime terrain and spawn helpers keep player positions grounded', ()
   assert.equal(player.isGrounded, true);
 });
 
+test('room runtime keeps latest intent and applies the ack after authoritative movement', () => {
+  const player = {
+    seq: 4,
+    pendingInputSeq: 4,
+    yaw: 0,
+    pitch: 0,
+    inputState: {}
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 7,
+    yaw: 0.25,
+    pitch: 0.5,
+    forward: true,
+    jump: true,
+    adsActive: false
+  }, {
+    movementLocked: false,
+    canEntityUseWeapon() { return true; },
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(player.seq, 4);
+  assert.equal(player.pendingInputSeq, 7);
+  assert.equal(player.yaw, 0.25);
+  assert.equal(player.inputState.forward, true);
+  assert.equal(player.inputState.jump, true);
+  applyPendingInputAck(player);
+
+  assert.equal(player.seq, 7);
+});
+
 test('room runtime ensures players and simulated fixtures through one boundary', () => {
   const room = makeRoom();
   const player = ensurePlayer(room, 'u1', 'ALPHA', 'abilities', 'actor-a', 'ALPHA', {
@@ -158,4 +194,30 @@ test('room runtime respawns dead entities and ticks live players through shared 
   assert.equal(player.spawnShieldUntil, 1500);
   assert.equal(player.x, 7);
   assert.equal(player.z, 8);
+});
+
+test('authoritative spawn selection avoids blocked boxes and exclusion zones', () => {
+  const room = makeRoom();
+  room.boundsMin = 0;
+  room.boundsMax = 100;
+  room.worldCollision = {
+    collidables: [
+      {
+        min: { x: 5, y: 0, z: 5 },
+        max: { x: 35, y: 8, z: 35 }
+      }
+    ],
+    spawnExclusionZones: [
+      { x: 82, z: 82, radius: 6 }
+    ]
+  };
+
+  const spawn = chooseEntitySpawnPoint(room, { id: 'u3', alive: true }, {
+    spawnPadding: 8,
+    spawnMinClearance: 14
+  });
+
+  assert.ok(spawn, 'expected a spawn point');
+  assert.equal(spawn.x > 5 && spawn.x < 35 && spawn.z > 5 && spawn.z < 35, false);
+  assert.equal(((spawn.x - 82) ** 2) + ((spawn.z - 82) ** 2) <= ((6.85) ** 2), false);
 });

@@ -1,4 +1,6 @@
 import '../../shared/gameplay-tuning.js';
+import '../../shared/game-modes.js';
+import '../../shared/runtime-modes.js';
 import '../../shared/protocol.js';
 import '../../shared/private-room-codes.js';
 import '../core/runtime-profile.js';
@@ -11,6 +13,7 @@ import './auth-ui.js';
 import './lobby-party-view.js';
 import './lobby-friends-view.js';
 import './lobby-private-room-view.js';
+import './menu-launch-orchestrator.js';
 import './lobby-clickables.js';
 import './lobby-controller-ui.js';
 import './lobby-session.js';
