@@ -108,7 +108,10 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
   return {
     camera,
     runtime: sandbox.__MAYHEM_RUNTIME,
-    GameHitscan: sandbox.__MAYHEM_RUNTIME.GameHitscan
+    GameHitscan: sandbox.__MAYHEM_RUNTIME.GameHitscan,
+    setNow(value) {
+      sandbox.__now = Number(value || 0);
+    }
   };
 }
 
@@ -224,6 +227,36 @@ test('pistol local fire spends the shot and misses when targets are out of range
   assert.equal(fired, true);
   assert.equal(misses, 1);
   assert.equal(beforeAmmo - afterAmmo, 1);
+});
+
+test('firearms auto-reload after the magazine empties and refill after reload time elapses', async () => {
+  const harness = await loadHitscanHarness({
+    magazineSize: 2,
+    reloadMs: 900,
+    cooldownMs: 10,
+    pellets: 1,
+    singleHitFromPellets: false,
+    maxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
+    }
+  }, []);
+
+  harness.setNow(1000);
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-1'), true);
+  harness.setNow(1020);
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-2'), true);
+
+  const emptyState = harness.GameHitscan.getCurrentWeapon();
+  assert.equal(emptyState.ammoInMag, 0);
+  assert.equal(emptyState.reloading, true);
+  assert.ok(emptyState.reloadRemaining > 0);
+
+  harness.setNow(2000);
+  const reloadedState = harness.GameHitscan.getCurrentWeapon();
+  assert.equal(reloadedState.reloading, false);
+  assert.equal(reloadedState.ammoInMag, 2);
 });
 
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {

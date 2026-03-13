@@ -383,6 +383,17 @@
         return weaponAmmoState[weaponId];
     }
 
+    function applyReloadState(weapon, state, now) {
+        if (!weapon || !state || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
+        state.ammoInMag = 0;
+        state.reloadUntil = now + weapon.reloadMs;
+        state.reloadedFlashUntil = 0;
+        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
+            globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
+        }
+        return true;
+    }
+
     function syncWeaponAmmoState(weaponId, now) {
         var weapon = weapons[weaponId];
         var state = ensureWeaponAmmoState(weaponId);
@@ -391,6 +402,9 @@
             state.reloadUntil = 0;
             state.ammoInMag = weapon.magazineSize;
             state.reloadedFlashUntil = now + RELOADED_FLASH_MS;
+        }
+        if (state.reloadUntil <= 0 && Number(state.ammoInMag || 0) <= 0 && weapon.reloadMs > 0) {
+            applyReloadState(weapon, state, now);
         }
         return state;
     }
@@ -415,13 +429,7 @@
         if (!weapon || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
         var state = syncWeaponAmmoState(weapon.id, now);
         if (!state || state.reloadUntil > now) return false;
-        state.ammoInMag = 0;
-        state.reloadUntil = now + weapon.reloadMs;
-        state.reloadedFlashUntil = 0;
-        if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
-            globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
-        }
-        return true;
+        return applyReloadState(weapon, state, now);
     }
 
     function consumeAmmoForShot(weapon, now) {
