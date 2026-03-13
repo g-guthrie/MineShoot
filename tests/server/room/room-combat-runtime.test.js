@@ -267,6 +267,86 @@ test('combat runtime rewinds targets and clamps far client aim origins to the au
   });
 });
 
+test('combat runtime applies rewound hits to the live room entity instead of the rewound clone', () => {
+  const liveTarget = { id: 't1', alive: true, hp: 500, armor: 90, x: 0, y: 1.7, z: -6 };
+  const rewoundClone = {
+    ...liveTarget,
+    x: 4,
+    y: 1.7,
+    z: -3,
+    bodyBox: {
+      min: { x: 3, y: 1, z: -4 },
+      max: { x: 5, y: 2, z: -2 }
+    },
+    headBox: {
+      min: { x: 3.7, y: 1.4, z: -3.4 },
+      max: { x: 4.3, y: 1.9, z: -2.8 }
+    }
+  };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    lastShotTokenByWeapon: {},
+    muzzleFlashUntil: 0,
+    weaponId: 'rifle'
+  };
+  const appliedTargets = [];
+  const broadcastTargets = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [liveTarget]; },
+    getEntityById(id) { return id === liveTarget.id ? liveTarget : null; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'rewind-live-target'
+  }, {
+    nowMs: () => 400,
+    weaponStats: {
+      rifle: { cooldownMs: 100, magazineSize: 10, pellets: 1 }
+    },
+    weaponFalloff: { rifle: [] },
+    buildRewoundHitscanTarget() {
+      return rewoundClone;
+    },
+    resolveHitscanShot() {
+      return [{ target: rewoundClone, damage: 104, hitType: 'head' }];
+    },
+    applyDamageFromSource(_source, target, damage, options) {
+      appliedTargets.push({ target, damage, hitType: options.hitType });
+      return { killed: false, damageApplied: damage };
+    },
+    broadcastDamageEvent(_room, ownerId, target, out, hitType, weaponId, shotToken) {
+      broadcastTargets.push({ ownerId, target, out, hitType, weaponId, shotToken });
+    },
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.equal(appliedTargets.length, 1);
+  assert.equal(appliedTargets[0].target, liveTarget);
+  assert.equal(appliedTargets[0].target, broadcastTargets[0].target);
+  assert.equal(appliedTargets[0].target === rewoundClone, false);
+  assert.equal(appliedTargets[0].damage, 104);
+  assert.equal(appliedTargets[0].hitType, 'head');
+});
+
 test('combat runtime aggregates multi-pellet shotgun hits per target by shot token', () => {
   const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -6 };
   const player = {

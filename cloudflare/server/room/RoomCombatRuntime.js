@@ -772,17 +772,21 @@ export function handleFire(room, player, msg, deps) {
   }
   for (let i = 0; i < shots.length; i++) {
     const shot = shots[i];
-    const target = shot ? shot.target : null;
-    if (!room.canTargetEntity(target, player.id)) continue;
-    const out = applyDamageFromSource(player, target, shot.damage, {
+    const resolvedShotTarget = shot ? shot.target : null;
+    const targetId = resolvedShotTarget && resolvedShotTarget.id ? String(resolvedShotTarget.id) : '';
+    const liveTarget = targetId && typeof room.getEntityById === 'function'
+      ? room.getEntityById(targetId)
+      : resolvedShotTarget;
+    if (!room.canTargetEntity(liveTarget, player.id)) continue;
+    const out = applyDamageFromSource(player, liveTarget, shot.damage, {
       hitType: shot.hitType === 'head' ? 'head' : 'body',
       weaponId,
       sourceKind: 'weapon'
     });
     if (!out) continue;
-    broadcastDamageEvent(room, player.id, target, out, shot.hitType === 'head' ? 'head' : 'body', weaponId, shotToken);
+    broadcastDamageEvent(room, player.id, liveTarget, out, shot.hitType === 'head' ? 'head' : 'body', weaponId, shotToken);
     if (out.killed) {
-      broadcastDeathRespawn(room, target);
+      broadcastDeathRespawn(room, liveTarget);
     }
   }
 }
