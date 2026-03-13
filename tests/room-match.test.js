@@ -118,6 +118,36 @@ test('public match helpers start tdm and assign the lighter team on join baselin
   assert.ok(joiner.teamId === 'alpha' || joiner.teamId === 'bravo');
 });
 
+test('public matches start immediately when the first human connects', () => {
+  const room = {
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 0, progressScore: 0 }]
+    ]),
+    matchState: emptyMatchState('ffa'),
+    isPublicMatchRoom() { return true; },
+    connectedHumanCount() { return 1; },
+    initializeLmsMatchState() {}
+  };
+
+  assert.equal(startPublicMatchIfReady(room, {
+    emptyMatchState,
+    nowMs: () => 42,
+    publicRoomStartThreshold: 1,
+    ffaTargetProgress: 10,
+    tdmTargetProgress: 10,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    gameModeLms: 'lms',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  }), true);
+  assert.equal(room.matchState.started, true);
+  assert.equal(room.matchState.startedAt, 42);
+  assert.equal(room.matchState.matchBaselinePlayerCount, 1);
+});
+
 test('leader, finish, elimination, and reset helpers preserve match outcomes', () => {
   const room = {
     roomName: 'ffa-01',
