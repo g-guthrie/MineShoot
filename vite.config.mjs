@@ -7,7 +7,7 @@ export default defineConfig({
   publicDir: 'public',
   server: {
     port: 3000,
-    open: true,
+    open: process.env.VITE_AUTO_OPEN === '1',
     proxy: {
       '/api': {
         target: `http://127.0.0.1:${workerProxyPort}`,
