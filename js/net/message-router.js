@@ -20,7 +20,8 @@
             CLASS_CAST_OK: 'class_cast_ok',
             CLASS_CAST_REJECT: 'class_cast_reject',
             CLASS_CHANGED: 'class_changed',
-            ERROR: 'error'
+            ERROR: 'error',
+            PONG: 'pong'
         };
     }
 
@@ -37,6 +38,12 @@
         opts.setPrivateRoomPhase(String(msg.privateRoomPhase || opts.getPrivateRoomPhase() || '').toLowerCase());
         opts.setMatchState((msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : null);
         opts.setPendingRespawnInfo(null);
+        if (opts.setInputSendInterval) {
+            var tickRate = Math.round(Number(msg.tickRate || 0));
+            if (isFinite(tickRate) && tickRate >= 10 && tickRate <= 120) {
+                opts.setInputSendInterval(1 / tickRate);
+            }
+        }
 
         var expectedMeta = opts.buildExpectedWorldMeta(opts.getRoomId());
         var nextMeta = {
@@ -112,6 +119,7 @@
                 damage: Math.max(0, Number(msg.damage || 0)),
                 hitType: msg.hitType === 'head' ? 'head' : 'body',
                 weaponId: msg.weaponId || '',
+                shotToken: msg.shotToken || '',
                 killed: !!msg.killed,
                 worldPos: opts.damagePointForEntityId(msg.targetId || '')
             }, 48);
@@ -176,9 +184,13 @@
                 opts.setGameMode(String(msg.gameMode || opts.getGameMode() || '').toLowerCase());
                 opts.setPrivateRoomPhase(String(msg.privateRoomPhase || opts.getPrivateRoomPhase() || '').toLowerCase());
                 opts.setMatchState((msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : opts.getMatchState());
-                opts.applySnapshot(msg.entities || [], msg.projectiles || [], msg.fireZones || [], {
+                var hasProjectiles = Object.prototype.hasOwnProperty.call(msg, 'projectiles');
+                var hasFireZones = Object.prototype.hasOwnProperty.call(msg, 'fireZones');
+                opts.applySnapshot(msg.entities || [], hasProjectiles ? (msg.projectiles || []) : undefined, hasFireZones ? (msg.fireZones || []) : undefined, {
                     delta: !!msg.delta,
-                    removedEntityIds: msg.removedEntityIds || []
+                    removedEntityIds: msg.removedEntityIds || [],
+                    serverTime: Number(msg.serverTime || 0),
+                    receivedAt: Date.now()
                 });
                 return;
             }
@@ -241,6 +253,13 @@
 
             if (msg.t === (msgTypes.ERROR || 'error')) {
                 opts.pushNotice(msg.message || 'Server error');
+                return;
+            }
+
+            if (msg.t === (msgTypes.PONG || 'pong')) {
+                if (opts.handlePong) {
+                    opts.handlePong(msg, Date.now());
+                }
             }
         }
 

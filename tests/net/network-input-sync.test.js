@@ -1,0 +1,497 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import {
+  buildExpectedWorldMeta,
+  cloneWorldFlags,
+  normalizeAbilityLoadoutPayload,
+  normalizeClassCastPayload,
+  normalizeThrowPayload,
+  normalizeWeaponLoadoutPayload,
+  sanitizeRoomId
+} from '../../shared/protocol.js';
+
+async function loadGameNetHarness() {
+  const renderMap = new Map();
+  const runtime = {
+    GameShared: {
+      protocol: {
+        wsPath: '/api/ws',
+        world: {
+          profileVersion: 6,
+          seedPrefix: 'room-env-v6-static',
+          flags: { envV2: true, terrainPhysicsV2: true }
+        },
+        sanitizeRoomId,
+        cloneWorldFlags,
+        buildExpectedWorldMeta,
+        normalizeWeaponLoadoutPayload,
+        normalizeThrowPayload,
+        normalizeAbilityLoadoutPayload,
+        normalizeClassCastPayload,
+        msg: {
+          c2s: { INPUT: 'input', FIRE: 'fire', PING: 'ping' },
+          s2c: { WELCOME: 'welcome', SNAPSHOT: 'snapshot', PONG: 'pong' }
+        }
+      },
+      entityPoints: {}
+    },
+    GameNetAuth: {
+      getSocketIdentity() { return { id: 'usr_test', username: 'TEST', classId: 'abilities' }; },
+      getUser() { return { id: 'usr_test', username: 'TEST', classId: 'abilities' }; },
+      ensureArenaIdentity() { return Promise.resolve(); }
+    },
+    GameNetEntities: {
+      init() {},
+      cleanup() {},
+      updateFromSnapshot() {},
+      removeRemoteVisual() {},
+      getRenderMap() { return renderMap; },
+      classStats() { return { armorMax: 90, wallhackRadius: 90 }; }
+    },
+    GameNetSnapshots: {
+      create(hooks = {}) {
+        return {
+          applySnapshot(entities, projectiles, fireZones, opts = {}) {
+            const list = Array.isArray(entities) ? entities : [];
+            for (let i = 0; i < list.length; i++) {
+              if (hooks.onEntity) hooks.onEntity(list[i]);
+            }
+            if (hooks.onPrune) hooks.onPrune(new Map(list.map((entity) => [entity.id, entity])));
+            if (hooks.onProjectiles && projectiles !== undefined) hooks.onProjectiles(Array.isArray(projectiles) ? projectiles : []);
+            if (hooks.onFireZones && fireZones !== undefined) hooks.onFireZones(Array.isArray(fireZones) ? fireZones : []);
+          }
+        };
+      }
+    },
+    GamePlayer: {
+      getAnimNetState() {
+        return { equippedWeaponId: 'rifle' };
+      },
+      getCamera() {
+        return {
+          fov: 75,
+          position: { x: 1, y: 2, z: 3 }
+        };
+      },
+      getRotation() {
+        return { yaw: 0.25, pitch: -0.1 };
+      },
+      getAdsState() {
+        return { active: false };
+      },
+      getNetworkInputState() {
+        return {
+          forward: true,
+          backward: false,
+          left: false,
+          right: false,
+          jump: false,
+          sprint: false,
+          adsActive: false
+        };
+      },
+      respawn() {}
+    },
+    GameNetTransport: null
+  };
+
+  const timeState = { now: 1000 };
+  const fakeDate = {
+    now() { return timeState.now; }
+  };
+  const sandbox = {
+    globalThis: { __MAYHEM_RUNTIME: runtime },
+    window: {
+      location: { protocol: 'https:', host: 'example.test' }
+    },
+    URL,
+    URLSearchParams,
+    console,
+    Date: fakeDate,
+    TextDecoder: class {
+      decode(value) { return String(value || ''); }
+    },
+    WebSocket: { OPEN: 1 },
+    setTimeout(fn) { if (typeof fn === 'function') fn(); return 1; },
+    clearTimeout() {},
+    Math,
+    Map,
+    JSON
+  };
+
+  const context = vm.createContext(sandbox);
+  for (const path of [
+    '../../js/combat/ability-fx.js',
+    '../../js/net/runtime-access.js',
+    '../../js/net/message-router.js',
+    '../../js/net/runtime-core.js',
+    '../../js/net/state-view.js',
+    '../../js/net/network.js'
+  ]) {
+    const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');
+    vm.runInContext(code, context);
+  }
+  const GameNet = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;
+
+  const sentMessages = [];
+  let transportHooks = null;
+  runtime.GameNetTransport = {
+    create(opts) {
+      transportHooks = opts;
+      return {
+        connect() {
+          const socket = { readyState: 1 };
+          if (opts.onOpen) opts.onOpen(socket);
+        },
+        send(msg) {
+          sentMessages.push(JSON.parse(JSON.stringify(msg)));
+          return true;
+        },
+        shutdown() {}
+      };
+    }
+  };
+
+  GameNet.init({});
+
+  return {
+    GameNet,
+    renderMap,
+    sentMessages,
+    timeState,
+    handleMessage(message) {
+      const payload = JSON.stringify(message);
+      if (transportHooks && transportHooks.onMessage) {
+        transportHooks.onMessage(payload);
+      }
+    }
+  };
+}
+
+test('GameNet records sent input samples with timing metadata', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  timeState.now = 1060;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  assert.equal(sentMessages.length, 2);
+  const syncState = GameNet.getInputSyncState();
+  const pending = GameNet.getPendingInputSamples();
+  assert.equal(syncState.pendingInputCount, 2);
+  assert.equal(pending.length, 2);
+  assert.equal(pending[0].dtMs, 33);
+  assert.equal(pending[1].dtMs, 60);
+});
+
+test('GameNet prunes acked input samples from self snapshots', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  timeState.now = 1050;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0.1, pitch: 0 });
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 1
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const syncState = GameNet.getInputSyncState();
+  const pending = GameNet.getPendingInputSamples();
+  assert.equal(syncState.lastAckedSeq, 1);
+  assert.equal(syncState.pendingInputCount, 1);
+  assert.equal(pending[0].seq, 2);
+});
+
+test('GameNet tolerates incomplete remote render entries during private-room sync', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, renderMap, timeState } = harness;
+
+  renderMap.set('usr_remote', {
+    id: 'usr_remote'
+  });
+
+  timeState.now = 1000;
+  assert.doesNotThrow(() => {
+    GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  });
+});
+
+test('GameNet maps compact abilityFx snapshot state into client selectors', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 1,
+        abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+        slot1CooldownRemaining: 1.25,
+        slot2CooldownRemaining: 5,
+        abilityFx: {
+          chokeCasterUntil: 1250,
+          chokeVictim: { startedAt: 900, endsAt: 1300, liftHeight: 1.5 },
+          hookedUntil: 1500,
+          hookVisual: {
+            phase: 'travel',
+            targetId: '',
+            headPos: { x: 1, y: 2, z: 3 },
+            endsAt: 1400
+          },
+          healUntil: 1600
+        },
+        deadeyeState: {
+          lockCount: 1,
+          maxLocks: 2,
+          nextLockAt: 1200,
+          lockEveryMs: 200,
+          endsAt: 1800,
+          targetIds: ['usr_remote']
+        }
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const abilityState = GameNet.getSelfAbilityState();
+  const chokeVictim = GameNet.getChokeVictimStateForEntity('usr_test');
+
+  assert.equal(abilityState.slot1CooldownRemaining, 1.25);
+  assert.equal(abilityState.chokeState.endsAt, 1250);
+  assert.equal(abilityState.hookState.phase, 'travel');
+  assert.deepEqual(JSON.parse(JSON.stringify(abilityState.hookState.headPos)), { x: 1, y: 2, z: 3 });
+  assert.equal(abilityState.healState.endsAt, 1600);
+  assert.equal(abilityState.deadeyeState.maxLocks, 2);
+  assert.equal(chokeVictim.startedAt, 900);
+  assert.equal(chokeVictim.endsAt, 1300);
+  assert.equal(chokeVictim.liftHeight, 1.5);
+});
+
+test('GameNet stores snapshot timing and estimates current server time from snapshots', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 940,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSnapshotTimingState())), {
+    serverTime: 940,
+    receivedAt: 1000,
+    serverTimeOffsetMs: 60
+  });
+
+  timeState.now = 1065;
+  assert.equal(GameNet.getEstimatedServerTime(), 1005);
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getConnectionTimingState())), {
+    snapshot: {
+      serverTime: 940,
+      receivedAt: 1000,
+      serverTimeOffsetMs: 60,
+      intervalMs: 0,
+      jitterMs: 0
+    },
+    rttMs: 0,
+    rttJitterMs: 0,
+    lastPongAt: 0,
+    pingCadenceMs: 500
+  });
+});
+
+test('GameNet sendFire includes estimated server shot time when snapshot timing exists', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 925,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1080;
+  assert.equal(GameNet.sendFire('rifle', 'shot_1'), true);
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].t, 'fire');
+  assert.equal(sentMessages[0].weaponId, 'rifle');
+  assert.equal(sentMessages[0].shotToken, 'shot_1');
+  assert.equal(sentMessages[0].estimatedServerShotTime, 1005);
+});
+
+test('GameNet sendFire omits estimated server shot time when snapshot timing is unavailable', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages } = harness;
+
+  assert.equal(GameNet.sendFire('rifle', 'shot_2'), true);
+  assert.equal(sentMessages.length, 1);
+  assert.equal('estimatedServerShotTime' in sentMessages[0], false);
+});
+
+test('GameNet emits ping messages on the configured cadence while connected', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.49);
+  assert.equal(sentMessages.length, 0);
+
+  timeState.now = 1510;
+  GameNet.update(0.02);
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].t, 'ping');
+  assert.equal(sentMessages[0].clientTime, 1510);
+});
+
+test('GameNet tracks pong RTT and jitter in connection timing state', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 940,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1120;
+  harness.handleMessage({
+    t: 'pong',
+    clientTime: 1000,
+    serverTime: 1080
+  });
+
+  const timing = JSON.parse(JSON.stringify(GameNet.getConnectionTimingState()));
+  assert.equal(timing.rttMs, 120);
+  assert.equal(timing.rttJitterMs, 0);
+  assert.equal(timing.lastPongAt, 1120);
+  assert.equal(timing.snapshot.serverTimeOffsetMs, 60);
+});
+
+test('GameNet rejects stale self snapshots before mutating self state', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 960,
+    delta: false,
+    entities: [{ id: 'usr_test', x: 4, y: 1.6, z: 5, yaw: 0, pitch: 0, seq: 3, hp: 400 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+  timeState.now = 1010;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 950,
+    delta: true,
+    entities: [{ id: 'usr_test', x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, seq: 2, hp: 100 }],
+    removedEntityIds: []
+  });
+
+  assert.equal(GameNet.getSelfState().seq, 3);
+  assert.equal(GameNet.getSelfState().x, 4);
+  assert.equal(GameNet.getSelfState().hp, 400);
+  assert.equal(GameNet.getInputSyncState().lastAckedSeq, 3);
+});
+
+test('GameNet preserves authoritative projectile and fire zone state when delta snapshots omit them', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 940,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [{ id: 'proj_1' }],
+    fireZones: [{ id: 'zone_1' }]
+  });
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 973,
+    delta: true,
+    entities: [{ id: 'usr_remote', x: 1, y: 1.6, z: 2 }],
+    removedEntityIds: []
+  });
+
+  const throwableState = GameNet.getAuthoritativeThrowableState();
+  assert.deepEqual(JSON.parse(JSON.stringify(throwableState.projectiles)), [{ id: 'proj_1' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(throwableState.fireZones)), [{ id: 'zone_1' }]);
+});

@@ -1,0 +1,338 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+
+async function loadRemoteSync() {
+  const code = await fs.readFile(new URL('../../js/net/remote-sync.js', import.meta.url), 'utf8');
+  const sandbox = {
+    __MAYHEM_RUNTIME: {
+      GameShared: {
+        entityPoints: {}
+      }
+    },
+    globalThis: null,
+    console,
+    Date
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInContext(code, vm.createContext(sandbox));
+  return sandbox.__MAYHEM_RUNTIME.GameNetRemoteSync;
+}
+
+test('remote sync turns a grounded-to-airborne transition into a jump action trigger', async () => {
+  const remoteSync = await loadRemoteSync();
+  const calls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        calls.push({ kind: 'update', animState });
+      },
+      triggerAction(action, options) {
+        calls.push({ kind: 'trigger', action, options });
+      },
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  render.isGrounded = false;
+  render.velocityY = 6;
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  const jumpTriggers = calls.filter((entry) => entry.kind === 'trigger' && entry.action === 'jump');
+  const latestUpdate = calls.filter((entry) => entry.kind === 'update').pop();
+
+  assert.equal(jumpTriggers.length, 1);
+  assert.equal(jumpTriggers[0].options.reverseLegTilt, false);
+  assert.equal(latestUpdate.animState.airborne, true);
+  assert.equal(latestUpdate.animState.movingForward, false);
+  assert.equal(latestUpdate.animState.movingBackward, false);
+});
+
+test('remote sync forwards airborne movement intent to animation', async () => {
+  const remoteSync = await loadRemoteSync();
+  const calls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0.7,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: true,
+    isGrounded: false,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].movingForward, false);
+  assert.equal(calls[0].movingBackward, true);
+});
+
+test('remote sync flips jump leg tilt when backward input starts the jump', async () => {
+  const remoteSync = await loadRemoteSync();
+  const calls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: true,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation() {},
+      triggerAction(action, options) {
+        calls.push({ action, options });
+      },
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  render.isGrounded = false;
+  render.velocityY = 6;
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, 'jump');
+  assert.equal(calls[0].options.reverseLegTilt, true);
+});
+
+test('remote sync does not force the reveal ghost on for choked victims', async () => {
+  const remoteSync = await loadRemoteSync();
+  const revealCalls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    deadeyeMark: { locked: true, progress: 1 },
+    actorVisual: {
+      updateAnimation() {},
+      setMuzzleVisible() {},
+      setRevealGhostState(visible, opacity, colorHex) {
+        revealCalls.push({ visible, opacity, colorHex });
+      }
+    },
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation() {},
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 1.2, startedAt: 1000 };
+  });
+
+  assert.equal(revealCalls.length > 0, true);
+  assert.equal(revealCalls.at(-1).visible, false);
+});
+
+test('remote sync renders from buffered snapshot history instead of chasing the newest target', async () => {
+  const remoteSync = await loadRemoteSync();
+  const originalDateNow = Date.now;
+  Date.now = () => 1000;
+  try {
+    const render = {
+      id: 'usr_remote',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      targetX: 20,
+      targetFootY: 0,
+      targetZ: 0,
+      targetYaw: 1.4,
+      targetPitch: 0.2,
+      snapshotHistory: [
+        { serverTime: 800, receivedAt: 800, x: 0, footY: 0, z: 0, yaw: 0, pitch: 0 },
+        { serverTime: 900, receivedAt: 900, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1 },
+        { serverTime: 1000, receivedAt: 1000, x: 20, footY: 2, z: -4, yaw: 0.8, pitch: 0.2 }
+      ],
+      snapshotIntervalMs: 50,
+      interpolationDelayMs: 90,
+      serverTimeOffsetMs: 0,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: null,
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {},
+        setMuzzleVisible() {}
+      }
+    };
+    const renderMap = new Map([['usr_remote', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(Number(render.group.position.x.toFixed(2)), 10.5);
+    assert.equal(Number(render.group.position.y.toFixed(2)), 1.05);
+    assert.equal(Number(render.group.position.z.toFixed(2)), -2.1);
+    assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.42);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('remote sync holds the latest buffered pose instead of over-extrapolating stale snapshots', async () => {
+  const remoteSync = await loadRemoteSync();
+  const originalDateNow = Date.now;
+  Date.now = () => 1100;
+  try {
+    const render = {
+      id: 'usr_remote',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      snapshotHistory: [
+        { serverTime: 900, receivedAt: 900, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1 },
+        { serverTime: 1000, receivedAt: 1000, x: 20, footY: 2, z: -4, yaw: 0.8, pitch: 0.2 }
+      ],
+      snapshotIntervalMs: 50,
+      interpolationDelayMs: 90,
+      serverTimeOffsetMs: 0,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: null,
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {},
+        setMuzzleVisible() {}
+      }
+    };
+    const renderMap = new Map([['usr_remote', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(Number(render.group.position.x.toFixed(2)), 20);
+    assert.equal(Number(render.group.position.y.toFixed(2)), 2);
+    assert.equal(Number(render.group.position.z.toFixed(2)), -4);
+    assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.8);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});

@@ -79,10 +79,16 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   return applyDamage(target, damage);
 }
 
-export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '') {
+export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '') {
   if (!target || !out) return;
   if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
     room.recordElimination(sourceId, target.id);
+  }
+  if (room && typeof room.markEntityEngaged === 'function' && sourceId && target.id) {
+    room.markEntityEngaged(sourceId, target.id);
+  }
+  if (room && typeof room.markSnapshotBurst === 'function') {
+    room.markSnapshotBurst([sourceId, target.id], [sourceId, target.id]);
   }
   room.broadcast({
     t: MSG_S2C.DAMAGE_EVENT,
@@ -92,6 +98,7 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
     armor: out.armor,
     hitType: hitType === 'head' ? 'head' : 'body',
     weaponId: String(weaponId || ''),
+    shotToken: String(shotToken || ''),
     damage: out.damageApplied || 0,
     killed: !!out.killed
   });

@@ -15,6 +15,39 @@ export const gameplayTuning = {
     beaconMinRange: 35,
     beaconMaxCount: 2
   },
+  network: {
+    flags: {
+      adaptiveSelfReconciliation: true,
+      combatBurstSnapshots: true,
+      shotTokenDamageAggregation: true
+    },
+    ping: {
+      cadenceMs: 500,
+      staleAfterMs: 4000,
+      rttAlpha: 0.15,
+      jitterAlpha: 0.2
+    },
+    selfReconciliation: {
+      hardSnapDistanceWu: 4.5,
+      hardSnapVerticalWu: 1.35,
+      idleReplayDistanceWu: 1.1,
+      movingReplayDistanceWu: 1.75,
+      emergencyReplayDistanceWu: 2.4,
+      baseGraceMs: 150,
+      maxExtraGraceMs: 120,
+      movingAckDriftLimit: 2
+    },
+    combatPriority: {
+      burstCadenceMs: 16,
+      burstWindowMs: 250,
+      engagementTtlMs: 1800,
+      maxBurstTargets: 4
+    },
+    feedback: {
+      predictedHitTtlMs: 900,
+      shotgunAggregateWindowMs: 60
+    }
+  },
   movement: {
     jogSpeed: 8,
     runSpeed: 14,
@@ -212,6 +245,10 @@ export function getMovementTuning() {
   return gameplayTuning.movement || {};
 }
 
+export function getNetworkTuning() {
+  return gameplayTuning.network || {};
+}
+
 export function getWeaponStats(weaponId) {
   return gameplayTuning.weaponStats[weaponId] || null;
 }
@@ -371,6 +408,7 @@ const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {}
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
+runtime.GameShared.getNetworkTuning = getNetworkTuning;
 runtime.GameShared.getWeaponStats = getWeaponStats;
 runtime.GameShared.getWeaponPresentation = getWeaponPresentation;
 runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.cf-deploy/
 .hermes-flow/
 .wrangler/
 test-results/

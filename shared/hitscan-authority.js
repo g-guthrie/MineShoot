@@ -184,7 +184,7 @@ function resolveViewFovDeg(weaponStats, viewFovDeg) {
   return clampNumber(raw, Math.min(CAMERA_FOV_DEG, scoped), Math.max(CAMERA_FOV_DEG, scoped));
 }
 
-function spreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
+export function sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToken) {
   const aim = resolveWeaponAimProfile(weaponStats, adsActive);
   const spread = Math.max(0, Number(aim && aim.spread || 0));
   if (spread <= 0.00001) return { x: 0, y: 0 };
@@ -202,7 +202,7 @@ function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotTok
   const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
   const right = normalizeVec3(crossVec3(baseForward, worldUp));
   const up = normalizeVec3(crossVec3(right, baseForward));
-  const offset = spreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
+  const offset = sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
   if (offset.x === 0 && offset.y === 0) return baseForward;
 
   const fovY = resolveViewFovDeg(weaponStats, viewFovDeg) * Math.PI / 180;
@@ -465,7 +465,7 @@ function resolveRayHits(options) {
   const out = [];
 
   for (let pelletIndex = 0; pelletIndex < pellets; pelletIndex++) {
-    const pelletOffset = spreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
+    const pelletOffset = sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToken);
     const dir = buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken, viewFovDeg);
     let worldHitDistance = maxDistance;
     for (let i = 0; i < worldBoxes.length; i++) {
@@ -673,5 +673,6 @@ const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {}
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.hitscanAuthority = {
   resolveHitscanShot,
-  resolveAutoLockPreview
+  resolveAutoLockPreview,
+  sampleSpreadOffset
 };

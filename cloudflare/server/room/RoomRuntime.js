@@ -110,6 +110,9 @@ export function buildPlayerEntity(room, userId, username, _classId, options, dep
 
   spawnEntityRandomly(room, player, deps);
   applySpawnShield(player, deps);
+  if (room && typeof room.seedEntityPoseHistory === 'function') {
+    room.seedEntityPoseHistory(player);
+  }
   return player;
 }
 
@@ -229,6 +232,9 @@ export function respawnIfNeeded(room, entity, deps) {
     createMovementInputState,
     zeroAim: entity.fixtureType === 'sim_player'
   });
+  if (typeof room.seedEntityPoseHistory === 'function') {
+    room.seedEntityPoseHistory(entity, nowMs());
+  }
 }
 
 export function tickPlayers(room, dtSec, deps) {

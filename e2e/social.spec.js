@@ -29,14 +29,14 @@ test('party lock, private room join, and friend save flow work across two browse
 
   const alphaId = await pageA.locator('#menu-party-id-value').textContent();
   await pageA.locator('#party-join-lock-btn').click();
-  await expect(pageA.locator('#party-join-lock-note')).toContainText('JOINS LOCKED');
+  await expect(pageA.locator('#party-join-lock-note')).toContainText('PARTY CLOSED');
 
   await pageB.locator('#party-id-input').fill(String(alphaId || '').trim());
   await pageB.locator('#join-party-btn').click();
   await expect(pageB.locator('#party-status')).toContainText('locked');
 
   await pageA.locator('#party-join-lock-btn').click();
-  await expect(pageA.locator('#party-join-lock-note')).toContainText('JOINS OPEN');
+  await expect(pageA.locator('#party-join-lock-note')).toContainText('PARTY OPEN');
 
   await pageB.locator('#join-party-btn').click();
   await expect(pageB.locator('#party-status')).toContainText('Party joined.');
@@ -49,6 +49,7 @@ test('party lock, private room join, and friend save flow work across two browse
 
   await pageA.locator('#social-tab-friends-btn').click();
   await pageA.locator('#refresh-friends-btn').click();
+  await pageA.locator('#friends-filter-all-btn').click();
   await expect(pageA.locator('#friends-preview')).toContainText(bravoName);
 
   await pageA.locator('#create-private-room-btn').click();

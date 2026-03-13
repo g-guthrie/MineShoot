@@ -1,6 +1,20 @@
 import { cloneWorldFlags } from '../../../shared/protocol.js';
 import { lmsRules } from '../../../shared/lms-mode.js';
 
+const SNAPSHOT_SELF_CADENCE_MS = 33;
+const SNAPSHOT_ENGAGED_CADENCE_MS = 33;
+const SNAPSHOT_NEARBY_CADENCE_MS = 66;
+const SNAPSHOT_FAR_CADENCE_MS = 132;
+const SNAPSHOT_NEARBY_DISTANCE = 35;
+
+function defaultDistanceBetween(a, b) {
+  if (!a || !b) return Infinity;
+  const dx = Number(a.x || 0) - Number(b.x || 0);
+  const dy = Number(a.y || 0) - Number(b.y || 0);
+  const dz = Number(a.z || 0) - Number(b.z || 0);
+  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+}
+
 export function currentPrivateRoomPhase(room, deps) {
   deps = deps || {};
   const isPrivateMatchRoom = deps.isPrivateMatchRoom;
@@ -52,6 +66,86 @@ export function serializeMatchState(room, deps) {
   };
 }
 
+export function snapshotCadenceMsForEntity(viewerEntity, entity, nowMs = 0, deps = {}) {
+  const selfCadenceMs = Math.max(1, Number(deps.selfCadenceMs || SNAPSHOT_SELF_CADENCE_MS));
+  const engagedCadenceMs = Math.max(1, Number(deps.engagedCadenceMs || SNAPSHOT_ENGAGED_CADENCE_MS));
+  const nearbyCadenceMs = Math.max(1, Number(deps.nearbyCadenceMs || SNAPSHOT_NEARBY_CADENCE_MS));
+  const farCadenceMs = Math.max(1, Number(deps.farCadenceMs || SNAPSHOT_FAR_CADENCE_MS));
+  const nearbyDistance = Math.max(0, Number(deps.nearbyDistance || SNAPSHOT_NEARBY_DISTANCE));
+  const isEngaged = typeof deps.isEngaged === 'function' ? deps.isEngaged : (() => false);
+  const distanceBetween = typeof deps.distanceBetween === 'function' ? deps.distanceBetween : defaultDistanceBetween;
+
+  if (!entity) return farCadenceMs;
+  if (viewerEntity && entity.id === viewerEntity.id) return selfCadenceMs;
+  if (viewerEntity && isEngaged(viewerEntity, entity, nowMs)) return engagedCadenceMs;
+  if (viewerEntity && distanceBetween(viewerEntity, entity) <= nearbyDistance) return nearbyCadenceMs;
+  return farCadenceMs;
+}
+
+export function buildViewerEntitySnapshot(entities, viewerEntity, viewerSnapshotState, options = {}) {
+  const list = Array.isArray(entities) ? entities : [];
+  const forceFull = !!options.forceFull;
+  const nowMs = Math.max(0, Number(options.nowMs || 0));
+  const priorityEntityIds = options.priorityEntityIds instanceof Set
+    ? options.priorityEntityIds
+    : new Set(Array.isArray(options.priorityEntityIds) ? options.priorityEntityIds : []);
+  const serializeEntity = typeof options.serializeEntity === 'function'
+    ? options.serializeEntity
+    : ((entity) => JSON.stringify(entity));
+  const serializedById = options.serializedById instanceof Map ? options.serializedById : new Map();
+  const prevEntityStateById = viewerSnapshotState && viewerSnapshotState.entityStateById instanceof Map
+    ? viewerSnapshotState.entityStateById
+    : new Map();
+  const prevEntityLastSentAtById = viewerSnapshotState && viewerSnapshotState.entityLastSentAtById instanceof Map
+    ? viewerSnapshotState.entityLastSentAtById
+    : new Map();
+  const nextEntityStateById = forceFull ? new Map() : new Map(prevEntityStateById);
+  const nextEntityLastSentAtById = forceFull ? new Map() : new Map(prevEntityLastSentAtById);
+  const currentIds = new Set();
+  const payloadEntities = [];
+  const removedEntityIds = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const entity = list[i];
+    if (!entity) continue;
+    const entityId = String(entity.id || '');
+    if (!entityId) continue;
+    currentIds.add(entityId);
+    const serialized = serializedById.has(entityId)
+      ? serializedById.get(entityId)
+      : serializeEntity(entity);
+    if (!serializedById.has(entityId)) serializedById.set(entityId, serialized);
+
+    const previousSerialized = prevEntityStateById.get(entityId);
+    const lastSentAt = Math.max(0, Number(prevEntityLastSentAtById.get(entityId) || 0));
+    const cadenceMs = snapshotCadenceMsForEntity(viewerEntity, entity, nowMs, options);
+    const priorityDue = priorityEntityIds.has(entityId);
+    const due = forceFull || priorityDue || !prevEntityStateById.has(entityId) || ((nowMs - lastSentAt) >= cadenceMs);
+
+    if (forceFull || !prevEntityStateById.has(entityId) || (due && previousSerialized !== serialized)) {
+      payloadEntities.push(entity);
+      nextEntityStateById.set(entityId, serialized);
+      nextEntityLastSentAtById.set(entityId, nowMs);
+    }
+  }
+
+  prevEntityStateById.forEach((_value, entityId) => {
+    if (currentIds.has(entityId)) return;
+    removedEntityIds.push(entityId);
+    nextEntityStateById.delete(entityId);
+    nextEntityLastSentAtById.delete(entityId);
+  });
+
+  return {
+    entities: payloadEntities,
+    removedEntityIds,
+    snapshotState: {
+      entityStateById: nextEntityStateById,
+      entityLastSentAtById: nextEntityLastSentAtById
+    }
+  };
+}
+
 export function buildWelcomePayload(room, selfId, deps) {
   deps = deps || {};
   return {
@@ -71,7 +165,7 @@ export function buildWelcomePayload(room, selfId, deps) {
 export function buildSnapshotPayload(room, snapshot, deps) {
   deps = deps || {};
   snapshot = snapshot || {};
-  return {
+  const payload = {
     t: deps.msgType,
     serverTime: deps.nowMs ? deps.nowMs() : 0,
     delta: !snapshot.forceFull,
@@ -79,8 +173,13 @@ export function buildSnapshotPayload(room, snapshot, deps) {
     privateRoomPhase: currentPrivateRoomPhase(room, deps),
     matchState: serializeMatchState(room, deps),
     entities: snapshot.forceFull ? (snapshot.entities || []) : (snapshot.changedEntities || []),
-    removedEntityIds: snapshot.removedEntityIds || [],
-    projectiles: snapshot.projectiles || [],
-    fireZones: snapshot.fireZones || []
+    removedEntityIds: snapshot.removedEntityIds || []
   };
+  if (snapshot.projectiles !== undefined) {
+    payload.projectiles = snapshot.projectiles || [];
+  }
+  if (snapshot.fireZones !== undefined) {
+    payload.fireZones = snapshot.fireZones || [];
+  }
+  return payload;
 }

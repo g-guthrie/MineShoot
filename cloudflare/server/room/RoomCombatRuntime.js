@@ -646,6 +646,13 @@ export function handleFire(room, player, msg, deps) {
   const broadcastDamageEvent = deps.broadcastDamageEvent;
   const broadcastDeathRespawn = deps.broadcastDeathRespawn;
   const canEquipWeaponId = deps.canEquipWeaponId;
+  const markFireEngagement = deps.markFireEngagement;
+  const markSnapshotBurst = deps.markSnapshotBurst;
+  const resolveHitscanShotTime = deps.resolveHitscanShotTime;
+  const buildRewoundHitscanTarget = deps.buildRewoundHitscanTarget;
+  const authoritativeHitscanOrigin = deps.authoritativeHitscanOrigin;
+  const shotTokenDamageAggregation = deps.shotTokenDamageAggregation !== false;
+  const hitscanAimOriginMaxOffset = Number(deps.hitscanAimOriginMaxOffset || 0.9);
   const playerEyeHeight = Number(deps.playerEyeHeight || 0);
   const remoteMuzzleFlashHoldMs = Number(deps.remoteMuzzleFlashHoldMs || 0);
 
@@ -672,10 +679,20 @@ export function handleFire(room, player, msg, deps) {
     room.beginWeaponReload(player, weaponId, now);
     return;
   }
+  let engagedIds = [];
+  if (typeof markFireEngagement === 'function') {
+    engagedIds = markFireEngagement(player, msg, now) || [];
+  }
   player.lastShotAt[weaponId] = now;
   if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
   player.muzzleFlashUntil = now + remoteMuzzleFlashHoldMs;
+  if (typeof markSnapshotBurst === 'function') {
+    markSnapshotBurst([player.id].concat(engagedIds), [player.id].concat(engagedIds), now);
+  }
   room.consumeWeaponAmmo(player, weaponId, now);
+  const shotServerTime = typeof resolveHitscanShotTime === 'function'
+    ? Number(resolveHitscanShotTime(msg, now) || now)
+    : now;
   let aimForward = room.entityForward(player);
   if (msg && msg.aimForward && typeof msg.aimForward === 'object') {
     const rawX = Number(msg.aimForward.x || 0);
@@ -691,18 +708,37 @@ export function handleFire(room, player, msg, deps) {
       }
     }
   }
-  const aimOrigin = (msg && msg.aimOrigin && typeof msg.aimOrigin === 'object')
-    ? {
-        x: Number.isFinite(Number(msg.aimOrigin.x)) ? Number(msg.aimOrigin.x) : Number(player.x || 0),
-        y: Number.isFinite(Number(msg.aimOrigin.y)) ? Number(msg.aimOrigin.y) : Number(player.y || playerEyeHeight),
-        z: Number.isFinite(Number(msg.aimOrigin.z)) ? Number(msg.aimOrigin.z) : Number(player.z || 0)
-      }
+  const fallbackAimOrigin = typeof authoritativeHitscanOrigin === 'function'
+    ? authoritativeHitscanOrigin(player)
     : {
         x: Number(player.x || 0),
         y: Number(player.y || playerEyeHeight),
         z: Number(player.z || 0)
       };
-  const shots = resolveHitscanShot({
+  let aimOrigin = (msg && msg.aimOrigin && typeof msg.aimOrigin === 'object')
+    ? {
+        x: Number.isFinite(Number(msg.aimOrigin.x)) ? Number(msg.aimOrigin.x) : Number(player.x || 0),
+        y: Number.isFinite(Number(msg.aimOrigin.y)) ? Number(msg.aimOrigin.y) : Number(player.y || playerEyeHeight),
+        z: Number.isFinite(Number(msg.aimOrigin.z)) ? Number(msg.aimOrigin.z) : Number(player.z || 0)
+      }
+    : fallbackAimOrigin;
+  const aimOriginDx = Number(aimOrigin.x || 0) - Number(fallbackAimOrigin.x || 0);
+  const aimOriginDy = Number(aimOrigin.y || 0) - Number(fallbackAimOrigin.y || 0);
+  const aimOriginDz = Number(aimOrigin.z || 0) - Number(fallbackAimOrigin.z || 0);
+  const aimOriginDelta = Math.sqrt((aimOriginDx * aimOriginDx) + (aimOriginDy * aimOriginDy) + (aimOriginDz * aimOriginDz));
+  if (!Number.isFinite(aimOriginDelta) || aimOriginDelta > hitscanAimOriginMaxOffset) {
+    aimOrigin = fallbackAimOrigin;
+  }
+  const targets = room.getAliveEntities()
+    .filter((entity) => room.canTargetEntity(entity, player.id))
+    .map((entity) => {
+      if (typeof buildRewoundHitscanTarget === 'function') {
+        return buildRewoundHitscanTarget(entity, shotServerTime, now);
+      }
+      return entity;
+    })
+    .filter(Boolean);
+  let shots = resolveHitscanShot({
     aimOrigin,
     aimForward,
     weaponStats: { ...stats, id: weaponId },
@@ -710,9 +746,30 @@ export function handleFire(room, player, msg, deps) {
     adsActive: !!(msg && msg.adsActive),
     viewFovDeg: Number(msg && msg.viewFovDeg),
     shotToken,
-    targets: room.getAliveEntities().filter((entity) => room.canTargetEntity(entity, player.id)),
+    targets,
     worldBoxes: room.worldCollidables()
   });
+  if (shotTokenDamageAggregation && Number(stats.pellets || 1) > 1 && !stats.singleHitFromPellets && Array.isArray(shots) && shots.length > 0) {
+    const groupedShots = new Map();
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i];
+      const target = shot ? shot.target : null;
+      const targetId = target && target.id ? String(target.id) : '';
+      if (!targetId) continue;
+      const existing = groupedShots.get(targetId);
+      if (!existing) {
+        groupedShots.set(targetId, {
+          target,
+          damage: Number(shot.damage || 0),
+          hitType: shot.hitType === 'head' ? 'head' : 'body'
+        });
+        continue;
+      }
+      existing.damage += Number(shot.damage || 0);
+      if (shot.hitType === 'head') existing.hitType = 'head';
+    }
+    shots = Array.from(groupedShots.values());
+  }
   for (let i = 0; i < shots.length; i++) {
     const shot = shots[i];
     const target = shot ? shot.target : null;
@@ -723,7 +780,7 @@ export function handleFire(room, player, msg, deps) {
       sourceKind: 'weapon'
     });
     if (!out) continue;
-    broadcastDamageEvent(room, player.id, target, out, shot.hitType === 'head' ? 'head' : 'body', weaponId);
+    broadcastDamageEvent(room, player.id, target, out, shot.hitType === 'head' ? 'head' : 'body', weaponId, shotToken);
     if (out.killed) {
       broadcastDeathRespawn(room, target);
     }

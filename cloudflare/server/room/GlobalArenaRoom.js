@@ -62,9 +62,19 @@ import { handleClassCast, tickClassAbilityState } from './AbilityService.js';
 import { handleRoomRequest, findSocketForUserId } from './RoomTransport.js';
 import { handleRoomSocketMessage, handleRoomSocketClose } from './RoomSocket.js';
 import {
+  buildViewerEntitySnapshot,
   buildSnapshotPayload,
   buildWelcomePayload as buildRoomWelcomePayload
 } from './RoomState.js';
+import {
+  buildRewoundTargetEntity,
+  clampRewindShotTime,
+  readCurrentPose,
+  recordEntityPoseHistory,
+  seedEntityPoseHistory,
+  DEFAULT_MAX_REWIND_MS,
+  DEFAULT_REWIND_HISTORY_MS
+} from './RoomRewind.js';
 import {
   applyJoinBaseline as applyRoomJoinBaseline,
   assignPlayerToCurrentTeam as assignRoomPlayerToCurrentTeam,
@@ -153,6 +163,9 @@ import {
 } from './RoomCombatRuntime.js';
 
 const GAMEPLAY_TUNING_WU = gameplayTuning;
+const NETWORK_TUNING = GAMEPLAY_TUNING_WU.network || {};
+const NETWORK_FLAGS = NETWORK_TUNING.flags || {};
+const NETWORK_COMBAT_PRIORITY = NETWORK_TUNING.combatPriority || {};
 const SHARED_PROTOCOL = protocol;
 const MSG_C2S = SHARED_PROTOCOL.msg.c2s;
 const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
@@ -166,9 +179,16 @@ const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
 const ROOM_SIM_TICK_MS = 33;
 const ROOM_SNAPSHOT_TICK_MS = 33;
-const ROOM_FULL_RESYNC_MS = 1000;
 const DISCONNECT_GRACE_MS = 15000;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
+const SNAPSHOT_ENGAGEMENT_TTL_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.engagementTtlMs || 1800));
+const SNAPSHOT_ENGAGEMENT_RANGE_WU = 52;
+const SNAPSHOT_ENGAGEMENT_MIN_DOT = 0.78;
+const SNAPSHOT_ENGAGEMENT_MAX_TARGETS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.maxBurstTargets || 4));
+const SNAPSHOT_BURST_CADENCE_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.burstCadenceMs || 16));
+const SNAPSHOT_BURST_WINDOW_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.burstWindowMs || 250));
+const COMBAT_BURST_SNAPSHOTS = NETWORK_FLAGS.combatBurstSnapshots !== false;
+const SHOT_TOKEN_DAMAGE_AGGREGATION = NETWORK_FLAGS.shotTokenDamageAggregation !== false;
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const PLAYER_HEIGHT_WU = PLAYER_HEIGHT;
 const PLAYER_RADIUS_WU = PLAYER_RADIUS;
@@ -200,6 +220,9 @@ const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
 const WORLD_RAY_EPSILON = 0.001;
 const RELOADED_FLASH_HOLD_MS = 900;
+const HITSCAN_REWIND_HISTORY_MS = DEFAULT_REWIND_HISTORY_MS;
+const HITSCAN_MAX_REWIND_MS = DEFAULT_MAX_REWIND_MS;
+const HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU = 0.9;
 
 function intersectRayAabb(origin, dir, box, maxDistance) {
   if (!box || !box.min || !box.max) return null;
@@ -321,8 +344,6 @@ export class GlobalArenaRoom extends DurableObject {
     this.tickHandle = null;
     this.lastTickAt = nowMs();
     this.lastSnapshotAt = 0;
-    this.lastFullSnapshotAt = 0;
-    this.lastBroadcastEntityState = new Map();
     this.roomName = env.ROOM_NAME || 'global';
     const initialWorldMeta = buildExpectedWorldMeta(this.roomName, SHARED_PROTOCOL.world);
     this.roomName = initialWorldMeta.roomId;
@@ -530,7 +551,6 @@ export class GlobalArenaRoom extends DurableObject {
     if (this.tickHandle) return;
     this.lastTickAt = nowMs();
     this.lastSnapshotAt = 0;
-    this.lastFullSnapshotAt = 0;
     this.tickHandle = setInterval(() => {
       try {
         this.tick();
@@ -787,15 +807,279 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   broadcast(obj) {
-    const all = this.ctx.getWebSockets();
     const payload = JSON.stringify(obj);
-    for (let i = 0; i < all.length; i++) {
+    for (const [ws, meta] of this.clients.entries()) {
+      if (!meta || this.activeSocketByUserId.get(meta.userId) !== ws) continue;
       try {
-        all[i].send(payload);
+        ws.send(payload);
       } catch (err) {
         // noop
       }
     }
+  }
+
+  ensureClientSnapshotState(meta) {
+    if (!meta.snapshotState) {
+      meta.snapshotState = {
+        entityStateById: new Map(),
+        entityLastSentAtById: new Map()
+      };
+    }
+    return meta.snapshotState;
+  }
+
+  ensureSnapshotBurstState(meta) {
+    if (!meta.snapshotBurstState) {
+      meta.snapshotBurstState = {
+        untilAt: 0,
+        lastSentAt: 0,
+        entityIds: new Set()
+      };
+    }
+    if (!(meta.snapshotBurstState.entityIds instanceof Set)) {
+      meta.snapshotBurstState.entityIds = new Set();
+    }
+    return meta.snapshotBurstState;
+  }
+
+  collectSnapshotFrame(now = nowMs()) {
+    const entities = [];
+    for (const player of this.players.values()) entities.push(toEntityState(player));
+    for (const bot of this.bots.values()) entities.push(toEntityState(bot));
+    const serializedById = new Map();
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      if (!entity || !entity.id) continue;
+      serializedById.set(entity.id, JSON.stringify(entity));
+    }
+    const projectiles = [];
+    this.projectiles.forEach((p) => {
+      if (!p || !p.alive) return;
+      projectiles.push(toProjectileState(p));
+    });
+    const fireZones = [];
+    this.fireZones.forEach((z) => {
+      fireZones.push(toFireZoneState(z));
+    });
+    return {
+      now,
+      entities,
+      serializedById,
+      projectiles,
+      fireZones,
+      projectilesSerialized: JSON.stringify(projectiles),
+      fireZonesSerialized: JSON.stringify(fireZones)
+    };
+  }
+
+  sendSnapshotToClient(ws, meta, frame, options = {}) {
+    if (!meta || !meta.userId) return false;
+    if (this.activeSocketByUserId.get(meta.userId) !== ws) return false;
+    const viewer = this.players.get(meta.userId) || null;
+    this.ensureClientSnapshotState(meta);
+    const selection = buildViewerEntitySnapshot(frame.entities, viewer, meta.snapshotState, {
+      forceFull: !!options.forceFull,
+      nowMs: frame.now,
+      serializedById: frame.serializedById,
+      distanceBetween: distance3,
+      isEngaged: (_viewer, entity, stamp) => this.isEntityEngagedForViewer(viewer, entity && entity.id ? entity.id : '', stamp),
+      priorityEntityIds: options.priorityEntityIds instanceof Set
+        ? options.priorityEntityIds
+        : new Set(Array.isArray(options.priorityEntityIds) ? options.priorityEntityIds : [])
+    });
+    meta.snapshotState = selection.snapshotState;
+
+    const includeProjectiles = options.includeProjectiles !== false;
+    const includeFireZones = options.includeFireZones !== false;
+    const projectileChanged = includeProjectiles && (!!options.forceFull || meta.lastProjectilesSerialized !== frame.projectilesSerialized);
+    const fireZonesChanged = includeFireZones && (!!options.forceFull || meta.lastFireZonesSerialized !== frame.fireZonesSerialized);
+    if (!options.forceFull && selection.entities.length === 0 && selection.removedEntityIds.length === 0 && !projectileChanged && !fireZonesChanged) {
+      return false;
+    }
+
+    if (projectileChanged) meta.lastProjectilesSerialized = frame.projectilesSerialized;
+    if (fireZonesChanged) meta.lastFireZonesSerialized = frame.fireZonesSerialized;
+    this.send(ws, buildSnapshotPayload(this, {
+      forceFull: !!options.forceFull,
+      entities: frame.entities,
+      changedEntities: selection.entities,
+      removedEntityIds: selection.removedEntityIds,
+      projectiles: projectileChanged ? frame.projectiles : undefined,
+      fireZones: fireZonesChanged ? frame.fireZones : undefined
+    }, {
+      msgType: MSG_S2C.SNAPSHOT,
+      nowMs: () => frame.now,
+      isPrivateMatchRoom,
+      roomPhaseActive: ROOM_PHASE_ACTIVE,
+      emptyMatchState,
+      teamAlpha: TDM_TEAM_A,
+      teamBravo: TDM_TEAM_B
+    }));
+    return true;
+  }
+
+  markSnapshotBurst(viewerIds, entityIds, now = nowMs(), ttlMs = SNAPSHOT_BURST_WINDOW_MS) {
+    if (!COMBAT_BURST_SNAPSHOTS) return false;
+    const viewerList = Array.isArray(viewerIds) ? viewerIds : [viewerIds];
+    const entityList = Array.isArray(entityIds) ? entityIds : [entityIds];
+    const normalizedEntityIds = [];
+    for (let i = 0; i < entityList.length; i++) {
+      const entityId = String(entityList[i] || '');
+      if (!entityId) continue;
+      normalizedEntityIds.push(entityId);
+    }
+    if (normalizedEntityIds.length === 0) return false;
+
+    const frame = this.collectSnapshotFrame(now);
+    let sentAny = false;
+    for (let i = 0; i < viewerList.length; i++) {
+      const viewerId = String(viewerList[i] || '');
+      if (!viewerId) continue;
+      const ws = this.activeSocketByUserId.get(viewerId);
+      if (!ws) continue;
+      const meta = this.clients.get(ws);
+      if (!meta) continue;
+      const burstState = this.ensureSnapshotBurstState(meta);
+      if (Number(burstState.untilAt || 0) <= now) {
+        burstState.entityIds.clear();
+      }
+      burstState.untilAt = Math.max(Number(burstState.untilAt || 0), now + Math.max(1, Number(ttlMs || SNAPSHOT_BURST_WINDOW_MS)));
+      burstState.entityIds.add(viewerId);
+      for (let r = 0; r < normalizedEntityIds.length; r++) {
+        burstState.entityIds.add(normalizedEntityIds[r]);
+      }
+      if ((now - Number(burstState.lastSentAt || 0)) < SNAPSHOT_BURST_CADENCE_MS) continue;
+      if (this.sendSnapshotToClient(ws, meta, frame, {
+        priorityEntityIds: burstState.entityIds,
+        includeProjectiles: false,
+        includeFireZones: false
+      })) {
+        burstState.lastSentAt = now;
+        sentAny = true;
+      }
+    }
+    return sentAny;
+  }
+
+  markEntityEngaged(sourceId, targetId, ttlMs = SNAPSHOT_ENGAGEMENT_TTL_MS, now = nowMs()) {
+    const source = this.getEntityById(sourceId);
+    const target = this.getEntityById(targetId);
+    const until = Math.max(0, Number(now || 0)) + Math.max(1, Number(ttlMs || SNAPSHOT_ENGAGEMENT_TTL_MS));
+    if (!source || !target || source.id === target.id) return false;
+    if (!source.snapshotEngagements) source.snapshotEngagements = new Map();
+    if (!target.snapshotEngagements) target.snapshotEngagements = new Map();
+    source.snapshotEngagements.set(target.id, until);
+    target.snapshotEngagements.set(source.id, until);
+    return true;
+  }
+
+  isEntityEngagedForViewer(viewerEntity, entityId, now = nowMs()) {
+    if (!viewerEntity || !entityId) return false;
+    const engagements = viewerEntity.snapshotEngagements;
+    if (!(engagements instanceof Map)) return false;
+    const until = Number(engagements.get(entityId) || 0);
+    if (until <= Math.max(0, Number(now || 0))) {
+      if (until > 0) engagements.delete(entityId);
+      return false;
+    }
+    return true;
+  }
+
+  markFireEngagement(player, msg, now = nowMs()) {
+    if (!player || !player.alive) return [];
+    let aimForward = this.entityForward(player);
+    if (msg && msg.aimForward && typeof msg.aimForward === 'object') {
+      const rawX = Number(msg.aimForward.x || 0);
+      const rawY = Number(msg.aimForward.y || 0);
+      const rawZ = Number(msg.aimForward.z || 0);
+      const len = Math.sqrt((rawX * rawX) + (rawY * rawY) + (rawZ * rawZ));
+      if (Number.isFinite(len) && len > 0.000001) {
+        const normalized = { x: rawX / len, y: rawY / len, z: rawZ / len };
+        const authoritativeForward = this.entityForward(player);
+        if (dot3(normalized, authoritativeForward) >= 0.1) {
+          aimForward = normalized;
+        }
+      }
+    }
+
+    const candidates = [];
+    const entities = this.getAliveEntities();
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      if (!this.canTargetEntity(entity, player.id)) continue;
+      const dist = distance3(player, entity);
+      if (!Number.isFinite(dist) || dist > SNAPSHOT_ENGAGEMENT_RANGE_WU) continue;
+      const toTarget = normalize3(
+        Number(entity.x || 0) - Number(player.x || 0),
+        Number((entity.y || PLAYER_EYE_HEIGHT_WU) - (player.y || PLAYER_EYE_HEIGHT_WU)),
+        Number(entity.z || 0) - Number(player.z || 0)
+      );
+      const alignment = dot3(aimForward, toTarget);
+      if (alignment < SNAPSHOT_ENGAGEMENT_MIN_DOT) continue;
+      candidates.push({ entity, alignment, dist });
+    }
+
+    candidates.sort((a, b) => {
+      if (Math.abs(Number(b.alignment || 0) - Number(a.alignment || 0)) > 0.0001) {
+        return Number(b.alignment || 0) - Number(a.alignment || 0);
+      }
+      return Number(a.dist || 0) - Number(b.dist || 0);
+    });
+
+    const engagedIds = [];
+    for (let i = 0; i < candidates.length && engagedIds.length < SNAPSHOT_ENGAGEMENT_MAX_TARGETS; i++) {
+      const target = candidates[i].entity;
+      if (!target) continue;
+      if (this.markEntityEngaged(player.id, target.id, SNAPSHOT_ENGAGEMENT_TTL_MS, now)) {
+        engagedIds.push(target.id);
+      }
+    }
+    return engagedIds;
+  }
+
+  seedEntityPoseHistory(entity, now = nowMs()) {
+    return seedEntityPoseHistory(entity, now, {
+      maxHistoryMs: HITSCAN_REWIND_HISTORY_MS
+    });
+  }
+
+  recordEntityPoseHistory(entity, now = nowMs()) {
+    return recordEntityPoseHistory(entity, now, {
+      maxHistoryMs: HITSCAN_REWIND_HISTORY_MS
+    });
+  }
+
+  recordAliveEntityPoseHistories(now = nowMs()) {
+    for (const player of this.players.values()) {
+      if (!player || !player.alive) continue;
+      this.recordEntityPoseHistory(player, now);
+    }
+    for (const bot of this.bots.values()) {
+      if (!bot || !bot.alive) continue;
+      this.recordEntityPoseHistory(bot, now);
+    }
+  }
+
+  resolveHitscanShotTime(msg, now = nowMs()) {
+    return clampRewindShotTime(msg && msg.estimatedServerShotTime, now, {
+      maxRewindMs: HITSCAN_MAX_REWIND_MS
+    });
+  }
+
+  buildRewoundHitscanTarget(entity, requestedShotTime, now = nowMs()) {
+    return buildRewoundTargetEntity(entity, requestedShotTime, now, {
+      maxRewindMs: HITSCAN_MAX_REWIND_MS
+    });
+  }
+
+  authoritativeHitscanOrigin(player) {
+    if (!player) return { x: 0, y: PLAYER_EYE_HEIGHT_WU, z: 0 };
+    const pose = readCurrentPose(player, nowMs()) || {};
+    return {
+      x: Number(pose.x || 0),
+      y: Number(pose.y || PLAYER_EYE_HEIGHT_WU),
+      z: Number(pose.z || 0)
+    };
   }
 
   createThrowableRuntime() {
@@ -1086,6 +1370,13 @@ export class GlobalArenaRoom extends DurableObject {
       broadcastDamageEvent,
       broadcastDeathRespawn,
       canEquipWeaponId: canEntityUseWeapon,
+      markFireEngagement: (firingPlayer, fireMsg, stamp) => this.markFireEngagement(firingPlayer, fireMsg, stamp),
+      markSnapshotBurst: (viewerIds, entityIds, stamp, ttlMs) => this.markSnapshotBurst(viewerIds, entityIds, stamp, ttlMs),
+      resolveHitscanShotTime: (fireMsg, stamp) => this.resolveHitscanShotTime(fireMsg, stamp),
+      buildRewoundHitscanTarget: (entity, requestedShotTime, stamp) => this.buildRewoundHitscanTarget(entity, requestedShotTime, stamp),
+      authoritativeHitscanOrigin: (entity) => this.authoritativeHitscanOrigin(entity),
+      shotTokenDamageAggregation: SHOT_TOKEN_DAMAGE_AGGREGATION,
+      hitscanAimOriginMaxOffset: HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU,
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU,
       remoteMuzzleFlashHoldMs: REMOTE_MUZZLE_FLASH_HOLD_MS
     });
@@ -1233,52 +1524,16 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   broadcastSnapshot(forceFull = false) {
-    const entities = [];
-    for (const player of this.players.values()) entities.push(toEntityState(player));
-    for (const bot of this.bots.values()) entities.push(toEntityState(bot));
-    const nextEntityState = new Map();
-    const changedEntities = [];
-    const removedEntityIds = [];
-    for (let i = 0; i < entities.length; i++) {
-      const entity = entities[i];
-      const serialized = JSON.stringify(entity);
-      nextEntityState.set(entity.id, serialized);
-      if (forceFull || this.lastBroadcastEntityState.get(entity.id) !== serialized) {
-        changedEntities.push(entity);
-      }
-    }
-    this.lastBroadcastEntityState.forEach((_state, entityId) => {
-      if (!nextEntityState.has(entityId)) {
-        removedEntityIds.push(entityId);
-      }
-    });
-    this.lastBroadcastEntityState = nextEntityState;
-    const projectiles = [];
-    this.projectiles.forEach((p) => {
-      if (!p || !p.alive) return;
-      projectiles.push(toProjectileState(p));
-    });
-    const fireZones = [];
-    this.fireZones.forEach((z) => {
-      fireZones.push(toFireZoneState(z));
-    });
+    const frame = this.collectSnapshotFrame(nowMs());
 
-    this.broadcast(buildSnapshotPayload(this, {
-      forceFull,
-      entities,
-      changedEntities,
-      removedEntityIds,
-      projectiles,
-      fireZones
-    }, {
-      msgType: MSG_S2C.SNAPSHOT,
-      nowMs,
-      isPrivateMatchRoom,
-      roomPhaseActive: ROOM_PHASE_ACTIVE,
-      emptyMatchState,
-      teamAlpha: TDM_TEAM_A,
-      teamBravo: TDM_TEAM_B
-    }));
+    for (const [ws, meta] of this.clients.entries()) {
+      if (!meta || !meta.userId) continue;
+      this.sendSnapshotToClient(ws, meta, frame, {
+        forceFull,
+        includeProjectiles: true,
+        includeFireZones: true
+      });
+    }
   }
 
   tick() {
@@ -1292,15 +1547,14 @@ export class GlobalArenaRoom extends DurableObject {
     this.startPublicMatchIfReady();
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
+    this.recordAliveEntityPoseHistories(now);
     this.tickLmsMode(now);
     tickProjectiles(this, dtSec);
     tickFireZones(this, dtSec);
     this.updateLeaderProgress();
     if ((now - this.lastSnapshotAt) >= ROOM_SNAPSHOT_TICK_MS) {
-      const forceFull = (now - this.lastFullSnapshotAt) >= ROOM_FULL_RESYNC_MS;
-      this.broadcastSnapshot(forceFull);
+      this.broadcastSnapshot(false);
       this.lastSnapshotAt = now;
-      if (forceFull) this.lastFullSnapshotAt = now;
     }
 
     this.stopTickIfEmpty();

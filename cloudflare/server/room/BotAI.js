@@ -33,7 +33,11 @@ export function ensureBots(room) {
   for (let i = 0; i < desired; i++) {
     const id = `bot-${i + 1}`;
     if (room.bots.has(id)) continue;
-    room.bots.set(id, createBot(room, i));
+    const bot = createBot(room, i);
+    room.bots.set(id, bot);
+    if (room && typeof room.seedEntityPoseHistory === 'function') {
+      room.seedEntityPoseHistory(bot);
+    }
   }
 }
 

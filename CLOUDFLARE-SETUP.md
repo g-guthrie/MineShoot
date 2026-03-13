@@ -29,7 +29,7 @@ wrangler deploy
 
 ## 5) Deploy frontend (Cloudflare Pages)
 
-Deploy this repository to Cloudflare Pages and make sure static assets are served from the project root.
+Deploy this repository to Cloudflare Pages and make sure the frontend build runs `npm run build` with `dist/` as the output directory.
 
 ## 6) Route API to Worker
 
@@ -39,7 +39,21 @@ Set a route so your frontend origin can call:
 - `GET /api/me`
 - `GET /api/ws` (WebSocket)
 
-## 7) Verify multiplayer
+Backend ownership notes:
+
+- `cloudflare/worker.js` is the primary backend entrypoint.
+- `functions/api/[[path]].js` is intentional Pages proxy glue for the same `/api/*` contract. Keep it only as compatibility routing, not as a second backend source of truth.
+
+## 7) Repo map
+
+- `js/` contains the browser runtime, menu flow, and gameplay client code.
+- `cloudflare/` contains the Worker runtime and server-side room, auth, and matchmaking code.
+- `shared/` contains gameplay, protocol, and tuning code shared by client and Worker.
+- `tests/` contains node-driven tests; `e2e/` contains Playwright browser flows.
+- `functions/` contains the Pages proxy compatibility surface for `/api/*`, not the primary backend implementation.
+- `dist/` is generated output only. Do not treat it as source, and do not recreate `.cf-deploy/`.
+
+## 8) Verify multiplayer
 
 Open two browser windows to the deployed URL:
 1. Login with two different usernames and 4-digit PINs.
@@ -47,7 +61,7 @@ Open two browser windows to the deployed URL:
 3. Confirm overhead health/armor bars render for bots + other players.
 4. Press `H` and verify hitboxes + wallhack circle hide/show together while silhouettes still work in range.
 
-## 8) Unified local dev
+## 9) Unified local dev
 
 Run the default dev command:
 
@@ -55,7 +69,13 @@ Run the default dev command:
 npm run dev
 ```
 
-This is the same Cloudflare Worker + static asset architecture used in production, served locally through Wrangler.
+This serves the same Cloudflare Worker + static asset architecture used in production, locally through Wrangler, using the current `dist/` build output.
+
+If `dist/` is missing or stale, rebuild it first:
+
+```bash
+npm run build
+```
 
 The localhost menu now exposes four runtime modes:
 
@@ -74,11 +94,11 @@ npm run dev:frontend
 
 Generated directory notes:
 
-- `dist/` is the primary Vite build output.
+- `dist/` is the only supported frontend build artifact for local serving and deploy validation.
 - `.wrangler/` stores local Worker state and logs.
-- `.cf-deploy/` is a quarantined legacy asset bundle kept only for compatibility/manual staging.
+- Git history is the archive for the removed `.cf-deploy/` legacy bundle. Do not recreate or recommit it.
 
-## 9) Offline local multiplayer dev
+## 10) Offline local multiplayer dev
 
 Run the local Worker + local Pages stack:
 
@@ -94,11 +114,11 @@ For guest flow testing, open two tabs and click `Multiplayer` in both tabs.
 
 Notes:
 
-- This runs the Worker locally with static assets from `.cf-deploy/`, which is kept as a quarantined legacy compatibility bundle.
-- `dist/` remains the main frontend build output; `.cf-deploy/` is not the primary source of truth for app code.
+- This runs the Worker locally with static assets from `dist/`.
+- `dist/` is the only supported local asset bundle. If it is missing or stale, run `npm run build`.
 - It gives you real client/server multiplayer behavior offline (same WS/backend model, local runtime).
 
-## 10) Repeatable deploy checklist
+## 11) Repeatable deploy checklist
 
 Use this exact flow when you want to push current work to production again.
 
@@ -122,7 +142,7 @@ npm run build
 Run the targeted tests you care about, or at minimum the current smoke path:
 
 ```bash
-node --experimental-default-type=module --test tests/menu-click-paths.test.js
+node --experimental-default-type=module --test tests/app/menu-click-paths.test.js
 ```
 
 For a local Cloudflare-style run before shipping:

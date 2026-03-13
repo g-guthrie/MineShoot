@@ -13,6 +13,77 @@
     var hitboxVisible = true;
     var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
+    var DEFAULT_SNAPSHOT_INTERVAL_MS = 50;
+    var DEFAULT_INTERPOLATION_DELAY_MS = 110;
+    var MAX_SNAPSHOT_HISTORY = 16;
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function snapshotFootY(entity) {
+        return ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
+    }
+
+    function appendSnapshotHistory(render, entity, snapshotMeta) {
+        if (!render || !entity) return;
+        var receivedAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || Date.now()));
+        var serverTime = Number(snapshotMeta && snapshotMeta.serverTime);
+        if (!isFinite(serverTime) || serverTime <= 0) serverTime = receivedAt;
+
+        var sample = {
+            serverTime: serverTime,
+            receivedAt: receivedAt,
+            x: Number(entity.x || 0),
+            footY: snapshotFootY(entity),
+            z: Number(entity.z || 0),
+            yaw: Number(entity.yaw || 0),
+            pitch: Number(entity.pitch || 0)
+        };
+        var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory.slice() : [];
+        var previous = history.length > 0 ? history[history.length - 1] : null;
+        if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
+            history[history.length - 1] = sample;
+        } else {
+            history.push(sample);
+            if (history.length > MAX_SNAPSHOT_HISTORY) history.shift();
+        }
+        render.snapshotHistory = history;
+        var measuredOffsetMs = receivedAt - serverTime;
+        if (!isFinite(Number(render.serverTimeOffsetMs))) {
+            render.serverTimeOffsetMs = measuredOffsetMs;
+        } else if (Math.abs(measuredOffsetMs - Number(render.serverTimeOffsetMs || 0)) > 90) {
+            render.serverTimeOffsetMs = measuredOffsetMs;
+        } else {
+            render.serverTimeOffsetMs += (measuredOffsetMs - render.serverTimeOffsetMs) * 0.12;
+        }
+
+        if (previous && serverTime > Number(previous.serverTime || 0)) {
+            var nextIntervalMs = clamp(serverTime - Number(previous.serverTime || 0), 16, 140);
+            var priorIntervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
+            var priorStepMs = clamp(Number(render.lastSnapshotStepMs || priorIntervalMs), 16, 140);
+            render.lastSnapshotStepMs = nextIntervalMs;
+            render.snapshotIntervalMs = (priorIntervalMs * 0.7) + (nextIntervalMs * 0.3);
+            var jitterSampleMs = Math.abs(nextIntervalMs - priorStepMs);
+            var priorJitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
+            render.snapshotJitterMs = (priorJitterMs * 0.65) + (clamp(jitterSampleMs, 0, 120) * 0.35);
+        } else if (!render.snapshotIntervalMs) {
+            render.snapshotIntervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS;
+            render.lastSnapshotStepMs = DEFAULT_SNAPSHOT_INTERVAL_MS;
+            render.snapshotJitterMs = 0;
+        }
+
+        var intervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
+        var jitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
+        var targetDelayMs = clamp((intervalMs * 2.2) + (jitterMs * 1.5), 95, 220);
+        var priorDelayMs = clamp(Number(render.interpolationDelayMs || targetDelayMs), 95, 240);
+        render.interpolationDelayMs = (priorDelayMs * 0.6) + (targetDelayMs * 0.4);
+        render.maxExtrapolationMs = clamp((intervalMs * 0.65) + jitterMs, 24, 90);
+        render.freezeGapMs = clamp((intervalMs * 1.75) + (jitterMs * 2.2), 80, 220);
+        if (!render.interpolationDelayMs) {
+            render.interpolationDelayMs = DEFAULT_INTERPOLATION_DELAY_MS;
+        }
+    }
 
     function classWallhackRadiusFor(classId) {
         if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius) {
@@ -37,7 +108,7 @@
         };
     }
 
-    function createRemoteVisual(entity) {
+    function createRemoteVisual(entity, snapshotMeta) {
         var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
         var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
         if (!actorFactory || !actorFactory.create) {
@@ -65,13 +136,13 @@
         if (actorVisual.setWorldTransform) {
             actorVisual.setWorldTransform({
                 x: entity.x,
-                y: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+                y: snapshotFootY(entity),
                 z: entity.z
             }, (entity.yaw || 0));
         } else {
             group.position.set(
                 entity.x,
-                ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+                snapshotFootY(entity),
                 entity.z
             );
             group.rotation.y = (entity.yaw || 0);
@@ -92,7 +163,7 @@
                 healState: null
             };
 
-        return {
+        var render = {
             id: entity.id,
             kind: entity.kind,
             group: group,
@@ -102,10 +173,18 @@
             rigApi: rigApi,
             targetX: entity.x,
             targetY: entity.y || 1.6,
-            targetFootY: ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT),
+            targetFootY: snapshotFootY(entity),
             targetZ: entity.z,
             targetYaw: (entity.yaw || 0),
             targetPitch: entity.pitch || 0,
+            snapshotHistory: [],
+            snapshotIntervalMs: DEFAULT_SNAPSHOT_INTERVAL_MS,
+            lastSnapshotStepMs: DEFAULT_SNAPSHOT_INTERVAL_MS,
+            snapshotJitterMs: 0,
+            interpolationDelayMs: DEFAULT_INTERPOLATION_DELAY_MS,
+            maxExtrapolationMs: 32,
+            freezeGapMs: 96,
+            serverTimeOffsetMs: NaN,
             hp: entity.hp,
             hpMax: entity.hpMax,
             armor: entity.armor,
@@ -135,15 +214,17 @@
             chokeState: snapshotAbilityState.chokeState,
             healState: snapshotAbilityState.healState
         };
+        appendSnapshotHistory(render, entity, snapshotMeta);
+        return render;
     }
 
     GameNetEntities.init = function (scene) {
         sceneRef = scene;
     };
 
-    GameNetEntities.ensureRemote = function (entity) {
+    GameNetEntities.ensureRemote = function (entity, snapshotMeta) {
         if (!renderMap.has(entity.id)) {
-            renderMap.set(entity.id, createRemoteVisual(entity));
+            renderMap.set(entity.id, createRemoteVisual(entity, snapshotMeta));
         }
         return renderMap.get(entity.id);
     };
@@ -168,16 +249,17 @@
         renderMap.delete(id);
     };
 
-    GameNetEntities.updateFromSnapshot = function (entity) {
+    GameNetEntities.updateFromSnapshot = function (entity, snapshotMeta) {
         if (!sceneRef) return;
-        var r = GameNetEntities.ensureRemote(entity);
+        var r = GameNetEntities.ensureRemote(entity, snapshotMeta);
         if (!r || !r.group) return;
         r.targetX = entity.x;
         r.targetY = entity.y || 1.6;
-        r.targetFootY = ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
+        r.targetFootY = snapshotFootY(entity);
         r.targetZ = entity.z;
         r.targetYaw = (entity.yaw || 0);
         r.targetPitch = entity.pitch || 0;
+        appendSnapshotHistory(r, entity, snapshotMeta);
         r.hp = entity.hp;
         r.hpMax = entity.hpMax;
         r.armor = entity.armor;

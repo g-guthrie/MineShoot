@@ -119,6 +119,23 @@
             }
             opts.applyPendingSpawnSync();
 
+            var pingCadenceSec = Math.max(0.1, Number(opts.getPingCadenceSeconds ? opts.getPingCadenceSeconds() : 0.5));
+            var pingSendTimer = Number(opts.getPingSendTimer ? opts.getPingSendTimer() : pingCadenceSec) - dt;
+            if (opts.isConnected && opts.isConnected()) {
+                if (pingSendTimer <= 0) {
+                    pingSendTimer = pingCadenceSec;
+                    wsSend({
+                        t: opts.getPingMessageType ? opts.getPingMessageType() : 'ping',
+                        clientTime: Date.now()
+                    });
+                }
+            } else {
+                pingSendTimer = pingCadenceSec;
+            }
+            if (opts.setPingSendTimer) {
+                opts.setPingSendTimer(pingSendTimer);
+            }
+
             var inputSendTimer = opts.getInputSendTimer() - dt;
             if (inputSendTimer <= 0) {
                 inputSendTimer = opts.getInputSendInterval();

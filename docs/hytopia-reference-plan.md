@@ -13,8 +13,8 @@ This note is not a migration plan to HYTOPIA. It is a list of ideas worth copyin
 
 The current game already has some good building blocks:
 - `cloudflare/server/room/GlobalArenaRoom.js` runs the authoritative room simulation and broadcasts snapshots.
-- `js/network.js` sends player state to the server and applies snapshot deltas on the client.
-- `js/world.js` and `js/world/quadrant-*.js` build the world with authored imperative scene code.
+- `js/net/network.js` applies authoritative snapshots and exposes the multiplayer client state surface.
+- `js/world/world.js` and `js/world/quadrant-*.js` build the world with authored imperative scene code.
 - `shared/headless-world-runtime.js` already shows the right instinct: keep a headless world path for non-rendering logic.
 
 The main gaps compared with HYTOPIA are:
@@ -36,7 +36,7 @@ The main gaps compared with HYTOPIA are:
 
 ### Why it matters here
 
-`js/network.js` currently sends `x`, `y`, `z`, `yaw`, and `pitch` every 50 ms. That is workable, but it is not strong authority. It still trusts too much client-produced state. HYTOPIA's model is stricter: clients send input, the server simulates, and state replication is a separate concern.
+`js/net/network.js` currently maintains the multiplayer client state, while `js/net/runtime-core.js` sends intent packets on a fixed cadence and the room sim resolves the real outcome. That is the right direction, but HYTOPIA's model is stricter: clients send input, the server simulates, and transport/replication are kept even more explicit.
 
 `cloudflare/server/room/GlobalArenaRoom.js` already has the right coarse structure:
 - fixed room tick
@@ -73,7 +73,7 @@ The next step is to tighten the protocol, not rewrite the whole backend.
 
 ### Suggested local targets
 
-- `js/network.js`
+- `js/net/network.js`
 - `js/net/transport.js`
 - `cloudflare/server/room/GlobalArenaRoom.js`
 - `shared/protocol.js`
@@ -123,7 +123,7 @@ HYTOPIA's useful pattern is not "voxel look". It is the architecture:
 
 ### Suggested local targets
 
-- `js/world.js`
+- `js/world/world.js`
 - `js/world/intersection-builder.js`
 - `shared/world-layout.js`
 - `shared/world-collision.js`
@@ -143,8 +143,8 @@ HYTOPIA's useful pattern is not "voxel look". It is the architecture:
 ### Why it matters here
 
 Current local input is still desktop-first:
-- `js/player.js` assumes pointer lock for real play
-- `js/main.js` only lightly handles touch
+- `js/actors/player.js` assumes pointer lock for real play
+- `js/runtime/main.js` only lightly handles touch
 - there is no joystick layer, touch camera layer, or mobile-specific UI behavior
 
 HYTOPIA's `InputManager` and `MobileManager` are worth copying almost directly as patterns.
@@ -163,10 +163,10 @@ HYTOPIA's `InputManager` and `MobileManager` are worth copying almost directly a
 
 ### Suggested local targets
 
-- `js/player.js`
-- `js/main.js`
-- `js/ui.js`
-- `js/network.js`
+- `js/actors/player.js`
+- `js/runtime/main.js`
+- `js/presentation/ui.js`
+- `js/net/network.js`
 - new files under `js/input/*`
 
 ## 4. World editor and asset pipeline

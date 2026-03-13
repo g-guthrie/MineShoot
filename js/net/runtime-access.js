@@ -42,6 +42,10 @@
             return runtime().GameNetRemoteSync || null;
         }
 
+        function getNetApi() {
+            return runtime().GameNet || null;
+        }
+
         function getSocketIdentity(authApi) {
             if (authApi && authApi.getSocketIdentity) return authApi.getSocketIdentity();
             return authApi && authApi.getUser ? authApi.getUser() : null;
@@ -117,6 +121,13 @@
                         y: Number(fireCamera.position.y || 0),
                         z: Number(fireCamera.position.z || 0)
                     };
+                }
+            }
+            var netApi = getNetApi();
+            if (netApi && netApi.getEstimatedServerTime) {
+                var estimatedServerTime = Number(netApi.getEstimatedServerTime() || 0);
+                if (isFinite(estimatedServerTime) && estimatedServerTime > 0) {
+                    payload.estimatedServerShotTime = Math.round(estimatedServerTime);
                 }
             }
             if (shotToken) payload.shotToken = String(shotToken);

@@ -124,11 +124,19 @@
         function getInputSyncState() {
             var inputSeqHistory = opts.getInputSeqHistory();
             var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
+            var lastSentSeq = opts.getLastInputSeqSent();
+            var lastAckedSeq = opts.getLastInputSeqAcked();
+            var connectionTiming = opts.getConnectionTimingState ? opts.getConnectionTimingState() : null;
+            var lastAcceptedSelfAckAt = opts.getLastAcceptedSelfAckAt ? Number(opts.getLastAcceptedSelfAckAt() || 0) : 0;
             return {
-                lastSentSeq: opts.getLastInputSeqSent(),
-                lastAckedSeq: opts.getLastInputSeqAcked(),
+                lastSentSeq: lastSentSeq,
+                lastAckedSeq: lastAckedSeq,
+                ackDrift: Math.max(0, Number(lastSentSeq || 0) - Number(lastAckedSeq || 0)),
                 pendingInputCount: inputSeqHistory.length,
-                latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0
+                latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0,
+                latestAckAgeMs: lastAcceptedSelfAckAt > 0 ? Math.max(0, Date.now() - lastAcceptedSelfAckAt) : 0,
+                estimatedRttMs: connectionTiming ? Math.max(0, Number(connectionTiming.rttMs || 0)) : 0,
+                rttJitterMs: connectionTiming ? Math.max(0, Number(connectionTiming.rttJitterMs || 0)) : 0
             };
         }
 

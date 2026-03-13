@@ -75,14 +75,23 @@
             var inputSyncState = RT.GameNet && RT.GameNet.getInputSyncState
                 ? RT.GameNet.getInputSyncState()
                 : null;
+            var connectionTimingState = RT.GameNet && RT.GameNet.getConnectionTimingState
+                ? RT.GameNet.getConnectionTimingState()
+                : null;
             var pendingInputs = RT.GameNet && RT.GameNet.getPendingInputSamples
                 ? RT.GameNet.getPendingInputSamples()
                 : [];
             RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
                 dt: dt,
+                allowReplayCorrection: true,
                 pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
                 lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
                 lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
+                ackDrift: inputSyncState ? Number(inputSyncState.ackDrift || 0) : 0,
+                latestPendingAgeMs: inputSyncState ? Number(inputSyncState.latestPendingAgeMs || 0) : 0,
+                latestAckAgeMs: inputSyncState ? Number(inputSyncState.latestAckAgeMs || 0) : 0,
+                rttMs: connectionTimingState ? Number(connectionTimingState.rttMs || 0) : 0,
+                rttJitterMs: connectionTimingState ? Number(connectionTimingState.rttJitterMs || 0) : 0,
                 pendingInputs: pendingInputs,
                 snapshotAt: Date.now()
             });

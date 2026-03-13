@@ -86,7 +86,21 @@ function handleWebSocketRequest(room, request, url) {
   server.serializeAttachment({ userId, username, classId, actorId, actorName });
 
   room.ensurePlayer(userId, username, classId, actorId, actorName);
-  room.clients.set(server, { userId, actorId });
+  room.clients.set(server, {
+    userId,
+    actorId,
+    snapshotState: {
+      entityStateById: new Map(),
+      entityLastSentAtById: new Map()
+    },
+    snapshotBurstState: {
+      untilAt: 0,
+      lastSentAt: 0,
+      entityIds: new Set()
+    },
+    lastProjectilesSerialized: '',
+    lastFireZonesSerialized: ''
+  });
   room.activeSocketByUserId.set(userId, server);
   closeDuplicateSockets(room.clients, userId, server);
   room.startPublicMatchIfReady();

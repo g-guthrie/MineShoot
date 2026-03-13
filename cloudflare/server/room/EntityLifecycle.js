@@ -93,6 +93,7 @@ export function createPlayerEntity(options = {}) {
       ? options.createThrowableRuntime()
       : {},
     lastThrowAt: 0,
+    poseHistory: [],
     kills: 0,
     deaths: 0,
     progressScore: 0,
@@ -146,6 +147,7 @@ export function createBotEntity(index, options = {}) {
       ? options.createThrowableRuntime()
       : {},
     lastThrowAt: 0,
+    poseHistory: [],
     lmsLives: 0,
     lmsCharge: 0,
     lmsBankState: null,
@@ -178,6 +180,7 @@ export function resetEntityForRespawn(entity, options = {}) {
     ? options.createThrowableRuntime()
     : {};
   entity.lastThrowAt = 0;
+  entity.poseHistory = [];
   entity.outOfRound = false;
 
   if (typeof options.createWeaponAmmoRuntime === 'function') {

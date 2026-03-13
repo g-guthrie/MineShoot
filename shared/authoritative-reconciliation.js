@@ -31,13 +31,17 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
   const lastReplayAckSeq = Math.max(0, Number(options.lastReplayAckSeq || 0));
   const horizontalDistSq = Math.max(0, Number(options.horizontalDistSq || 0));
   const replayDistance = Math.max(0, Number(options.replayCorrectionDistance || 0.55));
+  const latestPendingAgeMs = Math.max(0, Number(options.latestPendingAgeMs || 0));
+  const minPendingAgeMs = Math.max(0, Number(options.minPendingAgeMs || 0));
   const movingIntent = !!options.movingIntent;
   const canCorrectWhileMoving = options.canCorrectWhileMoving !== false;
+  const allowFreshPendingReplay = options.allowFreshPendingReplay === true;
   return pendingInputCount > 0 &&
     lastAckedSeq > 0 &&
     lastAckedSeq !== lastReplayAckSeq &&
     horizontalDistSq >= (replayDistance * replayDistance) &&
-    (!movingIntent || canCorrectWhileMoving);
+    (!movingIntent || canCorrectWhileMoving) &&
+    (allowFreshPendingReplay || latestPendingAgeMs >= minPendingAgeMs);
 }
 
 export function replayMotionState(snapshotState, pendingInputs, options = {}) {

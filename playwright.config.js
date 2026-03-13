@@ -9,13 +9,13 @@ module.exports = defineConfig({
   },
   webServer: [
     {
-      command: 'npm run dev:e2e:worker',
-      port: 8791,
+      command: 'WORKER_PORT=8791 WRANGLER_PERSIST_DIR=.wrangler/e2e-state npm run dev:e2e:worker',
+      url: 'http://127.0.0.1:8791/api/me',
       reuseExistingServer: false,
       timeout: 120_000
     },
     {
-      command: 'npm run dev:frontend:test',
+      command: 'FRONTEND_PORT=4173 WORKER_PROXY_PORT=8791 npm run dev:frontend:test',
       port: 4173,
       reuseExistingServer: false,
       timeout: 120_000

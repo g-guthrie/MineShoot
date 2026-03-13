@@ -5,21 +5,62 @@
 (function () {
     'use strict';
 
-    var lastPredictedHitFeedback = {
-        weaponId: '',
-        at: 0
-    };
+    var predictedHitFeedback = [];
+    var PREDICTED_HIT_MAX = 48;
+    var PREDICTED_HIT_TTL_MS = 900;
 
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
-    function suppressAuthoritativeHitFeedback(feedback) {
-        if (!feedback || feedback.killed) return false;
-        var ageMs = Date.now() - Number(lastPredictedHitFeedback.at || 0);
-        if (ageMs < 0 || ageMs > 180) return false;
-        if (!lastPredictedHitFeedback.weaponId) return false;
-        return String(lastPredictedHitFeedback.weaponId) === String(feedback.weaponId || '');
+    function prunePredictedHitFeedback(now) {
+        var stamp = Math.max(0, Number(now || Date.now()));
+        var next = [];
+        for (var i = 0; i < predictedHitFeedback.length; i++) {
+            var entry = predictedHitFeedback[i];
+            if (!entry) continue;
+            var ageMs = stamp - Number(entry.at || 0);
+            if (ageMs < 0 || ageMs > PREDICTED_HIT_TTL_MS) continue;
+            next.push(entry);
+        }
+        predictedHitFeedback = next;
+    }
+
+    function consumePredictedHitFeedback(feedback) {
+        if (!feedback) return null;
+        var stamp = Date.now();
+        prunePredictedHitFeedback(stamp);
+        var feedbackShotToken = String(feedback.shotToken || '');
+        var feedbackWeaponId = String(feedback.weaponId || '');
+        for (var i = predictedHitFeedback.length - 1; i >= 0; i--) {
+            var entry = predictedHitFeedback[i];
+            if (!entry) continue;
+            if (feedbackShotToken && String(entry.shotToken || '') === feedbackShotToken) {
+                return entry;
+            }
+        }
+        if (feedbackShotToken) return null;
+        for (var r = predictedHitFeedback.length - 1; r >= 0; r--) {
+            var fallbackEntry = predictedHitFeedback[r];
+            if (!fallbackEntry) continue;
+            if (String(fallbackEntry.weaponId || '') !== feedbackWeaponId) continue;
+            predictedHitFeedback.splice(r, 1);
+            return fallbackEntry;
+        }
+        return null;
+    }
+
+    function clearPredictedHitFeedbackByShotToken(shotToken) {
+        var token = String(shotToken || '');
+        if (!token) return;
+        var next = [];
+        for (var i = 0; i < predictedHitFeedback.length; i++) {
+            var entry = predictedHitFeedback[i];
+            if (!entry) continue;
+            if (String(entry.shotToken || '') === token) continue;
+            next.push(entry);
+        }
+        predictedHitFeedback = next;
     }
 
     function handleNetworkDamageFeedback(feedback, camera) {
@@ -27,7 +68,8 @@
         var RT = runtime();
         var isShotgun = feedback.weaponId === 'shotgun';
         var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
-        var suppressLocalFeedback = suppressAuthoritativeHitFeedback(feedback);
+        var matchedPrediction = consumePredictedHitFeedback(feedback);
+        var suppressLocalFeedback = !!matchedPrediction && !feedback.killed;
 
         if (!suppressLocalFeedback && RT.GameAudio && RT.GameAudio.play) {
             RT.GameAudio.play('bulletImpact', {
@@ -52,6 +94,9 @@
                 feedback.hitType || 'body',
                 damageNumberSpread
             );
+        }
+        if (feedback.killed) {
+            clearPredictedHitFeedbackByShotToken(feedback.shotToken || '');
         }
     }
 
@@ -177,8 +222,26 @@
     runtime().GameNetFeedbackSync = {
         syncGameplayFeedback: syncGameplayFeedback,
         notifyPredictedLocalHit: function (feedback) {
-            lastPredictedHitFeedback.weaponId = String(feedback && feedback.weaponId || '');
-            lastPredictedHitFeedback.at = Date.now();
+            var stamp = Date.now();
+            prunePredictedHitFeedback(stamp);
+            var shotToken = String(feedback && feedback.shotToken || '');
+            for (var i = predictedHitFeedback.length - 1; i >= 0; i--) {
+                var entry = predictedHitFeedback[i];
+                if (!entry) continue;
+                if (shotToken && String(entry.shotToken || '') === shotToken) {
+                    entry.weaponId = String(feedback && feedback.weaponId || '');
+                    entry.at = stamp;
+                    return;
+                }
+            }
+            predictedHitFeedback.push({
+                weaponId: String(feedback && feedback.weaponId || ''),
+                shotToken: shotToken,
+                at: stamp
+            });
+            while (predictedHitFeedback.length > PREDICTED_HIT_MAX) {
+                predictedHitFeedback.shift();
+            }
         }
     };
 })();

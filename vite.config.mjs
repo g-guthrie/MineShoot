@@ -26,25 +26,25 @@ export default defineConfig({
           const path = String(id || '');
           if (path.includes('/node_modules/three/')) return 'vendor-three';
           if (path.includes('/js/world/') || path.includes('/shared/world-layout') || path.includes('/shared/terrain-sampler')) return 'gameplay-world';
-          if (path.includes('/js/net/') || path.includes('/js/network.js')) return 'gameplay-network';
+          if (path.includes('/js/net/')) return 'gameplay-network';
           if (
-            path.includes('/js/player.js') ||
-            path.includes('/js/player-combat.js') ||
-            path.includes('/js/abilities.js') ||
-            path.includes('/js/throwables.js') ||
-            path.includes('/js/hitscan.js') ||
-            path.includes('/js/combat-tuning.js') ||
+            path.includes('/js/actors/player.js') ||
+            path.includes('/js/combat/player-combat.js') ||
+            path.includes('/js/combat/abilities.js') ||
+            path.includes('/js/combat/throwables.js') ||
+            path.includes('/js/combat/hitscan.js') ||
+            path.includes('/js/combat/combat-tuning.js') ||
             path.includes('/js/domain/weapons/')
           ) return 'gameplay-combat';
           if (
-            path.includes('/js/audio.js') ||
-            path.includes('/js/ui.js') ||
-            path.includes('/js/overhead.js') ||
-            path.includes('/js/avatar-rig.js') ||
-            path.includes('/js/actor-visual-factory.js') ||
-            path.includes('/js/bloom-reticle.js') ||
-            path.includes('/js/enemy.js') ||
-            path.includes('/js/hitbox-factory.js')
+            path.includes('/js/presentation/audio.js') ||
+            path.includes('/js/presentation/ui.js') ||
+            path.includes('/js/presentation/overhead.js') ||
+            path.includes('/js/actors/avatar-rig.js') ||
+            path.includes('/js/presentation/actor-visual-factory.js') ||
+            path.includes('/js/presentation/bloom-reticle.js') ||
+            path.includes('/js/actors/enemy.js') ||
+            path.includes('/js/actors/hitbox-factory.js')
           ) return 'gameplay-render';
           if (
             path.includes('/js/core/bootstrap.js') ||

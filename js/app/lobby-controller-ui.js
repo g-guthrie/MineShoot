@@ -11,7 +11,7 @@
         canTogglePartyJoinLock: false,
         partyJoinLocked: false,
         partyJoinLockTitle: 'Party join lock unavailable.',
-        partyJoinLockNote: 'JOINS OPEN',
+        partyJoinLockNote: 'PARTY OPEN',
         canViewPartyRoster: false,
         canLeaveParty: false,
         hasPrivateRoom: false,

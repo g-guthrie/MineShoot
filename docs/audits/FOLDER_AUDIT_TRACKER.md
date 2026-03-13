@@ -1,6 +1,6 @@
 # Folder Audit Tracker
 
-Last refreshed: 2026-03-10 against the current working tree, including the `js/main.js` menu bootstrap cleanup.
+Last refreshed: 2026-03-13 against the current working tree, including the mirror cleanup pass.
 
 ## Status
 
@@ -52,6 +52,7 @@ Last refreshed: 2026-03-10 against the current working tree, including the `js/m
 | 2026-03-10 | `js/app` | Codex / current thread | Fixed the silent menu-sync blank-state bug by preserving last-known party/private-room state on background refresh failures, surfacing explicit offline/retrying UI, removing the dead private-room sync wrappers, and pulling view-to-controller state mutation back into `lobby-controller.js`. Verified with `node --experimental-default-type=module --test tests/menu-click-paths.test.js`, `npx playwright test e2e/social.spec.js`, and `npm run build`. | implemented |
 | 2026-03-10 | `js/app` | Codex / current thread | Added `js/app/lobby-session.js` to own lobby state/actions/polling, rewrote `lobby-controller.js` around that boundary, deleted `js/app/lobby-sync-runtime.js`, moved friend payload normalization out of the view, and added explicit private-room clear-state behavior. Verified with `node --experimental-default-type=module --test tests/menu-click-paths.test.js` and `npm run build`. | implemented |
 | 2026-03-10 | `shared`, `js/hitscan.js`, `js/combat-tuning.js`, `docs` | Codex / current thread | Removed duplicate client-side weapon ownership by adding shared falloff helpers, rewiring `js/hitscan.js` weapon catalog/falloff reads to shared tuning, reducing `js/combat-tuning.js` weapon reads to a compatibility facade, and replacing the stale weapon audit doc. Verified with `node --experimental-default-type=module --test tests/gameplay-tuning.test.js`, `node --experimental-default-type=module --test tests/hitscan-authority.test.js`, and `npm run build`. | implemented |
+| 2026-03-13 | `js`, `tests`, `docs`, `.cf-deploy` | Codex / current thread | Removed the remaining root-level runtime mirrors in favor of the namespaced `js/app`, `js/net`, `js/runtime`, `js/presentation`, `js/combat`, and `js/actors` trees, collapsed duplicate top-level tests onto the namespaced suites after preserving the one root-only room rewind case, rewrote live docs to canonical module paths, and completed the tracked `.cf-deploy` bundle removal. | implemented |
 
 ## Recommended Next Targets
 
