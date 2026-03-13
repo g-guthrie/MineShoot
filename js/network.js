@@ -67,6 +67,74 @@
 
     var notices = [];
     var cloneWorldFlags = PROTOCOL.cloneWorldFlags;
+    var joinAttempt = null;
+
+    function clearJoinAttemptTimer(attempt) {
+        var current = attempt || joinAttempt;
+        if (!current || !current.timer) return;
+        clearTimeout(current.timer);
+        current.timer = null;
+    }
+
+    function resetJoinAttempt() {
+        clearJoinAttemptTimer(joinAttempt);
+        joinAttempt = null;
+    }
+
+    function failJoin(reason) {
+        if (!joinAttempt) return false;
+        var current = joinAttempt;
+        joinAttempt = null;
+        clearJoinAttemptTimer(current);
+        if (typeof current.reject === 'function') {
+            current.reject(new Error(String(reason || 'Room join failed.')));
+        }
+        return true;
+    }
+
+    function maybeResolveJoinAttempt() {
+        if (!joinAttempt || !joinAttempt.welcomeReceived || !joinAttempt.selfSnapshotReceived) return false;
+        var current = joinAttempt;
+        joinAttempt = null;
+        clearJoinAttemptTimer(current);
+        if (typeof current.resolve === 'function') {
+            current.resolve({
+                roomId: current.expectedRoomId,
+                selfId: current.selfId || selfId || ''
+            });
+        }
+        return true;
+    }
+
+    function markJoinConnectStart() {
+        if (!joinAttempt || joinAttempt.timer) return;
+        joinAttempt.timer = setTimeout(function () {
+            failJoin('Timed out joining room ' + String(joinAttempt && joinAttempt.expectedRoomId || roomId || '').toUpperCase() + '.');
+        }, Math.max(1, Number(joinAttempt.timeoutMs || 5000)));
+    }
+
+    function resolveJoinOnWelcome(data) {
+        if (!joinAttempt) return false;
+        var actualRoomId = sanitizeRoomId(data && data.roomId || roomId || 'global');
+        if (actualRoomId !== joinAttempt.expectedRoomId) {
+            failJoin(
+                'Joined unexpected room ' + actualRoomId.toUpperCase() +
+                ' while expecting ' + joinAttempt.expectedRoomId.toUpperCase() + '.'
+            );
+            return false;
+        }
+        joinAttempt.welcomeReceived = true;
+        joinAttempt.selfId = String(data && data.selfId || selfId || '');
+        return maybeResolveJoinAttempt();
+    }
+
+    function resolveJoinOnSelfSnapshot(entityId) {
+        if (!joinAttempt) return false;
+        var expectedSelfId = String(joinAttempt.selfId || selfId || '');
+        if (expectedSelfId && String(entityId || '') !== expectedSelfId) return false;
+        joinAttempt.selfSnapshotReceived = true;
+        return maybeResolveJoinAttempt();
+    }
 
     function buildExpectedWorldMeta(roomName) {
         return PROTOCOL.buildExpectedWorldMeta(roomName || roomId || 'global', PROTOCOL.world);
@@ -100,6 +168,7 @@
         if (!sceneRef) return;
         if (entity.id === selfId) {
             selfState = entity;
+            resolveJoinOnSelfSnapshot(entity.id);
             if (typeof entity.seq === 'number' && isFinite(entity.seq)) {
                 lastInputSeqAcked = Math.max(lastInputSeqAcked, Math.floor(Number(entity.seq || 0)));
                 if (inputSeqHistory.length > 0) {
@@ -307,6 +376,7 @@
         applySnapshot: applySnapshot,
         pushNotice: pushNotice,
         flushPendingWeaponLoadout: flushPendingWeaponLoadout,
+        resolveJoinOnWelcome: resolveJoinOnWelcome,
         damagePointForEntityId: damagePointForEntityId,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
         getSelfId: function () { return selfId; },
@@ -394,6 +464,13 @@
         ensureArenaIdentity: function () {
             return GameNetAuth.ensureArenaIdentity ? GameNetAuth.ensureArenaIdentity() : null;
         },
+        onTransportConnectStart: markJoinConnectStart,
+        onTransportClose: function () {
+            if (joinAttempt) failJoin('Disconnected while joining room ' + joinAttempt.expectedRoomId.toUpperCase() + '.');
+        },
+        onTransportError: function () {
+            if (joinAttempt) failJoin('WebSocket error while joining room ' + joinAttempt.expectedRoomId.toUpperCase() + '.');
+        },
         getPendingRespawnInfo: function () { return pendingRespawnInfo; },
         setPendingRespawnInfo: function (value) { pendingRespawnInfo = value; },
         applyPendingSpawnSync: applyPendingSpawnSync,
@@ -437,6 +514,26 @@
         return roomId;
     };
 
+    GameNet.beginJoinAttempt = function (opts) {
+        opts = opts || {};
+        resetJoinAttempt();
+        return new Promise(function (resolve, reject) {
+            joinAttempt = {
+                expectedRoomId: sanitizeRoomId(opts.expectedRoomId || roomId || 'global'),
+                timeoutMs: Math.max(1, Number(opts.timeoutMs || 5000)),
+                welcomeReceived: false,
+                selfSnapshotReceived: false,
+                selfId: '',
+                timer: null,
+                resolve: resolve,
+                reject: reject
+            };
+        });
+    };
+
+    GameNet.failJoin = failJoin;
+    GameNet.resetJoinAttempt = resetJoinAttempt;
+
     GameNet.init = function (scene) {
         sceneRef = scene;
         active = true;
@@ -450,6 +547,8 @@
             wsSend({ t: MSG_C2S.LEAVE_ROOM });
         }
         active = false;
+        failJoin('Disconnected while joining room.');
+        resetJoinAttempt();
         runtimeCore.shutdownConnection();
 
         GameNetEntities.cleanup();
@@ -479,6 +578,7 @@
         privateRoomPhase = '';
         worldMeta = null;
         worldMismatchNotified = false;
+        joinAttempt = null;
     };
 
     GameNet.isActive = function () {

@@ -28,6 +28,18 @@
         return globalThis.__MAYHEM_RUNTIME.GameRuntimeModeUi || null;
     }
 
+    function readStoredLaunchError() {
+        try {
+            var store = window.sessionStorage || null;
+            if (!store) return '';
+            var msg = String(store.getItem('mayhem.launchError') || '').trim();
+            if (msg) store.removeItem('mayhem.launchError');
+            return msg;
+        } catch (_err) {
+            return '';
+        }
+    }
+
     function roomCodeFromRoomId(roomId) {
         var modeUi = runtimeModeUi();
         if (modeUi && modeUi.roomCodeFromRoomId) {
@@ -185,6 +197,24 @@
             if (!privateRoomStatusEl) return;
             privateRoomStatusEl.textContent = text || '';
             privateRoomStatusEl.style.color = isErr ? '#ffb3a6' : '#ffd7af';
+        }
+
+        function connectingStatusForMode(mode) {
+            if (!mode) return 'Connecting to room...';
+            var roomId = String(mode.roomId || '').toUpperCase();
+            if (mode.id === 'single_cloudflare') {
+                return 'Connecting to private room ' + roomCodeFromRoomId(mode.roomId) + '...';
+            }
+            return 'Connecting to ' + String(mode.gameMode || 'ffa').toUpperCase() + ' room ' + roomId + '...';
+        }
+
+        function readyStatusForMode(mode) {
+            if (!mode) return 'Ready to enter match.';
+            var roomId = String(mode.roomId || '').toUpperCase();
+            if (mode.id === 'single_cloudflare') {
+                return 'Ready to enter private room ' + roomCodeFromRoomId(mode.roomId) + '.';
+            }
+            return 'Ready to enter ' + String(mode.gameMode || 'ffa').toUpperCase() + ' room ' + roomId + '.';
         }
 
         var lobbyUiFactory = runtime.GameLobbyControllerUi;
@@ -473,6 +503,7 @@
             },
             launchAssignedPrivateRoom: function (state) {
                 if (started || !state || !state.self || !state.self.privateRoom) return;
+                setRoomAccessStatus('Connecting to private room ' + roomCodeFromRoomId(state.self.privateRoom.roomId) + '...', false);
                 launchMode('single_cloudflare', {
                     roomId: state.self.privateRoom.roomId,
                     gameMode: state.self.privateRoom.roomMode || 'ffa'
@@ -546,16 +577,24 @@
             }
             started = true;
             lobbyUi.hideStartUi();
+            if (result.mode && result.mode.authorityMode === 'networked') {
+                setRoomAccessStatus(readyStatusForMode(result.mode), false);
+            }
             if (modeSubtitle) {
-                var modeUi = runtimeModeUi();
-                modeSubtitle.textContent = modeUi && modeUi.startupSubtitleForMode
-                    ? modeUi.startupSubtitleForMode(result.mode)
-                    : '';
+                if (result.mode && result.mode.authorityMode === 'networked') {
+                    modeSubtitle.textContent = readyStatusForMode(result.mode);
+                } else {
+                    var modeUi = runtimeModeUi();
+                    modeSubtitle.textContent = modeUi && modeUi.startupSubtitleForMode
+                        ? modeUi.startupSubtitleForMode(result.mode)
+                        : '';
+                }
             }
             if (typeof options.setRuntimeIndicator === 'function') {
                 options.setRuntimeIndicator(result.mode);
             }
-            if (runtime.GameSession && runtime.GameSession.showGameplayPrompt) {
+            if (result.mode && result.mode.authorityMode !== 'networked' &&
+                runtime.GameSession && runtime.GameSession.showGameplayPrompt) {
                 runtime.GameSession.showGameplayPrompt();
             }
             return true;
@@ -595,10 +634,10 @@
             }
             if (payload.privacy === 'private') {
                 setPrivateRoomShare(payload.roomId);
-                setRoomAccessStatus('Private room ready. Share code ' + roomCodeFromRoomId(payload.roomId) + '.', false);
+                setRoomAccessStatus('Connecting to private room ' + roomCodeFromRoomId(payload.roomId) + '...', false);
             } else {
                 setPrivateRoomShare('');
-                setRoomAccessStatus('Joined ' + String((payload.gameMode || 'ffa')).toUpperCase() + ' room ' + String(payload.roomId).toUpperCase() + '.', false);
+                setRoomAccessStatus('Connecting to ' + String((payload.gameMode || 'ffa')).toUpperCase() + ' room ' + String(payload.roomId).toUpperCase() + '...', false);
             }
             launchMode(payload.modeId || 'cloud_multiplayer', {
                 roomId: payload.roomId,
@@ -626,7 +665,7 @@
             }
             var room = result.state.room;
             setPrivateRoomShare(room.roomId);
-            setRoomAccessStatus(successText || ('Room ' + String(room.roomCode || '').toUpperCase() + ' ready.'), false);
+            setRoomAccessStatus('Connecting to private room ' + String(room.roomCode || '').toUpperCase() + '...', false);
             if (!started) {
                 launchMode('single_cloudflare', {
                     roomId: room.roomId,
@@ -719,6 +758,10 @@
         setPrivateRoomShare('');
         updatePartyIdentityDisplay();
         updateSocialSubtitle();
+        var storedLaunchError = readStoredLaunchError();
+        if (storedLaunchError) {
+            setRoomAccessStatus(storedLaunchError, true);
+        }
         if (partyView && partyView.applyState) partyView.applyState(null);
         if (friendsView && friendsView.applyState) friendsView.applyState({ friends: [] });
         if (privateRoomViewController && privateRoomViewController.applyState) privateRoomViewController.applyState(null);

@@ -303,6 +303,95 @@ canvas {
     display: none !important;
 }
 
+.launch-stage,
+#launch-flow {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+#launch-flow[hidden] {
+    display: none !important;
+}
+
+#launch-card {
+    width: min(520px, 92vw);
+    border: 1px solid rgba(114, 172, 126, 0.42);
+    background: linear-gradient(180deg, rgba(9, 22, 11, 0.96), rgba(3, 8, 4, 0.97));
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+    color: #d8ffe1;
+    text-align: center;
+    padding: 28px 24px 24px;
+}
+
+#launch-kicker,
+#launch-note {
+    color: #8dc79a;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+}
+
+#launch-kicker {
+    font-size: 12px;
+    letter-spacing: 0.22em;
+}
+
+#launch-title {
+    margin-top: 16px;
+    color: #f4ffef;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#launch-status {
+    margin-top: 12px;
+    color: #9ee7b1;
+    font-family: 'Rajdhani', 'Courier New', monospace;
+    font-size: clamp(18px, 2.4vw, 26px);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#launch-room-label {
+    margin-top: 16px;
+    color: #7bc4ff;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+#launch-note {
+    margin-top: 18px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+}
+
+#launch-enter-btn {
+    margin-top: 22px;
+    padding: 10px 26px;
+    border: 2px solid #0d612b;
+    background: rgba(0, 66, 37, 0.28);
+    color: #30ff70;
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-shadow: 0 0 8px rgba(48, 255, 112, 0.4);
+}
+
+#launch-enter-btn:hover {
+    background: rgba(0, 66, 37, 0.44);
+    border-color: #20dd58;
+}
+
 .postgame-screen {
     width: min(900px, 94vw);
     border: 1px solid rgba(132, 188, 146, 0.46);

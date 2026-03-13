@@ -435,8 +435,23 @@ async function createHarness(seedName, options = {}) {
   const windowListeners = new Map();
   let nextTimerId = 1;
   const timeoutQueue = [];
+  const sessionValues = new Map();
+  if (options.launchError) {
+    sessionValues.set('mayhem.launchError', String(options.launchError));
+  }
   const windowObj = {
-    location: { origin: 'http://menu.test', search: '' },
+    location: { origin: 'http://menu.test', pathname: '/', search: '' },
+    sessionStorage: {
+      getItem(key) {
+        return sessionValues.has(String(key)) ? sessionValues.get(String(key)) : null;
+      },
+      setItem(key, value) {
+        sessionValues.set(String(key), String(value));
+      },
+      removeItem(key) {
+        sessionValues.delete(String(key));
+      }
+    },
     setTimeout(handler) {
       const id = nextTimerId++;
       timeoutQueue.push({ id, handler });
@@ -678,6 +693,7 @@ async function createHarness(seedName, options = {}) {
         ok: true,
         mode: {
           id: modeId,
+          authorityMode: modeId === 'single_full_sandbox' ? 'offline' : 'networked',
           roomId: launchOptions && launchOptions.roomId ? launchOptions.roomId : '',
           gameMode: launchOptions && launchOptions.gameMode ? launchOptions.gameMode : ''
         }
@@ -1004,4 +1020,24 @@ test('sandbox launch preps the prompt and immediately starts gameplay when runti
 
   assert.equal(harness.startGameplayCount(), 1);
   assert.equal(harness.gameplayPromptCount(), 1);
+});
+
+test('quickplay keeps the controller in connecting/ready status without showing the gameplay prompt', async () => {
+  const harness = await createHarness('guest_idle');
+  const quickplay = harness.actions().find((action) => action.name === 'primary-play-btn');
+  assert.ok(quickplay, 'Expected quickplay action');
+
+  await quickplay.run();
+
+  const snap = JSON.parse(harness.snapshot());
+  assert.equal(harness.gameplayPromptCount(), 0);
+  assert.equal(snap.dom['room-access-status'].text, 'Ready to enter FFA room FFA-01.');
+  assert.equal(snap.dom['mode-subtitle'].text, 'Ready to enter FFA room FFA-01.');
+});
+
+test('menu boot restores a one-time failed launch error from session storage', async () => {
+  const harness = await createHarness('guest_idle', { launchError: 'Timed out joining room FFA-01.' });
+  const snap = JSON.parse(harness.snapshot());
+
+  assert.equal(snap.dom['room-access-status'].text, 'Timed out joining room FFA-01.');
 });

@@ -24,16 +24,14 @@ export async function onRequest(context) {
 
   const headers = new Headers(context.request.headers);
   headers.delete('host');
-
-  const init = {
+  const requestInit = {
     method: context.request.method,
     headers,
     redirect: 'manual'
   };
-
   if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
-    init.body = context.request.body;
+    requestInit.body = context.request.body;
   }
 
-  return fetch(workerUrl, init);
+  return fetch(new Request(workerUrl.toString(), requestInit));
 }

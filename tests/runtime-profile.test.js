@@ -32,6 +32,7 @@ test('runtime profile resolves menu api calls through same-origin on local http'
   });
 
   assert.equal(profile.resolveApiUrl('/api/party'), 'http://127.0.0.1:3004/api/party');
+  assert.equal(profile.resolveWsUrl('/api/ws'), 'ws://127.0.0.1:3004/api/ws');
 });
 
 test('runtime profile resolves menu api calls through same-origin on production http', async () => {
@@ -43,4 +44,5 @@ test('runtime profile resolves menu api calls through same-origin on production 
   });
 
   assert.equal(profile.resolveApiUrl('/api/friends'), 'https://mayhem.example/api/friends');
+  assert.equal(profile.resolveWsUrl('/api/ws'), 'wss://mayhem.example/api/ws');
 });

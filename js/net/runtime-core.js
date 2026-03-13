@@ -29,6 +29,7 @@
 
             function openConnection() {
                 if (!opts.isActive() || attemptSeq !== opts.getConnectAttemptSeq()) return;
+                if (opts.onTransportConnectStart) opts.onTransportConnectStart();
 
                 var transportApi = opts.getTransportApi();
                 if (transportApi && transportApi.create) {
@@ -39,14 +40,17 @@
                         onOpen: function (socket) {
                             opts.setWs(socket);
                             opts.setConnected(true);
+                            if (opts.onTransportOpen) opts.onTransportOpen(socket);
                         },
                         onMessage: opts.handleMessage,
                         onClose: function () {
                             opts.setConnected(false);
                             opts.setWs(null);
+                            if (opts.onTransportClose) opts.onTransportClose();
                         },
                         onError: function () {
                             opts.setConnected(false);
+                            if (opts.onTransportError) opts.onTransportError();
                         }
                     }));
                     opts.getTransport().connect();
@@ -59,6 +63,7 @@
 
                 ws.addEventListener('open', function () {
                     opts.setConnected(true);
+                    if (opts.onTransportOpen) opts.onTransportOpen(ws);
                 });
 
                 ws.addEventListener('message', function (event) {
@@ -68,6 +73,7 @@
                 ws.addEventListener('close', function () {
                     opts.setConnected(false);
                     opts.setWs(null);
+                    if (opts.onTransportClose) opts.onTransportClose();
                     if (!opts.isActive()) return;
                     opts.setReconnectTimer(setTimeout(function () {
                         connectWs();
@@ -76,6 +82,7 @@
 
                 ws.addEventListener('error', function () {
                     opts.setConnected(false);
+                    if (opts.onTransportError) opts.onTransportError();
                 });
             }
 

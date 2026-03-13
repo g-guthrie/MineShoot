@@ -24,6 +24,11 @@
     var runtimeInitialized = false;
     var controlsApi = null;
     var lastHandledMatchEndAt = 0;
+    var LAUNCH_ERROR_KEY = 'mayhem.launchError';
+    var launchState = {
+        phase: 'idle',
+        mode: null
+    };
     var postGameState = {
         active: false,
         phase: '',
@@ -31,6 +36,139 @@
         snapshot: null,
         timer: null
     };
+
+    function sessionStore() {
+        try {
+            return window.sessionStorage || null;
+        } catch (_err) {
+            return null;
+        }
+    }
+
+    function persistLaunchError(message) {
+        var store = sessionStore();
+        if (!store) return;
+        try {
+            store.setItem(LAUNCH_ERROR_KEY, String(message || 'Room join failed.'));
+        } catch (_err) {
+            // no-op
+        }
+    }
+
+    function isLaunchConnectPending() {
+        return launchState.phase === 'booting_runtime' || launchState.phase === 'connecting_room';
+    }
+
+    function isLaunchOverlayActive() {
+        return isLaunchConnectPending() || launchState.phase === 'joined_ready';
+    }
+
+    function ensureLaunchEls() {
+        return {
+            flow: document.getElementById('launch-flow'),
+            kicker: document.getElementById('launch-kicker'),
+            title: document.getElementById('launch-title'),
+            status: document.getElementById('launch-status'),
+            room: document.getElementById('launch-room-label'),
+            note: document.getElementById('launch-note'),
+            enterBtn: document.getElementById('launch-enter-btn'),
+            menuStage: document.getElementById('menu-stage')
+        };
+    }
+
+    function launchStatusText(phase, mode) {
+        var gameMode = String(mode && mode.gameMode || 'ffa').toUpperCase();
+        var roomId = String(mode && mode.roomId || '').toUpperCase();
+        if (phase === 'booting_runtime') {
+            return 'Loading gameplay runtime...';
+        }
+        if (phase === 'joined_ready') {
+            if (mode && mode.id === 'single_cloudflare') {
+                return 'Ready to enter private room ' + launchPrivateRoomCode(mode.roomId) + '.';
+            }
+            return 'Ready to enter ' + gameMode + ' room ' + roomId + '.';
+        }
+        if (mode && mode.id === 'single_cloudflare') {
+            return 'Connecting to private room ' + launchPrivateRoomCode(mode.roomId) + '...';
+        }
+        return 'Connecting to ' + gameMode + ' room ' + roomId + '...';
+    }
+
+    function launchPrivateRoomCode(roomId) {
+        var modeUi = runtimeModeUi();
+        if (modeUi && modeUi.roomCodeFromRoomId) {
+            return modeUi.roomCodeFromRoomId(roomId);
+        }
+        return String(roomId || '').toUpperCase();
+    }
+
+    function launchRoomText(mode) {
+        var modeUi = runtimeModeUi();
+        if (modeUi && modeUi.runtimeRoomLabel) {
+            return modeUi.runtimeRoomLabel(mode);
+        }
+        return String(mode && mode.roomId || '').toUpperCase();
+    }
+
+    function syncLaunchOverlay() {
+        var els = ensureLaunchEls();
+        var active = isLaunchOverlayActive();
+        var mode = launchState.mode || activeRuntimeMode || null;
+        if (els.flow) els.flow.hidden = !active;
+        if (els.menuStage) els.menuStage.hidden = active;
+        if (!active) return;
+        if (overlay) overlay.style.display = 'flex';
+        if (els.kicker) els.kicker.textContent = launchState.phase === 'joined_ready' ? 'ROOM LINKED' : 'ARENA LINK';
+        if (els.title) {
+            if (launchState.phase === 'booting_runtime') els.title.textContent = 'BOOTING ARENA';
+            else if (launchState.phase === 'joined_ready') els.title.textContent = 'ENTER MATCH';
+            else els.title.textContent = 'CONNECTING';
+        }
+        if (els.status) els.status.textContent = launchStatusText(launchState.phase, mode);
+        if (els.room) {
+            var roomText = launchRoomText(mode);
+            els.room.textContent = roomText || 'ROOM ----';
+            els.room.hidden = !roomText;
+        }
+        if (els.note) {
+            els.note.textContent = launchState.phase === 'joined_ready'
+                ? 'Click ENTER MATCH to capture pointer lock.'
+                : 'Waiting for authoritative room admission.';
+        }
+        if (els.enterBtn) {
+            els.enterBtn.hidden = launchState.phase !== 'joined_ready';
+            els.enterBtn.disabled = launchState.phase !== 'joined_ready';
+        }
+    }
+
+    function setLaunchState(phase, mode) {
+        launchState.phase = String(phase || 'idle');
+        launchState.mode = mode || activeRuntimeMode || launchState.mode || null;
+        syncLaunchOverlay();
+    }
+
+    function hardResetFailedNetworkLaunch(message) {
+        var runtime = runtimeProfile();
+        var msg = String(message || 'Room join failed.');
+        persistLaunchError(msg);
+        setLaunchState('failed', activeRuntimeMode);
+        if (depGet('GameNet')) {
+            if (depGet('GameNet').resetJoinAttempt) depGet('GameNet').resetJoinAttempt();
+            if (depGet('GameNet').shutdown) depGet('GameNet').shutdown();
+        }
+        activeRuntimeMode = null;
+        autoStartNoLock = false;
+        startupDebugNotice = '';
+        forcedRoomId = 'global';
+        if (runtime && runtime.clearSelectedMode) {
+            runtime.clearSelectedMode();
+        }
+        var nextHref = (window.location && window.location.pathname) ? window.location.pathname : '/';
+        if (window.location) {
+            window.location.href = nextHref;
+        }
+        return { ok: false, error: msg };
+    }
 
     function depGet(name) {
         return globalThis.__MAYHEM_RUNTIME[name];
@@ -141,7 +279,7 @@
         if (els.flow) els.flow.hidden = true;
         if (els.celebration) els.celebration.hidden = true;
         if (els.results) els.results.hidden = true;
-        if (els.menuStage) els.menuStage.hidden = false;
+        if (els.menuStage) els.menuStage.hidden = isLaunchOverlayActive();
     }
 
     function completePostGameFlow() {
@@ -231,6 +369,7 @@
     function canResumeGameplay() {
         if (!runtimeInitialized) return false;
         if (postGameState.active) return false;
+        if (isLaunchOverlayActive()) return false;
         if (!multiplayerMode) return true;
         var matchContext = readMatchContext();
         if (matchContext.privateRoomPhase === 'lobby') return false;
@@ -239,11 +378,13 @@
 
     function setResumeButtonsVisible(show) {
         var els = ensureMenuSessionEls();
-        if (els.playBtn) els.playBtn.style.display = show ? 'inline-block' : 'none';
-        if (els.backBtn) els.backBtn.style.display = show ? 'inline-block' : 'none';
+        var visible = !!show && !isLaunchOverlayActive();
+        if (els.playBtn) els.playBtn.style.display = visible ? 'inline-block' : 'none';
+        if (els.backBtn) els.backBtn.style.display = visible ? 'inline-block' : 'none';
     }
 
     function showGameplayPrompt() {
+        setLaunchState('idle', activeRuntimeMode);
         if (overlay) overlay.style.display = 'flex';
         isPlaying = false;
         setResumeButtonsVisible(canResumeGameplay());
@@ -599,7 +740,8 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
-            if (!canResumeGameplay()) return;
+            var readyPromptActive = launchState.phase === 'joined_ready';
+            if (!readyPromptActive && !canResumeGameplay()) return;
             var validation = validateMenuSelections();
             if (!validation.ok) {
                 setTransientDebug(validation.message, 1800);
@@ -616,14 +758,16 @@
             if (!target) {
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
-                showResumeControl(true);
+                if (readyPromptActive) setLaunchState('joined_ready', activeRuntimeMode);
+                else showResumeControl(true);
                 return;
             }
             var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
             if (typeof requestLock !== 'function') {
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
-                showResumeControl(true);
+                if (readyPromptActive) setLaunchState('joined_ready', activeRuntimeMode);
+                else showResumeControl(true);
                 setTransientDebug('Pointer lock is required for gameplay.', 2200);
                 return;
             }
@@ -634,7 +778,8 @@
                         if (!document.pointerLockElement) {
                             if (overlay) overlay.style.display = 'flex';
                             isPlaying = false;
-                            showResumeControl(true);
+                            if (launchState.phase === 'joined_ready') setLaunchState('joined_ready', activeRuntimeMode);
+                            else showResumeControl(true);
                             setTransientDebug('Pointer lock denied. Click PLAY to retry.', 2200);
                         }
                     });
@@ -642,7 +787,8 @@
             } catch (err) {
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
-                showResumeControl(true);
+                if (readyPromptActive) setLaunchState('joined_ready', activeRuntimeMode);
+                else showResumeControl(true);
                 setTransientDebug('Pointer lock failed. Click PLAY to retry.', 2200);
             }
         }
@@ -654,12 +800,25 @@
         globalThis.__MAYHEM_RUNTIME.GameSession.showGameplayPrompt = function () {
             showGameplayPrompt();
         };
+        globalThis.__MAYHEM_RUNTIME.GameSession.showLaunchOverlay = function (phase, mode) {
+            setLaunchState(phase, mode);
+        };
+        globalThis.__MAYHEM_RUNTIME.GameSession.failNetworkLaunch = function (message) {
+            return hardResetFailedNetworkLaunch(message);
+        };
 
         if (playBtn) {
             playBtn.addEventListener('click', requestPlayStart);
             playBtn.addEventListener('pointerup', requestPlayStart);
             playBtn.addEventListener('mousedown', requestPlayStart);
             playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+        }
+        var launchEls = ensureLaunchEls();
+        if (launchEls.enterBtn) {
+            launchEls.enterBtn.addEventListener('click', requestPlayStart);
+            launchEls.enterBtn.addEventListener('pointerup', requestPlayStart);
+            launchEls.enterBtn.addEventListener('mousedown', requestPlayStart);
+            launchEls.enterBtn.addEventListener('touchend', requestPlayStart, { passive: false });
         }
 
         if (backModeBtn) {
@@ -706,6 +865,7 @@
                 if (globalThis.__MAYHEM_RUNTIME.GameDocs && globalThis.__MAYHEM_RUNTIME.GameDocs.close) {
                     globalThis.__MAYHEM_RUNTIME.GameDocs.close();
                 }
+                setLaunchState('in_game', activeRuntimeMode);
                 if (overlay) overlay.style.display = 'none';
                 isPlaying = true;
                 setResumeButtonsVisible(false);
@@ -713,6 +873,7 @@
                 if (controlsApi && controlsApi.releaseTransientInput) {
                     controlsApi.releaseTransientInput();
                 }
+                syncLaunchOverlay();
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
                 setResumeButtonsVisible(canResumeGameplay());
@@ -726,7 +887,8 @@
                 }
                 if (overlay) overlay.style.display = 'flex';
                 isPlaying = false;
-                showResumeControl(true);
+                if (launchState.phase === 'joined_ready') setLaunchState('joined_ready', activeRuntimeMode);
+                else showResumeControl(true);
                 setTransientDebug('Pointer lock error. Click PLAY to retry.', 2200);
             }
         });
@@ -770,7 +932,11 @@
             startupDebugNotice = result.startupDebugNotice || '';
             runtimeInitialized = true;
             setupPointerLock();
-            showGameplayPrompt();
+            if (multiplayerMode) {
+                setLaunchState('connecting_room', activeRuntimeMode);
+            } else {
+                showGameplayPrompt();
+            }
             if (controlsApi && controlsApi.bind) {
                 controlsApi.bind();
             }
@@ -981,6 +1147,7 @@
         options = options || {};
         var runtime = runtimeProfile();
         var authApi = globalThis.__MAYHEM_RUNTIME.GameNetAuth || null;
+        var netApi = depGet('GameNet');
         var selectedMode = runtime && runtime.selectMode
             ? runtime.selectMode(modeId)
             : (runtime && runtime.getMode ? runtime.getMode(modeId) : null);
@@ -1017,9 +1184,28 @@
                 ? runtimeModeUi().startupNoticeForMode(selectedMode)
                 : '');
         }
+        var joinPromise = null;
+        if (selectedMode.authorityMode === 'networked') {
+            setLaunchState('booting_runtime', selectedMode);
+            if (!netApi || !netApi.beginJoinAttempt) {
+                return Promise.resolve({ ok: false, error: 'Network room join unavailable.' });
+            }
+            joinPromise = netApi.beginJoinAttempt({
+                expectedRoomId: forcedRoomId,
+                timeoutMs: 5000
+            });
+        }
         return Promise.resolve()
         .then(function () {
             return initGame();
+        })
+        .then(function () {
+            if (joinPromise) {
+                return joinPromise.then(function () {
+                    setLaunchState('joined_ready', selectedMode);
+                });
+            }
+            return null;
         })
         .then(function () {
             return {
@@ -1029,6 +1215,9 @@
         })
         .catch(function (err) {
             var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
+            if (selectedMode.authorityMode === 'networked') {
+                return hardResetFailedNetworkLaunch(msg);
+            }
             var overlayEl = document.getElementById('overlay');
             if (overlayEl) overlayEl.style.display = 'flex';
             var dbg = document.getElementById('debug-info');
@@ -1047,6 +1236,7 @@
 
     function getActivityState() {
         if (!activeRuntimeMode || !runtimeInitialized) return 'menu';
+        if (isLaunchConnectPending()) return 'menu';
         var matchContext = readMatchContext();
         if (multiplayerMode && matchContext.privateRoomPhase === 'lobby') {
             return 'private_room_lobby';

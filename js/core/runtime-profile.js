@@ -320,8 +320,13 @@
         if (!path) return '';
         if (/^wss?:\/\//i.test(String(path))) return String(path);
 
-        var mode = selectedOrDefaultMode();
-        var base = (mode && mode.backendOrigin) ? mode.backendOrigin : (isHttpEnvironment() ? String(window.location.origin || '') : LOCAL_WORKER_ORIGIN);
+        var base = '';
+        if (isHttpEnvironment()) {
+            base = String(window.location.origin || '');
+        } else {
+            var mode = selectedOrDefaultMode();
+            base = (mode && mode.backendOrigin) ? mode.backendOrigin : LOCAL_WORKER_ORIGIN;
+        }
         var wsBase = String(base).replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
         return absolutize(path, wsBase);
     };

@@ -75,6 +75,12 @@
 
         opts.pushNotice('Joined room ' + opts.getRoomId());
         opts.flushPendingWeaponLoadout();
+        if (opts.resolveJoinOnWelcome) {
+            opts.resolveJoinOnWelcome({
+                roomId: opts.getRoomId(),
+                selfId: opts.getSelfId()
+            });
+        }
     }
 
     function handleDamageEvent(msg, opts) {
