@@ -29,7 +29,15 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
   const pendingInputCount = Math.max(0, Number(options.pendingInputCount || 0));
   const lastAckedSeq = Math.max(0, Number(options.lastAckedSeq || 0));
   const lastReplayAckSeq = Math.max(0, Number(options.lastReplayAckSeq || 0));
-  return pendingInputCount > 0 && lastAckedSeq > 0 && lastAckedSeq !== lastReplayAckSeq;
+  const horizontalDistSq = Math.max(0, Number(options.horizontalDistSq || 0));
+  const replayDistance = Math.max(0, Number(options.replayCorrectionDistance || 0.55));
+  const movingIntent = !!options.movingIntent;
+  const canCorrectWhileMoving = options.canCorrectWhileMoving !== false;
+  return pendingInputCount > 0 &&
+    lastAckedSeq > 0 &&
+    lastAckedSeq !== lastReplayAckSeq &&
+    horizontalDistSq >= (replayDistance * replayDistance) &&
+    (!movingIntent || canCorrectWhileMoving);
 }
 
 export function replayMotionState(snapshotState, pendingInputs, options = {}) {

@@ -67,17 +67,57 @@ test('replay motion carries jump state across pending samples', () => {
   assert.ok(replayed.velocityY > 0);
 });
 
-test('replay correction only runs when ack sequence advances with pending input', () => {
+test('replay correction only runs when ack sequence advances and positional drift is meaningful', () => {
   assert.equal(
-    shouldReplayAuthoritativeCorrection({ pendingInputCount: 2, lastAckedSeq: 8, lastReplayAckSeq: 7 }),
+    shouldReplayAuthoritativeCorrection({
+      pendingInputCount: 2,
+      lastAckedSeq: 8,
+      lastReplayAckSeq: 7,
+      horizontalDistSq: 0.36,
+      replayCorrectionDistance: 0.55
+    }),
     true
   );
   assert.equal(
-    shouldReplayAuthoritativeCorrection({ pendingInputCount: 0, lastAckedSeq: 8, lastReplayAckSeq: 7 }),
+    shouldReplayAuthoritativeCorrection({
+      pendingInputCount: 0,
+      lastAckedSeq: 8,
+      lastReplayAckSeq: 7,
+      horizontalDistSq: 0.36,
+      replayCorrectionDistance: 0.55
+    }),
     false
   );
   assert.equal(
-    shouldReplayAuthoritativeCorrection({ pendingInputCount: 2, lastAckedSeq: 8, lastReplayAckSeq: 8 }),
+    shouldReplayAuthoritativeCorrection({
+      pendingInputCount: 2,
+      lastAckedSeq: 8,
+      lastReplayAckSeq: 8,
+      horizontalDistSq: 0.36,
+      replayCorrectionDistance: 0.55
+    }),
+    false
+  );
+  assert.equal(
+    shouldReplayAuthoritativeCorrection({
+      pendingInputCount: 2,
+      lastAckedSeq: 8,
+      lastReplayAckSeq: 7,
+      horizontalDistSq: 0.04,
+      replayCorrectionDistance: 0.55
+    }),
+    false
+  );
+  assert.equal(
+    shouldReplayAuthoritativeCorrection({
+      pendingInputCount: 2,
+      lastAckedSeq: 8,
+      lastReplayAckSeq: 7,
+      horizontalDistSq: 0.36,
+      replayCorrectionDistance: 0.55,
+      movingIntent: true,
+      canCorrectWhileMoving: false
+    }),
     false
   );
 });

@@ -671,7 +671,8 @@
         var dz = z - playerZ;
         var horizontalDistSq = (dx * dx) + (dz * dz);
         var hardSnapDistance = Number(opts.hardSnapDistance || 1.35);
-        var softCorrectDistance = Number(opts.softCorrectDistance || 0.2);
+        var softCorrectDistance = Number(opts.softCorrectDistance || 0.35);
+        var replayCorrectionDistance = Number(opts.replayCorrectionDistance || 0.55);
         var pendingInputCount = Math.max(0, Number(opts.pendingInputCount || 0));
         var ackDrift = Math.max(0, Number(opts.lastSentSeq || 0) - Number(opts.lastAckedSeq || 0));
         var movingIntent = hasMovementIntentInput() && !isMovementLocked();
@@ -679,23 +680,27 @@
         var pendingInputs = Array.isArray(opts.pendingInputs) ? opts.pendingInputs : [];
         var reconcile = reconciliationHelper();
 
+        if (opts.force || horizontalDistSq >= (hardSnapDistance * hardSnapDistance)) {
+            return applyAuthoritativeMotion(state);
+        }
+
         if (reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
             pendingInputCount: pendingInputCount,
             lastAckedSeq: Number(opts.lastAckedSeq || 0),
-            lastReplayAckSeq: lastReplayAckSeq
+            lastReplayAckSeq: lastReplayAckSeq,
+            horizontalDistSq: horizontalDistSq,
+            replayCorrectionDistance: replayCorrectionDistance,
+            movingIntent: movingIntent,
+            canCorrectWhileMoving: canCorrectWhileMoving
         })) {
             return replayAuthoritativeMotion(state, pendingInputs, opts);
-        }
-
-        if (opts.force || horizontalDistSq >= (hardSnapDistance * hardSnapDistance)) {
-            return applyAuthoritativeMotion(state);
         }
 
         if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
             return false;
         }
 
-        var blend = Math.min(1, dt * 8);
+        var blend = Math.min(1, dt * (movingIntent ? 4.5 : 6));
         playerX += dx * blend;
         playerZ += dz * blend;
 
