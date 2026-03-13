@@ -670,8 +670,8 @@
         var dx = x - playerX;
         var dz = z - playerZ;
         var horizontalDistSq = (dx * dx) + (dz * dz);
-        var hardSnapDistance = Number(opts.hardSnapDistance || 1.35);
-        var softCorrectDistance = Number(opts.softCorrectDistance || 0.35);
+        var hardSnapDistance = Number(opts.hardSnapDistance || 2.25);
+        var softCorrectDistance = Number(opts.softCorrectDistance || 0.5);
         var replayCorrectionDistance = Number(opts.replayCorrectionDistance || 0.55);
         var pendingInputCount = Math.max(0, Number(opts.pendingInputCount || 0));
         var ackDrift = Math.max(0, Number(opts.lastSentSeq || 0) - Number(opts.lastAckedSeq || 0));
@@ -684,7 +684,7 @@
             return applyAuthoritativeMotion(state);
         }
 
-        if (reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
+        if (opts.allowReplayCorrection && reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
             pendingInputCount: pendingInputCount,
             lastAckedSeq: Number(opts.lastAckedSeq || 0),
             lastReplayAckSeq: lastReplayAckSeq,
@@ -696,11 +696,11 @@
             return replayAuthoritativeMotion(state, pendingInputs, opts);
         }
 
-        if ((movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
+        if (movingIntent || (movingIntent && !canCorrectWhileMoving) || horizontalDistSq < (softCorrectDistance * softCorrectDistance)) {
             return false;
         }
 
-        var blend = Math.min(1, dt * (movingIntent ? 4.5 : 6));
+        var blend = Math.min(1, dt * 4);
         playerX += dx * blend;
         playerZ += dz * blend;
 

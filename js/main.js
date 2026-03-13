@@ -686,6 +686,22 @@
             camera,
             function (hitboxMesh, hitPoint, distance, hitType, damage, weapon) {
                 if (multiplayerMode && hitboxMesh && hitboxMesh.userData && hitboxMesh.userData.ownerType === 'net') {
+                    if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker) {
+                        globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker();
+                    }
+                    if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play && document.hasFocus()) {
+                        globalThis.__MAYHEM_RUNTIME.GameAudio.play('bulletImpact', {
+                            killed: false,
+                            hitType: hitType,
+                            weapon: weapon && weapon.id ? weapon.id : ''
+                        });
+                    }
+                    if (globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync &&
+                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.notifyPredictedLocalHit) {
+                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.notifyPredictedLocalHit({
+                            weaponId: weapon && weapon.id ? weapon.id : ''
+                        });
+                    }
                     return;
                 }
 

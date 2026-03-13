@@ -6,6 +6,7 @@ import vm from 'node:vm';
 async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../js/net/feedback-sync.js', import.meta.url), 'utf8');
   const audioCalls = [];
+  const uiCalls = [];
   const runtime = {
     GameNet: {
       consumeClassCastResult() { return null; },
@@ -32,9 +33,9 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       rejectPredictedThrow() {}
     },
     GameUI: {
-      showKillMarker() {},
-      showHitMarker() {},
-      showDamageNumber() {}
+      showKillMarker() { uiCalls.push('kill'); },
+      showHitMarker() { uiCalls.push('hit'); },
+      showDamageNumber() { uiCalls.push('damage'); }
     },
     GamePlayerCombat: {
       showIncomingFeedback() {}
@@ -59,7 +60,9 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   vm.runInContext(code, vm.createContext(sandbox));
   return {
     syncGameplayFeedback: sandbox.__MAYHEM_RUNTIME.GameNetFeedbackSync.syncGameplayFeedback,
-    audioCalls
+    notifyPredictedLocalHit: sandbox.__MAYHEM_RUNTIME.GameNetFeedbackSync.notifyPredictedLocalHit,
+    audioCalls,
+    uiCalls
   };
 }
 
@@ -114,4 +117,41 @@ test('feedback sync ignores distant choke casts for unrelated bystanders', async
   harness.syncGameplayFeedback({ selfState: { id: 'usr_self' }, dt: 0.016 });
 
   assert.deepEqual(harness.audioCalls, []);
+});
+
+test('feedback sync suppresses duplicate non-kill hitmarker feedback after a predicted local hit', async () => {
+  const queue = [{
+    damage: 24,
+    hitType: 'body',
+    weaponId: 'rifle',
+    killed: false,
+    worldPos: { x: 1, y: 2, z: 3 }
+  }];
+  const originalDateNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+  try {
+    const harness = await loadFeedbackSyncHarness({
+      GameNet: {
+        consumeClassCastResult() { return null; },
+        consumeDamageFeedback() { return queue.shift() || null; },
+        consumeIncomingDamageFeedback() { return null; },
+        consumeThrowAck() { return null; },
+        consumeThrowReject() { return null; },
+        getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
+        consumeThrowableEvent() { return null; },
+        consumeAbilityEvent() { return null; },
+        damagePointForEntityId() { return null; }
+      }
+    });
+
+    harness.notifyPredictedLocalHit({ weaponId: 'rifle' });
+    now = 1080;
+    harness.syncGameplayFeedback({ camera: {} });
+
+    assert.deepEqual(harness.audioCalls, []);
+    assert.deepEqual(harness.uiCalls, ['damage']);
+  } finally {
+    Date.now = originalDateNow;
+  }
 });

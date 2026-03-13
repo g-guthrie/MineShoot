@@ -153,7 +153,18 @@
     };
 
     GameUI.showHitMarker = function () {
-        return;
+        hitmarkerEl.style.transition = 'none';
+        hitmarkerEl.style.opacity = '1';
+        hitmarkerEl.style.color = '#ffffff';
+        hitmarkerEl.style.fontSize = '28px';
+        if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
+        hitmarkerTimer = setTimeout(function () {
+            hitmarkerEl.style.transition = 'opacity 0.18s ease-out';
+            hitmarkerEl.style.opacity = '0';
+            hitmarkerEl.style.color = '#ff0000';
+            hitmarkerEl.style.fontSize = '28px';
+            hitmarkerTimer = null;
+        }, 90);
     };
 
     GameUI.showKillMarker = function () {

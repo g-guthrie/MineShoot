@@ -5,8 +5,21 @@
 (function () {
     'use strict';
 
+    var lastPredictedHitFeedback = {
+        weaponId: '',
+        at: 0
+    };
+
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
+    }
+
+    function suppressAuthoritativeHitFeedback(feedback) {
+        if (!feedback || feedback.killed) return false;
+        var ageMs = Date.now() - Number(lastPredictedHitFeedback.at || 0);
+        if (ageMs < 0 || ageMs > 180) return false;
+        if (!lastPredictedHitFeedback.weaponId) return false;
+        return String(lastPredictedHitFeedback.weaponId) === String(feedback.weaponId || '');
     }
 
     function handleNetworkDamageFeedback(feedback, camera) {
@@ -14,17 +27,18 @@
         var RT = runtime();
         var isShotgun = feedback.weaponId === 'shotgun';
         var damageNumberSpread = isShotgun ? { spreadX: 152, spreadY: 72 } : undefined;
+        var suppressLocalFeedback = suppressAuthoritativeHitFeedback(feedback);
 
-        if (RT.GameAudio && RT.GameAudio.play) {
+        if (!suppressLocalFeedback && RT.GameAudio && RT.GameAudio.play) {
             RT.GameAudio.play('bulletImpact', {
                 killed: !!feedback.killed,
                 hitType: feedback.hitType || 'body',
                 weapon: feedback.weaponId || ''
             });
         }
-        if (feedback.killed) {
+        if (!suppressLocalFeedback && feedback.killed) {
             RT.GameUI.showKillMarker();
-        } else {
+        } else if (!suppressLocalFeedback) {
             RT.GameUI.showHitMarker();
         }
 
@@ -161,6 +175,10 @@
     }
 
     runtime().GameNetFeedbackSync = {
-        syncGameplayFeedback: syncGameplayFeedback
+        syncGameplayFeedback: syncGameplayFeedback,
+        notifyPredictedLocalHit: function (feedback) {
+            lastPredictedHitFeedback.weaponId = String(feedback && feedback.weaponId || '');
+            lastPredictedHitFeedback.at = Date.now();
+        }
     };
 })();
