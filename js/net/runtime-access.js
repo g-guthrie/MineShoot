@@ -46,6 +46,10 @@
             return runtime().GameNet || null;
         }
 
+        function getHitscanApi() {
+            return runtime().GameHitscan || null;
+        }
+
         function getSocketIdentity(authApi) {
             if (authApi && authApi.getSocketIdentity) return authApi.getSocketIdentity();
             return authApi && authApi.getUser ? authApi.getUser() : null;
@@ -87,17 +91,41 @@
                 t: msgType,
                 weaponId: String(weaponId)
             };
+            var hitscanApi = getHitscanApi();
+            var fireIntent = hitscanApi && hitscanApi.buildNetworkFireIntent
+                ? hitscanApi.buildNetworkFireIntent(shotToken)
+                : null;
+            if (fireIntent && String(fireIntent.weaponId || '') === String(weaponId)) {
+                if (fireIntent.adsActive) payload.adsActive = true;
+                if (isFinite(Number(fireIntent.viewFovDeg)) && Number(fireIntent.viewFovDeg) > 0.0001) {
+                    payload.viewFovDeg = Number(fireIntent.viewFovDeg);
+                }
+                if (fireIntent.aimOrigin) {
+                    payload.aimOrigin = {
+                        x: Number(fireIntent.aimOrigin.x || 0),
+                        y: Number(fireIntent.aimOrigin.y || 0),
+                        z: Number(fireIntent.aimOrigin.z || 0)
+                    };
+                }
+                if (fireIntent.aimForward) {
+                    payload.aimForward = {
+                        x: Number(fireIntent.aimForward.x || 0),
+                        y: Number(fireIntent.aimForward.y || 0),
+                        z: Number(fireIntent.aimForward.z || 0)
+                    };
+                }
+            }
             var playerApi = getPlayerApi();
-            if (playerApi && playerApi.getAdsState) {
+            if (!payload.adsActive && playerApi && playerApi.getAdsState) {
                 var adsState = playerApi.getAdsState();
                 if (adsState && adsState.active) payload.adsActive = true;
             }
-            if (playerApi && playerApi.getCamera) {
+            if (!payload.viewFovDeg && playerApi && playerApi.getCamera) {
                 var camera = playerApi.getCamera();
                 var cameraFov = Number(camera && camera.fov);
                 if (isFinite(cameraFov) && cameraFov > 0.0001) payload.viewFovDeg = cameraFov;
             }
-            if (playerApi && playerApi.getRotation) {
+            if (!payload.aimForward && playerApi && playerApi.getRotation) {
                 var rot = playerApi.getRotation();
                 var yaw = Number(rot && rot.yaw || 0);
                 var pitch = Number(rot && rot.pitch || 0);
@@ -113,14 +141,27 @@
                     };
                 }
             }
-            if (playerApi && playerApi.getCamera) {
-                var fireCamera = playerApi.getCamera();
-                if (fireCamera && isFinite(Number(fireCamera.position && fireCamera.position.x)) && isFinite(Number(fireCamera.position && fireCamera.position.y)) && isFinite(Number(fireCamera.position && fireCamera.position.z))) {
-                    payload.aimOrigin = {
-                        x: Number(fireCamera.position.x || 0),
-                        y: Number(fireCamera.position.y || 0),
-                        z: Number(fireCamera.position.z || 0)
+            if (!payload.aimOrigin) {
+                var fireOrigin = null;
+                if (playerApi && playerApi.getEyeWorldPosition) {
+                    fireOrigin = playerApi.getEyeWorldPosition();
+                }
+                if ((!fireOrigin || !isFinite(Number(fireOrigin.x)) || !isFinite(Number(fireOrigin.y)) || !isFinite(Number(fireOrigin.z))) && playerApi && playerApi.getCamera) {
+                    var fireCamera = playerApi.getCamera();
+                    if (fireCamera && fireCamera.position) {
+                        fireOrigin = fireCamera.position;
+                    }
+                }
+                if (fireOrigin && isFinite(Number(fireOrigin.x)) && isFinite(Number(fireOrigin.y)) && isFinite(Number(fireOrigin.z))) {
+                    var eyeOrigin = {
+                        x: Number(fireOrigin.x || 0),
+                        y: Number(fireOrigin.y || 0),
+                        z: Number(fireOrigin.z || 0)
                     };
+                    var sharedPoints = shared().entityPoints || {};
+                    payload.aimOrigin = sharedPoints.logicalHitscanOriginFromEye && payload.aimForward
+                        ? sharedPoints.logicalHitscanOriginFromEye(eyeOrigin, payload.aimForward)
+                        : eyeOrigin;
                 }
             }
             var netApi = getNetApi();

@@ -396,8 +396,27 @@
             var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
             var fired = globalThis.__MAYHEM_RUNTIME.GameHitscan.fire(
                 camera,
-                function (hitboxMesh, hitPoint, distance, hitType, damage, weapon) {
+                function (hitboxMesh, hitPoint, distance, hitType, damage, weapon, pelletIndex) {
                     if (multiplayerMode && hitboxMesh && hitboxMesh.userData && hitboxMesh.userData.ownerType === 'net') {
+                        var netApi = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+                        var canPredictNetworkHit = !!(netApi && netApi.isConnected && netApi.isConnected());
+                        var shouldPredictNetHit = canPredictNetworkHit && (!(globalThis.__MAYHEM_RUNTIME.GameHitscan &&
+                            globalThis.__MAYHEM_RUNTIME.GameHitscan.shouldPredictNetHit) ||
+                            globalThis.__MAYHEM_RUNTIME.GameHitscan.shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex));
+                        if (shouldPredictNetHit &&
+                            globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync &&
+                            globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.emitPredictedLocalDamageFeedback) {
+                            globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.emitPredictedLocalDamageFeedback({
+                                weaponId: weapon && weapon.id ? weapon.id : '',
+                                hitType: hitType,
+                                shotToken: shotToken,
+                                pelletIndex: pelletIndex,
+                                damage: damage,
+                                worldPos: hitPoint,
+                                camera: camera,
+                                killed: false
+                            });
+                        }
                         return;
                     }
 

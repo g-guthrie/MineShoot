@@ -1,10 +1,10 @@
 import { cloneWorldFlags } from '../../../shared/protocol.js';
 import { lmsRules } from '../../../shared/lms-mode.js';
 
-const SNAPSHOT_SELF_CADENCE_MS = 33;
-const SNAPSHOT_ENGAGED_CADENCE_MS = 33;
-const SNAPSHOT_NEARBY_CADENCE_MS = 66;
-const SNAPSHOT_FAR_CADENCE_MS = 132;
+const SNAPSHOT_SELF_CADENCE_MS = 1000 / 60;
+const SNAPSHOT_ENGAGED_CADENCE_MS = 1000 / 60;
+const SNAPSHOT_NEARBY_CADENCE_MS = 1000 / 30;
+const SNAPSHOT_FAR_CADENCE_MS = 1000 / 15;
 const SNAPSHOT_NEARBY_DISTANCE = 35;
 
 function defaultDistanceBetween(a, b) {

@@ -7,6 +7,7 @@ import {
 export const ENTITY_AIM_TARGET_OFFSET_Y = 1.0;
 export const DAMAGE_POINT_OFFSET_Y = 1.06;
 export const MARKER_POINT_OFFSET_Y = 2.25;
+export const HITSCAN_ORIGIN_FORWARD_OFFSET = 0.35;
 
 export function entityFeetY(entityY) {
   return Number(entityY || EYE_HEIGHT) - EYE_HEIGHT;
@@ -40,12 +41,22 @@ export function entityMarkerPointY(entityY) {
   return entityFeetY(entityY) + MARKER_POINT_OFFSET_Y;
 }
 
+export function logicalHitscanOriginFromEye(eyePos, forward) {
+  if (!eyePos || !forward) return null;
+  return {
+    x: Number(eyePos.x || 0) + (Number(forward.x || 0) * HITSCAN_ORIGIN_FORWARD_OFFSET),
+    y: Number(eyePos.y || 0) + (Number(forward.y || 0) * HITSCAN_ORIGIN_FORWARD_OFFSET),
+    z: Number(eyePos.z || 0) + (Number(forward.z || 0) * HITSCAN_ORIGIN_FORWARD_OFFSET)
+  };
+}
+
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.entityPoints = {
   ENTITY_AIM_TARGET_OFFSET_Y,
   DAMAGE_POINT_OFFSET_Y,
   MARKER_POINT_OFFSET_Y,
+  HITSCAN_ORIGIN_FORWARD_OFFSET,
   entityFeetY,
   entityAimTargetY,
   entityBodyHitboxYFromFeet,
@@ -53,5 +64,6 @@ runtime.GameShared.entityPoints = {
   entityBodyHitboxY,
   entityHeadHitboxY,
   entityDamagePointY,
-  entityMarkerPointY
+  entityMarkerPointY,
+  logicalHitscanOriginFromEye
 };

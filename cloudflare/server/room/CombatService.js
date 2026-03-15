@@ -79,7 +79,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   return applyDamage(target, damage);
 }
 
-export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '') {
+export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '', pelletIndex = null) {
   if (!target || !out) return;
   if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
     room.recordElimination(sourceId, target.id);
@@ -90,7 +90,7 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
   if (room && typeof room.markSnapshotBurst === 'function') {
     room.markSnapshotBurst([sourceId, target.id], [sourceId, target.id]);
   }
-  room.broadcast({
+  const payload = {
     t: MSG_S2C.DAMAGE_EVENT,
     targetId: target.id,
     sourceId: sourceId,
@@ -101,7 +101,11 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
     shotToken: String(shotToken || ''),
     damage: out.damageApplied || 0,
     killed: !!out.killed
-  });
+  };
+  if (pelletIndex != null && Number.isFinite(Number(pelletIndex))) {
+    payload.pelletIndex = Math.max(0, Math.floor(Number(pelletIndex)));
+  }
+  room.broadcast(payload);
 }
 
 export function broadcastDeathRespawn(room, target) {

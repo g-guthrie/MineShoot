@@ -9,8 +9,9 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
-    function syncPlayerState(selfState, dt) {
+    function syncPlayerState(selfState, dt, options) {
         if (!selfState) return;
+        var opts = options || {};
         var RT = runtime();
         var abilityFxView = RT.GameAbilityFx || null;
         var matchState = RT.GameNet && RT.GameNet.getMatchState
@@ -61,40 +62,42 @@
             }
         }
 
-        if (
-            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
-            RT.GamePlayer &&
-            RT.GamePlayer.applyAuthoritativeMotion
-        ) {
-            RT.GamePlayer.applyAuthoritativeMotion(selfState);
-        } else if (
-            selfState.alive !== false &&
-            RT.GamePlayer &&
-            RT.GamePlayer.reconcileAuthoritativeMotion
-        ) {
-            var inputSyncState = RT.GameNet && RT.GameNet.getInputSyncState
-                ? RT.GameNet.getInputSyncState()
-                : null;
-            var connectionTimingState = RT.GameNet && RT.GameNet.getConnectionTimingState
-                ? RT.GameNet.getConnectionTimingState()
-                : null;
-            var pendingInputs = RT.GameNet && RT.GameNet.getPendingInputSamples
-                ? RT.GameNet.getPendingInputSamples()
-                : [];
-            RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
-                dt: dt,
-                allowReplayCorrection: true,
-                pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
-                lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
-                lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
-                ackDrift: inputSyncState ? Number(inputSyncState.ackDrift || 0) : 0,
-                latestPendingAgeMs: inputSyncState ? Number(inputSyncState.latestPendingAgeMs || 0) : 0,
-                latestAckAgeMs: inputSyncState ? Number(inputSyncState.latestAckAgeMs || 0) : 0,
-                rttMs: connectionTimingState ? Number(connectionTimingState.rttMs || 0) : 0,
-                rttJitterMs: connectionTimingState ? Number(connectionTimingState.rttJitterMs || 0) : 0,
-                pendingInputs: pendingInputs,
-                snapshotAt: Date.now()
-            });
+        if (opts.skipMotionSync !== true) {
+            if (
+                selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
+                RT.GamePlayer &&
+                RT.GamePlayer.applyAuthoritativeMotion
+            ) {
+                RT.GamePlayer.applyAuthoritativeMotion(selfState);
+            } else if (
+                selfState.alive !== false &&
+                RT.GamePlayer &&
+                RT.GamePlayer.reconcileAuthoritativeMotion
+            ) {
+                var inputSyncState = RT.GameNet && RT.GameNet.getInputSyncState
+                    ? RT.GameNet.getInputSyncState()
+                    : null;
+                var connectionTimingState = RT.GameNet && RT.GameNet.getConnectionTimingState
+                    ? RT.GameNet.getConnectionTimingState()
+                    : null;
+                var pendingInputs = RT.GameNet && RT.GameNet.getPendingInputSamples
+                    ? RT.GameNet.getPendingInputSamples()
+                    : [];
+                RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
+                    dt: dt,
+                    allowReplayCorrection: true,
+                    pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
+                    lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
+                    lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
+                    ackDrift: inputSyncState ? Number(inputSyncState.ackDrift || 0) : 0,
+                    latestPendingAgeMs: inputSyncState ? Number(inputSyncState.latestPendingAgeMs || 0) : 0,
+                    latestAckAgeMs: inputSyncState ? Number(inputSyncState.latestAckAgeMs || 0) : 0,
+                    rttMs: connectionTimingState ? Number(connectionTimingState.rttMs || 0) : 0,
+                    rttJitterMs: connectionTimingState ? Number(connectionTimingState.rttJitterMs || 0) : 0,
+                    pendingInputs: pendingInputs,
+                    snapshotAt: Date.now()
+                });
+            }
         }
 
         if (RT.GameThrowables && RT.GameThrowables.setNetworkInventoryState && RT.GameUI && RT.GameUI.updateThrowableInfo) {

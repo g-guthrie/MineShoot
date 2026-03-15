@@ -42,11 +42,12 @@ function expectedPointForPellet(camera, hitbox, weaponStats, pelletIndex, shotTo
   return hit ? roundPoint(hit.point) : null;
 }
 
-async function loadHitscanHarness({ weaponId, targets, netActive = true }) {
+async function loadHitscanHarness({ weaponId, targets, netActive = true, netConnected = netActive, cameraPosition = null, eyeWorldPosition = null, adsActive = false, authorityOverride = null, randomValues = null }) {
   const code = await fs.readFile(new URL('../../js/combat/hitscan.js', import.meta.url), 'utf8');
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 200);
-  camera.position.set(0, 1.6, 0);
-  camera.lookAt(new THREE.Vector3(0, 1.6, -10));
+  const initialCameraPosition = cameraPosition || { x: 0, y: 1.6, z: 0 };
+  camera.position.set(initialCameraPosition.x, initialCameraPosition.y, initialCameraPosition.z);
+  camera.lookAt(new THREE.Vector3(initialCameraPosition.x, initialCameraPosition.y, initialCameraPosition.z - 10));
   camera.updateProjectionMatrix();
 
   const runtime = {
@@ -56,7 +57,7 @@ async function loadHitscanHarness({ weaponId, targets, netActive = true }) {
       getWeaponFalloffProfile,
       getWeaponPresentation,
       resolveWeaponAimProfile,
-      hitscanAuthority: {
+      hitscanAuthority: authorityOverride || {
         sampleSpreadOffset
       },
       damage: null
@@ -67,6 +68,7 @@ async function loadHitscanHarness({ weaponId, targets, netActive = true }) {
     },
     GameNet: {
       isActive() { return netActive; },
+      isConnected() { return netConnected; },
       getLockTargets() { return targets; },
       getHitboxArray() {
         const out = [];
@@ -81,8 +83,12 @@ async function loadHitscanHarness({ weaponId, targets, netActive = true }) {
       getCollidables() { return []; }
     },
     GamePlayer: {
-      getAdsState() { return { active: false, weaponId }; },
+      getAdsState() { return { active: adsActive, weaponId }; },
       getCamera() { return camera; },
+      getEyeWorldPosition() {
+        const eye = eyeWorldPosition || initialCameraPosition;
+        return new THREE.Vector3(eye.x, eye.y, eye.z);
+      },
       getMuzzleWorldPosition() { return new THREE.Vector3(0, 1.6, 0); },
       getRotation() { return { yaw: 0, pitch: 0 }; },
       getPosition() { return new THREE.Vector3(0, 1.6, 0); },
@@ -94,6 +100,13 @@ async function loadHitscanHarness({ weaponId, targets, netActive = true }) {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
     THREE,
+    Math: randomValues
+      ? Object.assign(Object.create(Math), {
+          random() {
+            return randomValues.length ? Number(randomValues.shift()) : 0.5;
+          }
+        })
+      : Math,
     window: {
       innerWidth: 1280,
       innerHeight: 720
@@ -180,7 +193,12 @@ test('shotgun multiplayer fire keeps pellet order aligned with the shared shot-t
 
   harness.GameHitscan.fire(
     harness.camera,
-    (_hitboxMesh, hitPoint) => { firstFire.push(roundPoint(hitPoint)); },
+    (_hitboxMesh, hitPoint, _distance, _hitType, _damage, _weapon, pelletIndex) => {
+      firstFire.push({
+        point: roundPoint(hitPoint),
+        pelletIndex
+      });
+    },
     () => {},
     shotToken
   );
@@ -188,23 +206,90 @@ test('shotgun multiplayer fire keeps pellet order aligned with the shared shot-t
   harness.setNow(2500);
   harness.GameHitscan.fire(
     harness.camera,
-    (_hitboxMesh, hitPoint) => { secondFire.push(roundPoint(hitPoint)); },
+    (_hitboxMesh, hitPoint, _distance, _hitType, _damage, _weapon, pelletIndex) => {
+      secondFire.push({
+        point: roundPoint(hitPoint),
+        pelletIndex
+      });
+    },
     () => {},
     shotToken
   );
 
   const expected = [];
   for (let pelletIndex = 0; pelletIndex < Number(gameplayTuning.weaponStats.shotgun.pellets || 0); pelletIndex++) {
-    expected.push(expectedPointForPellet(
-      harness.camera,
-      bodyHitbox,
-      gameplayTuning.weaponStats.shotgun,
-      pelletIndex,
-      shotToken
-    ));
+    expected.push({
+      point: expectedPointForPellet(
+        harness.camera,
+        bodyHitbox,
+        gameplayTuning.weaponStats.shotgun,
+        pelletIndex,
+        shotToken
+      ),
+      pelletIndex
+    });
   }
 
   assert.equal(firstFire.length, Number(gameplayTuning.weaponStats.shotgun.pellets || 0));
   assert.deepEqual(firstFire, secondFire);
   assert.deepEqual(firstFire, expected);
+});
+
+test('shotgun predicted-hit gating is pellet-specific, not just shot-specific', async () => {
+  const targetId = 'net:pellet-target';
+  const bodyHitbox = createHitbox('body', { x: 0, y: 1.6, z: -10 }, { x: 40, y: 20, z: 0.6 }, targetId);
+  const harness = await loadHitscanHarness({
+    weaponId: 'shotgun',
+    targets: [{
+      targetId,
+      ownerType: 'net',
+      worldPos: new THREE.Vector3(0, 1.6, -10),
+      hitbox: bodyHitbox,
+      bodyHitbox,
+      alive: true
+    }],
+    authorityOverride: {
+      sampleSpreadOffset,
+      resolveHitscanShot() {
+        return [{
+          target: { targetId },
+          pelletIndex: 0,
+          damage: 17,
+          hitType: 'body'
+        }];
+      }
+    }
+  });
+
+  assert.equal(harness.GameHitscan.shouldPredictNetHit(harness.camera, bodyHitbox, 'pellet-gate', 0), true);
+  assert.equal(harness.GameHitscan.shouldPredictNetHit(harness.camera, bodyHitbox, 'pellet-gate', 1), false);
+});
+
+test('multiplayer hitscan ignores stale remote hitboxes while disconnected', async () => {
+  const targetId = 'net:offline-target';
+  const bodyHitbox = createHitbox('body', { x: 0, y: 1.6, z: -12 }, { x: 8, y: 8, z: 0.6 }, targetId);
+  const harness = await loadHitscanHarness({
+    weaponId: 'rifle',
+    netActive: true,
+    netConnected: false,
+    targets: [{
+      targetId,
+      ownerType: 'net',
+      worldPos: new THREE.Vector3(0, 1.6, -12),
+      hitbox: bodyHitbox,
+      bodyHitbox,
+      alive: true
+    }]
+  });
+
+  let hitCount = 0;
+  harness.GameHitscan.fire(
+    harness.camera,
+    () => { hitCount += 1; },
+    () => {},
+    'offline-net'
+  );
+
+  assert.equal(hitCount, 0);
+  assert.equal(harness.GameHitscan.shouldPredictNetHit(harness.camera, bodyHitbox, 'offline-net', 0), false);
 });

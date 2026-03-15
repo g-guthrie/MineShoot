@@ -21,11 +21,13 @@ import {
   HEAD_HITBOX_SIZE
 } from '../../shared/entity-constants.js';
 import {
+  HITSCAN_ORIGIN_FORWARD_OFFSET,
   entityBodyHitboxY,
   entityBodyHitboxYFromFeet,
   entityFeetY,
   entityHeadHitboxY,
-  entityHeadHitboxYFromFeet
+  entityHeadHitboxYFromFeet,
+  logicalHitscanOriginFromEye
 } from '../../shared/entity-points.js';
 
 test('feet-based hitbox helpers preserve the shared center offsets', () => {
@@ -78,4 +80,11 @@ test('combat hitbox vertical split is derived from avatar torso and head primiti
   assert.equal(HEAD_HITBOX_SIZE.z, headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING);
   assert.equal(HEAD_HITBOX_SIZE.y, AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING);
   assert.equal(headBottomY, primitiveHeadBottomY);
+});
+
+test('logical hitscan origin pushes forward from the eye by the shared muzzle offset', () => {
+  assert.deepEqual(
+    logicalHitscanOriginFromEye({ x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: -1 }),
+    { x: 1, y: 2, z: 3 - HITSCAN_ORIGIN_FORWARD_OFFSET }
+  );
 });

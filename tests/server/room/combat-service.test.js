@@ -110,3 +110,36 @@ test('broadcastDamageEvent carries the shot token for predicted-hit reconciliati
     entityIds: ['usr_attacker', 'usr_target']
   }]);
 });
+
+test('broadcastDamageEvent carries pelletIndex when present', () => {
+  const broadcasts = [];
+  const room = {
+    broadcast(payload) {
+      broadcasts.push(payload);
+    },
+    markEntityEngaged() {},
+    markSnapshotBurst() {},
+    recordElimination() {}
+  };
+
+  broadcastDamageEvent(room, 'usr_attacker', { id: 'usr_target' }, {
+    hp: 300,
+    armor: 40,
+    damageApplied: 14,
+    killed: false
+  }, 'body', 'shotgun', 'shot_456', 3);
+
+  assert.deepEqual(broadcasts, [{
+    t: 'damage_event',
+    targetId: 'usr_target',
+    sourceId: 'usr_attacker',
+    health: 300,
+    armor: 40,
+    hitType: 'body',
+    weaponId: 'shotgun',
+    shotToken: 'shot_456',
+    pelletIndex: 3,
+    damage: 14,
+    killed: false
+  }]);
+});

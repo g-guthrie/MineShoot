@@ -155,9 +155,10 @@
             }
 
             var inputSendTimer = opts.getInputSendTimer() - dt;
+            var inputSendInterval = Math.max(0.001, Number(opts.getInputSendInterval() || 0));
             if (inputSendTimer <= 0) {
-                inputSendTimer = opts.getInputSendInterval();
-                if (playerPos && rotation) {
+                inputSendTimer += inputSendInterval;
+                if (playerPos && rotation && (!opts.isConnected || opts.isConnected())) {
                     var playerApi = opts.getPlayerApi();
                     var anim = (playerApi && playerApi.getAnimNetState) ? playerApi.getAnimNetState() : null;
                     var inputState = (playerApi && playerApi.getNetworkInputState) ? playerApi.getNetworkInputState() : null;
@@ -165,18 +166,16 @@
                     var sentAt = Date.now();
                     var inputSeqHistory = opts.getInputSeqHistory();
                     var previousSample = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
-                    var dtMs = previousSample ? Math.max(1, sentAt - Number(previousSample.at || sentAt)) : Math.round(opts.getInputSendInterval() * 1000);
-                    opts.setLastInputSeqSent(seq);
-                    inputSeqHistory.push({
+                    var dtMs = previousSample ? Math.max(1, sentAt - Number(previousSample.at || sentAt)) : Math.round(inputSendInterval * 1000);
+                    var sentSample = {
                         seq: seq,
                         at: sentAt,
                         dtMs: dtMs,
                         yaw: rotation.yaw || 0,
                         pitch: rotation.pitch || 0,
                         inputState: cloneInputState(inputState)
-                    });
-                    if (inputSeqHistory.length > 96) inputSeqHistory.shift();
-                    wsSend({
+                    };
+                    if (wsSend({
                         t: opts.getInputMessageType(),
                         seq: seq,
                         dtMs: dtMs,
@@ -191,7 +190,14 @@
                         adsActive: !!(inputState && inputState.adsActive),
                         weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
                         inputMode: 'intent'
-                    });
+                    })) {
+                        opts.setLastInputSeqSent(seq);
+                        if (opts.setLastSentInputSample) {
+                            opts.setLastSentInputSample(sentSample);
+                        }
+                        inputSeqHistory.push(sentSample);
+                        if (inputSeqHistory.length > 96) inputSeqHistory.shift();
+                    }
                 }
             }
             opts.setInputSendTimer(inputSendTimer);

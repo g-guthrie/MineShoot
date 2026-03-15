@@ -8,6 +8,10 @@ import {
   createMovementInputState,
   stepAuthoritativeMovement
 } from '../../shared/authoritative-movement.js';
+import {
+  replayMotionState,
+  shouldReplayAuthoritativeCorrection
+} from '../../shared/authoritative-reconciliation.js';
 
 class FakeDocument {
   constructor() {
@@ -112,6 +116,10 @@ async function loadPlayerMovementHarness(options = {}) {
       authoritativeMovement: {
         createMovementInputState,
         stepAuthoritativeMovement
+      },
+      authoritativeReconciliation: {
+        replayMotionState,
+        shouldReplayAuthoritativeCorrection
       },
       gameplayTuning: {
         movement: {},
@@ -439,4 +447,69 @@ test('jump while ADS keeps the sampled input path aligned with the shared step',
     sprint: false,
     adsActive: true
   });
+});
+
+test('player replay correction restores the airborne forward jump path after local drift', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const acknowledged = createExpectedEntity(harness.worldState.spawn);
+  const replayed = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.documentObj.dispatch('keydown', { code: 'Space' });
+
+  stepAuthoritativeMovement(acknowledged, createInputState({ forward: true, jump: true }), harness.buildStepOptions(0.05));
+  harness.player.update(0.05);
+
+  Object.assign(replayed, JSON.parse(JSON.stringify(acknowledged)));
+  stepAuthoritativeMovement(replayed, createInputState({ forward: true, jump: true }), harness.buildStepOptions(0.05));
+  harness.player.update(0.05);
+
+  harness.player.applyAuthoritativeMotion({
+    ...replayed,
+    x: replayed.x + 3.2,
+    z: replayed.z + 0.8
+  });
+
+  const driftedPos = harness.player.getPosition();
+  assert.ok(Math.hypot(driftedPos.x - replayed.x, driftedPos.z - replayed.z) > 3);
+
+  const pendingInput = {
+    seq: 2,
+    dtMs: 50,
+    yaw: acknowledged.yaw,
+    pitch: acknowledged.pitch,
+    inputState: createInputState({ forward: true, jump: true })
+  };
+  const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
+    dt: 0.05,
+    allowReplayCorrection: true,
+    pendingInputCount: 1,
+    lastSentSeq: 2,
+    lastAckedSeq: 1,
+    latestPendingAgeMs: 80,
+    latestAckAgeMs: 20,
+    ackDrift: 1,
+    hasUnsentInputTail: false,
+    pendingInputs: [pendingInput],
+    rttMs: 60,
+    rttJitterMs: 0
+  });
+
+  assert.equal(corrected, true);
+
+  const expectedCorrected = replayMotionState(acknowledged, [pendingInput], {
+    stepMovement: stepAuthoritativeMovement,
+    bounds: harness.worldState.bounds,
+    collisionBoxes: harness.worldState.collisionBoxes,
+    getGroundHeightAt: harness.worldState.getGroundHeightAt,
+    movementLocked: false,
+    eyeHeight: 1.6,
+    playerHeight: 1.7,
+    playerRadius: 0.35,
+    epsilon: 0.001,
+    fallbackYaw: acknowledged.yaw,
+    fallbackPitch: acknowledged.pitch
+  });
+
+  assertPlayerMatchesExpected(harness.player, expectedCorrected);
 });

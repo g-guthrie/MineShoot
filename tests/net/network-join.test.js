@@ -123,6 +123,8 @@ async function createNetHarness() {
 
   await loadScript('../../js/net/state-view.js', sandbox);
   await loadScript('../../js/net/message-router.js', sandbox);
+  await loadScript('../../js/net/runtime-state.js', sandbox);
+  await loadScript('../../js/net/commands.js', sandbox);
   await loadScript('../../js/net/network.js', sandbox);
 
   const net = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;

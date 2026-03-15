@@ -708,6 +708,7 @@
         var authoritativeY = (typeof state.y === 'number' && isFinite(state.y)) ? Number(state.y) : posY;
         var dy = authoritativeY - posY;
         var horizontalDistSq = (dx * dx) + (dz * dz);
+        var airborne = isGrounded === false || state.isGrounded === false;
         var hardSnapDistance = Number(opts.hardSnapDistance || (adaptiveSelfReconciliation ? reconcileTuning.hardSnapDistanceWu : 4.25) || 4.25);
         var hardSnapVerticalDistance = Number(opts.hardSnapVerticalDistance || (adaptiveSelfReconciliation ? reconcileTuning.hardSnapVerticalWu : 1.25) || 1.25);
         var idleBlendDistance = Number(opts.idleBlendDistance || 0.45);
@@ -722,12 +723,39 @@
         var pendingInputCount = Math.max(0, Number(opts.pendingInputCount || 0));
         var latestPendingAgeMs = Math.max(0, Number(opts.latestPendingAgeMs || 0));
         var ackDrift = Math.max(0, Number(opts.ackDrift != null ? opts.ackDrift : (Number(opts.lastSentSeq || 0) - Number(opts.lastAckedSeq || 0))));
+        var hasUnsentInputTail = !!opts.hasUnsentInputTail;
         var movingIntent = hasMovementIntentInput() && !isMovementLocked();
         var replayDistance = movingIntent
             ? Math.max(replayCorrectionDistance, movingReplayCorrectionDistance)
             : replayCorrectionDistance;
         var movingAckDriftLimit = Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.movingAckDriftLimit : 2) || 2);
-        var canCorrectWhileMoving = pendingInputCount <= 2 && ackDrift <= movingAckDriftLimit;
+        var movingPendingInputLimit = 2;
+        if (airborne) {
+            hardSnapDistance = Math.max(
+                hardSnapDistance,
+                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneHardSnapDistanceWu : hardSnapDistance) || hardSnapDistance
+            );
+            hardSnapVerticalDistance = Math.max(
+                hardSnapVerticalDistance,
+                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneHardSnapVerticalWu : hardSnapVerticalDistance) || hardSnapVerticalDistance
+            );
+            replayDistance = Math.max(
+                replayDistance,
+                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneReplayDistanceWu : replayDistance) || replayDistance
+            );
+            pendingReplayGraceMs = Math.max(
+                pendingReplayGraceMs,
+                Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneGraceMs : pendingReplayGraceMs) || pendingReplayGraceMs)
+            );
+            movingAckDriftLimit = Math.max(
+                movingAckDriftLimit,
+                Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneMovingAckDriftLimit : movingAckDriftLimit) || movingAckDriftLimit)
+            );
+            movingPendingInputLimit = Math.max(2, movingAckDriftLimit);
+        }
+        var canCorrectWhileMoving = !hasUnsentInputTail &&
+            pendingInputCount <= movingPendingInputLimit &&
+            ackDrift <= movingAckDriftLimit;
         var allowFreshPendingReplay = movingIntent && horizontalDistSq >= (emergencyReplayDistance * emergencyReplayDistance);
         var pendingInputs = Array.isArray(opts.pendingInputs) ? opts.pendingInputs : [];
         var reconcile = reconciliationHelper();

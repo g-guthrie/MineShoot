@@ -19,7 +19,7 @@ export const gameplayTuning = {
     flags: {
       adaptiveSelfReconciliation: true,
       combatBurstSnapshots: true,
-      shotTokenDamageAggregation: true
+      shotTokenDamageAggregation: false
     },
     ping: {
       cadenceMs: 500,
@@ -35,13 +35,37 @@ export const gameplayTuning = {
       emergencyReplayDistanceWu: 2.4,
       baseGraceMs: 150,
       maxExtraGraceMs: 120,
-      movingAckDriftLimit: 2
+      movingAckDriftLimit: 2,
+      airborneHardSnapDistanceWu: 6.25,
+      airborneHardSnapVerticalWu: 2.75,
+      airborneReplayDistanceWu: 2.6,
+      airborneGraceMs: 260,
+      airborneMovingAckDriftLimit: 4
     },
     combatPriority: {
       burstCadenceMs: 16,
       burstWindowMs: 250,
       engagementTtlMs: 1800,
       maxBurstTargets: 4
+    },
+    remoteInterpolation: {
+      historySize: 20,
+      defaultDelayMs: 78,
+      minDelayMs: 56,
+      maxDelayMs: 160,
+      intervalDelayScale: 1.6,
+      jitterDelayScale: 1.4,
+      freezeGapMinMs: 48,
+      freezeGapMaxMs: 160,
+      freezeGapIntervalScale: 1.25,
+      freezeGapJitterScale: 1.8,
+      maxExtrapolationMinMs: 8,
+      maxExtrapolationMaxMs: 36,
+      maxExtrapolationIntervalScale: 0.28,
+      maxExtrapolationJitterScale: 0.45,
+      serverOffsetSnapDeltaMs: 120,
+      offsetLerpAlpha: 0.12,
+      hitboxLeadMs: 0
     },
     feedback: {
       predictedHitTtlMs: 900,

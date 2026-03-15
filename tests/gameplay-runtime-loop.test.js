@@ -95,6 +95,7 @@ test('gameplay runtime loop wires net reconciliation state into motion sync sepa
   assert.equal(harness.calls.selfSync.length, 1);
   assert.equal(harness.calls.selfSync[0].state.id, 'usr_test');
   assert.deepEqual(harness.calls.selfSync[0].options, {
-    respawnState: { active: true, respawnAt: 1800, remainingMs: 800 }
+    respawnState: { active: true, respawnAt: 1800, remainingMs: 800 },
+    skipMotionSync: true
   });
 });

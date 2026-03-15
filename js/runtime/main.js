@@ -684,27 +684,25 @@
         var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
         var fired = globalThis.__MAYHEM_RUNTIME.GameHitscan.fire(
             camera,
-            function (hitboxMesh, hitPoint, distance, hitType, damage, weapon) {
+            function (hitboxMesh, hitPoint, distance, hitType, damage, weapon, pelletIndex) {
                 if (multiplayerMode && hitboxMesh && hitboxMesh.userData && hitboxMesh.userData.ownerType === 'net') {
-                    if (globalThis.__MAYHEM_RUNTIME.GameUI) {
-                        if (globalThis.__MAYHEM_RUNTIME.GameUI.showPredictedHitMarker) {
-                            globalThis.__MAYHEM_RUNTIME.GameUI.showPredictedHitMarker();
-                        } else if (globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker) {
-                            globalThis.__MAYHEM_RUNTIME.GameUI.showHitMarker();
-                        }
-                    }
-                    if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play && document.hasFocus()) {
-                        globalThis.__MAYHEM_RUNTIME.GameAudio.play('bulletImpact', {
-                            killed: false,
-                            hitType: hitType,
-                            weapon: weapon && weapon.id ? weapon.id : ''
-                        });
-                    }
-                    if (globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync &&
-                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.notifyPredictedLocalHit) {
-                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.notifyPredictedLocalHit({
+                    var netApi = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+                    var canPredictNetworkHit = !!(netApi && netApi.isConnected && netApi.isConnected());
+                    var shouldPredictNetHit = canPredictNetworkHit && (!(globalThis.__MAYHEM_RUNTIME.GameHitscan &&
+                        globalThis.__MAYHEM_RUNTIME.GameHitscan.shouldPredictNetHit) ||
+                        globalThis.__MAYHEM_RUNTIME.GameHitscan.shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex));
+                    if (shouldPredictNetHit &&
+                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync &&
+                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.emitPredictedLocalDamageFeedback) {
+                        globalThis.__MAYHEM_RUNTIME.GameNetFeedbackSync.emitPredictedLocalDamageFeedback({
                             weaponId: weapon && weapon.id ? weapon.id : '',
-                            shotToken: shotToken
+                            hitType: hitType,
+                            shotToken: shotToken,
+                            pelletIndex: pelletIndex,
+                            damage: damage,
+                            worldPos: hitPoint,
+                            camera: camera,
+                            killed: false
                         });
                     }
                     return;
@@ -1028,9 +1026,21 @@
             globalThis.__MAYHEM_RUNTIME.GameNet.update(dt, playerPos, playerRot);
             var matchContext = readMatchContext();
             var selfState = matchContext.selfState;
+            var selfMotionSynced = false;
             if (selfState) {
+                if (globalThis.__MAYHEM_RUNTIME.GameNetSelfMotionSync && globalThis.__MAYHEM_RUNTIME.GameNetSelfMotionSync.syncPlayerMotion) {
+                    globalThis.__MAYHEM_RUNTIME.GameNetSelfMotionSync.syncPlayerMotion(
+                        globalThis.__MAYHEM_RUNTIME.GameNet.getSelfReconciliationState
+                            ? (globalThis.__MAYHEM_RUNTIME.GameNet.getSelfReconciliationState() || selfState)
+                            : selfState,
+                        dt
+                    );
+                    selfMotionSynced = true;
+                }
                 if (globalThis.__MAYHEM_RUNTIME.GameNetSelfSync && globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState) {
-                    globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState(selfState, dt);
+                    globalThis.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState(selfState, dt, {
+                        skipMotionSync: selfMotionSynced
+                    });
                 }
             }
 

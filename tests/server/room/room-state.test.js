@@ -134,14 +134,14 @@ test('room state helper builds welcome and snapshot payloads from shared room st
     isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
     roomPhaseActive: 'active',
     emptyMatchState,
-    roomSimTickMs: 33,
+    roomSimTickMs: 1000 / 60,
     teamAlpha: 'alpha',
     teamBravo: 'bravo'
   };
   const welcome = buildWelcomePayload(room, 'u1', deps);
   assert.equal(welcome.t, 'welcome');
   assert.equal(welcome.privateRoomPhase, 'active');
-  assert.equal(welcome.tickRate, 30);
+  assert.equal(welcome.tickRate, 60);
   assert.deepEqual(welcome.worldFlags, { envV2: true, terrainPhysicsV2: false });
   assert.equal(welcome.matchState.lms.activeBeacon.id, 'b1');
 
@@ -181,14 +181,14 @@ test('room state helper prioritizes snapshot cadence for self, engaged, nearby, 
   const nearby = { id: 'u3', x: 10, y: 1.6, z: 0 };
   const far = { id: 'u4', x: 80, y: 1.6, z: 0 };
 
-  assert.equal(snapshotCadenceMsForEntity(viewer, viewer, 1000), 33);
+  assert.equal(snapshotCadenceMsForEntity(viewer, viewer, 1000), 1000 / 60);
   assert.equal(snapshotCadenceMsForEntity(viewer, engaged, 1000, {
     isEngaged(currentViewer, entity) {
       return currentViewer.id === 'u1' && entity.id === 'u2';
     }
-  }), 33);
-  assert.equal(snapshotCadenceMsForEntity(viewer, nearby, 1000), 66);
-  assert.equal(snapshotCadenceMsForEntity(viewer, far, 1000), 132);
+  }), 1000 / 60);
+  assert.equal(snapshotCadenceMsForEntity(viewer, nearby, 1000), 1000 / 30);
+  assert.equal(snapshotCadenceMsForEntity(viewer, far, 1000), 1000 / 15);
 });
 
 test('room state helper builds per-viewer deltas without dropping unsent far entities', () => {

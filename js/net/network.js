@@ -8,21 +8,30 @@
     'use strict';
 
     var GameNet = {};
+    var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 
-    var PROTOCOL = globalThis.__MAYHEM_RUNTIME.GameShared.protocol;
+    var PROTOCOL = runtime.GameShared.protocol;
     var MSG = PROTOCOL.msg;
     var MSG_C2S = MSG.c2s;
     var MSG_S2C = MSG.s2c;
 
     var WS_URL = PROTOCOL.wsPath;
 
-    var GameNetAuth = globalThis.__MAYHEM_RUNTIME.GameNetAuth;
-    var GameNetEntities = globalThis.__MAYHEM_RUNTIME.GameNetEntities;
-    var runtimeAccessFactory = globalThis.__MAYHEM_RUNTIME.GameNetRuntimeAccess;
+    var GameNetAuth = runtime.GameNetAuth;
+    var GameNetEntities = runtime.GameNetEntities;
+    var commandFactory = runtime.GameNetCommands;
+    if (!commandFactory || !commandFactory.create) {
+        throw new Error('GameNetCommands is required before GameNet initialization.');
+    }
+    var runtimeAccessFactory = runtime.GameNetRuntimeAccess;
     if (!runtimeAccessFactory || !runtimeAccessFactory.create) {
         throw new Error('GameNetRuntimeAccess is required before GameNet initialization.');
     }
     var runtimeAccess = runtimeAccessFactory.create();
+    var netStateFactory = runtime.GameNetRuntimeState;
+    if (!netStateFactory || !netStateFactory.create) {
+        throw new Error('GameNetRuntimeState is required before GameNet initialization.');
+    }
 
     var active = false;
     var connected = false;
@@ -32,30 +41,12 @@
     var sceneRef = null;
     var connectAttemptSeq = 0;
 
-    var roomId = 'global';
-    var selfId = '';
-    var selfState = null;
-    var matchState = null;
-    var gameMode = '';
-    var privateRoomPhase = '';
-    var worldMeta = null;
-    var worldMismatchNotified = false;
-    var pendingSpawnSync = null;
-    var pendingRespawnInfo = null;
-    var initialSpawnApplied = false;
-    var pendingWeaponLoadout = null;
-
-    var DEFAULT_INPUT_SEND_INTERVAL = 1 / 30;
-
-    var inputSeq = 1;
-    var lastInputSeqSent = 0;
-    var lastInputSeqAcked = 0;
-    var inputSeqHistory = [];
-    var inputSendTimer = 0;
-    var inputSendInterval = DEFAULT_INPUT_SEND_INTERVAL;
-    var pingSendTimer = 0.5;
-
-    var snapshotMap = new Map();
+    var DEFAULT_INPUT_SEND_INTERVAL = 1 / 60;
+    var netState = netStateFactory.create({
+        initialRoomId: 'global',
+        inputSendInterval: DEFAULT_INPUT_SEND_INTERVAL
+    });
+    var queues = netState.getQueueRefs();
     var snapshotHelper = null;
     var lastSnapshotServerTime = 0;
     var lastSnapshotReceivedAt = 0;
@@ -69,19 +60,10 @@
     var estimatedRttMs = NaN;
     var rttJitterMs = 0;
     var lastPongAt = 0;
+    var pingSendTimer = 0.5;
 
-    var remoteProjectileState = [];
-    var remoteFireZoneState = [];
-    var throwAckQueue = [];
-    var throwRejectQueue = [];
-    var throwableEventQueue = [];
-    var abilityEventQueue = [];
-    var classCastResultQueue = [];
-    var damageFeedbackQueue = [];
-    var incomingDamageFeedbackQueue = [];
-
-    var notices = [];
     var cloneWorldFlags = PROTOCOL.cloneWorldFlags;
+    var sanitizeRoomId = PROTOCOL.sanitizeRoomId;
     var joinAttempt = null;
 
     function clearJoinAttemptTimer(attempt) {
@@ -115,7 +97,7 @@
         if (typeof current.resolve === 'function') {
             current.resolve({
                 roomId: current.expectedRoomId,
-                selfId: current.selfId || selfId || ''
+                selfId: current.selfId || netState.getSelfId() || ''
             });
         }
         return true;
@@ -124,13 +106,13 @@
     function markJoinConnectStart() {
         if (!joinAttempt || joinAttempt.timer) return;
         joinAttempt.timer = setTimeout(function () {
-            failJoin('Timed out joining room ' + String(joinAttempt && joinAttempt.expectedRoomId || roomId || '').toUpperCase() + '.');
+            failJoin('Timed out joining room ' + String(joinAttempt && joinAttempt.expectedRoomId || netState.getRoomId() || '').toUpperCase() + '.');
         }, Math.max(1, Number(joinAttempt.timeoutMs || 5000)));
     }
 
     function resolveJoinOnWelcome(data) {
         if (!joinAttempt) return false;
-        var actualRoomId = sanitizeRoomId(data && data.roomId || roomId || 'global');
+        var actualRoomId = sanitizeRoomId(data && data.roomId || netState.getRoomId() || 'global');
         if (actualRoomId !== joinAttempt.expectedRoomId) {
             failJoin(
                 'Joined unexpected room ' + actualRoomId.toUpperCase() +
@@ -139,20 +121,20 @@
             return false;
         }
         joinAttempt.welcomeReceived = true;
-        joinAttempt.selfId = String(data && data.selfId || selfId || '');
+        joinAttempt.selfId = String(data && data.selfId || netState.getSelfId() || '');
         return maybeResolveJoinAttempt();
     }
 
     function resolveJoinOnSelfSnapshot(entityId) {
         if (!joinAttempt) return false;
-        var expectedSelfId = String(joinAttempt.selfId || selfId || '');
+        var expectedSelfId = String(joinAttempt.selfId || netState.getSelfId() || '');
         if (expectedSelfId && String(entityId || '') !== expectedSelfId) return false;
         joinAttempt.selfSnapshotReceived = true;
         return maybeResolveJoinAttempt();
     }
 
     function buildExpectedWorldMeta(roomName) {
-        return PROTOCOL.buildExpectedWorldMeta(roomName || roomId || 'global', PROTOCOL.world);
+        return PROTOCOL.buildExpectedWorldMeta(roomName || netState.getRoomId() || 'global', PROTOCOL.world);
     }
 
     function classStats(classId) {
@@ -160,27 +142,23 @@
     }
 
     function pushNotice(text) {
-        notices.push(text);
-        if (notices.length > 6) notices.shift();
+        netState.pushNotice(text);
     }
 
     function consumeNotice() {
-        if (notices.length === 0) return '';
-        return notices.shift();
+        return netState.consumeNotice();
     }
 
     function wsEndpoint() {
         return runtimeAccess.buildWsEndpoint({
             wsPath: WS_URL,
-            roomId: roomId,
+            roomId: netState.getRoomId(),
             authApi: GameNetAuth
         });
     }
 
-    var sanitizeRoomId = PROTOCOL.sanitizeRoomId;
-
     function gameplayNetworkTuning() {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var shared = runtime.GameShared || {};
         var tuning = shared.gameplayTuning && shared.gameplayTuning.network
             ? shared.gameplayTuning.network
             : null;
@@ -285,39 +263,38 @@
 
     function updateRemoteFromSnapshot(entity, snapshotMeta) {
         if (!sceneRef) return;
-        if (entity.id === selfId) {
+        if (entity.id === netState.getSelfId()) {
             if (!shouldAcceptSelfSnapshot(entity, snapshotMeta)) return;
-            selfState = entity;
+            netState.setSelfState(entity);
             resolveJoinOnSelfSnapshot(entity.id);
             var ackSeq = readSelfSnapshotSeq(entity);
             var acceptedServerTime = readSnapshotServerTime(snapshotMeta);
             if (ackSeq > 0) {
                 lastAppliedSelfSeq = Math.max(lastAppliedSelfSeq, ackSeq);
-                lastInputSeqAcked = Math.max(lastInputSeqAcked, ackSeq);
+                netState.ackInputSeq(ackSeq);
                 lastAcceptedSelfAckAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || Date.now()));
-                if (inputSeqHistory.length > 0) {
-                    inputSeqHistory = inputSeqHistory.filter(function (entry) {
-                        return entry && Number(entry.seq || 0) > lastInputSeqAcked;
-                    });
-                }
             }
             if (acceptedServerTime > 0) {
                 lastAppliedSelfServerTime = Math.max(lastAppliedSelfServerTime, acceptedServerTime);
             }
-            if (!initialSpawnApplied && entity && typeof entity.x === 'number' && typeof entity.z === 'number') {
-                pendingSpawnSync = {
+            if (!netState.getInitialSpawnApplied() && entity && typeof entity.x === 'number' && typeof entity.z === 'number') {
+                netState.setPendingSpawnSync({
                     x: Number(entity.x || 0),
                     z: Number(entity.z || 0),
                     executeAt: Date.now(),
                     kind: 'initial'
-                };
+                });
             }
             return;
+        }
+        if (netState.recordRemoteSnapshotEntity) {
+            netState.recordRemoteSnapshotEntity(entity.id, entity, snapshotMeta && snapshotMeta.serverTime);
         }
         GameNetEntities.updateFromSnapshot(entity, snapshotMeta);
     }
 
     function applyPendingSpawnSync() {
+        var pendingSpawnSync = netState.getPendingSpawnSync();
         if (!pendingSpawnSync) return;
         if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return;
         var playerApi = runtimeAccess.getPlayerApi();
@@ -331,9 +308,9 @@
             playerCombatApi.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
         }
         if (pendingSpawnSync.kind === 'initial') {
-            initialSpawnApplied = true;
+            netState.setInitialSpawnApplied(true);
         }
-        pendingSpawnSync = null;
+        netState.setPendingSpawnSync(null);
     }
 
     function updateSnapshotTiming(opts) {
@@ -369,6 +346,9 @@
     function applySnapshot(entities, projectiles, fireZones, opts) {
         opts = opts || {};
         updateSnapshotTiming(opts);
+        if (netState.recordRemoteSnapshotTiming) {
+            netState.recordRemoteSnapshotTiming(opts.serverTime, opts.receivedAt);
+        }
         if (snapshotHelper && snapshotHelper.applySnapshot) {
             snapshotHelper.applySnapshot(entities, projectiles, fireZones, opts);
             return;
@@ -377,60 +357,66 @@
 
         var renderMap = GameNetEntities.getRenderMap();
         if (!opts.delta) {
-            snapshotMap.clear();
+            netState.clearSnapshotMap();
         }
         for (var i = 0; i < entities.length; i++) {
             var e = entities[i];
-            snapshotMap.set(e.id, e);
+            netState.setSnapshotEntity(e.id, e);
             updateRemoteFromSnapshot(e, opts);
         }
         var removedIds = Array.isArray(opts.removedEntityIds) ? opts.removedEntityIds : [];
         for (i = 0; i < removedIds.length; i++) {
-            snapshotMap.delete(removedIds[i]);
+            netState.deleteSnapshotEntity(removedIds[i]);
             GameNetEntities.removeRemoteVisual(removedIds[i]);
         }
 
         var toRemove = [];
         renderMap.forEach(function (_v, id) {
-            if (!snapshotMap.has(id)) toRemove.push(id);
+            if (!netState.getSnapshotMap().has(id)) toRemove.push(id);
         });
         for (i = 0; i < toRemove.length; i++) {
             GameNetEntities.removeRemoteVisual(toRemove[i]);
         }
+        if (netState.pruneRemoteSnapshotTimelines) {
+            netState.pruneRemoteSnapshotTimelines(netState.getSnapshotMap());
+        }
 
         if (projectiles !== undefined) {
-            remoteProjectileState = Array.isArray(projectiles) ? projectiles.slice() : [];
+            netState.setRemoteProjectileState(projectiles);
         }
         if (fireZones !== undefined) {
-            remoteFireZoneState = Array.isArray(fireZones) ? fireZones.slice() : [];
+            netState.setRemoteFireZoneState(fireZones);
         }
     }
 
     function initSnapshotHelper() {
-        if (!globalThis.__MAYHEM_RUNTIME.GameNetSnapshots || !globalThis.__MAYHEM_RUNTIME.GameNetSnapshots.create) {
+        if (!runtime.GameNetSnapshots || !runtime.GameNetSnapshots.create) {
             snapshotHelper = null;
             return;
         }
-        snapshotHelper = globalThis.__MAYHEM_RUNTIME.GameNetSnapshots.create({
+        snapshotHelper = runtime.GameNetSnapshots.create({
             onEntity: function (entity, snapshotMeta) {
                 updateRemoteFromSnapshot(entity, snapshotMeta);
             },
             onPrune: function (nextMap) {
-                snapshotMap = nextMap;
+                netState.replaceSnapshotMap(nextMap);
                 var renderMap = GameNetEntities.getRenderMap();
                 var toRemove = [];
                 renderMap.forEach(function (_v, id) {
-                    if (!snapshotMap.has(id)) toRemove.push(id);
+                    if (!netState.getSnapshotMap().has(id)) toRemove.push(id);
                 });
                 for (var i = 0; i < toRemove.length; i++) {
                     GameNetEntities.removeRemoteVisual(toRemove[i]);
                 }
+                if (netState.pruneRemoteSnapshotTimelines) {
+                    netState.pruneRemoteSnapshotTimelines(nextMap);
+                }
             },
             onProjectiles: function (projectiles) {
-                remoteProjectileState = projectiles;
+                netState.setRemoteProjectileState(projectiles);
             },
             onFireZones: function (fireZones) {
-                remoteFireZoneState = fireZones;
+                netState.setRemoteFireZoneState(fireZones);
             }
         });
     }
@@ -438,7 +424,7 @@
     function damagePointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId) {
+        if (entityId === netState.getSelfId()) {
             var playerApi = runtimeAccess.getPlayerApi();
             var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition() : null;
             if (!selfPos) return null;
@@ -461,7 +447,7 @@
     function markerPointForEntityId(entityId) {
         if (!entityId) return null;
 
-        if (entityId === selfId) {
+        if (entityId === netState.getSelfId()) {
             var playerApi = runtimeAccess.getPlayerApi();
             var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition() : null;
             if (!selfPos) return null;
@@ -482,15 +468,25 @@
     }
 
     function flushPendingWeaponLoadout() {
-        var pending = pendingWeaponLoadout;
+        var pending = netState.getPendingWeaponLoadout();
         if (!pending) return false;
         if (!wsSend({
             t: MSG_C2S.WEAPON_LOADOUT,
             slot1: pending.slot1,
             slot2: pending.slot2
         })) return false;
-        pendingWeaponLoadout = null;
+        netState.setPendingWeaponLoadout(null);
         return true;
+    }
+
+    function clearRemoteWorldState() {
+        netState.clearSnapshotMap();
+        if (netState.pruneRemoteSnapshotTimelines) {
+            netState.pruneRemoteSnapshotTimelines(new Map());
+        }
+        netState.setRemoteProjectileState([]);
+        netState.setRemoteFireZoneState([]);
+        GameNetEntities.cleanup();
     }
 
     function getRenderCoreWorldPosition(render, outVec3) {
@@ -511,6 +507,7 @@
             : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
         if (!entityId) return emptyState;
         var now = Date.now();
+        var selfState = netState.getSelfState();
         var selfFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(selfState)
             : (selfState && selfState.abilityFx ? selfState.abilityFx : null);
@@ -529,9 +526,9 @@
         return emptyState;
     }
 
-    var messageRouter = globalThis.__MAYHEM_RUNTIME.GameNetMessageRouter.create({
+    var messageRouter = runtime.GameNetMessageRouter.create({
         msgTypes: MSG_S2C,
-        runtime: globalThis.__MAYHEM_RUNTIME,
+        runtime: runtime,
         sanitizeRoomId: sanitizeRoomId,
         buildExpectedWorldMeta: buildExpectedWorldMeta,
         cloneWorldFlags: cloneWorldFlags,
@@ -541,79 +538,94 @@
         resolveJoinOnWelcome: resolveJoinOnWelcome,
         damagePointForEntityId: damagePointForEntityId,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
-        getSelfId: function () { return selfId; },
-        setSelfId: function (value) { selfId = value; },
-        getRoomId: function () { return roomId; },
-        setRoomId: function (value) { roomId = value; },
-        getGameMode: function () { return gameMode; },
-        setGameMode: function (value) { gameMode = value; },
-        getPrivateRoomPhase: function () { return privateRoomPhase; },
-        setPrivateRoomPhase: function (value) { privateRoomPhase = value; },
-        getMatchState: function () { return matchState; },
-        setMatchState: function (value) { matchState = value; },
+        getSelfId: netState.getSelfId,
+        setSelfId: netState.setSelfId,
+        getRoomId: netState.getRoomId,
+        setRoomId: netState.setRoomId,
+        getGameMode: netState.getGameMode,
+        setGameMode: netState.setGameMode,
+        getPrivateRoomPhase: netState.getPrivateRoomPhase,
+        setPrivateRoomPhase: netState.setPrivateRoomPhase,
+        getMatchState: netState.getMatchState,
+        setMatchState: netState.setMatchState,
         setInputSendInterval: function (value) {
             var next = Number(value || 0);
             if (!isFinite(next) || next <= 0) return;
-            inputSendInterval = Math.max(1 / 90, Math.min(0.1, next));
+            netState.setInputSendInterval(Math.max(1 / 90, Math.min(0.1, next)));
         },
-        getSelfState: function () { return selfState; },
+        getSelfState: netState.getSelfState,
         setConnected: function (value) { connected = !!value; },
-        setPendingRespawnInfo: function (value) { pendingRespawnInfo = value; },
-        setPendingSpawnSync: function (value) { pendingSpawnSync = value; },
-        setWorldMeta: function (value) { worldMeta = value; },
-        getWorldMismatchNotified: function () { return worldMismatchNotified; },
-        setWorldMismatchNotified: function (value) { worldMismatchNotified = !!value; },
+        setPendingRespawnInfo: netState.setPendingRespawnInfo,
+        setPendingSpawnSync: netState.setPendingSpawnSync,
+        setWorldMeta: netState.setWorldMeta,
+        getWorldMismatchNotified: netState.getWorldMismatchNotified,
+        setWorldMismatchNotified: netState.setWorldMismatchNotified,
         getActiveWorldMeta: runtimeAccess.getActiveWorldMeta,
         handlePong: updatePongTiming,
-        throwAckQueue: throwAckQueue,
-        throwRejectQueue: throwRejectQueue,
-        throwableEventQueue: throwableEventQueue,
-        abilityEventQueue: abilityEventQueue,
-        classCastResultQueue: classCastResultQueue,
-        damageFeedbackQueue: damageFeedbackQueue,
-        incomingDamageFeedbackQueue: incomingDamageFeedbackQueue
+        throwAckQueue: queues.throwAckQueue,
+        throwRejectQueue: queues.throwRejectQueue,
+        throwableEventQueue: queues.throwableEventQueue,
+        abilityEventQueue: queues.abilityEventQueue,
+        classCastResultQueue: queues.classCastResultQueue,
+        damageFeedbackQueue: queues.damageFeedbackQueue,
+        incomingDamageFeedbackQueue: queues.incomingDamageFeedbackQueue
     });
 
     function handleMessage(raw) {
         messageRouter.handleMessage(raw);
     }
 
-    var stateView = globalThis.__MAYHEM_RUNTIME.GameNetStateView.create({
+    var stateView = runtime.GameNetStateView.create({
         buildExpectedWorldMeta: buildExpectedWorldMeta,
         cloneWorldFlags: cloneWorldFlags,
         classStats: classStats,
-        getRoomId: function () { return roomId; },
-        getWorldMeta: function () { return worldMeta; },
+        getRoomId: netState.getRoomId,
+        getWorldMeta: netState.getWorldMeta,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
-        getSelfState: function () { return selfState; },
-        getSelfId: function () { return selfId; },
-        getMatchState: function () { return matchState; },
-        getSnapshotMap: function () { return snapshotMap; },
-        getInputSeqHistory: function () { return inputSeqHistory; },
-        getLastInputSeqSent: function () { return lastInputSeqSent; },
-        getLastInputSeqAcked: function () { return lastInputSeqAcked; },
-        getInputSendInterval: function () { return inputSendInterval; },
-        getPendingRespawnInfo: function () { return pendingRespawnInfo; },
-        getGameMode: function () { return gameMode; },
-        getPrivateRoomPhase: function () { return privateRoomPhase; },
-        getRemoteProjectileState: function () { return remoteProjectileState; },
-        getRemoteFireZoneState: function () { return remoteFireZoneState; },
+        getSelfState: netState.getSelfState,
+        getSelfId: netState.getSelfId,
+        getMatchState: netState.getMatchState,
+        getSnapshotMap: netState.getSnapshotMap,
+        getInputSeqHistory: netState.getInputSeqHistory,
+        getLastInputSeqSent: netState.getLastInputSeqSent,
+        getLastInputSeqAcked: netState.getLastInputSeqAcked,
+        getLastSentInputSample: netState.getLastSentInputSample,
+        getInputSendTimer: netState.getInputSendTimer,
+        getInputSendInterval: netState.getInputSendInterval,
+        getPendingRespawnInfo: netState.getPendingRespawnInfo,
+        getGameMode: netState.getGameMode,
+        getPrivateRoomPhase: netState.getPrivateRoomPhase,
+        getRemoteProjectileState: netState.getRemoteProjectileState,
+        getRemoteFireZoneState: netState.getRemoteFireZoneState,
         getConnectionTimingState: connectionTimingState,
         getLastAcceptedSelfAckAt: function () { return lastAcceptedSelfAckAt; },
+        getCurrentInputState: function () {
+            var playerApi = runtimeAccess.getPlayerApi();
+            return playerApi && playerApi.getNetworkInputState
+                ? playerApi.getNetworkInputState()
+                : null;
+        },
+        getCurrentRotation: function () {
+            var playerApi = runtimeAccess.getPlayerApi();
+            return playerApi && playerApi.getRotation
+                ? playerApi.getRotation()
+                : null;
+        },
         getCurrentUser: function () { return runtimeAccess.getCurrentUser(GameNetAuth); },
         getRenderCoreWorldPosition: getRenderCoreWorldPosition,
         markerPointForEntityId: markerPointForEntityId,
         getChokeVictimStateForEntity: getChokeVictimStateForEntity,
         consumeNotice: consumeNotice,
-        throwAckQueue: throwAckQueue,
-        throwRejectQueue: throwRejectQueue,
-        throwableEventQueue: throwableEventQueue,
-        classCastResultQueue: classCastResultQueue,
-        damageFeedbackQueue: damageFeedbackQueue,
-        incomingDamageFeedbackQueue: incomingDamageFeedbackQueue
+        throwAckQueue: queues.throwAckQueue,
+        throwRejectQueue: queues.throwRejectQueue,
+        throwableEventQueue: queues.throwableEventQueue,
+        abilityEventQueue: queues.abilityEventQueue,
+        classCastResultQueue: queues.classCastResultQueue,
+        damageFeedbackQueue: queues.damageFeedbackQueue,
+        incomingDamageFeedbackQueue: queues.incomingDamageFeedbackQueue
     });
 
-    var runtimeCore = globalThis.__MAYHEM_RUNTIME.GameNetRuntimeCore.create({
+    var runtimeCore = runtime.GameNetRuntimeCore.create({
         isActive: function () { return active; },
         setConnected: function (value) { connected = !!value; },
         getSocketIdentity: function () { return runtimeAccess.getSocketIdentity(GameNetAuth); },
@@ -636,30 +648,31 @@
         },
         onTransportConnectStart: markJoinConnectStart,
         onTransportClose: function () {
+            resetConnectionTimingState();
+            clearRemoteWorldState();
             if (joinAttempt) failJoin('Disconnected while joining room ' + joinAttempt.expectedRoomId.toUpperCase() + '.');
         },
         onTransportError: function () {
+            resetConnectionTimingState();
+            clearRemoteWorldState();
             if (joinAttempt) failJoin('WebSocket error while joining room ' + joinAttempt.expectedRoomId.toUpperCase() + '.');
         },
-        getPendingRespawnInfo: function () { return pendingRespawnInfo; },
-        setPendingRespawnInfo: function (value) { pendingRespawnInfo = value; },
+        getPendingRespawnInfo: netState.getPendingRespawnInfo,
+        setPendingRespawnInfo: netState.setPendingRespawnInfo,
         applyPendingSpawnSync: applyPendingSpawnSync,
         isConnected: function () { return connected; },
-        getInputSendTimer: function () { return inputSendTimer; },
-        setInputSendTimer: function (value) { inputSendTimer = value; },
-        getInputSendInterval: function () { return inputSendInterval; },
+        getInputSendTimer: netState.getInputSendTimer,
+        setInputSendTimer: netState.setInputSendTimer,
+        getInputSendInterval: netState.getInputSendInterval,
+        setLastSentInputSample: netState.setLastSentInputSample,
         getPingSendTimer: function () { return pingSendTimer; },
         setPingSendTimer: function (value) { pingSendTimer = Math.max(0, Number(value || 0)); },
         getPingCadenceSeconds: function () { return pingCadenceMs() / 1000; },
         getPingMessageType: function () { return MSG_C2S.PING || 'ping'; },
         getPlayerApi: runtimeAccess.getPlayerApi,
-        nextInputSeq: function () {
-            var current = inputSeq;
-            inputSeq += 1;
-            return current;
-        },
-        getInputSeqHistory: function () { return inputSeqHistory; },
-        setLastInputSeqSent: function (value) { lastInputSeqSent = value; },
+        nextInputSeq: netState.nextInputSeq,
+        getInputSeqHistory: netState.getInputSeqHistory,
+        setLastInputSeqSent: netState.setLastInputSeqSent,
         getInputMessageType: function () { return MSG_C2S.INPUT; },
         getRemoteSyncApi: runtimeAccess.getRemoteSyncApi,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
@@ -678,17 +691,31 @@
         return runtimeCore.wsSend(msg);
     }
 
+    var commandsApi = commandFactory.create({
+        wsSend: wsSend,
+        buildFirePayload: runtimeAccess.buildFirePayload,
+        fireMessageType: MSG_C2S.FIRE,
+        equipWeaponMessageType: MSG_C2S.EQUIP_WEAPON,
+        normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,
+        normalizeThrowPayload: PROTOCOL.normalizeThrowPayload,
+        normalizeAbilityLoadoutPayload: PROTOCOL.normalizeAbilityLoadoutPayload,
+        normalizeClassCastPayload: PROTOCOL.normalizeClassCastPayload,
+        setPendingWeaponLoadout: netState.setPendingWeaponLoadout,
+        flushPendingWeaponLoadout: flushPendingWeaponLoadout
+    });
+
     GameNet.setRoomId = function (nextRoomId) {
-        roomId = sanitizeRoomId(nextRoomId);
-        worldMeta = null;
-        worldMismatchNotified = false;
-        inputSendInterval = DEFAULT_INPUT_SEND_INTERVAL;
+        var nextId = sanitizeRoomId(nextRoomId);
+        netState.setRoomId(nextId);
+        netState.setWorldMeta(null);
+        netState.setWorldMismatchNotified(false);
+        netState.setInputSendInterval(DEFAULT_INPUT_SEND_INTERVAL);
         resetConnectionTimingState();
-        return roomId;
+        return nextId;
     };
 
     GameNet.getRoomId = function () {
-        return roomId;
+        return netState.getRoomId();
     };
 
     GameNet.beginJoinAttempt = function (opts) {
@@ -696,7 +723,7 @@
         resetJoinAttempt();
         return new Promise(function (resolve, reject) {
             joinAttempt = {
-                expectedRoomId: sanitizeRoomId(opts.expectedRoomId || roomId || 'global'),
+                expectedRoomId: sanitizeRoomId(opts.expectedRoomId || netState.getRoomId() || 'global'),
                 timeoutMs: Math.max(1, Number(opts.timeoutMs || 5000)),
                 welcomeReceived: false,
                 selfSnapshotReceived: false,
@@ -730,33 +757,9 @@
 
         GameNetEntities.cleanup();
 
-        snapshotMap.clear();
         snapshotHelper = null;
-        remoteProjectileState = [];
-        remoteFireZoneState = [];
-        throwAckQueue.length = 0;
-        throwRejectQueue.length = 0;
-        throwableEventQueue.length = 0;
-        classCastResultQueue.length = 0;
-        damageFeedbackQueue.length = 0;
-        incomingDamageFeedbackQueue.length = 0;
-        notices = [];
-        pendingSpawnSync = null;
-        pendingRespawnInfo = null;
-        initialSpawnApplied = false;
-        pendingWeaponLoadout = null;
-        lastInputSeqSent = 0;
-        lastInputSeqAcked = 0;
-        inputSeqHistory = [];
-        inputSendInterval = DEFAULT_INPUT_SEND_INTERVAL;
+        netState.reset();
         resetConnectionTimingState();
-        selfState = null;
-        selfId = '';
-        matchState = null;
-        gameMode = '';
-        privateRoomPhase = '';
-        worldMeta = null;
-        worldMismatchNotified = false;
         joinAttempt = null;
     };
 
@@ -777,32 +780,16 @@
     };
 
     GameNet.getEntityStateList = stateView.getEntityStateList;
+    GameNet.getAuthoritativeSelfState = stateView.getAuthoritativeSelfState;
     GameNet.getSelfState = stateView.getSelfState;
+    GameNet.getSelfReconciliationState = stateView.getSelfReconciliationState;
 
     GameNet.update = runtimeCore.update;
 
-    GameNet.sendFire = function (weaponId, shotToken) {
-        var payload = runtimeAccess.buildFirePayload(MSG_C2S.FIRE, weaponId, shotToken);
-        if (!payload) return false;
-        return wsSend(payload);
-    };
-
-    GameNet.sendEquipWeapon = function (weaponId) {
-        if (!weaponId) return false;
-        return wsSend({
-            t: MSG_C2S.EQUIP_WEAPON,
-            weaponId: String(weaponId)
-        });
-    };
-
-    GameNet.sendWeaponLoadout = function (slot1, slot2) {
-        pendingWeaponLoadout = PROTOCOL.normalizeWeaponLoadoutPayload(slot1, slot2);
-        return flushPendingWeaponLoadout();
-    };
-
-    GameNet.sendThrow = function (throwableId, clientThrowId, throwIntent) {
-        return wsSend(PROTOCOL.normalizeThrowPayload(throwableId, clientThrowId, throwIntent));
-    };
+    GameNet.sendFire = commandsApi.sendFire;
+    GameNet.sendEquipWeapon = commandsApi.sendEquipWeapon;
+    GameNet.sendWeaponLoadout = commandsApi.sendWeaponLoadout;
+    GameNet.sendThrow = commandsApi.sendThrow;
 
     GameNet.consumeThrowAck = stateView.consumeThrowAck;
     GameNet.consumeThrowReject = stateView.consumeThrowReject;
@@ -810,14 +797,8 @@
     GameNet.consumeAbilityEvent = stateView.consumeAbilityEvent;
     GameNet.getAuthoritativeThrowableState = stateView.getAuthoritativeThrowableState;
 
-    GameNet.sendAbilityLoadout = function (slot1, slot2) {
-        return wsSend(PROTOCOL.normalizeAbilityLoadoutPayload(slot1, slot2));
-    };
-
-    GameNet.sendAbilityCast = function (slot, castData) {
-        return wsSend(PROTOCOL.normalizeClassCastPayload(slot, castData));
-    };
-
+    GameNet.sendAbilityLoadout = commandsApi.sendAbilityLoadout;
+    GameNet.sendAbilityCast = commandsApi.sendAbilityCast;
 
     GameNet.consumeClassCastResult = stateView.consumeClassCastResult;
     GameNet.consumeDamageFeedback = stateView.consumeDamageFeedback;
@@ -840,10 +821,10 @@
     GameNet.getSnapshotTimingState = snapshotTimingState;
     GameNet.getConnectionTimingState = connectionTimingState;
     GameNet.getEstimatedServerTime = function () {
-        if (!isFinite(serverTimeOffsetMs)) return 0;
+        if (!connected || !isFinite(serverTimeOffsetMs)) return 0;
         return Math.max(0, Date.now() - serverTimeOffsetMs);
     };
 
     resetConnectionTimingState();
-    globalThis.__MAYHEM_RUNTIME.GameNet = GameNet;
+    runtime.GameNet = GameNet;
 })();

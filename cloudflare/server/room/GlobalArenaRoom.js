@@ -12,7 +12,7 @@ import {
   normalizeThrowPayload,
   protocol
 } from '../../../shared/protocol.js';
-import { entityAimTargetY } from '../../../shared/entity-points.js';
+import { entityAimTargetY, logicalHitscanOriginFromEye } from '../../../shared/entity-points.js';
 import {
   nowMs,
   safeJsonParse,
@@ -70,6 +70,7 @@ import {
   buildRewoundTargetEntity,
   clampRewindShotTime,
   readCurrentPose,
+  rewindEntityPose,
   recordEntityPoseHistory,
   seedEntityPoseHistory,
   DEFAULT_MAX_REWIND_MS,
@@ -177,8 +178,8 @@ const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
 const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
-const ROOM_SIM_TICK_MS = 33;
-const ROOM_SNAPSHOT_TICK_MS = 33;
+const ROOM_SIM_TICK_MS = 1000 / 60;
+const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
 const DISCONNECT_GRACE_MS = 15000;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const SNAPSHOT_ENGAGEMENT_TTL_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.engagementTtlMs || 1800));
@@ -1072,14 +1073,36 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  authoritativeHitscanOrigin(player) {
+  authoritativeHitscanOrigin(player, requestedShotTime = 0, now = nowMs()) {
     if (!player) return { x: 0, y: PLAYER_EYE_HEIGHT_WU, z: 0 };
-    const pose = readCurrentPose(player, nowMs()) || {};
+    const rewoundPose = Number(requestedShotTime || 0) > 0
+      ? rewindEntityPose(player, requestedShotTime, now, {
+          maxRewindMs: HITSCAN_MAX_REWIND_MS
+        })
+      : null;
+    const pose = rewoundPose || readCurrentPose(player, now) || {};
+    const forward = combatEntityForward(rewoundPose || player, { normalize3 });
+    const logicalOrigin = logicalHitscanOriginFromEye({
+      x: Number(pose.x || 0),
+      y: Number(pose.y || PLAYER_EYE_HEIGHT_WU),
+      z: Number(pose.z || 0)
+    }, forward);
+    if (logicalOrigin) return logicalOrigin;
     return {
       x: Number(pose.x || 0),
       y: Number(pose.y || PLAYER_EYE_HEIGHT_WU),
       z: Number(pose.z || 0)
     };
+  }
+
+  authoritativeHitscanForward(player, requestedShotTime = 0, now = nowMs()) {
+    if (!player) return { x: 0, y: 0, z: -1 };
+    const rewoundPose = Number(requestedShotTime || 0) > 0
+      ? rewindEntityPose(player, requestedShotTime, now, {
+          maxRewindMs: HITSCAN_MAX_REWIND_MS
+        })
+      : null;
+    return combatEntityForward(rewoundPose || player, { normalize3 });
   }
 
   createThrowableRuntime() {
@@ -1374,7 +1397,8 @@ export class GlobalArenaRoom extends DurableObject {
       markSnapshotBurst: (viewerIds, entityIds, stamp, ttlMs) => this.markSnapshotBurst(viewerIds, entityIds, stamp, ttlMs),
       resolveHitscanShotTime: (fireMsg, stamp) => this.resolveHitscanShotTime(fireMsg, stamp),
       buildRewoundHitscanTarget: (entity, requestedShotTime, stamp) => this.buildRewoundHitscanTarget(entity, requestedShotTime, stamp),
-      authoritativeHitscanOrigin: (entity) => this.authoritativeHitscanOrigin(entity),
+      authoritativeHitscanOrigin: (entity, requestedShotTime, stamp) => this.authoritativeHitscanOrigin(entity, requestedShotTime, stamp),
+      authoritativeHitscanForward: (entity, requestedShotTime, stamp) => this.authoritativeHitscanForward(entity, requestedShotTime, stamp),
       shotTokenDamageAggregation: SHOT_TOKEN_DAMAGE_AGGREGATION,
       hitscanAimOriginMaxOffset: HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU,
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU,

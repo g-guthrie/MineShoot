@@ -3,12 +3,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-async function loadRemoteSync() {
+async function loadRemoteSync(remoteInterpolationTuning = null) {
   const code = await fs.readFile(new URL('../../js/net/remote-sync.js', import.meta.url), 'utf8');
   const sandbox = {
     __MAYHEM_RUNTIME: {
       GameShared: {
-        entityPoints: {}
+        entityPoints: {},
+        gameplayTuning: remoteInterpolationTuning ? {
+          network: {
+            remoteInterpolation: remoteInterpolationTuning
+          }
+        } : null
       }
     },
     globalThis: null,
@@ -225,6 +230,64 @@ test('remote sync does not force the reveal ghost on for choked victims', async 
 
   assert.equal(revealCalls.length > 0, true);
   assert.equal(revealCalls.at(-1).visible, false);
+});
+
+test('remote sync can lead remote combat hitboxes slightly ahead of the rendered model', async () => {
+  const remoteSync = await loadRemoteSync({
+    hitboxLeadMs: 24
+  });
+  const hitboxPositions = [];
+  const originalDateNow = Date.now;
+  Date.now = () => 1000;
+  try {
+    const render = {
+      id: 'usr_remote',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      targetX: 20,
+      targetFootY: 0,
+      targetZ: 0,
+      targetYaw: 0.8,
+      targetPitch: 0.2,
+      snapshotHistory: [
+        { serverTime: 800, receivedAt: 800, x: 0, footY: 0, z: 0, yaw: 0, pitch: 0 },
+        { serverTime: 900, receivedAt: 900, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1 },
+        { serverTime: 1000, receivedAt: 1000, x: 20, footY: 2, z: -4, yaw: 0.8, pitch: 0.2 }
+      ],
+      snapshotIntervalMs: 50,
+      interpolationDelayMs: 90,
+      serverTimeOffsetMs: 0,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: {
+        syncHitboxes(pos) {
+          hitboxPositions.push({ ...pos });
+        }
+      },
+      rigApi: null
+    };
+    const renderMap = new Map([['usr_remote', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(hitboxPositions.length, 1);
+    assert.equal(render.group.position.x > 10 && render.group.position.x < 12, true);
+    assert.equal(hitboxPositions[0].x > render.group.position.x, true);
+    assert.equal(hitboxPositions[0].x < 15, true);
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('remote sync renders from buffered snapshot history instead of chasing the newest target', async () => {

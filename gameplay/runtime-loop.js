@@ -87,15 +87,18 @@
             var respawnState = netView && netView.getRespawnState
                 ? netView.getRespawnState()
                 : null;
+            var selfMotionSynced = false;
             if (selfReconciliationState) {
                 if (runtime.GameNetSelfMotionSync && runtime.GameNetSelfMotionSync.syncPlayerMotion) {
                     runtime.GameNetSelfMotionSync.syncPlayerMotion(selfReconciliationState, dt);
+                    selfMotionSynced = true;
                 }
             }
             if (selfState || respawnState) {
                 if (runtime.GameNetSelfSync && runtime.GameNetSelfSync.syncPlayerState) {
                     runtime.GameNetSelfSync.syncPlayerState(selfState, dt, {
-                        respawnState: respawnState
+                        respawnState: respawnState,
+                        skipMotionSync: selfMotionSynced
                     });
                 }
             }

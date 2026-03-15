@@ -651,7 +651,7 @@ export function handleFire(room, player, msg, deps) {
   const resolveHitscanShotTime = deps.resolveHitscanShotTime;
   const buildRewoundHitscanTarget = deps.buildRewoundHitscanTarget;
   const authoritativeHitscanOrigin = deps.authoritativeHitscanOrigin;
-  const shotTokenDamageAggregation = deps.shotTokenDamageAggregation !== false;
+  const authoritativeHitscanForward = deps.authoritativeHitscanForward;
   const hitscanAimOriginMaxOffset = Number(deps.hitscanAimOriginMaxOffset || 0.9);
   const playerEyeHeight = Number(deps.playerEyeHeight || 0);
   const remoteMuzzleFlashHoldMs = Number(deps.remoteMuzzleFlashHoldMs || 0);
@@ -693,7 +693,10 @@ export function handleFire(room, player, msg, deps) {
   const shotServerTime = typeof resolveHitscanShotTime === 'function'
     ? Number(resolveHitscanShotTime(msg, now) || now)
     : now;
-  let aimForward = room.entityForward(player);
+  const fallbackAimForward = typeof authoritativeHitscanForward === 'function'
+    ? authoritativeHitscanForward(player, shotServerTime, now)
+    : room.entityForward(player);
+  let aimForward = fallbackAimForward;
   if (msg && msg.aimForward && typeof msg.aimForward === 'object') {
     const rawX = Number(msg.aimForward.x || 0);
     const rawY = Number(msg.aimForward.y || 0);
@@ -701,7 +704,7 @@ export function handleFire(room, player, msg, deps) {
     const len = Math.sqrt((rawX * rawX) + (rawY * rawY) + (rawZ * rawZ));
     if (Number.isFinite(len) && len > 0.000001) {
       const normalized = { x: rawX / len, y: rawY / len, z: rawZ / len };
-      const authoritativeForward = room.entityForward(player);
+      const authoritativeForward = fallbackAimForward;
       const dot = (normalized.x * authoritativeForward.x) + (normalized.y * authoritativeForward.y) + (normalized.z * authoritativeForward.z);
       if (dot >= 0.1) {
         aimForward = normalized;
@@ -709,7 +712,7 @@ export function handleFire(room, player, msg, deps) {
     }
   }
   const fallbackAimOrigin = typeof authoritativeHitscanOrigin === 'function'
-    ? authoritativeHitscanOrigin(player)
+    ? authoritativeHitscanOrigin(player, shotServerTime, now)
     : {
         x: Number(player.x || 0),
         y: Number(player.y || playerEyeHeight),
@@ -738,7 +741,7 @@ export function handleFire(room, player, msg, deps) {
       return entity;
     })
     .filter(Boolean);
-  let shots = resolveHitscanShot({
+  const shots = resolveHitscanShot({
     aimOrigin,
     aimForward,
     weaponStats: { ...stats, id: weaponId },
@@ -749,27 +752,6 @@ export function handleFire(room, player, msg, deps) {
     targets,
     worldBoxes: room.worldCollidables()
   });
-  if (shotTokenDamageAggregation && Number(stats.pellets || 1) > 1 && !stats.singleHitFromPellets && Array.isArray(shots) && shots.length > 0) {
-    const groupedShots = new Map();
-    for (let i = 0; i < shots.length; i++) {
-      const shot = shots[i];
-      const target = shot ? shot.target : null;
-      const targetId = target && target.id ? String(target.id) : '';
-      if (!targetId) continue;
-      const existing = groupedShots.get(targetId);
-      if (!existing) {
-        groupedShots.set(targetId, {
-          target,
-          damage: Number(shot.damage || 0),
-          hitType: shot.hitType === 'head' ? 'head' : 'body'
-        });
-        continue;
-      }
-      existing.damage += Number(shot.damage || 0);
-      if (shot.hitType === 'head') existing.hitType = 'head';
-    }
-    shots = Array.from(groupedShots.values());
-  }
   for (let i = 0; i < shots.length; i++) {
     const shot = shots[i];
     const resolvedShotTarget = shot ? shot.target : null;
@@ -784,7 +766,16 @@ export function handleFire(room, player, msg, deps) {
       sourceKind: 'weapon'
     });
     if (!out) continue;
-    broadcastDamageEvent(room, player.id, liveTarget, out, shot.hitType === 'head' ? 'head' : 'body', weaponId, shotToken);
+    broadcastDamageEvent(
+      room,
+      player.id,
+      liveTarget,
+      out,
+      shot.hitType === 'head' ? 'head' : 'body',
+      weaponId,
+      shotToken,
+      Number.isFinite(Number(shot && shot.pelletIndex)) ? Number(shot.pelletIndex) : null
+    );
     if (out.killed) {
       broadcastDeathRespawn(room, liveTarget);
     }

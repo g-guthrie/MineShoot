@@ -36,15 +36,23 @@
         var inputSyncState = netView && netView.getInputSyncState
             ? netView.getInputSyncState()
             : null;
+        var connectionTimingState = netView && netView.getConnectionTimingState
+            ? netView.getConnectionTimingState()
+            : null;
         return {
             authoritativeState: authoritativeState || null,
             pendingInputs: netView && netView.getPendingInputSamples
                 ? netView.getPendingInputSamples()
                 : [],
             pendingInputCount: inputSyncState ? Number(inputSyncState.pendingInputCount || 0) : 0,
+            ackDrift: inputSyncState ? Number(inputSyncState.ackDrift || 0) : 0,
+            latestPendingAgeMs: inputSyncState ? Number(inputSyncState.latestPendingAgeMs || 0) : 0,
+            latestAckAgeMs: inputSyncState ? Number(inputSyncState.latestAckAgeMs || 0) : 0,
             hasUnsentInputTail: !!(inputSyncState && inputSyncState.hasUnsentInputTail),
             lastSentSeq: inputSyncState ? Number(inputSyncState.lastSentSeq || 0) : 0,
-            lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0
+            lastAckedSeq: inputSyncState ? Number(inputSyncState.lastAckedSeq || 0) : 0,
+            rttMs: connectionTimingState ? Number(connectionTimingState.rttMs || 0) : 0,
+            rttJitterMs: connectionTimingState ? Number(connectionTimingState.rttJitterMs || 0) : 0
         };
     }
 
@@ -56,7 +64,10 @@
     function syncPlayerMotion(reconcileState, dt) {
         var normalizedState = normalizeContract(reconcileState);
         var authoritativeState = normalizedState ? normalizedState.authoritativeState : null;
-        if (!authoritativeState) return;
+        if (!authoritativeState) {
+            lastMotionSyncKey = '';
+            return;
+        }
 
         var RT = runtime();
         var abilityFxView = RT.GameAbilityFx || null;
@@ -90,6 +101,11 @@
                 hasUnsentInputTail: !!normalizedState.hasUnsentInputTail,
                 lastSentSeq: Number(normalizedState.lastSentSeq || 0),
                 lastAckedSeq: Number(normalizedState.lastAckedSeq || 0),
+                ackDrift: Number(normalizedState.ackDrift || 0),
+                latestPendingAgeMs: Number(normalizedState.latestPendingAgeMs || 0),
+                latestAckAgeMs: Number(normalizedState.latestAckAgeMs || 0),
+                rttMs: Number(normalizedState.rttMs || 0),
+                rttJitterMs: Number(normalizedState.rttJitterMs || 0),
                 pendingInputs: Array.isArray(normalizedState.pendingInputs)
                     ? normalizedState.pendingInputs
                     : [],

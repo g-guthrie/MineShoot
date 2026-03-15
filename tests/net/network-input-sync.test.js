@@ -11,8 +11,9 @@ import {
   normalizeWeaponLoadoutPayload,
   sanitizeRoomId
 } from '../../shared/protocol.js';
+import { logicalHitscanOriginFromEye } from '../../shared/entity-points.js';
 
-async function loadGameNetHarness() {
+async function loadGameNetHarness(options = {}) {
   const renderMap = new Map();
   const runtime = {
     GameShared: {
@@ -35,7 +36,9 @@ async function loadGameNetHarness() {
           s2c: { WELCOME: 'welcome', SNAPSHOT: 'snapshot', PONG: 'pong' }
         }
       },
-      entityPoints: {}
+      entityPoints: {
+        logicalHitscanOriginFromEye
+      }
     },
     GameNetAuth: {
       getSocketIdentity() { return { id: 'usr_test', username: 'TEST', classId: 'abilities' }; },
@@ -74,6 +77,12 @@ async function loadGameNetHarness() {
           fov: 75,
           position: { x: 1, y: 2, z: 3 }
         };
+      },
+      getMuzzleWorldPosition() {
+        return { x: 7, y: 8, z: 9 };
+      },
+      getEyeWorldPosition() {
+        return { x: 4, y: 5, z: 6 };
       },
       getRotation() {
         return { yaw: 0.25, pitch: -0.1 };
@@ -124,6 +133,8 @@ async function loadGameNetHarness() {
   const context = vm.createContext(sandbox);
   for (const path of [
     '../../js/combat/ability-fx.js',
+    '../../js/net/runtime-state.js',
+    '../../js/net/commands.js',
     '../../js/net/runtime-access.js',
     '../../js/net/message-router.js',
     '../../js/net/runtime-core.js',
@@ -137,19 +148,30 @@ async function loadGameNetHarness() {
 
   const sentMessages = [];
   let transportHooks = null;
+  let transportOpen = false;
   runtime.GameNetTransport = {
     create(opts) {
       transportHooks = opts;
       return {
         connect() {
+          transportOpen = true;
           const socket = { readyState: 1 };
           if (opts.onOpen) opts.onOpen(socket);
         },
         send(msg) {
+          if (!transportOpen) return false;
+          if (typeof options.transportSend === 'function') {
+            const didSend = options.transportSend(msg);
+            if (!didSend) return false;
+          } else if (options.transportSendResult === false) {
+            return false;
+          }
           sentMessages.push(JSON.parse(JSON.stringify(msg)));
           return true;
         },
-        shutdown() {}
+        shutdown() {
+          transportOpen = false;
+        }
       };
     }
   };
@@ -165,6 +187,12 @@ async function loadGameNetHarness() {
       const payload = JSON.stringify(message);
       if (transportHooks && transportHooks.onMessage) {
         transportHooks.onMessage(payload);
+      }
+    },
+    closeTransport(event = { code: 1006 }) {
+      transportOpen = false;
+      if (transportHooks && transportHooks.onClose) {
+        transportHooks.onClose(event);
       }
     }
   };
@@ -184,7 +212,7 @@ test('GameNet records sent input samples with timing metadata', async () => {
   const pending = GameNet.getPendingInputSamples();
   assert.equal(syncState.pendingInputCount, 2);
   assert.equal(pending.length, 2);
-  assert.equal(pending[0].dtMs, 33);
+  assert.equal(pending[0].dtMs, 17);
   assert.equal(pending[1].dtMs, 60);
 });
 
@@ -230,6 +258,32 @@ test('GameNet prunes acked input samples from self snapshots', async () => {
   assert.equal(syncState.lastAckedSeq, 1);
   assert.equal(syncState.pendingInputCount, 1);
   assert.equal(pending[0].seq, 2);
+});
+
+test('GameNet exposes an unsent input tail while local intent continues past the last sent sample', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  assert.equal(GameNet.getInputSyncState().hasUnsentInputTail, true);
+
+  timeState.now = 1005;
+  GameNet.update(0.005, { x: 0.03, y: 1.6, z: -0.02 }, { yaw: 0, pitch: 0 });
+  assert.equal(GameNet.getInputSyncState().hasUnsentInputTail, true);
+});
+
+test('GameNet preserves input send remainder after a long frame instead of resetting the cadence cleanly', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  assert.equal(sentMessages.length, 1);
+
+  timeState.now = 1001;
+  GameNet.update(0.001, { x: 0.01, y: 1.6, z: -0.01 }, { yaw: 0, pitch: 0 });
+  assert.equal(sentMessages.length, 2);
 });
 
 test('GameNet tolerates incomplete remote render entries during private-room sync', async () => {
@@ -354,6 +408,49 @@ test('GameNet stores snapshot timing and estimates current server time from snap
   });
 });
 
+test('GameNet does not queue input samples when transport send fails', async () => {
+  const harness = await loadGameNetHarness({
+    transportSendResult: false
+  });
+  const { GameNet, sentMessages, timeState } = harness;
+
+  timeState.now = 1000;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  timeState.now = 1060;
+  GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0.1, pitch: 0 });
+
+  const syncState = GameNet.getInputSyncState();
+  assert.equal(sentMessages.length, 0);
+  assert.equal(syncState.lastSentSeq, 0);
+  assert.equal(syncState.pendingInputCount, 0);
+  assert.equal(syncState.ackDrift, 0);
+  assert.equal(GameNet.getPendingInputSamples().length, 0);
+});
+
+test('GameNet clears stale snapshot timing after transport close', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState, closeTransport } = harness;
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 940,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  timeState.now = 1065;
+  assert.equal(GameNet.getEstimatedServerTime(), 1005);
+
+  closeTransport();
+  timeState.now = 6000;
+  assert.equal(GameNet.getEstimatedServerTime(), 0);
+  assert.equal(GameNet.getConnectionTimingState().snapshot, null);
+});
+
 test('GameNet sendFire includes estimated server shot time when snapshot timing exists', async () => {
   const harness = await loadGameNetHarness();
   const { GameNet, sentMessages, timeState } = harness;
@@ -375,6 +472,7 @@ test('GameNet sendFire includes estimated server shot time when snapshot timing 
   assert.equal(sentMessages[0].t, 'fire');
   assert.equal(sentMessages[0].weaponId, 'rifle');
   assert.equal(sentMessages[0].shotToken, 'shot_1');
+  assert.deepEqual(sentMessages[0].aimOrigin, logicalHitscanOriginFromEye({ x: 4, y: 5, z: 6 }, sentMessages[0].aimForward));
   assert.equal(sentMessages[0].estimatedServerShotTime, 1005);
 });
 

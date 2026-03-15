@@ -15,13 +15,37 @@
         return Math.max(min, Math.min(max, value));
     }
 
-    function interpolateBufferedTransform(render, nowMs) {
+    function remoteInterpolationTuning() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var network = shared.gameplayTuning && shared.gameplayTuning.network
+            ? shared.gameplayTuning.network
+            : null;
+        return network && network.remoteInterpolation ? network.remoteInterpolation : {};
+    }
+
+    function interpolateBufferedTransform(render, nowMs, options) {
         if (!render || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) return null;
+        var opts = options || {};
         var history = render.snapshotHistory;
         var latest = history[history.length - 1];
         var intervalMs = clamp(Number(render.snapshotIntervalMs || 50), 16, 140);
         var jitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
-        var interpolationDelayMs = clamp(Number(render.interpolationDelayMs || ((intervalMs * 2.2) + (jitterMs * 1.5))), 95, 240);
+        var interpolationTuning = remoteInterpolationTuning();
+        var minDelayMs = Math.max(32, Number(interpolationTuning.minDelayMs || 95));
+        var maxDelayMs = Math.max(minDelayMs, Number(interpolationTuning.maxDelayMs || 260));
+        var explicitDelayMs = Number(render.interpolationDelayMs);
+        var interpolationDelayMs = explicitDelayMs > 0
+            ? Math.max(minDelayMs, explicitDelayMs)
+            : clamp(
+                (intervalMs * Number(interpolationTuning.intervalDelayScale || 2.6)) +
+                (jitterMs * Number(interpolationTuning.jitterDelayScale || 2.1)),
+                minDelayMs,
+                maxDelayMs
+            );
+        var overrideDelayMs = Number(opts.delayMs);
+        if (isFinite(overrideDelayMs) && overrideDelayMs >= 0) {
+            interpolationDelayMs = overrideDelayMs;
+        }
         var serverTimeOffsetMs = Number(render.serverTimeOffsetMs);
         if (!isFinite(serverTimeOffsetMs)) {
             serverTimeOffsetMs = Number(latest.receivedAt || nowMs) - Number(latest.serverTime || nowMs);
@@ -51,7 +75,15 @@
         var last = history[history.length - 1];
         var prev = history.length > 1 ? history[history.length - 2] : last;
         var latestGapMs = Math.max(0, nowMs - Number(last.receivedAt || nowMs));
-        var freezeGapMs = clamp(Number(render.freezeGapMs || ((intervalMs * 1.75) + (jitterMs * 2.2))), 80, 220);
+        var explicitFreezeGapMs = Number(render.freezeGapMs);
+        var freezeGapMs = explicitFreezeGapMs > 0
+            ? explicitFreezeGapMs
+            : clamp(
+                (intervalMs * Number(interpolationTuning.freezeGapIntervalScale || 1.85)) +
+                (jitterMs * Number(interpolationTuning.freezeGapJitterScale || 2.5)),
+                Math.max(1, Number(interpolationTuning.freezeGapMinMs || 90)),
+                Math.max(1, Number(interpolationTuning.freezeGapMaxMs || 240))
+            );
         if (history.length < 2 || latestGapMs > freezeGapMs) {
             return {
                 x: Number(last.x || 0),
@@ -62,7 +94,15 @@
             };
         }
         var stepMs = Math.max(1, Number(last.serverTime || 0) - Number(prev.serverTime || 0));
-        var maxExtrapolationMs = clamp(Number(render.maxExtrapolationMs || ((intervalMs * 0.65) + jitterMs)), 24, 90);
+        var explicitMaxExtrapolationMs = Number(render.maxExtrapolationMs);
+        var maxExtrapolationMs = explicitMaxExtrapolationMs > 0
+            ? explicitMaxExtrapolationMs
+            : clamp(
+                (intervalMs * Number(interpolationTuning.maxExtrapolationIntervalScale || 0.45)) +
+                (jitterMs * Number(interpolationTuning.maxExtrapolationJitterScale || 0.65)),
+                Math.max(1, Number(interpolationTuning.maxExtrapolationMinMs || 20)),
+                Math.max(1, Number(interpolationTuning.maxExtrapolationMaxMs || 72))
+            );
         var extrapolationMs = clamp(renderServerTime - Number(last.serverTime || 0), 0, Math.min(maxExtrapolationMs, intervalMs + jitterMs));
         var extrapolationScale = extrapolationMs / stepMs;
         return {
@@ -77,6 +117,7 @@
     function updateRemoteEntities(dt, renderMap, getChokeVictimStateForEntity) {
         if (!renderMap || !renderMap.forEach) return;
         var nowMs = Date.now();
+        var interpolationTuning = remoteInterpolationTuning();
         renderMap.forEach(function (r) {
             if (!r || !r.group || !r.group.position || !r.group.rotation) return;
             var bufferedTransform = interpolateBufferedTransform(r, nowMs);
@@ -186,7 +227,30 @@
             }
 
             if (r.actorVisual && r.actorVisual.syncHitboxes) {
-                r.actorVisual.syncHitboxes(r.group.position);
+                var hitboxLeadMs = Math.max(0, Number(interpolationTuning.hitboxLeadMs || 0));
+                var hitboxTransform = bufferedTransform;
+                if (hitboxLeadMs > 0) {
+                    var presentDelayMs = Math.max(0, Number(r.interpolationDelayMs || 0));
+                    var combatDelayMs = Math.max(0, presentDelayMs - hitboxLeadMs);
+                    hitboxTransform = interpolateBufferedTransform(r, nowMs, {
+                        delayMs: combatDelayMs
+                    }) || hitboxTransform;
+                }
+                var hitboxPosition = hitboxTransform
+                    ? {
+                        x: Number(hitboxTransform.x || 0),
+                        y: Number(hitboxTransform.footY || 0),
+                        z: Number(hitboxTransform.z || 0)
+                    }
+                    : {
+                        x: Number(r.group.position.x || 0),
+                        y: Number(r.group.position.y || 0),
+                        z: Number(r.group.position.z || 0)
+                    };
+                if (finalChokeVictimState.lift > 0) {
+                    hitboxPosition.y += finalChokeVictimState.lift;
+                }
+                r.actorVisual.syncHitboxes(hitboxPosition);
             }
         });
     }

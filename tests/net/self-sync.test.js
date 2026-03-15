@@ -6,6 +6,7 @@ import vm from 'node:vm';
 async function loadSelfSyncHarness(runtimeOverrides = {}) {
   const statusCalls = [];
   const actionRestrictionCalls = [];
+  const reconcileCalls = [];
   const runtime = {
     GameNet: {
       getMatchState() { return null; }
@@ -18,7 +19,9 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
       setActionRestrictions(state) {
         actionRestrictionCalls.push(JSON.parse(JSON.stringify(state)));
       },
-      reconcileAuthoritativeMotion() {}
+      reconcileAuthoritativeMotion(_state, options) {
+        reconcileCalls.push(JSON.parse(JSON.stringify(options || {})));
+      }
     },
     GamePlayerCombat: {
       syncFromNetwork() {}
@@ -52,6 +55,7 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
     syncPlayerState: sandbox.__MAYHEM_RUNTIME.GameNetSelfSync.syncPlayerState,
     statusCalls,
     actionRestrictionCalls,
+    reconcileCalls,
     timeState
   };
 }
@@ -137,7 +141,6 @@ test('GameNetSelfSync locks the player out for the rest of an LMS round when out
 });
 
 test('GameNetSelfSync enables replay correction when reconciling authoritative motion', async () => {
-  const reconcileCalls = [];
   const harness = await loadSelfSyncHarness({
     GameNet: {
       getMatchState() { return null; },
@@ -166,7 +169,7 @@ test('GameNetSelfSync enables replay correction when reconciling authoritative m
       setStatusState() {},
       setActionRestrictions() {},
       reconcileAuthoritativeMotion(_state, options) {
-        reconcileCalls.push(JSON.parse(JSON.stringify(options)));
+        harness.reconcileCalls.push(JSON.parse(JSON.stringify(options)));
       }
     }
   });
@@ -183,13 +186,33 @@ test('GameNetSelfSync enables replay correction when reconciling authoritative m
     abilityFx: null
   }, 0.05);
 
-  assert.equal(reconcileCalls.length, 1);
-  assert.equal(reconcileCalls[0].allowReplayCorrection, true);
-  assert.equal(reconcileCalls[0].pendingInputCount, 2);
-  assert.equal(reconcileCalls[0].lastAckedSeq, 9);
-  assert.equal(reconcileCalls[0].latestPendingAgeMs, 87);
-  assert.equal(reconcileCalls[0].latestAckAgeMs, 41);
-  assert.equal(reconcileCalls[0].ackDrift, 2);
-  assert.equal(reconcileCalls[0].rttMs, 118);
-  assert.equal(reconcileCalls[0].rttJitterMs, 22);
+  assert.equal(harness.reconcileCalls.length, 1);
+  assert.equal(harness.reconcileCalls[0].allowReplayCorrection, true);
+  assert.equal(harness.reconcileCalls[0].pendingInputCount, 2);
+  assert.equal(harness.reconcileCalls[0].lastAckedSeq, 9);
+  assert.equal(harness.reconcileCalls[0].latestPendingAgeMs, 87);
+  assert.equal(harness.reconcileCalls[0].latestAckAgeMs, 41);
+  assert.equal(harness.reconcileCalls[0].ackDrift, 2);
+  assert.equal(harness.reconcileCalls[0].rttMs, 118);
+  assert.equal(harness.reconcileCalls[0].rttJitterMs, 22);
+});
+
+test('GameNetSelfSync can skip local motion reconciliation when a dedicated motion sync already ran', async () => {
+  const harness = await loadSelfSyncHarness();
+
+  harness.syncPlayerState({
+    id: 'usr_test',
+    alive: true,
+    x: 1,
+    y: 1.6,
+    z: 2,
+    weaponLockUntil: 0,
+    throwableLockUntil: 0,
+    abilityLockUntil: 0,
+    abilityFx: null
+  }, 0.05, {
+    skipMotionSync: true
+  });
+
+  assert.equal(harness.reconcileCalls.length, 0);
 });

@@ -153,11 +153,16 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
   assert.deepEqual(gameplayTuning.network.flags, {
     adaptiveSelfReconciliation: true,
     combatBurstSnapshots: true,
-    shotTokenDamageAggregation: true
+    shotTokenDamageAggregation: false
   });
   assert.equal(gameplayTuning.network.ping.cadenceMs, 500);
   assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.75);
+  assert.equal(gameplayTuning.network.selfReconciliation.airborneHardSnapVerticalWu, 2.75);
+  assert.equal(gameplayTuning.network.selfReconciliation.airborneMovingAckDriftLimit, 4);
   assert.equal(gameplayTuning.network.combatPriority.burstCadenceMs, 16);
+  assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 78);
+  assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 0);
+  assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 120);
   assert.equal(gameplayTuning.network.feedback.shotgunAggregateWindowMs, 60);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getNetworkTuning, 'function');
 });

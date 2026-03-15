@@ -35,7 +35,7 @@
         var transport = null;
         var sceneRef = null;
         var connectAttemptSeq = 0;
-        var INPUT_SEND_INTERVAL = (1 / 30);
+        var INPUT_SEND_INTERVAL = (1 / 60);
         var netStateFactory = runtime.GameNetRuntimeState;
         if (!netStateFactory || !netStateFactory.create) {
             throw new Error('GameNetRuntimeState is required before GameNet initialization.');
@@ -361,6 +361,8 @@
             getLocalPredictionSamples: netState.getLocalPredictionSamples,
             getLastInputSeqSent: netState.getLastInputSeqSent,
             getLastInputSeqAcked: netState.getLastInputSeqAcked,
+            getLastSentInputSample: netState.getLastSentInputSample,
+            getInputSendTimer: netState.getInputSendTimer,
             getInputSendInterval: netState.getInputSendInterval,
             getPendingRespawnInfo: netState.getPendingRespawnInfo,
             getGameMode: netState.getGameMode,
@@ -368,6 +370,18 @@
             getRemoteProjectileState: netState.getRemoteProjectileState,
             getRemoteFireZoneState: netState.getRemoteFireZoneState,
             damagePointForEntityId: damagePointForEntityId,
+            getCurrentInputState: function () {
+                var playerApi = getPlayerApi();
+                return playerApi && playerApi.getNetworkInputState
+                    ? playerApi.getNetworkInputState()
+                    : null;
+            },
+            getCurrentRotation: function () {
+                var playerApi = getPlayerApi();
+                return playerApi && playerApi.getRotation
+                    ? playerApi.getRotation()
+                    : null;
+            },
             getRenderCoreWorldPosition: getRenderCoreWorldPosition,
             markerPointForEntityId: markerPointForEntityId,
             getChokeVictimStateForEntity: getChokeVictimStateForEntity,
@@ -417,6 +431,7 @@
             getInputSendTimer: netState.getInputSendTimer,
             setInputSendTimer: netState.setInputSendTimer,
             getInputSendInterval: netState.getInputSendInterval,
+            setLastSentInputSample: netState.setLastSentInputSample,
             getPlayerApi: getPlayerApi,
             nextInputSeq: netState.nextInputSeq,
             getInputSeqHistory: netState.getInputSeqHistory,
@@ -440,14 +455,13 @@
 
         var commandsApi = commandFactory.create({
             wsSend: wsSend,
+            buildFirePayload: runtimeAccess.buildFirePayload,
             fireMessageType: MSG_C2S.FIRE,
             equipWeaponMessageType: MSG_C2S.EQUIP_WEAPON,
             normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,
             normalizeThrowPayload: PROTOCOL.normalizeThrowPayload,
             normalizeAbilityLoadoutPayload: PROTOCOL.normalizeAbilityLoadoutPayload,
             normalizeClassCastPayload: PROTOCOL.normalizeClassCastPayload,
-            getPlayerApi: getPlayerApi,
-            getRemotePresentationClock: stateView.getRemotePresentationClock,
             setPendingWeaponLoadout: netState.setPendingWeaponLoadout,
             flushPendingWeaponLoadout: flushPendingWeaponLoadout
         });

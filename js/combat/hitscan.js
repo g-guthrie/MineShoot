@@ -396,6 +396,13 @@
         tracer.life = tracer.maxLife;
     }
 
+    function isNetCombatReady() {
+        var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        if (!net || !net.isActive || !net.isActive()) return false;
+        if (net.isConnected) return !!net.isConnected();
+        return true;
+    }
+
     function getCombatHitboxes() {
         var out = [];
         var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
@@ -404,7 +411,7 @@
             var local = globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray() || [];
             out = out.concat(local);
         }
-        if (netRemote && netRemote.getHitboxArray) {
+        if (isNetCombatReady() && netRemote && netRemote.getHitboxArray) {
             var netHitboxes = netRemote.getHitboxArray() || [];
             out = out.concat(netHitboxes);
         }
@@ -622,8 +629,7 @@
     }
 
     function shouldUseSyncedMultiplayerSpread(shotToken) {
-        var net = globalThis.__MAYHEM_RUNTIME.GameNet;
-        return !!(shotToken && net && net.isActive && net.isActive());
+        return !!(shotToken && isNetCombatReady());
     }
 
     function syncedSpreadOffsetToNdc(offset) {
@@ -731,7 +737,7 @@
         if (globalThis.__MAYHEM_RUNTIME.GameEnemy && globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets) {
             out = out.concat(globalThis.__MAYHEM_RUNTIME.GameEnemy.getLockTargets() || []);
         }
-        if (netView && netView.getLockTargets) {
+        if (isNetCombatReady() && netView && netView.getLockTargets) {
             out = out.concat(netView.getLockTargets() || []);
         }
 
@@ -805,6 +811,88 @@
         };
     }
 
+    function localAimOrigin(camera) {
+        var playerApi = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+        var eyeWorld = playerApi && playerApi.getEyeWorldPosition
+            ? playerApi.getEyeWorldPosition()
+            : null;
+        var sharedPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
+        var eyeOrigin = null;
+        if (eyeWorld && isFinite(Number(eyeWorld.x)) && isFinite(Number(eyeWorld.y)) && isFinite(Number(eyeWorld.z))) {
+            eyeOrigin = {
+                x: Number(eyeWorld.x || 0),
+                y: Number(eyeWorld.y || 0),
+                z: Number(eyeWorld.z || 0)
+            };
+        } else if (camera && camera.position) {
+            eyeOrigin = {
+                x: Number(camera.position.x || 0),
+                y: Number(camera.position.y || 0),
+                z: Number(camera.position.z || 0)
+            };
+        }
+        if (!eyeOrigin) return null;
+        if (!camera || !camera.getWorldDirection) return eyeOrigin;
+        var cameraForward = new THREE.Vector3();
+        camera.getWorldDirection(cameraForward);
+        if (sharedPoints.logicalHitscanOriginFromEye) {
+            return sharedPoints.logicalHitscanOriginFromEye(eyeOrigin, cameraForward);
+        }
+        return {
+            x: eyeOrigin.x + (cameraForward.x * 0.35),
+            y: eyeOrigin.y + (cameraForward.y * 0.35),
+            z: eyeOrigin.z + (cameraForward.z * 0.35)
+        };
+    }
+
+    function resolveCrosshairAimPoint(camera, maxDistance) {
+        if (!camera || !camera.getWorldDirection) return null;
+        var targetsHitboxes = getCombatHitboxes();
+        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
+        var allTargets = targetsHitboxes.concat(worldMeshes);
+        var distance = Math.max(1, Number(maxDistance || 0) || 256);
+        screenPoint.set(0, 0);
+        raycaster.setFromCamera(screenPoint, camera);
+        raycaster.far = distance;
+        var intersects = raycaster.intersectObjects(allTargets, false);
+        if (intersects.length > 0) {
+            return intersects[0].point.clone ? intersects[0].point.clone() : intersects[0].point;
+        }
+        return raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction, distance);
+    }
+
+    function localAimForward(camera, aimOrigin, maxDistance) {
+        if (!camera || !aimOrigin || !camera.getWorldDirection) return null;
+        var cameraForward = plasmaForward.clone ? plasmaForward.clone() : new THREE.Vector3();
+        camera.getWorldDirection(cameraForward);
+        var targetPoint = resolveCrosshairAimPoint(camera, maxDistance);
+        if (!targetPoint) {
+            targetPoint = new THREE.Vector3(
+                Number(camera.position.x || 0),
+                Number(camera.position.y || 0),
+                Number(camera.position.z || 0)
+            ).addScaledVector(cameraForward, Math.max(1, Number(maxDistance || 0) || 256));
+        }
+        var aimDir = targetPoint.sub(new THREE.Vector3(
+            Number(aimOrigin.x || 0),
+            Number(aimOrigin.y || 0),
+            Number(aimOrigin.z || 0)
+        ));
+        if (aimDir.lengthSq() <= 0.000001) {
+            return {
+                x: cameraForward.x,
+                y: cameraForward.y,
+                z: cameraForward.z
+            };
+        }
+        aimDir.normalize();
+        return {
+            x: aimDir.x,
+            y: aimDir.y,
+            z: aimDir.z
+        };
+    }
+
     function buildLocalShotContext(camera, weapon, shotToken) {
         if (!camera || !weapon) return null;
         var lockTargets = getLockTargets() || [];
@@ -817,17 +905,19 @@
         }
         resolvePlasmaMuzzle(camera);
         camera.getWorldDirection(plasmaForward);
-        return {
-            aimOrigin: {
-                x: Number(camera.position.x || 0),
-                y: Number(camera.position.y || 0),
-                z: Number(camera.position.z || 0)
-            },
-            aimForward: {
+        var aimOrigin = localAimOrigin(camera);
+        if (!aimOrigin) return null;
+        var aimForward = localAimForward(camera, aimOrigin, getEffectiveMaxRange(weapon));
+        if (!aimForward) {
+            aimForward = {
                 x: plasmaForward.x,
                 y: plasmaForward.y,
                 z: plasmaForward.z
-            },
+            };
+        }
+        return {
+            aimOrigin: aimOrigin,
+            aimForward: aimForward,
             tracerOrigin: {
                 x: plasmaMuzzle.x,
                 y: plasmaMuzzle.y,
@@ -860,6 +950,34 @@
     function resolveAutoLockShot(camera, weapon, shotToken) {
         if (!camera || !weapon) return [];
         return resolveAutoLockShotFromContext(buildLocalShotContext(camera, weapon, shotToken));
+    }
+
+    function shouldPredictNetHit(camera, hitboxMesh, shotToken, pelletIndex) {
+        if (!camera || !hitboxMesh || !hitboxMesh.userData || hitboxMesh.userData.ownerType !== 'net') return true;
+        if (!isNetCombatReady()) return false;
+        var authority = sharedHitscanAuthority();
+        if (!authority || !authority.resolveHitscanShot) return true;
+        var weapon = getCurrentWeaponData();
+        if (!weapon) return true;
+        var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+        if (!shotContext) return false;
+        var predicted = authority.resolveHitscanShot(shotContext);
+        if (!Array.isArray(predicted) || predicted.length === 0) return false;
+        var expectedTargetId = String(hitboxMesh.userData.targetId || '');
+        var expectedNetEntityId = String(hitboxMesh.userData.netEntityId || '');
+        var expectedPelletIndex = Number.isFinite(Number(pelletIndex)) ? Math.max(0, Math.floor(Number(pelletIndex))) : null;
+        for (var i = 0; i < predicted.length; i++) {
+            var shot = predicted[i];
+            var target = shot && shot.target ? shot.target : null;
+            var targetId = String(target && target.targetId || '');
+            if (expectedPelletIndex != null) {
+                var predictedPelletIndex = Number.isFinite(Number(shot && shot.pelletIndex)) ? Math.max(0, Math.floor(Number(shot.pelletIndex))) : null;
+                if (predictedPelletIndex !== expectedPelletIndex) continue;
+            }
+            if (expectedTargetId && targetId === expectedTargetId) return true;
+            if (expectedNetEntityId && targetId === ('net:' + expectedNetEntityId)) return true;
+        }
+        return false;
     }
 
     function lockTargetPassesFilter(target, options) {
@@ -1035,6 +1153,7 @@
             distance: hit.distance,
             hitType: hitType,
             damage: damage,
+            pelletIndex: Number(pelletIndex || 0),
             pelletScore: pelletScore,
             traceEnd: hit.point.clone ? hit.point.clone() : hit.point
         };
@@ -1047,7 +1166,7 @@
         if (!traced.hit) return false;
 
         if (onHit) {
-            onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon);
+            onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon, traced.pelletIndex);
         }
 
         return true;
@@ -1071,7 +1190,7 @@
 
         if (bestHit) {
             if (bestHit.traceEnd) spawnTracer(camera, weapon, bestHit.traceEnd);
-            if (onHit) onHit(bestHit.hitbox, bestHit.hitPoint, bestHit.distance, bestHit.hitType, bestHit.damage, weapon);
+            if (onHit) onHit(bestHit.hitbox, bestHit.hitPoint, bestHit.distance, bestHit.hitType, bestHit.damage, weapon, bestHit.pelletIndex);
             return true;
         }
 
@@ -1147,7 +1266,7 @@
             if (onMiss) onMiss();
             return true;
         }
-        if (onHit) onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon);
+        if (onHit) onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon, null);
         return true;
     }
 
@@ -1648,6 +1767,23 @@
     GameHitscan.getSpreadMetrics = function (weaponId) {
         var weapon = (typeof weaponId === 'string') ? weapons[weaponId] : weaponId;
         return getWeaponSpreadMetrics(weapon);
+    };
+
+    GameHitscan.shouldPredictNetHit = shouldPredictNetHit;
+    GameHitscan.buildNetworkFireIntent = function (shotToken) {
+        var playerApi = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+        var camera = playerApi && playerApi.getCamera ? playerApi.getCamera() : null;
+        var weapon = getCurrentWeaponData();
+        if (!camera || !weapon) return null;
+        var shotContext = buildLocalShotContext(camera, weapon, shotToken);
+        if (!shotContext) return null;
+        return {
+            weaponId: weapon.id,
+            aimOrigin: shotContext.aimOrigin,
+            aimForward: shotContext.aimForward,
+            adsActive: !!shotContext.adsActive,
+            viewFovDeg: Number(shotContext.viewFovDeg || 0)
+        };
     };
 
     globalThis.__MAYHEM_RUNTIME.GameHitscan = GameHitscan;

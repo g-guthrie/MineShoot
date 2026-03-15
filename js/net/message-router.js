@@ -120,6 +120,7 @@
                 hitType: msg.hitType === 'head' ? 'head' : 'body',
                 weaponId: msg.weaponId || '',
                 shotToken: msg.shotToken || '',
+                pelletIndex: Number.isFinite(Number(msg.pelletIndex)) ? Math.max(0, Math.floor(Number(msg.pelletIndex))) : null,
                 killed: !!msg.killed,
                 worldPos: opts.damagePointForEntityId(msg.targetId || '')
             }, 48);

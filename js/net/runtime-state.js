@@ -7,7 +7,7 @@
 
     function create(opts) {
         opts = opts || {};
-        var initialInputSendInterval = Number(opts.inputSendInterval || (1 / 30));
+        var initialInputSendInterval = Number(opts.inputSendInterval || (1 / 60));
         var initialRoomId = String(opts.initialRoomId || 'global');
 
         var snapshotMap = new Map();
@@ -41,6 +41,7 @@
             pendingRespawnInfo: null,
             initialSpawnApplied: false,
             pendingWeaponLoadout: null,
+            lastSentInputSample: null,
             inputSeq: 1,
             lastInputSeqSent: 0,
             lastInputSeqAcked: 0,
@@ -64,12 +65,14 @@
             state.pendingRespawnInfo = null;
             state.initialSpawnApplied = false;
             state.pendingWeaponLoadout = null;
+            state.lastSentInputSample = null;
             state.inputSeq = 1;
             state.lastInputSeqSent = 0;
             state.lastInputSeqAcked = 0;
             state.inputSeqHistory = [];
             state.localPredictionSamples = [];
             state.inputSendTimer = 0;
+            state.inputSendInterval = initialInputSendInterval;
             state.remoteProjectileState = [];
             state.remoteFireZoneState = [];
             snapshotMap.clear();
@@ -256,6 +259,8 @@
             setInitialSpawnApplied: function (value) { state.initialSpawnApplied = !!value; },
             getPendingWeaponLoadout: function () { return state.pendingWeaponLoadout; },
             setPendingWeaponLoadout: function (value) { state.pendingWeaponLoadout = value || null; },
+            getLastSentInputSample: function () { return state.lastSentInputSample || null; },
+            setLastSentInputSample: function (value) { state.lastSentInputSample = value || null; },
             getInputSeqHistory: function () { return state.inputSeqHistory; },
             setInputSeqHistory: function (value) { state.inputSeqHistory = Array.isArray(value) ? value : []; },
             getLocalPredictionSamples: function () { return state.localPredictionSamples; },
@@ -269,6 +274,12 @@
             getInputSendTimer: function () { return state.inputSendTimer; },
             setInputSendTimer: function (value) { state.inputSendTimer = Number(value || 0); },
             getInputSendInterval: function () { return state.inputSendInterval; },
+            setInputSendInterval: function (value) {
+                var next = Number(value || 0);
+                if (!isFinite(next) || next <= 0) return state.inputSendInterval;
+                state.inputSendInterval = next;
+                return state.inputSendInterval;
+            },
             getRemoteProjectileState: function () { return state.remoteProjectileState; },
             setRemoteProjectileState: setRemoteProjectileState,
             getRemoteFireZoneState: function () { return state.remoteFireZoneState; },

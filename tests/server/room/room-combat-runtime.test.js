@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { logicalHitscanOriginFromEye } from '../../../shared/entity-points.js';
 
 import {
   deadeyeCandidates,
@@ -267,6 +268,129 @@ test('combat runtime rewinds targets and clamps far client aim origins to the au
   });
 });
 
+test('combat runtime clamps client aim origins against the rewound shooter eye when firing while moving', () => {
+  const target = { id: 't1', alive: true, x: 20, y: 1.7, z: -8 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 2.2,
+    y: 2.6,
+    z: -1.4,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  let shotRequest = null;
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [target]; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'move-origin',
+    estimatedServerShotTime: 1234,
+    aimOrigin: { x: 0.35, y: 1.72, z: -0.15 },
+    aimForward: { x: 0, y: 0, z: -1 }
+  }, {
+    nowMs: () => 1500,
+    weaponStats: { rifle: { cooldownMs: 100, magazineSize: 10 } },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot(options) {
+      shotRequest = options;
+      return [];
+    },
+    applyDamageFromSource() { return null; },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    resolveHitscanShotTime() { return 1260; },
+    buildRewoundHitscanTarget(entity) {
+      return entity;
+    },
+    authoritativeHitscanOrigin(_player, requestedShotTime) {
+      assert.equal(requestedShotTime, 1260);
+      return logicalHitscanOriginFromEye({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0, z: -1 });
+    },
+    hitscanAimOriginMaxOffset: 0.9,
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(shotRequest.aimOrigin, { x: 0.35, y: 1.72, z: -0.15 });
+});
+
+test('combat runtime validates aim forward against the rewound shooter facing', () => {
+  const target = { id: 't1', alive: true, x: 20, y: 1.7, z: -8 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 2.2,
+    y: 2.6,
+    z: -1.4,
+    yaw: 0.75,
+    pitch: 0.2,
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  let shotRequest = null;
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0.9, y: 0, z: 0.1 }; },
+    getAliveEntities() { return [target]; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'move-forward',
+    estimatedServerShotTime: 1234,
+    aimOrigin: { x: 0.1, y: 1.7, z: 0 },
+    aimForward: { x: 0, y: 0, z: -1 }
+  }, {
+    nowMs: () => 1500,
+    weaponStats: { rifle: { cooldownMs: 100, magazineSize: 10 } },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot(options) {
+      shotRequest = options;
+      return [];
+    },
+    applyDamageFromSource() { return null; },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    resolveHitscanShotTime() { return 1260; },
+    buildRewoundHitscanTarget(entity) {
+      return entity;
+    },
+    authoritativeHitscanOrigin() {
+      return { x: 0, y: 1.7, z: 0 };
+    },
+    authoritativeHitscanForward(_player, requestedShotTime) {
+      assert.equal(requestedShotTime, 1260);
+      return { x: 0, y: 0, z: -1 };
+    },
+    hitscanAimOriginMaxOffset: 0.9,
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(shotRequest.aimForward, { x: 0, y: 0, z: -1 });
+});
+
 test('combat runtime applies rewound hits to the live room entity instead of the rewound clone', () => {
   const liveTarget = { id: 't1', alive: true, hp: 500, armor: 90, x: 0, y: 1.7, z: -6 };
   const rewoundClone = {
@@ -347,7 +471,7 @@ test('combat runtime applies rewound hits to the live room entity instead of the
   assert.equal(appliedTargets[0].hitType, 'head');
 });
 
-test('combat runtime aggregates multi-pellet shotgun hits per target by shot token', () => {
+test('combat runtime emits one authoritative shotgun damage event per pellet while preserving pellet order', () => {
   const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -6 };
   const player = {
     id: 'p1',
@@ -390,33 +514,47 @@ test('combat runtime aggregates multi-pellet shotgun hits per target by shot tok
     weaponFalloff: { shotgun: [] },
     resolveHitscanShot() {
       return [
-        { target, damage: 17, hitType: 'body' },
-        { target, damage: 25, hitType: 'head' }
+        { target, damage: 17, hitType: 'body', pelletIndex: 0 },
+        { target, damage: 25, hitType: 'head', pelletIndex: 1 }
       ];
     },
     applyDamageFromSource(_source, _target, damage, options) {
       applied.push({ damage, hitType: options.hitType });
       return { killed: false, damageApplied: damage };
     },
-    broadcastDamageEvent(_room, ownerId, hitTarget, out, hitType, weaponId, shotToken) {
-      broadcasts.push({ ownerId, hitTargetId: hitTarget.id, out, hitType, weaponId, shotToken });
+    broadcastDamageEvent(_room, ownerId, hitTarget, out, hitType, weaponId, shotToken, pelletIndex) {
+      broadcasts.push({ ownerId, hitTargetId: hitTarget.id, out, hitType, weaponId, shotToken, pelletIndex });
     },
     broadcastDeathRespawn() {},
     canEquipWeaponId() { return true; },
     playerEyeHeight: 1.7,
-    shotTokenDamageAggregation: true,
     remoteMuzzleFlashHoldMs: 90
   });
 
-  assert.deepEqual(applied, [{ damage: 42, hitType: 'head' }]);
-  assert.deepEqual(broadcasts, [{
-    ownerId: 'p1',
-    hitTargetId: 't1',
-    out: { killed: false, damageApplied: 42 },
-    hitType: 'head',
-    weaponId: 'shotgun',
-    shotToken: 'sg1'
-  }]);
+  assert.deepEqual(applied, [
+    { damage: 17, hitType: 'body' },
+    { damage: 25, hitType: 'head' }
+  ]);
+  assert.deepEqual(broadcasts, [
+    {
+      ownerId: 'p1',
+      hitTargetId: 't1',
+      out: { killed: false, damageApplied: 17 },
+      hitType: 'body',
+      weaponId: 'shotgun',
+      shotToken: 'sg1',
+      pelletIndex: 0
+    },
+    {
+      ownerId: 'p1',
+      hitTargetId: 't1',
+      out: { killed: false, damageApplied: 25 },
+      hitType: 'head',
+      weaponId: 'shotgun',
+      shotToken: 'sg1',
+      pelletIndex: 1
+    }
+  ]);
 });
 
 test('spawnProjectile uses the full aim vector so trajectory changes with pitch', () => {

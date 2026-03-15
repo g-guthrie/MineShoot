@@ -13,12 +13,20 @@
     var hitboxVisible = true;
     var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
-    var DEFAULT_SNAPSHOT_INTERVAL_MS = 50;
-    var DEFAULT_INTERPOLATION_DELAY_MS = 110;
-    var MAX_SNAPSHOT_HISTORY = 16;
+    var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
+    var DEFAULT_INTERPOLATION_DELAY_MS = 78;
+    var MAX_SNAPSHOT_HISTORY = 20;
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    function remoteInterpolationTuning() {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var network = shared.gameplayTuning && shared.gameplayTuning.network
+            ? shared.gameplayTuning.network
+            : null;
+        return network && network.remoteInterpolation ? network.remoteInterpolation : {};
     }
 
     function snapshotFootY(entity) {
@@ -40,22 +48,26 @@
             yaw: Number(entity.yaw || 0),
             pitch: Number(entity.pitch || 0)
         };
+        var interpolationTuning = remoteInterpolationTuning();
+        var maxSnapshotHistory = Math.max(8, Math.round(Number(interpolationTuning.historySize || MAX_SNAPSHOT_HISTORY)));
         var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory.slice() : [];
         var previous = history.length > 0 ? history[history.length - 1] : null;
         if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
             history[history.length - 1] = sample;
         } else {
             history.push(sample);
-            if (history.length > MAX_SNAPSHOT_HISTORY) history.shift();
+            if (history.length > maxSnapshotHistory) history.shift();
         }
         render.snapshotHistory = history;
         var measuredOffsetMs = receivedAt - serverTime;
+        var offsetSnapDeltaMs = Math.max(60, Number(interpolationTuning.serverOffsetSnapDeltaMs || 150));
+        var offsetLerpAlpha = clamp(Number(interpolationTuning.offsetLerpAlpha || 0.08), 0.01, 1);
         if (!isFinite(Number(render.serverTimeOffsetMs))) {
             render.serverTimeOffsetMs = measuredOffsetMs;
-        } else if (Math.abs(measuredOffsetMs - Number(render.serverTimeOffsetMs || 0)) > 90) {
+        } else if (Math.abs(measuredOffsetMs - Number(render.serverTimeOffsetMs || 0)) > offsetSnapDeltaMs) {
             render.serverTimeOffsetMs = measuredOffsetMs;
         } else {
-            render.serverTimeOffsetMs += (measuredOffsetMs - render.serverTimeOffsetMs) * 0.12;
+            render.serverTimeOffsetMs += (measuredOffsetMs - render.serverTimeOffsetMs) * offsetLerpAlpha;
         }
 
         if (previous && serverTime > Number(previous.serverTime || 0)) {
@@ -75,13 +87,37 @@
 
         var intervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
         var jitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
-        var targetDelayMs = clamp((intervalMs * 2.2) + (jitterMs * 1.5), 95, 220);
-        var priorDelayMs = clamp(Number(render.interpolationDelayMs || targetDelayMs), 95, 240);
+        var minDelayMs = Math.max(32, Number(interpolationTuning.minDelayMs || 95));
+        var maxDelayMs = Math.max(minDelayMs, Number(interpolationTuning.maxDelayMs || 260));
+        var targetDelayMs = clamp(
+            (intervalMs * Number(interpolationTuning.intervalDelayScale || 2.6)) +
+            (jitterMs * Number(interpolationTuning.jitterDelayScale || 2.1)),
+            minDelayMs,
+            maxDelayMs
+        );
+        var priorDelayMs = clamp(
+            Number(render.interpolationDelayMs || targetDelayMs),
+            minDelayMs,
+            maxDelayMs
+        );
         render.interpolationDelayMs = (priorDelayMs * 0.6) + (targetDelayMs * 0.4);
-        render.maxExtrapolationMs = clamp((intervalMs * 0.65) + jitterMs, 24, 90);
-        render.freezeGapMs = clamp((intervalMs * 1.75) + (jitterMs * 2.2), 80, 220);
+        render.maxExtrapolationMs = clamp(
+            (intervalMs * Number(interpolationTuning.maxExtrapolationIntervalScale || 0.45)) +
+            (jitterMs * Number(interpolationTuning.maxExtrapolationJitterScale || 0.65)),
+            Math.max(1, Number(interpolationTuning.maxExtrapolationMinMs || 20)),
+            Math.max(1, Number(interpolationTuning.maxExtrapolationMaxMs || 72))
+        );
+        render.freezeGapMs = clamp(
+            (intervalMs * Number(interpolationTuning.freezeGapIntervalScale || 1.85)) +
+            (jitterMs * Number(interpolationTuning.freezeGapJitterScale || 2.5)),
+            Math.max(1, Number(interpolationTuning.freezeGapMinMs || 90)),
+            Math.max(1, Number(interpolationTuning.freezeGapMaxMs || 240))
+        );
         if (!render.interpolationDelayMs) {
-            render.interpolationDelayMs = DEFAULT_INTERPOLATION_DELAY_MS;
+            render.interpolationDelayMs = Math.max(
+                1,
+                Number(interpolationTuning.defaultDelayMs || DEFAULT_INTERPOLATION_DELAY_MS)
+            );
         }
     }
 
