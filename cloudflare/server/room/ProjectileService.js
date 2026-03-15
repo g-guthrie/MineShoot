@@ -19,6 +19,99 @@ const MSG_S2C = protocol.msg.s2c;
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const KNIFE_HEADSHOT_HEIGHT_DELTA_WU = 0.45;
 
+function intersectProjectileRayAabb(origin, dir, box, maxDistance) {
+  if (!box || !box.min || !box.max) return null;
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  let enterAxis = '';
+  let enterSign = 0;
+  let exitAxis = '';
+  let exitSign = 0;
+  const axes = ['x', 'y', 'z'];
+  for (let i = 0; i < axes.length; i++) {
+    const axis = axes[i];
+    const o = Number(origin && origin[axis] || 0);
+    const d = Number(dir && dir[axis] || 0);
+    const min = Number(box.min[axis] || 0);
+    const max = Number(box.max[axis] || 0);
+    if (Math.abs(d) < 0.000001) {
+      if (o < min || o > max) return null;
+      continue;
+    }
+    let t1 = (min - o) / d;
+    let t2 = (max - o) / d;
+    let sign1 = d > 0 ? -1 : 1;
+    let sign2 = -sign1;
+    if (t1 > t2) {
+      const swapT = t1;
+      t1 = t2;
+      t2 = swapT;
+      const swapSign = sign1;
+      sign1 = sign2;
+      sign2 = swapSign;
+    }
+    if (t1 > tmin) {
+      tmin = t1;
+      enterAxis = axis;
+      enterSign = sign1;
+    }
+    if (t2 < tmax) {
+      tmax = t2;
+      exitAxis = axis;
+      exitSign = sign2;
+    }
+    if (tmin > tmax) return null;
+  }
+  const hitDistance = tmin >= 0 ? tmin : tmax;
+  if (hitDistance < 0 || hitDistance > maxDistance) return null;
+  const axis = tmin >= 0 ? enterAxis : exitAxis;
+  const sign = tmin >= 0 ? enterSign : exitSign;
+  return {
+    distance: hitDistance,
+    normal: axis ? {
+      x: axis === 'x' ? sign : 0,
+      y: axis === 'y' ? sign : 0,
+      z: axis === 'z' ? sign : 0
+    } : { x: 0, y: 0, z: 0 }
+  };
+}
+
+function worldProjectileHit(room, start, end) {
+  const boxes = room && typeof room.worldCollidables === 'function'
+    ? room.worldCollidables()
+    : [];
+  if (!boxes || !boxes.length || !start || !end) return null;
+  const dx = Number(end.x || 0) - Number(start.x || 0);
+  const dy = Number(end.y || 0) - Number(start.y || 0);
+  const dz = Number(end.z || 0) - Number(start.z || 0);
+  const distance = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+  if (!(distance > 0.0001)) return null;
+  const dir = normalize3(dx, dy, dz);
+  let best = null;
+  for (let i = 0; i < boxes.length; i++) {
+    const hit = intersectProjectileRayAabb(start, dir, boxes[i], distance);
+    if (!hit) continue;
+    if (best && Number(best.distance || Infinity) <= Number(hit.distance || Infinity)) continue;
+    best = hit;
+  }
+  if (!best) return null;
+  const settleDistance = Math.max(0, Number(best.distance || 0) - 0.02);
+  return {
+    distance: Number(best.distance || 0),
+    point: {
+      x: Number(start.x || 0) + (dir.x * Number(best.distance || 0)),
+      y: Number(start.y || 0) + (dir.y * Number(best.distance || 0)),
+      z: Number(start.z || 0) + (dir.z * Number(best.distance || 0))
+    },
+    settlePoint: {
+      x: Number(start.x || 0) + (dir.x * settleDistance),
+      y: Number(start.y || 0) + (dir.y * settleDistance),
+      z: Number(start.z || 0) + (dir.z * settleDistance)
+    },
+    normal: best.normal || { x: 0, y: 0, z: 0 }
+  };
+}
+
 export function tickProjectiles(room, dtSec) {
   if (room.projectiles.size === 0) return;
   const now = nowMs();
@@ -135,7 +228,60 @@ export function tickProjectiles(room, dtSec) {
     }
 
     p.gravity = Number(def.gravity || 0);
+    const prevPos = { x: p.x, y: p.y, z: p.z };
     integrateProjectileMotion(p, dtSec, true);
+    const obstacleHit = worldProjectileHit(room, prevPos, { x: p.x, y: p.y, z: p.z });
+    if (obstacleHit) {
+      if (p.type === 'knife' || p.type === 'plasma_stream') {
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: obstacleHit.point.x, y: obstacleHit.point.y, z: obstacleHit.point.z });
+        toRemove.push(p.id);
+        return;
+      }
+      if (p.type === 'plasma') {
+        p.x = obstacleHit.point.x;
+        p.y = obstacleHit.point.y;
+        p.z = obstacleHit.point.z;
+        if (stickProjectile(p, null, p.x, p.y, p.z)) {
+          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: p.y, z: p.z });
+          return;
+        }
+      }
+      if (p.type === 'frag') {
+        p.x = obstacleHit.settlePoint.x;
+        p.y = obstacleHit.settlePoint.y;
+        p.z = obstacleHit.settlePoint.z;
+        const normal = obstacleHit.normal || { x: 0, y: 0, z: 0 };
+        const bounceDamping = Number(def.bounceVelocityDamping || 0.4);
+        const verticalBounce = Number(def.bounceVerticalDamping || 0.42);
+        if (Math.abs(Number(normal.y || 0)) > 0.5) {
+          p.vy = Math.abs(p.vy) * verticalBounce;
+          p.vx *= bounceDamping;
+          p.vz *= bounceDamping;
+        } else if (Math.abs(Number(normal.x || 0)) > 0.5) {
+          p.vx = -p.vx * bounceDamping;
+          p.vy *= bounceDamping;
+          p.vz *= bounceDamping;
+        } else if (Math.abs(Number(normal.z || 0)) > 0.5) {
+          p.vz = -p.vz * bounceDamping;
+          p.vx *= bounceDamping;
+          p.vy *= bounceDamping;
+        } else {
+          p.vx *= bounceDamping;
+          p.vy *= bounceDamping;
+          p.vz *= bounceDamping;
+        }
+        p.bounces++;
+        if (p.bounces > (def.bounceMaxCount || 2) || ((p.vx * p.vx) + (p.vy * p.vy) + (p.vz * p.vz)) < (def.bounceStopSpeedSq || 2.5)) {
+          p.vx = 0;
+          p.vy = 0;
+          p.vz = 0;
+        }
+        return;
+      }
+      explodeProjectile(room, p, obstacleHit.point.x, obstacleHit.point.y, obstacleHit.point.z);
+      toRemove.push(p.id);
+      return;
+    }
     const groundY = room.terrainFeetYAt(p.x, p.z);
 
     if (p.type === 'frag' && p.y <= (groundY + 0.05)) {

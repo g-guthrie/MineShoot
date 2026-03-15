@@ -13,6 +13,14 @@
         return net && net.view ? net.view : net;
     }
 
+    function networkAuthoritativeNow() {
+        var netApi = netView();
+        var stamp = netApi && netApi.getAuthoritativeNow
+            ? Number(netApi.getAuthoritativeNow() || 0)
+            : 0;
+        return stamp > 0 ? stamp : Date.now();
+    }
+
     function currentSelfCombatState(nowMs) {
         var combat = runtime.GamePlayerCombat || null;
         if (!combat) return null;
@@ -149,6 +157,7 @@
         var netApi = netView();
         if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
             var abilState = netApi.getSelfAbilityState();
+            var abilityNow = networkAuthoritativeNow();
             if (abilState && abilState.deadeyeState && abilState.deadeyeState.maxLocks > 0) {
                 return abilityBoundary && abilityBoundary.buildNetworkDeadeyeUiState
                     ? abilityBoundary.buildNetworkDeadeyeUiState(
@@ -162,7 +171,7 @@
                                         : null
                                 );
                         },
-                        Date.now()
+                        abilityNow
                     )
                     : null;
             }
@@ -206,9 +215,10 @@
         var multiplayerMode = !!options.multiplayerMode;
         var debugVisualsOn = !!options.debugVisualsOn;
         var stamp = Date.now();
+        var abilityStamp = multiplayerMode ? networkAuthoritativeNow() : stamp;
         var selfCombatState = syncSelfCombatHud(stamp);
-        var weaponState = currentWeaponState();
-        var weaponHudState = currentWeaponHudState();
+        var weaponState = currentWeaponState(stamp);
+        var weaponHudState = currentWeaponHudState(stamp);
 
         if (runtime.GamePlayer && runtime.GamePlayer.getEquippedWeaponId && runtime.GamePlayer.setWeaponModel && weaponState) {
             if (runtime.GamePlayer.getEquippedWeaponId() !== weaponState.id) {
@@ -230,13 +240,13 @@
 
         if (runtime.GamePlayer && runtime.GamePlayer.setHealFlash) {
             var selfHealState = currentHealState(multiplayerMode);
-            runtime.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > Date.now()));
+            runtime.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > abilityStamp));
         }
 
         if (runtime.GameAudio && runtime.GameAudio.setChokeAudioState) {
             var selfChokeCasterState = currentChokeCasterState(multiplayerMode);
             runtime.GameAudio.setChokeAudioState({
-                casterActive: !!(selfChokeCasterState && selfChokeCasterState.endsAt > Date.now()),
+                casterActive: !!(selfChokeCasterState && selfChokeCasterState.endsAt > abilityStamp),
                 victimActive: !!(runtime.GamePlayer && runtime.GamePlayer.isChoked && runtime.GamePlayer.isChoked())
             });
         }

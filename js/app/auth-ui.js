@@ -47,8 +47,12 @@
         }
 
         function localEnvironment() {
+            var runtimeProfile = runtime.GameRuntimeProfile || null;
+            if (runtimeProfile && runtimeProfile.isLocalEnvironment) {
+                return !!runtimeProfile.isLocalEnvironment();
+            }
             var host = String(window.location.hostname || '').toLowerCase();
-            return window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+            return window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1';
         }
 
         function formatClassName(classId) {

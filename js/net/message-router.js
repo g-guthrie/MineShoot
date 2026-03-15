@@ -153,6 +153,12 @@
         var selfState = opts.getSelfState();
         if (selfState) {
             selfState.classId = msg.classId || selfState.classId;
+            if (msg.abilityLoadout) {
+                selfState.abilityLoadout = {
+                    slot1: String(msg.abilityLoadout.slot1 || ''),
+                    slot2: String(msg.abilityLoadout.slot2 || '')
+                };
+            }
             selfState.slot1CooldownRemaining = 0;
             selfState.slot2CooldownRemaining = 0;
             selfState.abilityCooldownRemaining = 0;

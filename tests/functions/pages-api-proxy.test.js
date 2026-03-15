@@ -38,3 +38,26 @@ test('pages api proxy forwards websocket upgrade requests to the configured work
     globalThis.fetch = originalFetch;
   }
 });
+
+test('pages api proxy treats 0.0.0.0 preview hosts as local worker traffic', async () => {
+  const originalFetch = globalThis.fetch;
+  const seen = [];
+
+  globalThis.fetch = async function mockFetch(request) {
+    seen.push(request);
+    return { status: 200 };
+  };
+
+  try {
+    const response = await onRequest({
+      env: {},
+      request: new Request('http://0.0.0.0:3000/api/party')
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].url, 'http://127.0.0.1:8787/api/party');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

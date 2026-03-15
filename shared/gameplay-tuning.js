@@ -233,14 +233,14 @@ export const gameplayTuning = {
       debugSummary: 'Circle = hook catch radius debug.',
       tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
       cooldownMs: 15000, range: 24, minDot: 0.03, pullDistance: 3.2,
-      stunDuration: 1.0, castDamage: 35, lockBoxPx: 170, reticleRadiusPx: 78, catchRadius: 2.4, travelSpeed: 24
+      stunDuration: 1.5, castDamage: 35, lockBoxPx: 170, reticleRadiusPx: 78, catchRadius: 2.4, travelSpeed: 24
     },
     heal: {
       id: 'heal', slot: 'either', name: 'Heal',
       description: 'Brief self-heal with visible windup.',
       debugSummary: 'Visible windup before the heal resolves.',
       tunableParams: ['healAmount', 'cooldownMs'],
-      cooldownMs: 15000, duration: 0.85, healAmount: 150
+      cooldownMs: 15000, duration: 0.85, healAmount: 100
     },
     missile: {
       id: 'missile', slot: 'either', name: 'Missile',
@@ -251,7 +251,7 @@ export const gameplayTuning = {
       lockHalfAngleDeg: 12, homingBoost: 6.0, homingLerp: 8.4, gravity: 0.8, fuse: 1.25
     },
     deadeye: {
-      id: 'deadeye', slot: 'ultimate', name: 'Deadeye',
+      id: 'deadeye', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
       debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
       tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],

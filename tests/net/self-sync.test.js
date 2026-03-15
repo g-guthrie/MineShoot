@@ -99,6 +99,53 @@ test('GameNetSelfSync uses authoritative lock timers instead of deriving choke l
   });
 });
 
+test('GameNetSelfSync remaps authoritative timer stamps onto the local clock when timing data is available', async () => {
+  const harness = await loadSelfSyncHarness({
+    GameNet: {
+      getMatchState() { return null; },
+      getAuthoritativeNow() { return 1000; },
+      toLocalTime(timestamp) {
+        return Number(timestamp || 0) + 600;
+      }
+    }
+  });
+
+  harness.timeState.now = 1600;
+  harness.syncPlayerState({
+    id: 'usr_test',
+    alive: true,
+    stunUntil: 1400,
+    spawnShieldUntil: 1500,
+    weaponLockUntil: 1600,
+    throwableLockUntil: 1700,
+    abilityLockUntil: 1800,
+    abilityFx: {
+      chokeVictim: {
+        startedAt: 900,
+        endsAt: 1300,
+        liftHeight: 1.5
+      },
+      hookedStartedAt: 950,
+      hookedUntil: 1250
+    }
+  }, 0.05);
+
+  assert.deepEqual(harness.statusCalls.at(-1), {
+    stunUntil: 2000,
+    hookPullStartedAt: 1550,
+    hookPullUntil: 1850,
+    chokeStartedAt: 1500,
+    chokeUntil: 1900,
+    chokeLift: 1.5,
+    spawnShieldUntil: 2100
+  });
+  assert.deepEqual(harness.actionRestrictionCalls.at(-1), {
+    weaponUntil: 2200,
+    throwableUntil: 2300,
+    abilityUntil: 2400
+  });
+});
+
 test('GameNetSelfSync locks the player out for the rest of an LMS round when out of round', async () => {
   const harness = await loadSelfSyncHarness({
     GameNet: {

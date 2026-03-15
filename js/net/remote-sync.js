@@ -23,6 +23,27 @@
         return network && network.remoteInterpolation ? network.remoteInterpolation : {};
     }
 
+    function authoritativeNowMs() {
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var net = runtime.GameNet || null;
+        var stamp = net && net.getAuthoritativeNow
+            ? Number(net.getAuthoritativeNow() || 0)
+            : 0;
+        return stamp > 0 ? stamp : Date.now();
+    }
+
+    function toLocalTime(timestamp) {
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var net = runtime.GameNet || null;
+        var stamp = Number(timestamp || 0);
+        if (!(stamp > 0)) return 0;
+        if (net && net.toLocalTime) {
+            var localStamp = Number(net.toLocalTime(stamp) || 0);
+            if (localStamp > 0) return localStamp;
+        }
+        return stamp;
+    }
+
     function interpolateBufferedTransform(render, nowMs, options) {
         if (!render || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) return null;
         var opts = options || {};
@@ -117,6 +138,7 @@
     function updateRemoteEntities(dt, renderMap, getChokeVictimStateForEntity) {
         if (!renderMap || !renderMap.forEach) return;
         var nowMs = Date.now();
+        var serverNowMs = authoritativeNowMs();
         var interpolationTuning = remoteInterpolationTuning();
         renderMap.forEach(function (r) {
             if (!r || !r.group || !r.group.position || !r.group.rotation) return;
@@ -157,7 +179,7 @@
                     r._appliedWeaponId = nextWeaponId;
                 }
                 var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
-                var hookedNow = Number(r.hookedUntil || 0) > Date.now();
+                var hookedNow = Number(r.hookedUntil || 0) > serverNowMs;
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
                     animationApi.updateAnimation(dt, {
@@ -166,7 +188,7 @@
                         airborne: r.isGrounded === false,
                         aimPitch: renderPitch,
                         hooked: hookedNow,
-                        hookStartedAt: Number(r.hookedStartedAt || 0),
+                        hookStartedAt: toLocalTime(r.hookedStartedAt),
                         choked: chokeVictimState.lift > 0,
                         startedAt: chokeVictimState.startedAt || 0,
                         worldSpeed: (r.moveSpeedNorm || 0) * 14,
@@ -184,14 +206,14 @@
                     }
                 }
                 if (r.actorVisual && r.actorVisual.setMuzzleVisible) {
-                    r.actorVisual.setMuzzleVisible((r.muzzleFlashUntil || 0) > Date.now());
+                    r.actorVisual.setMuzzleVisible((r.muzzleFlashUntil || 0) > serverNowMs);
                 }
                 if (triggerApi && triggerApi.triggerAction) {
-                    if (r.chokeState && r.chokeState.endsAt > Date.now()) {
+                    if (r.chokeState && r.chokeState.endsAt > serverNowMs) {
                         if (!r._chokeGripTriggered) {
                             r._chokeGripTriggered = true;
                             triggerApi.triggerAction('choke_grip', {
-                                duration: (r.chokeState.endsAt - Date.now()) / 1000
+                                duration: (r.chokeState.endsAt - serverNowMs) / 1000
                             });
                         }
                     } else {
@@ -202,10 +224,10 @@
             }
 
             if (r.actorVisual && r.actorVisual.setHealFlash) {
-                r.actorVisual.setHealFlash(!!(r.healState && r.healState.endsAt > Date.now()));
+                r.actorVisual.setHealFlash(!!(r.healState && r.healState.endsAt > serverNowMs));
             }
             if (r.actorVisual && r.actorVisual.setSpawnShield) {
-                r.actorVisual.setSpawnShield(!!(r.spawnShieldUntil && r.spawnShieldUntil > Date.now()));
+                r.actorVisual.setSpawnShield(!!(r.spawnShieldUntil && r.spawnShieldUntil > serverNowMs));
             }
 
             var finalChokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0 };

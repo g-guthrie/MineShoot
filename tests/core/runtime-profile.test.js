@@ -2,11 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import {
+  getRuntimeModeCatalog,
+  getRuntimeMode,
+  getDefaultRuntimeModeId,
+  normalizeRuntimeModeId
+} from '../../shared/runtime-modes.js';
 
 async function loadRuntimeProfile(location) {
   const code = await fs.readFile(new URL('../../js/core/runtime-profile.js', import.meta.url), 'utf8');
   const sandbox = {
-    globalThis: { __MAYHEM_RUNTIME: {} },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameShared: {
+          getRuntimeModeCatalog,
+          getRuntimeMode,
+          getDefaultRuntimeModeId,
+          normalizeRuntimeModeId
+        }
+      }
+    },
     window: {
       location,
       sessionStorage: {
@@ -45,4 +60,16 @@ test('runtime profile resolves menu api calls through same-origin on production 
 
   assert.equal(profile.resolveApiUrl('/api/friends'), 'https://mayhem.example/api/friends');
   assert.equal(profile.resolveWsUrl('/api/ws'), 'wss://mayhem.example/api/ws');
+});
+
+test('runtime profile resolves offline sandbox aliases to the offline mode', async () => {
+  const profile = await loadRuntimeProfile({
+    protocol: 'https:',
+    hostname: 'mayhem.example',
+    origin: 'https://mayhem.example',
+    search: '?mode=sandbox'
+  });
+
+  assert.equal(profile.getRequestedModeId(), 'single_full_sandbox');
+  assert.equal(profile.getMode('single_full_sandbox').authorityMode, 'offline');
 });

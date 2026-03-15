@@ -9,17 +9,37 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
+    function authoritativeNow(netApi) {
+        var stamp = netApi && netApi.getAuthoritativeNow
+            ? Number(netApi.getAuthoritativeNow() || 0)
+            : 0;
+        return stamp > 0 ? stamp : Date.now();
+    }
+
+    function toLocalTime(netApi, timestamp) {
+        var stamp = Number(timestamp || 0);
+        if (!(stamp > 0)) return 0;
+        if (netApi && netApi.toLocalTime) {
+            var localStamp = Number(netApi.toLocalTime(stamp) || 0);
+            if (localStamp > 0) return localStamp;
+        }
+        return stamp;
+    }
+
     function syncPlayerState(selfState, dt, options) {
         if (!selfState) return;
         var opts = options || {};
         var RT = runtime();
+        var netApi = RT.GameNet || null;
         var abilityFxView = RT.GameAbilityFx || null;
-        var matchState = RT.GameNet && RT.GameNet.getMatchState
-            ? RT.GameNet.getMatchState()
+        var matchState = netApi && netApi.getMatchState
+            ? netApi.getMatchState()
             : null;
+        var serverNow = authoritativeNow(netApi);
         var spectatorLockUntil = Date.now() + 86400000;
+        var matchResetAt = toLocalTime(netApi, matchState && matchState.resetAt);
         var outOfRoundLockUntil = selfState.outOfRound && matchState && !matchState.ended
-            ? Math.max(Number(matchState.resetAt || 0), spectatorLockUntil)
+            ? Math.max(matchResetAt, spectatorLockUntil)
             : 0;
         var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(selfState)
@@ -28,7 +48,9 @@
                 : null);
 
         if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork) {
-            RT.GamePlayerCombat.syncFromNetwork(selfState);
+            RT.GamePlayerCombat.syncFromNetwork(Object.assign({}, selfState, {
+                spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil)
+            }));
         }
 
         if (RT.GameHitscan && RT.GameHitscan.syncAmmoStateFromNetwork && selfState.weaponAmmo) {
@@ -41,30 +63,30 @@
 
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
             var selfChokeVictimState = abilityFxView && abilityFxView.toChokeVictimVisualState
-                ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, Date.now())
+                ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, serverNow)
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
-                stunUntil: Math.max(Number(selfState.stunUntil || 0), outOfRoundLockUntil),
-                hookPullStartedAt: Number(selfAbilityFx ? (selfAbilityFx.hookedStartedAt || 0) : 0),
-                hookPullUntil: Number(selfAbilityFx ? (selfAbilityFx.hookedUntil || 0) : 0),
-                chokeStartedAt: Number(selfChokeVictimState.startedAt || 0),
-                chokeUntil: Number(selfChokeVictimState.endsAt || 0),
+                stunUntil: Math.max(toLocalTime(netApi, selfState.stunUntil), outOfRoundLockUntil),
+                hookPullStartedAt: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedStartedAt : 0),
+                hookPullUntil: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedUntil : 0),
+                chokeStartedAt: toLocalTime(netApi, selfChokeVictimState.startedAt),
+                chokeUntil: toLocalTime(netApi, selfChokeVictimState.endsAt),
                 chokeLift: Number(selfChokeVictimState.liftHeight || 0),
-                spawnShieldUntil: Number(selfState.spawnShieldUntil || 0)
+                spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil)
             });
 
             if (RT.GamePlayer.setActionRestrictions) {
                 RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: Math.max(Number(selfState.weaponLockUntil || 0), outOfRoundLockUntil),
-                    throwableUntil: Math.max(Number(selfState.throwableLockUntil || 0), outOfRoundLockUntil),
-                    abilityUntil: Math.max(Number(selfState.abilityLockUntil || 0), outOfRoundLockUntil)
+                    weaponUntil: Math.max(toLocalTime(netApi, selfState.weaponLockUntil), outOfRoundLockUntil),
+                    throwableUntil: Math.max(toLocalTime(netApi, selfState.throwableLockUntil), outOfRoundLockUntil),
+                    abilityUntil: Math.max(toLocalTime(netApi, selfState.abilityLockUntil), outOfRoundLockUntil)
                 });
             }
         }
 
         if (opts.skipMotionSync !== true) {
             if (
-                selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
+                selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > serverNow &&
                 RT.GamePlayer &&
                 RT.GamePlayer.applyAuthoritativeMotion
             ) {
@@ -74,14 +96,14 @@
                 RT.GamePlayer &&
                 RT.GamePlayer.reconcileAuthoritativeMotion
             ) {
-                var inputSyncState = RT.GameNet && RT.GameNet.getInputSyncState
-                    ? RT.GameNet.getInputSyncState()
+                var inputSyncState = netApi && netApi.getInputSyncState
+                    ? netApi.getInputSyncState()
                     : null;
-                var connectionTimingState = RT.GameNet && RT.GameNet.getConnectionTimingState
-                    ? RT.GameNet.getConnectionTimingState()
+                var connectionTimingState = netApi && netApi.getConnectionTimingState
+                    ? netApi.getConnectionTimingState()
                     : null;
-                var pendingInputs = RT.GameNet && RT.GameNet.getPendingInputSamples
-                    ? RT.GameNet.getPendingInputSamples()
+                var pendingInputs = netApi && netApi.getPendingInputSamples
+                    ? netApi.getPendingInputSamples()
                     : [];
                 RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
                     dt: dt,

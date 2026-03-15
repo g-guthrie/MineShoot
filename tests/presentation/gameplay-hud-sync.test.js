@@ -172,13 +172,64 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
   assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
 });
 
+test('gameplay hud sync passes a stable frame timestamp into weapon combat selectors', async () => {
+  const weaponCallTimes = [];
+  const harness = await loadHudSyncHarness({
+    GamePlayerCombat: {
+      getState() {
+        return {
+          hp: 410,
+          hpMax: 500,
+          armor: 55,
+          armorMax: 90,
+          alive: true,
+          invulnerable: false,
+          spawnShieldUntil: 0,
+          respawn: null
+        };
+      },
+      getCurrentWeaponState(now) {
+        weaponCallTimes.push({ kind: 'weapon', now });
+        return {
+          id: 'rifle',
+          name: 'Rifle',
+          magazineSize: 30,
+          ammoInMag: 17,
+          automatic: false,
+          bodyDamage: 48,
+          headDamage: 110
+        };
+      },
+      getWeaponHudState(now) {
+        weaponCallTimes.push({ kind: 'hud', now });
+        return { status: 'ready', pct: 1 };
+      }
+    }
+  });
+
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.16,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+
+  assert.deepEqual(weaponCallTimes, [
+    { kind: 'weapon', now: 1000 },
+    { kind: 'hud', now: 1000 }
+  ]);
+});
+
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {
   const harness = await loadHudSyncHarness({
     GameNet: {
+      getAuthoritativeNow() {
+        return 900;
+      },
       getSelfAbilityState() {
         return {
           abilityLoadout: { slot1: 'deadeye', slot2: 'choke' },
-          chokeState: { endsAt: 1400 },
+          chokeState: { endsAt: 950 },
           deadeyeState: {
             maxLocks: 2,
             lockCount: 1,
@@ -195,7 +246,8 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
       setDeadeyeHighlights(value) { harness.calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
     },
     GameAbilityBoundary: {
-      buildNetworkDeadeyeUiState(state, resolveTargetWorldPos) {
+      buildNetworkDeadeyeUiState(state, resolveTargetWorldPos, now) {
+        assert.equal(now, 900);
         return {
           targets: [{
             targetId: state.targetIds[0],

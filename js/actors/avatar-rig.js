@@ -39,6 +39,11 @@
     var GUN_MOUNT_LIFT_Y = 0.1 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
     var FOOT_PLANE_OFFSET_Y = (typeof entityConstants.AVATAR_FOOT_PLANE_OFFSET_Y === 'number') ? entityConstants.AVATAR_FOOT_PLANE_OFFSET_Y : 0.3;
+    var UPPER_BODY_PIVOT_OFFSET = {
+        x: AVATAR_TORSO_CENTER_OFFSET.x,
+        y: (AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y) - (AVATAR_TORSO_SIZE.y * 0.5),
+        z: AVATAR_TORSO_CENTER_OFFSET.z
+    };
     var HEAD_EYE_Y = 0.06;
     var HEAD_EYE_Z = -0.282;
     var HEAD_EYE_X = 0.12;
@@ -48,6 +53,9 @@
     var FIREARM_SPRINT_AIM_PITCH_WRIST_FACTOR = 0.25;
     var AIRBORNE_ARM_SIDE_SPLAY = -15 * DEG_TO_RAD;
     var AIRBORNE_ARM_SWEEP = 15 * DEG_TO_RAD;
+    var WALK_FORWARD_LEAN = 3.5 * DEG_TO_RAD;
+    var RUN_FORWARD_LEAN = 6.5 * DEG_TO_RAD;
+    var UPPER_BODY_LEAN_BLEND_SPEED = 10;
     var LEFT_PALM_NEUTRAL = { x: -0.01, y: -0.84, z: -0.03 };
     var RIGHT_PALM_SOCKET = { x: 0.015, y: -0.98, z: -0.01 };
     var HANDLE_ANCHOR_NAME = 'weaponHandleAnchor';
@@ -78,6 +86,16 @@
         if (!rig || !rig.armR || !rig.palmRight) return;
         rig.armR.rotation.x = shoulderBase + (rig.aimPitch * Number(shoulderFactor || 0));
         rig.palmRight.rotation.x = rig.aimPitch * Number(wristFactor || 0);
+    }
+
+    function updateUpperBodyLean(rig, targetLean, dt) {
+        if (!rig || !rig.upperBodyPivot) return;
+        var blend = Math.min(1, Math.max(0, Number(dt || 0)) * UPPER_BODY_LEAN_BLEND_SPEED);
+        rig.upperBodyLeanX += (Number(targetLean || 0) - rig.upperBodyLeanX) * blend;
+        if (Math.abs(rig.upperBodyLeanX) < 0.0001 && Math.abs(targetLean) < 0.0001) {
+            rig.upperBodyLeanX = 0;
+        }
+        rig.upperBodyPivot.rotation.x = rig.upperBodyLeanX;
     }
 
     function pointArmAtTarget(armGroup, targetVec, parentGroup, extraX, extraY, extraZ) {
@@ -277,13 +295,25 @@
         var gunMetal = new THREE.MeshLambertMaterial({ color: 0x666666 });
         var eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
 
+        var upperBodyPivot = new THREE.Group();
+        upperBodyPivot.position.set(UPPER_BODY_PIVOT_OFFSET.x, UPPER_BODY_PIVOT_OFFSET.y, UPPER_BODY_PIVOT_OFFSET.z);
+        modelRoot.add(upperBodyPivot);
+
         var body = new THREE.Mesh(new THREE.BoxGeometry(AVATAR_TORSO_SIZE.x, AVATAR_TORSO_SIZE.y, AVATAR_TORSO_SIZE.z), bodyMat);
-        body.position.set(AVATAR_TORSO_CENTER_OFFSET.x, AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y, AVATAR_TORSO_CENTER_OFFSET.z);
-        modelRoot.add(body);
+        body.position.set(
+            AVATAR_TORSO_CENTER_OFFSET.x - UPPER_BODY_PIVOT_OFFSET.x,
+            (AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y) - UPPER_BODY_PIVOT_OFFSET.y,
+            AVATAR_TORSO_CENTER_OFFSET.z - UPPER_BODY_PIVOT_OFFSET.z
+        );
+        upperBodyPivot.add(body);
 
         var head = new THREE.Mesh(new THREE.BoxGeometry(AVATAR_HEAD_SIZE.x, AVATAR_HEAD_SIZE.y, AVATAR_HEAD_SIZE.z), skinMat);
-        head.position.set(AVATAR_HEAD_CENTER_OFFSET.x, AVATAR_HEAD_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y, AVATAR_HEAD_CENTER_OFFSET.z);
-        modelRoot.add(head);
+        head.position.set(
+            AVATAR_HEAD_CENTER_OFFSET.x - UPPER_BODY_PIVOT_OFFSET.x,
+            (AVATAR_HEAD_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y) - UPPER_BODY_PIVOT_OFFSET.y,
+            AVATAR_HEAD_CENTER_OFFSET.z - UPPER_BODY_PIVOT_OFFSET.z
+        );
+        upperBodyPivot.add(head);
         var eyeLeft = addXEye(head, -HEAD_EYE_X, eyeMat);
         var eyeRight = addXEye(head, HEAD_EYE_X, eyeMat);
 
@@ -292,17 +322,25 @@
         head.add(eyeAnchor);
 
         var shoulderLeft = new THREE.Group();
-        shoulderLeft.position.set(AVATAR_ARM_LEFT_CENTER_OFFSET.x, AVATAR_ARM_LEFT_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y + (AVATAR_ARM_SIZE.y * 0.5), AVATAR_ARM_LEFT_CENTER_OFFSET.z);
+        shoulderLeft.position.set(
+            AVATAR_ARM_LEFT_CENTER_OFFSET.x - UPPER_BODY_PIVOT_OFFSET.x,
+            (AVATAR_ARM_LEFT_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y + (AVATAR_ARM_SIZE.y * 0.5)) - UPPER_BODY_PIVOT_OFFSET.y,
+            AVATAR_ARM_LEFT_CENTER_OFFSET.z - UPPER_BODY_PIVOT_OFFSET.z
+        );
         var armL = new THREE.Mesh(new THREE.BoxGeometry(AVATAR_ARM_SIZE.x, AVATAR_ARM_SIZE.y, AVATAR_ARM_SIZE.z), skinMat);
         armL.position.y = -(AVATAR_ARM_SIZE.y * 0.5);
         shoulderLeft.add(armL);
         var palmLeft = new THREE.Group();
         palmLeft.position.set(LEFT_PALM_NEUTRAL.x, LEFT_PALM_NEUTRAL.y, LEFT_PALM_NEUTRAL.z);
         shoulderLeft.add(palmLeft);
-        modelRoot.add(shoulderLeft);
+        upperBodyPivot.add(shoulderLeft);
 
         var shoulderRight = new THREE.Group();
-        shoulderRight.position.set(AVATAR_ARM_RIGHT_CENTER_OFFSET.x, AVATAR_ARM_RIGHT_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y + (AVATAR_ARM_SIZE.y * 0.5), AVATAR_ARM_RIGHT_CENTER_OFFSET.z);
+        shoulderRight.position.set(
+            AVATAR_ARM_RIGHT_CENTER_OFFSET.x - UPPER_BODY_PIVOT_OFFSET.x,
+            (AVATAR_ARM_RIGHT_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y + (AVATAR_ARM_SIZE.y * 0.5)) - UPPER_BODY_PIVOT_OFFSET.y,
+            AVATAR_ARM_RIGHT_CENTER_OFFSET.z - UPPER_BODY_PIVOT_OFFSET.z
+        );
         var armR = new THREE.Mesh(new THREE.BoxGeometry(AVATAR_ARM_SIZE.x, AVATAR_ARM_SIZE.y, AVATAR_ARM_SIZE.z), skinMat);
         armR.position.y = -(AVATAR_ARM_SIZE.y * 0.5);
         shoulderRight.add(armR);
@@ -310,7 +348,7 @@
         var palmRight = new THREE.Group();
         palmRight.position.set(RIGHT_PALM_SOCKET.x, RIGHT_PALM_SOCKET.y, RIGHT_PALM_SOCKET.z);
         shoulderRight.add(palmRight);
-        modelRoot.add(shoulderRight);
+        upperBodyPivot.add(shoulderRight);
 
         var hipLeft = new THREE.Group();
         hipLeft.position.set(AVATAR_LEG_LEFT_CENTER_OFFSET.x, AVATAR_LEG_LEFT_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y + (AVATAR_LEG_SIZE.y * 0.5), AVATAR_LEG_LEFT_CENTER_OFFSET.z);
@@ -379,8 +417,12 @@
         gun.add(supportAnchor);
 
         var coreAnchor = new THREE.Object3D();
-        coreAnchor.position.set(AVATAR_TORSO_CENTER_OFFSET.x, AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y, AVATAR_TORSO_CENTER_OFFSET.z);
-        modelRoot.add(coreAnchor);
+        coreAnchor.position.set(
+            AVATAR_TORSO_CENTER_OFFSET.x - UPPER_BODY_PIVOT_OFFSET.x,
+            (AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y) - UPPER_BODY_PIVOT_OFFSET.y,
+            AVATAR_TORSO_CENTER_OFFSET.z - UPPER_BODY_PIVOT_OFFSET.z
+        );
+        upperBodyPivot.add(coreAnchor);
 
         var throwableOriginAnchor = new THREE.Object3D();
         throwableOriginAnchor.position.set(0.01, -0.02, -0.12);
@@ -413,6 +455,7 @@
         }
 
         var rig = {
+            upperBodyPivot: upperBodyPivot,
             armL: shoulderLeft,
             armR: shoulderRight,
             legL: hipLeft,
@@ -444,6 +487,7 @@
             weaponId: '',
             gaitPhase: Math.random() * Math.PI * 2,
             aimPitch: 0,
+            upperBodyLeanX: 0,
             gunBasePos: new THREE.Vector3(),
             gunBaseRot: new THREE.Vector3(),
             supportBasePos: new THREE.Vector3(),
@@ -524,11 +568,20 @@
             var chokeStartedAt = choked ? Number(animState.startedAt || 0) : 0;
             var hooked = !!(animState && animState.hooked);
             var hookStartedAt = hooked ? Number(animState.hookStartedAt || 0) : 0;
+            var movingForward = !!(animState && animState.movingForward);
+            var movingBackward = !!(animState && animState.movingBackward);
             var legAmp = 0.12 + speedNorm * 0.55;
             if (legAmp > 0.72) legAmp = 0.72;
             var worldSpeed = animState && typeof animState.worldSpeed === 'number'
                 ? Math.max(0, Number(animState.worldSpeed || 0))
                 : (speedNorm * (sprinting ? INFERRED_RUN_SPEED : INFERRED_JOG_SPEED));
+            var targetUpperBodyLean = 0;
+            if (!airborne && !hooked && !choked && movingForward && !movingBackward && worldSpeed > 0.02) {
+                var leanBase = sprinting ? RUN_FORWARD_LEAN : WALK_FORWARD_LEAN;
+                var leanSpeedTarget = sprinting ? INFERRED_RUN_SPEED : INFERRED_JOG_SPEED;
+                targetUpperBodyLean = -leanBase * clamp01(worldSpeed / Math.max(0.001, leanSpeedTarget));
+            }
+            updateUpperBodyLean(rig, targetUpperBodyLean, dt);
             if (worldSpeed > 0.02) {
                 var strideLength = 1.6 + (legAmp * 3.2);
                 rig.gaitPhase += ((worldSpeed * Math.max(0, dt || 0)) / Math.max(0.001, strideLength)) * Math.PI * 2;
@@ -575,11 +628,9 @@
                 return;
             }
             if (airborne) {
-                var forwardPressed = !!(animState && animState.movingForward);
-                var backwardPressed = !!(animState && animState.movingBackward);
                 var airborneArmSweep = 0;
-                if (forwardPressed !== backwardPressed) {
-                    airborneArmSweep = forwardPressed ? -AIRBORNE_ARM_SWEEP : AIRBORNE_ARM_SWEEP;
+                if (movingForward !== movingBackward) {
+                    airborneArmSweep = movingForward ? -AIRBORNE_ARM_SWEEP : AIRBORNE_ARM_SWEEP;
                 }
                 rig.legL.rotation.x = 0;
                 rig.legR.rotation.x = 0;
@@ -623,7 +674,7 @@
                         pointArmAtTarget(
                             rig.armL,
                             targetWorld,
-                            modelRoot,
+                            rig.upperBodyPivot,
                             supportPose.targetX,
                             supportPose.targetY,
                             supportPose.targetZ
@@ -637,7 +688,7 @@
             }
 
             if (animState && animState.reloading && rig.weaponClass !== 'melee') {
-                applyReloadPose(rig, rig.weaponId, animState.reloadPct, modelRoot);
+                applyReloadPose(rig, rig.weaponId, animState.reloadPct, rig.upperBodyPivot);
             }
         }
 

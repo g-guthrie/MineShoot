@@ -120,6 +120,18 @@
 
     var inventory = {};
 
+    function inventoryLabelForType(type) {
+        var id = String(type || '');
+        var def = defs[id];
+        if (def && def.label) return String(def.label);
+        return id.toUpperCase();
+    }
+
+    function regenSecondsForType(type) {
+        var def = defs[String(type || '')];
+        return Math.max(0, Number(def && def.regen || 0));
+    }
+
     function resetInventory() {
         inventory = {};
         for (var i = 0; i < throwableOrder.length; i++) {
@@ -146,12 +158,13 @@
         for (var i = 0; i < throwableOrder.length; i++) {
             var id = throwableOrder[i];
             var inv = inventory[id];
+            if (!inv) continue;
             out[id] = {
                 id: id,
-                label: defs[id].label,
-                charges: inv.charges,
-                maxCharges: inv.maxCharges,
-                cooldownRemaining: inv.cooldownRemaining
+                label: inventoryLabelForType(id),
+                charges: Math.max(0, Number(inv.charges || 0)),
+                maxCharges: Math.max(1, Number(inv.maxCharges || 1)),
+                cooldownRemaining: Math.max(0, Number(inv.cooldownRemaining || 0))
             };
         }
         return out;
@@ -165,7 +178,7 @@
             inv.charges = inv.maxCharges;
             inv.cooldownRemaining = 0;
         } else if (inv.charges < inv.maxCharges && inv.cooldownRemaining <= 0) {
-            inv.cooldownRemaining = defs[type].regen;
+            inv.cooldownRemaining = regenSecondsForType(type);
         }
         return true;
     }
@@ -180,7 +193,7 @@
             if (inv.cooldownRemaining <= 0) {
                 inv.charges++;
                 if (inv.charges < inv.maxCharges) {
-                    inv.cooldownRemaining += defs[id].regen;
+                    inv.cooldownRemaining += regenSecondsForType(id);
                 } else {
                     inv.cooldownRemaining = 0;
                 }
@@ -1171,6 +1184,66 @@
         projectiles.splice(index, 1);
     }
 
+    function removePredictedProjectileByClientThrowId(clientThrowId) {
+        var id = String(clientThrowId || '');
+        if (!id) return false;
+        delete predictedByClientId[id];
+        for (var i = projectiles.length - 1; i >= 0; i--) {
+            var p = projectiles[i];
+            if (!p || p.clientThrowId !== id) continue;
+            removeProjectile(i);
+        }
+        return true;
+    }
+
+    function removePredictedProjectileByAuthoritativeId(projectileId) {
+        var id = String(projectileId || '');
+        if (!id) return false;
+        var removed = false;
+        for (var key in predictedByClientId) {
+            if (!Object.prototype.hasOwnProperty.call(predictedByClientId, key)) continue;
+            var entry = predictedByClientId[key];
+            if (!entry || String(entry.projectileId || '') !== id) continue;
+            delete predictedByClientId[key];
+            removed = true;
+            for (var i = projectiles.length - 1; i >= 0; i--) {
+                var p = projectiles[i];
+                if (!p || p.clientThrowId !== key) continue;
+                removeProjectile(i);
+            }
+        }
+        return removed;
+    }
+
+    function removeNetProjectileVisual(projectileId) {
+        var id = String(projectileId || '');
+        if (!id) return false;
+        if (!netProjectileMap[id]) return false;
+        removeNetProjectileById(id);
+        return true;
+    }
+
+    function updateNetProjectiles(dt) {
+        for (var key in netProjectileMap) {
+            if (!Object.prototype.hasOwnProperty.call(netProjectileMap, key)) continue;
+            var entry = netProjectileMap[key];
+            if (!entry || !entry.mesh || !entry.targetPosition) continue;
+            if (!entry.seeded) {
+                entry.mesh.position.copy(entry.targetPosition);
+                entry.seeded = true;
+            } else {
+                var distSq = entry.mesh.position.distanceToSquared(entry.targetPosition);
+                if (distSq > 400) {
+                    entry.mesh.position.copy(entry.targetPosition);
+                } else if (distSq > 0.000001) {
+                    entry.mesh.position.lerp(entry.targetPosition, Math.min(1, Math.max(0.12, dt * 18)));
+                }
+            }
+            entry.age = Math.max(0, Number(entry.age || 0) + Math.max(0, Number(dt || 0)));
+            orientProjectileVisual(entry.mesh, entry.velocity || tmpNetVec.set(0, 0, 0), entry.age);
+        }
+    }
+
     function updateProjectile(index, dt, onEnemyHit) {
         var p = projectiles[index];
         var def = defs[p.type];
@@ -1662,10 +1735,15 @@
         return true;
     };
 
-    GameThrowables.confirmPredictedThrow = function (clientThrowId) {
+    GameThrowables.confirmPredictedThrow = function (clientThrowId, ack) {
         var id = String(clientThrowId || '');
         if (!id || !predictedByClientId[id]) return false;
         predictedByClientId[id].acked = true;
+        predictedByClientId[id].projectileId = String(
+            (ack && typeof ack === 'object' && ack.projectileId)
+                ? ack.projectileId
+                : ''
+        );
         debugTelemetry.lastAckClientThrowId = id;
         return true;
     };
@@ -1673,14 +1751,8 @@
     GameThrowables.rejectPredictedThrow = function (clientThrowId) {
         var id = String(clientThrowId || '');
         if (!id) return false;
-        delete predictedByClientId[id];
         debugTelemetry.lastRejectClientThrowId = id;
-        for (var i = projectiles.length - 1; i >= 0; i--) {
-            var p = projectiles[i];
-            if (!p || p.clientThrowId !== id) continue;
-            removeProjectile(i);
-        }
-        return true;
+        return removePredictedProjectileByClientThrowId(id);
     };
 
     function reconcilePredictedAgainstAuthoritative(selfId, projectilesState) {
@@ -1737,12 +1809,25 @@
                 if (!mesh.userData) mesh.userData = {};
                 mesh.userData.projectileType = p.type;
                 sceneRef.add(mesh);
-                entry = { id: p.id, mesh: mesh, type: p.type };
+                entry = {
+                    id: p.id,
+                    mesh: mesh,
+                    type: p.type,
+                    velocity: new THREE.Vector3(),
+                    targetPosition: new THREE.Vector3(),
+                    age: 0,
+                    seeded: false
+                };
                 netProjectileMap[p.id] = entry;
             }
-            entry.mesh.position.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
-            tmpNetVec.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
-            orientProjectileVisual(entry.mesh, tmpNetVec, Number(p.age || 0));
+            entry.targetPosition.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
+            entry.velocity.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
+            entry.age = Math.max(0, Number(p.age || 0));
+            if (!entry.seeded) {
+                entry.mesh.position.copy(entry.targetPosition);
+                entry.seeded = true;
+                orientProjectileVisual(entry.mesh, entry.velocity, entry.age);
+            }
         }
 
         for (var key in netProjectileMap) {
@@ -1777,6 +1862,10 @@
     GameThrowables.applyNetworkEvent = function (event) {
         if (!event || !event.t) return;
         if (event.t === 'throw_impact') {
+            if (event.projectileType !== 'plasma') {
+                removePredictedProjectileByAuthoritativeId(event.projectileId || '');
+                removeNetProjectileVisual(event.projectileId || '');
+            }
             var impactPalette = effectPaletteForProjectileType(event.projectileType || event.throwableId || '');
             spawnFlash(
                 new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)),
@@ -1787,6 +1876,8 @@
             return;
         }
         if (event.t === 'throw_explode') {
+            removePredictedProjectileByAuthoritativeId(event.projectileId || '');
+            removeNetProjectileVisual(event.projectileId || '');
             var explosionPalette = effectPaletteForProjectileType(event.projectileType || event.throwableId || '');
             spawnExplosionBurst(
                 new THREE.Vector3(Number(event.x || 0), Number(event.y || 0), Number(event.z || 0)),
@@ -1859,6 +1950,7 @@
         for (var i = projectiles.length - 1; i >= 0; i--) {
             updateProjectile(i, dt, onEnemyHit);
         }
+        updateNetProjectiles(dt);
         updateFireZones(dt, onEnemyHit);
         updateFlashes(dt);
     };

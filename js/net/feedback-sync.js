@@ -300,7 +300,7 @@
             do {
                 throwAck = RT.GameNet.consumeThrowAck();
                 if (throwAck && throwAck.clientThrowId) {
-                    RT.GameThrowables.confirmPredictedThrow(throwAck.clientThrowId);
+                    RT.GameThrowables.confirmPredictedThrow(throwAck.clientThrowId, throwAck);
                 }
             } while (throwAck);
         }

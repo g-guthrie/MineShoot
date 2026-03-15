@@ -11,6 +11,13 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
+    function authoritativeNow(netApi) {
+        var stamp = netApi && netApi.getAuthoritativeNow
+            ? Number(netApi.getAuthoritativeNow() || 0)
+            : 0;
+        return stamp > 0 ? stamp : Date.now();
+    }
+
     function buildMotionSyncKey(selfState) {
         if (!selfState || typeof selfState !== 'object') return '';
         var precision = function (value) {
@@ -70,6 +77,7 @@
         }
 
         var RT = runtime();
+        var netApi = RT.GameNet || null;
         var abilityFxView = RT.GameAbilityFx || null;
         var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(authoritativeState)
@@ -78,9 +86,10 @@
                 : null);
         var motionSyncKey = buildMotionSyncKey(authoritativeState);
         var motionChanged = motionSyncKey !== lastMotionSyncKey;
+        var serverNow = authoritativeNow(netApi);
 
         if (
-            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > Date.now() &&
+            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > serverNow &&
             RT.GamePlayer &&
             RT.GamePlayer.applyAuthoritativeMotion
         ) {

@@ -43,6 +43,21 @@ const RUNTIME_MODE_DEFS = {
     fixedRoomId: 'local-shared',
     visible: 'local-only',
     authoritativeTesting: false
+  },
+  single_full_sandbox: {
+    id: 'single_full_sandbox',
+    label: 'Offline Sandbox',
+    menuTitle: 'OFFLINE SANDBOX',
+    menuDesc: 'Offline sandbox with local simulated bots.',
+    backendKind: 'sandbox',
+    backendLabel: 'OFFLINE SANDBOX',
+    authorityMode: 'offline',
+    authMode: 'none',
+    roomStrategy: 'none',
+    roomPrefix: '',
+    fixedRoomId: '',
+    visible: 'always',
+    authoritativeTesting: false
   }
 };
 

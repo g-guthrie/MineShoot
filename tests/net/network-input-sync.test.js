@@ -370,6 +370,54 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
   assert.equal(chokeVictim.liftHeight, 1.5);
 });
 
+test('GameNet updates self ability loadout immediately on class_changed before the next snapshot', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 1,
+        abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+        slot1CooldownRemaining: 2.5,
+        slot2CooldownRemaining: 7.5,
+        abilityFx: null
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  harness.handleMessage({
+    t: 'class_changed',
+    classId: 'abilities',
+    abilityLoadout: { slot1: 'hook', slot2: 'heal' }
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfAbilityState().abilityLoadout)), {
+    slot1: 'hook',
+    slot2: 'heal'
+  });
+});
+
 test('GameNet stores snapshot timing and estimates current server time from snapshots', async () => {
   const harness = await loadGameNetHarness();
   const { GameNet, timeState } = harness;

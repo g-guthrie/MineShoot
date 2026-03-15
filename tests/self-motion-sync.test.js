@@ -211,3 +211,51 @@ test('GameNetSelfMotionSync hard-applies authoritative motion while hook pull is
   assert.equal(harness.reconcileCalls.length, 0);
   assert.deepEqual(harness.applyCalls[0].options, { deferViewSync: true });
 });
+
+test('GameNetSelfMotionSync uses authoritative network time when evaluating hook-pull motion locks', async () => {
+  const harness = await loadSelfMotionSyncHarness({
+    GameNet: {
+      getAuthoritativeNow() {
+        return 900;
+      },
+      getInputSyncState() {
+        return {
+          pendingInputCount: 0,
+          hasUnsentInputTail: false,
+          lastSentSeq: 0,
+          lastAckedSeq: 0
+        };
+      },
+      getPendingInputSamples() {
+        return [];
+      }
+    }
+  });
+
+  harness.timeState.now = 1200;
+  harness.syncPlayerMotion({
+    authoritativeState: {
+      id: 'usr_test',
+      seq: 5,
+      x: 6,
+      y: 1.6,
+      z: 9,
+      yaw: 0.2,
+      pitch: 0,
+      velocityY: 0,
+      isGrounded: false,
+      alive: true,
+      abilityFx: {
+        hookedUntil: 1000
+      }
+    },
+    pendingInputCount: 0,
+    hasUnsentInputTail: false,
+    lastSentSeq: 5,
+    lastAckedSeq: 5,
+    pendingInputs: []
+  }, 0.016);
+
+  assert.equal(harness.applyCalls.length, 1);
+  assert.equal(harness.reconcileCalls.length, 0);
+});

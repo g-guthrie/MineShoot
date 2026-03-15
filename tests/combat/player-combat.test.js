@@ -86,6 +86,29 @@ test('player combat clears transient ability effects when death forces a respawn
   assert.equal(harness.getClearTransientCalls(), 2);
 });
 
+test('player combat defers offline respawn when local match owns the respawn flow', async () => {
+  let localMatchDeaths = 0;
+  const harness = await loadPlayerCombatHarness({
+    GameLocalMatch: {
+      isActive() { return true; },
+      onSelfKilled() {
+        localMatchDeaths += 1;
+        return { useManagedRespawn: true };
+      }
+    }
+  });
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return false; }
+  });
+
+  harness.GamePlayerCombat.consumeDamage(999, 'body', null);
+
+  assert.equal(localMatchDeaths, 1);
+  assert.equal(harness.GamePlayerCombat.isAlive(), false);
+  assert.equal(harness.getClearTransientCalls(), 1);
+});
+
 test('player combat exposes survivability state and preserves respawn countdown until the server revives the player', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
@@ -212,4 +235,65 @@ test('player combat owns weapon presentation state and repairs it from authorita
     ready: true,
     pct: 1
   });
+});
+
+test('player combat preserves a recent local multiplayer equip through stale snapshots', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.equipWeapon('sniper');
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1000);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 1500;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1500);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 1900;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1900);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
+});
+
+test('player combat clears multiplayer weapon prediction once the server catches up', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.equipWeapon('sniper');
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1000);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 1100;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'sniper',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1100);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 1500;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 1500);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
 });

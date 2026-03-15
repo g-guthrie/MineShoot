@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-async function loadRemoteSync(remoteInterpolationTuning = null) {
+async function loadRemoteSync(remoteInterpolationTuning = null, runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/net/remote-sync.js', import.meta.url), 'utf8');
   const sandbox = {
     __MAYHEM_RUNTIME: {
@@ -14,7 +14,8 @@ async function loadRemoteSync(remoteInterpolationTuning = null) {
             remoteInterpolation: remoteInterpolationTuning
           }
         } : null
-      }
+      },
+      ...runtimeOverrides
     },
     globalThis: null,
     console,
@@ -230,6 +231,82 @@ test('remote sync does not force the reveal ghost on for choked victims', async 
 
   assert.equal(revealCalls.length > 0, true);
   assert.equal(revealCalls.at(-1).visible, false);
+});
+
+test('remote sync uses authoritative network time for remote ability timers', async () => {
+  const originalDateNow = Date.now;
+  Date.now = () => 1200;
+  try {
+    const remoteSync = await loadRemoteSync(null, {
+      GameNet: {
+        getAuthoritativeNow() {
+          return 900;
+        }
+      }
+    });
+    const calls = [];
+    const render = {
+      id: 'usr_remote',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      targetX: 0,
+      targetFootY: 0,
+      targetZ: 0,
+      targetYaw: 0,
+      targetPitch: 0,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 1000,
+      muzzleFlashUntil: 1000,
+      chokeState: { endsAt: 1000 },
+      healState: { endsAt: 1000 },
+      spawnShieldUntil: 1000,
+      actorVisual: {
+        updateAnimation(_dt, animState) {
+          calls.push({ kind: 'update', animState });
+        },
+        setMuzzleVisible(visible) {
+          calls.push({ kind: 'muzzle', visible });
+        },
+        setHealFlash(visible) {
+          calls.push({ kind: 'heal', visible });
+        },
+        setSpawnShield(visible) {
+          calls.push({ kind: 'shield', visible });
+        },
+        setRevealGhostState() {}
+      },
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction(action, options) {
+          calls.push({ kind: 'trigger', action, options });
+        },
+        setMuzzleVisible() {}
+      }
+    };
+    const renderMap = new Map([['usr_remote', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(calls.some((entry) => entry.kind === 'update' && entry.animState.hooked === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'muzzle' && entry.visible === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'heal' && entry.visible === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'shield' && entry.visible === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'trigger' && entry.action === 'choke_grip'), true);
+  } finally {
+    Date.now = originalDateNow;
+  }
 });
 
 test('remote sync can lead remote combat hitboxes slightly ahead of the rendered model', async () => {

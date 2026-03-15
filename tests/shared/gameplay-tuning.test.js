@@ -137,6 +137,12 @@ test('Vader choke duration includes the extra half-second hold', () => {
   assert.equal(gameplayTuning.abilityCatalog.choke.duration, 2.0);
 });
 
+test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
+  assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 1.5);
+  assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 100);
+  assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
+});
+
 test('ability loadout normalization repairs invalid and duplicate picks', () => {
   assert.deepEqual(
     normalizeAbilityLoadout('missile', 'missile'),

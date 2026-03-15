@@ -18,12 +18,15 @@
     var respawnAtMs = 0;
     var weaponLoadout = ['rifle'];
     var equippedWeaponId = 'rifle';
+    var predictedMultiplayerWeaponId = '';
+    var predictedMultiplayerWeaponUntil = 0;
     var weaponAmmo = {};
     var lastWeaponFireAtMs = 0;
 
     var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
     var ARMOR_REGEN_PER_SEC = 12;
     var RELOADED_FLASH_MS = 900;
+    var MULTIPLAYER_WEAPON_PREDICTION_GRACE_MS = 800;
 
     var sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
 
@@ -271,10 +274,50 @@
         };
     }
 
+    function clearPredictedMultiplayerWeapon() {
+        predictedMultiplayerWeaponId = '';
+        predictedMultiplayerWeaponUntil = 0;
+    }
+
+    function rememberPredictedMultiplayerWeapon(weaponId) {
+        if (!isMultiplayer()) {
+            clearPredictedMultiplayerWeapon();
+            return;
+        }
+        predictedMultiplayerWeaponId = String(weaponId || '');
+        predictedMultiplayerWeaponUntil = nowMs() + MULTIPLAYER_WEAPON_PREDICTION_GRACE_MS;
+    }
+
+    function resolveMultiplayerWeaponPreference(authoritativeWeaponId) {
+        var authoritativeId = String(authoritativeWeaponId || '');
+        var predictedId = String(predictedMultiplayerWeaponId || '');
+        var wallNow = nowMs();
+
+        if (!isMultiplayer()) {
+            clearPredictedMultiplayerWeapon();
+            return authoritativeId;
+        }
+        if (!predictedId) return authoritativeId;
+        if (!isKnownWeaponId(predictedId) || weaponLoadout.indexOf(predictedId) === -1) {
+            clearPredictedMultiplayerWeapon();
+            return authoritativeId;
+        }
+        if (authoritativeId && authoritativeId === predictedId) {
+            clearPredictedMultiplayerWeapon();
+            return predictedId;
+        }
+        if (predictedMultiplayerWeaponUntil > wallNow) {
+            return predictedId;
+        }
+        clearPredictedMultiplayerWeapon();
+        return authoritativeId;
+    }
+
     function equipWeapon(weaponId) {
         var id = String(weaponId || '');
         if (!isKnownWeaponId(id)) return null;
         equippedWeaponId = id;
+        rememberPredictedMultiplayerWeapon(id);
         return buildWeaponState(equippedWeaponId);
     }
 
@@ -314,10 +357,16 @@
         if (!selfState || typeof selfState !== 'object') return getCurrentWeaponState(now);
         var stamp = weaponTimeMs(now);
         var hasLoadout = Array.isArray(selfState.weaponLoadout);
+        var authoritativeWeaponId = (selfState.weaponId && isKnownWeaponId(selfState.weaponId))
+            ? String(selfState.weaponId || '')
+            : '';
+        var preferredWeaponId = isMultiplayer()
+            ? resolveMultiplayerWeaponPreference(authoritativeWeaponId)
+            : authoritativeWeaponId;
         if (hasLoadout) {
-            applyWeaponLoadout(selfState.weaponLoadout, selfState.weaponId);
-        } else if (selfState.weaponId && isKnownWeaponId(selfState.weaponId)) {
-            equippedWeaponId = String(selfState.weaponId || equippedWeaponId);
+            applyWeaponLoadout(selfState.weaponLoadout, preferredWeaponId || equippedWeaponId);
+        } else if (preferredWeaponId) {
+            equippedWeaponId = preferredWeaponId;
         }
         if (selfState.weaponAmmo && typeof selfState.weaponAmmo === 'object') {
             syncAmmoStateFromSnapshot(selfState.weaponAmmo, stamp);
@@ -390,6 +439,7 @@
         respawnAtMs = 0;
         weaponAmmo = {};
         lastWeaponFireAtMs = 0;
+        clearPredictedMultiplayerWeapon();
         applyWeaponLoadout(defaultWeaponLoadout(), '');
     }
 
@@ -444,6 +494,14 @@
         if (playerHP <= 0) {
             if (RT.GameAbilities && RT.GameAbilities.clearTransientState) {
                 RT.GameAbilities.clearTransientState();
+            }
+            if (!isMultiplayer() && RT.GameLocalMatch && RT.GameLocalMatch.isActive && RT.GameLocalMatch.isActive()) {
+                var localDeath = RT.GameLocalMatch.onSelfKilled ? RT.GameLocalMatch.onSelfKilled(attackerEnemy || null) : null;
+                if (localDeath && (localDeath.useManagedRespawn || localDeath.suppressDefaultRespawn)) {
+                    setAlive(false);
+                    clearRespawnCountdown();
+                    return;
+                }
             }
             respawn();
             return;

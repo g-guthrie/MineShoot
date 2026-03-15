@@ -53,6 +53,17 @@
         var net = runtime.GameNet || null;
         var netRuntime = net && net.runtime ? net.runtime : net;
         var netView = net && net.view ? net.view : net;
+        var netRuntimeInitStarted = false;
+
+        function ensureNetRuntimeInit() {
+            if (!netRuntime || !netRuntime.init || netRuntimeInitStarted) return;
+            if (netRuntime.isActive && netRuntime.isActive()) {
+                netRuntimeInitStarted = true;
+                return;
+            }
+            netRuntime.init(scene);
+            netRuntimeInitStarted = true;
+        }
 
         function finalizeWorldBootstrap(worldMeta) {
             var worldOptions = (worldMeta && worldMeta.worldSeed) ? { worldMeta: worldMeta } : undefined;
@@ -71,8 +82,25 @@
             var camera = runtime.GamePlayer.init(scene);
             runtime.GameThrowables.init(scene);
 
-            if (netRuntime && (!netRuntime.isActive || !netRuntime.isActive())) {
-                netRuntime.init(scene);
+            if (multiplayerMode) {
+                ensureNetRuntimeInit();
+            } else {
+                var enemyCount = runtime.GameWorld.getRecommendedEnemyCount
+                    ? runtime.GameWorld.getRecommendedEnemyCount()
+                    : 5;
+                if (runtime.GameLocalMatch && runtime.GameLocalMatch.init) {
+                    runtime.GameLocalMatch.init({
+                        gameMode: (options.activeRuntimeMode && options.activeRuntimeMode.gameMode)
+                            ? options.activeRuntimeMode.gameMode
+                            : 'ffa'
+                    });
+                }
+                if (runtime.GameEnemy && runtime.GameEnemy.init) {
+                    runtime.GameEnemy.init(scene, enemyCount);
+                }
+                if (runtime.GameUI && runtime.GameUI.updateThrowableInfo && runtime.GameThrowables.getState) {
+                    runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
+                }
             }
 
             runtime.GameAbilities.init(scene);
@@ -130,12 +158,10 @@
         }
 
         if (!multiplayerMode) {
-            return Promise.reject(new Error('Non-networked runtime modes are no longer supported.'));
+            return Promise.resolve(finalizeWorldBootstrap(null));
         }
 
-        if (netRuntime && netRuntime.init) {
-            netRuntime.init(scene);
-        }
+        ensureNetRuntimeInit();
         var metaWaitStartedAt = performance.now();
         var metaTimeoutMs = 1400;
 

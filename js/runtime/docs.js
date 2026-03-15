@@ -1,10 +1,11 @@
 /**
- * docs.js - In-game Fallout-style ASCII field manual
+ * docs.js - In-game field manual with live tuning data.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameDocs
  */
 (function () {
     'use strict';
 
+    var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameDocs = {};
 
     var panelEl = null;
@@ -27,12 +28,12 @@
     };
 
     var PAGES = [
-        { id: 'home', label: 'HOME' },
+        { id: 'home', label: 'BRIEFING' },
         { id: 'controls', label: 'CONTROLS' },
-        { id: 'abilities', label: 'ABILITIES' },
         { id: 'weapons', label: 'WEAPONS' },
+        { id: 'abilities', label: 'ABILITIES' },
         { id: 'throwables', label: 'THROWABLES' },
-        { id: 'formulas', label: 'FORMULAS' }
+        { id: 'tunables', label: 'TUNABLES' }
     ];
 
     var WEAPON_ART = {
@@ -75,41 +76,366 @@
             '      O==========O',
             '           ||',
             '         __||__'
-        ].join('\n'),
+        ].join('\n')
     };
 
-    function fNum(value, fallback) {
-        if (typeof value !== 'number' || !isFinite(value)) return fallback || '--';
-        return String(value);
-    }
-
-    function fSec(value) {
-        if (typeof value !== 'number' || !isFinite(value)) return '--';
-        return value.toFixed(1) + 's';
-    }
-
-    function fRateMs(ms) {
-        if (typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '--';
-        return (1000 / ms).toFixed(2) + '/s';
-    }
-
-    function safeCatalog(getter) {
-        try {
-            var data = getter && getter();
-            if (!data || !data.length) return [];
-            return data;
-        } catch (err) {
-            return [];
+    var WEAPON_BRIEFINGS = {
+        machinegun: {
+            niche: 'Default generalist. Best for sustained pressure, tracking, and burning armor before a swap.',
+            mechanics: 'Single-ray automatic hitscan. The large magazine forgives misses, but ADS mainly zooms and does not tighten spread.',
+            tips: [
+                'Start fights with it, then quick-swap once the target is cracked or forced into cover.',
+                'Treat the spread like a controllable hose. Mid-range is the sweet spot, not cross-map beams.'
+            ]
+        },
+        shotgun: {
+            niche: 'Breach-and-finish weapon. It dominates corners, short peeks, and panic trades.',
+            mechanics: 'Twelve independent pellet rays per trigger. Unlike the pistol, every pellet can connect, so spacing decides the whole gun.',
+            tips: [
+                'Close space with movement or hook first. The damage falls off sharply once the circle reticle no longer covers the body.',
+                'Use it to punish pushes and to confirm kills after machinegun or rifle chip damage.'
+            ]
+        },
+        rifle: {
+            niche: 'Precision dueling rifle for controlled mid and long sightlines.',
+            mechanics: 'Single-ray hitscan with true precision ADS. Scoping drops spread to zero and stretches effective range.',
+            tips: [
+                'Play cover-to-cover and take deliberate shots instead of panic spamming hipfire.',
+                'The headshot reward is high enough that clean ADS peeks outvalue raw volume fire.'
+            ]
+        },
+        pistol: {
+            niche: 'Quick-swap hand cannon and finisher. It rewards clean aim without behaving like a shotgun.',
+            mechanics: 'Circle-scan / circle ray trace weapon. It is authored as multi-pellet, but `singleHitFromPellets` keeps only the first winning sample, so one shot still deals one damage result.',
+            tips: [
+                'Use it like a forgiving disc-shaped headhunter: fast draw, strong burst, then reposition.',
+                'Because only one sample wins, accuracy matters more than staying point-blank.'
+            ]
+        },
+        sniper: {
+            niche: 'Long-lane punish tool for picks, spawn punish, and hard opening damage.',
+            mechanics: 'Single-ray hitscan with ADS required before the shot is allowed. Hipfire exists for camera state, but the fire path is scope-gated.',
+            tips: [
+                'Scope early, hold angles, and leave after the shot. The cooldown is too long for brawling.',
+                'Use the massive body damage to force cover even when you do not secure the headshot.'
+            ]
         }
+    };
+
+    var ABILITY_BRIEFINGS = {
+        choke: {
+            useCase: 'Stops a peek, isolates one target, and gives you or your teammate a free follow-up window.',
+            mechanics: 'Acquires a target inside a widened on-screen box, then lifts and stuns them in place.',
+            tips: [
+                'Best when enemies have already committed to a line or doorway.',
+                'Use it to pin shotgun rushers and to guarantee clean rifle or pistol follow-up shots.'
+            ]
+        },
+        hook: {
+            useCase: 'Forces close range on demand and turns bad spacing into your spacing.',
+            mechanics: 'Launches a catch check toward the center aim point, then yanks the victim to a fixed close distance.',
+            tips: [
+                'Hook into shotgun or machinegun clean-up rather than using it as a standalone damage button.',
+                'It is strongest against players who think they are safe at medium range.'
+            ]
+        },
+        heal: {
+            useCase: 'Resets a fight after you break line of sight or win a short trade.',
+            mechanics: 'Simple self-heal with a brief visible windup before the health chunk lands.',
+            tips: [
+                'Use it behind cover, not in the middle of open tracking duels.',
+                'Good on loadouts that play extended poke windows instead of one-shot bursts.'
+            ]
+        },
+        missile: {
+            useCase: 'Fast finisher and movement-forcing tool. Great for chasing weak targets around corners.',
+            mechanics: 'Spawns a micro-rocket from the muzzle and lets nearby hostile hitboxes bend the flight path.',
+            tips: [
+                'Fire it when the enemy is already moving or healing so the tracking matters.',
+                'Low cooldown means it is part of your regular damage loop, not a once-per-fight panic key.'
+            ]
+        },
+        deadeye: {
+            useCase: 'High-threat execution button for exposed enemies and clustered pushes.',
+            mechanics: 'Scans a wide forward rectangle, stores a limited number of locks, then cashes them out as burst damage.',
+            tips: [
+                'Open angles wide enough to see multiple targets before committing the cast.',
+                'The value is in lock discipline. Do not waste it on a single target you already hard win.'
+            ]
+        }
+    };
+
+    var THROWABLE_BRIEFINGS = {
+        frag: {
+            useCase: 'Generic lethal grenade for flushes, corners, and post-damage confirms.',
+            mechanics: 'Trajectory-preview explosive with limited bounce and a short fuse.',
+            tips: [
+                'Cook the space, not the target. Throw where they have to move next.',
+                'Bounce it off cover when direct arcs are too readable.'
+            ]
+        },
+        plasma: {
+            useCase: 'Area denial with stickiness and soft homing on nearby targets.',
+            mechanics: 'Trajectory grenade that can acquire nearby targets inside a cone and explode after a stick delay.',
+            tips: [
+                'Strong against players tucking behind single pieces of cover.',
+                'The slower travel rewards setup throws more than panic tosses.'
+            ]
+        },
+        molotov: {
+            useCase: 'Space control and chase denial rather than pure burst damage.',
+            mechanics: 'Creates a burning zone that ticks damage over time after impact.',
+            tips: [
+                'Throw it into exits or revives, not directly at a strafing duel target.',
+                'Use the fire field to split teams and punish predictable retreats.'
+            ]
+        },
+        knife: {
+            useCase: 'Fast instant throw for clean-up, burst finishers, and explosive refill plays.',
+            mechanics: 'No-preview projectile with direct hit damage and headshot refill utility.',
+            tips: [
+                'Because there is no hold preview, treat it like a quick skill shot rather than a zoning tool.',
+                'A headshot instantly refills explosives, so it snowballs throw-focused loadouts.'
+            ]
+        }
+    };
+
+    var WEAPON_TUNABLE_HELP = {
+        primitiveType: 'Base shot solver. `hitscan_single` is one ray, `hitscan_multi` samples spread multiple times.',
+        automatic: 'If true, holding LMB keeps firing as long as cadence and ammo allow.',
+        cooldownMs: 'Minimum delay between one shot and the next.',
+        reloadMs: 'How long the weapon stays unavailable once a reload begins.',
+        magazineSize: 'Rounds loaded before the automatic reload kicks in.',
+        bodyDamage: 'Damage dealt on a non-head hit before falloff scaling.',
+        headDamage: 'Damage dealt on a head hit before falloff scaling.',
+        pellets: 'Number of spread samples or pellets fired per trigger pull.',
+        hipfireSpread: 'Hipfire spread radius feeding the shot solver.',
+        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim.',
+        maxRange: 'Hipfire distance cap before the shot stops checking for hits.',
+        adsMaxRange: 'ADS distance cap. Often longer than hipfire on precision guns.',
+        adsFovDeg: 'Zoom level while aiming down sights.',
+        singleHitFromPellets: 'Keeps only the best single winning sample from a multi-sample weapon. This is what makes pistol a circle-scan hand cannon.',
+        hipfireBloomScale: 'How large the HUD bloom reticle grows while hipfiring.',
+        adsBloomScale: 'How much the HUD bloom shrinks or persists in ADS.',
+        'tracer.life': 'How long the visual tracer stays alive.',
+        'tracer.speed': 'How quickly the tracer travels toward the hit point.',
+        'tracer.segmentLength': 'Visible tracer streak length.',
+        'recoil.z': 'Backward positional kick.',
+        'recoil.x': 'Side positional kick.',
+        'recoil.pitch': 'Vertical camera/weapon snap.',
+        'recoil.yaw': 'Horizontal kick per shot.',
+        'recoil.roll': 'Weapon roll during the recoil impulse.',
+        'recoil.armR': 'Right arm animation contribution.',
+        'recoil.armL': 'Left arm animation contribution.',
+        'recoil.muzzleMs': 'How long muzzle flash feedback stays visible.',
+        'audioSample.gain': 'Playback volume multiplier for the shot sample.',
+        'audioSample.playbackRate': 'Playback rate range used to keep repeated shots from sounding identical.'
+    };
+
+    var ABILITY_TUNABLE_HELP = {
+        range: 'Maximum reach in world units.',
+        cooldownMs: 'Cooldown before the same slot can be fired again.',
+        duration: 'How long the effect or lock window lasts.',
+        lockBoxPx: 'On-screen lock box width used for box-based acquisition.',
+        targetTolerance: 'Target leniency during choke validation.',
+        liftHeight: 'Vertical lift applied during choke.',
+        tickRate: 'DOT or repeated effect cadence.',
+        dotPerTick: 'Damage per DOT tick when present.',
+        reticleRadiusPx: 'On-screen radius used by the hook targeting helper.',
+        catchRadius: 'World-space radius used to catch or latch a target.',
+        travelSpeed: 'Travel speed for the hook or projectile-like effect.',
+        pullDistance: 'How close hook leaves the pulled target.',
+        castDamage: 'Immediate impact damage on cast.',
+        stunDuration: 'How long the victim stays disrupted after the hit.',
+        healAmount: 'Flat health returned when heal resolves.',
+        damage: 'Direct damage of the cast.',
+        radius: 'Explosion or hit radius.',
+        acquireRange: 'Homing seek range after launch.',
+        lockHalfAngleDeg: 'Half-angle of the seek cone in degrees.',
+        homingBoost: 'How aggressively the projectile gains steering force.',
+        homingLerp: 'How quickly the projectile direction bends toward the lock.',
+        minDot: 'Forward alignment requirement for lock-based abilities.',
+        maxTargets: 'Maximum simultaneous deadeye locks.'
+    };
+
+    var THROWABLE_TUNABLE_HELP = {
+        speed: 'Initial forward speed.',
+        upward: 'Vertical launch boost applied at throw time.',
+        gravity: 'Gravity scale during flight.',
+        fuse: 'Delay before detonation if nothing triggers earlier.',
+        radius: 'Blast radius.',
+        damage: 'Peak blast damage.',
+        regen: 'Recharge time before the charge returns.',
+        bounce: 'Whether the throwable is allowed to bounce.',
+        bounceVelocityDamping: 'Horizontal energy preserved after a bounce.',
+        bounceVerticalDamping: 'Vertical energy preserved after a bounce.',
+        bounceMaxCount: 'Maximum allowed bounce count.',
+        bounceStopSpeedSq: 'Threshold below which bouncing stops.',
+        homingBoost: 'How hard the projectile can steer toward a target.',
+        homingLerp: 'How quickly it blends toward that steering direction.',
+        acquireRange: 'Seek acquisition range.',
+        acquireHalfAngleDeg: 'Seek acquisition cone half-angle.',
+        stickExplodeDelay: 'Delay between a successful stick and detonation.',
+        fireRadius: 'Persistent fire zone radius.',
+        fireDuration: 'How long the fire patch lasts.',
+        fireTickDamage: 'Damage applied per fire tick.',
+        fireTickRate: 'Time between fire damage ticks.',
+        life: 'Lifetime before the projectile despawns.',
+        hitRadius: 'Direct-hit collision radius.',
+        bodyDamage: 'Direct body hit damage.',
+        headDamage: 'Direct head hit damage.'
+    };
+
+    var CONTROL_GROUPS = [
+        {
+            title: 'Movement & Camera',
+            rows: [
+                { key: 'WASD', title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
+                { key: 'Mouse', title: 'Look', note: 'Pointer lock starts when you enter the match. Escape releases it.' },
+                { key: 'E', title: 'Sprint', note: 'Sprinting wins spacing, but ADS and certain ability states will interrupt it.' },
+                { key: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
+            ]
+        },
+        {
+            title: 'Combat',
+            rows: [
+                { key: 'LMB', title: 'Fire', note: 'Automatic fire only matters on the machine gun. Every other weapon is deliberate.' },
+                { key: 'RMB / Shift', title: 'ADS', note: 'Rifle tightens to zero spread in ADS. Sniper must be scoped before it can fire.' },
+                { key: '1 / 2', title: 'Swap Weapon', note: 'These map to your two menu loadout slots.' },
+                { key: 'Wheel', title: 'Cycle Weapon', note: 'Scroll cycles the two-slot loadout when pointer lock is active.' },
+                { key: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
+                { key: 'R / F', title: 'Abilities', note: 'Slot 1 is on R, slot 2 is on F. Pick any two distinct abilities from the menu.' }
+            ]
+        },
+        {
+            title: 'Session',
+            rows: [
+                { key: 'ENTER', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to start aiming again.' },
+                { key: 'I', title: 'Field Manual', note: 'Opens and closes this manual from both menu and gameplay.' },
+                { key: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' },
+                { key: 'Auto', title: 'Reload', note: 'Weapons reload automatically when the magazine runs dry. There is no manual reload bind.' }
+            ]
+        }
+    ];
+
+    var TUNABLE_GROUPS = [
+        {
+            title: 'Shot Model',
+            items: [
+                '<code>primitiveType</code> chooses the solver: one ray or a spread bundle.',
+                '<code>pellets</code> sets how many spread samples fire on each trigger pull.',
+                '<code>singleHitFromPellets</code> collapses that bundle to the best single winner, which is why pistol feels like a forgiving hand cannon instead of a true shotgun.'
+            ]
+        },
+        {
+            title: 'Cadence & Ammo',
+            items: [
+                '<code>automatic</code> flips between tap fire and hold fire behavior.',
+                '<code>cooldownMs</code>, <code>magazineSize</code>, and <code>reloadMs</code> define pace and punishment windows.',
+                'Because reload is automatic on empty, these numbers directly shape when you can safely overcommit.'
+            ]
+        },
+        {
+            title: 'Accuracy & Range',
+            items: [
+                '<code>hipfireSpread</code> and <code>adsSpread</code> drive the actual shot cone.',
+                '<code>maxRange</code> and <code>adsMaxRange</code> cap hit checks, then falloff bands scale damage inside that range.',
+                '<code>adsFovDeg</code> changes zoom, while bloom scales change how readable the HUD reticle feels.'
+            ]
+        },
+        {
+            title: 'Presentation Feel',
+            items: [
+                '<code>tracer.*</code> shapes how visible the shot path feels.',
+                '<code>recoil.*</code> shapes kick, pose, and muzzle timing rather than raw damage output.',
+                '<code>audioSample.*</code> helps repeated firing stay readable without making every weapon identical.'
+            ]
+        }
+    ];
+
+    function hasOwn(source, key) {
+        return !!source && Object.prototype.hasOwnProperty.call(source, key);
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function asFiniteNumber(value) {
+        var num = Number(value);
+        return isFinite(num) ? num : null;
+    }
+
+    function formatNumber(value, decimals) {
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        if (!isFinite(num)) return 'INF';
+        if (Math.abs(num - Math.round(num)) < 0.0005) return String(Math.round(num));
+        return num.toFixed(typeof decimals === 'number' ? decimals : 2);
+    }
+
+    function formatMs(value) {
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        return formatNumber(num, 0) + ' ms';
+    }
+
+    function formatSeconds(value) {
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        return formatNumber(num, num >= 10 ? 0 : 2) + ' s';
+    }
+
+    function formatSecondsFromMs(value) {
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        return formatSeconds(num / 1000);
+    }
+
+    function formatRate(valueMs) {
+        var num = asFiniteNumber(valueMs);
+        if (num === null || num <= 0) return '--';
+        return formatNumber(1000 / num, 2) + '/s';
+    }
+
+    function formatRange(value) {
+        if (value === Infinity || Number(value) >= 99999) return 'INF';
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        return formatNumber(num, 0) + ' wu';
+    }
+
+    function formatSpread(value) {
+        var num = asFiniteNumber(value);
+        if (num === null) return '--';
+        return formatNumber(num, 3);
+    }
+
+    function formatPercentScale(scale) {
+        var num = asFiniteNumber(scale);
+        if (num === null) return '--';
+        return formatNumber(num * 100, 0) + '%';
+    }
+
+    function formatBool(value) {
+        return value ? 'Yes' : 'No';
+    }
+
+    function sharedApi() {
+        return runtime.GameShared || {};
     }
 
     function sharedDataCatalog() {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
-        return shared || {};
+        return sharedApi().gameplayTuning || {};
     }
 
     function findById(list, id) {
-        if (!list || !list.length || !id) return null;
+        if (!Array.isArray(list) || !id) return null;
         for (var i = 0; i < list.length; i++) {
             if (list[i] && list[i].id === id) return list[i];
         }
@@ -120,280 +446,885 @@
         for (var i = 0; i < PAGES.length; i++) {
             if (PAGES[i].id === pageId) return PAGES[i].label;
         }
-        return 'HOME';
+        return 'BRIEFING';
+    }
+
+    function safeArray(value) {
+        return Array.isArray(value) ? value.slice() : [];
+    }
+
+    function buildWeaponData(weaponId, shared, api) {
+        var stats = shared.weaponStats && shared.weaponStats[weaponId];
+        if (!stats) return null;
+        var hipAim = api.resolveWeaponAimProfile
+            ? api.resolveWeaponAimProfile(stats, false)
+            : { spread: stats.hipfireSpread, maxRange: stats.maxRange };
+        var adsAim = api.resolveWeaponAimProfile
+            ? api.resolveWeaponAimProfile(stats, true)
+            : {
+                spread: stats.adsSpread != null ? stats.adsSpread : stats.hipfireSpread,
+                maxRange: stats.adsMaxRange != null ? stats.adsMaxRange : stats.maxRange
+            };
+        var presentation = api.getWeaponPresentation
+            ? api.getWeaponPresentation(weaponId)
+            : (stats.presentation || {});
+        var falloff = api.getWeaponFalloffProfile
+            ? safeArray(api.getWeaponFalloffProfile(weaponId))
+            : safeArray(shared.weaponFalloff && shared.weaponFalloff[weaponId]);
+        return {
+            id: weaponId,
+            name: String(stats.name || weaponId),
+            primitiveType: String(stats.primitiveType || 'hitscan_single'),
+            automatic: !!stats.automatic,
+            cooldownMs: Number(stats.cooldownMs || 0),
+            reloadMs: Number(stats.reloadMs || 0),
+            magazineSize: Number(stats.magazineSize || 0),
+            bodyDamage: Number(stats.bodyDamage || 0),
+            headDamage: Number(stats.headDamage || 0),
+            pellets: Math.max(1, Number(stats.pellets || 1)),
+            hipfireSpread: Number(hipAim && hipAim.spread || 0),
+            adsSpread: Number(adsAim && adsAim.spread || 0),
+            maxRange: hipAim && hipAim.maxRange === Infinity ? Infinity : Number(hipAim && hipAim.maxRange || 0),
+            adsMaxRange: adsAim && adsAim.maxRange === Infinity ? Infinity : Number(adsAim && adsAim.maxRange || 0),
+            adsFovDeg: Number(stats.adsFovDeg || 0),
+            hipfireBloomScale: Number(stats.hipfireBloomScale != null ? stats.hipfireBloomScale : 1),
+            adsBloomScale: Number(stats.adsBloomScale != null ? stats.adsBloomScale : 1),
+            singleHitFromPellets: !!stats.singleHitFromPellets,
+            presentation: presentation || {},
+            falloff: falloff
+        };
+    }
+
+    function buildAbilityData(abilityId, shared) {
+        var def = shared.abilityCatalog && shared.abilityCatalog[abilityId];
+        if (!def) return null;
+        var out = { id: abilityId };
+        for (var key in def) {
+            if (hasOwn(def, key)) out[key] = def[key];
+        }
+        return out;
+    }
+
+    function buildThrowableData(throwableId, shared) {
+        var def = shared.throwables && shared.throwables[throwableId];
+        if (!def) return null;
+        var out = { id: throwableId };
+        for (var key in def) {
+            if (hasOwn(def, key)) out[key] = def[key];
+        }
+        return out;
+    }
+
+    function buildModeSummaries() {
+        var api = sharedApi();
+        var modes = api.getGameModeCatalog ? api.getGameModeCatalog() : [
+            { id: 'ffa', label: 'Free For All' },
+            { id: 'tdm', label: 'Team Deathmatch' },
+            { id: 'lms', label: 'Last Man Standing' }
+        ];
+        var matchRules = api.matchRules || {};
+        var lmsRules = api.lmsMode && api.lmsMode.rules ? api.lmsMode.rules : {};
+        var out = [];
+        for (var i = 0; i < modes.length; i++) {
+            var mode = modes[i];
+            if (!mode || !mode.id) continue;
+            var objective = 'First to ' + formatNumber(matchRules.ffaTargetProgress || 10, 0) + ' kills.';
+            var note = 'Pure frag race. Win by maintaining tempo.';
+            if (mode.id === 'tdm') {
+                objective = 'First team to ' + formatNumber(matchRules.tdmTargetProgress || 10, 0) + ' kills.';
+                note = 'Trade space for crossfires. Individual peeks matter less than team timing.';
+            } else if (mode.id === 'lms') {
+                objective = 'Start with ' + formatNumber(lmsRules.startingLives || 4, 0) +
+                    ' lives. Last player alive wins the round.';
+                note = 'Eliminations build charge toward extra lives, so surviving early chaos matters.';
+            }
+            out.push({
+                id: String(mode.id),
+                label: String(mode.label || mode.id),
+                objective: objective,
+                note: note
+            });
+        }
+        return out;
+    }
+
+    function loadoutSummary(data) {
+        var summary = {
+            slot1Weapon: '',
+            slot2Weapon: '',
+            slot1Ability: '',
+            slot2Ability: '',
+            throwable: ''
+        };
+        var menuLoadout = runtime.GameMenuLoadout && runtime.GameMenuLoadout.getRuntimeSnapshot
+            ? runtime.GameMenuLoadout.getRuntimeSnapshot()
+            : null;
+        var weaponSlots = menuLoadout && Array.isArray(menuLoadout.weaponSlots)
+            ? menuLoadout.weaponSlots.slice(0, 2)
+            : (runtime.GameHitscan && runtime.GameHitscan.getWeaponOrder
+                ? runtime.GameHitscan.getWeaponOrder().slice(0, 2)
+                : []);
+        var abilityLoadout = menuLoadout && menuLoadout.abilityLoadout
+            ? menuLoadout.abilityLoadout
+            : (runtime.GameAbilities && runtime.GameAbilities.getLoadout
+                ? runtime.GameAbilities.getLoadout()
+                : {});
+        var throwableId = menuLoadout && menuLoadout.selectedThrowableId
+            ? menuLoadout.selectedThrowableId
+            : (runtime.GameThrowables && runtime.GameThrowables.getSelectedThrowable
+                ? runtime.GameThrowables.getSelectedThrowable()
+                : '');
+        var weapon1 = findById(data.weapons, String(weaponSlots[0] || ''));
+        var weapon2 = findById(data.weapons, String(weaponSlots[1] || ''));
+        var ability1 = findById(data.abilities, String(abilityLoadout && abilityLoadout.slot1 || ''));
+        var ability2 = findById(data.abilities, String(abilityLoadout && abilityLoadout.slot2 || ''));
+        var throwable = findById(data.throwables, String(throwableId || ''));
+        summary.slot1Weapon = weapon1 ? weapon1.name : 'Unassigned';
+        summary.slot2Weapon = weapon2 ? weapon2.name : 'Unassigned';
+        summary.slot1Ability = ability1 ? ability1.name : 'Unassigned';
+        summary.slot2Ability = ability2 ? ability2.name : 'Unassigned';
+        summary.throwable = throwable ? (throwable.label || throwable.name || throwable.id) : 'Unassigned';
+        return summary;
     }
 
     function getData() {
         var shared = sharedDataCatalog();
-        var sharedWeapons = [];
-        var sharedAbilities = [];
-        var sharedThrowables = [];
-        var weaponStats = shared.weaponStats || {};
-        var abilityDefs = shared.abilityCatalog || {};
-        var throwableDefs = shared.throwables || {};
-
-        for (var weaponId in weaponStats) {
-            if (!Object.prototype.hasOwnProperty.call(weaponStats, weaponId)) continue;
-            sharedWeapons.push(Object.assign({ id: weaponId }, weaponStats[weaponId]));
-        }
-        for (var abilityId in abilityDefs) {
-            if (!Object.prototype.hasOwnProperty.call(abilityDefs, abilityId)) continue;
-            sharedAbilities.push(Object.assign({ id: abilityId }, abilityDefs[abilityId]));
-        }
-        var throwableOrder = (throwableDefs.order && throwableDefs.order.slice()) || [];
-        for (var i = 0; i < throwableOrder.length; i++) {
-            var throwableId = throwableOrder[i];
-            if (!throwableDefs[throwableId]) continue;
-            sharedThrowables.push(Object.assign({ id: throwableId }, throwableDefs[throwableId]));
+        var api = sharedApi();
+        var selectableWeaponIds = api.getSelectableWeaponIds
+            ? api.getSelectableWeaponIds()
+            : Object.keys(shared.weaponStats || {});
+        var weapons = [];
+        for (var i = 0; i < selectableWeaponIds.length; i++) {
+            var weapon = buildWeaponData(String(selectableWeaponIds[i] || ''), shared, api);
+            if (weapon) weapons.push(weapon);
         }
 
-        return {
-            abilities: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog).length
-                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.getCatalog)
-                : sharedAbilities,
-            weapons: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog).length
-                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getWeaponCatalog)
-                : sharedWeapons,
-            throwables: safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog).length
-                ? safeCatalog(globalThis.__MAYHEM_RUNTIME.GameThrowables && globalThis.__MAYHEM_RUNTIME.GameThrowables.getCatalog)
-                : sharedThrowables
+        var abilities = [];
+        var abilityCatalog = shared.abilityCatalog || {};
+        for (var abilityId in abilityCatalog) {
+            if (!hasOwn(abilityCatalog, abilityId)) continue;
+            var ability = buildAbilityData(abilityId, shared);
+            if (ability) abilities.push(ability);
+        }
+
+        var throwables = [];
+        var throwableOrder = safeArray(shared.throwables && shared.throwables.order);
+        for (var t = 0; t < throwableOrder.length; t++) {
+            var throwable = buildThrowableData(String(throwableOrder[t] || ''), shared);
+            if (throwable) throwables.push(throwable);
+        }
+
+        var data = {
+            weapons: weapons,
+            abilities: abilities,
+            throwables: throwables,
+            modes: buildModeSummaries()
         };
+        data.loadout = loadoutSummary(data);
+        return data;
     }
 
     function ensureSelections(data) {
         if (!findById(data.abilities, state.selectedAbilityId)) {
             state.selectedAbilityId = data.abilities.length ? data.abilities[0].id : '';
         }
-
         if (!findById(data.weapons, state.selectedWeaponId)) {
             state.selectedWeaponId = data.weapons.length ? data.weapons[0].id : '';
         }
-
         if (!findById(data.throwables, state.selectedThrowableId)) {
             state.selectedThrowableId = data.throwables.length ? data.throwables[0].id : '';
         }
     }
 
-    function weaponSpecial(weapon) {
+    function renderTagRow(tags) {
+        if (!Array.isArray(tags) || !tags.length) return '';
+        var out = ['<div class="docs-tag-row">'];
+        for (var i = 0; i < tags.length; i++) {
+            if (!tags[i]) continue;
+            out.push('<span class="docs-tag">' + escapeHtml(tags[i]) + '</span>');
+        }
+        out.push('</div>');
+        return out.join('');
+    }
+
+    function renderStatGrid(items) {
+        if (!Array.isArray(items) || !items.length) return '';
+        var out = ['<div class="docs-stat-grid">'];
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i] || {};
+            out.push('<div class="docs-stat">');
+            out.push('<span class="docs-stat-label">' + escapeHtml(item.label || '--') + '</span>');
+            out.push('<span class="docs-stat-value">' + escapeHtml(item.value || '--') + '</span>');
+            if (item.note) {
+                out.push('<span class="docs-stat-note">' + escapeHtml(item.note) + '</span>');
+            }
+            out.push('</div>');
+        }
+        out.push('</div>');
+        return out.join('');
+    }
+
+    function renderList(items) {
+        if (!Array.isArray(items) || !items.length) return '';
+        var out = ['<ul class="docs-list">'];
+        for (var i = 0; i < items.length; i++) {
+            if (!items[i]) continue;
+            out.push('<li>' + escapeHtml(items[i]) + '</li>');
+        }
+        out.push('</ul>');
+        return out.join('');
+    }
+
+    function renderInfoTable(rows) {
+        if (!Array.isArray(rows) || !rows.length) return '';
+        var out = [
+            '<table class="docs-table">',
+            '<thead><tr><th>Tunable</th><th>Value</th><th>What It Changes</th></tr></thead>',
+            '<tbody>'
+        ];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || {};
+            out.push('<tr>');
+            out.push('<th scope="row"><code>' + escapeHtml(row.label || '--') + '</code></th>');
+            out.push('<td>' + escapeHtml(row.value || '--') + '</td>');
+            out.push('<td>' + escapeHtml(row.note || '') + '</td>');
+            out.push('</tr>');
+        }
+        out.push('</tbody></table>');
+        return out.join('');
+    }
+
+    function renderSummaryTable(headers, rows) {
+        if (!Array.isArray(headers) || !headers.length || !Array.isArray(rows) || !rows.length) return '';
+        var out = ['<table class="docs-table"><thead><tr>'];
+        for (var h = 0; h < headers.length; h++) {
+            out.push('<th>' + escapeHtml(headers[h]) + '</th>');
+        }
+        out.push('</tr></thead><tbody>');
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i] || [];
+            out.push('<tr>');
+            for (var j = 0; j < row.length; j++) {
+                out.push('<td>' + row[j] + '</td>');
+            }
+            out.push('</tr>');
+        }
+        out.push('</tbody></table>');
+        return out.join('');
+    }
+
+    function renderControls(groups) {
+        var out = [];
+        for (var i = 0; i < groups.length; i++) {
+            var group = groups[i] || {};
+            out.push('<section class="docs-section">');
+            out.push('<h3>' + escapeHtml(group.title || '') + '</h3>');
+            out.push('<div class="docs-controls-grid">');
+            var rows = Array.isArray(group.rows) ? group.rows : [];
+            for (var r = 0; r < rows.length; r++) {
+                var row = rows[r] || {};
+                out.push('<div class="docs-control-row">');
+                out.push('<span class="docs-kbd">' + escapeHtml(row.key || '--') + '</span>');
+                out.push('<div class="docs-control-copy">');
+                out.push('<span class="docs-control-title">' + escapeHtml(row.title || '') + '</span>');
+                out.push('<span class="docs-control-note">' + escapeHtml(row.note || '') + '</span>');
+                out.push('</div>');
+                out.push('</div>');
+            }
+            out.push('</div>');
+            out.push('</section>');
+        }
+        return out.join('');
+    }
+
+    function renderModeCards(modes) {
+        if (!Array.isArray(modes) || !modes.length) return '';
+        var out = ['<div class="docs-mode-grid">'];
+        for (var i = 0; i < modes.length; i++) {
+            var mode = modes[i] || {};
+            out.push('<div class="docs-mode-card">');
+            out.push('<strong>' + escapeHtml(mode.label || mode.id || '--') + '</strong>');
+            out.push('<span>' + escapeHtml(mode.objective || '') + '</span>');
+            out.push('<span>' + escapeHtml(mode.note || '') + '</span>');
+            out.push('</div>');
+        }
+        out.push('</div>');
+        return out.join('');
+    }
+
+    function renderPills(items) {
+        if (!Array.isArray(items) || !items.length) return '';
+        var out = ['<div class="docs-pill-list">'];
+        for (var i = 0; i < items.length; i++) {
+            if (!items[i]) continue;
+            out.push('<span class="docs-pill">' + escapeHtml(items[i]) + '</span>');
+        }
+        out.push('</div>');
+        return out.join('');
+    }
+
+    function weaponFireModelLabel(weapon) {
         if (!weapon) return '--';
-        if (weapon.id === 'shotgun') return 'Point-blank burst monster; huge chunks up close without a full-health one-shot';
-        if (weapon.id === 'sniper') return 'Highest burst per trigger, long cooldown';
-        if (weapon.id === 'machinegun') return 'Automatic lane holder; ADS now trades mobility for real mid-range stability';
-        if (weapon.id === 'rifle') return 'Scout-style precision rifle with stronger headshot reward';
-        if (weapon.id === 'pistol') return 'Hand cannon sidearm built for mid-range headshots';
-        return 'Balanced baseline weapon';
+        if (weapon.singleHitFromPellets) return 'Circle-scan single winner';
+        if (weapon.primitiveType === 'hitscan_multi') return 'Multi-pellet spread';
+        return 'Single-ray hitscan';
+    }
+
+    function weaponReticleLabel(weapon) {
+        if (!weapon) return '--';
+        if (weapon.singleHitFromPellets || weapon.id === 'shotgun') return 'Circle reticle';
+        return 'Crosshair + bloom';
+    }
+
+    function weaponAdsSummary(weapon) {
+        if (!weapon) return '--';
+        if (weapon.id === 'sniper') return 'ADS required before firing';
+        if (weapon.adsSpread < weapon.hipfireSpread) {
+            return 'ADS tightens spread from ' + formatSpread(weapon.hipfireSpread) + ' to ' + formatSpread(weapon.adsSpread);
+        }
+        if (weapon.adsSpread === weapon.hipfireSpread) {
+            return 'ADS is mostly zoom/range management on this weapon';
+        }
+        return 'ADS changes the sight picture more than the spread';
+    }
+
+    function falloffBandText(prevMax, band) {
+        var min = prevMax <= 0 ? '0' : formatNumber(prevMax, 0);
+        var max = band.maxDistance >= 99999 ? 'INF' : formatNumber(band.maxDistance, 0);
+        return min + '-' + max + ' wu :: ' + formatPercentScale(band.scale);
+    }
+
+    function weaponFalloffPills(weapon) {
+        if (!weapon || !Array.isArray(weapon.falloff) || !weapon.falloff.length) {
+            return renderPills(['No explicit falloff bands']);
+        }
+        var pills = [];
+        var prev = 0;
+        for (var i = 0; i < weapon.falloff.length; i++) {
+            var band = weapon.falloff[i];
+            if (!band) continue;
+            pills.push(falloffBandText(prev, band));
+            prev = Number(band.maxDistance || prev);
+        }
+        return renderPills(pills);
+    }
+
+    function weaponRoleText(weapon) {
+        var briefing = weapon && WEAPON_BRIEFINGS[weapon.id] ? WEAPON_BRIEFINGS[weapon.id] : null;
+        return briefing ? briefing.niche : 'Balanced fallback weapon.';
+    }
+
+    function weaponMechanicsText(weapon) {
+        var briefing = weapon && WEAPON_BRIEFINGS[weapon.id] ? WEAPON_BRIEFINGS[weapon.id] : null;
+        return briefing ? briefing.mechanics : 'Standard hitscan weapon.';
+    }
+
+    function weaponTips(weapon) {
+        var briefing = weapon && WEAPON_BRIEFINGS[weapon.id] ? WEAPON_BRIEFINGS[weapon.id] : null;
+        return briefing && briefing.tips ? briefing.tips : [];
+    }
+
+    function buildWeaponCombatRows(weapon) {
+        if (!weapon) return [];
+        var rows = [
+            {
+                label: 'primitiveType',
+                value: weapon.singleHitFromPellets ? (weapon.primitiveType + ' + singleHitFromPellets') : weapon.primitiveType,
+                note: WEAPON_TUNABLE_HELP.primitiveType
+            },
+            { label: 'automatic', value: formatBool(weapon.automatic), note: WEAPON_TUNABLE_HELP.automatic },
+            { label: 'cooldownMs', value: formatMs(weapon.cooldownMs), note: WEAPON_TUNABLE_HELP.cooldownMs },
+            { label: 'reloadMs', value: formatMs(weapon.reloadMs), note: WEAPON_TUNABLE_HELP.reloadMs },
+            { label: 'magazineSize', value: formatNumber(weapon.magazineSize, 0), note: WEAPON_TUNABLE_HELP.magazineSize },
+            { label: 'bodyDamage', value: formatNumber(weapon.bodyDamage, 0), note: WEAPON_TUNABLE_HELP.bodyDamage },
+            { label: 'headDamage', value: formatNumber(weapon.headDamage, 0), note: WEAPON_TUNABLE_HELP.headDamage },
+            { label: 'pellets', value: formatNumber(weapon.pellets, 0), note: WEAPON_TUNABLE_HELP.pellets },
+            { label: 'hipfireSpread', value: formatSpread(weapon.hipfireSpread), note: WEAPON_TUNABLE_HELP.hipfireSpread },
+            { label: 'adsSpread', value: formatSpread(weapon.adsSpread), note: WEAPON_TUNABLE_HELP.adsSpread },
+            { label: 'maxRange', value: formatRange(weapon.maxRange), note: WEAPON_TUNABLE_HELP.maxRange },
+            { label: 'adsMaxRange', value: formatRange(weapon.adsMaxRange), note: WEAPON_TUNABLE_HELP.adsMaxRange },
+            { label: 'adsFovDeg', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: WEAPON_TUNABLE_HELP.adsFovDeg },
+            { label: 'hipfireBloomScale', value: formatNumber(weapon.hipfireBloomScale, 2), note: WEAPON_TUNABLE_HELP.hipfireBloomScale },
+            { label: 'adsBloomScale', value: formatNumber(weapon.adsBloomScale, 2), note: WEAPON_TUNABLE_HELP.adsBloomScale }
+        ];
+        if (weapon.singleHitFromPellets) {
+            rows.splice(9, 0, {
+                label: 'singleHitFromPellets',
+                value: 'Yes',
+                note: WEAPON_TUNABLE_HELP.singleHitFromPellets
+            });
+        }
+        return rows;
+    }
+
+    function buildWeaponFeelRows(weapon) {
+        if (!weapon) return [];
+        var tracer = weapon.presentation && weapon.presentation.tracer ? weapon.presentation.tracer : {};
+        var recoil = weapon.presentation && weapon.presentation.recoil ? weapon.presentation.recoil : {};
+        var audio = weapon.presentation && weapon.presentation.audioSample ? weapon.presentation.audioSample : null;
+        var rows = [
+            { label: 'tracer.life', value: formatSeconds(tracer.life), note: WEAPON_TUNABLE_HELP['tracer.life'] },
+            { label: 'tracer.speed', value: formatNumber(tracer.speed, 0), note: WEAPON_TUNABLE_HELP['tracer.speed'] },
+            { label: 'tracer.segmentLength', value: formatNumber(tracer.segmentLength, 2), note: WEAPON_TUNABLE_HELP['tracer.segmentLength'] },
+            { label: 'recoil.z', value: formatNumber(recoil.z, 3), note: WEAPON_TUNABLE_HELP['recoil.z'] },
+            { label: 'recoil.x', value: formatNumber(recoil.x, 3), note: WEAPON_TUNABLE_HELP['recoil.x'] },
+            { label: 'recoil.pitch', value: formatNumber(recoil.pitch, 3), note: WEAPON_TUNABLE_HELP['recoil.pitch'] },
+            { label: 'recoil.yaw', value: formatNumber(recoil.yaw, 3), note: WEAPON_TUNABLE_HELP['recoil.yaw'] },
+            { label: 'recoil.roll', value: formatNumber(recoil.roll, 3), note: WEAPON_TUNABLE_HELP['recoil.roll'] },
+            { label: 'recoil.armR', value: formatNumber(recoil.armR, 3), note: WEAPON_TUNABLE_HELP['recoil.armR'] },
+            { label: 'recoil.armL', value: formatNumber(recoil.armL, 3), note: WEAPON_TUNABLE_HELP['recoil.armL'] },
+            { label: 'recoil.muzzleMs', value: formatMs(recoil.muzzleMs), note: WEAPON_TUNABLE_HELP['recoil.muzzleMs'] }
+        ];
+        if (audio) {
+            rows.push({
+                label: 'audioSample.gain',
+                value: formatNumber(audio.gain, 2),
+                note: WEAPON_TUNABLE_HELP['audioSample.gain']
+            });
+            rows.push({
+                label: 'audioSample.playbackRate',
+                value: formatNumber(audio.playbackRateMin, 2) + ' -> ' + formatNumber(audio.playbackRateMax, 2),
+                note: WEAPON_TUNABLE_HELP['audioSample.playbackRate']
+            });
+        }
+        return rows;
+    }
+
+    function abilityRoleLabel(ability) {
+        if (!ability) return '--';
+        if (ability.slot === 'ability') return 'Pressure tool';
+        return 'Flex tool';
+    }
+
+    function formatAbilityValue(key, ability) {
+        if (!ability) return '--';
+        var value = ability[key];
+        if (key === 'cooldownMs') return formatMs(value);
+        if (key === 'duration' || key === 'tickRate') return formatSeconds(value);
+        if (key === 'range' || key === 'pullDistance' || key === 'radius' || key === 'acquireRange' || key === 'catchRadius' || key === 'liftHeight') {
+            return formatRange(value);
+        }
+        if (key === 'lockHalfAngleDeg') return formatNumber(value, 0) + ' deg';
+        return formatNumber(value, 2);
+    }
+
+    function buildAbilityRows(ability) {
+        if (!ability) return [];
+        var params = Array.isArray(ability.tunableParams) ? ability.tunableParams : [];
+        var rows = [];
+        for (var i = 0; i < params.length; i++) {
+            var key = String(params[i] || '');
+            rows.push({
+                label: key,
+                value: formatAbilityValue(key, ability),
+                note: ABILITY_TUNABLE_HELP[key] || 'Ability-specific tuning value.'
+            });
+        }
+        if (!params.length && ability.cooldownMs != null) {
+            rows.push({
+                label: 'cooldownMs',
+                value: formatMs(ability.cooldownMs),
+                note: ABILITY_TUNABLE_HELP.cooldownMs
+            });
+        }
+        return rows;
+    }
+
+    function abilityStats(ability) {
+        if (!ability) return [];
+        var stats = [
+            { label: 'Role', value: abilityRoleLabel(ability), note: 'Design intent, not a hard menu lock.' },
+            { label: 'Cooldown', value: formatMs(ability.cooldownMs), note: 'Per equipped slot.' }
+        ];
+        if (ability.range != null) stats.push({ label: 'Range', value: formatRange(ability.range), note: 'Effective cast reach.' });
+        if (ability.duration != null) stats.push({ label: 'Duration', value: formatSeconds(ability.duration), note: 'Active effect window.' });
+        if (ability.damage != null) stats.push({ label: 'Damage', value: formatNumber(ability.damage, 0), note: 'Direct impact damage.' });
+        if (ability.healAmount != null) stats.push({ label: 'Heal', value: formatNumber(ability.healAmount, 0), note: 'Health returned on resolve.' });
+        if (ability.maxTargets != null) stats.push({ label: 'Targets', value: formatNumber(ability.maxTargets, 0), note: 'Maximum stored locks.' });
+        return stats;
+    }
+
+    function throwablePreviewLabel(throwable) {
+        if (!throwable) return '--';
+        if (throwable.id === 'knife') return 'Instant throw';
+        return 'Hold Q for trajectory preview';
+    }
+
+    function formatThrowableValue(key, throwable) {
+        if (!throwable) return '--';
+        var value = throwable[key];
+        if (key === 'regen' || key === 'fuse' || key === 'fireDuration' || key === 'fireTickRate' || key === 'life' || key === 'stickExplodeDelay') {
+            return formatSeconds(value);
+        }
+        if (key === 'acquireHalfAngleDeg') return formatNumber(value, 0) + ' deg';
+        if (
+            key === 'speed' || key === 'upward' || key === 'gravity' || key === 'radius' || key === 'fireRadius' ||
+            key === 'acquireRange' || key === 'hitRadius'
+        ) {
+            return formatNumber(value, 2);
+        }
+        if (typeof value === 'boolean') return formatBool(value);
+        return formatNumber(value, 2);
+    }
+
+    function buildThrowableRows(throwable) {
+        if (!throwable) return [];
+        var keys = [];
+        for (var key in throwable) {
+            if (!hasOwn(throwable, key)) continue;
+            if (key === 'id' || key === 'label' || key === 'category') continue;
+            keys.push(key);
+        }
+        var preferredOrder = [
+            'speed', 'upward', 'gravity', 'fuse', 'radius', 'damage', 'regen',
+            'bounce', 'bounceVelocityDamping', 'bounceVerticalDamping', 'bounceMaxCount', 'bounceStopSpeedSq',
+            'homingBoost', 'homingLerp', 'acquireRange', 'acquireHalfAngleDeg', 'stickExplodeDelay',
+            'fireRadius', 'fireDuration', 'fireTickDamage', 'fireTickRate',
+            'life', 'hitRadius', 'bodyDamage', 'headDamage'
+        ];
+        var seen = {};
+        var rows = [];
+        function pushKey(nextKey) {
+            if (!nextKey || seen[nextKey] || !hasOwn(throwable, nextKey)) return;
+            seen[nextKey] = true;
+            rows.push({
+                label: nextKey,
+                value: formatThrowableValue(nextKey, throwable),
+                note: THROWABLE_TUNABLE_HELP[nextKey] || 'Throwable-specific tuning value.'
+            });
+        }
+        for (var i = 0; i < preferredOrder.length; i++) pushKey(preferredOrder[i]);
+        for (var n = 0; n < keys.length; n++) pushKey(keys[n]);
+        return rows;
+    }
+
+    function throwableStats(throwable) {
+        if (!throwable) return [];
+        var stats = [
+            { label: 'Preview', value: throwablePreviewLabel(throwable), note: 'Hold/release behavior on Q.' },
+            { label: 'Speed', value: formatNumber(throwable.speed, 2), note: 'Initial launch speed.' }
+        ];
+        if (throwable.fuse != null) stats.push({ label: 'Fuse', value: formatSeconds(throwable.fuse), note: 'Time before detonation.' });
+        if (throwable.damage != null) stats.push({ label: 'Damage', value: formatNumber(throwable.damage, 0), note: 'Peak blast damage.' });
+        if (throwable.radius != null) stats.push({ label: 'Radius', value: formatNumber(throwable.radius, 2), note: 'Explosion radius.' });
+        if (throwable.fireRadius != null) stats.push({ label: 'Fire Radius', value: formatNumber(throwable.fireRadius, 2), note: 'Area denial radius.' });
+        if (throwable.bodyDamage != null) stats.push({ label: 'Body Damage', value: formatNumber(throwable.bodyDamage, 0), note: 'Direct hit body damage.' });
+        if (throwable.headDamage != null) stats.push({ label: 'Head Damage', value: formatNumber(throwable.headDamage, 0), note: 'Direct hit head damage.' });
+        if (throwable.regen != null) stats.push({ label: 'Recharge', value: formatSeconds(throwable.regen), note: 'Time for a spent charge to return.' });
+        return stats;
     }
 
     function buildHomePage(data) {
-        var lines = [];
-        lines.push('+----------------------------------------------------------+');
-        lines.push('| FIELD MANUAL / HOME                                     |');
-        lines.push('+----------------------------------------------------------+');
-        lines.push('This manual is now split into clean Pip-Boy style pages.');
-        lines.push('');
-        lines.push('Catalog counts (live):');
-        lines.push('  Abilities  : ' + data.abilities.length);
-        lines.push('  Weapons    : ' + data.weapons.length);
-        lines.push('  Throwables : ' + data.throwables.length);
-        lines.push('');
-        lines.push('Mode cards:');
-        lines.push('  MULTIPLAYER CLOUDFLARE -> shared deployed room (?room=<id>, default global)');
-        lines.push('  SINGLE CLOUDFLARE      -> deployed private room (per tab by default)');
-        lines.push('  SINGLE DEV SERVER      -> shared local-worker room for authoritative multiplayer testing');
-        lines.push('');
-        lines.push('Environment v2 highlights:');
-        lines.push('  Grid hidden by default (debug only via ?debugGrid=1)');
-        lines.push('  Deterministic biome blend + landmark generation');
-        lines.push('  Desert mesas, arctic mountain, and animated waterfall');
-        lines.push('  Multiplayer rooms use server-auth world metadata');
-        lines.push('');
-        lines.push('Navigation:');
-        lines.push('  1. Choose top tab (Controls / Abilities / Weapons / etc).');
-        lines.push('  2. For Abilities/Weapons, choose a subpage from left list.');
-        lines.push('  3. Values are hydrated from gameplay modules.');
-        lines.push('');
-        lines.push('Status: live data linked to current game configs.');
-        return lines.join('\n');
+        var loadout = data.loadout || {};
+        return [
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Open Field Manual</div>',
+            '<h2>Get Into The Match Fast</h2>',
+            '<p>Pick a two-weapon kit, lock the cursor, stay moving, and treat abilities and throwables as extensions of your gunfight instead of separate mini-games.</p>',
+            renderTagRow([
+                data.weapons.length + ' weapons',
+                data.abilities.length + ' abilities',
+                data.throwables.length + ' throwables',
+                'auto reload on empty'
+            ]),
+            '</section>',
+            '<div class="docs-grid">',
+            '<section class="docs-card">',
+            '<h3>Quick Start</h3>',
+            renderList([
+                'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
+                'Move with WASD, sprint with E, jump with Space, and ADS with RMB or Shift.',
+                'Fire on LMB, swap weapons on 1 / 2 or the mouse wheel, and let reloads happen automatically when a mag empties.',
+                'Use Q for the current throwable, R for ability slot 1, and F for ability slot 2.',
+                'Break line of sight during long cooldowns instead of forcing low-odds trades.'
+            ]),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>Current Kit</h3>',
+            renderStatGrid([
+                { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key 1.' },
+                { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key 2.' },
+                { label: 'Q Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold Q for preview if supported.' },
+                { label: 'R Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
+                { label: 'F Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
+            ]),
+            '</section>',
+            '</div>',
+            '<section class="docs-section">',
+            '<h3>How Fights Actually Work</h3>',
+            '<div class="docs-callout">Open with a weapon that owns the current distance, then chain your utility into the follow-up. Machine gun or rifle starts, shotgun or pistol confirms, missile or choke seals the mistake.</div>',
+            '</section>',
+            '<section class="docs-section">',
+            '<h3>Mode Objectives</h3>',
+            renderModeCards(data.modes),
+            '</section>',
+            '</div>'
+        ].join('');
     }
 
     function buildControlsPage() {
         return [
-            '+----------------------------------------------------------+',
-            '| FIELD MANUAL / CONTROLS                                 |',
-            '+----------------------------------------------------------+',
-            'Movement',
-            '  WASD: Move',
-            '  E: Sprint',
-            '  RMB / Shift: Toggle ADS',
-            '  Space: Variable jump (hold for full height)',
-            '',
-            'Menu / Session',
-            '  Choose mode card on start screen',
-            '  RESUME MATCH to re-enter pointer lock',
-            '',
-            'Combat',
-            '  LMB: Fire',
-            '  ADS disables sprint and first jump press only exits ADS',
-            '  1-2 / Wheel: Weapon swap',
-            '  F: Throwable (hold for preview, release to throw)',
-            '  Y: Choke   R: Deadeye',
-            '',
-            'Utility',
-            '  H: Toggle dev ring + hitboxes',
-            '  I: Toggle field manual',
-            '  ESC: Release pointer lock'
-        ].join('\n');
-    }
-
-    function buildAbilityPage(data) {
-        var c = findById(data.abilities, state.selectedAbilityId);
-        if (!c) {
-            return [
-                '+----------------------------------------------------------+',
-                '| FIELD MANUAL / ABILITY PROFILE                          |',
-                '+----------------------------------------------------------+',
-                'DATA UNAVAILABLE'
-            ].join('\n');
-        }
-
-        var lines = [];
-        lines.push('+----------------------------------------------------------+');
-        lines.push('| FIELD MANUAL / ABILITY PROFILE                          |');
-        lines.push('+----------------------------------------------------------+');
-        lines.push('ABILITY     : ' + String(c.name || c.id || '').toUpperCase());
-        lines.push('ID          : ' + String(c.id || '--'));
-        lines.push('');
-        lines.push('DESCRIPTION : ' + String(c.description || 'No description.'));
-        lines.push('KEYMAP      : ' + (c.id === 'choke' ? 'E' : (c.id === 'deadeye' ? 'R' : '--')));
-        return lines.join('\n');
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Controls</div>',
+            '<h2>Movement, Weapons, Abilities, Session Flow</h2>',
+            '<p>The game only really feels correct once pointer lock is active. Enter the match, capture the cursor, and keep your inputs layered instead of playing one system at a time.</p>',
+            renderTagRow(['WASD', 'RMB / Shift ADS', '1 / 2 or wheel', 'Q / R / F']),
+            '</section>',
+            renderControls(CONTROL_GROUPS),
+            '<section class="docs-section">',
+            '<h3>Important Notes</h3>',
+            renderList([
+                'Sniper cannot fire until you are scoped in.',
+                'Grenades preview while held, but knife throws immediately on press.',
+                'Shift and RMB both toggle ADS. First jump input exits ADS before full aerial movement resumes.',
+                'The field manual is available in menu and in live gameplay on I.'
+            ]),
+            '</section>',
+            '</div>'
+        ].join('');
     }
 
     function buildWeaponPage(data) {
-        var w = findById(data.weapons, state.selectedWeaponId);
-        if (!w) {
-            return [
-                '+----------------------------------------------------------+',
-                '| FIELD MANUAL / WEAPON PROFILE                           |',
-                '+----------------------------------------------------------+',
-                'DATA UNAVAILABLE'
-            ].join('\n');
+        var weapon = findById(data.weapons, state.selectedWeaponId);
+        if (!weapon) {
+            return '<div class="docs-page"><section class="docs-hero"><h2>Weapon data unavailable</h2></section></div>';
         }
+        return [
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Weapon Profile</div>',
+            '<h2>' + escapeHtml(weapon.name) + '</h2>',
+            '<p>' + escapeHtml(weaponRoleText(weapon)) + '</p>',
+            renderTagRow([
+                weaponFireModelLabel(weapon),
+                weapon.automatic ? 'automatic' : 'semi-auto',
+                weaponReticleLabel(weapon),
+                formatRate(weapon.cooldownMs)
+            ]),
+            '</section>',
+            '<div class="docs-weapon-layout">',
+            '<section class="docs-section">',
+            '<h3>How It Works</h3>',
+            renderList([
+                weaponMechanicsText(weapon),
+                'Reticle style: ' + weaponReticleLabel(weapon) + '.',
+                'ADS behavior: ' + weaponAdsSummary(weapon) + '.',
+                'Fire cadence: ' + formatMs(weapon.cooldownMs) + ' per shot (' + formatRate(weapon.cooldownMs) + ').'
+            ].concat(weaponTips(weapon))),
+            '<div class="docs-divider"></div>',
+            '<h3>Falloff Profile</h3>',
+            weaponFalloffPills(weapon),
+            '</section>',
+            '<pre class="docs-weapon-art">' + escapeHtml(WEAPON_ART[weapon.id] || '[No ASCII profile]') + '</pre>',
+            '</div>',
+            '<section class="docs-section">',
+            '<h3>Live Combat Values</h3>',
+            renderStatGrid([
+                { label: 'Body / Head', value: formatNumber(weapon.bodyDamage, 0) + ' / ' + formatNumber(weapon.headDamage, 0), note: 'Base damage before falloff.' },
+                { label: 'Magazine', value: formatNumber(weapon.magazineSize, 0), note: 'Rounds before auto reload.' },
+                { label: 'Reload', value: formatMs(weapon.reloadMs), note: 'Forced downtime on empty.' },
+                { label: 'Cadence', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
+                { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.singleHitFromPellets ? 'Single winning sample only.' : 'All pellets may connect.' },
+                { label: 'Spread H / A', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Hipfire versus ADS spread radius.' },
+                { label: 'Range H / A', value: formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange), note: 'Range cap before hit checks stop.' },
+                { label: 'ADS FOV', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: 'Lower is more zoom.' }
+            ]),
+            '</section>',
+            '<section class="docs-section">',
+            '<h3>Combat Tunables</h3>',
+            renderInfoTable(buildWeaponCombatRows(weapon)),
+            '</section>',
+            '<section class="docs-section">',
+            '<h3>Feel Tunables</h3>',
+            renderInfoTable(buildWeaponFeelRows(weapon)),
+            '</section>',
+            '</div>'
+        ].join('');
+    }
 
-        var lines = [];
-        lines.push('+----------------------------------------------------------+');
-        lines.push('| FIELD MANUAL / WEAPON PROFILE                           |');
-        lines.push('+----------------------------------------------------------+');
-        lines.push('WEAPON      : ' + String(w.name || '').toUpperCase());
-        lines.push('MODE        : ' + (w.automatic ? 'AUTO' : 'SEMI-AUTO'));
-        lines.push('DAMAGE B/H  : ' + fNum(w.bodyDamage) + ' / ' + fNum(w.headDamage));
-        lines.push('COOLDOWN    : ' + fNum(w.cooldown) + 'ms');
-        lines.push('ROF         : ' + fRateMs(w.cooldown));
-        lines.push('RANGE H/A   : ' + fNum(w.maxRange) + ' / ' + fNum(w.adsMaxRange != null ? w.adsMaxRange : w.maxRange));
-        lines.push('SPREAD      : ' + fNum(w.hipfireSpread));
-        lines.push('ADS FOV     : ' + fNum(w.adsFovDeg != null ? w.adsFovDeg : (w.id === 'sniper' ? 24 : 56)));
-        lines.push('PELLETS     : ' + fNum(w.pellets));
-        lines.push('SPECIAL     : ' + weaponSpecial(w));
-        lines.push('');
-        lines.push('ASCII MODEL');
-        lines.push(WEAPON_ART[w.id] || '[NO ASCII ART FOR THIS WEAPON]');
-        return lines.join('\n');
+    function buildAbilityPage(data) {
+        var ability = findById(data.abilities, state.selectedAbilityId);
+        if (!ability) {
+            return '<div class="docs-page"><section class="docs-hero"><h2>Ability data unavailable</h2></section></div>';
+        }
+        var briefing = ABILITY_BRIEFINGS[ability.id] || { useCase: '', mechanics: '', tips: [] };
+        return [
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Ability Profile</div>',
+            '<h2>' + escapeHtml(ability.name || ability.id) + '</h2>',
+            '<p>' + escapeHtml(briefing.useCase || ability.description || 'Ability profile.') + '</p>',
+            renderTagRow([abilityRoleLabel(ability), formatMs(ability.cooldownMs), ability.slot || 'flex']),
+            '</section>',
+            '<div class="docs-grid">',
+            '<section class="docs-card">',
+            '<h3>Mechanics</h3>',
+            renderList([
+                briefing.mechanics || ability.description || 'No mechanics note.',
+                'Menu binding: slot 1 fires on R, slot 2 fires on F.',
+                ability.debugSummary || 'No extra debug summary.'
+            ].concat(briefing.tips || [])),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>Live Ability Values</h3>',
+            renderStatGrid(abilityStats(ability)),
+            '</section>',
+            '</div>',
+            '<section class="docs-section">',
+            '<h3>Tunables</h3>',
+            renderInfoTable(buildAbilityRows(ability)),
+            '</section>',
+            '</div>'
+        ].join('');
     }
 
     function buildThrowablesPage(data) {
-        var t = findById(data.throwables, state.selectedThrowableId);
-        if (!t) {
-            return [
-                '+----------------------------------------------------------+',
-                '| FIELD MANUAL / THROWABLE PROFILE                        |',
-                '+----------------------------------------------------------+',
-                'DATA UNAVAILABLE'
-            ].join('\n');
+        var throwable = findById(data.throwables, state.selectedThrowableId);
+        if (!throwable) {
+            return '<div class="docs-page"><section class="docs-hero"><h2>Throwable data unavailable</h2></section></div>';
         }
-
-        var lines = [];
-        lines.push('+----------------------------------------------------------+');
-        lines.push('| FIELD MANUAL / THROWABLE PROFILE                        |');
-        lines.push('+----------------------------------------------------------+');
-        lines.push('ITEM        : ' + String(t.label || t.id || '').toUpperCase());
-        lines.push('SPEED       : ' + fNum(t.speed));
-        lines.push('UPWARD      : ' + fNum(t.upward));
-        lines.push('GRAVITY     : ' + fNum(t.gravity));
-        lines.push('REGEN       : ' + fSec(t.regen));
-        lines.push('');
-
-        if (t.id === 'knife') {
-            lines.push('DAMAGE B/H  : ' + fNum(t.bodyDamage) + ' / ' + fNum(t.headDamage));
-            lines.push('LIFETIME    : ' + fSec(t.life));
-            lines.push('ON HEADSHOT : instantly refills explosive throwables');
-        } else if (t.id === 'molotov') {
-            lines.push('FUSE        : ' + fSec(t.fuse));
-            lines.push('FIRE RADIUS : ' + fNum(t.fireRadius));
-            lines.push('FIRE TICK   : ' + fNum(t.fireTickDamage) + ' every ' + fSec(t.fireTickRate));
-            lines.push('FIRE LIFE   : ' + fSec(t.fireDuration));
-        } else {
-            lines.push('FUSE        : ' + fSec(t.fuse));
-            lines.push('BLAST RADIUS: ' + fNum(t.radius));
-            lines.push('MAX DAMAGE  : ' + fNum(t.damage));
-        }
-
-        return lines.join('\n');
+        var briefing = THROWABLE_BRIEFINGS[throwable.id] || { useCase: '', mechanics: '', tips: [] };
+        return [
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Throwable Profile</div>',
+            '<h2>' + escapeHtml(throwable.label || throwable.id) + '</h2>',
+            '<p>' + escapeHtml(briefing.useCase || 'Throwable profile.') + '</p>',
+            renderTagRow([throwable.category || 'utility', throwablePreviewLabel(throwable)]),
+            '</section>',
+            '<div class="docs-grid">',
+            '<section class="docs-card">',
+            '<h3>Mechanics</h3>',
+            renderList([
+                briefing.mechanics || 'Throwable profile.',
+                'Throw input is always Q. Preview behavior depends on the selected item.'
+            ].concat(briefing.tips || [])),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>Live Throwable Values</h3>',
+            renderStatGrid(throwableStats(throwable)),
+            '</section>',
+            '</div>',
+            '<section class="docs-section">',
+            '<h3>Tunables</h3>',
+            renderInfoTable(buildThrowableRows(throwable)),
+            '</section>',
+            '</div>'
+        ].join('');
     }
 
-    function buildFormulasPage() {
+    function buildTunablesPage(data) {
+        var summaryRows = [];
+        for (var i = 0; i < data.weapons.length; i++) {
+            var weapon = data.weapons[i];
+            summaryRows.push([
+                '<strong>' + escapeHtml(weapon.name) + '</strong>',
+                escapeHtml(weaponFireModelLabel(weapon)),
+                escapeHtml(formatMs(weapon.cooldownMs) + ' | mag ' + formatNumber(weapon.magazineSize, 0)),
+                escapeHtml(formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread)),
+                escapeHtml(formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange)),
+                escapeHtml(weapon.singleHitFromPellets ? 'single winner' : (weapon.pellets > 1 ? 'all pellets count' : 'single ray'))
+            ]);
+        }
+
         return [
-            '+----------------------------------------------------------+',
-            '| FIELD MANUAL / CORE FORMULAS                            |',
-            '+----------------------------------------------------------+',
-            'BASE HP                = 500 for players and AI',
-            'DAMAGE ORDER           = armor first, then health',
-            'WEAPON FALLOFF         = tier bands (close/mid/long/extreme)',
-            'ARMOR REGEN START      = 6.0s after last damage taken',
-            'ARMOR REGEN RATE       = 12 armor per second',
-            'ABILITY LOADOUT        = shared by all players',
-            '',
-            'Distance/range values are normalized in world units',
-            'through shared/gameplay-tuning.js (single gameplay source).',
-            'Compatibility readers like js/combat/combat-tuning.js should mirror',
-            'shared values instead of redefining weapon numbers.'
-        ].join('\n');
+            '<div class="docs-page">',
+            '<section class="docs-hero">',
+            '<div class="docs-eyebrow">Tunables</div>',
+            '<h2>What The Weapon Numbers Actually Mean</h2>',
+            '<p>The important split is combat tuning versus feel tuning. Combat tuning decides damage, reach, spread, cadence, and solver behavior. Feel tuning decides how readable the weapon is to your hands and eyes.</p>',
+            renderTagRow(['combat tuning', 'feel tuning', 'shared gameplay source']),
+            '</section>',
+            '<div class="docs-grid">',
+            '<section class="docs-card">',
+            '<h3>' + escapeHtml(TUNABLE_GROUPS[0].title) + '</h3>',
+            '<div class="docs-callout">Pistol is the signature edge case: <code>hitscan_multi</code> plus <code>singleHitFromPellets</code> makes it a circle-scan single-hit weapon. Shotgun uses the same base family without that gate, so every pellet can land.</div>',
+            renderList([
+                'Single-ray weapons: rifle, machine gun, sniper.',
+                'True multi-pellet weapon: shotgun.',
+                'Circle-scan single winner: pistol.'
+            ]),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>' + escapeHtml(TUNABLE_GROUPS[1].title) + '</h3>',
+            renderList([
+                'Higher fire rate is lower `cooldownMs`.',
+                'Magazine and reload decide how greedy you can be before a forced disengage.',
+                'Automatic reload on empty means low mag weapons feel sharper than the raw damage numbers suggest.'
+            ]),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>' + escapeHtml(TUNABLE_GROUPS[2].title) + '</h3>',
+            renderList([
+                'Spread is solver input, not cosmetic bloom.',
+                'ADS can change spread, range, zoom, or only some of those depending on the gun.',
+                'Falloff bands scale final damage by distance instead of hard dropping to zero.'
+            ]),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>' + escapeHtml(TUNABLE_GROUPS[3].title) + '</h3>',
+            renderList([
+                'Tracer and recoil values shape feedback and readability.',
+                'These do not directly change damage output, but they absolutely change how controllable a gun feels.',
+                'Audio playback variation keeps repeated fire from sounding flat and repetitive.'
+            ]),
+            '</section>',
+            '</div>',
+            '<section class="docs-section">',
+            '<h3>Live Cross-Weapon Snapshot</h3>',
+            renderSummaryTable(
+                ['Weapon', 'Fire Model', 'Cadence / Mag', 'Spread H / A', 'Range H / A', 'Special'],
+                summaryRows
+            ),
+            '</section>',
+            '<section class="docs-section">',
+            '<h3>Reference</h3>',
+            renderInfoTable([
+                { label: 'primitiveType', value: 'single or multi', note: WEAPON_TUNABLE_HELP.primitiveType },
+                { label: 'singleHitFromPellets', value: 'pistol only', note: WEAPON_TUNABLE_HELP.singleHitFromPellets },
+                { label: 'cooldownMs', value: 'shot cadence', note: WEAPON_TUNABLE_HELP.cooldownMs },
+                { label: 'reloadMs', value: 'downtime', note: WEAPON_TUNABLE_HELP.reloadMs },
+                { label: 'hipfireSpread / adsSpread', value: 'solver cone', note: WEAPON_TUNABLE_HELP.hipfireSpread + ' ' + WEAPON_TUNABLE_HELP.adsSpread },
+                { label: 'maxRange / adsMaxRange', value: 'distance caps', note: WEAPON_TUNABLE_HELP.maxRange + ' ' + WEAPON_TUNABLE_HELP.adsMaxRange },
+                { label: 'tracer.* / recoil.*', value: 'feel layer', note: 'These are shared feel knobs layered on top of combat behavior.' }
+            ]),
+            '</section>',
+            '</div>'
+        ].join('');
     }
 
     function buildContent(pageId, data) {
         switch (pageId) {
-            case 'controls': return buildControlsPage();
-            case 'abilities': return buildAbilityPage(data);
-            case 'weapons': return buildWeaponPage(data);
-            case 'throwables': return buildThrowablesPage(data);
-            case 'formulas': return buildFormulasPage();
-            default: return buildHomePage(data);
+            case 'controls':
+                return buildControlsPage();
+            case 'weapons':
+                return buildWeaponPage(data);
+            case 'abilities':
+                return buildAbilityPage(data);
+            case 'throwables':
+                return buildThrowablesPage(data);
+            case 'tunables':
+                return buildTunablesPage(data);
+            default:
+                return buildHomePage(data);
         }
     }
 
     function getSubItems(pageId, data) {
         var out = [];
-        var i;
-
-        if (pageId === 'abilities') {
-            for (i = 0; i < data.abilities.length; i++) {
-                out.push({ id: data.abilities[i].id, label: String(data.abilities[i].name || data.abilities[i].id || '').toUpperCase() });
-            }
-            return out;
+        var list = [];
+        if (pageId === 'weapons') list = data.weapons;
+        else if (pageId === 'abilities') list = data.abilities;
+        else if (pageId === 'throwables') list = data.throwables;
+        for (var i = 0; i < list.length; i++) {
+            if (!list[i] || !list[i].id) continue;
+            out.push({
+                id: list[i].id,
+                label: String(list[i].name || list[i].label || list[i].id || '').toUpperCase()
+            });
         }
-
-        if (pageId === 'weapons') {
-            for (i = 0; i < data.weapons.length; i++) {
-                out.push({ id: data.weapons[i].id, label: String(data.weapons[i].name || data.weapons[i].id || '').toUpperCase() });
-            }
-            return out;
-        }
-
-        if (pageId === 'throwables') {
-            for (i = 0; i < data.throwables.length; i++) {
-                out.push({ id: data.throwables[i].id, label: String(data.throwables[i].label || data.throwables[i].id || '').toUpperCase() });
-            }
-            return out;
-        }
-
         return out;
     }
 
@@ -413,7 +1344,6 @@
     function renderNav() {
         if (!navEl) return;
         navEl.innerHTML = '';
-
         for (var i = 0; i < PAGES.length; i++) {
             var page = PAGES[i];
             var btn = document.createElement('button');
@@ -434,7 +1364,6 @@
 
     function renderSubnav(data) {
         if (!subnavEl || !mainEl) return;
-
         var items = getSubItems(state.activePage, data);
         if (!items.length) {
             subnavEl.innerHTML = '';
@@ -442,7 +1371,6 @@
             mainEl.classList.add('no-subnav');
             return;
         }
-
         subnavEl.style.display = 'flex';
         mainEl.classList.remove('no-subnav');
         subnavEl.innerHTML = '';
@@ -468,30 +1396,28 @@
 
     function renderHint() {
         if (!hintEl) return;
-
-        if (state.activePage === 'abilities' || state.activePage === 'weapons' || state.activePage === 'throwables') {
-            hintEl.textContent = 'Select a profile from the left list. Data is live from current gameplay configs.';
+        if (state.activePage === 'weapons' || state.activePage === 'abilities' || state.activePage === 'throwables') {
+            hintEl.textContent = 'Left rail picks a profile. Values and descriptions are pulled from current shared tuning.';
             return;
         }
-
-        hintEl.textContent = 'Use top tabs to navigate manual pages. Press I to close/open quickly.';
+        if (state.activePage === 'tunables') {
+            hintEl.textContent = 'Use this page as the glossary, then drill into a specific weapon profile for live values and role notes.';
+            return;
+        }
+        hintEl.textContent = 'Press I to open or close the field manual at any time.';
     }
 
     function render() {
         if (!contentEl) return;
-
         var data = getData();
         ensureSelections(data);
-
         renderNav();
         renderSubnav(data);
         renderHint();
-
         if (titleEl) {
             titleEl.textContent = 'MAYHEM :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
         }
-
-        contentEl.textContent = buildContent(state.activePage, data);
+        contentEl.innerHTML = buildContent(state.activePage, data);
     }
 
     function openPanel(triggerEl) {
@@ -499,8 +1425,8 @@
         if (document.pointerLockElement && document.exitPointerLock) {
             document.exitPointerLock();
         }
-        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.open) {
-            globalThis.__MAYHEM_RUNTIME.GameModalManager.open('docs', triggerEl || pauseOpenBtnEl || hudOpenBtnEl || document.activeElement || null);
+        if (runtime.GameModalManager && runtime.GameModalManager.open) {
+            runtime.GameModalManager.open('docs', triggerEl || pauseOpenBtnEl || hudOpenBtnEl || document.activeElement || null);
         } else {
             panelEl.hidden = false;
             panelEl.setAttribute('aria-hidden', 'false');
@@ -510,8 +1436,8 @@
 
     function closePanel() {
         if (!panelEl) return;
-        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.close) {
-            globalThis.__MAYHEM_RUNTIME.GameModalManager.close('docs');
+        if (runtime.GameModalManager && runtime.GameModalManager.close) {
+            runtime.GameModalManager.close('docs');
         } else {
             panelEl.hidden = true;
             panelEl.setAttribute('aria-hidden', 'true');
@@ -526,7 +1452,6 @@
         subnavEl = document.getElementById('docs-subnav');
         contentEl = document.getElementById('docs-content');
         hintEl = document.getElementById('docs-hint');
-
         closeBtnEl = document.getElementById('docs-close-btn');
         pauseOpenBtnEl = document.getElementById('open-manual-btn');
         hudOpenBtnEl = document.getElementById('hud-manual-btn');
@@ -545,8 +1470,8 @@
             e.stopPropagation();
         });
 
-        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.register) {
-            globalThis.__MAYHEM_RUNTIME.GameModalManager.register('docs', {
+        if (runtime.GameModalManager && runtime.GameModalManager.register) {
+            runtime.GameModalManager.register('docs', {
                 element: panelEl,
                 initialFocus: closeBtnEl || panelEl,
                 restoreFocus: pauseOpenBtnEl || hudOpenBtnEl || null
@@ -555,7 +1480,6 @@
 
         panelEl.hidden = true;
         panelEl.setAttribute('aria-hidden', 'true');
-
         isInited = true;
         render();
     };
@@ -577,19 +1501,36 @@
 
     GameDocs.toggle = function () {
         if (!isInited) return;
-        if (GameDocs.isOpen()) {
-            closePanel();
-        } else {
-            openPanel();
-        }
+        if (GameDocs.isOpen()) closePanel();
+        else openPanel();
     };
 
     GameDocs.isOpen = function () {
-        if (globalThis.__MAYHEM_RUNTIME.GameModalManager && globalThis.__MAYHEM_RUNTIME.GameModalManager.isOpen) {
-            return globalThis.__MAYHEM_RUNTIME.GameModalManager.isOpen('docs');
+        if (runtime.GameModalManager && runtime.GameModalManager.isOpen) {
+            return runtime.GameModalManager.isOpen('docs');
         }
         return !!panelEl && !panelEl.hidden;
     };
 
-    globalThis.__MAYHEM_RUNTIME.GameDocs = GameDocs;
+    GameDocs._test = {
+        getData: getData,
+        setState: function (patch) {
+            patch = patch || {};
+            if (patch.activePage) state.activePage = String(patch.activePage);
+            if (patch.selectedWeaponId) state.selectedWeaponId = String(patch.selectedWeaponId);
+            if (patch.selectedAbilityId) state.selectedAbilityId = String(patch.selectedAbilityId);
+            if (patch.selectedThrowableId) state.selectedThrowableId = String(patch.selectedThrowableId);
+        },
+        buildContent: function (pageId) {
+            var data = getData();
+            ensureSelections(data);
+            state.activePage = String(pageId || state.activePage || 'home');
+            return buildContent(state.activePage, data);
+        },
+        weaponFireModelLabel: weaponFireModelLabel,
+        buildWeaponCombatRows: buildWeaponCombatRows,
+        buildWeaponFeelRows: buildWeaponFeelRows
+    };
+
+    runtime.GameDocs = GameDocs;
 })();

@@ -130,6 +130,45 @@ test('missed server hook retracts toward the current origin before clearing', ()
   }
 });
 
+test('server hook starts from the shared throw origin when one is available', () => {
+  const player = {
+    id: 'usr_hook',
+    alive: true,
+    x: 0,
+    y: 1.2,
+    z: 0
+  };
+  const room = {
+    buildDefaultThrowOriginAndDirection() {
+      return {
+        origin: { x: 1, y: 2, z: 3 },
+        direction: { x: 0, y: 0, z: -1 }
+      };
+    },
+    entityCorePosition() {
+      return { x: 9, y: 9, z: 9 };
+    },
+    resolveClassAimPoint() {
+      return { x: 1, y: 2, z: -3 };
+    },
+    clampWorldAimPoint(_start, aimPoint) {
+      return aimPoint;
+    }
+  };
+
+  const result = castHook(room, player, {
+    range: 24,
+    catchRadius: 1.6,
+    pullDistance: 3.2,
+    stunDuration: 0.5,
+    castDamage: 35,
+    travelSpeed: 24
+  }, {}, 1000);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(player.hookState.startPos, { x: 1, y: 2, z: 3 });
+});
+
 test('hook pull releases once the target reaches the caster while following live movement', () => {
   const realNow = Date.now;
   const timeState = { now: 1000 };

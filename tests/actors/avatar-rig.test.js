@@ -184,8 +184,9 @@ test('airborne animation keeps the left arm splayed and lets forward/back input 
 test('armed sprint animation reuses the walk-style firearm arm motion with a stronger support-arm swing', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
+  api.rig.gaitPhase = Math.PI * 0.5;
 
-  api.updateAnimation(0.016, {
+  api.updateAnimation(0, {
     speedNorm: 1.1,
     sprinting: false,
     airborne: false,
@@ -196,7 +197,7 @@ test('armed sprint animation reuses the walk-style firearm arm motion with a str
   const walkRightArmZ = api.rig.armR.rotation.z;
   const walkRightWristX = api.rig.palmRight.rotation.x;
 
-  api.updateAnimation(0.016, {
+  api.updateAnimation(0, {
     speedNorm: 1.1,
     sprinting: true,
     airborne: false,
@@ -207,6 +208,66 @@ test('armed sprint animation reuses the walk-style firearm arm motion with a str
   assert.equal(api.rig.armR.rotation.z, walkRightArmZ);
   assert.notEqual(api.rig.palmRight.rotation.x, walkRightWristX);
   assert.ok(Math.abs(api.rig.armL.rotation.x) > Math.abs(walkLeftArmX) * 1.01);
+});
+
+test('forward locomotion tilts the torso and head together, with more lean while sprinting', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  assert.equal(api.rig.bodyMesh.parent, api.rig.upperBodyPivot);
+  assert.equal(api.rig.headMesh.parent, api.rig.upperBodyPivot);
+
+  api.updateAnimation(0.25, {
+    speedNorm: 8 / 14,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    worldSpeed: 8,
+    movingForward: true
+  });
+  const walkLean = api.rig.upperBodyPivot.rotation.x;
+
+  assert.ok(walkLean < -0.045);
+  assert.ok(walkLean > -0.07);
+
+  api.updateAnimation(0.25, {
+    speedNorm: 1,
+    sprinting: true,
+    airborne: false,
+    aimPitch: 0,
+    worldSpeed: 14,
+    movingForward: true
+  });
+  const runLean = api.rig.upperBodyPivot.rotation.x;
+
+  assert.ok(runLean < walkLean);
+  assert.ok(runLean < -0.1);
+  assert.ok(runLean > -0.12);
+});
+
+test('upper-body forward lean stays off while backpedaling or strafing', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.updateAnimation(0.25, {
+    speedNorm: 8 / 14,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    worldSpeed: 8,
+    movingBackward: true
+  });
+  assert.equal(api.rig.upperBodyPivot.rotation.x, 0);
+
+  api.updateAnimation(0.25, {
+    speedNorm: 8 / 14,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    worldSpeed: 8,
+    movingRight: true
+  });
+  assert.equal(api.rig.upperBodyPivot.rotation.x, 0);
 });
 
 test('weapon mount rotation can customize wrist pitch per weapon', async () => {

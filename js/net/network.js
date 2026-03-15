@@ -244,6 +244,20 @@
         };
     }
 
+    function authoritativeNowMs() {
+        if (connected && isFinite(serverTimeOffsetMs)) {
+            return Math.max(0, Date.now() - serverTimeOffsetMs);
+        }
+        return Date.now();
+    }
+
+    function toLocalClockTime(serverTimestamp) {
+        var stamp = Number(serverTimestamp || 0);
+        if (!(stamp > 0)) return 0;
+        if (!isFinite(serverTimeOffsetMs)) return stamp;
+        return Math.max(0, stamp + serverTimeOffsetMs);
+    }
+
     function connectionTimingState() {
         var snapshotState = snapshotTimingState();
         return {
@@ -505,8 +519,17 @@
         var emptyState = abilityFxView && abilityFxView.emptyChokeVictimState
             ? abilityFxView.emptyChokeVictimState()
             : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
+        function withLocalTimestamps(state) {
+            if (!state) return emptyState;
+            return {
+                lift: Number(state.lift || 0),
+                liftHeight: Number(state.liftHeight || 0),
+                startedAt: toLocalClockTime(state.startedAt),
+                endsAt: toLocalClockTime(state.endsAt)
+            };
+        }
         if (!entityId) return emptyState;
-        var now = Date.now();
+        var now = authoritativeNowMs();
         var selfState = netState.getSelfState();
         var selfFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(selfState)
@@ -514,13 +537,13 @@
         var selfChokeVictim = selfFx && selfFx.chokeVictim ? selfFx.chokeVictim : null;
         if (selfState && selfState.id === entityId && selfChokeVictim && selfChokeVictim.endsAt > now) {
             return abilityFxView && abilityFxView.toChokeVictimVisualState
-                ? abilityFxView.toChokeVictimVisualState(selfChokeVictim, now)
+                ? withLocalTimestamps(abilityFxView.toChokeVictimVisualState(selfChokeVictim, now))
                 : emptyState;
         }
         var render = GameNetEntities.getRenderMap().get(entityId);
         if (render && render.chokeVictimState && render.chokeVictimState.endsAt > now) {
             return abilityFxView && abilityFxView.toChokeVictimVisualState
-                ? abilityFxView.toChokeVictimVisualState(render.chokeVictimState, now)
+                ? withLocalTimestamps(abilityFxView.toChokeVictimVisualState(render.chokeVictimState, now))
                 : emptyState;
         }
         return emptyState;
@@ -820,10 +843,12 @@
     GameNet.consumeNotice = stateView.consumeNotice;
     GameNet.getSnapshotTimingState = snapshotTimingState;
     GameNet.getConnectionTimingState = connectionTimingState;
+    GameNet.getAuthoritativeNow = authoritativeNowMs;
     GameNet.getEstimatedServerTime = function () {
         if (!connected || !isFinite(serverTimeOffsetMs)) return 0;
         return Math.max(0, Date.now() - serverTimeOffsetMs);
     };
+    GameNet.toLocalTime = toLocalClockTime;
 
     resetConnectionTimingState();
     runtime.GameNet = GameNet;

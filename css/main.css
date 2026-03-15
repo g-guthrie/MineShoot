@@ -2638,15 +2638,315 @@ canvas {
 
 #docs-content {
     margin: 0;
-    padding: 14px 16px 18px;
+    padding: 16px 18px 20px;
     color: #84f49d;
     text-shadow: 0 0 6px rgba(77, 232, 114, 0.18);
     font-size: 13px;
-    line-height: 1.26;
+    line-height: 1.42;
     font-family: 'Courier New', monospace;
-    white-space: pre;
     overflow: auto;
     background: transparent;
+}
+
+#docs-content code {
+    border: 1px solid rgba(78, 167, 99, 0.45);
+    background: rgba(8, 31, 11, 0.95);
+    color: #d6ffdf;
+    font-family: inherit;
+    font-size: 0.94em;
+    padding: 1px 5px;
+}
+
+.docs-page {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.docs-hero,
+.docs-section,
+.docs-card,
+.docs-weapon-art {
+    border: 1px solid rgba(57, 132, 74, 0.68);
+    background:
+        linear-gradient(180deg, rgba(11, 34, 15, 0.96), rgba(5, 16, 7, 0.96)),
+        radial-gradient(circle at top right, rgba(65, 167, 86, 0.1), rgba(0, 0, 0, 0) 52%);
+    box-shadow: inset 0 0 0 1px rgba(11, 44, 18, 0.5);
+}
+
+.docs-hero {
+    padding: 16px 18px;
+}
+
+.docs-eyebrow {
+    color: #71cb86;
+    font-size: 10px;
+    letter-spacing: 1.7px;
+    text-transform: uppercase;
+}
+
+.docs-hero h2,
+.docs-section h3,
+.docs-card h3 {
+    margin: 0;
+    color: #ebfff0;
+    font-weight: 700;
+}
+
+.docs-hero h2 {
+    margin-top: 6px;
+    font-size: 21px;
+    letter-spacing: 0.5px;
+}
+
+.docs-hero p,
+.docs-section p,
+.docs-card p {
+    margin: 0;
+    color: #b7ffca;
+}
+
+.docs-hero p {
+    margin-top: 8px;
+    max-width: 72ch;
+}
+
+.docs-tag-row,
+.docs-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.docs-tag-row {
+    margin-top: 12px;
+}
+
+.docs-tag,
+.docs-pill {
+    border: 1px solid rgba(88, 176, 108, 0.55);
+    background: rgba(10, 35, 14, 0.95);
+    color: #cfffda;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    padding: 4px 8px;
+    text-transform: uppercase;
+}
+
+.docs-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.docs-card,
+.docs-section {
+    padding: 13px 14px;
+}
+
+.docs-card h3,
+.docs-section h3 {
+    margin-bottom: 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.docs-card p,
+.docs-section p {
+    color: #a9f8bd;
+    line-height: 1.45;
+}
+
+.docs-callout {
+    border-left: 3px solid #66d27f;
+    padding: 10px 12px;
+    background: rgba(11, 44, 18, 0.6);
+    color: #ddffe4;
+    line-height: 1.45;
+}
+
+.docs-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    gap: 10px;
+}
+
+.docs-stat {
+    border: 1px solid rgba(61, 143, 81, 0.66);
+    background: rgba(6, 23, 9, 0.92);
+    padding: 9px 10px 10px;
+    min-height: 74px;
+}
+
+.docs-stat-label {
+    display: block;
+    color: #76cd8b;
+    font-size: 10px;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+}
+
+.docs-stat-value {
+    display: block;
+    margin-top: 5px;
+    color: #effff3;
+    font-size: 18px;
+    line-height: 1.08;
+}
+
+.docs-stat-note {
+    display: block;
+    margin-top: 5px;
+    color: #95e5aa;
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+.docs-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #c8ffd4;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.docs-list li {
+    line-height: 1.4;
+}
+
+.docs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.docs-table thead th {
+    color: #e7ffee;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-size: 10px;
+}
+
+.docs-table th,
+.docs-table td {
+    border-top: 1px solid rgba(39, 95, 53, 0.84);
+    padding: 8px 8px 7px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.docs-table tbody tr:first-child th,
+.docs-table tbody tr:first-child td {
+    border-top: 1px solid rgba(56, 131, 73, 0.94);
+}
+
+.docs-table td {
+    color: #aaf2bd;
+    line-height: 1.36;
+}
+
+.docs-table th[scope="row"] {
+    width: 152px;
+    color: #d6ffde;
+}
+
+.docs-weapon-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(200px, 0.75fr);
+    gap: 12px;
+    align-items: start;
+}
+
+.docs-weapon-art {
+    margin: 0;
+    padding: 14px 12px;
+    color: #8ce9a3;
+    font-size: 11px;
+    line-height: 1.04;
+    white-space: pre;
+    overflow: auto;
+}
+
+.docs-controls-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+
+.docs-control-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 9px;
+    align-items: start;
+    min-height: 36px;
+}
+
+.docs-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    border: 1px solid rgba(96, 189, 117, 0.65);
+    background: rgba(8, 28, 10, 0.96);
+    color: #f0fff2;
+    font-size: 10px;
+    letter-spacing: 0.9px;
+    padding: 4px 6px;
+    text-transform: uppercase;
+}
+
+.docs-control-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.docs-control-title {
+    color: #e7ffee;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+}
+
+.docs-control-note {
+    color: #91e2a6;
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+.docs-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.docs-mode-card {
+    border: 1px solid rgba(58, 139, 76, 0.62);
+    background: rgba(6, 24, 9, 0.92);
+    padding: 11px 12px;
+}
+
+.docs-mode-card strong {
+    display: block;
+    color: #effff2;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    margin-bottom: 5px;
+}
+
+.docs-mode-card span {
+    display: block;
+    color: #97e9ac;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.docs-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(79, 166, 99, 0), rgba(79, 166, 99, 0.8), rgba(79, 166, 99, 0));
 }
 
 #docs-hint {
@@ -3678,6 +3978,17 @@ canvas {
         padding: 12px;
     }
 
+    .docs-grid,
+    .docs-weapon-layout,
+    .docs-controls-grid,
+    .docs-mode-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     #hud-manual-btn {
         left: 16px;
         top: 56px;
@@ -3889,5 +4200,18 @@ canvas {
     #throwable-choice-grid,
     .ability-choice-grid {
         gap: 3px;
+    }
+
+    .docs-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-table {
+        font-size: 10px;
+    }
+
+    .docs-table th,
+    .docs-table td {
+        padding: 6px;
     }
 }

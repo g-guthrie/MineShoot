@@ -27,6 +27,8 @@
     var bloomReticle = null;
 
     var hitmarkerTimer = null;
+    var HITMARKER_HOLD_MS = 45;
+    var HITMARKER_FADE_SEC = 0.09;
 
     function sharedMatchRules() {
         return globalThis.__MAYHEM_RUNTIME &&
@@ -159,12 +161,12 @@
         hitmarkerEl.style.fontSize = '28px';
         if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
         hitmarkerTimer = setTimeout(function () {
-            hitmarkerEl.style.transition = 'opacity 0.18s ease-out';
+            hitmarkerEl.style.transition = 'opacity ' + HITMARKER_FADE_SEC + 's ease-out';
             hitmarkerEl.style.opacity = '0';
             hitmarkerEl.style.color = '#ff0000';
             hitmarkerEl.style.fontSize = '28px';
             hitmarkerTimer = null;
-        }, 90);
+        }, HITMARKER_HOLD_MS);
     };
 
     GameUI.showPredictedHitMarker = function () {
@@ -174,12 +176,12 @@
         hitmarkerEl.style.fontSize = '28px';
         if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
         hitmarkerTimer = setTimeout(function () {
-            hitmarkerEl.style.transition = 'opacity 0.18s ease-out';
+            hitmarkerEl.style.transition = 'opacity ' + HITMARKER_FADE_SEC + 's ease-out';
             hitmarkerEl.style.opacity = '0';
             hitmarkerEl.style.color = '#ff0000';
             hitmarkerEl.style.fontSize = '28px';
             hitmarkerTimer = null;
-        }, 90);
+        }, HITMARKER_HOLD_MS);
     };
 
     GameUI.showKillMarker = function () {

@@ -4,7 +4,7 @@ const LOCAL_WORKER_ORIGIN = 'http://127.0.0.1:8787';
 function isLocalHost(hostname) {
   if (!hostname) return false;
   const host = String(hostname).toLowerCase();
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1';
 }
 
 function resolveWorkerOrigin(context, upstreamUrl) {

@@ -191,7 +191,12 @@ export function castDeadeye(room, player, cfg, _msg, now) {
 }
 
 export function castHook(room, player, cfg, _msg, now) {
-  const startPos = room.entityCorePosition(player);
+  const throwOrigin = room.buildDefaultThrowOriginAndDirection
+    ? room.buildDefaultThrowOriginAndDirection(player)
+    : null;
+  const startPos = throwOrigin && throwOrigin.origin
+    ? throwOrigin.origin
+    : room.entityCorePosition(player);
   const range = Math.max(1, Number(cfg.range || 24));
   const aimPoint = room.resolveClassAimPoint(player, _msg || {}, range);
   const endPos = room.clampWorldAimPoint(startPos, aimPoint, range);
