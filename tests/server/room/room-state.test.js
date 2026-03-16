@@ -135,6 +135,7 @@ test('room state helper builds welcome and snapshot payloads from shared room st
     roomPhaseActive: 'active',
     emptyMatchState,
     roomSimTickMs: 1000 / 60,
+    inputSendHz: 30,
     teamAlpha: 'alpha',
     teamBravo: 'bravo'
   };
@@ -142,6 +143,7 @@ test('room state helper builds welcome and snapshot payloads from shared room st
   assert.equal(welcome.t, 'welcome');
   assert.equal(welcome.privateRoomPhase, 'active');
   assert.equal(welcome.tickRate, 60);
+  assert.equal(welcome.inputSendHz, 30);
   assert.deepEqual(welcome.worldFlags, { envV2: true, terrainPhysicsV2: false });
   assert.equal(welcome.matchState.lms.activeBeacon.id, 'b1');
 

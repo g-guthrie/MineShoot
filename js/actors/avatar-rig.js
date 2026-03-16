@@ -55,6 +55,8 @@
     var AIRBORNE_ARM_SWEEP = 15 * DEG_TO_RAD;
     var WALK_FORWARD_LEAN = 3.5 * DEG_TO_RAD;
     var RUN_FORWARD_LEAN = 6.5 * DEG_TO_RAD;
+    var AIRBORNE_DIRECTIONAL_LEAN_SCALE = 0.75;
+    var AIRBORNE_DIRECTIONAL_LEAN_MIN = WALK_FORWARD_LEAN * 0.65;
     var UPPER_BODY_LEAN_BLEND_SPEED = 10;
     var LEFT_PALM_NEUTRAL = { x: -0.01, y: -0.84, z: -0.03 };
     var RIGHT_PALM_SOCKET = { x: 0.015, y: -0.98, z: -0.01 };
@@ -96,6 +98,21 @@
             rig.upperBodyLeanX = 0;
         }
         rig.upperBodyPivot.rotation.x = rig.upperBodyLeanX;
+    }
+
+    function resolveDirectionalUpperBodyLean(airborne, hooked, choked, movingForward, movingBackward, sprinting, worldSpeed) {
+        if (hooked || choked || movingForward === movingBackward) return 0;
+        var leanBase = sprinting ? RUN_FORWARD_LEAN : WALK_FORWARD_LEAN;
+        var leanSpeedTarget = sprinting ? INFERRED_RUN_SPEED : INFERRED_JOG_SPEED;
+        if (airborne) {
+            var airborneLean = leanBase * clamp01(worldSpeed / Math.max(0.001, leanSpeedTarget)) * AIRBORNE_DIRECTIONAL_LEAN_SCALE;
+            airborneLean = Math.max(AIRBORNE_DIRECTIONAL_LEAN_MIN, airborneLean);
+            return (movingForward ? -1 : 1) * airborneLean;
+        }
+        if (movingForward && worldSpeed > 0.02) {
+            return -leanBase * clamp01(worldSpeed / Math.max(0.001, leanSpeedTarget));
+        }
+        return 0;
     }
 
     function pointArmAtTarget(armGroup, targetVec, parentGroup, extraX, extraY, extraZ) {
@@ -575,12 +592,15 @@
             var worldSpeed = animState && typeof animState.worldSpeed === 'number'
                 ? Math.max(0, Number(animState.worldSpeed || 0))
                 : (speedNorm * (sprinting ? INFERRED_RUN_SPEED : INFERRED_JOG_SPEED));
-            var targetUpperBodyLean = 0;
-            if (!airborne && !hooked && !choked && movingForward && !movingBackward && worldSpeed > 0.02) {
-                var leanBase = sprinting ? RUN_FORWARD_LEAN : WALK_FORWARD_LEAN;
-                var leanSpeedTarget = sprinting ? INFERRED_RUN_SPEED : INFERRED_JOG_SPEED;
-                targetUpperBodyLean = -leanBase * clamp01(worldSpeed / Math.max(0.001, leanSpeedTarget));
-            }
+            var targetUpperBodyLean = resolveDirectionalUpperBodyLean(
+                airborne,
+                hooked,
+                choked,
+                movingForward,
+                movingBackward,
+                sprinting,
+                worldSpeed
+            );
             updateUpperBodyLean(rig, targetUpperBodyLean, dt);
             if (worldSpeed > 0.02) {
                 var strideLength = 1.6 + (legAmp * 3.2);

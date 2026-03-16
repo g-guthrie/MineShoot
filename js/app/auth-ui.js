@@ -132,10 +132,11 @@
             }
 
             if (modalManager && overlayEl) {
+                var utilityToggleBtn = document.getElementById('utility-toggle-btn');
                 modalManager.register('auth', {
                     element: overlayEl,
                     initialFocus: usernameInput || closeBtn || overlayEl,
-                    restoreFocus: toggleBtn || null,
+                    restoreFocus: utilityToggleBtn || toggleBtn || null,
                     onOpen: function () {
                         if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
                     },

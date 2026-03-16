@@ -26,6 +26,7 @@ import {
 import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
 import { buildWorldCollisionData } from '../../../shared/world-collision.js';
 import { createTerrainSampler } from '../../../shared/terrain-sampler.js';
+import { WORLD_MIN, WORLD_MAX } from '../../../shared/world-layout.js';
 import { EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS } from '../../../shared/entity-constants.js';
 import {
   createMovementInputState,
@@ -137,6 +138,7 @@ import {
   handleClassQueue as handleCombatClassQueue,
   handleEquipWeapon as handleCombatEquipWeapon,
   handleFire as handleCombatFire,
+  handleReload as handleCombatReload,
   handleThrow as handleCombatThrow,
   handleWeaponLoadout as handleCombatWeaponLoadout,
   hasWorldLineOfSight as combatHasWorldLineOfSight,
@@ -180,6 +182,7 @@ const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
 const ROOM_SIM_TICK_MS = 1000 / 60;
 const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
+const ROOM_INPUT_SEND_HZ = 30;
 const DISCONNECT_GRACE_MS = 15000;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const SNAPSHOT_ENGAGEMENT_TTL_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.engagementTtlMs || 1800));
@@ -353,8 +356,8 @@ export class GlobalArenaRoom extends DurableObject {
     this.worldFlags = cloneWorldFlags(initialWorldMeta.worldFlags);
     this.worldCollision = null;
     this.refreshWorldMeta();
-    this.boundsMin = 2;
-    this.boundsMax = 110;
+    this.boundsMin = Number(WORLD_MIN || 2);
+    this.boundsMax = Number(WORLD_MAX || 110);
     this.projectiles = new Map();
     this.fireZones = new Map();
     this.nextProjectileSeq = 1;
@@ -412,7 +415,7 @@ export class GlobalArenaRoom extends DurableObject {
   modeEntities() {
     const out = [];
     for (const player of this.players.values()) {
-      if (player) out.push(player);
+      if (player && !this.isEntityDisconnected(player)) out.push(player);
     }
     for (const bot of this.bots.values()) {
       if (bot) out.push(bot);
@@ -543,6 +546,7 @@ export class GlobalArenaRoom extends DurableObject {
       roomPhaseActive: ROOM_PHASE_ACTIVE,
       emptyMatchState,
       roomSimTickMs: ROOM_SIM_TICK_MS,
+      inputSendHz: ROOM_INPUT_SEND_HZ,
       teamAlpha: TDM_TEAM_A,
       teamBravo: TDM_TEAM_B
     });
@@ -684,9 +688,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   desiredBotCount() {
-    if (this.isDevLocalRoom()) return DEV_LOCAL_BOT_COUNT;
-    if (!this.usesConfiguredBots()) return 0;
-    return Math.max(0, Number(this.env.BOT_COUNT || '6'));
+    return 0;
   }
 
   humanPlayerCount() {
@@ -845,7 +847,10 @@ export class GlobalArenaRoom extends DurableObject {
 
   collectSnapshotFrame(now = nowMs()) {
     const entities = [];
-    for (const player of this.players.values()) entities.push(toEntityState(player));
+    for (const player of this.players.values()) {
+      if (!player || this.isEntityDisconnected(player)) continue;
+      entities.push(toEntityState(player));
+    }
     for (const bot of this.bots.values()) entities.push(toEntityState(bot));
     const serializedById = new Map();
     for (let i = 0; i < entities.length; i++) {
@@ -1052,7 +1057,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   recordAliveEntityPoseHistories(now = nowMs()) {
     for (const player of this.players.values()) {
-      if (!player || !player.alive) continue;
+      if (!player || !player.alive || this.isEntityDisconnected(player)) continue;
       this.recordEntityPoseHistory(player, now);
     }
     for (const bot of this.bots.values()) {
@@ -1249,9 +1254,18 @@ export class GlobalArenaRoom extends DurableObject {
     return null;
   }
 
+  isEntityDisconnected(entity) {
+    return !!(
+      entity &&
+      entity.fixtureType !== 'sim_player' &&
+      entity.kind === 'player' &&
+      Number(entity.disconnectedAt || 0) > 0
+    );
+  }
+
   getAliveEntities() {
     const out = [];
-    for (const p of this.players.values()) if (p && p.alive) out.push(p);
+    for (const p of this.players.values()) if (p && p.alive && !this.isEntityDisconnected(p)) out.push(p);
     for (const b of this.bots.values()) if (b && b.alive) out.push(b);
     return out;
   }
@@ -1417,6 +1431,14 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleEquipWeapon(player, msg) {
     return handleCombatEquipWeapon(this, player, msg, {
+      weaponStats: WEAPON_STATS,
+      canEquipWeaponId: canEntityUseWeapon
+    });
+  }
+
+  handleReload(player, msg) {
+    return handleCombatReload(this, player, msg, {
+      nowMs,
       weaponStats: WEAPON_STATS,
       canEquipWeaponId: canEntityUseWeapon
     });

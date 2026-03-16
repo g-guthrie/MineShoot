@@ -81,282 +81,204 @@
             </section>
         </div>
         <div id="menu-stage">
-            <div id="menu-shell">
-            <div id="menu-header">
-                <h1 class="visually-hidden">MAYHEM</h1>
-                <div id="menu-header-top">
-                    <div id="menu-brand">PIP-ARENA MKIV :: MAYHEM TERMINAL <span id="build-version">v0.1.3</span></div>
-                    <div id="menu-header-controls">
-                        <div id="menu-actions">
-                            <button id="open-manual-btn" type="button">OPEN FIELD MANUAL</button>
-                            <div id="top-mode-panel">
-                                <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="mode-buttons">DEV / TEST</button>
-                                <div id="mode-buttons" hidden>
-                                    <button id="mode-single-cloudflare-btn" class="mode-btn" type="button" data-mode-id="single_cloudflare">SOLO CLOUDFLARE (BOTS)</button>
-                                    <button id="mode-single-dev-server-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">LOCAL DEV ROOM (BOTS)</button>
+            <div id="menu-shell" class="menu-shell-v4">
+                <div id="menu-surface">
+                    <div id="menu-header">
+                        <div id="menu-header-main">
+                            <div id="menu-header-leading">
+                                <button id="party-back-btn" type="button" hidden>Back</button>
+                                <button id="menu-party-id-btn" type="button" title="Copy your player ID">
+                                    <span id="menu-party-id-label">Guest ID</span>
+                                    <span id="menu-party-id-value">------</span>
+                                </button>
+                                <button id="join-party-trigger-btn" type="button">Join Friend</button>
+                                <div id="join-party-popover" hidden>
+                                    <div id="join-party-popover-title">Join Friend</div>
+                                    <div id="join-party-recent"></div>
+                                    <input id="party-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Friend ID">
+                                    <button id="join-party-btn" type="button">Join</button>
                                 </div>
                             </div>
-                            <div id="top-controls-panel">
-                                <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-menu">CONTROLS</button>
-                                <div id="controls-menu" hidden>
-                                    <div class="controls-menu-grid">
-                                        <span>WASD Move</span>
-                                        <span>Mouse Look</span>
-                                        <span>E Sprint</span>
-                                        <span>RMB / Shift ADS</span>
-                                        <span>Space Jump</span>
-                                        <span>LMB Fire</span>
-                                        <span>1-2 / Wheel Swap</span>
-                                        <span>Q Throwable</span>
-                                        <span>R / F Abilities</span>
-                                        <span>Auto Reload</span>
-                                        <span>H Dev Visuals</span>
-                                        <span>I Field Manual</span>
-                                        <span>Esc Release Cursor</span>
-                                    </div>
-                                </div>
+                            <div id="menu-header-page-title" hidden>Party</div>
+                            <div id="menu-header-actions">
+                                <button id="open-party-btn" type="button">Party</button>
+                                <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">Login</button>
+                                <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Utility</button>
                             </div>
-                            <button id="sound-toggle-btn" type="button">SOUND: ON</button>
                         </div>
-                        <div id="menu-party-id-cluster">
-                            <button id="menu-party-id-btn" type="button" title="Copy your party ID">
-                                <span id="menu-party-id-label">GUEST ID</span>
-                                <span id="menu-party-id-value">------</span>
-                            </button>
-                            <button id="party-join-lock-btn" type="button" aria-pressed="false" title="Party join lock">
-                                <span id="party-join-lock-icon">[_/]</span>
-                                <span id="party-join-lock-note">PARTY OPEN</span>
-                            </button>
-                        </div>
-                        <div id="menu-account-panel">
-                            <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">LOGIN</button>
-                            <div id="auth-overlay" class="app-modal-overlay" hidden>
-                                <div id="auth-panel" class="app-modal-surface">
-                                    <button id="auth-close-btn" type="button" aria-label="Close account panel">CLOSE</button>
-                                    <div id="auth-login-view">
-                                        <h2>Optional Profile</h2>
-                                        <p>Create a profile with any unique username and a 4-digit PIN. Or ignore this and hit play.</p>
-                                        <form id="auth-form" novalidate>
-                                            <input id="auth-username" type="text" maxlength="64" autocomplete="username" placeholder="Username (anything unique)" required>
-                                            <input id="auth-pin" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="current-password" placeholder="4-digit PIN" required>
-                                            <button id="auth-play-btn" type="submit">LOGIN / CREATE PROFILE</button>
-                                        </form>
-                                        <div id="auth-status"></div>
-                                        <button id="auth-local-btn" type="button">BYPASS LOGIN (LOCAL DEV)</button>
-                                    </div>
-                                    <div id="auth-profile-view" hidden>
-                                        <div id="auth-profile-kicker">PROFILE ONLINE</div>
-                                        <h2 id="auth-profile-name">PLAYER</h2>
-                                        <p id="auth-profile-summary">Signed in and ready for matchmaking.</p>
-                                        <div id="auth-profile-stats">
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Class</span>
-                                                <span id="auth-profile-class" class="auth-profile-stat-value">ABILITIES</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Kills</span>
-                                                <span id="auth-profile-kills" class="auth-profile-stat-value">0</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Deaths</span>
-                                                <span id="auth-profile-deaths" class="auth-profile-stat-value">0</span>
-                                            </div>
-                                            <div class="auth-profile-stat">
-                                                <span class="auth-profile-stat-label">Damage</span>
-                                                <span id="auth-profile-damage" class="auth-profile-stat-value">0 / 0</span>
-                                            </div>
-                                        </div>
-                                        <button id="auth-logout-btn" type="button">LOG OUT</button>
-                                    </div>
+
+                        <div id="utility-overlay" hidden>
+                            <div id="utility-modal">
+                                <div id="utility-modal-header">
+                                    <span id="utility-modal-title">Utility</span>
+                                    <button id="utility-close-btn" type="button">Close</button>
+                                </div>
+                                <div id="utility-modal-copy">Help and setup live here.</div>
+                                <div id="utility-menu-buttons">
+                                    <button id="open-manual-btn" type="button">Instructions</button>
+                                    <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
+                                    <button id="sound-toggle-btn" type="button">Sound: On</button>
+                                    <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="dev-overlay" hidden>Dev / Test</button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div id="menu-title-stage" aria-hidden="true">
-                    <pre id="menu-title-rubble">      .  .       _     _     .  .           __
-   .        _.-' `-._/ \_.-' `-._        .`  `.
-      __.--'  broken neon slab   `--.__  /  ..  \</pre>
-                    <pre id="menu-title-mayhem"> __  __   ___   __   __  _   _  _____  __  __
-|  \/  | / _ \  \ \ / / | | | || ____||  \/  |
-| |\/| || /_\ |  \ V /  | |_| ||  _|  | |\/| |
-| |  | ||  _  |   | |   |  _  || |___ | |  | |
-|_|  |_||_| |_|   |_|   |_| |_||_____||_|  |_|
-  _.-._____.--._____.--._____.--._____.-._</pre>
-                    <pre id="menu-title-skull">   .-.
-  (x x)
-  | O \\
-  |    \\
-  |__.-'
- /|\
-/_|_\\</pre>
-                    <pre id="menu-title-ghost">   .--.
- .(    ).
-(___.__)__)
- /  ..  \\
- \_.--._/</pre>
-                </div>
-                <p id="mode-subtitle"></p>
-                </div>
-                <div id="menu-main">
-                    <div id="matchmaking-panel">
-                        <button id="primary-play-btn" type="button">QUICK MATCH (FFA)</button>
-                        <div id="matchmaking-grid">
-                            <div id="matchmaking-actions-panel">
-                                <div id="secondary-mode-grid">
-                                    <button id="tdm-play-btn" type="button">TEAM DEATHMATCH</button>
-                                    <button id="lms-play-btn" type="button">LAST MAN STANDING</button>
-                                    <div id="sandbox-launch-row">
-                                        <button id="sandbox-play-btn" type="button">OFFLINE SANDBOX :: FFA</button>
-                                        <button id="sandbox-mode-cycle-btn" type="button" aria-label="Choose sandbox ruleset">&gt;&lt;</button>
-                                    </div>
-                                </div>
-                                <div id="sandbox-ruleset-panel" hidden>
-                                    <div id="sandbox-ruleset-title">SANDBOX RULESET</div>
-                                    <div id="sandbox-ruleset-grid">
-                                        <button id="sandbox-ffa-btn" type="button">SANDBOX FFA</button>
-                                        <button id="sandbox-lms-btn" type="button">SANDBOX LMS</button>
-                                    </div>
-                                </div>
-                                <div id="private-room-actions">
-                                    <div id="private-room-actions-header">
-                                        <div id="private-room-actions-title">&gt; Private Room Access_</div>
-                                        <div id="private-room-actions-copy">Create a room to carry your current party in, or paste a code to regroup fast.</div>
-                                    </div>
-                                    <div id="private-room-controls-grid">
-                                        <button id="create-private-room-btn" type="button">CREATE ROOM</button>
-                                        <div id="private-room-join-row">
-                                            <input id="private-room-input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ROOM CODE">
-                                            <button id="join-private-room-btn" type="button">JOIN ROOM</button>
-                                        </div>
-                                    </div>
-                                    <div id="room-access-status" aria-live="polite"></div>
-                                    <div id="room-share-panel" hidden>
-                                        <span id="room-share-label">PRIVATE ROOM CODE</span>
-                                        <span id="room-share-code">------</span>
-                                        <button id="copy-room-code-btn" type="button">COPY</button>
-                                    </div>
-                                    <div id="private-room-actions-note">Private rooms now honor the carried roster and lock team setup to the host.</div>
-                                </div>
+
+                    <div id="menu-feedback" aria-live="polite"></div>
+
+                    <div id="menu-session-actions" hidden>
+                        <div id="menu-session-stats" hidden>
+                            <div id="menu-session-status">Paused</div>
+                            <div id="menu-session-kd">Change loadout or resume.</div>
+                        </div>
+                        <div id="menu-session-buttons">
+                            <button id="play-btn" type="button">Resume Match</button>
+                            <button id="back-mode-btn" type="button">Leave Game</button>
+                        </div>
+                    </div>
+
+                    <div id="menu-body">
+                        <section id="menu-screen-mode" class="menu-screen" data-screen="main">
+                            <div class="menu-stage-copy">
+                                <h1 id="mode-screen-title">Choose Match Type</h1>
                             </div>
-                            <div id="party-panel">
-                                <div id="party-link-view">
-                                    <div id="party-panel-header">
-                                        <div id="party-panel-header-copy">
-                                            <div id="party-panel-title">&gt; Social_</div>
-                                            <div id="party-panel-subtitle">Log in to save friends, invite them later, or quick-join mutuals.</div>
-                                        </div>
-                                        <div id="social-view-tabs">
-                                            <button id="social-tab-party-btn" class="social-tab-btn active" type="button" aria-pressed="true">PARTY</button>
-                                            <button id="social-tab-friends-btn" class="social-tab-btn" type="button" aria-pressed="false">FRIENDS</button>
-                                            <button id="social-tab-room-btn" class="social-tab-btn" type="button" aria-pressed="false" hidden>ROOM</button>
-                                        </div>
-                                    </div>
-                                    <div id="party-social-view">
-                                        <div id="party-join-row">
-                                            <input id="party-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="FRIEND ID">
-                                            <button id="join-party-btn" type="button">JOIN PARTY</button>
-                                        </div>
-                                        <div id="party-status" aria-live="polite"></div>
-                                        <div id="party-roster-preview-shell">
-                                            <div id="party-roster-preview-title">CURRENT PARTY</div>
-                                            <div id="party-roster-preview"></div>
-                                        </div>
-                                        <div id="party-panel-actions">
-                                            <button id="view-party-btn" type="button">VIEW ROSTER</button>
-                                            <button id="leave-party-btn" type="button">LEAVE PARTY</button>
+                            <div id="play-mode-group" role="group" aria-label="Select game mode">
+                                <button id="play-mode-ffa-btn" class="play-mode-btn" type="button" aria-pressed="false">Free For All</button>
+                                <button id="play-mode-tdm-btn" class="play-mode-btn" type="button" aria-pressed="false">Team Deathmatch</button>
+                                <button id="play-mode-lms-btn" class="play-mode-btn" type="button" aria-pressed="false">Last Man Standing</button>
+                                <button id="practice-mode-btn" class="play-mode-btn" type="button" aria-pressed="false">Offline Practice</button>
+                            </div>
+                            <div id="room-access-status" aria-live="polite"></div>
+                            <div id="mode-screen-actions">
+                                <button id="loadout-start-btn" type="button" hidden>Start Match</button>
+                                <button id="continue-loadout-btn" type="button">Create Room</button>
+                            </div>
+                        </section>
+
+                        <section id="menu-screen-party" class="menu-screen" data-screen="party" hidden>
+                            <div id="party-screen-grid">
+                                <section id="party-room-section" class="menu-card">
+                                    <div class="menu-card-kicker">Room</div>
+                                    <h2 class="menu-card-title">Private Room</h2>
+                                    <div id="private-room-status" aria-live="polite"></div>
+                                    <div id="party-room-entry">
+                                        <button id="create-private-room-btn" type="button">Create Room</button>
+                                        <div id="private-room-join-row">
+                                            <input id="private-room-input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Room code">
+                                            <button id="join-private-room-btn" type="button">Join Room</button>
                                         </div>
                                     </div>
-                                    <div id="friends-social-view" hidden>
-                                        <div id="friends-status" aria-live="polite"></div>
-                                        <div id="friends-quick-row">
-                                            <input id="friend-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="FRIEND USER ID">
-                                            <button id="add-friend-btn" type="button">ADD FRIEND</button>
-                                        </div>
-                                        <div id="friends-filter-row">
-                                            <button id="friends-filter-joinable-btn" class="friends-filter-btn active" type="button" aria-pressed="true">JOINABLE</button>
-                                            <button id="friends-filter-online-btn" class="friends-filter-btn" type="button" aria-pressed="false">ONLINE</button>
-                                            <button id="friends-filter-all-btn" class="friends-filter-btn" type="button" aria-pressed="false">ALL</button>
-                                        </div>
-                                        <div id="friends-preview-shell">
-                                            <div id="friends-preview-title">SAVED FRIENDS</div>
-                                            <div id="friends-preview"></div>
-                                        </div>
-                                        <div id="friends-panel-actions">
-                                            <button id="view-friends-btn" type="button">VIEW LIST</button>
-                                            <button id="refresh-friends-btn" type="button">REFRESH</button>
-                                        </div>
+                                    <div id="room-share-panel" hidden>
+                                        <span id="room-share-label">Room Code</span>
+                                        <span id="room-share-code">------</span>
+                                        <button id="copy-room-code-btn" type="button">Copy</button>
                                     </div>
                                     <div id="private-room-view" hidden>
-                                        <div id="private-room-panel-header">
-                                            <div id="private-room-panel-title">&gt; Private Room_</div>
-                                            <div id="private-room-panel-subtitle">Party carried into room. Configure or start from here.</div>
-                                        </div>
-                                        <div id="private-room-status" aria-live="polite"></div>
                                         <div id="private-room-summary"></div>
                                         <div id="private-room-mode-actions">
-                                            <button id="private-room-mode-ffa-btn" type="button">MODE :: FFA</button>
-                                            <button id="private-room-mode-tdm-btn" type="button">MODE :: TDM</button>
-                                            <button id="private-room-mode-lms-btn" type="button">MODE :: LMS</button>
-                                            <button id="private-room-randomize-btn" type="button">RANDOMIZE</button>
-                                            <button id="private-room-start-btn" type="button">START MATCH</button>
+                                            <button id="private-room-mode-ffa-btn" type="button">FFA</button>
+                                            <button id="private-room-mode-tdm-btn" type="button">TDM</button>
+                                            <button id="private-room-mode-lms-btn" type="button">LMS</button>
+                                        </div>
+                                        <div id="private-room-unassigned-wrap">
+                                            <div class="private-team-title">Unassigned</div>
+                                            <div id="private-room-unassigned"></div>
                                         </div>
                                         <div id="private-room-roster-grid">
                                             <div class="private-team-panel">
-                                                <div class="private-team-title">TEAM 1</div>
+                                                <div class="private-team-title">Team Alpha</div>
                                                 <div id="private-room-team-alpha"></div>
                                             </div>
                                             <div class="private-team-panel">
-                                                <div class="private-team-title">TEAM 2</div>
+                                                <div class="private-team-title">Team Bravo</div>
                                                 <div id="private-room-team-bravo"></div>
                                             </div>
                                         </div>
-                                        <div id="private-room-roster-note">Host controls team setup. FFA preserves this layout for later TDM swaps.</div>
+                                        <div id="private-room-roster-note">Drag players between teams or use move buttons.</div>
+                                        <div id="private-room-action-row">
+                                            <button id="private-room-randomize-btn" type="button">Balance Teams</button>
+                                            <button id="private-room-start-btn" type="button">Start Match</button>
+                                            <button id="private-room-enter-btn" type="button" hidden>Enter Match</button>
+                                        </div>
                                     </div>
-                                </div>
+                                </section>
+
+                                <section id="party-current-section" class="menu-card">
+                                    <div class="menu-card-kicker">Party</div>
+                                    <h2 class="menu-card-title">Current Party</h2>
+                                    <div id="party-status" aria-live="polite"></div>
+                                    <div id="party-lock-row">
+                                        <button id="party-join-lock-btn" type="button" aria-pressed="false" title="Party join lock">
+                                            <span id="party-join-lock-icon">[_/]</span>
+                                            <span id="party-join-lock-note">Party Open</span>
+                                        </button>
+                                        <button id="leave-party-btn" type="button">Leave Party</button>
+                                    </div>
+                                    <div id="social-party-members"></div>
+                                </section>
+
+                                <section id="party-friends-section" class="menu-card">
+                                    <div class="menu-card-kicker">Friends</div>
+                                    <h2 class="menu-card-title">Saved Friends</h2>
+                                    <div id="friends-status" aria-live="polite"></div>
+                                    <div id="friends-quick-row">
+                                        <input id="friend-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Friend user ID">
+                                        <button id="add-friend-btn" type="button">Add Friend</button>
+                                    </div>
+                                    <div id="friends-filter-row">
+                                        <button id="friends-filter-joinable-btn" class="friends-filter-btn active" type="button" aria-pressed="true">Joinable</button>
+                                        <button id="friends-filter-online-btn" class="friends-filter-btn" type="button" aria-pressed="false">Online</button>
+                                        <button id="friends-filter-all-btn" class="friends-filter-btn" type="button" aria-pressed="false">All</button>
+                                    </div>
+                                    <div id="friends-preview"></div>
+                                    <div class="menu-card-actions">
+                                        <button id="refresh-friends-btn" type="button">Refresh</button>
+                                    </div>
+                                </section>
                             </div>
+                        </section>
+                    </div>
+
+                    <div id="menu-loadout-band">
+                        <div id="loadout-row">
+                            <section class="loadout-section" data-loadout-section="weapons">
+                                <button id="weapon-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Weapons</button>
+                                <div id="weapon-slot-panel" hidden>
+                                    <div id="weapon-slot-title">Weapons</div>
+                                    <div id="weapon-slot-buttons">
+                                        <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">Slot 1</button>
+                                        <button id="weapon-slot-secondary" class="weapon-slot-btn" type="button" data-slot-index="1">Slot 2</button>
+                                    </div>
+                                    <div id="weapon-choice-grid"></div>
+                                    <div id="weapon-slot-note">Pick a slot, then a weapon.</div>
+                                </div>
+                            </section>
+
+                            <section class="loadout-section" data-loadout-section="throwable">
+                                <button id="throwable-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Throwable</button>
+                                <div id="throwable-slot-panel" hidden>
+                                    <div id="throwable-slot-title">Throwable</div>
+                                    <div id="throwable-category-tabs"></div>
+                                    <div id="throwable-choice-grid"></div>
+                                    <div id="throwable-slot-note">Choose a throwable.</div>
+                                </div>
+                            </section>
+
+                            <section class="loadout-section" data-loadout-section="abilities">
+                                <button id="ability-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Abilities</button>
+                                <div id="ability-slot-panel" hidden>
+                                    <div id="ability-slot-title">Abilities</div>
+                                    <div id="ability-slot1-label" class="ability-slot-label">Slot 1</div>
+                                    <div id="ability-slot1-grid" class="ability-choice-grid"></div>
+                                    <div id="ability-slot2-label" class="ability-slot-label">Slot 2</div>
+                                    <div id="ability-slot2-grid" class="ability-choice-grid"></div>
+                                    <div id="ability-slot-note">Choose abilities for each slot.</div>
+                                </div>
+                            </section>
                         </div>
                     </div>
                 </div>
-                <div id="menu-session-actions">
-                    <div id="menu-session-stats" hidden>
-                        <div id="menu-session-status">MATCH STANDBY</div>
-                        <div id="menu-session-kd">KILLS 0 | DEATHS 0</div>
-                    </div>
-                    <div id="menu-session-buttons">
-                        <button id="play-btn" type="button">RESUME MATCH</button>
-                        <button id="back-mode-btn" type="button">CHANGE MODE</button>
-                    </div>
-                </div>
-                <div class="menu-separator">&#9472;&#9472;&#9472;[ LOADOUT ]&#9472;&#9472;&#9472;</div>
-                <div id="loadout-row">
-                    <div id="weapon-slot-panel">
-                        <div id="weapon-slot-title">&gt; Weapons_</div>
-                        <div id="weapon-slot-buttons">
-                            <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">SLOT 1 :: MACHINE GUN</button>
-                            <button id="weapon-slot-secondary" class="weapon-slot-btn" type="button" data-slot-index="1">SLOT 2 :: SHOTGUN</button>
-                        </div>
-                        <div id="weapon-choice-grid"></div>
-                        <div id="weapon-slot-note">Click a slot, then choose a weapon.</div>
-                    </div>
-                    <div id="throwable-slot-panel">
-                        <div id="throwable-slot-title">&gt; Throwable [Q]_</div>
-                        <div id="throwable-category-tabs"></div>
-                        <div id="throwable-choice-grid"></div>
-                        <div id="throwable-slot-note">Hold Q for preview, release to throw.</div>
-                    </div>
-                    <div id="ability-slot-panel">
-                        <div id="ability-slot-title">&gt; Abilities [R/F]_</div>
-                        <div class="ability-slot-label">SLOT 1 [R]</div>
-                        <div id="ability-slot1-grid" class="ability-choice-grid"></div>
-                        <div class="ability-slot-label">SLOT 2 [F]</div>
-                        <div id="ability-slot2-grid" class="ability-choice-grid"></div>
-                        <div id="ability-slot-note">Pick slot 1 for R and slot 2 for F. Switch anytime from this menu.</div>
-                    </div>
-                </div>
-                <div class="menu-footer">&#9484;&#9472; SYS.OK &#9472;&#9472; ARENA READY &#9472;&#9472; AWAITING INPUT &#9472;&#9488;</div>
             </div>
-        </div>
         </div>
     </div>
 
@@ -380,6 +302,71 @@
         </div>
     </div>
 
+    <div id="leave-confirm-overlay" class="app-modal-overlay" hidden>
+        <div id="leave-confirm-panel" class="app-modal-surface">
+            <div id="leave-confirm-title">Leave Match?</div>
+            <div id="leave-confirm-copy">You will return to the main shell.</div>
+            <div id="leave-confirm-actions">
+                <button id="leave-confirm-cancel-btn" type="button">Cancel</button>
+                <button id="leave-confirm-accept-btn" type="button">Leave Game</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="auth-overlay" class="app-modal-overlay" hidden>
+        <div id="auth-panel" class="app-modal-surface">
+            <button id="auth-close-btn" type="button" aria-label="Close account panel">CLOSE</button>
+            <div id="auth-login-view">
+                <h2>Optional Profile</h2>
+                <p>Create a profile with any unique username and a 4-digit PIN. Or ignore this and hit play.</p>
+                <form id="auth-form" novalidate>
+                    <input id="auth-username" type="text" maxlength="64" autocomplete="username" placeholder="Username (anything unique)" required>
+                    <input id="auth-pin" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="current-password" placeholder="4-digit PIN" required>
+                    <button id="auth-play-btn" type="submit">LOGIN / CREATE PROFILE</button>
+                </form>
+                <div id="auth-status"></div>
+                <button id="auth-local-btn" type="button">BYPASS LOGIN (LOCAL DEV)</button>
+            </div>
+            <div id="auth-profile-view" hidden>
+                <div id="auth-profile-kicker">PROFILE ONLINE</div>
+                <h2 id="auth-profile-name">PLAYER</h2>
+                <p id="auth-profile-summary">Signed in and ready for matchmaking.</p>
+                <div id="auth-profile-stats">
+                    <div class="auth-profile-stat">
+                        <span class="auth-profile-stat-label">Class</span>
+                        <span id="auth-profile-class" class="auth-profile-stat-value">ABILITIES</span>
+                    </div>
+                    <div class="auth-profile-stat">
+                        <span class="auth-profile-stat-label">Kills</span>
+                        <span id="auth-profile-kills" class="auth-profile-stat-value">0</span>
+                    </div>
+                    <div class="auth-profile-stat">
+                        <span class="auth-profile-stat-label">Deaths</span>
+                        <span id="auth-profile-deaths" class="auth-profile-stat-value">0</span>
+                    </div>
+                    <div class="auth-profile-stat">
+                        <span class="auth-profile-stat-label">Damage</span>
+                        <span id="auth-profile-damage" class="auth-profile-stat-value">0 / 0</span>
+                    </div>
+                </div>
+                <button id="auth-logout-btn" type="button">LOG OUT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dev-overlay" class="app-modal-overlay" hidden>
+        <div id="dev-modal" class="app-modal-surface">
+            <div id="dev-modal-header">
+                <span id="dev-modal-title">DEV / TEST</span>
+                <button id="dev-close-btn" type="button">CLOSE</button>
+            </div>
+            <div id="dev-modal-copy">Launch the local-worker multiplayer room with the currently selected ruleset.</div>
+            <div id="mode-buttons">
+                <button id="mode-local-multiplayer-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">LOCAL MULTIPLAYER</button>
+            </div>
+        </div>
+    </div>
+
     <div id="docs-panel" class="app-modal-overlay" aria-hidden="true" hidden>
         <div id="docs-terminal" class="app-modal-surface">
             <div id="docs-header">
@@ -395,10 +382,31 @@
         </div>
     </div>
 
+    <div id="controls-overlay" class="app-modal-overlay" hidden>
+        <div id="controls-modal" class="app-modal-surface">
+            <div id="controls-modal-header">
+                <span id="controls-modal-title">KEY BINDINGS</span>
+                <button id="controls-close-btn" type="button">CLOSE</button>
+            </div>
+            <div id="controls-modal-copy">Keyboard bindings save instantly to this browser. Mouse, wheel, and Escape stay fixed.</div>
+            <div id="controls-fixed-panel">
+                <div id="controls-fixed-title">FIXED CONTROLS</div>
+                <div id="controls-fixed-grid"></div>
+            </div>
+            <div id="controls-bindings-groups"></div>
+            <div id="controls-rebind-status" aria-live="polite"></div>
+            <div id="controls-modal-actions">
+                <button id="controls-reset-btn" type="button">RESET DEFAULTS</button>
+            </div>
+            <input id="controls-capture-input" class="visually-hidden" type="text" aria-label="Keyboard capture input" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
     <!-- HUD Elements -->
     <div id="crosshair">+</div>
     <div id="bloom-reticle"></div>
     <div id="shotgun-reticle"></div>
+    <div id="plasma-reticle"></div>
     <div id="sniper-scope">
         <div id="sniper-scope-vignette"></div>
         <div id="sniper-scope-ring"></div>
@@ -426,8 +434,8 @@
         <span id="room-code-badge-value">------</span>
     </div>
     <div id="hud-bottom-right">
-        <div id="ability-info">R Choke: READY | F Deadeye: READY</div>
-        <div id="throwable-info">Q Frag: 1</div>
+        <div id="ability-info">ABILITY STATUS</div>
+        <div id="throwable-info">THROWABLE STATUS</div>
         <div id="weapon-info">Machine Gun | AUTO | 15/23 DMG</div>
         <div id="cooldown-status">READY</div>
         <div id="cooldown-container"><div id="cooldown-bar"></div></div>
@@ -438,6 +446,7 @@
         <div id="combat-radar-cross"></div>
     </div>
     <div id="combat-beacons"></div>
+    <div id="idle-warning" aria-live="polite" hidden></div>
     <div id="debug-info"></div>
     <div id="ability-debug-panel"></div>
     <div id="runtime-indicator">PROFILE :: STANDBY</div>

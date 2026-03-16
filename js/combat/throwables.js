@@ -17,6 +17,8 @@
     var localThrowSeq = 1;
     var debugInstantCooldowns = false;
     var debugPreviewVolumesEnabled = false;
+    var burningEnemyStates = new Map();
+    var fireAudioPulseTimer = 0;
     var debugTelemetry = {
         lastIntent: null,
         lastAckClientThrowId: '',
@@ -35,10 +37,20 @@
     var tmpDir = new THREE.Vector3();
     var tmpTarget = new THREE.Vector3();
     var tmpNetVec = new THREE.Vector3();
+    var tmpSegmentVec = new THREE.Vector3();
+    var tmpSegmentDir = new THREE.Vector3();
+    var tmpClosestPoint = new THREE.Vector3();
+    var tmpEnemyCenter = new THREE.Vector3();
+    var tmpDesiredVelocity = new THREE.Vector3();
+    var tmpStickyAnchor = new THREE.Vector3();
     var tmpVisualDir = new THREE.Vector3();
     var tmpVisualLook = new THREE.Vector3();
     var tmpForwardAxis = new THREE.Vector3(0, 0, -1);
     var tmpSpinAxis = new THREE.Vector3(0, 0, 1);
+    var tmpBoxCenter = new THREE.Vector3();
+    var tmpBoxSize = new THREE.Vector3();
+    var tmpRay = new THREE.Ray();
+    var tmpBox = new THREE.Box3();
     var trajPos = new THREE.Vector3();
     var trajVel = new THREE.Vector3();
     var trajStart = new THREE.Vector3();
@@ -65,11 +77,12 @@
         : {
             fragRadius: 5.4,
             plasmaRadius: 5.0,
+            plasmaCatchRadius: 1.5,
             missileRadius: 2.4,
             molotovFireRadius: 3.2,
             plasmaAcquireRange: 18,
             plasmaAcquireHalfAngleDeg: 35,
-            plasmaStickExplodeDelay: 0.65
+            plasmaStickExplodeDelay: 2.2
         };
     var throwableMechanicsTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getThrowableMechanicsTuning()
@@ -107,8 +120,11 @@
             if (id === 'frag') def.radius = throwableDistanceTuning.fragRadius;
             if (id === 'plasma') {
                 def.radius = throwableDistanceTuning.plasmaRadius;
+                def.catchRadius = throwableDistanceTuning.plasmaCatchRadius || def.catchRadius || 1.5;
                 def.acquireHalfAngleDeg = throwableDistanceTuning.plasmaAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 35;
-                def.stickExplodeDelay = throwableDistanceTuning.plasmaStickExplodeDelay || def.stickExplodeDelay || 0.65;
+                def.stickExplodeDelay = throwableDistanceTuning.plasmaStickExplodeDelay || def.stickExplodeDelay || 2.2;
+                def.trackDuration = Number.isFinite(Number(def.trackDuration)) ? Number(def.trackDuration) : 0.2;
+                def.trackLerp = Number.isFinite(Number(def.trackLerp)) ? Number(def.trackLerp) : 10;
             }
             if (id === 'missile') def.radius = throwableDistanceTuning.missileRadius;
             if (id === 'molotov') def.fireRadius = throwableDistanceTuning.molotovFireRadius;
@@ -130,6 +146,65 @@
     function regenSecondsForType(type) {
         var def = defs[String(type || '')];
         return Math.max(0, Number(def && def.regen || 0));
+    }
+
+    function molotovInnerRadius(def) {
+        var radius = Math.max(0.2, Number(def && def.fireRadius || 0));
+        var inner = Number(def && def.fireInnerRadius);
+        if (!isFinite(inner) || inner <= 0) inner = radius * 0.55;
+        return Math.max(0.2, Math.min(radius, inner));
+    }
+
+    function molotovOuterDamageScale(def) {
+        var scale = Number(def && def.fireOuterDamageScale);
+        if (!isFinite(scale)) scale = 0.38;
+        return Math.max(0.1, Math.min(1, scale));
+    }
+
+    function molotovMaxHeightDelta(def) {
+        var value = Number(def && def.fireMaxHeightDelta);
+        if (!isFinite(value)) value = 1.5;
+        return Math.max(0.1, value);
+    }
+
+    function molotovDamageScale(def, dist, radius) {
+        var maxRadius = Math.max(0.2, Number(radius || (def && def.fireRadius) || 0));
+        var innerRadius = molotovInnerRadius(def);
+        var edgeScale = molotovOuterDamageScale(def);
+        var distance = Math.max(0, Number(dist || 0));
+        if (distance <= innerRadius) return 1;
+        var outerSpan = Math.max(0.001, maxRadius - innerRadius);
+        var t = Math.max(0, Math.min(1, (distance - innerRadius) / outerSpan));
+        return 1 - ((1 - edgeScale) * t);
+    }
+
+    function molotovLingerDurationSec(def) {
+        var value = Number(def && def.fireLingerDuration);
+        if (!isFinite(value)) value = 0.9;
+        return Math.max(0, value);
+    }
+
+    function molotovLingerTickDamage(def) {
+        var value = Number(def && def.fireLingerTickDamage);
+        if (!isFinite(value)) value = Math.max(1, Math.round(Number(def && def.fireTickDamage || 18) * 0.45));
+        return Math.max(1, Math.round(value));
+    }
+
+    function molotovLingerTickRateSec(def) {
+        var value = Number(def && def.fireLingerTickRate);
+        if (!isFinite(value)) value = 0.4;
+        return Math.max(0.1, value);
+    }
+
+    function plasmaFuseDelay(def) {
+        var seconds = Number(def && (def.stickExplodeDelay != null ? def.stickExplodeDelay : def.fuse));
+        return Math.max(0.2, isFinite(seconds) ? seconds : 2.2);
+    }
+
+    function plasmaMaxLife(def) {
+        var maxLife = Number(def && def.maxLife);
+        if (isFinite(maxLife) && maxLife > 0) return maxLife;
+        return plasmaFuseDelay(def);
     }
 
     function resetInventory() {
@@ -330,10 +405,22 @@
             new THREE.MeshBasicMaterial({
                 color: 0xff7733,
                 transparent: true,
-                opacity: 0.45
+                opacity: 0.36,
+                depthWrite: false
             })
         );
         root.add(disk);
+        var innerDisk = new THREE.Mesh(
+            new THREE.CylinderGeometry(Math.max(0.35, radius * 0.58), Math.max(0.35, radius * 0.58), 0.06, 14),
+            new THREE.MeshBasicMaterial({
+                color: 0xffb347,
+                transparent: true,
+                opacity: 0.28,
+                depthWrite: false
+            })
+        );
+        innerDisk.position.y = 0.03;
+        root.add(innerDisk);
         var ring = new THREE.Mesh(
             new THREE.TorusGeometry(Math.max(0.24, radius * 0.72), 0.03, 6, 28),
             new THREE.MeshBasicMaterial({
@@ -346,9 +433,24 @@
         ring.rotation.x = Math.PI * 0.5;
         ring.position.y = 0.06;
         root.add(ring);
+        var ringOuter = new THREE.Mesh(
+            new THREE.TorusGeometry(Math.max(0.38, radius * 0.92), 0.02, 5, 30),
+            new THREE.MeshBasicMaterial({
+                color: 0xff6d2d,
+                transparent: true,
+                opacity: 0.12,
+                depthWrite: false
+            })
+        );
+        ringOuter.rotation.x = Math.PI * 0.5;
+        ringOuter.position.y = 0.04;
+        root.add(ringOuter);
 
         var assetFactory = globalThis.__MAYHEM_RUNTIME.GameAssetFactory || null;
         var flame = null;
+        var flameA = null;
+        var flameB = null;
+        var smoke = null;
         if (assetFactory && assetFactory.createParticleAsset) {
             flame = assetFactory.createParticleAsset('fire', { color: 0xff8833 });
             if (flame) {
@@ -356,12 +458,35 @@
                 flame.scale.set(Math.max(0.85, radius * 0.26), Math.max(0.85, radius * 0.34), Math.max(0.85, radius * 0.26));
                 root.add(flame);
             }
+            flameA = assetFactory.createParticleAsset('fire', { color: 0xff6d2d });
+            if (flameA) {
+                flameA.position.set(radius * 0.24, 0.12, -radius * 0.18);
+                flameA.scale.set(Math.max(0.5, radius * 0.16), Math.max(0.65, radius * 0.2), Math.max(0.5, radius * 0.16));
+                root.add(flameA);
+            }
+            flameB = assetFactory.createParticleAsset('fire', { color: 0xffc45d });
+            if (flameB) {
+                flameB.position.set(-radius * 0.2, 0.1, radius * 0.2);
+                flameB.scale.set(Math.max(0.42, radius * 0.14), Math.max(0.56, radius * 0.18), Math.max(0.42, radius * 0.14));
+                root.add(flameB);
+            }
+            smoke = assetFactory.createParticleAsset('smoke', { color: 0x3a3a3a });
+            if (smoke) {
+                smoke.position.y = 0.65;
+                smoke.scale.set(Math.max(0.72, radius * 0.22), Math.max(0.92, radius * 0.28), Math.max(0.72, radius * 0.22));
+                root.add(smoke);
+            }
         }
 
         root.userData.zoneParts = {
             disk: disk,
+            innerDisk: innerDisk,
             ring: ring,
-            flame: flame
+            ringOuter: ringOuter,
+            flame: flame,
+            flameA: flameA,
+            flameB: flameB,
+            smoke: smoke
         };
         return root;
     }
@@ -753,6 +878,136 @@
         return (groundHit.distance <= rayHit.distance) ? groundHit : rayHit;
     }
 
+    function findPlasmaCatchCandidate(start, end, maxDistance, catchRadius, trackedEnemy) {
+        var radius = Math.max(0.05, Number(catchRadius || 0));
+        if (radius <= 0.05) return null;
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
+        if (!enemies || !enemies.length) return null;
+
+        var best = null;
+        var bestDistance = isFinite(maxDistance) ? Number(maxDistance) : Infinity;
+
+        for (var i = 0; i < enemies.length; i++) {
+            var enemy = enemies[i];
+            if (!enemy || !enemy.alive) continue;
+            if (trackedEnemy && enemy !== trackedEnemy) continue;
+
+            var hitboxes = [];
+            if (enemy.bodyHitbox) hitboxes.push(enemy.bodyHitbox);
+            if (enemy.headHitbox) hitboxes.push(enemy.headHitbox);
+            if (!hitboxes.length) continue;
+
+            for (var h = 0; h < hitboxes.length; h++) {
+                var hitbox = hitboxes[h];
+                var distanceAlong = segmentIntersectsExpandedHitbox(start, end, hitbox, radius, tmpClosestPoint);
+                if (distanceAlong == null || distanceAlong >= bestDistance) continue;
+                bestDistance = distanceAlong;
+                best = {
+                    enemy: enemy,
+                    hitbox: hitbox,
+                    point: tmpClosestPoint.clone(),
+                    distance: distanceAlong
+                };
+            }
+        }
+
+        return best;
+    }
+
+    function stickPlasmaProjectile(projectile, point, enemy, def) {
+        if (!projectile || !point) return;
+        projectile.mesh.position.copy(point);
+        projectile.velocity.set(0, 0, 0);
+        projectile.stickyUntil = projectile.age + plasmaFuseDelay(def);
+        projectile.stuckEnemy = enemy || null;
+        projectile.trackingEnemy = null;
+        projectile.trackingHitbox = null;
+        projectile.trackingUntil = 0;
+        projectile.stuckOffset.set(0, 0, 0);
+        if (projectile.stuckEnemy && projectile.stuckEnemy.group && projectile.stuckEnemy.group.position) {
+            projectile.stuckOffset.copy(point).sub(projectile.stuckEnemy.group.position);
+        }
+        spawnFlash(point, 0xffb347, 0.08, 0.08);
+    }
+
+    function hitboxHalfExtents(hitbox) {
+        if (!hitbox || !hitbox.geometry || !hitbox.geometry.parameters) return null;
+        var params = hitbox.geometry.parameters;
+        var scale = hitbox.scale || null;
+        return {
+            x: Math.abs(Number(params.width || 0) * Number(scale && scale.x != null ? scale.x : 1) * 0.5),
+            y: Math.abs(Number(params.height || 0) * Number(scale && scale.y != null ? scale.y : 1) * 0.5),
+            z: Math.abs(Number(params.depth || 0) * Number(scale && scale.z != null ? scale.z : 1) * 0.5)
+        };
+    }
+
+    function segmentIntersectsExpandedHitbox(start, end, hitbox, expandRadius, outPoint) {
+        if (!hitbox || !hitbox.position) return null;
+        var half = hitboxHalfExtents(hitbox);
+        if (!half) return null;
+
+        tmpSegmentVec.copy(end).sub(start);
+        var segmentLength = tmpSegmentVec.length();
+        if (segmentLength <= 0.000001) return null;
+        tmpSegmentDir.copy(tmpSegmentVec).divideScalar(segmentLength);
+
+        var radius = Math.max(0, Number(expandRadius || 0));
+        tmpBoxCenter.copy(hitbox.position);
+        tmpBoxSize.set(
+            (half.x + radius) * 2,
+            (half.y + radius) * 2,
+            (half.z + radius) * 2
+        );
+        tmpBox.setFromCenterAndSize(tmpBoxCenter, tmpBoxSize);
+        tmpRay.set(start, tmpSegmentDir);
+        var point = tmpRay.intersectBox(tmpBox, outPoint || tmpClosestPoint);
+        if (!point) return null;
+        var dist = point.distanceTo(start);
+        if (dist > (segmentLength + 0.0001)) return null;
+        return dist;
+    }
+
+    function beginPlasmaTracking(projectile, candidate, def) {
+        if (!projectile || !candidate || !candidate.enemy) return;
+        projectile.trackingEnemy = candidate.enemy;
+        projectile.trackingHitbox = candidate.hitbox || null;
+        projectile.trackingUntil = projectile.age + Math.max(0.05, Number(def && def.trackDuration || 0.2));
+    }
+
+    function resolvePlasmaTrackingPoint(projectile) {
+        if (!projectile || !projectile.trackingEnemy || projectile.trackingEnemy.alive === false) return null;
+        var hitbox = projectile.trackingHitbox || projectile.trackingEnemy.bodyHitbox || null;
+        if (hitbox && hitbox.position) return hitbox.position;
+        if (projectile.trackingEnemy.group && projectile.trackingEnemy.group.position) {
+            tmpEnemyCenter.copy(projectile.trackingEnemy.group.position);
+            tmpEnemyCenter.y += 1.05;
+            return tmpEnemyCenter;
+        }
+        return null;
+    }
+
+    function updatePlasmaTracking(projectile, def, dt) {
+        if (!projectile || !def) return;
+        if (!projectile.trackingEnemy || projectile.trackingUntil <= projectile.age) {
+            projectile.trackingEnemy = null;
+            projectile.trackingHitbox = null;
+            projectile.trackingUntil = 0;
+            return;
+        }
+        var targetPoint = resolvePlasmaTrackingPoint(projectile);
+        if (!targetPoint) {
+            projectile.trackingEnemy = null;
+            projectile.trackingHitbox = null;
+            projectile.trackingUntil = 0;
+            return;
+        }
+        var speed = Math.max(Number(def.speed || 0), projectile.velocity.length());
+        tmpDesiredVelocity.copy(targetPoint).sub(projectile.mesh.position);
+        if (tmpDesiredVelocity.lengthSq() <= 0.000001) return;
+        tmpDesiredVelocity.normalize().multiplyScalar(speed);
+        projectile.velocity.lerp(tmpDesiredVelocity, Math.min(1, Math.max(0, dt) * Math.max(0, Number(def.trackLerp || 10))));
+    }
+
     function clearTrajectoryPreview() {
         trajectoryPreview.activeType = '';
         if (trajectoryPreview.dotsNear) trajectoryPreview.dotsNear.visible = false;
@@ -866,6 +1121,9 @@
     }
 
     function previewColorsForType(type) {
+        if (type === 'plasma') {
+            return { lineNear: 0x66ddff, lineFar: 0xd6f8ff, impact: 0x66ddff };
+        }
         if (type === 'molotov') {
             return { lineNear: 0xb77730, lineFar: 0xffffff, impact: 0xff8a3d };
         }
@@ -885,6 +1143,17 @@
             }
             trajectoryPreview.areaSphere.position.copy(sim.impactPoint);
             trajectoryPreview.areaSphere.scale.set(fragRadius, fragRadius, fragRadius);
+            trajectoryPreview.areaSphere.visible = true;
+            return;
+        }
+
+        if (type === 'plasma') {
+            var catchRadius = Math.max(0.2, Number(defs.plasma && defs.plasma.catchRadius || throwableDistanceTuning.plasmaCatchRadius || 0));
+            if (trajectoryPreview.areaSphere.material && trajectoryPreview.areaSphere.material.color) {
+                trajectoryPreview.areaSphere.material.color.setHex(previewColors.impact);
+            }
+            trajectoryPreview.areaSphere.position.copy(sim.impactPoint);
+            trajectoryPreview.areaSphere.scale.set(catchRadius, catchRadius, catchRadius);
             trajectoryPreview.areaSphere.visible = true;
             return;
         }
@@ -926,6 +1195,7 @@
     function previewLifetimeForType(type, def) {
         if (!def) return 2.2;
         if (type === 'knife') return Math.max(0.2, Number(def.life || 1.8));
+        if (type === 'plasma') return plasmaMaxLife(def);
         if (typeof def.fuse === 'number') return Math.max(0.2, Number(def.fuse));
         if (typeof def.life === 'number') return Math.max(0.2, Number(def.life));
         return 2.2;
@@ -1133,8 +1403,9 @@
 
     function createFireZone(position) {
         if (!sceneRef) return;
+        var def = defs.molotov || {};
 
-        var fireMesh = buildFireZoneMesh(defs.molotov.fireRadius);
+        var fireMesh = buildFireZoneMesh(def.fireRadius);
         var groundY = Number(position && position.y || 0);
         fireMesh.position.set(position.x, groundY + 0.04, position.z);
         sceneRef.add(fireMesh);
@@ -1142,37 +1413,82 @@
         fireZones.push({
             mesh: fireMesh,
             center: new THREE.Vector3(position.x, groundY, position.z),
-            radius: defs.molotov.fireRadius,
-            life: defs.molotov.fireDuration,
-            maxLife: defs.molotov.fireDuration,
+            radius: def.fireRadius,
+            innerRadius: molotovInnerRadius(def),
+            life: def.fireDuration,
+            maxLife: def.fireDuration,
             tickTimer: 0
         });
 
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireIgnite');
+            globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireBurning');
         }
-        spawnExplosionBurst(position, effectPaletteForProjectileType('molotov').explosion, defs.molotov.fireRadius || 3.2);
+        fireAudioPulseTimer = 0.9;
+        spawnExplosionBurst(position, effectPaletteForProjectileType('molotov').explosion, def.fireRadius || 3.2);
     }
 
     function updateFireZoneVisual(zone, now, lifeRatio) {
         if (!zone || !zone.mesh || !zone.mesh.userData || !zone.mesh.userData.zoneParts) return;
         var parts = zone.mesh.userData.zoneParts;
-        var pulse = 0.88 + (Math.sin((Number(now || 0) * 0.008) + zone.radius) * 0.12);
+        var stamp = Number(now || 0);
+        var pulse = 0.88 + (Math.sin((stamp * 0.008) + zone.radius) * 0.12);
         var lifeBlend = Math.max(0.25, Math.min(1, Number(lifeRatio || 1)));
         if (parts.disk && parts.disk.material) {
-            parts.disk.material.opacity = 0.22 + (lifeBlend * 0.24);
-            parts.disk.scale.set(0.98 + (pulse * 0.04), 1, 0.98 + (pulse * 0.04));
+            parts.disk.material.opacity = 0.14 + (lifeBlend * 0.2);
+            parts.disk.scale.set(0.96 + (pulse * 0.06), 1, 0.96 + (pulse * 0.06));
+        }
+        if (parts.innerDisk && parts.innerDisk.material) {
+            parts.innerDisk.material.opacity = 0.16 + (lifeBlend * 0.18);
+            parts.innerDisk.scale.set(0.94 + (pulse * 0.08), 1, 0.94 + (pulse * 0.08));
         }
         if (parts.ring && parts.ring.material) {
-            parts.ring.material.opacity = 0.12 + (lifeBlend * 0.18);
-            parts.ring.scale.set(0.94 + (pulse * 0.14), 0.94 + (pulse * 0.14), 1);
-            parts.ring.rotation.z = Math.sin(Number(now || 0) * 0.0018) * 0.18;
+            parts.ring.material.opacity = 0.1 + (lifeBlend * 0.2);
+            parts.ring.scale.set(0.9 + (pulse * 0.16), 0.9 + (pulse * 0.16), 1);
+            parts.ring.rotation.z = Math.sin(stamp * 0.0018) * 0.18;
+        }
+        if (parts.ringOuter && parts.ringOuter.material) {
+            parts.ringOuter.material.opacity = 0.06 + (lifeBlend * 0.1);
+            parts.ringOuter.scale.set(0.94 + (pulse * 0.22), 0.94 + (pulse * 0.22), 1);
+            parts.ringOuter.rotation.z = Math.cos(stamp * 0.0013) * -0.22;
         }
         if (parts.flame) {
             parts.flame.scale.set(
-                Math.max(0.85, zone.radius * (0.22 + (pulse * 0.05))),
-                Math.max(0.95, zone.radius * (0.3 + (pulse * 0.08))),
-                Math.max(0.85, zone.radius * (0.22 + (pulse * 0.05)))
+                Math.max(0.9, zone.radius * (0.24 + (pulse * 0.05))),
+                Math.max(1.0, zone.radius * (0.34 + (pulse * 0.1))),
+                Math.max(0.9, zone.radius * (0.24 + (pulse * 0.05)))
+            );
+        }
+        if (parts.flameA) {
+            parts.flameA.position.set(
+                zone.radius * (0.2 + Math.sin(stamp * 0.0022) * 0.05),
+                0.12 + (Math.sin(stamp * 0.006) * 0.03),
+                -zone.radius * (0.16 + Math.cos(stamp * 0.0018) * 0.04)
+            );
+            parts.flameA.scale.set(
+                Math.max(0.45, zone.radius * (0.15 + pulse * 0.03)),
+                Math.max(0.56, zone.radius * (0.19 + pulse * 0.04)),
+                Math.max(0.45, zone.radius * (0.15 + pulse * 0.03))
+            );
+        }
+        if (parts.flameB) {
+            parts.flameB.position.set(
+                -zone.radius * (0.18 + Math.cos(stamp * 0.0024) * 0.05),
+                0.11 + (Math.cos(stamp * 0.0052) * 0.025),
+                zone.radius * (0.18 + Math.sin(stamp * 0.0019) * 0.04)
+            );
+            parts.flameB.scale.set(
+                Math.max(0.4, zone.radius * (0.13 + pulse * 0.025)),
+                Math.max(0.5, zone.radius * (0.16 + pulse * 0.035)),
+                Math.max(0.4, zone.radius * (0.13 + pulse * 0.025))
+            );
+        }
+        if (parts.smoke) {
+            parts.smoke.position.y = 0.62 + (Math.sin(stamp * 0.0024) * 0.06);
+            parts.smoke.scale.set(
+                Math.max(0.7, zone.radius * (0.2 + pulse * 0.03)),
+                Math.max(0.92, zone.radius * (0.28 + pulse * 0.04)),
+                Math.max(0.7, zone.radius * (0.2 + pulse * 0.03))
             );
         }
     }
@@ -1223,12 +1539,51 @@
         return true;
     }
 
+    function resolveNetStickyTargetPosition(targetId, outVec3) {
+        var id = String(targetId || '');
+        if (!id) return null;
+        var out = outVec3 || new THREE.Vector3();
+        var netApi = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+        var selfState = netApi && netApi.getAuthoritativeSelfState ? netApi.getAuthoritativeSelfState() : null;
+        if (selfState && id === String(selfState.id || '')) {
+            var playerApi = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+            var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition() : null;
+            if (!selfPos) return null;
+            out.set(
+                Number(selfPos.x || 0),
+                Number(selfPos.y || 0) - Number(entityConstants.EYE_HEIGHT || 1.6) + 1.0,
+                Number(selfPos.z || 0)
+            );
+            return out;
+        }
+        var remoteApi = globalThis.__MAYHEM_RUNTIME.GameNetEntities || null;
+        var render = remoteApi && remoteApi.getRenderMap ? remoteApi.getRenderMap().get(id) : null;
+        if (!render || !render.group) return null;
+        out.set(
+            Number(render.group.position.x || 0),
+            Number(render.group.position.y || 0) + 1.0,
+            Number(render.group.position.z || 0)
+        );
+        return out;
+    }
+
     function updateNetProjectiles(dt) {
         for (var key in netProjectileMap) {
             if (!Object.prototype.hasOwnProperty.call(netProjectileMap, key)) continue;
             var entry = netProjectileMap[key];
             if (!entry || !entry.mesh || !entry.targetPosition) continue;
-            if (!entry.seeded) {
+            if (entry.stickyUntil > 0 && entry.stuckToTargetId) {
+                var stickyTarget = resolveNetStickyTargetPosition(entry.stuckToTargetId, tmpStickyAnchor);
+                if (stickyTarget) {
+                    entry.mesh.position.copy(stickyTarget).add(entry.stuckOffset || tmpNetVec.set(0, 0, 0));
+                    entry.seeded = true;
+                } else if (!entry.seeded) {
+                    entry.mesh.position.copy(entry.targetPosition);
+                    entry.seeded = true;
+                } else {
+                    entry.mesh.position.lerp(entry.targetPosition, Math.min(1, Math.max(0.12, dt * 18)));
+                }
+            } else if (!entry.seeded) {
                 entry.mesh.position.copy(entry.targetPosition);
                 entry.seeded = true;
             } else {
@@ -1263,7 +1618,11 @@
             return;
         }
 
-        var isTrackingProjectile = (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream');
+        if (p.type === 'plasma') {
+            updatePlasmaTracking(p, def, dt);
+        }
+
+        var isTrackingProjectile = (p.type === 'missile' || p.type === 'plasma_stream');
         if (isTrackingProjectile && p.age > 0.03) {
             var targetEnemy = null;
             var targetPoint = null;
@@ -1333,6 +1692,20 @@
         tmpEnd.copy(p.mesh.position).addScaledVector(p.velocity, dt);
 
         var hit = segmentCollision(tmpStart, tmpEnd);
+        if (p.type === 'plasma') {
+            if (!p.trackingEnemy) {
+                var catchHit = findPlasmaCatchCandidate(
+                    tmpStart,
+                    tmpEnd,
+                    hit ? Number(hit.distance || 0) : Infinity,
+                    def.catchRadius || throwableDistanceTuning.plasmaCatchRadius || 0,
+                    null
+                );
+                if (catchHit) {
+                    beginPlasmaTracking(p, catchHit, def);
+                }
+            }
+        }
         if (hit) {
             if (hit.kind === 'enemy') {
                 if (p.type === 'knife') {
@@ -1359,15 +1732,12 @@
                 }
 
                 if (p.type === 'plasma') {
-                    p.mesh.position.copy(hit.point);
-                    p.velocity.set(0, 0, 0);
-                    p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
-                    p.stuckEnemy = hit.object && hit.object.userData ? hit.object.userData.enemyRef : null;
-                    p.stuckOffset.set(0, 0, 0);
-                    if (p.stuckEnemy && p.stuckEnemy.group && p.stuckEnemy.group.position) {
-                        p.stuckOffset.copy(hit.point).sub(p.stuckEnemy.group.position);
-                    }
-                    spawnFlash(hit.point, 0xffb347, 0.08, 0.08);
+                    stickPlasmaProjectile(
+                        p,
+                        hit.point,
+                        hit.object && hit.object.userData ? hit.object.userData.enemyRef : null,
+                        def
+                    );
                     return;
                 }
 
@@ -1405,11 +1775,7 @@
 
             if (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream') {
                 if (p.type === 'plasma') {
-                    p.mesh.position.copy(hit.point);
-                    p.velocity.set(0, 0, 0);
-                    p.stickyUntil = p.age + (def.stickExplodeDelay || 0.65);
-                    p.stuckEnemy = null;
-                    p.stuckOffset.set(0, 0, 0);
+                    stickPlasmaProjectile(p, hit.point, null, def);
                 } else if (p.type === 'plasma_stream') {
                     spawnFlash(hit.point, 0x66ddff, 0.07, 0.07);
                     removeProjectile(index);
@@ -1446,7 +1812,13 @@
             return;
         }
 
-        if ((p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream') && p.age >= def.fuse) {
+        if (p.type === 'plasma' && p.age >= plasmaMaxLife(def)) {
+            explodeAt(p.mesh.position, def.radius, def.damage, p.type, onEnemyHit);
+            removeProjectile(index);
+            return;
+        }
+
+        if ((p.type === 'missile' || p.type === 'plasma_stream') && p.age >= def.fuse) {
             if (p.type === 'plasma_stream') {
                 removeProjectile(index);
             } else {
@@ -1462,26 +1834,88 @@
         }
     }
 
+    function refreshBurningEnemy(enemy, now, def) {
+        if (!enemy) return;
+        var state = burningEnemyStates.get(enemy) || {
+            until: 0,
+            nextTickAt: 0
+        };
+        state.until = Math.max(state.until || 0, now + Math.round(molotovLingerDurationSec(def) * 1000));
+        if (!state.nextTickAt || state.nextTickAt < now) {
+            state.nextTickAt = now + Math.round(molotovLingerTickRateSec(def) * 1000);
+        }
+        burningEnemyStates.set(enemy, state);
+    }
+
+    function tickLingeringBurns(now, heatedEnemies, onEnemyHit) {
+        var def = defs.molotov || {};
+        var lingerRateMs = Math.max(100, Math.round(molotovLingerTickRateSec(def) * 1000));
+        var lingerDamage = molotovLingerTickDamage(def);
+        burningEnemyStates.forEach(function (state, enemy) {
+            if (!enemy || !enemy.alive || !state) {
+                burningEnemyStates.delete(enemy);
+                return;
+            }
+            if ((state.until || 0) <= now) {
+                burningEnemyStates.delete(enemy);
+                return;
+            }
+            if (heatedEnemies.has(enemy)) return;
+            if ((state.nextTickAt || 0) > now) return;
+            state.nextTickAt = now + lingerRateMs;
+            var hitbox = enemy.bodyHitbox || null;
+            if (!hitbox) return;
+            var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hitbox, lingerDamage);
+            reportHit(
+                onEnemyHit,
+                hitbox.position,
+                lingerDamage,
+                'body',
+                result,
+                'molotov',
+                { burnLinger: true }
+            );
+        });
+    }
+
     function updateFireZones(dt, onEnemyHit) {
+        var now = Date.now();
+        var def = defs.molotov || {};
+        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
+        var heatedEnemies = new Set();
+
         for (var i = fireZones.length - 1; i >= 0; i--) {
             var z = fireZones[i];
             z.life -= dt;
             z.tickTimer -= dt;
-            updateFireZoneVisual(z, Date.now(), z.maxLife > 0 ? (z.life / z.maxLife) : 1);
+            updateFireZoneVisual(z, now, z.maxLife > 0 ? (z.life / z.maxLife) : 1);
+
+            for (var scan = 0; scan < enemies.length; scan++) {
+                var scanEnemy = enemies[scan];
+                if (!scanEnemy || !scanEnemy.alive || !scanEnemy.group || !scanEnemy.bodyHitbox) continue;
+                var heightDelta = Math.abs(Number(scanEnemy.bodyHitbox.position.y || 0) - Number(z.center.y || 0));
+                if (heightDelta > molotovMaxHeightDelta(def)) continue;
+                var scanDx = scanEnemy.group.position.x - z.center.x;
+                var scanDz = scanEnemy.group.position.z - z.center.z;
+                var scanDist = Math.sqrt((scanDx * scanDx) + (scanDz * scanDz));
+                if (scanDist > z.radius) continue;
+                heatedEnemies.add(scanEnemy);
+            }
 
             if (z.tickTimer <= 0) {
-                z.tickTimer += defs.molotov.fireTickRate;
-                var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
+                z.tickTimer += Math.max(0.1, Number(def.fireTickRate || 0.35));
                 for (var j = 0; j < enemies.length; j++) {
                     var enemy = enemies[j];
-                    if (!enemy || !enemy.alive) continue;
+                    if (!enemy || !enemy.alive || !enemy.group || !enemy.bodyHitbox) continue;
 
                     var dx = enemy.group.position.x - z.center.x;
                     var dz = enemy.group.position.z - z.center.z;
                     var d = Math.sqrt((dx * dx) + (dz * dz));
                     if (d > z.radius) continue;
+                    var verticalDelta = Math.abs(Number(enemy.bodyHitbox.position.y || 0) - Number(z.center.y || 0));
+                    if (verticalDelta > molotovMaxHeightDelta(def)) continue;
 
-                    var dmg = defs.molotov.fireTickDamage;
+                    var dmg = Math.max(2, Math.round(Number(def.fireTickDamage || 18) * molotovDamageScale(def, d, z.radius)));
                     var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(enemy.bodyHitbox, dmg);
                     reportHit(
                         onEnemyHit,
@@ -1491,6 +1925,7 @@
                         result,
                         'molotov'
                     );
+                    refreshBurningEnemy(enemy, now, def);
                 }
             }
 
@@ -1498,6 +1933,18 @@
                 if (z.mesh && z.mesh.parent) z.mesh.parent.remove(z.mesh);
                 fireZones.splice(i, 1);
             }
+        }
+
+        tickLingeringBurns(now, heatedEnemies, onEnemyHit);
+
+        if (fireZones.length > 0) {
+            fireAudioPulseTimer -= dt;
+            if (fireAudioPulseTimer <= 0 && globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
+                globalThis.__MAYHEM_RUNTIME.GameAudio.play('fireBurning');
+                fireAudioPulseTimer = 1.1;
+            }
+        } else {
+            fireAudioPulseTimer = 0;
         }
     }
 
@@ -1575,6 +2022,8 @@
         netProjectileMap = {};
         netFireZoneMap = {};
         predictedByClientId = {};
+        burningEnemyStates = new Map();
+        fireAudioPulseTimer = 0;
         localThrowSeq = 1;
         debugTelemetry.lastIntent = null;
         debugTelemetry.lastAckClientThrowId = '';
@@ -1601,8 +2050,13 @@
                 upward: def.upward,
                 gravity: def.gravity,
                 fuse: def.fuse,
+                maxLife: def.maxLife,
                 radius: def.radius,
+                catchRadius: def.catchRadius,
+                trackDuration: def.trackDuration,
+                trackLerp: def.trackLerp,
                 damage: def.damage,
+                stickExplodeDelay: def.stickExplodeDelay,
                 fireRadius: def.fireRadius,
                 fireDuration: def.fireDuration,
                 fireTickDamage: def.fireTickDamage,
@@ -1630,6 +2084,43 @@
             homingBoost: def.homingBoost || 0,
             homingLerp: def.homingLerp || 0,
             lockHalfAngleDeg: def.lockHalfAngleDeg || 0
+        };
+    };
+
+    GameThrowables.getPlasmaDebugState = function (camera) {
+        var def = defs.plasma;
+        if (!camera || !def) return null;
+        var intent = buildThrowIntent(camera);
+        if (!intent) return null;
+        var sim = simulateTrajectory('plasma', intent);
+        var referencePoint = sim && sim.impactPoint
+            ? sim.impactPoint
+            : (intent.aimPoint || null);
+        return {
+            catchRadius: Math.max(0, Number(def.catchRadius || throwableDistanceTuning.plasmaCatchRadius || 0)),
+            fuseSec: plasmaFuseDelay(def),
+            trackDuration: Math.max(0, Number(def.trackDuration || 0)),
+            trackLerp: Math.max(0, Number(def.trackLerp || 0)),
+            curveStrength: Math.max(0, Math.min(1, 1 - Math.exp(-(Math.max(0, Number(def.trackLerp || 0)) * Math.max(0, Number(def.trackDuration || 0)))))),
+            referenceDistance: referencePoint
+                ? Math.max(0.1, referencePoint.distanceTo(camera.position))
+                : Math.max(0.1, Number(throwableDistanceTuning.plasmaAcquireRange || 18))
+        };
+    };
+
+    GameThrowables.getDebugState = function (camera) {
+        var selectedId = String(selectedThrowableId || '');
+        var def = defs[selectedId] || null;
+        var inv = inventory[selectedId] || null;
+        var previewType = GameThrowables.getPreviewType(selectedId);
+        return {
+            selectedThrowableId: selectedId,
+            label: def && def.label ? String(def.label) : selectedId.toUpperCase(),
+            previewType: previewType,
+            charges: inv ? Math.max(0, Number(inv.charges || 0)) : 0,
+            cooldownRemaining: inv ? Math.max(0, Number(inv.cooldownRemaining || 0)) : 0,
+            telemetry: GameThrowables.getDebugTelemetry(),
+            plasma: selectedId === 'plasma' ? GameThrowables.getPlasmaDebugState(camera) : null
         };
     };
 
@@ -1815,6 +2306,7 @@
                     type: p.type,
                     velocity: new THREE.Vector3(),
                     targetPosition: new THREE.Vector3(),
+                    stuckOffset: new THREE.Vector3(),
                     age: 0,
                     seeded: false
                 };
@@ -1823,6 +2315,13 @@
             entry.targetPosition.set(Number(p.x || 0), Number(p.y || 0), Number(p.z || 0));
             entry.velocity.set(Number(p.vx || 0), Number(p.vy || 0), Number(p.vz || 0));
             entry.age = Math.max(0, Number(p.age || 0));
+            entry.stickyUntil = Number(p.stickyUntil || 0);
+            entry.stuckToTargetId = String(p.stuckToTargetId || '');
+            entry.stuckOffset.set(
+                Number(p.stuckOffsetX || 0),
+                Number(p.stuckOffsetY || 0),
+                Number(p.stuckOffsetZ || 0)
+            );
             if (!entry.seeded) {
                 entry.mesh.position.copy(entry.targetPosition);
                 entry.seeded = true;
@@ -1904,8 +2403,7 @@
             ? muzzle.clone().addScaledVector(tmpForward, 0.1)
             : camera.position.clone().addScaledVector(tmpForward, 0.75);
         var intent = buildThrowIntent(camera, {
-            origin: origin,
-            direction: tmpForward.clone()
+            origin: origin
         });
         if (!intent) return false;
 
@@ -1923,8 +2421,6 @@
         if (shouldPredict) {
             var ok = spawnProjectile(projectileType, camera, {
                 intent: intent,
-                origin: origin,
-                direction: tmpForward.clone(),
                 predicted: true,
                 clientThrowId: 'missile-' + Date.now().toString(36) + '-' + (localThrowSeq++).toString(36)
             });

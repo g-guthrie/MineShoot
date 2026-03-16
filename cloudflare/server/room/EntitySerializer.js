@@ -170,7 +170,12 @@ export function toProjectileState(projectile) {
     vx: Number(projectile.vx.toFixed(3)),
     vy: Number(projectile.vy.toFixed(3)),
     vz: Number(projectile.vz.toFixed(3)),
-    age: Number(projectile.age.toFixed(3))
+    age: Number(projectile.age.toFixed(3)),
+    stickyUntil: Number(projectile.stickyUntil || 0),
+    stuckToTargetId: projectile.stuckToTargetId || '',
+    stuckOffsetX: Number(projectile.stuckOffsetX || 0),
+    stuckOffsetY: Number(projectile.stuckOffsetY || 0),
+    stuckOffsetZ: Number(projectile.stuckOffsetZ || 0)
   };
 }
 

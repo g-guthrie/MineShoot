@@ -25,7 +25,7 @@ class FakeElement {
   }
 }
 
-async function loadMenuShell(toggleDocs) {
+async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/app/menu-shell.js', import.meta.url), 'utf8');
   const elements = {
     'open-manual-btn': new FakeElement('button', 'open-manual-btn'),
@@ -67,7 +67,8 @@ async function loadMenuShell(toggleDocs) {
       __MAYHEM_RUNTIME: {
         GameRuntimeLoader: {
           toggleDocs
-        }
+        },
+        ...runtimeOverrides
       }
     },
     window: windowObj,
@@ -111,6 +112,47 @@ test('menu docs shortcut ignores typing in editable fields but still works elsew
   let prevented = false;
   harness.dispatchKeydown({
     code: 'KeyI',
+    target: new FakeElement('div', 'menu-shell'),
+    currentTarget: null,
+    preventDefault() {
+      prevented = true;
+    },
+    stopPropagation() {}
+  });
+
+  assert.equal(toggleCount, 1);
+  assert.equal(prevented, true);
+});
+
+test('menu docs shortcut respects a remapped manual key when input bindings are available', async () => {
+  let toggleCount = 0;
+  const harness = await loadMenuShell(function () {
+    toggleCount += 1;
+  }, {
+    GameInputBindings: {
+      matches(actionId, event) {
+        return actionId === 'open_manual' && event && event.code === 'KeyJ';
+      }
+    }
+  });
+
+  harness.dispatchKeydown({
+    code: 'KeyI',
+    target: new FakeElement('div', 'menu-shell'),
+    currentTarget: null,
+    preventDefault() {
+      throw new Error('preventDefault should not fire for the old key');
+    },
+    stopPropagation() {
+      throw new Error('stopPropagation should not fire for the old key');
+    }
+  });
+
+  assert.equal(toggleCount, 0);
+
+  let prevented = false;
+  harness.dispatchKeydown({
+    code: 'KeyJ',
     target: new FakeElement('div', 'menu-shell'),
     currentTarget: null,
     preventDefault() {

@@ -27,10 +27,10 @@ North
 South
 ```
 
-Relevant authored biome bounds use `quadrantBounds(..., 6)`:
+Relevant biome bounds now use the full cell footprint from `quadrantBounds(...)`:
 
-- Desert: `x:[116,158] z:[8,50]`
-- Basin: `x:[62,104] z:[116,158]`
+- Desert: `x:[110,164] z:[2,56]`
+- Basin: `x:[56,110] z:[110,164]`
 - Hidden perimeter walls sit just outside the playable span:
   - north wall near `z:2`
   - south wall near `z:164`

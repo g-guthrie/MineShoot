@@ -90,6 +90,7 @@ export function selectSeekTarget(options) {
   const candidates = Array.isArray(cfg.candidates) ? cfg.candidates : [];
   const hasWorldLos = typeof cfg.hasWorldLos === 'function' ? cfg.hasWorldLos : null;
   const projectToNdc = typeof cfg.projectToNdc === 'function' ? cfg.projectToNdc : null;
+  const preferScreenCenter = !!cfg.preferScreenCenter;
   const boxSizePx = Number(cfg.boxSizePx || 0);
   const boxWidthPx = Number(cfg.boxWidthPx || boxSizePx || 0);
   const boxHeightPx = Number(cfg.boxHeightPx || boxSizePx || 0);
@@ -139,16 +140,27 @@ export function selectSeekTarget(options) {
 
     if (hasWorldLos && !hasWorldLos(targetPos, dirDist.distance)) continue;
 
-    if (dirDist.distance < selectedDistance) {
+    let candidateNorm = Infinity;
+    if (projection && halfNdcX > EPS && halfNdcY > EPS) {
+      const sx = projection.x / halfNdcX;
+      const sy = projection.y / halfNdcY;
+      candidateNorm = Math.sqrt((sx * sx) + (sy * sy));
+    }
+
+    const shouldReplace = preferScreenCenter
+      ? (
+        candidateNorm < selectedNorm - EPS ||
+        (
+          Math.abs(candidateNorm - selectedNorm) <= EPS &&
+          dirDist.distance < selectedDistance
+        )
+      )
+      : (dirDist.distance < selectedDistance);
+
+    if (shouldReplace) {
       selected = candidate;
       selectedDistance = dirDist.distance;
-      if (projection && halfNdcX > EPS && halfNdcY > EPS) {
-        const sx = projection.x / halfNdcX;
-        const sy = projection.y / halfNdcY;
-        selectedNorm = Math.sqrt((sx * sx) + (sy * sy));
-      } else {
-        selectedNorm = Infinity;
-      }
+      selectedNorm = candidateNorm;
     }
   }
 

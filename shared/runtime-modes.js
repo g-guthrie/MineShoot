@@ -16,9 +16,9 @@ const RUNTIME_MODE_DEFS = {
   },
   single_cloudflare: {
     id: 'single_cloudflare',
-    label: 'Solo Cloudflare (Bots)',
-    menuTitle: 'SOLO CLOUDFLARE (BOTS)',
-    menuDesc: 'Private Cloudflare test room with bots enabled.',
+    label: 'Private Cloudflare Room',
+    menuTitle: 'PRIVATE CLOUDFLARE',
+    menuDesc: 'Private Cloudflare room for invite and room-code testing.',
     backendKind: 'cloudflare-prod',
     backendLabel: 'CLOUDFLARE PROD',
     authorityMode: 'networked',
@@ -31,9 +31,9 @@ const RUNTIME_MODE_DEFS = {
   },
   single_dev_server: {
     id: 'single_dev_server',
-    label: 'Local Dev Room (Bots)',
-    menuTitle: 'LOCAL DEV ROOM (BOTS)',
-    menuDesc: 'Shared local Wrangler room with bots enabled.',
+    label: 'Local Multiplayer',
+    menuTitle: 'LOCAL MULTIPLAYER',
+    menuDesc: 'Shared local Wrangler room for multi-tab multiplayer testing.',
     backendKind: 'local-worker',
     backendLabel: 'LOCAL WORKER',
     authorityMode: 'networked',
@@ -84,12 +84,20 @@ function allRuntimeModes() {
   return Object.keys(RUNTIME_MODE_DEFS).map((modeId) => cloneRuntimeMode(RUNTIME_MODE_DEFS[modeId]));
 }
 
+function canonicalRuntimeModeId(modeId) {
+  const normalized = String(modeId || '').trim().toLowerCase();
+  if (normalized === 'cloud_single') return 'single_cloudflare';
+  if (normalized === 'dev_server' || normalized === 'singleplayer_server' || normalized === 'local_multiplayer') return 'single_dev_server';
+  if (normalized === 'sandbox' || normalized === 'singleplayer_local') return 'single_full_sandbox';
+  return normalized;
+}
+
 export function getRuntimeModeCatalog() {
   return allRuntimeModes();
 }
 
 export function getRuntimeMode(modeId) {
-  const normalized = String(modeId || '').trim().toLowerCase();
+  const normalized = canonicalRuntimeModeId(modeId);
   return cloneRuntimeMode(RUNTIME_MODE_DEFS[normalized] || null);
 }
 
@@ -98,7 +106,7 @@ export function getDefaultRuntimeModeId() {
 }
 
 export function normalizeRuntimeModeId(modeId) {
-  const normalized = String(modeId || '').trim().toLowerCase();
+  const normalized = canonicalRuntimeModeId(modeId);
   return RUNTIME_MODE_DEFS[normalized] ? normalized : getDefaultRuntimeModeId();
 }
 

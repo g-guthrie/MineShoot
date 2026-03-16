@@ -27,6 +27,49 @@
         selectedThrowableId: ''
     };
 
+    function inputBindingsApi() {
+        return runtime.GameInputBindings || null;
+    }
+
+    function bindingLabel(actionId, fallbackLabel) {
+        var bindingsApi = inputBindingsApi();
+        if (bindingsApi && bindingsApi.getDisplayLabel) {
+            return bindingsApi.getDisplayLabel(actionId);
+        }
+        return String(fallbackLabel || '--');
+    }
+
+    function bindingCombo(actionIds, fallbackLabels) {
+        var ids = Array.isArray(actionIds) ? actionIds : [];
+        var fallbacks = Array.isArray(fallbackLabels) ? fallbackLabels : [];
+        var labels = [];
+        for (var i = 0; i < ids.length; i++) {
+            labels.push(bindingLabel(ids[i], fallbacks[i] || '--'));
+        }
+        return labels.join(' / ');
+    }
+
+    function fixedControlRows() {
+        var bindingsApi = inputBindingsApi();
+        if (bindingsApi && bindingsApi.getFixedControls) {
+            var rows = bindingsApi.getFixedControls();
+            return rows.map(function (row) {
+                return {
+                    key: row.label,
+                    title: row.title,
+                    note: row.note
+                };
+            });
+        }
+        return [
+            { key: 'Mouse', title: 'Look', note: 'Pointer lock starts when you enter the match. Escape releases it.' },
+            { key: 'LMB', title: 'Fire', note: 'Primary fire stays on left mouse.' },
+            { key: 'RMB', title: 'ADS Mouse', note: 'Right mouse ADS stays fixed.' },
+            { key: 'Wheel', title: 'Toggle Weapon', note: 'Mouse wheel toggles between your two loadout weapons when pointer lock is active.' },
+            { key: 'Esc', title: 'Release / Close', note: 'Escape releases pointer lock and closes overlays when you are not typing.' }
+        ];
+    }
+
     var PAGES = [
         { id: 'home', label: 'BRIEFING' },
         { id: 'controls', label: 'CONTROLS' },
@@ -205,7 +248,7 @@
         automatic: 'If true, holding LMB keeps firing as long as cadence and ammo allow.',
         cooldownMs: 'Minimum delay between one shot and the next.',
         reloadMs: 'How long the weapon stays unavailable once a reload begins.',
-        magazineSize: 'Rounds loaded before the automatic reload kicks in.',
+        magazineSize: 'Rounds loaded before a manual or automatic reload starts.',
         bodyDamage: 'Damage dealt on a non-head hit before falloff scaling.',
         headDamage: 'Damage dealt on a head hit before falloff scaling.',
         pellets: 'Number of spread samples or pellets fired per trigger pull.',
@@ -290,30 +333,27 @@
         {
             title: 'Movement & Camera',
             rows: [
-                { key: 'WASD', title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
-                { key: 'Mouse', title: 'Look', note: 'Pointer lock starts when you enter the match. Escape releases it.' },
-                { key: 'E', title: 'Sprint', note: 'Sprinting wins spacing, but ADS and certain ability states will interrupt it.' },
-                { key: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
+                { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
+                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Sprinting wins spacing, but ADS and certain ability states will interrupt it.' },
+                { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
             ]
         },
         {
             title: 'Combat',
             rows: [
-                { key: 'LMB', title: 'Fire', note: 'Automatic fire only matters on the machine gun. Every other weapon is deliberate.' },
-                { key: 'RMB / Shift', title: 'ADS', note: 'Rifle tightens to zero spread in ADS. Sniper must be scoped before it can fire.' },
-                { key: '1 / 2', title: 'Swap Weapon', note: 'These map to your two menu loadout slots.' },
-                { key: 'Wheel', title: 'Cycle Weapon', note: 'Scroll cycles the two-slot loadout when pointer lock is active.' },
-                { key: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
-                { key: 'R / F', title: 'Abilities', note: 'Slot 1 is on R, slot 2 is on F. Pick any two distinct abilities from the menu.' }
+                { actionId: 'ads_key', fallbackKey: 'Alt', fixedPrefix: 'RMB / ', title: 'ADS Key', note: 'Rifle tightens to zero spread in ADS. Sniper must be scoped before it can fire.' },
+                { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload.' },
+                { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots.' },
+                { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
+                { actionIds: ['ability_1', 'ability_2'], fallbackKeys: ['E', 'F'], title: 'Abilities', note: 'Slot 1 and slot 2 can be remapped independently from the menu.' }
             ]
         },
         {
             title: 'Session',
             rows: [
-                { key: 'ENTER', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to start aiming again.' },
-                { key: 'I', title: 'Field Manual', note: 'Opens and closes this manual from both menu and gameplay.' },
-                { key: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' },
-                { key: 'Auto', title: 'Reload', note: 'Weapons reload automatically when the magazine runs dry. There is no manual reload bind.' }
+                { key: 'Menu', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to start aiming again.' },
+                { actionId: 'open_manual', fallbackKey: 'I', title: 'Field Manual', note: 'Opens and closes this manual from both menu and gameplay.' },
+                { actionId: 'toggle_debug', fallbackKey: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' }
             ]
         }
     ];
@@ -723,8 +763,17 @@
             var rows = Array.isArray(group.rows) ? group.rows : [];
             for (var r = 0; r < rows.length; r++) {
                 var row = rows[r] || {};
+                var keyLabel = String(row.key || '');
+                if (!keyLabel && Array.isArray(row.actionIds)) {
+                    keyLabel = bindingCombo(row.actionIds, row.fallbackKeys || []);
+                } else if (!keyLabel && row.actionId) {
+                    keyLabel = bindingLabel(row.actionId, row.fallbackKey || '--');
+                }
+                if (row.fixedPrefix) {
+                    keyLabel = String(row.fixedPrefix || '') + keyLabel;
+                }
                 out.push('<div class="docs-control-row">');
-                out.push('<span class="docs-kbd">' + escapeHtml(row.key || '--') + '</span>');
+                out.push('<span class="docs-kbd">' + escapeHtml(keyLabel || '--') + '</span>');
                 out.push('<div class="docs-control-copy">');
                 out.push('<span class="docs-control-title">' + escapeHtml(row.title || '') + '</span>');
                 out.push('<span class="docs-control-note">' + escapeHtml(row.note || '') + '</span>');
@@ -947,7 +996,7 @@
     function throwablePreviewLabel(throwable) {
         if (!throwable) return '--';
         if (throwable.id === 'knife') return 'Instant throw';
-        return 'Hold Q for trajectory preview';
+        return 'Hold ' + bindingLabel('throwable', 'Q') + ' for trajectory preview';
     }
 
     function formatThrowableValue(key, throwable) {
@@ -1001,7 +1050,7 @@
     function throwableStats(throwable) {
         if (!throwable) return [];
         var stats = [
-            { label: 'Preview', value: throwablePreviewLabel(throwable), note: 'Hold/release behavior on Q.' },
+            { label: 'Preview', value: throwablePreviewLabel(throwable), note: 'Hold/release behavior on ' + bindingLabel('throwable', 'Q') + '.' },
             { label: 'Speed', value: formatNumber(throwable.speed, 2), note: 'Initial launch speed.' }
         ];
         if (throwable.fuse != null) stats.push({ label: 'Fuse', value: formatSeconds(throwable.fuse), note: 'Time before detonation.' });
@@ -1026,7 +1075,7 @@
                 data.weapons.length + ' weapons',
                 data.abilities.length + ' abilities',
                 data.throwables.length + ' throwables',
-                'auto reload on empty'
+                bindingLabel('reload', 'R') + ' reload'
             ]),
             '</section>',
             '<div class="docs-grid">',
@@ -1034,20 +1083,20 @@
             '<h3>Quick Start</h3>',
             renderList([
                 'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
-                'Move with WASD, sprint with E, jump with Space, and ADS with RMB or Shift.',
-                'Fire on LMB, swap weapons on 1 / 2 or the mouse wheel, and let reloads happen automatically when a mag empties.',
-                'Use Q for the current throwable, R for ability slot 1, and F for ability slot 2.',
+                'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + bindingLabel('sprint', 'Shift') + ', jump with ' + bindingLabel('jump', 'Space') + ', and ADS with RMB or ' + bindingLabel('ads_key', 'Alt') + '.',
+                'Fire on LMB, reload on ' + bindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
+                'Use ' + bindingLabel('throwable', 'Q') + ' for the current throwable, ' + bindingLabel('ability_1', 'E') + ' for ability slot 1, and ' + bindingLabel('ability_2', 'F') + ' for ability slot 2.',
                 'Break line of sight during long cooldowns instead of forcing low-odds trades.'
             ]),
             '</section>',
             '<section class="docs-card">',
             '<h3>Current Kit</h3>',
             renderStatGrid([
-                { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key 1.' },
-                { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key 2.' },
-                { label: 'Q Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold Q for preview if supported.' },
-                { label: 'R Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
-                { label: 'F Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
+                { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + bindingLabel('weapon_slot_1', '1') + '.' },
+                { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + bindingLabel('weapon_slot_2', '2') + '.' },
+                { label: bindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + bindingLabel('throwable', 'Q') + ' for preview if supported.' },
+                { label: bindingLabel('ability_1', 'E') + ' Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
+                { label: bindingLabel('ability_2', 'F') + ' Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
             ]),
             '</section>',
             '</div>',
@@ -1070,16 +1119,24 @@
             '<div class="docs-eyebrow">Controls</div>',
             '<h2>Movement, Weapons, Abilities, Session Flow</h2>',
             '<p>The game only really feels correct once pointer lock is active. Enter the match, capture the cursor, and keep your inputs layered instead of playing one system at a time.</p>',
-            renderTagRow(['WASD', 'RMB / Shift ADS', '1 / 2 or wheel', 'Q / R / F']),
+            renderTagRow([
+                bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
+                'RMB / ' + bindingLabel('ads_key', 'Alt') + ' ADS',
+                bindingLabel('reload', 'R') + ' reload',
+                bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
+                bindingLabel('throwable', 'Q') + ' / ' + bindingLabel('ability_1', 'E') + ' / ' + bindingLabel('ability_2', 'F')
+            ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
+            renderControls([{ title: 'Fixed Controls', rows: fixedControlRows() }]),
             '<section class="docs-section">',
             '<h3>Important Notes</h3>',
             renderList([
                 'Sniper cannot fire until you are scoped in.',
-                'Grenades preview while held, but knife throws immediately on press.',
-                'Shift and RMB both toggle ADS. First jump input exits ADS before full aerial movement resumes.',
-                'The field manual is available in menu and in live gameplay on I.'
+                bindingLabel('throwable', 'Q') + ' previews grenades on hold, but knife throws immediately on press.',
+                bindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
+                bindingLabel('ads_key', 'Alt') + ' and RMB both toggle ADS. Jumping no longer cancels ADS, so you stay aimed through the full jump.',
+                'The field manual is available in menu and in live gameplay on ' + bindingLabel('open_manual', 'I') + '.'
             ]),
             '</section>',
             '</div>'
@@ -1123,8 +1180,8 @@
             '<h3>Live Combat Values</h3>',
             renderStatGrid([
                 { label: 'Body / Head', value: formatNumber(weapon.bodyDamage, 0) + ' / ' + formatNumber(weapon.headDamage, 0), note: 'Base damage before falloff.' },
-                { label: 'Magazine', value: formatNumber(weapon.magazineSize, 0), note: 'Rounds before auto reload.' },
-                { label: 'Reload', value: formatMs(weapon.reloadMs), note: 'Forced downtime on empty.' },
+                { label: 'Magazine', value: formatNumber(weapon.magazineSize, 0), note: 'Rounds before you need to reload.' },
+                { label: 'Reload', value: formatMs(weapon.reloadMs), note: 'Forced downtime once a reload begins.' },
                 { label: 'Cadence', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
                 { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.singleHitFromPellets ? 'Single winning sample only.' : 'All pellets may connect.' },
                 { label: 'Spread H / A', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Hipfire versus ADS spread radius.' },
@@ -1163,7 +1220,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || ability.description || 'No mechanics note.',
-                'Menu binding: slot 1 fires on R, slot 2 fires on F.',
+                'Menu binding: slot 1 fires on ' + bindingLabel('ability_1', 'E') + ', slot 2 fires on ' + bindingLabel('ability_2', 'F') + '.',
                 ability.debugSummary || 'No extra debug summary.'
             ].concat(briefing.tips || [])),
             '</section>',
@@ -1199,7 +1256,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || 'Throwable profile.',
-                'Throw input is always Q. Preview behavior depends on the selected item.'
+                'Throw input is on ' + bindingLabel('throwable', 'Q') + '. Preview behavior depends on the selected item.'
             ].concat(briefing.tips || [])),
             '</section>',
             '<section class="docs-card">',
@@ -1404,7 +1461,7 @@
             hintEl.textContent = 'Use this page as the glossary, then drill into a specific weapon profile for live values and role notes.';
             return;
         }
-        hintEl.textContent = 'Press I to open or close the field manual at any time.';
+        hintEl.textContent = 'Press ' + bindingLabel('open_manual', 'I') + ' to open or close the field manual at any time.';
     }
 
     function render() {
@@ -1471,10 +1528,17 @@
         });
 
         if (runtime.GameModalManager && runtime.GameModalManager.register) {
+            var utilityToggleBtn = document.getElementById('utility-toggle-btn');
             runtime.GameModalManager.register('docs', {
                 element: panelEl,
                 initialFocus: closeBtnEl || panelEl,
-                restoreFocus: pauseOpenBtnEl || hudOpenBtnEl || null
+                restoreFocus: utilityToggleBtn || pauseOpenBtnEl || hudOpenBtnEl || null
+            });
+        }
+        if (!panelEl.__docsBindingsSubscribed && runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
+            panelEl.__docsBindingsSubscribed = true;
+            runtime.GameInputBindings.subscribe(function () {
+                GameDocs.refresh();
             });
         }
 

@@ -1,6 +1,6 @@
-Desert biome authored-feature map
+Desert biome distribution map
 Biome: desert
-Bounds x:[116, 158] z:[8, 50]  grid:14x14
+Bounds x:[110, 164] z:[2, 56]  grid:14x14
 Features: 45 high-level placements across 49/196 cells (25.0% occupied)
 
 Dominant feature map

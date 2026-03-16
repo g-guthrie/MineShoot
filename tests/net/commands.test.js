@@ -109,6 +109,12 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
         throwIntent
       };
     },
+    normalizeReloadPayload(weaponId) {
+      return {
+        t: 'reload',
+        weaponId
+      };
+    },
     normalizeAbilityLoadoutPayload(slot1, slot2) {
       return {
         t: 'ability_loadout',
@@ -126,6 +132,7 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
   });
 
   assert.equal(commands.sendThrow('frag', 'throw_1', { power: 0.5 }), true);
+  assert.equal(commands.sendReload('rifle'), true);
   assert.equal(commands.sendAbilityLoadout('choke', 'missile'), true);
   assert.equal(commands.sendAbilityCast('slot1', { targetId: 'usr_remote' }), true);
   assert.deepEqual(sentMessages, [
@@ -134,6 +141,10 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
       throwableId: 'frag',
       clientThrowId: 'throw_1',
       throwIntent: { power: 0.5 }
+    },
+    {
+      t: 'reload',
+      weaponId: 'rifle'
     },
     {
       t: 'ability_loadout',

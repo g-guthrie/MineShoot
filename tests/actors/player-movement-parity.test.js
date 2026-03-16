@@ -338,6 +338,29 @@ test('player live forward movement matches the shared authoritative step', async
   assertPlayerMatchesExpected(harness.player, expected);
 });
 
+test('player movement honors remapped forward input and ignores the old key', async () => {
+  const harness = await loadPlayerMovementHarness({
+    runtimeOverrides: {
+      GameInputBindings: {
+        matches(actionId, event) {
+          return actionId === 'move_forward' && event && event.code === 'KeyI';
+        }
+      }
+    }
+  });
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyI' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+});
+
 test('player live collision stop matches the shared authoritative step', async () => {
   const harness = await loadPlayerMovementHarness({
     collisionBoxes: [{
@@ -373,7 +396,7 @@ test('player ground sprinting matches the shared authoritative step', async () =
   const expected = createExpectedEntity(harness.worldState.spawn);
 
   harness.documentObj.dispatch('keydown', { code: 'KeyW' });
-  harness.documentObj.dispatch('keydown', { code: 'KeyE' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
   stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
   harness.player.update(0.1);
 
@@ -419,7 +442,7 @@ test('holding sprint in air no longer depends on a local sprint queue', async ()
 
   harness.documentObj.dispatch('keyup', { code: 'Space' });
   harness.documentObj.dispatch('keydown', { code: 'KeyW' });
-  harness.documentObj.dispatch('keydown', { code: 'KeyE' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
   stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.05));
   harness.player.update(0.05);
 
@@ -427,7 +450,7 @@ test('holding sprint in air no longer depends on a local sprint queue', async ()
   assert.equal(harness.player.isSprinting(), true);
 });
 
-test('jump while ADS keeps the sampled input path aligned with the shared step', async () => {
+test('jump while ADS keeps airborne movement and sampled input aligned with the shared step', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
 
@@ -438,6 +461,9 @@ test('jump while ADS keeps the sampled input path aligned with the shared step',
 
   assertPlayerMatchesExpected(harness.player, expected);
   assert.equal(harness.player.getAdsState().active, true);
+  assert.equal(expected.isGrounded, false);
+  assert.ok(expected.velocityY > 0);
+  assert.ok(harness.player.getPosition().y > 1.6);
   assert.deepEqual(JSON.parse(JSON.stringify(harness.player.getNetworkInputState())), {
     forward: false,
     backward: false,

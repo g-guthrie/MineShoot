@@ -67,7 +67,7 @@ test('prepareNetCast shapes choke target selection behind the abilities boundary
     aimPoint: { x: 10, y: 11, z: 12 }
   });
   assert.equal(seen.opts.ownerType, 'net');
-  assert.ok(seen.width > 0);
+  assert.equal(seen.width, gameplayTuning.abilityCatalog.choke.lockBoxPx * 1.25);
   assert.ok(seen.height > 0);
 });
 

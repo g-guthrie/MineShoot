@@ -237,6 +237,64 @@ test('player combat owns weapon presentation state and repairs it from authorita
   });
 });
 
+test('player combat manual reload ignores full magazines and starts once rounds are missing', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return false; }
+  });
+
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1000), false);
+
+  harness.GamePlayerCombat.recordWeaponFire('rifle', 1050);
+
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1100), true);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1100).reloading, true);
+});
+
+test('player combat keeps a local multiplayer reload alive until authoritative ammo catches up', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.recordWeaponFire('rifle', 1050);
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1100), true);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1100).reloading, true);
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 29,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0
+      }
+    }
+  }, 1120);
+
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1120).reloading, true);
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 30,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0.2
+      }
+    }
+  }, 2400);
+
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2400).reloading, false);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2400).ammoInMag, 30);
+});
+
 test('player combat preserves a recent local multiplayer equip through stale snapshots', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
@@ -265,6 +323,13 @@ test('player combat preserves a recent local multiplayer equip through stale sna
     weaponId: 'rifle',
     weaponLoadout: ['rifle', 'sniper']
   }, 1900);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 3600;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 3600);
   assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
 });
 

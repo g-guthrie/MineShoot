@@ -46,6 +46,26 @@
         return ghost;
     }
 
+    function createChokeTendril(angle, radius, tipLift, material) {
+        var baseX = Math.cos(angle) * radius;
+        var baseZ = Math.sin(angle) * radius * 0.8;
+        var curl = 0.08 + (tipLift * 0.01);
+        var curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(baseX * 0.55, 1.78, baseZ * 0.55),
+            new THREE.Vector3(baseX, 1.98 + (tipLift * 0.03), baseZ),
+            new THREE.Vector3(
+                (baseX * 0.7) - (Math.sin(angle) * curl),
+                2.18 + (tipLift * 0.08),
+                (baseZ * 0.7) + (Math.cos(angle) * curl)
+            ),
+            new THREE.Vector3(-baseX * 0.08, 2.42 + tipLift, -baseZ * 0.08)
+        ]);
+        return new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 18, 0.026, 6, false),
+            material.clone()
+        );
+    }
+
     function createChokeFx() {
         var group = new THREE.Group();
         var glowMat = new THREE.MeshBasicMaterial({
@@ -62,43 +82,29 @@
             depthWrite: false
         });
 
-        var chestGlow = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 10), glowMat.clone());
-        chestGlow.position.set(0, 1.1, 0);
-        chestGlow.scale.set(1.0, 1.35, 0.9);
-        group.add(chestGlow);
+        var neckGrip = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.022, 6, 24), glowMat.clone());
+        neckGrip.position.set(0, 1.68, 0.02);
+        neckGrip.rotation.x = Math.PI * 0.5;
+        group.add(neckGrip);
 
-        var throatGlow = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat.clone());
-        throatGlow.position.set(0, 1.5, 0.02);
-        throatGlow.scale.set(0.9, 1.25, 0.9);
-        group.add(throatGlow);
+        var neckHalo = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.014, 5, 24), ringMat.clone());
+        neckHalo.position.set(0, 1.76, 0.01);
+        neckHalo.rotation.x = Math.PI * 0.5;
+        group.add(neckHalo);
 
-        var ringUpper = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.018, 5, 20), ringMat.clone());
-        ringUpper.position.set(0, 1.48, 0.01);
-        ringUpper.rotation.x = Math.PI * 0.5;
-        group.add(ringUpper);
-
-        var ringChest = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.015, 5, 22), ringMat.clone());
-        ringChest.position.set(0, 1.08, 0);
-        ringChest.rotation.x = Math.PI * 0.5;
-        group.add(ringChest);
-
-        var wisps = [];
-        for (var i = 0; i < 3; i++) {
-            var wisp = new THREE.Mesh(
-                new THREE.SphereGeometry(0.045 + (i * 0.01), 6, 6),
-                glowMat.clone()
-            );
-            group.add(wisp);
-            wisps.push(wisp);
+        var tendrils = [];
+        for (var i = 0; i < 4; i++) {
+            var angle = (i / 4) * Math.PI * 2;
+            var tendril = createChokeTendril(angle, 0.23 + ((i % 2) * 0.04), i * 0.03, glowMat);
+            group.add(tendril);
+            tendrils.push(tendril);
         }
 
         group.visible = false;
         group.userData.parts = {
-            chestGlow: chestGlow,
-            throatGlow: throatGlow,
-            ringUpper: ringUpper,
-            ringChest: ringChest,
-            wisps: wisps
+            neckGrip: neckGrip,
+            neckHalo: neckHalo,
+            tendrils: tendrils
         };
         return group;
     }
@@ -297,28 +303,24 @@
             var pulse = 0.62 + (Math.sin(phase * 1.7) * 0.18);
             var ringPulse = 0.84 + (Math.sin(phase * 1.3) * 0.12);
 
-            parts.chestGlow.material.opacity = 0.14 + (pulse * 0.12);
-            parts.throatGlow.material.opacity = 0.18 + (pulse * 0.16);
-            parts.chestGlow.scale.set(1.0 + (pulse * 0.08), 1.3 + (pulse * 0.12), 0.9 + (pulse * 0.08));
-            parts.throatGlow.scale.set(0.88 + (pulse * 0.06), 1.2 + (pulse * 0.12), 0.88 + (pulse * 0.06));
+            parts.neckGrip.material.opacity = 0.2 + (pulse * 0.18);
+            parts.neckGrip.scale.set(0.95 + (pulse * 0.08), 0.95 + (pulse * 0.08), 1);
 
-            parts.ringUpper.material.opacity = 0.3 + (pulse * 0.18);
-            parts.ringChest.material.opacity = 0.16 + (pulse * 0.12);
-            parts.ringUpper.scale.set(ringPulse, ringPulse, 1);
-            parts.ringChest.scale.set(0.92 + (pulse * 0.1), 0.92 + (pulse * 0.1), 1);
-            parts.ringUpper.rotation.z = Math.sin(phase * 0.8) * 0.24;
-            parts.ringChest.rotation.z = Math.cos(phase * 0.7) * 0.18;
+            parts.neckHalo.material.opacity = 0.18 + (pulse * 0.12);
+            parts.neckHalo.scale.set(ringPulse, ringPulse, 1);
+            parts.neckHalo.rotation.z = Math.sin(phase * 0.8) * 0.22;
 
-            for (var i = 0; i < parts.wisps.length; i++) {
-                var wisp = parts.wisps[i];
-                var wispPhase = phase + (i * 2.1);
-                var radius = 0.16 + (i * 0.04);
-                wisp.position.set(
-                    Math.cos(wispPhase) * radius,
-                    1.18 + (i * 0.14) + Math.sin(wispPhase * 1.6) * 0.05,
-                    Math.sin(wispPhase) * radius * 0.6
+            for (var i = 0; i < parts.tendrils.length; i++) {
+                var tendril = parts.tendrils[i];
+                var tendrilPhase = phase + (i * 1.35);
+                tendril.position.y = Math.sin(tendrilPhase * 1.2) * 0.04;
+                tendril.rotation.y = Math.sin(tendrilPhase * 0.55) * 0.16;
+                tendril.scale.set(
+                    0.96 + (Math.sin(tendrilPhase * 1.6) * 0.05),
+                    0.94 + (pulse * 0.12),
+                    0.96 + (Math.cos(tendrilPhase * 1.4) * 0.05)
                 );
-                wisp.material.opacity = 0.12 + (0.08 * (1 + Math.sin(wispPhase * 2.0)));
+                tendril.material.opacity = 0.14 + (0.12 * (1 + Math.sin(tendrilPhase * 1.9)));
             }
         }
 

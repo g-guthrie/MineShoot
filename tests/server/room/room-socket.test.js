@@ -90,6 +90,35 @@ test('room socket message blocks live actions while a private room is still in l
   assert.equal(fireCount, 0);
 });
 
+test('room socket message forwards reload commands when live gameplay is allowed', () => {
+  const ws = createSocket();
+  const reloads = [];
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleReload(player, msg) {
+      reloads.push({ player, msg });
+    }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'reload', weaponId: 'rifle' }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { RELOAD: 'reload', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.deepEqual(reloads, [{
+    player: { id: 'u1' },
+    msg: { t: 'reload', weaponId: 'rifle' }
+  }]);
+});
+
 test('room socket message answers ping and ignores stale sockets', () => {
   const activeWs = createSocket();
   const staleWs = createSocket();

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { toEntityState } from '../../../cloudflare/server/room/EntitySerializer.js';
+import { toEntityState, toProjectileState } from '../../../cloudflare/server/room/EntitySerializer.js';
 
 test('toEntityState exposes compact abilityFx instead of raw room runtime internals', () => {
   const state = toEntityState({
@@ -192,4 +192,44 @@ test('toEntityState resolves completed weapon reloads into a full authoritative 
   } finally {
     Date.now = originalNow;
   }
+});
+
+test('toProjectileState carries sticky attachment state for remote rendering', () => {
+  const state = toProjectileState({
+    id: 'proj_plasma',
+    type: 'plasma',
+    ownerId: 'usr_owner',
+    clientThrowId: 'cthrow_1',
+    x: 1.2345,
+    y: 2.3456,
+    z: 3.4567,
+    vx: 0,
+    vy: 0,
+    vz: -10.234,
+    age: 0.789,
+    stickyUntil: 2200,
+    stuckToTargetId: 'usr_target',
+    stuckOffsetX: 0.2,
+    stuckOffsetY: 0.1,
+    stuckOffsetZ: -0.3
+  });
+
+  assert.deepEqual(state, {
+    id: 'proj_plasma',
+    type: 'plasma',
+    ownerId: 'usr_owner',
+    clientThrowId: 'cthrow_1',
+    x: 1.234,
+    y: 2.346,
+    z: 3.457,
+    vx: 0,
+    vy: 0,
+    vz: -10.234,
+    age: 0.789,
+    stickyUntil: 2200,
+    stuckToTargetId: 'usr_target',
+    stuckOffsetX: 0.2,
+    stuckOffsetY: 0.1,
+    stuckOffsetZ: -0.3
+  });
 });

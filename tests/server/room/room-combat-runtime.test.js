@@ -3,14 +3,40 @@ import assert from 'node:assert/strict';
 import { logicalHitscanOriginFromEye } from '../../../shared/entity-points.js';
 
 import {
+  beginWeaponReload,
+  canTargetEntity,
   deadeyeCandidates,
   handleFire,
+  handleReload,
   handleThrow,
   reloadRemainingForWeapon,
   resolveLockedHostile,
   spawnProjectile,
   syncWeaponAmmoState
 } from '../../../cloudflare/server/room/RoomCombatRuntime.js';
+
+test('combat runtime does not target players lingering in disconnect grace', () => {
+  const room = {
+    isEntityDisconnected(entity) {
+      return !!(entity && entity.disconnectedAt);
+    },
+    isEntitySpawnShielded() {
+      return false;
+    }
+  };
+
+  assert.equal(canTargetEntity(room, {
+    id: 'u1',
+    alive: true,
+    disconnectedAt: 1234
+  }, 'u2'), false);
+
+  assert.equal(canTargetEntity(room, {
+    id: 'u1',
+    alive: true,
+    disconnectedAt: 0
+  }, 'u2'), true);
+});
 
 test('combat runtime weapon ammo helpers reload and expose remaining time', () => {
   const room = {
@@ -30,6 +56,59 @@ test('combat runtime weapon ammo helpers reload and expose remaining time', () =
   const after = room.syncWeaponAmmoState(entity, 'rifle', 1300);
   assert.equal(after.ammoInMag, 30);
   assert.equal(after.reloadedFlashUntil, 2200);
+});
+
+test('combat runtime only starts manual reload when the magazine is not already full', () => {
+  const weaponStats = { rifle: { magazineSize: 30, reloadMs: 1200 } };
+  const room = {
+    syncWeaponAmmoState(entity, weaponId, now) {
+      return syncWeaponAmmoState(this, entity, weaponId, now, {
+        weaponStats,
+        createWeaponAmmoRuntime() { return { rifle: { ammoInMag: 30, reloadUntil: 0, reloadedFlashUntil: 0 } }; },
+        defaultWeaponLoadout: ['rifle'],
+        reloadedFlashHoldMs: 900
+      });
+    }
+  };
+  const entity = { weaponLoadout: ['rifle'] };
+
+  assert.equal(beginWeaponReload(room, entity, 'rifle', 100, { weaponStats }), false);
+
+  const ammo = room.syncWeaponAmmoState(entity, 'rifle', 100);
+  ammo.ammoInMag = 7;
+
+  assert.equal(beginWeaponReload(room, entity, 'rifle', 100, { weaponStats }), true);
+  assert.equal(ammo.reloadUntil, 1300);
+});
+
+test('combat runtime handleReload validates the weapon and forwards to the room reload helper', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    weaponId: 'shotgun'
+  };
+  const room = {
+    canEntityUseWeapon() { return true; },
+    beginWeaponReloadCalls: [],
+    beginWeaponReload(entity, weaponId, now) {
+      this.beginWeaponReloadCalls.push({ entity, weaponId, now });
+      return true;
+    }
+  };
+
+  const reloaded = handleReload(room, player, { weaponId: 'rifle' }, {
+    nowMs: () => 450,
+    weaponStats: { rifle: { magazineSize: 30, reloadMs: 1200 } },
+    canEquipWeaponId() { return true; }
+  });
+
+  assert.equal(reloaded, true);
+  assert.equal(player.weaponId, 'rifle');
+  assert.deepEqual(room.beginWeaponReloadCalls, [{
+    entity: player,
+    weaponId: 'rifle',
+    now: 450
+  }]);
 });
 
 test('combat runtime resolves locked hostiles and handles throw/fire envelopes', () => {

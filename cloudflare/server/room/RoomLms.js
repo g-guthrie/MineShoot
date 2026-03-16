@@ -8,7 +8,11 @@ export function configureLmsBeaconAnchors(room, deps) {
 }
 
 export function lmsMatchEntities(room) {
-  return room.modeEntities().filter((entity) => !!entity);
+  return room.modeEntities().filter((entity) => (
+    !!entity &&
+    !(room && typeof room.isEntityDisconnected === 'function' && room.isEntityDisconnected(entity)) &&
+    Number(entity.disconnectedAt || 0) <= 0
+  ));
 }
 
 export function currentLmsBeacon(room) {

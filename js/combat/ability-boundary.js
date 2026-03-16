@@ -60,7 +60,7 @@
     }
 
     function widenedChokeWidth(lockBoxPx) {
-        return Math.max(24, Number(lockBoxPx || 180) * 1.2);
+        return Math.max(24, Number(lockBoxPx || 180) * 1.25);
     }
 
     function getChokeRectSize(camera, cfg) {

@@ -1,6 +1,6 @@
-Basin biome authored-feature map
+Basin biome distribution map
 Biome: basin
-Bounds x:[62, 104] z:[116, 158]  grid:14x14
+Bounds x:[56, 110] z:[110, 164]  grid:14x14
 Features: 6 high-level placements across 5/196 cells (2.6% occupied)
 
 Dominant feature map

@@ -4,6 +4,7 @@ import { handlePrivateRoomLobby } from './private-room-lobby.js';
 import {
   PUBLIC_ROOM_PREFIX,
   DEFAULT_PUBLIC_ROOM_COUNT,
+  DEFAULT_PUBLIC_OVERFLOW_ROOM_COUNT,
   PUBLIC_ROOM_START_THRESHOLD,
   publicRoomStartThresholdForMode,
   PUBLIC_ROOM_SOFT_TARGET,
@@ -36,6 +37,11 @@ function normalizePublicGameMode(raw) {
 function publicRoomId(gameMode, index) {
   const prefix = PUBLIC_ROOM_PREFIX[normalizePublicGameMode(gameMode)] || PUBLIC_ROOM_PREFIX.ffa;
   return sanitizeRoomId(`${prefix}-${String(index + 1).padStart(2, '0')}`);
+}
+
+function publicOverflowRoomId(gameMode, index) {
+  const prefix = PUBLIC_ROOM_PREFIX[normalizePublicGameMode(gameMode)] || PUBLIC_ROOM_PREFIX.ffa;
+  return sanitizeRoomId(`${prefix}-x${String(index + 1).padStart(2, '0')}`);
 }
 
 function buildRoomPayload(roomId, privacy, extras = null) {
@@ -79,15 +85,35 @@ function chooseBestRoom(entries, predicate) {
   return candidates.length ? candidates[0] : null;
 }
 
+function selectQuickMatchRoom(entries, gameMode, startThreshold, roomCapacity) {
+  if (gameMode === 'lms') {
+    return (
+      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
+      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold)
+    );
+  }
+  return (
+    chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
+    chooseBestRoom(entries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
+    chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold) ||
+    chooseBestRoom(entries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity)
+  );
+}
+
 async function allocateQuickMatch(env, requestedGameMode) {
   const gameMode = normalizePublicGameMode(requestedGameMode);
   const startThreshold = publicRoomStartThresholdForMode(gameMode);
   const roomCount = clampInt(env.PUBLIC_ROOM_COUNT, 1, 24, DEFAULT_PUBLIC_ROOM_COUNT);
+  const overflowRoomCount = clampInt(env.PUBLIC_OVERFLOW_ROOM_COUNT, 0, 24, DEFAULT_PUBLIC_OVERFLOW_ROOM_COUNT);
   const roomCapacity = clampInt(env.PUBLIC_ROOM_CAPACITY, PUBLIC_ROOM_SOFT_TARGET, 32, DEFAULT_PUBLIC_ROOM_CAPACITY);
   const roomIds = [];
+  const overflowRoomIds = [];
 
   for (let i = 0; i < roomCount; i++) {
     roomIds.push(publicRoomId(gameMode, i));
+  }
+  for (let i = 0; i < overflowRoomCount; i++) {
+    overflowRoomIds.push(publicOverflowRoomId(gameMode, i));
   }
 
   const stateEntries = await Promise.all(roomIds.map(async (roomId) => {
@@ -102,18 +128,22 @@ async function allocateQuickMatch(env, requestedGameMode) {
       matchStarted
     };
   }));
+  const overflowStateEntries = await Promise.all(overflowRoomIds.map(async (roomId) => {
+    const state = await fetchRoomState(env, roomId);
+    const connectedPlayers = Math.max(0, Number(state && state.connectedPlayers) || 0);
+    const players = Math.max(connectedPlayers, Number(state && state.players) || 0);
+    const matchStarted = !!(state && state.matchStarted);
+    return {
+      roomId,
+      connectedPlayers,
+      players,
+      matchStarted
+    };
+  }));
 
-  const selected = gameMode === 'lms'
-    ? (
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold)
-    )
-    : (
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
-      chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
-      chooseBestRoom(stateEntries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold) ||
-      chooseBestRoom(stateEntries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity)
-    );
+  const selected =
+    selectQuickMatchRoom(stateEntries, gameMode, startThreshold, roomCapacity) ||
+    selectQuickMatchRoom(overflowStateEntries, gameMode, startThreshold, roomCapacity);
 
   if (selected) {
     return buildRoomPayload(selected.roomId, 'public', {

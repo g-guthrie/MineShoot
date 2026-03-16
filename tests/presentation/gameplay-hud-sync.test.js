@@ -16,6 +16,7 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     statusState: [],
     chokeReticle: [],
     hookReticle: [],
+    plasmaState: [],
     deadeyeRect: [],
     abilityDebugPanel: [],
     deadeyeReticle: [],
@@ -56,9 +57,30 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       updateAbilityInfo(state) { calls.abilityInfo.push(state); },
       updateChokeReticle(visible, width, height) { calls.chokeReticle.push({ visible, width, height }); },
       updateHookReticle(visible, size) { calls.hookReticle.push({ visible, size }); },
+      updatePlasmaState(state) { calls.plasmaState.push(state); },
       updateDeadeyeDebugRect(visible, width, height) { calls.deadeyeRect.push({ visible, width, height }); },
-      updateAbilityDebugPanel(visible, text) { calls.abilityDebugPanel.push({ visible, text }); },
+      updateAbilityDebugPanel(visible, text) {
+        calls.abilityDebugPanel.push({
+          visible,
+          text: (text && typeof text === 'object') ? JSON.parse(JSON.stringify(text)) : text
+        });
+      },
       updateDeadeyeReticle(camera, state) { calls.deadeyeReticle.push({ camera, state }); }
+    },
+    GameThrowables: {
+      getSelectedThrowable() { return 'frag'; },
+      getPlasmaDebugState() { return null; },
+      getDebugState() {
+        return {
+          selectedThrowableId: 'frag',
+          label: 'Frag',
+          previewType: 'trajectory',
+          charges: 1,
+          cooldownRemaining: 0,
+          telemetry: { predictedCount: 0 },
+          plasma: null
+        };
+      }
     },
     GameAbilities: {
       getHudState() { return { slot1Cooldown: 3, slot2Cooldown: 5 }; },
@@ -164,9 +186,14 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
   assert.equal(harness.calls.statusState.length, 1);
   assert.deepEqual(harness.calls.chokeReticle[0], { visible: true, width: 240, height: 180 });
   assert.deepEqual(harness.calls.hookReticle[0], { visible: false, size: 120 });
+  assert.equal(harness.calls.plasmaState[0].visible, false);
   assert.equal(harness.calls.deadeyeRect[0].visible, true);
   assert.equal(harness.calls.abilityDebugPanel[0].visible, true);
-  assert.ok(harness.calls.abilityDebugPanel[0].text.includes('VADER CHOKE'));
+  assert.equal(Array.isArray(harness.calls.abilityDebugPanel[0].text), true);
+  assert.equal(harness.calls.abilityDebugPanel[0].text.length, 4);
+  assert.deepEqual(Array.from(harness.calls.abilityDebugPanel[0].text, (section) => section.tone), ['weapon', 'ability1', 'ability2', 'throwable']);
+  assert.ok(harness.calls.abilityDebugPanel[0].text[1].title.includes('VADER CHOKE'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[3].title.includes('Q FRAG :: 1'));
   assert.deepEqual(harness.calls.deadeyeReticle[0].state, { targets: [{ id: 'a' }] });
   assert.deepEqual(harness.calls.deadeyeHighlights[0], {});
   assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
@@ -218,6 +245,50 @@ test('gameplay hud sync passes a stable frame timestamp into weapon combat selec
     { kind: 'weapon', now: 1000 },
     { kind: 'hud', now: 1000 }
   ]);
+});
+
+test('gameplay hud sync projects the plasma catch radius when debug visuals are on and plasma is equipped', async () => {
+  const harness = await loadHudSyncHarness({
+    GameThrowables: {
+      getDebugState() {
+        return {
+          selectedThrowableId: 'plasma',
+          label: 'Plasma Grenade',
+          previewType: 'trajectory',
+          charges: 1,
+          cooldownRemaining: 0,
+          telemetry: { predictedCount: 0 },
+          plasma: {
+            catchRadius: 1.5,
+            fuseSec: 2.2,
+            trackDuration: 0.2,
+            trackLerp: 10,
+            curveStrength: 0.8647,
+            referenceDistance: 10
+          }
+        };
+      }
+    }
+  });
+
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.16,
+    multiplayerMode: false,
+    debugVisualsOn: true
+  });
+
+  assert.equal(harness.calls.plasmaState[0].visible, true);
+  assert.ok(harness.calls.plasmaState[0].diameterPx > 185);
+  assert.ok(harness.calls.plasmaState[0].diameterPx < 190);
+  assert.equal(harness.calls.plasmaState[0].catchRadius, 1.5);
+  assert.equal(harness.calls.plasmaState[0].fuseSec, 2.2);
+  assert.ok(harness.calls.plasmaState[0].curveStrength > 0.8);
+  assert.equal(harness.calls.chokeReticle[0].visible, true);
+  assert.equal(harness.calls.deadeyeRect[0].visible, true);
+  assert.equal(Array.isArray(harness.calls.abilityDebugPanel[0].text), true);
+  assert.ok(harness.calls.abilityDebugPanel[0].text[3].title.includes('Q PLASMA GRENADE :: 1'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[3].body.includes('track: 0.20s @ 10.0'));
 });
 
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {

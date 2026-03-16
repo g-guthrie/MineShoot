@@ -10,7 +10,7 @@
     var sceneRef = null;
     var renderMap = new Map();
     var hitboxArray = [];
-    var hitboxVisible = true;
+    var hitboxVisible = false;
     var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
@@ -33,11 +33,33 @@
         return ((typeof entity.y === 'number' ? entity.y : REMOTE_EYE_HEIGHT) - REMOTE_EYE_HEIGHT);
     }
 
+    function snapshotServerTimeMs(snapshotMeta) {
+        var receivedAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || Date.now()));
+        var serverTime = Number(snapshotMeta && snapshotMeta.serverTime);
+        return (isFinite(serverTime) && serverTime > 0) ? serverTime : receivedAt;
+    }
+
+    function cloneWeaponAmmoStateMap(stateMap) {
+        if (!stateMap || typeof stateMap !== 'object') return {};
+        var out = {};
+        for (var weaponId in stateMap) {
+            if (!Object.prototype.hasOwnProperty.call(stateMap, weaponId)) continue;
+            var entry = stateMap[weaponId];
+            if (!entry) continue;
+            out[weaponId] = {
+                ammoInMag: Math.max(0, Number(entry.ammoInMag || 0)),
+                reloading: !!entry.reloading,
+                reloadRemainingMs: Math.max(0, Math.round(Number(entry.reloadRemaining || 0) * 1000)),
+                reloadedFlashRemainingMs: Math.max(0, Math.round(Number(entry.reloadedFlashRemaining || 0) * 1000))
+            };
+        }
+        return out;
+    }
+
     function appendSnapshotHistory(render, entity, snapshotMeta) {
         if (!render || !entity) return;
         var receivedAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || Date.now()));
-        var serverTime = Number(snapshotMeta && snapshotMeta.serverTime);
-        if (!isFinite(serverTime) || serverTime <= 0) serverTime = receivedAt;
+        var serverTime = snapshotServerTimeMs(snapshotMeta);
 
         var sample = {
             serverTime: serverTime,
@@ -238,6 +260,8 @@
             velocityY: Number(entity.velocityY || 0),
             _prevIsGrounded: entity.isGrounded !== false,
             weaponId: entity.weaponId || 'rifle',
+            weaponAmmo: cloneWeaponAmmoStateMap(entity.weaponAmmo),
+            weaponAmmoServerTimeMs: snapshotServerTimeMs(snapshotMeta),
             _appliedWeaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
             chokeVictimState: snapshotAbilityState.chokeVictimState,
@@ -312,6 +336,8 @@
         r.isGrounded = entity.isGrounded !== false;
         r.velocityY = Number(entity.velocityY || 0);
         r.weaponId = entity.weaponId || 'rifle';
+        r.weaponAmmo = cloneWeaponAmmoStateMap(entity.weaponAmmo);
+        r.weaponAmmoServerTimeMs = snapshotServerTimeMs(snapshotMeta);
         r.streamHeat = entity.streamHeat || 0;
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;

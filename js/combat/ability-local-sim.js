@@ -33,6 +33,14 @@
             return globalThis.__MAYHEM_RUNTIME || {};
         }
 
+        function bindingLabel(actionId, fallbackLabel) {
+            var bindingsApi = runtime().GameInputBindings || null;
+            if (bindingsApi && bindingsApi.getDisplayLabel) {
+                return bindingsApi.getDisplayLabel(actionId);
+            }
+            return String(fallbackLabel || '--');
+        }
+
         function cooldownUntilForSlot(slotIndex) {
             return opts.cooldownUntilForSlot ? opts.cooldownUntilForSlot(slotIndex) : 0;
         }
@@ -427,7 +435,7 @@
                 targets: candidates
             };
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
-            if (notifier) notifier('Deadeye primed. Press R again to fire.', 900);
+            if (notifier) notifier('Deadeye primed. Press ' + bindingLabel(slotIndex === 2 ? 'ability_2' : 'ability_1', slotIndex === 2 ? 'F' : 'E') + ' again to fire.', 900);
             return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
         }
 

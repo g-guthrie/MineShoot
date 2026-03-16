@@ -349,7 +349,7 @@ import { pointInBounds as pt } from './biome-utils.js';
         // Thin source lip so the tile sheet reads as water pouring over the cliff.
         addWallBlock(sx(0.02), sy(4.9), sz(1.12), sx(5.6), sy(0.08), sz(0.32), mats.water, false);
 
-        // Basin and stepped outflow scaled to match the larger cliff.
+        // Pool and stepped outflow scaled to match the larger cliff.
         addWallBlock(0, -0.02, sz(4.9), sx(6.9), 0.1, sz(4.9), mats.water, false);
         addWallBlock(-sx(0.1), 0.03, sz(7.1), sx(5.4), 0.08, sz(2.6), mats.water, false);
         addWallBlock(-sx(2.2), 0.12, sz(5.5), sx(0.95), sy(0.05), sz(0.7), mats.stone, false);

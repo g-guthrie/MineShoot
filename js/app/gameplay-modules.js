@@ -12,6 +12,7 @@ import '../../shared/match-rules.js';
 import '../../shared/authoritative-movement.js';
 import '../../shared/authoritative-reconciliation.js';
 import '../../shared/asset-recipes.js';
+import '../core/input-bindings.js';
 import '../core/bootstrap.js';
 import '../core/event-bus.js';
 import '../core/mode-flow.js';
@@ -38,7 +39,6 @@ import '../net/feedback-sync.js';
 import '../domain/weapons/visuals.js';
 import '../world/material-library.js';
 import '../presentation/asset-factory.js';
-import '../world/intersection-builder.js';
 import '../world/quadrant-arctic.js';
 import '../world/quadrant-basin.js';
 import '../world/quadrant-citadel.js';
@@ -60,6 +60,7 @@ import '../combat/hitscan.js';
 import '../actors/player-world.js';
 import '../actors/player-view.js';
 import '../combat/hook-visuals.js';
+import '../runtime/weapon-swap-input.js';
 import '../runtime/gameplay-controls.js';
 import '../presentation/gameplay-hud-sync.js';
 import '../runtime/gameplay-runtime-bootstrap.js';
@@ -70,4 +71,13 @@ import '../combat/player-combat.js';
 import '../actors/player.js';
 import '../net/network.js';
 import '../presentation/overhead.js';
-import '../runtime/main.js';
+import '../../gameplay/runtime-loop.js';
+import '../../presentation/runtime-loop.js';
+import './runtime-session.js';
+import './runtime-shell.js';
+import './runtime-coordinator.js';
+
+const runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+if (runtime.GameRuntimeCoordinator && runtime.GameRuntimeCoordinator.create) {
+    runtime.GameMain = runtime.GameRuntimeCoordinator.create();
+}

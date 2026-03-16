@@ -588,13 +588,18 @@
     }
 
     function playFireIgnite(c) {
-        playNoiseBurst(c, { duration: 0.06, vol: 0.05, frequency: 2600, q: 1.6, filterType: 'highpass' });
-        playNoiseBurst(c, { duration: 0.14, vol: 0.025, frequency: 980, q: 0.8, filterType: 'bandpass', delay: 0.01 });
+        playNoiseBurst(c, { duration: 0.045, vol: 0.06, frequency: 3400, q: 2.0, filterType: 'highpass' });
+        playNoiseBurst(c, { duration: 0.12, vol: 0.04, frequency: 1200, q: 0.9, filterType: 'bandpass', delay: 0.004 });
+        playNoiseBurst(c, { duration: 0.18, vol: 0.03, frequency: 640, q: 0.7, filterType: 'lowpass', delay: 0.008 });
+        playOscBurst(c, { type: 'sawtooth', startFreq: 180, endFreq: 520, duration: 0.08, vol: 0.028, delay: 0.002 });
+        playOscBurst(c, { type: 'triangle', startFreq: 420, endFreq: 170, duration: 0.14, vol: 0.022, delay: 0.018 });
     }
 
     function playFireBurning(c) {
-        playNoiseBurst(c, { duration: 0.22, vol: 0.02, frequency: 1400, q: 0.9, filterType: 'bandpass' });
-        playNoiseBurst(c, { duration: 0.18, vol: 0.012, frequency: 3200, q: 1.8, filterType: 'highpass', delay: 0.03 });
+        playNoiseBurst(c, { duration: 0.26, vol: 0.026, frequency: 1280, q: 0.95, filterType: 'bandpass' });
+        playNoiseBurst(c, { duration: 0.2, vol: 0.018, frequency: 3000, q: 1.9, filterType: 'highpass', delay: 0.02 });
+        playNoiseBurst(c, { duration: 0.24, vol: 0.014, frequency: 520, q: 0.65, filterType: 'lowpass', delay: 0.016 });
+        playOscBurst(c, { type: 'triangle', startFreq: 96, endFreq: 74, duration: 0.18, vol: 0.012, delay: 0.01 });
     }
 
     function playChokeCast(c) {

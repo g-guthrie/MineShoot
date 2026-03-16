@@ -133,8 +133,12 @@ export function spawnProjectile(room, player, throwableId, clientThrowId, throwI
     alive: true,
     age: 0,
     bounces: 0,
-    fuseSec: typeof def.fuse === 'number' ? def.fuse : (typeof def.life === 'number' ? def.life : 0),
-    lifeSec: typeof def.life === 'number' ? def.life : 0,
+    fuseSec: throwableId === 'plasma'
+      ? 0
+      : (typeof def.fuse === 'number' ? def.fuse : (typeof def.life === 'number' ? def.life : 0)),
+    lifeSec: throwableId === 'plasma'
+      ? (typeof def.maxLife === 'number' ? def.maxLife : 0)
+      : (typeof def.life === 'number' ? def.life : 0),
     createdAt: now,
     lockTargetId: options && options.lockTargetId ? String(options.lockTargetId) : '',
     launchDirX: forward.x,
@@ -142,6 +146,11 @@ export function spawnProjectile(room, player, throwableId, clientThrowId, throwI
     launchDirZ: forward.z,
     hitRadius: Number(def.hitRadius || 1.2),
     stickyDelaySec: (typeof def.stickExplodeDelay === 'number' ? def.stickExplodeDelay : 0),
+    catchRadius: Number(def.catchRadius || 0),
+    trackDurationSec: Number(def.trackDuration || 0),
+    trackLerp: Number(def.trackLerp || 0),
+    trackingTargetId: '',
+    trackingUntil: 0,
     stickyUntil: 0,
     stuckToTargetId: '',
     stuckOffsetX: 0,
@@ -183,6 +192,11 @@ export function isEntitySpawnShielded(entity, deps) {
 
 export function canTargetEntity(room, entity, sourceId, deps) {
   if (!entity || !entity.alive) return false;
+  if (room && typeof room.isEntityDisconnected === 'function') {
+    if (room.isEntityDisconnected(entity)) return false;
+  } else if (Number(entity.disconnectedAt || 0) > 0) {
+    return false;
+  }
   if (sourceId && entity.id === sourceId) return false;
   return !room.isEntitySpawnShielded(entity);
 }
@@ -522,6 +536,7 @@ export function beginWeaponReload(room, entity, weaponId, now, deps) {
   if (!stats || !entry) return false;
   const reloadMs = Math.max(0, Number(stats.reloadMs || 0));
   if (reloadMs <= 0 || entry.reloadUntil > now) return false;
+  if (Number(entry.ammoInMag || 0) >= Math.max(0, Number(stats.magazineSize || 0))) return false;
   entry.ammoInMag = 0;
   entry.reloadUntil = now + reloadMs;
   entry.reloadedFlashUntil = 0;
@@ -583,6 +598,22 @@ export function handleEquipWeapon(room, player, msg, deps) {
   player.weaponId = weaponId;
   player.streamHeat = 0;
   player.streamOverheatedUntil = 0;
+}
+
+export function handleReload(room, player, msg, deps) {
+  deps = deps || {};
+  const nowMs = typeof deps.nowMs === 'function' ? deps.nowMs : () => 0;
+  const weaponStats = deps.weaponStats || {};
+  const canEquipWeaponId = typeof deps.canEquipWeaponId === 'function'
+    ? deps.canEquipWeaponId
+    : () => true;
+  if (!player || !player.alive) return false;
+  if (room && typeof room.canEntityUseWeapon === 'function' && !room.canEntityUseWeapon(player)) return false;
+  const weaponId = String(msg && msg.weaponId || player.weaponId || '');
+  if (!weaponStats[weaponId]) return false;
+  if (!canEquipWeaponId(player, weaponId)) return false;
+  player.weaponId = weaponId;
+  return !!room.beginWeaponReload(player, weaponId, nowMs());
 }
 
 export function handleClassQueue(room, player, msg, ws, deps) {

@@ -13,7 +13,7 @@ Several high-value extractions are already in place:
 - net transport, runtime state, runtime core, and state-view boundaries now exist under [js/net](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net)
 - server room ownership is substantially narrowed under [cloudflare/server/room](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room)
 
-The remaining rewrite pressure is mostly coordinator cleanup, compatibility-facade shrinkage, and presentation/runtime decoupling.
+The remaining rewrite pressure is mostly `js/app` surface reduction, presentation/runtime decoupling, and trimming the last compatibility shims.
 
 ## 1. Runtime and Game Lifecycle Is Monolithic
 
@@ -23,9 +23,9 @@ Mayhem got right:
 - The product behavior is real.
 
 Mayhem got wrong:
-- The worst lifecycle knot has been reduced, but too much gameplay coordination still routes through the `GameMain` compatibility surface.
-- Launch flow, session contracts, runtime boot, HUD/session sync, and frame orchestration still need one explicit app-owned coordinator instead of compatibility glue.
-- Lifecycle ownership is hard to identify or test in isolation.
+- The worst lifecycle knot has been reduced, but the app coordinator still owns a broad gameplay/runtime surface.
+- Launch flow, session contracts, runtime boot, HUD/session sync, and frame orchestration are app-owned now, but they still need more shrink-and-isolate work inside `js/app`.
+- Lifecycle ownership is clearer, but some compatibility and global wiring still make isolated testing harder than it should be.
 
 Rewrite rule:
 - Split lifecycle into explicit owners for shell, runtime loader, session, match runtime, and coordinator.

@@ -6,6 +6,7 @@ import {
   currentLmsBeacon,
   ensureLmsStartedState,
   initializeLmsMatchState,
+  lmsMatchEntities,
   lmsRemainingPlayers,
   lmsWinnerId,
   rotateLmsBeacon,
@@ -47,7 +48,7 @@ function makeRoom() {
     leaderUpdates: 0,
     updateLeaderProgress() { this.leaderUpdates += 1; }
   };
-  room.lmsMatchEntities = function () { return this.modeEntities(); };
+  room.lmsMatchEntities = function () { return lmsMatchEntities(this); };
   room.currentLmsBeacon = function () { return currentLmsBeacon(this); };
   room.lmsRemainingPlayers = function () { return lmsRemainingPlayers(this); };
   room.lmsWinnerId = function () { return lmsWinnerId(this); };
@@ -144,4 +145,17 @@ test('lms helper rotates beacons and resolves banking/winner flow', () => {
   room.players.get('u2').lmsLives = 0;
   tickLmsMode(room, { nowMs: () => 9100, lmsRules, gameModeLms: 'lms' }, 9100);
   assert.deepEqual(room.finishCalls, [{ winnerId: 'u1', winnerTeam: '' }]);
+});
+
+test('lms helper excludes disconnected grace players from remaining-player counts', () => {
+  const room = makeRoom();
+  room.players.get('u1').lmsLives = 3;
+  room.players.get('u2').lmsLives = 2;
+  room.players.get('u2').disconnectedAt = 1234;
+  room.isEntityDisconnected = function (entity) {
+    return !!(entity && entity.disconnectedAt);
+  };
+
+  assert.equal(lmsRemainingPlayers(room), 1);
+  assert.equal(lmsWinnerId(room), 'u1');
 });

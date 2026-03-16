@@ -7,6 +7,25 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     'use strict';
 
     var MATS = null;
+    var RADIATION_TREFOIL_PATTERN = [
+        '00000011111000000',
+        '00000111111100000',
+        '00001111111110000',
+        '00001111111110000',
+        '00000111111100000',
+        '00000011111000000',
+        '00000000000000000',
+        '01100001110000110',
+        '11110001110001111',
+        '11111001110011111',
+        '11111001110011111',
+        '01111100000011110',
+        '00111100000011100',
+        '00011100000011000',
+        '00001100000010000',
+        '00000000000000000',
+        '00000000000000000'
+    ];
 
     function ensureMats() {
         if (MATS) return MATS;
@@ -47,22 +66,44 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         }
     }
 
-    function buildCoolingTower(cx, cz, place, mats, ctx) {
-        var scale = 1.34;
+    function buildCoolingTower(eastFaceX, cz, place, mats, ctx) {
+        var baseWidth = 10.6;
+        var cx = eastFaceX - (baseWidth * 0.5);
         var tiers = [
-            { y: 1.3, w: 7.8 * scale, h: 2.6, d: 7.8 * scale },
-            { y: 3.5, w: 6.8 * scale, h: 1.8, d: 6.8 * scale },
-            { y: 5.2, w: 5.6 * scale, h: 1.55, d: 5.6 * scale },
-            { y: 6.7, w: 4.8 * scale, h: 1.35, d: 4.8 * scale },
-            { y: 8.2, w: 5.5 * scale, h: 1.6, d: 5.5 * scale },
-            { y: 9.95, w: 6.6 * scale, h: 1.85, d: 6.6 * scale },
-            { y: 11.7, w: 7.5 * scale, h: 1.55, d: 7.5 * scale }
+            { w: 10.6, h: 2.6, mat: mats.panel },
+            { w: 10.3, h: 2.4, mat: mats.concrete },
+            { w: 9.9, h: 2.3, mat: mats.panel },
+            { w: 9.5, h: 2.2, mat: mats.concrete },
+            { w: 9.0, h: 2.1, mat: mats.panel },
+            { w: 8.4, h: 2.0, mat: mats.concrete },
+            { w: 7.8, h: 1.9, mat: mats.panel },
+            { w: 7.4, h: 1.8, mat: mats.concrete },
+            { w: 7.6, h: 1.9, mat: mats.panel },
+            { w: 8.0, h: 2.0, mat: mats.concrete },
+            { w: 8.5, h: 2.1, mat: mats.panel },
+            { w: 9.1, h: 2.4, mat: mats.concrete }
         ];
+        var currentBaseY = 0;
+        var peakHeight = 0;
         for (var i = 0; i < tiers.length; i++) {
             var tier = tiers[i];
-            place.addBlock(cx, tier.y, cz, tier.w, tier.h, tier.d, (i % 2 === 0) ? mats.panel : mats.glass, true);
+            var centerY = currentBaseY + (tier.h * 0.5);
+            place.addBlock(cx, centerY, cz, tier.w, tier.h, tier.w, tier.mat, true);
+            currentBaseY += tier.h;
+            peakHeight = Math.max(peakHeight, centerY + (tier.h * 0.5));
         }
-        place.addBlock(cx, 12.95, cz, 8.35 * scale, 0.22, 8.35 * scale, mats.accent, false);
+        place.addBlock(cx, currentBaseY + 0.2, cz, 9.6, 0.4, 9.6, mats.accent, true);
+        peakHeight = Math.max(peakHeight, currentBaseY + 0.4);
+
+        // Inward maintenance catwalks and service body keep the lower half playable.
+        place.addBlock(cx - 5.55, 4.2, cz, 0.9, 0.24, 6.1, mats.dark, true);
+        place.addBlock(cx - 5.7, 8.4, cz, 1.2, 0.24, 6.7, mats.dark, true);
+        place.addBlock(cx - 5.5, 12.1, cz, 0.9, 0.24, 5.6, mats.dark, true);
+        place.addBlock(cx - 4.8, 6.0, cz - 2.5, 0.22, 4.0, 0.22, mats.stripe, true);
+        place.addBlock(cx - 4.8, 9.8, cz + 2.2, 0.22, 3.2, 0.22, mats.stripe, true);
+        place.addRamp(cx - 6.2, 3.0, cz - 2.0, 1.3, 0.22, 4.0, mats.dark, Math.PI * 0.5, -0.22, true);
+        place.addRamp(cx - 6.2, 7.0, cz + 2.1, 1.3, 0.22, 3.6, mats.dark, Math.PI * 0.5, -0.18, true);
+        place.addRamp(cx - 6.0, 10.5, cz - 1.8, 1.2, 0.22, 3.2, mats.dark, Math.PI * 0.5, -0.18, true);
 
         var tiles = [];
         for (var col = 0; col < 5; col++) {
@@ -70,11 +111,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
                 var phase = (col * 0.37) + (row * 0.18);
                 var steamMat = cloneMaterial(mats.steam);
                 var tile = place.addBlock(
-                    cx - 2.0 + (col * 1.0),
-                    13.2 + (row * 0.56),
+                    cx - 1.9 + (col * 0.95),
+                    currentBaseY + 0.85 + (row * 0.72),
                     cz - 0.8 + ((col % 2) * 0.45),
                     0.92,
-                    0.48,
+                    0.56,
                     0.92,
                     steamMat,
                     false
@@ -93,13 +134,19 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             ctx.addSteamColumn({
                 tiles: tiles,
                 cycle: 2.6,
-                rise: 4.8,
+                rise: 6.4,
                 baseOpacity: 0.18,
                 swayAmp: 0.28,
                 depthAmp: 0.18,
                 swayFreq: 0.9
             });
         }
+
+        return {
+            peakHeight: peakHeight,
+            eastFaceX: eastFaceX,
+            centerX: cx
+        };
     }
 
     function buildFireEscape(originX, originZ, place, mats) {
@@ -135,7 +182,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildReactorCampus(bounds, place, mats, ctx) {
-        var hub = pt(bounds, 0.48, 0.55);
+        var hub = pt(bounds, 0.32, 0.56);
         place.addBlock(hub.x, 0.4, hub.z, 22.0, 0.8, 18.0, mats.dark, true);
         place.addBlock(hub.x, 4.0, hub.z, 18.4, 7.2, 13.8, mats.concrete, true);
         place.addBlock(hub.x - 4.8, 7.2, hub.z - 0.6, 6.2, 1.4, 5.2, mats.panel, true);
@@ -163,80 +210,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var signTile = 0.42;
         var signBackZ = hub.z - 7.66;
         var signFrontZ = hub.z - 7.76;
+        var signCenterX = hub.x - 0.12;
+        var signCenterY = 4.55;
+        var signOriginX = signCenterX - (((RADIATION_TREFOIL_PATTERN[0].length - 1) * signTile) * 0.5);
+        var signOriginY = signCenterY + (((RADIATION_TREFOIL_PATTERN.length - 1) * signTile) * 0.5);
         place.addBlock(hub.x - 0.12, 4.55, signBackZ, 7.3, 7.3, 0.08, mats.stripe, false);
         addTileLogo(
-            hub.x - 3.22,
-            6.82,
+            signOriginX,
+            signOriginY,
             signFrontZ,
-            [
-                '00011111',
-                '00111111',
-                '01111111',
-                '11111111',
-                '11111110',
-                '11111100',
-                '11111000',
-                '11110000'
-            ],
-            signTile,
-            signTile,
-            0.08,
-            place,
-            mats.accent
-        );
-        addTileLogo(
-            hub.x + 0.28,
-            6.82,
-            signFrontZ,
-            [
-                '11111000',
-                '11111100',
-                '11111110',
-                '11111111',
-                '01111111',
-                '00111111',
-                '00011111',
-                '00001111'
-            ],
-            signTile,
-            signTile,
-            0.08,
-            place,
-            mats.accent
-        );
-        addTileLogo(
-            hub.x - 1.47,
-            4.52,
-            signFrontZ,
-            [
-                '00011000',
-                '00011000',
-                '00111100',
-                '00111100',
-                '01111110',
-                '11111111',
-                '11111111',
-                '01111110'
-            ],
-            signTile,
-            signTile,
-            0.08,
-            place,
-            mats.accent
-        );
-        addTileLogo(
-            hub.x - 1.26,
-            5.82,
-            signFrontZ,
-            [
-                '0011100',
-                '0111110',
-                '1111111',
-                '1111111',
-                '1111111',
-                '0111110',
-                '0011100'
-            ],
+            RADIATION_TREFOIL_PATTERN,
             signTile,
             signTile,
             0.08,
@@ -256,30 +239,39 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     function buildNuclearQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
+        var rawBounds = ctx && ctx.rawBounds ? ctx.rawBounds : bounds;
         var hub = buildReactorCampus(bounds, place, mats, ctx);
 
-        var towerA = pt(bounds, 0.2, 0.26);
-        var towerB = pt(bounds, 0.82, 0.3);
-        buildCoolingTower(towerA.x, towerA.z, place, mats, ctx);
-        buildCoolingTower(towerB.x, towerB.z, place, mats, ctx);
-        ctx.addExclusion(towerA.x, towerA.z, 5.8);
-        ctx.addExclusion(towerB.x, towerB.z, 5.8);
+        var towerNorthZ = rawBounds.minZ + 14.0;
+        var towerSouthZ = rawBounds.maxZ - 14.0;
+        var towerNorth = buildCoolingTower(rawBounds.maxX, towerNorthZ, place, mats, ctx);
+        var towerSouth = buildCoolingTower(rawBounds.maxX, towerSouthZ, place, mats, ctx);
+        ctx.addExclusion(towerNorth.centerX, towerNorthZ, 6.4);
+        ctx.addExclusion(towerSouth.centerX, towerSouthZ, 6.4);
 
-        var controlYard = pt(bounds, 0.74, 0.78);
-        place.addBlock(controlYard.x, 0.34, controlYard.z, 9.0, 0.68, 6.0, mats.dark, true);
-        place.addBlock(controlYard.x, 1.0, controlYard.z, 5.4, 0.22, 3.4, mats.panel, true);
-        place.addBlock(controlYard.x - 2.8, 1.8, controlYard.z - 1.2, 2.0, 1.6, 1.8, mats.concrete, true);
-        place.addBlock(controlYard.x + 2.4, 1.5, controlYard.z + 1.1, 1.8, 1.2, 1.6, mats.concrete, true);
-        place.addBlock(controlYard.x, 0.18, controlYard.z, 7.8, 0.08, 0.12, mats.accent, false);
+        var controlYard = pt(bounds, 0.60, 0.58);
+        place.addBlock(controlYard.x, 0.34, controlYard.z, 10.2, 0.68, 6.4, mats.dark, true);
+        place.addBlock(controlYard.x, 1.0, controlYard.z, 6.2, 0.22, 3.8, mats.panel, true);
+        place.addBlock(controlYard.x - 3.2, 1.8, controlYard.z - 1.2, 2.2, 1.6, 1.8, mats.concrete, true);
+        place.addBlock(controlYard.x + 2.8, 1.5, controlYard.z + 1.1, 1.8, 1.2, 1.6, mats.concrete, true);
+        place.addBlock(controlYard.x, 0.18, controlYard.z, 8.6, 0.08, 0.12, mats.accent, true);
 
-        place.addBlock(hub.x, 0.2, bounds.minZ + 3.4, 18.0, 0.4, 1.2, mats.accent, false);
+        // Pipe runs and service ties make the west-shifted campus feed into the back-wall towers.
+        place.addBlock(hub.x + 10.8, 1.0, hub.z - 5.2, 12.0, 1.0, 0.9, mats.pipe, true);
+        place.addBlock(hub.x + 10.8, 1.0, hub.z + 5.4, 12.0, 1.0, 0.9, mats.pipe, true);
+        place.addBlock(controlYard.x + 4.8, 1.4, towerNorthZ + 6.2, 0.9, 2.8, 12.2, mats.pipe, true);
+        place.addBlock(controlYard.x + 4.8, 1.4, towerSouthZ - 6.2, 0.9, 2.8, 12.2, mats.pipe, true);
+        place.addBlock(hub.x, 0.2, bounds.minZ + 3.4, 18.0, 0.4, 1.2, mats.accent, true);
         place.addBlock(bounds.minX + 4.2, 0.22, hub.z + 10.2, 1.4, 0.44, 8.8, mats.dark, true);
-        place.addBlock(bounds.maxX - 4.0, 0.22, hub.z - 9.8, 1.4, 0.44, 8.0, mats.dark, true);
+        place.addBlock(controlYard.x + 6.2, 0.22, controlYard.z, 1.4, 0.44, 10.0, mats.dark, true);
 
         return {
             structures: 4,
             towers: 2,
-            steamColumns: 2
+            steamColumns: 2,
+            towerPeakHeight: Math.max(towerNorth.peakHeight, towerSouth.peakHeight),
+            towerEastFaceX: Math.max(towerNorth.eastFaceX, towerSouth.eastFaceX),
+            campusCenterX: hub.x
         };
     }
 

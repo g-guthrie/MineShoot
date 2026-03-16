@@ -148,5 +148,27 @@ test('choke FX stays localized to the real body instead of requiring a duplicate
 
   assert.equal(actor.chokeFx.visible, true);
   assert.equal(actor.revealGhost.visible, false);
-  assert.ok(actor.chokeFx.userData.parts.throatGlow.material.opacity > 0);
+  assert.ok(actor.chokeFx.userData.parts.neckGrip.position.y > 1.6);
+  assert.equal(actor.chokeFx.userData.parts.tendrils.length, 4);
+  assert.equal(actor.chokeFx.userData.parts.tendrils[0].geometry.type, 'TubeGeometry');
+  actor.chokeFx.userData.parts.tendrils[0].geometry.computeBoundingBox();
+  assert.ok(actor.chokeFx.userData.parts.tendrils[0].geometry.boundingBox.min.y > 1.7);
+  assert.ok(actor.chokeFx.userData.parts.tendrils[0].geometry.boundingBox.max.y > 2.3);
+  assert.ok(actor.chokeFx.userData.parts.tendrils[0].material.opacity > 0);
+});
+
+test('combat hitbox visuals follow debug visibility toggles', async () => {
+  const factory = await loadActorVisualFactory();
+  const actor = factory.create({ ownerType: 'net', targetId: 'remote-d', weaponId: 'rifle', hitboxOpacity: 0.3 });
+
+  assert.equal(actor.bodyHitbox.material.opacity, 0.3);
+  assert.equal(actor.headHitbox.material.opacity, 0.3);
+
+  actor.setHitboxVisibility(false);
+  assert.equal(actor.bodyHitbox.material.opacity, 0);
+  assert.equal(actor.headHitbox.material.opacity, 0);
+
+  actor.setHitboxVisibility(true);
+  assert.equal(actor.bodyHitbox.material.opacity, 0.3);
+  assert.equal(actor.headHitbox.material.opacity, 0.3);
 });

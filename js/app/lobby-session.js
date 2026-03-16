@@ -7,8 +7,21 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameLobbySession = {};
+    var POLL_OWNER_KEY = 'mayhem.menuPollOwner';
+    var POLL_OWNER_LEASE_MS = 8000;
+    // Keep cross-client social and room changes visible within a few seconds.
+    var PARTY_POLL_INTERVAL_MS = 3000;
+    var FRIENDS_POLL_INTERVAL_MS = 15000;
+    var PRIVATE_ROOM_POLL_INTERVAL_MS = 3000;
 
     function noop() {}
+
+    function randomToken(prefix) {
+        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+            return String(prefix || '') + globalThis.crypto.randomUUID().replace(/-/g, '');
+        }
+        return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
 
     GameLobbySession.create = function (ctx) {
         ctx = ctx || {};
@@ -24,6 +37,7 @@
         var friendsPollHandle = 0;
         var privateRoomPollHandle = 0;
         var lifecycleStarted = false;
+        var pollOwnerToken = randomToken('menu_');
 
         function setPartyStatus(text, isErr) {
             if (ctx.setPartyStatus) ctx.setPartyStatus(text, isErr);
@@ -64,6 +78,97 @@
                 return authApi.getUser();
             }
             return null;
+        }
+
+        function localStore() {
+            try {
+                return window.localStorage || null;
+            } catch (_err) {
+                return null;
+            }
+        }
+
+        function currentTimeMs() {
+            return Date.now();
+        }
+
+        function isDocumentVisible() {
+            if (typeof document === 'undefined' || !document) return true;
+            if (typeof document.hidden === 'boolean') return !document.hidden;
+            if (typeof document.visibilityState === 'string') return document.visibilityState !== 'hidden';
+            return true;
+        }
+
+        function readPollOwnerLease() {
+            var store = localStore();
+            if (!store || typeof store.getItem !== 'function') return null;
+            try {
+                var raw = String(store.getItem(POLL_OWNER_KEY) || '').trim();
+                if (!raw) return null;
+                var parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') return null;
+                return {
+                    token: String(parsed.token || ''),
+                    expiresAt: Math.max(0, Number(parsed.expiresAt || 0))
+                };
+            } catch (_err) {
+                return null;
+            }
+        }
+
+        function writePollOwnerLease(expiresAt) {
+            var store = localStore();
+            if (!store || typeof store.setItem !== 'function') return true;
+            try {
+                store.setItem(POLL_OWNER_KEY, JSON.stringify({
+                    token: pollOwnerToken,
+                    expiresAt: Math.max(0, Number(expiresAt || 0))
+                }));
+                return true;
+            } catch (_err) {
+                return false;
+            }
+        }
+
+        function releasePollOwnerLease() {
+            var store = localStore();
+            if (!store || typeof store.removeItem !== 'function') return;
+            var currentLease = readPollOwnerLease();
+            if (!currentLease || currentLease.token !== pollOwnerToken) return;
+            try {
+                store.removeItem(POLL_OWNER_KEY);
+            } catch (_err) {
+                // no-op
+            }
+        }
+
+        function hasPollingLease() {
+            var store = localStore();
+            if (!store) return true;
+            var now = currentTimeMs();
+            var currentLease = readPollOwnerLease();
+            if (!currentLease || !currentLease.token || currentLease.expiresAt <= now) {
+                writePollOwnerLease(now + POLL_OWNER_LEASE_MS);
+                return true;
+            }
+            if (currentLease.token !== pollOwnerToken) return false;
+            if ((currentLease.expiresAt - now) <= Math.round(POLL_OWNER_LEASE_MS * 0.5)) {
+                writePollOwnerLease(now + POLL_OWNER_LEASE_MS);
+            }
+            return true;
+        }
+
+        function shouldRunBackgroundSync() {
+            var activityState = String(currentPartyActivityState() || 'menu');
+            if (!(activityState === 'menu' || activityState === 'private_room_lobby')) {
+                releasePollOwnerLease();
+                return false;
+            }
+            if (!isDocumentVisible()) {
+                releasePollOwnerLease();
+                return false;
+            }
+            return hasPollingLease();
         }
 
         function isLoggedIn() {
@@ -472,6 +577,7 @@
         }
 
         function refreshBackgroundState(includePrivateRoom) {
+            if (!shouldRunBackgroundSync()) return;
             refreshPartyState(true);
             refreshFriendsState(true);
             if (includePrivateRoom !== false) {
@@ -644,6 +750,7 @@
         }
 
         function refreshAll(silent) {
+            if (!shouldRunBackgroundSync()) return;
             refreshPartyStateInternal(silent, false);
             refreshFriendsState(silent);
             refreshPrivateRoomState(silent);
@@ -653,12 +760,21 @@
             refreshAll(true);
         }
 
+        function visibilityListener() {
+            if (!isDocumentVisible()) {
+                releasePollOwnerLease();
+                return;
+            }
+            refreshAll(true);
+        }
+
         function authChangedListener() {
             refreshAll(true);
             onSocialUpdate();
         }
 
         function pagehideListener() {
+            releasePollOwnerLease();
             var identity = currentPartyIdentity();
             if (!identity || identity.kind !== 'guest' || !navigator.sendBeacon) return;
             try {
@@ -676,20 +792,26 @@
 
             if (partyPollHandle) window.clearInterval(partyPollHandle);
             partyPollHandle = window.setInterval(function () {
+                if (!shouldRunBackgroundSync()) return;
                 refreshPartyState(true);
-            }, 5000);
+            }, PARTY_POLL_INTERVAL_MS);
 
             if (friendsPollHandle) window.clearInterval(friendsPollHandle);
             friendsPollHandle = window.setInterval(function () {
+                if (!shouldRunBackgroundSync()) return;
                 refreshFriendsState(true);
-            }, 5000);
+            }, FRIENDS_POLL_INTERVAL_MS);
 
             if (privateRoomPollHandle) window.clearInterval(privateRoomPollHandle);
             privateRoomPollHandle = window.setInterval(function () {
+                if (!shouldRunBackgroundSync()) return;
                 refreshPrivateRoomState(true);
-            }, 2500);
+            }, PRIVATE_ROOM_POLL_INTERVAL_MS);
 
             window.addEventListener('focus', focusListener);
+            if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+                document.addEventListener('visibilitychange', visibilityListener);
+            }
             window.addEventListener('mayhem-auth-changed', authChangedListener);
             window.addEventListener('pagehide', pagehideListener);
         }
@@ -716,6 +838,10 @@
                 window.removeEventListener('mayhem-auth-changed', authChangedListener);
                 window.removeEventListener('pagehide', pagehideListener);
             }
+            if (typeof document !== 'undefined' && document && typeof document.removeEventListener === 'function') {
+                document.removeEventListener('visibilitychange', visibilityListener);
+            }
+            releasePollOwnerLease();
         }
 
         return {
@@ -743,6 +869,7 @@
             start: start,
             stop: stop,
             focusListener: focusListener,
+            visibilityListener: visibilityListener,
             authChangedListener: authChangedListener,
             pagehideListener: pagehideListener
         };

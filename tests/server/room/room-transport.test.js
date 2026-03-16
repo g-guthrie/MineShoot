@@ -197,6 +197,72 @@ test('websocket room requests are handled by the transport helper, including dup
   }
 });
 
+test('room transport accepts case-insensitive websocket upgrade headers', async () => {
+  const originalResponse = globalThis.Response;
+  const originalPair = globalThis.WebSocketPair;
+  let accepted = 0;
+
+  class FakeResponse {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.webSocket = init.webSocket;
+    }
+  }
+
+  function createSocket() {
+    return {
+      serializeAttachment() {},
+      deserializeAttachment() { return null; },
+      close() {}
+    };
+  }
+
+  globalThis.Response = FakeResponse;
+  globalThis.WebSocketPair = class {
+    constructor() {
+      this[0] = createSocket();
+      this[1] = createSocket();
+    }
+  };
+
+  try {
+    const room = {
+      env: { ROOM_NAME: 'global' },
+      roomName: 'global',
+      gameMode: 'ffa',
+      matchState: { started: false, ended: false },
+      bots: new Map(),
+      players: new Map(),
+      privateRoomConfig: { teams: new Map() },
+      clients: new Map(),
+      activeSocketByUserId: new Map(),
+      ctx: { acceptWebSocket() { accepted += 1; } },
+      refreshWorldMeta() {},
+      syncRoomFixtures() {},
+      ensurePlayer() {},
+      startPublicMatchIfReady() {},
+      ensureTick() {},
+      buildWelcomePayload() { return { ok: true }; },
+      send() {},
+      broadcastSnapshot() {}
+    };
+
+    const response = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=global&userId=user-1&username=PLAYER&actorId=actor-1', {
+        headers: { Upgrade: 'WebSocket' }
+      })
+    );
+
+    assert.equal(response.status, 101);
+    assert.equal(accepted, 1);
+  } finally {
+    globalThis.Response = originalResponse;
+    globalThis.WebSocketPair = originalPair;
+  }
+});
+
 test('active LMS rooms reject fresh websocket joins without blocking reconnects', async () => {
   const originalResponse = globalThis.Response;
   const originalPair = globalThis.WebSocketPair;

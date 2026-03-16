@@ -144,7 +144,7 @@ HYTOPIA's useful pattern is not "voxel look". It is the architecture:
 
 Current local input is still desktop-first:
 - `js/actors/player.js` assumes pointer lock for real play
-- `js/runtime/main.js` only lightly handles touch
+- the current gameplay handoff still assumes pointer lock and only lightly handles touch
 - there is no joystick layer, touch camera layer, or mobile-specific UI behavior
 
 HYTOPIA's `InputManager` and `MobileManager` are worth copying almost directly as patterns.
@@ -164,7 +164,8 @@ HYTOPIA's `InputManager` and `MobileManager` are worth copying almost directly a
 ### Suggested local targets
 
 - `js/actors/player.js`
-- `js/runtime/main.js`
+- `js/app/runtime-session.js`
+- `js/app/runtime-coordinator.js`
 - `js/presentation/ui.js`
 - `js/net/network.js`
 - new files under `js/input/*`

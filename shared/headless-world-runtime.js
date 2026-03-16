@@ -153,6 +153,14 @@ export function ensureHeadlessWorldRuntime() {
       this.heightSegments = heightSegments;
     };
   }
+  if (!globalThis.THREE.CylinderGeometry) {
+    globalThis.THREE.CylinderGeometry = function CylinderGeometry(radiusTop, radiusBottom, height, radialSegments) {
+      this.radiusTop = radiusTop;
+      this.radiusBottom = radiusBottom;
+      this.height = height;
+      this.radialSegments = radialSegments;
+    };
+  }
   if (!globalThis.THREE.Mesh) {
     globalThis.THREE.Mesh = function Mesh(geometry, material) {
       this.geometry = geometry || null;

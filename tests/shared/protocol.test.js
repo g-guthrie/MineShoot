@@ -7,6 +7,7 @@ import {
   buildExpectedWorldMeta,
   normalizeAbilityLoadoutPayload,
   normalizeClassCastPayload,
+  normalizeReloadPayload,
   normalizeThrowPayload
 } from '../../shared/protocol.js';
 
@@ -65,6 +66,15 @@ test('normalizeClassCastPayload centralizes aim point and projectile intent shap
     origin: { x: 1, y: 2, z: 3 },
     direction: { x: 0, y: 0, z: -1 },
     aimPoint: { x: 4, y: 5, z: 6 }
+  });
+});
+
+test('normalizeReloadPayload emits a reload command for the requested weapon', () => {
+  const payload = normalizeReloadPayload('shotgun');
+
+  assert.deepEqual(payload, {
+    t: MSG_C2S.RELOAD,
+    weaponId: 'shotgun'
   });
 });
 

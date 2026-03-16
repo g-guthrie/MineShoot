@@ -71,6 +71,41 @@ async function jsonBody(response) {
   return await response.json();
 }
 
+function createRoomStateArena(stateByRoomId) {
+  const states = stateByRoomId instanceof Map ? stateByRoomId : new Map();
+  return {
+    idFromName(name) {
+      return String(name || '');
+    },
+    get(id) {
+      return {
+        async fetch(request) {
+          const rawUrl = typeof request === 'string' ? request : (request && request.url) || 'https://room/state';
+          const url = new URL(rawUrl);
+          if (url.pathname === '/state') {
+            const roomId = String(id || url.searchParams.get('roomId') || '');
+            const state = states.get(roomId) || null;
+            return new Response(JSON.stringify({
+              ok: true,
+              roomId,
+              connectedPlayers: Math.max(0, Number(state && state.connectedPlayers) || 0),
+              players: Math.max(0, Number(state && state.players) || 0),
+              matchStarted: !!(state && state.matchStarted)
+            }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    }
+  };
+}
+
 test('create room defaults to FFA and carries menu-idle party members', async () => {
   const env = createFakeEnv();
 
@@ -516,6 +551,50 @@ test('quick matchmaking returns LMS public rooms when requested', async () => {
   assert.equal(body.ok, true);
   assert.equal(body.gameMode, 'lms');
   assert.match(body.roomId, /^lms-/);
+});
+
+test('quick matchmaking reuses deterministic overflow shards before minting emergency room ids', async () => {
+  const env = createFakeEnv();
+  env.PUBLIC_ROOM_COUNT = '2';
+  env.PUBLIC_OVERFLOW_ROOM_COUNT = '2';
+  env.GLOBAL_ARENA = createRoomStateArena(new Map([
+    ['ffa-01', { connectedPlayers: 16, players: 16, matchStarted: true }],
+    ['ffa-02', { connectedPlayers: 16, players: 16, matchStarted: true }],
+    ['ffa-x01', { connectedPlayers: 6, players: 6, matchStarted: true }],
+    ['ffa-x02', { connectedPlayers: 0, players: 0, matchStarted: false }]
+  ]));
+
+  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa'
+  }));
+  const body = await jsonBody(response);
+
+  assert.equal(body.ok, true);
+  assert.equal(body.roomId, 'ffa-x01');
+  assert.equal(body.players, 6);
+});
+
+test('quick matchmaking falls back to an emergency unique room after stable public shards fill up', async () => {
+  const env = createFakeEnv();
+  env.PUBLIC_ROOM_COUNT = '2';
+  env.PUBLIC_OVERFLOW_ROOM_COUNT = '2';
+  env.GLOBAL_ARENA = createRoomStateArena(new Map([
+    ['ffa-01', { connectedPlayers: 16, players: 16, matchStarted: true }],
+    ['ffa-02', { connectedPlayers: 16, players: 16, matchStarted: true }],
+    ['ffa-x01', { connectedPlayers: 16, players: 16, matchStarted: true }],
+    ['ffa-x02', { connectedPlayers: 16, players: 16, matchStarted: true }]
+  ]));
+
+  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa'
+  }));
+  const body = await jsonBody(response);
+
+  assert.equal(body.ok, true);
+  assert.equal(/^(ffa-01|ffa-02|ffa-x01|ffa-x02)$/.test(body.roomId), false);
+  assert.equal(/^ffa-[a-z0-9]{4}-[a-z0-9]{2}$/.test(body.roomId), true);
 });
 
 test('websocket upgrade enforces private-room membership and forwards actor identity', async () => {

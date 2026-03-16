@@ -9,7 +9,7 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.goto('/');
 
   await expect(page.locator('#menu-party-id-value')).not.toHaveText('------');
-  await expect(page.locator('#party-roster-preview')).toContainText('[LEAD]');
+  await expect(page.locator('#menu-screen-mode')).toBeVisible();
   expect(await page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(false);
   expect(await page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(false);
 
@@ -22,15 +22,17 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.locator('#auth-close-btn').click();
   await expect(page.locator('#auth-overlay')).toBeHidden();
 
+  await page.locator('#utility-toggle-btn').click();
   await page.locator('#open-manual-btn').click();
   await expect(page.locator('#docs-panel')).toBeVisible();
   await expect(page.locator('#docs-title')).toContainText('FIELD MANUAL');
   await page.locator('#docs-close-btn').click();
   await expect(page.locator('#docs-panel')).toBeHidden();
+  await page.locator('#utility-close-btn').click();
 
-  await page.locator('#sandbox-mode-cycle-btn').click();
-  await expect(page.locator('#sandbox-ruleset-panel')).toBeVisible();
-  await page.locator('#sandbox-ffa-btn').click();
+  await page.locator('#practice-mode-btn').click();
+  await expect(page.locator('#loadout-start-btn')).toBeVisible();
+  await page.locator('#loadout-start-btn').click();
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(true);
 });

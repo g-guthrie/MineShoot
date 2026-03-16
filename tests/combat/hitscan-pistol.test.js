@@ -259,6 +259,30 @@ test('firearms auto-reload after the magazine empties and refill after reload ti
   assert.equal(reloadedState.ammoInMag, 2);
 });
 
+test('manual reload starts only after the magazine has spent rounds', async () => {
+  const harness = await loadHitscanHarness({
+    magazineSize: 3,
+    reloadMs: 900,
+    cooldownMs: 10,
+    pellets: 1,
+    singleHitFromPellets: false,
+    maxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
+    }
+  }, []);
+
+  harness.setNow(1000);
+  assert.equal(harness.GameHitscan.reloadCurrentWeapon(), false);
+
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-1'), true);
+  harness.setNow(1020);
+
+  assert.equal(harness.GameHitscan.reloadCurrentWeapon(), true);
+  assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
+});
+
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {
   const harness = await loadHitscanHarness();
   const configuredSegmentLength = getWeaponPresentation('pistol').tracer.segmentLength;

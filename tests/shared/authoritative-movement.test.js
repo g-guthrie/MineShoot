@@ -82,3 +82,22 @@ test('authoritative movement applies jump intent and vertical motion', () => {
   assert.equal(entity.isGrounded, false);
   assert.ok(entity.velocityY > 0);
 });
+
+test('authoritative movement still starts a jump while ADS is active', () => {
+  const entity = createEntity();
+  const input = createMovementInputState();
+  input.jump = true;
+  input.adsActive = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.05,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.ok(entity.y > 1.6);
+  assert.equal(entity.isGrounded, false);
+  assert.ok(entity.velocityY > 0);
+});

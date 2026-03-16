@@ -8,6 +8,7 @@ SESSION_COOKIE_NAME = "mfa_session"
 SESSION_DAYS = "30"
 ROOM_NAME = "global"
 BOT_COUNT = "6"
+PUBLIC_OVERFLOW_ROOM_COUNT = "8"
 
 [[durable_objects.bindings]]
 name = "GLOBAL_ARENA"

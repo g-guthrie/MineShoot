@@ -334,8 +334,8 @@
         for (var xi = 0; xi < seamLinesX.length; xi++) {
             var seamX = Number(seamLinesX[xi] || 0);
             for (var row = 0; row < gridRows; row++) {
-                var leftBounds = layout.cellBounds({ row: row, col: xi }, 0);
-                var rightBounds = layout.cellBounds({ row: row, col: xi + 1 }, 0);
+                var leftBounds = layout.cellBounds({ row: row, col: xi });
+                var rightBounds = layout.cellBounds({ row: row, col: xi + 1 });
                 var segmentCenterZ = (leftBounds.minZ + leftBounds.maxZ) * 0.5;
                 var segmentDepth = leftBounds.maxZ - leftBounds.minZ;
                 place.addBlock(seamX, seamSpec.height * 0.5, segmentCenterZ, seamSpec.armWidth, seamSpec.height, segmentDepth, seamMaterial, false);
@@ -372,8 +372,8 @@
         for (var zi = 0; zi < seamLinesZ.length; zi++) {
             var seamZ = Number(seamLinesZ[zi] || 0);
             for (var col = 0; col < gridCols; col++) {
-                var topBounds = layout.cellBounds({ row: zi, col: col }, 0);
-                var bottomBounds = layout.cellBounds({ row: zi + 1, col: col }, 0);
+                var topBounds = layout.cellBounds({ row: zi, col: col });
+                var bottomBounds = layout.cellBounds({ row: zi + 1, col: col });
                 var segmentCenterX = (topBounds.minX + topBounds.maxX) * 0.5;
                 var segmentWidth = topBounds.maxX - topBounds.minX;
                 place.addBlock(segmentCenterX, seamSpec.height * 0.5, seamZ, segmentWidth, seamSpec.height, seamSpec.armWidth, seamMaterial, false);

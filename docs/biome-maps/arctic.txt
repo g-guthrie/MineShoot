@@ -1,40 +1,40 @@
-Arctic biome authored-feature map
+Arctic biome distribution map
 Biome: arctic
-Bounds x:[8, 50] z:[8, 50]  grid:14x14
-Features: 31 high-level placements across 30/196 cells (15.3% occupied)
+Bounds x:[2, 56] z:[2, 56]  grid:14x14
+Features: 50 high-level placements across 35/196 cells (17.9% occupied)
 
 Dominant feature map
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
  0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  f  .  d  .  .  d  .  .  .  .  . 
- 2 | .  .  S  .  .  .  .  .  B  .  .  .  .  . 
- 3 | .  .  f  *  .  .  .  .  .  f  O  f  .  . 
+ 1 | .  .  .  f  .  d  .  .  *  f  .  .  .  . 
+ 2 | .  *  S  .  .  .  .  .  B  .  .  .  .  . 
+ 3 | .  f  f  *  .  .  .  .  .  f  O  f  .  . 
  4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  5 | .  .  .  B  .  .  .  .  .  .  .  d  .  . 
  6 | .  .  d  .  .  .  M  .  .  .  .  .  .  . 
  7 | .  .  .  .  .  .  .  .  .  .  .  .  d  . 
- 8 | .  d  .  .  .  .  .  .  .  .  B  .  .  . 
- 9 | .  .  .  .  .  .  .  B  .  .  .  .  S  . 
+ 8 | .  d  .  .  .  .  .  .  .  .  B  .  f  . 
+ 9 | .  .  .  .  .  .  .  B  .  .  .  .  *  . 
 10 | .  S  .  .  A  .  .  .  .  P  .  S  f  . 
-11 | .  f  S  .  .  B  .  .  .  .  .  .  .  . 
-12 | .  .  .  .  .  .  .  d  d  .  f  .  .  . 
+11 | .  *  S  .  .  B  .  .  .  .  .  .  .  . 
+12 | .  .  f  .  .  .  .  d  d  .  f  .  .  . 
 13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 
 Density heatmap
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
  0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  1  .  1  .  .  1  .  .  .  .  . 
- 2 | .  .  1  .  .  .  .  .  1  .  .  .  .  . 
- 3 | .  .  1  2  .  .  .  .  .  1  1  1  .  . 
+ 1 | .  .  .  1  .  1  .  .  4  1  .  .  .  . 
+ 2 | .  4  1  .  .  .  .  .  1  .  .  .  .  . 
+ 3 | .  1  1  2  .  .  .  .  .  1  1  1  .  . 
  4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  5 | .  .  .  1  .  .  .  .  .  .  .  1  .  . 
  6 | .  .  1  .  .  .  1  .  .  .  .  .  .  . 
  7 | .  .  .  .  .  .  .  .  .  .  .  .  1  . 
- 8 | .  1  .  .  .  .  .  .  .  .  1  .  .  . 
- 9 | .  .  .  .  .  .  .  1  .  .  .  .  1  . 
+ 8 | .  1  .  .  .  .  .  .  .  .  1  .  1  . 
+ 9 | .  .  .  .  .  .  .  1  .  .  .  .  5  . 
 10 | .  1  .  .  1  .  .  .  .  1  .  1  1  . 
-11 | .  1  1  .  .  1  .  .  .  .  .  .  .  . 
-12 | .  .  .  .  .  .  .  1  1  .  1  .  .  . 
+11 | .  3  3  .  .  1  .  .  .  .  .  .  .  . 
+12 | .  .  1  .  .  .  .  1  1  .  1  .  .  . 
 13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 
 Legend
@@ -42,6 +42,7 @@ Legend
   B boulder
   d drift
   f fragment
+  G glacier
   M mountain
   O overhang
   P pool
@@ -53,23 +54,24 @@ Counts by feature kind
   arch             1
   boulder          5
   drift            8
-  fragment         7
+  fragment        11
+  glacier          4
   mountain         1
   overhang         1
   pool             1
   shelf            1
-  spire            6
+  spire           17
 
 Top dense cells
+  r9 c12  count=5  kinds=glacier,spire  labels=glacier-east-a, glacier-east-b, glacier-east-c, glacier-patch-3, spire-6
+  r1 c8  count=4  kinds=drift,glacier,spire  labels=drift-8, glacier-north-a, glacier-north-b, glacier-patch-4
+  r2 c1  count=4  kinds=glacier,spire  labels=glacier-nw-a, glacier-nw-b, glacier-nw-c, glacier-patch-1
+  r11 c1  count=3  kinds=fragment,glacier,spire  labels=fragment-3, glacier-patch-2, glacier-sw-a
+  r11 c2  count=3  kinds=spire  labels=glacier-sw-b, glacier-sw-c, spire-4
   r3 c3  count=2  kinds=shelf,spire  labels=ice-shelf, spire-2
   r1 c3  count=1  kinds=fragment  labels=fragment-5
   r1 c5  count=1  kinds=drift  labels=drift-3
-  r1 c8  count=1  kinds=drift  labels=drift-8
+  r1 c9  count=1  kinds=fragment  labels=edge-fragment-4
   r2 c2  count=1  kinds=spire  labels=spire-1
   r2 c8  count=1  kinds=boulder  labels=boulder-4
-  r3 c2  count=1  kinds=fragment  labels=fragment-1
-  r3 c9  count=1  kinds=fragment  labels=fragment-7
-  r3 c10  count=1  kinds=overhang  labels=overhang
-  r3 c11  count=1  kinds=fragment  labels=fragment-2
-  r5 c3  count=1  kinds=boulder  labels=boulder-1
-  r5 c11  count=1  kinds=drift  labels=drift-2
+  r3 c1  count=1  kinds=fragment  labels=edge-fragment-1

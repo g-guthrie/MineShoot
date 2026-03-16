@@ -46,6 +46,23 @@
             : {};
     }
 
+    function inputBindingsApi() {
+        return globalThis.__MAYHEM_RUNTIME.GameInputBindings || null;
+    }
+
+    function matchesBinding(actionId, event, fallbackCodes) {
+        var bindingsApi = inputBindingsApi();
+        if (bindingsApi && bindingsApi.matches) {
+            return bindingsApi.matches(actionId, event);
+        }
+        var code = String(event && event.code || '');
+        var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
+        for (var i = 0; i < fallbacks.length; i++) {
+            if (String(fallbacks[i] || '') === code) return true;
+        }
+        return false;
+    }
+
     var EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var RUN_SPEED = Number(movementTuning.runSpeed || 14);
     var MOUSE_SENSITIVITY = 0.002;
@@ -477,44 +494,32 @@
         if (inputBound) return;
         inputBound = true;
         document.addEventListener('keydown', function (e) {
-            switch (e.code) {
-                case 'KeyW': keys.forward = true; break;
-                case 'KeyA': keys.left = true; break;
-                case 'KeyS': keys.backward = true; break;
-                case 'KeyD': keys.right = true; break;
-                case 'KeyE':
-                    keys.sprint = true;
-                    break;
-                case 'ShiftLeft':
-                case 'ShiftRight':
-                    if (!e.repeat) {
-                        if (hasInputCapture()) {
-                            e.preventDefault();
-                            toggleAds();
-                        }
-                    }
-                    break;
-                case 'Space':
-                    keys.jump = true;
+            if (matchesBinding('move_forward', e, 'KeyW')) keys.forward = true;
+            if (matchesBinding('move_left', e, 'KeyA')) keys.left = true;
+            if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = true;
+            if (matchesBinding('move_right', e, 'KeyD')) keys.right = true;
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
+                keys.sprint = true;
+            }
+            if (matchesBinding('ads_key', e, ['AltLeft', 'AltRight'])) {
+                if (!e.repeat && hasInputCapture()) {
                     e.preventDefault();
-                    break;
+                    toggleAds();
+                }
+            }
+            if (matchesBinding('jump', e, 'Space')) {
+                keys.jump = true;
+                e.preventDefault();
             }
         });
 
         document.addEventListener('keyup', function (e) {
-            switch (e.code) {
-                case 'KeyW': keys.forward = false; break;
-                case 'KeyA': keys.left = false; break;
-                case 'KeyS': keys.backward = false; break;
-                case 'KeyD': keys.right = false; break;
-                case 'KeyE':
-                    keys.sprint = false;
-                    break;
-                case 'ShiftLeft':
-                case 'ShiftRight':
-                    break;
-                case 'Space': keys.jump = false; break;
-            }
+            if (matchesBinding('move_forward', e, 'KeyW')) keys.forward = false;
+            if (matchesBinding('move_left', e, 'KeyA')) keys.left = false;
+            if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = false;
+            if (matchesBinding('move_right', e, 'KeyD')) keys.right = false;
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = false;
+            if (matchesBinding('jump', e, 'Space')) keys.jump = false;
         });
 
         document.addEventListener('mousemove', function (e) {

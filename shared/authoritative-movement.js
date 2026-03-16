@@ -185,7 +185,7 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   const jumpJustReleased = !jumpHeld && !!entity.jumpHeldLast;
   entity.jumpHeldLast = jumpHeld;
 
-  if (jumpJustPressed && !!entity.isGrounded && !adsActive) {
+  if (jumpJustPressed && !!entity.isGrounded) {
     entity.velocityY = tuning.jumpVelocity;
     entity.isGrounded = false;
     entity.jumpHoldTimer = tuning.maxJumpHold;

@@ -231,22 +231,21 @@ export function resolveBiomeCell(cell) {
   return { row: BIOME_GRID_ROWS - 1, col: BIOME_GRID_COLS - 1 };
 }
 
-export function cellBounds(cell, padding) {
+export function cellBounds(cell) {
   const { row, col } = resolveBiomeCell(cell);
-  const pad = Math.max(0, Number(padding || 0));
   return {
     row,
     col,
     cell: cellIdFor(row, col),
-    minX: WORLD_MIN + (col * CELL_WIDTH) + pad,
-    maxX: WORLD_MIN + ((col + 1) * CELL_WIDTH) - pad,
-    minZ: WORLD_MIN + (row * CELL_DEPTH) + pad,
-    maxZ: WORLD_MIN + ((row + 1) * CELL_DEPTH) - pad
+    minX: WORLD_MIN + (col * CELL_WIDTH),
+    maxX: WORLD_MIN + ((col + 1) * CELL_WIDTH),
+    minZ: WORLD_MIN + (row * CELL_DEPTH),
+    maxZ: WORLD_MIN + ((row + 1) * CELL_DEPTH)
   };
 }
 
-export function quadrantBounds(quadrant, padding) {
-  return cellBounds(quadrant, padding);
+export function quadrantBounds(quadrant) {
+  return cellBounds(quadrant);
 }
 
 export function getBiomeCellAtPosition(x, z, biomeMap) {
@@ -270,7 +269,7 @@ export function buildBiomePerimeter(place, materials, biomeMap) {
 
   for (let col = 0; col < BIOME_GRID_COLS; col++) {
     const topEntry = findCellEntry(0, col, map);
-    const topBounds = cellBounds({ row: 0, col }, 0);
+    const topBounds = cellBounds({ row: 0, col });
     const topMats = materialsForBiome(topEntry && topEntry.biome, mats);
     const topCenterX = (topBounds.minX + topBounds.maxX) * 0.5;
     const topSpan = topBounds.maxX - topBounds.minX;
@@ -279,7 +278,7 @@ export function buildBiomePerimeter(place, materials, biomeMap) {
     addHorizontalAccent(place, topEntry && topEntry.biome, topBounds, topZ, edgeH, edgeThick, topMats, false);
 
     const bottomEntry = findCellEntry(BIOME_GRID_ROWS - 1, col, map);
-    const bottomBounds = cellBounds({ row: BIOME_GRID_ROWS - 1, col }, 0);
+    const bottomBounds = cellBounds({ row: BIOME_GRID_ROWS - 1, col });
     const bottomMats = materialsForBiome(bottomEntry && bottomEntry.biome, mats);
     const bottomCenterX = (bottomBounds.minX + bottomBounds.maxX) * 0.5;
     const bottomSpan = bottomBounds.maxX - bottomBounds.minX;
@@ -290,7 +289,7 @@ export function buildBiomePerimeter(place, materials, biomeMap) {
 
   for (let row = 0; row < BIOME_GRID_ROWS; row++) {
     const leftEntry = findCellEntry(row, 0, map);
-    const leftBounds = cellBounds({ row, col: 0 }, 0);
+    const leftBounds = cellBounds({ row, col: 0 });
     const leftMats = materialsForBiome(leftEntry && leftEntry.biome, mats);
     const leftCenterZ = (leftBounds.minZ + leftBounds.maxZ) * 0.5;
     const leftSpan = leftBounds.maxZ - leftBounds.minZ;
@@ -299,7 +298,7 @@ export function buildBiomePerimeter(place, materials, biomeMap) {
     addVerticalAccent(place, leftEntry && leftEntry.biome, leftBounds, leftX, edgeH, edgeThick, leftMats, false);
 
     const rightEntry = findCellEntry(row, BIOME_GRID_COLS - 1, map);
-    const rightBounds = cellBounds({ row, col: BIOME_GRID_COLS - 1 }, 0);
+    const rightBounds = cellBounds({ row, col: BIOME_GRID_COLS - 1 });
     const rightMats = materialsForBiome(rightEntry && rightEntry.biome, mats);
     const rightCenterZ = (rightBounds.minZ + rightBounds.maxZ) * 0.5;
     const rightSpan = rightBounds.maxZ - rightBounds.minZ;

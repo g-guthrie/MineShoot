@@ -39,9 +39,14 @@
         opts.setMatchState((msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : null);
         opts.setPendingRespawnInfo(null);
         if (opts.setInputSendInterval) {
-            var tickRate = Math.round(Number(msg.tickRate || 0));
-            if (isFinite(tickRate) && tickRate >= 10 && tickRate <= 120) {
-                opts.setInputSendInterval(1 / tickRate);
+            var inputSendHz = Math.round(Number(msg.inputSendHz || 0));
+            if (isFinite(inputSendHz) && inputSendHz >= 10 && inputSendHz <= 120) {
+                opts.setInputSendInterval(1 / inputSendHz);
+            } else {
+                var tickRate = Math.round(Number(msg.tickRate || 0));
+                if (isFinite(tickRate) && tickRate >= 10 && tickRate <= 120) {
+                    opts.setInputSendInterval(1 / tickRate);
+                }
             }
         }
 
@@ -129,7 +134,10 @@
 
     function handleDeathRespawn(msg, opts) {
         if (msg.entityId !== opts.getSelfId()) return;
-        var respawnAt = Math.max(Date.now(), Number(msg.respawnAt || 0));
+        var translatedRespawnAt = opts.toLocalClockTime
+            ? Number(opts.toLocalClockTime(msg.respawnAt || 0) || 0)
+            : Number(msg.respawnAt || 0);
+        var respawnAt = Math.max(Date.now(), translatedRespawnAt);
         opts.setPendingRespawnInfo({
             active: true,
             respawnAt: respawnAt

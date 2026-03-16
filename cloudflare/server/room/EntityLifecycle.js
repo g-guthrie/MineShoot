@@ -27,6 +27,9 @@ function applyActionRuntimeDefaults(entity) {
   entity.stunUntil = 0;
   entity.slowUntil = 0;
   entity.slowMultiplier = 1;
+  entity.burnUntil = 0;
+  entity.burnTickAt = 0;
+  entity.burnSourceId = '';
   entity.deadeye = null;
   entity.chokeState = null;
   entity.chokeVictimState = null;

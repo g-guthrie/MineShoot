@@ -150,7 +150,7 @@
         if (explicit) {
             if (explicit === 'multiplayer' || explicit === 'cloud_multiplayer') return 'cloud_multiplayer';
             if (explicit === 'single_cloudflare' || explicit === 'cloud_single') return 'single_cloudflare';
-            if (explicit === 'single_dev_server' || explicit === 'dev_server' || explicit === 'singleplayer_server') return 'single_dev_server';
+            if (explicit === 'single_dev_server' || explicit === 'dev_server' || explicit === 'singleplayer_server' || explicit === 'local_multiplayer') return 'single_dev_server';
             if (explicit === 'single_full_sandbox' || explicit === 'sandbox' || explicit === 'singleplayer_local') return 'single_full_sandbox';
         }
 

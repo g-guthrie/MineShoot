@@ -3,7 +3,13 @@ import { integrateProjectileMotion } from '../sim/projectiles.js';
 import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { protocol } from '../../../shared/protocol.js';
 import { steerHomingVelocity } from '../../../shared/seek-core.js';
-import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
+import {
+  EYE_HEIGHT,
+  BODY_HITBOX_SIZE,
+  HEAD_HITBOX_SIZE,
+  BODY_HITBOX_CENTER_OFFSET_Y,
+  HEAD_HITBOX_CENTER_OFFSET_Y
+} from '../../../shared/entity-constants.js';
 import {
   applyDamageFromSource,
   broadcastDamageEvent,
@@ -18,6 +24,155 @@ const MSG_S2C = protocol.msg.s2c;
 
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const KNIFE_HEADSHOT_HEIGHT_DELTA_WU = 0.45;
+
+function feetY(entity) {
+  return Number(entity && entity.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU;
+}
+
+function hitboxesForEntity(entity) {
+  if (!entity) return [];
+  const fx = Number(entity.x || 0);
+  const fy = feetY(entity);
+  const fz = Number(entity.z || 0);
+  const bodyCenterY = fy + BODY_HITBOX_CENTER_OFFSET_Y;
+  const headCenterY = fy + HEAD_HITBOX_CENTER_OFFSET_Y;
+  return [
+    {
+      type: 'body',
+      min: { x: fx - (BODY_HITBOX_SIZE.x * 0.5), y: bodyCenterY - (BODY_HITBOX_SIZE.y * 0.5), z: fz - (BODY_HITBOX_SIZE.z * 0.5) },
+      max: { x: fx + (BODY_HITBOX_SIZE.x * 0.5), y: bodyCenterY + (BODY_HITBOX_SIZE.y * 0.5), z: fz + (BODY_HITBOX_SIZE.z * 0.5) }
+    },
+    {
+      type: 'head',
+      min: { x: fx - (HEAD_HITBOX_SIZE.x * 0.5), y: headCenterY - (HEAD_HITBOX_SIZE.y * 0.5), z: fz - (HEAD_HITBOX_SIZE.z * 0.5) },
+      max: { x: fx + (HEAD_HITBOX_SIZE.x * 0.5), y: headCenterY + (HEAD_HITBOX_SIZE.y * 0.5), z: fz + (HEAD_HITBOX_SIZE.z * 0.5) }
+    }
+  ];
+}
+
+function expandBox(box, radius) {
+  return {
+    min: {
+      x: Number(box.min.x || 0) - radius,
+      y: Number(box.min.y || 0) - radius,
+      z: Number(box.min.z || 0) - radius
+    },
+    max: {
+      x: Number(box.max.x || 0) + radius,
+      y: Number(box.max.y || 0) + radius,
+      z: Number(box.max.z || 0) + radius
+    }
+  };
+}
+
+function pointAlong(origin, dir, distance) {
+  return {
+    x: Number(origin.x || 0) + (Number(dir.x || 0) * distance),
+    y: Number(origin.y || 0) + (Number(dir.y || 0) * distance),
+    z: Number(origin.z || 0) + (Number(dir.z || 0) * distance)
+  };
+}
+
+function entityTrackPoint(entity) {
+  return {
+    x: Number(entity && entity.x || 0),
+    y: feetY(entity) + 1.0,
+    z: Number(entity && entity.z || 0)
+  };
+}
+
+function molotovInnerRadius(def) {
+  const radius = Math.max(0.2, Number(def && def.fireRadius || 0));
+  let inner = Number(def && def.fireInnerRadius);
+  if (!Number.isFinite(inner) || inner <= 0) inner = radius * 0.55;
+  return Math.max(0.2, Math.min(radius, inner));
+}
+
+function molotovOuterDamageScale(def) {
+  let scale = Number(def && def.fireOuterDamageScale);
+  if (!Number.isFinite(scale)) scale = 0.38;
+  return Math.max(0.1, Math.min(1, scale));
+}
+
+function molotovMaxHeightDelta(def) {
+  let value = Number(def && def.fireMaxHeightDelta);
+  if (!Number.isFinite(value)) value = 1.5;
+  return Math.max(0.1, value);
+}
+
+function molotovDamageScale(def, dist, radius) {
+  const maxRadius = Math.max(0.2, Number(radius || (def && def.fireRadius) || 0));
+  const innerRadius = molotovInnerRadius(def);
+  const edgeScale = molotovOuterDamageScale(def);
+  const distance = Math.max(0, Number(dist || 0));
+  if (distance <= innerRadius) return 1;
+  const outerSpan = Math.max(0.001, maxRadius - innerRadius);
+  const t = Math.max(0, Math.min(1, (distance - innerRadius) / outerSpan));
+  return 1 - ((1 - edgeScale) * t);
+}
+
+function molotovLingerDurationMs(def) {
+  let value = Number(def && def.fireLingerDuration);
+  if (!Number.isFinite(value)) value = 0.9;
+  return Math.max(0, Math.round(value * 1000));
+}
+
+function molotovLingerTickDamage(def) {
+  let value = Number(def && def.fireLingerTickDamage);
+  if (!Number.isFinite(value)) value = Math.max(1, Math.round(Number(def && def.fireTickDamage || 18) * 0.45));
+  return Math.max(1, Math.round(value));
+}
+
+function molotovLingerTickRateMs(def) {
+  let value = Number(def && def.fireLingerTickRate);
+  if (!Number.isFinite(value)) value = 0.4;
+  return Math.max(100, Math.round(value * 1000));
+}
+
+function refreshMolotovBurn(entity, ownerId, now, def) {
+  if (!entity) return;
+  entity.burnUntil = Math.max(Number(entity.burnUntil || 0), now + molotovLingerDurationMs(def));
+  if (!entity.burnTickAt || entity.burnTickAt < now) {
+    entity.burnTickAt = now + molotovLingerTickRateMs(def);
+  }
+  entity.burnSourceId = String(ownerId || entity.burnSourceId || '');
+}
+
+function firstEntityHit(room, projectile, origin, end, expandRadius, trackedOnlyId = '') {
+  if (!projectile || !origin || !end) return null;
+  const dx = Number(end.x || 0) - Number(origin.x || 0);
+  const dy = Number(end.y || 0) - Number(origin.y || 0);
+  const dz = Number(end.z || 0) - Number(origin.z || 0);
+  const distance = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+  if (!(distance > 0.0001)) return null;
+  const dir = normalize3(dx, dy, dz);
+  const radius = Math.max(0, Number(expandRadius || 0));
+
+  const entities = [];
+  for (const p of room.players.values()) entities.push(p);
+  for (const b of room.bots.values()) entities.push(b);
+
+  let best = null;
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    if (!room.canTargetEntity(entity, projectile.ownerId)) continue;
+    if (trackedOnlyId && entity.id !== trackedOnlyId) continue;
+    const boxes = hitboxesForEntity(entity);
+    for (let b = 0; b < boxes.length; b++) {
+      const box = radius > 0 ? expandBox(boxes[b], radius) : boxes[b];
+      const hit = intersectProjectileRayAabb(origin, dir, box, distance);
+      if (!hit) continue;
+      if (best && Number(best.distance || Infinity) <= Number(hit.distance || Infinity)) continue;
+      best = {
+        entity,
+        hitType: boxes[b].type,
+        distance: Number(hit.distance || 0),
+        point: pointAlong(origin, dir, Number(hit.distance || 0))
+      };
+    }
+  }
+  return best;
+}
 
 function intersectProjectileRayAabb(origin, dir, box, maxDistance) {
   if (!box || !box.min || !box.max) return null;
@@ -177,7 +332,33 @@ export function tickProjectiles(room, dtSec) {
       return;
     }
 
-    const isTrackingProjectile = (p.type === 'plasma' || p.type === 'missile' || p.type === 'plasma_stream');
+    if (p.type === 'plasma' && p.trackingTargetId) {
+      if ((p.trackingUntil || 0) <= now) {
+        p.trackingTargetId = '';
+        p.trackingUntil = 0;
+      } else {
+        const tracked = room.getEntityById(p.trackingTargetId);
+        if (!room.canTargetEntity(tracked, p.ownerId)) {
+          p.trackingTargetId = '';
+          p.trackingUntil = 0;
+        } else {
+          const nextVel = steerHomingVelocity({
+            projectilePos: { x: p.x, y: p.y, z: p.z },
+            targetPos: entityTrackPoint(tracked),
+            velocity: { x: p.vx, y: p.vy, z: p.vz },
+            speed: Number(def.speed || 14),
+            boost: 0,
+            lerp: Number(def.trackLerp || 10),
+            dt: dtSec
+          });
+          p.vx = Number(nextVel.x || 0);
+          p.vy = Number(nextVel.y || 0);
+          p.vz = Number(nextVel.z || 0);
+        }
+      }
+    }
+
+    const isTrackingProjectile = (p.type === 'missile' || p.type === 'plasma_stream');
     if (isTrackingProjectile) {
       const acquireRange = Number(def.acquireRange || 24);
       let target = null;
@@ -319,21 +500,45 @@ export function tickProjectiles(room, dtSec) {
       return;
     }
 
+    if (p.type === 'plasma') {
+      const contactHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, 0);
+      if (contactHit) {
+        if (stickProjectile(p, contactHit.entity, contactHit.point.x, contactHit.point.y, contactHit.point.z)) {
+          p.trackingTargetId = '';
+          p.trackingUntil = 0;
+          room.broadcast({
+            t: MSG_S2C.THROW_IMPACT,
+            projectileId: p.id,
+            projectileType: p.type,
+            impactType: 'enemy',
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            targetId: contactHit.entity.id
+          });
+          return;
+        }
+      }
+
+      if (!p.trackingTargetId) {
+        const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0));
+        if (catchHit) {
+          p.trackingTargetId = catchHit.entity.id;
+          p.trackingUntil = now + Math.max(50, Math.round(Number(def.trackDuration || 0.2) * 1000));
+        }
+      }
+    }
+
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
       if (!room.canTargetEntity(e, p.ownerId)) continue;
+      if (p.type === 'plasma') continue;
       const dx = e.x - p.x;
       const dz = e.z - p.z;
       const dy = ((e.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0) - p.y;
       const d = Math.sqrt(dx * dx + dz * dz + dy * dy);
       const hitRadius = Math.max(0.1, Number(p.hitRadius || 1.2));
       if (d > hitRadius) continue;
-      if (p.type === 'plasma') {
-        if (stickProjectile(p, e, p.x, p.y, p.z)) {
-          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
-          return;
-        }
-      }
       if (p.type === 'plasma_stream') {
         projectileDamageHit(room, p, e, 'body');
         room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: e.id });
@@ -361,17 +566,39 @@ export function tickProjectiles(room, dtSec) {
 }
 
 export function tickFireZones(room, dtSec) {
-  if (room.fireZones.size === 0) return;
-  const toRemove = [];
   const entities = [];
   for (const p of room.players.values()) entities.push(p);
   for (const b of room.bots.values()) entities.push(b);
+  let hasLingeringBurn = false;
+  for (let i = 0; i < entities.length; i++) {
+    if ((entities[i].burnUntil || 0) > 0) {
+      hasLingeringBurn = true;
+      break;
+    }
+  }
+  if (room.fireZones.size === 0 && !hasLingeringBurn) return;
+
+  const toRemove = [];
+  const now = nowMs();
+  const def = THROWABLE_STATS.molotov;
+  const heatedEntityIds = new Set();
 
   room.fireZones.forEach((z) => {
     z.life -= dtSec;
     z.tickTimer -= dtSec;
+    for (let i = 0; i < entities.length; i++) {
+      const entity = entities[i];
+      if (!room.canTargetEntity(entity, z.ownerId)) continue;
+      const dx = entity.x - z.x;
+      const dz = entity.z - z.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d > z.radius) continue;
+      const heightDelta = Math.abs(entityTrackPoint(entity).y - Number(z.y || 0));
+      if (heightDelta > molotovMaxHeightDelta(def)) continue;
+      heatedEntityIds.add(entity.id);
+    }
     if (z.tickTimer <= 0) {
-      z.tickTimer += THROWABLE_STATS.molotov.fireTickRate;
+      z.tickTimer += Math.max(0.1, Number(def.fireTickRate || 0.35));
       for (let i = 0; i < entities.length; i++) {
         const e = entities[i];
         if (!room.canTargetEntity(e, z.ownerId)) continue;
@@ -379,14 +606,18 @@ export function tickFireZones(room, dtSec) {
         const dz = e.z - z.z;
         const d = Math.sqrt(dx * dx + dz * dz);
         if (d > z.radius) continue;
+        const heightDelta = Math.abs(entityTrackPoint(e).y - Number(z.y || 0));
+        if (heightDelta > molotovMaxHeightDelta(def)) continue;
         const owner = room.getEntityById(z.ownerId);
-        const out = applyDamageFromSource(owner, e, THROWABLE_STATS.molotov.fireTickDamage, {
+        const damage = Math.max(2, Math.round(Number(def.fireTickDamage || 18) * molotovDamageScale(def, d, z.radius)));
+        const out = applyDamageFromSource(owner, e, damage, {
           hitType: 'body',
           weaponId: 'molotov',
           sourceKind: 'throwable',
           applyOutgoing: false
         });
         if (!out) continue;
+        refreshMolotovBurn(e, z.ownerId, now, def);
         broadcastDamageEvent(room, z.ownerId, e, out, 'body');
         if (out.killed) {
           broadcastDeathRespawn(room, e);
@@ -395,6 +626,39 @@ export function tickFireZones(room, dtSec) {
     }
     if (z.life <= 0) toRemove.push(z.id);
   });
+
+  for (let i = 0; i < entities.length; i++) {
+    const entity = entities[i];
+    if (!entity || !entity.alive) {
+      if (entity) {
+        entity.burnUntil = 0;
+        entity.burnTickAt = 0;
+        entity.burnSourceId = '';
+      }
+      continue;
+    }
+    if ((entity.burnUntil || 0) <= now) {
+      entity.burnUntil = 0;
+      entity.burnTickAt = 0;
+      entity.burnSourceId = '';
+      continue;
+    }
+    if (heatedEntityIds.has(entity.id)) continue;
+    if ((entity.burnTickAt || 0) > now) continue;
+    entity.burnTickAt = now + molotovLingerTickRateMs(def);
+    const owner = room.getEntityById(entity.burnSourceId || '');
+    const out = applyDamageFromSource(owner, entity, molotovLingerTickDamage(def), {
+      hitType: 'body',
+      weaponId: 'molotov',
+      sourceKind: 'throwable',
+      applyOutgoing: false
+    });
+    if (!out) continue;
+    broadcastDamageEvent(room, entity.burnSourceId || '', entity, out, 'body');
+    if (out.killed) {
+      broadcastDeathRespawn(room, entity);
+    }
+  }
 
   for (let i = 0; i < toRemove.length; i++) {
     const id = toRemove[i];

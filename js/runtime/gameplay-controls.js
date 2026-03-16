@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var activeTestHandle = null;
 
     function editableTarget(target) {
         var node = target || null;
@@ -21,6 +22,19 @@
         var armedThrowableType = '';
         var throwableHeldType = '';
         var bound = false;
+
+        function matchesBinding(actionId, event, fallbackCodes) {
+            var bindingsApi = runtime.GameInputBindings || null;
+            if (bindingsApi && bindingsApi.matches) {
+                return bindingsApi.matches(actionId, event);
+            }
+            var code = String(event && event.code || '');
+            var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
+            for (var i = 0; i < fallbacks.length; i++) {
+                if (String(fallbacks[i] || '') === code) return true;
+            }
+            return false;
+        }
 
         function getCamera() {
             return opts.getCamera ? opts.getCamera() : null;
@@ -46,6 +60,32 @@
         function setTransientDebug(text, ms) {
             if (opts.setTransientDebug) opts.setTransientDebug(text, ms);
         }
+
+        var weaponSwapInput = runtime.GameWeaponSwapInput && runtime.GameWeaponSwapInput.create
+            ? runtime.GameWeaponSwapInput.create({
+                applyWeapon: opts.applyWeapon,
+                hasInputCapture: hasInputCapture,
+                toggleWeapon: function () {
+                    return runtime.GameHitscan && runtime.GameHitscan.toggleWeapon
+                        ? runtime.GameHitscan.toggleWeapon()
+                        : null;
+                }
+            })
+            : null;
+
+        activeTestHandle = weaponSwapInput ? {
+            setInputCaptureOverride: function (value) {
+                return weaponSwapInput.setInputCaptureOverride
+                    ? weaponSwapInput.setInputCaptureOverride(value)
+                    : null;
+            },
+            resetState: function () {
+                if (weaponSwapInput.resetState) weaponSwapInput.resetState();
+            },
+            readState: function () {
+                return weaponSwapInput.readState ? weaponSwapInput.readState() : null;
+            }
+        } : null;
 
         function clearTrackingReticle() {
             if (runtime.GameUI && runtime.GameUI.updateTrackingReticle) {
@@ -188,10 +228,26 @@
             }
         }
 
+        function triggerReload() {
+            if (!hasInputCapture()) return false;
+            if (!canUseLocalAction('weapon')) return false;
+            var hitscanApi = runtime.GameHitscan;
+            if (!hitscanApi || !hitscanApi.reloadCurrentWeapon) return false;
+            var currentWeapon = hitscanApi.getCurrentWeapon ? hitscanApi.getCurrentWeapon() : null;
+            var weaponId = currentWeapon && currentWeapon.id ? String(currentWeapon.id || '') : '';
+            var started = !!hitscanApi.reloadCurrentWeapon();
+            if (!started) return false;
+            var commandsApi = netCommands();
+            if (multiplayerMode() && commandsApi && commandsApi.sendReload) {
+                commandsApi.sendReload(weaponId);
+            }
+            return true;
+        }
+
         function bindDocsControls() {
             document.addEventListener('keydown', function (e) {
                 if (editableTarget(e.target)) return;
-                if (e.code === 'KeyI') {
+                if (matchesBinding('open_manual', e, 'KeyI')) {
                     e.preventDefault();
                     if (runtime.GameRuntimeLoader && runtime.GameRuntimeLoader.toggleDocs) {
                         runtime.GameRuntimeLoader.toggleDocs();
@@ -227,57 +283,40 @@
 
         function bindWeaponControls() {
             document.addEventListener('keydown', function (e) {
-                if (e.code === 'Digit1' || e.code === 'Digit2') {
+                var idx = -1;
+                if (matchesBinding('weapon_slot_1', e, 'Digit1')) {
+                    idx = 0;
+                } else if (matchesBinding('weapon_slot_2', e, 'Digit2')) {
+                    idx = 1;
+                }
+                if (idx >= 0) {
                     var weaponOrder = runtime.GameHitscan.getWeaponOrder();
-                    var idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
-                    if (idx >= 0 && idx < weaponOrder.length && opts.applyWeapon) {
+                    if (idx < weaponOrder.length && opts.applyWeapon) {
                         opts.applyWeapon(runtime.GameHitscan.setWeapon(weaponOrder[idx]));
                     }
-                    return;
                 }
             });
 
-            var wheelCooldownUntil = 0;
-            var wheelScrollAccum = 0;
-            var wheelGestureLatched = false;
-            var wheelLatchedDirection = 0;
-            var WHEEL_SCROLL_THRESHOLD = 3;
-            var WHEEL_COOLDOWN_MS = 500;
-            var WHEEL_RELEASE_EPSILON = 1.1;
-
             document.addEventListener('wheel', function (e) {
+                if (!weaponSwapInput || !weaponSwapInput.handleWheel) return;
+                weaponSwapInput.handleWheel(e);
+            }, { passive: false });
+
+            window.addEventListener('blur', function () {
+                if (weaponSwapInput && weaponSwapInput.resetState) {
+                    weaponSwapInput.resetState();
+                }
+            });
+        }
+
+        function bindReloadControls() {
+            document.addEventListener('keydown', function (e) {
+                if (e.repeat) return;
+                if (!matchesBinding('reload', e, 'KeyR')) return;
                 if (!hasInputCapture()) return;
                 e.preventDefault();
-                var now = performance.now();
-                var primaryDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-                var direction = primaryDelta === 0 ? 0 : (primaryDelta > 0 ? 1 : -1);
-                var dominantMagnitude = Math.max(Math.abs(e.deltaX), Math.abs(e.deltaY));
-
-                if (dominantMagnitude <= WHEEL_RELEASE_EPSILON) {
-                    wheelGestureLatched = false;
-                    wheelLatchedDirection = 0;
-                    wheelScrollAccum = 0;
-                }
-                if (wheelGestureLatched && direction !== 0 && direction === wheelLatchedDirection) {
-                    wheelScrollAccum = 0;
-                    return;
-                }
-                if (now < wheelCooldownUntil) return;
-                if (direction !== 0 && wheelLatchedDirection !== 0 && direction !== wheelLatchedDirection) {
-                    wheelScrollAccum = 0;
-                    wheelGestureLatched = false;
-                    wheelLatchedDirection = 0;
-                }
-
-                wheelScrollAccum += dominantMagnitude;
-                if (wheelScrollAccum < WHEEL_SCROLL_THRESHOLD) return;
-
-                wheelScrollAccum = 0;
-                wheelCooldownUntil = now + WHEEL_COOLDOWN_MS;
-                wheelGestureLatched = true;
-                wheelLatchedDirection = direction;
-                if (opts.applyWeapon) opts.applyWeapon(runtime.GameHitscan.cycleWeapon(1));
-            }, { passive: false });
+                triggerReload();
+            });
         }
 
         function bindSoundToggleControl() {
@@ -303,7 +342,7 @@
         function bindThrowableControls() {
             document.addEventListener('keydown', function (e) {
                 if (e.repeat) return;
-                if (e.code !== 'KeyQ') return;
+                if (!matchesBinding('throwable', e, 'KeyQ')) return;
                 if (!hasInputCapture()) return;
                 if (!canUseLocalAction('throwable')) return;
 
@@ -324,7 +363,7 @@
             });
 
             document.addEventListener('keyup', function (e) {
-                if (e.code !== 'KeyQ') return;
+                if (!matchesBinding('throwable', e, 'KeyQ')) return;
                 if (!throwableHeldType) return;
                 if (!canUseLocalAction('throwable')) {
                     clearArmedThrowablePreview();
@@ -344,9 +383,9 @@
         function bindAbilityControls() {
             document.addEventListener('keydown', function (e) {
                 if (e.repeat) return;
-                if (e.code === 'KeyR') {
+                if (matchesBinding('ability_1', e, 'KeyE')) {
                     triggerAbility(1);
-                } else if (e.code === 'KeyF') {
+                } else if (matchesBinding('ability_2', e, 'KeyF')) {
                     triggerAbility(2);
                 }
             });
@@ -354,7 +393,7 @@
 
         function bindDebugKeys() {
             document.addEventListener('keydown', function (e) {
-                if (e.code !== 'KeyH') return;
+                if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
                 var enabled = opts.toggleDebugVisuals ? !!opts.toggleDebugVisuals() : false;
                 setTransientDebug(enabled ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);
             });
@@ -367,6 +406,7 @@
                 bindDocsControls();
                 bindShooting();
                 bindWeaponControls();
+                bindReloadControls();
                 bindSoundToggleControl();
                 bindThrowableControls();
                 bindAbilityControls();
@@ -382,6 +422,9 @@
             },
             releaseTransientInput: function () {
                 triggerHeld = false;
+                if (weaponSwapInput && weaponSwapInput.resetState) {
+                    weaponSwapInput.resetState();
+                }
                 if (armedThrowableType || throwableHeldType) {
                     clearArmedThrowablePreview();
                 }
@@ -390,6 +433,11 @@
     }
 
     runtime.GameGameplayControls = {
-        create: create
+        create: create,
+        _test: {
+            getActiveHandle: function () {
+                return activeTestHandle;
+            }
+        }
     };
 })();

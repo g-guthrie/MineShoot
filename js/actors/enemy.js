@@ -10,7 +10,7 @@
     var enemies = [];
     var hitboxArray = [];
     var sceneRef = null;
-    var hitboxVisible = true;
+    var hitboxVisible = false;
     var enemyTuning = (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning)
         ? globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getEnemyTuning()
         : {

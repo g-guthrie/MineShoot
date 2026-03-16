@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var LAUNCH_ERROR_KEY = 'mayhem.launchError';
 
     function create() {
         var renderer, scene, clock, camera;
@@ -22,6 +23,24 @@
 
         function depGet(name) {
             return globalThis.__MAYHEM_RUNTIME[name];
+        }
+
+        function sessionStore() {
+            try {
+                return window.sessionStorage || null;
+            } catch (_err) {
+                return null;
+            }
+        }
+
+        function persistLaunchError(message) {
+            var store = sessionStore();
+            if (!store) return;
+            try {
+                store.setItem(LAUNCH_ERROR_KEY, String(message || 'Room join failed.'));
+            } catch (_err) {
+                // no-op
+            }
         }
 
         function menuLoadoutApi() {
@@ -88,7 +107,8 @@
         }
 
         function currentMatchRuntimeApi() {
-            return globalThis.__MAYHEM_RUNTIME.GameNet || null;
+            if (multiplayerMode) return globalThis.__MAYHEM_RUNTIME.GameNet || null;
+            return globalThis.__MAYHEM_RUNTIME.GameLocalMatch || globalThis.__MAYHEM_RUNTIME.GameNet || null;
         }
 
         function currentMatchRuntimeOwner() {
@@ -106,11 +126,13 @@
         }
 
         function currentMatchCommandApi() {
+            if (!multiplayerMode) return null;
             var api = currentMatchRuntimeApi();
             return api && api.commands ? api.commands : api;
         }
 
         function currentMatchRemoteEntitiesApi() {
+            if (!multiplayerMode) return null;
             var api = currentMatchRuntimeApi();
             return api && api.remoteEntities ? api.remoteEntities : api;
         }
@@ -121,7 +143,11 @@
             return {
                 api: api,
                 matchState: api && api.getMatchState ? api.getMatchState() : null,
-                selfState: api && api.getAuthoritativeSelfState ? api.getAuthoritativeSelfState() : null,
+                selfState: api
+                    ? (api.getAuthoritativeSelfState
+                        ? api.getAuthoritativeSelfState()
+                        : (api.getSelfState ? api.getSelfState() : null))
+                    : null,
                 respawnState: selfCombat && selfCombat.getRespawnState ? selfCombat.getRespawnState() : null,
                 privateRoomPhase: multiplayerMode && api && api.getPrivateRoomPhase ? api.getPrivateRoomPhase() : ''
             };
@@ -169,6 +195,19 @@
                 statsEl.hidden = true;
                 if (gameSession && gameSession.setResumeButtonsVisible) {
                     gameSession.setResumeButtonsVisible(!playing && runtimeInitialized);
+                }
+                return;
+            }
+
+            var pauseState = gameSession && gameSession.getPauseState ? gameSession.getPauseState() : null;
+            if (pauseState && pauseState.active) {
+                statsEl.hidden = false;
+                statusEl.textContent = pauseState.reason === 'idle'
+                    ? 'IDLE TIMEOUT :: MATCH DISCONNECTED'
+                    : 'PAUSE MENU :: MATCH DISCONNECTED';
+                kdEl.textContent = 'CONNECTION CLOSED TO LIMIT CLOUDFLARE TRAFFIC';
+                if (gameSession && gameSession.setResumeButtonsVisible) {
+                    gameSession.setResumeButtonsVisible(false);
                 }
                 return;
             }
@@ -229,6 +268,12 @@
                 globalThis.__MAYHEM_RUNTIME.GameUI.setDebugInfo('');
                 debugTimer = null;
             }, ms || 1000);
+        }
+
+        function setIdleWarning(text) {
+            if (globalThis.__MAYHEM_RUNTIME.GameUI && globalThis.__MAYHEM_RUNTIME.GameUI.setIdleWarning) {
+                globalThis.__MAYHEM_RUNTIME.GameUI.setIdleWarning(text || '');
+            }
         }
 
         function isLocalActionLocked() {
@@ -467,6 +512,9 @@
                 getActivityState: function () {
                     return ensureRuntimeShell().getActivityState();
                 },
+                isNetworkedRuntime: function () {
+                    return !!multiplayerMode;
+                },
                 getPointerLockTarget: function () {
                     return renderer ? renderer.domElement : null;
                 },
@@ -480,6 +528,17 @@
                     }
                 },
                 setTransientDebug: setTransientDebug,
+                setIdleWarning: setIdleWarning,
+                suspendNetworkSession: function () {
+                    if (!multiplayerMode) return false;
+                    var netApi = currentMatchRuntimeApi();
+                    if (!netApi || !netApi.shutdown) return false;
+                    if (netApi.isActive && !netApi.isActive()) return true;
+                    netApi.shutdown();
+                    setIdleWarning('');
+                    updateMenuSessionPanel(readMatchContext());
+                    return true;
+                },
                 releaseTransientInput: function () {
                     if (controlsApi && controlsApi.releaseTransientInput) {
                         controlsApi.releaseTransientInput();
@@ -592,6 +651,20 @@
             }
         }
 
+        function hardResetFailedNetworkLaunch(message) {
+            var msg = String(message || 'Room join failed.');
+            persistLaunchError(msg);
+            var dbg = document.getElementById('debug-info');
+            if (dbg) dbg.textContent = 'Startup error: ' + msg;
+            var runtimeProfileApi = runtimeProfile();
+            if (runtimeProfileApi && runtimeProfileApi.clearSelectedMode) {
+                runtimeProfileApi.clearSelectedMode();
+            }
+            if (window.location) {
+                window.location.href = (window.location && window.location.pathname) ? window.location.pathname : '/';
+            }
+        }
+
         function ensureRuntimeShell() {
             if (runtimeShell) return runtimeShell;
             var shellFactory = depGet('GameRuntimeShell');
@@ -602,13 +675,26 @@
                 getRuntimeProfile: runtimeProfile,
                 getRuntimeModeUi: runtimeModeUi,
                 getAuthApi: function () { return globalThis.__MAYHEM_RUNTIME.GameNetAuth || null; },
+                getNetApi: function () { return globalThis.__MAYHEM_RUNTIME.GameNet || null; },
                 setRoomId: function (roomId) {
-                    var netRuntime = currentMatchRuntimeOwner();
+                    var gameNet = globalThis.__MAYHEM_RUNTIME.GameNet || null;
+                    var netRuntime = gameNet && gameNet.runtime ? gameNet.runtime : gameNet;
                     if (netRuntime && netRuntime.setRoomId) {
                         netRuntime.setRoomId(roomId);
+                        return;
+                    }
+                    var fallbackRuntime = currentMatchRuntimeOwner();
+                    if (fallbackRuntime && fallbackRuntime.setRoomId) {
+                        fallbackRuntime.setRoomId(roomId);
                     }
                 },
                 startRuntime: initGame,
+                onNetworkLaunchFailure: function (message, err) {
+                    var overlayEl = document.getElementById('overlay');
+                    if (overlayEl) overlayEl.style.display = 'flex';
+                    console.error('Startup error:', err);
+                    hardResetFailedNetworkLaunch(message);
+                },
                 onLaunchError: function (message, err) {
                     var overlayEl = document.getElementById('overlay');
                     if (overlayEl) overlayEl.style.display = 'flex';
@@ -627,6 +713,9 @@
                 return ensureRuntimeShell().launchModeById(modeId, options);
             },
             getActivityState: function () {
+                if (gameSession && gameSession.getActivityState) {
+                    return gameSession.getActivityState();
+                }
                 return ensureRuntimeShell().getActivityState();
             }
         };

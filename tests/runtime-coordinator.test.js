@@ -166,3 +166,119 @@ test('runtime coordinator reads respawn countdown from self combat instead of ne
   assert.deepEqual(JSON.parse(JSON.stringify(matchContext.respawnState)), expectedRespawnState);
   assert.deepEqual(JSON.parse(JSON.stringify(matchContext.selfState)), { id: 'usr_test', alive: false });
 });
+
+test('runtime coordinator reads local-match state when offline runtime is active', async () => {
+  const code = await readModule('../js/app/runtime-coordinator.js');
+  let capturedReadMatchContext = null;
+
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame() {},
+    document: {
+      querySelector() { return null; },
+      getElementById() { return null; },
+      hasFocus() { return false; }
+    },
+    window: {
+      location: {
+        pathname: '/'
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameLocalMatch: {
+          getMatchState() {
+            return { started: true, gameMode: 'lms' };
+          },
+          getSelfState() {
+            return { id: 'guest-self', alive: true, lmsLives: 3 };
+          }
+        },
+        GamePlayerCombat: {
+          getRespawnState() {
+            return null;
+          }
+        },
+        GameRuntimeShell: {
+          create(opts) {
+            capturedReadMatchContext = opts.readMatchContext;
+            return {
+              launchModeById() { return { ok: true }; },
+              getActivityState() { return 'in_match'; }
+            };
+          }
+        }
+      }
+    }
+  };
+
+  vm.runInContext(code, vm.createContext(sandbox));
+
+  const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
+  coordinator.getActivityState();
+
+  assert.equal(typeof capturedReadMatchContext, 'function');
+  const matchContext = capturedReadMatchContext();
+  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.matchState)), { started: true, gameMode: 'lms' });
+  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.selfState)), { id: 'guest-self', alive: true, lmsLives: 3 });
+});
+
+test('runtime coordinator seeds network room ids through GameNet before multiplayer init flips on', async () => {
+  const code = await readModule('../js/app/runtime-coordinator.js');
+  let capturedSetRoomId = null;
+  const gameNetCalls = [];
+  const localMatchCalls = [];
+
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame() {},
+    document: {
+      querySelector() { return null; },
+      getElementById() { return null; },
+      hasFocus() { return false; }
+    },
+    window: {
+      location: {
+        pathname: '/'
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameNet: {
+          setRoomId(roomId) {
+            gameNetCalls.push(String(roomId || ''));
+          }
+        },
+        GameLocalMatch: {
+          setRoomId(roomId) {
+            localMatchCalls.push(String(roomId || ''));
+          }
+        },
+        GameRuntimeShell: {
+          create(opts) {
+            capturedSetRoomId = opts.setRoomId;
+            return {
+              launchModeById() { return { ok: true }; },
+              getActivityState() { return 'menu'; }
+            };
+          }
+        }
+      }
+    }
+  };
+
+  vm.runInContext(code, vm.createContext(sandbox));
+
+  const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
+  coordinator.getActivityState();
+
+  assert.equal(typeof capturedSetRoomId, 'function');
+  capturedSetRoomId('ffa-01');
+
+  assert.deepEqual(gameNetCalls, ['ffa-01']);
+  assert.deepEqual(localMatchCalls, []);
+});

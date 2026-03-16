@@ -138,8 +138,10 @@ test('Vader choke duration includes the extra half-second hold', () => {
 });
 
 test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
+  assert.equal(gameplayTuning.abilityCatalog.choke.cooldownMs, 18000);
   assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 1.5);
   assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 100);
+  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 6000);
   assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
 });
 

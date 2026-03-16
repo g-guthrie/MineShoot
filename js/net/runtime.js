@@ -431,6 +431,7 @@
             getInputSendTimer: netState.getInputSendTimer,
             setInputSendTimer: netState.setInputSendTimer,
             getInputSendInterval: netState.getInputSendInterval,
+            getLastSentInputSample: netState.getLastSentInputSample,
             setLastSentInputSample: netState.setLastSentInputSample,
             getPlayerApi: getPlayerApi,
             nextInputSeq: netState.nextInputSeq,
@@ -457,9 +458,11 @@
             wsSend: wsSend,
             buildFirePayload: runtimeAccess.buildFirePayload,
             fireMessageType: MSG_C2S.FIRE,
+            reloadMessageType: MSG_C2S.RELOAD,
             equipWeaponMessageType: MSG_C2S.EQUIP_WEAPON,
             normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,
             normalizeThrowPayload: PROTOCOL.normalizeThrowPayload,
+            normalizeReloadPayload: PROTOCOL.normalizeReloadPayload,
             normalizeAbilityLoadoutPayload: PROTOCOL.normalizeAbilityLoadoutPayload,
             normalizeClassCastPayload: PROTOCOL.normalizeClassCastPayload,
             setPendingWeaponLoadout: netState.setPendingWeaponLoadout,
@@ -528,6 +531,7 @@
         GameNet.getHitboxArray = remoteEntitiesApi.getHitboxArray;
         GameNet.setHitboxVisibility = remoteEntitiesApi.setHitboxVisibility;
         GameNet.sendFire = commandsApi.sendFire;
+        GameNet.sendReload = commandsApi.sendReload;
         GameNet.sendEquipWeapon = commandsApi.sendEquipWeapon;
         GameNet.sendWeaponLoadout = commandsApi.sendWeaponLoadout;
         GameNet.sendThrow = commandsApi.sendThrow;

@@ -98,7 +98,12 @@
         if (!window.__mayhemDocsKeyBound) {
             window.__mayhemDocsKeyBound = true;
             document.addEventListener('keydown', function (event) {
-                if (event.code !== 'KeyI') return;
+                var inputBindings = runtime.GameInputBindings || null;
+                if (inputBindings && inputBindings.matches) {
+                    if (!inputBindings.matches('open_manual', event)) return;
+                } else if (event.code !== 'KeyI') {
+                    return;
+                }
                 if (editableTarget(event.target)) return;
                 openDocs(event);
             });
@@ -110,6 +115,9 @@
         setRuntimeIndicator(null);
         if (runtime.GameMenuLoadout && runtime.GameMenuLoadout.init) {
             runtime.GameMenuLoadout.init();
+        }
+        if (runtime.GameInputBindingsUi && runtime.GameInputBindingsUi.init) {
+            runtime.GameInputBindingsUi.init();
         }
         if (runtime.GameNetAuth && runtime.GameNetAuth.initMenuAuth) {
             runtime.GameNetAuth.initMenuAuth();

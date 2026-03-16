@@ -4,7 +4,6 @@ import {
   createHeadlessRecorder,
   ensureHeadlessWorldRuntime
 } from './headless-world-runtime.js';
-import '../js/world/intersection-builder.js';
 import '../js/world/quadrant-arctic.js';
 import '../js/world/quadrant-basin.js';
 import '../js/world/quadrant-citadel.js';
@@ -32,18 +31,7 @@ function cloneWorldFlags(flags) {
 export function buildWorldCollisionData(worldMeta) {
   const runtime = ensureHeadlessWorldRuntime();
   const recorder = createHeadlessRecorder();
-  const intersections = runtime.WorldIntersections || {};
   const quadrants = runtime.WorldQuadrants || {};
-
-  if (typeof intersections.buildGridDecor === 'function') {
-    intersections.buildGridDecor({
-      place: recorder.place,
-      materialLibrary: runtime.GameMaterialLibrary,
-      layout: runtime.GameShared.worldLayout,
-      biomeMap: DEFAULT_QUADRANT_MAP.slice(),
-      fx: recorder.ctx
-    });
-  }
 
   buildBiomePerimeter(recorder.place, null, DEFAULT_QUADRANT_MAP);
 
@@ -51,13 +39,11 @@ export function buildWorldCollisionData(worldMeta) {
     const entry = DEFAULT_QUADRANT_MAP[qi];
     const builder = quadrants[entry.biome];
     if (typeof builder !== 'function') continue;
-    const rawBounds = quadrantBounds(entry.quadrant, 0);
-    const paddedBounds = quadrantBounds(entry.quadrant, 6);
-    builder(paddedBounds, recorder.place, {
+    const rawBounds = quadrantBounds(entry.quadrant);
+    builder(rawBounds, recorder.place, {
       ...recorder.ctx,
       biomeEntry: entry,
-      rawBounds,
-      paddedBounds
+      rawBounds
     });
   }
 

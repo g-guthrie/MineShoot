@@ -14,6 +14,10 @@
         var activeRuntimeMode = null;
         var startupDebugNotice = '';
 
+        function netApi() {
+            return opts.getNetApi ? opts.getNetApi() : (runtime.GameNet || null);
+        }
+
         function launchModeById(modeId, options) {
             options = options || {};
             var runtimeProfile = opts.getRuntimeProfile ? opts.getRuntimeProfile() : null;
@@ -24,19 +28,17 @@
             if (!selectedMode) {
                 return { ok: false, error: 'Unknown runtime mode.' };
             }
-            if (selectedMode.authorityMode !== 'networked') {
-                return { ok: false, error: 'Only server-authoritative runtime modes are supported.' };
-            }
 
             if (options.roomId) selectedMode.roomId = String(options.roomId);
             if (options.gameMode) selectedMode.gameMode = String(options.gameMode);
 
             activeRuntimeMode = selectedMode;
+            var requiresNetwork = selectedMode.authorityMode === 'networked';
 
-            if (authApi && authApi.setAuthVisible) {
+            if (requiresNetwork && authApi && authApi.setAuthVisible) {
                 authApi.setAuthVisible(false);
             }
-            if (opts.setRoomId) {
+            if (requiresNetwork && opts.setRoomId) {
                 opts.setRoomId(selectedMode.roomId || 'global');
             }
 
@@ -44,6 +46,19 @@
             startupDebugNotice = options.notice || (runtimeModeUi && runtimeModeUi.startupNoticeForMode
                 ? runtimeModeUi.startupNoticeForMode(selectedMode)
                 : '');
+            var joinPromise = null;
+            if (requiresNetwork) {
+                var currentNetApi = netApi();
+                if (!currentNetApi || !currentNetApi.beginJoinAttempt) {
+                    activeRuntimeMode = null;
+                    startupDebugNotice = '';
+                    return { ok: false, error: 'Network room join unavailable.' };
+                }
+                joinPromise = currentNetApi.beginJoinAttempt({
+                    expectedRoomId: selectedMode.roomId || 'global',
+                    timeoutMs: 5000
+                });
+            }
 
             return Promise.resolve()
                 .then(function () {
@@ -53,6 +68,9 @@
                     }) : null;
                 })
                 .then(function () {
+                    return joinPromise || null;
+                })
+                .then(function () {
                     return {
                         ok: true,
                         mode: selectedMode
@@ -60,7 +78,20 @@
                 })
                 .catch(function (err) {
                     var msg = (err && err.message) ? err.message : String(err || 'Unknown startup error');
-                    if (opts.onLaunchError) {
+                    if (requiresNetwork) {
+                        var failedNetApi = netApi();
+                        if (failedNetApi && failedNetApi.resetJoinAttempt) {
+                            failedNetApi.resetJoinAttempt();
+                        }
+                        if (failedNetApi && failedNetApi.shutdown) {
+                            failedNetApi.shutdown();
+                        }
+                        if (opts.onNetworkLaunchFailure) {
+                            opts.onNetworkLaunchFailure(msg, err);
+                        } else if (opts.onLaunchError) {
+                            opts.onLaunchError(msg, err);
+                        }
+                    } else if (opts.onLaunchError) {
                         opts.onLaunchError(msg, err);
                     }
                     activeRuntimeMode = null;

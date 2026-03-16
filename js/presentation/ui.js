@@ -7,8 +7,8 @@
 
     var GameUI = {};
 
-    var crosshairEl, bloomReticleEl, shotgunReticleEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
-    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, abilityDebugPanelEl;
+    var crosshairEl, bloomReticleEl, shotgunReticleEl, plasmaReticleEl, plasmaCurveLeftEl, plasmaCurveRightEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, idleWarningEl, abilityDebugPanelEl;
     var trackingReticleEl, trackingReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
@@ -29,6 +29,8 @@
     var hitmarkerTimer = null;
     var HITMARKER_HOLD_MS = 45;
     var HITMARKER_FADE_SEC = 0.09;
+    var lastAbilityInfoState = null;
+    var lastThrowableInfoState = null;
 
     function sharedMatchRules() {
         return globalThis.__MAYHEM_RUNTIME &&
@@ -36,6 +38,20 @@
             globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
             ? globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
             : null;
+    }
+
+    function inputBindingsApi() {
+        return globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameInputBindings
+            ? globalThis.__MAYHEM_RUNTIME.GameInputBindings
+            : null;
+    }
+
+    function bindingLabel(actionId, fallback) {
+        var bindingsApi = inputBindingsApi();
+        if (bindingsApi && bindingsApi.getDisplayLabel) {
+            return bindingsApi.getDisplayLabel(actionId);
+        }
+        return String(fallback || '--');
     }
 
     function formatCooldown(seconds) {
@@ -50,6 +66,68 @@
         return rad;
     }
 
+    function debugToneSpec(tone) {
+        var id = String(tone || '');
+        if (id === 'ability1') {
+            return {
+                border: 'rgba(126, 215, 255, 0.85)',
+                glow: 'rgba(100, 180, 255, 0.35)',
+                fill: 'rgba(100, 180, 255, 0.08)',
+                text: '#b9ddff',
+                surface: 'rgba(4, 12, 18, 0.9)'
+            };
+        }
+        if (id === 'ability2') {
+            return {
+                border: 'rgba(118, 230, 142, 0.88)',
+                glow: 'rgba(94, 212, 118, 0.34)',
+                fill: 'rgba(82, 188, 104, 0.08)',
+                text: '#c6ffd3',
+                surface: 'rgba(4, 16, 8, 0.9)'
+            };
+        }
+        if (id === 'throwable') {
+            return {
+                border: 'rgba(255, 166, 94, 0.9)',
+                glow: 'rgba(255, 130, 72, 0.34)',
+                fill: 'rgba(255, 140, 70, 0.08)',
+                text: '#ffd2ad',
+                surface: 'rgba(22, 10, 4, 0.9)'
+            };
+        }
+        return {
+            border: 'rgba(244, 246, 248, 0.82)',
+            glow: 'rgba(255, 255, 255, 0.22)',
+            fill: 'rgba(255, 255, 255, 0.06)',
+            text: '#f2f5f7',
+            surface: 'rgba(10, 12, 14, 0.9)'
+        };
+    }
+
+    function applyOverlayTone(el, tone, options) {
+        if (!el) return;
+        var spec = debugToneSpec(tone);
+        options = options || {};
+        el.style.borderColor = spec.border;
+        el.style.boxShadow = '0 0 14px ' + spec.glow + ', inset 0 0 8px ' + spec.fill;
+        if (options.useBackground) {
+            el.style.background = spec.fill;
+        }
+    }
+
+    function ensurePlasmaReticleDecorations() {
+        if (!plasmaReticleEl || plasmaReticleEl.__decorated) return;
+        var left = document.createElement('div');
+        left.className = 'plasma-reticle-curve left';
+        plasmaReticleEl.appendChild(left);
+        var right = document.createElement('div');
+        right.className = 'plasma-reticle-curve right';
+        plasmaReticleEl.appendChild(right);
+        plasmaReticleEl.__curveLeft = left;
+        plasmaReticleEl.__curveRight = right;
+        plasmaReticleEl.__decorated = true;
+    }
+
     GameUI.init = function () {
         crosshairEl = document.getElementById('crosshair');
         bloomReticleEl = document.getElementById('bloom-reticle');
@@ -57,6 +135,10 @@
             ? globalThis.__MAYHEM_RUNTIME.GameBloomReticle.create(bloomReticleEl)
             : null;
         shotgunReticleEl = document.getElementById('shotgun-reticle');
+        plasmaReticleEl = document.getElementById('plasma-reticle');
+        ensurePlasmaReticleDecorations();
+        plasmaCurveLeftEl = plasmaReticleEl ? plasmaReticleEl.__curveLeft || null : null;
+        plasmaCurveRightEl = plasmaReticleEl ? plasmaReticleEl.__curveRight || null : null;
         sniperScopeEl = document.getElementById('sniper-scope');
         chokeReticleEl = document.getElementById('choke-reticle');
         hookReticleEl = document.getElementById('hook-reticle');
@@ -69,6 +151,7 @@
         armorBarEl = document.getElementById('armor-bar');
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
+        idleWarningEl = document.getElementById('idle-warning');
         abilityDebugPanelEl = document.getElementById('ability-debug-panel');
         trackingReticleEl = document.getElementById('tracking-reticle');
         trackingReticleLabelEl = document.getElementById('tracking-reticle-label');
@@ -91,6 +174,13 @@
         damageTicks = [];
         damageTickTimers = [];
         damageFlashLevel = 0;
+        GameUI.setIdleWarning('');
+        if (inputBindingsApi() && inputBindingsApi().subscribe) {
+            inputBindingsApi().subscribe(function () {
+                if (lastAbilityInfoState) GameUI.updateAbilityInfo(lastAbilityInfoState);
+                if (lastThrowableInfoState) GameUI.updateThrowableInfo(lastThrowableInfoState);
+            });
+        }
 
         if (damageIndicatorEl) {
             damageIndicatorEl.innerHTML = '';
@@ -261,6 +351,13 @@
         debugInfoEl.textContent = text || '';
     };
 
+    GameUI.setIdleWarning = function (text) {
+        if (!idleWarningEl) return;
+        var nextText = String(text || '').trim();
+        idleWarningEl.textContent = nextText;
+        idleWarningEl.hidden = !nextText;
+    };
+
     GameUI.setDebugVisuals = function (enabled) {
         debugVisualsOn = !!enabled;
         if (!shotgunReticleEl) return;
@@ -268,6 +365,16 @@
             bloomReticle.setDebugEnabled(debugVisualsOn);
         } else if (bloomReticleEl && !debugVisualsOn) {
             bloomReticleEl.style.display = 'none';
+        }
+        if (!debugVisualsOn) {
+            if (plasmaReticleEl) plasmaReticleEl.style.display = 'none';
+            if (chokeReticleEl) chokeReticleEl.style.display = 'none';
+            if (hookReticleEl) hookReticleEl.style.display = 'none';
+            if (deadeyeDebugRectEl) deadeyeDebugRectEl.style.display = 'none';
+            if (abilityDebugPanelEl) {
+                abilityDebugPanelEl.style.display = 'none';
+                abilityDebugPanelEl.textContent = '';
+            }
         }
     };
 
@@ -399,6 +506,7 @@
 
     GameUI.updateAbilityInfo = function (state) {
         if (!abilityInfoEl || !state) return;
+        lastAbilityInfoState = state;
 
         if (typeof state === 'string') {
             abilityInfoEl.textContent = state;
@@ -411,8 +519,8 @@
             return seconds.toFixed(1) + 's';
         }
 
-        var slot1 = 'R ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
-        var slot2 = 'F ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
+        var slot1 = bindingLabel('ability_1', 'E') + ' ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
+        var slot2 = bindingLabel('ability_2', 'F') + ' ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
         var extra = state.extra ? (' | ' + state.extra) : '';
         abilityInfoEl.textContent = slot1 + ' | ' + slot2 + extra;
     };
@@ -471,19 +579,42 @@
 
     GameUI.updateThrowableInfo = function (state) {
         if (!throwableInfoEl || !state) return;
+        lastThrowableInfoState = state;
 
         var GT = globalThis.__MAYHEM_RUNTIME.GameThrowables;
         var selectedId = (GT && GT.getSelectedThrowable) ? GT.getSelectedThrowable() : 'frag';
         var entry = state[selectedId];
         if (!entry) {
-            throwableInfoEl.textContent = 'Q --';
+            throwableInfoEl.textContent = bindingLabel('throwable', 'Q') + ' --';
             return;
         }
         var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
-        throwableInfoEl.textContent = 'Q ' + entry.label + ': ' + entry.charges + cd;
+        throwableInfoEl.textContent = bindingLabel('throwable', 'Q') + ' ' + entry.label + ': ' + entry.charges + cd;
     };
 
-    GameUI.updatePlasmaState = function (_state) {};
+    GameUI.updatePlasmaState = function (state) {
+        if (!plasmaReticleEl) return;
+        if (!state || !state.visible) {
+            plasmaReticleEl.style.display = 'none';
+            return;
+        }
+        var size = Math.max(24, Math.round(Number(state.diameterPx || 120)));
+        var curveStrength = Math.max(0, Math.min(1, Number(state.curveStrength || 0)));
+        var curveWidth = Math.max(30, Math.round(size * (0.42 + (curveStrength * 0.34))));
+        var curveHeight = Math.max(18, Math.round(size * (0.18 + (curveStrength * 0.3))));
+        applyOverlayTone(plasmaReticleEl, state.tone || 'throwable', { useBackground: false });
+        plasmaReticleEl.style.width = size + 'px';
+        plasmaReticleEl.style.height = size + 'px';
+        plasmaReticleEl.style.display = 'block';
+        if (plasmaCurveLeftEl) {
+            plasmaCurveLeftEl.style.width = curveWidth + 'px';
+            plasmaCurveLeftEl.style.height = curveHeight + 'px';
+        }
+        if (plasmaCurveRightEl) {
+            plasmaCurveRightEl.style.width = curveWidth + 'px';
+            plasmaCurveRightEl.style.height = curveHeight + 'px';
+        }
+    };
 
     GameUI.showDirectionalDamage = function (sourcePos, playerPos, playerYaw, damage) {
         if (!sourcePos || !playerPos || typeof playerYaw !== 'number') return;
@@ -577,6 +708,7 @@
         }
         chokeReticleEl.style.width = Math.round(widthPx || 60) + 'px';
         chokeReticleEl.style.height = Math.round(heightPx || 180) + 'px';
+        applyOverlayTone(chokeReticleEl, arguments[3], { useBackground: false });
         chokeReticleEl.style.display = 'block';
     };
 
@@ -589,6 +721,7 @@
         var size = diameterPx || 104;
         hookReticleEl.style.width = size + 'px';
         hookReticleEl.style.height = size + 'px';
+        applyOverlayTone(hookReticleEl, arguments[2], { useBackground: false });
         hookReticleEl.style.display = 'block';
     };
 
@@ -600,17 +733,52 @@
         }
         deadeyeDebugRectEl.style.width = Math.round(widthPx || 220) + 'px';
         deadeyeDebugRectEl.style.height = Math.round(heightPx || 160) + 'px';
+        applyOverlayTone(deadeyeDebugRectEl, arguments[3], { useBackground: true });
         deadeyeDebugRectEl.style.display = 'block';
     };
 
-    GameUI.updateAbilityDebugPanel = function (visible, text) {
+    GameUI.updateAbilityDebugPanel = function (visible, payload) {
         if (!abilityDebugPanelEl) return;
-        if (!visible || !text) {
+        if (!visible || !payload || (Array.isArray(payload) && payload.length === 0)) {
             abilityDebugPanelEl.style.display = 'none';
             abilityDebugPanelEl.textContent = '';
+            abilityDebugPanelEl.innerHTML = '';
             return;
         }
-        abilityDebugPanelEl.textContent = text;
+        if (typeof payload === 'string') {
+            abilityDebugPanelEl.textContent = payload;
+            abilityDebugPanelEl.style.display = 'block';
+            return;
+        }
+        if (abilityDebugPanelEl.replaceChildren) {
+            abilityDebugPanelEl.replaceChildren();
+        } else {
+            abilityDebugPanelEl.innerHTML = '';
+            if (Array.isArray(abilityDebugPanelEl.children)) abilityDebugPanelEl.children.length = 0;
+        }
+        for (var i = 0; i < payload.length; i++) {
+            var section = payload[i];
+            if (!section) continue;
+            var tone = debugToneSpec(section.tone);
+            var node = document.createElement('div');
+            node.className = 'ability-debug-section tone-' + String(section.tone || 'weapon');
+            node.style.borderColor = tone.border;
+            node.style.background = tone.surface;
+            node.style.color = tone.text;
+
+            var title = document.createElement('div');
+            title.className = 'ability-debug-title';
+            title.textContent = String(section.title || '');
+            node.appendChild(title);
+
+            if (section.body) {
+                var body = document.createElement('div');
+                body.className = 'ability-debug-body';
+                body.textContent = String(section.body || '');
+                node.appendChild(body);
+            }
+            abilityDebugPanelEl.appendChild(node);
+        }
         abilityDebugPanelEl.style.display = 'block';
     };
 

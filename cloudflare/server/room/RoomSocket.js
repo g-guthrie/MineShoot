@@ -47,6 +47,11 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     room.handleFire(player, msg);
     return;
   }
+  if (type === msgC2s.RELOAD) {
+    if (privateLobbyLocked) return;
+    room.handleReload(player, msg);
+    return;
+  }
   if (type === msgC2s.EQUIP_WEAPON) {
     room.handleEquipWeapon(player, msg);
     return;

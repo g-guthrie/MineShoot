@@ -48,6 +48,10 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
     harness.ui.runtimeRoomLabel({ id: 'single_cloudflare', roomId: 'private-room1', gameMode: 'tdm' }),
     'TDM CODE ROOM1'
   );
+  assert.equal(
+    harness.ui.startupSubtitleForMode({ id: 'single_dev_server', roomId: 'local-shared', gameMode: 'ffa' }),
+    'Connecting to Local Multiplayer: local-shared...'
+  );
 });
 
 test('runtime mode ui renders indicator text from one shared formatter', async () => {
@@ -55,7 +59,7 @@ test('runtime mode ui renders indicator text from one shared formatter', async (
 
   harness.ui.setRuntimeIndicator({
     id: 'single_cloudflare',
-    label: 'Solo Cloudflare (Bots)',
+    label: 'Private Cloudflare Room',
     backendLabel: 'Cloudflare Prod',
     roomId: 'private-room1',
     gameMode: 'lms'
@@ -63,6 +67,6 @@ test('runtime mode ui renders indicator text from one shared formatter', async (
 
   assert.equal(
     harness.indicator.textContent,
-    'PROFILE :: SOLO CLOUDFLARE (BOTS) :: CLOUDFLARE PROD :: LMS CODE ROOM1'
+    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: LMS CODE ROOM1'
   );
 });

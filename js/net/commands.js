@@ -23,6 +23,15 @@
                 if (!payload) return false;
                 return wsSend(payload);
             },
+            sendReload: function (weaponId) {
+                if (!weaponId) return false;
+                return wsSend(opts.normalizeReloadPayload
+                    ? opts.normalizeReloadPayload(weaponId)
+                    : {
+                        t: opts.reloadMessageType || 'reload',
+                        weaponId: String(weaponId)
+                    });
+            },
             sendEquipWeapon: function (weaponId) {
                 if (!weaponId) return false;
                 return wsSend({

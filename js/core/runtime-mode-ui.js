@@ -66,10 +66,10 @@
             return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_cloudflare') {
-            return 'Connecting to Solo Cloudflare room: ' + mode.roomId + '...';
+            return 'Connecting to Private Cloudflare room: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_dev_server') {
-            return 'Connecting to Local Dev Room: ' + mode.roomId + '...';
+            return 'Connecting to Local Multiplayer: ' + mode.roomId + '...';
         }
         return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
             ? 'Starting Offline Sandbox: LMS...'
@@ -94,10 +94,10 @@
             if (isShareCodeRoomId(mode.roomId)) {
                 return 'Private room code ' + roomCodeFromRoomId(mode.roomId) + '.';
             }
-            return 'Solo Cloudflare (Bots): room ' + mode.roomId + '.';
+            return 'Private Cloudflare room ' + mode.roomId + '.';
         }
         if (mode.id === 'single_dev_server') {
-            return 'Local Dev Room (Bots): shared local-worker room ' + mode.roomId + '.';
+            return 'Local Multiplayer: shared local-worker room ' + mode.roomId + '.';
         }
         return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
             ? 'Offline Sandbox LMS: local simulated players.'

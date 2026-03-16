@@ -186,3 +186,23 @@ test('sprint effects stay peripheral and hide while scoped or stationary', async
   assert.equal(harness.getElement('sprint-speed-lines').style.display, 'none');
   assert.equal(harness.getElement('sprint-speed-lines').style.opacity, '0');
 });
+
+test('plasma debug reticle shows the projected catch diameter only while active', async () => {
+  const harness = await loadUiHarness();
+
+  harness.GameUI.updatePlasmaState({
+    visible: true,
+    diameterPx: 188,
+    curveStrength: 0.86
+  });
+
+  assert.equal(harness.getElement('plasma-reticle').style.display, 'block');
+  assert.equal(harness.getElement('plasma-reticle').style.width, '188px');
+  assert.equal(harness.getElement('plasma-reticle').style.height, '188px');
+  assert.equal(harness.getElement('plasma-reticle').children.length, 2);
+  assert.notEqual(harness.getElement('plasma-reticle').children[0].style.width, undefined);
+  assert.notEqual(harness.getElement('plasma-reticle').children[1].style.height, undefined);
+
+  harness.GameUI.updatePlasmaState({ visible: false });
+  assert.equal(harness.getElement('plasma-reticle').style.display, 'none');
+});

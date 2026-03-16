@@ -148,6 +148,8 @@ export function buildViewerEntitySnapshot(entities, viewerEntity, viewerSnapshot
 
 export function buildWelcomePayload(room, selfId, deps) {
   deps = deps || {};
+  const tickRate = Math.round(1000 / Number(deps.roomSimTickMs || 33));
+  const inputSendHz = Math.max(0, Math.round(Number(deps.inputSendHz || 0))) || tickRate;
   return {
     t: deps.msgType,
     selfId,
@@ -155,7 +157,8 @@ export function buildWelcomePayload(room, selfId, deps) {
     gameMode: room.gameMode || '',
     privateRoomPhase: currentPrivateRoomPhase(room, deps),
     matchState: serializeMatchState(room, deps),
-    tickRate: Math.round(1000 / Number(deps.roomSimTickMs || 33)),
+    tickRate,
+    inputSendHz,
     worldSeed: room.worldSeed,
     worldProfileVersion: room.worldProfileVersion,
     worldFlags: cloneWorldFlags(room.worldFlags)

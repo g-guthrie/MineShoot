@@ -6,7 +6,6 @@ const GRID_ROWS = 14;
 const WORLD_MIN = 2;
 const WORLD_PLAYABLE_SPAN = 162;
 const CELL_SPAN = WORLD_PLAYABLE_SPAN / 3;
-const CELL_PADDING = 6;
 
 const BIOME_CELLS = {
   arctic: { row: 0, col: 0 },
@@ -24,10 +23,10 @@ function biomeBounds(biomeId) {
   const cell = BIOME_CELLS[biomeId];
   if (!cell) throw new Error(`Unknown biome: ${biomeId}`);
   return {
-    minX: WORLD_MIN + (cell.col * CELL_SPAN) + CELL_PADDING,
-    maxX: WORLD_MIN + ((cell.col + 1) * CELL_SPAN) - CELL_PADDING,
-    minZ: WORLD_MIN + (cell.row * CELL_SPAN) + CELL_PADDING,
-    maxZ: WORLD_MIN + ((cell.row + 1) * CELL_SPAN) - CELL_PADDING
+    minX: WORLD_MIN + (cell.col * CELL_SPAN),
+    maxX: WORLD_MIN + ((cell.col + 1) * CELL_SPAN),
+    minZ: WORLD_MIN + (cell.row * CELL_SPAN),
+    maxZ: WORLD_MIN + ((cell.row + 1) * CELL_SPAN)
   };
 }
 
@@ -160,7 +159,7 @@ function buildReport(biomeId) {
   const usedKinds = Array.from(countsByKind.keys()).sort();
 
   const lines = [];
-  lines.push(`${spec.name} biome authored-feature map`);
+  lines.push(`${spec.name} biome distribution map`);
   lines.push(`Biome: ${biomeId}`);
   lines.push(`Bounds x:[${bounds.minX}, ${bounds.maxX}] z:[${bounds.minZ}, ${bounds.maxZ}]  grid:${GRID_COLS}x${GRID_ROWS}`);
   lines.push(`Features: ${authoredFeatures.length} high-level placements across ${occupiedCells}/${GRID_ROWS * GRID_COLS} cells (${occupancyRate}% occupied)`);
@@ -228,22 +227,43 @@ const BIOME_SPECS = {
       shelf: 'H',
       arch: 'A',
       pool: 'P',
+      glacier: 'G',
       spire: 'S',
       boulder: 'B',
       drift: 'd',
       fragment: 'f'
     },
     build(bounds) {
+      const glacierNw = pt(bounds, 0.10, 0.16);
+      const glacierSw = pt(bounds, 0.14, 0.82);
+      const glacierEast = pt(bounds, 0.88, 0.68);
+      const glacierNorth = pt(bounds, 0.62, 0.12);
       return [
         uvPoint(bounds, 'mountain', 0.46, 0.46, 'mountain'),
         uvPoint(bounds, 'overhang', 0.76, 0.28, 'overhang'),
         uvPoint(bounds, 'shelf', 0.26, 0.28, 'ice-shelf'),
         uvPoint(bounds, 'arch', 0.34, 0.72, 'ice-arch'),
         uvPoint(bounds, 'pool', 0.70, 0.78, 'frozen-pool'),
+        ...uvPoints(bounds, 'glacier', [
+          { u: 0.10, v: 0.16 }, { u: 0.14, v: 0.82 }, { u: 0.88, v: 0.68 }, { u: 0.62, v: 0.12 }
+        ], 'glacier-patch'),
         ...uvPoints(bounds, 'spire', [
           { u: 0.18, v: 0.18 }, { u: 0.24, v: 0.24 }, { u: 0.12, v: 0.78 },
           { u: 0.20, v: 0.84 }, { u: 0.84, v: 0.74 }, { u: 0.88, v: 0.66 }
         ], 'spire'),
+        ...[
+          point('spire', glacierNw.x - 1.0, glacierNw.z - 0.4, 'glacier-nw-a'),
+          point('spire', glacierNw.x + 0.2, glacierNw.z + 0.2, 'glacier-nw-b'),
+          point('spire', glacierNw.x + 1.2, glacierNw.z - 0.6, 'glacier-nw-c'),
+          point('spire', glacierSw.x - 0.8, glacierSw.z + 0.4, 'glacier-sw-a'),
+          point('spire', glacierSw.x + 0.4, glacierSw.z - 0.2, 'glacier-sw-b'),
+          point('spire', glacierSw.x + 1.3, glacierSw.z + 0.8, 'glacier-sw-c'),
+          point('spire', glacierEast.x - 1.0, glacierEast.z - 0.2, 'glacier-east-a'),
+          point('spire', glacierEast.x + 0.3, glacierEast.z + 0.4, 'glacier-east-b'),
+          point('spire', glacierEast.x + 1.2, glacierEast.z - 0.8, 'glacier-east-c'),
+          point('spire', glacierNorth.x - 0.8, glacierNorth.z + 0.1, 'glacier-north-a'),
+          point('spire', glacierNorth.x + 0.7, glacierNorth.z - 0.2, 'glacier-north-b')
+        ],
         ...uvPoints(bounds, 'boulder', [
           { u: 0.28, v: 0.36 }, { u: 0.74, v: 0.58 }, { u: 0.42, v: 0.80 },
           { u: 0.62, v: 0.18 }, { u: 0.56, v: 0.68 }
@@ -255,7 +275,10 @@ const BIOME_SPECS = {
         ...uvPoints(bounds, 'fragment', [
           { u: 0.16, v: 0.22 }, { u: 0.84, v: 0.22 }, { u: 0.13, v: 0.84 }, { u: 0.87, v: 0.74 },
           { u: 0.28, v: 0.14 }, { u: 0.72, v: 0.86 }, { u: 0.68, v: 0.28 }
-        ], 'fragment')
+        ], 'fragment'),
+        ...uvPoints(bounds, 'fragment', [
+          { u: 0.08, v: 0.22 }, { u: 0.18, v: 0.88 }, { u: 0.90, v: 0.60 }, { u: 0.66, v: 0.08 }
+        ], 'edge-fragment')
       ];
     }
   },

@@ -270,6 +270,43 @@ test('upper-body forward lean stays off while backpedaling or strafing', async (
   assert.equal(api.rig.upperBodyPivot.rotation.x, 0);
 });
 
+test('airborne forward and backward input tilts the torso to match the live jump arm sweep', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.updateAnimation(0.25, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: true,
+    aimPitch: 0
+  });
+  assert.equal(api.rig.upperBodyPivot.rotation.x, 0);
+
+  api.updateAnimation(0.25, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: true,
+    aimPitch: 0,
+    movingForward: true
+  });
+  const forwardAirLean = api.rig.upperBodyPivot.rotation.x;
+
+  assert.ok(forwardAirLean < -0.03);
+  assert.ok(forwardAirLean > -0.05);
+
+  api.updateAnimation(0.25, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: true,
+    aimPitch: 0,
+    movingBackward: true
+  });
+  const backwardAirLean = api.rig.upperBodyPivot.rotation.x;
+
+  assert.ok(backwardAirLean > 0.03);
+  assert.ok(backwardAirLean < 0.05);
+});
+
 test('weapon mount rotation can customize wrist pitch per weapon', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'pistol' });

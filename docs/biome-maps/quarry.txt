@@ -1,6 +1,6 @@
-Quarry biome authored-feature map
+Quarry biome distribution map
 Biome: quarry
-Bounds x:[8, 50] z:[116, 158]  grid:14x14
+Bounds x:[2, 56] z:[110, 164]  grid:14x14
 Features: 9 high-level placements across 9/196 cells (4.6% occupied)
 
 Dominant feature map
@@ -13,8 +13,8 @@ Dominant feature map
  5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  6 | .  .  .  .  .  .  .  r  .  .  .  .  .  . 
  7 | .  .  .  .  .  P  .  .  .  .  .  .  .  . 
- 8 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 9 | .  .  .  r  .  .  .  .  r  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  r  .  .  .  .  .  . 
+ 9 | .  .  .  .  r  .  .  .  .  .  .  .  .  . 
 10 | .  .  .  .  .  .  .  .  .  W  .  .  .  . 
 11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 12 | .  R  .  .  .  .  .  .  .  .  .  .  R  . 
@@ -30,8 +30,8 @@ Density heatmap
  5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  6 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
  7 | .  .  .  .  .  1  .  .  .  .  .  .  .  . 
- 8 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 9 | .  .  .  1  .  .  .  .  1  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
+ 9 | .  .  .  .  1  .  .  .  .  .  .  .  .  . 
 10 | .  .  .  .  .  .  .  .  .  1  .  .  .  . 
 11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 12 | .  1  .  .  .  .  .  .  .  .  .  .  1  . 
@@ -59,8 +59,8 @@ Top dense cells
   r3 c10  count=1  kinds=crane  labels=crane
   r6 c7  count=1  kinds=ramp  labels=ramp-b
   r7 c5  count=1  kinds=pit  labels=quarry-pit
-  r9 c3  count=1  kinds=ramp  labels=ramp-c
-  r9 c8  count=1  kinds=ramp  labels=ramp-a
+  r8 c7  count=1  kinds=ramp  labels=ramp-a
+  r9 c4  count=1  kinds=ramp  labels=ramp-c
   r10 c9  count=1  kinds=catwalk  labels=catwalk
   r12 c1  count=1  kinds=ridge  labels=ridge-1
   r12 c12  count=1  kinds=ridge  labels=ridge-2

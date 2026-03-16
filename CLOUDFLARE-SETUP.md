@@ -192,7 +192,45 @@ Expected backend URL for this project:
 
 - `https://mayhem.gguthrie-minecraft-fps.workers.dev`
 
-### D) Pages/frontend note
+### D) Manual Wrangler deploy from the current workspace
+
+Use this when you want to push the exact local workspace to Cloudflare without waiting on GitHub-driven deploys.
+
+Fast path:
+
+```bash
+npm run deploy:prod -- --message "Describe the change"
+```
+
+This runs the build, deploys the Worker, then deploys `dist/` to Pages with the production project/branch settings baked in.
+
+Build first:
+
+```bash
+npm run build
+```
+
+Deploy the Worker/backend:
+
+```bash
+./scripts/wrangler.sh deploy
+```
+
+Deploy the built frontend to Pages:
+
+```bash
+./scripts/wrangler.sh pages deploy dist --project-name mayhem --branch main --commit-dirty=true --commit-message "Describe the change"
+```
+
+Notes:
+
+- This Pages command deploys the current local `dist/` output, including uncommitted work.
+- Wrangler prints a preview deployment URL like `https://<hash>.mayhem-9uj.pages.dev`.
+- The production Pages URL for this project remains `https://mayhem-9uj.pages.dev/`.
+- If Wrangler warns that `wrangler.toml` does not yet include `pages_build_output_dir`, you can ignore that warning for now. The deploy still proceeds correctly with the explicit `dist` argument above.
+- The wrapper script lives at [scripts/deploy-prod.sh](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/scripts/deploy-prod.sh).
+
+### E) Pages/frontend note
 
 The frontend Pages deploy is Git-driven from `main`.
 
@@ -212,12 +250,22 @@ Important:
 - You still need to verify that the Pages site is actually serving the new frontend before calling the push complete.
 - If Pages is delayed, still building, or failed, the push is not done.
 
-### E) Quick verification
+### F) Quick verification
 
-Check both endpoints respond:
+Check the Worker on a real API route:
 
 ```bash
-curl -I https://mayhem.gguthrie-minecraft-fps.workers.dev/
+curl -i https://mayhem.gguthrie-minecraft-fps.workers.dev/api/me
+```
+
+Expected result:
+
+- `401 Unauthorized` is fine when you are not logged in.
+- Do not use the Worker root URL `/` as the health check here. A `404` there is normal for this project.
+
+Check the Pages site:
+
+```bash
 curl -I https://mayhem-9uj.pages.dev/
 ```
 

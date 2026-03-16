@@ -437,6 +437,7 @@
 
     function applyReloadState(weapon, state, now) {
         if (!weapon || !state || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
+        if (Number(state.ammoInMag || 0) >= Math.max(0, Number(weapon.magazineSize || 0))) return false;
         state.ammoInMag = 0;
         state.reloadUntil = now + weapon.reloadMs;
         state.reloadedFlashUntil = 0;
@@ -1061,6 +1062,7 @@
             candidates: filtered.map(toSeekCandidate).filter(Boolean),
             maxRange: maxRange,
             coneHalfAngleDeg: 180,
+            preferScreenCenter: true,
             boxWidthPx: boxWidthPx,
             boxHeightPx: boxHeightPx,
             viewportWidth: window.innerWidth,
@@ -1487,6 +1489,21 @@
         return GameHitscan.setWeapon(order[idx]);
     };
 
+    GameHitscan.toggleWeapon = function () {
+        var order = activeWeaponOrder().slice(0, 2);
+        if (!order.length) return null;
+        if (order.length === 1) {
+            if (activeWeaponId() !== order[0]) {
+                return GameHitscan.setWeapon(order[0]);
+            }
+            return GameHitscan.getCurrentWeapon();
+        }
+        var activeId = activeWeaponId();
+        if (activeId === order[0]) return GameHitscan.setWeapon(order[1]);
+        if (activeId === order[1]) return GameHitscan.setWeapon(order[0]);
+        return GameHitscan.setWeapon(order[0]);
+    };
+
     GameHitscan.setWeaponOrder = function (nextOrder) {
         if (!Array.isArray(nextOrder) || nextOrder.length === 0) return weaponOrder.slice();
         var seen = {};
@@ -1639,6 +1656,11 @@
 
     GameHitscan.getHudState = function () {
         return hudStateForWeapon(getCurrentWeaponData(), performance.now());
+    };
+
+    GameHitscan.reloadCurrentWeapon = function () {
+        var weapon = getCurrentWeaponData();
+        return beginReload(weapon, performance.now());
     };
 
     GameHitscan.isAdsBlocked = function () {

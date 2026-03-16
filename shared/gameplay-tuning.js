@@ -203,8 +203,8 @@ export const gameplayTuning = {
       bounceStopSpeedSq: 2.5
     },
     plasma: {
-      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 16, upward: 4.4, gravity: 12, fuse: 3.4, radius: 5.0, damage: 110, regen: 10,
-      homingBoost: 2.0, homingLerp: 4.8, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 0.65
+      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 20, upward: 3.2, gravity: 18, fuse: 2.2, maxLife: 6.0, radius: 5.0, damage: 110, regen: 10,
+      catchRadius: 1.5, trackDuration: 0.2, trackLerp: 10, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 2.2
     },
     missile: {
       id: 'missile', label: 'Missile', speed: 38, upward: 0.2, gravity: 0.8, fuse: 1.25, radius: 2.4, damage: 90,
@@ -212,7 +212,8 @@ export const gameplayTuning = {
     },
     molotov: {
       id: 'molotov', category: 'grenade', label: 'Molotov', speed: 17, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.8,
-      fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, regen: 10
+      fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, fireInnerRadius: 2.1, fireOuterDamageScale: 0.38,
+      fireLingerDuration: 0.9, fireLingerTickDamage: 8, fireLingerTickRate: 0.4, fireMaxHeightDelta: 1.5, regen: 10
     },
     knife: {
       id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, hitRadius: 0.55, bodyDamage: 100, headDamage: 250, regen: 8
@@ -224,7 +225,7 @@ export const gameplayTuning = {
       description: 'Single-target lift and stun in reticle box.',
       debugSummary: 'Square = choke target box.',
       tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 15000, range: 28, minDot: 0.05, duration: 2.0,
+      cooldownMs: 18000, range: 28, minDot: 0.05, duration: 2.0,
       liftHeight: 1.75, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 315, targetTolerance: 1.6
     },
     hook: {
@@ -247,7 +248,7 @@ export const gameplayTuning = {
       description: 'Fast guided micro-rocket that bends toward nearby targets.',
       debugSummary: 'Fires from muzzle and gently seeks toward nearby hostile hitboxes.',
       tunableParams: ['range', 'cooldownMs', 'damage', 'radius', 'travelSpeed', 'acquireRange', 'catchRadius', 'lockHalfAngleDeg', 'homingBoost', 'homingLerp'],
-      cooldownMs: 900, range: 34, damage: 90, radius: 2.4, travelSpeed: 38, acquireRange: 7.5, catchRadius: 1.25,
+      cooldownMs: 6000, range: 34, damage: 90, radius: 2.4, travelSpeed: 38, acquireRange: 7.5, catchRadius: 1.25,
       lockHalfAngleDeg: 12, homingBoost: 6.0, homingLerp: 8.4, gravity: 0.8, fuse: 1.25
     },
     deadeye: {

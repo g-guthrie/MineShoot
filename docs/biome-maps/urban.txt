@@ -1,6 +1,6 @@
-Urban biome authored-feature map
+Urban biome distribution map
 Biome: urban
-Bounds x:[116, 158] z:[116, 158]  grid:14x14
+Bounds x:[110, 164] z:[110, 164]  grid:14x14
 Features: 22 high-level placements across 21/196 cells (10.7% occupied)
 
 Dominant feature map

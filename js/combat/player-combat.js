@@ -20,13 +20,16 @@
     var equippedWeaponId = 'rifle';
     var predictedMultiplayerWeaponId = '';
     var predictedMultiplayerWeaponUntil = 0;
+    var predictedMultiplayerReloadUntilByWeapon = {};
     var weaponAmmo = {};
     var lastWeaponFireAtMs = 0;
 
     var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
     var ARMOR_REGEN_PER_SEC = 12;
     var RELOADED_FLASH_MS = 900;
-    var MULTIPLAYER_WEAPON_PREDICTION_GRACE_MS = 800;
+    // Allow for network jitter plus snapshot cadence before a stale authoritative
+    // weapon id snaps the local switch back.
+    var MULTIPLAYER_WEAPON_PREDICTION_GRACE_MS = 2500;
 
     var sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
 
@@ -168,6 +171,7 @@
             state.reloadUntil = 0;
             state.ammoInMag = Math.max(0, Number(stats.magazineSize || 0));
             state.reloadedFlashUntil = stamp + RELOADED_FLASH_MS;
+            clearPredictedMultiplayerReload(id);
         }
         return state;
     }
@@ -187,11 +191,22 @@
             var stats = getWeaponStats(weaponId);
             if (!entry || !state || !stats) continue;
             var magazineSize = Math.max(0, Number(stats.magazineSize || 0));
+            var snapshotAmmoInMag = Math.max(0, Number(entry.ammoInMag || 0));
+            var predictedReloadUntil = Math.max(0, Number(predictedMultiplayerReloadUntilByWeapon[weaponId] || 0));
+            var awaitingReloadAck = isMultiplayer() &&
+                predictedReloadUntil > stamp &&
+                !entry.reloading &&
+                snapshotAmmoInMag > 0 &&
+                snapshotAmmoInMag < magazineSize;
+            if (awaitingReloadAck) continue;
             state.ammoInMag = Math.max(0, Math.min(magazineSize, Number(entry.ammoInMag || 0)));
             state.reloadUntil = entry.reloading
                 ? stamp + Math.max(0, Math.round(Number(entry.reloadRemaining || 0) * 1000))
                 : 0;
             state.reloadedFlashUntil = stamp + Math.max(0, Math.round(Number(entry.reloadedFlashRemaining || 0) * 1000));
+            if (entry.reloading || state.ammoInMag >= magazineSize) {
+                clearPredictedMultiplayerReload(weaponId);
+            }
         }
         return true;
     }
@@ -279,6 +294,22 @@
         predictedMultiplayerWeaponUntil = 0;
     }
 
+    function clearPredictedMultiplayerReload(weaponId) {
+        var id = String(weaponId || '');
+        if (!id) return;
+        delete predictedMultiplayerReloadUntilByWeapon[id];
+    }
+
+    function rememberPredictedMultiplayerReload(weaponId, now, reloadMs) {
+        if (!isMultiplayer()) {
+            clearPredictedMultiplayerReload(weaponId);
+            return;
+        }
+        var id = String(weaponId || '');
+        if (!id) return;
+        predictedMultiplayerReloadUntilByWeapon[id] = weaponTimeMs(now) + Math.max(0, Number(reloadMs || 0)) + 250;
+    }
+
     function rememberPredictedMultiplayerWeapon(weaponId) {
         if (!isMultiplayer()) {
             clearPredictedMultiplayerWeapon();
@@ -329,9 +360,11 @@
         if (Number(stats.magazineSize || 0) <= 0 || Number(stats.reloadMs || 0) <= 0) return false;
         var state = syncWeaponAmmoState(id, stamp);
         if (!state || Number(state.reloadUntil || 0) > stamp) return false;
+        if (Number(state.ammoInMag || 0) >= Math.max(0, Number(stats.magazineSize || 0))) return false;
         state.ammoInMag = 0;
         state.reloadUntil = stamp + Math.max(0, Number(stats.reloadMs || 0));
         state.reloadedFlashUntil = 0;
+        rememberPredictedMultiplayerReload(id, stamp, stats.reloadMs);
         return true;
     }
 
@@ -440,6 +473,7 @@
         weaponAmmo = {};
         lastWeaponFireAtMs = 0;
         clearPredictedMultiplayerWeapon();
+        predictedMultiplayerReloadUntilByWeapon = {};
         applyWeaponLoadout(defaultWeaponLoadout(), '');
     }
 

@@ -147,9 +147,9 @@ Known invariant:
 ### 7. Menu Launch and Runtime State
 
 Owner:
-- menu launch state machine in [js/app/menu-launch-orchestrator.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/menu-launch-orchestrator.js)
+- menu launch flow in [js/app/lobby-controller.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/lobby-controller.js)
 - menu session polling in [js/app/lobby-session.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/lobby-session.js)
-- gameplay runtime/session bridge in [js/main.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/main.js)
+- gameplay runtime/session bridge in [js/app/runtime-shell.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-shell.js), [js/app/runtime-session.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-session.js), and [js/app/runtime-coordinator.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-coordinator.js)
 
 Must own:
 - matchmaking pending state

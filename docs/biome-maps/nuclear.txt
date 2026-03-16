@@ -1,39 +1,39 @@
-Nuclear biome authored-feature map
+Nuclear biome distribution map
 Biome: nuclear
-Bounds x:[116, 158] z:[62, 104]  grid:14x14
+Bounds x:[110, 164] z:[56, 110]  grid:14x14
 Features: 11 high-level placements across 11/196 cells (5.6% occupied)
 
 Dominant feature map
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
- 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  .  .  .  L  .  .  .  .  .  .  . 
+ 0 | .  .  .  .  .  .  L  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  3 | .  .  T  .  .  .  .  .  .  .  .  .  .  . 
- 4 | .  .  .  .  .  .  .  .  .  .  .  T  L  . 
- 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  T  .  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  L  . 
  6 | .  .  .  .  .  b  .  .  .  .  .  .  .  . 
- 7 | .  .  .  P  .  .  C  .  .  P  .  .  .  . 
- 8 | .  .  .  .  .  .  .  .  b  .  .  .  .  . 
+ 7 | .  .  .  .  P  .  C  .  P  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  b  .  .  .  .  .  . 
  9 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
-10 | .  .  .  .  .  .  .  .  .  .  Y  .  .  . 
-11 | .  L  .  .  .  .  .  .  .  .  .  .  .  . 
+10 | .  L  .  .  .  .  .  .  .  .  Y  .  .  . 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 
 Density heatmap
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
- 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  .  .  .  1  .  .  .  .  .  .  . 
+ 0 | .  .  .  .  .  .  1  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
  3 | .  .  1  .  .  .  .  .  .  .  .  .  .  . 
- 4 | .  .  .  .  .  .  .  .  .  .  .  1  1  . 
- 5 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  .  1  .  . 
+ 5 | .  .  .  .  .  .  .  .  .  .  .  .  1  . 
  6 | .  .  .  .  .  1  .  .  .  .  .  .  .  . 
- 7 | .  .  .  1  .  .  1  .  .  1  .  .  .  . 
- 8 | .  .  .  .  .  .  .  .  1  .  .  .  .  . 
+ 7 | .  .  .  .  1  .  1  .  1  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  1  .  .  .  .  .  . 
  9 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
-10 | .  .  .  .  .  .  .  .  .  .  1  .  .  . 
-11 | .  1  .  .  .  .  .  .  .  .  .  .  .  . 
+10 | .  1  .  .  .  .  .  .  .  .  1  .  .  . 
+11 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
 
@@ -55,14 +55,14 @@ Counts by feature kind
   yard             1
 
 Top dense cells
-  r1 c6  count=1  kinds=lane  labels=north-lane
+  r0 c6  count=1  kinds=lane  labels=north-lane
   r3 c2  count=1  kinds=tower  labels=cooling-tower-1
   r4 c11  count=1  kinds=tower  labels=cooling-tower-2
-  r4 c12  count=1  kinds=lane  labels=east-lane
+  r5 c12  count=1  kinds=lane  labels=east-lane
   r6 c5  count=1  kinds=beacon  labels=beacon-a
-  r7 c3  count=1  kinds=pipe  labels=west-pipe
+  r7 c4  count=1  kinds=pipe  labels=west-pipe
   r7 c6  count=1  kinds=campus  labels=reactor-campus
-  r7 c9  count=1  kinds=pipe  labels=east-pipe
-  r8 c8  count=1  kinds=beacon  labels=beacon-b
+  r7 c8  count=1  kinds=pipe  labels=east-pipe
+  r8 c7  count=1  kinds=beacon  labels=beacon-b
+  r10 c1  count=1  kinds=lane  labels=west-lane
   r10 c10  count=1  kinds=yard  labels=control-yard
-  r11 c1  count=1  kinds=lane  labels=west-lane

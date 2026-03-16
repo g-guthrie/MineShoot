@@ -36,8 +36,6 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     var BIOME_QUARRY = SHARED_LAYOUT.BIOME_QUARRY;
     var BIOME_BASIN = SHARED_LAYOUT.BIOME_BASIN;
     var BIOME_RADAR = SHARED_LAYOUT.BIOME_RADAR;
-    var BIOME_GRID_LINE_X = SHARED_LAYOUT.BIOME_GRID_LINE_X.slice();
-    var BIOME_GRID_LINE_Z = SHARED_LAYOUT.BIOME_GRID_LINE_Z.slice();
 
     var DEFAULT_QUADRANT_MAP = SHARED_LAYOUT.DEFAULT_QUADRANT_MAP.slice();
 
@@ -137,28 +135,21 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         return a + ((b - a) * t);
     }
 
-    function isNearGridSeam(value, seamLines, threshold) {
-        for (var i = 0; i < seamLines.length; i++) {
-            if (Math.abs(value - seamLines[i]) <= threshold) return true;
-        }
-        return false;
-    }
-
-    function quadrantBounds(quadrant, padding) {
-        return SHARED_LAYOUT.quadrantBounds(quadrant, padding);
+    function quadrantBounds(quadrant) {
+        return SHARED_LAYOUT.quadrantBounds(quadrant);
     }
 
     function biomeAt(x, z) {
         return SHARED_LAYOUT.biomeAtPosition(x, z, DEFAULT_QUADRANT_MAP);
     }
 
-    function biomeBounds(biomeId, padding) {
+    function biomeBounds(biomeId) {
         for (var i = 0; i < DEFAULT_QUADRANT_MAP.length; i++) {
             if (DEFAULT_QUADRANT_MAP[i].biome === biomeId) {
-                return quadrantBounds(DEFAULT_QUADRANT_MAP[i].quadrant, padding);
+                return quadrantBounds(DEFAULT_QUADRANT_MAP[i].quadrant);
             }
         }
-        return quadrantBounds(DEFAULT_QUADRANT_MAP[DEFAULT_QUADRANT_MAP.length - 1].quadrant, padding);
+        return quadrantBounds(DEFAULT_QUADRANT_MAP[DEFAULT_QUADRANT_MAP.length - 1].quadrant);
     }
 
     function pointInBounds(bounds, u, v) {
@@ -316,11 +307,6 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             addDecor: addDecor
         };
 
-        var intersections = globalThis.__MAYHEM_RUNTIME.WorldIntersections || {};
-        var seamSpec = (typeof intersections.createSeamSpec === 'function')
-            ? intersections.createSeamSpec({})
-            : { armWidth: 0.36, halfWidth: 0.18, height: 0.08, tintMix: 0.12, tintThreshold: 0.22 };
-
         var quadrantCtx = {
             scene: scene,
             addExclusion: function (x, z, r) { addSpawnExclusionCircle(x, z, r); },
@@ -341,7 +327,6 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         var groundPos = groundGeo.attributes.position;
         var groundColors = new Float32Array(groundPos.count * 3);
         var color = new THREE.Color();
-        var seamColor = new THREE.Color(0x606763);
 
         var biomeColorCache = {};
         for (var bk in GROUND_COLORS) {
@@ -356,12 +341,6 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 
             var biomeId = biomeAt(gx, gz);
             color.copy(biomeColorCache[biomeId] || biomeColorCache[BIOME_JUNGLE]);
-
-            if (isNearGridSeam(gx, BIOME_GRID_LINE_X, seamSpec.tintThreshold) || isNearGridSeam(gz, BIOME_GRID_LINE_Z, seamSpec.tintThreshold)) {
-                color.r += (seamColor.r - color.r) * seamSpec.tintMix;
-                color.g += (seamColor.g - color.g) * seamSpec.tintMix;
-                color.b += (seamColor.b - color.b) * seamSpec.tintMix;
-            }
 
             groundColors[(vi * 3)] = color.r;
             groundColors[(vi * 3) + 1] = color.g;
@@ -387,18 +366,6 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         lowerGround.position.set(WORLD_CENTER, -6, WORLD_CENTER);
         lowerGround.receiveShadow = true;
         scene.add(lowerGround);
-
-        if (typeof intersections.buildGridDecor === 'function') {
-            intersections.buildGridDecor({
-                place: place,
-                materialLibrary: matLib,
-                layout: SHARED_LAYOUT,
-                biomeMap: DEFAULT_QUADRANT_MAP.slice(),
-                seamSpec: seamSpec,
-                seamMaterial: matLib.getLambert({ color: 0x58605d }),
-                fx: quadrantCtx
-            });
-        }
 
         // --- Biome-themed perimeter walls ---
         (function buildBiomeWalls() {
@@ -440,14 +407,12 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             var entry = DEFAULT_QUADRANT_MAP[qi];
             var builder = quadrants[entry.biome];
             if (typeof builder !== 'function') continue;
-            var rawBounds = quadrantBounds(entry.quadrant, 0);
-            var qBounds = quadrantBounds(entry.quadrant, 6);
+            var rawBounds = quadrantBounds(entry.quadrant);
             var builderCtx = Object.assign({}, quadrantCtx, {
                 biomeEntry: entry,
-                rawBounds: rawBounds,
-                paddedBounds: qBounds
+                rawBounds: rawBounds
             });
-            var stats = builder(qBounds, place, builderCtx);
+            var stats = builder(rawBounds, place, builderCtx);
             if (stats) {
                 var target = generationStats[entry.biome] || {};
                 generationStats[entry.biome] = target;

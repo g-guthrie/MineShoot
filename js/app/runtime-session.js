@@ -7,6 +7,15 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameRuntimeSession = {};
+    var IDLE_TIMEOUT_MS = 30000;
+    var IDLE_WARNING_WINDOW_MS = 5000;
+
+    function editableTarget(target) {
+        var node = target || null;
+        var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
+        if (node && node.isContentEditable) return true;
+        return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+    }
 
     function ensureMenuSessionEls() {
         return {
@@ -37,9 +46,11 @@
 
     function ensureLaunchHandoffEls() {
         return {
-            flow: document.getElementById('launch-handoff'),
-            title: document.getElementById('launch-handoff-title'),
-            copy: document.getElementById('launch-handoff-copy'),
+            flow: document.getElementById('launch-flow') || document.getElementById('launch-handoff'),
+            title: document.getElementById('launch-title') || document.getElementById('launch-handoff-title'),
+            copy: document.getElementById('launch-status') || document.getElementById('launch-handoff-copy'),
+            note: document.getElementById('launch-note'),
+            roomLabel: document.getElementById('launch-room-label'),
             enterBtn: document.getElementById('launch-enter-btn'),
             cancelBtn: document.getElementById('launch-cancel-btn'),
             menuStage: document.getElementById('menu-stage')
@@ -75,6 +86,15 @@
         var lastHandledMatchEndAt = 0;
         var listenersBound = false;
         var lastStartRequestAt = 0;
+        var lastGameplayActivityAt = 0;
+        var idleMonitorHandle = 0;
+        var lastIdleWarningSecond = 0;
+        var pendingPauseReason = '';
+        var pauseState = {
+            active: false,
+            reason: '',
+            triggeredAt: 0
+        };
         var postGameState = {
             active: false,
             phase: '',
@@ -83,10 +103,207 @@
             timer: null
         };
 
+        function baseActivityState() {
+            return opts.getActivityState ? String(opts.getActivityState() || 'menu') : 'menu';
+        }
+
+        function currentActivityState() {
+            if (!opts.isRuntimeReady || !opts.isRuntimeReady()) return 'menu';
+            if (pauseState.active) return 'paused';
+            if (pendingInputCapture && !isPlaying) return 'awaiting_input_capture';
+            return baseActivityState();
+        }
+
+        function isNetworkedRuntime() {
+            return !!(opts.isNetworkedRuntime && opts.isNetworkedRuntime());
+        }
+
+        function setMenuButtonsVisible(playVisible, backVisible) {
+            var els = ensureMenuSessionEls();
+            if (els.playBtn) {
+                els.playBtn.style.display = playVisible ? 'inline-block' : 'none';
+                els.playBtn.textContent = pendingInputCapture ? 'ENTER MATCH' : 'RESUME MATCH';
+            }
+            if (els.backBtn) {
+                els.backBtn.style.display = backVisible ? 'inline-block' : 'none';
+                if (pendingInputCapture) {
+                    els.backBtn.textContent = 'RETURN TO MENU';
+                } else if (pauseState.active || canResumeGameplay()) {
+                    els.backBtn.textContent = 'LEAVE GAME';
+                } else {
+                    els.backBtn.textContent = 'RETURN TO MENU';
+                }
+            }
+        }
+
+        function requestLeaveGame() {
+            if (window && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('mayhem-leave-game-request', {
+                    detail: {
+                        requiresConfirm: !!(pauseState.active || canResumeGameplay()),
+                        pendingInputCapture: !!pendingInputCapture
+                    }
+                }));
+            }
+        }
+
+        function clearIdleWarning() {
+            lastIdleWarningSecond = 0;
+            if (opts.setIdleWarning) opts.setIdleWarning('');
+        }
+
+        function clearPauseState() {
+            pauseState.active = false;
+            pauseState.reason = '';
+            pauseState.triggeredAt = 0;
+        }
+
+        function focusElement(target) {
+            if (!target || typeof target.focus !== 'function') return false;
+            try {
+                target.focus();
+                return true;
+            } catch (_err) {
+                return false;
+            }
+        }
+
+        function escapeModalOpen() {
+            return !!(runtime.GameModalManager && runtime.GameModalManager.isOpen && runtime.GameModalManager.isOpen());
+        }
+
+        function shouldPauseFromEscape(event) {
+            if (!event || event.key !== 'Escape') return false;
+            if (event.repeat) return false;
+            if (editableTarget(event.target)) return false;
+            if (!document.pointerLockElement) return false;
+            if (!isPlaying) return false;
+            if (escapeModalOpen()) return false;
+            return true;
+        }
+
+        function focusResumeControl(preferPlay) {
+            var els = ensureMenuSessionEls();
+            var preferred = preferPlay ? els.playBtn : els.backBtn;
+            var fallback = preferPlay ? els.backBtn : els.playBtn;
+            if (focusElement(preferred)) return true;
+            return focusElement(fallback);
+        }
+
+        function clearIdleMonitor() {
+            if (idleMonitorHandle) {
+                clearInterval(idleMonitorHandle);
+                idleMonitorHandle = 0;
+            }
+            lastGameplayActivityAt = 0;
+            clearIdleWarning();
+        }
+
+        function shouldMonitorIdle() {
+            if (!isPlaying) return false;
+            if (pauseState.active) return false;
+            if (postGameState.active) return false;
+            if (!isNetworkedRuntime()) return false;
+            return baseActivityState() !== 'private_room_lobby';
+        }
+
+        function recordGameplayActivity() {
+            if (!shouldMonitorIdle()) return;
+            lastGameplayActivityAt = Date.now();
+            clearIdleWarning();
+        }
+
+        function setPauseState(reason) {
+            pauseState.active = true;
+            pauseState.reason = String(reason || 'pause');
+            pauseState.triggeredAt = Date.now();
+            pendingInputCapture = false;
+            clearIdleWarning();
+            setMenuButtonsVisible(false, true);
+        }
+
+        function suspendNetworkSession(reason) {
+            if (!isNetworkedRuntime()) return false;
+            if (pauseState.active) return true;
+            if (opts.suspendNetworkSession && opts.suspendNetworkSession(reason) === false) {
+                return false;
+            }
+            setPauseState(reason);
+            if (opts.setTransientDebug) {
+                opts.setTransientDebug(
+                    reason === 'idle'
+                        ? 'Idle timeout reached. Match connection closed.'
+                        : 'Pause menu opened. Match connection closed.',
+                    2400
+                );
+            }
+            return true;
+        }
+
+        function triggerIdlePause() {
+            if (!shouldMonitorIdle()) return;
+            clearIdleMonitor();
+            pendingPauseReason = 'idle';
+            if (document.pointerLockElement && document.exitPointerLock) {
+                document.exitPointerLock();
+            }
+            if (!document.pointerLockElement) {
+                suspendNetworkSession('idle');
+            }
+        }
+
+        function checkIdleTimeout() {
+            if (!shouldMonitorIdle()) {
+                clearIdleMonitor();
+                return;
+            }
+            if (!(lastGameplayActivityAt > 0)) {
+                lastGameplayActivityAt = Date.now();
+            }
+            var remainingMs = IDLE_TIMEOUT_MS - Math.max(0, Date.now() - lastGameplayActivityAt);
+            if (remainingMs <= 0) {
+                triggerIdlePause();
+                return;
+            }
+            if (remainingMs > IDLE_WARNING_WINDOW_MS) {
+                clearIdleWarning();
+                return;
+            }
+            var nextSecond = Math.max(1, Math.ceil(remainingMs / 1000));
+            if (nextSecond === lastIdleWarningSecond) return;
+            lastIdleWarningSecond = nextSecond;
+            if (opts.setIdleWarning) {
+                opts.setIdleWarning('Inactive. Returning to pause menu in ' + nextSecond + '...');
+            }
+        }
+
+        function syncIdleMonitor() {
+            if (!shouldMonitorIdle()) {
+                clearIdleMonitor();
+                return;
+            }
+            if (!(lastGameplayActivityAt > 0)) {
+                lastGameplayActivityAt = Date.now();
+            }
+            if (idleMonitorHandle) return;
+            idleMonitorHandle = setInterval(checkIdleTimeout, 250);
+        }
+
         function canResumeGameplay() {
             if (!opts.isRuntimeReady || !opts.isRuntimeReady()) return false;
             if (postGameState.active) return false;
+            if (pauseState.active) return false;
             return opts.canResumeGameplay ? !!opts.canResumeGameplay() : false;
+        }
+
+        function shouldResumeFromEscape(event) {
+            if (!event || event.key !== 'Escape') return false;
+            if (event.repeat) return false;
+            if (editableTarget(event.target)) return false;
+            if (document.pointerLockElement) return false;
+            if (!canResumeGameplay()) return false;
+            if (escapeModalOpen()) return false;
+            return true;
         }
 
         function emitSessionState() {
@@ -97,7 +314,7 @@
                     inMatch: !!isPlaying,
                     awaitingInputCapture: !!(pendingInputCapture && opts.isRuntimeReady && opts.isRuntimeReady() && !isPlaying),
                     canResume: canResumeGameplay(),
-                    activityState: opts.getActivityState ? String(opts.getActivityState() || 'menu') : 'menu',
+                    activityState: currentActivityState(),
                     launchContext: cloneLaunchContext(launchContext)
                 }
             }));
@@ -111,32 +328,53 @@
         }
 
         function setResumeButtonsVisible(show) {
-            var els = ensureMenuSessionEls();
-            if (els.playBtn) els.playBtn.style.display = show ? 'inline-block' : 'none';
-            if (els.backBtn) els.backBtn.style.display = show ? 'inline-block' : 'none';
+            if (pauseState.active) {
+                setMenuButtonsVisible(false, true);
+                return;
+            }
+            if (pendingInputCapture) {
+                setMenuButtonsVisible(true, true);
+                return;
+            }
+            setMenuButtonsVisible(show, show);
         }
 
         function hideLaunchHandoff() {
             var els = ensureLaunchHandoffEls();
             if (els.flow) els.flow.hidden = true;
+            if (els.enterBtn) els.enterBtn.hidden = true;
+            if (els.cancelBtn) els.cancelBtn.hidden = true;
+            if (els.roomLabel) els.roomLabel.hidden = true;
             if (!postGameState.active && els.menuStage) els.menuStage.hidden = false;
         }
 
         function showLaunchHandoff(context) {
             var els = ensureLaunchHandoffEls();
             var modeLabel = String(context && context.gameMode || '').toUpperCase();
+            var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = true;
-            if (els.menuStage) els.menuStage.hidden = true;
-            if (els.flow) els.flow.hidden = false;
+            clearIdleMonitor();
+            if (els.menuStage) els.menuStage.hidden = false;
+            if (els.flow) els.flow.hidden = true;
             if (els.title) els.title.textContent = 'ENTER MATCH';
             if (els.copy) {
                 els.copy.textContent = modeLabel
-                    ? (modeLabel + ' READY. CLICK TO CAPTURE THE MOUSE AND DROP INTO THE ARENA.')
-                    : 'CLICK TO CAPTURE THE MOUSE AND DROP INTO THE ARENA.';
+                    ? (modeLabel + ' READY.')
+                    : 'MATCH READY.';
             }
-            setResumeButtonsVisible(false);
+            if (els.note) {
+                els.note.textContent = 'Click ENTER MATCH to capture the mouse and drop into the arena.';
+            }
+            if (els.roomLabel) {
+                els.roomLabel.hidden = true;
+                els.roomLabel.textContent = roomLabel ? ('ROOM ' + roomLabel) : 'ROOM ----';
+            }
+            if (els.enterBtn) els.enterBtn.hidden = true;
+            if (els.cancelBtn) els.cancelBtn.hidden = true;
+            setResumeButtonsVisible(true);
+            focusResumeControl(true);
             emitSessionState();
         }
 
@@ -144,8 +382,10 @@
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
+            clearIdleMonitor();
             hideLaunchHandoff();
             setResumeButtonsVisible(canResumeGameplay());
+            focusResumeControl(canResumeGameplay());
             emitSessionState();
         }
 
@@ -155,6 +395,7 @@
             postGameState.active = false;
             postGameState.phase = '';
             postGameState.snapshot = null;
+            clearIdleMonitor();
             if (els.flow) els.flow.hidden = true;
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = true;
@@ -168,6 +409,7 @@
             if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) {
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
+                clearIdleMonitor();
                 setResumeButtonsVisible(canResumeGameplay());
                 return;
             }
@@ -228,6 +470,7 @@
                 privateRoomPhase: matchContext ? String(matchContext.privateRoomPhase || '') : ''
             };
 
+            clearIdleMonitor();
             clearPostGameTimer();
             if (document.pointerLockElement && document.exitPointerLock) {
                 document.exitPointerLock();
@@ -254,8 +497,18 @@
 
         function requestPlayStart(event) {
             var now = performance.now();
-            if (now - lastStartRequestAt < 140) return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
-            lastStartRequestAt = now;
+            var eventType = event && event.type ? String(event.type) : '';
+            var debouncePointerActivation =
+                eventType === 'click' ||
+                eventType === 'pointerup' ||
+                eventType === 'mousedown' ||
+                eventType === 'touchend';
+            if (debouncePointerActivation) {
+                if (now - lastStartRequestAt < 140) {
+                    return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
+                }
+                lastStartRequestAt = now;
+            }
 
             if (event) {
                 if (typeof event.button === 'number' && event.button !== 0) {
@@ -278,13 +531,15 @@
             }
 
             if (opts.beforeGameplayEntry) opts.beforeGameplayEntry();
+            clearPauseState();
+            clearIdleWarning();
 
             var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
             if (!target) {
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
-                setResumeButtonsVisible(canResumeGameplay());
                 pendingInputCapture = true;
+                setResumeButtonsVisible(true);
                 emitSessionState();
                 return Promise.resolve({ ok: true, entered: false, pendingCapture: true });
             }
@@ -293,9 +548,9 @@
             if (typeof requestLock !== 'function') {
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
-                setResumeButtonsVisible(canResumeGameplay());
                 if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock is required for gameplay.', 2200);
                 pendingInputCapture = true;
+                setResumeButtonsVisible(true);
                 emitSessionState();
                 return Promise.resolve({ ok: true, entered: false, pendingCapture: true, error: 'Pointer lock is required for gameplay.' });
             }
@@ -305,6 +560,7 @@
                 if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
                     return maybePromise.then(function () {
                         pendingInputCapture = !(document.pointerLockElement === target);
+                        if (pendingInputCapture) setResumeButtonsVisible(true);
                         emitSessionState();
                         return {
                             ok: true,
@@ -315,10 +571,10 @@
                         if (!document.pointerLockElement) {
                             if (overlayEl) overlayEl.style.display = 'flex';
                             isPlaying = false;
-                            setResumeButtonsVisible(canResumeGameplay());
                             if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock denied. Click PLAY to retry.', 2200);
                         }
                         pendingInputCapture = true;
+                        setResumeButtonsVisible(true);
                         emitSessionState();
                         return {
                             ok: true,
@@ -338,9 +594,9 @@
             } catch (err) {
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
-                setResumeButtonsVisible(canResumeGameplay());
                 if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock failed. Click PLAY to retry.', 2200);
                 pendingInputCapture = true;
+                setResumeButtonsVisible(true);
                 emitSessionState();
                 return Promise.resolve({
                     ok: true,
@@ -375,6 +631,10 @@
                     backModeBtn.addEventListener('click', function (event) {
                         event.preventDefault();
                         event.stopPropagation();
+                        if (pauseState.active || canResumeGameplay()) {
+                            requestLeaveGame();
+                            return;
+                        }
                         api.returnToMenu();
                     });
                 }
@@ -410,7 +670,25 @@
                 }
 
                 document.addEventListener('keydown', function (event) {
-                    if (!postGameState.active) return;
+                    if (!postGameState.active) {
+                        if (shouldPauseFromEscape(event)) {
+                            pendingPauseReason = '';
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (document.exitPointerLock) {
+                                document.exitPointerLock();
+                            }
+                            return;
+                        }
+                        if (shouldResumeFromEscape(event)) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            api.resumeGameplay(event);
+                            return;
+                        }
+                        recordGameplayActivity();
+                        return;
+                    }
                     if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         if (postGameState.phase === 'celebration') {
@@ -421,21 +699,38 @@
                     }
                 });
 
+                document.addEventListener('mousemove', recordGameplayActivity);
+                document.addEventListener('mousedown', recordGameplayActivity);
+                document.addEventListener('mouseup', recordGameplayActivity);
+                document.addEventListener('wheel', recordGameplayActivity);
+                document.addEventListener('touchstart', recordGameplayActivity);
+                window.addEventListener('focus', recordGameplayActivity);
+
                 document.addEventListener('pointerlockchange', function () {
                     var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
+                    var lostWhilePlaying = !!isPlaying;
                     if (document.pointerLockElement === target) {
                         pendingInputCapture = false;
+                        clearPauseState();
                         hideLaunchHandoff();
                         if (overlayEl) overlayEl.style.display = 'none';
                         isPlaying = true;
+                        recordGameplayActivity();
+                        syncIdleMonitor();
                         setResumeButtonsVisible(false);
                     } else {
                         if (opts.releaseTransientInput) opts.releaseTransientInput();
                         if (overlayEl) overlayEl.style.display = 'flex';
                         isPlaying = false;
+                        clearIdleMonitor();
+                        if (lostWhilePlaying && !postGameState.active && pendingPauseReason === 'idle') {
+                            suspendNetworkSession('idle');
+                        }
+                        pendingPauseReason = '';
                         if (!pendingInputCapture) {
                             hideLaunchHandoff();
                             setResumeButtonsVisible(canResumeGameplay());
+                            focusResumeControl(canResumeGameplay());
                         } else {
                             showLaunchHandoff(launchContext);
                         }
@@ -448,9 +743,10 @@
                         if (opts.releaseTransientInput) opts.releaseTransientInput();
                         if (overlayEl) overlayEl.style.display = 'flex';
                         isPlaying = false;
-                        setResumeButtonsVisible(canResumeGameplay());
+                        clearIdleMonitor();
                         if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock error. Click PLAY to retry.', 2200);
                         pendingInputCapture = true;
+                        setResumeButtonsVisible(true);
                     }
                     emitSessionState();
                 });
@@ -469,10 +765,22 @@
             emitSessionState: emitSessionState,
             prepareLaunch: function (context) {
                 launchContext = cloneLaunchContext(context);
+                var handoffEls = ensureLaunchHandoffEls();
+                var roomLabel = String(launchContext.roomCode || launchContext.roomId || '').toUpperCase();
+                clearPauseState();
+                clearIdleMonitor();
                 pendingInputCapture = false;
                 hideLaunchHandoff();
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
+                if (handoffEls.flow) handoffEls.flow.hidden = true;
+                if (handoffEls.title) handoffEls.title.textContent = 'CONNECTING';
+                if (handoffEls.copy) handoffEls.copy.textContent = 'Loading gameplay runtime...';
+                if (handoffEls.note) handoffEls.note.textContent = 'Waiting for authoritative room admission.';
+                if (handoffEls.roomLabel) {
+                    handoffEls.roomLabel.hidden = true;
+                    handoffEls.roomLabel.textContent = roomLabel ? ('ROOM ' + roomLabel) : 'ROOM ----';
+                }
                 setResumeButtonsVisible(false);
                 emitSessionState();
             },
@@ -492,13 +800,39 @@
                 if (context) launchContext = cloneLaunchContext(context);
                 showLaunchHandoff(launchContext);
             },
+            showLaunchOverlay: function (phase, context) {
+                var nextPhase = String(phase || '');
+                if (context) launchContext = cloneLaunchContext(context);
+                if (nextPhase === 'joined_ready') {
+                    showLaunchHandoff(launchContext);
+                    return;
+                }
+                if (nextPhase === 'idle') {
+                    showGameplayPrompt();
+                    return;
+                }
+                api.prepareLaunch(launchContext);
+            },
             hideInputCapturePrompt: function () {
                 pendingInputCapture = false;
                 hideLaunchHandoff();
                 emitSessionState();
             },
+            startGameplayFromMenu: function (event) {
+                return api.enterGameplay(event, launchContext);
+            },
             returnToMenu: function () {
+                clearPauseState();
+                clearIdleMonitor();
                 if (opts.returnToMenu) opts.returnToMenu();
+            },
+            getActivityState: currentActivityState,
+            getPauseState: function () {
+                return {
+                    active: !!pauseState.active,
+                    reason: String(pauseState.reason || ''),
+                    triggeredAt: Number(pauseState.triggeredAt || 0)
+                };
             },
             showGameplayPrompt: showGameplayPrompt,
             syncMatchState: function (matchContext) {

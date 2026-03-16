@@ -15,6 +15,21 @@ import { logicalHitscanOriginFromEye } from '../../shared/entity-points.js';
 
 async function loadGameNetHarness(options = {}) {
   const renderMap = new Map();
+  const currentInputState = {
+    forward: true,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    adsActive: false,
+    ...(options.initialInputState || {})
+  };
+  const currentRotation = {
+    yaw: 0.25,
+    pitch: -0.1,
+    ...(options.initialRotation || {})
+  };
   const runtime = {
     GameShared: {
       protocol: {
@@ -85,20 +100,23 @@ async function loadGameNetHarness(options = {}) {
         return { x: 4, y: 5, z: 6 };
       },
       getRotation() {
-        return { yaw: 0.25, pitch: -0.1 };
+        return {
+          yaw: Number(currentRotation.yaw || 0),
+          pitch: Number(currentRotation.pitch || 0)
+        };
       },
       getAdsState() {
         return { active: false };
       },
       getNetworkInputState() {
         return {
-          forward: true,
-          backward: false,
-          left: false,
-          right: false,
-          jump: false,
-          sprint: false,
-          adsActive: false
+          forward: !!currentInputState.forward,
+          backward: !!currentInputState.backward,
+          left: !!currentInputState.left,
+          right: !!currentInputState.right,
+          jump: !!currentInputState.jump,
+          sprint: !!currentInputState.sprint,
+          adsActive: !!currentInputState.adsActive
         };
       },
       respawn() {}
@@ -194,6 +212,21 @@ async function loadGameNetHarness(options = {}) {
       if (transportHooks && transportHooks.onClose) {
         transportHooks.onClose(event);
       }
+    },
+    setInputState(nextState) {
+      const next = nextState && typeof nextState === 'object' ? nextState : {};
+      currentInputState.forward = !!next.forward;
+      currentInputState.backward = !!next.backward;
+      currentInputState.left = !!next.left;
+      currentInputState.right = !!next.right;
+      currentInputState.jump = !!next.jump;
+      currentInputState.sprint = !!next.sprint;
+      currentInputState.adsActive = !!next.adsActive;
+    },
+    setRotation(nextRotation) {
+      const next = nextRotation && typeof nextRotation === 'object' ? nextRotation : {};
+      if (Object.prototype.hasOwnProperty.call(next, 'yaw')) currentRotation.yaw = Number(next.yaw || 0);
+      if (Object.prototype.hasOwnProperty.call(next, 'pitch')) currentRotation.pitch = Number(next.pitch || 0);
     }
   };
 }
@@ -258,6 +291,89 @@ test('GameNet prunes acked input samples from self snapshots', async () => {
   assert.equal(syncState.lastAckedSeq, 1);
   assert.equal(syncState.pendingInputCount, 1);
   assert.equal(pending[0].seq, 2);
+});
+
+test('GameNet prefers welcome inputSendHz over tickRate for continuous input cadence', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    tickRate: 60,
+    inputSendHz: 30,
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  for (const now of [1000, 1010, 1020, 1030, 1040]) {
+    timeState.now = now;
+    GameNet.update(0.01, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  }
+
+  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 2);
+});
+
+test('GameNet flushes movement, ADS, sprint, and jump edges immediately between 30 Hz sends', async () => {
+  const harness = await loadGameNetHarness({ initialInputState: {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    adsActive: false
+  } });
+  const { GameNet, sentMessages, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    tickRate: 60,
+    inputSendHz: 30,
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1000;
+  GameNet.update(0.01, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  timeState.now = 1010;
+  GameNet.update(0.01, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 1);
+
+  harness.setInputState({ right: true });
+  timeState.now = 1015;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({});
+  timeState.now = 1020;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({ adsActive: true });
+  timeState.now = 1025;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({});
+  timeState.now = 1030;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({ sprint: true });
+  timeState.now = 1035;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({});
+  timeState.now = 1040;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  harness.setInputState({ jump: true });
+  timeState.now = 1045;
+  GameNet.update(0.005, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+
+  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 8);
 });
 
 test('GameNet exposes an unsent input tail while local intent continues past the last sent sample', async () => {
@@ -497,6 +613,45 @@ test('GameNet clears stale snapshot timing after transport close', async () => {
   timeState.now = 6000;
   assert.equal(GameNet.getEstimatedServerTime(), 0);
   assert.equal(GameNet.getConnectionTimingState().snapshot, null);
+});
+
+test('GameNet remaps death respawn timing onto the local clock when snapshot timing is available', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1100;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1000,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  harness.handleMessage({
+    t: 'death_respawn',
+    entityId: 'usr_test',
+    respawnAt: 1300,
+    x: 4,
+    z: 8
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+    active: true,
+    respawnAt: 1400,
+    remainingMs: 300
+  });
 });
 
 test('GameNet sendFire includes estimated server shot time when snapshot timing exists', async () => {

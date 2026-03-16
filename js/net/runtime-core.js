@@ -128,6 +128,65 @@
             return true;
         }
 
+        function hasMovementIntent(inputState) {
+            return !!(inputState && (
+                inputState.forward ||
+                inputState.backward ||
+                inputState.left ||
+                inputState.right
+            ));
+        }
+
+        function shouldFlushInputImmediately(inputState, lastSentInputSample) {
+            if (!lastSentInputSample) return false;
+            var priorInputState = lastSentInputSample.inputState || null;
+            if (!!(inputState && inputState.jump) && !(priorInputState && priorInputState.jump)) return true;
+            if (!!(inputState && inputState.adsActive) !== !!(priorInputState && priorInputState.adsActive)) return true;
+            if (!!(inputState && inputState.sprint) !== !!(priorInputState && priorInputState.sprint)) return true;
+            return hasMovementIntent(inputState) !== hasMovementIntent(priorInputState);
+        }
+
+        function sendInputSample(inputState, rotation, anim, inputSendInterval) {
+            var seq = opts.nextInputSeq();
+            var sentAt = Date.now();
+            var inputSeqHistory = opts.getInputSeqHistory();
+            var previousSample = inputSeqHistory.length > 0
+                ? inputSeqHistory[inputSeqHistory.length - 1]
+                : (opts.getLastSentInputSample ? opts.getLastSentInputSample() : null);
+            var dtMs = previousSample ? Math.max(1, sentAt - Number(previousSample.at || sentAt)) : Math.round(inputSendInterval * 1000);
+            var sentSample = {
+                seq: seq,
+                at: sentAt,
+                dtMs: dtMs,
+                yaw: rotation.yaw || 0,
+                pitch: rotation.pitch || 0,
+                inputState: cloneInputState(inputState)
+            };
+            if (wsSend({
+                t: opts.getInputMessageType(),
+                seq: seq,
+                dtMs: dtMs,
+                yaw: rotation.yaw || 0,
+                pitch: rotation.pitch || 0,
+                forward: !!(inputState && inputState.forward),
+                backward: !!(inputState && inputState.backward),
+                left: !!(inputState && inputState.left),
+                right: !!(inputState && inputState.right),
+                jump: !!(inputState && inputState.jump),
+                sprint: !!(inputState && inputState.sprint),
+                adsActive: !!(inputState && inputState.adsActive),
+                weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
+                inputMode: 'intent'
+            })) {
+                opts.setLastInputSeqSent(seq);
+                if (opts.setLastSentInputSample) {
+                    opts.setLastSentInputSample(sentSample);
+                }
+                inputSeqHistory.push(sentSample);
+                if (inputSeqHistory.length > 96) inputSeqHistory.shift();
+            }
+        }
+
         function update(dt, playerPos, rotation) {
             if (!opts.isActive()) return;
 
@@ -156,48 +215,19 @@
 
             var inputSendTimer = opts.getInputSendTimer() - dt;
             var inputSendInterval = Math.max(0.001, Number(opts.getInputSendInterval() || 0));
-            if (inputSendTimer <= 0) {
-                inputSendTimer += inputSendInterval;
-                if (playerPos && rotation && (!opts.isConnected || opts.isConnected())) {
-                    var playerApi = opts.getPlayerApi();
-                    var anim = (playerApi && playerApi.getAnimNetState) ? playerApi.getAnimNetState() : null;
-                    var inputState = (playerApi && playerApi.getNetworkInputState) ? playerApi.getNetworkInputState() : null;
-                    var seq = opts.nextInputSeq();
-                    var sentAt = Date.now();
-                    var inputSeqHistory = opts.getInputSeqHistory();
-                    var previousSample = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
-                    var dtMs = previousSample ? Math.max(1, sentAt - Number(previousSample.at || sentAt)) : Math.round(inputSendInterval * 1000);
-                    var sentSample = {
-                        seq: seq,
-                        at: sentAt,
-                        dtMs: dtMs,
-                        yaw: rotation.yaw || 0,
-                        pitch: rotation.pitch || 0,
-                        inputState: cloneInputState(inputState)
-                    };
-                    if (wsSend({
-                        t: opts.getInputMessageType(),
-                        seq: seq,
-                        dtMs: dtMs,
-                        yaw: rotation.yaw || 0,
-                        pitch: rotation.pitch || 0,
-                        forward: !!(inputState && inputState.forward),
-                        backward: !!(inputState && inputState.backward),
-                        left: !!(inputState && inputState.left),
-                        right: !!(inputState && inputState.right),
-                        jump: !!(inputState && inputState.jump),
-                        sprint: !!(inputState && inputState.sprint),
-                        adsActive: !!(inputState && inputState.adsActive),
-                        weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
-                        inputMode: 'intent'
-                    })) {
-                        opts.setLastInputSeqSent(seq);
-                        if (opts.setLastSentInputSample) {
-                            opts.setLastSentInputSample(sentSample);
-                        }
-                        inputSeqHistory.push(sentSample);
-                        if (inputSeqHistory.length > 96) inputSeqHistory.shift();
-                    }
+            var playerApi = opts.getPlayerApi();
+            var anim = (playerApi && playerApi.getAnimNetState) ? playerApi.getAnimNetState() : null;
+            var inputState = (playerApi && playerApi.getNetworkInputState) ? playerApi.getNetworkInputState() : null;
+            var sendDue = inputSendTimer <= 0;
+            var canSendInput = playerPos && rotation && (!opts.isConnected || opts.isConnected());
+            var forceImmediate = canSendInput && shouldFlushInputImmediately(
+                inputState,
+                opts.getLastSentInputSample ? opts.getLastSentInputSample() : null
+            );
+            if (sendDue || forceImmediate) {
+                inputSendTimer = sendDue ? (inputSendTimer + inputSendInterval) : inputSendInterval;
+                if (canSendInput) {
+                    sendInputSample(inputState, rotation, anim, inputSendInterval);
                 }
             }
             opts.setInputSendTimer(inputSendTimer);

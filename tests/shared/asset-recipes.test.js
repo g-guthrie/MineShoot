@@ -29,7 +29,8 @@ test('asset recipes cover every requested category with concrete example assets'
   assert.deepEqual(Object.keys(ASSET_RECIPES.sound), ['themeSong', 'swordClash', 'punchHit', 'levelUpNoise', 'ambientWeather']);
   assert.deepEqual(Object.keys(ASSET_RECIPES.particle), ['smoke', 'dust', 'sparks', 'fire']);
   assert.deepEqual(Object.keys(ASSET_RECIPES.projectile), ['arrow', 'laser', 'fireball', 'bullet', 'flyingRock']);
-  assert.deepEqual(Object.keys(ASSET_RECIPES.environment), ['rocks', 'grasses', 'flowers', 'swarmOfBugs', 'rubble']);
+  assert.deepEqual(Object.keys(ASSET_RECIPES.environment).slice(0, 5), ['rocks', 'grasses', 'flowers', 'swarmOfBugs', 'rubble']);
+  assert.equal(Object.keys(ASSET_RECIPES.environment).length, 5);
   assert.deepEqual(Object.keys(ASSET_RECIPES.structure), ['fence', 'lightPole', 'sign']);
   assert.deepEqual(Object.keys(ASSET_RECIPES.ui), ['icon', 'image', 'background', 'font']);
 });

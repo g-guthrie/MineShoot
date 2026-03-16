@@ -1,21 +1,23 @@
-import { buildArcticQuadrant } from './quadrant-arctic.js';
-import { buildBasinQuadrant } from './quadrant-basin.js';
-import { buildCitadelQuadrant } from './quadrant-citadel.js';
-import { buildDesertQuadrant } from './quadrant-desert.js';
-import { buildJungleQuadrant } from './quadrant-jungle.js';
-import { buildNuclearQuadrant } from './quadrant-nuclear.js';
-import { buildQuarryQuadrant } from './quadrant-quarry.js';
-import { buildRadarQuadrant } from './quadrant-radar.js';
-import { buildUrbanQuadrant } from './quadrant-urban.js';
+import './quadrant-arctic.js';
+import './quadrant-basin.js';
+import './quadrant-citadel.js';
+import './quadrant-desert.js';
+import './quadrant-jungle.js';
+import './quadrant-nuclear.js';
+import './quadrant-quarry.js';
+import './quadrant-radar.js';
+import './quadrant-urban.js';
+
+const quadrants = (globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.WorldQuadrants) || {};
 
 export const GameWorldQuadrants = {
-  arctic: buildArcticQuadrant,
-  basin: buildBasinQuadrant,
-  citadel: buildCitadelQuadrant,
-  desert: buildDesertQuadrant,
-  jungle: buildJungleQuadrant,
-  nuclear: buildNuclearQuadrant,
-  quarry: buildQuarryQuadrant,
-  radar: buildRadarQuadrant,
-  urban: buildUrbanQuadrant
+  arctic: quadrants.arctic,
+  basin: quadrants.basin,
+  citadel: quadrants.citadel,
+  desert: quadrants.desert,
+  jungle: quadrants.jungle,
+  nuclear: quadrants.nuclear,
+  quarry: quadrants.quarry,
+  radar: quadrants.radar,
+  urban: quadrants.urban
 };

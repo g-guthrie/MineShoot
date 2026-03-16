@@ -46,11 +46,12 @@
         throwables: {
             fragRadius: 6.8,
             plasmaRadius: 5.0,
+            plasmaCatchRadius: 1.5,
             missileRadius: 2.4,
             molotovFireRadius: 3.8,
             plasmaAcquireRange: 18,
             plasmaAcquireHalfAngleDeg: 35,
-            plasmaStickExplodeDelay: 0.65
+            plasmaStickExplodeDelay: 2.2
         },
         throwableMechanics: {
             aimRayRange: 100,
@@ -127,6 +128,7 @@
             throwables: {
                 fragRadius: Number(throwables.frag && throwables.frag.radius) || DEFAULTS.throwables.fragRadius,
                 plasmaRadius: Number(throwables.plasma && throwables.plasma.radius) || DEFAULTS.throwables.plasmaRadius,
+                plasmaCatchRadius: Number(throwables.plasma && throwables.plasma.catchRadius) || DEFAULTS.throwables.plasmaCatchRadius,
                 missileRadius: Number(throwables.missile && throwables.missile.radius) || DEFAULTS.throwables.missileRadius,
                 molotovFireRadius: Number(throwables.molotov && throwables.molotov.fireRadius) || DEFAULTS.throwables.molotovFireRadius,
                 plasmaAcquireRange: Number(throwables.plasma && throwables.plasma.acquireRange) || DEFAULTS.throwables.plasmaAcquireRange,
@@ -241,6 +243,7 @@
         return {
             fragRadius: BASE.throwables.fragRadius,
             plasmaRadius: BASE.throwables.plasmaRadius,
+            plasmaCatchRadius: BASE.throwables.plasmaCatchRadius,
             missileRadius: BASE.throwables.missileRadius,
             molotovFireRadius: BASE.throwables.molotovFireRadius,
             plasmaAcquireRange: BASE.throwables.plasmaAcquireRange,

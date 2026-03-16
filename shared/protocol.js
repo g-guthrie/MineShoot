@@ -96,6 +96,13 @@ export function normalizeThrowPayload(throwableId, clientThrowId, throwIntent) {
   return payload;
 }
 
+export function normalizeReloadPayload(weaponId) {
+  return {
+    t: MSG_C2S.RELOAD,
+    weaponId: String(weaponId || '')
+  };
+}
+
 export function normalizeClassCastPayload(slot, castData) {
   const payload = {
     t: MSG_C2S.CLASS_CAST,
@@ -115,6 +122,7 @@ export const MSG_C2S = {
   LEAVE_ROOM: 'leave_room',
   INPUT: 'input',
   FIRE: 'fire',
+  RELOAD: 'reload',
   EQUIP_WEAPON: 'equip_weapon',
   WEAPON_LOADOUT: 'weapon_loadout',
   THROW: 'throw',
@@ -165,6 +173,7 @@ export const protocol = {
   normalizeWeaponLoadoutPayload,
   normalizeAbilityLoadoutPayload,
   normalizeThrowPayload,
+  normalizeReloadPayload,
   normalizeClassCastPayload
 };
 

@@ -124,7 +124,8 @@ export async function handleRoomRequest(room, request) {
     room.refreshWorldMeta();
   }
 
-  if (request.headers.get('Upgrade') !== 'websocket') {
+  const upgradeHeader = String(request.headers.get('Upgrade') || '').trim().toLowerCase();
+  if (upgradeHeader !== 'websocket') {
     return handleHttpRequest(room, request, url);
   }
   return handleWebSocketRequest(room, request, url);

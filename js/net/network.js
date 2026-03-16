@@ -580,6 +580,7 @@
         setConnected: function (value) { connected = !!value; },
         setPendingRespawnInfo: netState.setPendingRespawnInfo,
         setPendingSpawnSync: netState.setPendingSpawnSync,
+        toLocalClockTime: toLocalClockTime,
         setWorldMeta: netState.setWorldMeta,
         getWorldMismatchNotified: netState.getWorldMismatchNotified,
         setWorldMismatchNotified: netState.setWorldMismatchNotified,
@@ -687,6 +688,7 @@
         getInputSendTimer: netState.getInputSendTimer,
         setInputSendTimer: netState.setInputSendTimer,
         getInputSendInterval: netState.getInputSendInterval,
+        getLastSentInputSample: netState.getLastSentInputSample,
         setLastSentInputSample: netState.setLastSentInputSample,
         getPingSendTimer: function () { return pingSendTimer; },
         setPingSendTimer: function (value) { pingSendTimer = Math.max(0, Number(value || 0)); },
@@ -718,9 +720,11 @@
         wsSend: wsSend,
         buildFirePayload: runtimeAccess.buildFirePayload,
         fireMessageType: MSG_C2S.FIRE,
+        reloadMessageType: MSG_C2S.RELOAD,
         equipWeaponMessageType: MSG_C2S.EQUIP_WEAPON,
         normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,
         normalizeThrowPayload: PROTOCOL.normalizeThrowPayload,
+        normalizeReloadPayload: PROTOCOL.normalizeReloadPayload,
         normalizeAbilityLoadoutPayload: PROTOCOL.normalizeAbilityLoadoutPayload,
         normalizeClassCastPayload: PROTOCOL.normalizeClassCastPayload,
         setPendingWeaponLoadout: netState.setPendingWeaponLoadout,
@@ -810,6 +814,7 @@
     GameNet.update = runtimeCore.update;
 
     GameNet.sendFire = commandsApi.sendFire;
+    GameNet.sendReload = commandsApi.sendReload;
     GameNet.sendEquipWeapon = commandsApi.sendEquipWeapon;
     GameNet.sendWeaponLoadout = commandsApi.sendWeaponLoadout;
     GameNet.sendThrow = commandsApi.sendThrow;
