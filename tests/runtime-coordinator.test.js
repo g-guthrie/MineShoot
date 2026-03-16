@@ -282,3 +282,169 @@ test('runtime coordinator seeds network room ids through GameNet before multipla
   assert.deepEqual(gameNetCalls, ['ffa-01']);
   assert.deepEqual(localMatchCalls, []);
 });
+
+test('runtime coordinator breaks sprint and still fires on the same click', async () => {
+  const code = await readModule('../js/app/runtime-coordinator.js');
+  let capturedStartOptions = null;
+  let sprinting = true;
+  let sprintRequested = true;
+  let cancelSprintCalls = 0;
+  let fireCalls = 0;
+  const playerActions = [];
+
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame() {},
+    document: {
+      pointerLockElement: null,
+      querySelector() { return null; },
+      getElementById() { return null; },
+      hasFocus() { return false; }
+    },
+    window: {
+      location: {
+        pathname: '/'
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameUI: {
+          setDebugInfo() {},
+          setIdleWarning() {},
+          setDebugVisuals() {},
+          updateMatchStatus() {}
+        },
+        GamePlayer: {
+          canUseWeapon() {
+            return true;
+          },
+          isSprinting() {
+            return sprinting;
+          },
+          cancelSprintUntilRelease() {
+            cancelSprintCalls += 1;
+            sprinting = false;
+            sprintRequested = false;
+            return true;
+          },
+          getNetworkInputState() {
+            return {
+              forward: true,
+              backward: false,
+              left: false,
+              right: false,
+              jump: false,
+              sprint: sprintRequested,
+              adsActive: false
+            };
+          },
+          triggerAction(kind) {
+            playerActions.push(String(kind || ''));
+          }
+        },
+        GameHitscan: {
+          fire() {
+            fireCalls += 1;
+            return true;
+          },
+          getCurrentWeapon() {
+            return { id: 'rifle' };
+          }
+        },
+        GameAbilities: {
+          isDeadeyeActive() {
+            return false;
+          }
+        },
+        GameGameplayRuntimeBootstrap: {
+          start(opts) {
+            capturedStartOptions = opts;
+            return Promise.resolve({
+              renderer: { domElement: {} },
+              scene: {},
+              clock: {
+                getDelta() {
+                  return 0.016;
+                }
+              },
+              camera: {},
+              controlsApi: {
+                bind() {}
+              },
+              multiplayerMode: false
+            });
+          }
+        },
+        GameRuntimeSession: {
+          create() {
+            return {
+              bindRuntimeControls() {},
+              emitSessionState() {},
+              isPlaying() {
+                return false;
+              },
+              getActivityState() {
+                return 'in_match';
+              }
+            };
+          }
+        },
+        GameGameplayRuntimeLoop: {
+          create() {
+            return {
+              step() {
+                return {};
+              }
+            };
+          }
+        },
+        GamePresentationRuntimeLoop: {
+          create() {
+            return {
+              renderFrame() {}
+            };
+          }
+        },
+        GameLoop: {
+          requestFrame() {}
+        },
+        GameRuntimeShell: {
+          create(opts) {
+            return {
+              launchModeById() {
+                return opts.startRuntime();
+              },
+              getActivityState() {
+                return 'menu';
+              },
+              getActiveRuntimeMode() {
+                return {
+                  id: 'single_full_sandbox',
+                  authorityMode: 'offline'
+                };
+              },
+              getStartupDebugNotice() {
+                return '';
+              }
+            };
+          }
+        }
+      }
+    }
+  };
+
+  vm.runInContext(code, vm.createContext(sandbox));
+
+  const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
+  await coordinator.launchModeById('single_full_sandbox', {});
+
+  assert.equal(typeof capturedStartOptions.tryPlayerFire, 'function');
+
+  capturedStartOptions.tryPlayerFire();
+
+  assert.equal(cancelSprintCalls, 1);
+  assert.equal(fireCalls, 1);
+  assert.deepEqual(playerActions, ['fire']);
+});

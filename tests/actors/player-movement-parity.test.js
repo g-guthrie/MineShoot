@@ -403,6 +403,40 @@ test('player ground sprinting matches the shared authoritative step', async () =
   assertPlayerMatchesExpected(harness.player, expected);
 });
 
+test('canceling sprint holds sprint off until the sprint key is pressed again', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.player.cancelSprintUntilRelease(), true);
+  assert.equal(harness.player.isSprinting(), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.player.getNetworkInputState())), {
+    forward: true,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    adsActive: false
+  });
+
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: false }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+
+  harness.documentObj.dispatch('keyup', { code: 'ShiftLeft' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+});
+
 test('player ADS movement slowdown matches the shared authoritative step', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);

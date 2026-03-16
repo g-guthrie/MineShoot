@@ -176,14 +176,20 @@ test('arctic mountain keeps a lower summit while adding more glacier texture', (
   });
 
   assert.ok(stats);
-  assert.ok(stats.peakHeight >= 24);
-  assert.ok(stats.peakHeight <= 25.5);
-  assert.ok(stats.mountainBaseWidth <= 26.1);
-  assert.ok(stats.mountainBaseDepth <= 22.1);
-  assert.ok(stats.summitWidth <= 2.0);
-  assert.equal(stats.glacierPatches, 4);
-  assert.ok(stats.groundSpires >= 17);
-  assert.ok(stats.crystals >= 23);
+  assert.ok(stats.peakHeight >= 19.5);
+  assert.ok(stats.peakHeight <= 21.5);
+  assert.ok(stats.terraceCount <= 6);
+  assert.ok(stats.minRouteShelfDepth >= 3.5);
+  assert.ok(stats.minRouteShelfWidth >= 4.0);
+  assert.ok(stats.summitWidth >= 4.0);
+  assert.ok(stats.summitDepth >= 3.5);
+  assert.equal(stats.glacierPatches, 8);
+  assert.ok(stats.groundSpires >= 30);
+  assert.ok(stats.crystals >= 36);
+  assert.ok(stats.edgeTouchSides.north >= 1);
+  assert.ok(stats.edgeTouchSides.east >= 1);
+  assert.ok(stats.edgeTouchSides.south >= 1);
+  assert.ok(stats.edgeTouchSides.west >= 1);
 });
 
 test('nuclear cooling towers sit flush to the east wall and tower over the old profile', () => {

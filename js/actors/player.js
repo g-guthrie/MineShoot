@@ -108,6 +108,7 @@
         jump: false,
         sprint: false
     };
+    var sprintCanceledUntilRelease = false;
     var inputBound = false;
 
     var currentWeaponId = 'rifle';
@@ -309,6 +310,18 @@
         return canUseAds() && scopeHeld;
     }
 
+    function isSprintInputActive() {
+        return !!keys.sprint && !sprintCanceledUntilRelease;
+    }
+
+    function cancelSprintUntilRelease() {
+        var hadSprint = !!keys.sprint || !!sprinting || sprintCanceledUntilRelease;
+        if (!hadSprint) return false;
+        if (keys.sprint) sprintCanceledUntilRelease = true;
+        sprinting = false;
+        return true;
+    }
+
     function setAdsEnabled(enabled) {
         scopeHeld = !!enabled && canUseAds();
         return scopeHeld;
@@ -498,9 +511,7 @@
             if (matchesBinding('move_left', e, 'KeyA')) keys.left = true;
             if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = true;
             if (matchesBinding('move_right', e, 'KeyD')) keys.right = true;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
-                keys.sprint = true;
-            }
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = true;
             if (matchesBinding('ads_key', e, ['AltLeft', 'AltRight'])) {
                 if (!e.repeat && hasInputCapture()) {
                     e.preventDefault();
@@ -518,7 +529,10 @@
             if (matchesBinding('move_left', e, 'KeyA')) keys.left = false;
             if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = false;
             if (matchesBinding('move_right', e, 'KeyD')) keys.right = false;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = false;
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
+                keys.sprint = false;
+                sprintCanceledUntilRelease = false;
+            }
             if (matchesBinding('jump', e, 'Space')) keys.jump = false;
         });
 
@@ -604,7 +618,7 @@
             left: !!keys.left,
             right: !!keys.right,
             jump: !!keys.jump,
-            sprint: !!keys.sprint,
+            sprint: !!isSprintInputActive(),
             adsActive: !!isAdsActive()
         };
     }
@@ -693,7 +707,7 @@
     }
 
     function hasMovementIntentInput() {
-        return !!(keys.forward || keys.backward || keys.left || keys.right || keys.jump || keys.sprint);
+        return !!(keys.forward || keys.backward || keys.left || keys.right || keys.jump || isSprintInputActive());
     }
 
     function reconcileAuthoritativeMotion(state, options) {
@@ -976,6 +990,10 @@
         return setAdsEnabled(enabled);
     };
 
+    GamePlayer.cancelSprintUntilRelease = function () {
+        return cancelSprintUntilRelease();
+    };
+
     GamePlayer.isSprinting = function () {
         return !!sprinting;
     };
@@ -996,7 +1014,7 @@
             left: !!keys.left,
             right: !!keys.right,
             jump: !!keys.jump,
-            sprint: !!keys.sprint,
+            sprint: !!isSprintInputActive(),
             adsActive: !!isAdsActive()
         };
     };

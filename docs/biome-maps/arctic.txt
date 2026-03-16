@@ -1,41 +1,41 @@
 Arctic biome distribution map
 Biome: arctic
 Bounds x:[2, 56] z:[2, 56]  grid:14x14
-Features: 50 high-level placements across 35/196 cells (17.9% occupied)
+Features: 68 high-level placements across 42/196 cells (21.4% occupied)
 
 Dominant feature map
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
- 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  f  .  d  .  .  *  f  .  .  .  . 
- 2 | .  *  S  .  .  .  .  .  B  .  .  .  .  . 
- 3 | .  f  f  *  .  .  .  .  .  f  O  f  .  . 
- 4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 5 | .  .  .  B  .  .  .  .  .  .  .  d  .  . 
- 6 | .  .  d  .  .  .  M  .  .  .  .  .  .  . 
- 7 | .  .  .  .  .  .  .  .  .  .  .  .  d  . 
- 8 | .  d  .  .  .  .  .  .  .  .  B  .  f  . 
- 9 | .  .  .  .  .  .  .  B  .  .  .  .  *  . 
-10 | .  S  .  .  A  .  .  .  .  P  .  S  f  . 
-11 | .  *  S  .  .  B  .  .  .  .  .  .  .  . 
-12 | .  .  f  .  .  .  .  d  d  .  f  .  .  . 
-13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 0 | .  S  *  .  f  .  .  .  .  .  f  *  .  . 
+ 1 | f  d  .  .  .  d  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  f  .  .  .  .  B  .  f  .  d  * 
+ 3 | *  .  .  H  .  .  .  .  .  .  O  .  .  * 
+ 4 | .  .  .  .  S  S  .  .  .  S  .  .  .  . 
+ 5 | .  .  .  B  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  M  .  .  .  .  .  d  . 
+ 7 | .  d  .  .  .  .  .  .  .  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  .  .  B  .  .  . 
+ 9 | .  .  .  .  .  .  .  *  .  .  .  .  .  f 
+10 | *  .  .  .  A  .  .  S  .  P  .  .  .  * 
+11 | .  .  .  f  .  B  .  .  .  .  f  .  .  S 
+12 | .  .  d  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  *  f  .  .  .  d  .  .  .  *  S  . 
 
 Density heatmap
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
- 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 1 | .  .  .  1  .  1  .  .  4  1  .  .  .  . 
- 2 | .  4  1  .  .  .  .  .  1  .  .  .  .  . 
- 3 | .  1  1  2  .  .  .  .  .  1  1  1  .  . 
- 4 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
- 5 | .  .  .  1  .  .  .  .  .  .  .  1  .  . 
- 6 | .  .  1  .  .  .  1  .  .  .  .  .  .  . 
- 7 | .  .  .  .  .  .  .  .  .  .  .  .  1  . 
- 8 | .  1  .  .  .  .  .  .  .  .  1  .  1  . 
- 9 | .  .  .  .  .  .  .  1  .  .  .  .  5  . 
-10 | .  1  .  .  1  .  .  .  .  1  .  1  1  . 
-11 | .  3  3  .  .  1  .  .  .  .  .  .  .  . 
-12 | .  .  1  .  .  .  .  1  1  .  1  .  .  . 
-13 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 0 | .  1  3  .  1  .  .  .  .  .  1  4  .  . 
+ 1 | 1  1  .  .  .  1  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  1  .  .  .  .  1  .  1  .  1  2 
+ 3 | 4  .  .  1  .  .  .  .  .  .  1  .  .  3 
+ 4 | .  .  .  .  1  1  .  .  .  2  .  .  .  . 
+ 5 | .  .  .  1  .  .  .  .  .  .  .  .  .  . 
+ 6 | .  .  .  .  .  .  1  .  .  .  .  .  1  . 
+ 7 | .  1  .  .  .  .  .  .  .  .  .  .  .  . 
+ 8 | .  .  .  .  .  .  .  .  .  .  1  .  .  . 
+ 9 | .  .  .  .  .  .  .  2  .  .  .  .  .  1 
+10 | 5  .  .  .  1  .  .  1  .  1  .  .  .  4 
+11 | .  .  .  1  .  1  .  .  .  .  1  .  .  1 
+12 | .  .  1  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  4  1  .  .  .  1  .  .  .  4  1  . 
 
 Legend
   A arch
@@ -54,24 +54,24 @@ Counts by feature kind
   arch             1
   boulder          5
   drift            8
-  fragment        11
-  glacier          4
+  fragment        12
+  glacier          8
   mountain         1
   overhang         1
   pool             1
   shelf            1
-  spire           17
+  spire           30
 
 Top dense cells
-  r9 c12  count=5  kinds=glacier,spire  labels=glacier-east-a, glacier-east-b, glacier-east-c, glacier-patch-3, spire-6
-  r1 c8  count=4  kinds=drift,glacier,spire  labels=drift-8, glacier-north-a, glacier-north-b, glacier-patch-4
-  r2 c1  count=4  kinds=glacier,spire  labels=glacier-nw-a, glacier-nw-b, glacier-nw-c, glacier-patch-1
-  r11 c1  count=3  kinds=fragment,glacier,spire  labels=fragment-3, glacier-patch-2, glacier-sw-a
-  r11 c2  count=3  kinds=spire  labels=glacier-sw-b, glacier-sw-c, spire-4
-  r3 c3  count=2  kinds=shelf,spire  labels=ice-shelf, spire-2
-  r1 c3  count=1  kinds=fragment  labels=fragment-5
-  r1 c5  count=1  kinds=drift  labels=drift-3
-  r1 c9  count=1  kinds=fragment  labels=edge-fragment-4
-  r2 c2  count=1  kinds=spire  labels=spire-1
-  r2 c8  count=1  kinds=boulder  labels=boulder-4
-  r3 c1  count=1  kinds=fragment  labels=edge-fragment-1
+  r10 c0  count=5  kinds=fragment,glacier,spire  labels=fragment-8, west-south-pack, west-south-pack-companion-1, west-south-pack-companion-2, west-south-pack-primary
+  r0 c11  count=4  kinds=glacier,spire  labels=north-east-pack, north-east-pack-companion-1, north-east-pack-companion-2, north-east-pack-primary
+  r3 c0  count=4  kinds=glacier,spire  labels=west-north-pack, west-north-pack-companion-1, west-north-pack-companion-2, west-north-pack-primary
+  r10 c13  count=4  kinds=drift,glacier,spire  labels=drift-8, east-south-pack, east-south-pack-companion-1, east-south-pack-primary
+  r13 c2  count=4  kinds=glacier,spire  labels=south-west-pack, south-west-pack-companion-1, south-west-pack-companion-2, south-west-pack-primary
+  r13 c11  count=4  kinds=fragment,glacier,spire  labels=fragment-6, south-east-pack, south-east-pack-companion-1, south-east-pack-primary
+  r0 c2  count=3  kinds=glacier,spire  labels=north-west-pack, north-west-pack-companion-2, north-west-pack-primary
+  r3 c13  count=3  kinds=glacier,spire  labels=east-north-pack, east-north-pack-companion-2, east-north-pack-primary
+  r2 c13  count=2  kinds=fragment,spire  labels=east-north-pack-companion-1, fragment-4
+  r4 c9  count=2  kinds=spire  labels=inner-east-cluster-1, inner-east-cluster-2
+  r9 c7  count=2  kinds=boulder,spire  labels=boulder-5, inner-south-cluster-1
+  r0 c1  count=1  kinds=spire  labels=north-west-pack-companion-1

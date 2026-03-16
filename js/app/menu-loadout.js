@@ -312,9 +312,9 @@
             abilityName(state.abilityLoadout.slot2) || 'Empty'
         ].join(' / ');
 
-        if (chrome.weaponsSummary) chrome.weaponsSummary.textContent = 'Weapons  ' + weaponCopy;
-        if (chrome.throwableSummary) chrome.throwableSummary.textContent = 'Throwable  ' + throwableCopy;
-        if (chrome.abilitySummary) chrome.abilitySummary.textContent = 'Abilities  ' + abilityCopy;
+        if (chrome.weaponsSummary) chrome.weaponsSummary.textContent = 'Weapons: ' + weaponCopy;
+        if (chrome.throwableSummary) chrome.throwableSummary.textContent = 'Throwable: ' + throwableCopy;
+        if (chrome.abilitySummary) chrome.abilitySummary.textContent = 'Abilities: ' + abilityCopy;
     }
 
     function renderSectionChrome() {

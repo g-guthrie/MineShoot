@@ -174,6 +174,7 @@
 
         function shouldPauseFromEscape(event) {
             if (!event || event.key !== 'Escape') return false;
+            if (event.__mayhemResumeHandled) return false;
             if (event.repeat) return false;
             if (editableTarget(event.target)) return false;
             if (!document.pointerLockElement) return false;
@@ -298,6 +299,7 @@
 
         function shouldResumeFromEscape(event) {
             if (!event || event.key !== 'Escape') return false;
+            if (event.__mayhemResumeHandled) return false;
             if (event.repeat) return false;
             if (editableTarget(event.target)) return false;
             if (document.pointerLockElement) return false;

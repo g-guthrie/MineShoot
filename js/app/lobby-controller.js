@@ -268,7 +268,7 @@
         var elements = {
             menuHeader: document.getElementById('menu-header'),
             menuFeedback: document.getElementById('menu-feedback'),
-            menuHeaderPageTitle: document.getElementById('menu-header-page-title'),
+            menuReturnBtn: document.getElementById('menu-return-btn'),
             menuPartyIdBtn: document.getElementById('menu-party-id-btn'),
             menuPartyIdLabel: document.getElementById('menu-party-id-label'),
             menuPartyIdValue: document.getElementById('menu-party-id-value'),
@@ -284,6 +284,7 @@
             utilityOverlay: document.getElementById('utility-overlay'),
             utilityCloseBtn: document.getElementById('utility-close-btn'),
             utilityModal: document.getElementById('utility-modal'),
+            settingsAccountBtn: document.getElementById('settings-account-btn'),
             openManualBtn: document.getElementById('open-manual-btn'),
             controlsToggle: document.getElementById('controls-toggle'),
             soundToggleBtn: document.getElementById('sound-toggle-btn'),
@@ -838,22 +839,31 @@
             var isBusy = busy();
             var selectedMode = normalizeMode(launch.selectedMode);
             var identity = currentPartyIdentity();
+            var loggedIn = !!state.utilities.isLoggedIn;
+            var headerVariant = paused ? 'pause' : (state.activeSurface === 'party' ? 'party' : 'home');
 
-            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = state.activeSurface !== 'main';
-            if (elements.joinPartyTriggerBtn) elements.joinPartyTriggerBtn.hidden = state.activeSurface !== 'main';
-            if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface === 'main';
-            if (elements.menuHeaderPageTitle) {
-                elements.menuHeaderPageTitle.hidden = state.activeSurface === 'main';
-                elements.menuHeaderPageTitle.textContent = 'Party';
-            }
-            if (elements.openPartyBtn) elements.openPartyBtn.hidden = state.activeSurface !== 'main';
-            if (elements.joinPartyPopover) elements.joinPartyPopover.hidden = !state.joinPopoverOpen || state.activeSurface !== 'main';
+            if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
+
+            if (elements.menuReturnBtn) elements.menuReturnBtn.hidden = headerVariant !== 'pause';
+            if (elements.partyBackBtn) elements.partyBackBtn.hidden = headerVariant !== 'party';
+            if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn;
+            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = false;
+            if (elements.joinPartyTriggerBtn) elements.joinPartyTriggerBtn.hidden = headerVariant !== 'home';
+            if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home';
+            if (elements.openPartyBtn) elements.openPartyBtn.hidden = !(headerVariant === 'home' || headerVariant === 'pause');
+            if (elements.joinPartyPopover) elements.joinPartyPopover.hidden = !state.joinPopoverOpen || headerVariant !== 'home';
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
             if (elements.leaveConfirmOverlay) elements.leaveConfirmOverlay.hidden = !state.confirmLeaveOpen;
 
             if (identity) {
                 setText(elements.menuPartyIdLabel, identity.label || 'Player ID');
                 setText(elements.menuPartyIdValue, String(identity.id || '------').toUpperCase());
+            }
+            if (!loggedIn && elements.menuPartyIdLabel) {
+                elements.menuPartyIdLabel.textContent = 'Guest ID';
+            }
+            if (elements.settingsAccountBtn) {
+                elements.settingsAccountBtn.textContent = loggedIn ? 'Profile' : 'Login';
             }
 
             renderJoinRecent(state);
@@ -1078,12 +1088,33 @@
         });
 
         bindClick(elements.openPartyBtn, function () {
-            setActiveSurface('party');
+            if (getState().paused) {
+                setActiveSurface(getState().activeSurface === 'party' ? 'main' : 'party');
+            } else {
+                setActiveSurface('party');
+            }
             render();
         });
         bindClick(elements.partyBackBtn, function () {
             setActiveSurface('main');
             render();
+        });
+        bindClick(elements.menuReturnBtn, function (event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            var sessionApi = runtime.GameSession || null;
+            if (sessionApi && sessionApi.resumeGameplay) {
+                sessionApi.resumeGameplay(event || null);
+            }
+        });
+        bindClick(elements.settingsAccountBtn, function () {
+            closeUtility();
+            render();
+            if (elements.accountToggleBtn) {
+                elements.accountToggleBtn.click();
+            }
         });
 
         function selectMode(modeId) {
@@ -1294,6 +1325,16 @@
             if (getState().joinPopoverOpen) {
                 closeJoinPopover();
                 render();
+                return;
+            }
+            if (getState().paused) {
+                var sessionApi = runtime.GameSession || null;
+                if (sessionApi && sessionApi.resumeGameplay) {
+                    event.__mayhemResumeHandled = true;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    sessionApi.resumeGameplay(event);
+                }
             }
         });
 

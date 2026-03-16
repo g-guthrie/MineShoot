@@ -28,26 +28,50 @@ import { pointInBounds as pt } from './biome-utils.js';
         return MATS;
     }
 
+    function edgeLerp(min, max, t) {
+        return min + ((max - min) * Number(t || 0));
+    }
+
+    function sideBasis(side) {
+        if (side === 'north') return { alongX: 1, alongZ: 0, inwardX: 0, inwardZ: 1 };
+        if (side === 'south') return { alongX: 1, alongZ: 0, inwardX: 0, inwardZ: -1 };
+        if (side === 'east') return { alongX: 0, alongZ: 1, inwardX: -1, inwardZ: 0 };
+        return { alongX: 0, alongZ: 1, inwardX: 1, inwardZ: 0 };
+    }
+
     function buildMountain(cx, cz, place, mats) {
         var tiers = [
-            { dx: 0.0, dz: 0.0, w: 26.0, h: 2.7, d: 22.0, mat: mats.rock },
-            { dx: -0.6, dz: 0.7, w: 23.2, h: 2.5, d: 19.6, mat: mats.rock },
-            { dx: -1.1, dz: 1.2, w: 20.8, h: 2.4, d: 17.5, mat: mats.frost },
-            { dx: -0.9, dz: 1.8, w: 18.6, h: 2.3, d: 15.8, mat: mats.frost },
-            { dx: -0.2, dz: 1.2, w: 16.4, h: 2.4, d: 14.0, mat: mats.snow },
-            { dx: 0.3, dz: 0.8, w: 14.2, h: 2.2, d: 12.1, mat: mats.snow },
-            { dx: 0.6, dz: 0.4, w: 12.0, h: 2.0, d: 10.0, mat: mats.snow },
-            { dx: 0.9, dz: 0.1, w: 10.0, h: 1.8, d: 8.2, mat: mats.frost },
-            { dx: 1.1, dz: -0.2, w: 8.1, h: 1.6, d: 6.6, mat: mats.frost },
-            { dx: 1.2, dz: -0.4, w: 6.2, h: 1.4, d: 5.0, mat: mats.snow },
-            { dx: 1.1, dz: -0.4, w: 4.6, h: 1.2, d: 3.6, mat: mats.snow },
-            { dx: 1.0, dz: -0.3, w: 2.4, h: 1.0, d: 1.8, mat: mats.frost }
+            { dx: 0.0, dz: 0.0, w: 28.0, h: 3.0, d: 24.0, mat: mats.rock },
+            { dx: -0.7, dz: 0.8, w: 24.2, h: 2.8, d: 20.4, mat: mats.rock },
+            { dx: -0.6, dz: 1.3, w: 20.4, h: 2.6, d: 17.2, mat: mats.frost },
+            { dx: 0.1, dz: 1.0, w: 16.4, h: 2.4, d: 14.0, mat: mats.snow },
+            { dx: 0.8, dz: 0.6, w: 12.8, h: 2.2, d: 10.8, mat: mats.snow },
+            { dx: 1.0, dz: 0.2, w: 9.4, h: 2.0, d: 8.0, mat: mats.frost }
         ];
+        var routeShelves = [
+            { x: cx + 7.8, y: 4.1, z: cz + 6.0, w: 6.8, h: 1.0, d: 4.6, mat: mats.snow },
+            { x: cx + 5.9, y: 6.5, z: cz + 3.2, w: 6.2, h: 0.9, d: 4.2, mat: mats.snow },
+            { x: cx + 3.5, y: 8.9, z: cz + 0.8, w: 5.8, h: 0.9, d: 4.0, mat: mats.frost },
+            { x: cx + 1.1, y: 11.3, z: cz - 1.2, w: 5.2, h: 0.9, d: 4.0, mat: mats.snow },
+            { x: cx + 0.8, y: 13.9, z: cz - 0.2, w: 4.8, h: 0.9, d: 3.8, mat: mats.snow }
+        ];
+        var topLevels = [
+            { x: cx + 0.9, y: 15.8, z: cz - 0.2, w: 6.4, h: 1.2, d: 5.2, mat: mats.snow },
+            { x: cx + 1.2, y: 17.9, z: cz - 0.2, w: 5.4, h: 1.2, d: 4.6, mat: mats.frost }
+        ];
+        var summit = { x: cx + 1.3, y: 20.0, z: cz - 0.2, w: 4.6, h: 1.0, d: 3.8 };
+        var minRouteShelfDepth = Infinity;
+        var minRouteShelfWidth = Infinity;
         var currentBaseY = 0;
         var peakHeight = 0;
 
         function markPeak(centerY, height) {
             peakHeight = Math.max(peakHeight, centerY + (height * 0.5));
+        }
+
+        function recordRouteShelf(width, depth) {
+            minRouteShelfWidth = Math.min(minRouteShelfWidth, Number(width || 0));
+            minRouteShelfDepth = Math.min(minRouteShelfDepth, Number(depth || 0));
         }
 
         for (var t = 0; t < tiers.length; t++) {
@@ -58,49 +82,57 @@ import { pointInBounds as pt } from './biome-utils.js';
             markPeak(centerY, tier.h);
         }
 
-        // Broken shelves and hard-to-follow approach route.
-        place.addBlock(cx + 7.0, 5.2, cz - 2.1, 7.0, 1.8, 3.6, mats.snow, true);
-        place.addBlock(cx - 7.2, 6.4, cz + 3.4, 6.4, 1.4, 3.6, mats.snow, true);
-        place.addBlock(cx + 5.3, 7.4, cz - 4.7, 4.8, 1.1, 2.1, mats.frost, true);
-        place.addRamp(cx + 4.8, 3.7, cz + 7.6, 6.8, 1.4, 4.1, mats.rock, Math.PI * 0.56, -0.28, true);
-        place.addRamp(cx - 5.1, 4.6, cz - 6.7, 6.2, 1.3, 3.8, mats.snow, Math.PI * 1.08, -0.24, true);
+        // Broad route shelves keep the climb readable and give players room to stand.
+        for (var s = 0; s < routeShelves.length; s++) {
+            var shelf = routeShelves[s];
+            place.addBlock(shelf.x, shelf.y, shelf.z, shelf.w, shelf.h, shelf.d, shelf.mat, true);
+            recordRouteShelf(shelf.w, shelf.d);
+        }
+        place.addRamp(cx + 6.8, 2.8, cz + 8.6, 7.4, 1.2, 4.8, mats.rock, Math.PI * 0.70, -0.16, true);
+        place.addRamp(cx + 5.0, 5.1, cz + 5.0, 6.2, 1.0, 4.2, mats.frost, Math.PI * 0.76, -0.15, true);
+        place.addRamp(cx + 2.8, 7.4, cz + 2.5, 5.6, 0.9, 3.8, mats.frost, Math.PI * 0.80, -0.14, true);
+        place.addRamp(cx + 0.8, 9.8, cz + 0.6, 5.0, 0.9, 3.6, mats.snow, Math.PI * 0.82, -0.14, true);
+        place.addRamp(cx + 0.7, 12.4, cz + 0.8, 4.8, 0.8, 3.4, mats.snow, Math.PI * 0.66, -0.12, true);
 
-        // A single narrow summit route and exposed summit pocket.
-        place.addBlock(cx - 5.6, 9.0, cz + 4.8, 4.6, 1.0, 2.4, mats.snow, true);
-        place.addRamp(cx - 3.4, 11.2, cz + 2.4, 4.2, 0.9, 2.6, mats.frost, Math.PI * 0.84, -0.22, true);
-        place.addBlock(cx - 1.2, 13.6, cz + 0.8, 3.2, 0.9, 2.0, mats.snow, true);
-        place.addRamp(cx + 0.6, 16.0, cz - 0.8, 3.0, 0.8, 2.4, mats.frost, Math.PI * 0.76, -0.2, true);
-        place.addBlock(cx + 1.3, 18.6, cz - 1.2, 2.2, 0.8, 1.5, mats.snow, true);
-        place.addBlock(cx + 1.2, 23.2, cz - 0.2, 1.9, 0.8, 1.4, mats.frost, true);
+        for (var tl = 0; tl < topLevels.length; tl++) {
+            var topLevel = topLevels[tl];
+            place.addBlock(topLevel.x, topLevel.y, topLevel.z, topLevel.w, topLevel.h, topLevel.d, topLevel.mat, true);
+            markPeak(topLevel.y, topLevel.h);
+        }
 
-        // Summit texture so the peak stays solid but not featureless.
-        place.addBlock(cx + 1.6, 24.1, cz - 0.5, 1.1, 1.2, 0.9, mats.ice, true);
-        place.addBlock(cx + 0.4, 23.8, cz + 0.2, 0.8, 0.8, 0.7, mats.frost, true);
-        markPeak(24.1, 1.2);
-        markPeak(23.8, 0.8);
+        place.addBlock(summit.x, summit.y, summit.z, summit.w, summit.h, summit.d, mats.snow, true);
+        markPeak(summit.y, summit.h);
+
+        // Summit texture stays broad instead of turning into a needle.
+        place.addBlock(cx + 1.8, 20.1, cz - 0.4, 1.4, 0.4, 1.1, mats.ice, false);
+        place.addBlock(cx + 0.6, 20.0, cz + 0.3, 1.1, 0.3, 0.9, mats.frost, false);
 
         // Crevasse slashes.
-        place.addBlock(cx + 5.8, 3.8, cz + 0.8, 0.35, 3.2, 4.4, mats.crevasse, false);
-        place.addBlock(cx - 4.9, 5.2, cz - 1.4, 3.8, 1.9, 0.35, mats.crevasse, false);
-        place.addBlock(cx + 1.8, 7.2, cz - 4.1, 2.6, 1.3, 0.3, mats.crevasse, false);
+        place.addBlock(cx + 6.4, 3.4, cz + 0.9, 0.35, 2.8, 5.0, mats.crevasse, false);
+        place.addBlock(cx - 5.6, 4.4, cz - 1.2, 4.2, 1.7, 0.35, mats.crevasse, false);
+        place.addBlock(cx + 2.6, 6.1, cz - 4.2, 3.0, 1.1, 0.3, mats.crevasse, false);
 
-        // Frozen waterfall stretched along the eastern face, but shorter than the old summit.
-        place.addBlock(cx + 8.7, 8.8, cz + 0.1, 1.1, 12.0, 2.2, mats.ice, false);
-        var fallGeo = new THREE.PlaneGeometry(4.0, 13.8);
-        place.addDecor(cx + 8.9, 9.1, cz + 0.3, fallGeo, mats.frozenFall, 0, 0, 0);
+        // Frozen waterfall shortened to match the lower eastern face.
+        place.addBlock(cx + 9.4, 6.8, cz + 0.2, 1.1, 9.2, 2.0, mats.ice, false);
+        var fallGeo = new THREE.PlaneGeometry(3.8, 10.6);
+        place.addDecor(cx + 9.6, 6.9, cz + 0.3, fallGeo, mats.frozenFall, 0, 0, 0);
 
         return {
             peakHeight: peakHeight,
             baseWidth: tiers[0].w,
             baseDepth: tiers[0].d,
-            summitWidth: 1.9
+            terraceCount: tiers.length,
+            summitWidth: summit.w,
+            summitDepth: summit.d,
+            minRouteShelfWidth: minRouteShelfWidth,
+            minRouteShelfDepth: minRouteShelfDepth
         };
     }
 
-    function addIceSpire(x, z, h, place, mats, ctx) {
+    function addIceSpire(x, z, h, place, mats, ctx, options) {
         var height = Math.max(2.0, h);
         // Tapered: 3 stacked segments of decreasing width
-        var baseW = 1.1;
+        var baseW = Math.max(0.9, Number((options && options.baseW) || 1.1));
         var seg1H = height * 0.45;
         var seg2H = height * 0.32;
         var seg3H = height * 0.23;
@@ -113,6 +145,61 @@ import { pointInBounds as pt } from './biome-utils.js';
         ctx.addIceShimmer({ material: mats.ice, baseOpacity: 0.85, phase: x * 1.7 + z * 2.3 });
 
         return topMesh;
+    }
+
+    function buildBorderIciclePack(bounds, pack, place, mats, ctx) {
+        var basis = sideBasis(pack.side);
+        var blockW = (pack.side === 'north' || pack.side === 'south') ? 4.8 : 2.6;
+        var blockD = (pack.side === 'north' || pack.side === 'south') ? 2.6 : 4.8;
+        var primaryBaseW = 1.2;
+        var centerX = (pack.side === 'east')
+            ? bounds.maxX - (blockW * 0.5)
+            : (pack.side === 'west')
+                ? bounds.minX + (blockW * 0.5)
+                : edgeLerp(bounds.minX, bounds.maxX, pack.t);
+        var centerZ = (pack.side === 'south')
+            ? bounds.maxZ - (blockD * 0.5)
+            : (pack.side === 'north')
+                ? bounds.minZ + (blockD * 0.5)
+                : edgeLerp(bounds.minZ, bounds.maxZ, pack.t);
+        var primaryX = (pack.side === 'east')
+            ? bounds.maxX - (primaryBaseW * 0.5)
+            : (pack.side === 'west')
+                ? bounds.minX + (primaryBaseW * 0.5)
+                : centerX;
+        var primaryZ = (pack.side === 'south')
+            ? bounds.maxZ - (primaryBaseW * 0.5)
+            : (pack.side === 'north')
+                ? bounds.minZ + (primaryBaseW * 0.5)
+                : centerZ;
+        var companions = Array.isArray(pack.companions) ? pack.companions : [];
+
+        place.addBlock(centerX, 0.18, centerZ, blockW, 0.36, blockD, mats.iceDeep, false);
+        place.addBlock(
+            centerX + (basis.inwardX * 0.18),
+            0.3,
+            centerZ + (basis.inwardZ * 0.18),
+            blockW * 0.72,
+            0.12,
+            blockD * 0.58,
+            mats.frost,
+            false
+        );
+
+        addIceSpire(primaryX, primaryZ, pack.primaryH, place, mats, ctx, { baseW: primaryBaseW });
+        for (var i = 0; i < companions.length; i++) {
+            var companion = companions[i];
+            addIceSpire(
+                primaryX + (basis.alongX * Number(companion.along || 0)) + (basis.inwardX * Number(companion.inset || 0)),
+                primaryZ + (basis.alongZ * Number(companion.along || 0)) + (basis.inwardZ * Number(companion.inset || 0)),
+                companion.h,
+                place,
+                mats,
+                ctx
+            );
+        }
+
+        return 1 + companions.length;
     }
 
     function addGlacierPatch(cx, cz, width, depth, spires, place, mats, ctx) {
@@ -185,71 +272,141 @@ import { pointInBounds as pt } from './biome-utils.js';
         var center = pt(bounds, 0.46, 0.46);
         var crystalCount = 0;
         var groundSpireCount = 0;
+        var edgeTouchSides = { north: 0, east: 0, south: 0, west: 0 };
+        var borderPackLabels = [];
 
         var mountain = buildMountain(center.x, center.z, place, mats);
-        ctx.addExclusion(center.x, center.z, 12.5);
+        ctx.addExclusion(center.x, center.z, 14.2);
 
         var overhangPt = pt(bounds, 0.76, 0.28);
         crystalCount += buildIceOverhang(overhangPt.x, overhangPt.z, place, mats, ctx);
         ctx.addExclusion(overhangPt.x, overhangPt.z, 5.2);
 
-        var glacierPatches = [
+        var borderPacks = [
             {
-                u: 0.10, v: 0.16, w: 3.8, d: 2.6,
-                spires: [
-                    { dx: -1.0, dz: -0.4, h: 3.0 },
-                    { dx: 0.2, dz: 0.2, h: 4.1 },
-                    { dx: 1.2, dz: -0.6, h: 2.5 }
+                label: 'north-west-pack',
+                side: 'north',
+                t: 0.16,
+                primaryH: 4.8,
+                companions: [
+                    { along: -1.3, inset: 1.5, h: 3.4 },
+                    { along: 1.5, inset: 2.5, h: 2.9 }
                 ]
             },
             {
-                u: 0.14, v: 0.82, w: 3.6, d: 2.8,
-                spires: [
-                    { dx: -0.8, dz: 0.4, h: 3.6 },
-                    { dx: 0.4, dz: -0.2, h: 4.0 },
-                    { dx: 1.3, dz: 0.8, h: 2.7 }
+                label: 'north-east-pack',
+                side: 'north',
+                t: 0.82,
+                primaryH: 4.4,
+                companions: [
+                    { along: -1.5, inset: 1.6, h: 3.2 },
+                    { along: 1.2, inset: 2.4, h: 2.8 }
                 ]
             },
             {
-                u: 0.88, v: 0.68, w: 4.0, d: 3.0,
-                spires: [
-                    { dx: -1.0, dz: -0.2, h: 3.2 },
-                    { dx: 0.3, dz: 0.4, h: 3.8 },
-                    { dx: 1.2, dz: -0.8, h: 2.9 }
+                label: 'east-north-pack',
+                side: 'east',
+                t: 0.24,
+                primaryH: 4.9,
+                companions: [
+                    { along: -1.4, inset: 1.5, h: 3.6 },
+                    { along: 1.4, inset: 2.3, h: 3.0 }
                 ]
             },
             {
-                u: 0.62, v: 0.12, w: 3.4, d: 2.4,
-                spires: [
-                    { dx: -0.8, dz: 0.1, h: 2.6 },
-                    { dx: 0.7, dz: -0.2, h: 3.2 }
+                label: 'east-south-pack',
+                side: 'east',
+                t: 0.78,
+                primaryH: 4.5,
+                companions: [
+                    { along: -1.3, inset: 1.5, h: 3.2 },
+                    { along: 1.6, inset: 2.5, h: 2.9 }
+                ]
+            },
+            {
+                label: 'south-east-pack',
+                side: 'south',
+                t: 0.84,
+                primaryH: 4.7,
+                companions: [
+                    { along: -1.4, inset: 1.4, h: 3.5 },
+                    { along: 1.2, inset: 2.3, h: 3.0 }
+                ]
+            },
+            {
+                label: 'south-west-pack',
+                side: 'south',
+                t: 0.18,
+                primaryH: 4.3,
+                companions: [
+                    { along: -1.2, inset: 1.4, h: 3.1 },
+                    { along: 1.5, inset: 2.4, h: 2.8 }
+                ]
+            },
+            {
+                label: 'west-south-pack',
+                side: 'west',
+                t: 0.74,
+                primaryH: 4.6,
+                companions: [
+                    { along: -1.3, inset: 1.5, h: 3.4 },
+                    { along: 1.4, inset: 2.2, h: 3.0 }
+                ]
+            },
+            {
+                label: 'west-north-pack',
+                side: 'west',
+                t: 0.26,
+                primaryH: 5.0,
+                companions: [
+                    { along: -1.4, inset: 1.5, h: 3.6 },
+                    { along: 1.2, inset: 2.3, h: 3.2 }
                 ]
             }
         ];
-        for (var gp = 0; gp < glacierPatches.length; gp++) {
-            var glacier = glacierPatches[gp];
-            var glacierPt = pt(rawBounds, glacier.u, glacier.v);
-            var patchCount = addGlacierPatch(glacierPt.x, glacierPt.z, glacier.w, glacier.d, glacier.spires, place, mats, ctx);
-            crystalCount += patchCount;
-            groundSpireCount += patchCount;
+
+        for (var bp = 0; bp < borderPacks.length; bp++) {
+            var pack = borderPacks[bp];
+            var packCount = buildBorderIciclePack(rawBounds, pack, place, mats, ctx);
+            crystalCount += packCount;
+            groundSpireCount += packCount;
+            edgeTouchSides[pack.side] += 1;
+            borderPackLabels.push(pack.label);
         }
 
-        // Stand-alone ice teeth keep the biome readable between the larger glacier patches.
-        var spires = [
-            { u: 0.18, v: 0.18, h: 4.3 },
-            { u: 0.24, v: 0.24, h: 3.2 },
-            { u: 0.12, v: 0.78, h: 4.2 },
-            { u: 0.20, v: 0.84, h: 3.1 },
-            { u: 0.84, v: 0.74, h: 3.8 },
-            { u: 0.88, v: 0.66, h: 2.9 }
+        var interiorSpireGroups = [
+            {
+                label: 'inner-west-cluster',
+                u: 0.34, v: 0.32, w: 3.6, d: 2.4,
+                spires: [
+                    { dx: -1.0, dz: 0.5, h: 3.2 },
+                    { dx: 1.0, dz: -0.6, h: 2.8 }
+                ]
+            },
+            {
+                label: 'inner-east-cluster',
+                u: 0.66, v: 0.34, w: 3.4, d: 2.4,
+                spires: [
+                    { dx: -0.8, dz: 0.4, h: 3.0 },
+                    { dx: 0.9, dz: -0.7, h: 2.7 }
+                ]
+            },
+            {
+                label: 'inner-south-cluster',
+                u: 0.54, v: 0.72, w: 3.8, d: 2.6,
+                spires: [
+                    { dx: -1.1, dz: -0.4, h: 3.1 },
+                    { dx: 1.0, dz: 0.6, h: 2.9 }
+                ]
+            }
         ];
-        for (var i = 0; i < spires.length; i++) {
-            var s = spires[i];
-            var p = pt(bounds, s.u, s.v);
-            addIceSpire(p.x, p.z, s.h, place, mats, ctx);
+        for (var ig = 0; ig < interiorSpireGroups.length; ig++) {
+            var group = interiorSpireGroups[ig];
+            var groupPt = pt(bounds, group.u, group.v);
+            var groupCount = addGlacierPatch(groupPt.x, groupPt.z, group.w, group.d, group.spires, place, mats, ctx);
+            crystalCount += groupCount;
+            groundSpireCount += groupCount;
         }
-        crystalCount += spires.length;
-        groundSpireCount += spires.length;
 
         // Ice arch on the southern side to create a lower secondary landmark.
         var archPt = pt(bounds, 0.34, 0.72);
@@ -280,17 +437,17 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Snow drifts and shelves create grouped approach paths.
         var drifts = [
-            { u: 0.18, v: 0.46, w: 4.0, d: 2.2 },
-            { u: 0.80, v: 0.42, w: 4.8, d: 2.8 },
-            { u: 0.42, v: 0.12, w: 3.8, d: 2.0 },
-            { u: 0.60, v: 0.88, w: 4.0, d: 2.4 },
-            { u: 0.12, v: 0.64, w: 3.1, d: 3.2 },
-            { u: 0.86, v: 0.54, w: 3.4, d: 2.2 },
-            { u: 0.50, v: 0.92, w: 5.2, d: 2.1 },
-            { u: 0.58, v: 0.08, w: 3.4, d: 1.6 }
+            { u: 0.08, v: 0.10, w: 3.2, d: 1.8 },
+            { u: 0.42, v: 0.08, w: 3.8, d: 2.0 },
+            { u: 0.92, v: 0.18, w: 3.0, d: 1.8 },
+            { u: 0.10, v: 0.54, w: 3.2, d: 2.8 },
+            { u: 0.90, v: 0.46, w: 4.4, d: 2.6 },
+            { u: 0.18, v: 0.92, w: 3.4, d: 2.0 },
+            { u: 0.56, v: 0.94, w: 4.8, d: 2.2 },
+            { u: 0.94, v: 0.78, w: 3.2, d: 1.9 }
         ];
         for (var d = 0; d < drifts.length; d++) {
-            var dp = pt(bounds, drifts[d].u, drifts[d].v);
+            var dp = pt(rawBounds, drifts[d].u, drifts[d].v);
             addSnowDrift(dp.x, dp.z, drifts[d].w, drifts[d].d, place, mats);
         }
 
@@ -303,21 +460,22 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Small scattered ice fragments near clusters
         var fragments = [
-            { u: 0.16, v: 0.22, w: 0.5, h: 0.3, d: 0.4 },
-            { u: 0.84, v: 0.22, w: 0.5, h: 0.28, d: 0.36 },
-            { u: 0.13, v: 0.84, w: 0.6, h: 0.2, d: 0.45 },
-            { u: 0.87, v: 0.74, w: 0.42, h: 0.24, d: 0.32 },
-            { u: 0.28, v: 0.14, w: 0.55, h: 0.2, d: 0.4 },
-            { u: 0.72, v: 0.86, w: 0.44, h: 0.22, d: 0.34 },
-            { u: 0.68, v: 0.28, w: 0.52, h: 0.24, d: 0.36 },
-            { u: 0.08, v: 0.22, w: 0.46, h: 0.18, d: 0.34, raw: true },
-            { u: 0.18, v: 0.88, w: 0.48, h: 0.2, d: 0.36, raw: true },
-            { u: 0.90, v: 0.60, w: 0.5, h: 0.2, d: 0.36, raw: true },
-            { u: 0.66, v: 0.08, w: 0.44, h: 0.18, d: 0.32, raw: true }
+            { u: 0.03, v: 0.08, w: 0.46, h: 0.18, d: 0.32 },
+            { u: 0.30, v: 0.03, w: 0.48, h: 0.18, d: 0.34 },
+            { u: 0.78, v: 0.02, w: 0.46, h: 0.18, d: 0.32 },
+            { u: 0.98, v: 0.20, w: 0.46, h: 0.18, d: 0.32 },
+            { u: 0.97, v: 0.68, w: 0.50, h: 0.2, d: 0.34 },
+            { u: 0.82, v: 0.98, w: 0.48, h: 0.18, d: 0.34 },
+            { u: 0.22, v: 0.97, w: 0.50, h: 0.2, d: 0.36 },
+            { u: 0.02, v: 0.78, w: 0.46, h: 0.18, d: 0.32 },
+            { u: 0.28, v: 0.18, w: 0.55, h: 0.2, d: 0.4 },
+            { u: 0.72, v: 0.18, w: 0.52, h: 0.2, d: 0.36 },
+            { u: 0.22, v: 0.84, w: 0.54, h: 0.22, d: 0.4 },
+            { u: 0.76, v: 0.84, w: 0.48, h: 0.2, d: 0.34 }
         ];
         for (var fi = 0; fi < fragments.length; fi++) {
             var fr = fragments[fi];
-            var frp = pt(fr.raw ? rawBounds : bounds, fr.u, fr.v);
+            var frp = pt(rawBounds, fr.u, fr.v);
             place.addBlock(frp.x, fr.h * 0.5, frp.z, fr.w, fr.h, fr.d, mats.ice, false);
         }
 
@@ -327,11 +485,18 @@ import { pointInBounds as pt } from './biome-utils.js';
             foothillCrystals: fragments.length,
             foothillDrifts: 0,
             groundSpires: groundSpireCount,
-            glacierPatches: glacierPatches.length,
+            glacierPatches: borderPacks.length,
+            interiorSpireGroups: interiorSpireGroups.length,
             peakHeight: mountain.peakHeight,
+            terraceCount: mountain.terraceCount,
             mountainBaseWidth: mountain.baseWidth,
             mountainBaseDepth: mountain.baseDepth,
-            summitWidth: mountain.summitWidth
+            summitWidth: mountain.summitWidth,
+            summitDepth: mountain.summitDepth,
+            minRouteShelfWidth: mountain.minRouteShelfWidth,
+            minRouteShelfDepth: mountain.minRouteShelfDepth,
+            edgeTouchSides: edgeTouchSides,
+            borderPackLabels: borderPackLabels
         };
     }
 

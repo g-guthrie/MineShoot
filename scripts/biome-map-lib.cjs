@@ -5,7 +5,10 @@ const GRID_COLS = 14;
 const GRID_ROWS = 14;
 const WORLD_MIN = 2;
 const WORLD_PLAYABLE_SPAN = 162;
+const WORLD_MAX = WORLD_MIN + WORLD_PLAYABLE_SPAN;
 const CELL_SPAN = WORLD_PLAYABLE_SPAN / 3;
+const DEFAULT_NEIGHBOR_MARGIN = 12;
+const OBJECT_SYMBOL_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 const BIOME_CELLS = {
   arctic: { row: 0, col: 0 },
@@ -30,6 +33,12 @@ function biomeBounds(biomeId) {
   };
 }
 
+function biomeCell(biomeId) {
+  const cell = BIOME_CELLS[biomeId];
+  if (!cell) throw new Error(`Unknown biome: ${biomeId}`);
+  return cell;
+}
+
 function pt(bounds, u, v) {
   return {
     x: bounds.minX + ((bounds.maxX - bounds.minX) * u),
@@ -39,6 +48,50 @@ function pt(bounds, u, v) {
 
 function point(kind, x, z, label) {
   return { type: 'point', kind, x, z, label: label || kind };
+}
+
+function edgeLerp(min, max, t) {
+  return min + ((max - min) * Number(t || 0));
+}
+
+function sideBasis(side) {
+  if (side === 'north') return { alongX: 1, alongZ: 0, inwardX: 0, inwardZ: 1 };
+  if (side === 'south') return { alongX: 1, alongZ: 0, inwardX: 0, inwardZ: -1 };
+  if (side === 'east') return { alongX: 0, alongZ: 1, inwardX: -1, inwardZ: 0 };
+  return { alongX: 0, alongZ: 1, inwardX: 1, inwardZ: 0 };
+}
+
+function borderPackCenter(bounds, pack) {
+  const blockW = (pack.side === 'north' || pack.side === 'south') ? 4.8 : 2.6;
+  const blockD = (pack.side === 'north' || pack.side === 'south') ? 2.6 : 4.8;
+  return {
+    x: (pack.side === 'east')
+      ? bounds.maxX - (blockW * 0.5)
+      : (pack.side === 'west')
+        ? bounds.minX + (blockW * 0.5)
+        : edgeLerp(bounds.minX, bounds.maxX, pack.t),
+    z: (pack.side === 'south')
+      ? bounds.maxZ - (blockD * 0.5)
+      : (pack.side === 'north')
+        ? bounds.minZ + (blockD * 0.5)
+        : edgeLerp(bounds.minZ, bounds.maxZ, pack.t)
+  };
+}
+
+function borderPackPrimary(bounds, pack, baseW = 1.2) {
+  const center = borderPackCenter(bounds, pack);
+  return {
+    x: (pack.side === 'east')
+      ? bounds.maxX - (baseW * 0.5)
+      : (pack.side === 'west')
+        ? bounds.minX + (baseW * 0.5)
+        : center.x,
+    z: (pack.side === 'south')
+      ? bounds.maxZ - (baseW * 0.5)
+      : (pack.side === 'north')
+        ? bounds.minZ + (baseW * 0.5)
+        : center.z
+  };
 }
 
 function uvPoint(bounds, kind, u, v, label) {
@@ -118,12 +171,169 @@ function dominantGlyph(bucket, glyphs) {
   return glyphs[bucket.items[0].kind] || '?';
 }
 
-function buildReport(biomeId) {
+function buildBiomeDataset(biomeId) {
   const spec = BIOME_SPECS[biomeId];
   if (!spec) throw new Error(`Missing biome spec: ${biomeId}`);
   const bounds = biomeBounds(biomeId);
   const authoredFeatures = spec.build(bounds);
   const sampledFeatures = authoredFeatures.flatMap(linesToPoints);
+  return {
+    biomeId,
+    spec,
+    bounds,
+    authoredFeatures,
+    sampledFeatures
+  };
+}
+
+function unitRegionForBiome(biomeId, margin) {
+  const bounds = biomeBounds(biomeId);
+  const cell = biomeCell(biomeId);
+  const neighborMargin = Math.max(0, Math.floor(Number(margin) || 0));
+  return {
+    minX: Math.max(WORLD_MIN, bounds.minX - (cell.col > 0 ? neighborMargin : 0)),
+    maxX: Math.min(WORLD_MAX, bounds.maxX + (cell.col < 2 ? neighborMargin : 0)),
+    minZ: Math.max(WORLD_MIN, bounds.minZ - (cell.row > 0 ? neighborMargin : 0)),
+    maxZ: Math.min(WORLD_MAX, bounds.maxZ + (cell.row < 2 ? neighborMargin : 0))
+  };
+}
+
+function intersectionBounds(a, b) {
+  const minX = Math.max(a.minX, b.minX);
+  const maxX = Math.min(a.maxX, b.maxX);
+  const minZ = Math.max(a.minZ, b.minZ);
+  const maxZ = Math.min(a.maxZ, b.maxZ);
+  if (!(maxX > minX) || !(maxZ > minZ)) return null;
+  return { minX, maxX, minZ, maxZ };
+}
+
+function internalBoundaries(regionMin, regionMax, boundsMin, boundsMax) {
+  const values = [];
+  if (regionMin < boundsMin && boundsMin < regionMax) values.push(boundsMin);
+  if (regionMin < boundsMax && boundsMax < regionMax) values.push(boundsMax);
+  return values.sort((a, b) => a - b);
+}
+
+function axisHeader(prefix, regionMin, regionMax, boundarySet, digitFn) {
+  let line = prefix;
+  for (let value = regionMin; value < regionMax; value++) {
+    if (boundarySet.has(value) && value > regionMin) line += '|';
+    line += digitFn(value);
+  }
+  return line;
+}
+
+function separatorRow(prefix, regionMin, regionMax, boundarySet) {
+  let line = prefix;
+  for (let value = regionMin; value < regionMax; value++) {
+    if (boundarySet.has(value) && value > regionMin) line += '+';
+    line += '-';
+  }
+  return line;
+}
+
+function renderUnitMap(region, bounds, cellRenderer) {
+  const boundaryCols = new Set(internalBoundaries(region.minX, region.maxX, bounds.minX, bounds.maxX));
+  const boundaryRows = new Set(internalBoundaries(region.minZ, region.maxZ, bounds.minZ, bounds.maxZ));
+  const lines = [];
+
+  lines.push(axisHeader('x10 ', region.minX, region.maxX, boundaryCols, (value) => String(Math.floor(value / 10) % 10)));
+  lines.push(axisHeader('x01 ', region.minX, region.maxX, boundaryCols, (value) => String(Math.abs(value % 10))));
+
+  for (let z = region.minZ; z < region.maxZ; z++) {
+    if (boundaryRows.has(z) && z > region.minZ) {
+      lines.push(separatorRow('    ', region.minX, region.maxX, boundaryCols));
+    }
+    let line = String(z).padStart(3, ' ') + ' ';
+    for (let x = region.minX; x < region.maxX; x++) {
+      if (boundaryCols.has(x) && x > region.minX) line += '|';
+      line += cellRenderer(x, z);
+    }
+    lines.push(line);
+  }
+
+  return lines.join('\n');
+}
+
+function visibleBiomeSlices(region) {
+  return Object.entries(BIOME_CELLS)
+    .map(([biomeId, cell]) => {
+      const bounds = biomeBounds(biomeId);
+      const visible = intersectionBounds(region, bounds);
+      if (!visible) return null;
+      return {
+        biomeId,
+        name: BIOME_SPECS[biomeId].name,
+        row: cell.row,
+        col: cell.col,
+        bounds,
+        visible
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.row - b.row || a.col - b.col);
+}
+
+function preferredObjectSymbol(spec, kind) {
+  const preferred = spec && spec.glyphs && spec.glyphs[kind];
+  if (typeof preferred === 'string' && /^[A-Za-z0-9]$/.test(preferred)) return preferred;
+  const fallback = String(kind || '').replace(/[^A-Za-z0-9]/g, '');
+  return fallback ? fallback[0].toUpperCase() : null;
+}
+
+function assignObjectSymbols(entries) {
+  const assigned = new Map();
+  const taken = new Set(['.', '*', '|', '-', '+']);
+
+  for (const entry of entries) {
+    const preferred = preferredObjectSymbol(entry.spec, entry.kind);
+    if (preferred && !taken.has(preferred)) {
+      assigned.set(entry.key, preferred);
+      taken.add(preferred);
+      continue;
+    }
+    for (const candidate of OBJECT_SYMBOL_POOL) {
+      if (taken.has(candidate)) continue;
+      assigned.set(entry.key, candidate);
+      taken.add(candidate);
+      break;
+    }
+  }
+
+  return assigned;
+}
+
+function buildObjectBuckets(region, datasets) {
+  const buckets = new Map();
+  const usedKinds = new Map();
+
+  for (const dataset of datasets) {
+    for (const feature of dataset.sampledFeatures) {
+      if (feature.x < region.minX || feature.x >= region.maxX || feature.z < region.minZ || feature.z >= region.maxZ) continue;
+      const x = Math.floor(feature.x);
+      const z = Math.floor(feature.z);
+      const bucketKey = `${z}:${x}`;
+      const featureKey = `${dataset.biomeId}:${feature.kind}`;
+      const bucket = buckets.get(bucketKey) || new Set();
+      bucket.add(featureKey);
+      buckets.set(bucketKey, bucket);
+      if (!usedKinds.has(featureKey)) {
+        usedKinds.set(featureKey, {
+          key: featureKey,
+          biomeId: dataset.biomeId,
+          biomeName: dataset.spec.name,
+          kind: feature.kind,
+          spec: dataset.spec
+        });
+      }
+    }
+  }
+
+  return { buckets, usedKinds };
+}
+
+function buildReport(biomeId) {
+  const { spec, bounds, authoredFeatures, sampledFeatures } = buildBiomeDataset(biomeId);
   const grid = makeGrid();
 
   for (const feature of sampledFeatures) {
@@ -193,14 +403,75 @@ function buildReport(biomeId) {
   };
 }
 
+function buildUnitAreaReport(biomeId, options) {
+  const focus = buildBiomeDataset(biomeId);
+  const neighborMargin = Math.max(0, Math.floor(Number(options && options.neighborMargin) || DEFAULT_NEIGHBOR_MARGIN));
+  const region = unitRegionForBiome(biomeId, neighborMargin);
+  const slices = visibleBiomeSlices(region);
+  const datasetByBiome = new Map();
+  const datasets = slices.map((slice) => {
+    if (!datasetByBiome.has(slice.biomeId)) datasetByBiome.set(slice.biomeId, buildBiomeDataset(slice.biomeId));
+    return datasetByBiome.get(slice.biomeId);
+  });
+  const { buckets, usedKinds } = buildObjectBuckets(region, datasets);
+  const symbolEntries = Array.from(usedKinds.values())
+    .sort((a, b) => a.biomeName.localeCompare(b.biomeName) || a.kind.localeCompare(b.kind));
+  const symbols = assignObjectSymbols(symbolEntries);
+
+  const lines = [];
+  lines.push(`${focus.spec.name} unit-area biome map`);
+  lines.push(`Biome: ${biomeId}`);
+  lines.push('Unit resolution: 1x1 world units');
+  lines.push(`Focus bounds x:[${focus.bounds.minX}, ${focus.bounds.maxX}) z:[${focus.bounds.minZ}, ${focus.bounds.maxZ})`);
+  lines.push(`Exact biome edges: west x=${focus.bounds.minX}, east x=${focus.bounds.maxX}, north z=${focus.bounds.minZ}, south z=${focus.bounds.maxZ}`);
+  lines.push(`Sample region x:[${region.minX}, ${region.maxX}) z:[${region.minZ}, ${region.maxZ})  neighbor margin:${neighborMargin}`);
+  lines.push('');
+  lines.push('Visible biome slices');
+  for (const slice of slices) {
+    lines.push(`  ${slice.name.padEnd(8, ' ')} ${slice.biomeId === biomeId ? 'focus   ' : 'neighbor'} x:[${slice.visible.minX}, ${slice.visible.maxX}) z:[${slice.visible.minZ}, ${slice.visible.maxZ})`);
+  }
+  lines.push('');
+  lines.push(`Binary biome mask (1 = ${focus.spec.name} biome, 0 = non-${focus.spec.name.toLowerCase()} neighbor area)`);
+  lines.push(renderUnitMap(region, focus.bounds, (x, z) => (
+    x >= focus.bounds.minX && x < focus.bounds.maxX &&
+    z >= focus.bounds.minZ && z < focus.bounds.maxZ
+  ) ? '1' : '0'));
+  lines.push('');
+  lines.push('Object map (sampled authored placements across the visible biome slices)');
+  lines.push(renderUnitMap(region, focus.bounds, (x, z) => {
+    const bucket = buckets.get(`${z}:${x}`);
+    if (!bucket || !bucket.size) return '.';
+    if (bucket.size > 1) return '*';
+    const [key] = bucket;
+    return symbols.get(key) || '?';
+  }));
+  lines.push('');
+  lines.push('Object legend');
+  for (const entry of symbolEntries) {
+    lines.push(`  ${symbols.get(entry.key)} ${entry.biomeName}/${entry.kind}`);
+  }
+  lines.push('  * mixed unit (multiple object kinds overlap in the same 1x1 cell)');
+  lines.push('  . empty unit');
+
+  return {
+    biomeId,
+    name: focus.spec.name,
+    region,
+    visibleBiomes: slices,
+    content: lines.join('\n') + '\n'
+  };
+}
+
 function writeAllReports(outputDir) {
   fs.mkdirSync(outputDir, { recursive: true });
   const biomeIds = Object.keys(BIOME_SPECS);
   const reports = biomeIds.map((biomeId) => buildReport(biomeId));
+  const arcticUnitArea = buildUnitAreaReport('arctic');
 
   for (const report of reports) {
     fs.writeFileSync(path.join(outputDir, `${report.biomeId}.txt`), report.content, 'utf8');
   }
+  fs.writeFileSync(path.join(outputDir, 'arctic-unit-area.txt'), arcticUnitArea.content, 'utf8');
 
   const summaryLines = ['# Biome ASCII Maps', '', 'Generated by `npm run maps:biomes`.', ''];
   summaryLines.push('| Biome | Features | Occupied Cells | Hotspot | File |');
@@ -212,6 +483,10 @@ function writeAllReports(outputDir) {
       : 'none';
     summaryLines.push(`| ${report.name} | ${totalFeatures} | ${report.occupiedCells}/196 (${report.occupancyRate}%) | ${hotspot} | [${report.biomeId}.txt](./${report.biomeId}.txt) |`);
   }
+  summaryLines.push('');
+  summaryLines.push('## Specialized maps');
+  summaryLines.push('');
+  summaryLines.push('- [Arctic unit-area boundary map](./arctic-unit-area.txt) - 1x1 world-unit mask with exact Arctic biome edges and sampled neighboring object strips.');
   summaryLines.push('');
   fs.writeFileSync(path.join(outputDir, 'README.md'), summaryLines.join('\n') + '\n', 'utf8');
 
@@ -234,51 +509,152 @@ const BIOME_SPECS = {
       fragment: 'f'
     },
     build(bounds) {
-      const glacierNw = pt(bounds, 0.10, 0.16);
-      const glacierSw = pt(bounds, 0.14, 0.82);
-      const glacierEast = pt(bounds, 0.88, 0.68);
-      const glacierNorth = pt(bounds, 0.62, 0.12);
+      const borderPacks = [
+        {
+          label: 'north-west-pack',
+          side: 'north',
+          t: 0.16,
+          companions: [
+            { along: -1.3, inset: 1.5 },
+            { along: 1.5, inset: 2.5 }
+          ]
+        },
+        {
+          label: 'north-east-pack',
+          side: 'north',
+          t: 0.82,
+          companions: [
+            { along: -1.5, inset: 1.6 },
+            { along: 1.2, inset: 2.4 }
+          ]
+        },
+        {
+          label: 'east-north-pack',
+          side: 'east',
+          t: 0.24,
+          companions: [
+            { along: -1.4, inset: 1.5 },
+            { along: 1.4, inset: 2.3 }
+          ]
+        },
+        {
+          label: 'east-south-pack',
+          side: 'east',
+          t: 0.78,
+          companions: [
+            { along: -1.3, inset: 1.5 },
+            { along: 1.6, inset: 2.5 }
+          ]
+        },
+        {
+          label: 'south-east-pack',
+          side: 'south',
+          t: 0.84,
+          companions: [
+            { along: -1.4, inset: 1.4 },
+            { along: 1.2, inset: 2.3 }
+          ]
+        },
+        {
+          label: 'south-west-pack',
+          side: 'south',
+          t: 0.18,
+          companions: [
+            { along: -1.2, inset: 1.4 },
+            { along: 1.5, inset: 2.4 }
+          ]
+        },
+        {
+          label: 'west-south-pack',
+          side: 'west',
+          t: 0.74,
+          companions: [
+            { along: -1.3, inset: 1.5 },
+            { along: 1.4, inset: 2.2 }
+          ]
+        },
+        {
+          label: 'west-north-pack',
+          side: 'west',
+          t: 0.26,
+          companions: [
+            { along: -1.4, inset: 1.5 },
+            { along: 1.2, inset: 2.3 }
+          ]
+        }
+      ];
+      const interiorGroups = [
+        {
+          label: 'inner-west-cluster',
+          x: pt(bounds, 0.34, 0.32).x,
+          z: pt(bounds, 0.34, 0.32).z,
+          spires: [
+            { dx: -1.0, dz: 0.5 },
+            { dx: 1.0, dz: -0.6 }
+          ]
+        },
+        {
+          label: 'inner-east-cluster',
+          x: pt(bounds, 0.66, 0.34).x,
+          z: pt(bounds, 0.66, 0.34).z,
+          spires: [
+            { dx: -0.8, dz: 0.4 },
+            { dx: 0.9, dz: -0.7 }
+          ]
+        },
+        {
+          label: 'inner-south-cluster',
+          x: pt(bounds, 0.54, 0.72).x,
+          z: pt(bounds, 0.54, 0.72).z,
+          spires: [
+            { dx: -1.1, dz: -0.4 },
+            { dx: 1.0, dz: 0.6 }
+          ]
+        }
+      ];
       return [
         uvPoint(bounds, 'mountain', 0.46, 0.46, 'mountain'),
         uvPoint(bounds, 'overhang', 0.76, 0.28, 'overhang'),
         uvPoint(bounds, 'shelf', 0.26, 0.28, 'ice-shelf'),
         uvPoint(bounds, 'arch', 0.34, 0.72, 'ice-arch'),
         uvPoint(bounds, 'pool', 0.70, 0.78, 'frozen-pool'),
-        ...uvPoints(bounds, 'glacier', [
-          { u: 0.10, v: 0.16 }, { u: 0.14, v: 0.82 }, { u: 0.88, v: 0.68 }, { u: 0.62, v: 0.12 }
-        ], 'glacier-patch'),
-        ...uvPoints(bounds, 'spire', [
-          { u: 0.18, v: 0.18 }, { u: 0.24, v: 0.24 }, { u: 0.12, v: 0.78 },
-          { u: 0.20, v: 0.84 }, { u: 0.84, v: 0.74 }, { u: 0.88, v: 0.66 }
-        ], 'spire'),
-        ...[
-          point('spire', glacierNw.x - 1.0, glacierNw.z - 0.4, 'glacier-nw-a'),
-          point('spire', glacierNw.x + 0.2, glacierNw.z + 0.2, 'glacier-nw-b'),
-          point('spire', glacierNw.x + 1.2, glacierNw.z - 0.6, 'glacier-nw-c'),
-          point('spire', glacierSw.x - 0.8, glacierSw.z + 0.4, 'glacier-sw-a'),
-          point('spire', glacierSw.x + 0.4, glacierSw.z - 0.2, 'glacier-sw-b'),
-          point('spire', glacierSw.x + 1.3, glacierSw.z + 0.8, 'glacier-sw-c'),
-          point('spire', glacierEast.x - 1.0, glacierEast.z - 0.2, 'glacier-east-a'),
-          point('spire', glacierEast.x + 0.3, glacierEast.z + 0.4, 'glacier-east-b'),
-          point('spire', glacierEast.x + 1.2, glacierEast.z - 0.8, 'glacier-east-c'),
-          point('spire', glacierNorth.x - 0.8, glacierNorth.z + 0.1, 'glacier-north-a'),
-          point('spire', glacierNorth.x + 0.7, glacierNorth.z - 0.2, 'glacier-north-b')
-        ],
+        ...borderPacks.map((pack) => {
+          const center = borderPackCenter(bounds, pack);
+          return point('glacier', center.x, center.z, pack.label);
+        }),
+        ...borderPacks.flatMap((pack) => {
+          const basis = sideBasis(pack.side);
+          const primary = borderPackPrimary(bounds, pack);
+          return [
+            point('spire', primary.x, primary.z, `${pack.label}-primary`),
+            ...pack.companions.map((companion, index) =>
+              point(
+                'spire',
+                primary.x + (basis.alongX * companion.along) + (basis.inwardX * companion.inset),
+                primary.z + (basis.alongZ * companion.along) + (basis.inwardZ * companion.inset),
+                `${pack.label}-companion-${index + 1}`
+              )
+            )
+          ];
+        }),
+        ...interiorGroups.flatMap((group) =>
+          group.spires.map((spire, index) =>
+            point('spire', group.x + spire.dx, group.z + spire.dz, `${group.label}-${index + 1}`)
+          )
+        ),
         ...uvPoints(bounds, 'boulder', [
           { u: 0.28, v: 0.36 }, { u: 0.74, v: 0.58 }, { u: 0.42, v: 0.80 },
           { u: 0.62, v: 0.18 }, { u: 0.56, v: 0.68 }
         ], 'boulder'),
         ...uvPoints(bounds, 'drift', [
-          { u: 0.18, v: 0.46 }, { u: 0.80, v: 0.42 }, { u: 0.42, v: 0.12 }, { u: 0.60, v: 0.88 },
-          { u: 0.12, v: 0.64 }, { u: 0.86, v: 0.54 }, { u: 0.50, v: 0.92 }, { u: 0.58, v: 0.08 }
+          { u: 0.08, v: 0.10 }, { u: 0.42, v: 0.08 }, { u: 0.92, v: 0.18 }, { u: 0.10, v: 0.54 },
+          { u: 0.90, v: 0.46 }, { u: 0.18, v: 0.92 }, { u: 0.56, v: 0.94 }, { u: 0.94, v: 0.78 }
         ], 'drift'),
         ...uvPoints(bounds, 'fragment', [
-          { u: 0.16, v: 0.22 }, { u: 0.84, v: 0.22 }, { u: 0.13, v: 0.84 }, { u: 0.87, v: 0.74 },
-          { u: 0.28, v: 0.14 }, { u: 0.72, v: 0.86 }, { u: 0.68, v: 0.28 }
-        ], 'fragment'),
-        ...uvPoints(bounds, 'fragment', [
-          { u: 0.08, v: 0.22 }, { u: 0.18, v: 0.88 }, { u: 0.90, v: 0.60 }, { u: 0.66, v: 0.08 }
-        ], 'edge-fragment')
+          { u: 0.03, v: 0.08 }, { u: 0.30, v: 0.03 }, { u: 0.78, v: 0.02 }, { u: 0.98, v: 0.20 },
+          { u: 0.97, v: 0.68 }, { u: 0.82, v: 0.98 }, { u: 0.22, v: 0.97 }, { u: 0.02, v: 0.78 },
+          { u: 0.28, v: 0.18 }, { u: 0.72, v: 0.18 }, { u: 0.22, v: 0.84 }, { u: 0.76, v: 0.84 }
+        ], 'fragment')
       ];
     }
   },
@@ -591,5 +967,6 @@ const BIOME_SPECS = {
 module.exports = {
   BIOME_SPECS,
   buildReport,
+  buildUnitAreaReport,
   writeAllReports
 };

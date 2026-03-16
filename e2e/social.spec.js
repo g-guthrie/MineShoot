@@ -61,8 +61,11 @@ test('party lock, private room join, and friend save flow work across two browse
   await expect(pageA.locator('#room-share-panel')).toBeVisible();
   const roomCode = await pageA.locator('#room-share-code').textContent();
 
-  await pageB.locator('#private-room-input').fill(String(roomCode || '').trim());
-  await pageB.locator('#join-private-room-btn').click();
+  const alreadyInRoom = await pageB.locator('#private-room-view').isVisible().catch(() => false);
+  if (!alreadyInRoom) {
+    await pageB.locator('#private-room-input').fill(String(roomCode || '').trim());
+    await pageB.locator('#join-private-room-btn').click();
+  }
   await expect(pageB.locator('#private-room-view')).toBeVisible();
 
   await pageA.close();

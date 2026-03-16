@@ -5589,8 +5589,20 @@ body {
 
 #menu-shell.menu-shell-v4 {
     width: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     color: #162133;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: block;
+    overflow: visible;
+}
+
+#menu-shell.menu-shell-v4::before,
+#menu-shell.menu-shell-v4::after {
+    display: none;
 }
 
 #menu-shell.menu-shell-v4 #menu-surface {
@@ -5599,10 +5611,12 @@ body {
     grid-template-rows: auto auto auto 1fr auto;
     min-height: min(880px, calc(100vh - 48px));
     max-height: calc(100vh - 48px);
-    background: rgba(250, 251, 253, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.72);
-    border-radius: 30px;
-    box-shadow: 0 24px 60px rgba(28, 44, 76, 0.12);
+    background: rgba(251, 252, 255, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: 34px;
+    box-shadow:
+        0 18px 48px rgba(28, 44, 76, 0.08),
+        0 42px 110px rgba(28, 44, 76, 0.07);
     backdrop-filter: blur(14px);
     overflow: hidden;
 }
@@ -5619,7 +5633,7 @@ body {
 
 #menu-shell.menu-shell-v4 #menu-header-main {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 16px;
 }
@@ -5635,15 +5649,10 @@ body {
     justify-content: flex-end;
 }
 
-#menu-shell.menu-shell-v4 #menu-header-page-title {
-    justify-self: center;
-    color: #546178;
-    font-size: 14px;
-    font-weight: 600;
-}
-
 #menu-shell.menu-shell-v4 #menu-party-id-btn,
+#menu-shell.menu-shell-v4 #menu-return-btn,
 #menu-shell.menu-shell-v4 #join-party-trigger-btn,
+#menu-shell.menu-shell-v4 #continue-loadout-btn,
 #menu-shell.menu-shell-v4 #open-party-btn,
 #menu-shell.menu-shell-v4 #account-toggle-btn,
 #menu-shell.menu-shell-v4 #utility-toggle-btn,
@@ -5675,14 +5684,23 @@ body {
 
 #menu-shell.menu-shell-v4 #open-party-btn,
 #menu-shell.menu-shell-v4 #account-toggle-btn,
-#menu-shell.menu-shell-v4 #utility-toggle-btn {
+#menu-shell.menu-shell-v4 #utility-toggle-btn,
+#menu-shell.menu-shell-v4 #continue-loadout-btn,
+#menu-shell.menu-shell-v4 #menu-return-btn {
     background: transparent;
     box-shadow: none;
     padding-inline: 10px;
 }
 
 #menu-shell.menu-shell-v4 #open-party-btn.active,
-#menu-shell.menu-shell-v4 #utility-toggle-btn.active {
+#menu-shell.menu-shell-v4 #utility-toggle-btn.active,
+#menu-shell.menu-shell-v4 #continue-loadout-btn.active {
+    background: rgba(58, 110, 255, 0.12);
+    color: #2358d8;
+    box-shadow: inset 0 0 0 1px rgba(87, 129, 255, 0.18);
+}
+
+#menu-shell.menu-shell-v4 #menu-header[data-variant="pause"] #menu-return-btn {
     background: rgba(58, 110, 255, 0.12);
     color: #2358d8;
     box-shadow: inset 0 0 0 1px rgba(87, 129, 255, 0.18);
@@ -5913,16 +5931,6 @@ body {
     cursor: pointer;
 }
 
-#menu-shell.menu-shell-v4 #continue-loadout-btn {
-    border: none;
-    background: transparent;
-    color: #4f6488;
-    padding: 10px 0;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
 #menu-shell.menu-shell-v4 #party-screen-grid {
     display: grid;
     gap: 16px;
@@ -6055,20 +6063,33 @@ body {
 
 #menu-shell.menu-shell-v4 #menu-loadout-band {
     position: relative;
-    padding: 12px 22px 22px;
-    border-top: 1px solid rgba(226, 232, 241, 0.88);
-    background: linear-gradient(180deg, rgba(251, 252, 253, 0.82), rgba(246, 248, 251, 0.94));
+    padding: 6px 18px 18px;
+    background: transparent;
+}
+
+#menu-shell.menu-shell-v4 #menu-loadout-band::before {
+    content: '';
+    display: block;
+    height: 1px;
+    margin: 0 6px 14px;
+    background: linear-gradient(90deg, transparent, rgba(214, 222, 236, 0.9), transparent);
 }
 
 #menu-shell.menu-shell-v4 #loadout-row {
     display: grid;
     gap: 10px;
+    padding: 16px;
+    border-radius: 28px;
+    background: rgba(243, 246, 251, 0.95);
+    box-shadow:
+        inset 0 0 0 1px rgba(226, 232, 241, 0.96),
+        0 14px 30px rgba(28, 44, 76, 0.04);
 }
 
 #menu-shell.menu-shell-v4 .loadout-summary-btn {
     width: 100%;
     border: none;
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(255, 255, 255, 0.98);
     color: #25334b;
     border-radius: 20px;
     padding: 14px 18px;
@@ -6202,29 +6223,15 @@ body {
     #menu-shell.menu-shell-v4 #menu-surface {
         min-height: calc(100vh - 20px);
         max-height: calc(100vh - 20px);
-        border-radius: 26px;
+        border-radius: 30px;
     }
 
     #menu-shell.menu-shell-v4 #menu-header-main {
         grid-template-columns: 1fr auto;
-        grid-template-areas:
-            "leading actions"
-            "title title";
     }
 
     #menu-shell.menu-shell-v4 #menu-header-leading {
-        grid-area: leading;
         flex-wrap: wrap;
-    }
-
-    #menu-shell.menu-shell-v4 #menu-header-actions {
-        grid-area: actions;
-    }
-
-    #menu-shell.menu-shell-v4 #menu-header-page-title {
-        grid-area: title;
-        justify-self: start;
-        margin-top: 8px;
     }
 
     #menu-shell.menu-shell-v4 #private-room-roster-grid {
@@ -6241,7 +6248,7 @@ body {
     #menu-shell.menu-shell-v4 #menu-surface {
         min-height: 100vh;
         max-height: 100vh;
-        border-radius: 0;
+        border-radius: 22px 22px 0 0;
     }
 
     #menu-shell.menu-shell-v4 #menu-header {
@@ -6253,7 +6260,7 @@ body {
     }
 
     #menu-shell.menu-shell-v4 #menu-loadout-band {
-        padding: 12px 16px 16px;
+        padding: 6px 14px 14px;
     }
 
     #join-party-popover,

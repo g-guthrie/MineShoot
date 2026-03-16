@@ -424,6 +424,7 @@
 
         function tryPlayerFire() {
             if (!canUseLocalAction('weapon')) return;
+            var player = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
             var netView = currentMatchViewApi();
             var netCommands = currentMatchCommandApi();
             var selfCombat = currentSelfCombatApi();
@@ -435,7 +436,11 @@
                     if ((selfState && selfState.alive === false) || (respawnState && respawnState.active)) return;
                 }
             }
-            if (globalThis.__MAYHEM_RUNTIME.GamePlayer.isSprinting()) return;
+            var sprintRequested = !!(player && player.getNetworkInputState && player.getNetworkInputState().sprint);
+            if ((sprintRequested || (player && player.isSprinting && player.isSprinting())) &&
+                (!player || !player.cancelSprintUntilRelease || !player.cancelSprintUntilRelease())) {
+                return;
+            }
             if (globalThis.__MAYHEM_RUNTIME.GameAbilities && globalThis.__MAYHEM_RUNTIME.GameAbilities.isDeadeyeActive()) return;
             netShotCounter = (netShotCounter + 1) % 1000000;
             var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);

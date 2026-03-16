@@ -95,7 +95,7 @@ class FakeElement {
   }
 }
 
-async function loadHarness({ localEnvironment = false } = {}) {
+async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   const code = await fs.readFile(new URL('../../js/app/lobby-controller.js', import.meta.url), 'utf8');
 
   const storageMap = new Map();
@@ -139,7 +139,7 @@ async function loadHarness({ localEnvironment = false } = {}) {
   const ids = [
     ['div', 'menu-header'],
     ['div', 'menu-feedback'],
-    ['div', 'menu-header-page-title'],
+    ['button', 'menu-return-btn'],
     ['button', 'menu-party-id-btn'],
     ['span', 'menu-party-id-label'],
     ['span', 'menu-party-id-value'],
@@ -155,6 +155,7 @@ async function loadHarness({ localEnvironment = false } = {}) {
     ['div', 'utility-overlay'],
     ['button', 'utility-close-btn'],
     ['div', 'utility-modal'],
+    ['button', 'settings-account-btn'],
     ['button', 'open-manual-btn'],
     ['button', 'controls-toggle'],
     ['button', 'sound-toggle-btn'],
@@ -231,7 +232,7 @@ async function loadHarness({ localEnvironment = false } = {}) {
   documentObj.elements['private-room-view'].hidden = true;
   documentObj.elements['private-room-enter-btn'].hidden = true;
   documentObj.elements['menu-session-actions'].hidden = true;
-  documentObj.elements['menu-header-page-title'].hidden = true;
+  documentObj.elements['menu-return-btn'].hidden = true;
   documentObj.elements['party-back-btn'].hidden = true;
   documentObj.elements['mode-local-multiplayer-btn'].dataset.modeId = 'single_dev_server';
 
@@ -365,13 +366,15 @@ async function loadHarness({ localEnvironment = false } = {}) {
     },
     GameNetAuth: {
       getPartyIdentity() {
-        return { id: 'usr_alpha', username: 'ALPHA', label: 'Player ID', kind: 'account' };
+        return loggedIn
+          ? { id: 'usr_alpha', username: 'ALPHA', label: 'Player ID', kind: 'account' }
+          : { id: 'gst_alpha', username: 'GUEST', label: 'Guest ID', kind: 'guest' };
       },
       isLoggedIn() {
-        return true;
+        return !!loggedIn;
       },
       getUser() {
-        return { id: 'usr_alpha', username: 'ALPHA', displayName: 'ALPHA' };
+        return loggedIn ? { id: 'usr_alpha', username: 'ALPHA', displayName: 'ALPHA' } : null;
       }
     },
     GameMenuLoadout: {
@@ -574,6 +577,17 @@ test('menu boots on the main screen with no selected mode and hidden start actio
   assert.equal(elements['menu-screen-party'].hidden, true);
   assert.equal(elements['loadout-start-btn'].hidden, true);
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
+  assert.equal(elements['account-toggle-btn'].hidden, true);
+  assert.equal(elements['continue-loadout-btn'].hidden, false);
+});
+
+test('logged-out home header shows login and guest id together', async () => {
+  const harness = await loadHarness({ loggedIn: false });
+  const { elements } = harness;
+
+  assert.equal(elements['account-toggle-btn'].hidden, false);
+  assert.equal(elements['menu-party-id-label'].textContent, 'Guest ID');
+  assert.equal(elements['continue-loadout-btn'].hidden, false);
 });
 
 test('join friend opens a popover and joins in place', async () => {
@@ -652,7 +666,22 @@ test('paused runtime hides the main stage, shows the session rail, and keeps par
   assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-screen-party'].hidden, false);
   assert.equal(elements['menu-session-actions'].hidden, false);
+  assert.equal(elements['menu-return-btn'].hidden, false);
+  assert.equal(elements['open-party-btn'].hidden, false);
+  assert.equal(elements['party-back-btn'].hidden, true);
 
-  elements['party-back-btn'].click();
+  elements['open-party-btn'].click();
   assert.equal(elements['menu-screen-party'].hidden, true);
+});
+
+test('party page outside pause reduces the left header to back and id', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  elements['open-party-btn'].click();
+
+  assert.equal(elements['party-back-btn'].hidden, false);
+  assert.equal(elements['join-party-trigger-btn'].hidden, true);
+  assert.equal(elements['continue-loadout-btn'].hidden, true);
+  assert.equal(elements['open-party-btn'].hidden, true);
 });

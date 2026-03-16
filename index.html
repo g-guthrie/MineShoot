@@ -86,12 +86,16 @@
                     <div id="menu-header">
                         <div id="menu-header-main">
                             <div id="menu-header-leading">
+                                <button id="menu-return-btn" type="button" hidden>Return to Game</button>
                                 <button id="party-back-btn" type="button" hidden>Back</button>
+                                <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">Login</button>
                                 <button id="menu-party-id-btn" type="button" title="Copy your player ID">
                                     <span id="menu-party-id-label">Guest ID</span>
                                     <span id="menu-party-id-value">------</span>
                                 </button>
                                 <button id="join-party-trigger-btn" type="button">Join Friend</button>
+                                <button id="continue-loadout-btn" type="button">Create Room</button>
+                                <button id="open-party-btn" type="button">Party</button>
                                 <div id="join-party-popover" hidden>
                                     <div id="join-party-popover-title">Join Friend</div>
                                     <div id="join-party-recent"></div>
@@ -99,11 +103,8 @@
                                     <button id="join-party-btn" type="button">Join</button>
                                 </div>
                             </div>
-                            <div id="menu-header-page-title" hidden>Party</div>
                             <div id="menu-header-actions">
-                                <button id="open-party-btn" type="button">Party</button>
-                                <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">Login</button>
-                                <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Utility</button>
+                                <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Settings</button>
                             </div>
                         </div>
 
@@ -115,6 +116,7 @@
                                 </div>
                                 <div id="utility-modal-copy">Help and setup live here.</div>
                                 <div id="utility-menu-buttons">
+                                    <button id="settings-account-btn" type="button">Account</button>
                                     <button id="open-manual-btn" type="button">Instructions</button>
                                     <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
                                     <button id="sound-toggle-btn" type="button">Sound: On</button>
@@ -151,7 +153,6 @@
                             <div id="room-access-status" aria-live="polite"></div>
                             <div id="mode-screen-actions">
                                 <button id="loadout-start-btn" type="button" hidden>Start Match</button>
-                                <button id="continue-loadout-btn" type="button">Create Room</button>
                             </div>
                         </section>
 
