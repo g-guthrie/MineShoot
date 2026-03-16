@@ -314,16 +314,6 @@ import { pointInBounds as pt } from './biome-utils.js';
                 ]
             },
             {
-                label: 'east-south-pack',
-                side: 'east',
-                t: 0.78,
-                primaryH: 4.5,
-                companions: [
-                    { along: -1.3, inset: 1.5, h: 3.2 },
-                    { along: 1.6, inset: 2.5, h: 2.9 }
-                ]
-            },
-            {
                 label: 'south-east-pack',
                 side: 'south',
                 t: 0.84,
@@ -341,16 +331,6 @@ import { pointInBounds as pt } from './biome-utils.js';
                 companions: [
                     { along: -1.2, inset: 1.4, h: 3.1 },
                     { along: 1.5, inset: 2.4, h: 2.8 }
-                ]
-            },
-            {
-                label: 'west-south-pack',
-                side: 'west',
-                t: 0.74,
-                primaryH: 4.6,
-                companions: [
-                    { along: -1.3, inset: 1.5, h: 3.4 },
-                    { along: 1.4, inset: 2.2, h: 3.0 }
                 ]
             },
             {
@@ -393,10 +373,29 @@ import { pointInBounds as pt } from './biome-utils.js';
             },
             {
                 label: 'inner-south-cluster',
-                u: 0.54, v: 0.72, w: 3.8, d: 2.6,
+                u: 0.52, v: 0.66, w: 4.0, d: 2.8,
                 spires: [
-                    { dx: -1.1, dz: -0.4, h: 3.1 },
-                    { dx: 1.0, dz: 0.6, h: 2.9 }
+                    { dx: -1.2, dz: -0.4, h: 3.2 },
+                    { dx: 0.2, dz: 0.1, h: 3.0 },
+                    { dx: 1.3, dz: 0.6, h: 2.9 }
+                ]
+            },
+            {
+                label: 'mid-west-cluster',
+                u: 0.30, v: 0.62, w: 4.0, d: 2.6,
+                spires: [
+                    { dx: -1.2, dz: 0.4, h: 3.1 },
+                    { dx: 0.1, dz: -0.3, h: 2.8 },
+                    { dx: 1.3, dz: 0.5, h: 2.9 }
+                ]
+            },
+            {
+                label: 'mid-east-cluster',
+                u: 0.72, v: 0.62, w: 4.0, d: 2.6,
+                spires: [
+                    { dx: -1.2, dz: 0.2, h: 3.0 },
+                    { dx: 0.2, dz: -0.4, h: 2.8 },
+                    { dx: 1.2, dz: 0.5, h: 3.0 }
                 ]
             }
         ];
@@ -442,9 +441,9 @@ import { pointInBounds as pt } from './biome-utils.js';
             { u: 0.92, v: 0.18, w: 3.0, d: 1.8 },
             { u: 0.10, v: 0.54, w: 3.2, d: 2.8 },
             { u: 0.90, v: 0.46, w: 4.4, d: 2.6 },
-            { u: 0.18, v: 0.92, w: 3.4, d: 2.0 },
-            { u: 0.56, v: 0.94, w: 4.8, d: 2.2 },
-            { u: 0.94, v: 0.78, w: 3.2, d: 1.9 }
+            { u: 0.28, v: 0.70, w: 3.4, d: 2.0 },
+            { u: 0.52, v: 0.80, w: 4.8, d: 2.2 },
+            { u: 0.76, v: 0.66, w: 3.2, d: 1.9 }
         ];
         for (var d = 0; d < drifts.length; d++) {
             var dp = pt(rawBounds, drifts[d].u, drifts[d].v);

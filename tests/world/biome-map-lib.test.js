@@ -10,12 +10,14 @@ test('arctic biome map uses raw biome edges and tracks glacier fields', () => {
 
   assert.ok(report.content.includes('Arctic biome distribution map'));
   assert.ok(report.content.includes('Bounds x:[2, 56] z:[2, 56]  grid:14x14'));
-  assert.equal(report.countsByKind.get('glacier'), 8);
-  assert.equal(report.countsByKind.get('spire'), 30);
+  assert.equal(report.countsByKind.get('glacier'), 6);
+  assert.equal(report.countsByKind.get('spire'), 31);
+  assert.equal(report.occupiedCells, 44);
   assert.ok(report.denseCells.some((cell) => cell.row === 0));
   assert.ok(report.denseCells.some((cell) => cell.row === 13));
   assert.ok(report.denseCells.some((cell) => cell.col === 0));
   assert.ok(report.denseCells.some((cell) => cell.col === 13));
+  assert.ok(report.denseCells.some((cell) => cell.row >= 8 && cell.row <= 10 && cell.col >= 4 && cell.col <= 10));
 });
 
 test('arctic unit-area report shows exact edges and neighboring object slices', () => {

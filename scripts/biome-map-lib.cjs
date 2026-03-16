@@ -538,15 +538,6 @@ const BIOME_SPECS = {
           ]
         },
         {
-          label: 'east-south-pack',
-          side: 'east',
-          t: 0.78,
-          companions: [
-            { along: -1.3, inset: 1.5 },
-            { along: 1.6, inset: 2.5 }
-          ]
-        },
-        {
           label: 'south-east-pack',
           side: 'south',
           t: 0.84,
@@ -562,15 +553,6 @@ const BIOME_SPECS = {
           companions: [
             { along: -1.2, inset: 1.4 },
             { along: 1.5, inset: 2.4 }
-          ]
-        },
-        {
-          label: 'west-south-pack',
-          side: 'west',
-          t: 0.74,
-          companions: [
-            { along: -1.3, inset: 1.5 },
-            { along: 1.4, inset: 2.2 }
           ]
         },
         {
@@ -604,11 +586,32 @@ const BIOME_SPECS = {
         },
         {
           label: 'inner-south-cluster',
-          x: pt(bounds, 0.54, 0.72).x,
-          z: pt(bounds, 0.54, 0.72).z,
+          x: pt(bounds, 0.52, 0.66).x,
+          z: pt(bounds, 0.52, 0.66).z,
           spires: [
-            { dx: -1.1, dz: -0.4 },
-            { dx: 1.0, dz: 0.6 }
+            { dx: -1.2, dz: -0.4 },
+            { dx: 0.2, dz: 0.1 },
+            { dx: 1.3, dz: 0.6 }
+          ]
+        },
+        {
+          label: 'mid-west-cluster',
+          x: pt(bounds, 0.30, 0.62).x,
+          z: pt(bounds, 0.30, 0.62).z,
+          spires: [
+            { dx: -1.2, dz: 0.4 },
+            { dx: 0.1, dz: -0.3 },
+            { dx: 1.3, dz: 0.5 }
+          ]
+        },
+        {
+          label: 'mid-east-cluster',
+          x: pt(bounds, 0.72, 0.62).x,
+          z: pt(bounds, 0.72, 0.62).z,
+          spires: [
+            { dx: -1.2, dz: 0.2 },
+            { dx: 0.2, dz: -0.4 },
+            { dx: 1.2, dz: 0.5 }
           ]
         }
       ];
@@ -648,7 +651,7 @@ const BIOME_SPECS = {
         ], 'boulder'),
         ...uvPoints(bounds, 'drift', [
           { u: 0.08, v: 0.10 }, { u: 0.42, v: 0.08 }, { u: 0.92, v: 0.18 }, { u: 0.10, v: 0.54 },
-          { u: 0.90, v: 0.46 }, { u: 0.18, v: 0.92 }, { u: 0.56, v: 0.94 }, { u: 0.94, v: 0.78 }
+          { u: 0.90, v: 0.46 }, { u: 0.28, v: 0.70 }, { u: 0.52, v: 0.80 }, { u: 0.76, v: 0.66 }
         ], 'drift'),
         ...uvPoints(bounds, 'fragment', [
           { u: 0.03, v: 0.08 }, { u: 0.30, v: 0.03 }, { u: 0.78, v: 0.02 }, { u: 0.98, v: 0.20 },

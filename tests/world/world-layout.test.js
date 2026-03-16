@@ -183,7 +183,8 @@ test('arctic mountain keeps a lower summit while adding more glacier texture', (
   assert.ok(stats.minRouteShelfWidth >= 4.0);
   assert.ok(stats.summitWidth >= 4.0);
   assert.ok(stats.summitDepth >= 3.5);
-  assert.equal(stats.glacierPatches, 8);
+  assert.equal(stats.glacierPatches, 6);
+  assert.equal(stats.interiorSpireGroups, 5);
   assert.ok(stats.groundSpires >= 30);
   assert.ok(stats.crystals >= 36);
   assert.ok(stats.edgeTouchSides.north >= 1);
