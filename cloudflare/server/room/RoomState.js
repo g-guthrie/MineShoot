@@ -30,6 +30,18 @@ export function serializeMatchState(room, deps) {
   const teamAlpha = deps.teamAlpha || 'alpha';
   const teamBravo = deps.teamBravo || 'bravo';
   const match = room.matchState || (emptyMatchState ? emptyMatchState(room.gameMode) : null) || {};
+  const teamIds = String(match.gameMode || room.gameMode || '').toLowerCase() === 'tdm'
+    ? (Array.isArray(match.teamIds) && match.teamIds.length ? match.teamIds.slice() : [teamAlpha, teamBravo])
+    : [];
+  const teamProgress = {};
+  const teamBaselineSize = {};
+  const statTeamIds = teamIds.length ? teamIds : [teamAlpha, teamBravo];
+  for (let i = 0; i < statTeamIds.length; i++) {
+    const teamId = String(statTeamIds[i] || '');
+    if (!teamId) continue;
+    teamProgress[teamId] = Number((match.teamProgress && match.teamProgress[teamId]) || 0);
+    teamBaselineSize[teamId] = Number((match.teamBaselineSize && match.teamBaselineSize[teamId]) || 0);
+  }
 
   return {
     gameMode: match.gameMode || '',
@@ -44,6 +56,7 @@ export function serializeMatchState(room, deps) {
     leaderId: match.leaderId || '',
     winnerId: match.winnerId || '',
     winnerTeam: match.winnerTeam || '',
+    teamIds: teamIds,
     lms: match.lms ? {
       startingLives: Number(match.lms.startingLives || lmsRules.startingLives),
       maxLives: Number(match.lms.maxLives || lmsRules.maxLives),
@@ -55,14 +68,8 @@ export function serializeMatchState(room, deps) {
       bankingEnabled: !!match.lms.bankingEnabled,
       activeBeacon: match.lms.activeBeacon ? { ...match.lms.activeBeacon } : null
     } : null,
-    teamProgress: {
-      [teamAlpha]: Number((match.teamProgress && match.teamProgress[teamAlpha]) || 0),
-      [teamBravo]: Number((match.teamProgress && match.teamProgress[teamBravo]) || 0)
-    },
-    teamBaselineSize: {
-      [teamAlpha]: Number((match.teamBaselineSize && match.teamBaselineSize[teamAlpha]) || 0),
-      [teamBravo]: Number((match.teamBaselineSize && match.teamBaselineSize[teamBravo]) || 0)
-    }
+    teamProgress: teamProgress,
+    teamBaselineSize: teamBaselineSize
   };
 }
 

@@ -6,10 +6,10 @@ const DEFAULT_EPSILON = 0.001;
 
 function defaultBounds(bounds) {
   return {
-    minX: typeof bounds?.minX === 'number' ? bounds.minX : (typeof bounds?.min === 'number' ? bounds.min : 0),
-    maxX: typeof bounds?.maxX === 'number' ? bounds.maxX : (typeof bounds?.max === 'number' ? bounds.max : 0),
-    minZ: typeof bounds?.minZ === 'number' ? bounds.minZ : (typeof bounds?.min === 'number' ? bounds.min : 0),
-    maxZ: typeof bounds?.maxZ === 'number' ? bounds.maxZ : (typeof bounds?.max === 'number' ? bounds.max : 0)
+    minX: typeof bounds?.minX === 'number' ? bounds.minX : (typeof bounds?.min === 'number' ? bounds.min : -Infinity),
+    maxX: typeof bounds?.maxX === 'number' ? bounds.maxX : (typeof bounds?.max === 'number' ? bounds.max : Infinity),
+    minZ: typeof bounds?.minZ === 'number' ? bounds.minZ : (typeof bounds?.min === 'number' ? bounds.min : -Infinity),
+    maxZ: typeof bounds?.maxZ === 'number' ? bounds.maxZ : (typeof bounds?.max === 'number' ? bounds.max : Infinity)
   };
 }
 

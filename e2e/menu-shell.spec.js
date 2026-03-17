@@ -82,6 +82,159 @@ test('three-menu hero layout keeps the home hero contained without horizontal ov
   expect(metrics.viewportOverflow).toBe(false);
 });
 
+test('active-match shell keeps the header friend bar and pill stats contained at narrow width', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 1200 });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
+      detail: {
+        runtimeReady: true,
+        inMatch: false,
+        awaitingInputCapture: false,
+        canResume: true,
+        activityState: 'paused',
+        launchContext: {}
+      }
+    }));
+    window.dispatchEvent(new CustomEvent('mayhem-menu-match-model', {
+      detail: {
+        ready: true,
+        banner: null,
+        modePill: { label: 'MODE', value: 'TDM' },
+        contextPill: { label: 'LEAD', value: '7' },
+        primaryPill: { label: 'KILLS', value: '12' },
+        secondaryPill: { label: 'DEATHS', value: '3' }
+      }
+    }));
+  });
+
+  const metrics = await page.evaluate(() => {
+    const overlay = document.getElementById('overlay');
+    const header = document.getElementById('menu-header');
+    const menuSurface = document.getElementById('menu-surface');
+    const mainHeroes = document.getElementById('menu-main-heroes');
+    const homeHero = document.getElementById('menu-home-hero');
+    const socialHero = document.getElementById('menu-social-hero');
+    const partyHero = document.getElementById('menu-party-hero');
+    const sessionActions = document.getElementById('active-match-shell');
+    const sessionStats = document.getElementById('active-match-pill-grid');
+    const sessionStatus = document.getElementById('active-match-mode-pill');
+    const sessionContext = document.getElementById('active-match-context-pill');
+    const sessionKd = document.getElementById('active-match-primary-stat-pill');
+    const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
+    const friendInput = document.getElementById('active-match-friend-id-input');
+    const inviteFriend = document.getElementById('active-match-invite-friend-btn');
+    const joinFriend = document.getElementById('active-match-join-friend-btn');
+
+    function alphaOf(color) {
+      if (!color || color === 'transparent') return 0;
+      const match = String(color).match(/rgba?\(([^)]+)\)/);
+      if (!match) return 1;
+      const parts = match[1].split(',').map((part) => Number(String(part).trim()));
+      return parts.length >= 4 ? parts[3] : 1;
+    }
+
+    function withinRect(node, bounds) {
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+    }
+
+    const headerRect = header ? header.getBoundingClientRect() : { left: 0, right: 0 };
+    const sessionRect = sessionActions ? sessionActions.getBoundingClientRect() : { left: 0, right: 0 };
+    const shellRect = document.documentElement.getBoundingClientRect();
+
+    return {
+      mainHeroesHidden: !!(mainHeroes && mainHeroes.hidden),
+      homeHeroHidden: !!(homeHero && homeHero.hidden),
+      socialHeroHidden: !!(socialHero && socialHero.hidden),
+      partyHeroHidden: !!(partyHero && partyHero.hidden),
+      sessionActionsVisible: !!(sessionActions && !sessionActions.hidden),
+      headerContainsFriendControls: withinRect(friendInput, headerRect) && withinRect(inviteFriend, headerRect) && withinRect(joinFriend, headerRect),
+      sessionPillsContained: withinRect(sessionStats, sessionRect) && withinRect(sessionStatus, sessionRect) && withinRect(sessionContext, sessionRect) && withinRect(sessionKd, sessionRect) && withinRect(sessionMeta, sessionRect),
+      overlayContext: overlay ? overlay.getAttribute('data-menu-context') : '',
+      surfaceContext: menuSurface ? menuSurface.getAttribute('data-menu-context') : '',
+      surfaceIsGlassy: alphaOf(menuSurface ? getComputedStyle(menuSurface).backgroundColor : '') < 0.9,
+      structuredPillsApplied: !!(
+        sessionStatus &&
+        sessionStatus.textContent.trim() === 'TDM' &&
+        sessionContext &&
+        sessionContext.textContent.trim() === '7' &&
+        sessionKd &&
+        sessionKd.textContent.trim() === '12' &&
+        sessionMeta &&
+        sessionMeta.textContent.trim() === '3'
+      ),
+      viewportOverflow: shellRect.width < document.documentElement.scrollWidth
+    };
+  });
+
+  expect(metrics.mainHeroesHidden).toBe(true);
+  expect(metrics.homeHeroHidden).toBe(true);
+  expect(metrics.socialHeroHidden).toBe(true);
+  expect(metrics.partyHeroHidden).toBe(true);
+  expect(metrics.sessionActionsVisible).toBe(true);
+  expect(metrics.headerContainsFriendControls).toBe(true);
+  expect(metrics.sessionPillsContained).toBe(true);
+  expect(metrics.overlayContext).toBe('active-match');
+  expect(metrics.surfaceContext).toBe('active-match');
+  expect(metrics.surfaceIsGlassy).toBe(true);
+  expect(metrics.structuredPillsApplied).toBe(true);
+  expect(metrics.viewportOverflow).toBe(false);
+});
+
+test('rounded container language stays consistent across active banner, loadout shell, room tray, and member block', async ({ page }) => {
+  await page.goto('/');
+
+  const metrics = await page.evaluate(() => {
+    const activeBanner = document.getElementById('active-match-primary-banner');
+    const loadoutShell = document.getElementById('loadout-expanded-shell');
+    const menuSurface = document.getElementById('menu-surface');
+    if (activeBanner) {
+      activeBanner.hidden = false;
+      const copy = document.getElementById('active-match-primary-banner-copy');
+      if (copy) copy.textContent = 'Invite from BRAVO.';
+    }
+
+    const fixtureTray = document.createElement('div');
+    fixtureTray.id = 'fixture-rounded-room-tray';
+    fixtureTray.className = 'private-room-team-tray';
+    fixtureTray.setAttribute('data-rounded-role', 'container');
+    const fixtureMember = document.createElement('div');
+    fixtureMember.id = 'fixture-rounded-room-member';
+    fixtureMember.className = 'private-room-member-pill';
+    fixtureMember.setAttribute('data-rounded-role', 'container');
+    fixtureMember.textContent = 'ALPHA';
+    fixtureTray.appendChild(fixtureMember);
+    (menuSurface || document.body).appendChild(fixtureTray);
+
+    const bannerStyle = activeBanner ? getComputedStyle(activeBanner) : null;
+    const shellStyle = loadoutShell ? getComputedStyle(loadoutShell) : null;
+    const trayStyle = getComputedStyle(fixtureTray);
+    const memberStyle = getComputedStyle(fixtureMember);
+
+    return {
+      activeBannerRole: activeBanner ? activeBanner.getAttribute('data-rounded-role') : '',
+      loadoutShellRole: loadoutShell ? loadoutShell.getAttribute('data-rounded-role') : '',
+      trayRole: fixtureTray.getAttribute('data-rounded-role') || '',
+      memberRole: fixtureMember.getAttribute('data-rounded-role') || '',
+      activeBannerRadius: bannerStyle ? bannerStyle.borderRadius : '',
+      loadoutShellRadius: shellStyle ? shellStyle.borderRadius : '',
+      trayRadius: trayStyle.borderRadius,
+      memberRadius: memberStyle.borderRadius
+    };
+  });
+
+  expect(metrics.activeBannerRole).toBe('container');
+  expect(metrics.loadoutShellRole).toBe('container');
+  expect(metrics.trayRole).toBe('container');
+  expect(metrics.memberRole).toBe('container');
+  expect(metrics.activeBannerRadius).toBe(metrics.loadoutShellRadius);
+  expect(metrics.trayRadius).toBe(metrics.loadoutShellRadius);
+  expect(metrics.memberRadius).toBe(metrics.loadoutShellRadius);
+});
+
 test('menu v4 border hierarchy distinguishes shells actions and subactions', async ({ page }) => {
   await page.goto('/');
 
@@ -177,21 +330,11 @@ test('room controls separate primary actions from contextual subactions', async 
     const modeScreen = document.getElementById('menu-screen-mode');
     const roomScreen = document.getElementById('menu-screen-room');
     const roomView = document.getElementById('private-room-view');
-    const teamAlpha = document.getElementById('private-room-team-alpha');
     if (modeScreen) modeScreen.hidden = true;
     if (roomScreen) roomScreen.hidden = false;
     if (roomView) roomView.hidden = false;
-    if (teamAlpha) {
-      teamAlpha.innerHTML = `
-        <div class="private-room-member">
-          <div class="private-room-member-head">
-            <span>Host Alpha</span>
-            <span>Team Alpha</span>
-          </div>
-          <div class="private-room-member-id">USR_ALPHA</div>
-          <button type="button" id="fixture-room-subaction" class="private-room-member-move">Move to Bravo</button>
-        </div>
-      `;
+    if (roomView) {
+      roomView.insertAdjacentHTML('beforeend', '<button type="button" id="fixture-room-subaction" class="private-room-member-move">Move to Bravo</button>');
     }
   });
 

@@ -293,3 +293,25 @@ test('multiplayer hitscan ignores stale remote hitboxes while disconnected', asy
   assert.equal(hitCount, 0);
   assert.equal(harness.GameHitscan.shouldPredictNetHit(harness.camera, bodyHitbox, 'offline-net', 0), false);
 });
+
+test('network fire intent falls back to a forward-facing shot when the crosshair hit would point backward', async () => {
+  const targetId = 'net:close-cover';
+  const bodyHitbox = createHitbox('body', { x: 0, y: 1.6, z: -0.05 }, { x: 10, y: 10, z: 0.08 }, targetId);
+  const harness = await loadHitscanHarness({
+    weaponId: 'rifle',
+    targets: [{
+      targetId,
+      ownerType: 'net',
+      worldPos: new THREE.Vector3(0, 1.6, -0.05),
+      hitbox: bodyHitbox,
+      bodyHitbox,
+      alive: true
+    }]
+  });
+
+  const intent = harness.GameHitscan.buildNetworkFireIntent('backstop-shot');
+
+  assert.ok(intent);
+  assert.equal(intent.weaponId, 'rifle');
+  assert.ok(intent.aimForward.z < 0);
+});

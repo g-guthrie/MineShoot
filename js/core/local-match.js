@@ -513,7 +513,10 @@
                         }
                         if (nowMs() >= Number(entry.lmsBankState.endsAt || 0)) {
                             entry.lmsCharge = Math.max(0, entry.lmsCharge - lmsRules.chargePerExtraLife);
-                            entry.lmsLives = Math.min(lmsRules.startingLives, entry.lmsLives + 1);
+                            entry.lmsLives = Math.min(
+                                Math.max(1, Number(matchState && matchState.lms && matchState.lms.maxLives || lmsRules.maxLives || lmsRules.startingLives || 1)),
+                                entry.lmsLives + 1
+                            );
                             entry.lmsBankState = null;
                             rotateBeacon();
                             banked = true;

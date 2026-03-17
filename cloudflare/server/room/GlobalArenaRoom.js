@@ -217,6 +217,7 @@ const GAME_MODE_LMS = LMS_MODE_ID;
 const ROOM_PHASE_ACTIVE = 'active';
 const TDM_TEAM_A = 'alpha';
 const TDM_TEAM_B = 'bravo';
+const TDM_TEAM_ORDER = [TDM_TEAM_A, TDM_TEAM_B, 'charlie', 'delta'];
 const FFA_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_FFA);
 const TDM_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_TDM);
 const PLAYER_SPAWN_PADDING_WU = 8;
@@ -369,6 +370,8 @@ export class GlobalArenaRoom extends DurableObject {
       roomMode: '',
       roomPhase: ROOM_PHASE_ACTIVE,
       hostActorId: '',
+      teamCount: 2,
+      teamIds: TDM_TEAM_ORDER.slice(0, 2),
       teams: new Map()
     };
     this.configureLmsBeaconAnchors();
@@ -401,6 +404,8 @@ export class GlobalArenaRoom extends DurableObject {
         roomMode: '',
         roomPhase: ROOM_PHASE_ACTIVE,
         hostActorId: '',
+        teamCount: 2,
+        teamIds: TDM_TEAM_ORDER.slice(0, 2),
         teams: new Map()
       };
     }
@@ -490,6 +495,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (String((this.privateRoomConfig && this.privateRoomConfig.roomMode) || '') !== String((nextConfig && nextConfig.roomMode) || '')) return false;
     if (String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || '') !== String((nextConfig && nextConfig.roomPhase) || '')) return false;
     if (String((this.privateRoomConfig && this.privateRoomConfig.hostActorId) || '') !== String((nextConfig && nextConfig.hostActorId) || '')) return false;
+    if (Number((this.privateRoomConfig && this.privateRoomConfig.teamCount) || 2) !== Number((nextConfig && nextConfig.teamCount) || 2)) return false;
     if (currentTeams.size !== nextTeams.size) return false;
     for (const [actorId, teamId] of nextTeams.entries()) {
       if (String(currentTeams.get(actorId) || '') !== String(teamId || '')) return false;
@@ -499,12 +505,15 @@ export class GlobalArenaRoom extends DurableObject {
 
   applyPrivateRoomConfig(config) {
     if (!config || !isPrivateMatchRoom(this.roomName)) return;
+    const teamCount = Math.max(2, Math.min(4, Math.round(Number(config.teamCount || 2) || 2)));
+    const teamIds = TDM_TEAM_ORDER.slice(0, teamCount);
     const teams = new Map();
     const teamEntries = Array.isArray(config.teams) ? config.teams : [];
     for (let i = 0; i < teamEntries.length; i++) {
       const entry = teamEntries[i];
       if (!entry || !entry.actorId) continue;
-      teams.set(String(entry.actorId), String(entry.teamId || TDM_TEAM_A) === TDM_TEAM_B ? TDM_TEAM_B : TDM_TEAM_A);
+      const normalizedTeamId = String(entry.teamId || '').trim().toLowerCase();
+      teams.set(String(entry.actorId), teamIds.indexOf(normalizedTeamId) >= 0 ? normalizedTeamId : teamIds[0]);
     }
     const nextConfig = {
       roomMode: String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_TDM
@@ -512,6 +521,8 @@ export class GlobalArenaRoom extends DurableObject {
         : (String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_LMS ? GAME_MODE_LMS : GAME_MODE_FFA),
       roomPhase: String(config.roomPhase || 'lobby') === 'active' ? 'active' : 'lobby',
       hostActorId: String(config.hostActorId || ''),
+      teamCount,
+      teamIds: teamIds.slice(),
       teams
     };
     const syncMode = String(config.syncMode || 'lobby_update') === 'hydrate' ? 'hydrate' : 'lobby_update';
@@ -520,7 +531,7 @@ export class GlobalArenaRoom extends DurableObject {
     if (!changed) {
       for (const player of this.players.values()) {
         if (!player || player.fixtureType === 'sim_player') continue;
-        player.teamId = String(teams.get(player.actorId || player.id) || TDM_TEAM_A);
+        player.teamId = String(teams.get(player.actorId || player.id) || nextConfig.teamIds[0] || TDM_TEAM_A);
       }
       return;
     }
@@ -532,7 +543,7 @@ export class GlobalArenaRoom extends DurableObject {
     ) {
       for (const player of this.players.values()) {
         if (!player || player.fixtureType === 'sim_player') continue;
-        player.teamId = String(teams.get(player.actorId || player.id) || TDM_TEAM_A);
+        player.teamId = String(teams.get(player.actorId || player.id) || nextConfig.teamIds[0] || TDM_TEAM_A);
       }
       return;
     }

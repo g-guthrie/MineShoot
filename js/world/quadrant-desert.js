@@ -115,7 +115,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx - 2.5, 0.1, cz - 1.3, 0.4, 0.2, 0.3, mats.rubble, false);
 
         return {
-            peakHeight: 5.45
+            peakHeight: 5.45,
+            spanWidth: 8.0
         };
     }
 
@@ -132,6 +133,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx - 5.1, 1.2, cz + 1.0, 2.0, 2.4, 1.7, mats.darkRock, true);
         place.addBlock(cx + 5.0, 1.1, cz - 0.9, 1.8, 2.2, 1.6, mats.mesa, true);
         place.addBlock(cx - 3.3, 4.8, cz + 0.9, 1.5, 0.58, 2.1, mats.sandstone, true);
+        place.addBlock(cx + 3.0, 5.8, cz + 1.2, 0.9, 0.32, 0.8, mats.sandstone, false);
+        place.addBlock(cx - 4.0, 5.4, cz - 1.1, 1.1, 0.28, 0.7, mats.darkRock, false);
         place.addRamp(cx + 3.4, 3.1, cz - 1.2, 2.8, 0.9, 4.6, mats.darkRock, Math.PI * 0.5, -0.18, true);
         place.addRamp(cx - 5.6, 1.0, cz + 2.0, 3.2, 0.8, 4.4, mats.mesa, 1.02, -0.16, true);
         addRubbleCluster(cx - 5.6, cz + 2.6, 0.95, place, mats);
@@ -470,12 +473,12 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Cacti with character -- arms, spines, flowers
         var cacti = [
-            { u: 0.12, v: 0.56, tall: true,  flower: true },
+            { u: 0.18, v: 0.46, tall: true,  flower: true },
             { u: 0.20, v: 0.86, tall: true,  flower: false },
             { u: 0.34, v: 0.66, tall: false, flower: true },
             { u: 0.46, v: 0.78, tall: true,  flower: false },
             { u: 0.58, v: 0.70, tall: false, flower: false },
-            { u: 0.66, v: 0.52, tall: true,  flower: false },
+            { u: 0.76, v: 0.46, tall: true,  flower: false },
             { u: 0.78, v: 0.64, tall: false, flower: true },
             { u: 0.84, v: 0.86, tall: true,  flower: true }
         ];
@@ -486,7 +489,7 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         // Dry bushes with more variety
         var bushes = [
-            { u: 0.24, v: 0.58 },
+            { u: 0.34, v: 0.60 },
             { u: 0.58, v: 0.62 },
             { u: 0.74, v: 0.56 }
         ];
@@ -544,7 +547,8 @@ import { pointInBounds as pt } from './biome-utils.js';
             centerHeroArchSpan: centerArchStats.spanWidth,
             centerHeroArchClearWidth: centerArchStats.clearWidth,
             centerSupportCount: 4,
-            westArchPeakHeight: westArchStats.peakHeight
+            westArchPeakHeight: westArchStats.peakHeight,
+            westArchSpan: westArchStats.spanWidth
         };
     }
 

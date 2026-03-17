@@ -12,7 +12,7 @@ async function login(page, username, pin = '1234') {
   await expect(page.locator('#menu-party-id-value')).toContainText('USR_');
 }
 
-test('party lock, private room join, and friend save flow work across two browser contexts', async ({ browser }) => {
+test('party join, friend save, and private room join work from the current menu selectors', async ({ browser }) => {
   const pageA = await browser.newPage();
   const pageB = await browser.newPage();
 
@@ -25,47 +25,24 @@ test('party lock, private room join, and friend save flow work across two browse
 
   await login(pageA, alphaName);
   await login(pageB, bravoName);
-  await pageA.locator('#open-party-btn').click();
-  await pageB.locator('#open-party-btn').click();
 
   const alphaId = await pageA.locator('#menu-party-id-value').textContent();
-  await pageA.locator('#party-join-lock-btn').click();
-  await expect(pageA.locator('#party-join-lock-note')).toContainText('PARTY CLOSED');
-
-  await pageB.locator('#party-back-btn').click();
-  await pageB.locator('#join-party-trigger-btn').click();
   await pageB.locator('#party-id-input').fill(String(alphaId || '').trim());
-  await pageB.locator('#join-party-btn').click();
-  await pageB.locator('#open-party-btn').click();
-  await expect(pageB.locator('#party-status')).toContainText('locked');
+  await pageB.locator('#join-friend-btn').click();
 
-  await pageA.locator('#party-join-lock-btn').click();
-  await expect(pageA.locator('#party-join-lock-note')).toContainText('PARTY OPEN');
+  await expect(pageA.locator('#party-hero-members')).toContainText(bravoName);
 
-  await pageB.locator('#party-back-btn').click();
-  await pageB.locator('#join-party-trigger-btn').click();
-  await pageB.locator('#join-party-btn').click();
-  await pageB.locator('#open-party-btn').click();
-  await expect(pageB.locator('#party-status')).toContainText('Party joined.');
-  await expect(pageA.locator('#social-party-members')).toContainText(bravoName);
-  const bravoUserId = await pageB.evaluate(() => {
-    const auth = window.__MAYHEM_RUNTIME && window.__MAYHEM_RUNTIME.GameNetAuth;
-    const user = auth && auth.getUser ? auth.getUser() : null;
-    return user && user.id ? String(user.id) : '';
-  });
-  await pageA.locator('#friend-id-input').fill(bravoUserId);
-  await pageA.locator('#add-friend-btn').click();
-  await expect(pageA.locator('#friends-status')).toContainText('Friend saved.');
+  const bravoCard = pageA.locator('#party-hero-members').getByText(bravoName).first();
+  await bravoCard.click();
+  await pageA.getByRole('button', { name: 'Add Friend' }).click();
+  await expect(pageA.locator('#social-friends-list')).toContainText(bravoName);
 
-  await pageA.locator('#create-private-room-btn').click();
-  await expect(pageA.locator('#room-share-panel')).toBeVisible();
+  await pageA.locator('#continue-loadout-btn').click();
+  await expect(pageA.locator('#private-room-view')).toBeVisible();
   const roomCode = await pageA.locator('#room-share-code').textContent();
 
-  const alreadyInRoom = await pageB.locator('#private-room-view').isVisible().catch(() => false);
-  if (!alreadyInRoom) {
-    await pageB.locator('#private-room-input').fill(String(roomCode || '').trim());
-    await pageB.locator('#join-private-room-btn').click();
-  }
+  await pageB.locator('#room-code-input').fill(String(roomCode || '').trim());
+  await pageB.locator('#join-room-btn').click();
   await expect(pageB.locator('#private-room-view')).toBeVisible();
 
   await pageA.close();

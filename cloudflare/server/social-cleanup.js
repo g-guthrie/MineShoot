@@ -14,13 +14,15 @@ import {
 } from './party-match-state.js';
 
 let ensurePartySocialSchemaPromise = null;
+const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
 
 function nowSec() {
   return Math.floor(nowMs() / 1000);
 }
 
 function normalizeTeamId(value) {
-  return String(value || '').trim().toLowerCase() === 'bravo' ? 'bravo' : 'alpha';
+  const normalized = String(value || '').trim().toLowerCase();
+  return ROOM_TEAM_IDS.indexOf(normalized) >= 0 ? normalized : 'alpha';
 }
 
 async function ensurePartySocialSchema(env) {
@@ -68,6 +70,8 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
   const roomState = await getPrivateRoomState(env, roomId);
   const members = await getPrivateRoomMembers(env, roomId);
   if (!roomState) return null;
+  const teamCount = Math.max(2, Math.min(4, Math.round(Number(roomState.team_count || 2) || 2)));
+  const allowedTeamIds = ROOM_TEAM_IDS.slice(0, teamCount);
 
   const id = env.GLOBAL_ARENA.idFromName(roomId);
   const stub = env.GLOBAL_ARENA.get(id);
@@ -82,10 +86,13 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       roomMode: roomState.room_mode,
       roomPhase: roomState.room_phase,
       hostActorId: roomState.host_actor_id,
+      teamCount,
       syncMode: String(syncMode || 'lobby_update'),
       teams: members.map((member) => ({
         actorId: String(member.actor_id || ''),
-        teamId: normalizeTeamId(member.team_id)
+        teamId: allowedTeamIds.indexOf(normalizeTeamId(member.team_id)) >= 0
+          ? normalizeTeamId(member.team_id)
+          : allowedTeamIds[0]
       }))
     })
   }).catch(() => null);

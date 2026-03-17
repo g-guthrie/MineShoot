@@ -724,6 +724,10 @@
         if (!options || options.skipWeaponSync !== true) {
             syncWeaponState(selfState, options && options.weaponNow);
         }
+        if (selfState && selfState.outOfRound) {
+            clearRespawnCountdown();
+            return;
+        }
         var respawnState = options && Object.prototype.hasOwnProperty.call(options, 'respawnState')
             ? options.respawnState
             : null;

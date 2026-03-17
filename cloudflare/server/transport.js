@@ -1,5 +1,8 @@
 import { DEFAULT_ROOM_ID, sanitizeRoomId as sanitizeProtocolRoomId } from '../../shared/protocol.js';
 
+const FRIENDLY_GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
+const FRIENDLY_GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
+
 export function nowMs() {
   return Date.now();
 }
@@ -16,12 +19,31 @@ export function normalizeUsername(username) {
   return String(username || '').trim().toLowerCase();
 }
 
+function normalizeFriendlyGuestId(value) {
+  const compact = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const match = /^([a-z]+)(\d{3})$/.exec(compact);
+  if (!match) return '';
+  const words = match[1];
+  const suffix = match[2];
+  for (let i = 0; i < FRIENDLY_GUEST_ADJECTIVES.length; i++) {
+    const adjective = FRIENDLY_GUEST_ADJECTIVES[i];
+    if (!words.startsWith(adjective)) continue;
+    const noun = words.slice(adjective.length);
+    if (!noun) continue;
+    if (FRIENDLY_GUEST_NOUNS.indexOf(noun) < 0) continue;
+    return `${adjective}-${noun}-${suffix}`;
+  }
+  return '';
+}
+
 export function normalizeOpaqueId(value) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return '';
   if (/^(usr_|gst_|ses_|pty_|ply_|pub_|private-)/i.test(trimmed)) {
     return trimmed.toLowerCase();
   }
+  const normalizedGuestId = normalizeFriendlyGuestId(trimmed);
+  if (normalizedGuestId) return normalizedGuestId;
   return trimmed;
 }
 
@@ -66,7 +88,12 @@ export function parseCookies(cookieHeader) {
     if (idx < 0) continue;
     const k = part.slice(0, idx).trim();
     const v = part.slice(idx + 1).trim();
-    out[k] = decodeURIComponent(v);
+    if (!k) continue;
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch (_err) {
+      // Ignore malformed cookie segments rather than failing the whole request.
+    }
   }
   return out;
 }

@@ -197,6 +197,13 @@ export function sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToke
   };
 }
 
+export function pistolCylinderRadiusWu(weaponStats, adsActive) {
+  const stats = weaponStats || {};
+  const key = adsActive ? 'adsCylinderRadiusWu' : 'hipfireCylinderRadiusWu';
+  const raw = Number(stats[key]);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
 function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken, viewFovDeg) {
   const baseForward = normalizeVec3(forward);
   const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
@@ -234,6 +241,22 @@ function buildRayDirectionFromOffset(forward, weaponStats, offset, viewFovDeg) {
       scaleVec3(up, Number(offset.y || 0) * tanHalfY)
     )
   ));
+}
+
+function originBasis(forward) {
+  const baseForward = normalizeVec3(forward);
+  const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
+  const right = normalizeVec3(crossVec3(baseForward, worldUp));
+  const up = normalizeVec3(crossVec3(right, baseForward));
+  return { forward: baseForward, right, up };
+}
+
+function sampleOriginOffsetForCylinder(forward, sample, radiusWu) {
+  const basis = originBasis(forward);
+  return addVec3(
+    scaleVec3(basis.right, Number(sample && sample.x || 0) * radiusWu),
+    scaleVec3(basis.up, Number(sample && sample.y || 0) * radiusWu)
+  );
 }
 
 function intersectRayAabb(origin, dir, box, maxDistance) {
@@ -544,24 +567,21 @@ function resolveCircleScanHits(options) {
   const targets = Array.isArray(options.targets) ? options.targets : [];
   const worldBoxes = Array.isArray(options.worldBoxes) ? options.worldBoxes : [];
   const adsActive = !!(options && options.adsActive);
-  const viewFovDeg = Number(options && options.viewFovDeg);
   const maxDistance = effectiveRange(weaponStats, adsActive);
-  const aim = resolveWeaponAimProfile(weaponStats, adsActive);
-  const spread = Math.max(0, Number(aim && aim.spread || 0));
+  const radiusWu = pistolCylinderRadiusWu(weaponStats, adsActive);
+  const basis = originBasis(forward);
   let best = null;
 
   for (let sampleIndex = 0; sampleIndex < CIRCLE_SCAN_PATTERN.length; sampleIndex++) {
     const sample = CIRCLE_SCAN_PATTERN[sampleIndex];
-    const offset = {
-      x: sample.x * spread / DEFAULT_ASPECT,
-      y: sample.y * spread
-    };
-    const dir = buildRayDirectionFromOffset(forward, weaponStats, offset, viewFovDeg);
+    const originOffset = sampleOriginOffsetForCylinder(forward, sample, radiusWu);
+    const sampleOrigin = addVec3(origin, originOffset);
+    const dir = basis.forward;
     let worldHitDistance = maxDistance;
     for (let i = 0; i < worldBoxes.length; i++) {
       const box = explicitBox(worldBoxes[i]);
       if (!box) continue;
-      const hitDistance = intersectRayAabb(origin, dir, box, maxDistance);
+      const hitDistance = intersectRayAabb(sampleOrigin, dir, box, maxDistance);
       if (hitDistance != null && hitDistance < worldHitDistance) {
         worldHitDistance = hitDistance;
       }
@@ -572,8 +592,8 @@ function resolveCircleScanHits(options) {
       const entity = targets[i];
       if (!entity) continue;
       const boxes = entityHitboxes(entity);
-      const headDistance = intersectRayAabb(origin, dir, boxes.head, worldHitDistance);
-      const bodyDistance = intersectRayAabb(origin, dir, boxes.body, worldHitDistance);
+      const headDistance = intersectRayAabb(sampleOrigin, dir, boxes.head, worldHitDistance);
+      const bodyDistance = intersectRayAabb(sampleOrigin, dir, boxes.body, worldHitDistance);
       if (headDistance == null && bodyDistance == null) continue;
 
       let hitType = 'body';
@@ -589,9 +609,9 @@ function resolveCircleScanHits(options) {
           hitType,
           distance: hitDistance,
           point: {
-            x: origin.x + dir.x * hitDistance,
-            y: origin.y + dir.y * hitDistance,
-            z: origin.z + dir.z * hitDistance
+            x: sampleOrigin.x + dir.x * hitDistance,
+            y: sampleOrigin.y + dir.y * hitDistance,
+            z: sampleOrigin.z + dir.z * hitDistance
           }
         };
       }

@@ -26,6 +26,7 @@ const ACTIVITY_MENU = 'menu';
 const ACTIVITY_PRIVATE_ROOM_LOBBY = 'private_room_lobby';
 const ACTIVITY_IN_MATCH = 'in_match';
 const ACTIVITY_STALE_WINDOW_SEC = 15;
+const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
 
 let ensurePresencePromise = null;
 let ensurePartySchemaPromise = null;
@@ -465,7 +466,7 @@ async function addActorToParty(env, partyId, actor) {
 
 function normalizeRoomTeamId(value) {
   const next = String(value || '').trim().toLowerCase();
-  return next || 'alpha';
+  return ROOM_TEAM_IDS.indexOf(next) >= 0 ? next : 'alpha';
 }
 
 async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_update') {
@@ -473,6 +474,8 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
   const roomState = await getPrivateRoomState(env, roomId);
   const members = await getPrivateRoomMembers(env, roomId);
   if (!roomState) return null;
+  const teamCount = Math.max(2, Math.min(4, Math.round(Number(roomState.team_count || 2) || 2)));
+  const allowedTeamIds = ROOM_TEAM_IDS.slice(0, teamCount);
   const id = env.GLOBAL_ARENA.idFromName(roomId);
   const stub = env.GLOBAL_ARENA.get(id);
   const url = new URL('https://room/private-config');
@@ -484,10 +487,13 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       roomMode: roomState.room_mode,
       roomPhase: roomState.room_phase,
       hostActorId: roomState.host_actor_id,
+      teamCount,
       syncMode: String(syncMode || 'lobby_update'),
       teams: members.map((member) => ({
         actorId: String(member.actor_id || ''),
-        teamId: normalizeRoomTeamId(member.team_id)
+        teamId: allowedTeamIds.indexOf(normalizeRoomTeamId(member.team_id)) >= 0
+          ? normalizeRoomTeamId(member.team_id)
+          : allowedTeamIds[0]
       }))
     })
   }).catch(() => null);

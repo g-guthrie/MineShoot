@@ -7,6 +7,7 @@ import {
 const HISTORY_WINDOW_MS = 1200;
 const MAX_REWIND_MS = 250;
 const FUTURE_TOLERANCE_MS = 50;
+const TELEPORT_RESET_DISTANCE_SQ = 64;
 const BODY_CENTER_OFFSET_Y = 0.7625;
 const HEAD_CENTER_OFFSET_Y = 2.0;
 
@@ -54,6 +55,20 @@ export function recordHistorySample(entity, timeMs) {
   const history = ensureHistoryBuffer(entity);
   const sample = cloneHistorySample(entity, timeMs);
   const last = history.length > 0 ? history[history.length - 1] : null;
+  const dx = last ? (last.x - sample.x) : 0;
+  const dy = last ? (last.y - sample.y) : 0;
+  const dz = last ? (last.z - sample.z) : 0;
+  const teleported = !!(
+    last &&
+    (
+      ((dx * dx) + (dy * dy) + (dz * dz)) > TELEPORT_RESET_DISTANCE_SQ ||
+      (!!last.alive !== !!sample.alive && sample.alive)
+    )
+  );
+
+  if (teleported) {
+    history.length = 0;
+  }
 
   if (last && last.timeMs === sample.timeMs) {
     history[history.length - 1] = sample;

@@ -1,4 +1,5 @@
 import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
+import { isBlockedAt } from '../../../shared/authoritative-movement.js';
 import { nowMs, clamp } from '../transport.js';
 import { tickClassAbilityState } from './AbilityService.js';
 import { createBotEntity } from './EntityLifecycle.js';
@@ -74,12 +75,35 @@ export function tickBots(room, dtSec) {
       const slowMult = now < (bot.slowUntil || 0)
         ? clamp(Number(bot.slowMultiplier || 1), 0.1, 1)
         : 1;
-      bot.x = clamp(bot.x + bot.aiDirX * bot.aiSpeed * slowMult * dtSec, room.boundsMin, room.boundsMax);
-      bot.z = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * slowMult * dtSec, room.boundsMin, room.boundsMax);
+      const colliders = room && typeof room.worldCollidables === 'function' ? room.worldCollidables() : [];
+      const feetY = Number(bot.y || 1.6) - 1.6;
+      const nextX = clamp(bot.x + bot.aiDirX * bot.aiSpeed * slowMult * dtSec, room.boundsMin, room.boundsMax);
+      const nextZ = clamp(bot.z + bot.aiDirZ * bot.aiSpeed * slowMult * dtSec, room.boundsMin, room.boundsMax);
+      var moved = false;
+
+      if (!isBlockedAt(nextX, nextZ, feetY, colliders)) {
+        bot.x = nextX;
+        bot.z = nextZ;
+        moved = true;
+      } else {
+        if (nextX !== bot.x && !isBlockedAt(nextX, bot.z, feetY, colliders)) {
+          bot.x = nextX;
+          moved = true;
+        }
+        if (nextZ !== bot.z && !isBlockedAt(bot.x, nextZ, feetY, colliders)) {
+          bot.z = nextZ;
+          moved = true;
+        }
+      }
+      if (!moved) {
+        bot.aiDirX *= -1;
+        bot.aiDirZ *= -1;
+        bot.aiTurnTimer = Math.min(Number(bot.aiTurnTimer || 0), 0.2);
+      }
       bot.yaw = Math.atan2(bot.aiDirX, bot.aiDirZ);
       bot.pitch = 0;
-      bot.moveSpeedNorm = clamp((bot.aiSpeed * slowMult) / 3.2, 0, 1.4);
-      bot.sprinting = (bot.aiSpeed * slowMult) > 2.5;
+      bot.moveSpeedNorm = moved ? clamp((bot.aiSpeed * slowMult) / 3.2, 0, 1.4) : 0;
+      bot.sprinting = moved && (bot.aiSpeed * slowMult) > 2.5;
     }
 
     room.regenArmor(bot, dtSec);

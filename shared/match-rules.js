@@ -5,6 +5,9 @@ export const MATCH_GAME_MODE_TDM = 'tdm';
 export const MATCH_GAME_MODE_LMS = LMS_MODE_ID;
 export const MATCH_TEAM_ALPHA = 'alpha';
 export const MATCH_TEAM_BRAVO = 'bravo';
+export const MATCH_TEAM_CHARLIE = 'charlie';
+export const MATCH_TEAM_DELTA = 'delta';
+export const MATCH_TEAM_IDS = [MATCH_TEAM_ALPHA, MATCH_TEAM_BRAVO, MATCH_TEAM_CHARLIE, MATCH_TEAM_DELTA];
 export const FFA_TARGET_PROGRESS = 10;
 export const TDM_TARGET_PROGRESS = 10;
 export const MATCH_RESET_DELAY_MS = 5000;
@@ -27,10 +30,65 @@ export function targetProgressForGameMode(gameMode, options = {}) {
   return 0;
 }
 
+export function normalizeMatchTeamIds(rawTeamIds, fallbackTeamIds = [MATCH_TEAM_ALPHA, MATCH_TEAM_BRAVO]) {
+  const source = Array.isArray(rawTeamIds) && rawTeamIds.length ? rawTeamIds : fallbackTeamIds;
+  const fallback = Array.isArray(fallbackTeamIds) && fallbackTeamIds.length ? fallbackTeamIds : [MATCH_TEAM_ALPHA, MATCH_TEAM_BRAVO];
+  const out = [];
+  for (let i = 0; i < source.length; i++) {
+    const teamId = String(source[i] || '').trim().toLowerCase();
+    if (MATCH_TEAM_IDS.indexOf(teamId) < 0 || out.indexOf(teamId) >= 0) continue;
+    out.push(teamId);
+  }
+  if (out.length >= 2) return out;
+  return fallback.slice(0, 2);
+}
+
+function buildTeamStatMap(teamIds, source) {
+  const out = {};
+  const ids = normalizeMatchTeamIds(teamIds);
+  for (let i = 0; i < ids.length; i++) {
+    const teamId = ids[i];
+    out[teamId] = Number(source && source[teamId] || 0);
+  }
+  return out;
+}
+
+function teamIdsForMatch(matchState) {
+  const match = matchState || null;
+  if (match && Array.isArray(match.teamIds) && match.teamIds.length) {
+    return normalizeMatchTeamIds(match.teamIds);
+  }
+  return normalizeMatchTeamIds(match && match.teamProgress ? Object.keys(match.teamProgress) : null);
+}
+
+export function getLeadingOpposingTeam(matchState, selfTeamId) {
+  const match = matchState || null;
+  const ownTeamId = String(selfTeamId || '').trim().toLowerCase();
+  const teamIds = teamIdsForMatch(match);
+  let bestTeamId = '';
+  let bestProgress = 0;
+  for (let i = 0; i < teamIds.length; i++) {
+    const teamId = teamIds[i];
+    if (teamId === ownTeamId) continue;
+    const progress = Number(match && match.teamProgress && match.teamProgress[teamId] || 0);
+    if (!bestTeamId || progress > bestProgress) {
+      bestTeamId = teamId;
+      bestProgress = progress;
+    }
+  }
+  return {
+    teamId: bestTeamId,
+    progress: Number(bestProgress || 0)
+  };
+}
+
 export function createMatchState(gameMode, options = {}) {
   const teamAlpha = String(options.teamAlpha || MATCH_TEAM_ALPHA);
   const teamBravo = String(options.teamBravo || MATCH_TEAM_BRAVO);
   const mode = normalizeMatchGameMode(gameMode);
+  const teamIds = mode === MATCH_GAME_MODE_TDM
+    ? normalizeMatchTeamIds(options.teamIds, [teamAlpha, teamBravo])
+    : [teamAlpha, teamBravo];
   return {
     gameMode: mode,
     started: false,
@@ -44,6 +102,7 @@ export function createMatchState(gameMode, options = {}) {
     leaderId: '',
     winnerId: '',
     winnerTeam: '',
+    teamIds: mode === MATCH_GAME_MODE_TDM ? teamIds.slice() : [],
     lms: mode === MATCH_GAME_MODE_LMS ? {
       startingLives: lmsRules.startingLives,
       maxLives: lmsRules.maxLives,
@@ -55,14 +114,8 @@ export function createMatchState(gameMode, options = {}) {
       bankingEnabled: false,
       activeBeacon: null
     } : null,
-    teamProgress: {
-      [teamAlpha]: 0,
-      [teamBravo]: 0
-    },
-    teamBaselineSize: {
-      [teamAlpha]: 0,
-      [teamBravo]: 0
-    }
+    teamProgress: buildTeamStatMap(teamIds, null),
+    teamBaselineSize: buildTeamStatMap(teamIds, null)
   };
 }
 
@@ -116,11 +169,10 @@ export function formatMatchHudCounter(matchState, selfState) {
   if (mode === MATCH_GAME_MODE_TDM) {
     const teamId = String(selfState && selfState.teamId || '');
     const teamProgress = Number(match.teamProgress && match.teamProgress[teamId] || 0);
-    const enemyTeamId = teamId === MATCH_TEAM_ALPHA ? MATCH_TEAM_BRAVO : MATCH_TEAM_ALPHA;
-    const enemyProgress = Number(match.teamProgress && match.teamProgress[enemyTeamId] || 0);
+    const opposing = getLeadingOpposingTeam(match, teamId);
     return 'Kills: ' + ownKills +
       ' | Team: ' + formatMatchProgress(teamProgress) + '/' + formatMatchProgress(match.targetProgress) +
-      ' | Enemy: ' + formatMatchProgress(enemyProgress);
+      ' | Opp: ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
   }
 
   return 'Kills: ' + ownKills +
@@ -164,11 +216,10 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
   if (mode === MATCH_GAME_MODE_TDM) {
     const teamId = String(selfState && selfState.teamId || '');
     const teamProgress = Number(match.teamProgress && match.teamProgress[teamId] || 0);
-    const enemyTeamId = teamId === MATCH_TEAM_ALPHA ? MATCH_TEAM_BRAVO : MATCH_TEAM_ALPHA;
-    const enemyProgress = Number(match.teamProgress && match.teamProgress[enemyTeamId] || 0);
+    const opposing = getLeadingOpposingTeam(match, teamId);
     return 'TDM TEAM ' + formatMatchProgress(teamProgress) +
       ' / ' + formatMatchProgress(match.targetProgress) +
-      ' | ENEMY ' + formatMatchProgress(enemyProgress);
+      ' | OPP ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
   }
 
   if (mode === MATCH_GAME_MODE_LMS) {
@@ -203,14 +254,19 @@ export const matchRules = {
   gameModeLms: MATCH_GAME_MODE_LMS,
   teamAlpha: MATCH_TEAM_ALPHA,
   teamBravo: MATCH_TEAM_BRAVO,
+  teamCharlie: MATCH_TEAM_CHARLIE,
+  teamDelta: MATCH_TEAM_DELTA,
+  teamIds: MATCH_TEAM_IDS.slice(),
   ffaTargetProgress: FFA_TARGET_PROGRESS,
   tdmTargetProgress: TDM_TARGET_PROGRESS,
   matchResetDelayMs: MATCH_RESET_DELAY_MS,
   normalizeMatchGameMode,
+  normalizeMatchTeamIds,
   targetProgressForGameMode,
   createMatchState,
   formatMatchProgress,
   formatSecondsRemaining,
+  getLeadingOpposingTeam,
   formatWinnerLabel,
   formatMatchHudCounter,
   formatMenuMatchStats,

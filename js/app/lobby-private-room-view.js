@@ -14,6 +14,9 @@
     };
 
     GameLobbyPrivateRoomView.create = function (ctx) {
+        var selectedMemberId = '';
+        var movePending = false;
+
         function currentState() {
             return ctx.getState();
         }
@@ -29,87 +32,272 @@
             ctx.privateRoomStatusEl.style.color = isErr ? '#ffb3a6' : '#ffd7af';
         }
 
-        function bindTeamDropTarget(targetEl, teamId) {
-            if (!targetEl || targetEl.__teamDropBound) return;
-            targetEl.__teamDropBound = true;
-            targetEl.addEventListener('dragover', function (event) {
-                if (!ctx.moveMember) return;
-                event.preventDefault();
-            });
-            targetEl.addEventListener('drop', function (event) {
-                if (!ctx.moveMember) return;
-                event.preventDefault();
-                var memberId = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
-                if (!memberId) return;
-                ctx.moveMember(memberId, teamId);
-            });
-        }
-
         function teamLabel(teamId) {
             return TEAM_LABELS[String(teamId || '').toLowerCase()] || TEAM_LABELS.alpha;
         }
 
-        function setPrivateRoomTeamList(targetEl, members, canEdit, currentTeamId, activeTeamIds) {
+        function activeTeamIds(room) {
+            return Array.isArray(room && room.teamIds) && room.teamIds.length
+                ? room.teamIds.slice()
+                : ['alpha', 'bravo'];
+        }
+
+        function allowEditing(room) {
+            return currentRoomHost() && String(room && room.roomPhase || '') === 'lobby';
+        }
+
+        function findMemberIds(room) {
+            var seen = {};
+            var members = Array.isArray(room && room.members) ? room.members : [];
+            for (var i = 0; i < members.length; i++) {
+                var memberId = String(members[i] && members[i].id || '');
+                if (memberId) seen[memberId] = true;
+            }
+            return seen;
+        }
+
+        function syncSelection(room) {
+            if (!selectedMemberId) return;
+            if (findMemberIds(room)[selectedMemberId]) return;
+            selectedMemberId = '';
+        }
+
+        function walkNodeTree(root, visitor) {
+            if (!root) return;
+            visitor(root);
+            var children = Array.isArray(root.childNodes) ? root.childNodes : [];
+            for (var i = 0; i < children.length; i++) {
+                walkNodeTree(children[i], visitor);
+            }
+        }
+
+        function clearDropHighlights() {
+            walkNodeTree(ctx.privateRoomRosterGrid, function (node) {
+                if (node && node.classList && node.classList.remove) node.classList.remove('drag-over');
+            });
+            walkNodeTree(ctx.privateRoomUnassigned, function (node) {
+                if (node && node.classList && node.classList.remove) node.classList.remove('drag-over');
+            });
+        }
+
+        function moveMember(memberId, nextTeamId) {
+            if (movePending || !ctx.moveMember) return Promise.resolve(null);
+            movePending = true;
+            selectedMemberId = '';
+            clearDropHighlights();
+            setStatus('Updating teams...', false);
+            applyState(currentState());
+            return Promise.resolve(ctx.moveMember(memberId, nextTeamId))
+                .then(function (result) {
+                    movePending = false;
+                    clearDropHighlights();
+                    setStatus(result ? 'Team layout updated.' : 'Team update failed.', !result);
+                    applyState(currentState());
+                    return result;
+                })
+                .catch(function () {
+                    movePending = false;
+                    clearDropHighlights();
+                    setStatus('Team update failed.', true);
+                    applyState(currentState());
+                    return null;
+                });
+        }
+
+        function bindDropTarget(targetEl, teamId, enabled) {
+            if (!targetEl || targetEl.__dropBound) return;
+            targetEl.__dropBound = true;
+            targetEl.addEventListener('dragover', function (event) {
+                if (!enabled || movePending || !ctx.moveMember) return;
+                event.preventDefault();
+                targetEl.classList.add('drag-over');
+            });
+            targetEl.addEventListener('dragleave', function () {
+                targetEl.classList.remove('drag-over');
+            });
+            targetEl.addEventListener('drop', function (event) {
+                if (!enabled || movePending || !ctx.moveMember) return;
+                event.preventDefault();
+                targetEl.classList.remove('drag-over');
+                var memberId = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
+                if (!memberId) return;
+                moveMember(memberId, teamId);
+            });
+        }
+
+        function buildMoveRail(memberId, currentTeamId, teamIds) {
+            var rail = document.createElement('div');
+            rail.className = 'private-room-destination-rail';
+            for (var i = 0; i < teamIds.length; i++) {
+                var nextTeamId = String(teamIds[i] || '');
+                if (!nextTeamId || nextTeamId === currentTeamId) continue;
+                var moveBtn = document.createElement('button');
+                moveBtn.type = 'button';
+                moveBtn.className = 'private-room-destination-pill';
+                moveBtn.setAttribute('data-team-id', nextTeamId);
+                moveBtn.textContent = teamLabel(nextTeamId);
+                moveBtn.disabled = movePending;
+                moveBtn.addEventListener('click', (function (targetId, destinationTeamId) {
+                    return function (event) {
+                        if (movePending) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        moveMember(targetId, destinationTeamId);
+                    };
+                })(memberId, nextTeamId));
+                rail.appendChild(moveBtn);
+            }
+            return rail;
+        }
+
+        function buildMemberPill(member, canEditRoom, currentTeamId, teamIds) {
+            var memberId = String(member && member.id || '');
+            var pill = document.createElement('div');
+            pill.className = 'private-room-member-pill' + (member && member.isHost ? ' host' : '') + (selectedMemberId === memberId ? ' selected' : '');
+            pill.setAttribute('data-member-id', memberId);
+            pill.setAttribute('data-team-id', String(currentTeamId || ''));
+            pill.setAttribute('data-rounded-role', 'container');
+            if (movePending) pill.className += ' pending';
+
+            if (canEditRoom) {
+                pill.draggable = !movePending;
+                pill.tabIndex = 0;
+                pill.setAttribute('role', 'button');
+                pill.addEventListener('dragstart', function (event) {
+                    if (movePending) return;
+                    if (!event.dataTransfer) return;
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', memberId);
+                });
+                pill.addEventListener('dragend', function () {
+                    clearDropHighlights();
+                });
+                pill.addEventListener('click', function () {
+                    if (movePending) return;
+                    selectedMemberId = selectedMemberId === memberId ? '' : memberId;
+                    applyState(currentState());
+                });
+                pill.addEventListener('keydown', function (event) {
+                    if (movePending) return;
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    selectedMemberId = selectedMemberId === memberId ? '' : memberId;
+                    applyState(currentState());
+                });
+            }
+
+            var top = document.createElement('div');
+            top.className = 'private-room-member-topline';
+
+            var name = document.createElement('div');
+            name.className = 'private-room-member-name';
+            name.textContent = String(member && member.displayName || memberId || 'Player');
+            top.appendChild(name);
+
+            if (member && member.isHost) {
+                var badge = document.createElement('span');
+                badge.className = 'private-room-host-badge';
+                badge.textContent = 'Host';
+                top.appendChild(badge);
+            }
+
+            pill.appendChild(top);
+
+            var meta = document.createElement('div');
+            meta.className = 'private-room-member-meta';
+            meta.textContent = memberId.toUpperCase();
+            pill.appendChild(meta);
+
+            if (canEditRoom && selectedMemberId === memberId) {
+                pill.appendChild(buildMoveRail(memberId, currentTeamId, teamIds));
+            }
+            return pill;
+        }
+
+        function renderMemberTray(targetEl, members, canEditRoom, currentTeamId, teamIds, emptyCopy) {
             if (!targetEl) return;
             targetEl.innerHTML = '';
-            bindTeamDropTarget(targetEl, currentTeamId);
+            bindDropTarget(targetEl, currentTeamId, canEditRoom && !!currentTeamId);
             if (!members || members.length === 0) {
                 var empty = document.createElement('div');
                 empty.className = 'private-room-empty';
-                empty.textContent = 'No players assigned.';
+                empty.textContent = String(emptyCopy || 'No players assigned.');
                 targetEl.appendChild(empty);
                 return;
             }
             for (var i = 0; i < members.length; i++) {
-                var member = members[i];
-                var card = document.createElement('div');
-                card.className = 'private-room-member' + (member.isHost ? ' host' : '');
-                if (canEdit) {
-                    card.draggable = true;
-                    card.addEventListener('dragstart', (function (memberId) {
-                        return function (event) {
-                            if (!event.dataTransfer) return;
-                            event.dataTransfer.effectAllowed = 'move';
-                            event.dataTransfer.setData('text/plain', memberId);
-                        };
-                    })(String(member.id || '')));
-                }
-                var head = document.createElement('div');
-                head.className = 'private-room-member-head';
-                var name = document.createElement('span');
-                name.textContent = (member.isHost ? 'Host  ' : '') + String(member.displayName || member.id || 'Player');
-                var tag = document.createElement('span');
-                tag.textContent = teamLabel(member.teamId);
-                head.appendChild(name);
-                head.appendChild(tag);
-                card.appendChild(head);
+                targetEl.appendChild(buildMemberPill(members[i], canEditRoom, currentTeamId, teamIds));
+            }
+        }
 
-                var idLine = document.createElement('div');
-                idLine.className = 'private-room-member-id';
-                idLine.textContent = String(member.id || '');
-                card.appendChild(idLine);
+        function buildTeamLane(teamId, members, canEditRoom, teamIds) {
+            var lane = document.createElement('section');
+            lane.className = 'private-room-team-lane';
+            lane.setAttribute('data-team-id', teamId);
 
-                if (canEdit) {
-                    var direction = document.createElement('div');
-                    direction.className = 'private-room-member-direction';
-                    direction.textContent = 'Move to another team.';
-                    card.appendChild(direction);
-                    for (var j = 0; j < activeTeamIds.length; j++) {
-                        var nextTeamId = String(activeTeamIds[j] || '');
-                        if (!nextTeamId || nextTeamId === currentTeamId) continue;
-                        var moveBtn = document.createElement('button');
-                        moveBtn.type = 'button';
-                        moveBtn.className = 'private-room-member-move';
-                        moveBtn.textContent = 'Move to ' + teamLabel(nextTeamId).replace('Team ', '');
-                        moveBtn.addEventListener('click', (function (memberId, destinationTeamId) {
-                            return function () {
-                                ctx.moveMember(memberId, destinationTeamId);
-                            };
-                        })(String(member.id || ''), nextTeamId));
-                        card.appendChild(moveBtn);
-                    }
-                }
-                targetEl.appendChild(card);
+            var header = document.createElement('div');
+            header.className = 'private-room-team-header';
+
+            var copy = document.createElement('div');
+            copy.className = 'private-room-team-copy';
+
+            var title = document.createElement('div');
+            title.className = 'private-room-team-name';
+            title.textContent = teamLabel(teamId);
+            copy.appendChild(title);
+
+            var subtitle = document.createElement('div');
+            subtitle.className = 'private-room-team-subtitle';
+            subtitle.textContent = String(members.length || 0) + ' ' + (members.length === 1 ? 'player ready' : 'players ready');
+            copy.appendChild(subtitle);
+            header.appendChild(copy);
+
+            var count = document.createElement('div');
+            count.className = 'private-room-team-count';
+            count.textContent = String(members.length || 0);
+            header.appendChild(count);
+            lane.appendChild(header);
+
+            var tray = document.createElement('div');
+            tray.className = 'private-room-team-tray';
+            tray.setAttribute('data-team-id', teamId);
+            tray.setAttribute('data-rounded-role', 'container');
+            lane.appendChild(tray);
+
+            renderMemberTray(tray, members, canEditRoom, teamId, teamIds, 'Drop players here.');
+            return lane;
+        }
+
+        function renderUnassignedTray(room, canEditRoom) {
+            if (!ctx.privateRoomUnassigned) return;
+            var teamIds = activeTeamIds(room);
+            var members = Array.isArray(room.members) ? room.members : [];
+            var unassigned = members.filter(function (member) {
+                return member && teamIds.indexOf(String(member.teamId || '')) < 0;
+            });
+
+            if (ctx.privateRoomUnassignedWrap) {
+                ctx.privateRoomUnassignedWrap.hidden = !canEditRoom && unassigned.length === 0;
+            }
+
+            renderMemberTray(
+                ctx.privateRoomUnassigned,
+                unassigned,
+                false,
+                '',
+                teamIds,
+                canEditRoom ? 'Fresh players land here until they are slotted.' : 'Everyone is assigned.'
+            );
+        }
+
+        function renderTeamBoard(room, canEditRoom) {
+            if (!ctx.privateRoomRosterGrid) return;
+            ctx.privateRoomRosterGrid.innerHTML = '';
+            var teamIds = activeTeamIds(room);
+            for (var i = 0; i < teamIds.length; i++) {
+                var teamId = String(teamIds[i] || '');
+                var members = room.teams && room.teams[teamId] ? room.teams[teamId] : [];
+                ctx.privateRoomRosterGrid.appendChild(buildTeamLane(teamId, members, canEditRoom, teamIds));
             }
         }
 
@@ -119,14 +307,14 @@
 
             if (!privateRoomState || !privateRoomState.room) {
                 if (ctx.privateRoomSummaryEl) ctx.privateRoomSummaryEl.textContent = '';
-                if (ctx.privateRoomTeamAlpha) ctx.privateRoomTeamAlpha.innerHTML = '';
-                if (ctx.privateRoomTeamBravo) ctx.privateRoomTeamBravo.innerHTML = '';
                 if (ctx.privateRoomUnassigned) ctx.privateRoomUnassigned.innerHTML = '';
+                if (ctx.privateRoomRosterGrid) ctx.privateRoomRosterGrid.innerHTML = '';
                 return;
             }
 
             var room = privateRoomState.room;
-            var isHost = currentRoomHost();
+            var canEditRoom = allowEditing(room);
+            syncSelection(room);
 
             if (ctx.privateRoomSummaryEl) {
                 ctx.privateRoomSummaryEl.textContent =
@@ -138,30 +326,12 @@
 
             if (ctx.privateRoomRandomizeBtn) {
                 ctx.privateRoomRandomizeBtn.textContent = String(room.roomMode || '') === 'tdm'
-                    ? 'Balance Teams'
-                    : 'Randomize';
+                    ? 'Auto Assign'
+                    : 'Shuffle';
             }
 
-            var activeTeamIds = Array.isArray(room.teamIds) && room.teamIds.length ? room.teamIds.slice() : ['alpha', 'bravo'];
-            setPrivateRoomTeamList(ctx.privateRoomTeamAlpha, room.teams ? room.teams.alpha : [], isHost && String(room.roomPhase || '') === 'lobby', 'alpha', activeTeamIds);
-            setPrivateRoomTeamList(ctx.privateRoomTeamBravo, room.teams ? room.teams.bravo : [], isHost && String(room.roomPhase || '') === 'lobby', 'bravo', activeTeamIds);
-            setPrivateRoomTeamList(ctx.privateRoomTeamCharlie, room.teams ? room.teams.charlie : [], isHost && String(room.roomPhase || '') === 'lobby', 'charlie', activeTeamIds);
-            setPrivateRoomTeamList(ctx.privateRoomTeamDelta, room.teams ? room.teams.delta : [], isHost && String(room.roomPhase || '') === 'lobby', 'delta', activeTeamIds);
-            if (ctx.privateRoomUnassigned) {
-                var members = Array.isArray(room.members) ? room.members : [];
-                var unassigned = members.filter(function (member) {
-                    return member && activeTeamIds.indexOf(String(member.teamId || '')) < 0;
-                });
-                ctx.privateRoomUnassigned.innerHTML = '';
-                if (!unassigned.length) {
-                    var empty = document.createElement('div');
-                    empty.className = 'private-room-empty';
-                    empty.textContent = 'Everyone assigned.';
-                    ctx.privateRoomUnassigned.appendChild(empty);
-                } else {
-                    setPrivateRoomTeamList(ctx.privateRoomUnassigned, unassigned, false, '', activeTeamIds);
-                }
-            }
+            renderUnassignedTray(room, canEditRoom);
+            renderTeamBoard(room, canEditRoom);
         }
 
         function setUnavailable(message) {

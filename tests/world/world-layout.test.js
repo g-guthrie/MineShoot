@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  createRotatedBoxAabb,
   createHeadlessRecorder,
   ensureHeadlessWorldRuntime
 } from '../../shared/headless-world-runtime.js';
@@ -252,6 +253,7 @@ test('desert adds a mid-scale hero arch while keeping the fortress edges', () =>
   assert.ok(stats.centerHeroArchClearWidth >= 4.8);
   assert.equal(stats.centerSupportCount, 4);
   assert.ok(stats.centerHeroArchHeight > stats.westArchPeakHeight);
+  assert.ok(stats.centerHeroArchSpan > stats.westArchSpan);
 
   const northTouches = recorder.collidables.filter((box) =>
     Math.abs(box.min.z - rawBounds.minZ) < 0.0001
@@ -381,7 +383,7 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
   assert.ok(stats.towerPeakHeight <= 60);
   assert.ok(stats.upperShaftWidth >= 8);
   assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
-  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.94))) < 0.0001);
+  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.866))) < 0.0001);
   assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
   assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
   assert.equal(stats.northSupportCount, 4);
@@ -412,4 +414,50 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
     Math.abs((block.z + (block.d * 0.5)) - rawBounds.maxZ) < 0.0001
   );
   assert.ok(southFlushSolids.length >= 1);
+});
+
+test('basin geometry and collidables stay inside the biome bounds', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.basin;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r2c1');
+  const geometryRecorder = createGeometryRecorder();
+  builder(rawBounds, geometryRecorder.place, {
+    ...geometryRecorder.ctx,
+    biomeEntry: { biome: BIOME_BASIN },
+    rawBounds
+  });
+
+  const overflowBlocks = geometryRecorder.blocks.filter((block) => {
+    const bounds = createRotatedBoxAabb(
+      block.x,
+      block.y,
+      block.z,
+      block.w,
+      block.h,
+      block.d,
+      block.rotY || 0,
+      block.tiltX || 0
+    );
+    return bounds.min.x < rawBounds.minX - 0.0001 ||
+      bounds.max.x > rawBounds.maxX + 0.0001 ||
+      bounds.min.z < rawBounds.minZ - 0.0001 ||
+      bounds.max.z > rawBounds.maxZ + 0.0001;
+  });
+  assert.equal(overflowBlocks.length, 0);
+
+  const collisionRecorder = createHeadlessRecorder();
+  builder(rawBounds, collisionRecorder.place, {
+    ...collisionRecorder.ctx,
+    biomeEntry: { biome: BIOME_BASIN },
+    rawBounds
+  });
+  const overflowColliders = collisionRecorder.collidables.filter((box) =>
+    box.min.x < rawBounds.minX - 0.0001 ||
+    box.max.x > rawBounds.maxX + 0.0001 ||
+    box.min.z < rawBounds.minZ - 0.0001 ||
+    box.max.z > rawBounds.maxZ + 0.0001
+  );
+  assert.equal(overflowColliders.length, 0);
 });

@@ -165,6 +165,52 @@ test('player combat exposes survivability state and preserves respawn countdown 
   assert.equal(harness.GamePlayerCombat.canUseGameplayActions(1900), true);
 });
 
+test('player combat clears respawn countdown when a network snapshot marks the player out of round', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.syncFromNetwork({
+    hp: 0,
+    hpMax: 500,
+    armor: 0,
+    armorMax: 90,
+    alive: false,
+    outOfRound: false,
+    spawnShieldUntil: 0
+  }, {
+    respawnState: {
+      active: true,
+      respawnAt: 1800
+    }
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getRespawnState(1000))), {
+    active: true,
+    respawnAt: 1800,
+    remainingMs: 800
+  });
+
+  harness.GamePlayerCombat.syncFromNetwork({
+    hp: 0,
+    hpMax: 500,
+    armor: 0,
+    armorMax: 90,
+    alive: false,
+    outOfRound: true,
+    spawnShieldUntil: 0
+  }, {
+    respawnState: {
+      active: true,
+      respawnAt: 1800
+    }
+  });
+
+  assert.equal(harness.GamePlayerCombat.getRespawnState(1000), null);
+});
+
 test('player combat owns weapon presentation state and repairs it from authoritative snapshots', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({

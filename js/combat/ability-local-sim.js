@@ -259,13 +259,15 @@
                 if (live && live.worldPos) {
                     var nextWorldPos = makeVector3Like(live.worldPos);
                     var origin = deadeyeOriginWorldPosition(camera);
+                    var forward = new THREE.Vector3();
+                    if (camera && camera.getWorldDirection) camera.getWorldDirection(forward);
                     if (
                         camera &&
                         origin &&
                         nextWorldPos &&
                         (
                             !deadeyeHasLOS(origin, nextWorldPos, cfg && cfg.range || 80) ||
-                            camera.getWorldDirection(new THREE.Vector3()).dot(nextWorldPos.clone().sub(camera.position).normalize()) < Number(cfg && cfg.minDot || 0.18)
+                            forward.dot(nextWorldPos.clone().sub(origin).normalize()) < Number(cfg && cfg.minDot || 0.18)
                         )
                     ) {
                         stored.dead = true;

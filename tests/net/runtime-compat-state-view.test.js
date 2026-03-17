@@ -244,3 +244,44 @@ test('GameNetStateView samples remote presentation from snapshot timelines', asy
   assert.ok(Math.abs(sample.moveSpeedNorm - 0.5) < 0.0001);
   assert.ok(Math.abs(sample.velocityY - 0.25) < 0.0001);
 });
+
+test('GameNetStateView returns safe empty values when optional selectors are absent', async () => {
+  const sandbox = {
+    console,
+    Date,
+    Map,
+    THREE: {
+      Vector3: class Vector3 {
+        copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameAbilityFx: null
+      }
+    }
+  };
+
+  await loadScript('../../js/net/state-view.js', sandbox);
+
+  const view = sandbox.globalThis.__MAYHEM_RUNTIME.GameNetStateView.create({
+    buildExpectedWorldMeta() {
+      return {};
+    }
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(view.getExpectedWorldMeta())), {
+    roomId: '',
+    worldSeed: '',
+    worldProfileVersion: 0,
+    worldFlags: {}
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(view.getAuthoritativeThrowableState())), {
+    projectiles: [],
+    fireZones: [],
+    selfThrowables: null
+  });
+  assert.equal(view.getEntityName('missing'), '');
+  assert.equal(view.getRespawnState(), null);
+  assert.equal(view.getGameMode(), '');
+});

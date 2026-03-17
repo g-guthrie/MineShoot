@@ -90,13 +90,26 @@
                                 <button id="party-back-btn" type="button" hidden>Back</button>
                                 <button id="account-toggle-btn" type="button" aria-expanded="false" aria-controls="auth-overlay">Login</button>
                                 <button id="menu-party-id-btn" type="button" title="Copy your player ID">
-                                    <span id="menu-party-id-label">Guest ID</span>
+                                    <span id="menu-party-id-label">Player ID</span>
                                     <span id="menu-party-id-value">------</span>
                                 </button>
                                 <button id="continue-loadout-btn" type="button">Create Room</button>
+                                <div id="active-match-friend-bar" hidden>
+                                    <input id="active-match-friend-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Friend ID">
+                                    <button id="active-match-invite-friend-btn" type="button">Invite Friend</button>
+                                    <button id="active-match-join-friend-btn" type="button">Join Friend</button>
+                                </div>
                             </div>
                             <div id="menu-header-actions">
                                 <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Settings</button>
+                            </div>
+                        </div>
+                        <div id="active-match-header-feedback" class="menu-panel-status menu-status-pill" hidden></div>
+                        <div id="active-match-primary-banner" class="menu-panel-status menu-status-banner" data-rounded-role="container" hidden>
+                            <div id="active-match-primary-banner-copy"></div>
+                            <div id="active-match-primary-banner-actions" class="menu-pill-flow menu-pill-flow-secondary">
+                                <button id="active-match-primary-banner-accept-btn" type="button">Accept Invite</button>
+                                <button id="active-match-primary-banner-dismiss-btn" type="button">Dismiss</button>
                             </div>
                         </div>
                         <div id="menu-inline-toast" hidden></div>
@@ -121,12 +134,14 @@
 
                     <div id="menu-feedback" aria-live="polite" hidden></div>
 
-                    <div id="menu-session-actions" hidden>
-                        <div id="menu-session-stats" hidden>
-                            <div id="menu-session-status">Paused</div>
-                            <div id="menu-session-kd">Change loadout or resume.</div>
+                    <div id="active-match-shell" hidden>
+                        <div id="active-match-pill-grid" hidden>
+                            <div id="active-match-mode-pill">Paused</div>
+                            <div id="active-match-context-pill" hidden></div>
+                            <div id="active-match-primary-stat-pill">Change loadout or resume.</div>
+                            <div id="active-match-secondary-stat-pill" hidden></div>
                         </div>
-                        <div id="menu-session-buttons">
+                        <div id="active-match-action-row">
                             <button id="play-btn" type="button">Resume Match</button>
                             <button id="back-mode-btn" type="button">Leave Game</button>
                         </div>
@@ -264,10 +279,10 @@
                         <div id="loadout-band-actions">
                             <button id="loadout-collapse-btn" type="button" aria-expanded="true">Collapse</button>
                         </div>
-                        <div id="loadout-expanded-shell" class="menu-panel-shell menu-loadout-shell">
+                        <div id="loadout-expanded-shell" class="menu-panel-shell menu-loadout-shell" data-rounded-role="container">
                             <div id="loadout-row">
                                 <section class="loadout-section" data-loadout-section="weapons">
-                                    <div id="weapon-slot-panel" class="menu-panel-shell menu-loadout-panel">
+                                    <div id="weapon-slot-panel" class="menu-panel-shell menu-loadout-panel" data-rounded-role="container">
                                         <div id="weapon-slot-title">Weapons</div>
                                         <div id="weapon-slot-buttons">
                                             <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">Slot 1</button>
@@ -278,7 +293,7 @@
                                 </section>
 
                                 <section class="loadout-section" data-loadout-section="throwable">
-                                    <div id="throwable-slot-panel" class="menu-panel-shell menu-loadout-panel">
+                                    <div id="throwable-slot-panel" class="menu-panel-shell menu-loadout-panel" data-rounded-role="container">
                                         <div id="throwable-slot-title">Throwable</div>
                                         <div id="throwable-category-tabs"></div>
                                         <div id="throwable-choice-grid"></div>
@@ -286,7 +301,7 @@
                                 </section>
 
                                 <section class="loadout-section" data-loadout-section="abilities">
-                                    <div id="ability-slot-panel" class="menu-panel-shell menu-loadout-panel">
+                                    <div id="ability-slot-panel" class="menu-panel-shell menu-loadout-panel" data-rounded-role="container">
                                         <div id="ability-slot-title">Abilities</div>
                                         <div id="ability-slot-buttons">
                                             <button id="ability-slot-primary" class="ability-slot-btn active" type="button" data-slot-index="0">Ability 1</button>

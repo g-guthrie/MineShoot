@@ -88,7 +88,14 @@
             if (mode === 'tdm') {
                 var teamId = String(selfState && selfState.teamId || '');
                 var teamProgress = Number(matchState && matchState.teamProgress && matchState.teamProgress[teamId] || 0);
-                return 'TEAM ' + teamProgress + ' / ' + Number(matchState && matchState.targetProgress || 0);
+                var rules = sharedMatchRules();
+                var opposing = rules && rules.getLeadingOpposingTeam
+                    ? rules.getLeadingOpposingTeam(matchState, teamId)
+                    : { teamId: '', progress: 0 };
+                return 'TEAM ' + teamProgress +
+                    ' / ' + Number(matchState && matchState.targetProgress || 0) +
+                    ' | OPP ' + String(opposing.teamId || '--').toUpperCase() +
+                    ' ' + Number(opposing.progress || 0);
             }
             if (mode === 'lms') {
                 return 'LEFT ' + Math.max(0, Number(matchState && matchState.lms && matchState.lms.remainingPlayers || 0));
@@ -180,17 +187,22 @@
         }
 
         function updateMenuSessionPanel(matchContext) {
-            var statsEl = document.getElementById('menu-session-stats');
-            var statusEl = document.getElementById('menu-session-status');
-            var kdEl = document.getElementById('menu-session-kd');
-            if (!statsEl || !statusEl || !kdEl) return;
+            function emitMenuMatchModel(detail) {
+                if (!window || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
+                var nextKey = JSON.stringify(detail || null);
+                if (updateMenuSessionPanel._lastPayloadKey === nextKey) return;
+                updateMenuSessionPanel._lastPayloadKey = nextKey;
+                window.dispatchEvent(new CustomEvent('mayhem-menu-match-model', {
+                    detail: detail || null
+                }));
+            }
 
             var matchState = matchContext ? matchContext.matchState : null;
             var selfState = matchContext ? matchContext.selfState : null;
             var playing = !!(gameSession && gameSession.isPlaying && gameSession.isPlaying());
 
             if (!runtimeInitialized) {
-                statsEl.hidden = true;
+                emitMenuMatchModel(null);
                 if (gameSession && gameSession.setResumeButtonsVisible) {
                     gameSession.setResumeButtonsVisible(!playing && runtimeInitialized);
                 }
@@ -199,11 +211,19 @@
 
             var pauseState = gameSession && gameSession.getPauseState ? gameSession.getPauseState() : null;
             if (pauseState && pauseState.active) {
-                statsEl.hidden = false;
-                statusEl.textContent = pauseState.reason === 'idle'
-                    ? 'IDLE TIMEOUT :: MATCH DISCONNECTED'
-                    : 'PAUSE MENU :: MATCH DISCONNECTED';
-                kdEl.textContent = 'CONNECTION CLOSED TO LIMIT CLOUDFLARE TRAFFIC';
+                emitMenuMatchModel({
+                    ready: true,
+                    banner: {
+                        kind: 'critical',
+                        tone: 'critical',
+                        title: pauseState.reason === 'idle' ? 'IDLE TIMEOUT' : 'MATCH DISCONNECTED',
+                        detail: 'Connection closed to limit Cloudflare traffic.'
+                    },
+                    modePill: { label: 'MODE', value: String(matchState && matchState.gameMode || 'match').toUpperCase() || 'MATCH' },
+                    contextPill: { label: 'STATE', value: pauseState.reason === 'idle' ? 'DISCONNECTED' : 'PAUSED' },
+                    primaryPill: { label: 'STATUS', value: 'DISCONNECTED' },
+                    secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }
+                });
                 if (gameSession && gameSession.setResumeButtonsVisible) {
                     gameSession.setResumeButtonsVisible(false);
                 }
@@ -214,31 +234,46 @@
             var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
             var lives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
             var charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
-            var matchRules = sharedMatchRules();
+            var modeId = String(matchState && matchState.gameMode || '').toLowerCase();
+            var modeValue = modeId ? modeId.toUpperCase() : 'MATCH';
+            var primaryLabel = modeId === 'lms' ? 'LIVES' : 'KILLS';
+            var primaryValue = modeId === 'lms' ? String(lives) : String(kills);
+            var secondaryLabel = modeId === 'lms' ? 'CHARGE' : 'DEATHS';
+            var secondaryValue = modeId === 'lms' ? String(charge) : String(deaths);
+            var contextLabel = 'STATE';
+            var contextValue = !matchState || !matchState.started
+                ? 'WAITING'
+                : (matchState.ended ? 'RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now()) : 'LIVE');
 
-            statsEl.hidden = false;
-            kdEl.textContent = matchRules && matchRules.formatMenuMatchStats
-                ? matchRules.formatMenuMatchStats(matchState, selfState)
-                : (String(matchState && matchState.gameMode || '') === 'lms'
-                    ? ('LIVES ' + lives + ' | CHARGE ' + charge)
-                    : ('KILLS ' + kills + ' | DEATHS ' + deaths));
-
-            if (matchRules && matchRules.formatMenuMatchStatus) {
-                statusEl.textContent = matchRules.formatMenuMatchStatus(matchState, selfState, {
-                    nowMs: Date.now,
-                    privateRoomPhase: matchContext ? matchContext.privateRoomPhase : '',
-                    respawnState: matchContext ? matchContext.respawnState : null,
-                    resolveEntityName: resolveMatchEntityName
-                });
-            } else {
-                if (!matchState || !matchState.started) {
-                    statusEl.textContent = 'WAITING FOR MATCH START';
-                } else if (matchState.ended) {
-                    statusEl.textContent = winnerLabel(matchState, selfState) + ' WON | RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
+            if (matchState && matchState.ended) {
+                var winner = winnerLabel(matchState, selfState);
+                if (winner) {
+                    contextLabel = 'WINNER';
+                    contextValue = String(winner || '').toUpperCase();
                 } else {
-                    statusEl.textContent = 'FFA ' + kills + ' / ' + Number(matchState.targetProgress || 0).toFixed(0) + ' | LEAD ' + Number(matchState.leaderProgress || 0).toFixed(0);
+                    contextLabel = 'STATE';
+                    contextValue = 'ENDED';
+                }
+                secondaryLabel = 'RESET';
+                secondaryValue = formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now());
+            } else if (matchState && !matchState.ended && matchState.started) {
+                if (modeId !== 'lms' && Number(matchState.targetProgress || 0) > 0) {
+                    contextLabel = 'TARGET';
+                    contextValue = String(Number(matchState.targetProgress || 0).toFixed(0));
+                } else if (modeId !== 'lms' && matchState.leaderProgress != null) {
+                    contextLabel = 'LEAD';
+                    contextValue = String(Number(matchState.leaderProgress || 0).toFixed(0));
                 }
             }
+
+            emitMenuMatchModel({
+                ready: true,
+                banner: null,
+                modePill: { label: 'MODE', value: modeValue },
+                contextPill: { label: contextLabel, value: contextValue },
+                primaryPill: { label: primaryLabel, value: primaryValue },
+                secondaryPill: { label: secondaryLabel, value: secondaryValue }
+            });
 
             if (gameSession && gameSession.setResumeButtonsVisible) {
                 gameSession.setResumeButtonsVisible(!playing && gameSession.canResumeGameplay && gameSession.canResumeGameplay());

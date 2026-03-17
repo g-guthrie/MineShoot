@@ -1,7 +1,7 @@
 Desert biome distribution map
 Biome: desert
 Bounds x:[110, 164] z:[2, 56]  grid:14x14
-Features: 50 high-level placements across 54/196 cells (27.6% occupied)
+Features: 50 high-level placements across 55/196 cells (28.1% occupied)
 
 Dominant feature map
      0  1  2  3  4  5  6  7  8  9 10 11 12 13 
@@ -11,9 +11,9 @@ Dominant feature map
  3 | .  .  .  *  .  D  .  .  .  .  I  .  .  . 
  4 | .  .  .  .  .  .  .  .  .  R  *  .  I  E 
  5 | .  .  .  .  .  .  .  .  .  .  .  .  .  E 
- 6 | .  .  .  .  .  .  *  r  .  R  .  P  I  E 
- 7 | .  *  .  .  .  B  .  H  W  C  *  .  .  . 
- 8 | .  .  .  b  .  .  .  .  *  .  *  P  I  E 
+ 6 | .  .  C  .  .  .  *  r  .  R  C  P  I  E 
+ 7 | .  A  .  .  .  B  .  H  W  .  *  .  .  . 
+ 8 | .  .  .  .  b  .  .  .  *  .  *  P  I  E 
  9 | .  .  r  .  C  .  .  .  C  .  o  R  .  E 
 10 | .  .  F  .  .  .  C  .  .  .  .  .  I  E 
 11 | .  .  .  .  .  .  .  .  .  .  .  .  P  . 
@@ -28,9 +28,9 @@ Density heatmap
  3 | .  .  .  2  .  1  .  .  .  .  1  .  .  . 
  4 | .  .  .  .  .  .  .  .  .  1  2  .  1  1 
  5 | .  .  .  .  .  .  .  .  .  .  .  .  .  1 
- 6 | .  .  .  .  .  .  2  1  .  1  .  1  1  1 
- 7 | .  2  .  .  .  1  .  1  1  1  2  .  .  . 
- 8 | .  .  .  1  .  .  .  .  2  .  2  1  1  1 
+ 6 | .  .  1  .  .  .  2  1  .  1  1  1  1  1 
+ 7 | .  1  .  .  .  1  .  1  1  .  2  .  .  . 
+ 8 | .  .  .  .  1  .  .  .  2  .  2  1  1  1 
  9 | .  .  1  .  1  .  .  .  1  .  1  1  .  1 
 10 | .  .  1  .  .  .  1  .  .  .  .  .  1  1 
 11 | .  .  .  .  .  .  .  .  .  .  .  .  1  . 
@@ -83,7 +83,6 @@ Top dense cells
   r3 c3  count=2  kinds=bone,rock  labels=bone-3, rock-1
   r4 c10  count=2  kinds=pocket,rock  labels=rock-4, shelf-pocket-1
   r6 c6  count=2  kinds=bush,rock  labels=bush-4, rock-2
-  r7 c1  count=2  kinds=arch,cactus  labels=arch-1, cactus-1
   r7 c10  count=2  kinds=bush,rubble  labels=bush-3, rubble-3
   r8 c8  count=2  kinds=bush,rock  labels=bush-2, rock-3
   r8 c10  count=2  kinds=bone,cactus  labels=bone-1, cactus-7
@@ -91,3 +90,4 @@ Top dense cells
   r2 c2  count=1  kinds=dune  labels=dune-2
   r2 c3  count=1  kinds=northWall  labels=north-crumble-band
   r2 c5  count=1  kinds=northWall  labels=north-crumble-band
+  r2 c6  count=1  kinds=northWall  labels=north-crumble-band

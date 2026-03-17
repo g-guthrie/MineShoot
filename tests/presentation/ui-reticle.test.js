@@ -24,6 +24,12 @@ class FakeElement {
     return child;
   }
 
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index >= 0) this.children.splice(index, 1);
+    return child;
+  }
+
   querySelectorAll() {
     return [];
   }
@@ -233,6 +239,26 @@ test('plasma debug reticle shows the projected catch diameter only while active'
 
   harness.GameUI.updatePlasmaState({ visible: false });
   assert.equal(harness.getElement('plasma-reticle').style.display, 'none');
+});
+
+test('damage numbers skip points behind the camera and kill count access stays safe', async () => {
+  const harness = await loadUiHarness();
+  const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 200);
+  camera.position.set(0, 1.6, 0);
+  camera.lookAt(new THREE.Vector3(0, 1.6, -10));
+  camera.updateProjectionMatrix();
+
+  harness.GameUI.updateMatchStatus({ gameMode: 'ffa', started: true, targetProgress: 10, leaderProgress: 4 }, {
+    kills: 3,
+    deaths: 1
+  });
+  assert.equal(harness.GameUI.getKillCount(), 3);
+
+  harness.GameUI.showDamageNumber(new THREE.Vector3(0, 1.6, 5), 25, false, camera, 'body');
+  assert.equal(harness.getElement('damage-numbers').children.length, 0);
+
+  harness.GameUI.showDamageNumber(new THREE.Vector3(0, 1.6, -5), 25, false, camera, 'body');
+  assert.equal(harness.getElement('damage-numbers').children.length, 1);
 });
 
 test('combat radar keeps empty sectors quiet while making distant occupied sectors readable', async () => {

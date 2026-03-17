@@ -70,6 +70,7 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
   const roomState = await getPrivateRoomState(env, roomId);
   const members = await getPrivateRoomMembers(env, roomId);
   if (!roomState) return null;
+  const teamCount = normalizeTeamCount(roomState.team_count);
   const id = env.GLOBAL_ARENA.idFromName(roomId);
   const stub = env.GLOBAL_ARENA.get(id);
   const url = new URL('https://room/private-config');
@@ -81,10 +82,11 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       roomMode: roomState.room_mode,
       roomPhase: roomState.room_phase,
       hostActorId: roomState.host_actor_id,
+      teamCount,
       syncMode: String(syncMode || 'lobby_update'),
       teams: members.map((member) => ({
         actorId: String(member.actor_id || ''),
-        teamId: normalizeTeamId(member.team_id)
+        teamId: normalizeTeamId(member.team_id, teamCount)
       }))
     })
   }).catch(() => null);
@@ -210,6 +212,31 @@ async function createPrivateRoomWithMode(env, request, actor, roomMode) {
   throw new Error('Private room creation failed.');
 }
 
+function countMembersPerTeam(members, allowed) {
+  const counts = {};
+  for (let i = 0; i < allowed.length; i++) counts[allowed[i]] = 0;
+  for (let i = 0; i < members.length; i++) {
+    const teamId = String(members[i] && members[i].team_id || '').trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, teamId)) counts[teamId] += 1;
+  }
+  return counts;
+}
+
+function pickBalancedTeamId(members, allowed) {
+  const counts = countMembersPerTeam(members, allowed);
+  let bestTeamId = allowed[0] || TEAM_ALPHA;
+  let bestCount = Number.MAX_SAFE_INTEGER;
+  for (let i = 0; i < allowed.length; i++) {
+    const teamId = allowed[i];
+    const nextCount = Math.max(0, Number(counts[teamId] || 0));
+    if (nextCount < bestCount) {
+      bestCount = nextCount;
+      bestTeamId = teamId;
+    }
+  }
+  return bestTeamId;
+}
+
 async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   const roomId = normalizePrivateRoomId(rawRoomCode);
   if (!roomId || roomId === 'global') {
@@ -232,7 +259,9 @@ async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   }
   await clearPublicMatchAssignment(env, actor.id);
   await detachActorFromPrivateRoom(env, actor.id);
-  await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, TEAM_ALPHA);
+  const members = await getPrivateRoomMembers(env, roomId);
+  const allowed = activeTeamIds(roomState.team_count);
+  await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, pickBalancedTeamId(members, allowed));
   await touchPrivateRoomById(env, roomId);
   await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
   const state = await buildLobbyState(env, actor, roomId);
@@ -274,21 +303,43 @@ async function invitePartyToPrivateRoom(env, actor, roomId, roomState) {
 async function normalizeMemberTeams(env, roomId, teamCount) {
   const members = await getPrivateRoomMembers(env, roomId);
   const allowed = activeTeamIds(teamCount);
-  let nextIndex = 0;
+  const counts = countMembersPerTeam(members, allowed);
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
     if (allowed.indexOf(String(member.team_id || '').toLowerCase()) >= 0) continue;
-    await moveActorToPrivateRoomTeam(env, member.actor_id, allowed[nextIndex % allowed.length]);
-    nextIndex += 1;
+    let bestTeamId = allowed[0];
+    let bestCount = Number.MAX_SAFE_INTEGER;
+    for (let j = 0; j < allowed.length; j++) {
+      const teamId = allowed[j];
+      const nextCount = Math.max(0, Number(counts[teamId] || 0));
+      if (nextCount < bestCount) {
+        bestCount = nextCount;
+        bestTeamId = teamId;
+      }
+    }
+    await moveActorToPrivateRoomTeam(env, member.actor_id, bestTeamId);
+    counts[bestTeamId] = Math.max(0, Number(counts[bestTeamId] || 0)) + 1;
   }
 }
 
 async function randomizeTeams(env, roomId, teamCount) {
   const members = await getPrivateRoomMembers(env, roomId);
-  const sorted = members.slice().sort((a, b) => String(a.actor_id || '').localeCompare(String(b.actor_id || '')));
   const allowed = activeTeamIds(teamCount);
-  for (let i = 0; i < sorted.length; i++) {
-    await moveActorToPrivateRoomTeam(env, sorted[i].actor_id, allowed[i % allowed.length]);
+  const counts = {};
+  for (let i = 0; i < allowed.length; i++) counts[allowed[i]] = 0;
+  for (let i = 0; i < members.length; i++) {
+    let bestTeamId = allowed[0];
+    let bestCount = Number.MAX_SAFE_INTEGER;
+    for (let j = 0; j < allowed.length; j++) {
+      const teamId = allowed[j];
+      const nextCount = Math.max(0, Number(counts[teamId] || 0));
+      if (nextCount < bestCount) {
+        bestCount = nextCount;
+        bestTeamId = teamId;
+      }
+    }
+    await moveActorToPrivateRoomTeam(env, members[i].actor_id, bestTeamId);
+    counts[bestTeamId] += 1;
   }
 }
 
@@ -367,9 +418,14 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'set_team_count') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can change team count.' }, 403);
+    const previousTeamCount = normalizeTeamCount(currentState.team_count || 2);
     const teamCount = normalizeTeamCount(body.teamCount || 2);
     await setPrivateRoomState(env, currentRoomId, { teamCount });
-    await normalizeMemberTeams(env, currentRoomId, teamCount);
+    if (teamCount < previousTeamCount) {
+      await randomizeTeams(env, currentRoomId, teamCount);
+    } else {
+      await normalizeMemberTeams(env, currentRoomId, teamCount);
+    }
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });

@@ -113,10 +113,10 @@ export const gameplayTuning = {
       { maxDistance: 120, scale: 0.76 }
     ],
     pistol: [
-      { maxDistance: 16, scale: 1.0 },
-      { maxDistance: 28, scale: 0.88 },
-      { maxDistance: 42, scale: 0.72 },
-      { maxDistance: 54, scale: 0.56 }
+      { maxDistance: 12, scale: 1.0 },
+      { maxDistance: 20, scale: 0.88 },
+      { maxDistance: 26, scale: 0.62 },
+      { maxDistance: 28, scale: 0.45 }
     ],
     machinegun: [
       { maxDistance: 16, scale: 1.0 },
@@ -176,8 +176,10 @@ export const gameplayTuning = {
     },
     pistol: {
       name: 'Pistol', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 360, reloadMs: 1350, magazineSize: 10,
-      bodyDamage: 46, headDamage: 96, maxRange: 24, pellets: 12, hipfireSpread: 0.137, adsSpread: 0.225, adsFovDeg: 56, adsMaxRange: 30,
-      aimProfile: { hipfire: { spread: 0.137, maxRange: 24 }, ads: { spread: 0.225, maxRange: 30 } },
+      bodyDamage: 46, headDamage: 96, maxRange: 24, pellets: 12, hipfireSpread: 0.137, adsSpread: 0.225, adsFovDeg: 56, adsMaxRange: 28,
+      aimProfile: { hipfire: { spread: 0.137, maxRange: 24 }, ads: { spread: 0.225, maxRange: 28 } },
+      hipfireCylinderRadiusWu: 0.80,
+      adsCylinderRadiusWu: 1.00,
       singleHitFromPellets: true,
       armorBufferMode: 'normal',
       presentation: {

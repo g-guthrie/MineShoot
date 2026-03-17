@@ -149,10 +149,10 @@
         },
         pistol: {
             niche: 'Quick-swap hand cannon and finisher. It rewards clean aim without behaving like a shotgun.',
-            mechanics: 'Circle-scan / circle ray trace weapon. It is authored as multi-pellet, but `singleHitFromPellets` keeps only the first winning sample, so one shot still deals one damage result.',
+            mechanics: 'World-space cylinder scan weapon. It is authored as multi-pellet, but `singleHitFromPellets` keeps only the first winning sample, so one shot still deals one damage result.',
             tips: [
-                'Use it like a forgiving disc-shaped headhunter: fast draw, strong burst, then reposition.',
-                'Because only one sample wins, accuracy matters more than staying point-blank.'
+                'Use it like a forgiving body-hit finisher: the cylinder is wide, but headshots still reward center alignment.',
+                'The pistol ring is a midrange guide, not a perfect all-distance truth.'
             ]
         },
         sniper: {
@@ -253,11 +253,11 @@
         headDamage: 'Damage dealt on a head hit before falloff scaling.',
         pellets: 'Number of spread samples or pellets fired per trigger pull.',
         hipfireSpread: 'Hipfire spread radius feeding the shot solver.',
-        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim on normal guns; on pistol this is the scan-disc radius that can intentionally grow in ADS.',
+        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim on normal guns; on pistol this remains a compatibility control while the real solver uses a world-space cylinder.',
         maxRange: 'Hipfire distance cap before the shot stops checking for hits.',
         adsMaxRange: 'ADS distance cap. Often longer than hipfire on precision guns.',
         adsFovDeg: 'Zoom level while aiming down sights.',
-        singleHitFromPellets: 'Keeps only the best single winning sample from a multi-sample weapon. This is what makes pistol a circle-scan hand cannon.',
+        singleHitFromPellets: 'Keeps only the best single winning sample from a multi-sample weapon. This is what makes pistol a single-winner cylinder hand cannon.',
         hipfireBloomScale: 'Legacy HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
         adsBloomScale: 'Legacy ADS HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
         'tracer.life': 'How long the visual tracer stays alive.',
@@ -825,7 +825,7 @@
 
     function weaponFireModelLabel(weapon) {
         if (!weapon) return '--';
-        if (weapon.singleHitFromPellets) return 'Circle-scan single winner';
+        if (weapon.singleHitFromPellets) return 'Cylinder single winner';
         if (weapon.primitiveType === 'hitscan_multi') return 'Multi-pellet spread';
         return 'Single-ray hitscan';
     }
@@ -839,6 +839,9 @@
     function weaponAdsSummary(weapon) {
         if (!weapon) return '--';
         if (weapon.id === 'sniper') return 'ADS required before firing';
+        if (weapon.id === 'pistol') {
+            return 'ADS widens the cylinder and extends the reliable body-hit lane';
+        }
         if (weapon.adsSpread < weapon.hipfireSpread) {
             return 'ADS tightens spread from ' + formatSpread(weapon.hipfireSpread) + ' to ' + formatSpread(weapon.adsSpread);
         }
@@ -901,6 +904,8 @@
             { label: 'pellets', value: formatNumber(weapon.pellets, 0), note: WEAPON_TUNABLE_HELP.pellets },
             { label: 'hipfireSpread', value: formatSpread(weapon.hipfireSpread), note: WEAPON_TUNABLE_HELP.hipfireSpread },
             { label: 'adsSpread', value: formatSpread(weapon.adsSpread), note: WEAPON_TUNABLE_HELP.adsSpread },
+            { label: 'hipfireCylinderRadiusWu', value: formatNumber(weapon.hipfireCylinderRadiusWu, 2), note: 'World-space hipfire cylinder radius for pistol-style single-winner weapons.' },
+            { label: 'adsCylinderRadiusWu', value: formatNumber(weapon.adsCylinderRadiusWu, 2), note: 'World-space ADS cylinder radius for pistol-style single-winner weapons.' },
             { label: 'maxRange', value: formatRange(weapon.maxRange), note: WEAPON_TUNABLE_HELP.maxRange },
             { label: 'adsMaxRange', value: formatRange(weapon.adsMaxRange), note: WEAPON_TUNABLE_HELP.adsMaxRange },
             { label: 'adsFovDeg', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: WEAPON_TUNABLE_HELP.adsFovDeg },
@@ -1216,6 +1221,7 @@
                 { label: 'Cadence', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
                 { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.singleHitFromPellets ? 'Single winning sample only.' : 'All pellets may connect.' },
                 { label: 'Spread H / A', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Hipfire versus ADS spread radius.' },
+                { label: 'Cylinder H / A', value: formatNumber(weapon.hipfireCylinderRadiusWu, 2) + ' / ' + formatNumber(weapon.adsCylinderRadiusWu, 2), note: 'World-space cylinder radius for pistol body-hit reliability.' },
                 { label: 'Range H / A', value: formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange), note: 'Range cap before hit checks stop.' },
                 { label: 'ADS FOV', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: 'Lower is more zoom.' }
             ]),
@@ -1328,11 +1334,11 @@
             '<div class="docs-grid">',
             '<section class="docs-card">',
             '<h3>' + escapeHtml(TUNABLE_GROUPS[0].title) + '</h3>',
-            '<div class="docs-callout">Pistol is the signature edge case: <code>hitscan_multi</code> plus <code>singleHitFromPellets</code> makes it a circle-scan single-hit weapon. Shotgun uses the same base family without that gate, so every pellet can land.</div>',
+            '<div class="docs-callout">Pistol is the signature edge case: <code>hitscan_multi</code> plus <code>singleHitFromPellets</code> makes it a single-winner world-space cylinder weapon. Shotgun uses the same base family without that gate, so every pellet can land.</div>',
             renderList([
                 'Single-ray weapons: rifle, machine gun, sniper.',
                 'True multi-pellet weapon: shotgun.',
-                'Circle-scan single winner: pistol.'
+                'World-space cylinder single winner: pistol.'
             ]),
             '</section>',
             '<section class="docs-card">',
@@ -1348,6 +1354,7 @@
             renderList([
                 'Spread is solver input, not cosmetic bloom.',
                 'ADS can change spread, range, zoom, or only some of those depending on the gun.',
+                'Pistol is the edge case now: its real body-hit search volume is a world-space cylinder, not a cone.',
                 'Falloff bands scale final damage by distance instead of hard dropping to zero.'
             ]),
             '</section>',
@@ -1374,7 +1381,8 @@
                 { label: 'singleHitFromPellets', value: 'pistol only', note: WEAPON_TUNABLE_HELP.singleHitFromPellets },
                 { label: 'cooldownMs', value: 'shot cadence', note: WEAPON_TUNABLE_HELP.cooldownMs },
                 { label: 'reloadMs', value: 'downtime', note: WEAPON_TUNABLE_HELP.reloadMs },
-                { label: 'hipfireSpread / adsSpread', value: 'solver cone', note: WEAPON_TUNABLE_HELP.hipfireSpread + ' ' + WEAPON_TUNABLE_HELP.adsSpread },
+                { label: 'hipfireSpread / adsSpread', value: 'legacy angular compatibility', note: WEAPON_TUNABLE_HELP.hipfireSpread + ' ' + WEAPON_TUNABLE_HELP.adsSpread },
+                { label: 'hipfireCylinderRadiusWu / adsCylinderRadiusWu', value: 'pistol solver', note: 'Primary pistol body-hit reliability knobs in world units.' },
                 { label: 'maxRange / adsMaxRange', value: 'distance caps', note: WEAPON_TUNABLE_HELP.maxRange + ' ' + WEAPON_TUNABLE_HELP.adsMaxRange },
                 { label: 'tracer.* / recoil.*', value: 'feel layer', note: 'These are shared feel knobs layered on top of combat behavior.' }
             ]),

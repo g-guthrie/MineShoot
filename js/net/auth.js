@@ -21,18 +21,50 @@
     var uiBound = false;
     var sessionFetchPromise = null;
     var socketPlayerId = '';
+    var FRIENDLY_GUEST_ID_RE = /^[a-z]+-[a-z]+-\d{3}$/i;
     var SOCKET_PLAYER_ID_KEY = 'mayhem.arena.playerId';
     var PUBLIC_SESSION_USER_KEY = 'mayhem.arena.publicUser';
     var runtimeTabToken = '';
     var arenaIdentityReadyPromise = null;
     var identityChannel = null;
     var authUi = null;
+    var GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
+    var GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
 
     function randomToken(prefix) {
         if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
             return String(prefix || '') + globalThis.crypto.randomUUID().replace(/-/g, '');
         }
         return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function guestWord(list) {
+        return String(list[Math.floor(Math.random() * list.length)] || list[0] || 'guest');
+    }
+
+    function makeFriendlyGuestId() {
+        return guestWord(GUEST_ADJECTIVES) + '-' + guestWord(GUEST_NOUNS) + '-' + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    }
+
+    function guestDisplayNameFromId(id) {
+        var raw = String(id || '').trim().toLowerCase();
+        if (!raw) return 'GUEST';
+        return raw.toUpperCase();
+    }
+
+    function normalizeGuestIdentity(nextUser) {
+        var source = nextUser && typeof nextUser === 'object' ? nextUser : {};
+        var normalizedId = String(source.id || source.userId || socketPlayerId || '').trim().toLowerCase();
+        if (!FRIENDLY_GUEST_ID_RE.test(normalizedId)) {
+            normalizedId = makeFriendlyGuestId();
+        }
+        socketPlayerId = normalizedId;
+        return {
+            id: normalizedId,
+            username: String(source.username || source.displayName || guestDisplayNameFromId(normalizedId)),
+            displayName: String(source.displayName || source.username || guestDisplayNameFromId(normalizedId)),
+            classId: String(source.classId || 'abilities')
+        };
     }
 
     function emitAuthChanged() {
@@ -148,7 +180,7 @@
     }
 
     function makeSocketPlayerId() {
-        return randomToken('ply_').slice(0, 28);
+        return makeFriendlyGuestId();
     }
 
     function getSocketPlayerId() {
@@ -157,6 +189,9 @@
             store = sessionStore();
             if (store) {
                 socketPlayerId = String(store.getItem(SOCKET_PLAYER_ID_KEY) || '').trim();
+            }
+            if (socketPlayerId && !FRIENDLY_GUEST_ID_RE.test(socketPlayerId)) {
+                socketPlayerId = '';
             }
             if (!socketPlayerId) {
                 socketPlayerId = makeSocketPlayerId();
@@ -173,31 +208,25 @@
     }
 
     function makePublicSessionUser() {
-        var numericId = Math.floor(100000 + (Math.random() * 900000));
-        return {
+        return normalizeGuestIdentity({
             id: getSocketPlayerId(),
-            username: 'PLAYER ' + String(numericId),
             classId: 'abilities'
-        };
+        });
     }
 
     function makeMenuGuestUser() {
-        var numericId = Math.floor(100000 + (Math.random() * 900000));
-        return {
-            id: 'gst_' + randomToken('').slice(0, 8).toLowerCase(),
-            username: 'PLAYER ' + String(numericId),
+        return normalizeGuestIdentity({
+            id: getSocketPlayerId(),
             classId: 'abilities'
-        };
+        });
     }
 
     function writePublicSessionUser(nextUser) {
         var store = sessionStore();
-        publicSessionUser = nextUser || makePublicSessionUser();
-        publicSessionUser.id = getSocketPlayerId();
-        publicSessionUser.username = String(publicSessionUser.username || makePublicSessionUser().username);
-        publicSessionUser.classId = String(publicSessionUser.classId || 'abilities');
+        publicSessionUser = normalizeGuestIdentity(nextUser || makePublicSessionUser());
         if (store) {
             try {
+                store.setItem(SOCKET_PLAYER_ID_KEY, socketPlayerId);
                 store.setItem(PUBLIC_SESSION_USER_KEY, JSON.stringify(publicSessionUser));
             } catch (_err) {
                 // no-op
@@ -208,7 +237,7 @@
 
     function regenerateArenaIdentity() {
         var store = sessionStore();
-        socketPlayerId = makeSocketPlayerId();
+        socketPlayerId = makeFriendlyGuestId();
         if (store) {
             try {
                 store.setItem(SOCKET_PLAYER_ID_KEY, socketPlayerId);
@@ -216,6 +245,7 @@
                 // no-op
             }
         }
+        menuGuestUser = null;
         return writePublicSessionUser(null);
     }
 
@@ -305,14 +335,15 @@
             if (!publicSessionUser || typeof publicSessionUser !== 'object') {
                 publicSessionUser = makePublicSessionUser();
             }
+            publicSessionUser = normalizeGuestIdentity(publicSessionUser);
             writePublicSessionUser(publicSessionUser);
         }
         return publicSessionUser;
     }
 
     function getMenuGuestUser() {
-        if (!menuGuestUser) {
-            menuGuestUser = makeMenuGuestUser();
+        if (!menuGuestUser || String(menuGuestUser.id || '') !== String(getSocketPlayerId() || '')) {
+            menuGuestUser = normalizeGuestIdentity(makeMenuGuestUser());
         }
         return menuGuestUser;
     }
@@ -332,7 +363,7 @@
             id: String(guest.id || ''),
             username: String(guest.username || 'PLAYER'),
             classId: String(guest.classId || 'abilities'),
-            label: 'GUEST ID',
+            label: 'PLAYER ID',
             kind: 'guest'
         };
     }

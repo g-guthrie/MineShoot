@@ -13,6 +13,18 @@
     function create(opts) {
         opts = opts || {};
 
+        function readArray(name) {
+            var fn = opts[name];
+            var value = typeof fn === 'function' ? fn() : [];
+            return Array.isArray(value) ? value : [];
+        }
+
+        function readMap(name) {
+            var fn = opts[name];
+            var value = typeof fn === 'function' ? fn() : null;
+            return value instanceof Map ? value : new Map();
+        }
+
         function cloneInputState(inputState) {
             return inputState ? {
                 forward: !!inputState.forward,
@@ -173,29 +185,37 @@
         }
 
         function getExpectedWorldMeta() {
-            var expected = opts.buildExpectedWorldMeta(opts.getRoomId());
+            if (typeof opts.buildExpectedWorldMeta !== 'function') {
+                return {
+                    roomId: '',
+                    worldSeed: '',
+                    worldProfileVersion: 0,
+                    worldFlags: {}
+                };
+            }
+            var expected = opts.buildExpectedWorldMeta(typeof opts.getRoomId === 'function' ? opts.getRoomId() : '') || {};
             return {
-                roomId: expected.roomId,
-                worldSeed: expected.worldSeed,
-                worldProfileVersion: expected.worldProfileVersion,
-                worldFlags: opts.cloneWorldFlags(expected.worldFlags)
+                roomId: expected.roomId || '',
+                worldSeed: expected.worldSeed || '',
+                worldProfileVersion: Number(expected.worldProfileVersion || 0),
+                worldFlags: typeof opts.cloneWorldFlags === 'function' ? opts.cloneWorldFlags(expected.worldFlags) : {}
             };
         }
 
         function getWorldMeta() {
-            var worldMeta = opts.getWorldMeta();
+            var worldMeta = typeof opts.getWorldMeta === 'function' ? opts.getWorldMeta() : null;
             if (!worldMeta) return null;
             return {
                 roomId: worldMeta.roomId,
                 worldSeed: worldMeta.worldSeed,
                 worldProfileVersion: worldMeta.worldProfileVersion,
-                worldFlags: opts.cloneWorldFlags(worldMeta.worldFlags)
+                worldFlags: typeof opts.cloneWorldFlags === 'function' ? opts.cloneWorldFlags(worldMeta.worldFlags) : {}
             };
         }
 
         function getEntityStateList() {
             var out = [];
-            opts.getRenderMap().forEach(function (r) {
+            readMap('getRenderMap').forEach(function (r) {
                 out.push({
                     id: r.id,
                     kind: r.kind,
@@ -243,16 +263,16 @@
         }
 
         function getAuthoritativeThrowableState() {
-            var selfState = opts.getSelfState();
+            var selfState = typeof opts.getSelfState === 'function' ? opts.getSelfState() : null;
             return {
-                projectiles: opts.getRemoteProjectileState().slice(),
-                fireZones: opts.getRemoteFireZoneState().slice(),
+                projectiles: readArray('getRemoteProjectileState').slice(),
+                fireZones: readArray('getRemoteFireZoneState').slice(),
                 selfThrowables: (selfState && selfState.throwables) ? selfState.throwables : null
             };
         }
 
         function getSelfAbilityState() {
-            var selfState = opts.getSelfState();
+            var selfState = typeof opts.getSelfState === 'function' ? opts.getSelfState() : null;
             if (!selfState) return null;
             var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
             var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
@@ -277,7 +297,7 @@
         }
 
         function getMatchState() {
-            var matchState = opts.getMatchState();
+            var matchState = typeof opts.getMatchState === 'function' ? opts.getMatchState() : null;
             return matchState ? JSON.parse(JSON.stringify(matchState)) : null;
         }
 
@@ -286,10 +306,10 @@
         }
 
         function getInputSyncState() {
-            var inputSeqHistory = opts.getInputSeqHistory();
+            var inputSeqHistory = readArray('getInputSeqHistory');
             var latestPending = inputSeqHistory.length > 0 ? inputSeqHistory[inputSeqHistory.length - 1] : null;
-            var lastSentSeq = opts.getLastInputSeqSent();
-            var lastAckedSeq = opts.getLastInputSeqAcked();
+            var lastSentSeq = typeof opts.getLastInputSeqSent === 'function' ? opts.getLastInputSeqSent() : 0;
+            var lastAckedSeq = typeof opts.getLastInputSeqAcked === 'function' ? opts.getLastInputSeqAcked() : 0;
             var connectionTiming = opts.getConnectionTimingState ? opts.getConnectionTimingState() : null;
             var lastAcceptedSelfAckAt = opts.getLastAcceptedSelfAckAt ? Number(opts.getLastAcceptedSelfAckAt() || 0) : 0;
             var lastSentInputSample = opts.getLastSentInputSample ? opts.getLastSentInputSample() : null;
@@ -350,7 +370,7 @@
         }
 
         function getPendingInputSamples() {
-            var inputSeqHistory = opts.getInputSeqHistory();
+            var inputSeqHistory = readArray('getInputSeqHistory');
             if (!inputSeqHistory.length) return [];
             var out = [];
             for (var i = 0; i < inputSeqHistory.length; i++) {
@@ -359,7 +379,7 @@
                 out.push({
                     seq: Number(entry.seq || 0),
                     at: Number(entry.at || 0),
-                    dtMs: Math.max(1, Number(entry.dtMs || Math.round(opts.getInputSendInterval() * 1000))),
+                    dtMs: Math.max(1, Number(entry.dtMs || Math.round(((typeof opts.getInputSendInterval === 'function' ? opts.getInputSendInterval() : 0) || 0) * 1000))),
                     yaw: Number(entry.yaw || 0),
                     pitch: Number(entry.pitch || 0),
                     inputState: entry.inputState ? {
@@ -377,7 +397,9 @@
         }
 
         function getRespawnState() {
-            var pendingRespawnInfo = opts.getPendingRespawnInfo();
+            var selfState = getAuthoritativeSelfState();
+            if (selfState && selfState.outOfRound) return null;
+            var pendingRespawnInfo = typeof opts.getPendingRespawnInfo === 'function' ? opts.getPendingRespawnInfo() : null;
             if (!pendingRespawnInfo || !pendingRespawnInfo.active) return null;
             return {
                 active: true,
@@ -388,20 +410,22 @@
 
         function getEntityName(entityId) {
             var id = String(entityId || '');
-            var selfState = opts.getSelfState();
+            var selfState = typeof opts.getSelfState === 'function' ? opts.getSelfState() : null;
             if (!id) return '';
-            if (selfState && id === opts.getSelfId()) return String(selfState.username || selfState.id || '');
-            var snapshotEntity = opts.getSnapshotMap().get(id);
+            if (selfState && id === (typeof opts.getSelfId === 'function' ? opts.getSelfId() : '')) return String(selfState.username || selfState.id || '');
+            var snapshotEntity = readMap('getSnapshotMap').get(id);
             if (snapshotEntity) return String(snapshotEntity.username || snapshotEntity.id || '');
-            var render = opts.getRenderMap().get(id);
+            var render = readMap('getRenderMap').get(id);
             return render ? String(render.username || render.id || '') : '';
         }
 
         function getLockTargets() {
             var out = [];
-            opts.getRenderMap().forEach(function (r) {
+            readMap('getRenderMap').forEach(function (r) {
                 if (!r || !r.alive) return;
-                var worldPos = opts.getRenderCoreWorldPosition(r, new THREE.Vector3());
+                var worldPos = typeof opts.getRenderCoreWorldPosition === 'function'
+                    ? opts.getRenderCoreWorldPosition(r, new THREE.Vector3())
+                    : null;
                 if (!worldPos) return;
                 out.push({
                     targetId: 'net:' + r.id,
@@ -432,16 +456,16 @@
             getRespawnState: getRespawnState,
             getRemotePresentationClock: getRemotePresentationClock,
             sampleRemoteEntityPresentation: sampleRemoteEntityPresentation,
-            getGameMode: function () { return opts.getGameMode() || ''; },
-            getPrivateRoomPhase: function () { return opts.getPrivateRoomPhase() || ''; },
+            getGameMode: function () { return typeof opts.getGameMode === 'function' ? (opts.getGameMode() || '') : ''; },
+            getPrivateRoomPhase: function () { return typeof opts.getPrivateRoomPhase === 'function' ? (opts.getPrivateRoomPhase() || '') : ''; },
             getEntityName: getEntityName,
             getLockTargets: getLockTargets,
             damagePointForEntityId: function (entityId) {
                 return opts.damagePointForEntityId ? opts.damagePointForEntityId(entityId) : null;
             },
-            getEntityMarkerWorldPos: function (entityId) { return opts.markerPointForEntityId(entityId); },
-            getChokeVictimStateForEntity: function (entityId) { return opts.getChokeVictimStateForEntity(entityId); },
-            consumeNotice: function () { return opts.consumeNotice(); },
+            getEntityMarkerWorldPos: function (entityId) { return opts.markerPointForEntityId ? opts.markerPointForEntityId(entityId) : null; },
+            getChokeVictimStateForEntity: function (entityId) { return opts.getChokeVictimStateForEntity ? opts.getChokeVictimStateForEntity(entityId) : null; },
+            consumeNotice: function () { return opts.consumeNotice ? opts.consumeNotice() : ''; },
             consumeThrowAck: function () { return shiftQueue(opts.throwAckQueue); },
             consumeThrowReject: function () { return shiftQueue(opts.throwRejectQueue); },
             consumeThrowableEvent: function () { return shiftQueue(opts.throwableEventQueue); },

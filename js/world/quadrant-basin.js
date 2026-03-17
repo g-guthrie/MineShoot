@@ -152,8 +152,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildExchangeFrontage(centerX, facadeZ, bounds, place, mats, ctx) {
-        var wingCenterLeft = bounds.minX + 3.0;
-        var wingCenterRight = bounds.maxX - 3.0;
+        var wingCenterLeft = bounds.minX + 3.3;
+        var wingCenterRight = bounds.maxX - 3.3;
         var columnOffsets = [-10.1, -6.0, -2.0, 2.0, 6.0, 10.1];
         var lobbyPilasters = [-7.2, -2.4, 2.4, 7.2];
 
@@ -211,18 +211,20 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildTowerStack(centerX, towerZ, bounds, place, mats, ctx) {
+        var towerSideLeftX = bounds.minX + 4.76;
+        var towerSideRightX = bounds.maxX - 4.76;
         place.addBlock(centerX, 9.0, towerZ + 0.2, 24.6, 18.0, 13.2, mats.stoneDark, true);
-        place.addBlock(bounds.minX + 4.4, 9.3, towerZ + 0.58, 8.8, 18.6, 11.6, mats.stoneDark, true);
-        place.addBlock(bounds.maxX - 4.4, 9.1, towerZ + 0.54, 8.8, 18.2, 11.2, mats.stoneDark, true);
+        place.addBlock(towerSideLeftX, 9.3, towerZ + 0.58, 8.8, 18.6, 11.6, mats.stoneDark, true);
+        place.addBlock(towerSideRightX, 9.1, towerZ + 0.54, 8.8, 18.2, 11.2, mats.stoneDark, true);
         place.addBlock(centerX - 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.stoneDark, true);
         place.addBlock(centerX + 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.stoneDark, true);
         place.addBlock(centerX, 10.2, towerZ - 5.42, 15.8, 8.8, 0.92, mats.window, false);
         addWindowStack(place, centerX, 7.05, towerZ + 0.2, 24.6, 13.2, 4, 2.36, mats, 0.68, 0.58);
-        addWindowStack(place, bounds.minX + 4.4, 6.95, towerZ + 0.58, 8.8, 11.6, 4, 2.24, mats, 0.58, 0.46);
-        addWindowStack(place, bounds.maxX - 4.4, 6.95, towerZ + 0.54, 8.8, 11.2, 4, 2.24, mats, 0.58, 0.46);
+        addWindowStack(place, towerSideLeftX, 6.95, towerZ + 0.58, 8.8, 11.6, 4, 2.24, mats, 0.58, 0.46);
+        addWindowStack(place, towerSideRightX, 6.95, towerZ + 0.54, 8.8, 11.2, 4, 2.24, mats, 0.58, 0.46);
         addCornice(place, centerX, 18.1, towerZ + 0.2, 24.6, 13.2, mats);
-        addCornice(place, bounds.minX + 4.4, 18.1, towerZ + 0.58, 8.8, 11.6, mats);
-        addCornice(place, bounds.maxX - 4.4, 18.0, towerZ + 0.54, 8.8, 11.2, mats);
+        addCornice(place, towerSideLeftX, 18.1, towerZ + 0.58, 8.8, 11.6, mats);
+        addCornice(place, towerSideRightX, 18.0, towerZ + 0.54, 8.8, 11.2, mats);
 
         place.addBlock(centerX, 24.8, towerZ - 0.08, 12.6, 13.6, 12.6, mats.stoneDark, true);
         addWindowStack(place, centerX, 21.15, towerZ - 0.08, 12.6, 12.6, 4, 2.34, mats, 0.6, 0.56);
@@ -472,7 +474,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var mats = ensureMats();
         var centerX = (bounds.minX + bounds.maxX) * 0.5;
         var exchange = pt(bounds, 0.50, 0.84);
-        var tower = pt(bounds, 0.50, 0.94);
+        var tower = pt(bounds, 0.50, 0.866);
         var westBlock = pt(bounds, 0.25, 0.62);
         var eastBlock = pt(bounds, 0.81, 0.60);
         var westKiosk = pt(bounds, 0.28, 0.36);

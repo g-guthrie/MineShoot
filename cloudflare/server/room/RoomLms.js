@@ -152,7 +152,8 @@ export function tickLmsMode(room, deps, now) {
       continue;
     }
     const hasCharge = Number(entity.lmsCharge || 0) >= lmsRules.chargePerExtraLife;
-    const canGainLife = Number(entity.lmsLives || 0) < lmsRules.startingLives;
+    const maxLives = Math.max(1, Number(lms.maxLives || lmsRules.maxLives || lmsRules.startingLives || 1));
+    const canGainLife = Number(entity.lmsLives || 0) < maxLives;
     const dx = Number(entity.x || 0) - beacon.x;
     const dz = Number(entity.z || 0) - beacon.z;
     const inRange = Math.sqrt((dx * dx) + (dz * dz)) <= lmsRules.beaconBankRadius;
@@ -171,7 +172,7 @@ export function tickLmsMode(room, deps, now) {
     }
     if (currentNow < Number(entity.lmsBankState.endsAt || 0)) continue;
     entity.lmsCharge = Math.max(0, Number(entity.lmsCharge || 0) - lmsRules.chargePerExtraLife);
-    entity.lmsLives = Math.min(lmsRules.startingLives, Number(entity.lmsLives || 0) + 1);
+    entity.lmsLives = Math.min(maxLives, Number(entity.lmsLives || 0) + 1);
     entity.progressScore = entity.lmsLives;
     entity.lmsBankState = null;
     room.rotateLmsBeacon(currentNow);

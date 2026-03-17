@@ -65,7 +65,7 @@ test('pistol weapon profile explains the circle-scan single-winner behavior', as
   const pistol = data.weapons.find((weapon) => weapon.id === 'pistol');
 
   assert.ok(pistol);
-  assert.equal(docs.weaponFireModelLabel(pistol), 'Circle-scan single winner');
+  assert.equal(docs.weaponFireModelLabel(pistol), 'Cylinder single winner');
 
   const combatRows = docs.buildWeaponCombatRows(pistol);
   const gateRow = combatRows.find((row) => row.label === 'singleHitFromPellets');
@@ -74,7 +74,8 @@ test('pistol weapon profile explains the circle-scan single-winner behavior', as
 
   docs.setState({ selectedWeaponId: 'pistol' });
   const html = docs.buildContent('weapons');
-  assert.match(html, /Circle-scan \/ circle ray trace weapon/i);
+  assert.match(html, /World-space cylinder scan weapon/i);
+  assert.match(html, /midrange guide/i);
   assert.match(html, /singleHitFromPellets/i);
 });
 
@@ -84,6 +85,7 @@ test('tunables page calls out the pistol versus shotgun spread-model split', asy
 
   assert.match(html, /pistol is the signature edge case/i);
   assert.match(html, /Shotgun uses the same base family without that gate, so every pellet can land/i);
+  assert.match(html, /world-space cylinder/i);
   assert.match(html, /primitiveType/i);
 });
 

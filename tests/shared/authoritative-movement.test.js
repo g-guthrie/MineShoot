@@ -101,3 +101,19 @@ test('authoritative movement still starts a jump while ADS is active', () => {
   assert.equal(entity.isGrounded, false);
   assert.ok(entity.velocityY > 0);
 });
+
+test('authoritative movement leaves positions unconstrained when bounds are absent', () => {
+  const entity = createEntity({ x: 10, z: 10 });
+  const input = createMovementInputState();
+  input.forward = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.1,
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(entity.x, 10);
+  assert.ok(entity.z < 9.21 && entity.z > 9.19);
+});

@@ -1,3 +1,42 @@
+const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
+
+function normalizeTeamIds(rawTeamIds, fallbackTeamIds) {
+  const source = Array.isArray(rawTeamIds) && rawTeamIds.length ? rawTeamIds : fallbackTeamIds;
+  const fallback = Array.isArray(fallbackTeamIds) && fallbackTeamIds.length ? fallbackTeamIds : ['alpha', 'bravo'];
+  const out = [];
+  for (let i = 0; i < source.length; i++) {
+    const teamId = String(source[i] || '').trim().toLowerCase();
+    if (ROOM_TEAM_IDS.indexOf(teamId) < 0 || out.indexOf(teamId) >= 0) continue;
+    out.push(teamId);
+  }
+  return out.length >= 2 ? out : fallback.slice(0, 2);
+}
+
+function activeTeamIds(room, deps) {
+  const fallback = [deps.teamAlpha || 'alpha', deps.teamBravo || 'bravo'];
+  if (room && room.privateRoomConfig) {
+    if (Array.isArray(room.privateRoomConfig.teamIds) && room.privateRoomConfig.teamIds.length) {
+      return normalizeTeamIds(room.privateRoomConfig.teamIds, fallback);
+    }
+    const teamCount = Math.max(2, Math.min(4, Math.round(Number(room.privateRoomConfig.teamCount || 2) || 2)));
+    return normalizeTeamIds(ROOM_TEAM_IDS.slice(0, teamCount), fallback);
+  }
+  if (room && room.matchState && Array.isArray(room.matchState.teamIds) && room.matchState.teamIds.length) {
+    return normalizeTeamIds(room.matchState.teamIds, fallback);
+  }
+  return fallback;
+}
+
+function buildTeamStatMap(teamIds, source) {
+  const out = {};
+  const ids = Array.isArray(teamIds) ? teamIds : [];
+  for (let i = 0; i < ids.length; i++) {
+    const teamId = ids[i];
+    out[teamId] = Number(source && source[teamId] || 0);
+  }
+  return out;
+}
+
 export function syncPrivateRoomMatchState(room, deps) {
   deps = deps || {};
   const isPrivateMatchRoom = deps.isPrivateMatchRoom;
@@ -15,15 +54,36 @@ export function syncPrivateRoomMatchState(room, deps) {
     : (requestedMode === gameModeLms ? gameModeLms : gameModeFfa);
   room.gameMode = nextMode;
   room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
+  const teamIds = nextMode === gameModeTdm ? activeTeamIds(room, deps) : [];
+  room.matchState.teamIds = teamIds.slice();
+  if (nextMode === gameModeTdm) {
+    room.matchState.teamProgress = buildTeamStatMap(teamIds, room.matchState.teamProgress);
+    room.matchState.teamBaselineSize = buildTeamStatMap(teamIds, room.matchState.teamBaselineSize);
+  }
   room.matchState.started = String((room.privateRoomConfig && room.privateRoomConfig.roomPhase) || '') === 'active';
   room.matchState.startedAt = room.matchState.started ? nowMs() : 0;
   const teams = (room.privateRoomConfig && room.privateRoomConfig.teams) || new Map();
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player') continue;
     player.teamId = room.gameMode === gameModeTdm
-      ? String(teams.get(player.actorId || player.id) || teamAlpha)
+      ? String(teams.get(player.actorId || player.id) || teamIds[0] || teamAlpha)
       : '';
     player.progressScore = 0;
+  }
+  if (room.gameMode === gameModeTdm) {
+    for (let i = 0; i < teamIds.length; i++) {
+      const teamId = teamIds[i];
+      room.matchState.teamBaselineSize[teamId] = 0;
+    }
+    for (const player of room.players.values()) {
+      if (!player || player.fixtureType === 'sim_player') continue;
+      if (!Object.prototype.hasOwnProperty.call(room.matchState.teamBaselineSize, player.teamId)) continue;
+      room.matchState.teamBaselineSize[player.teamId] += 1;
+    }
+    for (let i = 0; i < teamIds.length; i++) {
+      const teamId = teamIds[i];
+      room.matchState.teamBaselineSize[teamId] = Math.max(1, Number(room.matchState.teamBaselineSize[teamId] || 0));
+    }
   }
 }
 
@@ -53,24 +113,30 @@ export function resetPublicRoomToIdle(room, deps) {
 
 export function assignPlayerToCurrentTeam(room, player, deps) {
   deps = deps || {};
-  const teamAlpha = deps.teamAlpha || 'alpha';
-  const teamBravo = deps.teamBravo || 'bravo';
+  const teamIds = activeTeamIds(room, deps);
   if (!player) return '';
   const progress = (room.matchState && room.matchState.teamProgress) || {};
-  let alphaCount = 0;
-  let bravoCount = 0;
+  const counts = {};
+  for (let i = 0; i < teamIds.length; i++) counts[teamIds[i]] = 0;
   for (const other of room.players.values()) {
     if (!other || other.fixtureType === 'sim_player' || other.id === player.id) continue;
-    if (other.teamId === teamAlpha) alphaCount++;
-    else if (other.teamId === teamBravo) bravoCount++;
+    if (Object.prototype.hasOwnProperty.call(counts, other.teamId)) counts[other.teamId] += 1;
   }
-  let teamId = teamAlpha;
-  if (alphaCount > bravoCount) {
-    teamId = teamBravo;
-  } else if (alphaCount === bravoCount) {
-    const alphaProgress = Number(progress[teamAlpha] || 0);
-    const bravoProgress = Number(progress[teamBravo] || 0);
-    teamId = alphaProgress <= bravoProgress ? teamAlpha : teamBravo;
+  let teamId = teamIds[0] || '';
+  let bestCount = Number.MAX_SAFE_INTEGER;
+  let bestProgress = Number.MAX_SAFE_INTEGER;
+  for (let i = 0; i < teamIds.length; i++) {
+    const nextTeamId = teamIds[i];
+    const nextCount = Math.max(0, Number(counts[nextTeamId] || 0));
+    const nextProgress = Number(progress[nextTeamId] || 0);
+    if (
+      nextCount < bestCount ||
+      (nextCount === bestCount && nextProgress < bestProgress)
+    ) {
+      teamId = nextTeamId;
+      bestCount = nextCount;
+      bestProgress = nextProgress;
+    }
   }
   player.teamId = teamId;
   return teamId;
@@ -108,8 +174,7 @@ export function startPublicMatchIfReady(room, deps) {
   const gameModeTdm = deps.gameModeTdm || 'tdm';
   const gameModeLms = deps.gameModeLms || 'lms';
   const publicRoomStartThresholdForMode = deps.publicRoomStartThresholdForMode;
-  const teamAlpha = deps.teamAlpha || 'alpha';
-  const teamBravo = deps.teamBravo || 'bravo';
+  const teamIds = activeTeamIds(room, deps);
 
   if (!room.isPublicMatchRoom()) return false;
   if (!room.matchState) room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
@@ -131,14 +196,9 @@ export function startPublicMatchIfReady(room, deps) {
     ? Number(deps.tdmTargetProgress || 10)
     : (room.gameMode === gameModeFfa ? Number(deps.ffaTargetProgress || 10) : 0);
   room.matchState.matchBaselinePlayerCount = connectedCount;
-  room.matchState.teamProgress = {
-    [teamAlpha]: 0,
-    [teamBravo]: 0
-  };
-  room.matchState.teamBaselineSize = {
-    [teamAlpha]: 0,
-    [teamBravo]: 0
-  };
+  room.matchState.teamIds = room.gameMode === gameModeTdm ? teamIds.slice() : (room.matchState.teamIds || []);
+  room.matchState.teamProgress = buildTeamStatMap(teamIds, null);
+  room.matchState.teamBaselineSize = buildTeamStatMap(teamIds, null);
 
   if (room.gameMode === gameModeFfa) {
     for (const player of room.players.values()) {
@@ -153,15 +213,17 @@ export function startPublicMatchIfReady(room, deps) {
       if (!player || player.fixtureType === 'sim_player') continue;
       assignPlayerToCurrentTeam(room, player, deps);
     }
-    let alphaSize = 0;
-    let bravoSize = 0;
+    const teamSizes = buildTeamStatMap(teamIds, null);
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
-      if (player.teamId === teamAlpha) alphaSize++;
-      else if (player.teamId === teamBravo) bravoSize++;
+      if (Object.prototype.hasOwnProperty.call(teamSizes, player.teamId)) {
+        teamSizes[player.teamId] += 1;
+      }
     }
-    room.matchState.teamBaselineSize[teamAlpha] = Math.max(1, alphaSize);
-    room.matchState.teamBaselineSize[teamBravo] = Math.max(1, bravoSize);
+    for (let i = 0; i < teamIds.length; i++) {
+      const teamId = teamIds[i];
+      room.matchState.teamBaselineSize[teamId] = Math.max(1, Number(teamSizes[teamId] || 0));
+    }
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
       player.progressScore = 0;
@@ -213,8 +275,6 @@ export function updateLeaderProgress(room, deps) {
   deps = deps || {};
   const gameModeFfa = deps.gameModeFfa || 'ffa';
   const gameModeLms = deps.gameModeLms || 'lms';
-  const teamAlpha = deps.teamAlpha || 'alpha';
-  const teamBravo = deps.teamBravo || 'bravo';
   if (!room.matchState) return;
 
   if (room.gameMode === gameModeFfa) {
@@ -253,10 +313,13 @@ export function updateLeaderProgress(room, deps) {
     return;
   }
 
-  const alpha = Number((room.matchState.teamProgress && room.matchState.teamProgress[teamAlpha]) || 0);
-  const bravo = Number((room.matchState.teamProgress && room.matchState.teamProgress[teamBravo]) || 0);
+  const teamIds = activeTeamIds(room, deps);
+  let leadingProgress = 0;
+  for (let i = 0; i < teamIds.length; i++) {
+    leadingProgress = Math.max(leadingProgress, Number((room.matchState.teamProgress && room.matchState.teamProgress[teamIds[i]]) || 0));
+  }
   room.matchState.leaderId = '';
-  room.matchState.leaderProgress = Number(Math.max(alpha, bravo).toFixed(3));
+  room.matchState.leaderProgress = Number(leadingProgress.toFixed(3));
 }
 
 export function finishPublicMatch(room, deps, winnerId, winnerTeam) {

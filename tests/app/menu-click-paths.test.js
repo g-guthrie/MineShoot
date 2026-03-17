@@ -59,7 +59,29 @@ class FakeElement {
   }
 
   setAttribute(name, value) {
-    this.attributes[String(name || '')] = String(value || '');
+    const normalized = String(name || '');
+    const nextValue = String(value || '');
+    this.attributes[normalized] = nextValue;
+    if (normalized.indexOf('data-') === 0) {
+      const key = normalized.slice(5).replace(/-([a-z])/g, (_match, chr) => chr.toUpperCase());
+      this.dataset[key] = nextValue;
+    }
+  }
+
+  removeAttribute(name) {
+    const normalized = String(name || '');
+    delete this.attributes[normalized];
+    if (normalized.indexOf('data-') === 0) {
+      const key = normalized.slice(5).replace(/-([a-z])/g, (_match, chr) => chr.toUpperCase());
+      delete this.dataset[key];
+    }
+  }
+
+  getAttribute(name) {
+    const normalized = String(name || '');
+    return Object.prototype.hasOwnProperty.call(this.attributes, normalized)
+      ? this.attributes[normalized]
+      : null;
   }
 
   focus() {
@@ -93,9 +115,94 @@ class FakeElement {
       });
     }
   }
+
+  input(event = {}) {
+    const handlers = this.listeners.get('input') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'input',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
+
+  dragstart(event = {}) {
+    const handlers = this.listeners.get('dragstart') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'dragstart',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
+
+  dragover(event = {}) {
+    const handlers = this.listeners.get('dragover') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'dragover',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
+
+  dragleave(event = {}) {
+    const handlers = this.listeners.get('dragleave') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'dragleave',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
+
+  drop(event = {}) {
+    const handlers = this.listeners.get('drop') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'drop',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
+
+  dragend(event = {}) {
+    const handlers = this.listeners.get('dragend') || [];
+    for (const handler of handlers) {
+      handler.call(this, {
+        type: 'dragend',
+        target: this,
+        currentTarget: this,
+        preventDefault() {},
+        stopPropagation() {},
+        ...event
+      });
+    }
+  }
 }
 
 async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
+  const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/app/lobby-controller.js', import.meta.url), 'utf8');
 
   const storageMap = new Map();
@@ -144,6 +251,16 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'menu-party-id-btn'],
     ['span', 'menu-party-id-label'],
     ['span', 'menu-party-id-value'],
+    ['div', 'active-match-friend-bar'],
+    ['input', 'active-match-friend-id-input'],
+    ['button', 'active-match-invite-friend-btn'],
+    ['button', 'active-match-join-friend-btn'],
+    ['div', 'active-match-header-feedback'],
+    ['div', 'active-match-primary-banner'],
+    ['div', 'active-match-primary-banner-copy'],
+    ['div', 'active-match-primary-banner-actions'],
+    ['button', 'active-match-primary-banner-accept-btn'],
+    ['button', 'active-match-primary-banner-dismiss-btn'],
     ['input', 'party-id-input'],
     ['button', 'invite-friend-btn'],
     ['button', 'join-friend-btn'],
@@ -170,6 +287,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'alt-mode-toggle'],
     ['div', 'dev-overlay'],
     ['button', 'dev-close-btn'],
+    ['div', 'menu-body'],
     ['div', 'mode-buttons'],
     ['button', 'mode-local-multiplayer-btn'],
     ['section', 'menu-screen-mode'],
@@ -192,10 +310,12 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['div', 'room-access-status'],
     ['button', 'loadout-start-btn'],
     ['button', 'continue-loadout-btn'],
-    ['div', 'menu-session-actions'],
-    ['div', 'menu-session-stats'],
-    ['div', 'menu-session-status'],
-    ['div', 'menu-session-kd'],
+    ['div', 'active-match-shell'],
+    ['div', 'active-match-pill-grid'],
+    ['div', 'active-match-mode-pill'],
+    ['div', 'active-match-context-pill'],
+    ['div', 'active-match-primary-stat-pill'],
+    ['div', 'active-match-secondary-stat-pill'],
     ['button', 'play-btn'],
     ['button', 'back-mode-btn'],
     ['div', 'leave-confirm-overlay'],
@@ -226,13 +346,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'private-room-randomize-btn'],
     ['button', 'private-room-start-btn'],
     ['button', 'private-room-enter-btn'],
+    ['div', 'private-room-unassigned-wrap'],
     ['div', 'private-room-unassigned'],
-    ['div', 'private-room-team-alpha'],
-    ['div', 'private-room-team-bravo'],
-    ['div', 'private-room-team-charlie-wrap'],
-    ['div', 'private-room-team-delta-wrap'],
-    ['div', 'private-room-team-charlie'],
-    ['div', 'private-room-team-delta']
+    ['div', 'private-room-roster-grid']
   ];
 
   for (const [tag, id] of ids) {
@@ -246,10 +362,14 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   documentObj.elements['room-share-panel'].hidden = true;
   documentObj.elements['private-room-view'].hidden = true;
   documentObj.elements['private-room-enter-btn'].hidden = true;
-  documentObj.elements['menu-session-actions'].hidden = true;
+  documentObj.elements['active-match-shell'].hidden = true;
   documentObj.elements['menu-return-btn'].hidden = true;
   documentObj.elements['party-back-btn'].hidden = true;
   documentObj.elements['menu-party-hero'].hidden = true;
+  documentObj.elements['active-match-friend-bar'].hidden = true;
+  documentObj.elements['active-match-header-feedback'].hidden = true;
+  documentObj.elements['active-match-primary-banner'].hidden = true;
+  documentObj.elements['active-match-primary-banner-actions'].hidden = true;
   documentObj.elements['social-direct-invite-banner'].hidden = true;
   documentObj.elements['menu-social-friends-pane'].hidden = !loggedIn;
   documentObj.elements['menu-inline-toast'].hidden = true;
@@ -306,14 +426,70 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
       roomMode: 'tdm',
       roomPhase: 'lobby',
       hostActorId: 'usr_alpha',
+      teamCount: 2,
+      teamIds: ['alpha', 'bravo'],
       memberCount: 1,
       teams: {
         alpha: [{ id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true }],
-        bravo: []
+        bravo: [],
+        charlie: [],
+        delta: []
       },
       members: [{ id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true }]
     }
   };
+
+  function activePrivateRoomTeamIds() {
+    return Array.isArray(privateRoomState.room.teamIds) && privateRoomState.room.teamIds.length
+      ? privateRoomState.room.teamIds.slice()
+      : ['alpha', 'bravo'];
+  }
+
+  function rebuildPrivateRoomMembers() {
+    const teamIds = activePrivateRoomTeamIds();
+    const all = [];
+    for (const teamId of ['alpha', 'bravo', 'charlie', 'delta']) {
+      const entries = Array.isArray(privateRoomState.room.teams[teamId]) ? privateRoomState.room.teams[teamId] : [];
+      for (const entry of entries) {
+        if (!entry) continue;
+        all.push({
+          ...entry,
+          teamId: teamId
+        });
+      }
+    }
+    privateRoomState.room.members = all.filter((entry, index, list) =>
+      list.findIndex((candidate) => candidate && candidate.id === entry.id) === index
+    );
+    privateRoomState.room.memberCount = privateRoomState.room.members.length;
+    privateRoomState.room.teamCount = teamIds.length;
+    privateRoomState.room.teamIds = teamIds;
+  }
+
+  function rebalancePrivateRoomTeams() {
+    const teamIds = activePrivateRoomTeamIds();
+    const members = privateRoomState.room.members.slice().sort((left, right) => String(left.id || '').localeCompare(String(right.id || '')));
+    for (const teamId of ['alpha', 'bravo', 'charlie', 'delta']) {
+      privateRoomState.room.teams[teamId] = [];
+    }
+    const counts = {};
+    for (const teamId of teamIds) counts[teamId] = 0;
+    for (const member of members) {
+      let bestTeamId = teamIds[0];
+      let bestCount = Number.MAX_SAFE_INTEGER;
+      for (const teamId of teamIds) {
+        const nextCount = Number(counts[teamId] || 0);
+        if (nextCount < bestCount) {
+          bestCount = nextCount;
+          bestTeamId = teamId;
+        }
+      }
+      member.teamId = bestTeamId;
+      privateRoomState.room.teams[bestTeamId].push(member);
+      counts[bestTeamId] += 1;
+    }
+    rebuildPrivateRoomMembers();
+  }
 
   const windowObj = {
     listeners: new Map(),
@@ -392,7 +568,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
       getPartyIdentity() {
         return loggedIn
           ? { id: 'usr_alpha', username: 'ALPHA', label: 'Player ID', kind: 'account' }
-          : { id: 'gst_alpha', username: 'GUEST', label: 'Guest ID', kind: 'guest' };
+          : { id: 'amber-otter-314', username: 'AMBER-OTTER-314', label: 'Player ID', kind: 'guest' };
       },
       isLoggedIn() {
         return !!loggedIn;
@@ -416,16 +592,6 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
         return function () {};
       }
     },
-    GameLobbyPrivateRoomView: {
-      create(ctx) {
-        return {
-          applyState(nextState) {
-            const room = nextState && nextState.room ? nextState.room : null;
-            ctx.privateRoomSummaryEl.textContent = room ? `Room ${room.roomCode}` : '';
-          }
-        };
-      }
-    },
     GameLobbySession: {
       create(callbacks) {
         Object.assign(sessionCallbacks, callbacks);
@@ -447,8 +613,11 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
               hasPrivateRoom: !!room,
               privateRoomPhase: room ? room.roomPhase : '',
               privateRoomMode: room ? room.roomMode : '',
-              canEditPrivateRoom: !!room,
-              canRandomizeTeams: !!room,
+              privateRoomInviteLocked: false,
+              canTogglePrivateRoomInviteLock: !!room,
+              canInvitePartyToPrivateRoom: !!room,
+              canEditPrivateRoom: !!(room && room.roomPhase === 'lobby'),
+              canRandomizeTeams: !!(room && room.roomPhase === 'lobby' && room.roomMode === 'tdm'),
               canStartPrivateRoom: !!(room && room.roomPhase === 'lobby')
             };
           },
@@ -520,7 +689,16 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
             callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
           },
+          setPrivateRoomTeamCount(teamCount) {
+            privateRoomState.room.teamCount = Number(teamCount || 2);
+            privateRoomState.room.teamIds = ['alpha', 'bravo', 'charlie', 'delta'].slice(0, privateRoomState.room.teamCount);
+            rebalancePrivateRoomTeams();
+            callbacks.onPrivateRoomStateChanged(privateRoomState);
+            return Promise.resolve({ state: privateRoomState });
+          },
           randomizePrivateRoomTeams() {
+            rebalancePrivateRoomTeams();
+            callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
           },
           startPrivateRoomMatch() {
@@ -529,13 +707,16 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
             return Promise.resolve({ state: privateRoomState });
           },
           movePrivateRoomMember(memberId, nextTeamId) {
-            const all = [...privateRoomState.room.teams.alpha, ...privateRoomState.room.teams.bravo];
+            const teamIds = activePrivateRoomTeamIds();
+            const all = privateRoomState.room.members.slice();
             const member = all.find((entry) => entry.id === memberId);
             if (member) {
-              privateRoomState.room.teams.alpha = privateRoomState.room.teams.alpha.filter((entry) => entry.id !== memberId);
-              privateRoomState.room.teams.bravo = privateRoomState.room.teams.bravo.filter((entry) => entry.id !== memberId);
-              member.teamId = nextTeamId;
-              privateRoomState.room.teams[nextTeamId].push(member);
+              for (const teamId of ['alpha', 'bravo', 'charlie', 'delta']) {
+                privateRoomState.room.teams[teamId] = privateRoomState.room.teams[teamId].filter((entry) => entry.id !== memberId);
+              }
+              member.teamId = teamIds.includes(nextTeamId) ? nextTeamId : teamIds[0];
+              privateRoomState.room.teams[member.teamId].push(member);
+              rebuildPrivateRoomMembers();
             }
             callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
@@ -585,7 +766,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   sandbox.globalThis.navigator = sandbox.navigator;
   sandbox.globalThis.CustomEvent = sandbox.CustomEvent;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(viewCode, context);
+  vm.runInContext(code, context);
 
   sandbox.__MAYHEM_RUNTIME.GameLobbyController.init({
     prepareMenu() {},
@@ -613,6 +796,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
 
   return {
     elements: documentObj.elements,
+    privateRoomState,
     storageMap,
     runPartyActionCalls,
     friendActionCalls,
@@ -630,6 +814,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     },
     emitSessionState(detail) {
       windowObj.dispatchEvent({ type: 'mayhem-session-state', detail });
+    },
+    emitMatchMenuModel(detail) {
+      windowObj.dispatchEvent({ type: 'mayhem-menu-match-model', detail });
     }
   };
 }
@@ -650,6 +837,7 @@ test('menu boots on the main screen with play ffa as the default launch action',
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
   assert.equal(elements['account-toggle-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, false);
+  assert.equal(elements['active-match-friend-bar'].hidden, true);
   assert.equal(elements['invite-friend-btn'].hidden, false);
   assert.equal(elements['join-friend-btn'].hidden, false);
   assert.equal(elements['menu-social-friends-pane'].hidden, false);
@@ -683,7 +871,7 @@ test('logged-out home header shows login and guest id together', async () => {
   const { elements } = harness;
 
   assert.equal(elements['account-toggle-btn'].hidden, false);
-  assert.equal(elements['menu-party-id-label'].textContent, 'Guest ID');
+  assert.equal(elements['menu-party-id-label'].textContent, 'Player ID');
   assert.equal(elements['continue-loadout-btn'].hidden, false);
   assert.equal(elements['menu-social-friends-pane'].hidden, true);
 });
@@ -864,8 +1052,18 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(launchCalls[0].modeId, 'cloud_multiplayer');
   assert.equal(launchCalls[0].options.gameMode, 'tdm');
   assert.equal(elements['menu-feedback'].hidden, true);
-  assert.equal(elements['room-access-status'].hidden, false);
-  assert.equal(elements['room-access-status'].textContent, 'Pointer lock denied.');
+  assert.equal(elements['menu-body'].hidden, true);
+  assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
+  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
+  assert.equal(elements['menu-screen-mode'].hidden, true);
+  assert.equal(elements['menu-home-hero'].hidden, true);
+  assert.equal(elements['menu-social-hero'].hidden, true);
+  assert.equal(elements['menu-party-hero'].hidden, true);
+  assert.equal(elements['continue-loadout-btn'].hidden, true);
+  assert.equal(elements['active-match-friend-bar'].hidden, false);
+  assert.equal(elements['room-access-status'].hidden, true);
 });
 
 test('main room action creates a room and opens the party surface', async () => {
@@ -891,6 +1089,202 @@ test('existing private room changes the room action label to open room', async (
   await harness.flush();
 
   assert.equal(elements['continue-loadout-btn'].textContent, 'ROOM #ROOM1');
+});
+
+test('private room team board grows and shrinks lanes as team count changes', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitPrivateRoomState();
+  await harness.flush();
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+  assert.equal(elements['private-room-roster-grid'].children.length, 2);
+  assert.equal(elements['private-room-roster-grid'].children[0].dataset.teamId, 'alpha');
+  assert.equal(elements['private-room-roster-grid'].children[1].dataset.teamId, 'bravo');
+  assert.equal(elements['private-room-roster-grid'].children[0].children[1].attributes['data-rounded-role'], 'container');
+
+  elements['private-room-teams-4-btn'].click();
+  await harness.flush();
+  assert.equal(elements['private-room-roster-grid'].children.length, 4);
+  assert.equal(elements['private-room-roster-grid'].children[2].dataset.teamId, 'charlie');
+  assert.equal(elements['private-room-roster-grid'].children[3].dataset.teamId, 'delta');
+
+  elements['private-room-teams-3-btn'].click();
+  await harness.flush();
+  assert.equal(elements['private-room-roster-grid'].children.length, 3);
+  assert.equal(elements['private-room-roster-grid'].children[2].dataset.teamId, 'charlie');
+});
+
+test('private room drag-and-drop moves player pills between generated team lanes', async () => {
+  const harness = await loadHarness();
+  const { elements, privateRoomState } = harness;
+
+  privateRoomState.room.teamCount = 3;
+  privateRoomState.room.teamIds = ['alpha', 'bravo', 'charlie'];
+  privateRoomState.room.teams = {
+    alpha: [
+      { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+      { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+    ],
+    bravo: [],
+    charlie: [],
+    delta: []
+  };
+  privateRoomState.room.members = [
+    { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+    { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+  ];
+  privateRoomState.room.memberCount = 2;
+  harness.emitPrivateRoomState();
+  await harness.flush();
+
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+
+  const alphaTray = elements['private-room-roster-grid'].children[0].children[1];
+  const charlieTray = elements['private-room-roster-grid'].children[2].children[1];
+  const bravoPill = alphaTray.children[1];
+  assert.equal(bravoPill.attributes['data-rounded-role'], 'container');
+  const dataTransfer = {
+    _values: {},
+    setData(type, value) {
+      this._values[type] = value;
+    },
+    getData(type) {
+      return this._values[type] || '';
+    }
+  };
+
+  bravoPill.dragstart({ dataTransfer });
+  charlieTray.dragover({ dataTransfer });
+  charlieTray.drop({ dataTransfer });
+  await harness.flush();
+
+  assert.equal(privateRoomState.room.teams.alpha.length, 1);
+  assert.equal(privateRoomState.room.teams.charlie.length, 1);
+  assert.equal(privateRoomState.room.teams.charlie[0].id, 'usr_bravo');
+});
+
+test('private room drag end clears drag-over highlighting', async () => {
+  const harness = await loadHarness();
+  const { elements, privateRoomState } = harness;
+
+  privateRoomState.room.teamCount = 3;
+  privateRoomState.room.teamIds = ['alpha', 'bravo', 'charlie'];
+  privateRoomState.room.teams = {
+    alpha: [
+      { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+      { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+    ],
+    bravo: [],
+    charlie: [],
+    delta: []
+  };
+  privateRoomState.room.members = [
+    { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+    { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+  ];
+  privateRoomState.room.memberCount = 2;
+  harness.emitPrivateRoomState();
+  await harness.flush();
+
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+
+  const alphaTray = elements['private-room-roster-grid'].children[0].children[1];
+  const charlieTray = elements['private-room-roster-grid'].children[2].children[1];
+  const bravoPill = alphaTray.children[1];
+  const dataTransfer = {
+    _values: {},
+    setData(type, value) {
+      this._values[type] = value;
+    },
+    getData(type) {
+      return this._values[type] || '';
+    }
+  };
+
+  bravoPill.dragstart({ dataTransfer });
+  charlieTray.dragover({ dataTransfer });
+  assert.equal(charlieTray.classList.contains('drag-over'), true);
+  bravoPill.dragend({ dataTransfer });
+  assert.equal(charlieTray.classList.contains('drag-over'), false);
+});
+
+test('private room tap fallback reveals destination pills and moves the selected player', async () => {
+  const harness = await loadHarness();
+  const { elements, privateRoomState } = harness;
+
+  privateRoomState.room.teams = {
+    alpha: [
+      { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+      { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+    ],
+    bravo: [],
+    charlie: [],
+    delta: []
+  };
+  privateRoomState.room.members = [
+    { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+    { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false }
+  ];
+  privateRoomState.room.memberCount = 2;
+  harness.emitPrivateRoomState();
+  await harness.flush();
+
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+
+  const alphaTray = elements['private-room-roster-grid'].children[0].children[1];
+  const bravoPill = alphaTray.children[1];
+  bravoPill.click();
+
+  const refreshedBravoPill = elements['private-room-roster-grid'].children[0].children[1].children[1];
+  const moveRail = refreshedBravoPill.children[2];
+  assert.equal(moveRail.children.length > 0, true);
+  moveRail.children[0].click();
+  await harness.flush();
+
+  assert.equal(privateRoomState.room.teams.bravo.length, 1);
+  assert.equal(privateRoomState.room.teams.bravo[0].id, 'usr_bravo');
+});
+
+test('private room auto assign rebalances all members across active teams', async () => {
+  const harness = await loadHarness();
+  const { elements, privateRoomState } = harness;
+
+  privateRoomState.room.teamCount = 4;
+  privateRoomState.room.teamIds = ['alpha', 'bravo', 'charlie', 'delta'];
+  privateRoomState.room.teams = {
+    alpha: [
+      { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+      { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false },
+      { id: 'usr_charlie', displayName: 'CHARLIE', teamId: 'alpha', isHost: false },
+      { id: 'usr_delta', displayName: 'DELTA', teamId: 'alpha', isHost: false }
+    ],
+    bravo: [],
+    charlie: [],
+    delta: []
+  };
+  privateRoomState.room.members = [
+    { id: 'usr_alpha', displayName: 'ALPHA', teamId: 'alpha', isHost: true },
+    { id: 'usr_bravo', displayName: 'BRAVO', teamId: 'alpha', isHost: false },
+    { id: 'usr_charlie', displayName: 'CHARLIE', teamId: 'alpha', isHost: false },
+    { id: 'usr_delta', displayName: 'DELTA', teamId: 'alpha', isHost: false }
+  ];
+  privateRoomState.room.memberCount = 4;
+  harness.emitPrivateRoomState();
+
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+  elements['private-room-randomize-btn'].click();
+  await harness.flush();
+
+  assert.equal(privateRoomState.room.teams.alpha.length, 1);
+  assert.equal(privateRoomState.room.teams.bravo.length, 1);
+  assert.equal(privateRoomState.room.teams.charlie.length, 1);
+  assert.equal(privateRoomState.room.teams.delta.length, 1);
 });
 
 test('party hero appears only after the party grows beyond one member', async () => {
@@ -956,13 +1350,18 @@ test('resumable runtime uses the session rail as the only return path', async ()
     launchContext: {}
   });
 
-  assert.equal(elements['menu-screen-mode'].hidden, false);
+  assert.equal(elements['menu-body'].hidden, true);
+  assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-home-hero'].hidden, true);
-  assert.equal(elements['menu-party-hero'].hidden, false);
-  assert.equal(elements['menu-session-actions'].hidden, false);
-  assert.equal(elements['menu-session-status'].textContent, 'Resume Match');
-  assert.equal(elements['menu-session-kd'].textContent, 'Change loadout or return to the match.');
+  assert.equal(elements['menu-social-hero'].hidden, true);
+  assert.equal(elements['menu-party-hero'].hidden, true);
+  assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['active-match-mode-pill'].textContent, 'FFA');
+  assert.equal(elements['active-match-context-pill'].textContent, 'LIVE');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Change loadout or return to the match.');
   assert.equal(elements['menu-return-btn'].hidden, true);
+  assert.equal(elements['continue-loadout-btn'].hidden, true);
+  assert.equal(elements['active-match-friend-bar'].hidden, false);
 });
 
 test('paused runtime hides the duplicate header return, shows the session rail, and keeps party back behavior', async () => {
@@ -980,14 +1379,142 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
     launchContext: {}
   });
 
-  assert.equal(elements['menu-screen-mode'].hidden, false);
+  assert.equal(elements['menu-body'].hidden, true);
+  assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-home-hero'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
-  assert.equal(elements['menu-session-actions'].hidden, false);
-  assert.equal(elements['menu-session-status'].textContent, 'Paused');
+  assert.equal(elements['menu-social-hero'].hidden, true);
+  assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['active-match-mode-pill'].textContent, 'FFA');
+  assert.equal(elements['active-match-context-pill'].textContent, 'PAUSED');
   assert.equal(elements['menu-return-btn'].hidden, true);
-  assert.equal(elements['menu-party-hero'].hidden, false);
+  assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['party-back-btn'].hidden, true);
+  assert.equal(elements['continue-loadout-btn'].hidden, true);
+  assert.equal(elements['active-match-friend-bar'].hidden, false);
+});
+
+test('active-match header friend controls mirror the home friend id and reuse the same party actions', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  elements['active-match-friend-id-input'].value = 'usr_delta';
+  elements['active-match-friend-id-input'].input();
+  elements['active-match-invite-friend-btn'].click();
+  elements['active-match-join-friend-btn'].click();
+
+  assert.equal(elements['party-id-input'].value, 'usr_delta');
+  assert.equal(runPartyActionCalls[0].action, 'invite');
+  assert.equal(runPartyActionCalls[0].payload.targetId, 'usr_delta');
+  assert.equal(runPartyActionCalls[1].action, 'join');
+  assert.equal(runPartyActionCalls[1].payload.targetId, 'usr_delta');
+});
+
+test('active-match header surfaces visible friend errors and incoming invite actions', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  elements['active-match-invite-friend-btn'].click();
+  assert.equal(elements['active-match-header-feedback'].hidden, false);
+  assert.equal(elements['active-match-header-feedback'].textContent, 'Enter a friend ID.');
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: { actorId: 'usr_bravo', displayName: 'BRAVO' }, outgoing: null },
+    roomInvite: { incoming: null, outgoing: null },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+
+  assert.equal(elements['active-match-primary-banner'].hidden, false);
+  assert.equal(elements['active-match-primary-banner-accept-btn'].textContent, 'Accept Invite');
+  elements['active-match-primary-banner-accept-btn'].click();
+  assert.equal(runPartyActionCalls.at(-1).action, 'accept_invite');
+});
+
+test('structured active-match model fills the menu with live mode-aware pills', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+  harness.emitMatchMenuModel({
+    ready: true,
+    banner: null,
+    modePill: { label: 'MODE', value: 'TDM' },
+    contextPill: { label: 'LEAD', value: '7' },
+    primaryPill: { label: 'KILLS', value: '12' },
+    secondaryPill: { label: 'DEATHS', value: '3' }
+  });
+
+  assert.equal(elements['active-match-mode-pill'].attributes['data-session-label'], 'MODE');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
+  assert.equal(elements['active-match-context-pill'].attributes['data-session-label'], 'LEAD');
+  assert.equal(elements['active-match-context-pill'].textContent, '7');
+  assert.equal(elements['active-match-primary-stat-pill'].attributes['data-session-label'], 'KILLS');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, '12');
+  assert.equal(elements['active-match-secondary-stat-pill'].attributes['data-session-label'], 'DEATHS');
+  assert.equal(elements['active-match-secondary-stat-pill'].textContent, '3');
+});
+
+test('hidden menu caches structured match model and applies it when the active shell opens', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitMatchMenuModel({
+    ready: true,
+    banner: null,
+    modePill: { label: 'MODE', value: 'LMS' },
+    contextPill: { label: 'STATE', value: 'WAITING' },
+    primaryPill: { label: 'LIVES', value: '2' },
+    secondaryPill: { label: 'CHARGE', value: '1' }
+  });
+
+  assert.equal(elements['active-match-shell'].hidden, true);
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  assert.equal(elements['active-match-mode-pill'].textContent, 'LMS');
+  assert.equal(elements['active-match-context-pill'].textContent, 'WAITING');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, '2');
+  assert.equal(elements['active-match-secondary-stat-pill'].textContent, '1');
 });
 
 test('paused escape keeps focus on the pause rail instead of trying to resume directly', async () => {
@@ -1012,7 +1539,7 @@ test('paused escape keeps focus on the pause rail instead of trying to resume di
   });
 
   assert.equal(doc.activeElement, elements['play-btn']);
-  assert.equal(elements['menu-session-actions'].hidden, false);
+  assert.equal(elements['active-match-shell'].hidden, false);
 });
 
 test('room screen outside pause reduces the left header to back and id', async () => {

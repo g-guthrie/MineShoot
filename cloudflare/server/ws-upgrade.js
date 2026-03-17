@@ -1,5 +1,5 @@
 import { getSessionFromRequest } from './auth.js';
-import { normalizeOpaqueId, randomId, sanitizeRoomId, validUsername } from './transport.js';
+import { normalizeOpaqueId, sanitizeRoomId, validUsername } from './transport.js';
 import {
   getPrivateRoomById,
   getPrivateRoomMember,
@@ -7,6 +7,22 @@ import {
   touchPrivateRoomById
 } from './private-rooms.js';
 import { consumePublicMatchAssignment } from './party-match-state.js';
+
+const FRIENDLY_GUEST_ID_RE = /^[a-z]+-[a-z]+-\d{3}$/i;
+const GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
+const GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
+
+function guestWord(list) {
+  return String(list[Math.floor(Math.random() * list.length)] || list[0] || 'guest');
+}
+
+function randomGuestId() {
+  return `${guestWord(GUEST_ADJECTIVES)}-${guestWord(GUEST_NOUNS)}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
+}
+
+function guestDisplayName(id) {
+  return String(id || '').trim().toUpperCase() || 'GUEST';
+}
 
 export async function handleWsUpgrade(env, request, classPresets) {
   const url = new URL(request.url);
@@ -45,10 +61,11 @@ export async function handleWsUpgrade(env, request, classPresets) {
     const rawGuestName = requestedPlayerName;
     const rawGuestClassId = requestedClassId;
 
-    const guestId = /^[a-zA-Z0-9_-]{6,64}$/.test(rawGuestId) ? rawGuestId : randomId('gst');
+    const normalizedGuestId = normalizeOpaqueId(rawGuestId || '');
+    const guestId = FRIENDLY_GUEST_ID_RE.test(normalizedGuestId) ? normalizedGuestId : randomGuestId();
     const guestName = validUsername(rawGuestName)
       ? rawGuestName
-      : `Guest_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      : guestDisplayName(guestId);
     const guestClassId = classPresets && classPresets[rawGuestClassId] ? rawGuestClassId : 'abilities';
 
     session = {

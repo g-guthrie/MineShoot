@@ -86,9 +86,59 @@ test('room state helper normalizes private room phase and match state payloads',
     leaderId: 'lead',
     winnerId: '',
     winnerTeam: '',
+    teamIds: ['alpha', 'bravo'],
     lms: null,
     teamProgress: { alpha: 2, bravo: 1 },
     teamBaselineSize: { alpha: 2, bravo: 2 }
+  });
+});
+
+test('room state helper serializes dynamic private tdm team ids and progress maps', () => {
+  const room = {
+    roomName: 'private-room4',
+    gameMode: 'tdm',
+    privateRoomConfig: { roomPhase: 'lobby' },
+    matchState: {
+      gameMode: 'tdm',
+      started: true,
+      ended: false,
+      startedAt: 11,
+      endedAt: 0,
+      resetAt: 22,
+      matchBaselinePlayerCount: 4,
+      targetProgress: 10,
+      leaderProgress: 5,
+      leaderId: '',
+      winnerId: '',
+      winnerTeam: '',
+      teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
+      lms: null,
+      teamProgress: { alpha: 2, bravo: 1, charlie: 5, delta: 4 },
+      teamBaselineSize: { alpha: 1, bravo: 1, charlie: 1, delta: 1 }
+    }
+  };
+
+  assert.deepEqual(serializeMatchState(room, {
+    emptyMatchState,
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  }), {
+    gameMode: 'tdm',
+    started: true,
+    ended: false,
+    startedAt: 11,
+    endedAt: 0,
+    resetAt: 22,
+    matchBaselinePlayerCount: 4,
+    targetProgress: 10,
+    leaderProgress: 5,
+    leaderId: '',
+    winnerId: '',
+    winnerTeam: '',
+    teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
+    lms: null,
+    teamProgress: { alpha: 2, bravo: 1, charlie: 5, delta: 4 },
+    teamBaselineSize: { alpha: 1, bravo: 1, charlie: 1, delta: 1 }
   });
 });
 

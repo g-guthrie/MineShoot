@@ -25,6 +25,7 @@
     var deadeyeProjectVec = new THREE.Vector3();
     var debugVisualsOn = false;
     var spreadReticle = null;
+    var killCount = 0;
 
     var hitmarkerTimer = null;
     var HITMARKER_HOLD_MS = 45;
@@ -312,13 +313,14 @@
     };
 
     GameUI.updateMatchStatus = function (matchState, selfState) {
+        killCount = Math.max(0, Number(selfState && selfState.kills || 0));
         if (!killCounterEl) return;
         var matchRules = sharedMatchRules();
         if (matchRules && matchRules.formatMatchHudCounter) {
             killCounterEl.textContent = matchRules.formatMatchHudCounter(matchState, selfState);
             return;
         }
-        killCounterEl.textContent = 'Kills: ' + Math.max(0, Number(selfState && selfState.kills || 0));
+        killCounterEl.textContent = 'Kills: ' + killCount;
     };
 
     GameUI.updateHealth = function (hp, maxHp) {
@@ -344,10 +346,12 @@
 
     GameUI.showDamageNumber = function (worldPoint, damage, isKill, camera, hitType, options) {
         options = options || {};
+        if (!damageNumbersEl || !worldPoint || !camera || !worldPoint.clone || !camera.isCamera) return;
         var projected = worldPoint.clone().project(camera);
+        if (!isFinite(projected.x) || !isFinite(projected.y) || !isFinite(projected.z)) return;
+        if (projected.z < -1 || projected.z > 1) return;
         var x = (projected.x * 0.5 + 0.5) * window.innerWidth;
         var y = (-projected.y * 0.5 + 0.5) * window.innerHeight;
-        if (projected.z > 1) return;
         damage = Math.max(0, Math.round(Number(damage) || 0));
 
         var className = 'damage-number';

@@ -552,6 +552,72 @@ test('private room supports selectable team counts up to four', async () => {
   assert.deepEqual(updated.state.room.teamIds, ['alpha', 'bravo', 'charlie', 'delta']);
 });
 
+test('private room keeps charlie and delta team assignments after four-team moves', async () => {
+  const env = createFakeEnv();
+
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_A',
+    displayName: 'HOST',
+    activityState: 'menu',
+    action: 'create'
+  })));
+
+  const roomCode = created.state.room.roomCode;
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_B',
+    displayName: 'B',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_C',
+    displayName: 'C',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_D',
+    displayName: 'D',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'set_team_count',
+    teamCount: 4
+  }));
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'move_member',
+    targetId: 'ROOMX_C',
+    teamId: 'charlie'
+  }));
+  const moved = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMX_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'move_member',
+    targetId: 'ROOMX_D',
+    teamId: 'delta'
+  })));
+
+  assert.equal(moved.ok, true);
+  assert.equal(moved.state.room.teams.charlie.length, 1);
+  assert.equal(moved.state.room.teams.charlie[0].id, 'ROOMX_C');
+  assert.equal(moved.state.room.teams.delta.length, 1);
+  assert.equal(moved.state.room.teams.delta[0].id, 'ROOMX_D');
+});
+
 test('joining a full private room fails without ejecting the caller from their current room', async () => {
   const env = createFakeEnv();
 
@@ -1216,6 +1282,65 @@ test('websocket upgrade accepts uppercase copied guest actor ids for private-roo
   assert.equal(forwarded.length, 1);
   const forwardedUrl = new URL(forwarded[0].url);
   assert.equal(forwardedUrl.searchParams.get('actorId'), 'gst_casews1');
+});
+
+test('websocket upgrade mints readable guest ids when the client does not provide one', async () => {
+  const env = createFakeEnv();
+  let forwardedUrl = null;
+  env.GLOBAL_ARENA = {
+    idFromName() {
+      return 'room-guest-friendly';
+    },
+    get() {
+      return {
+        async fetch(requestLike) {
+          forwardedUrl = new URL(typeof requestLike === 'string' ? requestLike : requestLike.url);
+          return new Response(null, { status: 200 });
+        }
+      };
+    }
+  };
+
+  const response = await handleWsUpgrade(env, request('/api/ws?room=global&username=', 'GET'), {});
+
+  assert.equal(response.status, 200);
+  assert.match(String(forwardedUrl.searchParams.get('userId') || ''), /^[a-z]+-[a-z]+-\d{3}$/);
+  assert.equal(forwardedUrl.searchParams.get('username'), String(forwardedUrl.searchParams.get('userId') || '').toUpperCase());
+});
+
+test('websocket upgrade accepts separator-free readable guest actor ids for private-room membership', async () => {
+  const env = createFakeEnv();
+  let forwardedUrl = null;
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'amber-otter-314',
+    displayName: 'AMBER-OTTER-314',
+    activityState: 'menu',
+    action: 'create'
+  })));
+  const roomId = created.state.room.roomId;
+
+  env.GLOBAL_ARENA = {
+    idFromName() {
+      return 'room-readable-guest';
+    },
+    get() {
+      return {
+        async fetch(requestLike) {
+          forwardedUrl = new URL(typeof requestLike === 'string' ? requestLike : requestLike.url);
+          return new Response(null, { status: 200 });
+        }
+      };
+    }
+  };
+
+  const allowed = await handleWsUpgrade(
+    env,
+    request(`/api/ws?room=${roomId}&pid=ply_read_1&uid=pub_read_1&username=AMBEROTTER314&classId=abilities&actorId=AMBEROTTER314&actorName=AMBEROTTER314`, 'GET'),
+    {}
+  );
+
+  assert.equal(allowed.status, 200);
+  assert.equal(forwardedUrl.searchParams.get('actorId'), 'amber-otter-314');
 });
 
 test('websocket upgrade path no longer reprimes private rooms', async () => {

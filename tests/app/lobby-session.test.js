@@ -172,7 +172,7 @@ async function loadLobbySessionHarness(options = {}) {
     },
     authApi: {
       getPartyIdentity() {
-        return { id: 'guest_01', username: 'Guest 01', kind: 'guest' };
+        return { id: 'amber-otter-314', username: 'AMBER-OTTER-314', label: 'Player ID', kind: 'guest' };
       },
       isLoggedIn() {
         return false;
@@ -407,12 +407,12 @@ test('lobby session triggers auto-launch callback when party state receives a pu
       return Promise.resolve({
         state: {
           self: {
-            id: 'guest_01',
-            username: 'Guest 01',
+            id: 'amber-otter-314',
+            username: 'AMBER-OTTER-314',
             publicMatch: {
               roomId: 'tdm-01',
               gameMode: 'tdm',
-              assignedByActorId: 'guest_lead',
+              assignedByActorId: 'ember-wolf-219',
               assignedAt: 1
             },
             privateRoom: null
@@ -421,11 +421,11 @@ test('lobby session triggers auto-launch callback when party state receives a pu
           roomInvite: { incoming: null, outgoing: null },
           party: {
             id: 'pty_01',
-            leaderId: 'guest_01',
+            leaderId: 'amber-otter-314',
             joinLocked: false,
             isLeader: true,
             memberCount: 1,
-            members: [{ id: 'guest_01', displayName: 'Guest 01', isLeader: true }]
+            members: [{ id: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isLeader: true }]
           }
         }
       });

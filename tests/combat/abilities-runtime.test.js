@@ -623,6 +623,45 @@ test('deadeye candidate order prefers the target nearest the crosshair over the 
   assert.equal(abilities.getDeadeyeState().targets[1].targetId, 'enemy:near');
 });
 
+test('deadeye refresh keeps locks valid from the player eye origin during upkeep', async () => {
+  const target = {
+    targetId: 'enemy:1',
+    worldPos: new THREE.Vector3(0, 1.6, -10),
+    hitbox: {}
+  };
+  const camera = {
+    position: new THREE.Vector3(80, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameEnemy: {
+      getLockTargets() {
+        return [target];
+      }
+    },
+    GameWorld: {
+      getCollidables() {
+        return [];
+      }
+    },
+    GamePlayer: {
+      getEyeWorldPosition() {
+        return new THREE.Vector3(0, 1.6, 0);
+      }
+    }
+  });
+
+  abilities.setLoadout('deadeye', 'missile');
+  const start = abilities.triggerAbility(1, camera, null, null, null, null);
+  assert.equal(start.ok, true);
+
+  abilities.update(0.016, camera, null, null, null, null);
+
+  assert.equal(abilities.getDeadeyeState().targets[0].dead === true, false);
+});
+
 test('local choke only applies the lifted state to the victim', async () => {
   const restrictionCalls = [];
   const audioCalls = [];

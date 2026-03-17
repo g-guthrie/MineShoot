@@ -110,6 +110,8 @@
             maxRange: hipAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(hipAim.maxRange || 0),
             adsMaxRange: adsAim.maxRange === Infinity ? Number.POSITIVE_INFINITY : Number(adsAim.maxRange || 0),
             adsHitscanRangeMultiplier: Number(hipAim.maxRange > 0 ? (Number(adsAim.maxRange || hipAim.maxRange) / hipAim.maxRange) : 1),
+            hipfireCylinderRadiusWu: Number(s.hipfireCylinderRadiusWu || 0),
+            adsCylinderRadiusWu: Number(s.adsCylinderRadiusWu || 0),
             tracerLife: Number(tracer.life || 0),
             tracerSpeed: Number(tracer.speed || 0),
             tracerSegmentLength: Number(tracer.segmentLength || 0),
@@ -669,6 +671,18 @@
             return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
         }
 
+        if (weapon.id === 'pistol' && weapon.singleHitFromPellets) {
+            var player = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+            var camera = player && player.getCamera ? player.getCamera() : null;
+            var cylinderRadiusPx = projectCylinderRadiusToScreenPx(camera, pistolCylinderRadiusWu(weapon), PISTOL_RETICLE_REFERENCE_DISTANCE_WU);
+            return {
+                radiusPx: cylinderRadiusPx,
+                radiusXpx: cylinderRadiusPx,
+                radiusYpx: cylinderRadiusPx,
+                spread: pistolCylinderRadiusWu(weapon)
+            };
+        }
+
         // HUD/debug circles should match the actual shot solver area, not a display-only multiplier.
         var spread = getActiveAimSpread(weapon);
         if (spread <= 0.00001) {
@@ -790,6 +804,39 @@
         return {
             x: (Number(sample && sample.x || 0) * radiusXpx) / (window.innerWidth * 0.5),
             y: (Number(sample && sample.y || 0) * radiusYpx) / (window.innerHeight * 0.5)
+        };
+    }
+
+    var PISTOL_RETICLE_REFERENCE_DISTANCE_WU = 20;
+
+    function pistolCylinderRadiusWu(weapon) {
+        if (!weapon) return 0;
+        var adsActive = isAdsActiveForWeapon(weapon.id);
+        var key = adsActive ? 'adsCylinderRadiusWu' : 'hipfireCylinderRadiusWu';
+        var value = Number(weapon[key] != null ? weapon[key] : 0);
+        return isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function projectCylinderRadiusToScreenPx(camera, radiusWu, referenceDistance) {
+        if (!camera || !(radiusWu > 0) || !(referenceDistance > 0)) return 0;
+        var vFov = Number(camera.fov || 75) * Math.PI / 180;
+        var projected = radiusWu / Math.max(0.0001, referenceDistance * Math.tan(vFov * 0.5));
+        return Math.max(0, projected * (window.innerHeight * 0.5));
+    }
+
+    function buildParallelRayFromSample(camera, weapon, sample) {
+        if (!camera || !weapon) return null;
+        var radiusWu = pistolCylinderRadiusWu(weapon);
+        var forward = new THREE.Vector3();
+        camera.getWorldDirection(forward).normalize();
+        var worldUp = Math.abs(forward.y) > 0.98 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+        var right = new THREE.Vector3().crossVectors(forward, worldUp).normalize();
+        var up = new THREE.Vector3().crossVectors(right, forward).normalize();
+        return {
+            origin: camera.position.clone()
+                .addScaledVector(right, Number(sample && sample.x || 0) * radiusWu)
+                .addScaledVector(up, Number(sample && sample.y || 0) * radiusWu),
+            direction: forward
         };
     }
 
@@ -950,6 +997,13 @@
             };
         }
         aimDir.normalize();
+        if (aimDir.dot(cameraForward) <= 0.0001) {
+            return {
+                x: cameraForward.x,
+                y: cameraForward.y,
+                z: cameraForward.z
+            };
+        }
         return {
             x: aimDir.x,
             y: aimDir.y,
@@ -1268,11 +1322,10 @@
         var targetsHitboxes = getCombatHitboxes();
         var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
         var allTargets = targetsHitboxes.concat(worldMeshes);
-        var ndcOffset = getCircleSampleNdcOffset(weapon, sample);
         var effectiveRange = getEffectiveMaxRange(weapon);
-
-        screenPoint.set(ndcOffset.x, ndcOffset.y);
-        raycaster.setFromCamera(screenPoint, camera);
+        var ray = buildParallelRayFromSample(camera, weapon, sample);
+        if (!ray) return null;
+        raycaster.set(ray.origin, ray.direction);
         raycaster.far = effectiveRange;
 
         var intersects = raycaster.intersectObjects(allTargets, false);
@@ -1846,6 +1899,8 @@
                 pellets: weapon.pellets,
                 hipfireSpread: weapon.hipfireSpread,
                 adsSpread: Number(weapon.adsSpread || 0),
+                hipfireCylinderRadiusWu: Number(weapon.hipfireCylinderRadiusWu || 0),
+                adsCylinderRadiusWu: Number(weapon.adsCylinderRadiusWu || 0),
                 adsFovDeg: Number(weapon.adsFovDeg || 0),
                 hipfireBloomScale: Number(weapon.hipfireBloomScale != null ? weapon.hipfireBloomScale : 1),
                 adsBloomScale: Number(weapon.adsBloomScale != null ? weapon.adsBloomScale : 1),

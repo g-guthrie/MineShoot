@@ -80,6 +80,7 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
     },
     GamePlayer: {
       getAdsState() { return { active: false, weaponId: 'pistol' }; },
+      getCamera() { return camera; },
       getMuzzleWorldPosition() { return new THREE.Vector3(0, 1.6, 0); },
       getRotation() { return { yaw: 0, pitch: 0 }; },
       getPosition() { return new THREE.Vector3(0, 1.6, 0); },
@@ -213,6 +214,8 @@ test('spread metrics track the true hitscan area instead of bloom scale multipli
   const harness = await loadHitscanHarness({
     hipfireSpread: 0.05,
     adsSpread: 0.03,
+    hipfireCylinderRadiusWu: 0.8,
+    adsCylinderRadiusWu: 1.0,
     hipfireBloomScale: 4,
     adsBloomScale: 0.25,
     aimProfile: {
@@ -222,9 +225,9 @@ test('spread metrics track the true hitscan area instead of bloom scale multipli
   });
 
   const hipfireMetrics = harness.GameHitscan.getSpreadMetrics('pistol');
-  assert.equal(Math.round(hipfireMetrics.radiusPx), 18);
-  assert.equal(Math.round(hipfireMetrics.radiusXpx), 18);
-  assert.equal(Math.round(hipfireMetrics.radiusYpx), 18);
+  assert.equal(Math.round(hipfireMetrics.radiusPx), 19);
+  assert.equal(Math.round(hipfireMetrics.radiusXpx), 19);
+  assert.equal(Math.round(hipfireMetrics.radiusYpx), 19);
 });
 
 test('pistol local fire spends the shot and misses when targets are out of range', async () => {

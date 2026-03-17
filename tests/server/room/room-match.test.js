@@ -247,3 +247,74 @@ test('lms elimination marks players out of round when they lose their last life'
   assert.equal(room.players.get('u2').respawnAt, 0);
   assert.deepEqual(room.finishCalls, [{ winnerId: 'u1', winnerTeam: '' }]);
 });
+
+test('private room four-team tdm preserves assignments and scores the winning team', () => {
+  let finishCall = null;
+  const room = {
+    roomName: 'private-room4',
+    gameMode: 'ffa',
+    privateRoomConfig: {
+      roomMode: 'tdm',
+      roomPhase: 'active',
+      teamCount: 4,
+      teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
+      teams: new Map([
+        ['a1', 'alpha'],
+        ['a2', 'charlie'],
+        ['a3', 'delta']
+      ])
+    },
+    players: new Map([
+      ['u1', { id: 'u1', actorId: 'a1', fixtureType: '', teamId: '', progressScore: 0, kills: 0, deaths: 0 }],
+      ['u2', { id: 'u2', actorId: 'a2', fixtureType: '', teamId: '', progressScore: 0, kills: 0, deaths: 0 }],
+      ['u3', { id: 'u3', actorId: 'a3', fixtureType: '', teamId: '', progressScore: 0, kills: 0, deaths: 0 }]
+    ]),
+    getEntityById(id) { return this.players.get(id) || null; },
+    assignPlayerToCurrentTeam(player) {
+      return assignPlayerToCurrentTeam(this, player, {
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    updateLeaderProgress() {
+      return updateLeaderProgress(this, {
+        gameModeFfa: 'ffa',
+        gameModeLms: 'lms',
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    finishPublicMatch(winnerId, winnerTeam) {
+      finishCall = { winnerId, winnerTeam };
+    }
+  };
+
+  syncPrivateRoomMatchState(room, {
+    isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
+    emptyMatchState,
+    nowMs: () => 50,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    gameModeLms: 'lms',
+    teamAlpha: 'alpha'
+  });
+
+  assert.deepEqual(room.matchState.teamIds, ['alpha', 'bravo', 'charlie', 'delta']);
+  assert.equal(room.players.get('u1').teamId, 'alpha');
+  assert.equal(room.players.get('u2').teamId, 'charlie');
+  assert.equal(room.players.get('u3').teamId, 'delta');
+
+  room.matchState.targetProgress = 1;
+  recordElimination(room, {
+    nowMs: () => 100,
+    lmsRules: { startingLives: 3, chargePerExtraLife: 100, chargePerElimination: 30, respawnDelayMs: 1500 },
+    ffaTargetProgress: 10,
+    tdmTargetProgress: 1,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    gameModeLms: 'lms'
+  }, 'u2', 'u1');
+
+  assert.equal(room.matchState.teamProgress.charlie, 1);
+  assert.deepEqual(finishCall, { winnerId: '', winnerTeam: 'charlie' });
+});

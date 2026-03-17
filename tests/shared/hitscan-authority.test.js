@@ -22,16 +22,18 @@ function makePistolStats(overrides = {}) {
   return makeWeaponStats({
     id: 'pistol',
     bodyDamage: 46,
-    headDamage: 150,
-    hipfireSpread: 0.06,
+    headDamage: 96,
+    hipfireSpread: 0.137,
     adsFovDeg: 56,
     maxRange: 24,
     adsMaxRange: 28,
     pellets: 12,
+    hipfireCylinderRadiusWu: 0.8,
+    adsCylinderRadiusWu: 1.0,
     singleHitFromPellets: true,
     aimProfile: {
-      hipfire: { spread: 0.06, maxRange: 24 },
-      ads: { spread: 0.035, maxRange: 28 }
+      hipfire: { spread: 0.137, maxRange: 24 },
+      ads: { spread: 0.225, maxRange: 28 }
     },
     ...overrides
   });
@@ -66,13 +68,12 @@ function hitAreaAtDistance(spread, fovDeg, distance) {
   return Math.PI * radius * radius;
 }
 
-test('shared pistol tuning keeps hipfire near 20 m^2 and leaves ADS near 26 m^2 at 24m', () => {
+test('shared pistol tuning keeps the legacy spread values for compatibility while exposing cylinder radii', () => {
   const pistol = gameplayTuning.weaponStats.pistol;
-  const hipfireArea = hitAreaAtDistance(pistol.hipfireSpread, 75, 24);
-  const adsArea = hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24);
-
-  assert.ok(Math.abs(hipfireArea - 20) < 0.05);
-  assert.ok(Math.abs(adsArea - 25.9) < 0.1);
+  assert.equal(pistol.hipfireCylinderRadiusWu, 0.8);
+  assert.equal(pistol.adsCylinderRadiusWu, 1.0);
+  assert.ok(Math.abs(hitAreaAtDistance(pistol.hipfireSpread, 75, 24) - 20) < 0.05);
+  assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 25.9) < 0.1);
 });
 
 test('hitscan view FOV clamps to the weapon zoom range', () => {
@@ -146,6 +147,41 @@ test('pistol keeps only one winning pellet even when many pellets can hit', () =
   assert.equal(shots.length, 1);
   assert.equal(shots[0].mode, 'circle_scan');
   assert.equal(shots[0].sampleIndex >= 0, true);
+});
+
+test('pistol cylinder width does not widen with distance the way a cone would', () => {
+  const near = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makePistolStats(),
+    shotToken: 'near-cylinder',
+    targets: [{
+      id: 'near-body',
+      bodyBox: {
+        min: { x: 0.72, y: 1.0, z: -8.4 },
+        max: { x: 1.1, y: 2.0, z: -7.6 }
+      }
+    }],
+    worldBoxes: []
+  });
+
+  const far = resolveHitscanShot({
+    origin: { x: 0, y: 1.6, z: 0 },
+    forward: { x: 0, y: 0, z: -1 },
+    weaponStats: makePistolStats(),
+    shotToken: 'far-cylinder',
+    targets: [{
+      id: 'far-body',
+      bodyBox: {
+        min: { x: 0.72, y: 1.0, z: -20.4 },
+        max: { x: 1.1, y: 2.0, z: -19.6 }
+      }
+    }],
+    worldBoxes: []
+  });
+
+  assert.equal(near.length, 1);
+  assert.equal(far.length, 1);
 });
 
 test('pistol range cap prevents pellet hits beyond max range', () => {

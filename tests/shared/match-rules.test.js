@@ -70,11 +70,42 @@ test('shared match rules format tdm progress as team progress, not raw kills', (
 
   assert.equal(
     formatMatchHudCounter(matchState, selfState),
-    'Kills: 2 | Team: 4.5/10 | Enemy: 3'
+    'Kills: 2 | Team: 4.5/10 | Opp: BRAVO 3'
   );
   assert.equal(
     formatMenuMatchStatus(matchState, selfState),
-    'TDM TEAM 4.5 / 10 | ENEMY 3'
+    'TDM TEAM 4.5 / 10 | OPP BRAVO 3'
+  );
+});
+
+test('shared match rules use the leading opposing team in multi-team tdm summaries', () => {
+  const matchState = {
+    gameMode: 'tdm',
+    started: true,
+    ended: false,
+    targetProgress: 10,
+    teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
+    teamProgress: {
+      alpha: 2,
+      bravo: 3,
+      charlie: 5,
+      delta: 4
+    }
+  };
+  const selfState = {
+    id: 'u3',
+    teamId: 'alpha',
+    kills: 1,
+    deaths: 2
+  };
+
+  assert.equal(
+    formatMatchHudCounter(matchState, selfState),
+    'Kills: 1 | Team: 2/10 | Opp: CHARLIE 5'
+  );
+  assert.equal(
+    formatMenuMatchStatus(matchState, selfState),
+    'TDM TEAM 2 / 10 | OPP CHARLIE 5'
   );
 });
 
