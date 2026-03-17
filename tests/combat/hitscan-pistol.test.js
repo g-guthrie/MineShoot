@@ -203,6 +203,30 @@ test('pistol local fire still succeeds with the shared pellet weapon config', as
   assert.equal(hitCount, 1);
 });
 
+test('pistol reticle spec uses the shared crosshair path instead of the shotgun circle', async () => {
+  const harness = await loadHitscanHarness();
+
+  assert.equal(harness.GameHitscan.getReticleSpec('pistol'), null);
+});
+
+test('spread metrics track the true hitscan area instead of bloom scale multipliers', async () => {
+  const harness = await loadHitscanHarness({
+    hipfireSpread: 0.05,
+    adsSpread: 0.03,
+    hipfireBloomScale: 4,
+    adsBloomScale: 0.25,
+    aimProfile: {
+      hipfire: { spread: 0.05, maxRange: 24 },
+      ads: { spread: 0.03, maxRange: 28 }
+    }
+  });
+
+  const hipfireMetrics = harness.GameHitscan.getSpreadMetrics('pistol');
+  assert.equal(Math.round(hipfireMetrics.radiusPx), 18);
+  assert.equal(Math.round(hipfireMetrics.radiusXpx), 18);
+  assert.equal(Math.round(hipfireMetrics.radiusYpx), 18);
+});
+
 test('pistol local fire spends the shot and misses when targets are out of range', async () => {
   const bodyHitbox = createHitbox('body', { x: 0, y: 1.5, z: -50 }, { x: 1.2, y: 1.2, z: 0.8 }, 'enemy:3');
   const harness = await loadHitscanHarness({}, []);

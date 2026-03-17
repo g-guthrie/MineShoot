@@ -6,6 +6,7 @@ import {
   isRegisteredPrivateRoomId,
   touchPrivateRoomById
 } from './private-rooms.js';
+import { consumePublicMatchAssignment } from './party-match-state.js';
 
 export async function handleWsUpgrade(env, request, classPresets) {
   const url = new URL(request.url);
@@ -84,9 +85,13 @@ export async function handleWsUpgrade(env, request, classPresets) {
   if (actorId) headers.set('X-Actor-Id', actorId);
   if (actorName) headers.set('X-Actor-Name', actorName);
 
-  return stub.fetch(new Request(doUrl.toString(), {
+  const response = await stub.fetch(new Request(doUrl.toString(), {
     method: request.method,
     headers,
     body: request.body
   }));
+  if (!isRegisteredPrivateRoomId(roomId) && actorId && response && Number(response.status || 0) < 400) {
+    await consumePublicMatchAssignment(env, actorId, roomId).catch(() => null);
+  }
+  return response;
 }

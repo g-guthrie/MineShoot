@@ -32,9 +32,15 @@ function resolveRateConfig(runtime) {
   if (runtime && typeof runtime.getRateConfig === 'function') {
     const config = runtime.getRateConfig();
     if (config && typeof config === 'object') {
+      const renderHz = Number(config.renderHz);
+      const interpolationDelayMs = Number(config.interpolationDelayMs);
       return {
-        renderHz: Number(config.renderHz || DEFAULT_RATE_CONFIG.renderHz),
-        interpolationDelayMs: Math.max(0, Number(config.interpolationDelayMs || DEFAULT_RATE_CONFIG.interpolationDelayMs))
+        renderHz: Number.isFinite(renderHz) && renderHz > 0
+          ? renderHz
+          : DEFAULT_RATE_CONFIG.renderHz,
+        interpolationDelayMs: Number.isFinite(interpolationDelayMs) && interpolationDelayMs >= 0
+          ? interpolationDelayMs
+          : DEFAULT_RATE_CONFIG.interpolationDelayMs
       };
     }
   }
@@ -109,8 +115,16 @@ function sharedWeaponStatsFor(weaponId) {
   return weaponStats[String(weaponId || '')] || null;
 }
 
+function weaponPresentationFor(weaponId) {
+  const runtime = globalThis.__MAYHEM_RUNTIME || {};
+  const shared = runtime.GameShared || {};
+  return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+}
+
 function resolveRemoteReloadState(render, serverNowMs) {
-  const emptyState = { reloading: false, reloadPct: 0 };
+  const runtime = globalThis.__MAYHEM_RUNTIME || {};
+  const shared = runtime.GameShared || {};
+  const emptyState = { reloading: false, reloadPct: 1, reloadPhase: 'ready', reloadPhasePct: 1 };
   if (!render || !render.weaponAmmo || typeof render.weaponAmmo !== 'object') return emptyState;
   const weaponId = String(render.weaponId || '');
   if (!weaponId) return emptyState;
@@ -123,9 +137,23 @@ function resolveRemoteReloadState(render, serverNowMs) {
   const elapsedMs = snapshotServerTimeMs > 0 ? Math.max(0, serverNowMs - snapshotServerTimeMs) : 0;
   const remainingMs = Math.max(0, Number(ammoState.reloadRemainingMs || 0) - elapsedMs);
   if (!(remainingMs > 0)) return emptyState;
+  if (shared.resolveReloadPresentationState) {
+    const presentation = weaponPresentationFor(weaponId);
+    return shared.resolveReloadPresentationState({
+      reloadMs,
+      reloadRemaining: remainingMs,
+      reloadedFlashRemaining: Math.max(0, Number(ammoState.reloadedFlashRemainingMs || 0)),
+      reload: presentation ? presentation.reload : null
+    }, null);
+  }
+  const reloadPct = clamp(1 - (remainingMs / reloadMs), 0, 1);
   return {
     reloading: true,
-    reloadPct: clamp(1 - (remainingMs / reloadMs), 0, 1)
+    reloadPct,
+    reloadPhase: 'manipulate',
+    reloadPhasePct: 0.5,
+    phase: 'manipulate',
+    phasePct: 0.5
   };
 }
 
@@ -174,7 +202,7 @@ export function updateRemotePresentation(options = {}) {
       weaponApi.setWeapon(render.weaponId || 'rifle');
     }
 
-    const remoteReloadState = resolveRemoteReloadState(render, estimatedServerTime);
+    const remoteReloadState = resolveRemoteReloadState(render, renderTimeMs);
     const animationApi = (render.actorVisual && typeof render.actorVisual.updateAnimation === 'function')
       ? render.actorVisual
       : render.rigApi;
@@ -191,6 +219,8 @@ export function updateRemotePresentation(options = {}) {
         adsActive: false,
         reloading: remoteReloadState.reloading,
         reloadPct: remoteReloadState.reloadPct,
+        reloadPhase: remoteReloadState.phase || remoteReloadState.reloadPhase,
+        reloadPhasePct: remoteReloadState.phasePct != null ? remoteReloadState.phasePct : remoteReloadState.reloadPhasePct,
         worldSpeed: Number(render.moveSpeedNorm || 0) * INFERRED_RUN_SPEED,
         movingForward: !!render.movingForward,
         movingBackward: !!render.movingBackward

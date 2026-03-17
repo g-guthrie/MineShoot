@@ -366,6 +366,53 @@ test('clearTransientState drops local heal effects', async () => {
   assert.equal(abilities.getHealState(), null);
 });
 
+test('local hook applies temporary weapon and throwable restrictions while active', async () => {
+  const restrictionCalls = [];
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GamePlayer: {
+      getThrowableOriginWorldPosition() {
+        return new THREE.Vector3(0, 1.2, 0);
+      },
+      setActionRestrictions(state) {
+        restrictionCalls.push(JSON.parse(JSON.stringify(state)));
+      }
+    }
+  });
+
+  abilities.setLoadout('hook', 'missile');
+  const result = abilities.triggerAbility(1, camera, { x: 0, y: 0, z: 0 }, { yaw: 0 }, null, null);
+
+  assert.equal(result.ok, true);
+  assert.ok(restrictionCalls.at(-1).weaponUntil > 0);
+  assert.ok(restrictionCalls.at(-1).throwableUntil > 0);
+  assert.equal(restrictionCalls.at(-1).abilityUntil, 0);
+});
+
+test('local heal applies temporary weapon and throwable restrictions during the windup', async () => {
+  const restrictionCalls = [];
+  const abilities = await loadAbilitiesRuntime({
+    GamePlayer: {
+      setActionRestrictions(state) {
+        restrictionCalls.push(JSON.parse(JSON.stringify(state)));
+      }
+    }
+  });
+
+  abilities.setLoadout('heal', 'missile');
+  const result = abilities.triggerAbility(1, {}, null, null, null, null);
+
+  assert.equal(result.ok, true);
+  assert.ok(restrictionCalls.at(-1).weaponUntil > 0);
+  assert.ok(restrictionCalls.at(-1).throwableUntil > 0);
+  assert.equal(restrictionCalls.at(-1).abilityUntil, 0);
+});
+
 test('deadeye starts cooldown when primed, not only when released', async () => {
   const timeState = { now: 1000 };
   const fakeDate = {
@@ -407,6 +454,101 @@ test('deadeye starts cooldown when primed, not only when released', async () => 
   assert.equal(start.ok, true);
   assert.equal(start.kind, 'deadeye_start');
   assert.ok(abilities.getHudState().slot1Cooldown > 14);
+});
+
+test('deadeye keeps the player locked out of weapon and throwable use until release or expiry', async () => {
+  const restrictionCalls = [];
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameEnemy: {
+      getLockTargets() {
+        return [{
+          targetId: 'enemy:1',
+          worldPos: new THREE.Vector3(0, 1.6, -10),
+          hitbox: {}
+        }];
+      }
+    },
+    GameWorld: {
+      getCollidables() {
+        return [];
+      }
+    },
+    GamePlayer: {
+      setActionRestrictions(state) {
+        restrictionCalls.push(JSON.parse(JSON.stringify(state)));
+      }
+    }
+  });
+
+  abilities.setLoadout('deadeye', 'missile');
+  const start = abilities.triggerAbility(1, camera, null, null, null, null);
+
+  assert.equal(start.ok, true);
+  assert.ok(restrictionCalls.at(-1).weaponUntil > 0);
+  assert.ok(restrictionCalls.at(-1).throwableUntil > 0);
+  assert.equal(restrictionCalls.at(-1).abilityUntil, 0);
+});
+
+test('deadeye does not fire before expiry once locks are accruing', async () => {
+  const timeState = { now: 1000 };
+  let damageCalls = 0;
+  const fakeDate = {
+    now() {
+      return timeState.now;
+    }
+  };
+  const camera = {
+    position: new THREE.Vector3(0, 1.6, 0),
+    getWorldDirection(out) {
+      return out.set(0, 0, -1);
+    }
+  };
+  const abilities = await loadAbilitiesRuntime({
+    GameEnemy: {
+      getLockTargets() {
+        return [{
+          targetId: 'enemy:1',
+          worldPos: new THREE.Vector3(0, 1.6, -10),
+          hitbox: {}
+        }, {
+          targetId: 'enemy:2',
+          worldPos: new THREE.Vector3(1, 1.6, -12),
+          hitbox: {}
+        }];
+      },
+      damage() {
+        damageCalls += 1;
+        return { killed: false };
+      }
+    },
+    GameWorld: {
+      getCollidables() {
+        return [];
+      }
+    }
+  }, {
+    Date: fakeDate
+  });
+
+  abilities.setLoadout('deadeye', 'missile');
+  const start = abilities.triggerAbility(1, camera, null, null, null, null);
+
+  assert.equal(start.ok, true);
+  timeState.now = 2000;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(damageCalls, 0);
+  assert.ok(abilities.getDeadeyeState());
+
+  timeState.now = 2600;
+  abilities.update(0.016, camera, null, null, null, null);
+  assert.equal(damageCalls, 2);
+  assert.equal(abilities.getDeadeyeState(), null);
 });
 
 test('deadeye candidate acquisition uses the player eye origin instead of raw camera position', async () => {
@@ -512,6 +654,7 @@ test('local choke only applies the lifted state to the victim', async () => {
   });
 
   abilities.setLoadout('choke', 'missile');
+  restrictionCalls.length = 0;
   const result = abilities.triggerAbility(1, { fov: 60 }, null, null, null, null);
 
   assert.equal(result.ok, true);

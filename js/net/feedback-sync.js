@@ -192,6 +192,9 @@
     function handleNetworkDamageFeedback(feedback, camera) {
         if (!feedback) return;
         var RT = runtime();
+        if (feedback.targetId && RT.GameOverhead && RT.GameOverhead.revealTarget) {
+            RT.GameOverhead.revealTarget(String(feedback.targetId || ''), 1500);
+        }
         var matchedPrediction = consumePredictedHitFeedback(feedback);
         var suppressLocalAudio = !!matchedPrediction;
         var suppressDamageNumber = !!matchedPrediction;

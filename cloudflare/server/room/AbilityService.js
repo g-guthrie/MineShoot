@@ -12,6 +12,25 @@ const ABILITY_CATALOG = gameplayTuning.abilityCatalog || {};
 const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 
 const MSG_S2C = protocol.msg.s2c;
+const DEAD_EYE_LOCKS = { weapon: true, throwable: true };
+const HOOK_LOCKS = { weapon: true, throwable: true };
+const HEAL_LOCKS = { weapon: true, throwable: true };
+
+function applyActionLocks(entity, until, locks) {
+  if (!entity || !locks) return;
+  const endsAt = Math.max(0, Number(until || 0));
+  if (locks.weapon) entity.weaponLockUntil = Math.max(Number(entity.weaponLockUntil || 0), endsAt);
+  if (locks.throwable) entity.throwableLockUntil = Math.max(Number(entity.throwableLockUntil || 0), endsAt);
+  if (locks.ability) entity.abilityLockUntil = Math.max(Number(entity.abilityLockUntil || 0), endsAt);
+}
+
+function clearActionLocks(entity, until, locks) {
+  if (!entity || !locks) return;
+  const stamp = Math.max(0, Number(until || 0));
+  if (locks.weapon && Number(entity.weaponLockUntil || 0) <= stamp) entity.weaponLockUntil = 0;
+  if (locks.throwable && Number(entity.throwableLockUntil || 0) <= stamp) entity.throwableLockUntil = 0;
+  if (locks.ability && Number(entity.abilityLockUntil || 0) <= stamp) entity.abilityLockUntil = 0;
+}
 
 function hookHeadPosition(state, now, liveOrigin) {
   if (!state) return null;
@@ -110,6 +129,7 @@ export function fireDeadeyeLocks(room, player) {
       broadcastDeathRespawn(room, target);
     }
   }
+  clearActionLocks(player, d.lockEndsAt || d.endsAt || 0, DEAD_EYE_LOCKS);
   player.deadeye = null;
   return { fired: true, landed };
 }
@@ -187,6 +207,8 @@ export function castDeadeye(room, player, cfg, _msg, now) {
   player.deadeye = buildDeadeyeState(cfg, picks, now);
   player.deadeye.range = Number(cfg.range || 70);
   player.deadeye.minDot = Number(cfg.minDot || 0.22);
+  player.deadeye.lockEndsAt = Number(player.deadeye.endsAt || now);
+  applyActionLocks(player, player.deadeye.lockEndsAt, DEAD_EYE_LOCKS);
   return { ok: true, kind: 'ability_deadeye_start', payload: { targetCount: picks.length } };
 }
 
@@ -206,6 +228,7 @@ export function castHook(room, player, cfg, _msg, now) {
   const dz = endPos.z - startPos.z;
   const travelDistance = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
   const travelMs = Math.max(120, Math.round((travelDistance / travelSpeed) * 1000));
+  const pullSpeed = Math.max(8, Number(cfg.pullSpeed || cfg.travelSpeed || 24));
   player.hookState = {
     phase: 'travel',
     targetId: '',
@@ -218,10 +241,13 @@ export function castHook(room, player, cfg, _msg, now) {
     stunDuration: Number(cfg.stunDuration || 0.5),
     castDamage: Number(cfg.castDamage || 35),
     travelSpeed: Number(cfg.travelSpeed || 24),
+    pullSpeed: pullSpeed,
     startedAt: now,
     hitAt: now + travelMs,
-    endsAt: now + travelMs
+    endsAt: now + travelMs,
+    lockEndsAt: now + travelMs
   };
+  applyActionLocks(player, player.hookState.lockEndsAt, HOOK_LOCKS);
   return { ok: true, kind: 'ability_hook_start' };
 }
 
@@ -230,8 +256,10 @@ export function castHeal(_room, player, cfg, _msg, now) {
     startedAt: now,
     endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
     healAmount: Math.max(1, Math.round(Number(cfg.healAmount || 150))),
-    applied: false
+    applied: false,
+    lockEndsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000)
   };
+  applyActionLocks(player, player.healState.lockEndsAt, HEAL_LOCKS);
   return { ok: true, kind: 'ability_heal_start' };
 }
 
@@ -425,7 +453,7 @@ export function tickClassAbilityState(room, entity) {
           entity,
           target,
           state.pullDistance || 3.2,
-          state.travelSpeed || 24,
+          state.pullSpeed || state.travelSpeed || 24,
           state.stunDuration || 0
         );
         state.phase = 'latched';
@@ -433,8 +461,12 @@ export function tickClassAbilityState(room, entity) {
         state.attachPos = attachPos;
         state.headPos = attachPos;
         state.endsAt = now + 140;
+        state.lockEndsAt = state.endsAt;
+        applyActionLocks(entity, state.lockEndsAt, HOOK_LOCKS);
       } else if (now >= (state.hitAt || 0)) {
         beginHookRetract(state, now);
+        state.lockEndsAt = state.endsAt;
+        applyActionLocks(entity, state.lockEndsAt, HOOK_LOCKS);
       }
     } else if (state.phase === 'latched') {
       const target = room.getEntityById(String(state.targetId || ''));
@@ -447,14 +479,18 @@ export function tickClassAbilityState(room, entity) {
         if (now >= (state.endsAt || 0)) {
           state.retractStartPos = state.attachPos || state.headPos || state.endPos || state.startPos;
           beginHookRetract(state, now);
+          state.lockEndsAt = state.endsAt;
+          applyActionLocks(entity, state.lockEndsAt, HOOK_LOCKS);
         }
       }
     } else if (state.phase === 'retract') {
       state.headPos = hookHeadPosition(state, now, room.entityCorePosition(entity)) || state.headPos || state.startPos;
       if (now >= (state.endsAt || 0)) {
+        clearActionLocks(entity, state.lockEndsAt || state.endsAt || 0, HOOK_LOCKS);
         entity.hookState = null;
       }
     } else if (now >= (state.endsAt || 0)) {
+      clearActionLocks(entity, state.lockEndsAt || state.endsAt || 0, HOOK_LOCKS);
       entity.hookState = null;
     }
   }
@@ -466,6 +502,7 @@ export function tickClassAbilityState(room, entity) {
         entity.hp = Math.min(entity.hpMax, entity.hp + Math.max(1, Math.round(Number(state.healAmount || 150))));
         state.applied = true;
       }
+      clearActionLocks(entity, state.lockEndsAt || state.endsAt || 0, HEAL_LOCKS);
       entity.healState = null;
     }
   }
@@ -473,6 +510,7 @@ export function tickClassAbilityState(room, entity) {
   if (entity.deadeye) {
     const d = entity.deadeye;
     if (!d.queue || !d.queue.length) {
+      clearActionLocks(entity, d.lockEndsAt || d.endsAt || 0, DEAD_EYE_LOCKS);
       entity.deadeye = null;
     } else {
       d.queue = d.queue.filter((targetId) => !!room.resolveLockedHostile(entity, targetId, d.range || 70, d.minDot || 0.22, {
@@ -480,6 +518,7 @@ export function tickClassAbilityState(room, entity) {
       }));
       d.lockIndex = Math.min(d.queue.length, Number(d.lockIndex || 0));
       if (!d.queue.length) {
+        clearActionLocks(entity, d.lockEndsAt || d.endsAt || 0, DEAD_EYE_LOCKS);
         entity.deadeye = null;
         return;
       }
@@ -488,7 +527,7 @@ export function tickClassAbilityState(room, entity) {
         d.lockIndex = Math.min(d.queue.length, (d.lockIndex || 0) + 1);
         d.nextLockAt = (d.nextLockAt || now) + lockEveryMs;
       }
-      if ((d.lockIndex || 0) >= d.queue.length || now >= (d.endsAt || 0)) {
+      if (now >= (d.endsAt || 0)) {
         fireDeadeyeLocks(room, entity);
       }
     }

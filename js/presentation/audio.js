@@ -447,6 +447,107 @@
         playWeaponFireProcedural(c, weapon);
     }
 
+    function reloadProfileKey(cueId, weaponId) {
+        var cue = String(cueId || '').toLowerCase();
+        if (cue.indexOf('sidearm') !== -1) return 'sidearm';
+        if (cue.indexOf('precision') !== -1) return 'precision';
+        if (cue.indexOf('lmg') !== -1) return 'lmg';
+        if (cue.indexOf('shotgun') !== -1) return 'shotgun';
+        if (cue.indexOf('rifle') !== -1) return 'rifle';
+        var weapon = String(weaponId || '').toLowerCase();
+        if (weapon === 'pistol') return 'sidearm';
+        if (weapon === 'sniper') return 'precision';
+        if (weapon === 'machinegun') return 'lmg';
+        if (weapon === 'shotgun') return 'shotgun';
+        return 'rifle';
+    }
+
+    function playReloadCue(c, weaponId, cueName, cueId) {
+        if (!c) return;
+        var cue = String(cueName || 'start').toLowerCase();
+        var profile = reloadProfileKey(cueId, weaponId);
+
+        if (cue === 'start') {
+            if (profile === 'sidearm') {
+                playNoiseBurst(c, { duration: 0.028, vol: 0.018, frequency: 2800, q: 3.2, filterType: 'bandpass' });
+                playOscBurst(c, { type: 'square', startFreq: 760, endFreq: 420, duration: 0.045, vol: 0.012, delay: 0.001 });
+                return;
+            }
+            if (profile === 'precision') {
+                playNoiseBurst(c, { duration: 0.032, vol: 0.022, frequency: 2200, q: 2.1, filterType: 'bandpass' });
+                playOscBurst(c, { type: 'triangle', startFreq: 320, endFreq: 220, duration: 0.07, vol: 0.012, delay: 0.002 });
+                return;
+            }
+            if (profile === 'shotgun') {
+                playNoiseBurst(c, { duration: 0.038, vol: 0.026, frequency: 1700, q: 1.4, filterType: 'bandpass' });
+                playOscBurst(c, { type: 'triangle', startFreq: 240, endFreq: 160, duration: 0.08, vol: 0.016, delay: 0.002 });
+                return;
+            }
+            if (profile === 'lmg') {
+                playNoiseBurst(c, { duration: 0.032, vol: 0.024, frequency: 1500, q: 1.2, filterType: 'bandpass' });
+                playOscBurst(c, { type: 'triangle', startFreq: 220, endFreq: 140, duration: 0.075, vol: 0.015, delay: 0.002 });
+                return;
+            }
+            playNoiseBurst(c, { duration: 0.03, vol: 0.02, frequency: 2100, q: 2.0, filterType: 'bandpass' });
+            playOscBurst(c, { type: 'triangle', startFreq: 280, endFreq: 190, duration: 0.065, vol: 0.013, delay: 0.002 });
+            return;
+        }
+
+        if (cue === 'manipulate') {
+            if (profile === 'sidearm') {
+                playNoiseBurst(c, { duration: 0.03, vol: 0.022, frequency: 3200, q: 3.4, filterType: 'highpass' });
+                playNoiseBurst(c, { duration: 0.048, vol: 0.02, frequency: 1850, q: 2.0, filterType: 'bandpass', delay: 0.004 });
+                playOscBurst(c, { type: 'square', startFreq: 940, endFreq: 520, duration: 0.05, vol: 0.012, delay: 0.002 });
+                return;
+            }
+            if (profile === 'precision') {
+                playNoiseBurst(c, { duration: 0.055, vol: 0.026, frequency: 1500, q: 1.4, filterType: 'bandpass' });
+                playNoiseBurst(c, { duration: 0.03, vol: 0.018, frequency: 3200, q: 3.0, filterType: 'highpass', delay: 0.01 });
+                playOscBurst(c, { type: 'triangle', startFreq: 240, endFreq: 130, duration: 0.11, vol: 0.016, delay: 0.004 });
+                return;
+            }
+            if (profile === 'shotgun') {
+                playNoiseBurst(c, { duration: 0.06, vol: 0.032, frequency: 1280, q: 1.1, filterType: 'bandpass' });
+                playNoiseBurst(c, { duration: 0.04, vol: 0.02, frequency: 2400, q: 2.8, filterType: 'highpass', delay: 0.012 });
+                playOscBurst(c, { type: 'sawtooth', startFreq: 210, endFreq: 120, duration: 0.12, vol: 0.018, delay: 0.004 });
+                return;
+            }
+            if (profile === 'lmg') {
+                playNoiseBurst(c, { duration: 0.05, vol: 0.03, frequency: 1180, q: 1.0, filterType: 'bandpass' });
+                playNoiseBurst(c, { duration: 0.028, vol: 0.018, frequency: 2600, q: 2.6, filterType: 'highpass', delay: 0.008 });
+                playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 108, duration: 0.1, vol: 0.017, delay: 0.004 });
+                return;
+            }
+            playNoiseBurst(c, { duration: 0.042, vol: 0.026, frequency: 1600, q: 1.3, filterType: 'bandpass' });
+            playNoiseBurst(c, { duration: 0.03, vol: 0.016, frequency: 2800, q: 2.5, filterType: 'highpass', delay: 0.008 });
+            playOscBurst(c, { type: 'triangle', startFreq: 220, endFreq: 130, duration: 0.095, vol: 0.015, delay: 0.004 });
+            return;
+        }
+
+        if (profile === 'sidearm') {
+            playNoiseBurst(c, { duration: 0.022, vol: 0.018, frequency: 3400, q: 3.0, filterType: 'highpass' });
+            playOscBurst(c, { type: 'triangle', startFreq: 880, endFreq: 620, duration: 0.04, vol: 0.011, delay: 0.001 });
+            return;
+        }
+        if (profile === 'precision') {
+            playNoiseBurst(c, { duration: 0.028, vol: 0.02, frequency: 2600, q: 2.0, filterType: 'bandpass' });
+            playOscBurst(c, { type: 'triangle', startFreq: 340, endFreq: 240, duration: 0.06, vol: 0.012, delay: 0.002 });
+            return;
+        }
+        if (profile === 'shotgun') {
+            playNoiseBurst(c, { duration: 0.034, vol: 0.024, frequency: 2000, q: 2.1, filterType: 'bandpass' });
+            playOscBurst(c, { type: 'triangle', startFreq: 260, endFreq: 180, duration: 0.08, vol: 0.014, delay: 0.003 });
+            return;
+        }
+        if (profile === 'lmg') {
+            playNoiseBurst(c, { duration: 0.03, vol: 0.022, frequency: 1800, q: 1.6, filterType: 'bandpass' });
+            playOscBurst(c, { type: 'triangle', startFreq: 230, endFreq: 160, duration: 0.075, vol: 0.014, delay: 0.002 });
+            return;
+        }
+        playNoiseBurst(c, { duration: 0.026, vol: 0.02, frequency: 2400, q: 2.2, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 300, endFreq: 220, duration: 0.065, vol: 0.012, delay: 0.002 });
+    }
+
     function playKillFinisher(c, head) {
         var accentStart = head ? 1240 : 1080;
         var accentEnd = head ? 760 : 660;
@@ -753,6 +854,9 @@
                     break;
                 case 'throw':
                     playOscBurst(c, { type: 'sine', startFreq: 240, endFreq: 160, duration: 0.06, vol: 0.05 });
+                    break;
+                case 'reload':
+                    playReloadCue(c, options.weapon || 'rifle', options.cue || 'start', options.cueId || '');
                     break;
                 default:
                     break;

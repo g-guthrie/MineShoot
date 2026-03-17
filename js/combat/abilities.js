@@ -31,7 +31,8 @@
             stunDuration: 'hookStunDuration',
             pullDistance: 'hookPullDistance',
             catchRadius: 'hookCatchRadius',
-            travelSpeed: 'hookTravelSpeed'
+            travelSpeed: 'hookTravelSpeed',
+            pullSpeed: 'hookPullSpeed'
         },
         missile: {
             range: 'missileRange',

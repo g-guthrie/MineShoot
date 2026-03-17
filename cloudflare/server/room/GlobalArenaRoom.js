@@ -849,9 +849,14 @@ export class GlobalArenaRoom extends DurableObject {
     const entities = [];
     for (const player of this.players.values()) {
       if (!player || this.isEntityDisconnected(player)) continue;
+      this.materializeTrackedWeaponAmmo(player, now);
       entities.push(toEntityState(player));
     }
-    for (const bot of this.bots.values()) entities.push(toEntityState(bot));
+    for (const bot of this.bots.values()) {
+      if (!bot) continue;
+      this.materializeTrackedWeaponAmmo(bot, now);
+      entities.push(toEntityState(bot));
+    }
     const serializedById = new Map();
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i];
@@ -1452,6 +1457,18 @@ export class GlobalArenaRoom extends DurableObject {
       defaultWeaponLoadout: DEFAULT_WEAPON_LOADOUT,
       reloadedFlashHoldMs: RELOADED_FLASH_HOLD_MS
     });
+  }
+
+  materializeTrackedWeaponAmmo(entity, now = nowMs()) {
+    if (!entity || !entity.weaponAmmo || typeof entity.weaponAmmo !== 'object') return false;
+    let changedAny = false;
+    for (const weaponId in entity.weaponAmmo) {
+      if (!Object.prototype.hasOwnProperty.call(entity.weaponAmmo, weaponId)) continue;
+      if (this.syncWeaponAmmoState(entity, weaponId, now)) {
+        changedAny = true;
+      }
+    }
+    return changedAny;
   }
 
   reloadRemainingForWeapon(entity, weaponId, now = nowMs()) {

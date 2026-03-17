@@ -448,3 +448,168 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
   assert.equal(fireCalls, 1);
   assert.deepEqual(playerActions, ['fire']);
 });
+
+test('runtime coordinator reveals the local overhead target when a local hit lands', async () => {
+  const code = await readModule('../js/app/runtime-coordinator.js');
+  let capturedStartOptions = null;
+  const revealedTargets = [];
+
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame() {},
+    document: {
+      pointerLockElement: null,
+      querySelector() { return null; },
+      getElementById() { return null; },
+      hasFocus() { return false; }
+    },
+    window: {
+      location: {
+        pathname: '/'
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameUI: {
+          setDebugInfo() {},
+          setIdleWarning() {},
+          setDebugVisuals() {},
+          updateMatchStatus() {},
+          showHitMarker() {},
+          showKillMarker() {},
+          showDamageNumber() {}
+        },
+        GameOverhead: {
+          revealTarget(targetId, durationMs) {
+            revealedTargets.push({ targetId, durationMs });
+          }
+        },
+        GameAudio: {
+          play() {}
+        },
+        GamePlayer: {
+          canUseWeapon() {
+            return true;
+          },
+          isSprinting() {
+            return false;
+          },
+          cancelSprintUntilRelease() {
+            return false;
+          },
+          getNetworkInputState() {
+            return {
+              forward: false,
+              backward: false,
+              left: false,
+              right: false,
+              jump: false,
+              sprint: false,
+              adsActive: false
+            };
+          },
+          triggerAction() {}
+        },
+        GameHitscan: {
+          fire(_camera, onHit) {
+            onHit(
+              { userData: { ownerType: 'enemy', targetId: 'enemy:2' } },
+              { clone() { return { x: 1, y: 2, z: 3 }; } },
+              10,
+              'body',
+              20,
+              { id: 'rifle' },
+              null
+            );
+            return true;
+          },
+          getCurrentWeapon() {
+            return { id: 'rifle' };
+          }
+        },
+        GameEnemy: {
+          damage() {
+            return { enemy: { index: 2 }, killed: false };
+          }
+        },
+        GameAbilities: {
+          isDeadeyeActive() {
+            return false;
+          }
+        },
+        GameGameplayRuntimeBootstrap: {
+          start(opts) {
+            capturedStartOptions = opts;
+            return Promise.resolve({
+              renderer: { domElement: {} },
+              scene: {},
+              clock: { getDelta() { return 0.016; } },
+              camera: {},
+              controlsApi: { bind() {} },
+              multiplayerMode: false
+            });
+          }
+        },
+        GameRuntimeSession: {
+          create() {
+            return {
+              bindRuntimeControls() {},
+              emitSessionState() {},
+              isPlaying() { return false; },
+              getActivityState() { return 'in_match'; }
+            };
+          }
+        },
+        GameGameplayRuntimeLoop: {
+          create() {
+            return {
+              step() { return {}; }
+            };
+          }
+        },
+        GamePresentationRuntimeLoop: {
+          create() {
+            return {
+              renderFrame() {}
+            };
+          }
+        },
+        GameLoop: {
+          requestFrame() {}
+        },
+        GameRuntimeShell: {
+          create(opts) {
+            return {
+              launchModeById() {
+                return opts.startRuntime();
+              },
+              getActivityState() {
+                return 'menu';
+              },
+              getActiveRuntimeMode() {
+                return {
+                  id: 'single_full_sandbox',
+                  authorityMode: 'offline'
+                };
+              },
+              getStartupDebugNotice() {
+                return '';
+              }
+            };
+          }
+        }
+      }
+    }
+  };
+
+  vm.runInContext(code, vm.createContext(sandbox));
+
+  const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
+  await coordinator.launchModeById('single_full_sandbox', {});
+
+  capturedStartOptions.tryPlayerFire();
+
+  assert.deepEqual(revealedTargets, [{ targetId: 'enemy:2', durationMs: 1500 }]);
+});

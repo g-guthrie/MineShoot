@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ensureHeadlessWorldRuntime } from '../../shared/headless-world-runtime.js';
+import {
+  createHeadlessRecorder,
+  ensureHeadlessWorldRuntime
+} from '../../shared/headless-world-runtime.js';
 import {
   BIOME_ARCTIC,
   BIOME_BASIN,
@@ -193,6 +196,71 @@ test('arctic mountain keeps a lower summit while adding more glacier texture', (
   assert.ok(stats.edgeTouchSides.west >= 1);
 });
 
+test('jungle keeps the waterfall and shrine anchors while opening the shrine court', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.jungle;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r1c0');
+  const recorder = createHeadlessRecorder();
+  const stats = builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_JUNGLE },
+    rawBounds
+  });
+
+  assert.ok(stats);
+  assert.ok(Math.abs(stats.waterfallAnchorX - (rawBounds.minX + 2.75)) < 0.0001);
+  assert.ok(Math.abs(stats.waterfallAnchorZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.34))) < 0.0001);
+  assert.ok(Math.abs(stats.shrineCenterX - (rawBounds.minX + ((rawBounds.maxX - rawBounds.minX) * 0.67))) < 0.0001);
+  assert.ok(Math.abs(stats.shrineCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.56))) < 0.0001);
+  assert.equal(stats.canopyTrees, 11);
+  assert.equal(stats.giantTrees, 9);
+  assert.equal(stats.bushyTrees, 9);
+  assert.equal(stats.saplings, 5);
+  assert.equal(stats.corridorBlockers, 3);
+  assert.equal(stats.edgeTreeAssets, 6);
+
+  const exactBorderTouches = recorder.collidables.filter((box) =>
+    Math.abs(box.min.x - rawBounds.minX) < 0.0001 ||
+    Math.abs(box.max.x - rawBounds.maxX) < 0.0001 ||
+    Math.abs(box.min.z - rawBounds.minZ) < 0.0001 ||
+    Math.abs(box.max.z - rawBounds.maxZ) < 0.0001
+  );
+  assert.equal(exactBorderTouches.length, 0);
+});
+
+test('desert adds a mid-scale hero arch while keeping the fortress edges', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r0c2');
+  const recorder = createHeadlessRecorder();
+  const stats = builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_DESERT },
+    rawBounds
+  });
+
+  assert.ok(stats);
+  assert.ok(Math.abs(stats.centerHeroArchX - (rawBounds.minX + ((rawBounds.maxX - rawBounds.minX) * 0.52))) < 0.0001);
+  assert.ok(Math.abs(stats.centerHeroArchZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.54))) < 0.0001);
+  assert.ok(stats.centerHeroArchHeight >= 8.8);
+  assert.ok(stats.centerHeroArchHeight <= 9.2);
+  assert.ok(stats.centerHeroArchSpan >= 11.5);
+  assert.equal(stats.centerSupportCount, 2);
+
+  const northTouches = recorder.collidables.filter((box) =>
+    Math.abs(box.min.z - rawBounds.minZ) < 0.0001
+  );
+  const eastTouches = recorder.collidables.filter((box) =>
+    Math.abs(box.max.x - rawBounds.maxX) < 0.0001
+  );
+  assert.ok(northTouches.length >= 1);
+  assert.ok(eastTouches.length >= 1);
+});
+
 test('nuclear cooling towers sit flush to the east wall and tower over the old profile', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
@@ -289,4 +357,57 @@ test('nuclear reactor sign renders as a centered radiation trefoil bitmap', () =
     actualPattern.map((row) => row.join('')),
     expectedPattern
   );
+});
+
+test('wall street keeps the south hero wall while differentiating the flanks', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.basin;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r2c1');
+  const recorder = createGeometryRecorder();
+  const stats = builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_BASIN },
+    rawBounds
+  });
+
+  assert.ok(stats);
+  assert.equal(stats.busStops, 2);
+  assert.equal(stats.cover, 10);
+  assert.ok(stats.towerPeakHeight >= 59);
+  assert.ok(stats.towerPeakHeight <= 60);
+  assert.ok(stats.upperShaftWidth >= 8);
+  assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
+  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.94))) < 0.0001);
+  assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
+  assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
+  assert.equal(stats.northSupportCount, 4);
+  assert.ok(stats.westAlleyCoverCount > stats.eastAlleyCoverCount);
+
+  const busStopRoofs = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs(block.y - 2.42) < 0.0001 &&
+    Math.abs(block.w - 5.4) < 0.0001 &&
+    Math.abs(block.h - 0.28) < 0.0001 &&
+    Math.abs(block.d - 3.1) < 0.0001
+  );
+  assert.equal(busStopRoofs.length, 2);
+
+  const lobbyPilasters = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs(block.w - 1.26) < 0.0001 &&
+    Math.abs(block.h - 8.4) < 0.0001 &&
+    Math.abs(block.d - 4.8) < 0.0001
+  );
+  assert.equal(lobbyPilasters.length, 4);
+
+  const southFlushSolids = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs((block.z + (block.d * 0.5)) - rawBounds.maxZ) < 0.0001
+  );
+  assert.ok(southFlushSolids.length >= 1);
 });

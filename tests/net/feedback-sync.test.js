@@ -178,6 +178,42 @@ test('feedback sync can emit predicted local hit feedback immediately and regist
   }]);
 });
 
+test('feedback sync reveals the authoritative target overhead bar when damage lands', async () => {
+  const reveals = [];
+  const queue = [{
+    damage: 24,
+    hitType: 'body',
+    weaponId: 'rifle',
+    shotToken: 'overhead-shot',
+    pelletIndex: 0,
+    killed: false,
+    targetId: 'net:usr_target',
+    worldPos: { x: 1, y: 2, z: 3 }
+  }];
+  const harness = await loadFeedbackSyncHarness({
+    GameOverhead: {
+      revealTarget(targetId, durationMs) {
+        reveals.push({ targetId, durationMs });
+      }
+    },
+    GameNet: {
+      consumeClassCastResult() { return null; },
+      consumeDamageFeedback() { return queue.shift() || null; },
+      consumeIncomingDamageFeedback() { return null; },
+      consumeThrowAck() { return null; },
+      consumeThrowReject() { return null; },
+      getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
+      consumeThrowableEvent() { return null; },
+      consumeAbilityEvent() { return null; },
+      damagePointForEntityId() { return null; }
+    }
+  });
+
+  harness.syncGameplayFeedback({ camera: {} });
+
+  assert.deepEqual(reveals, [{ targetId: 'net:usr_target', durationMs: 1500 }]);
+});
+
 test('feedback sync suppresses duplicate non-kill hitmarker feedback after a predicted local hit', async () => {
   const queue = [{
     damage: 24,

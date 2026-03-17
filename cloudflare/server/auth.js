@@ -7,6 +7,7 @@ import {
   json,
   parseCookies
 } from './transport.js';
+import { cleanupAccountSocialState } from './social-cleanup.js';
 
 function forwardedProto(request) {
   if (!request || !request.headers) return '';
@@ -186,6 +187,38 @@ export async function handleLogout(env, request) {
   const cookieName = env.SESSION_COOKIE_NAME || 'mfa_session';
   const cookies = parseCookies(request.headers.get('Cookie'));
   const sid = cookies[cookieName];
+  let session = null;
+
+  if (sid) {
+    try {
+      session = await getSessionFromRequest(env, request);
+    } catch (err) {
+      if (console && typeof console.warn === 'function') {
+        console.warn('[auth] failed to resolve session during logout', {
+          sessionId: sid,
+          message: err && err.message ? err.message : ''
+        });
+      }
+    }
+  }
+
+  if (session && session.userId) {
+    try {
+      await cleanupAccountSocialState(env, session.userId);
+    } catch (err) {
+      if (console && typeof console.warn === 'function') {
+        console.warn('[auth] social cleanup failed during logout', {
+          userId: String(session.userId || ''),
+          details: Array.isArray(err && err.details)
+            ? err.details.map((detail) => ({
+                scope: detail && detail.scope ? detail.scope : '',
+                message: detail && detail.error && detail.error.message ? detail.error.message : ''
+              }))
+            : []
+        });
+      }
+    }
+  }
 
   if (sid) {
     await env.DB.prepare('DELETE FROM sessions WHERE id = ?1').bind(sid).run();

@@ -1,18 +1,35 @@
 const DEFAULT_CAMERA_FOV_DEG = 75;
 const DEFAULT_ADS_FOV_DEG = 56;
 const DEFAULT_SNIPER_SCOPE_FOV_DEG = 24;
+const DEFAULT_WEAPON_RELOAD_PRESENTATION = {
+  profileId: 'rifle',
+  raiseEnd: 0.16,
+  manipulateEnd: 0.68,
+  audio: {
+    start: 'reload_rifle_start',
+    manipulate: 'reload_rifle_manipulate',
+    complete: 'reload_rifle_complete'
+  }
+};
 const DEFAULT_WEAPON_PRESENTATION = {
   tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
   recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
-  audioSample: null
+  audioSample: null,
+  reload: DEFAULT_WEAPON_RELOAD_PRESENTATION
 };
 
 export const gameplayTuning = {
+  survivability: {
+    hpMax: 360,
+    armorMax: 90,
+    armorRegenDelaySec: 8.0,
+    armorRegenPerSec: 10
+  },
   awareness: {
     segments: 8,
-    radarRange: 35,
+    radarRange: 56,
     coreRange: 10,
-    beaconMinRange: 35,
+    beaconMinRange: 56,
     beaconMaxCount: 2
   },
   network: {
@@ -131,59 +148,115 @@ export const gameplayTuning = {
     throwIntentDirectionMinDot: -0.2
   },
   classPresets: {
-    abilities: { armorMax: 90, wallhackRadius: 90 }
+    abilities: { armorMax: 90, wallhackRadius: 90 },
+    ffa: { armorMax: 90, wallhackRadius: 90 }
   },
   weaponStats: {
     rifle: {
-      name: 'Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 260, reloadMs: 1550, magazineSize: 15,
-      bodyDamage: 44, headDamage: 104, maxRange: 110, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 132,
+      name: 'Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 260, reloadMs: 1600, magazineSize: 15,
+      bodyDamage: 44, headDamage: 90, maxRange: 110, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 132,
       hipfireBloomScale: 2.5, adsBloomScale: 1,
       aimProfile: { hipfire: { spread: 0.024, maxRange: 110 }, ads: { spread: 0, maxRange: 132 } },
+      armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 1.25 },
         recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
-        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 }
+        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 },
+        reload: {
+          profileId: 'rifle',
+          raiseEnd: 0.16,
+          manipulateEnd: 0.68,
+          audio: {
+            start: 'reload_rifle_start',
+            manipulate: 'reload_rifle_manipulate',
+            complete: 'reload_rifle_complete'
+          }
+        }
       }
     },
     pistol: {
       name: 'Pistol', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 360, reloadMs: 1350, magazineSize: 10,
-      bodyDamage: 46, headDamage: 150, maxRange: 24, pellets: 12, hipfireSpread: 0.156, adsSpread: 0.156, adsFovDeg: 56, adsMaxRange: 28,
-      aimProfile: { hipfire: { spread: 0.156, maxRange: 24 }, ads: { spread: 0.156, maxRange: 28 } },
+      bodyDamage: 46, headDamage: 96, maxRange: 24, pellets: 12, hipfireSpread: 0.137, adsSpread: 0.225, adsFovDeg: 56, adsMaxRange: 30,
+      aimProfile: { hipfire: { spread: 0.137, maxRange: 24 }, ads: { spread: 0.225, maxRange: 30 } },
       singleHitFromPellets: true,
+      armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
         recoil: { z: -0.04, x: -0.08, pitch: 0.014, yaw: 0.007, roll: 0.005, armR: 0.2, armL: 0.08, muzzleMs: 60 },
-        audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 }
+        audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 },
+        reload: {
+          profileId: 'sidearm',
+          raiseEnd: 0.18,
+          manipulateEnd: 0.62,
+          audio: {
+            start: 'reload_sidearm_start',
+            manipulate: 'reload_sidearm_manipulate',
+            complete: 'reload_sidearm_complete'
+          }
+        }
       }
     },
     machinegun: {
-      name: 'Machine Gun', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 82, reloadMs: 1388, magazineSize: 45,
-      bodyDamage: 15, headDamage: 23, maxRange: 58, pellets: 1, hipfireSpread: 0.046, adsSpread: 0.046, adsFovDeg: 56, adsMaxRange: 72,
+      name: 'Machine Gun', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 82, reloadMs: 1450, magazineSize: 50,
+      bodyDamage: 15, headDamage: 20, maxRange: 58, pellets: 1, hipfireSpread: 0.046, adsSpread: 0.046, adsFovDeg: 56, adsMaxRange: 72,
       aimProfile: { hipfire: { spread: 0.046, maxRange: 58 }, ads: { spread: 0.046, maxRange: 72 } },
+      armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.075, speed: 260, segmentLength: 1.0 },
         recoil: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 },
-        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 }
+        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 },
+        reload: {
+          profileId: 'lmg',
+          raiseEnd: 0.14,
+          manipulateEnd: 0.60,
+          audio: {
+            start: 'reload_lmg_start',
+            manipulate: 'reload_lmg_manipulate',
+            complete: 'reload_lmg_complete'
+          }
+        }
       }
     },
     shotgun: {
-      name: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 1000, reloadMs: 1850, magazineSize: 6,
-      bodyDamage: 17, headDamage: 25, maxRange: 26, pellets: 12, hipfireSpread: 0.19, adsSpread: 0.19, adsFovDeg: 56, adsMaxRange: 26,
-      aimProfile: { hipfire: { spread: 0.19, maxRange: 26 }, ads: { spread: 0.19, maxRange: 26 } },
+      name: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 950, reloadMs: 1850, magazineSize: 6,
+      bodyDamage: 17, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.19, adsSpread: 0.19, adsFovDeg: 56, adsMaxRange: 24,
+      aimProfile: { hipfire: { spread: 0.19, maxRange: 24 }, ads: { spread: 0.19, maxRange: 24 } },
+      armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.1, speed: 230, segmentLength: 1.9 },
         recoil: { z: -0.09, x: -0.16, pitch: 0.03, yaw: 0.012, roll: 0.008, armR: 0.26, armL: 0.12, muzzleMs: 70 },
-        audioSample: { url: '/assets/audio/weapons/shotgun.mp3', gain: 0.98, playbackRateMin: 0.97, playbackRateMax: 1.02 }
+        audioSample: { url: '/assets/audio/weapons/shotgun.mp3', gain: 0.98, playbackRateMin: 0.97, playbackRateMax: 1.02 },
+        reload: {
+          profileId: 'shotgun',
+          raiseEnd: 0.18,
+          manipulateEnd: 0.72,
+          audio: {
+            start: 'reload_shotgun_start',
+            manipulate: 'reload_shotgun_manipulate',
+            complete: 'reload_shotgun_complete'
+          }
+        }
       }
     },
     sniper: {
-      name: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1450, reloadMs: 2100, magazineSize: 5,
-      bodyDamage: 230, headDamage: 500, maxRange: 160, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 160,
-      aimProfile: { hipfire: { spread: 0.32, maxRange: 160 }, ads: { spread: 0, maxRange: 160 } }, infiniteRange: true,
+      name: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
+      bodyDamage: 170, headDamage: 360, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
+      aimProfile: { hipfire: { spread: 0.32, maxRange: 170 }, ads: { spread: 0, maxRange: 170 } }, infiniteRange: true,
+      armorBufferMode: 'heavy',
       presentation: {
         tracer: { life: 0.12, speed: 320, segmentLength: 2.6 },
         recoil: { z: -0.12, x: -0.2, pitch: 0.04, yaw: 0.01, roll: 0.007, armR: 0.3, armL: 0.12, muzzleMs: 90 },
-        audioSample: { url: '/assets/audio/weapons/sniper.mp3', gain: 0.82, playbackRateMin: 0.96, playbackRateMax: 1.0 }
+        audioSample: { url: '/assets/audio/weapons/sniper.mp3', gain: 0.82, playbackRateMin: 0.96, playbackRateMax: 1.0 },
+        reload: {
+          profileId: 'precision',
+          raiseEnd: 0.22,
+          manipulateEnd: 0.76,
+          audio: {
+            start: 'reload_precision_start',
+            manipulate: 'reload_precision_manipulate',
+            complete: 'reload_precision_complete'
+          }
+        }
       }
     },
   },
@@ -196,27 +269,32 @@ export const gameplayTuning = {
   throwables: {
     order: ['frag', 'plasma', 'molotov', 'knife'],
     frag: {
-      id: 'frag', category: 'grenade', label: 'Frag', speed: 22.5, upward: 5.2, gravity: 19, fuse: 2.2, radius: 6.8, damage: 125, regen: 10, bounce: true,
+      id: 'frag', category: 'grenade', label: 'Frag', speed: 22.5, upward: 5.0, gravity: 19, fuse: 2.0, radius: 6.2, damage: 110, minBlastDamage: 10, regen: 10, bounce: true,
       bounceVelocityDamping: 0.4,
       bounceVerticalDamping: 0.42,
       bounceMaxCount: 2,
-      bounceStopSpeedSq: 2.5
+      bounceStopSpeedSq: 2.5,
+      armorBufferMode: 'heavy'
     },
     plasma: {
-      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 20, upward: 3.2, gravity: 18, fuse: 2.2, maxLife: 6.0, radius: 5.0, damage: 110, regen: 10,
-      catchRadius: 1.5, trackDuration: 0.2, trackLerp: 10, acquireRange: 18, acquireHalfAngleDeg: 35, stickExplodeDelay: 2.2
+      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 19, upward: 3.0, gravity: 18, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
+      catchRadius: 1.3, trackDuration: 0.15, trackLerp: 8, acquireRange: 16, acquireHalfAngleDeg: 28, stickExplodeDelay: 1.8,
+      armorBufferMode: 'heavy'
     },
     missile: {
-      id: 'missile', label: 'Missile', speed: 38, upward: 0.2, gravity: 0.8, fuse: 1.25, radius: 2.4, damage: 90,
-      homingBoost: 6.0, homingLerp: 8.4, lockHalfAngleDeg: 12, acquireRange: 7.5, hitRadius: 0.9
+      id: 'missile', label: 'Missile', speed: 34, upward: 0.2, gravity: 0.7, fuse: 1.1, radius: 2.0, damage: 70, minBlastDamage: 10,
+      homingBoost: 4.5, homingLerp: 6.0, lockHalfAngleDeg: 10, acquireRange: 6.0, hitRadius: 0.9,
+      armorBufferMode: 'heavy'
     },
     molotov: {
-      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 17, upward: 4.8, gravity: 21, fuse: 3.0, fireRadius: 3.8,
-      fireDuration: 5.5, fireTickDamage: 18, fireTickRate: 0.35, fireInnerRadius: 2.1, fireOuterDamageScale: 0.38,
-      fireLingerDuration: 0.9, fireLingerTickDamage: 8, fireLingerTickRate: 0.4, fireMaxHeightDelta: 1.5, regen: 10
+      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 16.5, upward: 4.6, gravity: 21, fuse: 2.8, fireRadius: 4.0,
+      fireDuration: 6.5, fireTickDamage: 14, fireTickRate: 0.4, fireInnerRadius: 2.2, fireOuterDamageScale: 0.45,
+      fireLingerDuration: 1.2, fireLingerTickDamage: 5, fireLingerTickRate: 0.5, fireMaxHeightDelta: 1.5, regen: 10,
+      armorBufferMode: 'normal'
     },
     knife: {
-      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.4, gravity: 7, life: 1.8, hitRadius: 0.55, bodyDamage: 100, headDamage: 250, regen: 8
+      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.2, gravity: 7, life: 1.6, hitRadius: 0.5, bodyDamage: 90, headDamage: 180, regen: 8,
+      armorBufferMode: 'normal'
     }
   },
   abilityCatalog: {
@@ -225,38 +303,38 @@ export const gameplayTuning = {
       description: 'Single-target lift and stun in reticle box.',
       debugSummary: 'Square = choke target box.',
       tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 18000, range: 28, minDot: 0.05, duration: 2.0,
-      liftHeight: 1.75, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 315, targetTolerance: 1.6
+      cooldownMs: 18000, range: 26, minDot: 0.08, duration: 1.25,
+      liftHeight: 1.6, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 280, targetTolerance: 1.35
     },
     hook: {
       id: 'hook', slot: 'either', name: 'Chain Hook',
       description: 'Latch a target and yank them into close range.',
       debugSummary: 'Circle = hook catch radius debug.',
-      tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
-      cooldownMs: 15000, range: 24, minDot: 0.03, pullDistance: 3.2,
-      stunDuration: 1.5, castDamage: 35, lockBoxPx: 170, reticleRadiusPx: 78, catchRadius: 2.4, travelSpeed: 24
+      tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
+      cooldownMs: 14000, range: 22, minDot: 0.04, pullDistance: 4.0,
+      stunDuration: 0.5, castDamage: 20, lockBoxPx: 150, reticleRadiusPx: 68, catchRadius: 1.8, travelSpeed: 26, pullSpeed: 20
     },
     heal: {
       id: 'heal', slot: 'either', name: 'Heal',
       description: 'Brief self-heal with visible windup.',
       debugSummary: 'Visible windup before the heal resolves.',
       tunableParams: ['healAmount', 'cooldownMs'],
-      cooldownMs: 15000, duration: 0.85, healAmount: 100
+      cooldownMs: 14000, duration: 1.0, healAmount: 90
     },
     missile: {
       id: 'missile', slot: 'either', name: 'Missile',
       description: 'Fast guided micro-rocket that bends toward nearby targets.',
       debugSummary: 'Fires from muzzle and gently seeks toward nearby hostile hitboxes.',
       tunableParams: ['range', 'cooldownMs', 'damage', 'radius', 'travelSpeed', 'acquireRange', 'catchRadius', 'lockHalfAngleDeg', 'homingBoost', 'homingLerp'],
-      cooldownMs: 6000, range: 34, damage: 90, radius: 2.4, travelSpeed: 38, acquireRange: 7.5, catchRadius: 1.25,
-      lockHalfAngleDeg: 12, homingBoost: 6.0, homingLerp: 8.4, gravity: 0.8, fuse: 1.25
+      cooldownMs: 8500, range: 36, damage: 70, radius: 2.0, travelSpeed: 34, acquireRange: 6.0, catchRadius: 1.1,
+      lockHalfAngleDeg: 10, homingBoost: 4.5, homingLerp: 6.0, gravity: 0.7, fuse: 1.1
     },
     deadeye: {
       id: 'deadeye', name: 'Deadeye',
       description: 'Lock and execute marked targets.',
       debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
       tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
-      cooldownMs: 15000, range: 70, duration: 1.5, maxTargets: 2, minDot: 0.22, damage: 180
+      cooldownMs: 20000, range: 60, duration: 1.6, maxTargets: 2, minDot: 0.28, damage: 160
     }
   },
   defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
@@ -264,6 +342,10 @@ export const gameplayTuning = {
 
 export function getClassPreset(classId) {
   return gameplayTuning.classPresets[classId] || gameplayTuning.classPresets.abilities;
+}
+
+export function getSurvivabilityTuning() {
+  return gameplayTuning.survivability || {};
 }
 
 export function getMovementTuning() {
@@ -284,6 +366,19 @@ export function getWeaponPresentation(weaponId) {
   const tracer = raw.tracer || {};
   const recoil = raw.recoil || {};
   const audioSample = raw.audioSample || null;
+  const reload = raw.reload || {};
+  const reloadAudio = reload.audio || {};
+  const resolvedRaiseEnd = Number.isFinite(Number(reload.raiseEnd))
+    ? Number(reload.raiseEnd)
+    : DEFAULT_WEAPON_PRESENTATION.reload.raiseEnd;
+  const normalizedRaiseEnd = Math.max(0.05, Math.min(0.7, resolvedRaiseEnd));
+  const resolvedManipulateEnd = Number.isFinite(Number(reload.manipulateEnd))
+    ? Number(reload.manipulateEnd)
+    : DEFAULT_WEAPON_PRESENTATION.reload.manipulateEnd;
+  const normalizedManipulateEnd = Math.max(
+    normalizedRaiseEnd + 0.05,
+    Math.min(0.95, resolvedManipulateEnd)
+  );
   return {
     tracer: {
       life: Number.isFinite(Number(tracer.life)) ? Number(tracer.life) : DEFAULT_WEAPON_PRESENTATION.tracer.life,
@@ -305,7 +400,61 @@ export function getWeaponPresentation(weaponId) {
       gain: Number.isFinite(Number(audioSample.gain)) ? Number(audioSample.gain) : 1,
       playbackRateMin: Number.isFinite(Number(audioSample.playbackRateMin)) ? Number(audioSample.playbackRateMin) : 1,
       playbackRateMax: Number.isFinite(Number(audioSample.playbackRateMax)) ? Number(audioSample.playbackRateMax) : 1
-    } : null
+    } : null,
+    reload: {
+      profileId: String(reload.profileId || DEFAULT_WEAPON_PRESENTATION.reload.profileId),
+      raiseEnd: normalizedRaiseEnd,
+      manipulateEnd: normalizedManipulateEnd,
+      audio: {
+        start: String(reloadAudio.start || DEFAULT_WEAPON_PRESENTATION.reload.audio.start),
+        manipulate: String(reloadAudio.manipulate || DEFAULT_WEAPON_PRESENTATION.reload.audio.manipulate),
+        complete: String(reloadAudio.complete || DEFAULT_WEAPON_PRESENTATION.reload.audio.complete)
+      }
+    }
+  };
+}
+
+export function resolveReloadPresentationState(options, previousState) {
+  const opts = options || {};
+  const reloadMs = Math.max(0, Number(opts.reloadMs || 0));
+  const reloadRemaining = Math.max(0, Number(opts.reloadRemaining || 0));
+  const reloadedFlashRemaining = Math.max(0, Number(opts.reloadedFlashRemaining || 0));
+  const reloadConfig = opts.reload || DEFAULT_WEAPON_PRESENTATION.reload;
+  const raiseEnd = Math.max(0.05, Math.min(0.7, Number(reloadConfig.raiseEnd || DEFAULT_WEAPON_PRESENTATION.reload.raiseEnd)));
+  const manipulateEnd = Math.max(
+    raiseEnd + 0.05,
+    Math.min(0.95, Number(reloadConfig.manipulateEnd || DEFAULT_WEAPON_PRESENTATION.reload.manipulateEnd))
+  );
+  const previous = previousState || null;
+  const reloading = reloadMs > 0 && reloadRemaining > 0;
+  const reloadPct = reloading ? Math.max(0, Math.min(1, 1 - (reloadRemaining / reloadMs))) : 1;
+  let phase = 'ready';
+  let phasePct = 1;
+  if (reloading) {
+    if (reloadPct < raiseEnd) {
+      phase = 'raise';
+      phasePct = Math.max(0, Math.min(1, reloadPct / Math.max(0.0001, raiseEnd)));
+    } else if (reloadPct < manipulateEnd) {
+      phase = 'manipulate';
+      phasePct = Math.max(0, Math.min(1, (reloadPct - raiseEnd) / Math.max(0.0001, manipulateEnd - raiseEnd)));
+    } else {
+      phase = 'settle';
+      phasePct = Math.max(0, Math.min(1, (reloadPct - manipulateEnd) / Math.max(0.0001, 1 - manipulateEnd)));
+    }
+  } else if (reloadedFlashRemaining > 0) {
+    phase = 'complete';
+  }
+  const previousPhase = previous ? String(previous.phase || '') : '';
+  const previousReloading = !!(previous && previous.reloading);
+  return {
+    reloading,
+    reloadPct,
+    phase,
+    phasePct,
+    justStarted: reloading && !previousReloading,
+    justCompleted: !reloading && reloadedFlashRemaining > 0 && (previousReloading || previousPhase !== 'complete'),
+    reloadRemaining,
+    reloadedFlashRemaining
   };
 }
 
@@ -432,10 +581,13 @@ export function normalizeAbilityLoadout(slot1, slot2) {
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
+runtime.GameShared.getClassPreset = getClassPreset;
+runtime.GameShared.getSurvivabilityTuning = getSurvivabilityTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
 runtime.GameShared.getNetworkTuning = getNetworkTuning;
 runtime.GameShared.getWeaponStats = getWeaponStats;
 runtime.GameShared.getWeaponPresentation = getWeaponPresentation;
+runtime.GameShared.resolveReloadPresentationState = resolveReloadPresentationState;
 runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;
 runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;

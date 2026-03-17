@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { broadcastDamageEvent, explodeProjectile } from '../../../cloudflare/server/room/CombatService.js';
+import {
+  applyDamageFromSource,
+  broadcastDamageEvent,
+  explodeProjectile
+} from '../../../cloudflare/server/room/CombatService.js';
 
 test('explodeProjectile tags missile explosions with projectileType for remote FX', () => {
   const broadcasts = [];
@@ -33,7 +37,7 @@ test('explodeProjectile tags missile explosions with projectileType for remote F
     x: 1,
     y: 2,
     z: 3,
-    radius: 2.4
+    radius: 2
   }]);
 });
 
@@ -142,4 +146,60 @@ test('broadcastDamageEvent carries pelletIndex when present', () => {
     damage: 14,
     killed: false
   }]);
+});
+
+test('normal hits still spill excess damage into health after armor breaks', () => {
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    hp: 360,
+    armor: 10,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+
+  const out = applyDamageFromSource({ id: 'usr_attacker' }, target, 44, {
+    hitType: 'body',
+    weaponId: 'rifle',
+    sourceKind: 'weapon',
+    armorBufferMode: 'normal'
+  });
+
+  assert.deepEqual(out, {
+    id: 'usr_target',
+    hp: 326,
+    armor: 0,
+    armorDamage: 10,
+    healthDamage: 34,
+    damageApplied: 44,
+    killed: false
+  });
+});
+
+test('heavy hits are fully absorbed by any remaining armor', () => {
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    hp: 360,
+    armor: 10,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+
+  const out = applyDamageFromSource({ id: 'usr_attacker' }, target, 170, {
+    hitType: 'body',
+    weaponId: 'sniper',
+    sourceKind: 'weapon',
+    armorBufferMode: 'heavy'
+  });
+
+  assert.deepEqual(out, {
+    id: 'usr_target',
+    hp: 360,
+    armor: 0,
+    armorDamage: 10,
+    healthDamage: 0,
+    damageApplied: 10,
+    killed: false
+  });
 });

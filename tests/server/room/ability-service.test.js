@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { castChoke, castHook, tickClassAbilityState } from '../../../cloudflare/server/room/AbilityService.js';
+import { castChoke, castDeadeye, castHeal, castHook, fireDeadeyeLocks, tickClassAbilityState } from '../../../cloudflare/server/room/AbilityService.js';
 import { pullEntityToward } from '../../../cloudflare/server/room/RoomCombatRuntime.js';
 
 test('castChoke leaves the caster action timers alone and applies lift to the victim', () => {
@@ -167,6 +167,191 @@ test('server hook starts from the shared throw origin when one is available', ()
 
   assert.equal(result.ok, true);
   assert.deepEqual(player.hookState.startPos, { x: 1, y: 2, z: 3 });
+});
+
+test('castHook applies self weapon and throwable locks and stores a separate pull speed', () => {
+  const player = {
+    id: 'usr_hook',
+    alive: true,
+    x: 0,
+    y: 1.2,
+    z: 0,
+    weaponLockUntil: 0,
+    throwableLockUntil: 0
+  };
+  const room = {
+    entityCorePosition() {
+      return { x: 0, y: 1.2, z: 0 };
+    },
+    resolveClassAimPoint() {
+      return { x: 0, y: 1.2, z: -3 };
+    },
+    clampWorldAimPoint(_start, aimPoint) {
+      return aimPoint;
+    }
+  };
+
+  const result = castHook(room, player, {
+    range: 22,
+    catchRadius: 1.8,
+    pullDistance: 4.0,
+    stunDuration: 0.5,
+    castDamage: 20,
+    travelSpeed: 26,
+    pullSpeed: 20
+  }, {}, 1000);
+
+  assert.equal(result.ok, true);
+  assert.equal(player.hookState.pullSpeed, 20);
+  assert.equal(player.weaponLockUntil, player.hookState.hitAt);
+  assert.equal(player.throwableLockUntil, player.hookState.hitAt);
+});
+
+test('castHeal applies self weapon and throwable locks for the windup and clears them on resolve', () => {
+  const realNow = Date.now;
+  const timeState = { now: 1000 };
+  Date.now = function () {
+    return timeState.now;
+  };
+
+  try {
+    const player = {
+      id: 'usr_heal',
+      alive: true,
+      hp: 100,
+      hpMax: 200,
+      weaponLockUntil: 0,
+      throwableLockUntil: 0
+    };
+
+    const result = castHeal(null, player, {
+      duration: 1.0,
+      healAmount: 90
+    }, null, timeState.now);
+
+    assert.equal(result.ok, true);
+    assert.equal(player.weaponLockUntil, 2000);
+    assert.equal(player.throwableLockUntil, 2000);
+
+    timeState.now = 2000;
+    tickClassAbilityState({}, player);
+    assert.equal(player.hp, 190);
+    assert.equal(player.healState, null);
+    assert.equal(player.weaponLockUntil, 0);
+    assert.equal(player.throwableLockUntil, 0);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('castDeadeye applies weapon and throwable locks, keeps ability recast usable, and release clears the locks', () => {
+  const player = {
+    id: 'usr_deadeye',
+    alive: true,
+    weaponLockUntil: 0,
+    throwableLockUntil: 0,
+    abilityLockUntil: 0
+  };
+  const target = { id: 'usr_target', alive: true };
+  const room = {
+    deadeyeCandidates() {
+      return [target];
+    },
+    broadcast() {},
+    entityAimTargetPosition() {
+      return { x: 0, y: 1.2, z: 0 };
+    },
+    getEntityById() {
+      return target;
+    },
+    canTargetEntity() {
+      return true;
+    },
+    hasWorldLineOfSight() {
+      return true;
+    }
+  };
+
+  const start = castDeadeye(room, player, {
+    range: 60,
+    minDot: 0.28,
+    duration: 1.6,
+    maxTargets: 2,
+    damage: 160
+  }, null, 1000);
+
+  assert.equal(start.ok, true);
+  assert.equal(player.weaponLockUntil, 2600);
+  assert.equal(player.throwableLockUntil, 2600);
+  assert.equal(player.abilityLockUntil, 0);
+
+  player.deadeye.lockIndex = 1;
+  const release = fireDeadeyeLocks(room, player);
+  assert.equal(release.fired, true);
+  assert.equal(player.deadeye, null);
+  assert.equal(player.weaponLockUntil, 0);
+  assert.equal(player.throwableLockUntil, 0);
+});
+
+test('deadeye waits for expiry instead of auto-firing when all locks are acquired', () => {
+  const realNow = Date.now;
+  const timeState = { now: 1000 };
+  Date.now = function () {
+    return timeState.now;
+  };
+
+  try {
+    const target = { id: 'usr_target', alive: true };
+    const player = {
+      id: 'usr_deadeye',
+      alive: true,
+      deadeye: {
+        queue: [target.id],
+        lockIndex: 1,
+        lockEveryMs: 200,
+        nextLockAt: 1200,
+        endsAt: 1600,
+        lockEndsAt: 1600,
+        range: 60,
+        minDot: 0.28,
+        damage: 160
+      },
+      weaponLockUntil: 1600,
+      throwableLockUntil: 1600
+    };
+    const room = {
+      resolveLockedHostile() {
+        return target;
+      },
+      broadcast() {},
+      getEntityById() {
+        return target;
+      },
+      canTargetEntity() {
+        return true;
+      },
+      entityAimTargetPosition() {
+        return { x: 0, y: 1.2, z: 0 };
+      },
+      hasWorldLineOfSight() {
+        return true;
+      }
+    };
+
+    timeState.now = 1300;
+    tickClassAbilityState(room, player);
+    assert.ok(player.deadeye);
+    assert.equal(player.weaponLockUntil, 1600);
+    assert.equal(player.throwableLockUntil, 1600);
+
+    timeState.now = 1600;
+    tickClassAbilityState(room, player);
+    assert.equal(player.deadeye, null);
+    assert.equal(player.weaponLockUntil, 0);
+    assert.equal(player.throwableLockUntil, 0);
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test('hook pull releases once the target reaches the caster while following live movement', () => {

@@ -1,5 +1,5 @@
 import { json } from './transport.js';
-import { resolveActor, loadEligiblePartyMembers } from './party.js';
+import { resolveActor, loadCurrentPartyMembers } from './party.js';
 import {
   createPrivateRoomRecord,
   getPrivateRoomById,
@@ -14,6 +14,7 @@ import {
   removeActorFromPrivateRoom,
   moveActorToPrivateRoomTeam
 } from './private-rooms.js';
+import { clearPrivateRoomInvitesByRoom, clearPublicMatchAssignment, upsertPrivateRoomInvite } from './party-match-state.js';
 import {
   privateRoomIdFromCode,
   privateRoomCodeFromId,
@@ -28,6 +29,9 @@ const ROOM_PHASE_LOBBY = 'lobby';
 const ROOM_PHASE_ACTIVE = 'active';
 const TEAM_ALPHA = 'alpha';
 const TEAM_BRAVO = 'bravo';
+const TEAM_CHARLIE = 'charlie';
+const TEAM_DELTA = 'delta';
+const ROOM_TEAM_IDS = [TEAM_ALPHA, TEAM_BRAVO, TEAM_CHARLIE, TEAM_DELTA];
 const ROOM_MEMBER_MAX = 16;
 
 function nowSec() {
@@ -41,8 +45,19 @@ function normalizeRoomMode(value) {
   return ROOM_MODE_FFA;
 }
 
-function normalizeTeamId(value) {
-  return String(value || '').trim().toLowerCase() === TEAM_BRAVO ? TEAM_BRAVO : TEAM_ALPHA;
+function normalizeTeamCount(value) {
+  const parsed = Math.round(Number(value) || 2);
+  return Math.max(2, Math.min(4, parsed));
+}
+
+function activeTeamIds(teamCount) {
+  return ROOM_TEAM_IDS.slice(0, normalizeTeamCount(teamCount));
+}
+
+function normalizeTeamId(value, teamCount = 2) {
+  const normalized = String(value || '').trim().toLowerCase();
+  const allowed = activeTeamIds(teamCount);
+  return allowed.indexOf(normalized) >= 0 ? normalized : TEAM_ALPHA;
 }
 
 function randomCode(length) {
@@ -82,13 +97,19 @@ async function buildLobbyState(env, actor, roomId) {
   if (!room || !roomState) return null;
   const members = await getPrivateRoomMembers(env, roomId);
   const hostId = String(roomState.host_actor_id || '');
-  const teams = { alpha: [], bravo: [] };
+  const teamCount = normalizeTeamCount(roomState.team_count);
+  const teams = {
+    alpha: [],
+    bravo: [],
+    charlie: [],
+    delta: []
+  };
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
     const entry = {
       id: String(member.actor_id || ''),
       displayName: String(member.display_name || member.actor_id || 'PLAYER'),
-      teamId: normalizeTeamId(member.team_id),
+      teamId: normalizeTeamId(member.team_id, teamCount),
       isHost: String(member.actor_id || '') === hostId
     };
     teams[entry.teamId].push(entry);
@@ -104,13 +125,18 @@ async function buildLobbyState(env, actor, roomId) {
       roomCode: privateRoomCodeFromId(room.room_id || roomId || ''),
       roomMode: normalizeRoomMode(roomState.room_mode),
       roomPhase: String(roomState.room_phase || ROOM_PHASE_LOBBY) === ROOM_PHASE_ACTIVE ? ROOM_PHASE_ACTIVE : ROOM_PHASE_LOBBY,
+      teamCount,
+      teamIds: activeTeamIds(teamCount),
+      inviteLocked: !!Number(roomState.invite_locked || 0),
       hostActorId: hostId,
+      canToggleInviteLock: String(actor.id || '') === hostId,
+      canInviteParty: String(actor.id || '') === hostId || !Number(roomState.invite_locked || 0),
       memberCount: members.length,
       teams: teams,
       members: members.map((member) => ({
         id: String(member.actor_id || ''),
         displayName: String(member.display_name || member.actor_id || 'PLAYER'),
-        teamId: normalizeTeamId(member.team_id),
+        teamId: normalizeTeamId(member.team_id, teamCount),
         isHost: String(member.actor_id || '') === hostId
       }))
     }
@@ -133,6 +159,7 @@ async function detachActorFromPrivateRoom(env, actorId) {
   await removeActorFromPrivateRoom(env, actorId);
   const remaining = await getPrivateRoomMembers(env, roomId);
   if (remaining.length === 0) {
+    await clearPrivateRoomInvitesByRoom(env, roomId);
     await deletePrivateRoom(env, roomId);
     return roomId;
   }
@@ -144,53 +171,6 @@ async function detachActorFromPrivateRoom(env, actorId) {
   return roomId;
 }
 
-async function pullEligiblePartyIntoRoom(env, roomId, actor, initialTeamId) {
-  const eligible = await loadEligiblePartyMembers(env, actor);
-  const actorIds = eligible.map((member) => String(member.id || ''));
-  const canFit = await ensureRoomCapacity(env, roomId, actorIds);
-  if (!canFit) {
-    return { movedCount: 0, skippedCount: eligible.length, movedIds: [], skippedIds: actorIds };
-  }
-
-  const movedIds = [];
-  for (let i = 0; i < eligible.length; i++) {
-    const member = eligible[i];
-    await detachActorFromPrivateRoom(env, member.id);
-    await assignActorToPrivateRoom(env, roomId, member.id, member.displayName, initialTeamId);
-    movedIds.push(String(member.id || ''));
-  }
-
-  return {
-    movedCount: movedIds.length,
-    skippedCount: 0,
-    movedIds,
-    skippedIds: []
-  };
-}
-
-async function loadEligiblePartyMove(env, roomId, actor) {
-  const eligible = await loadEligiblePartyMembers(env, actor);
-  const actorIds = eligible.map((member) => String(member.id || ''));
-  const canFit = await ensureRoomCapacity(env, roomId, actorIds);
-  return { eligible, actorIds, canFit };
-}
-
-async function moveEligiblePartyIntoRoom(env, roomId, eligible, initialTeamId) {
-  const movedIds = [];
-  for (let i = 0; i < eligible.length; i++) {
-    const member = eligible[i];
-    await detachActorFromPrivateRoom(env, member.id);
-    await assignActorToPrivateRoom(env, roomId, member.id, member.displayName, initialTeamId);
-    movedIds.push(String(member.id || ''));
-  }
-  return {
-    movedCount: movedIds.length,
-    skippedCount: 0,
-    movedIds,
-    skippedIds: []
-  };
-}
-
 async function ensureActorOwnsRoom(env, actor) {
   const existing = await getPrivateRoomMember(env, actor.id);
   return existing ? String(existing.room_id || '') : '';
@@ -198,6 +178,7 @@ async function ensureActorOwnsRoom(env, actor) {
 
 async function createPrivateRoomWithMode(env, request, actor, roomMode) {
   const normalizedMode = normalizeRoomMode(roomMode);
+  await clearPublicMatchAssignment(env, actor.id);
   await detachActorFromPrivateRoom(env, actor.id);
   for (let attempt = 0; attempt < 12; attempt++) {
     const roomCode = randomCode(PRIVATE_ROOM_CODE_LENGTH);
@@ -211,15 +192,15 @@ async function createPrivateRoomWithMode(env, request, actor, roomMode) {
         actor.id,
         normalizedMode === ROOM_MODE_TDM ? ROOM_PHASE_LOBBY : ROOM_PHASE_ACTIVE
       );
-      const pull = await pullEligiblePartyIntoRoom(env, roomId, actor, TEAM_ALPHA);
+      await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, TEAM_ALPHA);
       await touchPrivateRoomById(env, roomId);
       await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
       const state = await buildLobbyState(env, actor, roomId);
       return {
         ok: true,
         state,
-        movedCount: pull.movedCount,
-        skippedCount: pull.skippedCount,
+        movedCount: 1,
+        skippedCount: 0,
         autoStart: normalizedMode !== ROOM_MODE_TDM
       };
     } catch (_err) {
@@ -229,7 +210,7 @@ async function createPrivateRoomWithMode(env, request, actor, roomMode) {
   throw new Error('Private room creation failed.');
 }
 
-async function joinPrivateRoomWithParty(env, actor, rawRoomCode) {
+async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   const roomId = normalizePrivateRoomId(rawRoomCode);
   if (!roomId || roomId === 'global') {
     return { ok: false, status: 400, error: 'Enter a valid private room code.' };
@@ -239,34 +220,75 @@ async function joinPrivateRoomWithParty(env, actor, rawRoomCode) {
   if (!room || !roomState) {
     return { ok: false, status: 404, error: 'Private room code not found.' };
   }
-  const eligibility = await loadEligiblePartyMove(env, roomId, actor);
-  if (!eligibility.canFit) {
+  const actorIds = [String(actor.id || '')];
+  const canFit = await ensureRoomCapacity(env, roomId, actorIds);
+  if (!canFit) {
     return {
       ok: false,
       status: 409,
       error: 'That private room is full.',
-      skippedCount: eligibility.actorIds.length
+      skippedCount: actorIds.length
     };
   }
-  const pull = await moveEligiblePartyIntoRoom(env, roomId, eligibility.eligible, TEAM_ALPHA);
+  await clearPublicMatchAssignment(env, actor.id);
+  await detachActorFromPrivateRoom(env, actor.id);
+  await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, TEAM_ALPHA);
   await touchPrivateRoomById(env, roomId);
   await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
   const state = await buildLobbyState(env, actor, roomId);
   return {
     ok: true,
     state,
-    movedCount: pull.movedCount,
-    skippedCount: pull.skippedCount,
+    movedCount: 1,
+    skippedCount: 0,
     autoStart: normalizeRoomMode(roomState.room_mode) !== ROOM_MODE_TDM
   };
 }
 
-async function randomizeTeams(env, roomId) {
+async function invitePartyToPrivateRoom(env, actor, roomId, roomState) {
+  const isHost = String(roomState.host_actor_id || '') === String(actor.id || '');
+  const inviteLocked = !!Number(roomState.invite_locked || 0);
+  if (!isHost && inviteLocked) {
+    return { ok: false, status: 403, error: 'Only the room host can invite parties while room invites are locked.' };
+  }
+  const partyMembers = await loadCurrentPartyMembers(env, actor);
+  const roomMembers = await getPrivateRoomMembers(env, roomId);
+  const roomMemberIds = new Set(roomMembers.map((member) => String(member.actor_id || '')));
+  let invitedCount = 0;
+  for (let i = 0; i < partyMembers.length; i++) {
+    const member = partyMembers[i];
+    const memberId = String(member && member.id || '');
+    if (!memberId || memberId === String(actor.id || '') || roomMemberIds.has(memberId)) continue;
+    await upsertPrivateRoomInvite(env, roomId, actor.id, memberId);
+    invitedCount += 1;
+  }
+  await touchPrivateRoomById(env, roomId);
+  const state = await buildLobbyState(env, actor, roomId);
+  return {
+    ok: true,
+    state,
+    invitedCount
+  };
+}
+
+async function normalizeMemberTeams(env, roomId, teamCount) {
+  const members = await getPrivateRoomMembers(env, roomId);
+  const allowed = activeTeamIds(teamCount);
+  let nextIndex = 0;
+  for (let i = 0; i < members.length; i++) {
+    const member = members[i];
+    if (allowed.indexOf(String(member.team_id || '').toLowerCase()) >= 0) continue;
+    await moveActorToPrivateRoomTeam(env, member.actor_id, allowed[nextIndex % allowed.length]);
+    nextIndex += 1;
+  }
+}
+
+async function randomizeTeams(env, roomId, teamCount) {
   const members = await getPrivateRoomMembers(env, roomId);
   const sorted = members.slice().sort((a, b) => String(a.actor_id || '').localeCompare(String(b.actor_id || '')));
-  const splitAt = Math.ceil(sorted.length / 2);
+  const allowed = activeTeamIds(teamCount);
   for (let i = 0; i < sorted.length; i++) {
-    await moveActorToPrivateRoomTeam(env, sorted[i].actor_id, i < splitAt ? TEAM_ALPHA : TEAM_BRAVO);
+    await moveActorToPrivateRoomTeam(env, sorted[i].actor_id, allowed[i % allowed.length]);
   }
 }
 
@@ -305,7 +327,7 @@ export async function handlePrivateRoomLobby(env, request) {
   }
 
   if (action === 'join') {
-    const result = await joinPrivateRoomWithParty(env, actor, body.roomCode || body.roomId || '');
+    const result = await joinPrivateRoomSolo(env, actor, body.roomCode || body.roomId || '');
     if (!result.ok) return json({ ok: false, error: result.error }, result.status || 400);
     return json(result);
   }
@@ -337,14 +359,42 @@ export async function handlePrivateRoomLobby(env, request) {
       roomMode: nextMode,
       roomPhase: nextMode === ROOM_MODE_TDM ? ROOM_PHASE_LOBBY : ROOM_PHASE_ACTIVE
     });
+    await normalizeMemberTeams(env, currentRoomId, Number(currentState.team_count || 2));
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
 
+  if (action === 'set_team_count') {
+    if (!isHost) return json({ ok: false, error: 'Only the room host can change team count.' }, 403);
+    const teamCount = normalizeTeamCount(body.teamCount || 2);
+    await setPrivateRoomState(env, currentRoomId, { teamCount });
+    await normalizeMemberTeams(env, currentRoomId, teamCount);
+    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    const state = await buildLobbyState(env, actor, currentRoomId);
+    return json({ ok: true, state });
+  }
+
+  if (action === 'set_invite_lock') {
+    if (!isHost) return json({ ok: false, error: 'Only the room host can change room invite access.' }, 403);
+    await setPrivateRoomState(env, currentRoomId, {
+      inviteLocked: !!body.locked
+    });
+    const state = await buildLobbyState(env, actor, currentRoomId);
+    return json({ ok: true, state });
+  }
+
+  if (action === 'invite_party') {
+    const result = await invitePartyToPrivateRoom(env, actor, currentRoomId, currentState);
+    if (!result.ok) {
+      return json({ ok: false, error: result.error }, result.status || 400);
+    }
+    return json({ ok: true, state: result.state, invitedCount: Number(result.invitedCount || 0) });
+  }
+
   if (action === 'randomize') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can randomize teams.' }, 403);
-    await randomizeTeams(env, currentRoomId);
+    await randomizeTeams(env, currentRoomId, Number(currentState.team_count || 2));
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
@@ -357,7 +407,7 @@ export async function handlePrivateRoomLobby(env, request) {
     if (!member || String(member.room_id || '') !== currentRoomId) {
       return json({ ok: false, error: 'That player is not in this room.' }, 404);
     }
-    await moveActorToPrivateRoomTeam(env, targetId, normalizeTeamId(body.teamId || TEAM_ALPHA));
+    await moveActorToPrivateRoomTeam(env, targetId, normalizeTeamId(body.teamId || TEAM_ALPHA, Number(currentState.team_count || 2)));
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });

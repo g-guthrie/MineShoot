@@ -7,6 +7,7 @@ import {
   canTargetEntity,
   deadeyeCandidates,
   handleFire,
+  handleEquipWeapon,
   handleReload,
   handleThrow,
   reloadRemainingForWeapon,
@@ -81,6 +82,46 @@ test('combat runtime only starts manual reload when the magazine is not already 
   assert.equal(ammo.reloadUntil, 1300);
 });
 
+test('combat runtime keeps per-weapon reload progress alive when the player equips another weapon', () => {
+  const weaponStats = {
+    rifle: { magazineSize: 30, reloadMs: 1200 },
+    sniper: { magazineSize: 5, reloadMs: 1800 }
+  };
+  const room = {
+    syncWeaponAmmoState(entity, weaponId, now) {
+      return syncWeaponAmmoState(this, entity, weaponId, now, {
+        weaponStats,
+        createWeaponAmmoRuntime() {
+          return {
+            rifle: { ammoInMag: 30, reloadUntil: 0, reloadedFlashUntil: 0 },
+            sniper: { ammoInMag: 5, reloadUntil: 0, reloadedFlashUntil: 0 }
+          };
+        },
+        defaultWeaponLoadout: ['rifle', 'sniper'],
+        reloadedFlashHoldMs: 900
+      });
+    }
+  };
+  const player = { weaponLoadout: ['rifle', 'sniper'], weaponId: 'rifle' };
+  const rifleAmmo = room.syncWeaponAmmoState(player, 'rifle', 100);
+  rifleAmmo.ammoInMag = 7;
+
+  assert.equal(beginWeaponReload(room, player, 'rifle', 100, { weaponStats }), true);
+
+  handleEquipWeapon(room, player, { weaponId: 'sniper' }, {
+    weaponStats,
+    canEquipWeaponId() { return true; }
+  });
+
+  assert.equal(player.weaponId, 'sniper');
+  assert.equal(reloadRemainingForWeapon(room, player, 'rifle', 200), 1100);
+  assert.equal(reloadRemainingForWeapon(room, player, 'sniper', 200), 0);
+
+  const after = room.syncWeaponAmmoState(player, 'rifle', 1300);
+  assert.equal(after.ammoInMag, 30);
+  assert.equal(after.reloadUntil, 0);
+});
+
 test('combat runtime handleReload validates the weapon and forwards to the room reload helper', () => {
   const player = {
     id: 'p1',
@@ -109,6 +150,66 @@ test('combat runtime handleReload validates the weapon and forwards to the room 
     weaponId: 'rifle',
     now: 450
   }]);
+});
+
+test('combat runtime handleReload rejects reload when weapon use is locked', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    weaponId: 'rifle'
+  };
+  const room = {
+    canEntityUseWeapon() { return false; },
+    beginWeaponReload() {
+      throw new Error('should not begin reload');
+    }
+  };
+
+  const reloaded = handleReload(room, player, { weaponId: 'rifle' }, {
+    nowMs: () => 450,
+    weaponStats: { rifle: { magazineSize: 30, reloadMs: 1200 } },
+    canEquipWeaponId() { return true; }
+  });
+
+  assert.equal(reloaded, false);
+  assert.equal(player.weaponId, 'rifle');
+});
+
+test('combat runtime relies on generic weapon locks instead of a deadeye special case', () => {
+  const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -8 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    deadeye: { lockIndex: 1 },
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  const sent = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    canTargetEntity() { return true; },
+    worldCollidables() { return []; },
+    syncWeaponAmmoState() { return { ammoInMag: 5, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [target]; }
+  };
+
+  handleFire(room, player, { weaponId: 'rifle', shotToken: 'deadeye-fire' }, {
+    nowMs: () => 200,
+    weaponStats: { rifle: { cooldownMs: 100, magazineSize: 30 } },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot() { return [{ target, damage: 12, hitType: 'body' }]; },
+    applyDamageFromSource() { return { killed: false }; },
+    broadcastDamageEvent(_room, ownerId) { sent.push({ ownerId }); },
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(sent, [{ ownerId: 'p1' }]);
 });
 
 test('combat runtime resolves locked hostiles and handles throw/fire envelopes', () => {

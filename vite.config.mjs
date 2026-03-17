@@ -42,7 +42,7 @@ export default defineConfig({
             path.includes('/js/presentation/overhead.js') ||
             path.includes('/js/actors/avatar-rig.js') ||
             path.includes('/js/presentation/actor-visual-factory.js') ||
-            path.includes('/js/presentation/bloom-reticle.js') ||
+            path.includes('/js/presentation/spread-reticle.js') ||
             path.includes('/js/actors/enemy.js') ||
             path.includes('/js/actors/hitbox-factory.js')
           ) return 'gameplay-render';

@@ -35,3 +35,63 @@ test('arctic unit-area report shows exact edges and neighboring object slices', 
   assert.match(report.content, /\n    [-+]+\n 56 /);
   assert.ok(report.content.includes('Object map (sampled authored placements across the visible biome slices)'));
 });
+
+test('jungle map keeps a looser but readable distribution after the reauthor', () => {
+  const report = buildReport('jungle');
+
+  assert.ok(report.content.includes('Jungle biome distribution map'));
+  assert.ok(report.occupiedCells >= 58);
+  assert.ok(report.occupiedCells <= 62);
+  assert.equal(report.countsByKind.get('edgeTree'), 6);
+  assert.ok(report.denseCells.every((cell) => cell.count <= 2));
+  assert.ok(report.denseCells.some((cell) => cell.row >= 5 && cell.row <= 8 && cell.col >= 2 && cell.col <= 4));
+  assert.ok(report.denseCells.some((cell) => cell.row >= 10 && cell.row <= 12 && cell.col >= 6 && cell.col <= 11));
+});
+
+test('desert map gains a center hero beat without creating a new hotspot', () => {
+  const report = buildReport('desert');
+  const heroArchCell = report.denseCells.find((cell) => cell.labels.includes('center-hero-arch'));
+  const centerBand = report.denseCells.filter((cell) =>
+    cell.row >= 6 && cell.row <= 9 && cell.col >= 5 && cell.col <= 8
+  );
+
+  assert.ok(report.content.includes('Desert biome distribution map'));
+  assert.ok(report.occupiedCells >= 52);
+  assert.ok(report.occupiedCells <= 56);
+  assert.equal(report.countsByKind.get('heroArch'), 1);
+  assert.equal(report.countsByKind.get('butte'), 1);
+  assert.equal(report.countsByKind.get('fence'), 1);
+  assert.ok(report.denseCells.every((cell) => cell.count <= 2));
+  assert.ok(heroArchCell);
+  assert.ok(heroArchCell.row >= 6 && heroArchCell.row <= 8);
+  assert.ok(heroArchCell.col >= 6 && heroArchCell.col <= 8);
+  assert.ok(centerBand.length >= 4);
+});
+
+test('wall street map starts earlier, stays center-dominant, and avoids new hotspots', () => {
+  const report = buildReport('basin');
+  const topBandCells = report.denseCells.filter((cell) => cell.row <= 3);
+  const northInteriorSupport = report.denseCells.filter((cell) =>
+    cell.row >= 3 && cell.row <= 6 && cell.col >= 5 && cell.col <= 8
+  );
+  const westFlank = report.denseCells.filter((cell) =>
+    cell.row >= 5 && cell.row <= 11 && cell.col >= 3 && cell.col <= 5
+  );
+  const eastFlank = report.denseCells.filter((cell) =>
+    cell.row >= 5 && cell.row <= 11 && cell.col >= 9 && cell.col <= 11
+  );
+  const centerBand = report.denseCells.filter((cell) =>
+    cell.row >= 5 && cell.row <= 12 && cell.col >= 6 && cell.col <= 8
+  );
+
+  assert.ok(report.content.includes('Wall Street biome distribution map'));
+  assert.ok(report.occupiedCells >= 34);
+  assert.ok(report.occupiedCells <= 38);
+  assert.ok(report.denseCells.every((cell) => cell.count <= 2));
+  assert.ok(topBandCells.length >= 2);
+  assert.ok(northInteriorSupport.length >= 2);
+  assert.ok(westFlank.length >= 1);
+  assert.ok(eastFlank.length >= 1);
+  assert.ok(centerBand.length > westFlank.length);
+  assert.ok(centerBand.length > eastFlank.length);
+});

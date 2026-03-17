@@ -87,6 +87,21 @@ test('tunables page calls out the pistol versus shotgun spread-model split', asy
   assert.match(html, /primitiveType/i);
 });
 
+test('throwable detail pages expose the richer projectile and denial tuning knobs', async () => {
+  const docs = await loadDocsHarness();
+  docs.setState({ selectedThrowableId: 'plasma' });
+  const plasmaHtml = docs.buildContent('throwables');
+  docs.setState({ selectedThrowableId: 'molotov' });
+  const molotovHtml = docs.buildContent('throwables');
+
+  assert.match(plasmaHtml, /trackDuration/i);
+  assert.match(plasmaHtml, /trackLerp/i);
+  assert.match(plasmaHtml, /maxLife/i);
+  assert.match(molotovHtml, /fireInnerRadius/i);
+  assert.match(molotovHtml, /fireLingerDuration/i);
+  assert.match(molotovHtml, /fireLingerTickDamage/i);
+});
+
 test('docs pages reflect remapped slot, throwable, and manual labels', async () => {
   const docs = await loadDocsHarness(null, {
     GameInputBindings: {

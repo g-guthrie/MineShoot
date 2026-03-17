@@ -7,6 +7,7 @@ import {
   getWeaponFalloffProfile,
   getWeaponPresentation,
   normalizeAbilityLoadout,
+  resolveReloadPresentationState,
   resolveWeaponAdsFovDeg,
   resolveWeaponAimProfile
 } from '../../shared/gameplay-tuning.js';
@@ -30,6 +31,7 @@ function ttkMs(weapon, hitType) {
 
 test('weapon tuning exposes a valid fastest perfect-ttk weapon', () => {
   const shotgun = gameplayTuning.weaponStats.shotgun;
+  assert.equal(FULL_HEALTH_DURABILITY, 450);
   assert.equal(shotsToKill(shotgun, 'body'), 3);
   assert.equal(shotsToKill(shotgun, 'head'), 2);
 
@@ -60,9 +62,9 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
     {
       rifle: 15,
       pistol: 10,
-      machinegun: 45,
+      machinegun: 50,
       shotgun: 6,
-      sniper: 5
+      sniper: 4
     }
   );
 
@@ -75,13 +77,23 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
       sniper: gameplayTuning.weaponStats.sniper.reloadMs
     },
     {
-      rifle: 1550,
+      rifle: 1600,
       pistol: 1350,
-      machinegun: 1388,
+      machinegun: 1450,
       shotgun: 1850,
-      sniper: 2100
+      sniper: 2400
     }
   );
+});
+
+test('awareness tuning expands radar coverage before targets are already visually obvious', () => {
+  assert.deepEqual(gameplayTuning.awareness, {
+    segments: 8,
+    radarRange: 56,
+    coreRange: 10,
+    beaconMinRange: 56,
+    beaconMaxCount: 2
+  });
 });
 
 test('shared weapon helpers expose the selectable loadout order and falloff profiles', () => {
@@ -101,9 +113,41 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   assert.equal(rifle.tracer.speed, 280);
   assert.equal(rifle.recoil.muzzleMs, 60);
   assert.equal(rifle.audioSample.url, '/assets/audio/weapons/rifle.mp3');
+  assert.equal(rifle.reload.profileId, 'rifle');
+  assert.equal(rifle.reload.raiseEnd, 0.16);
   assert.equal(sniper.tracer.segmentLength, 2.6);
   assert.equal(sniper.recoil.pitch, 0.04);
   assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper.mp3');
+  assert.equal(sniper.reload.profileId, 'precision');
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.resolveReloadPresentationState, 'function');
+});
+
+test('reload presentation helper resolves phase boundaries and completion flashes from weapon tuning', () => {
+  const rifle = getWeaponPresentation('rifle');
+  const raising = resolveReloadPresentationState({
+    reloadMs: 1600,
+    reloadRemaining: 1400,
+    reloadedFlashRemaining: 0,
+    reload: rifle.reload
+  });
+  const manipulating = resolveReloadPresentationState({
+    reloadMs: 1600,
+    reloadRemaining: 620,
+    reloadedFlashRemaining: 0,
+    reload: rifle.reload
+  }, raising);
+  const completed = resolveReloadPresentationState({
+    reloadMs: 1600,
+    reloadRemaining: 0,
+    reloadedFlashRemaining: 400,
+    reload: rifle.reload
+  }, manipulating);
+
+  assert.equal(raising.phase, 'raise');
+  assert.equal(raising.justStarted, true);
+  assert.equal(manipulating.phase, 'manipulate');
+  assert.equal(completed.phase, 'complete');
+  assert.equal(completed.justCompleted, true);
 });
 
 test('ADS aim profiles can tighten spread independently from hipfire', () => {
@@ -115,6 +159,8 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
 
   assert.equal(rifle.hipfireSpread, 0.024);
   assert.equal(rifle.adsSpread, 0);
+  assert.equal(pistol.hipfireSpread, 0.137);
+  assert.equal(pistol.adsSpread, 0.225);
   assert.equal(resolveWeaponAimProfile(rifle, false).spread, rifle.hipfireSpread);
   assert.equal(resolveWeaponAimProfile(rifle, true).spread, rifle.adsSpread);
   assert.equal(resolveWeaponAimProfile(machinegun, true).spread, machinegun.adsSpread);
@@ -133,16 +179,29 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
   assert.equal(resolveWeaponAdsFovDeg(sniper), 24);
 });
 
-test('Vader choke duration includes the extra half-second hold', () => {
-  assert.equal(gameplayTuning.abilityCatalog.choke.duration, 2.0);
+test('survivability tuning exposes the tanky baseline and slower armor reset window', () => {
+  assert.deepEqual(gameplayTuning.survivability, {
+    hpMax: 360,
+    armorMax: 90,
+    armorRegenDelaySec: 8.0,
+    armorRegenPerSec: 10
+  });
+  assert.equal(gameplayTuning.classPresets.abilities.armorMax, 90);
+  assert.equal(gameplayTuning.classPresets.ffa.armorMax, 90);
 });
 
 test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
   assert.equal(gameplayTuning.abilityCatalog.choke.cooldownMs, 18000);
-  assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 1.5);
-  assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 100);
-  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 6000);
+  assert.equal(gameplayTuning.abilityCatalog.choke.duration, 1.25);
+  assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 0.5);
+  assert.equal(gameplayTuning.abilityCatalog.hook.pullSpeed, 20);
+  assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 90);
+  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 8500);
+  assert.equal(gameplayTuning.abilityCatalog.deadeye.damage, 160);
   assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
+  assert.equal(gameplayTuning.weaponStats.sniper.armorBufferMode, 'heavy');
+  assert.equal(gameplayTuning.throwables.frag.minBlastDamage, 10);
+  assert.equal(gameplayTuning.throwables.molotov.armorBufferMode, 'normal');
 });
 
 test('ability loadout normalization repairs invalid and duplicate picks', () => {

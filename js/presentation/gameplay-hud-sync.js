@@ -7,6 +7,7 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameGameplayHudSync = {};
+    var lastReloadPresentationByWeaponId = {};
 
     function netView() {
         var net = runtime.GameNet || null;
@@ -79,6 +80,119 @@
             return runtime.GameHitscan.getHudState();
         }
         return null;
+    }
+
+    function currentWeaponLoadout() {
+        var combat = runtime.GamePlayerCombat || null;
+        if (combat && combat.getWeaponLoadout) {
+            var loadout = combat.getWeaponLoadout();
+            if (loadout && Array.isArray(loadout.slots) && loadout.slots.length) {
+                return loadout.slots.slice();
+            }
+        }
+        if (runtime.GameHitscan && runtime.GameHitscan.getWeaponOrder) {
+            return runtime.GameHitscan.getWeaponOrder();
+        }
+        return [];
+    }
+
+    function weaponPresentationFor(weaponId) {
+        var shared = runtime.GameShared || null;
+        return shared && shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+    }
+
+    function resolveReloadPresentationState(weaponState, previousState) {
+        if (!weaponState) {
+            return {
+                reloading: false,
+                reloadPct: 1,
+                phase: 'ready',
+                phasePct: 1,
+                justStarted: false,
+                justCompleted: false
+            };
+        }
+        var shared = runtime.GameShared || null;
+        if (shared && shared.resolveReloadPresentationState) {
+            return shared.resolveReloadPresentationState({
+                reloadMs: Number(weaponState.reloadMs || 0),
+                reloadRemaining: Number(weaponState.reloadRemaining || 0),
+                reloadedFlashRemaining: Number(weaponState.reloadedFlashRemaining || 0),
+                reload: weaponPresentationFor(weaponState.id) ? weaponPresentationFor(weaponState.id).reload : null
+            }, previousState || null);
+        }
+        var reloading = !!weaponState.reloading;
+        var previous = previousState || null;
+        return {
+            reloading: reloading,
+            reloadPct: reloading && Number(weaponState.reloadMs || 0) > 0
+                ? Math.max(0, Math.min(1, 1 - (Number(weaponState.reloadRemaining || 0) / Math.max(1, Number(weaponState.reloadMs || 1)))))
+                : 1,
+            phase: reloading ? String(weaponState.reloadPhase || 'manipulate') : (Number(weaponState.reloadedFlashRemaining || 0) > 0 ? 'complete' : 'ready'),
+            phasePct: Math.max(0, Math.min(1, Number(weaponState.reloadPhasePct != null ? weaponState.reloadPhasePct : (reloading ? 0.5 : 1)))),
+            justStarted: reloading && !(previous && previous.reloading),
+            justCompleted: !reloading && Number(weaponState.reloadedFlashRemaining || 0) > 0 && !!(previous && previous.reloading)
+        };
+    }
+
+    function syncReloadFeedback(weaponState, nowMs) {
+        var combat = runtime.GamePlayerCombat || null;
+        var loadout = currentWeaponLoadout();
+        var nextReloadPresentationByWeaponId = {};
+        for (var i = 0; i < loadout.length; i++) {
+            var weaponId = String(loadout[i] || '');
+            if (!weaponId) continue;
+            var state = null;
+            if (combat && combat.getWeaponState) {
+                state = combat.getWeaponState(weaponId, nowMs);
+            } else if (weaponState && weaponState.id === weaponId) {
+                state = weaponState;
+            }
+            if (!state) continue;
+            nextReloadPresentationByWeaponId[weaponId] = resolveReloadPresentationState(
+                state,
+                lastReloadPresentationByWeaponId[weaponId] || null
+            );
+        }
+        if (weaponState && weaponState.id && !nextReloadPresentationByWeaponId[weaponState.id]) {
+            nextReloadPresentationByWeaponId[weaponState.id] = resolveReloadPresentationState(
+                weaponState,
+                lastReloadPresentationByWeaponId[weaponState.id] || null
+            );
+        }
+
+        var activeWeaponId = weaponState && weaponState.id ? String(weaponState.id || '') : '';
+        var activeReloadPresentation = activeWeaponId ? nextReloadPresentationByWeaponId[activeWeaponId] : null;
+        var previousActiveReloadPresentation = activeWeaponId ? (lastReloadPresentationByWeaponId[activeWeaponId] || null) : null;
+        if (runtime.GameAudio && runtime.GameAudio.play && activeWeaponId && activeReloadPresentation) {
+            var presentation = weaponPresentationFor(activeWeaponId);
+            var audioIds = presentation && presentation.reload && presentation.reload.audio ? presentation.reload.audio : null;
+            if (activeReloadPresentation.justStarted) {
+                runtime.GameAudio.play('reload', {
+                    weapon: activeWeaponId,
+                    cue: 'start',
+                    cueId: audioIds ? audioIds.start : ''
+                });
+            } else if (
+                activeReloadPresentation.reloading &&
+                activeReloadPresentation.phase === 'manipulate' &&
+                (!previousActiveReloadPresentation || previousActiveReloadPresentation.phase !== 'manipulate')
+            ) {
+                runtime.GameAudio.play('reload', {
+                    weapon: activeWeaponId,
+                    cue: 'manipulate',
+                    cueId: audioIds ? audioIds.manipulate : ''
+                });
+            } else if (activeReloadPresentation.justCompleted) {
+                runtime.GameAudio.play('reload', {
+                    weapon: activeWeaponId,
+                    cue: 'complete',
+                    cueId: audioIds ? audioIds.complete : ''
+                });
+            }
+        }
+
+        lastReloadPresentationByWeaponId = nextReloadPresentationByWeaponId;
     }
 
     function currentAbilityLoadoutState(multiplayerMode) {
@@ -189,9 +303,9 @@
         if (options.weaponDebugState) {
             var weaponLines = [];
             if (options.weaponDebugState.spreadRadiusPx > 0) {
-                weaponLines.push('bloom: ' + Math.round(options.weaponDebugState.spreadRadiusPx) + 'px');
+                weaponLines.push('hit area: ' + Math.round(options.weaponDebugState.spreadRadiusPx) + 'px');
             } else {
-                weaponLines.push('bloom: off');
+                weaponLines.push('hit area: off');
             }
             weaponLines.push('reticle: ' + String(options.weaponDebugState.reticleKind || 'crosshair'));
             sections.unshift({
@@ -343,6 +457,7 @@
         if (runtime.GameUI && runtime.GameUI.updateCooldown && weaponHudState) {
             runtime.GameUI.updateCooldown(weaponHudState);
         }
+        syncReloadFeedback(weaponState, stamp);
         if (runtime.GameUI && runtime.GameUI.updateDamageEffects) {
             runtime.GameUI.updateDamageEffects(dt);
         }

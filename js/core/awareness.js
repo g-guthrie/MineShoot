@@ -10,9 +10,9 @@
         ? RT.GameCombatTuning.getAwarenessTuning()
         : {
             segments: 8,
-            radarRange: 35,
+            radarRange: 56,
             coreRange: 10,
-            beaconMinRange: 35,
+            beaconMinRange: 56,
             beaconMaxCount: 2
         };
 

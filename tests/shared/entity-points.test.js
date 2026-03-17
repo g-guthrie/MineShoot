@@ -28,6 +28,7 @@ import {
   entityFeetY,
   entityHeadHitboxY,
   entityHeadHitboxYFromFeet,
+  entityMarkerPointYFromFeet,
   logicalHitscanOriginFromEye
 } from '../../shared/entity-points.js';
 
@@ -36,6 +37,7 @@ test('feet-based hitbox helpers preserve the shared center offsets', () => {
 
   assert.equal(entityBodyHitboxYFromFeet(feetY), feetY + BODY_HITBOX_CENTER_OFFSET_Y);
   assert.equal(entityHeadHitboxYFromFeet(feetY), feetY + HEAD_HITBOX_CENTER_OFFSET_Y);
+  assert.equal(entityMarkerPointYFromFeet(feetY), feetY + 2.25);
 });
 
 test('entity-space and feet-space hitbox helpers agree on the same position', () => {

@@ -227,7 +227,7 @@
                 function (hitData) {
                     if (!hitData || !hitData.result) return;
                     if (opts.handleEnemyHit) {
-                        opts.handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result);
+                        opts.handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result, hitData.targetId || '');
                     }
                 },
                 setTransientDebug
@@ -245,13 +245,30 @@
             if (!hitscanApi || !hitscanApi.reloadCurrentWeapon) return false;
             var currentWeapon = hitscanApi.getCurrentWeapon ? hitscanApi.getCurrentWeapon() : null;
             var weaponId = currentWeapon && currentWeapon.id ? String(currentWeapon.id || '') : '';
-            var started = !!hitscanApi.reloadCurrentWeapon();
-            if (!started) return false;
             var commandsApi = netCommands();
-            if (multiplayerMode() && commandsApi && commandsApi.sendReload) {
-                commandsApi.sendReload(weaponId);
+            if (!weaponId) return false;
+            if (currentWeapon) {
+                var reloadMs = Number(currentWeapon.reloadMs);
+                var magazineSize = Number(currentWeapon.magazineSize);
+                var ammoInMag = Number(currentWeapon.ammoInMag);
+                if (currentWeapon.reloading) return false;
+                if (isFinite(reloadMs) && reloadMs <= 0) return false;
+                if (isFinite(magazineSize) && magazineSize <= 0) return false;
+                if (isFinite(magazineSize) && magazineSize > 0 && isFinite(ammoInMag) && ammoInMag >= magazineSize) {
+                    return false;
+                }
             }
-            return true;
+            if (multiplayerMode()) {
+                if (!commandsApi || !commandsApi.sendReload) {
+                    setTransientDebug('Reload unavailable.', 700);
+                    return false;
+                }
+                if (!commandsApi.sendReload(weaponId)) {
+                    setTransientDebug('Reload send failed.', 700);
+                    return false;
+                }
+            }
+            return !!hitscanApi.reloadCurrentWeapon();
         }
 
         function bindDocsControls() {

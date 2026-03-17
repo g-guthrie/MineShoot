@@ -6,12 +6,18 @@ Use with [`world-planning-workflow.md`](/Users/gguthrie/Desktop/code%20bs/minecr
 
 - Biome name: Wall Street
 - Grid cell: `r2c1`
-- Current biome id: `basin`
 - Theme / fantasy: Toontown Wall Street, with a satirical finance district built against the south wall
 - Perimeter wall being hidden: south wall
 - Hero landmark: CEO tower rising out of a NYSE-style exchange frontage
-- Secondary structures: west annex, east brokerage block, alleys, plaza cover, signage
-- One-sentence pitch: A giant stock-exchange facade and impossible CEO tower turn the old basin into a dense satirical Wall Street canyon that hides the south perimeter wall.
+- Secondary structures: west annex, east brokerage block, north offices, kiosks, alleys, plaza cover, signage
+- One-sentence pitch: A giant stock-exchange facade and impossible CEO tower turn the south-center slot into a dense satirical Wall Street canyon that hides the south perimeter wall.
+
+### Exact Edge Math
+
+- Current cell bounds: `x:[56,110] z:[110,164]`
+- Current cell centerline: `x:83 z:137`
+- South perimeter wall strip from [`buildBiomePerimeter(...)`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/world-layout.js) sits just beyond the cell at roughly `z:164.6`
+- CEO tower target height is capped at roughly `y:52`
 
 ## 2. Intent Sheet
 
@@ -144,10 +150,10 @@ South
 
 - Ground / apron: `y 0-1`
 - Lower playable tier: `y 1-7`
-- Mid playable tier: `y 8-14`
-- Upper playable tier: `y 15-22` only on selected side-block balcony edges or podium lip if proven safe
-- Skyline-only tier: `y 23-78`
-- Maximum height: `y 78`
+- Mid playable tier: `y 8-16`
+- Upper playable tier: `y 17-20` only on selected side-block balcony edges or podium lip if proven safe
+- Skyline-only tier: `y 21-52`
+- Maximum height: `y 52`
 
 ### Silhouette Rules
 
@@ -165,8 +171,8 @@ South
 
 ### Anchors
 
-- Primary anchor: exchange center `u:0.50 v:0.90`, approx world `x:83 z:153.8`
-- Secondary anchor: west block center `u:0.24 v:0.66`, approx world `x:72.1 z:143.7`
+- Primary anchor: exchange center `u:0.50 v:0.84`, exact world `x:83 z:155.36`
+- Secondary anchor: west block center `u:0.21 v:0.66`, exact world `x:67.34 z:145.64`
 - Facing edge: south
 
 ### Major Pieces

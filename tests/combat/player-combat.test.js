@@ -201,6 +201,9 @@ test('player combat owns weapon presentation state and repairs it from authorita
     reloading: false,
     reloadRemaining: 0,
     reloadedFlashRemaining: 0,
+    reloadPct: 1,
+    reloadPhase: 'ready',
+    reloadPhasePct: 1,
     bodyDamage: 140,
     headDamage: 240,
     pellets: 1
@@ -211,9 +214,11 @@ test('player combat owns weapon presentation state and repairs it from authorita
   assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(1050))), {
     status: 'reloading',
     ready: false,
-    pct: 0
+    pct: 0,
+    phase: 'raise'
   });
   assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloading, true);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloadPhase, 'raise');
 
   harness.GamePlayerCombat.syncWeaponState({
     weaponId: 'sniper',
@@ -233,7 +238,8 @@ test('player combat owns weapon presentation state and repairs it from authorita
   assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(2200))), {
     status: 'reloaded',
     ready: true,
-    pct: 1
+    pct: 1,
+    phase: 'complete'
   });
 });
 
@@ -293,6 +299,112 @@ test('player combat keeps a local multiplayer reload alive until authoritative a
 
   assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2400).reloading, false);
   assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(2400).ammoInMag, 30);
+});
+
+test('player combat ignores stale zero-ammo snapshots while multiplayer reload prediction is pending', async () => {
+  const weaponStats = {
+    rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 1, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 },
+    sniper: { name: 'Sniper', cooldownMs: 900, reloadMs: 1800, magazineSize: 5, automatic: false, bodyDamage: 140, headDamage: 240, pellets: 1 }
+  };
+  const harness = await loadPlayerCombatHarness({
+    GameShared: {
+      damage: null,
+      gameplayTuning: { weaponStats },
+      getWeaponStats(weaponId) {
+        return this.gameplayTuning.weaponStats[weaponId] || null;
+      },
+      getDefaultWeaponLoadout() {
+        return ['rifle', 'sniper'];
+      },
+      getSelectableWeaponIds() {
+        return ['rifle', 'sniper'];
+      }
+    }
+  });
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.recordWeaponFire('rifle', 1000);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1000).reloading, true);
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 0,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0
+      }
+    }
+  }, 1020);
+
+  const currentWeapon = harness.GamePlayerCombat.getCurrentWeaponState(1020);
+  assert.equal(currentWeapon.reloading, true);
+  assert.equal(currentWeapon.ammoInMag, 0);
+});
+
+test('player combat keeps completed multiplayer reloads stable through the local grace window', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.recordWeaponFire('rifle', 1050);
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1100), true);
+
+  const completedState = harness.GamePlayerCombat.getCurrentWeaponState(2300);
+  assert.equal(completedState.reloading, false);
+  assert.equal(completedState.ammoInMag, 30);
+
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 29,
+        reloading: false,
+        reloadRemaining: 0,
+        reloadedFlashRemaining: 0
+      }
+    }
+  }, 2400);
+
+  const stabilizedState = harness.GamePlayerCombat.getCurrentWeaponState(2400);
+  assert.equal(stabilizedState.reloading, false);
+  assert.equal(stabilizedState.ammoInMag, 30);
+});
+
+test('player combat keeps per-weapon reload progress alive while swapping away and back', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.recordWeaponFire('rifle', 1050);
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1100), true);
+  harness.GamePlayerCombat.equipWeapon('sniper');
+
+  const rifleWhileAway = harness.GamePlayerCombat.getWeaponState('rifle', 1600);
+  assert.equal(rifleWhileAway.reloading, true);
+  assert.equal(rifleWhileAway.reloadPhase, 'manipulate');
+  assert.ok(rifleWhileAway.reloadPct > 0.3);
+
+  const rifleCompleted = harness.GamePlayerCombat.getWeaponState('rifle', 2400);
+  assert.equal(rifleCompleted.reloading, false);
+  assert.equal(rifleCompleted.ammoInMag, 30);
+  assert.equal(rifleCompleted.reloadPhase, 'complete');
+
+  harness.GamePlayerCombat.equipWeapon('rifle');
+  const currentWeapon = harness.GamePlayerCombat.getCurrentWeaponState(2400);
+  assert.equal(currentWeapon.id, 'rifle');
+  assert.equal(currentWeapon.ammoInMag, 30);
+  assert.equal(currentWeapon.reloading, false);
 });
 
 test('player combat preserves a recent local multiplayer equip through stale snapshots', async () => {

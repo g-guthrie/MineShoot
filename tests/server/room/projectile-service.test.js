@@ -227,8 +227,8 @@ test('tickFireZones keeps a short lingering burn after an entity leaves the molo
       x: 0,
       y: 0,
       z: 0,
-      radius: 3.8,
-      life: 5.5,
+      radius: 4.0,
+      life: 6.5,
       tickTimer: 0
     });
 
@@ -237,8 +237,8 @@ test('tickFireZones keeps a short lingering burn after an entity leaves the molo
     assert.equal(target.burnUntil > now, true);
 
     target.x = 10;
-    now += 450;
-    tickFireZones(room, 0.45);
+    now += 550;
+    tickFireZones(room, 0.55);
 
     assert.equal(target.hp < hpAfterDirect, true);
     const lingerEvents = broadcasts.filter((payload) => payload.t === 'damage_event' && payload.targetId === target.id);

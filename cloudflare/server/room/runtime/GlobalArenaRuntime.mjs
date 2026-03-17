@@ -5,6 +5,7 @@ import { WORLD_MIN, WORLD_MAX } from '../../../../shared/world-layout.js';
 import { nowMs, clamp, sanitizeRoomId } from '../../transport.js';
 import { chooseSpawnPoint } from '../../../../shared/spawn-logic.js';
 import { getRateConfig } from '../../../../shared/rate-presets.js';
+import { DEFAULT_HP_MAX, DEFAULT_ARMOR_MAX } from '../../../../shared/entity-constants.js';
 
 import {
   recordHistorySample,
@@ -75,7 +76,7 @@ const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets || {};
 const GAME_MODE_FFA = 'ffa';
 const ROOM_FULL_RESYNC_MS = 1000;
 const MAX_SIM_CATCH_UP_STEPS = 5;
-const MAX_HP = 500;
+const MAX_HP = DEFAULT_HP_MAX;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const PLAYER_EYE_HEIGHT_WU = 1.6;
 const PUBLIC_ROOM_START_THRESHOLD = 2;
@@ -88,7 +89,7 @@ const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const PLAYER_SPAWN_SHIELD_MS = 1000;
 
 function classPreset() {
-  return CLASS_PRESETS.ffa || { armorMax: 90, wallhackRadius: 90 };
+  return CLASS_PRESETS.ffa || CLASS_PRESETS.abilities || { armorMax: DEFAULT_ARMOR_MAX, wallhackRadius: 90 };
 }
 
 function cloneWorldFlags(flags) {

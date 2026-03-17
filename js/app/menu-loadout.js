@@ -57,19 +57,13 @@
     function refreshBindingCopy() {
         var weaponTitle = document.getElementById('weapon-slot-title');
         var throwableTitle = document.getElementById('throwable-slot-title');
-        var throwableNote = document.getElementById('throwable-slot-note');
         var abilityTitle = document.getElementById('ability-slot-title');
-        var abilityNote = document.getElementById('ability-slot-note');
 
         var throwableKey = bindingLabel('throwable', 'Q');
-        var ability1Key = bindingLabel('ability_1', 'E');
-        var ability2Key = bindingLabel('ability_2', 'F');
 
         if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
         if (throwableTitle) throwableTitle.textContent = 'Throwables [' + throwableKey + ']';
-        if (throwableNote) throwableNote.textContent = 'Hold ' + throwableKey + ' for preview, release to throw.';
         if (abilityTitle) abilityTitle.textContent = 'Abilities';
-        if (abilityNote) abilityNote.textContent = 'Pick ability 1 for ' + ability1Key + ' and ability 2 for ' + ability2Key + '. Switch anytime from this menu.';
     }
 
     function weaponNameLookup() {

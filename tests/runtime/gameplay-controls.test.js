@@ -77,6 +77,7 @@ async function loadControlsHarness(options = {}) {
     debugToggles: 0,
     reloads: 0,
     reloadMessages: [],
+    transientDebug: [],
     toggleWeaponCalls: [],
     appliedWeapons: []
   };
@@ -158,7 +159,9 @@ async function loadControlsHarness(options = {}) {
     getMultiplayerMode() { return false; },
     handleEnemyHit() {},
     hasInputCapture() { return true; },
-    setTransientDebug() {},
+    setTransientDebug(text, ms) {
+      calls.transientDebug.push({ text: String(text || ''), ms: Number(ms || 0) });
+    },
     toggleDebugVisuals() {
       calls.debugToggles += 1;
       return false;
@@ -253,6 +256,61 @@ test('gameplay controls trigger reload on the bound key and forward multiplayer 
 
   assert.equal(harness.calls.reloads, 1);
   assert.deepEqual(harness.calls.reloadMessages, ['rifle']);
+});
+
+test('gameplay controls do not start multiplayer reload prediction when reload send fails', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameNet: {
+        sendReload(weaponId) {
+          harness.calls.reloadMessages.push(String(weaponId || ''));
+          return false;
+        }
+      }
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyR',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(harness.calls.reloads, 0);
+  assert.deepEqual(harness.calls.reloadMessages, ['rifle']);
+  assert.deepEqual(harness.calls.transientDebug, [{
+    text: 'Reload send failed.',
+    ms: 700
+  }]);
+});
+
+test('gameplay controls do not start multiplayer reload prediction when reload networking is unavailable', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameNet: {}
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyR',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(harness.calls.reloads, 0);
+  assert.deepEqual(harness.calls.reloadMessages, []);
+  assert.deepEqual(harness.calls.transientDebug, [{
+    text: 'Reload unavailable.',
+    ms: 700
+  }]);
 });
 
 test('gameplay controls toggle weapons once for a single mouse-wheel notch', async () => {

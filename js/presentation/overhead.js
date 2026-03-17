@@ -9,6 +9,9 @@
 
     var container = null;
     var entries = new Map();
+    var revealUntilByTargetId = new Map();
+    var REVEAL_HOLD_MS = 1500;
+    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
 
     function ensureContainer() {
         if (container) return;
@@ -63,6 +66,33 @@
         return '#ff6f6f';
     }
 
+    function nowStamp() {
+        if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
+            return Number(performance.now() || 0);
+        }
+        return Date.now();
+    }
+
+    function descriptorTargetId(desc) {
+        return desc && desc.targetId ? String(desc.targetId) : '';
+    }
+
+    function descriptorMarkerY(desc) {
+        if (!desc || !desc.worldPos) return 0;
+        if (entityPoints && entityPoints.entityMarkerPointYFromFeet) {
+            return entityPoints.entityMarkerPointYFromFeet(desc.worldPos.y);
+        }
+        return Number(desc.worldPos.y || 0) + 2.25;
+    }
+
+    function pruneExpiredRevealTargets(stamp) {
+        revealUntilByTargetId.forEach(function (revealUntil, targetId) {
+            if (Number(revealUntil || 0) <= stamp) {
+                revealUntilByTargetId.delete(targetId);
+            }
+        });
+    }
+
     function getLocalEnemyDescriptors() {
         if (!globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return [];
 
@@ -80,8 +110,7 @@
                 hpMax: e.maxHp || 500,
                 armor: typeof e.armor === 'number' ? e.armor : 0,
                 armorMax: typeof e.armorMax === 'number' ? e.armorMax : 100,
-                worldPos: e.group.position,
-                headY: 2.9
+                worldPos: e.group.position
             });
         }
 
@@ -106,33 +135,28 @@
                 hpMax: e.hpMax,
                 armor: e.armor,
                 armorMax: e.armorMax,
-                worldPos: e.worldPos,
-                headY: e.headY || 2.9
+                worldPos: e.worldPos
             });
         }
 
         return out;
     }
 
-    function descriptorVisible(desc, playerPos, crosshairTargetId) {
-        if (!desc || !desc.worldPos || !playerPos) return false;
-        if (crosshairTargetId && crosshairTargetId === desc.targetId) return true;
-
-        var dx = desc.worldPos.x - playerPos.x;
-        var dz = desc.worldPos.z - playerPos.z;
-        var d = Math.sqrt(dx * dx + dz * dz);
-        return d <= 22;
+    function descriptorVisible(desc, stamp, crosshairTargetId) {
+        if (!desc || !desc.worldPos) return false;
+        if (crosshairTargetId && crosshairTargetId === descriptorTargetId(desc)) return true;
+        return Number(revealUntilByTargetId.get(descriptorTargetId(desc)) || 0) > stamp;
     }
 
-    function updateEntry(entry, desc, camera, stamp, playerPos, crosshairTargetId) {
+    function updateEntry(entry, desc, camera, stamp, crosshairTargetId) {
         entry.touched = stamp;
 
-        if (!descriptorVisible(desc, playerPos, crosshairTargetId)) {
+        if (!descriptorVisible(desc, stamp, crosshairTargetId)) {
             entry.root.style.display = 'none';
             return;
         }
 
-        var p = new THREE.Vector3(desc.worldPos.x, (desc.worldPos.y || 0) + desc.headY, desc.worldPos.z);
+        var p = new THREE.Vector3(desc.worldPos.x, descriptorMarkerY(desc), desc.worldPos.z);
         p.project(camera);
 
         if (p.z < -1 || p.z > 1) {
@@ -144,7 +168,8 @@
         var y = (-p.y * 0.5 + 0.5) * window.innerHeight;
 
         entry.root.style.display = 'block';
-        entry.root.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
+        entry.root.style.left = Math.round(x) + 'px';
+        entry.root.style.top = Math.round(y) + 'px';
         entry.name.textContent = desc.name || '';
 
         var hpMax = Math.max(1, desc.hpMax || 1);
@@ -175,11 +200,20 @@
         ensureContainer();
     };
 
-    GameOverhead.update = function (camera, playerPos, crosshairTargetId) {
-        if (!camera || !playerPos) return;
+    GameOverhead.revealTarget = function (targetId, durationMs) {
+        var id = String(targetId || '');
+        if (!id) return false;
+        var holdMs = Math.max(0, Number(durationMs || REVEAL_HOLD_MS));
+        revealUntilByTargetId.set(id, nowStamp() + holdMs);
+        return true;
+    };
+
+    GameOverhead.update = function (camera, _playerPos, crosshairTargetId) {
+        if (!camera) return;
         ensureContainer();
 
-        var stamp = performance.now();
+        var stamp = nowStamp();
+        pruneExpiredRevealTargets(stamp);
         var descriptors = getLocalEnemyDescriptors().concat(getNetworkDescriptors());
 
         for (var i = 0; i < descriptors.length; i++) {
@@ -189,7 +223,7 @@
                 entry = makeEntry(desc.id);
                 entries.set(desc.id, entry);
             }
-            updateEntry(entry, desc, camera, stamp, playerPos, crosshairTargetId);
+            updateEntry(entry, desc, camera, stamp, crosshairTargetId);
         }
 
         cleanupUntouched(stamp);

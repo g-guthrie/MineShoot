@@ -1,6 +1,12 @@
 import { json, sanitizeRoomId } from './transport.js';
-import { resolveActor } from './party.js';
+import { loadCurrentPartyContext, loadEligiblePartyMembers, resolveActor } from './party.js';
 import { handlePrivateRoomLobby } from './private-room-lobby.js';
+import {
+  acquirePublicMatchQueueLock,
+  assignPublicMatchToActors,
+  loadPublicMatchAssignment,
+  releasePublicMatchQueueLock
+} from './party-match-state.js';
 import {
   PUBLIC_ROOM_PREFIX,
   DEFAULT_PUBLIC_ROOM_COUNT,
@@ -60,6 +66,62 @@ function buildRoomPayload(roomId, privacy, extras = null) {
   return payload;
 }
 
+function buildPartyMatchQueueKey(actor, partyContext) {
+  if (partyContext && partyContext.party && partyContext.party.id) {
+    return `party:${String(partyContext.party.id || '').trim().toLowerCase()}`;
+  }
+  return `solo:${String(actor && actor.id ? actor.id : '').trim().toLowerCase()}`;
+}
+
+function buildPartyMemberSnapshot(memberIds) {
+  return memberIds
+    .map((memberId) => String(memberId || '').trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
+
+async function loadAssignedRoomForParty(env, memberIds) {
+  const ids = Array.isArray(memberIds) ? memberIds.map((memberId) => String(memberId || '').trim()).filter(Boolean) : [];
+  if (!ids.length) return null;
+  const assignments = await Promise.all(ids.map((memberId) => loadPublicMatchAssignment(env, memberId)));
+  const present = [];
+  const missingActorIds = [];
+  for (let i = 0; i < ids.length; i++) {
+    const assignment = assignments[i];
+    if (assignment && assignment.room_id) {
+      present.push(assignment);
+    } else {
+      missingActorIds.push(ids[i]);
+    }
+  }
+  if (!present.length) return null;
+  const first = present[0];
+  const roomId = String(first.room_id || '');
+  const gameMode = String(first.game_mode || 'ffa');
+  const allMatch = present.every((assignment) => (
+    String(assignment.room_id || '') === roomId &&
+    String(assignment.game_mode || 'ffa') === gameMode
+  ));
+  if (!allMatch) {
+    return {
+      conflict: true
+    };
+  }
+  const roomState = await fetchRoomState(env, roomId);
+  const out = {
+    roomId,
+    gameMode,
+    assignedActorIds: present.map((assignment) => String(assignment.actor_id || '')).filter(Boolean),
+    missingActorIds
+  };
+  if (roomState) {
+    out.players = Math.max(0, Number(roomState.players) || 0);
+    out.connectedPlayers = Math.max(0, Number(roomState.connectedPlayers) || 0);
+  }
+  return out;
+}
+
 async function fetchRoomState(env, roomId) {
   const id = env.GLOBAL_ARENA.idFromName(roomId);
   const stub = env.GLOBAL_ARENA.get(id);
@@ -85,22 +147,23 @@ function chooseBestRoom(entries, predicate) {
   return candidates.length ? candidates[0] : null;
 }
 
-function selectQuickMatchRoom(entries, gameMode, startThreshold, roomCapacity) {
+function selectQuickMatchRoom(entries, gameMode, startThreshold, roomCapacity, groupSize) {
+  const size = Math.max(1, Number(groupSize) || 1);
   if (gameMode === 'lms') {
     return (
-      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
-      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold)
+      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && (entry.connectedPlayers + size) <= startThreshold) ||
+      chooseBestRoom(entries, (entry) => !entry.matchStarted && (entry.connectedPlayers + size) <= startThreshold)
     );
   }
   return (
-    chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && entry.connectedPlayers < startThreshold) ||
-    chooseBestRoom(entries, (entry) => entry.matchStarted && entry.connectedPlayers < PUBLIC_ROOM_SOFT_TARGET) ||
-    chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers < startThreshold) ||
-    chooseBestRoom(entries, (entry) => entry.matchStarted && entry.connectedPlayers < roomCapacity)
+    chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && (entry.connectedPlayers + size) <= startThreshold) ||
+    chooseBestRoom(entries, (entry) => entry.matchStarted && (entry.connectedPlayers + size) <= PUBLIC_ROOM_SOFT_TARGET) ||
+    chooseBestRoom(entries, (entry) => !entry.matchStarted && (entry.connectedPlayers + size) <= startThreshold) ||
+    chooseBestRoom(entries, (entry) => entry.matchStarted && (entry.connectedPlayers + size) <= roomCapacity)
   );
 }
 
-async function allocateQuickMatch(env, requestedGameMode) {
+async function allocateQuickMatch(env, requestedGameMode, groupSize = 1) {
   const gameMode = normalizePublicGameMode(requestedGameMode);
   const startThreshold = publicRoomStartThresholdForMode(gameMode);
   const roomCount = clampInt(env.PUBLIC_ROOM_COUNT, 1, 24, DEFAULT_PUBLIC_ROOM_COUNT);
@@ -142,8 +205,8 @@ async function allocateQuickMatch(env, requestedGameMode) {
   }));
 
   const selected =
-    selectQuickMatchRoom(stateEntries, gameMode, startThreshold, roomCapacity) ||
-    selectQuickMatchRoom(overflowStateEntries, gameMode, startThreshold, roomCapacity);
+    selectQuickMatchRoom(stateEntries, gameMode, startThreshold, roomCapacity, groupSize) ||
+    selectQuickMatchRoom(overflowStateEntries, gameMode, startThreshold, roomCapacity, groupSize);
 
   if (selected) {
     return buildRoomPayload(selected.roomId, 'public', {
@@ -226,8 +289,108 @@ export async function handleMatchmaking(env, request) {
   const action = String(body.action || '').trim().toLowerCase();
 
   if (action === 'quick') {
-    const payload = await allocateQuickMatch(env, body.gameMode || 'ffa');
-    return json(payload);
+    const actor = await resolveActor(env, request, body).catch(() => null);
+    if (!actor) {
+      const legacyPayload = await allocateQuickMatch(env, body.gameMode || 'ffa', 1);
+      return json(legacyPayload);
+    }
+    const partyContext = await loadCurrentPartyContext(env, actor);
+    const currentPartyMembers = Array.isArray(partyContext.members) ? partyContext.members : [];
+    const currentMemberIds = currentPartyMembers.map((member) => String(member.id || '')).filter(Boolean);
+    const partySize = Math.max(1, currentMemberIds.length);
+    const queueKey = buildPartyMatchQueueKey(actor, partyContext);
+    const partySnapshot = buildPartyMemberSnapshot(currentMemberIds);
+
+    if (partySize > 1) {
+      const selfMember = currentPartyMembers.find((member) => String(member.id || '') === String(actor.id || ''));
+      if (!selfMember || !selfMember.isLeader) {
+        return json({ ok: false, error: 'Only the party leader can start public matchmaking.' }, 403);
+      }
+      const eligiblePartyMembers = await loadEligiblePartyMembers(env, actor);
+      if (eligiblePartyMembers.length !== partySize) {
+        return json({ ok: false, error: 'All party members must be in the menu to queue together.' }, 409);
+      }
+    }
+
+    const existingAssignment = await loadAssignedRoomForParty(env, currentMemberIds);
+    if (existingAssignment && existingAssignment.conflict) {
+      return json({ ok: false, error: 'That party already has a different public match assignment.' }, 409);
+    }
+    if (existingAssignment && existingAssignment.roomId) {
+      if (existingAssignment.missingActorIds && existingAssignment.missingActorIds.length) {
+        await assignPublicMatchToActors(
+          env,
+          existingAssignment.missingActorIds,
+          existingAssignment.roomId,
+          existingAssignment.gameMode || body.gameMode || 'ffa',
+          actor.id
+        );
+      }
+      const payload = buildRoomPayload(existingAssignment.roomId, 'public', {
+        gameMode: existingAssignment.gameMode || body.gameMode || 'ffa'
+      });
+      if (Number.isFinite(existingAssignment.players)) {
+        payload.players = existingAssignment.players;
+      }
+      if (Number.isFinite(existingAssignment.connectedPlayers)) {
+        payload.connectedPlayers = existingAssignment.connectedPlayers;
+      }
+      return json(payload);
+    }
+
+    const claimed = await acquirePublicMatchQueueLock(
+      env,
+      queueKey,
+      actor.id,
+      partyContext && partyContext.party ? partyContext.party.id : '',
+      partySize,
+      body.gameMode || 'ffa'
+    );
+    if (!claimed.ok) {
+      if (claimed.pending) {
+        return json({ ok: false, error: 'Public matchmaking is already starting for this party.' }, 409);
+      }
+      return json({ ok: false, error: claimed.error || 'Public matchmaking is unavailable.' }, claimed.status || 400);
+    }
+
+    let lockReleased = false;
+    try {
+      const lockedContext = await loadCurrentPartyContext(env, actor);
+      const lockedMembers = Array.isArray(lockedContext.members) ? lockedContext.members : [];
+      const lockedMemberIds = lockedMembers.map((member) => String(member.id || '')).filter(Boolean);
+      const lockedQueueKey = buildPartyMatchQueueKey(actor, lockedContext);
+      const lockedSnapshot = buildPartyMemberSnapshot(lockedMemberIds);
+      if (lockedQueueKey !== queueKey || lockedSnapshot !== partySnapshot) {
+        return json({ ok: false, error: 'Your party changed before matchmaking could start. Try again.' }, 409);
+      }
+
+      const payload = await allocateQuickMatch(env, body.gameMode || 'ffa', partySize);
+
+      const postAllocContext = await loadCurrentPartyContext(env, actor);
+      const postAllocMembers = Array.isArray(postAllocContext.members) ? postAllocContext.members : [];
+      const postAllocMemberIds = postAllocMembers.map((member) => String(member.id || '')).filter(Boolean);
+      const postAllocQueueKey = buildPartyMatchQueueKey(actor, postAllocContext);
+      const postAllocSnapshot = buildPartyMemberSnapshot(postAllocMemberIds);
+      if (postAllocQueueKey !== queueKey || postAllocSnapshot !== partySnapshot) {
+        return json({ ok: false, error: 'Your party changed before matchmaking could finish. Try again.' }, 409);
+      }
+
+      const eligibleMembers = partySize > 1 ? await loadEligiblePartyMembers(env, actor) : currentPartyMembers;
+      await assignPublicMatchToActors(
+        env,
+        eligibleMembers.map((member) => String(member.id || '')),
+        payload.roomId,
+        payload.gameMode || body.gameMode || 'ffa',
+        actor.id
+      );
+      await releasePublicMatchQueueLock(env, queueKey);
+      lockReleased = true;
+      return json(payload);
+    } finally {
+      if (!lockReleased) {
+        await releasePublicMatchQueueLock(env, queueKey).catch(() => null);
+      }
+    }
   }
 
   if (action === 'private') {

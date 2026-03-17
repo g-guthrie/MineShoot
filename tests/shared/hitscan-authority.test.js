@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { resolveHitscanShot } from '../../shared/hitscan-authority.js';
+import { gameplayTuning } from '../../shared/gameplay-tuning.js';
 
 function makeWeaponStats(overrides = {}) {
   return {
@@ -57,6 +58,21 @@ test('hitscan spread follows the current on-screen FOV', () => {
 
   assert.ok(Math.abs(zoomedShot.point.x) < Math.abs(hipfireShot.point.x));
   assert.ok(Math.abs(zoomedShot.point.y - 1.6) < Math.abs(hipfireShot.point.y - 1.6));
+});
+
+function hitAreaAtDistance(spread, fovDeg, distance) {
+  const halfAngle = Math.atan(Number(spread || 0) * Math.tan((Number(fovDeg || 0) * Math.PI / 180) * 0.5));
+  const radius = Math.tan(halfAngle) * Number(distance || 0);
+  return Math.PI * radius * radius;
+}
+
+test('shared pistol tuning keeps hipfire near 20 m^2 and leaves ADS near 26 m^2 at 24m', () => {
+  const pistol = gameplayTuning.weaponStats.pistol;
+  const hipfireArea = hitAreaAtDistance(pistol.hipfireSpread, 75, 24);
+  const adsArea = hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24);
+
+  assert.ok(Math.abs(hipfireArea - 20) < 0.05);
+  assert.ok(Math.abs(adsArea - 25.9) < 0.1);
 });
 
 test('hitscan view FOV clamps to the weapon zoom range', () => {

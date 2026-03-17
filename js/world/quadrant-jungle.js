@@ -548,43 +548,46 @@ import { pointInBounds as pt } from './biome-utils.js';
     function buildJungleQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
         var center = pt(bounds, 0.67, 0.56);
+        var waterfallAnchorZ = pt(bounds, 0, 0.34).z;
+        var edgeTreeAssets = [
+            { assetId: 'waterfallCrownTree', x: bounds.minX + 1.55, z: waterfallAnchorZ - 10.8, rotY: 0.18, scale: 1, radius: 4.6 },
+            { assetId: 'waterfallBranchTree', x: bounds.minX + 1.6, z: waterfallAnchorZ + 10.4, rotY: -0.24, scale: 1, radius: 4.2 },
+            { assetId: 'waterfallWallTree', x: bounds.minX + 1.45, z: waterfallAnchorZ - 19.5, rotY: 0.1, scale: 0.96, radius: 3.8 },
+            { assetId: 'waterfallBranchTree', x: bounds.minX + 1.52, z: waterfallAnchorZ + 24.8, rotY: -0.16, scale: 0.94, radius: 4.1 },
+            { assetId: 'waterfallBranchTree', x: bounds.minX + 1.3, z: bounds.maxZ - 4.6, rotY: Math.PI * 0.5, scale: 0.94, radius: 4.1 },
+            { assetId: 'waterfallCrownTree', x: bounds.maxX - 2.4, z: bounds.maxZ - 2.5, rotY: -0.34, scale: 0.92, radius: 4.3 }
+        ];
 
         buildShrine(center.x, center.z, place, mats, ctx);
 
         var wfPt = {
             x: bounds.minX + 2.75,
-            z: pt(bounds, 0, 0.34).z
+            z: waterfallAnchorZ
         };
         buildWaterfall(wfPt.x, wfPt.z, place, mats, ctx);
 
-        addEnvironmentAsset('waterfallCrownTree', bounds.minX + 1.55, 0, wfPt.z - 10.8, 0.18, 1, ctx);
-        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.6, 0, wfPt.z + 10.4, -0.24, 1, ctx);
-        addEnvironmentAsset('waterfallWallTree', bounds.minX + 1.45, 0, wfPt.z - 19.5, 0.1, 0.96, ctx);
-        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.52, 0, wfPt.z + 24.8, -0.16, 0.94, ctx);
-        addEnvironmentAsset('waterfallBranchTree', bounds.minX + 1.3, 0, bounds.maxZ - 4.6, Math.PI * 0.5, 0.94, ctx);
-        addEnvironmentAsset('waterfallCrownTree', bounds.maxX - 2.4, 0, bounds.maxZ - 2.5, -0.34, 0.92, ctx);
-        ctx.addExclusion(bounds.minX + 2.2, wfPt.z - 10.8, 4.6);
-        ctx.addExclusion(bounds.minX + 2.2, wfPt.z + 10.4, 4.2);
-        ctx.addExclusion(bounds.minX + 1.95, wfPt.z - 19.5, 3.8);
-        ctx.addExclusion(bounds.minX + 2.0, wfPt.z + 24.8, 4.1);
-        ctx.addExclusion(bounds.minX + 1.85, bounds.maxZ - 4.6, 4.1);
-        ctx.addExclusion(bounds.maxX - 2.1, bounds.maxZ - 2.2, 4.3);
+        for (var et = 0; et < edgeTreeAssets.length; et++) {
+            var edgeTree = edgeTreeAssets[et];
+            addEnvironmentAsset(edgeTree.assetId, edgeTree.x, 0, edgeTree.z, edgeTree.rotY, edgeTree.scale, ctx);
+            ctx.addExclusion(edgeTree.x + (et < 5 ? 0.65 : 0.3), edgeTree.z, edgeTree.radius);
+        }
 
         // ============================================================
-        // TREES -- 4 types, dramatic height variation, dense edges
+        // TREES -- redistributed around three lanes:
+        // west waterfall lane, shrine court, and south grove flank.
         // ============================================================
 
         // Type D: Giant ancient trees (towering pillars of the forest)
         var giants = [
-            { u: 0.18, v: 0.04, s: 1.18 },
-            { u: 0.36, v: 0.14, s: 1.08 },
-            { u: 0.62, v: 0.10, s: 1.02 },
-            { u: 0.72, v: 0.34, s: 1.04 },
-            { u: 0.72, v: 0.76, s: 1.06 },
-            { u: 0.48, v: 0.90, s: 1.12 },
-            { u: 0.98, v: 0.52, s: 1.02 },
-            { u: 0.90, v: 0.92, s: 1.08 },
-            { u: 0.84, v: 0.04, s: 1.1 }
+            { u: 0.16, v: 0.08, s: 1.16 },
+            { u: 0.34, v: 0.18, s: 1.08 },
+            { u: 0.54, v: 0.16, s: 1.02 },
+            { u: 0.28, v: 0.44, s: 1.04 },
+            { u: 0.82, v: 0.26, s: 1.02 },
+            { u: 0.80, v: 0.78, s: 1.06 },
+            { u: 0.56, v: 0.86, s: 1.1 },
+            { u: 0.22, v: 0.82, s: 1.12 },
+            { u: 0.90, v: 0.58, s: 1.08 }
         ];
         for (var gi = 0; gi < giants.length; gi++) {
             var gp = pt(bounds, giants[gi].u, giants[gi].v);
@@ -592,49 +595,49 @@ import { pointInBounds as pt } from './biome-utils.js';
             ctx.addExclusion(gp.x, gp.z, 2.5);
         }
 
-        // Type A: Canopy trees -- wide scale range for dramatic height contrast
+        // Type A: Canopy trees frame lanes without turning the entire rim into one ring.
         var canopyTrees = [
-            // Outer layer pushed to the actual padded biome edges.
-            { u: 0.12, v: 0.06, s: 1.55 },
-            { u: 0.32, v: 0.04, s: 1.35 },
-            { u: 0.54, v: 0.03, s: 1.6 },
-            { u: 0.78, v: 0.05, s: 1.22 },
-            { u: 0.96, v: 0.18, s: 1.22 },
-            { u: 0.97, v: 0.40, s: 1.22 },
-            { u: 0.95, v: 0.70, s: 1.35 },
-            { u: 0.82, v: 0.96, s: 1.1 },
-            { u: 0.56, v: 0.95, s: 1.22 },
-            { u: 0.28, v: 0.94, s: 1.08 },
-            { u: 0.10, v: 0.90, s: 1.18 },
-            // Inner layer spread wider with fewer clumps.
-            { u: 0.68, v: 0.26, s: 1.18 },
-            { u: 0.34, v: 0.68, s: 1.1 }
+            { u: 0.12, v: 0.12, s: 1.48 },
+            { u: 0.16, v: 0.28, s: 1.24 },
+            { u: 0.20, v: 0.48, s: 1.3 },
+            { u: 0.40, v: 0.10, s: 1.34 },
+            { u: 0.70, v: 0.12, s: 1.2 },
+            { u: 0.90, v: 0.22, s: 1.22 },
+            { u: 0.94, v: 0.70, s: 1.28 },
+            { u: 0.34, v: 0.88, s: 1.12 },
+            { u: 0.66, v: 0.90, s: 1.24 },
+            { u: 0.84, v: 0.86, s: 1.12 },
+            { u: 0.38, v: 0.68, s: 1.08 }
         ];
         for (var t = 0; t < canopyTrees.length; t++) {
             var tp = pt(bounds, canopyTrees[t].u, canopyTrees[t].v);
             addCanopyTree(tp.x, tp.z, canopyTrees[t].s, place, mats, ctx);
         }
 
-        // Type B: Bushy trees -- more of them, wider scale range
+        // Type B: Bushy trees collect into the mid-west and south-grove pockets.
         var bushyTrees = [
-            { u: 0.18, v: 0.16, s: 0.9 },
-            { u: 0.90, v: 0.26, s: 0.95 },
-            { u: 0.88, v: 0.60, s: 0.72 },
-            { u: 0.70, v: 0.88, s: 1.05 },
-            { u: 0.34, v: 0.90, s: 0.95 },
-            { u: 0.56, v: 0.36, s: 0.92 },
-            { u: 0.42, v: 0.76, s: 0.88 }
+            { u: 0.24, v: 0.24, s: 0.92 },
+            { u: 0.30, v: 0.62, s: 0.88 },
+            { u: 0.46, v: 0.36, s: 0.92 },
+            { u: 0.74, v: 0.30, s: 0.95 },
+            { u: 0.88, v: 0.44, s: 0.78 },
+            { u: 0.70, v: 0.72, s: 1.02 },
+            { u: 0.48, v: 0.82, s: 0.94 },
+            { u: 0.28, v: 0.86, s: 0.92 },
+            { u: 0.82, v: 0.84, s: 1.0 }
         ];
         for (var bt = 0; bt < bushyTrees.length; bt++) {
             var btp = pt(bounds, bushyTrees[bt].u, bushyTrees[bt].v);
             addBushyTree(btp.x, btp.z, bushyTrees[bt].s, place, mats, ctx);
         }
 
-        // Type C: Saplings -- fill gaps, especially mid-zone
+        // Type C: Saplings soften route edges without crowding the shrine court.
         var saplings = [
-            { u: 0.92, v: 0.46 },
-            { u: 0.16, v: 0.84 },
-            { u: 0.62, v: 0.78 }
+            { u: 0.18, v: 0.72 },
+            { u: 0.32, v: 0.84 },
+            { u: 0.46, v: 0.40 },
+            { u: 0.88, v: 0.58 },
+            { u: 0.96, v: 0.68 }
         ];
         for (var sp = 0; sp < saplings.length; sp++) {
             var spp = pt(bounds, saplings[sp].u, saplings[sp].v);
@@ -642,13 +645,14 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
 
         // ============================================================
-        // UNDERGROWTH -- lighter fern layer so the floor reads cleaner
+        // UNDERGROWTH -- clustered pockets instead of uniform scatter.
         // ============================================================
         var ferns = [
-            { u: 0.18, v: 0.26 }, { u: 0.60, v: 0.22 }, { u: 0.75, v: 0.40 },
-            { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 }, { u: 0.56, v: 0.74 },
-            { u: 0.88, v: 0.38 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
-            { u: 0.70, v: 0.86 }, { u: 0.42, v: 0.28 }
+            { u: 0.14, v: 0.20 }, { u: 0.18, v: 0.24 },
+            { u: 0.28, v: 0.50 }, { u: 0.32, v: 0.54 },
+            { u: 0.72, v: 0.24 }, { u: 0.78, v: 0.28 },
+            { u: 0.44, v: 0.78 }, { u: 0.50, v: 0.82 }, { u: 0.56, v: 0.84 },
+            { u: 0.84, v: 0.62 }, { u: 0.88, v: 0.68 }
         ];
         for (var f = 0; f < ferns.length; f++) {
             var fp = pt(bounds, ferns[f].u, ferns[f].v);
@@ -659,9 +663,10 @@ import { pointInBounds as pt } from './biome-utils.js';
         // LOGS
         // ============================================================
         var logs = [
-            { u: 0.28, v: 0.58, ax: true },
-            { u: 0.74, v: 0.50, ax: false },
-            { u: 0.54, v: 0.78, ax: false }
+            { u: 0.24, v: 0.56, ax: true },
+            { u: 0.60, v: 0.40, ax: false },
+            { u: 0.50, v: 0.78, ax: false },
+            { u: 0.74, v: 0.74, ax: true }
         ];
         for (var l = 0; l < logs.length; l++) {
             var lp = pt(bounds, logs[l].u, logs[l].v);
@@ -672,14 +677,14 @@ import { pointInBounds as pt } from './biome-utils.js';
         // MUSHROOMS
         // ============================================================
         var mushrooms = [
-            { u: 0.29, v: 0.59, red: true },
-            { u: 0.26, v: 0.61, red: false },
-            { u: 0.73, v: 0.49, red: true },
-            { u: 0.76, v: 0.53, red: false },
-            { u: 0.50, v: 0.23, red: false },
-            { u: 0.54, v: 0.79, red: true },
-            { u: 0.58, v: 0.77, red: false },
-            { u: 0.86, v: 0.72, red: true }
+            { u: 0.22, v: 0.60, red: true },
+            { u: 0.26, v: 0.62, red: false },
+            { u: 0.62, v: 0.30, red: false },
+            { u: 0.66, v: 0.34, red: true },
+            { u: 0.42, v: 0.76, red: false },
+            { u: 0.48, v: 0.82, red: true },
+            { u: 0.86, v: 0.66, red: true },
+            { u: 0.74, v: 0.72, red: false }
         ];
         for (var mi = 0; mi < mushrooms.length; mi++) {
             var mp = pt(bounds, mushrooms[mi].u, mushrooms[mi].v);
@@ -689,33 +694,43 @@ import { pointInBounds as pt } from './biome-utils.js';
         // ============================================================
         // GROUND VINES -- snaking between trees at ground level
         // ============================================================
-        var gv2a = pt(bounds, 0.16, 0.78);
-        var gv2b = pt(bounds, 0.32, 0.86);
+        var gv2a = pt(bounds, 0.14, 0.72);
+        var gv2b = pt(bounds, 0.30, 0.82);
         addGroundVine(gv2a.x, gv2a.z, gv2b.x, gv2b.z, place, mats);
 
-        var gv3a = pt(bounds, 0.78, 0.64);
-        var gv3b = pt(bounds, 0.88, 0.82);
+        var gv3a = pt(bounds, 0.72, 0.66);
+        var gv3b = pt(bounds, 0.86, 0.78);
         addGroundVine(gv3a.x, gv3a.z, gv3b.x, gv3b.z, place, mats);
 
         // ============================================================
-        // FALLEN PILLAR near shrine (toppled column)
+        // FALLEN PILLAR near shrine-west, framing the open court without closing it.
         // ============================================================
-        place.addRamp(center.x - 5.4, 0.42, center.z - 3.1, 0.9, 0.8, 4.8, mats.stone, 0.18, 0.08, false);
-        place.addBlock(center.x - 3.1, 0.18, center.z - 3.5, 0.95, 0.34, 0.95, mats.mossy, false);
-        place.addBlock(center.x - 6.8, 0.54, center.z - 2.8, 0.85, 0.44, 0.85, mats.stone, false);
+        place.addRamp(center.x - 6.0, 0.42, center.z - 3.2, 0.9, 0.8, 4.6, mats.stone, 0.24, 0.08, false);
+        place.addBlock(center.x - 3.9, 0.18, center.z - 3.8, 0.95, 0.34, 0.95, mats.mossy, false);
+        place.addBlock(center.x - 7.2, 0.54, center.z - 2.6, 0.85, 0.44, 0.85, mats.stone, false);
 
-        // Corridor blockers between shrine and waterfall so the jungle is not one open field.
-        place.addBlock(center.x - 8.4, 0.7, center.z - 0.4, 1.6, 1.4, 1.2, mats.stone, true);
-        place.addBlock(center.x - 10.4, 0.55, center.z + 1.2, 1.2, 1.1, 1.0, mats.mossy, true);
-        place.addRamp(center.x - 6.4, 0.42, center.z + 2.4, 1.0, 0.7, 3.2, mats.log, 1.05, -0.06, true);
+        // Corridor blockers shape an S-curve from the waterfall lane into shrine-west.
+        var corridorBlockers = [
+            { kind: 'block', x: center.x - 9.8, y: 0.7, z: center.z - 1.4, w: 1.5, h: 1.4, d: 1.2, mat: mats.stone },
+            { kind: 'block', x: center.x - 7.0, y: 0.55, z: center.z + 0.8, w: 1.3, h: 1.1, d: 1.1, mat: mats.mossy },
+            { kind: 'ramp', x: center.x - 9.2, y: 0.42, z: center.z + 3.0, w: 1.0, h: 0.7, d: 3.1, mat: mats.log, rotY: 1.02, tiltX: -0.06 }
+        ];
+        for (var cb = 0; cb < corridorBlockers.length; cb++) {
+            var blocker = corridorBlockers[cb];
+            if (blocker.kind === 'ramp') {
+                place.addRamp(blocker.x, blocker.y, blocker.z, blocker.w, blocker.h, blocker.d, blocker.mat, blocker.rotY, blocker.tiltX, true);
+            } else {
+                place.addBlock(blocker.x, blocker.y, blocker.z, blocker.w, blocker.h, blocker.d, blocker.mat, true);
+            }
+        }
 
         // ============================================================
-        // MOSS PATCHES on ground
+        // MOSS PATCHES reinforce the waterfall toe, shrine approach, and south grove.
         // ============================================================
-        place.addBlock(wfPt.x + 2.2, 0.03, wfPt.z + 2.2, 1.9, 0.04, 1.5, mats.mossy, false);
-        place.addBlock(wfPt.x - 2.0, 0.03, wfPt.z + 4.6, 1.6, 0.04, 1.2, mats.fern, false);
-        place.addBlock(center.x - 3.4, 0.03, center.z + 3.1, 2.1, 0.04, 1.6, mats.mossy, false);
-        place.addBlock(center.x + 3.6, 0.03, center.z - 1.7, 1.2, 0.04, 1.8, mats.fern, false);
+        place.addBlock(pt(bounds, 0.60, 0.40).x + 0.4, 0.03, pt(bounds, 0.60, 0.40).z + 0.3, 1.9, 0.04, 1.5, mats.mossy, false);
+        place.addBlock(wfPt.x + 5.0, 0.03, wfPt.z + 7.2, 1.8, 0.04, 1.3, mats.fern, false);
+        place.addBlock(pt(bounds, 0.50, 0.78).x + 0.5, 0.03, pt(bounds, 0.50, 0.78).z + 0.2, 2.0, 0.04, 1.5, mats.mossy, false);
+        place.addBlock(pt(bounds, 0.70, 0.72).x + 0.35, 0.03, pt(bounds, 0.70, 0.72).z + 0.45, 1.6, 0.04, 1.8, mats.fern, false);
 
         var totalTrees = giants.length + canopyTrees.length + bushyTrees.length + saplings.length;
         return {
@@ -723,7 +738,17 @@ import { pointInBounds as pt } from './biome-utils.js';
             bushes: ferns.length,
             logs: logs.length,
             artifacts: 1,
-            borderTrees: 0
+            borderTrees: 0,
+            giantTrees: giants.length,
+            canopyTrees: canopyTrees.length,
+            bushyTrees: bushyTrees.length,
+            saplings: saplings.length,
+            corridorBlockers: corridorBlockers.length,
+            edgeTreeAssets: edgeTreeAssets.length,
+            shrineCenterX: center.x,
+            shrineCenterZ: center.z,
+            waterfallAnchorX: wfPt.x,
+            waterfallAnchorZ: wfPt.z
         };
     }
 

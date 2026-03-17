@@ -3,24 +3,28 @@ multi_agent = true
 
 [agents]
 max_threads = 6
-max_depth = 2
+max_depth = 1
 
 [agents.explorer]
-description = "Context-first investigator: aggressively gathers cross-file context before recommendations."
+description = "Read-only code mapper for grep-heavy context gathering, dependency tracing, and evidence collection."
 config_file = "agents/explorer.toml"
 
 [agents.reviewer]
-description = "First-principles simplifier: questions requirements, removes unnecessary complexity, and enforces concise correctness."
+description = "High-judgment reviewer for correctness, regressions, edge cases, and safe simplification."
 config_file = "agents/reviewer.toml"
 
 [agents.balance_designer]
-description = "Big-picture gameplay architect: validates practical player experience before implementation details."
+description = "High-judgment gameplay reviewer focused on player experience, coherence, and testable acceptance criteria."
 config_file = "agents/balance-designer.toml"
 
 [agents.worker]
-description = "Implementation agent that merges context, big-picture intent, and simplification before coding."
+description = "Bounded implementation agent for pre-scoped code changes where correctness still matters."
 config_file = "agents/worker.toml"
 
 [agents.monitor]
-description = "Monitoring-focused agent for long-running checks, polling, and status tracking."
+description = "Ultra-fast read-only poller for repetitive checks, grep, logs, and simple status watching."
 config_file = "agents/monitor.toml"
+
+[agents.browser_debugger]
+description = "Browser evidence collector for reproducing UI issues and gathering concrete traces from the live app."
+config_file = "agents/browser-debugger.toml"

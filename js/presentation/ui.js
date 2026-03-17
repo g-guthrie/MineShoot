@@ -7,7 +7,7 @@
 
     var GameUI = {};
 
-    var crosshairEl, bloomReticleEl, shotgunReticleEl, plasmaReticleEl, plasmaCurveLeftEl, plasmaCurveRightEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, plasmaCurveLeftEl, plasmaCurveRightEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, idleWarningEl, abilityDebugPanelEl;
     var trackingReticleEl, trackingReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
@@ -24,7 +24,7 @@
     var deadeyeReticlePool = [];
     var deadeyeProjectVec = new THREE.Vector3();
     var debugVisualsOn = false;
-    var bloomReticle = null;
+    var spreadReticle = null;
 
     var hitmarkerTimer = null;
     var HITMARKER_HOLD_MS = 45;
@@ -128,11 +128,33 @@
         plasmaReticleEl.__decorated = true;
     }
 
+    function clearChildren(el) {
+        if (!el) return;
+        if (typeof el.replaceChildren === 'function') {
+            el.replaceChildren();
+            return;
+        }
+        if (Array.isArray(el.children)) {
+            el.children.length = 0;
+        }
+        el.textContent = '';
+        el.innerHTML = '';
+    }
+
+    function appendWeaponInfoLine(text, className) {
+        if (!weaponInfoEl) return;
+        var line = document.createElement('div');
+        line.className = className;
+        line.textContent = String(text || '');
+        weaponInfoEl.appendChild(line);
+    }
+
     GameUI.init = function () {
         crosshairEl = document.getElementById('crosshair');
-        bloomReticleEl = document.getElementById('bloom-reticle');
-        bloomReticle = (globalThis.__MAYHEM_RUNTIME.GameBloomReticle && globalThis.__MAYHEM_RUNTIME.GameBloomReticle.create)
-            ? globalThis.__MAYHEM_RUNTIME.GameBloomReticle.create(bloomReticleEl)
+        pistolReticleEl = document.getElementById('pistol-reticle');
+        spreadReticleEl = document.getElementById('spread-reticle');
+        spreadReticle = (globalThis.__MAYHEM_RUNTIME.GameSpreadReticle && globalThis.__MAYHEM_RUNTIME.GameSpreadReticle.create)
+            ? globalThis.__MAYHEM_RUNTIME.GameSpreadReticle.create(spreadReticleEl)
             : null;
         shotgunReticleEl = document.getElementById('shotgun-reticle');
         plasmaReticleEl = document.getElementById('plasma-reticle');
@@ -361,10 +383,10 @@
     GameUI.setDebugVisuals = function (enabled) {
         debugVisualsOn = !!enabled;
         if (!shotgunReticleEl) return;
-        if (bloomReticle && bloomReticle.setDebugEnabled) {
-            bloomReticle.setDebugEnabled(debugVisualsOn);
-        } else if (bloomReticleEl && !debugVisualsOn) {
-            bloomReticleEl.style.display = 'none';
+        if (spreadReticle && spreadReticle.setDebugEnabled) {
+            spreadReticle.setDebugEnabled(debugVisualsOn);
+        } else if (spreadReticleEl && !debugVisualsOn) {
+            spreadReticleEl.style.display = 'none';
         }
         if (!debugVisualsOn) {
             if (plasmaReticleEl) plasmaReticleEl.style.display = 'none';
@@ -430,7 +452,7 @@
         var parts = [];
         for (var i = 0; i < count; i++) {
             var intensity = Math.max(0, Math.min(1, Number(segs[i] || 0)));
-            var alpha = (0.04 + intensity * 0.78).toFixed(3);
+            var alpha = (intensity > 0 ? (0.14 + intensity * 0.64) : 0.04).toFixed(3);
             var start = (i * step - step * 0.5);
             var end = start + step;
             parts.push('rgba(86, 193, 255, ' + alpha + ') ' + start.toFixed(2) + 'deg ' + end.toFixed(2) + 'deg');
@@ -470,14 +492,25 @@
         if (!cooldownBarEl || !cooldownStatusEl) return;
         var status = String(state && state.status || 'ready');
         var pct = Math.max(0, Math.min(1, Number(state && state.pct != null ? state.pct : 1)));
+        var phase = String(state && state.phase || 'ready');
         cooldownBarEl.style.width = (pct * 100) + '%';
         if (status === 'reloading') {
-            cooldownBarEl.style.background = '#ff5c5c';
-            cooldownStatusEl.textContent = 'RELOADING';
-            cooldownStatusEl.style.color = '#ff5c5c';
+            if (phase === 'raise') {
+                cooldownBarEl.style.background = '#ff8b3d';
+                cooldownStatusEl.textContent = 'RELOAD :: RAISE';
+                cooldownStatusEl.style.color = '#ff8b3d';
+            } else if (phase === 'settle') {
+                cooldownBarEl.style.background = '#ffc04d';
+                cooldownStatusEl.textContent = 'RELOAD :: SETTLE';
+                cooldownStatusEl.style.color = '#ffc04d';
+            } else {
+                cooldownBarEl.style.background = '#ff5c5c';
+                cooldownStatusEl.textContent = 'RELOAD :: MANIPULATE';
+                cooldownStatusEl.style.color = '#ff5c5c';
+            }
         } else if (status === 'reloaded') {
             cooldownBarEl.style.background = '#4CAF50';
-            cooldownStatusEl.textContent = 'RELOADED';
+            cooldownStatusEl.textContent = 'RELOAD COMPLETE';
             cooldownStatusEl.style.color = '#4CAF50';
         } else if (status === 'cooldown') {
             cooldownBarEl.style.background = '#FFC107';
@@ -496,12 +529,14 @@
         if (weapon.pellets && weapon.pellets > 1) {
             mode = weapon.pellets + ' PELLETS';
         }
-        var ammo = '';
+        var ammoText = 'NO AMMO';
         if (weapon.magazineSize && weapon.magazineSize > 0) {
-            ammo = ' | ' + Math.max(0, Number(weapon.ammoInMag || 0)) + '/' + Math.max(1, Number(weapon.magazineSize || 1));
+            ammoText = Math.max(0, Number(weapon.ammoInMag || 0)) + '/' + Math.max(1, Number(weapon.magazineSize || 1));
         }
-        weaponInfoEl.textContent = weapon.name + ammo + ' | ' + mode + ' | ' +
-            weapon.bodyDamage + '/' + weapon.headDamage + ' DMG';
+        clearChildren(weaponInfoEl);
+        appendWeaponInfoLine(weapon.name, 'weapon-line weapon-line-name');
+        appendWeaponInfoLine(ammoText, 'weapon-line weapon-line-ammo');
+        appendWeaponInfoLine(mode + ' | ' + weapon.bodyDamage + '/' + weapon.headDamage + ' DMG', 'weapon-line weapon-line-meta');
     };
 
     GameUI.updateAbilityInfo = function (state) {
@@ -526,11 +561,12 @@
     };
 
     GameUI.updateReticle = function (weapon, spec, adsState) {
-        if (!crosshairEl || !bloomReticleEl || !shotgunReticleEl || !weapon) return;
+        if (!crosshairEl || !spreadReticleEl || !shotgunReticleEl || !weapon) return;
 
         var isSniper = !!(adsState && adsState.sniper);
         var blend = Math.max(0, Math.min(1, Number(adsState && adsState.blend) || 0));
         var scoped = isSniper && blend > 0.02;
+        var hitscan = globalThis.__MAYHEM_RUNTIME.GameHitscan || null;
 
         if (sniperScopeEl) {
             sniperScopeEl.style.display = scoped ? 'block' : 'none';
@@ -539,8 +575,9 @@
 
         if (scoped) {
             crosshairEl.style.display = 'none';
-            if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
-            else bloomReticleEl.style.display = 'none';
+            if (pistolReticleEl) pistolReticleEl.style.display = 'none';
+            if (spreadReticle && spreadReticle.hide) spreadReticle.hide();
+            else spreadReticleEl.style.display = 'none';
             shotgunReticleEl.style.display = 'none';
             return;
         }
@@ -548,20 +585,35 @@
         if (!(spec && spec.type === 'circle')) {
             crosshairEl.style.display = 'block';
             shotgunReticleEl.style.display = 'none';
-            if (bloomReticle && bloomReticle.updateForWeapon) {
-                bloomReticle.updateForWeapon(weapon, {
+            if (pistolReticleEl) {
+                var spreadMetrics = weapon.id === 'pistol' && hitscan && hitscan.getSpreadMetrics
+                    ? hitscan.getSpreadMetrics(weapon.id)
+                    : null;
+                var pistolDiameterX = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusXpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
+                var pistolDiameterY = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusYpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
+                if (weapon.id === 'pistol' && pistolDiameterX > 2 && pistolDiameterY > 2) {
+                    pistolReticleEl.style.display = 'block';
+                    pistolReticleEl.style.width = Math.round(pistolDiameterX) + 'px';
+                    pistolReticleEl.style.height = Math.round(pistolDiameterY) + 'px';
+                } else {
+                    pistolReticleEl.style.display = 'none';
+                }
+            }
+            if (spreadReticle && spreadReticle.updateForWeapon) {
+                spreadReticle.updateForWeapon(weapon, {
                     adsActive: !!(adsState && adsState.active),
                     scoped: scoped
                 });
             } else {
-                bloomReticleEl.style.display = 'none';
+                spreadReticleEl.style.display = 'none';
             }
             return;
         }
 
         crosshairEl.style.display = 'none';
-        if (bloomReticle && bloomReticle.hide) bloomReticle.hide();
-        else bloomReticleEl.style.display = 'none';
+        if (pistolReticleEl) pistolReticleEl.style.display = 'none';
+        if (spreadReticle && spreadReticle.hide) spreadReticle.hide();
+        else spreadReticleEl.style.display = 'none';
         shotgunReticleEl.style.display = 'block';
 
         var size = (spec && spec.size) ? spec.size : 300;

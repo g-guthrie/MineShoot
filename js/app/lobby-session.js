@@ -38,6 +38,7 @@
         var privateRoomPollHandle = 0;
         var lifecycleStarted = false;
         var pollOwnerToken = randomToken('menu_');
+        var lastObservedPartyPresenceState = '';
 
         function setPartyStatus(text, isErr) {
             if (ctx.setPartyStatus) ctx.setPartyStatus(text, isErr);
@@ -71,6 +72,17 @@
         function currentPartyActivityState() {
             if (typeof ctx.getActivityState === 'function') return ctx.getActivityState();
             return 'menu';
+        }
+
+        function normalizePartyPresenceState(activityState) {
+            var next = String(activityState || '').trim().toLowerCase();
+            if (next === 'menu') return 'menu';
+            if (next === 'private_room_lobby') return 'private_room_lobby';
+            return 'in_match';
+        }
+
+        function currentPartyPresenceState() {
+            return normalizePartyPresenceState(currentPartyActivityState());
         }
 
         function currentAccountUser() {
@@ -203,6 +215,10 @@
             return partyState && partyState.self ? partyState.self.privateRoom || null : null;
         }
 
+        function currentAssignedPublicMatch() {
+            return partyState && partyState.self ? partyState.self.publicMatch || null : null;
+        }
+
         function currentPrivateRoomSummary() {
             if (privateRoomState && privateRoomState.room) {
                 return {
@@ -230,6 +246,7 @@
             var partyMembers = hasParty && Array.isArray(partyState.party.members) ? partyState.party.members : [];
             var canTogglePartyJoinLock = !!(hasParty && partyState.party.isLeader);
             var partyJoinLocked = !!(hasParty && partyState.party.joinLocked);
+            var publicMatch = currentAssignedPublicMatch();
             var privateRoomSummary = currentPrivateRoomSummary();
             var hasPrivateRoom = privateRoomSummary.hasPrivateRoom;
             var privateRoom = privateRoomSummary.room;
@@ -237,6 +254,9 @@
             var privateRoomPhase = String(privateRoom && privateRoom.roomPhase || '');
             var privateRoomMode = String(privateRoom && privateRoom.roomMode || '');
             var isPrivateRoomHost = !!(privateRoomSelf && privateRoomSelf.isHost);
+            var privateRoomInviteLocked = !!(privateRoom && privateRoom.inviteLocked);
+            var canTogglePrivateRoomInviteLock = !!(privateRoom && privateRoom.canToggleInviteLock);
+            var canInvitePartyToPrivateRoom = !!(privateRoom && privateRoom.canInviteParty);
             var partyJoinLockTitle = 'Party join lock unavailable.';
             var partyJoinLockNote = 'PARTY OPEN';
 
@@ -261,10 +281,14 @@
                 partyJoinLockNote: partyJoinLockNote,
                 canViewPartyRoster: !!(hasParty && partyMembers.length > 1),
                 canLeaveParty: !!(hasParty && partyMembers.length > 1),
+                hasPublicMatch: !!publicMatch,
                 hasPrivateRoom: hasPrivateRoom,
                 privateRoomLoaded: privateRoomSummary.loaded,
                 privateRoomPhase: privateRoomPhase,
                 privateRoomMode: privateRoomMode,
+                privateRoomInviteLocked: privateRoomInviteLocked,
+                canTogglePrivateRoomInviteLock: canTogglePrivateRoomInviteLock,
+                canInvitePartyToPrivateRoom: canInvitePartyToPrivateRoom,
                 canEditPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost),
                 canRandomizeTeams: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomMode !== 'lms'),
                 canStartPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomPhase === 'lobby')
@@ -371,13 +395,28 @@
             }
         }
 
-        function maybeAutoJoinAssignedPrivateRoom(state) {
-            if (!ctx.launchAssignedPrivateRoom) return;
-            ctx.launchAssignedPrivateRoom(state || null);
+        function maybeAutoJoinAssignedMatch(state) {
+            if (!ctx.launchAssignedMatch) return;
+            ctx.launchAssignedMatch(state || null);
         }
 
-        function partyRequest(method, payload) {
+        function sessionStateListener(event) {
+            var detail = event && event.detail ? event.detail : null;
+            var nextPresenceState = normalizePartyPresenceState(
+                detail && detail.activityState !== undefined
+                    ? detail.activityState
+                    : currentPartyActivityState()
+            );
+            if (nextPresenceState === lastObservedPartyPresenceState) return;
+            lastObservedPartyPresenceState = nextPresenceState;
+            refreshPartyStateInternal(true, true, nextPresenceState);
+        }
+
+        function partyRequest(method, payload, presenceStateOverride) {
             var identity = currentPartyIdentity();
+            var activityState = presenceStateOverride != null
+                ? normalizePartyPresenceState(presenceStateOverride)
+                : currentPartyPresenceState();
             if (!identity || !identity.id) {
                 return Promise.reject(new Error('Party identity unavailable.'));
             }
@@ -385,7 +424,7 @@
                 var partyUrl = new URL(lobbyApi.resolveApiUrl(lobbyApi.partyPath()), window.location.origin);
                 partyUrl.searchParams.set('actorId', String(identity.id));
                 partyUrl.searchParams.set('displayName', String(identity.username || identity.id));
-                partyUrl.searchParams.set('activityState', currentPartyActivityState());
+                partyUrl.searchParams.set('activityState', activityState);
                 return lobbyApi.requestJson(partyUrl.toString(), { method: 'GET' }).then(function (body) {
                     return body.state || null;
                 });
@@ -396,7 +435,7 @@
                 body: JSON.stringify(Object.assign({
                     actorId: String(identity.id),
                     displayName: String(identity.username || identity.id),
-                    activityState: currentPartyActivityState()
+                    activityState: activityState
                 }, payload || {}))
             }).then(function (body) {
                 return body.state || null;
@@ -422,13 +461,13 @@
             var swallowError = options.swallowError !== false;
             var shouldRefreshPrivateRoom = options.refreshPrivateRoom !== false;
             var shouldAutoJoin = options.autoJoin !== false;
-            return partyRequest('GET')
+            return partyRequest('GET', null, options.partyPresenceState)
                 .then(function (state) {
                     var nextState = state || fallbackState || null;
                     applyPartyState(nextState);
                     onPartyIdentityChange();
                     if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true);
-                    if (shouldAutoJoin) maybeAutoJoinAssignedPrivateRoom(nextState);
+                    if (shouldAutoJoin) maybeAutoJoinAssignedMatch(nextState);
                     return nextState;
                 })
                 .catch(function (err) {
@@ -441,7 +480,7 @@
                     }
                     onPartyIdentityChange();
                     if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true);
-                    if (shouldAutoJoin) maybeAutoJoinAssignedPrivateRoom(nextState);
+                    if (shouldAutoJoin) maybeAutoJoinAssignedMatch(nextState);
                     return nextState;
                 });
         }
@@ -473,7 +512,7 @@
             });
         }
 
-        function refreshPartyStateInternal(silent, refreshPrivateRoom) {
+        function refreshPartyStateInternal(silent, refreshPrivateRoom, partyPresenceState) {
             var identity = currentPartyIdentity();
             if (!identity || !identity.id || !lobbyApi || !lobbyApi.requestJson) {
                 applyPartyState(null);
@@ -484,6 +523,7 @@
             return reconcilePartyState(partyState, {
                 swallowError: !!silent,
                 refreshPrivateRoom: refreshPrivateRoom !== false,
+                partyPresenceState: partyPresenceState,
                 silent: !!silent
             })
                 .then(function (state) {
@@ -611,6 +651,18 @@
                             setPartyStatus('Left party.', false);
                         } else if (action === 'join') {
                             setPartyStatus('Party joined.', false);
+                        } else if (action === 'invite') {
+                            setPartyStatus('Invite sent.', false);
+                        } else if (action === 'accept_invite') {
+                            setPartyStatus('Invite accepted.', false);
+                        } else if (action === 'dismiss_invite') {
+                            setPartyStatus('Invite dismissed.', false);
+                        } else if (action === 'accept_room_invite') {
+                            setPartyStatus('Room invite accepted.', false);
+                        } else if (action === 'dismiss_room_invite') {
+                            setPartyStatus('Room invite dismissed.', false);
+                        } else if (action === 'kick') {
+                            setPartyStatus('Player removed from party.', false);
                         } else if (action === 'lock') {
                             var locked = !!(nextState && nextState.party && nextState.party.joinLocked);
                             setPartyStatus(locked ? 'Party locked.' : 'Party unlocked.', false);
@@ -682,6 +734,17 @@
             );
         }
 
+        function setPrivateRoomTeamCount(teamCount) {
+            return runPrivateRoomHostAction(
+                'set_team_count',
+                { teamCount: teamCount },
+                'Updating team count...',
+                'Team count updated.',
+                'Team count change failed.',
+                'canEditPrivateRoom'
+            );
+        }
+
         function randomizePrivateRoomTeams() {
             return runPrivateRoomHostAction(
                 'randomize',
@@ -743,6 +806,28 @@
                 });
         }
 
+        function setPrivateRoomInviteLock(locked) {
+            return runPrivateRoomHostAction(
+                'set_invite_lock',
+                { locked: !!locked },
+                'Updating room invite access...',
+                !!locked ? 'Room invites locked.' : 'Room invites unlocked.',
+                'Room invite access update failed.',
+                'canTogglePrivateRoomInviteLock'
+            );
+        }
+
+        function invitePartyToPrivateRoom() {
+            return runPrivateRoomHostAction(
+                'invite_party',
+                {},
+                'Inviting party...',
+                'Party invite sent.',
+                'Party invite failed.',
+                'canInvitePartyToPrivateRoom'
+            );
+        }
+
         function buildGuestLeavePayload(identity) {
             return {
                 action: 'leave',
@@ -800,6 +885,7 @@
         function start() {
             if (lifecycleStarted) return;
             lifecycleStarted = true;
+            lastObservedPartyPresenceState = currentPartyPresenceState();
 
             if (partyPollHandle) window.clearInterval(partyPollHandle);
             partyPollHandle = window.setInterval(function () {
@@ -823,6 +909,7 @@
             if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
                 document.addEventListener('visibilitychange', visibilityListener);
             }
+            window.addEventListener('mayhem-session-state', sessionStateListener);
             window.addEventListener('mayhem-auth-changed', authChangedListener);
             window.addEventListener('pagehide', pagehideListener);
         }
@@ -846,12 +933,14 @@
 
             if (typeof window.removeEventListener === 'function') {
                 window.removeEventListener('focus', focusListener);
+                window.removeEventListener('mayhem-session-state', sessionStateListener);
                 window.removeEventListener('mayhem-auth-changed', authChangedListener);
                 window.removeEventListener('pagehide', pagehideListener);
             }
             if (typeof document !== 'undefined' && document && typeof document.removeEventListener === 'function') {
                 document.removeEventListener('visibilitychange', visibilityListener);
             }
+            lastObservedPartyPresenceState = '';
             releasePollOwnerLease();
         }
 
@@ -872,9 +961,12 @@
             runPartyAction: runPartyAction,
             performFriendAction: performFriendAction,
             setPrivateRoomMode: setPrivateRoomMode,
+            setPrivateRoomTeamCount: setPrivateRoomTeamCount,
             randomizePrivateRoomTeams: randomizePrivateRoomTeams,
             startPrivateRoomMatch: startPrivateRoomMatch,
             movePrivateRoomMember: movePrivateRoomMember,
+            setPrivateRoomInviteLock: setPrivateRoomInviteLock,
+            invitePartyToPrivateRoom: invitePartyToPrivateRoom,
             createPrivateRoom: createPrivateRoom,
             joinPrivateRoom: joinPrivateRoom,
             start: start,

@@ -201,6 +201,77 @@ test('remote sync forwards replicated reload progress to remote animation', asyn
   assert.ok(Math.abs(latestAnimState.reloadPct - 0.4) < 0.000001);
 });
 
+test('remote sync evaluates reload progress against the delayed presentation clock', async () => {
+  const remoteSync = await loadRemoteSync(null, {
+    GameShared: {
+      entityPoints: {},
+      gameplayTuning: {
+        weaponStats: {
+          rifle: { reloadMs: 1500 }
+        }
+      }
+    },
+    GameNet: {
+      getAuthoritativeNow() {
+        return 1000;
+      }
+    }
+  });
+  let latestAnimState = null;
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    weaponId: 'rifle',
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 0,
+        reloading: true,
+        reloadRemainingMs: 1000,
+        reloadedFlashRemainingMs: 0
+      }
+    },
+    weaponAmmoServerTimeMs: 900,
+    interpolationDelayMs: 100,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        latestAnimState = animState;
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(!!latestAnimState, true);
+  assert.equal(latestAnimState.reloading, true);
+  assert.ok(Math.abs(latestAnimState.reloadPct - (1 / 3)) < 0.000001);
+});
+
 test('remote sync flips jump leg tilt when backward input starts the jump', async () => {
   const remoteSync = await loadRemoteSync();
   const calls = [];

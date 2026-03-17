@@ -1,6 +1,8 @@
 import {
   EYE_HEIGHT,
-  PLAYER_RADIUS
+  PLAYER_RADIUS,
+  DEFAULT_HP_MAX,
+  DEFAULT_ARMOR_MAX
 } from '../../../../shared/entity-constants.js';
 import {
   PLAYER_HEIGHT,
@@ -63,7 +65,7 @@ export function buildPlayerEntity(options = {}) {
   const chooseSpawnPoint = options.chooseSpawnPoint;
   const terrainEyeYAt = options.terrainEyeYAt;
   const now = Number(options.now || 0);
-  const preset = options.preset || { armorMax: 90, wallhackRadius: 90 };
+  const preset = options.preset || { armorMax: DEFAULT_ARMOR_MAX, wallhackRadius: 90 };
   const eyeHeight = Number(options.eyeHeight || EYE_HEIGHT);
 
   const entity = {
@@ -76,8 +78,8 @@ export function buildPlayerEntity(options = {}) {
     z: 0,
     yaw: 0,
     pitch: 0,
-    hp: Number(options.maxHp || 500),
-    hpMax: Number(options.maxHp || 500),
+    hp: Number(options.maxHp || DEFAULT_HP_MAX),
+    hpMax: Number(options.maxHp || DEFAULT_HP_MAX),
     armor: Number(preset.armorMax || 0),
     armorMax: Number(preset.armorMax || 0),
     wallhackRadius: Number(preset.wallhackRadius || 0),

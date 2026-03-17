@@ -2,6 +2,10 @@ import { nowMs } from '../transport.js';
 import { applyDistanceFalloffDamage } from '../sim/combat.js';
 import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { protocol } from '../../../shared/protocol.js';
+import {
+  applyDamage as applySharedDamage,
+  ARMOR_BUFFER_MODE_NORMAL
+} from '../../../shared/damage.js';
 
 const WEAPON_FALLOFF = gameplayTuning.weaponFalloff || {};
 
@@ -24,7 +28,7 @@ export function applyOutgoingDamageModifier(source, damage, _hitType, _weaponId,
   return out;
 }
 
-export function applyDamage(target, damage) {
+export function applyDamage(target, damage, options = {}) {
   if (!target || !target.alive) return null;
 
   const now = nowMs();
@@ -33,16 +37,9 @@ export function applyDamage(target, damage) {
 
   const hpBefore = target.hp;
   const armorBefore = target.armor;
-  let remaining = Math.max(1, Math.round(damage));
-  if (target.armor > 0) {
-    const absorbed = Math.min(target.armor, remaining);
-    target.armor -= absorbed;
-    remaining -= absorbed;
-  }
-
-  if (remaining > 0) {
-    target.hp = Math.max(0, target.hp - remaining);
-  }
+  applySharedDamage(target, damage, {
+    armorBufferMode: String(options.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
+  });
 
   let killed = false;
   if (target.hp <= 0 && target.alive) {
@@ -67,6 +64,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   const hitType = opts.hitType === 'head' ? 'head' : 'body';
   const weaponId = String(opts.weaponId || '');
   const sourceKind = String(opts.sourceKind || 'weapon');
+  const armorBufferMode = String(opts.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL);
   let damage = Math.max(1, Math.round(baseDamage));
 
   if (opts.applyOutgoing !== false) {
@@ -76,7 +74,7 @@ export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
     damage = applyIncomingDamageModifier(target, damage);
   }
 
-  return applyDamage(target, damage);
+  return applyDamage(target, damage, { armorBufferMode });
 }
 
 export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '', pelletIndex = null) {
@@ -134,7 +132,8 @@ export function projectileDamageHit(room, projectile, target, hitType) {
     hitType,
     weaponId: projectile.type || 'knife',
     sourceKind: 'throwable',
-    applyOutgoing: false
+    applyOutgoing: false,
+    armorBufferMode: String(def.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
   });
   if (!out) return;
   broadcastDamageEvent(room, projectile.ownerId, target, out, hitType, projectile.type || 'knife');
@@ -174,12 +173,13 @@ export function explodeProjectile(room, projectile, x, y, z) {
     const dist = Math.sqrt(dx * dx + dz * dz);
     if (dist > radius) continue;
     const falloff = 1 - (dist / Math.max(0.001, radius));
-    const blastDamage = Math.max(20, Math.round(damage * falloff));
+    const blastDamage = Math.max(Number(def.minBlastDamage || 0), Math.round(damage * falloff));
     const out = applyDamageFromSource(owner, e, blastDamage, {
       hitType: 'body',
       weaponId: projectile.type || 'frag',
       sourceKind: 'throwable',
-      applyOutgoing: false
+      applyOutgoing: false,
+      armorBufferMode: String(def.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
     });
     if (!out) continue;
     broadcastDamageEvent(room, projectile.ownerId, e, out, 'body', projectile.type || 'frag');

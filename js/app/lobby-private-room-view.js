@@ -6,6 +6,12 @@
     'use strict';
 
     var GameLobbyPrivateRoomView = {};
+    var TEAM_LABELS = {
+        alpha: 'Team Alpha',
+        bravo: 'Team Bravo',
+        charlie: 'Team Charlie',
+        delta: 'Team Delta'
+    };
 
     GameLobbyPrivateRoomView.create = function (ctx) {
         function currentState() {
@@ -39,7 +45,11 @@
             });
         }
 
-        function setPrivateRoomTeamList(targetEl, members, canEdit, currentTeamId, destinationTeamId) {
+        function teamLabel(teamId) {
+            return TEAM_LABELS[String(teamId || '').toLowerCase()] || TEAM_LABELS.alpha;
+        }
+
+        function setPrivateRoomTeamList(targetEl, members, canEdit, currentTeamId, activeTeamIds) {
             if (!targetEl) return;
             targetEl.innerHTML = '';
             bindTeamDropTarget(targetEl, currentTeamId);
@@ -69,7 +79,7 @@
                 var name = document.createElement('span');
                 name.textContent = (member.isHost ? 'Host  ' : '') + String(member.displayName || member.id || 'Player');
                 var tag = document.createElement('span');
-                tag.textContent = member.teamId === 'bravo' ? 'Team Bravo' : 'Team Alpha';
+                tag.textContent = teamLabel(member.teamId);
                 head.appendChild(name);
                 head.appendChild(tag);
                 card.appendChild(head);
@@ -82,18 +92,22 @@
                 if (canEdit) {
                     var direction = document.createElement('div');
                     direction.className = 'private-room-member-direction';
-                    direction.textContent = destinationTeamId === 'bravo' ? 'Target: Team Bravo' : 'Target: Team Alpha';
+                    direction.textContent = 'Move to another team.';
                     card.appendChild(direction);
-                    var moveBtn = document.createElement('button');
-                    moveBtn.type = 'button';
-                    moveBtn.className = 'private-room-member-move';
-                    moveBtn.textContent = destinationTeamId === 'bravo' ? 'Move to Bravo' : 'Move to Alpha';
-                    moveBtn.addEventListener('click', (function (memberId, nextTeamId) {
-                        return function () {
-                            ctx.moveMember(memberId, nextTeamId);
-                        };
-                    })(String(member.id || ''), destinationTeamId));
-                    card.appendChild(moveBtn);
+                    for (var j = 0; j < activeTeamIds.length; j++) {
+                        var nextTeamId = String(activeTeamIds[j] || '');
+                        if (!nextTeamId || nextTeamId === currentTeamId) continue;
+                        var moveBtn = document.createElement('button');
+                        moveBtn.type = 'button';
+                        moveBtn.className = 'private-room-member-move';
+                        moveBtn.textContent = 'Move to ' + teamLabel(nextTeamId).replace('Team ', '');
+                        moveBtn.addEventListener('click', (function (memberId, destinationTeamId) {
+                            return function () {
+                                ctx.moveMember(memberId, destinationTeamId);
+                            };
+                        })(String(member.id || ''), nextTeamId));
+                        card.appendChild(moveBtn);
+                    }
                 }
                 targetEl.appendChild(card);
             }
@@ -118,7 +132,8 @@
                 ctx.privateRoomSummaryEl.textContent =
                     String(room.roomCode || '').toUpperCase() +
                     ' • ' + (String(room.roomPhase || '') === 'active' ? 'LIVE' : 'LOBBY') +
-                    ' • ' + String(room.memberCount || 0) + '/16';
+                    ' • ' + String(room.memberCount || 0) + '/16' +
+                    ' • ' + String(room.teamCount || 2) + ' TEAMS';
             }
 
             if (ctx.privateRoomRandomizeBtn) {
@@ -127,12 +142,15 @@
                     : 'Randomize';
             }
 
-            setPrivateRoomTeamList(ctx.privateRoomTeamAlpha, room.teams ? room.teams.alpha : [], isHost && String(room.roomPhase || '') === 'lobby', 'alpha', 'bravo');
-            setPrivateRoomTeamList(ctx.privateRoomTeamBravo, room.teams ? room.teams.bravo : [], isHost && String(room.roomPhase || '') === 'lobby', 'bravo', 'alpha');
+            var activeTeamIds = Array.isArray(room.teamIds) && room.teamIds.length ? room.teamIds.slice() : ['alpha', 'bravo'];
+            setPrivateRoomTeamList(ctx.privateRoomTeamAlpha, room.teams ? room.teams.alpha : [], isHost && String(room.roomPhase || '') === 'lobby', 'alpha', activeTeamIds);
+            setPrivateRoomTeamList(ctx.privateRoomTeamBravo, room.teams ? room.teams.bravo : [], isHost && String(room.roomPhase || '') === 'lobby', 'bravo', activeTeamIds);
+            setPrivateRoomTeamList(ctx.privateRoomTeamCharlie, room.teams ? room.teams.charlie : [], isHost && String(room.roomPhase || '') === 'lobby', 'charlie', activeTeamIds);
+            setPrivateRoomTeamList(ctx.privateRoomTeamDelta, room.teams ? room.teams.delta : [], isHost && String(room.roomPhase || '') === 'lobby', 'delta', activeTeamIds);
             if (ctx.privateRoomUnassigned) {
                 var members = Array.isArray(room.members) ? room.members : [];
                 var unassigned = members.filter(function (member) {
-                    return member && member.teamId !== 'alpha' && member.teamId !== 'bravo';
+                    return member && activeTeamIds.indexOf(String(member.teamId || '')) < 0;
                 });
                 ctx.privateRoomUnassigned.innerHTML = '';
                 if (!unassigned.length) {
@@ -141,7 +159,7 @@
                     empty.textContent = 'Everyone assigned.';
                     ctx.privateRoomUnassigned.appendChild(empty);
                 } else {
-                    setPrivateRoomTeamList(ctx.privateRoomUnassigned, unassigned, false, '', 'alpha');
+                    setPrivateRoomTeamList(ctx.privateRoomUnassigned, unassigned, false, '', activeTeamIds);
                 }
             }
         }

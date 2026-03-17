@@ -146,6 +146,49 @@ test('GameNetSelfSync remaps authoritative timer stamps onto the local clock whe
   });
 });
 
+test('GameNetSelfSync only reapplies combat weapon state when the authoritative self snapshot changes', async () => {
+  let combatSyncCalls = 0;
+  let hitscanSyncCalls = 0;
+  const harness = await loadSelfSyncHarness({
+    GamePlayerCombat: {
+      syncFromNetwork() {
+        combatSyncCalls += 1;
+      },
+      syncWeaponState() {}
+    },
+    GameHitscan: {
+      syncAmmoStateFromNetwork() {
+        hitscanSyncCalls += 1;
+      }
+    }
+  });
+
+  const selfState = {
+    id: 'usr_test',
+    alive: true,
+    stunUntil: 0,
+    spawnShieldUntil: 0,
+    weaponLockUntil: 0,
+    throwableLockUntil: 0,
+    abilityLockUntil: 0,
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 0,
+        reloading: true,
+        reloadRemaining: 1.2,
+        reloadedFlashRemaining: 0
+      }
+    },
+    abilityFx: null
+  };
+
+  harness.syncPlayerState(selfState, 0.05);
+  harness.syncPlayerState(selfState, 0.05);
+
+  assert.equal(combatSyncCalls, 1);
+  assert.equal(hitscanSyncCalls, 0);
+});
+
 test('GameNetSelfSync locks the player out for the rest of an LMS round when out of round', async () => {
   const harness = await loadSelfSyncHarness({
     GameNet: {

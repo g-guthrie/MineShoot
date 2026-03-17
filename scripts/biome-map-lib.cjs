@@ -336,6 +336,8 @@ function buildObjectBuckets(region, datasets) {
 
 function buildReport(biomeId) {
   const { spec, bounds, authoredFeatures, sampledFeatures } = buildBiomeDataset(biomeId);
+  const displayBiomeId = String(spec.displayBiomeId || biomeId);
+  const outputFile = String(spec.outputFile || `${biomeId}.txt`);
   const grid = makeGrid();
 
   for (const feature of sampledFeatures) {
@@ -372,7 +374,7 @@ function buildReport(biomeId) {
 
   const lines = [];
   lines.push(`${spec.name} biome distribution map`);
-  lines.push(`Biome: ${biomeId}`);
+  lines.push(`Biome: ${displayBiomeId}`);
   lines.push(`Bounds x:[${bounds.minX}, ${bounds.maxX}] z:[${bounds.minZ}, ${bounds.maxZ}]  grid:${GRID_COLS}x${GRID_ROWS}`);
   lines.push(`Features: ${authoredFeatures.length} high-level placements across ${occupiedCells}/${GRID_ROWS * GRID_COLS} cells (${occupancyRate}% occupied)`);
   lines.push('');
@@ -396,6 +398,8 @@ function buildReport(biomeId) {
 
   return {
     biomeId,
+    displayBiomeId,
+    outputFile,
     name: spec.name,
     countsByKind,
     occupiedCells,
@@ -471,7 +475,11 @@ function writeAllReports(outputDir) {
   const arcticUnitArea = buildUnitAreaReport('arctic');
 
   for (const report of reports) {
-    fs.writeFileSync(path.join(outputDir, `${report.biomeId}.txt`), report.content, 'utf8');
+    fs.writeFileSync(path.join(outputDir, report.outputFile), report.content, 'utf8');
+    const legacyPath = path.join(outputDir, `${report.biomeId}.txt`);
+    if (report.outputFile !== `${report.biomeId}.txt` && fs.existsSync(legacyPath)) {
+      fs.rmSync(legacyPath, { force: true });
+    }
   }
   fs.writeFileSync(path.join(outputDir, 'arctic-unit-area.txt'), arcticUnitArea.content, 'utf8');
 
@@ -483,7 +491,7 @@ function writeAllReports(outputDir) {
     const hotspot = report.denseCells[0]
       ? `r${report.denseCells[0].row} c${report.denseCells[0].col} (${report.denseCells[0].count})`
       : 'none';
-    summaryLines.push(`| ${report.name} | ${totalFeatures} | ${report.occupiedCells}/196 (${report.occupancyRate}%) | ${hotspot} | [${report.biomeId}.txt](./${report.biomeId}.txt) |`);
+    summaryLines.push(`| ${report.name} | ${totalFeatures} | ${report.occupiedCells}/196 (${report.occupancyRate}%) | ${hotspot} | [${report.outputFile}](./${report.outputFile}) |`);
   }
   summaryLines.push('');
   summaryLines.push('## Specialized maps');
@@ -695,9 +703,11 @@ const BIOME_SPECS = {
       crown: 'M',
       eastWall: 'E',
       northWall: 'N',
+      heroArch: 'H',
       pocket: 'P',
       rubble: 'R',
       arch: 'A',
+      butte: 'B',
       outcrop: 'O',
       filler: 'I',
       fossil: 'F',
@@ -705,6 +715,7 @@ const BIOME_SPECS = {
       bush: 'b',
       bone: 'o',
       dune: 'D',
+      fence: 'W',
       tumbleweed: 't',
       rock: 'r'
     },
@@ -719,6 +730,9 @@ const BIOME_SPECS = {
         ...uvPoints(bounds, 'rubble', [
           { u: 0.66, v: 0.34 }, { u: 0.70, v: 0.48 }, { u: 0.76, v: 0.56 }, { u: 0.84, v: 0.66 }
         ], 'rubble'),
+        uvPoint(bounds, 'heroArch', 0.52, 0.54, 'center-hero-arch'),
+        uvPoint(bounds, 'butte', 0.42, 0.56, 'center-butte'),
+        uvPoint(bounds, 'fence', 0.64, 0.50, 'center-fence'),
         ...uvPoints(bounds, 'arch', [{ u: 0.12, v: 0.52 }], 'arch'),
         ...uvPoints(bounds, 'outcrop', [{ u: 0.56, v: 0.88 }], 'outcrop'),
         ...uvPoints(bounds, 'filler', [
@@ -731,16 +745,16 @@ const BIOME_SPECS = {
           { u: 0.58, v: 0.70 }, { u: 0.66, v: 0.52 }, { u: 0.78, v: 0.64 }, { u: 0.84, v: 0.86 }
         ], 'cactus'),
         ...uvPoints(bounds, 'bush', [
-          { u: 0.24, v: 0.58 }, { u: 0.58, v: 0.62 }, { u: 0.74, v: 0.56 }
+          { u: 0.24, v: 0.58 }, { u: 0.58, v: 0.62 }, { u: 0.74, v: 0.56 }, { u: 0.48, v: 0.48 }
         ], 'bush'),
-        ...uvPoints(bounds, 'bone', [{ u: 0.60, v: 0.66 }, { u: 0.64, v: 0.68 }, { u: 0.24, v: 0.24 }], 'bone'),
+        ...uvPoints(bounds, 'bone', [{ u: 0.72, v: 0.62 }, { u: 0.78, v: 0.66 }, { u: 0.24, v: 0.24 }], 'bone'),
         ...uvPoints(bounds, 'dune', [
           { u: 0.40, v: 0.90 }, { u: 0.16, v: 0.16 }, { u: 0.40, v: 0.22 }
         ], 'dune'),
         ...uvPoints(bounds, 'tumbleweed', [{ u: 0.32, v: 0.18 }, { u: 0.24, v: 0.86 }], 'tumbleweed'),
         ...uvPoints(bounds, 'rock', [
           { u: 0.26, v: 0.26 }, { u: 0.46, v: 0.48 }, { u: 0.62, v: 0.58 },
-          { u: 0.72, v: 0.34 }, { u: 0.20, v: 0.70 }
+          { u: 0.72, v: 0.34 }, { u: 0.20, v: 0.70 }, { u: 0.56, v: 0.46 }
         ], 'rock')
       ];
     }
@@ -777,43 +791,50 @@ const BIOME_SPECS = {
           { x: bounds.maxX - 2.4, z: bounds.maxZ - 2.5 }
         ].map((entry, index) => point('edgeTree', entry.x, entry.z, `edge-tree-${index + 1}`)),
         ...uvPoints(bounds, 'giant', [
-          { u: 0.18, v: 0.04 }, { u: 0.36, v: 0.14 }, { u: 0.62, v: 0.10 },
-          { u: 0.72, v: 0.34 }, { u: 0.72, v: 0.76 }, { u: 0.48, v: 0.90 },
-          { u: 0.98, v: 0.52 }, { u: 0.90, v: 0.92 }, { u: 0.84, v: 0.04 }
+          { u: 0.16, v: 0.08 }, { u: 0.34, v: 0.18 }, { u: 0.54, v: 0.16 },
+          { u: 0.28, v: 0.44 }, { u: 0.82, v: 0.26 }, { u: 0.80, v: 0.78 },
+          { u: 0.56, v: 0.86 }, { u: 0.22, v: 0.82 }, { u: 0.90, v: 0.58 }
         ], 'giant'),
         ...uvPoints(bounds, 'canopy', [
-          { u: 0.12, v: 0.06 }, { u: 0.32, v: 0.04 }, { u: 0.54, v: 0.03 },
-          { u: 0.78, v: 0.05 }, { u: 0.96, v: 0.18 }, { u: 0.97, v: 0.40 },
-          { u: 0.95, v: 0.70 }, { u: 0.82, v: 0.96 }, { u: 0.56, v: 0.95 },
-          { u: 0.28, v: 0.94 }, { u: 0.10, v: 0.90 }, { u: 0.68, v: 0.26 }, { u: 0.34, v: 0.68 }
+          { u: 0.12, v: 0.12 }, { u: 0.16, v: 0.28 }, { u: 0.20, v: 0.48 },
+          { u: 0.40, v: 0.10 }, { u: 0.70, v: 0.12 }, { u: 0.90, v: 0.22 },
+          { u: 0.94, v: 0.70 }, { u: 0.34, v: 0.88 }, { u: 0.66, v: 0.90 },
+          { u: 0.84, v: 0.86 }, { u: 0.38, v: 0.68 }
         ], 'canopy'),
         ...uvPoints(bounds, 'bushy', [
-          { u: 0.18, v: 0.16 }, { u: 0.90, v: 0.26 }, { u: 0.88, v: 0.60 },
-          { u: 0.70, v: 0.88 }, { u: 0.34, v: 0.90 }, { u: 0.56, v: 0.36 }, { u: 0.42, v: 0.76 }
+          { u: 0.24, v: 0.24 }, { u: 0.30, v: 0.62 }, { u: 0.46, v: 0.36 },
+          { u: 0.74, v: 0.30 }, { u: 0.88, v: 0.44 }, { u: 0.70, v: 0.72 },
+          { u: 0.48, v: 0.82 }, { u: 0.28, v: 0.86 }, { u: 0.82, v: 0.84 }
         ], 'bushy'),
-        ...uvPoints(bounds, 'sapling', [{ u: 0.92, v: 0.46 }, { u: 0.16, v: 0.84 }, { u: 0.62, v: 0.78 }], 'sapling'),
+        ...uvPoints(bounds, 'sapling', [
+          { u: 0.18, v: 0.72 }, { u: 0.32, v: 0.84 }, { u: 0.46, v: 0.40 },
+          { u: 0.88, v: 0.58 }, { u: 0.96, v: 0.68 }
+        ], 'sapling'),
         ...uvPoints(bounds, 'fern', [
-          { u: 0.18, v: 0.26 }, { u: 0.60, v: 0.22 }, { u: 0.75, v: 0.40 },
-          { u: 0.80, v: 0.70 }, { u: 0.24, v: 0.66 }, { u: 0.56, v: 0.74 },
-          { u: 0.88, v: 0.38 }, { u: 0.90, v: 0.82 }, { u: 0.30, v: 0.14 },
-          { u: 0.70, v: 0.86 }, { u: 0.42, v: 0.28 }
+          { u: 0.14, v: 0.20 }, { u: 0.18, v: 0.24 },
+          { u: 0.28, v: 0.50 }, { u: 0.32, v: 0.54 },
+          { u: 0.72, v: 0.24 }, { u: 0.78, v: 0.28 },
+          { u: 0.44, v: 0.78 }, { u: 0.50, v: 0.82 }, { u: 0.56, v: 0.84 },
+          { u: 0.84, v: 0.62 }, { u: 0.88, v: 0.68 }
         ], 'fern'),
-        ...uvPoints(bounds, 'log', [{ u: 0.28, v: 0.58 }, { u: 0.74, v: 0.50 }, { u: 0.54, v: 0.78 }], 'log'),
+        ...uvPoints(bounds, 'log', [
+          { u: 0.24, v: 0.56 }, { u: 0.60, v: 0.40 }, { u: 0.50, v: 0.78 }, { u: 0.74, v: 0.74 }
+        ], 'log'),
         ...uvPoints(bounds, 'mushroom', [
-          { u: 0.29, v: 0.59 }, { u: 0.26, v: 0.61 }, { u: 0.73, v: 0.49 }, { u: 0.76, v: 0.53 },
-          { u: 0.50, v: 0.23 }, { u: 0.54, v: 0.79 }, { u: 0.58, v: 0.77 }, { u: 0.86, v: 0.72 }
+          { u: 0.22, v: 0.60 }, { u: 0.26, v: 0.62 }, { u: 0.62, v: 0.30 }, { u: 0.66, v: 0.34 },
+          { u: 0.42, v: 0.76 }, { u: 0.48, v: 0.82 }, { u: 0.86, v: 0.66 }, { u: 0.74, v: 0.72 }
         ], 'mushroom'),
-        uvLine(bounds, 'vinePath', { u: 0.16, v: 0.78 }, { u: 0.32, v: 0.86 }, 4, 'vine-1'),
-        uvLine(bounds, 'vinePath', { u: 0.78, v: 0.64 }, { u: 0.88, v: 0.82 }, 4, 'vine-2'),
+        uvLine(bounds, 'vinePath', { u: 0.14, v: 0.72 }, { u: 0.30, v: 0.82 }, 4, 'vine-1'),
+        uvLine(bounds, 'vinePath', { u: 0.72, v: 0.66 }, { u: 0.86, v: 0.78 }, 4, 'vine-2'),
         ...[
-          { kind: 'blocker', x: center.x - 5.4, z: center.z - 3.1, label: 'fallen-pillar' },
-          { kind: 'blocker', x: center.x - 8.4, z: center.z - 0.4, label: 'corridor-blocker-1' },
-          { kind: 'blocker', x: center.x - 10.4, z: center.z + 1.2, label: 'corridor-blocker-2' },
-          { kind: 'blocker', x: center.x - 6.4, z: center.z + 2.4, label: 'corridor-blocker-3' },
-          { kind: 'mossPatch', x: waterfall.x + 2.2, z: waterfall.z + 2.2, label: 'moss-1' },
-          { kind: 'mossPatch', x: waterfall.x - 2.0, z: waterfall.z + 4.6, label: 'moss-2' },
-          { kind: 'mossPatch', x: center.x - 3.4, z: center.z + 3.1, label: 'moss-3' },
-          { kind: 'mossPatch', x: center.x + 3.6, z: center.z - 1.7, label: 'moss-4' }
+          { kind: 'blocker', x: center.x - 6.0, z: center.z - 3.2, label: 'fallen-pillar' },
+          { kind: 'blocker', x: center.x - 9.8, z: center.z - 1.4, label: 'corridor-blocker-1' },
+          { kind: 'blocker', x: center.x - 7.0, z: center.z + 0.8, label: 'corridor-blocker-2' },
+          { kind: 'blocker', x: center.x - 9.2, z: center.z + 3.0, label: 'corridor-blocker-3' },
+          { kind: 'mossPatch', x: pt(bounds, 0.60, 0.40).x + 0.4, z: pt(bounds, 0.60, 0.40).z + 0.3, label: 'moss-1' },
+          { kind: 'mossPatch', x: waterfall.x + 5.0, z: waterfall.z + 7.2, label: 'moss-2' },
+          { kind: 'mossPatch', x: pt(bounds, 0.50, 0.78).x + 0.5, z: pt(bounds, 0.50, 0.78).z + 0.2, label: 'moss-3' },
+          { kind: 'mossPatch', x: pt(bounds, 0.70, 0.72).x + 0.35, z: pt(bounds, 0.70, 0.72).z + 0.45, label: 'moss-4' }
         ].map((entry) => point(entry.kind, entry.x, entry.z, entry.label))
       ];
     }
@@ -914,23 +935,57 @@ const BIOME_SPECS = {
     }
   },
   basin: {
-    name: 'Basin',
+    name: 'Wall Street',
+    displayBiomeId: 'wall-street',
+    outputFile: 'wall-street.txt',
     glyphs: {
-      basin: 'B',
-      house: 'H',
-      catwalk: 'C',
-      pipe: 'P',
-      beacon: 'b'
+      exchange: 'F',
+      podium: 'L',
+      tower: 'T',
+      annex: 'W',
+      brokerage: 'E',
+      village: 'V',
+      stairs: 'S',
+      alley: 'A',
+      cover: 'C',
+      kiosk: 'K',
+      arch: 'H',
+      lamp: 'l'
     },
     build(bounds) {
-      const basin = pt(bounds, 0.46, 0.56);
+      const exchange = pt(bounds, 0.50, 0.84);
+      const podium = pt(bounds, 0.50, 0.94);
       return [
-        point('basin', basin.x, basin.z, 'main-basin'),
-        uvPoint(bounds, 'house', 0.76, 0.28, 'pump-house'),
-        uvPoint(bounds, 'catwalk', 0.24, 0.24, 'catwalk'),
-        point('pipe', bounds.minX + 5.0, basin.z + 8.8, 'west-pipe'),
-        point('pipe', bounds.maxX - 5.0, basin.z - 8.4, 'east-pipe'),
-        uvPoint(bounds, 'beacon', 0.76, 0.28, 'house-beacon')
+        uvLine(bounds, 'stairs', { u: 0.50, v: 0.38 }, { u: 0.50, v: 0.79 }, 8, 'grand-stair'),
+        uvLine(bounds, 'alley', { u: 0.31, v: 0.40 }, { u: 0.32, v: 0.82 }, 7, 'west-alley'),
+        uvLine(bounds, 'alley', { u: 0.67, v: 0.38 }, { u: 0.68, v: 0.80 }, 7, 'east-alley'),
+        point('exchange', exchange.x, exchange.z, 'stock-exchange'),
+        point('podium', podium.x, podium.z, 'ceo-podium'),
+        uvPoint(bounds, 'tower', 0.50, 0.94, 'ceo-tower'),
+        uvPoint(bounds, 'annex', 0.25, 0.62, 'west-annex'),
+        uvPoint(bounds, 'brokerage', 0.81, 0.60, 'east-brokerage'),
+        ...uvPoints(bounds, 'village', [
+          { u: 0.15, v: 0.24 },
+          { u: 0.86, v: 0.24 },
+          { u: 0.39, v: 0.44 },
+          { u: 0.66, v: 0.41 }
+        ], 'support'),
+        ...uvPoints(bounds, 'kiosk', [{ u: 0.28, v: 0.36 }, { u: 0.74, v: 0.34 }], 'ticker-kiosk'),
+        ...uvPoints(bounds, 'arch', [{ u: 0.31, v: 0.67 }, { u: 0.69, v: 0.63 }], 'alley-arch'),
+        ...uvPoints(bounds, 'lamp', [{ u: 0.45, v: 0.47 }, { u: 0.60, v: 0.45 }], 'street-lamp'),
+        ...uvPoints(bounds, 'cover', [
+          { u: 0.47, v: 0.36 },
+          { u: 0.24, v: 0.50 },
+          { u: 0.38, v: 0.46 },
+          { u: 0.50, v: 0.44 },
+          { u: 0.61, v: 0.43 },
+          { u: 0.50, v: 0.54 },
+          { u: 0.46, v: 0.56 },
+          { u: 0.58, v: 0.60 },
+          { u: 0.30, v: 0.58 },
+          { u: 0.22, v: 0.56 },
+          { u: 0.70, v: 0.53 }
+        ], 'cover')
       ];
     }
   },

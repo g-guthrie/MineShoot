@@ -207,7 +207,6 @@
                     armorMax: r.armorMax,
                     alive: r.alive,
                     worldPos: r.group.position,
-                    headY: 2.45,
                     targetId: 'net:' + r.id,
                     healState: r.healState || null
                 });
@@ -221,10 +220,12 @@
             var user = opts.getCurrentUser();
             if (!user) return null;
             var defaults = opts.classStats(user.classId || 'abilities');
+            var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+            var survivability = shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
             return {
                 id: user.id,
-                hp: 500,
-                hpMax: 500,
+                hp: Number(survivability.hpMax || 360),
+                hpMax: Number(survivability.hpMax || 360),
                 armor: defaults.armorMax,
                 armorMax: defaults.armorMax,
                 classId: user.classId || 'abilities',

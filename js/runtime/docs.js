@@ -253,13 +253,13 @@
         headDamage: 'Damage dealt on a head hit before falloff scaling.',
         pellets: 'Number of spread samples or pellets fired per trigger pull.',
         hipfireSpread: 'Hipfire spread radius feeding the shot solver.',
-        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim.',
+        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim on normal guns; on pistol this is the scan-disc radius that can intentionally grow in ADS.',
         maxRange: 'Hipfire distance cap before the shot stops checking for hits.',
         adsMaxRange: 'ADS distance cap. Often longer than hipfire on precision guns.',
         adsFovDeg: 'Zoom level while aiming down sights.',
         singleHitFromPellets: 'Keeps only the best single winning sample from a multi-sample weapon. This is what makes pistol a circle-scan hand cannon.',
-        hipfireBloomScale: 'How large the HUD bloom reticle grows while hipfiring.',
-        adsBloomScale: 'How much the HUD bloom shrinks or persists in ADS.',
+        hipfireBloomScale: 'Legacy HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
+        adsBloomScale: 'Legacy ADS HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
         'tracer.life': 'How long the visual tracer stays alive.',
         'tracer.speed': 'How quickly the tracer travels toward the hit point.',
         'tracer.segmentLength': 'Visible tracer streak length.',
@@ -287,6 +287,7 @@
         reticleRadiusPx: 'On-screen radius used by the hook targeting helper.',
         catchRadius: 'World-space radius used to catch or latch a target.',
         travelSpeed: 'Travel speed for the hook or projectile-like effect.',
+        pullSpeed: 'How quickly a hooked target is reeled toward the user.',
         pullDistance: 'How close hook leaves the pulled target.',
         castDamage: 'Immediate impact damage on cast.',
         stunDuration: 'How long the victim stays disrupted after the hit.',
@@ -308,6 +309,7 @@
         fuse: 'Delay before detonation if nothing triggers earlier.',
         radius: 'Blast radius.',
         damage: 'Peak blast damage.',
+        minBlastDamage: 'Minimum damage floor after radial falloff.',
         regen: 'Recharge time before the charge returns.',
         bounce: 'Whether the throwable is allowed to bounce.',
         bounceVelocityDamping: 'Horizontal energy preserved after a bounce.',
@@ -318,11 +320,20 @@
         homingLerp: 'How quickly it blends toward that steering direction.',
         acquireRange: 'Seek acquisition range.',
         acquireHalfAngleDeg: 'Seek acquisition cone half-angle.',
+        maxLife: 'Maximum lifetime before a projectile times out even if it has not detonated.',
+        trackDuration: 'How long post-acquire steering stays active.',
+        trackLerp: 'How quickly the tracked projectile bends toward the target.',
         stickExplodeDelay: 'Delay between a successful stick and detonation.',
         fireRadius: 'Persistent fire zone radius.',
         fireDuration: 'How long the fire patch lasts.',
         fireTickDamage: 'Damage applied per fire tick.',
         fireTickRate: 'Time between fire damage ticks.',
+        fireInnerRadius: 'Inner zone that takes full burn damage before outer falloff starts.',
+        fireOuterDamageScale: 'Damage multiplier at the outer edge of the fire zone.',
+        fireLingerDuration: 'How long a target keeps burning after leaving the zone.',
+        fireLingerTickDamage: 'Damage applied by the lingering burn state.',
+        fireLingerTickRate: 'Tick rate for lingering burn damage.',
+        fireMaxHeightDelta: 'Maximum vertical separation where the fire zone can still damage a target.',
         life: 'Lifetime before the projectile despawns.',
         hitRadius: 'Direct-hit collision radius.',
         bodyDamage: 'Direct body hit damage.',
@@ -1002,13 +1013,25 @@
     function formatThrowableValue(key, throwable) {
         if (!throwable) return '--';
         var value = throwable[key];
-        if (key === 'regen' || key === 'fuse' || key === 'fireDuration' || key === 'fireTickRate' || key === 'life' || key === 'stickExplodeDelay') {
+        if (
+            key === 'regen' ||
+            key === 'fuse' ||
+            key === 'maxLife' ||
+            key === 'trackDuration' ||
+            key === 'fireDuration' ||
+            key === 'fireTickRate' ||
+            key === 'fireLingerDuration' ||
+            key === 'fireLingerTickRate' ||
+            key === 'life' ||
+            key === 'stickExplodeDelay'
+        ) {
             return formatSeconds(value);
         }
         if (key === 'acquireHalfAngleDeg') return formatNumber(value, 0) + ' deg';
         if (
             key === 'speed' || key === 'upward' || key === 'gravity' || key === 'radius' || key === 'fireRadius' ||
-            key === 'acquireRange' || key === 'hitRadius'
+            key === 'acquireRange' || key === 'hitRadius' || key === 'catchRadius' || key === 'fireInnerRadius' ||
+            key === 'fireMaxHeightDelta'
         ) {
             return formatNumber(value, 2);
         }
@@ -1026,9 +1049,11 @@
         }
         var preferredOrder = [
             'speed', 'upward', 'gravity', 'fuse', 'radius', 'damage', 'regen',
+            'minBlastDamage',
             'bounce', 'bounceVelocityDamping', 'bounceVerticalDamping', 'bounceMaxCount', 'bounceStopSpeedSq',
-            'homingBoost', 'homingLerp', 'acquireRange', 'acquireHalfAngleDeg', 'stickExplodeDelay',
-            'fireRadius', 'fireDuration', 'fireTickDamage', 'fireTickRate',
+            'homingBoost', 'homingLerp', 'acquireRange', 'acquireHalfAngleDeg', 'catchRadius', 'trackDuration', 'trackLerp', 'maxLife', 'stickExplodeDelay',
+            'fireRadius', 'fireInnerRadius', 'fireOuterDamageScale', 'fireDuration', 'fireTickDamage', 'fireTickRate',
+            'fireLingerDuration', 'fireLingerTickDamage', 'fireLingerTickRate', 'fireMaxHeightDelta',
             'life', 'hitRadius', 'bodyDamage', 'headDamage'
         ];
         var seen = {};
@@ -1055,8 +1080,14 @@
         ];
         if (throwable.fuse != null) stats.push({ label: 'Fuse', value: formatSeconds(throwable.fuse), note: 'Time before detonation.' });
         if (throwable.damage != null) stats.push({ label: 'Damage', value: formatNumber(throwable.damage, 0), note: 'Peak blast damage.' });
+        if (throwable.minBlastDamage != null) stats.push({ label: 'Min Blast', value: formatNumber(throwable.minBlastDamage, 0), note: 'Damage floor after radial falloff.' });
         if (throwable.radius != null) stats.push({ label: 'Radius', value: formatNumber(throwable.radius, 2), note: 'Explosion radius.' });
+        if (throwable.maxLife != null) stats.push({ label: 'Max Life', value: formatSeconds(throwable.maxLife), note: 'Hard lifetime cap for the projectile.' });
+        if (throwable.catchRadius != null) stats.push({ label: 'Catch Radius', value: formatNumber(throwable.catchRadius, 2), note: 'World-space latch/catch distance.' });
+        if (throwable.trackDuration != null) stats.push({ label: 'Track Window', value: formatSeconds(throwable.trackDuration), note: 'How long steering stays active after acquire.' });
         if (throwable.fireRadius != null) stats.push({ label: 'Fire Radius', value: formatNumber(throwable.fireRadius, 2), note: 'Area denial radius.' });
+        if (throwable.fireDuration != null) stats.push({ label: 'Fire Duration', value: formatSeconds(throwable.fireDuration), note: 'Lifetime of the denial patch.' });
+        if (throwable.fireLingerDuration != null) stats.push({ label: 'Linger', value: formatSeconds(throwable.fireLingerDuration), note: 'How long the burn persists after exiting.' });
         if (throwable.bodyDamage != null) stats.push({ label: 'Body Damage', value: formatNumber(throwable.bodyDamage, 0), note: 'Direct hit body damage.' });
         if (throwable.headDamage != null) stats.push({ label: 'Head Damage', value: formatNumber(throwable.headDamage, 0), note: 'Direct hit head damage.' });
         if (throwable.regen != null) stats.push({ label: 'Recharge', value: formatSeconds(throwable.regen), note: 'Time for a spent charge to return.' });

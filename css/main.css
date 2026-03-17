@@ -2266,6 +2266,10 @@ canvas {
     margin-bottom: 6px;
 }
 
+#menu-session-actions[hidden] {
+    display: none !important;
+}
+
 #menu-session-stats {
     flex: 1 1 auto;
     min-height: 42px;
@@ -3188,7 +3192,40 @@ canvas {
         0 0 10px rgba(255, 70, 70, 0.28);
 }
 
-#bloom-reticle {
+#pistol-reticle {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background:
+        repeating-conic-gradient(
+            from -90deg,
+            rgba(255, 255, 255, 0.34) 0deg 12deg,
+            rgba(255, 255, 255, 0) 12deg 22deg
+        );
+    -webkit-mask: radial-gradient(
+        farthest-side,
+        transparent calc(100% - 2px),
+        #000 calc(100% - 2px)
+    );
+    mask: radial-gradient(
+        farthest-side,
+        transparent calc(100% - 2px),
+        #000 calc(100% - 2px)
+    );
+    box-shadow:
+        0 0 8px rgba(255, 255, 255, 0.08),
+        inset 0 0 4px rgba(255, 255, 255, 0.04);
+    opacity: 0.56;
+    z-index: 9;
+    pointer-events: none;
+    display: none;
+}
+
+#spread-reticle {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -3637,23 +3674,34 @@ canvas {
     flex-direction: column;
     align-items: flex-end;
     gap: 3px;
+    max-width: min(34vw, 260px);
     text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
     text-align: right;
 }
 
 #weapon-info .weapon-line {
     display: block;
+    max-width: 100%;
 }
 
-#weapon-info .weapon-line-current {
+#weapon-info .weapon-line-name {
     color: #ffffff;
     font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-#weapon-info .weapon-line-stowed {
+#weapon-info .weapon-line-ammo {
+    color: #dbeeff;
+    font-size: 16px;
+    letter-spacing: 0.4px;
+}
+
+#weapon-info .weapon-line-meta {
     color: #a7c6d6;
-    font-size: 14px;
-    letter-spacing: 0.8px;
+    font-size: 13px;
+    line-height: 1.2;
 }
 
 #plasma-status {
@@ -4049,7 +4097,7 @@ canvas {
 .overhead-entry {
     position: absolute;
     display: none;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, calc(-100% - 8px));
     min-width: 92px;
     max-width: 180px;
     text-align: center;
@@ -4095,6 +4143,42 @@ canvas {
     height: 100%;
     width: 100%;
     background: linear-gradient(90deg, #d3dae2, #a7b2bd);
+}
+
+@media (max-width: 900px), (max-height: 720px) {
+    #hud-bottom-right {
+        right: 14px;
+        bottom: 10px;
+        gap: 1px;
+    }
+
+    #weapon-info {
+        max-width: min(42vw, 220px);
+        gap: 2px;
+    }
+
+    #weapon-info .weapon-line-name {
+        font-size: 16px;
+    }
+
+    #weapon-info .weapon-line-ammo {
+        font-size: 14px;
+    }
+
+    #weapon-info .weapon-line-meta {
+        font-size: 12px;
+    }
+
+    .overhead-entry {
+        min-width: 82px;
+        max-width: 156px;
+        transform: translate(-50%, calc(-100% - 6px)) scale(0.94);
+        transform-origin: bottom center;
+    }
+
+    .overhead-name {
+        font-size: 10px;
+    }
 }
 
 @media (max-width: 840px) {
@@ -5611,6 +5695,19 @@ body {
     flex-direction: column;
     min-height: 0;
     max-height: calc(100vh - 48px);
+    --menu-shell-padding-inline: clamp(12px, 2.2vw, 22px);
+    --menu-divider-color: rgba(180, 191, 209, 0.78);
+    --menu-header-divider-gap: clamp(10px, 1.3vw, 16px);
+    --menu-body-gap-top: clamp(8px, 1vw, 12px);
+    --menu-body-gap-bottom: clamp(12px, 1.8vw, 22px);
+    --menu-loadout-divider-gap: clamp(12px, 1.5vw, 18px);
+    --menu-panel-gap: 14px;
+    --menu-panel-flow-gap: 12px;
+    --menu-shell-border: rgba(220, 227, 236, 0.96);
+    --menu-action-border: rgba(56, 66, 82, 0.78);
+    --menu-subaction-border: rgba(188, 197, 209, 0.96);
+    --menu-action-fill: rgba(255, 255, 255, 0.96);
+    --menu-subaction-fill: rgba(244, 247, 251, 0.98);
     background: rgba(251, 252, 255, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.82);
     border-radius: 34px;
@@ -5628,7 +5725,35 @@ body {
 
 #menu-shell.menu-shell-v4 #menu-header {
     position: relative;
-    padding: 16px 22px 10px;
+    padding: 12px var(--menu-shell-padding-inline) var(--menu-header-divider-gap);
+    border-bottom: none;
+}
+
+#menu-shell.menu-shell-v4 #menu-inline-toast {
+    position: absolute;
+    z-index: 9;
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(24, 36, 58, 0.92);
+    color: #f5f8ff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    box-shadow: 0 10px 24px rgba(26, 39, 66, 0.18);
+}
+
+#menu-shell.menu-shell-v4 #menu-header::after {
+    content: '';
+    position: absolute;
+    left: var(--menu-shell-padding-inline);
+    right: var(--menu-shell-padding-inline);
+    bottom: 0;
+    height: 1px;
+    background: var(--menu-divider-color);
+    pointer-events: none;
 }
 
 #menu-shell.menu-shell-v4 #menu-header-main {
@@ -5712,12 +5837,12 @@ body {
     border: 1px solid rgba(223, 229, 240, 0.95);
     border-radius: 22px;
     box-shadow: 0 22px 40px rgba(28, 44, 76, 0.16);
-    padding: 16px;
+    padding: 12px;
     z-index: 8;
 }
 
 #join-party-popover {
-    left: 22px;
+    left: 0;
 }
 
 #utility-overlay {
@@ -5766,7 +5891,7 @@ body {
     background: rgba(236, 241, 251, 0.96);
     color: #4b5a72;
     border-radius: 999px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     cursor: pointer;
 }
 
@@ -5780,7 +5905,7 @@ body {
     color: #1a2233;
     border-radius: 999px;
     box-shadow: inset 0 0 0 1px rgba(220, 227, 238, 0.92);
-    padding: 12px 14px;
+    padding: 12px 12px;
 }
 
 #join-party-popover input,
@@ -5793,21 +5918,12 @@ body {
 #utility-modal button,
 #leave-confirm-panel button,
 #menu-shell.menu-shell-v4 #party-room-entry button,
-#menu-shell.menu-shell-v4 #friends-quick-row button,
-#menu-shell.menu-shell-v4 #copy-room-code-btn,
-#menu-shell.menu-shell-v4 #party-join-lock-btn,
-#menu-shell.menu-shell-v4 #leave-party-btn,
-#menu-shell.menu-shell-v4 #private-room-randomize-btn,
-#menu-shell.menu-shell-v4 #private-room-start-btn,
-#menu-shell.menu-shell-v4 #private-room-enter-btn,
-#menu-shell.menu-shell-v4 .friend-preview-btn,
-#menu-shell.menu-shell-v4 .party-modal-action,
-#menu-shell.menu-shell-v4 .private-room-member-move {
+#menu-shell.menu-shell-v4 #friends-quick-row button {
     border: none;
     background: rgba(236, 241, 251, 0.96);
     color: #34507f;
     border-radius: 999px;
-    padding: 10px 12px;
+    padding: 12px 12px;
     cursor: pointer;
 }
 
@@ -5816,8 +5932,8 @@ body {
     align-items: center;
     gap: 8px;
     width: fit-content;
-    margin: 0 22px 8px;
-    padding: 9px 14px;
+    margin: 12px var(--menu-shell-padding-inline) 8px;
+    padding: 9px 12px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.88);
     box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.92);
@@ -5826,10 +5942,23 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #menu-feedback[hidden],
+#menu-shell.menu-shell-v4 #menu-inline-toast[hidden],
 #menu-shell.menu-shell-v4 #room-access-status[hidden],
 #menu-shell.menu-shell-v4 #play-mode-options[hidden],
+#menu-shell.menu-shell-v4 #menu-main-heroes[hidden],
+#menu-shell.menu-shell-v4 #menu-home-hero[hidden],
+#menu-shell.menu-shell-v4 #menu-social-hero[hidden],
+#menu-shell.menu-shell-v4 #menu-party-hero[hidden],
+#menu-shell.menu-shell-v4 #menu-social-friends-pane[hidden],
+#menu-shell.menu-shell-v4 #social-direct-invite-banner[hidden],
+#menu-shell.menu-shell-v4 #social-hero-status[hidden],
+#menu-shell.menu-shell-v4 #menu-screen-room[hidden],
 #menu-shell.menu-shell-v4 #loadout-expanded-shell[hidden],
-#menu-shell.menu-shell-v4 #loadout-collapsed-row[hidden] {
+#menu-shell.menu-shell-v4 #loadout-collapsed-row[hidden],
+#menu-shell.menu-shell-v4 .menu-pill-stack > button[hidden],
+#menu-shell.menu-shell-v4 .menu-pill-stack > input[hidden],
+#menu-shell.menu-shell-v4 .menu-pill-flow > button[hidden],
+#menu-shell.menu-shell-v4 .menu-pill-flow > input[hidden] {
     display: none !important;
 }
 
@@ -5839,8 +5968,8 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #menu-session-actions {
-    margin: 0 22px 0;
-    padding: 14px 18px;
+    margin: 0 var(--menu-shell-padding-inline) 0;
+    padding: 12px 12px;
     background: rgba(255, 255, 255, 0.82);
     border-radius: 24px;
     box-shadow: inset 0 0 0 1px rgba(225, 232, 242, 0.92);
@@ -5856,7 +5985,7 @@ body {
     background: #3b6eff;
     color: #fff;
     border-radius: 999px;
-    padding: 13px 18px;
+    padding: 12px 12px;
     font-weight: 700;
 }
 
@@ -5865,7 +5994,7 @@ body {
     background: rgba(233, 100, 84, 0.12);
     color: #b63e33;
     border-radius: 999px;
-    padding: 13px 18px;
+    padding: 12px 12px;
     font-weight: 700;
 }
 
@@ -5873,32 +6002,330 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: 6px 22px 22px;
+    padding:
+        var(--menu-body-gap-top)
+        var(--menu-shell-padding-inline)
+        var(--menu-body-gap-bottom);
 }
 
 #menu-shell.menu-shell-v4 .menu-screen {
     min-height: auto;
 }
 
-#menu-shell.menu-shell-v4 #menu-home-hero {
+#menu-shell.menu-shell-v4 .menu-panel-grid,
+#menu-shell.menu-shell-v4 .menu-panel-primary,
+#menu-shell.menu-shell-v4 .menu-panel-actions,
+#menu-shell.menu-shell-v4 .menu-panel-status,
+#menu-shell.menu-shell-v4 .menu-pill-stack,
+#menu-shell.menu-shell-v4 .menu-pill-flow {
+    min-width: 0;
+}
+
+#menu-shell.menu-shell-v4 .menu-panel-shell {
+    min-width: 0;
+    container-type: inline-size;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack {
+    display: grid;
+    gap: var(--menu-panel-gap);
+    width: 100%;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-flow {
+    display: grid;
+    gap: var(--menu-panel-flow-gap);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--menu-pill-flow-min, 160px)), 1fr));
+    width: 100%;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-flow > *,
+#menu-shell.menu-shell-v4 .menu-pill-stack > * {
+    min-width: 0;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-flow-primary {
+    --menu-pill-flow-min: 168px;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-flow-secondary {
+    --menu-pill-flow-min: 148px;
+}
+
+#menu-shell.menu-shell-v4 .menu-status-pill {
+    justify-self: start;
+}
+
+#menu-shell.menu-shell-v4 .menu-status-banner {
+    width: 100%;
+}
+
+#menu-shell.menu-shell-v4 #menu-main-heroes {
+    display: grid;
+    align-items: stretch;
+    gap: 16px;
+}
+
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="1"] {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 2fr);
+}
+
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] #menu-home-hero {
+    padding: 20px 16px 16px;
+}
+
+#menu-shell.menu-shell-v4 #menu-home-hero,
+#menu-shell.menu-shell-v4 #menu-social-hero,
+#menu-shell.menu-shell-v4 #menu-party-hero {
     padding: 26px 24px 22px;
     border-radius: 32px;
     background:
         radial-gradient(circle at top right, rgba(73, 125, 255, 0.14), transparent 36%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 255, 0.96));
     box-shadow:
-        inset 0 0 0 1px rgba(224, 231, 242, 0.98),
+        inset 0 0 0 1px var(--menu-shell-border),
         0 18px 40px rgba(31, 47, 80, 0.06);
+}
+
+#menu-shell.menu-shell-v4 #menu-home-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+#menu-shell.menu-shell-v4 #menu-social-hero {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+}
+
+#menu-shell.menu-shell-v4 #menu-party-hero {
+    display: grid;
+    gap: var(--menu-panel-gap);
+    align-content: start;
+    grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 #menu-shell.menu-shell-v4 .menu-stage-copy {
     padding: 0;
 }
 
+#menu-shell.menu-shell-v4 #menu-social-layout {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#menu-shell.menu-shell-v4 #menu-social-layout[data-layout="split"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#menu-shell.menu-shell-v4 #menu-social-actions-pane,
+#menu-shell.menu-shell-v4 #menu-social-friends-pane {
+    display: grid;
+    gap: var(--menu-panel-gap);
+    align-content: start;
+}
+
+#menu-shell.menu-shell-v4 .menu-panel-subsection {
+    padding: 14px;
+    border-radius: 36px;
+    background: rgba(250, 252, 255, 0.76);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
+}
+
+#menu-shell.menu-shell-v4 .menu-panel-list-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #20304a;
+}
+
+#menu-shell.menu-shell-v4 .menu-panel-scroll {
+    display: grid;
+    gap: 10px;
+    max-height: clamp(220px, 42vh, 420px);
+    overflow: auto;
+    padding-right: 4px;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-card,
+#menu-shell.menu-shell-v4 .menu-friend-card {
+    display: grid;
+    gap: 8px;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-pill,
+#menu-shell.menu-shell-v4 .menu-friend-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 14px;
+    background: var(--menu-action-fill);
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    color: #263246;
+    font-size: clamp(13px, 4.6cqw, 15px);
+    font-weight: 650;
+    text-align: left;
+    cursor: pointer;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-pill.active,
+#menu-shell.menu-shell-v4 .menu-friend-pill.active {
+    background: rgba(59, 110, 255, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.24);
+    color: #2358d8;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-pill-name,
+#menu-shell.menu-shell-v4 .menu-friend-pill-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-pill-name span:last-child,
+#menu-shell.menu-shell-v4 .menu-friend-pill-name span:last-child {
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.15;
+}
+
+#menu-shell.menu-shell-v4 .menu-member-subpills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#menu-shell.menu-shell-v4 .menu-online-orb {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #3fd45f;
+    box-shadow: 0 0 0 4px rgba(63, 212, 95, 0.16), 0 0 14px rgba(63, 212, 95, 0.65);
+    flex: 0 0 auto;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack > button,
+#menu-shell.menu-shell-v4 .menu-pill-stack > input,
+#menu-shell.menu-shell-v4 .menu-pill-flow > button,
+#menu-shell.menu-shell-v4 .menu-pill-flow > input {
+    display: inline-flex;
+    border: none;
+    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 16px 18px;
+    font-size: clamp(14px, 5.25cqw, 16px);
+    font-weight: 700;
+    background: var(--menu-action-fill);
+    color: #263246;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack > button.active,
+#menu-shell.menu-shell-v4 .menu-pill-flow > button.active,
+#menu-shell.menu-shell-v4 .menu-pill-stack > button.locked,
+#menu-shell.menu-shell-v4 .menu-pill-flow > button.locked {
+    background: rgba(59, 110, 255, 0.12);
+    color: #2358d8;
+    box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.24);
+}
+
+#menu-shell.menu-shell-v4 #party-id-input,
+#menu-shell.menu-shell-v4 #room-code-input {
+    border: none;
+    justify-content: flex-start;
+    background: var(--menu-action-fill);
+    color: #1a2233;
+    margin: 0;
+    padding: clamp(12px, 4.8cqw, 16px) clamp(14px, 5.5cqw, 18px);
+    font-size: clamp(15px, 5.5cqw, 16px);
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+}
+
+#menu-shell.menu-shell-v4 #party-id-input::placeholder,
+#menu-shell.menu-shell-v4 #room-code-input::placeholder {
+    color: #95a3b8;
+}
+
+#menu-shell.menu-shell-v4 #social-direct-invite-banner {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 22px;
+    background: rgba(247, 249, 253, 0.98);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
+}
+
+#menu-shell.menu-shell-v4 #social-direct-invite-copy {
+    color: #44546c;
+    font-size: clamp(13px, 4.5cqw, 14px);
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+#menu-shell.menu-shell-v4 #social-direct-invite-actions {
+    display: grid;
+    gap: 10px;
+}
+
+#menu-shell.menu-shell-v4 #social-direct-invite-dismiss-btn {
+    color: #8a5560;
+    background: rgba(249, 243, 244, 0.98);
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
+}
+
+#menu-shell.menu-shell-v4 #social-direct-invite-dismiss-btn:hover {
+    background: rgba(246, 237, 239, 0.98);
+    color: #7b4650;
+}
+
+#menu-shell.menu-shell-v4 #party-hero-leave-btn {
+    color: #b63e33;
+    background: rgba(255, 245, 244, 0.96);
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+}
+
+#menu-shell.menu-shell-v4 #social-hero-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    padding: 9px 12px;
+    border-radius: 999px;
+    background: rgba(248, 250, 255, 0.96);
+    box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.92);
+    color: #5c6a83;
+    font-size: clamp(12px, 4.2cqw, 13px);
+    line-height: 1.2;
+}
+
+#menu-shell.menu-shell-v4 #social-hero-status.error {
+    color: #c33e36;
+}
+
 #menu-shell.menu-shell-v4 #mode-screen-kicker {
     display: inline-flex;
     align-items: center;
-    padding: 6px 11px;
+    padding: 6px 12px;
     border-radius: 999px;
     background: rgba(58, 110, 255, 0.12);
     color: #2d5fdc;
@@ -5910,11 +6337,12 @@ body {
 
 #menu-shell.menu-shell-v4 #mode-screen-title {
     margin: 12px 0 10px;
-    font-size: clamp(38px, 5vw, 58px);
+    font-size: clamp(26px, 18cqw, 58px);
     line-height: 0.98;
     font-weight: 800;
     letter-spacing: -0.04em;
     color: #151e30;
+    white-space: nowrap;
 }
 
 #menu-shell.menu-shell-v4 #mode-screen-copy {
@@ -5926,36 +6354,36 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #play-mode-group {
-    display: grid;
-    gap: 14px;
-}
-
-#menu-shell.menu-shell-v4 #play-mode-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
+    gap: var(--menu-panel-gap);
 }
 
 #menu-shell.menu-shell-v4 #primary-launch-btn,
 #menu-shell.menu-shell-v4 #game-modes-toggle-btn {
     border: none;
     border-radius: 999px;
-    padding: 16px 22px;
-    font-size: 16px;
+    width: 100%;
+    padding: clamp(10px, 5.5cqw, 12px) clamp(12px, 7.5cqw, 22px);
+    font-size: clamp(13px, 5.25cqw, 16px);
     font-weight: 750;
     cursor: pointer;
+    min-width: 0;
+    text-align: center;
+    line-height: 1.15;
+    white-space: normal;
 }
 
 #menu-shell.menu-shell-v4 #primary-launch-btn {
     background: #3b6eff;
     color: #fff;
-    box-shadow: 0 18px 32px rgba(59, 110, 255, 0.24);
+    box-shadow:
+        inset 0 0 0 1px var(--menu-action-border),
+        0 18px 32px rgba(59, 110, 255, 0.24);
 }
 
 #menu-shell.menu-shell-v4 #game-modes-toggle-btn {
-    background: rgba(255, 255, 255, 0.9);
-    color: #3f4f67;
-    box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.94);
+    background: var(--menu-action-fill);
+    color: #263246;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
 }
 
 #menu-shell.menu-shell-v4 #game-modes-toggle-btn.active {
@@ -5964,22 +6392,24 @@ body {
     box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.24);
 }
 
-#menu-shell.menu-shell-v4 #play-mode-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
 #menu-shell.menu-shell-v4 .play-mode-btn {
     border: none;
-    background: rgba(255, 255, 255, 0.88);
-    color: #1b2334;
+    background: var(--menu-action-fill);
+    color: #263246;
     border-radius: 999px;
-    padding: 12px 16px;
-    box-shadow: inset 0 0 0 1px rgba(224, 230, 239, 0.94);
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    padding: clamp(9px, 4.8cqw, 12px) clamp(10px, 4.8cqw, 12px);
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    font-size: clamp(12px, 4.7cqw, 14px);
     font-weight: 650;
     cursor: pointer;
+    line-height: 1.2;
+    text-align: center;
+    white-space: normal;
 }
 
 #menu-shell.menu-shell-v4 .play-mode-btn.active {
@@ -5994,19 +6424,20 @@ body {
     gap: 8px;
     width: fit-content;
     margin-top: 0;
-    padding: 9px 14px;
+    padding: 9px 12px;
     border-radius: 999px;
     background: rgba(248, 250, 255, 0.96);
     box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.92);
     color: #5c6a83;
-    font-size: 13px;
+    font-size: clamp(12px, 4.2cqw, 13px);
+    line-height: 1.2;
 }
 
 #menu-shell.menu-shell-v4 #mode-screen-actions {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 18px 4px 0;
+    padding: 12px 4px 0;
 }
 
 #menu-shell.menu-shell-v4 #loadout-start-btn {
@@ -6014,32 +6445,26 @@ body {
     background: #3b6eff;
     color: #fff;
     border-radius: 20px;
-    padding: 15px 22px;
+    padding: 12px 22px;
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
 }
 
-#menu-shell.menu-shell-v4 #party-screen-grid {
+#menu-shell.menu-shell-v4 #room-screen-grid {
     display: grid;
     gap: 16px;
-    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);
     overflow: visible;
     padding-right: 0;
-    align-content: start;
-}
-
-#menu-shell.menu-shell-v4 #party-support-stack {
-    display: grid;
-    gap: 16px;
     align-content: start;
 }
 
 #menu-shell.menu-shell-v4 .menu-card {
     background: rgba(255, 255, 255, 0.84);
     border-radius: 24px;
-    padding: 20px;
-    box-shadow: inset 0 0 0 1px rgba(228, 234, 243, 0.95);
+    padding: 12px;
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
     position: static;
     z-index: auto;
 }
@@ -6051,7 +6476,7 @@ body {
 #menu-shell.menu-shell-v4 .menu-card-kicker {
     display: inline-flex;
     align-items: center;
-    padding: 6px 10px;
+    padding: 6px 12px;
     border-radius: 999px;
     background: rgba(240, 244, 250, 0.95);
     color: #667892;
@@ -6064,32 +6489,37 @@ body {
 #menu-shell.menu-shell-v4 .menu-card-title {
     margin-top: 6px;
     margin-bottom: 10px;
-    font-size: 24px;
+    font-size: clamp(18px, 8.5cqw, 24px);
     font-weight: 650;
     color: #162133;
+    line-height: 1.05;
 }
 
 #menu-shell.menu-shell-v4 #private-room-mode-actions {
     display: inline-flex;
     gap: 8px;
     padding: 6px;
-    background: rgba(241, 244, 249, 0.96);
+    background: rgba(246, 248, 252, 0.98);
     border-radius: 18px;
     margin: 12px 0;
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
 }
 
 #menu-shell.menu-shell-v4 #private-room-mode-actions button {
     border: none;
-    background: transparent;
-    color: #62728c;
-    padding: 10px 14px;
+    background: var(--menu-action-fill);
+    color: #263246;
+    padding: 12px 12px;
     border-radius: 999px;
     font-weight: 650;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    cursor: pointer;
 }
 
 #menu-shell.menu-shell-v4 #private-room-mode-actions button.active {
     background: rgba(59, 110, 255, 0.12);
     color: #2358d8;
+    box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.24);
 }
 
 #menu-shell.menu-shell-v4 #party-room-entry {
@@ -6109,10 +6539,10 @@ body {
     align-items: center;
     gap: 10px;
     margin-top: 12px;
-    padding: 10px 12px;
+    padding: 12px 12px;
     border-radius: 999px;
     background: rgba(244, 247, 252, 0.98);
-    box-shadow: inset 0 0 0 1px rgba(226, 232, 241, 0.95);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
 }
 
 #menu-shell.menu-shell-v4 #room-share-label {
@@ -6128,27 +6558,37 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 12px 12px;
     border-radius: 999px;
-    background: rgba(244, 247, 252, 0.98);
-    box-shadow: inset 0 0 0 1px rgba(226, 232, 241, 0.95);
+    background: var(--menu-subaction-fill);
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
     color: #21304b;
     font-weight: 650;
+}
+
+#menu-shell.menu-shell-v4 #copy-room-code-btn {
+    border: none;
+    background: var(--menu-action-fill);
+    color: #263246;
+    border-radius: 999px;
+    padding: 12px 14px;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    cursor: pointer;
 }
 
 #menu-shell.menu-shell-v4 #private-room-unassigned-wrap,
 #menu-shell.menu-shell-v4 .private-team-panel {
     margin-top: 14px;
-    padding: 16px;
+    padding: 12px;
     border-radius: 20px;
     background: rgba(246, 248, 252, 0.98);
-    box-shadow: inset 0 0 0 1px rgba(226, 232, 241, 0.95);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
 }
 
 #menu-shell.menu-shell-v4 #private-room-roster-grid {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 }
 
 #menu-shell.menu-shell-v4 #private-room-action-row,
@@ -6162,6 +6602,64 @@ body {
     gap: 10px;
 }
 
+#menu-shell.menu-shell-v4 #private-room-invite-row > button,
+#menu-shell.menu-shell-v4 #private-room-invite-row > button.locked {
+    background: var(--menu-subaction-fill);
+    color: #4a5a72;
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn,
+#menu-shell.menu-shell-v4 .party-modal-action,
+#menu-shell.menu-shell-v4 .private-room-member-move,
+#menu-shell.menu-shell-v4 .party-preview-add {
+    border: none;
+    background: var(--menu-subaction-fill);
+    color: #47566d;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn:hover,
+#menu-shell.menu-shell-v4 .party-modal-action:hover,
+#menu-shell.menu-shell-v4 .private-room-member-move:hover,
+#menu-shell.menu-shell-v4 .party-preview-add:hover {
+    background: rgba(238, 243, 248, 0.98);
+    color: #314059;
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn.secondary {
+    background: rgba(249, 243, 244, 0.98);
+    color: #8a5560;
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn.secondary:hover {
+    background: rgba(246, 237, 239, 0.98);
+    color: #7b4650;
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn.join {
+    background: rgba(240, 248, 242, 0.98);
+    color: #2f6f3d;
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn.join:hover,
+#menu-shell.menu-shell-v4 .private-room-member-move:hover {
+    background: rgba(232, 243, 236, 0.98);
+    color: #255c31;
+}
+
+#menu-shell.menu-shell-v4 .friend-preview-btn:disabled,
+#menu-shell.menu-shell-v4 .party-modal-action:disabled,
+#menu-shell.menu-shell-v4 .private-room-member-move:disabled,
+#menu-shell.menu-shell-v4 .party-preview-add:disabled {
+    opacity: 0.56;
+    cursor: not-allowed;
+    background: var(--menu-subaction-fill);
+    color: #7f8ba0;
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
+}
+
 #menu-shell.menu-shell-v4 .private-team-title {
     font-size: 13px;
     font-weight: 700;
@@ -6172,10 +6670,10 @@ body {
 #menu-shell.menu-shell-v4 .private-room-member,
 #menu-shell.menu-shell-v4 .party-modal-row,
 #menu-shell.menu-shell-v4 .friend-modal-row {
-    padding: 14px;
+    padding: 12px;
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.98);
-    box-shadow: inset 0 0 0 1px rgba(227, 233, 242, 0.94);
+    background: var(--menu-subaction-fill);
+    box-shadow: inset 0 0 0 1px var(--menu-subaction-border);
 }
 
 #menu-shell.menu-shell-v4 .private-room-member + .private-room-member,
@@ -6208,10 +6706,21 @@ body {
 
 #menu-shell.menu-shell-v4 #menu-loadout-band {
     position: relative;
-    padding: 10px 18px 18px;
+    padding: var(--menu-loadout-divider-gap) var(--menu-shell-padding-inline) 12px;
     background:
         linear-gradient(180deg, rgba(248, 250, 255, 0), rgba(244, 247, 252, 0.8) 32%, rgba(244, 247, 252, 0.96));
-    border-top: 1px solid rgba(228, 234, 243, 0.8);
+    border-top: none;
+}
+
+#menu-shell.menu-shell-v4 #menu-loadout-band::before {
+    content: '';
+    position: absolute;
+    left: var(--menu-shell-padding-inline);
+    right: var(--menu-shell-padding-inline);
+    top: 0;
+    height: 1px;
+    background: var(--menu-divider-color);
+    pointer-events: none;
 }
 
 #menu-shell.menu-shell-v4 #loadout-band-actions {
@@ -6221,7 +6730,7 @@ body {
     align-items: center;
     gap: 10px;
     min-height: 33px;
-    padding: 0 16px;
+    padding: 0 12px;
     margin-bottom: 12px;
 }
 
@@ -6230,10 +6739,10 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #loadout-expanded-shell {
-    padding: 14px 16px 16px;
+    padding: 12px 12px 12px;
     border-radius: 26px;
     background: rgba(245, 248, 252, 0.92);
-    box-shadow: inset 0 0 0 1px rgba(226, 232, 241, 0.96);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
 }
 
 #menu-shell.menu-shell-v4 #loadout-collapse-btn,
@@ -6242,7 +6751,7 @@ body {
     align-items: center;
     border: none;
     border-radius: 999px;
-    padding: 9px 13px;
+    padding: 9px 12px;
     background: rgba(255, 255, 255, 0.98);
     color: #50617a;
     box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.92);
@@ -6264,7 +6773,7 @@ body {
 #menu-shell.menu-shell-v4 #loadout-row {
     display: grid;
     gap: 14px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
 }
 
 #menu-shell.menu-shell-v4 .loadout-section {
@@ -6277,10 +6786,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 18px;
+    padding: 12px;
     border-radius: 22px;
     background: rgba(255, 255, 255, 0.98);
-    box-shadow: inset 0 0 0 1px rgba(223, 229, 239, 0.96);
+    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
 }
 
 #menu-shell.menu-shell-v4 #weapon-slot-title,
@@ -6295,7 +6804,7 @@ body {
 #menu-shell.menu-shell-v4 #weapon-slot-buttons,
 #menu-shell.menu-shell-v4 #ability-slot-buttons {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
     gap: 10px;
     margin: 0;
 }
@@ -6317,11 +6826,15 @@ body {
 #menu-shell.menu-shell-v4 .throwable-choice-btn,
 #menu-shell.menu-shell-v4 .ability-choice-btn {
     border: none;
-    background: rgba(241, 244, 249, 0.96);
-    color: #566781;
+    background: var(--menu-action-fill);
+    color: #263246;
     border-radius: 16px;
-    padding: 10px 12px;
+    padding: clamp(10px, 4.5cqw, 12px) clamp(10px, 4.5cqw, 12px);
     cursor: pointer;
+    font-size: clamp(12px, 4.5cqw, 14px);
+    line-height: 1.2;
+    text-wrap: balance;
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
 }
 
 #menu-shell.menu-shell-v4 .weapon-slot-btn,
@@ -6331,6 +6844,33 @@ body {
     border-radius: 10px;
     line-height: 1.35;
     white-space: normal;
+}
+
+@container (max-width: 360px) {
+    #menu-shell.menu-shell-v4 .menu-status-pill {
+        width: 100%;
+        justify-content: center;
+    }
+
+    #menu-shell.menu-shell-v4 #room-access-status {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@container (max-width: 320px) {
+    #menu-shell.menu-shell-v4 #menu-home-hero .menu-stage-copy {
+        margin-bottom: 2px;
+    }
+
+    #menu-shell.menu-shell-v4 #mode-screen-title {
+        letter-spacing: -0.03em;
+    }
+
+    #menu-shell.menu-shell-v4 #play-mode-group {
+        --menu-panel-gap: 10px;
+        --menu-panel-flow-gap: 10px;
+    }
 }
 
 #menu-shell.menu-shell-v4 .weapon-slot-btn,
@@ -6546,6 +7086,11 @@ body {
     #menu-shell.menu-shell-v4 #menu-surface {
         max-height: calc(100vh - 20px);
         border-radius: 30px;
+        --menu-shell-padding-inline: 16px;
+        --menu-header-divider-gap: 10px;
+        --menu-body-gap-top: 8px;
+        --menu-body-gap-bottom: 16px;
+        --menu-loadout-divider-gap: 12px;
     }
 
     #menu-shell.menu-shell-v4 #menu-header-main {
@@ -6556,8 +7101,14 @@ body {
         flex-wrap: wrap;
     }
 
-    #menu-shell.menu-shell-v4 #menu-home-hero {
-        padding: 24px 20px 20px;
+    #menu-shell.menu-shell-v4 #menu-main-heroes {
+        grid-template-columns: 1fr;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-home-hero,
+    #menu-shell.menu-shell-v4 #menu-social-hero,
+    #menu-shell.menu-shell-v4 #menu-party-hero {
+        padding: 24px 12px 12px;
         border-radius: 28px;
     }
 
@@ -6585,10 +7136,6 @@ body {
         border-radius: 22px 22px 0 0;
     }
 
-    #menu-shell.menu-shell-v4 #menu-header {
-        padding: 16px;
-    }
-
     #menu-shell.menu-shell-v4 #menu-header-main {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -6598,16 +7145,18 @@ body {
         justify-content: flex-start;
     }
 
-    #menu-shell.menu-shell-v4 #menu-body {
-        padding: 6px 16px 18px;
+    #menu-shell.menu-shell-v4 #menu-surface {
+        --menu-shell-padding-inline: 12px;
+        --menu-header-divider-gap: 8px;
+        --menu-body-gap-top: 6px;
+        --menu-body-gap-bottom: 12px;
+        --menu-loadout-divider-gap: 10px;
     }
 
-    #menu-shell.menu-shell-v4 #menu-loadout-band {
-        padding: 10px 14px 14px;
-    }
-
-    #menu-shell.menu-shell-v4 #menu-home-hero {
-        padding: 22px 18px 18px;
+    #menu-shell.menu-shell-v4 #menu-home-hero,
+    #menu-shell.menu-shell-v4 #menu-social-hero,
+    #menu-shell.menu-shell-v4 #menu-party-hero {
+        padding: 22px 12px 12px;
         border-radius: 24px;
     }
 
@@ -6626,6 +7175,10 @@ body {
         left: 16px;
         right: 16px;
         width: auto;
+    }
+
+    #utility-overlay {
+        left: auto;
     }
 }
 #menu-shell.menu-shell-v4 .throwable-cat-btn {

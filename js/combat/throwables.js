@@ -207,6 +207,12 @@
         return plasmaFuseDelay(def);
     }
 
+    function explosiveMinDamage(def) {
+        var value = Number(def && def.minBlastDamage);
+        if (!isFinite(value)) value = 20;
+        return Math.max(0, Math.round(value));
+    }
+
     function resetInventory() {
         inventory = {};
         for (var i = 0; i < throwableOrder.length; i++) {
@@ -1362,11 +1368,16 @@
 
     function reportHit(onEnemyHit, hitPoint, damage, hitType, result, source, special) {
         if (!onEnemyHit || !result) return;
+        var targetId = '';
+        if (result.enemy && Number.isFinite(Number(result.enemy.index))) {
+            targetId = 'enemy:' + String(result.enemy.index);
+        }
         onEnemyHit({
             hitPoint: hitPoint.clone(),
             damage: damage,
             hitType: hitType,
             result: result,
+            targetId: targetId,
             source: source,
             special: special || null
         });
@@ -1374,6 +1385,7 @@
 
     function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
         var palette = effectPaletteForProjectileType(source);
+        var def = defs[String(source || '')] || {};
         if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.play) {
             globalThis.__MAYHEM_RUNTIME.GameAudio.play('explosion');
         }
@@ -1388,7 +1400,7 @@
             if (dist > radius) continue;
 
             var falloff = 1 - (dist / radius);
-            var damage = Math.max(20, Math.round(maxDamage * falloff));
+            var damage = Math.max(explosiveMinDamage(def), Math.round(maxDamage * falloff));
             var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(enemy.bodyHitbox, damage);
             reportHit(
                 onEnemyHit,

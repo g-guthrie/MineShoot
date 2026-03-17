@@ -63,10 +63,12 @@
 
         function clearHookState() {
             hookState = null;
+            syncActionRestrictions();
         }
 
         function clearHealState() {
             healState = null;
+            syncActionRestrictions();
         }
 
         function clearChokeCasterState() {
@@ -78,6 +80,31 @@
             clearHookState();
             clearHealState();
             clearChokeCasterState();
+            syncActionRestrictions();
+        }
+
+        function syncActionRestrictions() {
+            var player = runtime().GamePlayer || null;
+            if (!player || !player.setActionRestrictions) return;
+            var weaponUntil = 0;
+            var throwableUntil = 0;
+            if (hookState && hookState.active) {
+                weaponUntil = Math.max(weaponUntil, Number(hookState.lockEndsAt || hookState.endsAt || 0));
+                throwableUntil = Math.max(throwableUntil, Number(hookState.lockEndsAt || hookState.endsAt || 0));
+            }
+            if (healState && healState.active) {
+                weaponUntil = Math.max(weaponUntil, Number(healState.lockEndsAt || healState.endsAt || 0));
+                throwableUntil = Math.max(throwableUntil, Number(healState.lockEndsAt || healState.endsAt || 0));
+            }
+            if (deadeyeState && deadeyeState.active) {
+                weaponUntil = Math.max(weaponUntil, Number(deadeyeState.lockEndsAt || deadeyeState.endsAt || 0));
+                throwableUntil = Math.max(throwableUntil, Number(deadeyeState.lockEndsAt || deadeyeState.endsAt || 0));
+            }
+            player.setActionRestrictions({
+                weaponUntil: weaponUntil,
+                throwableUntil: throwableUntil,
+                abilityUntil: 0
+            });
         }
 
         function currentHookOriginWorldPosition(fallback) {
@@ -262,6 +289,7 @@
             var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
             if (count <= 0) {
                 deadeyeState = null;
+                syncActionRestrictions();
                 return { ok: false, message: 'No Deadeye locks acquired.' };
             }
 
@@ -285,6 +313,7 @@
             }
 
             deadeyeState = null;
+            syncActionRestrictions();
             if (notifier) notifier('Deadeye fired (' + landed + ' hit).', 800);
             return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
         }
@@ -384,6 +413,7 @@
                 stunDuration: Number(cfg.stunDuration || 0.5),
                 castDamage: Number(cfg.castDamage || 35),
                 travelSpeed: Number(cfg.travelSpeed || 24),
+                pullSpeed: Number(cfg.pullSpeed || cfg.travelSpeed || 24),
                 playerPos: makeVector3Like(playerPos),
                 playerYaw: Number(rotation.yaw || 0),
                 startPos: startPos,
@@ -392,8 +422,10 @@
                 attachPos: null,
                 startedAt: now,
                 hitAt: now + travelMs,
-                endsAt: now + travelMs
+                endsAt: now + travelMs,
+                lockEndsAt: now + travelMs
             };
+            syncActionRestrictions();
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Chain Hook out.', 550);
             return { ok: true, kind: 'hook_start' };
@@ -432,8 +464,10 @@
                 lockEveryMs: lockEveryMs,
                 nextLockAt: now + lockEveryMs,
                 lockCount: 0,
-                targets: candidates
+                targets: candidates,
+                lockEndsAt: now + durationMs
             };
+            syncActionRestrictions();
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Deadeye primed. Press ' + bindingLabel(slotIndex === 2 ? 'ability_2' : 'ability_1', slotIndex === 2 ? 'F' : 'E') + ' again to fire.', 900);
             return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
@@ -452,8 +486,10 @@
                 startedAt: now,
                 endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
                 healAmount: Number(cfg.healAmount || 150),
-                applied: false
+                applied: false,
+                lockEndsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000)
             };
+            syncActionRestrictions();
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Healing...', 450);
             return { ok: true, kind: 'heal_start' };
@@ -512,7 +548,7 @@
                                 hookState.playerPos,
                                 hookState.playerYaw || 0,
                                 hookState.pullDistance || 3.2,
-                                Number(hookState.travelSpeed || 26),
+                                Number(hookState.pullSpeed || hookState.travelSpeed || 26),
                                 Number(hookState.stunDuration || 0)
                             );
                         }
@@ -521,6 +557,8 @@
                         hookState.attachPos = makeVector3Like(hookTarget.worldPos);
                         hookState.headPos = makeVector3Like(hookTarget.worldPos);
                         hookState.endsAt = now + 140;
+                        hookState.lockEndsAt = hookState.endsAt;
+                        syncActionRestrictions();
                         if (hookResult && onEnemyHit) {
                             onEnemyHit({
                                 hitPoint: makeVector3Like(hookTarget.worldPos),
@@ -532,6 +570,8 @@
                         if (notifier) notifier('Chain Hook landed.', 700);
                     } else if (now >= (hookState.hitAt || 0)) {
                         beginHookRetract(hookState, now);
+                        hookState.lockEndsAt = hookState.endsAt;
+                        syncActionRestrictions();
                         if (notifier) notifier('Hook missed.', 500);
                     }
                 } else if (hookState.phase === 'latched') {
@@ -545,6 +585,8 @@
                         if (now >= (hookState.endsAt || 0)) {
                             hookState.retractStartPos = makeVector3Like(hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
                             beginHookRetract(hookState, now);
+                            hookState.lockEndsAt = hookState.endsAt;
+                            syncActionRestrictions();
                         }
                     }
                 } else if (hookState.phase === 'retract') {
@@ -576,13 +618,14 @@
             }
             if (!deadeyeState.targets.length) {
                 deadeyeState = null;
+                syncActionRestrictions();
                 return;
             }
             while (deadeyeState.lockCount < deadeyeState.targets.length && now >= deadeyeState.nextLockAt) {
                 deadeyeState.lockCount += 1;
                 deadeyeState.nextLockAt += deadeyeState.lockEveryMs;
             }
-            if (deadeyeState.lockCount >= deadeyeState.targets.length || now >= deadeyeState.endsAt) {
+            if (now >= deadeyeState.endsAt) {
                 fireDeadeye(deadeyeState.slotKey === 'slot2' ? 2 : 1, camera, onEnemyHit, notifier, 'auto');
             }
         }
@@ -596,6 +639,7 @@
                 headPos: hookState.headPos ? makeVector3Like(hookState.headPos) : null,
                 attachPos: hookState.attachPos ? makeVector3Like(hookState.attachPos) : null,
                 catchRadius: Number(hookState.catchRadius || 1.8),
+                pullSpeed: Number(hookState.pullSpeed || hookState.travelSpeed || 26),
                 startedAt: hookState.startedAt || 0,
                 hitAt: hookState.hitAt || 0,
                 endsAt: hookState.endsAt

@@ -37,8 +37,12 @@ export function entityDamagePointY(entityY) {
   return entityFeetY(entityY) + DAMAGE_POINT_OFFSET_Y;
 }
 
+export function entityMarkerPointYFromFeet(feetY) {
+  return Number(feetY || 0) + MARKER_POINT_OFFSET_Y;
+}
+
 export function entityMarkerPointY(entityY) {
-  return entityFeetY(entityY) + MARKER_POINT_OFFSET_Y;
+  return entityMarkerPointYFromFeet(entityFeetY(entityY));
 }
 
 export function logicalHitscanOriginFromEye(eyePos, forward) {
@@ -64,6 +68,7 @@ runtime.GameShared.entityPoints = {
   entityBodyHitboxY,
   entityHeadHitboxY,
   entityDamagePointY,
+  entityMarkerPointYFromFeet,
   entityMarkerPointY,
   logicalHitscanOriginFromEye
 };

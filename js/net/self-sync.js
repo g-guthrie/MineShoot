@@ -5,6 +5,9 @@
 (function () {
     'use strict';
 
+    var lastAppliedWeaponSnapshotRef = null;
+    var lastAppliedRespawnSnapshotRef = null;
+
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
     }
@@ -41,20 +44,39 @@
         var outOfRoundLockUntil = selfState.outOfRound && matchState && !matchState.ended
             ? Math.max(matchResetAt, spectatorLockUntil)
             : 0;
+        var respawnState = opts && Object.prototype.hasOwnProperty.call(opts, 'respawnState')
+            ? opts.respawnState
+            : null;
+        var weaponSnapshotChanged = selfState !== lastAppliedWeaponSnapshotRef;
+        var respawnSnapshotChanged = respawnState !== lastAppliedRespawnSnapshotRef;
         var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
             ? abilityFxView.readAbilityFx(selfState)
             : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
                 ? selfState.abilityFx
                 : null);
 
-        if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork) {
+        if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork && (weaponSnapshotChanged || respawnSnapshotChanged)) {
             RT.GamePlayerCombat.syncFromNetwork(Object.assign({}, selfState, {
                 spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil)
-            }));
+            }), {
+                respawnState: respawnState,
+                skipWeaponSync: !weaponSnapshotChanged
+            });
+            if (weaponSnapshotChanged) {
+                lastAppliedWeaponSnapshotRef = selfState;
+            }
+            lastAppliedRespawnSnapshotRef = respawnState;
         }
 
-        if (RT.GameHitscan && RT.GameHitscan.syncAmmoStateFromNetwork && selfState.weaponAmmo) {
+        if (
+            weaponSnapshotChanged &&
+            !(RT.GamePlayerCombat && RT.GamePlayerCombat.syncWeaponState) &&
+            RT.GameHitscan &&
+            RT.GameHitscan.syncAmmoStateFromNetwork &&
+            selfState.weaponAmmo
+        ) {
             RT.GameHitscan.syncAmmoStateFromNetwork(selfState.weaponAmmo);
+            lastAppliedWeaponSnapshotRef = selfState;
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setAliveVisual) {

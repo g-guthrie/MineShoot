@@ -7,10 +7,10 @@
 
     var RT = globalThis.__MAYHEM_RUNTIME;
 
-    var playerHP = 500;
-    var playerMaxHP = 500;
-    var playerArmor = 90;
-    var playerArmorMax = 90;
+    var playerHP = defaultPlayerHp();
+    var playerMaxHP = defaultPlayerHp();
+    var playerArmor = defaultPlayerArmor();
+    var playerArmorMax = defaultPlayerArmor();
     var playerAlive = true;
     var armorRegenDelay = 0;
     var respawnInvulnTimer = 0;
@@ -24,8 +24,8 @@
     var weaponAmmo = {};
     var lastWeaponFireAtMs = 0;
 
-    var DEFAULT_ARMOR_REGEN_DELAY = 6.0;
-    var ARMOR_REGEN_PER_SEC = 12;
+    var DEFAULT_ARMOR_REGEN_DELAY = defaultArmorRegenDelay();
+    var ARMOR_REGEN_PER_SEC = defaultArmorRegenPerSec();
     var RELOADED_FLASH_MS = 900;
     // Allow for network jitter plus snapshot cadence before a stale authoritative
     // weapon id snaps the local switch back.
@@ -71,6 +71,27 @@
         return RT.GameShared || {};
     }
 
+    function survivabilityTuning() {
+        var shared = sharedWeaponApi();
+        return shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
+    }
+
+    function defaultPlayerHp() {
+        return clampNumber(survivabilityTuning().hpMax, 360, 1);
+    }
+
+    function defaultPlayerArmor() {
+        return clampNumber(survivabilityTuning().armorMax, 90, 0);
+    }
+
+    function defaultArmorRegenDelay() {
+        return clampNumber(survivabilityTuning().armorRegenDelaySec, 8.0, 0);
+    }
+
+    function defaultArmorRegenPerSec() {
+        return clampNumber(survivabilityTuning().armorRegenPerSec, 10, 0);
+    }
+
     function getAllSelectableWeaponIds() {
         var shared = sharedWeaponApi();
         var ids = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
@@ -103,6 +124,58 @@
         var tuning = shared.gameplayTuning || {};
         var stats = tuning.weaponStats || {};
         return stats[id] || null;
+    }
+
+    function getWeaponPresentation(weaponId) {
+        var id = String(weaponId || '');
+        if (!id) return null;
+        var shared = sharedWeaponApi();
+        if (shared.getWeaponPresentation) return shared.getWeaponPresentation(id);
+        return null;
+    }
+
+    function resolveReloadPresentationState(weaponId, reloadMs, reloadRemaining, reloadedFlashRemaining, previousState) {
+        var shared = sharedWeaponApi();
+        if (shared.resolveReloadPresentationState) {
+            return shared.resolveReloadPresentationState({
+                reloadMs: reloadMs,
+                reloadRemaining: reloadRemaining,
+                reloadedFlashRemaining: reloadedFlashRemaining,
+                reload: getWeaponPresentation(weaponId) ? getWeaponPresentation(weaponId).reload : null
+            }, previousState || null);
+        }
+        var reloadConfig = getWeaponPresentation(weaponId) ? getWeaponPresentation(weaponId).reload : {
+            raiseEnd: 0.16,
+            manipulateEnd: 0.68
+        };
+        var reloading = Number(reloadMs || 0) > 0 && Number(reloadRemaining || 0) > 0;
+        var reloadPct = reloading ? Math.max(0, Math.min(1, 1 - (Number(reloadRemaining || 0) / Math.max(1, Number(reloadMs || 1))))) : 1;
+        var phase = 'ready';
+        var phasePct = 1;
+        if (reloading) {
+            if (reloadPct < Number(reloadConfig.raiseEnd || 0.16)) {
+                phase = 'raise';
+                phasePct = reloadPct / Math.max(0.0001, Number(reloadConfig.raiseEnd || 0.16));
+            } else if (reloadPct < Number(reloadConfig.manipulateEnd || 0.68)) {
+                phase = 'manipulate';
+                phasePct = (reloadPct - Number(reloadConfig.raiseEnd || 0.16)) / Math.max(0.0001, Number(reloadConfig.manipulateEnd || 0.68) - Number(reloadConfig.raiseEnd || 0.16));
+            } else {
+                phase = 'settle';
+                phasePct = (reloadPct - Number(reloadConfig.manipulateEnd || 0.68)) / Math.max(0.0001, 1 - Number(reloadConfig.manipulateEnd || 0.68));
+            }
+        } else if (Number(reloadedFlashRemaining || 0) > 0) {
+            phase = 'complete';
+        }
+        return {
+            reloading: reloading,
+            reloadPct: reloadPct,
+            phase: phase,
+            phasePct: Math.max(0, Math.min(1, phasePct)),
+            justStarted: false,
+            justCompleted: false,
+            reloadRemaining: Math.max(0, Number(reloadRemaining || 0)),
+            reloadedFlashRemaining: Math.max(0, Number(reloadedFlashRemaining || 0))
+        };
     }
 
     function isKnownWeaponId(weaponId) {
@@ -167,11 +240,11 @@
         var state = ensureWeaponAmmoState(id);
         var stamp = weaponTimeMs(now);
         if (!id || !stats || !state || Number(stats.magazineSize || 0) <= 0) return state;
+        readPredictedMultiplayerReloadUntil(id, stamp);
         if (Number(state.reloadUntil || 0) > 0 && stamp >= Number(state.reloadUntil || 0)) {
             state.reloadUntil = 0;
             state.ammoInMag = Math.max(0, Number(stats.magazineSize || 0));
             state.reloadedFlashUntil = stamp + RELOADED_FLASH_MS;
-            clearPredictedMultiplayerReload(id);
         }
         return state;
     }
@@ -192,11 +265,10 @@
             if (!entry || !state || !stats) continue;
             var magazineSize = Math.max(0, Number(stats.magazineSize || 0));
             var snapshotAmmoInMag = Math.max(0, Number(entry.ammoInMag || 0));
-            var predictedReloadUntil = Math.max(0, Number(predictedMultiplayerReloadUntilByWeapon[weaponId] || 0));
+            var predictedReloadUntil = readPredictedMultiplayerReloadUntil(weaponId, stamp);
             var awaitingReloadAck = isMultiplayer() &&
                 predictedReloadUntil > stamp &&
                 !entry.reloading &&
-                snapshotAmmoInMag > 0 &&
                 snapshotAmmoInMag < magazineSize;
             if (awaitingReloadAck) continue;
             state.ammoInMag = Math.max(0, Math.min(magazineSize, Number(entry.ammoInMag || 0)));
@@ -217,6 +289,14 @@
         if (!stats) return null;
         var stamp = weaponTimeMs(now);
         var ammoState = syncWeaponAmmoState(id, stamp);
+        var reloadRemaining = reloadRemainingForWeapon(id, stamp);
+        var reloadedFlashRemaining = Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - stamp);
+        var reloadPresentation = resolveReloadPresentationState(
+            id,
+            Math.max(0, Number(stats.reloadMs || 0)),
+            reloadRemaining,
+            reloadedFlashRemaining
+        );
         return {
             id: id,
             name: String(stats.name || id),
@@ -225,9 +305,12 @@
             reloadMs: Math.max(0, Number(stats.reloadMs || 0)),
             magazineSize: Math.max(0, Number(stats.magazineSize || 0)),
             ammoInMag: Math.max(0, Number(ammoState && ammoState.ammoInMag || 0)),
-            reloading: Math.max(0, Number(ammoState && ammoState.reloadUntil || 0) - stamp) > 0,
-            reloadRemaining: reloadRemainingForWeapon(id, stamp),
-            reloadedFlashRemaining: Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - stamp),
+            reloading: !!reloadPresentation.reloading,
+            reloadRemaining: reloadRemaining,
+            reloadedFlashRemaining: reloadedFlashRemaining,
+            reloadPct: Number(reloadPresentation.reloadPct || 0),
+            reloadPhase: String(reloadPresentation.phase || 'ready'),
+            reloadPhasePct: Number(reloadPresentation.phasePct || 0),
             bodyDamage: Number(stats.bodyDamage || 0),
             headDamage: Number(stats.headDamage || 0),
             pellets: Math.max(1, Number(stats.pellets || 1))
@@ -236,7 +319,6 @@
 
     function buildWeaponHudState(now) {
         var currentWeapon = buildWeaponState(equippedWeaponId, now);
-        var stamp = weaponTimeMs(now);
         if (!currentWeapon) {
             return {
                 status: 'ready',
@@ -244,13 +326,15 @@
                 pct: 1
             };
         }
-        if (currentWeapon.reloadRemaining > 0) {
+        if (currentWeapon.reloading) {
             return {
                 status: 'reloading',
                 ready: false,
-                pct: currentWeapon.reloadMs > 0 ? (1 - (currentWeapon.reloadRemaining / currentWeapon.reloadMs)) : 1
+                pct: currentWeapon.reloadPct,
+                phase: currentWeapon.reloadPhase
             };
         }
+        var stamp = weaponTimeMs(now);
         var cooldownRemaining = Math.max(0, Number(currentWeapon.cooldown || 0) - (stamp - lastWeaponFireAtMs));
         if (cooldownRemaining > 0) {
             return {
@@ -263,13 +347,15 @@
             return {
                 status: 'reloaded',
                 ready: true,
-                pct: 1
+                pct: 1,
+                phase: currentWeapon.reloadPhase
             };
         }
         return {
             status: 'ready',
             ready: true,
-            pct: 1
+            pct: 1,
+            phase: 'ready'
         };
     }
 
@@ -298,6 +384,18 @@
         var id = String(weaponId || '');
         if (!id) return;
         delete predictedMultiplayerReloadUntilByWeapon[id];
+    }
+
+    function readPredictedMultiplayerReloadUntil(weaponId, now) {
+        var id = String(weaponId || '');
+        if (!id) return 0;
+        var stamp = weaponTimeMs(now);
+        var predictedUntil = Math.max(0, Number(predictedMultiplayerReloadUntilByWeapon[id] || 0));
+        if (predictedUntil > 0 && predictedUntil <= stamp) {
+            clearPredictedMultiplayerReload(id);
+            return 0;
+        }
+        return predictedUntil;
     }
 
     function rememberPredictedMultiplayerReload(weaponId, now, reloadMs) {
@@ -465,6 +563,10 @@
             if (typeof opts.isMultiplayer === 'function') _isMultiplayerFn = opts.isMultiplayer;
         }
         sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
+        DEFAULT_ARMOR_REGEN_DELAY = defaultArmorRegenDelay();
+        ARMOR_REGEN_PER_SEC = defaultArmorRegenPerSec();
+        playerMaxHP = defaultPlayerHp();
+        playerArmorMax = defaultPlayerArmor();
         playerHP = playerMaxHP;
         playerArmor = playerArmorMax;
         playerAlive = true;
@@ -566,7 +668,7 @@
     }
 
     function applyArmorProfile(armorMax) {
-        armorMax = Math.max(1, armorMax || 100);
+        armorMax = Math.max(1, armorMax || defaultPlayerArmor());
         playerArmorMax = armorMax;
         if (playerArmor > playerArmorMax) playerArmor = playerArmorMax;
         if (playerArmor < 0) playerArmor = 0;
@@ -619,7 +721,9 @@
 
     function syncFromNetwork(selfState, options) {
         syncAuthoritativeState(selfState);
-        syncWeaponState(selfState, options && options.weaponNow);
+        if (!options || options.skipWeaponSync !== true) {
+            syncWeaponState(selfState, options && options.weaponNow);
+        }
         var respawnState = options && Object.prototype.hasOwnProperty.call(options, 'respawnState')
             ? options.respawnState
             : null;

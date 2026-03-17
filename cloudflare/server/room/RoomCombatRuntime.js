@@ -689,7 +689,6 @@ export function handleFire(room, player, msg, deps) {
 
   if (!player || !player.alive) return;
   if (!room.canEntityUseWeapon(player)) return;
-  if (player.deadeye) return;
 
   const weaponId = String(msg.weaponId || 'rifle');
   const stats = weaponStats[weaponId];
@@ -794,7 +793,8 @@ export function handleFire(room, player, msg, deps) {
     const out = applyDamageFromSource(player, liveTarget, shot.damage, {
       hitType: shot.hitType === 'head' ? 'head' : 'body',
       weaponId,
-      sourceKind: 'weapon'
+      sourceKind: 'weapon',
+      armorBufferMode: String(stats.armorBufferMode || 'normal')
     });
     if (!out) continue;
     broadcastDamageEvent(

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { getWeaponPresentation, resolveReloadPresentationState } from '../../shared/gameplay-tuning.js';
 
 async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
   const code = await fs.readFile(new URL('../../js/presentation/gameplay-hud-sync.js', import.meta.url), 'utf8');
@@ -21,7 +22,8 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     abilityDebugPanel: [],
     deadeyeReticle: [],
     deadeyeHighlights: [],
-    chokeAudio: []
+    chokeAudio: [],
+    audio: []
   };
   const runtime = {
     GameShared: {
@@ -30,7 +32,9 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
           choke: { id: 'choke', name: 'Vader Choke', debugSummary: 'Square', tunableParams: ['lockBoxPx'] },
           deadeye: { id: 'deadeye', name: 'Deadeye', minDot: 0.22, debugSummary: 'Rect', tunableParams: [] }
         }
-      }
+      },
+      getWeaponPresentation,
+      resolveReloadPresentationState
     },
     GameHitscan: {
       getHudState() {
@@ -98,6 +102,12 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       isChoked() { return false; }
     },
     GameAudio: {
+      play(soundId, options) {
+        calls.audio.push({
+          soundId,
+          options: options ? JSON.parse(JSON.stringify(options)) : null
+        });
+      },
       setChokeAudioState(value) { calls.chokeAudio.push(JSON.parse(JSON.stringify(value))); }
     },
     GameEnemy: {
@@ -351,4 +361,134 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
     usr_remote: { locked: true, progress: 1 }
   });
   assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
+});
+
+test('gameplay hud sync does not replay reload cues when a background reload completes before swap-back', async () => {
+  var activeWeaponId = 'rifle';
+  var weaponStates = {
+    rifle: {
+      id: 'rifle',
+      name: 'Rifle',
+      reloadMs: 1550,
+      reloadRemaining: 1550,
+      reloadedFlashRemaining: 0,
+      reloading: true,
+      reloadPct: 0,
+      reloadPhase: 'raise',
+      reloadPhasePct: 0,
+      magazineSize: 15,
+      ammoInMag: 0,
+      automatic: false,
+      bodyDamage: 44,
+      headDamage: 104
+    },
+    sniper: {
+      id: 'sniper',
+      name: 'Sniper',
+      reloadMs: 2100,
+      reloadRemaining: 0,
+      reloadedFlashRemaining: 0,
+      reloading: false,
+      reloadPct: 1,
+      reloadPhase: 'ready',
+      reloadPhasePct: 1,
+      magazineSize: 5,
+      ammoInMag: 5,
+      automatic: false,
+      bodyDamage: 230,
+      headDamage: 500
+    }
+  };
+  const harness = await loadHudSyncHarness({
+    GamePlayerCombat: {
+      getState() {
+        return {
+          hp: 410,
+          hpMax: 500,
+          armor: 55,
+          armorMax: 90,
+          alive: true,
+          invulnerable: false,
+          spawnShieldUntil: 0,
+          respawn: null
+        };
+      },
+      getWeaponLoadout() {
+        return { slots: ['rifle', 'sniper'] };
+      },
+      getCurrentWeaponState() {
+        return weaponStates[activeWeaponId];
+      },
+      getWeaponState(weaponId) {
+        return weaponStates[weaponId];
+      },
+      getWeaponHudState() {
+        var state = weaponStates[activeWeaponId];
+        return state.reloading
+          ? { status: 'reloading', pct: state.reloadPct, phase: state.reloadPhase }
+          : (state.reloadedFlashRemaining > 0
+            ? { status: 'reloaded', pct: 1, phase: 'complete' }
+            : { status: 'ready', pct: 1, phase: 'ready' });
+      }
+    }
+  });
+
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.016,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+  assert.deepEqual(harness.calls.audio.map((entry) => entry.options && entry.options.cue), ['start']);
+
+  weaponStates.rifle = {
+    ...weaponStates.rifle,
+    reloadRemaining: 700,
+    reloadPct: 1 - (700 / 1550),
+    reloadPhase: 'manipulate',
+    reloadPhasePct: 0.35
+  };
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.016,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+  assert.deepEqual(harness.calls.audio.map((entry) => entry.options && entry.options.cue), ['start', 'manipulate']);
+
+  activeWeaponId = 'sniper';
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.016,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+  assert.deepEqual(harness.calls.audio.map((entry) => entry.options && entry.options.cue), ['start', 'manipulate']);
+
+  weaponStates.rifle = {
+    ...weaponStates.rifle,
+    reloadRemaining: 0,
+    reloadedFlashRemaining: 400,
+    reloading: false,
+    reloadPct: 1,
+    reloadPhase: 'complete',
+    reloadPhasePct: 1,
+    ammoInMag: 15
+  };
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.016,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+  assert.deepEqual(harness.calls.audio.map((entry) => entry.options && entry.options.cue), ['start', 'manipulate']);
+
+  activeWeaponId = 'rifle';
+  harness.hudSync.update({
+    camera: { fov: 60, aspect: 16 / 9 },
+    dt: 0.016,
+    multiplayerMode: false,
+    debugVisualsOn: false
+  });
+  assert.deepEqual(harness.calls.audio.map((entry) => entry.options && entry.options.cue), ['start', 'manipulate']);
 });

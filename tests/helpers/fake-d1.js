@@ -8,11 +8,16 @@ export function createFakeEnv() {
     privateRooms: new Map(),
     privateRoomState: new Map(),
     privateRoomMembers: new Map(),
+    publicMatchAssignments: new Map(),
+    publicMatchQueueLocks: new Map(),
+    privateRoomInvites: new Map(),
     partyPresence: new Map(),
     friendships: new Map(),
     partyInvites: new Map(),
+    partyDirectInvites: new Map(),
     schema: {
-      party_presence: ['actor_id', 'display_name', 'last_menu_seen_at', 'activity_state', 'last_seen_at']
+      party_presence: ['actor_id', 'display_name', 'last_menu_seen_at', 'activity_state', 'last_seen_at'],
+      private_room_state: ['room_id', 'room_mode', 'room_phase', 'host_actor_id', 'invite_locked', 'created_at', 'updated_at']
     }
   };
 
@@ -57,6 +62,20 @@ export function createFakeEnv() {
     }
     if (q.startsWith('alter table party_presence add column last_seen_at')) {
       if (state.schema.party_presence.indexOf('last_seen_at') === -1) state.schema.party_presence.push('last_seen_at');
+      return;
+    }
+    if (q.startsWith('alter table private_room_state add column team_count')) {
+      if (state.schema.private_room_state.indexOf('team_count') === -1) state.schema.private_room_state.push('team_count');
+      state.privateRoomState.forEach(function (roomState) {
+        if (roomState && roomState.team_count === undefined) roomState.team_count = 2;
+      });
+      return;
+    }
+    if (q.startsWith('alter table private_room_state add column invite_locked')) {
+      if (state.schema.private_room_state.indexOf('invite_locked') === -1) state.schema.private_room_state.splice(4, 0, 'invite_locked');
+      state.privateRoomState.forEach(function (roomState) {
+        if (roomState && roomState.invite_locked === undefined) roomState.invite_locked = 1;
+      });
       return;
     }
     if (q.indexOf('insert into parties') >= 0) {
@@ -169,6 +188,10 @@ export function createFakeEnv() {
       });
       return;
     }
+    if (q.indexOf('delete from party_presence where actor_id') >= 0) {
+      state.partyPresence.delete(String(args[0]));
+      return;
+    }
     if (q.indexOf('insert into private_rooms') >= 0) {
       state.privateRooms.set(String(args[0]), {
         room_id: String(args[0]),
@@ -190,8 +213,10 @@ export function createFakeEnv() {
         room_mode: String(args[1] || 'ffa'),
         room_phase: String(args[2] || 'lobby'),
         host_actor_id: String(args[3] || ''),
-        created_at: Number(args[4]) || 0,
-        updated_at: Number(args[4]) || 0
+        invite_locked: Number(args[4]) ? 1 : 0,
+        created_at: Number(args[5]) || 0,
+        updated_at: Number(args[5]) || 0,
+        team_count: Number(args[6]) || 2
       });
       return;
     }
@@ -201,8 +226,76 @@ export function createFakeEnv() {
         roomState.room_mode = String(args[1] || roomState.room_mode);
         roomState.room_phase = String(args[2] || roomState.room_phase);
         roomState.host_actor_id = String(args[3] || roomState.host_actor_id);
-        roomState.updated_at = Number(args[4]) || roomState.updated_at;
+        roomState.invite_locked = Number(args[4]) ? 1 : 0;
+        roomState.updated_at = Number(args[5]) || roomState.updated_at;
+        if (args.length > 6) roomState.team_count = Number(args[6]) || roomState.team_count || 2;
       }
+      return;
+    }
+    if (q.indexOf('insert into public_match_assignments') >= 0) {
+      state.publicMatchAssignments.set(String(args[0]), {
+        actor_id: String(args[0]),
+        room_id: String(args[1]),
+        game_mode: String(args[2] || 'ffa'),
+        assigned_by_actor_id: String(args[3] || ''),
+        assigned_at: Number(args[4]) || 0
+      });
+      return;
+    }
+    if (q.indexOf('delete from public_match_assignments where actor_id') >= 0) {
+      state.publicMatchAssignments.delete(String(args[0]));
+      return;
+    }
+    if (q.indexOf('insert into public_match_queue_locks') >= 0) {
+      const key = String(args[0]);
+      if (state.publicMatchQueueLocks.has(key)) {
+        throw new Error('Constraint violation: public_match_queue_locks.queue_key');
+      }
+      state.publicMatchQueueLocks.set(key, {
+        queue_key: key,
+        actor_id: String(args[1]),
+        party_id: String(args[2] || ''),
+        party_size: Number(args[3]) || 1,
+        game_mode: String(args[4] || 'ffa'),
+        lock_expires_at: Number(args[5]) || 0,
+        created_at: Number(args[6]) || 0,
+        updated_at: Number(args[7]) || 0
+      });
+      return;
+    }
+    if (q.indexOf('delete from public_match_queue_locks where queue_key') >= 0) {
+      state.publicMatchQueueLocks.delete(String(args[0]));
+      return;
+    }
+    if (q.indexOf('insert into private_room_invites') >= 0) {
+      state.privateRoomInvites.set(String(args[0]), {
+        invitee_actor_id: String(args[0]),
+        room_id: String(args[1]),
+        inviter_actor_id: String(args[2]),
+        created_at: Number(args[3]) || 0
+      });
+      return;
+    }
+    if (q.indexOf('delete from private_room_invites where invitee_actor_id = ?1 or inviter_actor_id = ?1') >= 0) {
+      const actorId = String(args[0]);
+      state.privateRoomInvites.forEach(function (invite, key) {
+        if (invite.invitee_actor_id === actorId || invite.inviter_actor_id === actorId) {
+          state.privateRoomInvites.delete(String(key));
+        }
+      });
+      return;
+    }
+    if (q.indexOf('delete from private_room_invites where room_id') >= 0) {
+      const roomId = String(args[0]);
+      state.privateRoomInvites.forEach(function (invite, key) {
+        if (invite.room_id === roomId) {
+          state.privateRoomInvites.delete(String(key));
+        }
+      });
+      return;
+    }
+    if (q.indexOf('delete from private_room_invites where invitee_actor_id') >= 0) {
+      state.privateRoomInvites.delete(String(args[0]));
       return;
     }
     if (q.indexOf('insert into private_room_members') >= 0) {
@@ -249,6 +342,10 @@ export function createFakeEnv() {
       });
       return;
     }
+    if (q.indexOf('delete from friendships where user_id = ?1 and friend_user_id = ?2') >= 0) {
+      state.friendships.delete(String(args[0]) + '|' + String(args[1]));
+      return;
+    }
     if (q.indexOf('insert into party_invites') >= 0) {
       state.partyInvites.set(String(args[0]) + '|' + String(args[1]), {
         inviter_user_id: String(args[0]),
@@ -259,6 +356,23 @@ export function createFakeEnv() {
     }
     if (q.indexOf('delete from party_invites where inviter_user_id') >= 0) {
       state.partyInvites.delete(String(args[0]) + '|' + String(args[1]));
+      return;
+    }
+    if (q.indexOf('insert into party_direct_invites') >= 0) {
+      state.partyDirectInvites.set(String(args[0]) + '|' + String(args[1]), {
+        inviter_actor_id: String(args[0]),
+        invitee_actor_id: String(args[1]),
+        created_at: Number(args[2]) || 0
+      });
+      return;
+    }
+    if (q.indexOf('delete from party_direct_invites where inviter_actor_id = ?1 and invitee_actor_id = ?2') >= 0) {
+      state.partyDirectInvites.delete(String(args[0]) + '|' + String(args[1]));
+      return;
+    }
+    if (q.indexOf('delete from party_direct_invites where (inviter_actor_id = ?1 and invitee_actor_id = ?2) or (inviter_actor_id = ?2 and invitee_actor_id = ?1)') >= 0) {
+      state.partyDirectInvites.delete(String(args[0]) + '|' + String(args[1]));
+      state.partyDirectInvites.delete(String(args[1]) + '|' + String(args[0]));
       return;
     }
     throw new Error('Unhandled run SQL: ' + sql);
@@ -324,6 +438,9 @@ export function createFakeEnv() {
         join_locked: party ? party.join_locked : 0
       };
     }
+    if (q.indexOf('select actor_id, display_name, activity_state, last_seen_at from party_presence where actor_id') >= 0) {
+      return state.partyPresence.get(String(args[0])) || null;
+    }
     if (q.indexOf('select u.id, u.username from users u where u.id') >= 0) {
       return state.users.get(String(args[0])) || null;
     }
@@ -357,8 +474,17 @@ export function createFakeEnv() {
       });
       return members.length ? { member_id: members[0].member_id } : null;
     }
-    if (q.indexOf('select room_id, room_mode, room_phase, host_actor_id') >= 0) {
+    if (q.indexOf('select room_id, room_mode, room_phase, host_actor_id, invite_locked') >= 0) {
       return state.privateRoomState.get(String(args[0])) || null;
+    }
+    if (q.indexOf('select actor_id, room_id, game_mode, assigned_by_actor_id, assigned_at from public_match_assignments') >= 0) {
+      return state.publicMatchAssignments.get(String(args[0])) || null;
+    }
+    if (q.indexOf('select queue_key, actor_id, party_id, party_size, game_mode, lock_expires_at, created_at, updated_at from public_match_queue_locks where queue_key') >= 0) {
+      return state.publicMatchQueueLocks.get(String(args[0])) || null;
+    }
+    if (q.indexOf('select invitee_actor_id, room_id, inviter_actor_id, created_at from private_room_invites where invitee_actor_id') >= 0) {
+      return state.privateRoomInvites.get(String(args[0])) || null;
     }
     if (q.indexOf('select actor_id, room_id, display_name, team_id, joined_at from private_room_members where actor_id') >= 0) {
       return state.privateRoomMembers.get(String(args[0])) || null;
@@ -373,6 +499,9 @@ export function createFakeEnv() {
     const q = normalize(sql);
     if (q.indexOf('pragma table_info(party_presence)') >= 0) {
       return state.schema.party_presence.map(function (name) { return { name: name }; });
+    }
+    if (q.indexOf('pragma table_info(private_room_state)') >= 0) {
+      return state.schema.private_room_state.map(function (name) { return { name: name }; });
     }
     if (q.indexOf('select member_id, display_name, joined_at from party_members where party_id') >= 0) {
       const leaderId = String(args[1] || '');
@@ -457,6 +586,45 @@ export function createFakeEnv() {
         return a.invitee_user_id.localeCompare(b.invitee_user_id);
       });
       return out.map(function (row) { return { invitee_user_id: row.invitee_user_id }; });
+    }
+    if (q.indexOf('select inviter_actor_id, created_at from party_direct_invites where invitee_actor_id') >= 0) {
+      const out = [];
+      state.partyDirectInvites.forEach(function (row) {
+        if (row.invitee_actor_id === String(args[0])) out.push({ inviter_actor_id: row.inviter_actor_id, created_at: row.created_at });
+      });
+      out.sort(function (a, b) {
+        if (a.created_at !== b.created_at) return b.created_at - a.created_at;
+        return a.inviter_actor_id.localeCompare(b.inviter_actor_id);
+      });
+      return out;
+    }
+    if (q.indexOf('select invitee_actor_id, created_at from party_direct_invites where inviter_actor_id') >= 0) {
+      const out = [];
+      state.partyDirectInvites.forEach(function (row) {
+        if (row.inviter_actor_id === String(args[0])) out.push({ invitee_actor_id: row.invitee_actor_id, created_at: row.created_at });
+      });
+      out.sort(function (a, b) {
+        if (a.created_at !== b.created_at) return b.created_at - a.created_at;
+        return a.invitee_actor_id.localeCompare(b.invitee_actor_id);
+      });
+      return out;
+    }
+    if (q.indexOf('select invitee_actor_id, room_id, created_at from private_room_invites where inviter_actor_id') >= 0) {
+      const out = [];
+      state.privateRoomInvites.forEach(function (row) {
+        if (row.inviter_actor_id === String(args[0])) {
+          out.push({
+            invitee_actor_id: row.invitee_actor_id,
+            room_id: row.room_id,
+            created_at: row.created_at
+          });
+        }
+      });
+      out.sort(function (a, b) {
+        if (a.created_at !== b.created_at) return b.created_at - a.created_at;
+        return a.invitee_actor_id.localeCompare(b.invitee_actor_id);
+      });
+      return out;
     }
     throw new Error('Unhandled all SQL: ' + sql);
   }

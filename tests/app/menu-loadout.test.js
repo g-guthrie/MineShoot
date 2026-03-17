@@ -123,21 +123,18 @@ async function loadMenuLoadoutHarness({ storageMap } = {}) {
     ['button', 'weapon-slot-primary'],
     ['button', 'weapon-slot-secondary'],
     ['div', 'weapon-choice-grid'],
-    ['div', 'weapon-slot-note'],
     ['button', 'throwable-slot-summary'],
     ['div', 'throwable-slot-panel'],
     ['div', 'throwable-slot-title'],
     ['div', 'throwable-category-tabs'],
     ['div', 'throwable-choice-grid'],
-    ['div', 'throwable-slot-note'],
     ['button', 'ability-slot-summary'],
     ['div', 'ability-slot-panel'],
     ['div', 'ability-slot-title'],
     ['div', 'ability-slot-buttons'],
     ['button', 'ability-slot-primary'],
     ['button', 'ability-slot-secondary'],
-    ['div', 'ability-choice-grid'],
-    ['div', 'ability-slot-note']
+    ['div', 'ability-choice-grid']
   ];
 
   for (const [tagName, id] of ids) {

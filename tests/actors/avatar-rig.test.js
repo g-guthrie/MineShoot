@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
+import { getWeaponPresentation } from '../../shared/gameplay-tuning.js';
 
 async function loadAvatarRig(runtimeOverrides = {}) {
   const visualsCode = await fs.readFile(new URL('../../js/domain/weapons/visuals.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/actors/avatar-rig.js', import.meta.url), 'utf8');
   const runtime = {
     GameShared: {
-      entityConstants: {}
+      entityConstants: {},
+      getWeaponPresentation
     },
     ...runtimeOverrides
   };
@@ -40,20 +42,21 @@ test('sniper support pose keeps the left arm tucked near the rifle fore-end', as
   assert.ok(pose.targetY < -0.05);
 });
 
-test('reload pose is available for every firearm and keeps the support hand anchored near the weapon', async () => {
+test('reload pose is available for every firearm and keeps the support hand on the original torso side', async () => {
   const avatarRig = await loadAvatarRig();
   const weaponIds = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
 
   for (const weaponId of weaponIds) {
     const pose = avatarRig._test.getReloadPoseForWeapon(weaponId, 0.35);
     assert.ok(pose, weaponId + ' should produce a reload pose');
-    assert.ok(pose.armX > 0.95, weaponId + ' should sweep the support shoulder across the torso for a readable reload');
+    assert.ok(pose.armX > 0.08 && pose.armX < 0.24, weaponId + ' should move the shoulder in a controlled range');
     assert.ok(pose.targetOffsetZ > 0, weaponId + ' should pull the support hand back toward the receiver');
     assert.notEqual(pose.gunRoll, 0, weaponId + ' should add reload wiggle');
+    assert.equal(pose.phase, 'manipulate');
   }
 });
 
-test('reload animation drives the left shoulder across the torso for a pronounced reload motion', async () => {
+test('reload animation keeps the left shoulder on its original torso side and the palm near the weapon support anchor', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
 
@@ -67,8 +70,15 @@ test('reload animation drives the left shoulder across the torso for a pronounce
     reloadPct: 0.35
   });
 
-  assert.ok(api.rig.armL.position.x > 0.25);
-  assert.ok(api.rig.armL.position.x < 0.75);
+  api.root.updateMatrixWorld(true);
+  const support = new THREE.Vector3();
+  const palm = new THREE.Vector3();
+  api.rig.supportAnchor.getWorldPosition(support);
+  api.rig.palmLeft.getWorldPosition(palm);
+
+  assert.ok(api.rig.armL.position.x < 0);
+  assert.ok(api.rig.armL.position.x > -0.4);
+  assert.ok(support.distanceTo(palm) < 1.0);
 });
 
 test('reload action trigger applies the reload pose even before replicated reload state arrives', async () => {
@@ -86,8 +96,15 @@ test('reload action trigger applies the reload pose even before replicated reloa
     reloadPct: 0
   });
 
-  assert.ok(api.rig.armL.position.x > 0.2);
-  assert.ok(api.rig.armL.position.x < 0.8);
+  api.root.updateMatrixWorld(true);
+  const support = new THREE.Vector3();
+  const palm = new THREE.Vector3();
+  api.rig.supportAnchor.getWorldPosition(support);
+  api.rig.palmLeft.getWorldPosition(palm);
+
+  assert.ok(api.rig.armL.position.x < 0);
+  assert.ok(api.rig.armL.position.x > -0.5);
+  assert.ok(support.distanceTo(palm) < 0.8);
 });
 
 test('built-in weapon visuals keep the sniper support anchor tucked under the fore-end', async () => {

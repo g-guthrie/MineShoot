@@ -34,7 +34,7 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
     'mode-screen-title': new FakeElement('h1', 'mode-screen-title'),
     'docs-title': new FakeElement('div', 'docs-title')
   };
-  elements['mode-screen-title'].textContent = 'Drop Into a Match';
+  elements['mode-screen-title'].textContent = 'MAYHEM';
   elements['docs-title'].textContent = 'minecraft fps :: open field manual';
   const documentListeners = new Map();
   const documentObj = {
@@ -134,7 +134,7 @@ test('menu docs shortcut ignores typing in editable fields but still works elsew
 test('menu shell branding keeps the home hero heading intact', async () => {
   const harness = await loadMenuShell(function () {});
 
-  assert.equal(harness.modeScreenTitle.textContent, 'Drop Into a Match');
+  assert.equal(harness.modeScreenTitle.textContent, 'MAYHEM');
   assert.equal(harness.docsTitle.textContent, 'MAYHEM :: open field manual');
 });
 

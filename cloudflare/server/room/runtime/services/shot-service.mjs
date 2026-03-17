@@ -80,7 +80,8 @@ export function handleFire(runtime, player, message, options = {}) {
   const out = applyDamageFromSource(player, target, damage, {
     hitType,
     weaponId,
-    sourceKind: 'weapon'
+    sourceKind: 'weapon',
+    armorBufferMode: String(stats.armorBufferMode || 'normal')
   });
   if (!out) return buildShotResult(runtime, message, false, 'damage_rejected');
 

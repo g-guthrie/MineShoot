@@ -61,7 +61,7 @@
             var parsed = JSON.parse(raw);
             if (!parsed || typeof parsed !== 'object') return null;
             return {
-                activeSurface: parsed.activeSurface === 'party' ? 'party' : 'main',
+                activeSurface: parsed.activeSurface === 'room' ? 'room' : 'main',
                 selectedMode: normalizeMode(parsed.selectedMode)
             };
         } catch (_err) {
@@ -74,7 +74,7 @@
         if (!store || typeof store.setItem !== 'function') return;
         try {
             store.setItem(RETURN_STATE_KEY, JSON.stringify({
-                activeSurface: payload && payload.activeSurface === 'party' ? 'party' : 'main',
+                activeSurface: payload && payload.activeSurface === 'room' ? 'room' : 'main',
                 selectedMode: normalizeMode(payload && payload.selectedMode)
             }));
         } catch (_err) {
@@ -133,47 +133,16 @@
         if (typeof onFailure === 'function') onFailure(text);
     }
 
-    function readRecentJoinTargets() {
-        var store = localStore();
-        if (!store || typeof store.getItem !== 'function') return [];
-        try {
-            var parsed = JSON.parse(String(store.getItem(RECENT_JOIN_KEY) || '[]'));
-            if (!Array.isArray(parsed)) return [];
-            return parsed.map(function (value) { return String(value || '').trim(); }).filter(Boolean).slice(0, 5);
-        } catch (_err) {
-            return [];
-        }
-    }
-
-    function writeRecentJoinTarget(targetId) {
-        var nextId = String(targetId || '').trim();
-        if (!nextId) return readRecentJoinTargets();
-        var recent = readRecentJoinTargets().filter(function (entry) {
-            return entry !== nextId;
-        });
-        recent.unshift(nextId);
-        recent = recent.slice(0, 5);
-        var store = localStore();
-        if (store && typeof store.setItem === 'function') {
-            try {
-                store.setItem(RECENT_JOIN_KEY, JSON.stringify(recent));
-            } catch (_err) {
-                // no-op
-            }
-        }
-        return recent;
-    }
-
     function defaultState() {
         var returnState = readReturnState();
         return {
             activeSurface: returnState ? returnState.activeSurface : 'main',
             paused: false,
             utilityOpen: false,
-            joinPopoverOpen: false,
-            joinRecent: readRecentJoinTargets(),
             confirmLeaveOpen: false,
             modeListOpen: false,
+            expandedPartyMemberId: '',
+            expandedFriendId: '',
             launch: {
                 selectedMode: returnState && returnState.selectedMode ? returnState.selectedMode : 'ffa',
                 phase: 'idle',
@@ -280,17 +249,25 @@
 
         var elements = {
             menuHeader: document.getElementById('menu-header'),
+            inlineToast: document.getElementById('menu-inline-toast'),
             menuFeedback: document.getElementById('menu-feedback'),
             menuReturnBtn: document.getElementById('menu-return-btn'),
             menuPartyIdBtn: document.getElementById('menu-party-id-btn'),
             menuPartyIdLabel: document.getElementById('menu-party-id-label'),
             menuPartyIdValue: document.getElementById('menu-party-id-value'),
-            joinPartyTriggerBtn: document.getElementById('join-party-trigger-btn'),
-            joinPartyPopover: document.getElementById('join-party-popover'),
-            joinPartyRecent: document.getElementById('join-party-recent'),
             partyIdInput: document.getElementById('party-id-input'),
-            joinPartyBtn: document.getElementById('join-party-btn'),
-            openPartyBtn: document.getElementById('open-party-btn'),
+            inviteFriendBtn: document.getElementById('invite-friend-btn'),
+            joinFriendBtn: document.getElementById('join-friend-btn'),
+            socialHeroStatus: document.getElementById('social-hero-status'),
+            socialDirectInviteBanner: document.getElementById('social-direct-invite-banner'),
+            socialDirectInviteCopy: document.getElementById('social-direct-invite-copy'),
+            socialDirectInviteAcceptBtn: document.getElementById('social-direct-invite-accept-btn'),
+            socialDirectInviteDismissBtn: document.getElementById('social-direct-invite-dismiss-btn'),
+            socialLayout: document.getElementById('menu-social-layout'),
+            socialFriendsPane: document.getElementById('menu-social-friends-pane'),
+            socialFriendsList: document.getElementById('social-friends-list'),
+            roomCodeInput: document.getElementById('room-code-input'),
+            joinRoomBtn: document.getElementById('join-room-btn'),
             partyBackBtn: document.getElementById('party-back-btn'),
             accountToggleBtn: document.getElementById('account-toggle-btn'),
             utilityToggleBtn: document.getElementById('utility-toggle-btn'),
@@ -306,7 +283,12 @@
             devCloseBtn: document.getElementById('dev-close-btn'),
             devModeButtons: Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]')),
             screenMain: document.getElementById('menu-screen-mode'),
-            screenParty: document.getElementById('menu-screen-party'),
+            screenRoom: document.getElementById('menu-screen-room'),
+            mainHeroes: document.getElementById('menu-main-heroes'),
+            homeHero: document.getElementById('menu-home-hero'),
+            socialHero: document.getElementById('menu-social-hero'),
+            partyHero: document.getElementById('menu-party-hero'),
+            partyHeroMembers: document.getElementById('party-hero-members'),
             modeTitle: document.getElementById('mode-screen-title'),
             primaryLaunchBtn: document.getElementById('primary-launch-btn'),
             gameModesToggleBtn: document.getElementById('game-modes-toggle-btn'),
@@ -327,19 +309,10 @@
             leaveConfirmOverlay: document.getElementById('leave-confirm-overlay'),
             leaveConfirmCancelBtn: document.getElementById('leave-confirm-cancel-btn'),
             leaveConfirmAcceptBtn: document.getElementById('leave-confirm-accept-btn'),
-            partyCurrentSection: document.getElementById('party-current-section'),
             partyRoomSection: document.getElementById('party-room-section'),
-            partyFriendsSection: document.getElementById('party-friends-section'),
             partyStatus: document.getElementById('party-status'),
-            partyJoinLockBtn: document.getElementById('party-join-lock-btn'),
-            partyJoinLockIcon: document.getElementById('party-join-lock-icon'),
-            partyJoinLockNote: document.getElementById('party-join-lock-note'),
-            leavePartyBtn: document.getElementById('leave-party-btn'),
-            socialPartyMembers: document.getElementById('social-party-members'),
+            partyHeroLeaveBtn: document.getElementById('party-hero-leave-btn'),
             privateRoomStatus: document.getElementById('private-room-status'),
-            createRoomBtn: document.getElementById('create-private-room-btn'),
-            privateRoomInput: document.getElementById('private-room-input'),
-            joinPrivateRoomBtn: document.getElementById('join-private-room-btn'),
             roomSharePanel: document.getElementById('room-share-panel'),
             roomShareCode: document.getElementById('room-share-code'),
             copyRoomCodeBtn: document.getElementById('copy-room-code-btn'),
@@ -348,20 +321,21 @@
             privateRoomModeFfaBtn: document.getElementById('private-room-mode-ffa-btn'),
             privateRoomModeTdmBtn: document.getElementById('private-room-mode-tdm-btn'),
             privateRoomModeLmsBtn: document.getElementById('private-room-mode-lms-btn'),
+            privateRoomTeams2Btn: document.getElementById('private-room-teams-2-btn'),
+            privateRoomTeams3Btn: document.getElementById('private-room-teams-3-btn'),
+            privateRoomTeams4Btn: document.getElementById('private-room-teams-4-btn'),
             privateRoomRandomizeBtn: document.getElementById('private-room-randomize-btn'),
             privateRoomStartBtn: document.getElementById('private-room-start-btn'),
             privateRoomEnterBtn: document.getElementById('private-room-enter-btn'),
+            privateRoomInvitePartyBtn: document.getElementById('private-room-invite-party-btn'),
+            privateRoomInviteLockBtn: document.getElementById('private-room-invite-lock-btn'),
             privateRoomUnassigned: document.getElementById('private-room-unassigned'),
             privateRoomTeamAlpha: document.getElementById('private-room-team-alpha'),
             privateRoomTeamBravo: document.getElementById('private-room-team-bravo'),
-            friendIdInput: document.getElementById('friend-id-input'),
-            addFriendBtn: document.getElementById('add-friend-btn'),
-            friendsStatus: document.getElementById('friends-status'),
-            friendsFilterJoinableBtn: document.getElementById('friends-filter-joinable-btn'),
-            friendsFilterOnlineBtn: document.getElementById('friends-filter-online-btn'),
-            friendsFilterAllBtn: document.getElementById('friends-filter-all-btn'),
-            friendsPreview: document.getElementById('friends-preview'),
-            refreshFriendsBtn: document.getElementById('refresh-friends-btn')
+            privateRoomTeamCharlieWrap: document.getElementById('private-room-team-charlie-wrap'),
+            privateRoomTeamDeltaWrap: document.getElementById('private-room-team-delta-wrap'),
+            privateRoomTeamCharlie: document.getElementById('private-room-team-charlie'),
+            privateRoomTeamDelta: document.getElementById('private-room-team-delta')
         };
 
         function currentPartyIdentity() {
@@ -373,6 +347,18 @@
                 return authApi.getUser();
             }
             return null;
+        }
+
+        function isLocalEnvironment() {
+            var runtimeProfile = runtime.GameRuntimeProfile || null;
+            return !!(runtimeProfile && runtimeProfile.isLocalEnvironment && runtimeProfile.isLocalEnvironment());
+        }
+
+        function localizeServiceStatusText(text) {
+            var value = String(text || '');
+            if (!isLocalEnvironment()) return value;
+            if (!/(service unavailable|endpoint offline|retrying)/i.test(value)) return value;
+            return 'Local social backend offline. Start the worker/API server.';
         }
 
         function isLoggedIn() {
@@ -393,6 +379,9 @@
                 hasPrivateRoom: false,
                 privateRoomPhase: '',
                 privateRoomMode: '',
+                privateRoomInviteLocked: true,
+                canTogglePrivateRoomInviteLock: false,
+                canInvitePartyToPrivateRoom: false,
                 canEditPrivateRoom: false,
                 canRandomizeTeams: false,
                 canStartPrivateRoom: false
@@ -408,7 +397,7 @@
         }
 
         function setActiveSurface(surfaceId) {
-            patchState({ activeSurface: surfaceId === 'party' ? 'party' : 'main' });
+            patchState({ activeSurface: surfaceId === 'room' ? 'room' : 'main' });
         }
 
         function setPaused(paused) {
@@ -457,20 +446,68 @@
             patchState({ friendsStatus: { text: text || '', error: !!isErr } });
         }
 
+        function launchAssignedMatch(nextPartyState) {
+            if (controllerBusy || !nextPartyState || !nextPartyState.self) return;
+            var launchState = getState().launch || {};
+            if (launchState.hasRuntime || launchState.phase === 'matching' || launchState.phase === 'joining' || launchState.phase === 'entering' || launchState.phase === 'in_match') {
+                return;
+            }
+            var self = nextPartyState.self;
+            var modeId = '';
+            var roomId = '';
+            var gameMode = '';
+            var message = '';
+            var nextSurface = 'main';
+            if (self.publicMatch && self.publicMatch.roomId) {
+                modeId = 'cloud_multiplayer';
+                roomId = String(self.publicMatch.roomId || '');
+                gameMode = String(self.publicMatch.gameMode || 'ffa');
+                message = 'Joining room ' + roomId.toUpperCase() + '...';
+            } else if (self.privateRoom && self.privateRoom.roomId) {
+                modeId = 'single_cloudflare';
+                roomId = String(self.privateRoom.roomId || '');
+                gameMode = String(self.privateRoom.roomMode || 'ffa');
+                message = 'Joining room ' + String(runtime.GameRuntimeModeUi && runtime.GameRuntimeModeUi.roomCodeFromRoomId
+                    ? runtime.GameRuntimeModeUi.roomCodeFromRoomId(roomId)
+                    : roomId).toUpperCase() + '...';
+                nextSurface = 'room';
+            } else {
+                return;
+            }
+            controllerBusy = true;
+            writeReturnState({ activeSurface: nextSurface, selectedMode: normalizeMode(gameMode) || getState().launch.selectedMode });
+            setLaunchState({
+                selectedMode: normalizeMode(gameMode) || getState().launch.selectedMode,
+                phase: 'joining',
+                message: message,
+                error: false
+            });
+            render();
+            Promise.resolve(options.launchModeById ? options.launchModeById(modeId, {
+                roomId: roomId,
+                gameMode: gameMode || 'ffa'
+            }) : { ok: false, error: 'Launch unavailable.' })
+                .then(function (result) {
+                    controllerBusy = false;
+                    return handleLaunchResult(result, modeId === 'single_cloudflare' ? 'Room ready.' : 'Match ready.');
+                })
+                .catch(function (err) {
+                    controllerBusy = false;
+                    setLaunchState({
+                        phase: 'error',
+                        message: (err && err.message) ? err.message : 'Launch failed.',
+                        error: true
+                    });
+                    render();
+                });
+        }
+
         function openUtility() {
             patchState({ utilityOpen: true });
         }
 
         function closeUtility() {
             patchState({ utilityOpen: false });
-        }
-
-        function openJoinPopover() {
-            patchState({ joinPopoverOpen: true, joinRecent: readRecentJoinTargets() });
-        }
-
-        function closeJoinPopover() {
-            patchState({ joinPopoverOpen: false });
         }
 
         function openLeaveConfirm() {
@@ -526,12 +563,15 @@
                     });
             }
 
+            var actor = currentPartyIdentity();
             return lobbyApi.requestJson(lobbyApi.matchmakingPath(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'quick',
-                    gameMode: mode
+                    gameMode: mode,
+                    actorId: actor && actor.id ? String(actor.id) : '',
+                    displayName: actor && actor.username ? String(actor.username) : ''
                 })
             }).then(function (payload) {
                 if (!payload || !payload.roomId) {
@@ -610,40 +650,6 @@
             });
         }
 
-        function renderPartyMembers(state) {
-            if (!elements.socialPartyMembers) return;
-            elements.socialPartyMembers.innerHTML = '';
-            var partyState = state.party;
-            if (!partyState || !partyState.party || !Array.isArray(partyState.party.members) || !partyState.party.members.length) {
-                var empty = document.createElement('div');
-                empty.className = 'party-preview-empty';
-                empty.textContent = 'No one is in your party yet.';
-                elements.socialPartyMembers.appendChild(empty);
-                return;
-            }
-
-            for (var i = 0; i < partyState.party.members.length; i++) {
-                var member = partyState.party.members[i];
-                var row = document.createElement('div');
-                row.className = 'party-modal-row' + (member.isLeader ? ' leader' : '');
-
-                var main = document.createElement('div');
-                main.className = 'party-modal-main';
-                var name = document.createElement('div');
-                name.className = 'party-modal-name';
-                name.textContent = String(member.displayName || member.id || 'Player');
-                main.appendChild(name);
-
-                var meta = document.createElement('div');
-                meta.className = 'party-modal-meta';
-                meta.textContent = member.isLeader ? 'Host' : String(member.id || '');
-                main.appendChild(meta);
-                row.appendChild(main);
-
-                elements.socialPartyMembers.appendChild(row);
-            }
-        }
-
         function appendFriendAction(target, label, className, disabled, handler) {
             var btn = document.createElement('button');
             btn.type = 'button';
@@ -654,105 +660,150 @@
             target.appendChild(btn);
         }
 
+        function savedFriendIds(state) {
+            var friendsState = state && state.friends ? state.friends : { friends: [] };
+            var ids = new Set();
+            var friends = Array.isArray(friendsState.friends) ? friendsState.friends : [];
+            for (var i = 0; i < friends.length; i++) {
+                ids.add(String(friends[i] && friends[i].userId || ''));
+            }
+            return ids;
+        }
+
+        function renderPartyMembers(state) {
+            if (!elements.partyHeroMembers) return;
+            elements.partyHeroMembers.innerHTML = '';
+            var partyState = state.party;
+            if (!partyState || !partyState.party || !Array.isArray(partyState.party.members) || partyState.party.memberCount <= 1) return;
+            var memberIds = savedFriendIds(state);
+            for (var i = 0; i < partyState.party.members.length; i++) {
+                var member = partyState.party.members[i];
+                var actorId = String(member.id || '');
+                var wrapper = document.createElement('div');
+                wrapper.className = 'menu-member-card';
+
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'menu-member-pill' + (member.isLeader ? ' leader' : '') + (state.expandedPartyMemberId === actorId ? ' active' : '');
+                btn.textContent = String(member.displayName || member.id || 'Player');
+                btn.disabled = member.isLeader && actorId === String(partyState.self && partyState.self.id || '');
+                btn.addEventListener('click', (function (targetId, isSelf) {
+                    return function () {
+                        if (isSelf) return;
+                        patchState({ expandedPartyMemberId: getState().expandedPartyMemberId === targetId ? '' : targetId });
+                        render();
+                    };
+                })(actorId, actorId === String(partyState.self && partyState.self.id || '')));
+                wrapper.appendChild(btn);
+
+                if (state.expandedPartyMemberId === actorId && actorId !== String(partyState.self && partyState.self.id || '')) {
+                    var actions = document.createElement('div');
+                    actions.className = 'menu-member-subpills';
+                    if (state.utilities.isLoggedIn && member.isAccount && member.accountUserId && !memberIds.has(String(member.accountUserId || ''))) {
+                        appendFriendAction(actions, 'Add Friend', 'friend-preview-btn secondary', busy(), (function (targetUserId) {
+                            return function () {
+                                if (!session || !session.performFriendAction) return;
+                                session.performFriendAction('add', targetUserId, 'Saving friend...', 'Friend saved.');
+                            };
+                        })(String(member.accountUserId || '')));
+                    }
+                    if (partyState.party.isLeader) {
+                        appendFriendAction(actions, 'Kick from Party', 'friend-preview-btn secondary', busy(), (function (targetId) {
+                            return function () {
+                                if (!session || !session.runPartyAction) return;
+                                session.runPartyAction('kick', { targetId: targetId }, 'Removing player...');
+                                patchState({ expandedPartyMemberId: '' });
+                                render();
+                            };
+                        })(actorId));
+                    }
+                    if (actions.childNodes.length) wrapper.appendChild(actions);
+                }
+
+                elements.partyHeroMembers.appendChild(wrapper);
+            }
+        }
+
         function renderFriends(state) {
-            if (!elements.friendsPreview) return;
-            elements.friendsPreview.innerHTML = '';
+            if (!elements.socialFriendsPane || !elements.socialFriendsList || !elements.socialLayout) return;
+            elements.socialFriendsList.innerHTML = '';
 
-            if (!state.utilities.isLoggedIn) {
-                var loginPrompt = document.createElement('div');
-                loginPrompt.className = 'party-preview-empty';
-                loginPrompt.textContent = 'Log in to save friends.';
-                elements.friendsPreview.appendChild(loginPrompt);
-                return;
-            }
-
+            var loggedIn = !!state.utilities.isLoggedIn;
             var friendsState = state.friends || { friends: [] };
-            if (!Array.isArray(friendsState.friends) || !friendsState.friends.length) {
-                var empty = document.createElement('div');
-                empty.className = 'party-preview-empty';
-                empty.textContent = 'No saved friends yet.';
-                elements.friendsPreview.appendChild(empty);
-                return;
-            }
+            var friends = loggedIn && Array.isArray(friendsState.friends) ? friendsState.friends.slice() : [];
+            friends.sort(function (a, b) {
+                var aOnline = !!(a && a.online);
+                var bOnline = !!(b && b.online);
+                if (aOnline !== bOnline) return aOnline ? -1 : 1;
+                return String(a && a.displayName || a && a.username || a && a.userId || '').localeCompare(
+                    String(b && b.displayName || b && b.username || b && b.userId || '')
+                );
+            });
 
-            var friends = filteredFriends(friendsState.friends, state.friendsFilter);
-            if (!friends.length) {
-                var noMatch = document.createElement('div');
-                noMatch.className = 'party-preview-empty';
-                noMatch.textContent = 'No friends match this filter.';
-                elements.friendsPreview.appendChild(noMatch);
-                return;
-            }
+            var showPane = loggedIn && friends.length > 0;
+            elements.socialFriendsPane.hidden = !showPane;
+            elements.socialLayout.setAttribute('data-layout', showPane ? 'split' : 'stack');
+            if (!showPane) return;
 
             for (var i = 0; i < friends.length; i++) {
                 var friend = friends[i];
-                var line = document.createElement('div');
-                line.className = 'friend-modal-row';
-                var row = document.createElement('div');
-                row.className = 'friend-preview-row';
+                var friendId = String(friend.userId || '');
+                var wrapper = document.createElement('div');
+                wrapper.className = 'menu-friend-card';
+                var pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'menu-friend-pill' + (getState().expandedFriendId === friendId ? ' active' : '');
+                pill.addEventListener('click', (function (targetId) {
+                    return function () {
+                        patchState({ expandedFriendId: getState().expandedFriendId === targetId ? '' : targetId });
+                        render();
+                    };
+                })(friendId));
 
-                var main = document.createElement('div');
-                main.className = 'friend-preview-main';
-                var name = document.createElement('div');
-                name.className = 'friend-preview-name';
-                name.textContent = String(friend.displayName || friend.username || friend.userId || 'Friend');
-                main.appendChild(name);
-                var meta = document.createElement('div');
-                meta.className = 'friend-preview-meta';
-                meta.textContent = friendActivityCopy(friend);
-                main.appendChild(meta);
-                row.appendChild(main);
+                var nameRow = document.createElement('div');
+                nameRow.className = 'menu-friend-pill-name';
+                if (friend.online) {
+                    var orb = document.createElement('span');
+                    orb.className = 'menu-online-orb';
+                    nameRow.appendChild(orb);
+                }
+                var label = document.createElement('span');
+                label.textContent = String(friend.displayName || friend.username || friend.userId || 'Friend');
+                nameRow.appendChild(label);
+                pill.appendChild(nameRow);
+                wrapper.appendChild(pill);
 
-                var actions = document.createElement('div');
-                actions.className = 'friend-preview-actions';
-                if (friend.incomingInvite) {
-                    appendFriendAction(actions, 'Accept Invite', 'friend-preview-btn', busy(), (function (targetUserId) {
+                if (getState().expandedFriendId === friendId) {
+                    var actions = document.createElement('div');
+                    actions.className = 'menu-member-subpills';
+                    appendFriendAction(actions, 'Remove Friend', 'friend-preview-btn secondary', busy(), (function (targetUserId) {
                         return function () {
                             if (!session || !session.performFriendAction) return;
-                            session.performFriendAction('accept_invite', targetUserId, 'Joining invited party...', 'Joined party.');
+                            session.performFriendAction('remove', targetUserId, 'Removing friend...', 'Friend removed.');
+                            patchState({ expandedFriendId: '' });
+                            render();
                         };
-                    })(String(friend.userId || '')));
-                } else {
+                    })(friendId));
                     if (friend.canJoin) {
-                        appendFriendAction(actions, 'Join', 'friend-preview-btn join', busy(), (function (targetUserId) {
+                        appendFriendAction(actions, 'Join Friend', 'friend-preview-btn join', busy(), (function (targetUserId) {
                             return function () {
                                 if (!session || !session.performFriendAction) return;
                                 session.performFriendAction('join', targetUserId, 'Joining friend...', 'Joined friend.');
                             };
-                        })(String(friend.userId || '')));
+                        })(friendId));
                     }
                     if (friend.canInvite && !friend.sameParty) {
-                        appendFriendAction(actions, friend.outgoingInvite ? 'Invited' : 'Invite', 'friend-preview-btn secondary', busy() || !!friend.outgoingInvite, (function (targetUserId) {
+                        appendFriendAction(actions, friend.outgoingInvite ? 'Invited' : 'Invite Friend', 'friend-preview-btn secondary', busy() || !!friend.outgoingInvite, (function (targetUserId) {
                             return function () {
                                 if (!session || !session.performFriendAction) return;
                                 session.performFriendAction('invite', targetUserId, 'Sending invite...', 'Invite sent.');
                             };
-                        })(String(friend.userId || '')));
+                        })(friendId));
                     }
+                    wrapper.appendChild(actions);
                 }
 
-                row.appendChild(actions);
-                line.appendChild(row);
-                elements.friendsPreview.appendChild(line);
-            }
-        }
-
-        function renderJoinRecent(state) {
-            if (!elements.joinPartyRecent) return;
-            elements.joinPartyRecent.innerHTML = '';
-            var recent = Array.isArray(state.joinRecent) ? state.joinRecent : [];
-            if (!recent.length) return;
-            for (var i = 0; i < recent.length; i++) {
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'join-recent-btn';
-                btn.textContent = recent[i];
-                btn.addEventListener('click', (function (targetId) {
-                    return function () {
-                        if (elements.partyIdInput) elements.partyIdInput.value = targetId;
-                    };
-                })(recent[i]));
-                elements.joinPartyRecent.appendChild(btn);
+                elements.socialFriendsList.appendChild(wrapper);
             }
         }
 
@@ -765,9 +816,6 @@
             if (elements.roomSharePanel) elements.roomSharePanel.hidden = !hasRoom;
             if (elements.roomShareCode) setText(elements.roomShareCode, hasRoom ? String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase() : '------');
             if (elements.privateRoomView) elements.privateRoomView.hidden = !hasRoom;
-            if (elements.createRoomBtn) elements.createRoomBtn.hidden = hasRoom;
-            if (elements.privateRoomInput) elements.privateRoomInput.hidden = hasRoom;
-            if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.hidden = hasRoom;
             if (elements.privateRoomEnterBtn) {
                 var active = !!(hasRoom && String(room.roomPhase || '') === 'active');
                 elements.privateRoomEnterBtn.hidden = !active;
@@ -790,7 +838,31 @@
                 elements.privateRoomModeLmsBtn.classList.toggle('active', hasRoom && String(room.roomMode || '') === 'lms');
                 elements.privateRoomModeLmsBtn.disabled = busy() || !caps.canEditPrivateRoom;
             }
+            if (elements.privateRoomTeams2Btn) {
+                elements.privateRoomTeams2Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 2);
+                elements.privateRoomTeams2Btn.disabled = busy() || !caps.canEditPrivateRoom;
+            }
+            if (elements.privateRoomTeams3Btn) {
+                elements.privateRoomTeams3Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 3);
+                elements.privateRoomTeams3Btn.disabled = busy() || !caps.canEditPrivateRoom;
+            }
+            if (elements.privateRoomTeams4Btn) {
+                elements.privateRoomTeams4Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 4);
+                elements.privateRoomTeams4Btn.disabled = busy() || !caps.canEditPrivateRoom;
+            }
+            if (elements.privateRoomInvitePartyBtn) {
+                elements.privateRoomInvitePartyBtn.hidden = !hasRoom;
+                elements.privateRoomInvitePartyBtn.disabled = busy() || !caps.canInvitePartyToPrivateRoom;
+            }
+            if (elements.privateRoomInviteLockBtn) {
+                elements.privateRoomInviteLockBtn.hidden = !hasRoom;
+                elements.privateRoomInviteLockBtn.disabled = busy() || !caps.canTogglePrivateRoomInviteLock;
+                elements.privateRoomInviteLockBtn.textContent = caps.privateRoomInviteLocked ? 'Room Invites Locked' : 'Room Invites Open';
+                elements.privateRoomInviteLockBtn.classList.toggle('locked', !!caps.privateRoomInviteLocked);
+            }
             if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = busy() || !caps.canRandomizeTeams;
+            if (elements.privateRoomTeamCharlieWrap) elements.privateRoomTeamCharlieWrap.hidden = !(hasRoom && Number(room.teamCount || 2) >= 3);
+            if (elements.privateRoomTeamDeltaWrap) elements.privateRoomTeamDeltaWrap.hidden = !(hasRoom && Number(room.teamCount || 2) >= 4);
 
             if (privateRoomViewController && privateRoomViewController.applyState) {
                 privateRoomViewController.applyState(privateRoomState);
@@ -800,7 +872,7 @@
         function renderFeedback(state) {
             var text = '';
             var error = false;
-            if (state.activeSurface === 'party') {
+            if (state.activeSurface === 'room') {
                 if (state.roomStatus.text) {
                     text = state.roomStatus.text;
                     error = state.roomStatus.error;
@@ -812,13 +884,99 @@
                     error = state.friendsStatus.error;
                 }
             } else {
-                text = state.launch.message || '';
-                error = !!state.launch.error;
+                var homeStatuses = [state.partyStatus, state.friendsStatus, state.roomStatus];
+                for (var i = 0; i < homeStatuses.length; i++) {
+                    var status = homeStatuses[i];
+                    var candidate = status && status.text ? String(status.text || '') : '';
+                    if (!candidate || !status || !status.error) continue;
+                    if (!/(service unavailable|endpoint offline|retrying)/i.test(candidate)) continue;
+                    text = candidate;
+                    error = true;
+                    break;
+                }
             }
             if (!elements.menuFeedback) return;
-            elements.menuFeedback.textContent = text;
+            elements.menuFeedback.textContent = localizeServiceStatusText(text);
             elements.menuFeedback.hidden = !text;
             elements.menuFeedback.classList.toggle('error', !!error);
+        }
+
+        function renderSocialHeroStatus(state) {
+            if (!elements.socialHeroStatus) return;
+            if (state.activeSurface !== 'main') {
+                elements.socialHeroStatus.hidden = true;
+                elements.socialHeroStatus.textContent = '';
+                elements.socialHeroStatus.classList.remove('error');
+                return;
+            }
+
+            var text = '';
+            var error = false;
+            var hasPartyHero = !!(state.party && state.party.party && state.party.party.memberCount > 1);
+            if (state.friendsStatus.text) {
+                text = String(state.friendsStatus.text || '');
+                error = !!state.friendsStatus.error;
+            } else if (!hasPartyHero && state.partyStatus.text) {
+                text = String(state.partyStatus.text || '');
+                error = !!state.partyStatus.error;
+                if (/^party service unavailable\./i.test(text)) {
+                    text = 'SOCIAL SERVICE UNAVAILABLE. RETRYING...';
+                } else if (/^party joined\./i.test(text)) {
+                    text = 'Joined friend.';
+                }
+            } else {
+                var outgoingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.outgoing : null;
+                if (outgoingRoomInvite && outgoingRoomInvite.roomCode) {
+                    text = 'Room invite sent for ' + String(outgoingRoomInvite.roomCode || '').toUpperCase() + '.';
+                }
+                var outgoingInvite = state.party && state.party.directInvite ? state.party.directInvite.outgoing : null;
+                if (!text && outgoingInvite && outgoingInvite.displayName) {
+                    text = 'Invite pending for ' + String(outgoingInvite.displayName || 'PLAYER') + '.';
+                }
+            }
+
+            if (isLocalEnvironment() && /(?:service unavailable|endpoint offline|retrying)/i.test(text)) {
+                text = '';
+                error = false;
+            }
+
+            elements.socialHeroStatus.textContent = text;
+            elements.socialHeroStatus.hidden = !text;
+            elements.socialHeroStatus.classList.toggle('error', !!error);
+        }
+
+        function renderDirectInviteBanner(state) {
+            if (!elements.socialDirectInviteBanner) return;
+            if (state.activeSurface !== 'main') {
+                elements.socialDirectInviteBanner.hidden = true;
+                return;
+            }
+            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
+            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
+            if ((!incomingRoomInvite || !incomingRoomInvite.roomId) && (!incomingInvite || !incomingInvite.actorId)) {
+                elements.socialDirectInviteBanner.hidden = true;
+                return;
+            }
+            if (elements.socialDirectInviteCopy) {
+                if (incomingRoomInvite && incomingRoomInvite.roomId) {
+                    elements.socialDirectInviteCopy.textContent =
+                        String(incomingRoomInvite.inviterDisplayName || incomingRoomInvite.inviterActorId || 'PLAYER') +
+                        ' invited you to room ' +
+                        String(incomingRoomInvite.roomCode || '').toUpperCase() +
+                        '.';
+                } else {
+                    elements.socialDirectInviteCopy.textContent = String(incomingInvite.displayName || incomingInvite.actorId || 'PLAYER') + ' invited you to join.';
+                }
+            }
+            if (elements.socialDirectInviteAcceptBtn) {
+                elements.socialDirectInviteAcceptBtn.textContent = incomingRoomInvite && incomingRoomInvite.roomId ? 'Join Room' : 'Accept Invite';
+            }
+            if (elements.socialDirectInviteDismissBtn) {
+                elements.socialDirectInviteDismissBtn.textContent = 'Dismiss';
+            }
+            if (elements.socialDirectInviteAcceptBtn) elements.socialDirectInviteAcceptBtn.disabled = busy();
+            if (elements.socialDirectInviteDismissBtn) elements.socialDirectInviteDismissBtn.disabled = busy();
+            elements.socialDirectInviteBanner.hidden = false;
         }
 
         function syncSessionState(detail) {
@@ -854,18 +1012,15 @@
             var selectedMode = normalizeMode(launch.selectedMode);
             var identity = currentPartyIdentity();
             var loggedIn = !!state.utilities.isLoggedIn;
-            var headerVariant = paused ? 'pause' : (state.activeSurface === 'party' ? 'party' : 'home');
+            var headerVariant = paused ? 'pause' : (state.activeSurface === 'room' ? 'room' : 'home');
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
 
             if (elements.menuReturnBtn) elements.menuReturnBtn.hidden = headerVariant !== 'pause' || showSessionStrip;
-            if (elements.partyBackBtn) elements.partyBackBtn.hidden = headerVariant !== 'party';
+            if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room';
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn;
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = false;
-            if (elements.joinPartyTriggerBtn) elements.joinPartyTriggerBtn.hidden = headerVariant !== 'home';
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home';
-            if (elements.openPartyBtn) elements.openPartyBtn.hidden = !(headerVariant === 'home' || headerVariant === 'pause');
-            if (elements.joinPartyPopover) elements.joinPartyPopover.hidden = !state.joinPopoverOpen || headerVariant !== 'home';
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
             if (elements.leaveConfirmOverlay) elements.leaveConfirmOverlay.hidden = !state.confirmLeaveOpen;
 
@@ -880,8 +1035,9 @@
                 elements.settingsAccountBtn.textContent = loggedIn ? 'Profile' : 'Login';
             }
 
-            renderJoinRecent(state);
             renderFeedback(state);
+            renderSocialHeroStatus(state);
+            renderDirectInviteBanner(state);
             renderPartyMembers(state);
             renderFriends(state);
             renderPrivateRoom(state);
@@ -921,17 +1077,40 @@
                 elements.loadoutStartBtn.disabled = isBusy;
             }
             if (elements.roomActionBtn) {
-                elements.roomActionBtn.textContent = hasRoom ? 'Open Room' : 'Create Room';
+                elements.roomActionBtn.textContent = hasRoom
+                    ? ('ROOM #' + String(state.privateRoom.room.roomCode || roomCodeFromRoomId(state.privateRoom.room.roomId)).toUpperCase())
+                    : 'Create Room';
+                elements.roomActionBtn.classList.toggle('active', hasRoom);
                 elements.roomActionBtn.disabled = isBusy || paused;
             }
+            if (elements.partyIdInput) elements.partyIdInput.disabled = isBusy;
+            if (elements.inviteFriendBtn) elements.inviteFriendBtn.disabled = isBusy;
+            if (elements.joinFriendBtn) elements.joinFriendBtn.disabled = isBusy;
+            if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
+            if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {
                 elements.roomAccessStatus.textContent = (state.activeSurface === 'main' && !paused) ? String(launch.message || '') : '';
                 elements.roomAccessStatus.classList.toggle('error', !!launch.error);
                 elements.roomAccessStatus.hidden = !elements.roomAccessStatus.textContent;
             }
 
-            if (elements.screenMain) elements.screenMain.hidden = state.activeSurface !== 'main' || paused;
-            if (elements.screenParty) elements.screenParty.hidden = state.activeSurface !== 'party';
+            var showMainHeroes = state.activeSurface === 'main';
+            var showHomeHero = showMainHeroes && !paused;
+            var showPartyHero = showMainHeroes && caps.partyMemberCount > 1;
+            var heroCount = 0;
+            if (showHomeHero) heroCount += 1;
+            if (showMainHeroes) heroCount += 1;
+            if (showPartyHero) heroCount += 1;
+
+            if (elements.screenMain) elements.screenMain.hidden = !showMainHeroes;
+            if (elements.mainHeroes) {
+                elements.mainHeroes.hidden = !showMainHeroes;
+                elements.mainHeroes.setAttribute('data-columns', String(Math.max(1, heroCount || 1)));
+            }
+            if (elements.homeHero) elements.homeHero.hidden = !showHomeHero;
+            if (elements.socialHero) elements.socialHero.hidden = !showMainHeroes;
+            if (elements.partyHero) elements.partyHero.hidden = !showPartyHero;
+            if (elements.screenRoom) elements.screenRoom.hidden = state.activeSurface !== 'room';
 
             if (elements.menuSessionActions) {
                 elements.menuSessionActions.hidden = !showSessionStrip;
@@ -957,25 +1136,8 @@
                 }
             }
 
-            setStatusEl(elements.partyStatus, state.partyStatus, '#2f6fed', '#d14f45');
             setStatusEl(elements.privateRoomStatus, state.roomStatus, '#2f6fed', '#d14f45');
-            setStatusEl(elements.friendsStatus, state.friendsStatus, '#2f6fed', '#d14f45');
-
-            if (elements.partyJoinLockBtn) {
-                elements.partyJoinLockBtn.disabled = isBusy || !caps.canTogglePartyJoinLock;
-                elements.partyJoinLockBtn.classList.toggle('locked', !!caps.partyJoinLocked);
-                elements.partyJoinLockBtn.setAttribute('aria-pressed', caps.partyJoinLocked ? 'true' : 'false');
-            }
-            setText(elements.partyJoinLockIcon, caps.partyJoinLocked ? '[#]' : '[ ]');
-            setText(elements.partyJoinLockNote, caps.partyJoinLockNote || 'Party Open');
-            if (elements.leavePartyBtn) elements.leavePartyBtn.disabled = isBusy || !caps.canLeaveParty;
-
-            if (elements.friendIdInput) elements.friendIdInput.disabled = isBusy || !state.utilities.isLoggedIn;
-            if (elements.addFriendBtn) elements.addFriendBtn.disabled = isBusy || !state.utilities.isLoggedIn;
-            if (elements.refreshFriendsBtn) elements.refreshFriendsBtn.disabled = isBusy || !state.utilities.isLoggedIn;
-            if (elements.friendsFilterJoinableBtn) elements.friendsFilterJoinableBtn.classList.toggle('active', state.friendsFilter === 'joinable');
-            if (elements.friendsFilterOnlineBtn) elements.friendsFilterOnlineBtn.classList.toggle('active', state.friendsFilter === 'online');
-            if (elements.friendsFilterAllBtn) elements.friendsFilterAllBtn.classList.toggle('active', state.friendsFilter === 'all');
+            if (elements.partyHeroLeaveBtn) elements.partyHeroLeaveBtn.disabled = isBusy || !caps.canLeaveParty;
         }
 
         function bindClick(button, handler) {
@@ -992,9 +1154,34 @@
             });
         }
 
+        var inlineToastHandle = 0;
+
+        function showInlineToast(target, message) {
+            if (!elements.inlineToast) return;
+            elements.inlineToast.textContent = String(message || 'Copied');
+            elements.inlineToast.hidden = false;
+            if (target && typeof target.getBoundingClientRect === 'function' && elements.menuHeader && typeof elements.menuHeader.getBoundingClientRect === 'function') {
+                var targetRect = target.getBoundingClientRect();
+                var headerRect = elements.menuHeader.getBoundingClientRect();
+                elements.inlineToast.style.left = Math.max(8, targetRect.left - headerRect.left) + 'px';
+                elements.inlineToast.style.top = Math.max(0, targetRect.bottom - headerRect.top + 6) + 'px';
+            } else {
+                elements.inlineToast.style.left = '12px';
+                elements.inlineToast.style.top = '48px';
+            }
+            if (typeof window.clearTimeout === 'function' && inlineToastHandle) window.clearTimeout(inlineToastHandle);
+            if (typeof window.setTimeout === 'function') {
+                inlineToastHandle = window.setTimeout(function () {
+                    if (!elements.inlineToast) return;
+                    elements.inlineToast.hidden = true;
+                }, 1400);
+            }
+        }
+
         function maybeWarnUnevenTeams() {
             var room = getState().privateRoom && getState().privateRoom.room;
             if (!room || String(room.roomMode || '') !== 'tdm') return;
+            if (Number(room.teamCount || 2) !== 2) return;
             var alphaCount = room.teams && room.teams.alpha ? room.teams.alpha.length : 0;
             var bravoCount = room.teams && room.teams.bravo ? room.teams.bravo.length : 0;
             if (alphaCount !== bravoCount) {
@@ -1016,6 +1203,8 @@
                 privateRoomUnassigned: elements.privateRoomUnassigned,
                 privateRoomTeamAlpha: elements.privateRoomTeamAlpha,
                 privateRoomTeamBravo: elements.privateRoomTeamBravo,
+                privateRoomTeamCharlie: elements.privateRoomTeamCharlie,
+                privateRoomTeamDelta: elements.privateRoomTeamDelta,
                 privateRoomRandomizeBtn: elements.privateRoomRandomizeBtn,
                 moveMember: function (memberId, nextTeamId) {
                     if (!session || !session.movePrivateRoomMember) return Promise.resolve(null);
@@ -1069,7 +1258,8 @@
             onPrivateRoomUnavailable: function (message) {
                 setRoomStatus(message, true);
                 render();
-            }
+            },
+            launchAssignedMatch: launchAssignedMatch
         }) : null;
 
         bindClick(elements.menuPartyIdBtn, function () {
@@ -1077,8 +1267,7 @@
             copyText(
                 value,
                 function () {
-                    setPartyStatus('ID copied.', false);
-                    render();
+                    showInlineToast(elements.menuPartyIdBtn, 'ID copied');
                 },
                 function () {
                     setPartyStatus('Copy failed.', true);
@@ -1091,13 +1280,18 @@
             );
         });
 
-        bindClick(elements.joinPartyTriggerBtn, function () {
-            if (getState().joinPopoverOpen) closeJoinPopover();
-            else openJoinPopover();
+        bindClick(elements.inviteFriendBtn, function () {
+            var targetId = elements.partyIdInput ? String(elements.partyIdInput.value || '').trim() : '';
+            if (!targetId) {
+                setPartyStatus('Enter a friend ID.', true);
+                render();
+                return;
+            }
+            if (!session || !session.runPartyAction) return;
+            session.runPartyAction('invite', { targetId: targetId }, 'Sending invite...');
             render();
-            if (elements.partyIdInput && getState().joinPopoverOpen) elements.partyIdInput.focus();
         });
-        bindClick(elements.joinPartyBtn, function () {
+        bindClick(elements.joinFriendBtn, function () {
             var targetId = elements.partyIdInput ? String(elements.partyIdInput.value || '').trim() : '';
             if (!targetId) {
                 setPartyStatus('Enter a friend ID.', true);
@@ -1106,11 +1300,50 @@
             }
             if (!session || !session.runPartyAction) return;
             session.runPartyAction('join', { targetId: targetId }, 'Joining friend...');
-            patchState({ joinRecent: writeRecentJoinTarget(targetId), joinPopoverOpen: false });
             render();
         });
         bindEnter(elements.partyIdInput, function () {
-            if (elements.joinPartyBtn) elements.joinPartyBtn.click();
+            if (elements.joinFriendBtn) elements.joinFriendBtn.click();
+        });
+        bindClick(elements.joinRoomBtn, function () {
+            var roomCode = elements.roomCodeInput ? String(elements.roomCodeInput.value || '').trim() : '';
+            if (!roomCode) {
+                setRoomStatus('Enter a room number.', true);
+                render();
+                return;
+            }
+            if (!session || !session.joinPrivateRoom || busy()) return;
+            session.joinPrivateRoom(roomCode).then(function () {
+                setActiveSurface('room');
+                render();
+            });
+        });
+        bindEnter(elements.roomCodeInput, function () {
+            if (elements.joinRoomBtn) elements.joinRoomBtn.click();
+        });
+        bindClick(elements.socialDirectInviteAcceptBtn, function () {
+            var roomInvite = getState().party && getState().party.roomInvite ? getState().party.roomInvite.incoming : null;
+            if (roomInvite && roomInvite.roomId && session && session.runPartyAction) {
+                session.runPartyAction('accept_room_invite', {}, 'Joining room invite...');
+                render();
+                return;
+            }
+            var invite = getState().party && getState().party.directInvite ? getState().party.directInvite.incoming : null;
+            if (!invite || !invite.actorId || !session || !session.runPartyAction) return;
+            session.runPartyAction('accept_invite', { targetId: invite.actorId }, 'Joining invite...');
+            render();
+        });
+        bindClick(elements.socialDirectInviteDismissBtn, function () {
+            var roomInvite = getState().party && getState().party.roomInvite ? getState().party.roomInvite.incoming : null;
+            if (roomInvite && roomInvite.roomId && session && session.runPartyAction) {
+                session.runPartyAction('dismiss_room_invite', {}, 'Dismissing room invite...');
+                render();
+                return;
+            }
+            var invite = getState().party && getState().party.directInvite ? getState().party.directInvite.incoming : null;
+            if (!invite || !invite.actorId || !session || !session.runPartyAction) return;
+            session.runPartyAction('dismiss_invite', { targetId: invite.actorId }, 'Dismissing invite...');
+            render();
         });
 
         bindClick(elements.utilityToggleBtn, function () {
@@ -1123,14 +1356,6 @@
             render();
         });
 
-        bindClick(elements.openPartyBtn, function () {
-            if (getState().paused) {
-                setActiveSurface(getState().activeSurface === 'party' ? 'main' : 'party');
-            } else {
-                setActiveSurface('party');
-            }
-            render();
-        });
         bindClick(elements.partyBackBtn, function () {
             setActiveSurface('main');
             render();
@@ -1183,7 +1408,7 @@
         bindClick(elements.roomActionBtn, function () {
             var state = getState();
             if (state.privateRoom && state.privateRoom.room) {
-                setActiveSurface('party');
+                setActiveSurface('room');
                 render();
                 return;
             }
@@ -1201,53 +1426,25 @@
                 })
                 .finally(function () {
                     controllerBusy = false;
-                    setActiveSurface('party');
+                    setActiveSurface('room');
                     render();
                 });
         });
 
-        bindClick(elements.partyJoinLockBtn, function () {
-            var partyState = getState().party;
-            if (!partyState || !partyState.party || !partyState.party.isLeader || !session || !session.runPartyAction) return;
-            session.runPartyAction('lock', { locked: !partyState.party.joinLocked }, 'Updating party...');
-        });
-        bindClick(elements.leavePartyBtn, function () {
+        function leaveParty() {
             if (!session || !session.runPartyAction) return;
             session.runPartyAction('leave', {}, 'Leaving party...');
-        });
+            patchState({ expandedPartyMemberId: '' });
+            render();
+        }
 
-        bindClick(elements.createRoomBtn, function () {
-            if (!session || !session.createPrivateRoom || busy()) return;
-            session.createPrivateRoom().then(function () {
-                var seedMode = selectedModeForRoomSeed(getState().launch.selectedMode);
-                if (seedMode && session && session.setPrivateRoomMode) {
-                    return session.setPrivateRoomMode(seedMode);
-                }
-                return null;
-            });
-        });
-        bindClick(elements.joinPrivateRoomBtn, function () {
-            var roomCode = elements.privateRoomInput ? String(elements.privateRoomInput.value || '').trim() : '';
-            if (!roomCode) {
-                setRoomStatus('Enter a room code.', true);
-                render();
-                return;
-            }
-            if (!session || !session.joinPrivateRoom || busy()) return;
-            session.joinPrivateRoom(roomCode).then(function () {
-                setActiveSurface('party');
-                render();
-            });
-        });
-        bindEnter(elements.privateRoomInput, function () {
-            if (elements.joinPrivateRoomBtn) elements.joinPrivateRoomBtn.click();
-        });
+        bindClick(elements.partyHeroLeaveBtn, leaveParty);
 
         bindClick(elements.copyRoomCodeBtn, function () {
             var value = elements.roomShareCode ? elements.roomShareCode.textContent : '';
             copyText(
                 value,
-                function () { setRoomStatus('Room code copied.', false); render(); },
+                function () { showInlineToast(elements.copyRoomCodeBtn, 'Room copied'); },
                 function () { setRoomStatus('Copy failed.', true); render(); },
                 function () { setRoomStatus('Copy unavailable.', false); render(); }
             );
@@ -1261,6 +1458,23 @@
         bindClick(elements.privateRoomModeLmsBtn, function () {
             if (session && session.setPrivateRoomMode) session.setPrivateRoomMode('lms');
         });
+        bindClick(elements.privateRoomTeams2Btn, function () {
+            if (session && session.setPrivateRoomTeamCount) session.setPrivateRoomTeamCount(2);
+        });
+        bindClick(elements.privateRoomTeams3Btn, function () {
+            if (session && session.setPrivateRoomTeamCount) session.setPrivateRoomTeamCount(3);
+        });
+        bindClick(elements.privateRoomTeams4Btn, function () {
+            if (session && session.setPrivateRoomTeamCount) session.setPrivateRoomTeamCount(4);
+        });
+        bindClick(elements.privateRoomInvitePartyBtn, function () {
+            if (session && session.invitePartyToPrivateRoom) session.invitePartyToPrivateRoom();
+        });
+        bindClick(elements.privateRoomInviteLockBtn, function () {
+            var room = getState().privateRoom && getState().privateRoom.room;
+            if (!room || !session || !session.setPrivateRoomInviteLock) return;
+            session.setPrivateRoomInviteLock(!room.inviteLocked);
+        });
         bindClick(elements.privateRoomRandomizeBtn, function () {
             if (session && session.randomizePrivateRoomTeams) session.randomizePrivateRoomTeams();
         });
@@ -1272,7 +1486,7 @@
             var room = getState().privateRoom && getState().privateRoom.room;
             if (!room) return;
             controllerBusy = true;
-            writeReturnState({ activeSurface: 'party', selectedMode: room.roomMode || getState().launch.selectedMode });
+            writeReturnState({ activeSurface: 'room', selectedMode: room.roomMode || getState().launch.selectedMode });
             setLaunchState({
                 selectedMode: normalizeMode(room.roomMode || getState().launch.selectedMode),
                 phase: 'joining',
@@ -1296,36 +1510,7 @@
                         error: true
                     });
                     render();
-                });
-        });
-
-        bindClick(elements.addFriendBtn, function () {
-            var targetUserId = elements.friendIdInput ? String(elements.friendIdInput.value || '').trim() : '';
-            if (!targetUserId) {
-                setFriendsStatus('Enter a friend user ID.', true);
-                render();
-                return;
-            }
-            if (!session || !session.performFriendAction) return;
-            session.performFriendAction('add', targetUserId, 'Saving friend...', 'Friend saved.');
-        });
-        bindEnter(elements.friendIdInput, function () {
-            if (elements.addFriendBtn) elements.addFriendBtn.click();
-        });
-        bindClick(elements.refreshFriendsBtn, function () {
-            if (session && session.refreshFriendsState) session.refreshFriendsState(false);
-        });
-        bindClick(elements.friendsFilterJoinableBtn, function () {
-            patchState({ friendsFilter: 'joinable' });
-            render();
-        });
-        bindClick(elements.friendsFilterOnlineBtn, function () {
-            patchState({ friendsFilter: 'online' });
-            render();
-        });
-        bindClick(elements.friendsFilterAllBtn, function () {
-            patchState({ friendsFilter: 'all' });
-            render();
+                    });
         });
 
         bindClick(elements.leaveConfirmCancelBtn, function () {
@@ -1347,10 +1532,6 @@
                     closeUtility();
                     render();
                 }
-                if (getState().joinPopoverOpen && elements.joinPartyPopover && !isNodeWithin(event.target, elements.joinPartyPopover) && event.target !== elements.joinPartyTriggerBtn) {
-                    closeJoinPopover();
-                    render();
-                }
             });
         }
         document.addEventListener('keydown', function (event) {
@@ -1363,11 +1544,6 @@
             }
             if (getState().utilityOpen) {
                 closeUtility();
-                render();
-                return;
-            }
-            if (getState().joinPopoverOpen) {
-                closeJoinPopover();
                 render();
                 return;
             }

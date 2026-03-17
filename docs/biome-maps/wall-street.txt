@@ -1,0 +1,81 @@
+Wall Street biome distribution map
+Biome: wall-street
+Bounds x:[56, 110] z:[110, 164]  grid:14x14
+Features: 29 high-level placements across 35/196 cells (17.9% occupied)
+
+Dominant feature map
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  V  .  .  .  .  .  .  .  .  .  V  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  K  .  .  . 
+ 5 | .  .  .  K  A  .  C  S  .  *  .  .  .  . 
+ 6 | .  .  .  .  A  *  l  *  *  A  .  .  .  . 
+ 7 | .  .  .  C  A  .  C  *  .  *  .  .  .  . 
+ 8 | .  .  .  W  *  .  .  S  C  *  .  E  .  . 
+ 9 | .  .  .  .  *  .  .  S  .  A  .  .  .  . 
+10 | .  .  .  .  A  .  .  S  .  A  .  .  .  . 
+11 | .  .  .  .  A  .  .  *  .  A  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  *  .  .  .  .  .  . 
+
+Density heatmap
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 
+ 0 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 1 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 2 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+ 3 | .  .  1  .  .  .  .  .  .  .  .  .  1  . 
+ 4 | .  .  .  .  .  .  .  .  .  .  1  .  .  . 
+ 5 | .  .  .  1  1  .  1  1  .  2  .  .  .  . 
+ 6 | .  .  .  .  1  2  1  2  2  1  .  .  .  . 
+ 7 | .  .  .  2  1  .  1  2  .  2  .  .  .  . 
+ 8 | .  .  .  1  2  .  .  1  1  2  .  1  .  . 
+ 9 | .  .  .  .  2  .  .  1  .  1  .  .  .  . 
+10 | .  .  .  .  1  .  .  1  .  1  .  .  .  . 
+11 | .  .  .  .  1  .  .  2  .  1  .  .  .  . 
+12 | .  .  .  .  .  .  .  .  .  .  .  .  .  . 
+13 | .  .  .  .  .  .  .  2  .  .  .  .  .  . 
+
+Legend
+  A alley
+  W annex
+  H arch
+  E brokerage
+  C cover
+  F exchange
+  K kiosk
+  l lamp
+  L podium
+  S stairs
+  T tower
+  V village
+  * mixed cell
+
+Counts by feature kind
+  alley            2
+  annex            1
+  arch             2
+  brokerage        1
+  cover           11
+  exchange         1
+  kiosk            2
+  lamp             2
+  podium           1
+  stairs           1
+  tower            1
+  village          4
+
+Top dense cells
+  r5 c9  count=2  kinds=alley,village  labels=east-alley, support-4
+  r6 c5  count=2  kinds=cover,village  labels=cover-3, support-3
+  r6 c7  count=2  kinds=cover,stairs  labels=cover-4, grand-stair
+  r6 c8  count=2  kinds=cover,lamp  labels=cover-5, street-lamp-2
+  r7 c3  count=2  kinds=cover  labels=cover-10, cover-2
+  r7 c7  count=2  kinds=cover,stairs  labels=cover-6, grand-stair
+  r7 c9  count=2  kinds=alley,cover  labels=cover-11, east-alley
+  r8 c4  count=2  kinds=alley,cover  labels=cover-9, west-alley
+  r8 c9  count=2  kinds=alley,arch  labels=alley-arch-2, east-alley
+  r9 c4  count=2  kinds=alley,arch  labels=alley-arch-1, west-alley
+  r11 c7  count=2  kinds=exchange,stairs  labels=grand-stair, stock-exchange
+  r13 c7  count=2  kinds=podium,tower  labels=ceo-podium, ceo-tower

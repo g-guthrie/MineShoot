@@ -56,8 +56,16 @@
         return weaponStats[String(weaponId || '')] || null;
     }
 
+    function weaponPresentationFor(weaponId) {
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var shared = runtime.GameShared || {};
+        return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+    }
+
     function resolveRemoteReloadState(render, serverNowMs) {
-        var emptyState = { reloading: false, reloadPct: 0 };
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var shared = runtime.GameShared || {};
+        var emptyState = { reloading: false, reloadPct: 1, phase: 'ready', phasePct: 1 };
         if (!render || !render.weaponAmmo || typeof render.weaponAmmo !== 'object') return emptyState;
         var weaponId = String(render.weaponId || '');
         if (!weaponId) return emptyState;
@@ -70,9 +78,20 @@
         var elapsedMs = snapshotServerTimeMs > 0 ? Math.max(0, serverNowMs - snapshotServerTimeMs) : 0;
         var remainingMs = Math.max(0, Number(ammoState.reloadRemainingMs || 0) - elapsedMs);
         if (!(remainingMs > 0)) return emptyState;
+        if (shared.resolveReloadPresentationState) {
+            var presentation = weaponPresentationFor(weaponId);
+            return shared.resolveReloadPresentationState({
+                reloadMs: reloadMs,
+                reloadRemaining: remainingMs,
+                reloadedFlashRemaining: Math.max(0, Number(ammoState.reloadedFlashRemainingMs || 0)),
+                reload: presentation ? presentation.reload : null
+            }, null);
+        }
         return {
             reloading: true,
-            reloadPct: clamp(1 - (remainingMs / reloadMs), 0, 1)
+            reloadPct: clamp(1 - (remainingMs / reloadMs), 0, 1),
+            phase: 'manipulate',
+            phasePct: 0.5
         };
     }
 
@@ -212,7 +231,10 @@
                 }
                 var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
                 var hookedNow = Number(r.hookedUntil || 0) > serverNowMs;
-                var remoteReloadState = resolveRemoteReloadState(r, serverNowMs);
+                var remoteReloadState = resolveRemoteReloadState(
+                    r,
+                    Math.max(0, serverNowMs - Math.max(0, Number(r.interpolationDelayMs || 0)))
+                );
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
                     animationApi.updateAnimation(dt, {
@@ -226,6 +248,8 @@
                         startedAt: chokeVictimState.startedAt || 0,
                         reloading: remoteReloadState.reloading,
                         reloadPct: remoteReloadState.reloadPct,
+                        reloadPhase: remoteReloadState.phase,
+                        reloadPhasePct: remoteReloadState.phasePct,
                         worldSpeed: (r.moveSpeedNorm || 0) * 14,
                         movingForward: !!r.movingForward,
                         movingBackward: !!r.movingBackward

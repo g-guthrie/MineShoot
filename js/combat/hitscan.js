@@ -120,6 +120,44 @@
         };
     }
 
+    function resolveReloadPresentationState(weaponId, reloadMs, reloadRemaining, reloadedFlashRemaining) {
+        if (shared.resolveReloadPresentationState) {
+            return shared.resolveReloadPresentationState({
+                reloadMs: reloadMs,
+                reloadRemaining: reloadRemaining,
+                reloadedFlashRemaining: reloadedFlashRemaining,
+                reload: shared.getWeaponPresentation ? (shared.getWeaponPresentation(weaponId) || {}).reload : null
+            }, null);
+        }
+        var reloading = Number(reloadMs || 0) > 0 && Number(reloadRemaining || 0) > 0;
+        var reloadConfig = shared.getWeaponPresentation ? ((shared.getWeaponPresentation(weaponId) || {}).reload || null) : null;
+        var raiseEnd = Math.max(0.05, Math.min(0.7, Number(reloadConfig && reloadConfig.raiseEnd || 0.16)));
+        var manipulateEnd = Math.max(raiseEnd + 0.05, Math.min(0.95, Number(reloadConfig && reloadConfig.manipulateEnd || 0.68)));
+        var reloadPct = reloading ? Math.max(0, Math.min(1, 1 - (Number(reloadRemaining || 0) / Math.max(1, Number(reloadMs || 1))))) : 1;
+        var phase = 'ready';
+        var phasePct = 1;
+        if (reloading) {
+            if (reloadPct < raiseEnd) {
+                phase = 'raise';
+                phasePct = reloadPct / Math.max(0.0001, raiseEnd);
+            } else if (reloadPct < manipulateEnd) {
+                phase = 'manipulate';
+                phasePct = (reloadPct - raiseEnd) / Math.max(0.0001, manipulateEnd - raiseEnd);
+            } else {
+                phase = 'settle';
+                phasePct = (reloadPct - manipulateEnd) / Math.max(0.0001, 1 - manipulateEnd);
+            }
+        } else if (Number(reloadedFlashRemaining || 0) > 0) {
+            phase = 'complete';
+        }
+        return {
+            reloading: reloading,
+            reloadPct: reloadPct,
+            phase: phase,
+            phasePct: Math.max(0, Math.min(1, phasePct))
+        };
+    }
+
     function selectableWeaponIds() {
         if (shared.getSelectableWeaponIds) {
             return shared.getSelectableWeaponIds().filter(function (id) {
@@ -542,11 +580,19 @@
         }
         var state = syncWeaponAmmoState(weapon.id, now);
         var reloadRemaining = reloadRemainingForWeapon(weapon, now);
-        if (reloadRemaining > 0) {
+        var reloadedFlashRemaining = Math.max(0, Number(state && state.reloadedFlashUntil || 0) - now);
+        var reloadPresentation = resolveReloadPresentationState(
+            weapon.id,
+            weapon.reloadMs,
+            reloadRemaining,
+            reloadedFlashRemaining
+        );
+        if (reloadPresentation.reloading) {
             return {
                 status: 'reloading',
                 ready: false,
-                pct: weapon.reloadMs > 0 ? (1 - (reloadRemaining / weapon.reloadMs)) : 1
+                pct: reloadPresentation.reloadPct,
+                phase: reloadPresentation.phase
             };
         }
         var cooldownRemaining = Math.max(0, weapon.cooldown - (now - lastFireTime));
@@ -557,17 +603,19 @@
                 pct: weapon.cooldown > 0 ? (1 - (cooldownRemaining / weapon.cooldown)) : 1
             };
         }
-        if (state && state.reloadedFlashUntil > now) {
+        if (reloadedFlashRemaining > 0) {
             return {
                 status: 'reloaded',
                 ready: true,
-                pct: 1
+                pct: 1,
+                phase: reloadPresentation.phase
             };
         }
         return {
             status: 'ready',
             ready: true,
-            pct: 1
+            pct: 1,
+            phase: 'ready'
         };
     }
 
@@ -607,14 +655,6 @@
         return Math.max(0, Number(adsActive ? weapon.adsSpread : weapon.hipfireSpread || 0));
     }
 
-    function getBloomDisplayScale(weapon) {
-        if (!weapon) return 1;
-        var adsActive = isAdsActiveForWeapon(weapon.id);
-        var scale = adsActive ? weapon.adsBloomScale : weapon.hipfireBloomScale;
-        scale = Number(scale);
-        return isFinite(scale) && scale >= 0 ? scale : 1;
-    }
-
     function currentViewAspect() {
         var player = globalThis.__MAYHEM_RUNTIME.GamePlayer;
         var camera = player && player.getCamera ? player.getCamera() : null;
@@ -629,7 +669,8 @@
             return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
         }
 
-        var spread = getActiveAimSpread(weapon) * getBloomDisplayScale(weapon);
+        // HUD/debug circles should match the actual shot solver area, not a display-only multiplier.
+        var spread = getActiveAimSpread(weapon);
         if (spread <= 0.00001) {
             return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
         }
@@ -1438,6 +1479,18 @@
         var ammoState = combatState ? {
             reloadUntil: combatState.reloading ? (now + Math.max(0, Number(combatState.reloadRemaining || 0))) : 0
         } : syncWeaponAmmoState(weapon.id, now);
+        var reloadRemaining = reloadRemainingForWeapon(weapon, now);
+        var reloadedFlashRemaining = combatState
+            ? Math.max(0, Number(combatState.reloadedFlashRemaining || 0))
+            : Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - now);
+        var reloadPresentation = combatState
+            ? {
+                reloading: !!combatState.reloading,
+                reloadPct: Math.max(0, Math.min(1, Number(combatState.reloadPct != null ? combatState.reloadPct : 0))),
+                phase: String(combatState.reloadPhase || (combatState.reloading ? 'manipulate' : (reloadedFlashRemaining > 0 ? 'complete' : 'ready'))),
+                phasePct: Math.max(0, Math.min(1, Number(combatState.reloadPhasePct != null ? combatState.reloadPhasePct : (combatState.reloading ? 0.5 : 1))))
+            }
+            : resolveReloadPresentationState(weapon.id, weapon.reloadMs, reloadRemaining, reloadedFlashRemaining);
         return {
             id: weapon.id,
             name: weapon.name,
@@ -1447,10 +1500,12 @@
             reloadMs: weapon.reloadMs,
             magazineSize: weapon.magazineSize,
             ammoInMag: weapon.magazineSize > 0 ? getAmmoInMag(weapon, now) : 0,
-            reloading: weapon.magazineSize > 0
-                ? (combatState ? !!combatState.reloading : (Number(ammoState && ammoState.reloadUntil || 0) > now))
-                : false,
-            reloadRemaining: reloadRemainingForWeapon(weapon, now),
+            reloading: weapon.magazineSize > 0 ? !!reloadPresentation.reloading : false,
+            reloadRemaining: reloadRemaining,
+            reloadedFlashRemaining: reloadedFlashRemaining,
+            reloadPct: Number(reloadPresentation.reloadPct || 0),
+            reloadPhase: String(reloadPresentation.phase || 'ready'),
+            reloadPhasePct: Number(reloadPresentation.phasePct || 0),
             bodyDamage: weapon.bodyDamage,
             headDamage: weapon.headDamage,
             pellets: weapon.pellets,
@@ -1469,7 +1524,7 @@
         var id = weaponId || activeWeaponId();
         var weapon = weapons[id];
         if (!weapon) return null;
-        if (getAutoLockConfig(weapon) || weapon.singleHitFromPellets || id === 'shotgun') {
+        if (getAutoLockConfig(weapon) || id === 'shotgun' || (weapon.singleHitFromPellets && id !== 'pistol')) {
             return {
                 type: 'circle',
                 size: getCircleReticleSizePx(weapon),

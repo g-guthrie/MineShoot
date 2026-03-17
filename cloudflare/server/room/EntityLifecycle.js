@@ -1,7 +1,7 @@
 import { getClassPreset, getDefaultAbilityLoadout, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { DEFAULT_HP_MAX } from '../../../shared/entity-constants.js';
 
 const DEFAULT_CLASS_ID = 'abilities';
-const DEFAULT_HP = 500;
 const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
@@ -62,8 +62,8 @@ export function createPlayerEntity(options = {}) {
     z: 0,
     yaw: Number(options.yaw || 0),
     pitch: Number(options.pitch || 0),
-    hp: DEFAULT_HP,
-    hpMax: DEFAULT_HP,
+    hp: DEFAULT_HP_MAX,
+    hpMax: DEFAULT_HP_MAX,
     armor: preset.armorMax,
     armorMax: preset.armorMax,
     wallhackRadius: preset.wallhackRadius,
@@ -132,8 +132,8 @@ export function createBotEntity(index, options = {}) {
     z: 10 + (Math.random() * 90),
     yaw: Math.random() * Math.PI * 2,
     pitch: 0,
-    hp: DEFAULT_HP,
-    hpMax: DEFAULT_HP,
+    hp: DEFAULT_HP_MAX,
+    hpMax: DEFAULT_HP_MAX,
     armor: preset.armorMax,
     armorMax: preset.armorMax,
     wallhackRadius: preset.wallhackRadius,

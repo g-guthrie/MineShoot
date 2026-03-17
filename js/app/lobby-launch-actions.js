@@ -323,8 +323,25 @@
             launchSandboxRuleset(selectedSandboxMode, event);
         }
 
-        function launchAssignedPrivateRoom(state) {
-            if (started || !state || !state.self || !state.self.privateRoom) return;
+        function launchAssignedMatch(state) {
+            if (started || startPending || !state || !state.self) return;
+            if (state.self.publicMatch && state.self.publicMatch.roomId) {
+                setPrivateRoomShare('');
+                setRoomAccessStatus(
+                    'Connecting to ' +
+                    String(state.self.publicMatch.gameMode || 'ffa').toUpperCase() +
+                    ' room ' +
+                    String(state.self.publicMatch.roomId || '').toUpperCase() +
+                    '...',
+                    false
+                );
+                launchMode('cloud_multiplayer', {
+                    roomId: state.self.publicMatch.roomId,
+                    gameMode: state.self.publicMatch.gameMode || 'ffa'
+                });
+                return;
+            }
+            if (!state.self.privateRoom) return;
             setRoomAccessStatus('Connecting to private room ' + roomCodeFromRoomId(ctx, state.self.privateRoom.roomId) + '...', false);
             launchMode('single_cloudflare', {
                 roomId: state.self.privateRoom.roomId,
@@ -346,7 +363,7 @@
             beginPrivateRoomJoin: beginPrivateRoomJoin,
             launchSandboxRuleset: launchSandboxRuleset,
             launchSelectedSandbox: launchSelectedSandbox,
-            launchAssignedPrivateRoom: launchAssignedPrivateRoom
+            launchAssignedMatch: launchAssignedMatch
         };
     };
 

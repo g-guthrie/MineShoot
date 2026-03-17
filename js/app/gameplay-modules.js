@@ -53,7 +53,7 @@ import '../combat/combat-tuning.js';
 import '../actors/hitbox-factory.js';
 import '../actors/avatar-rig.js';
 import '../presentation/actor-visual-factory.js';
-import '../presentation/bloom-reticle.js';
+import '../presentation/spread-reticle.js';
 import '../presentation/ui.js';
 import '../actors/enemy.js';
 import '../combat/hitscan.js';

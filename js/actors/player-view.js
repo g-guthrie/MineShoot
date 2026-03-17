@@ -8,6 +8,68 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GamePlayerView = {};
 
+    function resolveReloadPresentationState(weaponState, getWeaponPresentation) {
+        var state = weaponState || null;
+        if (!state) {
+            return {
+                reloading: false,
+                reloadPct: 1,
+                phase: 'ready',
+                phasePct: 1
+            };
+        }
+        if (typeof state.reloadPct === 'number' && typeof state.reloadPhase === 'string') {
+            return {
+                reloading: !!state.reloading,
+                reloadPct: Math.max(0, Math.min(1, Number(state.reloadPct || 0))),
+                phase: String(state.reloadPhase || 'ready'),
+                phasePct: Math.max(0, Math.min(1, Number(state.reloadPhasePct != null ? state.reloadPhasePct : 1)))
+            };
+        }
+        var shared = runtime.GameShared || {};
+        if (shared.resolveReloadPresentationState) {
+            return shared.resolveReloadPresentationState({
+                reloadMs: Number(state.reloadMs || 0),
+                reloadRemaining: Number(state.reloadRemaining || 0),
+                reloadedFlashRemaining: Number(state.reloadedFlashRemaining || 0),
+                reload: getWeaponPresentation && state.id
+                    ? ((getWeaponPresentation(state.id) || {}).reload || null)
+                    : null
+            }, null);
+        }
+        var reloading = !!state.reloading;
+        var reloadConfig = getWeaponPresentation && state.id
+            ? (((getWeaponPresentation(state.id) || {}).reload) || null)
+            : null;
+        var raiseEnd = Math.max(0.05, Math.min(0.7, Number(reloadConfig && reloadConfig.raiseEnd || 0.16)));
+        var manipulateEnd = Math.max(raiseEnd + 0.05, Math.min(0.95, Number(reloadConfig && reloadConfig.manipulateEnd || 0.68)));
+        var reloadPct = reloading && Number(state.reloadMs || 0) > 0
+            ? (1 - (Math.max(0, Number(state.reloadRemaining || 0)) / Math.max(1, Number(state.reloadMs || 1))))
+            : 1;
+        var phase = 'ready';
+        var phasePct = 1;
+        if (reloading) {
+            if (reloadPct < raiseEnd) {
+                phase = 'raise';
+                phasePct = reloadPct / Math.max(0.0001, raiseEnd);
+            } else if (reloadPct < manipulateEnd) {
+                phase = 'manipulate';
+                phasePct = (reloadPct - raiseEnd) / Math.max(0.0001, manipulateEnd - raiseEnd);
+            } else {
+                phase = 'settle';
+                phasePct = (reloadPct - manipulateEnd) / Math.max(0.0001, 1 - manipulateEnd);
+            }
+        } else if (Number(state.reloadedFlashRemaining || 0) > 0) {
+            phase = 'complete';
+        }
+        return {
+            reloading: reloading,
+            reloadPct: Math.max(0, Math.min(1, reloadPct)),
+            phase: phase,
+            phasePct: Math.max(0, Math.min(1, phasePct))
+        };
+    }
+
     GamePlayerView.create = function (options) {
         options = options || {};
 
@@ -105,10 +167,7 @@
             if (!animationApi) return;
             var speedNorm = Math.max(0, Math.min(1.4, speed / state.runSpeed));
             var activeWeaponState = options.getCurrentWeaponState ? options.getCurrentWeaponState() : null;
-            var reloadPct = 0;
-            if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
-                reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
-            }
+            var reloadPresentation = resolveReloadPresentationState(activeWeaponState, options.getWeaponPresentation);
             animationApi.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: state.sprinting,
@@ -119,8 +178,10 @@
                 choked: !!state.choked,
                 startedAt: state.chokeStartedAt || 0,
                 adsActive: !!state.adsActive,
-                reloading: !!(activeWeaponState && activeWeaponState.reloading),
-                reloadPct: reloadPct,
+                reloading: !!reloadPresentation.reloading,
+                reloadPct: reloadPresentation.reloadPct,
+                reloadPhase: reloadPresentation.phase,
+                reloadPhasePct: reloadPresentation.phasePct,
                 worldSpeed: speed,
                 movingForward: !!state.movingForward,
                 movingBackward: !!state.movingBackward,

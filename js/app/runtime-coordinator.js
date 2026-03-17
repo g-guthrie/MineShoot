@@ -397,8 +397,16 @@
             return selected;
         }
 
-        function handleEnemyHit(hitPoint, damage, hitType, result) {
+        function handleEnemyHit(hitPoint, damage, hitType, result, targetId) {
             if (!result) return;
+            var overhead = globalThis.__MAYHEM_RUNTIME.GameOverhead || null;
+            var resolvedTargetId = String(targetId || '');
+            if (!resolvedTargetId && result.enemy && Number.isFinite(Number(result.enemy.index))) {
+                resolvedTargetId = 'enemy:' + String(result.enemy.index);
+            }
+            if (resolvedTargetId && overhead && overhead.revealTarget) {
+                overhead.revealTarget(resolvedTargetId, 1500);
+            }
             var currentWeapon = globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
                 ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
                 : null;
@@ -470,7 +478,10 @@
 
                     if (!globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.damage) return;
                     var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hitboxMesh, damage);
-                    handleEnemyHit(hitPoint, damage, hitType, result);
+                    var localTargetId = hitboxMesh && hitboxMesh.userData
+                        ? String(hitboxMesh.userData.targetId || '')
+                        : '';
+                    handleEnemyHit(hitPoint, damage, hitType, result, localTargetId);
                 },
                 function () {},
                 shotToken

@@ -115,6 +115,29 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx - 2.5, 0.1, cz - 1.3, 0.4, 0.2, 0.3, mats.rubble, false);
     }
 
+    function buildGrandSpanArch(cx, cz, place, mats) {
+        // Mid-scale hero arch that seeds a center fight without competing with the corner mesa.
+        place.addBlock(cx - 4.2, 3.3, cz + 0.1, 2.4, 6.6, 2.8, mats.darkRock, true);
+        place.addBlock(cx + 4.0, 3.0, cz - 0.2, 2.2, 6.0, 2.6, mats.mesa, true);
+        place.addBlock(cx, 7.1, cz, 11.8, 1.4, 3.0, mats.sandstone, true);
+        place.addBlock(cx - 0.4, 8.1, cz - 0.1, 7.2, 0.56, 2.1, mats.mesa, true);
+        place.addBlock(cx + 0.6, 8.8, cz + 0.2, 3.8, 0.42, 1.4, mats.sandstone, false);
+        place.addBlock(cx - 0.3, 6.2, cz, 8.4, 0.48, 2.2, mats.darkRock, false);
+        place.addBlock(cx - 5.1, 1.2, cz + 1.0, 2.0, 2.4, 1.7, mats.darkRock, true);
+        place.addBlock(cx + 5.0, 1.1, cz - 0.9, 1.8, 2.2, 1.6, mats.mesa, true);
+        place.addBlock(cx - 3.3, 4.8, cz + 0.9, 1.5, 0.58, 2.1, mats.sandstone, true);
+        place.addRamp(cx + 3.4, 3.1, cz - 1.2, 2.8, 0.9, 4.6, mats.darkRock, Math.PI * 0.5, -0.18, true);
+        place.addRamp(cx - 5.6, 1.0, cz + 2.0, 3.2, 0.8, 4.4, mats.mesa, 1.02, -0.16, true);
+        addRubbleCluster(cx - 5.6, cz + 2.6, 0.95, place, mats);
+        addRubbleCluster(cx + 4.8, cz - 2.0, 0.88, place, mats);
+        addRubbleCluster(cx + 0.4, cz + 3.0, 0.92, place, mats);
+
+        return {
+            peakHeight: 9.01,
+            spanWidth: 11.8
+        };
+    }
+
     function addCactus(x, z, place, mats, tall, hasFlower) {
         var h = tall ? 3.0 : 2.2;
         // Main trunk (collidable)
@@ -392,6 +415,7 @@ import { pointInBounds as pt } from './biome-utils.js';
     function buildDesertQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
         var wallBounds = (ctx && ctx.rawBounds) ? ctx.rawBounds : bounds;
+        var centerHero = pt(bounds, 0.52, 0.54);
         buildCornerMesaCrown(wallBounds, place, mats);
         ctx.addExclusion(wallBounds.maxX - 7.4, wallBounds.minZ + 8.8, 12.0);
 
@@ -413,6 +437,16 @@ import { pointInBounds as pt } from './biome-utils.js';
         var shelfB = pt(bounds, 0.30, 0.42);
         buildRockShelf(shelfB.x, shelfB.z, -0.88, place, mats);
         ctx.addExclusion(shelfB.x, shelfB.z, 3.8);
+
+        var centerArchStats = buildGrandSpanArch(centerHero.x, centerHero.z, place, mats);
+        ctx.addExclusion(centerHero.x, centerHero.z, 6.1);
+
+        var centerButte = pt(bounds, 0.42, 0.56);
+        buildButte(centerButte.x, centerButte.z, place, mats);
+        ctx.addExclusion(centerButte.x, centerButte.z, 3.8);
+
+        var centerFence = pt(bounds, 0.64, 0.50);
+        buildFenceRuins(centerFence.x, centerFence.z, place, mats);
 
         var westArch = pt(bounds, 0.12, 0.52);
         buildArch(westArch.x, westArch.z, place, mats);
@@ -450,9 +484,9 @@ import { pointInBounds as pt } from './biome-utils.js';
         }
 
         // Skull and bones (narrative detail)
-        var skullPt = pt(bounds, 0.60, 0.66);
+        var skullPt = pt(bounds, 0.72, 0.62);
         addSkull(skullPt.x, skullPt.z, place, mats);
-        var bonesPt = pt(bounds, 0.64, 0.68);
+        var bonesPt = pt(bounds, 0.78, 0.66);
         addBones(bonesPt.x, bonesPt.z, place, mats);
 
         var bones2 = pt(bounds, 0.24, 0.24);
@@ -491,7 +525,12 @@ import { pointInBounds as pt } from './biome-utils.js';
             cacti: cacti.length,
             cover: 2,
             cliffs: 3,
-            mesas: 5
+            mesas: 5,
+            centerHeroArchX: centerHero.x,
+            centerHeroArchZ: centerHero.z,
+            centerHeroArchHeight: centerArchStats.peakHeight,
+            centerHeroArchSpan: centerArchStats.spanWidth,
+            centerSupportCount: 2
         };
     }
 

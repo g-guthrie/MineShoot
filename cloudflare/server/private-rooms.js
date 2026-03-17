@@ -2,6 +2,10 @@ import { normalizeOpaqueId, nowMs, sanitizeRoomId } from './transport.js';
 import { PRIVATE_ROOM_ID_PREFIX } from '../../shared/matchmaking-config.js';
 
 let ensureTablePromise = null;
+let ensureTeamCountColumnPromise = null;
+let ensureInviteLockColumnPromise = null;
+
+const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
 
 function isPrivateRoomId(roomId) {
   return String(roomId || '').startsWith(PRIVATE_ROOM_ID_PREFIX);
@@ -29,6 +33,7 @@ async function ensurePrivateRoomTable(env) {
            room_mode TEXT NOT NULL DEFAULT 'ffa',
            room_phase TEXT NOT NULL DEFAULT 'lobby',
            host_actor_id TEXT NOT NULL DEFAULT '',
+           invite_locked INTEGER NOT NULL DEFAULT 1,
            created_at INTEGER NOT NULL,
            updated_at INTEGER NOT NULL
          )`
@@ -51,6 +56,40 @@ async function ensurePrivateRoomTable(env) {
     });
   }
   await ensureTablePromise;
+  if (!ensureTeamCountColumnPromise) {
+    ensureTeamCountColumnPromise = env.DB.prepare('PRAGMA table_info(private_room_state)').all()
+      .then(async (result) => {
+        const rows = result && Array.isArray(result.results) ? result.results : [];
+        const hasTeamCount = rows.some((row) => String(row && row.name || '') === 'team_count');
+        if (!hasTeamCount) {
+          await env.DB.prepare(
+            'ALTER TABLE private_room_state ADD COLUMN team_count INTEGER NOT NULL DEFAULT 2'
+          ).run();
+        }
+      })
+      .catch((err) => {
+        ensureTeamCountColumnPromise = null;
+        throw err;
+      });
+  }
+  await ensureTeamCountColumnPromise;
+  if (!ensureInviteLockColumnPromise) {
+    ensureInviteLockColumnPromise = env.DB.prepare('PRAGMA table_info(private_room_state)').all()
+      .then(async (result) => {
+        const rows = result && Array.isArray(result.results) ? result.results : [];
+        const hasInviteLock = rows.some((row) => String(row && row.name || '') === 'invite_locked');
+        if (!hasInviteLock) {
+          await env.DB.prepare(
+            'ALTER TABLE private_room_state ADD COLUMN invite_locked INTEGER NOT NULL DEFAULT 1'
+          ).run();
+        }
+      })
+      .catch((err) => {
+        ensureInviteLockColumnPromise = null;
+        throw err;
+      });
+  }
+  await ensureInviteLockColumnPromise;
 }
 
 function normalizeRoomCode(roomCode) {
@@ -75,19 +114,23 @@ export async function initializePrivateRoomState(env, roomId, roomMode = 'ffa', 
   await ensurePrivateRoomTable(env);
   const now = Math.floor(nowMs() / 1000);
   await env.DB.prepare(
-    `INSERT INTO private_room_state (room_id, room_mode, room_phase, host_actor_id, created_at, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+    `INSERT INTO private_room_state (room_id, room_mode, room_phase, host_actor_id, invite_locked, created_at, updated_at, team_count)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, ?7)
      ON CONFLICT(room_id) DO UPDATE SET
        room_mode = excluded.room_mode,
        room_phase = excluded.room_phase,
        host_actor_id = excluded.host_actor_id,
+       invite_locked = excluded.invite_locked,
+       team_count = excluded.team_count,
        updated_at = excluded.updated_at`
   ).bind(
     sanitizeRoomId(roomId),
     String(roomMode || 'ffa') === 'tdm' ? 'tdm' : (String(roomMode || 'ffa') === 'lms' ? 'lms' : 'ffa'),
     String(roomPhase || 'lobby') === 'active' ? 'active' : 'lobby',
     String(hostActorId || ''),
-    now
+    1,
+    now,
+    2
   ).run();
 }
 
@@ -95,7 +138,7 @@ export async function getPrivateRoomState(env, roomId) {
   if (!isPrivateRoomId(roomId)) return null;
   await ensurePrivateRoomTable(env);
   return env.DB.prepare(
-    `SELECT room_id, room_mode, room_phase, host_actor_id, created_at, updated_at
+    `SELECT room_id, room_mode, room_phase, host_actor_id, invite_locked, team_count, created_at, updated_at
      FROM private_room_state
      WHERE room_id = ?1`
   ).bind(sanitizeRoomId(roomId)).first();
@@ -108,16 +151,28 @@ export async function setPrivateRoomState(env, roomId, updates) {
   const nextMode = rawMode === 'tdm' ? 'tdm' : (rawMode === 'lms' ? 'lms' : 'ffa');
   const nextPhase = String((updates && updates.roomPhase) || current.room_phase || 'lobby') === 'active' ? 'active' : 'lobby';
   const nextHost = String((updates && updates.hostActorId) || current.host_actor_id || '');
+  const nextInviteLocked = updates && Object.prototype.hasOwnProperty.call(updates, 'inviteLocked')
+    ? ((updates && updates.inviteLocked) ? 1 : 0)
+    : (Number(current.invite_locked || 0) ? 1 : 0);
+  const requestedTeamCount = Number((updates && updates.teamCount) || current.team_count || 2);
+  const nextTeamCount = Math.max(2, Math.min(4, Math.round(requestedTeamCount) || 2));
   const now = Math.floor(nowMs() / 1000);
   await env.DB.prepare(
     `UPDATE private_room_state
      SET room_mode = ?2,
          room_phase = ?3,
          host_actor_id = ?4,
-         updated_at = ?5
+         invite_locked = ?5,
+         updated_at = ?6,
+         team_count = ?7
      WHERE room_id = ?1`
-  ).bind(sanitizeRoomId(roomId), nextMode, nextPhase, nextHost, now).run();
+  ).bind(sanitizeRoomId(roomId), nextMode, nextPhase, nextHost, nextInviteLocked, now, nextTeamCount).run();
   return getPrivateRoomState(env, roomId);
+}
+
+function normalizeRoomTeamId(teamId) {
+  const normalized = String(teamId || '').trim().toLowerCase();
+  return ROOM_TEAM_IDS.indexOf(normalized) >= 0 ? normalized : 'alpha';
 }
 
 export async function assignActorToPrivateRoom(env, roomId, actorId, displayName, teamId = 'alpha') {
@@ -136,7 +191,7 @@ export async function assignActorToPrivateRoom(env, roomId, actorId, displayName
     normalizedActorId,
     sanitizeRoomId(roomId),
     String(displayName || actorId || 'PLAYER'),
-    String(teamId || 'alpha') === 'bravo' ? 'bravo' : 'alpha',
+    normalizeRoomTeamId(teamId),
     now
   ).run();
 }
@@ -179,7 +234,7 @@ export async function moveActorToPrivateRoomTeam(env, actorId, teamId) {
   if (!existing) return;
   await env.DB.prepare(
     'UPDATE private_room_members SET team_id = ?2 WHERE actor_id = ?1'
-  ).bind(String(existing.actor_id || ''), String(teamId || 'alpha') === 'bravo' ? 'bravo' : 'alpha').run();
+  ).bind(String(existing.actor_id || ''), normalizeRoomTeamId(teamId)).run();
 }
 
 export async function deletePrivateRoom(env, roomId) {

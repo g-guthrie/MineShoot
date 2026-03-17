@@ -106,7 +106,7 @@ function createRoomStateArena(stateByRoomId) {
   };
 }
 
-test('create room defaults to FFA and carries menu-idle party members', async () => {
+test('create room defaults to FFA and only places the creator into the room', async () => {
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=ACTOR_A1&displayName=ALPHA&activityState=menu', 'GET'));
@@ -129,8 +129,8 @@ test('create room defaults to FFA and carries menu-idle party members', async ()
 
   assert.equal(body.ok, true);
   assert.equal(body.state.room.roomMode, 'ffa');
-  assert.equal(body.state.room.memberCount, 2);
-  assert.equal(body.movedCount, 2);
+  assert.equal(body.state.room.memberCount, 1);
+  assert.equal(body.movedCount, 1);
 });
 
 test('party state bootstraps on a fresh local schema', async () => {
@@ -236,6 +236,55 @@ test('party join accepts copied uppercase actor ids from the menu header', async
   assert.equal(body.state.party.memberCount, 2);
 });
 
+test('party direct invites support typed actor ids, dismissal, and accept flow', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=ACTOR_INV_A&displayName=ALPHA&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=ACTOR_INV_B&displayName=BRAVO&activityState=menu', 'GET'));
+
+  const invited = await jsonBody(await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ACTOR_INV_A',
+    displayName: 'ALPHA',
+    activityState: 'menu',
+    action: 'invite',
+    targetId: 'ACTOR_INV_B'
+  })));
+  assert.equal(invited.ok, true);
+  assert.equal(invited.state.directInvite.outgoing.actorId, 'ACTOR_INV_B');
+
+  const recipientView = await jsonBody(await handleParty(env, request('/api/party?actorId=ACTOR_INV_B&displayName=BRAVO&activityState=menu', 'GET')));
+  assert.equal(recipientView.state.directInvite.incoming.actorId, 'ACTOR_INV_A');
+
+  const dismissed = await jsonBody(await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ACTOR_INV_B',
+    displayName: 'BRAVO',
+    activityState: 'menu',
+    action: 'dismiss_invite',
+    targetId: 'ACTOR_INV_A'
+  })));
+  assert.equal(dismissed.ok, true);
+  assert.equal(dismissed.state.directInvite.incoming, null);
+
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ACTOR_INV_A',
+    displayName: 'ALPHA',
+    activityState: 'menu',
+    action: 'invite',
+    targetId: 'ACTOR_INV_B'
+  }));
+
+  const accepted = await jsonBody(await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ACTOR_INV_B',
+    displayName: 'BRAVO',
+    activityState: 'menu',
+    action: 'accept_invite',
+    targetId: 'ACTOR_INV_A'
+  })));
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.state.party.memberCount, 2);
+  assert.equal(accepted.state.directInvite.incoming, null);
+});
+
 test('friends persist for accounts, support invites, and allow one-click mutual joins', async () => {
   const env = createFakeEnv();
   const alpha = seedAccount(env, 'alpha', 'ALPHA');
@@ -280,6 +329,28 @@ test('friends persist for accounts, support invites, and allow one-click mutual 
   const relisted = await jsonBody(await handleFriends(env, authedRequest(bravo.sessionId, '/api/friends', 'GET')));
   assert.equal(relisted.friends.friends[0].incomingInvite, false);
   assert.equal(relisted.friends.friends[0].sameParty, true);
+});
+
+test('friends support removing a saved friend', async () => {
+  const env = createFakeEnv();
+  const alpha = seedAccount(env, 'removealpha', 'ALPHA_REMOVE');
+  const bravo = seedAccount(env, 'removebravo', 'BRAVO_REMOVE');
+
+  await handleParty(env, authedRequest(alpha.sessionId, '/api/party?activityState=menu', 'GET'));
+  await handleParty(env, authedRequest(bravo.sessionId, '/api/party?activityState=menu', 'GET'));
+
+  await handleFriends(env, authedRequest(alpha.sessionId, '/api/friends', 'POST', {
+    action: 'add',
+    targetUserId: bravo.userId
+  }));
+
+  const removed = await jsonBody(await handleFriends(env, authedRequest(alpha.sessionId, '/api/friends', 'POST', {
+    action: 'remove',
+    targetUserId: bravo.userId
+  })));
+
+  assert.equal(removed.ok, true);
+  assert.equal(removed.friends.friends.length, 0);
 });
 
 test('friend actions accept uppercase copied user ids', async () => {
@@ -391,6 +462,14 @@ test('team layout persists across FFA/TDM mode switching', async () => {
   const roomCode = created.state.room.roomCode;
 
   await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ACTOR_B4',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
     actorId: 'ACTOR_A4',
     displayName: 'LEAD',
     activityState: 'private_room_lobby',
@@ -424,6 +503,53 @@ test('team layout persists across FFA/TDM mode switching', async () => {
   assert.equal(finalState.state.room.roomCode, roomCode);
   assert.equal(finalState.state.room.teams.bravo.length, 1);
   assert.equal(finalState.state.room.teams.bravo[0].id, 'ACTOR_B4');
+});
+
+test('private room supports selectable team counts up to four', async () => {
+  const env = createFakeEnv();
+
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOM4_A',
+    displayName: 'HOST',
+    activityState: 'menu',
+    action: 'create'
+  })));
+
+  const roomCode = created.state.room.roomCode;
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOM4_B',
+    displayName: 'B',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOM4_C',
+    displayName: 'C',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOM4_D',
+    displayName: 'D',
+    activityState: 'menu',
+    action: 'join',
+    roomCode
+  }));
+
+  const updated = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOM4_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'set_team_count',
+    teamCount: 4
+  })));
+
+  assert.equal(updated.ok, true);
+  assert.equal(updated.state.room.teamCount, 4);
+  assert.deepEqual(updated.state.room.teamIds, ['alpha', 'bravo', 'charlie', 'delta']);
 });
 
 test('joining a full private room fails without ejecting the caller from their current room', async () => {
@@ -595,6 +721,418 @@ test('quick matchmaking falls back to an emergency unique room after stable publ
   assert.equal(body.ok, true);
   assert.equal(/^(ffa-01|ffa-02|ffa-x01|ffa-x02)$/.test(body.roomId), false);
   assert.equal(/^ffa-[a-z0-9]{4}-[a-z0-9]{2}$/.test(body.roomId), true);
+});
+
+test('public quick matchmaking assigns one room to the whole ready party when the leader queues', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_A&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_B&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_B',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_A'
+  }));
+
+  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'tdm',
+    actorId: 'QUEUE_A',
+    displayName: 'LEAD'
+  }));
+  const body = await jsonBody(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_A').room_id, body.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_B').room_id, body.roomId);
+
+  const wingState = await jsonBody(await handleParty(env, request('/api/party?actorId=QUEUE_B&displayName=WING&activityState=menu', 'GET')));
+  assert.equal(wingState.state.self.publicMatch.roomId, body.roomId);
+  assert.equal(wingState.state.self.publicMatch.gameMode, 'tdm');
+});
+
+test('public quick matchmaking blocks overlapping requests for the same party and reuses the assigned room', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_R1&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_R2&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_R2',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_R1'
+  }));
+
+  let releaseFetch = null;
+  const roomStateResponse = new Response(JSON.stringify({
+    ok: true,
+    connectedPlayers: 0,
+    players: 0,
+    matchStarted: false
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  env.GLOBAL_ARENA = {
+    idFromName(name) {
+      return String(name || '');
+    },
+    get(id) {
+      return {
+        async fetch(request) {
+          const rawUrl = typeof request === 'string' ? request : (request && request.url) || 'https://room/state';
+          const url = new URL(rawUrl);
+          if (url.pathname === '/state') {
+            if (!releaseFetch) {
+              return new Promise((resolve) => {
+                releaseFetch = () => resolve(roomStateResponse.clone());
+              });
+            }
+            return roomStateResponse.clone();
+          }
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    }
+  };
+
+  const firstRequest = handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_R1',
+    displayName: 'LEAD'
+  }));
+
+  for (let i = 0; i < 120 && env.__state.publicMatchQueueLocks.size === 0; i++) {
+    await Promise.resolve();
+  }
+  assert.equal(env.__state.publicMatchQueueLocks.size > 0, true, 'expected the first matchmaking request to acquire the queue lock');
+
+  const secondResponse = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_R1',
+    displayName: 'LEAD'
+  }));
+  const secondBody = await jsonBody(secondResponse);
+
+  assert.equal(secondResponse.status, 409);
+  assert.match(secondBody.error, /starting/i);
+
+  releaseFetch();
+  const firstBody = await jsonBody(await firstRequest);
+
+  assert.equal(firstBody.ok, true);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_R1').room_id, firstBody.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_R2').room_id, firstBody.roomId);
+  assert.equal(env.__state.publicMatchQueueLocks.size, 0);
+
+  const retryBody = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_R1',
+    displayName: 'LEAD'
+  })));
+
+  assert.equal(retryBody.ok, true);
+  assert.equal(retryBody.roomId, firstBody.roomId);
+});
+
+test('public quick matchmaking repairs missing party assignments when reusing an existing room', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_M1&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_M2&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_M2',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_M1'
+  }));
+
+  const queued = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'tdm',
+    actorId: 'QUEUE_M1',
+    displayName: 'LEAD'
+  })));
+
+  env.__state.publicMatchAssignments.delete('QUEUE_M2');
+
+  const retried = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'tdm',
+    actorId: 'QUEUE_M1',
+    displayName: 'LEAD'
+  })));
+
+  assert.equal(retried.ok, true);
+  assert.equal(retried.roomId, queued.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_M1').room_id, queued.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_M2').room_id, queued.roomId);
+});
+
+test('public quick matchmaking keeps valid assignments when room state is temporarily unavailable', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_S1&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_S2&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_S2',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_S1'
+  }));
+
+  const queued = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_S1',
+    displayName: 'LEAD'
+  })));
+
+  env.GLOBAL_ARENA = {
+    idFromName(name) {
+      return String(name || '');
+    },
+    get() {
+      return {
+        async fetch(request) {
+          const rawUrl = typeof request === 'string' ? request : (request && request.url) || 'https://room/state';
+          const url = new URL(rawUrl);
+          if (url.pathname === '/state') {
+            return new Response('temporary failure', { status: 503 });
+          }
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      };
+    }
+  };
+
+  const retried = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_S1',
+    displayName: 'LEAD'
+  })));
+
+  assert.equal(retried.ok, true);
+  assert.equal(retried.roomId, queued.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_S1').room_id, queued.roomId);
+  assert.equal(env.__state.publicMatchAssignments.get('QUEUE_S2').room_id, queued.roomId);
+});
+
+test('public quick matchmaking rejects non-leader party queue attempts', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_C&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_D&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_D',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_C'
+  }));
+
+  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_D',
+    displayName: 'WING'
+  }));
+  const body = await jsonBody(response);
+
+  assert.equal(response.status, 403);
+  assert.match(body.error, /leader/i);
+});
+
+test('public quick matchmaking blocks until the full party is menu-ready', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_E&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_F&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_F',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_E'
+  }));
+  await handleParty(env, request('/api/party?actorId=QUEUE_F&displayName=WING&activityState=in_match', 'GET'));
+
+  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_E',
+    displayName: 'LEAD'
+  }));
+  const body = await jsonBody(response);
+
+  assert.equal(response.status, 409);
+  assert.match(body.error, /menu/i);
+});
+
+test('private room invite defaults to host-only, can be dismissed, and accepting keeps the party intact', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=ROOMINV_A&displayName=HOST&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=ROOMINV_B&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ROOMINV_B',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'ROOMINV_A'
+  }));
+
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_A',
+    displayName: 'HOST',
+    activityState: 'menu',
+    action: 'create'
+  })));
+
+  assert.equal(created.state.room.inviteLocked, true);
+
+  const invited = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'invite_party'
+  })));
+  assert.equal(invited.invitedCount, 1);
+
+  const recipientView = await jsonBody(await handleParty(env, request('/api/party?actorId=ROOMINV_B&displayName=WING&activityState=menu', 'GET')));
+  assert.equal(recipientView.state.roomInvite.incoming.roomCode, created.state.room.roomCode);
+
+  const dismissed = await jsonBody(await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ROOMINV_B',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'dismiss_room_invite'
+  })));
+  assert.equal(dismissed.state.roomInvite.incoming, null);
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_A',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'invite_party'
+  }));
+  const accepted = await jsonBody(await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ROOMINV_B',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'accept_room_invite'
+  })));
+
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.state.party.memberCount, 2);
+  assert.equal(env.__state.privateRoomMembers.get('ROOMINV_B').room_id, created.state.room.roomId);
+});
+
+test('unlocked private rooms allow any room member to invite their own party', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=ROOMINV_H&displayName=HOST&activityState=menu', 'GET'));
+  const created = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_H',
+    displayName: 'HOST',
+    activityState: 'menu',
+    action: 'create'
+  })));
+
+  await handleParty(env, request('/api/party?actorId=ROOMINV_M&displayName=MEMBER&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=ROOMINV_X&displayName=EXTRA&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'ROOMINV_X',
+    displayName: 'EXTRA',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'ROOMINV_M'
+  }));
+
+  await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_M',
+    displayName: 'MEMBER',
+    activityState: 'menu',
+    action: 'join',
+    roomCode: created.state.room.roomCode
+  }));
+
+  const denied = await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_M',
+    displayName: 'MEMBER',
+    activityState: 'private_room_lobby',
+    action: 'invite_party'
+  }));
+  assert.equal(denied.status, 403);
+
+  const unlocked = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_H',
+    displayName: 'HOST',
+    activityState: 'private_room_lobby',
+    action: 'set_invite_lock',
+    locked: false
+  })));
+  assert.equal(unlocked.state.room.inviteLocked, false);
+
+  const invited = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
+    actorId: 'ROOMINV_M',
+    displayName: 'MEMBER',
+    activityState: 'private_room_lobby',
+    action: 'invite_party'
+  })));
+  assert.equal(invited.invitedCount, 1);
+
+  const extraState = await jsonBody(await handleParty(env, request('/api/party?actorId=ROOMINV_X&displayName=EXTRA&activityState=menu', 'GET')));
+  assert.equal(extraState.state.roomInvite.incoming.roomCode, created.state.room.roomCode);
+});
+
+test('public websocket connect consumes the actor public match assignment', async () => {
+  const env = createFakeEnv();
+
+  await handleParty(env, request('/api/party?actorId=QUEUE_G&displayName=LEAD&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party?actorId=QUEUE_H&displayName=WING&activityState=menu', 'GET'));
+  await handleParty(env, request('/api/party', 'POST', {
+    actorId: 'QUEUE_H',
+    displayName: 'WING',
+    activityState: 'menu',
+    action: 'join',
+    targetId: 'QUEUE_G'
+  }));
+
+  const queued = await jsonBody(await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
+    action: 'quick',
+    gameMode: 'ffa',
+    actorId: 'QUEUE_G',
+    displayName: 'LEAD'
+  })));
+
+  const wsRequest = new Request(
+    'https://example.test/api/ws?room=' + encodeURIComponent(queued.roomId) +
+    '&actorId=QUEUE_H&actorName=WING&uid=guest_queue_h&username=WING',
+    { method: 'GET' }
+  );
+  const response = await handleWsUpgrade(env, wsRequest, {});
+
+  assert.equal(response.status, 200);
+  assert.equal(env.__state.publicMatchAssignments.has('QUEUE_H'), false);
+  assert.equal(env.__state.publicMatchAssignments.has('QUEUE_G'), true);
 });
 
 test('websocket upgrade enforces private-room membership and forwards actor identity', async () => {

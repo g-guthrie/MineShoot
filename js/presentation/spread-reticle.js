@@ -1,18 +1,18 @@
 /**
- * bloom-reticle.js - Debug bloom ring for hitscan weapons.
- * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameBloomReticle
+ * spread-reticle.js - Debug spread ring for hitscan weapons.
+ * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameSpreadReticle
  */
 (function () {
     'use strict';
 
-    var GameBloomReticle = {};
+    var GameSpreadReticle = {};
 
-    function BloomReticle(element) {
+    function SpreadReticle(element) {
         this.el = element || null;
         this.debugEnabled = false;
     }
 
-    BloomReticle.prototype.radiusPxForWeapon = function (weapon, options) {
+    SpreadReticle.prototype.radiusPxForWeapon = function (weapon, options) {
         options = options || {};
         if (!weapon || weapon.id === 'shotgun') return 0;
         if (!!options.scoped) return 0;
@@ -22,7 +22,7 @@
         return 0;
     };
 
-    BloomReticle.prototype.metricsForWeapon = function (weapon, options) {
+    SpreadReticle.prototype.metricsForWeapon = function (weapon, options) {
         options = options || {};
         if (!weapon || weapon.id === 'shotgun' || !!options.scoped) {
             return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0 };
@@ -34,17 +34,17 @@
         return { radiusPx: radiusPx, radiusXpx: radiusPx, radiusYpx: radiusPx };
     };
 
-    BloomReticle.prototype.setDebugEnabled = function (enabled) {
+    SpreadReticle.prototype.setDebugEnabled = function (enabled) {
         this.debugEnabled = !!enabled;
         if (!this.debugEnabled) this.hide();
     };
 
-    BloomReticle.prototype.hide = function () {
+    SpreadReticle.prototype.hide = function () {
         if (!this.el) return;
         this.el.style.display = 'none';
     };
 
-    BloomReticle.prototype.updateForWeapon = function (weapon, options) {
+    SpreadReticle.prototype.updateForWeapon = function (weapon, options) {
         if (!this.el) return;
         options = options || {};
 
@@ -68,9 +68,9 @@
         this.el.style.height = Math.round(diameterYpx) + 'px';
     };
 
-    GameBloomReticle.create = function (element) {
-        return new BloomReticle(element);
+    GameSpreadReticle.create = function (element) {
+        return new SpreadReticle(element);
     };
 
-    globalThis.__MAYHEM_RUNTIME.GameBloomReticle = GameBloomReticle;
+    globalThis.__MAYHEM_RUNTIME.GameSpreadReticle = GameSpreadReticle;
 })();

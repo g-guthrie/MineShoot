@@ -227,6 +227,31 @@ async function addFriend(env, session, targetUserId) {
   };
 }
 
+async function removeFriend(env, session, targetUserId) {
+  const ownUserId = normalizeOpaqueId(session.userId || '');
+  const targetId = normalizeOpaqueId(targetUserId);
+  if (!targetId || targetId === ownUserId) {
+    return { status: 400, body: { ok: false, error: 'Pick another signed-in player.' } };
+  }
+  await ensureSocialTables(env);
+  await env.DB.prepare(
+    'DELETE FROM friendships WHERE user_id = ?1 AND friend_user_id = ?2'
+  ).bind(ownUserId, targetId).run();
+  await env.DB.prepare(
+    'DELETE FROM party_invites WHERE inviter_user_id = ?1 AND invitee_user_id = ?2'
+  ).bind(ownUserId, targetId).run();
+  await env.DB.prepare(
+    'DELETE FROM party_invites WHERE inviter_user_id = ?1 AND invitee_user_id = ?2'
+  ).bind(targetId, ownUserId).run();
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      friends: await buildFriendsPayload(env, session)
+    }
+  };
+}
+
 async function inviteFriend(env, session, targetUserId) {
   const ownUserId = normalizeOpaqueId(session.userId || '');
   const targetId = normalizeOpaqueId(targetUserId);
@@ -347,6 +372,8 @@ export async function handleFriends(env, request) {
   let result = null;
   if (action === 'add') {
     result = await addFriend(env, session, body.targetUserId || body.targetId || '');
+  } else if (action === 'remove') {
+    result = await removeFriend(env, session, body.targetUserId || body.targetId || '');
   } else if (action === 'invite') {
     result = await inviteFriend(env, session, body.targetUserId || '');
   } else if (action === 'join') {

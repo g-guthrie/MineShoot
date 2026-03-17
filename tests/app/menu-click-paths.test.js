@@ -138,17 +138,25 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
 
   const ids = [
     ['div', 'menu-header'],
+    ['div', 'menu-inline-toast'],
     ['div', 'menu-feedback'],
     ['button', 'menu-return-btn'],
     ['button', 'menu-party-id-btn'],
     ['span', 'menu-party-id-label'],
     ['span', 'menu-party-id-value'],
-    ['button', 'join-party-trigger-btn'],
-    ['div', 'join-party-popover'],
-    ['div', 'join-party-recent'],
     ['input', 'party-id-input'],
-    ['button', 'join-party-btn'],
-    ['button', 'open-party-btn'],
+    ['button', 'invite-friend-btn'],
+    ['button', 'join-friend-btn'],
+    ['div', 'social-hero-status'],
+    ['div', 'social-direct-invite-banner'],
+    ['div', 'social-direct-invite-copy'],
+    ['button', 'social-direct-invite-accept-btn'],
+    ['button', 'social-direct-invite-dismiss-btn'],
+    ['div', 'menu-social-layout'],
+    ['div', 'menu-social-friends-pane'],
+    ['div', 'social-friends-list'],
+    ['input', 'room-code-input'],
+    ['button', 'join-room-btn'],
     ['button', 'party-back-btn'],
     ['button', 'account-toggle-btn'],
     ['button', 'utility-toggle-btn'],
@@ -165,7 +173,14 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['div', 'mode-buttons'],
     ['button', 'mode-local-multiplayer-btn'],
     ['section', 'menu-screen-mode'],
-    ['section', 'menu-screen-party'],
+    ['section', 'menu-screen-room'],
+    ['div', 'menu-main-heroes'],
+    ['div', 'menu-home-hero'],
+    ['div', 'menu-social-hero'],
+    ['div', 'menu-party-hero'],
+    ['div', 'party-hero-members'],
+    ['div', 'menu-social-actions'],
+    ['div', 'menu-party-actions'],
     ['h1', 'mode-screen-title'],
     ['button', 'primary-launch-btn'],
     ['button', 'game-modes-toggle-btn'],
@@ -194,12 +209,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'party-join-lock-btn'],
     ['span', 'party-join-lock-icon'],
     ['span', 'party-join-lock-note'],
-    ['button', 'leave-party-btn'],
-    ['div', 'social-party-members'],
+    ['button', 'party-hero-lock-btn'],
+    ['button', 'party-hero-leave-btn'],
     ['div', 'private-room-status'],
-    ['button', 'create-private-room-btn'],
-    ['input', 'private-room-input'],
-    ['button', 'join-private-room-btn'],
     ['div', 'room-share-panel'],
     ['div', 'room-share-code'],
     ['button', 'copy-room-code-btn'],
@@ -208,30 +220,28 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'private-room-mode-ffa-btn'],
     ['button', 'private-room-mode-tdm-btn'],
     ['button', 'private-room-mode-lms-btn'],
+    ['button', 'private-room-teams-2-btn'],
+    ['button', 'private-room-teams-3-btn'],
+    ['button', 'private-room-teams-4-btn'],
     ['button', 'private-room-randomize-btn'],
     ['button', 'private-room-start-btn'],
     ['button', 'private-room-enter-btn'],
     ['div', 'private-room-unassigned'],
     ['div', 'private-room-team-alpha'],
     ['div', 'private-room-team-bravo'],
-    ['input', 'friend-id-input'],
-    ['button', 'add-friend-btn'],
-    ['div', 'friends-status'],
-    ['button', 'friends-filter-joinable-btn'],
-    ['button', 'friends-filter-online-btn'],
-    ['button', 'friends-filter-all-btn'],
-    ['div', 'friends-preview'],
-    ['button', 'refresh-friends-btn']
+    ['div', 'private-room-team-charlie-wrap'],
+    ['div', 'private-room-team-delta-wrap'],
+    ['div', 'private-room-team-charlie'],
+    ['div', 'private-room-team-delta']
   ];
 
   for (const [tag, id] of ids) {
     documentObj.elements[id] = new FakeElement(tag, id, documentObj);
   }
 
-  documentObj.elements['join-party-popover'].hidden = true;
   documentObj.elements['utility-overlay'].hidden = true;
   documentObj.elements['leave-confirm-overlay'].hidden = true;
-  documentObj.elements['menu-screen-party'].hidden = true;
+  documentObj.elements['menu-screen-room'].hidden = true;
   documentObj.elements['play-mode-options'].hidden = true;
   documentObj.elements['room-share-panel'].hidden = true;
   documentObj.elements['private-room-view'].hidden = true;
@@ -239,14 +249,23 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   documentObj.elements['menu-session-actions'].hidden = true;
   documentObj.elements['menu-return-btn'].hidden = true;
   documentObj.elements['party-back-btn'].hidden = true;
+  documentObj.elements['menu-party-hero'].hidden = true;
+  documentObj.elements['social-direct-invite-banner'].hidden = true;
+  documentObj.elements['menu-social-friends-pane'].hidden = !loggedIn;
+  documentObj.elements['menu-inline-toast'].hidden = true;
   documentObj.elements['mode-local-multiplayer-btn'].dataset.modeId = 'single_dev_server';
 
   const runPartyActionCalls = [];
+  const friendActionCalls = [];
   const launchCalls = [];
   const matchmakingCalls = [];
   const sessionCallbacks = {};
   const partyState = {
     self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: {
+      incoming: null,
+      outgoing: null
+    },
     party: {
       id: 'pty_alpha',
       leaderId: 'usr_alpha',
@@ -418,6 +437,8 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
           getCapabilities() {
             const room = privateRoomState.room;
             return {
+              hasParty: true,
+              partyMemberCount: partyState.party.memberCount,
               canTogglePartyJoinLock: true,
               partyJoinLocked: !!partyState.party.joinLocked,
               partyJoinLockTitle: 'Toggle party privacy.',
@@ -434,20 +455,52 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
           runPartyAction(action, payload) {
             runPartyActionCalls.push({ action, payload: payload || {} });
             if (action === 'join') {
+              const isAccount = String(payload.targetId || '').startsWith('usr_');
               partyState.party.memberCount = 2;
               partyState.party.members.push({
                 id: payload.targetId,
                 displayName: payload.targetId,
                 isLeader: false,
+                isAccount,
+                accountUserId: isAccount ? String(payload.targetId) : '',
+                username: isAccount ? String(payload.targetId).replace(/^usr_/, '').toUpperCase() : ''
+              });
+              partyState.directInvite.incoming = null;
+              partyState.directInvite.outgoing = null;
+              callbacks.onPartyStateChanged(partyState);
+            } else if (action === 'invite') {
+              partyState.directInvite.outgoing = {
+                actorId: String(payload.targetId || ''),
+                displayName: String(payload.targetId || '').toUpperCase()
+              };
+              callbacks.onPartyStateChanged(partyState);
+            } else if (action === 'accept_invite') {
+              partyState.party.memberCount = 2;
+              partyState.party.members.push({
+                id: payload.targetId,
+                displayName: String(payload.targetId || '').toUpperCase(),
+                isLeader: false,
                 isAccount: false,
                 accountUserId: '',
                 username: ''
               });
+              partyState.directInvite.incoming = null;
+              callbacks.onPartyStateChanged(partyState);
+            } else if (action === 'dismiss_invite') {
+              partyState.directInvite.incoming = null;
+              callbacks.onPartyStateChanged(partyState);
+            } else if (action === 'lock') {
+              partyState.party.joinLocked = !!payload.locked;
+              callbacks.onPartyStateChanged(partyState);
+            } else if (action === 'leave') {
+              partyState.party.memberCount = 1;
+              partyState.party.members = partyState.party.members.slice(0, 1);
               callbacks.onPartyStateChanged(partyState);
             }
             return Promise.resolve(partyState);
           },
-          performFriendAction() {
+          performFriendAction(action, targetUserId) {
+            friendActionCalls.push({ action, targetUserId });
             return Promise.resolve({ friends: friendsState.friends });
           },
           refreshFriendsState() {
@@ -562,9 +615,16 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     elements: documentObj.elements,
     storageMap,
     runPartyActionCalls,
+    friendActionCalls,
     launchCalls,
     matchmakingCalls,
     flush,
+    emitPartyUnavailable(message) {
+      sessionCallbacks.onPartyUnavailable(message);
+    },
+    emitPartyState(nextState) {
+      sessionCallbacks.onPartyStateChanged(nextState || partyState);
+    },
     emitPrivateRoomState() {
       sessionCallbacks.onPrivateRoomStateChanged(privateRoomState);
     },
@@ -579,7 +639,9 @@ test('menu boots on the main screen with play ffa as the default launch action',
   const { elements } = harness;
 
   assert.equal(elements['menu-screen-mode'].hidden, false);
-  assert.equal(elements['menu-screen-party'].hidden, true);
+  assert.equal(elements['menu-social-hero'].hidden, false);
+  assert.equal(elements['menu-party-hero'].hidden, true);
+  assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['loadout-start-btn'].hidden, true);
   assert.equal(elements['primary-launch-btn'].textContent, 'Play FFA');
   assert.equal(elements['play-mode-options'].hidden, true);
@@ -588,6 +650,32 @@ test('menu boots on the main screen with play ffa as the default launch action',
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
   assert.equal(elements['account-toggle-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, false);
+  assert.equal(elements['invite-friend-btn'].hidden, false);
+  assert.equal(elements['join-friend-btn'].hidden, false);
+  assert.equal(elements['menu-social-friends-pane'].hidden, false);
+});
+
+test('main screen markup keeps create room in the header and uses inline social actions', async () => {
+  const html = await fs.readFile(new URL('../../index.html', import.meta.url), 'utf8');
+
+  const headerStart = html.indexOf('<div id="menu-header-leading">');
+  const headerEnd = html.indexOf('<div id="menu-header-actions">', headerStart);
+  const socialStart = html.indexOf('<div id="menu-social-hero" class="menu-panel-shell menu-panel-hero">');
+  const partyHeroStart = html.indexOf('<div id="menu-party-hero"', socialStart);
+  const modeActionsStart = html.indexOf('<div id="mode-screen-actions">', socialStart);
+
+  assert.notEqual(html.indexOf('<div id="menu-main-heroes" class="menu-panel-grid" data-columns="2">'), -1);
+  assert.notEqual(socialStart, -1);
+  assert.equal(html.slice(headerStart, headerEnd).includes('id="continue-loadout-btn"'), true);
+  assert.equal(html.slice(headerStart, headerEnd).includes('ROOM #'), false);
+  assert.equal(html.indexOf('id="party-id-input"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="invite-friend-btn"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="join-friend-btn"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="room-code-input"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="join-room-btn"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="social-add-friend-btn"', socialStart), -1);
+  assert.equal(partyHeroStart > socialStart, true);
+  assert.equal(html.indexOf('id="party-hero-members"', partyHeroStart) < modeActionsStart, true);
 });
 
 test('logged-out home header shows login and guest id together', async () => {
@@ -597,24 +685,163 @@ test('logged-out home header shows login and guest id together', async () => {
   assert.equal(elements['account-toggle-btn'].hidden, false);
   assert.equal(elements['menu-party-id-label'].textContent, 'Guest ID');
   assert.equal(elements['continue-loadout-btn'].hidden, false);
+  assert.equal(elements['menu-social-friends-pane'].hidden, true);
 });
 
-test('join friend opens a popover and joins in place', async () => {
+test('local home routes service unavailable noise to the top feedback strip instead of the social hero', async () => {
+  const harness = await loadHarness({ localEnvironment: true });
+  const { elements } = harness;
+
+  harness.emitPartyUnavailable('PARTY SERVICE UNAVAILABLE. RETRYING...');
+
+  assert.equal(elements['social-hero-status'].hidden, true);
+  assert.equal(elements['social-hero-status'].textContent, '');
+  assert.equal(elements['menu-feedback'].hidden, false);
+  assert.equal(elements['menu-feedback'].textContent, 'Local social backend offline. Start the worker/API server.');
+});
+
+test('logged-in home shows the split social hero with a friends pane', async () => {
   const harness = await loadHarness();
-  const { elements, runPartyActionCalls, storageMap } = harness;
+  const { elements } = harness;
 
-  elements['join-party-trigger-btn'].click();
-  assert.equal(elements['join-party-popover'].hidden, false);
+  assert.equal(elements['menu-social-friends-pane'].hidden, false);
+  assert.equal(elements['social-friends-list'].children.length > 0, true);
+});
 
-  elements['party-id-input'].value = 'friend-123';
-  elements['join-party-btn'].click();
+test('join friend uses the shared social input and joins in place', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  elements['party-id-input'].value = 'usr_bravo';
+  elements['join-friend-btn'].click();
 
   assert.equal(runPartyActionCalls.length, 1);
   assert.equal(runPartyActionCalls[0].action, 'join');
-  assert.equal(runPartyActionCalls[0].payload.targetId, 'friend-123');
+  assert.equal(runPartyActionCalls[0].payload.targetId, 'usr_bravo');
   assert.equal(elements['menu-screen-mode'].hidden, false);
-  assert.equal(elements['menu-screen-party'].hidden, true);
-  assert.match(String(storageMap.get('mayhem.menu.recentJoinIds.v1') || ''), /friend-123/);
+  assert.equal(elements['menu-screen-room'].hidden, true);
+});
+
+test('invite friend uses the shared social input and shows the outgoing status', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  elements['party-id-input'].value = 'friend-123';
+  elements['invite-friend-btn'].click();
+
+  assert.equal(runPartyActionCalls.length, 1);
+  assert.equal(runPartyActionCalls[0].action, 'invite');
+  assert.equal(runPartyActionCalls[0].payload.targetId, 'friend-123');
+  assert.equal(elements['social-hero-status'].textContent, 'Invite pending for FRIEND-123.');
+});
+
+test('direct invite banner accepts and dismisses inline from the social hero', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: {
+      incoming: { actorId: 'usr_bravo', displayName: 'BRAVO' },
+      outgoing: null
+    },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+
+  assert.equal(elements['social-direct-invite-banner'].hidden, false);
+  assert.equal(elements['social-direct-invite-copy'].textContent, 'BRAVO invited you to join.');
+
+  elements['social-direct-invite-dismiss-btn'].click();
+  assert.equal(runPartyActionCalls[0].action, 'dismiss_invite');
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: {
+      incoming: { actorId: 'usr_bravo', displayName: 'BRAVO' },
+      outgoing: null
+    },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+  elements['social-direct-invite-accept-btn'].click();
+  assert.equal(runPartyActionCalls[1].action, 'accept_invite');
+});
+
+test('room invite banner uses the shared invite controls with room-specific actions', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls } = harness;
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: null, outgoing: null },
+    roomInvite: {
+      incoming: {
+        roomId: 'private-room1',
+        roomCode: 'ROOM1',
+        roomMode: 'ffa',
+        roomPhase: 'lobby',
+        inviterActorId: 'usr_bravo',
+        inviterDisplayName: 'BRAVO',
+        createdAt: 1
+      },
+      outgoing: null
+    },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+
+  assert.equal(elements['social-direct-invite-banner'].hidden, false);
+  assert.equal(elements['social-direct-invite-copy'].textContent, 'BRAVO invited you to room ROOM1.');
+  assert.equal(elements['social-direct-invite-accept-btn'].textContent, 'Join Room');
+
+  elements['social-direct-invite-dismiss-btn'].click();
+  assert.equal(runPartyActionCalls[0].action, 'dismiss_room_invite');
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: null, outgoing: null },
+    roomInvite: {
+      incoming: {
+        roomId: 'private-room1',
+        roomCode: 'ROOM1',
+        roomMode: 'ffa',
+        roomPhase: 'lobby',
+        inviterActorId: 'usr_bravo',
+        inviterDisplayName: 'BRAVO',
+        createdAt: 1
+      },
+      outgoing: null
+    },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+  elements['social-direct-invite-accept-btn'].click();
+  assert.equal(runPartyActionCalls[1].action, 'accept_room_invite');
 });
 
 test('game modes reveal below the launch row and the primary launch pill starts the selected mode', async () => {
@@ -636,6 +863,9 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(launchCalls.length, 1);
   assert.equal(launchCalls[0].modeId, 'cloud_multiplayer');
   assert.equal(launchCalls[0].options.gameMode, 'tdm');
+  assert.equal(elements['menu-feedback'].hidden, true);
+  assert.equal(elements['room-access-status'].hidden, false);
+  assert.equal(elements['room-access-status'].textContent, 'Pointer lock denied.');
 });
 
 test('main room action creates a room and opens the party surface', async () => {
@@ -648,12 +878,9 @@ test('main room action creates a room and opens the party surface', async () => 
   await harness.flush();
 
   assert.equal(elements['menu-screen-mode'].hidden, true);
-  assert.equal(elements['menu-screen-party'].hidden, false);
+  assert.equal(elements['menu-screen-room'].hidden, false);
   assert.equal(elements['party-back-btn'].hidden, false);
   assert.equal(elements['private-room-view'].hidden, false);
-  assert.equal(elements['party-room-section'].style.order || '', '');
-  assert.equal(elements['party-current-section'].style.order || '', '');
-  assert.equal(elements['party-friends-section'].style.order || '', '');
 });
 
 test('existing private room changes the room action label to open room', async () => {
@@ -663,13 +890,63 @@ test('existing private room changes the room action label to open room', async (
   harness.emitPrivateRoomState();
   await harness.flush();
 
-  assert.equal(elements['continue-loadout-btn'].textContent, 'Open Room');
+  assert.equal(elements['continue-loadout-btn'].textContent, 'ROOM #ROOM1');
+});
+
+test('party hero appears only after the party grows beyond one member', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  assert.equal(elements['menu-party-hero'].hidden, true);
+
+  elements['party-id-input'].value = 'usr_bravo';
+  elements['join-friend-btn'].click();
+
+  assert.equal(elements['menu-party-hero'].hidden, false);
+  assert.equal(elements['party-hero-members'].children.length > 0, true);
+  assert.equal(elements['menu-main-heroes'].attributes['data-columns'], '3');
+});
+
+test('party hero shows roster actions and leave party', async () => {
+  const harness = await loadHarness();
+  const { elements, runPartyActionCalls, friendActionCalls } = harness;
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: null, outgoing: null },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 2,
+      members: [
+        { id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' },
+        { id: 'usr_charlie', displayName: 'usr_charlie', isLeader: false, isAccount: true, accountUserId: 'usr_charlie', username: 'CHARLIE' }
+      ]
+    }
+  });
+  const memberCard = elements['party-hero-members'].children[1];
+  const memberBtn = memberCard.children[0];
+  memberBtn.click();
+  const expandedCard = elements['party-hero-members'].children[1];
+  const actions = expandedCard.children[1];
+  actions.children[0].click();
+  assert.equal(friendActionCalls[0].action, 'add');
+
+  actions.children[1].click();
+  elements['party-hero-leave-btn'].click();
+
+  assert.equal(runPartyActionCalls[0].action, 'kick');
+  assert.equal(runPartyActionCalls[1].action, 'leave');
 });
 
 test('resumable runtime uses the session rail as the only return path', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['party-id-input'].value = 'usr_bravo';
+  elements['join-friend-btn'].click();
   harness.emitSessionState({
     runtimeReady: true,
     inMatch: false,
@@ -679,7 +956,9 @@ test('resumable runtime uses the session rail as the only return path', async ()
     launchContext: {}
   });
 
-  assert.equal(elements['menu-screen-mode'].hidden, true);
+  assert.equal(elements['menu-screen-mode'].hidden, false);
+  assert.equal(elements['menu-home-hero'].hidden, true);
+  assert.equal(elements['menu-party-hero'].hidden, false);
   assert.equal(elements['menu-session-actions'].hidden, false);
   assert.equal(elements['menu-session-status'].textContent, 'Resume Match');
   assert.equal(elements['menu-session-kd'].textContent, 'Change loadout or return to the match.');
@@ -690,7 +969,8 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   const harness = await loadHarness();
   const { elements } = harness;
 
-  elements['open-party-btn'].click();
+  elements['party-id-input'].value = 'friend-123';
+  elements['join-friend-btn'].click();
   harness.emitSessionState({
     runtimeReady: true,
     inMatch: false,
@@ -700,16 +980,14 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
     launchContext: {}
   });
 
-  assert.equal(elements['menu-screen-mode'].hidden, true);
-  assert.equal(elements['menu-screen-party'].hidden, false);
+  assert.equal(elements['menu-screen-mode'].hidden, false);
+  assert.equal(elements['menu-home-hero'].hidden, true);
+  assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['menu-session-actions'].hidden, false);
   assert.equal(elements['menu-session-status'].textContent, 'Paused');
   assert.equal(elements['menu-return-btn'].hidden, true);
-  assert.equal(elements['open-party-btn'].hidden, false);
+  assert.equal(elements['menu-party-hero'].hidden, false);
   assert.equal(elements['party-back-btn'].hidden, true);
-
-  elements['open-party-btn'].click();
-  assert.equal(elements['menu-screen-party'].hidden, true);
 });
 
 test('paused escape keeps focus on the pause rail instead of trying to resume directly', async () => {
@@ -737,14 +1015,15 @@ test('paused escape keeps focus on the pause rail instead of trying to resume di
   assert.equal(elements['menu-session-actions'].hidden, false);
 });
 
-test('party page outside pause reduces the left header to back and id', async () => {
+test('room screen outside pause reduces the left header to back and id', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
-  elements['open-party-btn'].click();
+  harness.emitPrivateRoomState();
+  await harness.flush();
+  elements['continue-loadout-btn'].click();
 
   assert.equal(elements['party-back-btn'].hidden, false);
-  assert.equal(elements['join-party-trigger-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, true);
-  assert.equal(elements['open-party-btn'].hidden, true);
+  assert.equal(elements['menu-screen-room'].hidden, false);
 });

@@ -27,6 +27,12 @@
     var ENEMY_HEADSHOT_NEAR_RANGE = enemyTuning.headshotNearRange;
     var ENEMY_HEADSHOT_MID_RANGE = enemyTuning.headshotMidRange;
     var DEFAULT_WALLHACK_RADIUS = enemyTuning.defaultWallhackRadius;
+    var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
+    var ENEMY_HP_DEFAULT = Number(entityConstants.ENEMY_HP || 360);
+    var ENEMY_ARMOR_DEFAULT = Number(entityConstants.ENEMY_ARMOR || 90);
+    var ENEMY_ARMOR_REGEN_DELAY = Number((globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.getSurvivabilityTuning
+        ? (globalThis.__MAYHEM_RUNTIME.GameShared.getSurvivabilityTuning() || {}).armorRegenDelaySec
+        : 8.0) || 8.0);
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -145,10 +151,10 @@
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
             actorVisual: actorVisual,
-            hp: 500,
-            maxHp: 500,
-            armor: 100,
-            armorMax: 100,
+            hp: ENEMY_HP_DEFAULT,
+            maxHp: ENEMY_HP_DEFAULT,
+            armor: ENEMY_ARMOR_DEFAULT,
+            armorMax: ENEMY_ARMOR_DEFAULT,
             alive: true,
             index: index,
             localMatchId: localMatchId,
@@ -602,7 +608,7 @@
             result = sharedDamageMod.applyDamage(enemy, damage);
         } else {
             var incoming = Math.max(1, Math.round(damage));
-            enemy.armorRegenDelay = 6.0;
+            enemy.armorRegenDelay = ENEMY_ARMOR_REGEN_DELAY;
             if (enemy.armor > 0) {
                 var absorbed = Math.min(enemy.armor, incoming);
                 enemy.armor -= absorbed;

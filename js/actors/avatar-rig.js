@@ -185,38 +185,276 @@
         }
     }
 
-    function getReloadPoseForWeapon(weaponId, reloadPct) {
-        var t = clamp01(reloadPct);
-        var reach = Math.sin(t * Math.PI);
-        var wiggle = Math.sin(t * Math.PI * 5) * reach;
-        var longGun = weaponId === 'rifle' || weaponId === 'machinegun' || weaponId === 'shotgun' || weaponId === 'sniper';
-        var supportBias = longGun ? 1 : 0;
+    function smoothstep(value) {
+        var t = clamp01(value);
+        return t * t * (3 - (2 * t));
+    }
 
+    function lerpNumber(a, b, t) {
+        return Number(a || 0) + ((Number(b || 0) - Number(a || 0)) * clamp01(t));
+    }
+
+    function mixReloadPose(a, b, t) {
+        var from = a || {};
+        var to = b || {};
         return {
-            // Restore the broader support-hand sweep from the older runtime so
-            // reloads read clearly in multiplayer instead of barely twitching.
-            armX: 0.9 + (reach * (longGun ? 0.42 : 0.3)) + (wiggle * (longGun ? 0.08 : 0.05)),
-            armY: -0.14 - (reach * (0.18 + (supportBias * 0.06))),
-            armZ: -0.28 - (reach * (0.22 + (supportBias * 0.1))) - (wiggle * 0.05),
-            palmX: LEFT_PALM_NEUTRAL.x - 0.03 - (supportBias * 0.02),
-            palmY: LEFT_PALM_NEUTRAL.y + (reach * 0.18),
-            palmZ: LEFT_PALM_NEUTRAL.z - 0.14 - (supportBias * 0.05),
-            gunYaw: wiggle * 0.012,
-            gunRoll: wiggle * 0.02,
-            rightArmX: reach * 0.05,
-            targetOffsetX: longGun ? -0.05 : -0.02,
-            targetOffsetY: 0.05 + (reach * (longGun ? 0.08 : 0.05)),
-            targetOffsetZ: (longGun ? 0.2 : 0.11) + (wiggle * 0.04),
-            aimX: longGun ? 0.12 : 0.08,
-            aimY: longGun ? -0.06 : -0.04,
-            aimZ: longGun ? -0.05 : -0.03
+            armX: lerpNumber(from.armX, to.armX, t),
+            armY: lerpNumber(from.armY, to.armY, t),
+            armZ: lerpNumber(from.armZ, to.armZ, t),
+            palmX: lerpNumber(from.palmX, to.palmX, t),
+            palmY: lerpNumber(from.palmY, to.palmY, t),
+            palmZ: lerpNumber(from.palmZ, to.palmZ, t),
+            palmRotX: lerpNumber(from.palmRotX, to.palmRotX, t),
+            palmRotY: lerpNumber(from.palmRotY, to.palmRotY, t),
+            palmRotZ: lerpNumber(from.palmRotZ, to.palmRotZ, t),
+            gunPitch: lerpNumber(from.gunPitch, to.gunPitch, t),
+            gunYaw: lerpNumber(from.gunYaw, to.gunYaw, t),
+            gunRoll: lerpNumber(from.gunRoll, to.gunRoll, t),
+            rightArmX: lerpNumber(from.rightArmX, to.rightArmX, t),
+            rightArmY: lerpNumber(from.rightArmY, to.rightArmY, t),
+            rightArmZ: lerpNumber(from.rightArmZ, to.rightArmZ, t),
+            rightWristX: lerpNumber(from.rightWristX, to.rightWristX, t),
+            targetOffsetX: lerpNumber(from.targetOffsetX, to.targetOffsetX, t),
+            targetOffsetY: lerpNumber(from.targetOffsetY, to.targetOffsetY, t),
+            targetOffsetZ: lerpNumber(from.targetOffsetZ, to.targetOffsetZ, t),
+            aimX: lerpNumber(from.aimX, to.aimX, t),
+            aimY: lerpNumber(from.aimY, to.aimY, t),
+            aimZ: lerpNumber(from.aimZ, to.aimZ, t),
+            torsoRoll: lerpNumber(from.torsoRoll, to.torsoRoll, t),
+            torsoLeanX: lerpNumber(from.torsoLeanX, to.torsoLeanX, t)
         };
     }
 
-    function applyReloadPose(rig, weaponId, reloadPct, modelRoot) {
+    function reloadPresentationForWeapon(weaponId) {
+        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var presentation = shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+        return presentation && presentation.reload ? presentation.reload : {
+            profileId: 'rifle',
+            raiseEnd: 0.16,
+            manipulateEnd: 0.68
+        };
+    }
+
+    function reloadProfileSpecForWeapon(weaponId) {
+        var reloadPresentation = reloadPresentationForWeapon(weaponId);
+        var profileId = String(reloadPresentation.profileId || 'rifle');
+        if (profileId === 'sidearm') {
+            return {
+                ready: {
+                    armX: 0.04, armY: 0.01, armZ: 0.03,
+                    palmX: -0.02, palmY: -0.8, palmZ: -0.08,
+                    palmRotX: 0.12, palmRotY: -0.04, palmRotZ: -0.12,
+                    targetOffsetX: -0.01, targetOffsetY: 0.03, targetOffsetZ: 0.05,
+                    aimX: 0.06, aimY: -0.04, aimZ: -0.02,
+                    gunPitch: -0.01, gunYaw: 0.02, gunRoll: -0.04
+                },
+                raise: {
+                    armX: 0.1, armY: 0.06, armZ: 0.09,
+                    palmX: -0.03, palmY: -0.72, palmZ: -0.09,
+                    palmRotX: 0.28, palmRotY: -0.12, palmRotZ: -0.28,
+                    targetOffsetX: -0.015, targetOffsetY: 0.05, targetOffsetZ: 0.09,
+                    aimX: 0.07, aimY: -0.03, aimZ: -0.01,
+                    gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.14,
+                    rightArmX: 0.04, rightArmY: -0.02, rightArmZ: 0.03, rightWristX: 0.05,
+                    torsoRoll: 0.03, torsoLeanX: 0.01
+                },
+                manipulate: {
+                    armX: 0.15, armY: 0.11, armZ: 0.13,
+                    palmX: -0.035, palmY: -0.64, palmZ: -0.07,
+                    palmRotX: 0.52, palmRotY: -0.16, palmRotZ: -0.4,
+                    targetOffsetX: -0.02, targetOffsetY: 0.085, targetOffsetZ: 0.12,
+                    aimX: 0.09, aimY: -0.02, aimZ: 0.0,
+                    gunPitch: -0.12, gunYaw: 0.09, gunRoll: -0.22,
+                    rightArmX: 0.08, rightArmY: -0.04, rightArmZ: 0.05, rightWristX: 0.12,
+                    torsoRoll: 0.05, torsoLeanX: 0.02
+                },
+                actionPulse: { gunYaw: -0.025, gunRoll: 0.05, palmRotX: 0.05, targetOffsetZ: 0.015, rightWristX: 0.03 }
+            };
+        }
+        if (profileId === 'lmg') {
+            return {
+                ready: {
+                    armX: 0.05, armY: 0.0, armZ: 0.04,
+                    palmX: -0.03, palmY: -0.82, palmZ: -0.14,
+                    palmRotX: 0.1, palmRotY: -0.03, palmRotZ: -0.1,
+                    targetOffsetX: -0.03, targetOffsetY: 0.03, targetOffsetZ: 0.08,
+                    aimX: 0.09, aimY: -0.05, aimZ: -0.03
+                },
+                raise: {
+                    armX: 0.1, armY: 0.04, armZ: 0.11,
+                    palmX: -0.04, palmY: -0.76, palmZ: -0.18,
+                    palmRotX: 0.18, palmRotY: -0.08, palmRotZ: -0.18,
+                    targetOffsetX: -0.04, targetOffsetY: 0.06, targetOffsetZ: 0.12,
+                    aimX: 0.1, aimY: -0.04, aimZ: -0.02,
+                    gunPitch: -0.04, gunYaw: 0.05, gunRoll: -0.1,
+                    rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.04,
+                    torsoRoll: 0.05, torsoLeanX: 0.02
+                },
+                manipulate: {
+                    armX: 0.17, armY: 0.08, armZ: 0.18,
+                    palmX: -0.045, palmY: -0.7, palmZ: -0.2,
+                    palmRotX: 0.28, palmRotY: -0.12, palmRotZ: -0.22,
+                    targetOffsetX: -0.05, targetOffsetY: 0.09, targetOffsetZ: 0.16,
+                    aimX: 0.12, aimY: -0.03, aimZ: -0.01,
+                    gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.18,
+                    rightArmX: 0.07, rightArmY: -0.02, rightArmZ: 0.06, rightWristX: 0.1,
+                    torsoRoll: 0.08, torsoLeanX: 0.03
+                },
+                actionPulse: { gunYaw: -0.015, gunRoll: 0.04, palmRotX: 0.03, targetOffsetZ: 0.012, rightWristX: 0.02 }
+            };
+        }
+        if (profileId === 'shotgun') {
+            return {
+                ready: {
+                    armX: 0.05, armY: 0.0, armZ: 0.05,
+                    palmX: -0.03, palmY: -0.83, palmZ: -0.16,
+                    palmRotX: 0.08, palmRotY: -0.03, palmRotZ: -0.1,
+                    targetOffsetX: -0.03, targetOffsetY: 0.03, targetOffsetZ: 0.1,
+                    aimX: 0.1, aimY: -0.05, aimZ: -0.03
+                },
+                raise: {
+                    armX: 0.12, armY: 0.04, armZ: 0.12,
+                    palmX: -0.04, palmY: -0.76, palmZ: -0.2,
+                    palmRotX: 0.16, palmRotY: -0.08, palmRotZ: -0.16,
+                    targetOffsetX: -0.04, targetOffsetY: 0.06, targetOffsetZ: 0.18,
+                    aimX: 0.1, aimY: -0.04, aimZ: -0.02,
+                    gunPitch: -0.03, gunYaw: 0.04, gunRoll: -0.1,
+                    rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.05,
+                    torsoRoll: 0.05, torsoLeanX: 0.02
+                },
+                manipulate: {
+                    armX: 0.22, armY: 0.06, armZ: 0.21,
+                    palmX: -0.045, palmY: -0.71, palmZ: -0.24,
+                    palmRotX: 0.24, palmRotY: -0.11, palmRotZ: -0.18,
+                    targetOffsetX: -0.06, targetOffsetY: 0.08, targetOffsetZ: 0.24,
+                    aimX: 0.12, aimY: -0.04, aimZ: -0.01,
+                    gunPitch: -0.05, gunYaw: 0.05, gunRoll: -0.16,
+                    rightArmX: 0.06, rightArmY: -0.02, rightArmZ: 0.05, rightWristX: 0.08,
+                    torsoRoll: 0.07, torsoLeanX: 0.02
+                },
+                actionPulse: { gunYaw: 0.01, gunRoll: 0.035, palmRotX: 0.02, targetOffsetZ: 0.03, rightWristX: 0.015 }
+            };
+        }
+        if (profileId === 'precision') {
+            return {
+                ready: {
+                    armX: 0.04, armY: 0.0, armZ: 0.04,
+                    palmX: -0.03, palmY: -0.84, palmZ: -0.14,
+                    palmRotX: 0.09, palmRotY: -0.03, palmRotZ: -0.12,
+                    targetOffsetX: -0.03, targetOffsetY: 0.03, targetOffsetZ: 0.09,
+                    aimX: 0.09, aimY: -0.05, aimZ: -0.03
+                },
+                raise: {
+                    armX: 0.09, armY: 0.05, armZ: 0.09,
+                    palmX: -0.035, palmY: -0.77, palmZ: -0.18,
+                    palmRotX: 0.18, palmRotY: -0.08, palmRotZ: -0.18,
+                    targetOffsetX: -0.04, targetOffsetY: 0.06, targetOffsetZ: 0.14,
+                    aimX: 0.1, aimY: -0.04, aimZ: -0.02,
+                    gunPitch: -0.035, gunYaw: 0.04, gunRoll: -0.08,
+                    rightArmX: 0.03, rightArmY: -0.01, rightArmZ: 0.03, rightWristX: 0.035,
+                    torsoRoll: 0.03, torsoLeanX: 0.015
+                },
+                manipulate: {
+                    armX: 0.16, armY: 0.1, armZ: 0.15,
+                    palmX: -0.04, palmY: -0.7, palmZ: -0.2,
+                    palmRotX: 0.26, palmRotY: -0.1, palmRotZ: -0.2,
+                    targetOffsetX: -0.045, targetOffsetY: 0.095, targetOffsetZ: 0.16,
+                    aimX: 0.11, aimY: -0.03, aimZ: -0.01,
+                    gunPitch: -0.06, gunYaw: 0.05, gunRoll: -0.12,
+                    rightArmX: 0.06, rightArmY: -0.02, rightArmZ: 0.04, rightWristX: 0.08,
+                    torsoRoll: 0.05, torsoLeanX: 0.025
+                },
+                actionPulse: { gunYaw: -0.01, gunRoll: 0.025, palmRotX: 0.02, targetOffsetZ: 0.012, rightWristX: 0.01 }
+            };
+        }
+        return {
+            ready: {
+                armX: 0.05, armY: 0.0, armZ: 0.04,
+                palmX: -0.03, palmY: -0.83, palmZ: -0.15,
+                palmRotX: 0.08, palmRotY: -0.03, palmRotZ: -0.1,
+                targetOffsetX: -0.03, targetOffsetY: 0.03, targetOffsetZ: 0.09,
+                aimX: 0.1, aimY: -0.05, aimZ: -0.03
+            },
+            raise: {
+                armX: 0.12, armY: 0.04, armZ: 0.11,
+                palmX: -0.04, palmY: -0.76, palmZ: -0.18,
+                palmRotX: 0.17, palmRotY: -0.08, palmRotZ: -0.16,
+                targetOffsetX: -0.04, targetOffsetY: 0.06, targetOffsetZ: 0.14,
+                aimX: 0.1, aimY: -0.04, aimZ: -0.02,
+                gunPitch: -0.04, gunYaw: 0.05, gunRoll: -0.1,
+                rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.04,
+                torsoRoll: 0.05, torsoLeanX: 0.02
+            },
+            manipulate: {
+                armX: 0.2, armY: 0.08, armZ: 0.18,
+                palmX: -0.045, palmY: -0.7, palmZ: -0.2,
+                palmRotX: 0.26, palmRotY: -0.11, palmRotZ: -0.2,
+                targetOffsetX: -0.05, targetOffsetY: 0.1, targetOffsetZ: 0.17,
+                aimX: 0.12, aimY: -0.03, aimZ: -0.01,
+                gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.18,
+                rightArmX: 0.07, rightArmY: -0.02, rightArmZ: 0.05, rightWristX: 0.1,
+                torsoRoll: 0.07, torsoLeanX: 0.03
+            },
+            actionPulse: { gunYaw: -0.015, gunRoll: 0.03, palmRotX: 0.025, targetOffsetZ: 0.015, rightWristX: 0.012 }
+        };
+    }
+
+    function resolveReloadTiming(weaponId, reloadPct, reloadPhase, reloadPhasePct) {
+        var reloadPresentation = reloadPresentationForWeapon(weaponId);
+        var t = clamp01(reloadPct);
+        var phase = String(reloadPhase || '');
+        var phasePct = clamp01(reloadPhasePct);
+        if (!phase) {
+            if (t < reloadPresentation.raiseEnd) {
+                phase = 'raise';
+                phasePct = t / Math.max(0.0001, reloadPresentation.raiseEnd);
+            } else if (t < reloadPresentation.manipulateEnd) {
+                phase = 'manipulate';
+                phasePct = (t - reloadPresentation.raiseEnd) / Math.max(0.0001, reloadPresentation.manipulateEnd - reloadPresentation.raiseEnd);
+            } else {
+                phase = 'settle';
+                phasePct = (t - reloadPresentation.manipulateEnd) / Math.max(0.0001, 1 - reloadPresentation.manipulateEnd);
+            }
+        }
+        return {
+            phase: phase,
+            phasePct: clamp01(phasePct),
+            reloadPresentation: reloadPresentation
+        };
+    }
+
+    function getReloadPoseForWeapon(weaponId, reloadPct, reloadPhase, reloadPhasePct) {
+        var profile = reloadProfileSpecForWeapon(weaponId);
+        var timing = resolveReloadTiming(weaponId, reloadPct, reloadPhase, reloadPhasePct);
+        var phase = timing.phase;
+        var phasePct = timing.phasePct;
+        var pose = null;
+        if (phase === 'raise') {
+            pose = mixReloadPose(profile.ready, profile.raise, smoothstep(phasePct));
+        } else if (phase === 'settle') {
+            pose = mixReloadPose(profile.manipulate, profile.ready, smoothstep(phasePct));
+        } else {
+            var enterPct = smoothstep(Math.min(1, phasePct / 0.38));
+            pose = mixReloadPose(profile.raise, profile.manipulate, enterPct);
+            if (phasePct > 0.42) {
+                var pulsePct = smoothstep((phasePct - 0.42) / 0.58);
+                var actionPulse = Math.sin(pulsePct * Math.PI);
+                pose.gunYaw += actionPulse * Number(profile.actionPulse && profile.actionPulse.gunYaw || 0);
+                pose.gunRoll += actionPulse * Number(profile.actionPulse && profile.actionPulse.gunRoll || 0);
+                pose.palmRotX += actionPulse * Number(profile.actionPulse && profile.actionPulse.palmRotX || 0);
+                pose.targetOffsetZ += actionPulse * Number(profile.actionPulse && profile.actionPulse.targetOffsetZ || 0);
+                pose.rightWristX += actionPulse * Number(profile.actionPulse && profile.actionPulse.rightWristX || 0);
+            }
+        }
+        pose.phase = phase;
+        pose.phasePct = phasePct;
+        return pose;
+    }
+
+    function applyReloadPose(rig, weaponId, reloadPct, modelRoot, reloadPhase, reloadPhasePct) {
         if (!rig || !rig.armL || !rig.gun) return;
 
-        var pose = getReloadPoseForWeapon(weaponId, reloadPct);
+        var pose = getReloadPoseForWeapon(weaponId, reloadPct, reloadPhase, reloadPhasePct);
         applyLeftArmPose(rig, pose);
         if (rig.supportAnchor && modelRoot) {
             var reloadTarget = new THREE.Vector3(
@@ -234,10 +472,20 @@
                 pose.aimZ
             );
         }
+        if (rig.upperBodyPivot) {
+            rig.upperBodyPivot.rotation.x += Number(pose.torsoLeanX || 0);
+            rig.upperBodyPivot.rotation.z += Number(pose.torsoRoll || 0);
+        }
+        rig.gun.rotation.x += Number(pose.gunPitch || 0);
         rig.gun.rotation.y += pose.gunYaw;
         rig.gun.rotation.z += pose.gunRoll;
         if (rig.armR) {
             rig.armR.rotation.x += pose.rightArmX;
+            rig.armR.rotation.y += Number(pose.rightArmY || 0);
+            rig.armR.rotation.z += Number(pose.rightArmZ || 0);
+        }
+        if (rig.palmRight) {
+            rig.palmRight.rotation.x += Number(pose.rightWristX || 0);
         }
     }
 
@@ -605,6 +853,7 @@
                 worldSpeed
             );
             updateUpperBodyLean(rig, targetUpperBodyLean, dt);
+            rig.upperBodyPivot.rotation.z = 0;
             if (worldSpeed > 0.02) {
                 var strideLength = 1.6 + (legAmp * 3.2);
                 rig.gaitPhase += ((worldSpeed * Math.max(0, dt || 0)) / Math.max(0.001, strideLength)) * Math.PI * 2;
@@ -711,7 +960,7 @@
             }
 
             if (animState && animState.reloading && rig.weaponClass !== 'melee') {
-                applyReloadPose(rig, rig.weaponId, animState.reloadPct, rig.upperBodyPivot);
+                applyReloadPose(rig, rig.weaponId, animState.reloadPct, rig.upperBodyPivot, animState.reloadPhase, animState.reloadPhasePct);
             }
         }
 
