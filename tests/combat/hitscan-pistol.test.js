@@ -34,6 +34,7 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
   scene.add(camera);
 
   const runtime = {
+    triggeredActions: [],
     GameShared: {
       gameplayTuning: {
         ...gameplayTuning,
@@ -82,7 +83,14 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
       getMuzzleWorldPosition() { return new THREE.Vector3(0, 1.6, 0); },
       getRotation() { return { yaw: 0, pitch: 0 }; },
       getPosition() { return new THREE.Vector3(0, 1.6, 0); },
-      setAdsEnabled() {}
+      setAdsEnabled() {},
+      triggerAction(action, options) {
+        runtime.triggeredActions.push({
+          action: String(action || ''),
+          options: options || null
+        });
+        return true;
+      }
     }
   };
 
@@ -281,6 +289,56 @@ test('manual reload starts only after the magazine has spent rounds', async () =
 
   assert.equal(harness.GameHitscan.reloadCurrentWeapon(), true);
   assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
+});
+
+test('manual reload notifies the player rig so the reload pose starts immediately', async () => {
+  const harness = await loadHitscanHarness({
+    magazineSize: 3,
+    reloadMs: 900,
+    cooldownMs: 10,
+    pellets: 1,
+    singleHitFromPellets: false,
+    maxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
+    }
+  }, []);
+
+  harness.setNow(1000);
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-1'), true);
+  harness.setNow(1020);
+
+  assert.equal(harness.GameHitscan.reloadCurrentWeapon(), true);
+  assert.equal(harness.runtime.triggeredActions.length, 1);
+  assert.equal(harness.runtime.triggeredActions[0].action, 'reload');
+  assert.equal(harness.runtime.triggeredActions[0].options.duration, 0.9);
+  assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
+});
+
+test('empty-mag auto reload notifies the player rig so the reload pose starts immediately', async () => {
+  const harness = await loadHitscanHarness({
+    magazineSize: 2,
+    reloadMs: 900,
+    cooldownMs: 10,
+    pellets: 1,
+    singleHitFromPellets: false,
+    maxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
+    }
+  }, []);
+
+  harness.setNow(1000);
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-1'), true);
+  harness.setNow(1020);
+  assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-2'), true);
+
+  assert.equal(harness.runtime.triggeredActions.length, 1);
+  assert.equal(harness.runtime.triggeredActions[0].action, 'reload');
+  assert.equal(harness.runtime.triggeredActions[0].options.duration, 0.9);
+  assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
 });
 
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {

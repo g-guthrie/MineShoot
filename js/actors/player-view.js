@@ -99,14 +99,17 @@
         }
 
         function updateAvatarAnimation(dt, speed, state) {
-            if (!state.actorVisual || !state.actorVisual.updateAnimation) return;
+            var animationApi = (state.actorVisual && state.actorVisual.updateAnimation)
+                ? state.actorVisual
+                : ((state.avatarRigApi && state.avatarRigApi.updateAnimation) ? state.avatarRigApi : null);
+            if (!animationApi) return;
             var speedNorm = Math.max(0, Math.min(1.4, speed / state.runSpeed));
             var activeWeaponState = options.getCurrentWeaponState ? options.getCurrentWeaponState() : null;
             var reloadPct = 0;
             if (activeWeaponState && activeWeaponState.reloading && activeWeaponState.reloadMs > 0) {
                 reloadPct = 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)));
             }
-            state.actorVisual.updateAnimation(dt, {
+            animationApi.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: state.sprinting,
                 airborne: !state.isGrounded,

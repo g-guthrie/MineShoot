@@ -167,6 +167,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['section', 'menu-screen-mode'],
     ['section', 'menu-screen-party'],
     ['h1', 'mode-screen-title'],
+    ['button', 'primary-launch-btn'],
+    ['button', 'game-modes-toggle-btn'],
+    ['div', 'play-mode-options'],
     ['button', 'play-mode-ffa-btn'],
     ['button', 'play-mode-tdm-btn'],
     ['button', 'play-mode-lms-btn'],
@@ -186,6 +189,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['section', 'party-current-section'],
     ['section', 'party-room-section'],
     ['section', 'party-friends-section'],
+    ['div', 'party-support-stack'],
     ['div', 'party-status'],
     ['button', 'party-join-lock-btn'],
     ['span', 'party-join-lock-icon'],
@@ -228,6 +232,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   documentObj.elements['utility-overlay'].hidden = true;
   documentObj.elements['leave-confirm-overlay'].hidden = true;
   documentObj.elements['menu-screen-party'].hidden = true;
+  documentObj.elements['play-mode-options'].hidden = true;
   documentObj.elements['room-share-panel'].hidden = true;
   documentObj.elements['private-room-view'].hidden = true;
   documentObj.elements['private-room-enter-btn'].hidden = true;
@@ -569,13 +574,17 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   };
 }
 
-test('menu boots on the main screen with no selected mode and hidden start action', async () => {
+test('menu boots on the main screen with play ffa as the default launch action', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
   assert.equal(elements['menu-screen-mode'].hidden, false);
   assert.equal(elements['menu-screen-party'].hidden, true);
   assert.equal(elements['loadout-start-btn'].hidden, true);
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play FFA');
+  assert.equal(elements['play-mode-options'].hidden, true);
+  assert.equal(elements['room-access-status'].hidden, true);
+  assert.equal(elements['menu-feedback'].hidden, true);
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
   assert.equal(elements['account-toggle-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, false);
@@ -608,13 +617,18 @@ test('join friend opens a popover and joins in place', async () => {
   assert.match(String(storageMap.get('mayhem.menu.recentJoinIds.v1') || ''), /friend-123/);
 });
 
-test('selecting a public mode reveals start match and launches directly from main', async () => {
+test('game modes reveal below the launch row and the primary launch pill starts the selected mode', async () => {
   const harness = await loadHarness();
   const { elements, matchmakingCalls, launchCalls } = harness;
 
+  elements['game-modes-toggle-btn'].click();
+  assert.equal(elements['play-mode-options'].hidden, false);
+
   elements['play-mode-tdm-btn'].click();
-  assert.equal(elements['loadout-start-btn'].hidden, false);
-  elements['loadout-start-btn'].click();
+  assert.equal(elements['play-mode-options'].hidden, true);
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
+
+  elements['primary-launch-btn'].click();
   await harness.flush();
 
   assert.equal(matchmakingCalls.length, 1);
@@ -628,6 +642,7 @@ test('main room action creates a room and opens the party surface', async () => 
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['game-modes-toggle-btn'].click();
   elements['play-mode-lms-btn'].click();
   elements['continue-loadout-btn'].click();
   await harness.flush();
@@ -636,7 +651,9 @@ test('main room action creates a room and opens the party surface', async () => 
   assert.equal(elements['menu-screen-party'].hidden, false);
   assert.equal(elements['party-back-btn'].hidden, false);
   assert.equal(elements['private-room-view'].hidden, false);
-  assert.equal(elements['party-room-section'].style.order, '0');
+  assert.equal(elements['party-room-section'].style.order || '', '');
+  assert.equal(elements['party-current-section'].style.order || '', '');
+  assert.equal(elements['party-friends-section'].style.order || '', '');
 });
 
 test('existing private room changes the room action label to open room', async () => {
@@ -649,7 +666,27 @@ test('existing private room changes the room action label to open room', async (
   assert.equal(elements['continue-loadout-btn'].textContent, 'Open Room');
 });
 
-test('paused runtime hides the main stage, shows the session rail, and keeps party back behavior', async () => {
+test('resumable runtime uses the session rail as the only return path', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'in_match',
+    launchContext: {}
+  });
+
+  assert.equal(elements['menu-screen-mode'].hidden, true);
+  assert.equal(elements['menu-session-actions'].hidden, false);
+  assert.equal(elements['menu-session-status'].textContent, 'Resume Match');
+  assert.equal(elements['menu-session-kd'].textContent, 'Change loadout or return to the match.');
+  assert.equal(elements['menu-return-btn'].hidden, true);
+});
+
+test('paused runtime hides the duplicate header return, shows the session rail, and keeps party back behavior', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
@@ -666,12 +703,38 @@ test('paused runtime hides the main stage, shows the session rail, and keeps par
   assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-screen-party'].hidden, false);
   assert.equal(elements['menu-session-actions'].hidden, false);
-  assert.equal(elements['menu-return-btn'].hidden, false);
+  assert.equal(elements['menu-session-status'].textContent, 'Paused');
+  assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['open-party-btn'].hidden, false);
   assert.equal(elements['party-back-btn'].hidden, true);
 
   elements['open-party-btn'].click();
   assert.equal(elements['menu-screen-party'].hidden, true);
+});
+
+test('paused escape keeps focus on the pause rail instead of trying to resume directly', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  const doc = elements['play-btn'].ownerDocument;
+  doc.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(doc.activeElement, elements['play-btn']);
+  assert.equal(elements['menu-session-actions'].hidden, false);
 });
 
 test('party page outside pause reduces the left header to back and id', async () => {

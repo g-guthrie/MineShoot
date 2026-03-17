@@ -97,6 +97,18 @@
         return '';
     }
 
+    function modePillLabel(modeId) {
+        var mode = normalizeMode(modeId);
+        if (mode === 'tdm') return 'TDM';
+        if (mode === 'lms') return 'LMS';
+        if (mode === 'practice') return 'Practice';
+        return 'FFA';
+    }
+
+    function launchPillLabel(modeId) {
+        return 'Play ' + modePillLabel(modeId);
+    }
+
     function isRoomSeedMode(modeId) {
         var mode = normalizeMode(modeId);
         return mode === 'tdm' || mode === 'lms';
@@ -161,8 +173,9 @@
             joinPopoverOpen: false,
             joinRecent: readRecentJoinTargets(),
             confirmLeaveOpen: false,
+            modeListOpen: false,
             launch: {
-                selectedMode: returnState ? returnState.selectedMode : '',
+                selectedMode: returnState && returnState.selectedMode ? returnState.selectedMode : 'ffa',
                 phase: 'idle',
                 message: '',
                 roomCode: '',
@@ -295,6 +308,9 @@
             screenMain: document.getElementById('menu-screen-mode'),
             screenParty: document.getElementById('menu-screen-party'),
             modeTitle: document.getElementById('mode-screen-title'),
+            primaryLaunchBtn: document.getElementById('primary-launch-btn'),
+            gameModesToggleBtn: document.getElementById('game-modes-toggle-btn'),
+            playModeOptions: document.getElementById('play-mode-options'),
             playModeFfaBtn: document.getElementById('play-mode-ffa-btn'),
             playModeTdmBtn: document.getElementById('play-mode-tdm-btn'),
             playModeLmsBtn: document.getElementById('play-mode-lms-btn'),
@@ -401,6 +417,10 @@
 
         function setLaunchState(patch) {
             patchState({ launch: patch || {} });
+        }
+
+        function setModeListOpen(open) {
+            patchState({ modeListOpen: !!open });
         }
 
         function syncAccountState() {
@@ -772,16 +792,6 @@
             }
             if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = busy() || !caps.canRandomizeTeams;
 
-            if (elements.partyRoomSection) {
-                elements.partyRoomSection.style.order = hasRoom ? '0' : '2';
-            }
-            if (elements.partyCurrentSection) {
-                elements.partyCurrentSection.style.order = hasRoom ? '1' : '0';
-            }
-            if (elements.partyFriendsSection) {
-                elements.partyFriendsSection.style.order = hasRoom ? '2' : '1';
-            }
-
             if (privateRoomViewController && privateRoomViewController.applyState) {
                 privateRoomViewController.applyState(privateRoomState);
             }
@@ -820,12 +830,15 @@
                 detail.canResume &&
                 String(detail.activityState || '') !== 'private_room_lobby'
             );
+            var pausePhase = paused && String(detail.activityState || '') === 'paused'
+                ? 'paused'
+                : (paused ? 'resume' : '');
             setPaused(paused);
             setLaunchState({
                 hasRuntime: !!detail.runtimeReady,
                 canResume: !!detail.canResume,
-                activityState: paused ? 'paused' : String(detail.activityState || 'menu'),
-                phase: detail.awaitingInputCapture ? 'retryable' : (paused ? 'paused' : (detail.inMatch ? 'in_match' : getState().launch.phase))
+                activityState: String(detail.activityState || 'menu'),
+                phase: detail.awaitingInputCapture ? 'retryable' : (pausePhase || (detail.inMatch ? 'in_match' : getState().launch.phase))
             });
             render();
         }
@@ -834,6 +847,7 @@
             var state = getState();
             var launch = state.launch;
             var paused = !!state.paused;
+            var showSessionStrip = paused || launch.phase === 'retryable';
             var hasRoom = !!(state.privateRoom && state.privateRoom.room);
             var caps = capabilities();
             var isBusy = busy();
@@ -844,7 +858,7 @@
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
 
-            if (elements.menuReturnBtn) elements.menuReturnBtn.hidden = headerVariant !== 'pause';
+            if (elements.menuReturnBtn) elements.menuReturnBtn.hidden = headerVariant !== 'pause' || showSessionStrip;
             if (elements.partyBackBtn) elements.partyBackBtn.hidden = headerVariant !== 'party';
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn;
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = false;
@@ -872,6 +886,19 @@
             renderFriends(state);
             renderPrivateRoom(state);
 
+            if (elements.primaryLaunchBtn) {
+                elements.primaryLaunchBtn.textContent = launchPillLabel(selectedMode || 'ffa');
+                elements.primaryLaunchBtn.disabled = isBusy || paused;
+            }
+            if (elements.gameModesToggleBtn) {
+                elements.gameModesToggleBtn.classList.toggle('active', !!state.modeListOpen);
+                elements.gameModesToggleBtn.setAttribute('aria-expanded', state.modeListOpen ? 'true' : 'false');
+                elements.gameModesToggleBtn.disabled = paused;
+            }
+            if (elements.playModeOptions) {
+                elements.playModeOptions.hidden = !state.modeListOpen || state.activeSurface !== 'main' || paused;
+            }
+
             if (elements.playModeFfaBtn) {
                 elements.playModeFfaBtn.classList.toggle('active', selectedMode === 'ffa');
                 elements.playModeFfaBtn.setAttribute('aria-pressed', selectedMode === 'ffa' ? 'true' : 'false');
@@ -890,9 +917,8 @@
             }
 
             if (elements.loadoutStartBtn) {
-                elements.loadoutStartBtn.hidden = !selectedMode || state.activeSurface !== 'main' || paused;
+                elements.loadoutStartBtn.hidden = true;
                 elements.loadoutStartBtn.disabled = isBusy;
-                elements.loadoutStartBtn.textContent = 'Start Match';
             }
             if (elements.roomActionBtn) {
                 elements.roomActionBtn.textContent = hasRoom ? 'Open Room' : 'Create Room';
@@ -908,11 +934,21 @@
             if (elements.screenParty) elements.screenParty.hidden = state.activeSurface !== 'party';
 
             if (elements.menuSessionActions) {
-                var showSessionStrip = paused || launch.phase === 'retryable';
                 elements.menuSessionActions.hidden = !showSessionStrip;
                 if (showSessionStrip) {
                     if (elements.menuSessionStats) elements.menuSessionStats.hidden = false;
-                    if (elements.menuSessionStatus) elements.menuSessionStatus.textContent = paused ? 'Paused' : 'Enter Match';
+                    if (elements.menuSessionStatus) {
+                        elements.menuSessionStatus.textContent = launch.phase === 'retryable'
+                            ? 'Enter Match'
+                            : (launch.phase === 'paused' ? 'Paused' : 'Resume Match');
+                    }
+                    if (elements.menuSessionKd) {
+                        elements.menuSessionKd.textContent = launch.phase === 'retryable'
+                            ? String(launch.message || 'Ready to enter.')
+                            : 'Change loadout or return to the match.';
+                    }
+                } else {
+                    if (elements.menuSessionStatus) elements.menuSessionStatus.textContent = '';
                     if (elements.menuSessionKd) {
                         elements.menuSessionKd.textContent = paused
                             ? 'Change loadout or return to the match.'
@@ -1124,9 +1160,17 @@
                 message: '',
                 error: false
             });
+            setModeListOpen(false);
             render();
         }
 
+        bindClick(elements.primaryLaunchBtn, function () {
+            launchGame(getState().launch.selectedMode || 'ffa');
+        });
+        bindClick(elements.gameModesToggleBtn, function () {
+            setModeListOpen(!getState().modeListOpen);
+            render();
+        });
         bindClick(elements.playModeFfaBtn, function () { selectMode('ffa'); });
         bindClick(elements.playModeTdmBtn, function () { selectMode('tdm'); });
         bindClick(elements.playModeLmsBtn, function () { selectMode('lms'); });
@@ -1328,12 +1372,10 @@
                 return;
             }
             if (getState().paused) {
-                var sessionApi = runtime.GameSession || null;
-                if (sessionApi && sessionApi.resumeGameplay) {
-                    event.__mayhemResumeHandled = true;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    sessionApi.resumeGameplay(event);
+                event.preventDefault();
+                event.stopPropagation();
+                if (elements.playBtn && typeof elements.playBtn.focus === 'function') {
+                    elements.playBtn.focus();
                 }
             }
         });

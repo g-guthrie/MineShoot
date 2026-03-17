@@ -1206,8 +1206,9 @@ export class GlobalArenaRoom extends DurableObject {
     if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
     if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
     if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
-    if (typeof msg.weaponId === 'string' && canEntityUseWeapon(player, msg.weaponId)) player.weaponId = msg.weaponId;
 
+    // Weapon changes are authoritative through explicit equip/reload/fire flows.
+    // Movement input can arrive stale and must not rewind player.weaponId.
     if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
 
     player.inputMode = 'intent';

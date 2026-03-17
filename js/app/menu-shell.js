@@ -43,8 +43,6 @@
 
     function applyBrandingOverrides() {
         document.title = 'Mayhem';
-        var overlayTitle = document.querySelector('#overlay h1');
-        if (overlayTitle) overlayTitle.textContent = 'MAYHEM';
         var docsTitle = document.getElementById('docs-title');
         if (docsTitle && /minecraft fps/i.test(docsTitle.textContent || '')) {
             docsTitle.textContent = String(docsTitle.textContent).replace(/minecraft fps/ig, 'MAYHEM');

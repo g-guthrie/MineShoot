@@ -6,7 +6,7 @@
     'use strict';
 
     var ec = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
-    var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.375, y: 0.844, z: 1.375 };
+    var HEAD = ec.HEAD_HITBOX_SIZE || { x: 1.092, y: 0.669, z: 1.092 };
     var BODY = ec.BODY_HITBOX_SIZE || { x: 2.7, y: 1.525, z: 2.7 };
 
     var HEAD_COLOR_ENEMY = 0xff4444;

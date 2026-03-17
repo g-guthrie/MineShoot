@@ -334,7 +334,7 @@
             title: 'Movement & Camera',
             rows: [
                 { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
-                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Sprinting wins spacing, but ADS and certain ability states will interrupt it.' },
+                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Pressing sprint breaks ADS immediately, and certain ability states can still interrupt the run.' },
                 { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
             ]
         },

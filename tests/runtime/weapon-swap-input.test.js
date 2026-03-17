@@ -83,7 +83,7 @@ test('weapon swap input swallows duplicate same-notch wheel events', async () =>
   dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
   const result = dispatchWheel(harness, 60, { deltaY: 1, deltaMode: 1 });
 
-  assert.equal(result.reason, 'lockout');
+  assert.equal(result.reason, 'switch_lockout');
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
 });
 
@@ -93,15 +93,15 @@ test('weapon swap input swallows opposite-direction wheel events during lockout'
   dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
   const result = dispatchWheel(harness, 60, { deltaY: -1, deltaMode: 1 });
 
-  assert.equal(result.reason, 'lockout');
+  assert.equal(result.reason, 'switch_lockout');
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
 });
 
-test('weapon swap input allows a later wheel event after lockout', async () => {
+test('weapon swap input allows a later wheel event after the one-second switch lockout', async () => {
   const harness = await loadWeaponSwapHarness();
 
   dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
-  dispatchWheel(harness, 200, { deltaY: -1, deltaMode: 1 });
+  dispatchWheel(harness, 1200, { deltaY: -1, deltaMode: 1 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
 });
@@ -123,29 +123,41 @@ test('weapon swap input keeps delayed momentum packets from retriggering', async
   dispatchWheel(harness, 20, { deltaY: 12 });
   const result = dispatchWheel(harness, 230, { deltaY: 12 });
 
-  assert.equal(result.reason, 'blocked');
+  assert.equal(result.reason, 'switch_lockout');
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
 });
 
-test('weapon swap input toggles again after a quiet release packet', async () => {
+test('weapon swap input stays locked for a minimum time even after a quiet release packet', async () => {
   const harness = await loadWeaponSwapHarness();
 
   dispatchWheel(harness, 10, { deltaY: 12 });
   dispatchWheel(harness, 20, { deltaY: 12 });
   dispatchWheel(harness, 55, { deltaY: 2 });
-  dispatchWheel(harness, 70, { deltaY: -12 });
-  dispatchWheel(harness, 80, { deltaY: -12 });
+  const result = dispatchWheel(harness, 70, { deltaY: -12 });
 
-  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
+  assert.equal(result.reason, 'switch_lockout');
+  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
 });
 
-test('weapon swap input recovers after the gesture timeout without a quiet release packet', async () => {
+test('weapon swap input toggles again after quiet release once the one-second switch lockout expires', async () => {
   const harness = await loadWeaponSwapHarness();
 
   dispatchWheel(harness, 10, { deltaY: 12 });
   dispatchWheel(harness, 20, { deltaY: 12 });
-  dispatchWheel(harness, 520, { deltaY: 12 });
-  dispatchWheel(harness, 530, { deltaY: 12 });
+  dispatchWheel(harness, 55, { deltaY: 2 });
+  dispatchWheel(harness, 1100, { deltaY: -12 });
+  dispatchWheel(harness, 1110, { deltaY: -12 });
+
+  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
+});
+
+test('weapon swap input recovers after the one-second switch lockout without a quiet release packet', async () => {
+  const harness = await loadWeaponSwapHarness();
+
+  dispatchWheel(harness, 10, { deltaY: 12 });
+  dispatchWheel(harness, 20, { deltaY: 12 });
+  dispatchWheel(harness, 1100, { deltaY: 12 });
+  dispatchWheel(harness, 1110, { deltaY: 12 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
 });

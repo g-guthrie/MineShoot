@@ -54,6 +54,10 @@ async function loadLobbySessionHarness(options = {}) {
   const intervalCallbacks = new Map();
   const intervalDelays = new Map();
   const requestCalls = [];
+  const partyStatuses = [];
+  const friendsStatuses = [];
+  const privateRoomStatuses = [];
+  const warnCalls = [];
   const document = new FakeDocument();
   const storage = options.storage || createStorage();
   const windowListeners = new Map();
@@ -89,7 +93,11 @@ async function loadLobbySessionHarness(options = {}) {
   const sandbox = {
     Blob,
     URL,
-    console,
+    console: {
+      warn(...args) {
+        warnCalls.push(args);
+      }
+    },
     document,
     navigator: {
       sendBeacon() {
@@ -125,6 +133,9 @@ async function loadLobbySessionHarness(options = {}) {
       },
       requestJson(path) {
         requestCalls.push(String(path || ''));
+        if (typeof options.requestJson === 'function') {
+          return options.requestJson(path);
+        }
         return Promise.resolve({ state: null });
       }
     },
@@ -141,12 +152,25 @@ async function loadLobbySessionHarness(options = {}) {
     },
     getActivityState() {
       return activityState;
+    },
+    setPartyStatus(text, isErr) {
+      partyStatuses.push({ text: String(text || ''), isErr: !!isErr });
+    },
+    setFriendsStatus(text, isErr) {
+      friendsStatuses.push({ text: String(text || ''), isErr: !!isErr });
+    },
+    setPrivateRoomStatus(text, isErr) {
+      privateRoomStatuses.push({ text: String(text || ''), isErr: !!isErr });
     }
   });
 
   return {
     session,
     requestCalls,
+    partyStatuses,
+    friendsStatuses,
+    privateRoomStatuses,
+    warnCalls,
     setActivityState(nextState) {
       activityState = String(nextState || 'menu');
     },
@@ -236,4 +260,33 @@ test('lobby session registers responsive visible-menu polling cadences', async (
     harness.getIntervalDelays().sort((a, b) => a - b),
     [3000, 3000, 15000]
   );
+});
+
+test('lobby session keeps silent background party failures off the visible UI and console', async () => {
+  const harness = await loadLobbySessionHarness({
+    requestJson() {
+      return Promise.reject({ message: 'HTTP 500 at /api/party', status: 500, url: '/api/party' });
+    }
+  });
+  harness.setActivityState('menu');
+
+  await harness.session.refreshPartyState(true);
+
+  assert.equal(harness.partyStatuses.length, 0);
+  assert.equal(harness.warnCalls.length, 0);
+});
+
+test('lobby session still surfaces manual party failures through status and warning hooks', async () => {
+  const harness = await loadLobbySessionHarness({
+    requestJson() {
+      return Promise.reject({ message: 'HTTP 500 at /api/party', status: 500, url: '/api/party' });
+    }
+  });
+  harness.setActivityState('menu');
+
+  await harness.session.refreshPartyState(false);
+
+  assert.equal(harness.partyStatuses.at(-1).isErr, true);
+  assert.match(harness.partyStatuses.at(-1).text, /PARTY SERVICE UNAVAILABLE/i);
+  assert.equal(harness.warnCalls.length, 1);
 });

@@ -333,7 +333,7 @@ test('player combat preserves a recent local multiplayer equip through stale sna
   assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
 });
 
-test('player combat clears multiplayer weapon prediction once the server catches up', async () => {
+test('player combat keeps multiplayer weapon prediction through stale snapshots even after the server catches up once', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
     isPlaying() { return true; },
@@ -360,5 +360,12 @@ test('player combat clears multiplayer weapon prediction once the server catches
     weaponId: 'rifle',
     weaponLoadout: ['rifle', 'sniper']
   }, 1500);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'sniper');
+
+  harness.timeState.now = 3800;
+  harness.GamePlayerCombat.syncWeaponState({
+    weaponId: 'rifle',
+    weaponLoadout: ['rifle', 'sniper']
+  }, 3800);
   assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
 });

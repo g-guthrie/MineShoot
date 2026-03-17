@@ -259,10 +259,9 @@ export function queueAuthoritativeInput(player, msg, deps) {
   if (typeof msg.seq === 'number') {
     player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
   }
-  if (typeof msg.weaponId === 'string' && (!canEntityUseWeapon || canEntityUseWeapon(player, msg.weaponId))) {
-    player.weaponId = msg.weaponId;
-  }
 
+  // Weapon changes are authoritative through explicit equip/reload/fire flows.
+  // Movement input can arrive stale and must not rewind player.weaponId.
   player.inputMode = 'intent';
   player.inputState = player.inputState || (createMovementInputState ? createMovementInputState() : null) || {};
   player.inputState.forward = !!msg.forward;

@@ -149,6 +149,30 @@ test('room runtime keeps latest intent and applies the ack after authoritative m
   assert.equal(player.seq, 7);
 });
 
+test('room runtime input samples do not rewind weapon selection from stale client anim state', () => {
+  const player = {
+    alive: true,
+    weaponId: 'sniper',
+    pendingInputSeq: 0,
+    inputState: {}
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 3,
+    weaponId: 'rifle',
+    forward: true
+  }, {
+    movementLocked: false,
+    canEntityUseWeapon() { return true; },
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(player.weaponId, 'sniper');
+  assert.equal(player.pendingInputSeq, 3);
+  assert.equal(player.inputState.forward, true);
+});
+
 test('room runtime ensures players and simulated fixtures through one boundary', () => {
   const room = makeRoom();
   const player = ensurePlayer(room, 'u1', 'ALPHA', 'abilities', 'actor-a', 'ALPHA', {

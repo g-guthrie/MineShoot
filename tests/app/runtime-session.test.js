@@ -268,6 +268,7 @@ async function loadRuntimeSessionHarness() {
     launchRoomLabel,
     launchEnterBtn,
     document,
+    target,
     window,
     suspendReasons,
     idleWarnings,
@@ -353,12 +354,82 @@ test('networked runtime session toggles out of and back into gameplay with Escap
   assert.equal(harness.playBtn.style.display, 'inline-block');
   assert.equal(harness.backBtn.style.display, 'inline-block');
 
+  harness.document.dispatch('keyup', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  await Promise.resolve();
+
+  assert.equal(harness.session.isPlaying(), false);
+  assert.equal(harness.document.pointerLockElement, null);
+  assert.equal(harness.playBtn.style.display, 'inline-block');
+  assert.equal(harness.backBtn.style.display, 'inline-block');
+
   harness.document.dispatch('keydown', {
     key: 'Escape',
     target: { tagName: 'DIV', isContentEditable: false },
     preventDefault() {},
     stopPropagation() {}
   });
+  await Promise.resolve();
+
+  assert.equal(harness.session.isPlaying(), true);
+  assert.equal(harness.document.pointerLockElement !== null, true);
+  assert.equal(harness.playBtn.style.display, 'none');
+  assert.equal(harness.backBtn.style.display, 'none');
+});
+
+test('networked runtime session requires a fresh Escape press before resuming', async () => {
+  const harness = await loadRuntimeSessionHarness();
+  harness.advanceClock(500);
+
+  await harness.session.enterGameplay({
+    button: 0,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  await Promise.resolve();
+
+  assert.equal(harness.session.isPlaying(), false);
+  assert.equal(harness.document.pointerLockElement, null);
+  assert.equal(harness.playBtn.style.display, 'inline-block');
+  assert.equal(harness.backBtn.style.display, 'inline-block');
+});
+
+test('networked runtime session resumes from the pause rail button', async () => {
+  const harness = await loadRuntimeSessionHarness();
+  harness.advanceClock(500);
+
+  await harness.session.enterGameplay({
+    button: 0,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.playBtn.dispatch('click');
   await Promise.resolve();
 
   assert.equal(harness.session.isPlaying(), true);

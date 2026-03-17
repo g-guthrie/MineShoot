@@ -15,6 +15,12 @@ class FakeDocument {
     this.listeners.set(key, list);
   }
 
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    this.listeners.set(key, list.filter((entry) => entry !== handler));
+  }
+
   getElementById() {
     return null;
   }
@@ -37,6 +43,12 @@ class FakeWindow {
     const list = this.listeners.get(key) || [];
     list.push(handler);
     this.listeners.set(key, list);
+  }
+
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    this.listeners.set(key, list.filter((entry) => entry !== handler));
   }
 
   dispatch(type, event) {
@@ -272,17 +284,17 @@ test('gameplay controls ignore opposite-direction mouse-wheel input during the n
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }]);
 });
 
-test('gameplay controls let the mouse wheel toggle again after the lockout expires', async () => {
+test('gameplay controls let the mouse wheel toggle again after the one-second switch lockout expires', async () => {
   const harness = await loadControlsHarness();
 
   dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
-  dispatchWheel(harness, 200, { deltaY: -1, deltaMode: 1 });
+  dispatchWheel(harness, 1200, { deltaY: -1, deltaMode: 1 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }, { id: 'rifle' }]);
 });
 
-test('gameplay controls toggle weapons again after a touchpad burst settles back to near-zero', async () => {
+test('gameplay controls keep swipe bursts locked briefly even after a quiet release packet', async () => {
   const harness = await loadControlsHarness();
 
   dispatchWheel(harness, 10, { deltaY: 10 });
@@ -291,7 +303,21 @@ test('gameplay controls toggle weapons again after a touchpad burst settles back
   dispatchWheel(harness, 40, { deltaY: 10 });
   dispatchWheel(harness, 55, { deltaY: 2 });
   dispatchWheel(harness, 70, { deltaY: 12 });
-  dispatchWheel(harness, 80, { deltaY: 12 });
+
+  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
+  assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }]);
+});
+
+test('gameplay controls toggle weapons again after quiet release once the one-second switch lockout expires', async () => {
+  const harness = await loadControlsHarness();
+
+  dispatchWheel(harness, 10, { deltaY: 10 });
+  dispatchWheel(harness, 20, { deltaY: 10 });
+  dispatchWheel(harness, 30, { deltaY: 10 });
+  dispatchWheel(harness, 40, { deltaY: 10 });
+  dispatchWheel(harness, 55, { deltaY: 2 });
+  dispatchWheel(harness, 1100, { deltaY: 12 });
+  dispatchWheel(harness, 1110, { deltaY: 12 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }, { id: 'rifle' }]);
@@ -309,26 +335,26 @@ test('gameplay controls keep delayed touchpad momentum from retriggering weapon 
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }]);
 });
 
-test('gameplay controls toggle weapons again after the swipe settles even if the sign flips', async () => {
+test('gameplay controls toggle weapons again after the one-second switch lockout expires even if the sign flips', async () => {
   const harness = await loadControlsHarness();
 
   dispatchWheel(harness, 10, { deltaY: 12 });
   dispatchWheel(harness, 20, { deltaY: 12 });
   dispatchWheel(harness, 55, { deltaY: 2 });
-  dispatchWheel(harness, 70, { deltaY: -12 });
-  dispatchWheel(harness, 80, { deltaY: -12 });
+  dispatchWheel(harness, 1100, { deltaY: -12 });
+  dispatchWheel(harness, 1110, { deltaY: -12 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }, { id: 'rifle' }]);
 });
 
-test('gameplay controls recover after a long pause even when the device never sends a quiet release packet', async () => {
+test('gameplay controls recover after the one-second switch lockout even when the device never sends a quiet release packet', async () => {
   const harness = await loadControlsHarness();
 
   dispatchWheel(harness, 10, { deltaY: 12 });
   dispatchWheel(harness, 20, { deltaY: 12 });
-  dispatchWheel(harness, 520, { deltaY: 12 });
-  dispatchWheel(harness, 530, { deltaY: 12 });
+  dispatchWheel(harness, 1100, { deltaY: 12 });
+  dispatchWheel(harness, 1110, { deltaY: 12 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }, { id: 'rifle' }]);
@@ -379,6 +405,16 @@ test('gameplay controls expose a test handle that can force input capture and re
   assert.equal(handle.readState().inputCaptureOverride, true);
 });
 
+test('gameplay controls unbind removes the wheel listener so relaunches do not stack toggles', async () => {
+  const harness = await loadControlsHarness();
+
+  harness.controls.unbind();
+  dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
+
+  assert.deepEqual(harness.calls.toggleWeaponCalls, []);
+  assert.deepEqual(harness.calls.appliedWeapons, []);
+});
+
 test('gameplay controls clear wheel burst state when transient input is released', async () => {
   const harness = await loadControlsHarness();
 
@@ -388,7 +424,7 @@ test('gameplay controls clear wheel burst state when transient input is released
   harness.controls.releaseTransientInput();
 
   dispatchWheel(harness, 30, { deltaY: 12 });
-  dispatchWheel(harness, 40, { deltaY: 12 });
+  dispatchWheel(harness, 1040, { deltaY: 12 });
 
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'sniper' }, { id: 'rifle' }]);

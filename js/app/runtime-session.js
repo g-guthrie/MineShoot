@@ -82,6 +82,7 @@
         var overlayEl = document.getElementById('overlay');
         var isPlaying = false;
         var pendingInputCapture = false;
+        var escapeResumeReady = false;
         var launchContext = cloneLaunchContext(null);
         var lastHandledMatchEndAt = 0;
         var listenersBound = false;
@@ -156,6 +157,7 @@
             pauseState.active = false;
             pauseState.reason = '';
             pauseState.triggeredAt = 0;
+            escapeResumeReady = false;
         }
 
         function focusElement(target) {
@@ -219,6 +221,7 @@
             pauseState.reason = String(reason || 'pause');
             pauseState.triggeredAt = Date.now();
             pendingInputCapture = false;
+            escapeResumeReady = false;
             clearIdleWarning();
             setMenuButtonsVisible(false, true);
         }
@@ -298,11 +301,23 @@
         }
 
         function shouldResumeFromEscape(event) {
-            if (!event || event.key !== 'Escape') return false;
+            if (!event || event.key !== 'Escape' || event.type !== 'keydown') return false;
             if (event.__mayhemResumeHandled) return false;
             if (event.repeat) return false;
             if (editableTarget(event.target)) return false;
             if (document.pointerLockElement) return false;
+            if (pendingInputCapture) return false;
+            if (!canResumeGameplay()) return false;
+            if (escapeModalOpen()) return false;
+            if (!escapeResumeReady) return false;
+            return true;
+        }
+
+        function shouldArmEscapeResume(event) {
+            if (!event || event.key !== 'Escape' || event.type !== 'keyup') return false;
+            if (editableTarget(event.target)) return false;
+            if (document.pointerLockElement) return false;
+            if (pendingInputCapture) return false;
             if (!canResumeGameplay()) return false;
             if (escapeModalOpen()) return false;
             return true;
@@ -389,6 +404,16 @@
             setResumeButtonsVisible(canResumeGameplay());
             focusResumeControl(canResumeGameplay());
             emitSessionState();
+        }
+
+        function restoreResumablePauseState() {
+            if (overlayEl) overlayEl.style.display = 'flex';
+            isPlaying = false;
+            pendingInputCapture = false;
+            clearIdleMonitor();
+            hideLaunchHandoff();
+            setResumeButtonsVisible(true);
+            focusResumeControl(true);
         }
 
         function hidePostGameFlow() {
@@ -498,8 +523,10 @@
         }
 
         function requestPlayStart(event) {
+            escapeResumeReady = false;
             var now = performance.now();
             var eventType = event && event.type ? String(event.type) : '';
+            var resumeFromPause = !isPlaying && !pendingInputCapture && canResumeGameplay();
             var debouncePointerActivation =
                 eventType === 'click' ||
                 eventType === 'pointerup' ||
@@ -538,36 +565,54 @@
 
             var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
             if (!target) {
-                if (overlayEl) overlayEl.style.display = 'flex';
-                isPlaying = false;
-                pendingInputCapture = true;
-                setResumeButtonsVisible(true);
+                if (resumeFromPause) {
+                    restoreResumablePauseState();
+                } else {
+                    if (overlayEl) overlayEl.style.display = 'flex';
+                    isPlaying = false;
+                    pendingInputCapture = true;
+                    setResumeButtonsVisible(true);
+                }
                 emitSessionState();
-                return Promise.resolve({ ok: true, entered: false, pendingCapture: true });
+                return Promise.resolve({ ok: true, entered: false, pendingCapture: !resumeFromPause });
             }
 
             var requestLock = target.requestPointerLock || target.webkitRequestPointerLock || target.mozRequestPointerLock;
             if (typeof requestLock !== 'function') {
-                if (overlayEl) overlayEl.style.display = 'flex';
-                isPlaying = false;
                 if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock is required for gameplay.', 2200);
-                pendingInputCapture = true;
-                setResumeButtonsVisible(true);
+                if (resumeFromPause) {
+                    restoreResumablePauseState();
+                } else {
+                    if (overlayEl) overlayEl.style.display = 'flex';
+                    isPlaying = false;
+                    pendingInputCapture = true;
+                    setResumeButtonsVisible(true);
+                }
                 emitSessionState();
-                return Promise.resolve({ ok: true, entered: false, pendingCapture: true, error: 'Pointer lock is required for gameplay.' });
+                return Promise.resolve({
+                    ok: true,
+                    entered: false,
+                    pendingCapture: !resumeFromPause,
+                    error: 'Pointer lock is required for gameplay.'
+                });
             }
 
             try {
                 var maybePromise = requestLock.call(target);
                 if (maybePromise && typeof maybePromise.then === 'function' && typeof maybePromise.catch === 'function') {
                     return maybePromise.then(function () {
-                        pendingInputCapture = !(document.pointerLockElement === target);
-                        if (pendingInputCapture) setResumeButtonsVisible(true);
+                        var entered = document.pointerLockElement === target;
+                        if (!entered && resumeFromPause) {
+                            restoreResumablePauseState();
+                        } else {
+                            pendingInputCapture = !entered;
+                            if (pendingInputCapture) setResumeButtonsVisible(true);
+                        }
                         emitSessionState();
                         return {
                             ok: true,
-                            entered: document.pointerLockElement === target,
-                            pendingCapture: !(document.pointerLockElement === target)
+                            entered: entered,
+                            pendingCapture: !entered && !resumeFromPause
                         };
                     }).catch(function () {
                         if (!document.pointerLockElement) {
@@ -575,38 +620,56 @@
                             isPlaying = false;
                             if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock denied. Click PLAY to retry.', 2200);
                         }
-                        pendingInputCapture = true;
-                        setResumeButtonsVisible(true);
+                        if (resumeFromPause) {
+                            restoreResumablePauseState();
+                        } else {
+                            pendingInputCapture = true;
+                            setResumeButtonsVisible(true);
+                        }
                         emitSessionState();
                         return {
                             ok: true,
                             entered: false,
-                            pendingCapture: true,
+                            pendingCapture: !resumeFromPause,
                             error: 'Pointer lock denied.'
                         };
                     });
                 }
-                pendingInputCapture = !(document.pointerLockElement === target);
+                var enteredSync = document.pointerLockElement === target;
+                if (!enteredSync && resumeFromPause) {
+                    restoreResumablePauseState();
+                } else {
+                    pendingInputCapture = !enteredSync;
+                    if (pendingInputCapture) setResumeButtonsVisible(true);
+                }
                 emitSessionState();
                 return Promise.resolve({
                     ok: true,
-                    entered: document.pointerLockElement === target,
-                    pendingCapture: !(document.pointerLockElement === target)
+                    entered: enteredSync,
+                    pendingCapture: !enteredSync && !resumeFromPause
                 });
             } catch (err) {
-                if (overlayEl) overlayEl.style.display = 'flex';
-                isPlaying = false;
                 if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock failed. Click PLAY to retry.', 2200);
-                pendingInputCapture = true;
-                setResumeButtonsVisible(true);
+                if (resumeFromPause) {
+                    restoreResumablePauseState();
+                } else {
+                    if (overlayEl) overlayEl.style.display = 'flex';
+                    isPlaying = false;
+                    pendingInputCapture = true;
+                    setResumeButtonsVisible(true);
+                }
                 emitSessionState();
                 return Promise.resolve({
                     ok: true,
                     entered: false,
-                    pendingCapture: true,
+                    pendingCapture: !resumeFromPause,
                     error: 'Pointer lock failed.'
                 });
             }
+        }
+
+        function triggerResumeGameplay(event) {
+            return requestPlayStart(event);
         }
 
         var api = {
@@ -623,10 +686,10 @@
                 runtime.GameSession = api;
 
                 if (playBtn) {
-                    playBtn.addEventListener('click', requestPlayStart);
-                    playBtn.addEventListener('pointerup', requestPlayStart);
-                    playBtn.addEventListener('mousedown', requestPlayStart);
-                    playBtn.addEventListener('touchend', requestPlayStart, { passive: false });
+                    playBtn.addEventListener('click', triggerResumeGameplay);
+                    playBtn.addEventListener('pointerup', triggerResumeGameplay);
+                    playBtn.addEventListener('mousedown', triggerResumeGameplay);
+                    playBtn.addEventListener('touchend', triggerResumeGameplay, { passive: false });
                 }
 
                 if (backModeBtn) {
@@ -685,7 +748,7 @@
                         if (shouldResumeFromEscape(event)) {
                             event.preventDefault();
                             event.stopPropagation();
-                            api.resumeGameplay(event);
+                            triggerResumeGameplay(event);
                             return;
                         }
                         recordGameplayActivity();
@@ -706,11 +769,16 @@
                 document.addEventListener('mouseup', recordGameplayActivity);
                 document.addEventListener('wheel', recordGameplayActivity);
                 document.addEventListener('touchstart', recordGameplayActivity);
+                document.addEventListener('keyup', function (event) {
+                    if (!shouldArmEscapeResume(event)) return;
+                    escapeResumeReady = true;
+                });
                 window.addEventListener('focus', recordGameplayActivity);
 
                 document.addEventListener('pointerlockchange', function () {
                     var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
                     var lostWhilePlaying = !!isPlaying;
+                    escapeResumeReady = false;
                     if (document.pointerLockElement === target) {
                         pendingInputCapture = false;
                         clearPauseState();
@@ -741,14 +809,20 @@
                 });
 
                 document.addEventListener('pointerlockerror', function () {
+                    escapeResumeReady = false;
                     if (!document.pointerLockElement) {
+                        var resumablePause = !isPlaying && !pendingInputCapture && canResumeGameplay();
                         if (opts.releaseTransientInput) opts.releaseTransientInput();
-                        if (overlayEl) overlayEl.style.display = 'flex';
-                        isPlaying = false;
-                        clearIdleMonitor();
                         if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock error. Click PLAY to retry.', 2200);
-                        pendingInputCapture = true;
-                        setResumeButtonsVisible(true);
+                        if (resumablePause) {
+                            restoreResumablePauseState();
+                        } else {
+                            if (overlayEl) overlayEl.style.display = 'flex';
+                            isPlaying = false;
+                            clearIdleMonitor();
+                            pendingInputCapture = true;
+                            setResumeButtonsVisible(true);
+                        }
                     }
                     emitSessionState();
                 });
@@ -796,7 +870,7 @@
                 });
             },
             resumeGameplay: function (event) {
-                return requestPlayStart(event);
+                return triggerResumeGameplay(event);
             },
             showInputCapturePrompt: function (context) {
                 if (context) launchContext = cloneLaunchContext(context);

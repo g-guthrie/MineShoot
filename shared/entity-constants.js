@@ -67,16 +67,17 @@ var HEAD_BOTTOM_Y = minExtent(AVATAR_HEAD_CENTER_OFFSET, AVATAR_HEAD_SIZE, 'y');
 
 // Tunable combat padding values. Body keeps a fixed vertical span from leg bottom
 // to torso top, while x/z stay square. Head keeps its bottom locked to the head
-// primitive, with separate square padding and top padding.
+// primitive, with separate square padding and top padding before a final linear
+// scale is applied.
 export var BODY_HITBOX_SQUARE_PADDING = 1.2252062288671335;
 export var HEAD_HITBOX_SQUARE_PADDING = 0.8262512027010309;
 export var HEAD_HITBOX_TOP_PADDING = 0.29350880165547055;
 
-export var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.7);
+export var HEAD_HITBOX_LINEAR_SCALE = Math.cbrt(0.5);
 export var HEAD_HITBOX_SIZE = {
-  x: HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING,
-  y: AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING,
-  z: HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING
+  x: (HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE,
+  y: (AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING) * HEAD_HITBOX_LINEAR_SCALE,
+  z: (HEAD_BASE_SQUARE_SIZE + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE
 };
 export var BODY_HITBOX_SIZE = {
   x: BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING,

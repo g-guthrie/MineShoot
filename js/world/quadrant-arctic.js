@@ -152,25 +152,26 @@ import { pointInBounds as pt } from './biome-utils.js';
         var blockW = (pack.side === 'north' || pack.side === 'south') ? 4.8 : 2.6;
         var blockD = (pack.side === 'north' || pack.side === 'south') ? 2.6 : 4.8;
         var primaryBaseW = 1.2;
+        var edgeInset = Math.max(0, Number(pack.edgeInset || 0));
         var centerX = (pack.side === 'east')
-            ? bounds.maxX - (blockW * 0.5)
+            ? bounds.maxX - edgeInset - (blockW * 0.5)
             : (pack.side === 'west')
-                ? bounds.minX + (blockW * 0.5)
+                ? bounds.minX + edgeInset + (blockW * 0.5)
                 : edgeLerp(bounds.minX, bounds.maxX, pack.t);
         var centerZ = (pack.side === 'south')
-            ? bounds.maxZ - (blockD * 0.5)
+            ? bounds.maxZ - edgeInset - (blockD * 0.5)
             : (pack.side === 'north')
-                ? bounds.minZ + (blockD * 0.5)
+                ? bounds.minZ + edgeInset + (blockD * 0.5)
                 : edgeLerp(bounds.minZ, bounds.maxZ, pack.t);
         var primaryX = (pack.side === 'east')
-            ? bounds.maxX - (primaryBaseW * 0.5)
+            ? bounds.maxX - edgeInset - (primaryBaseW * 0.5)
             : (pack.side === 'west')
-                ? bounds.minX + (primaryBaseW * 0.5)
+                ? bounds.minX + edgeInset + (primaryBaseW * 0.5)
                 : centerX;
         var primaryZ = (pack.side === 'south')
-            ? bounds.maxZ - (primaryBaseW * 0.5)
+            ? bounds.maxZ - edgeInset - (primaryBaseW * 0.5)
             : (pack.side === 'north')
-                ? bounds.minZ + (primaryBaseW * 0.5)
+                ? bounds.minZ + edgeInset + (primaryBaseW * 0.5)
                 : centerZ;
         var companions = Array.isArray(pack.companions) ? pack.companions : [];
 
@@ -316,7 +317,8 @@ import { pointInBounds as pt } from './biome-utils.js';
             {
                 label: 'south-east-pack',
                 side: 'south',
-                t: 0.84,
+                t: 0.76,
+                edgeInset: 2.8,
                 primaryH: 4.7,
                 companions: [
                     { along: -1.4, inset: 1.4, h: 3.5 },
@@ -326,7 +328,8 @@ import { pointInBounds as pt } from './biome-utils.js';
             {
                 label: 'south-west-pack',
                 side: 'south',
-                t: 0.18,
+                t: 0.24,
+                edgeInset: 2.8,
                 primaryH: 4.3,
                 companions: [
                     { along: -1.2, inset: 1.4, h: 3.1 },

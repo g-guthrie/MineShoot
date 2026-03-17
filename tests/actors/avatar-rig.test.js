@@ -47,13 +47,13 @@ test('reload pose is available for every firearm and keeps the support hand anch
   for (const weaponId of weaponIds) {
     const pose = avatarRig._test.getReloadPoseForWeapon(weaponId, 0.35);
     assert.ok(pose, weaponId + ' should produce a reload pose');
-    assert.ok(Math.abs(pose.armX) < 0.2, weaponId + ' should not throw the shoulder across the torso');
+    assert.ok(pose.armX > 0.95, weaponId + ' should sweep the support shoulder across the torso for a readable reload');
     assert.ok(pose.targetOffsetZ > 0, weaponId + ' should pull the support hand back toward the receiver');
     assert.notEqual(pose.gunRoll, 0, weaponId + ' should add reload wiggle');
   }
 });
 
-test('reload animation keeps the left shoulder on the weapon side instead of floating across the torso', async () => {
+test('reload animation drives the left shoulder across the torso for a pronounced reload motion', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
 
@@ -67,8 +67,27 @@ test('reload animation keeps the left shoulder on the weapon side instead of flo
     reloadPct: 0.35
   });
 
-  assert.ok(api.rig.armL.position.x < -0.2);
-  assert.ok(api.rig.armL.position.x > -0.8);
+  assert.ok(api.rig.armL.position.x > 0.25);
+  assert.ok(api.rig.armL.position.x < 0.75);
+});
+
+test('reload action trigger applies the reload pose even before replicated reload state arrives', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.triggerAction('reload', { duration: 0.9 });
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    adsActive: false,
+    reloading: false,
+    reloadPct: 0
+  });
+
+  assert.ok(api.rig.armL.position.x > 0.2);
+  assert.ok(api.rig.armL.position.x < 0.8);
 });
 
 test('built-in weapon visuals keep the sniper support anchor tucked under the fore-end', async () => {

@@ -22,6 +22,7 @@
         var armedThrowableType = '';
         var throwableHeldType = '';
         var bound = false;
+        var listenerRemovers = [];
 
         function matchesBinding(actionId, event, fallbackCodes) {
             var bindingsApi = runtime.GameInputBindings || null;
@@ -59,6 +60,15 @@
 
         function setTransientDebug(text, ms) {
             if (opts.setTransientDebug) opts.setTransientDebug(text, ms);
+        }
+
+        function listen(target, type, handler, options) {
+            if (!target || typeof target.addEventListener !== 'function') return;
+            target.addEventListener(type, handler, options);
+            listenerRemovers.push(function () {
+                if (typeof target.removeEventListener !== 'function') return;
+                target.removeEventListener(type, handler, options);
+            });
         }
 
         var weaponSwapInput = runtime.GameWeaponSwapInput && runtime.GameWeaponSwapInput.create
@@ -245,7 +255,7 @@
         }
 
         function bindDocsControls() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 if (editableTarget(e.target)) return;
                 if (matchesBinding('open_manual', e, 'KeyI')) {
                     e.preventDefault();
@@ -264,25 +274,25 @@
         }
 
         function bindShooting() {
-            document.addEventListener('mousedown', function (e) {
+            listen(document, 'mousedown', function (e) {
                 if (e.button !== 0) return;
                 if (!hasInputCapture()) return;
                 triggerHeld = true;
                 if (opts.tryPlayerFire) opts.tryPlayerFire();
             });
 
-            document.addEventListener('mouseup', function (e) {
+            listen(document, 'mouseup', function (e) {
                 if (e.button !== 0) return;
                 triggerHeld = false;
             });
 
-            window.addEventListener('blur', function () {
+            listen(window, 'blur', function () {
                 triggerHeld = false;
             });
         }
 
         function bindWeaponControls() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 var idx = -1;
                 if (matchesBinding('weapon_slot_1', e, 'Digit1')) {
                     idx = 0;
@@ -297,12 +307,12 @@
                 }
             });
 
-            document.addEventListener('wheel', function (e) {
+            listen(document, 'wheel', function (e) {
                 if (!weaponSwapInput || !weaponSwapInput.handleWheel) return;
                 weaponSwapInput.handleWheel(e);
             }, { passive: false });
 
-            window.addEventListener('blur', function () {
+            listen(window, 'blur', function () {
                 if (weaponSwapInput && weaponSwapInput.resetState) {
                     weaponSwapInput.resetState();
                 }
@@ -310,7 +320,7 @@
         }
 
         function bindReloadControls() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (!matchesBinding('reload', e, 'KeyR')) return;
                 if (!hasInputCapture()) return;
@@ -328,7 +338,7 @@
                 soundToggleBtn.textContent = runtime.GameAudio.isMuted() ? 'SOUND: OFF' : 'SOUND: ON';
             }
 
-            soundToggleBtn.addEventListener('click', function (e) {
+            listen(soundToggleBtn, 'click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var muted = runtime.GameAudio.setMuted(!runtime.GameAudio.isMuted());
@@ -340,7 +350,7 @@
         }
 
         function bindThrowableControls() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (!matchesBinding('throwable', e, 'KeyQ')) return;
                 if (!hasInputCapture()) return;
@@ -362,7 +372,7 @@
                 throwableHeldType = selectedType;
             });
 
-            document.addEventListener('keyup', function (e) {
+            listen(document, 'keyup', function (e) {
                 if (!matchesBinding('throwable', e, 'KeyQ')) return;
                 if (!throwableHeldType) return;
                 if (!canUseLocalAction('throwable')) {
@@ -381,7 +391,7 @@
         }
 
         function bindAbilityControls() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (matchesBinding('ability_1', e, 'KeyE')) {
                     triggerAbility(1);
@@ -392,7 +402,7 @@
         }
 
         function bindDebugKeys() {
-            document.addEventListener('keydown', function (e) {
+            listen(document, 'keydown', function (e) {
                 if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
                 var enabled = opts.toggleDebugVisuals ? !!opts.toggleDebugVisuals() : false;
                 setTransientDebug(enabled ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);
@@ -411,6 +421,14 @@
                 bindThrowableControls();
                 bindAbilityControls();
                 bindDebugKeys();
+            },
+            unbind: function () {
+                if (!bound) return;
+                bound = false;
+                while (listenerRemovers.length) {
+                    var remove = listenerRemovers.pop();
+                    if (typeof remove === 'function') remove();
+                }
             },
             clearArmedThrowablePreview: clearArmedThrowablePreview,
             updateArmedThrowablePreview: updateArmedThrowablePreview,

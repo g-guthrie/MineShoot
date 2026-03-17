@@ -195,6 +195,10 @@
             });
         }
 
+        function shouldSurfaceSyncError(options) {
+            return !(options && options.silent);
+        }
+
         function currentAssignedPrivateRoom() {
             return partyState && partyState.self ? partyState.self.privateRoom || null : null;
         }
@@ -337,8 +341,10 @@
             if (ctx.onPartyUnavailable) {
                 ctx.onPartyUnavailable(message, err, options);
             }
-            setPartyStatus(message, true);
-            logSyncError(options.scope || 'party', err);
+            if (shouldSurfaceSyncError(options)) {
+                setPartyStatus(message, true);
+                logSyncError(options.scope || 'party', err);
+            }
         }
 
         function setFriendsUnavailable(err, options) {
@@ -347,8 +353,10 @@
             if (ctx.onFriendsUnavailable) {
                 ctx.onFriendsUnavailable(message, err, options);
             }
-            setFriendsStatus(message, true);
-            logSyncError(options.scope || 'friends', err);
+            if (shouldSurfaceSyncError(options)) {
+                setFriendsStatus(message, true);
+                logSyncError(options.scope || 'friends', err);
+            }
         }
 
         function setPrivateRoomUnavailable(err, options) {
@@ -357,8 +365,10 @@
             if (ctx.onPrivateRoomUnavailable) {
                 ctx.onPrivateRoomUnavailable(message, err, options);
             }
-            setPrivateRoomStatus(message, true);
-            logSyncError(options.scope || 'private-room', err);
+            if (shouldSurfaceSyncError(options)) {
+                setPrivateRoomStatus(message, true);
+                logSyncError(options.scope || 'private-room', err);
+            }
         }
 
         function maybeAutoJoinAssignedPrivateRoom(state) {
@@ -427,7 +437,7 @@
                     if (fallbackState) {
                         applyPartyState(fallbackState);
                     } else {
-                        setPartyUnavailable(err, { scope: 'party-reconcile' });
+                        setPartyUnavailable(err, { scope: 'party-reconcile', silent: !!options.silent });
                     }
                     onPartyIdentityChange();
                     if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true);
@@ -473,7 +483,8 @@
 
             return reconcilePartyState(partyState, {
                 swallowError: !!silent,
-                refreshPrivateRoom: refreshPrivateRoom !== false
+                refreshPrivateRoom: refreshPrivateRoom !== false,
+                silent: !!silent
             })
                 .then(function (state) {
                     if (partyStateAvailability === 'ready') {
@@ -482,7 +493,7 @@
                     return state;
                 })
                 .catch(function (err) {
-                    setPartyUnavailable(err, { scope: silent ? 'party' : 'party-refresh' });
+                    setPartyUnavailable(err, { scope: silent ? 'party' : 'party-refresh', silent: !!silent });
                     return null;
                 });
         }
@@ -539,7 +550,7 @@
                     return state;
                 })
                 .catch(function (err) {
-                    setPrivateRoomUnavailable(err, { scope: silent ? 'private-room' : 'private-room-refresh' });
+                    setPrivateRoomUnavailable(err, { scope: silent ? 'private-room' : 'private-room-refresh', silent: !!silent });
                     return privateRoomState;
                 });
         }
@@ -570,7 +581,7 @@
                     return friendsState;
                 })
                 .catch(function (err) {
-                    setFriendsUnavailable(err, { scope: silent ? 'friends' : 'friends-refresh' });
+                    setFriendsUnavailable(err, { scope: silent ? 'friends' : 'friends-refresh', silent: !!silent });
                     onSocialUpdate();
                     return friendsState;
                 });

@@ -49,8 +49,6 @@
 
         function applyBrandingOverrides() {
             document.title = 'Mayhem';
-            var overlayTitle = document.querySelector('#overlay h1');
-            if (overlayTitle) overlayTitle.textContent = 'MAYHEM';
             var docsTitle = document.getElementById('docs-title');
             if (docsTitle && /minecraft fps/i.test(docsTitle.textContent || '')) {
                 docsTitle.textContent = String(docsTitle.textContent).replace(/minecraft fps/ig, 'MAYHEM');
@@ -594,6 +592,9 @@
                 scene = result.scene;
                 clock = result.clock;
                 camera = result.camera;
+                if (controlsApi && controlsApi !== result.controlsApi && controlsApi.unbind) {
+                    controlsApi.unbind();
+                }
                 controlsApi = result.controlsApi || null;
                 multiplayerMode = !!result.multiplayerMode;
                 runtimeInitialized = true;

@@ -450,6 +450,23 @@ test('player ADS movement slowdown matches the shared authoritative step', async
   assert.equal(harness.player.getAdsState().active, true);
 });
 
+test('pressing sprint clears ADS and restores sprint movement', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.player.setAdsEnabled(true);
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+
+  assert.equal(harness.player.getAdsState().active, false);
+
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.player.getAdsState().active, false);
+});
+
 test('backward jump keeps movement parity and only flips the presentation tilt', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);

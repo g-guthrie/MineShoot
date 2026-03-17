@@ -482,26 +482,45 @@
         return reloadRemainingForWeapon(weapon, now) > 0;
     }
 
+    function notifyReloadStarted(weapon) {
+        if (!weapon || Number(weapon.reloadMs || 0) <= 0) return;
+        var playerApi = globalThis.__MAYHEM_RUNTIME.GamePlayer || null;
+        if (!playerApi || !playerApi.triggerAction) return;
+        playerApi.triggerAction('reload', {
+            duration: Math.max(0.12, Number(weapon.reloadMs || 0) / 1000),
+            weaponId: weapon.id || ''
+        });
+    }
+
     function beginReload(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0 || weapon.reloadMs <= 0) return false;
         var combat = combatRuntime();
         if (combat && combat.beginWeaponReload) {
             var started = !!combat.beginWeaponReload(weapon.id, now);
-            if (started && globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
-                globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
+            if (started) {
+                if (globalThis.__MAYHEM_RUNTIME.GamePlayer && globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled) {
+                    globalThis.__MAYHEM_RUNTIME.GamePlayer.setAdsEnabled(false);
+                }
+                notifyReloadStarted(weapon);
             }
             return started;
         }
         var state = syncWeaponAmmoState(weapon.id, now);
         if (!state || state.reloadUntil > now) return false;
-        return applyReloadState(weapon, state, now);
+        var applied = applyReloadState(weapon, state, now);
+        if (applied) notifyReloadStarted(weapon);
+        return applied;
     }
 
     function consumeAmmoForShot(weapon, now) {
         if (!weapon || weapon.magazineSize <= 0) return;
+        var wasReloading = isReloadingWeapon(weapon, now);
         var combat = combatRuntime();
         if (combat && combat.recordWeaponFire) {
-            combat.recordWeaponFire(weapon.id, now);
+            var postFireState = combat.recordWeaponFire(weapon.id, now);
+            if (!wasReloading && postFireState && postFireState.reloading) {
+                notifyReloadStarted(weapon);
+            }
             return;
         }
         var state = syncWeaponAmmoState(weapon.id, now);
@@ -510,6 +529,9 @@
         state.reloadedFlashUntil = 0;
         if (state.ammoInMag <= 0) {
             beginReload(weapon, now);
+        }
+        if (!wasReloading && Number(state.reloadUntil || 0) > now) {
+            notifyReloadStarted(weapon);
         }
     }
 

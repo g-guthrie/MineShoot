@@ -334,7 +334,9 @@
             return authoritativeId;
         }
         if (authoritativeId && authoritativeId === predictedId) {
-            clearPredictedMultiplayerWeapon();
+            if (predictedMultiplayerWeaponUntil <= wallNow) {
+                clearPredictedMultiplayerWeapon();
+            }
             return predictedId;
         }
         if (predictedMultiplayerWeaponUntil > wallNow) {

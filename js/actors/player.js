@@ -176,6 +176,10 @@
         if (!helper || !helper.create) return null;
         playerView = helper.create({
             getCurrentWeaponState: function () {
+                var combatApi = globalThis.__MAYHEM_RUNTIME.GamePlayerCombat || null;
+                if (combatApi && combatApi.getCurrentWeaponState) {
+                    return combatApi.getCurrentWeaponState();
+                }
                 return globalThis.__MAYHEM_RUNTIME.GameHitscan && globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon
                     ? globalThis.__MAYHEM_RUNTIME.GameHitscan.getCurrentWeapon()
                     : null;
@@ -372,6 +376,7 @@
         if (!view || !view.updateAvatarAnimation) return;
         view.updateAvatarAnimation(dt, speed, {
             actorVisual: actorVisual,
+            avatarRigApi: avatarRigApi,
             runSpeed: RUN_SPEED,
             sprinting: sprinting,
             isGrounded: isGrounded,
@@ -511,7 +516,10 @@
             if (matchesBinding('move_left', e, 'KeyA')) keys.left = true;
             if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = true;
             if (matchesBinding('move_right', e, 'KeyD')) keys.right = true;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = true;
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
+                keys.sprint = true;
+                if (scopeHeld) setAdsEnabled(false);
+            }
             if (matchesBinding('ads_key', e, ['AltLeft', 'AltRight'])) {
                 if (!e.repeat && hasInputCapture()) {
                     e.preventDefault();

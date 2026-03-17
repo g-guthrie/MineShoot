@@ -79,17 +79,17 @@ test('browser wheel path toggles once and swallows duplicate notch events', asyn
   await expect.poll(() => currentWeaponId(page)).toBe('sniper');
 });
 
-test('browser wheel path toggles again after the discrete lockout expires', async ({ page }) => {
+test('browser wheel path toggles again after the one-second switch lockout expires', async ({ page }) => {
   await configureWeaponSwap(page, 'rifle');
 
   await dispatchWheel(page, { deltaY: 1, deltaMode: 1 });
-  await page.waitForTimeout(180);
+  await page.waitForTimeout(1100);
   await dispatchWheel(page, { deltaY: -1, deltaMode: 1 });
 
   await expect.poll(() => currentWeaponId(page)).toBe('rifle');
 });
 
-test('browser pixel bursts toggle once, ignore delayed momentum, and toggle again after quiet release', async ({ page }) => {
+test('browser pixel bursts ignore delayed momentum packets while blocked', async ({ page }) => {
   await configureWeaponSwap(page, 'rifle');
 
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
@@ -99,20 +99,33 @@ test('browser pixel bursts toggle once, ignore delayed momentum, and toggle agai
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
 
   await expect.poll(() => currentWeaponId(page)).toBe('sniper');
+});
 
+test('browser pixel bursts stay locked briefly even after a quiet release packet', async ({ page }) => {
+  await configureWeaponSwap(page, 'rifle');
+
+  await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
+  await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
+  await page.waitForTimeout(50);
   await dispatchWheel(page, { deltaY: 2, deltaMode: 0 });
+  await dispatchWheel(page, { deltaY: -12, deltaMode: 0 });
+  await dispatchWheel(page, { deltaY: -12, deltaMode: 0 });
+
+  await expect.poll(() => currentWeaponId(page)).toBe('sniper');
+
+  await page.waitForTimeout(1100);
   await dispatchWheel(page, { deltaY: -12, deltaMode: 0 });
   await dispatchWheel(page, { deltaY: -12, deltaMode: 0 });
 
   await expect.poll(() => currentWeaponId(page)).toBe('rifle');
 });
 
-test('browser pixel bursts recover after the gesture timeout without a quiet release packet', async ({ page }) => {
+test('browser pixel bursts recover after the one-second switch lockout without a quiet release packet', async ({ page }) => {
   await configureWeaponSwap(page, 'rifle');
 
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
-  await page.waitForTimeout(470);
+  await page.waitForTimeout(1100);
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
   await dispatchWheel(page, { deltaY: 12, deltaMode: 0 });
 

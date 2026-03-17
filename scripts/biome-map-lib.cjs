@@ -64,32 +64,34 @@ function sideBasis(side) {
 function borderPackCenter(bounds, pack) {
   const blockW = (pack.side === 'north' || pack.side === 'south') ? 4.8 : 2.6;
   const blockD = (pack.side === 'north' || pack.side === 'south') ? 2.6 : 4.8;
+  const edgeInset = Math.max(0, Number(pack.edgeInset || 0));
   return {
     x: (pack.side === 'east')
-      ? bounds.maxX - (blockW * 0.5)
+      ? bounds.maxX - edgeInset - (blockW * 0.5)
       : (pack.side === 'west')
-        ? bounds.minX + (blockW * 0.5)
+        ? bounds.minX + edgeInset + (blockW * 0.5)
         : edgeLerp(bounds.minX, bounds.maxX, pack.t),
     z: (pack.side === 'south')
-      ? bounds.maxZ - (blockD * 0.5)
+      ? bounds.maxZ - edgeInset - (blockD * 0.5)
       : (pack.side === 'north')
-        ? bounds.minZ + (blockD * 0.5)
+        ? bounds.minZ + edgeInset + (blockD * 0.5)
         : edgeLerp(bounds.minZ, bounds.maxZ, pack.t)
   };
 }
 
 function borderPackPrimary(bounds, pack, baseW = 1.2) {
   const center = borderPackCenter(bounds, pack);
+  const edgeInset = Math.max(0, Number(pack.edgeInset || 0));
   return {
     x: (pack.side === 'east')
-      ? bounds.maxX - (baseW * 0.5)
+      ? bounds.maxX - edgeInset - (baseW * 0.5)
       : (pack.side === 'west')
-        ? bounds.minX + (baseW * 0.5)
+        ? bounds.minX + edgeInset + (baseW * 0.5)
         : center.x,
     z: (pack.side === 'south')
-      ? bounds.maxZ - (baseW * 0.5)
+      ? bounds.maxZ - edgeInset - (baseW * 0.5)
       : (pack.side === 'north')
-        ? bounds.minZ + (baseW * 0.5)
+        ? bounds.minZ + edgeInset + (baseW * 0.5)
         : center.z
   };
 }
@@ -540,7 +542,8 @@ const BIOME_SPECS = {
         {
           label: 'south-east-pack',
           side: 'south',
-          t: 0.84,
+          t: 0.76,
+          edgeInset: 2.8,
           companions: [
             { along: -1.4, inset: 1.4 },
             { along: 1.2, inset: 2.3 }
@@ -549,7 +552,8 @@ const BIOME_SPECS = {
         {
           label: 'south-west-pack',
           side: 'south',
-          t: 0.18,
+          t: 0.24,
+          edgeInset: 2.8,
           companions: [
             { along: -1.2, inset: 1.4 },
             { along: 1.5, inset: 2.4 }

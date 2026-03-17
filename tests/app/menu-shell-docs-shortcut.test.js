@@ -30,8 +30,12 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
   const elements = {
     'open-manual-btn': new FakeElement('button', 'open-manual-btn'),
     'hud-manual-btn': new FakeElement('button', 'hud-manual-btn'),
-    'auth-username': new FakeElement('input', 'auth-username')
+    'auth-username': new FakeElement('input', 'auth-username'),
+    'mode-screen-title': new FakeElement('h1', 'mode-screen-title'),
+    'docs-title': new FakeElement('div', 'docs-title')
   };
+  elements['mode-screen-title'].textContent = 'Drop Into a Match';
+  elements['docs-title'].textContent = 'minecraft fps :: open field manual';
   const documentListeners = new Map();
   const documentObj = {
     readyState: 'complete',
@@ -40,7 +44,8 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
     getElementById(id) {
       return elements[id] || null;
     },
-    querySelector() {
+    querySelector(selector) {
+      if (selector === '#overlay h1') return elements['mode-screen-title'];
       return null;
     },
     addEventListener(type, handler) {
@@ -80,6 +85,8 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
 
   return {
     authUsername: elements['auth-username'],
+    modeScreenTitle: elements['mode-screen-title'],
+    docsTitle: elements['docs-title'],
     dispatchKeydown(event) {
       const list = documentListeners.get('keydown') || [];
       for (let i = 0; i < list.length; i++) {
@@ -122,6 +129,13 @@ test('menu docs shortcut ignores typing in editable fields but still works elsew
 
   assert.equal(toggleCount, 1);
   assert.equal(prevented, true);
+});
+
+test('menu shell branding keeps the home hero heading intact', async () => {
+  const harness = await loadMenuShell(function () {});
+
+  assert.equal(harness.modeScreenTitle.textContent, 'Drop Into a Match');
+  assert.equal(harness.docsTitle.textContent, 'MAYHEM :: open field manual');
 });
 
 test('menu docs shortcut respects a remapped manual key when input bindings are available', async () => {

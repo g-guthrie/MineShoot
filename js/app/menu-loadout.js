@@ -22,9 +22,10 @@
     var state = {
         weaponSlots: defaultWeaponLoadout.slice(0, 2),
         activeWeaponSlot: 0,
+        activeAbilitySlot: 0,
         selectedThrowableId: 'frag',
         activeThrowableCategory: 'grenade',
-        expandedSection: '',
+        loadoutExpanded: true,
         abilityLoadout: {
             slot1: String(defaultAbilityLoadout.slot1 || ''),
             slot2: String(defaultAbilityLoadout.slot2 || '')
@@ -54,23 +55,21 @@
     }
 
     function refreshBindingCopy() {
+        var weaponTitle = document.getElementById('weapon-slot-title');
         var throwableTitle = document.getElementById('throwable-slot-title');
         var throwableNote = document.getElementById('throwable-slot-note');
         var abilityTitle = document.getElementById('ability-slot-title');
-        var abilitySlot1Label = document.getElementById('ability-slot1-label');
-        var abilitySlot2Label = document.getElementById('ability-slot2-label');
         var abilityNote = document.getElementById('ability-slot-note');
 
         var throwableKey = bindingLabel('throwable', 'Q');
         var ability1Key = bindingLabel('ability_1', 'E');
         var ability2Key = bindingLabel('ability_2', 'F');
 
-        if (throwableTitle) throwableTitle.textContent = '> Throwable [' + throwableKey + ']_';
+        if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
+        if (throwableTitle) throwableTitle.textContent = 'Throwables [' + throwableKey + ']';
         if (throwableNote) throwableNote.textContent = 'Hold ' + throwableKey + ' for preview, release to throw.';
-        if (abilityTitle) abilityTitle.textContent = '> Abilities [' + ability1Key + '/' + ability2Key + ']_';
-        if (abilitySlot1Label) abilitySlot1Label.textContent = 'SLOT 1 [' + ability1Key + ']';
-        if (abilitySlot2Label) abilitySlot2Label.textContent = 'SLOT 2 [' + ability2Key + ']';
-        if (abilityNote) abilityNote.textContent = 'Pick slot 1 for ' + ability1Key + ' and slot 2 for ' + ability2Key + '. Switch anytime from this menu.';
+        if (abilityTitle) abilityTitle.textContent = 'Abilities';
+        if (abilityNote) abilityNote.textContent = 'Pick ability 1 for ' + ability1Key + ' and ability 2 for ' + ability2Key + '. Switch anytime from this menu.';
     }
 
     function weaponNameLookup() {
@@ -149,6 +148,35 @@
         }
         state.weaponSlots = next;
         if (state.activeWeaponSlot < 0 || state.activeWeaponSlot > 1) state.activeWeaponSlot = 0;
+        if (state.activeAbilitySlot < 0 || state.activeAbilitySlot > 1) state.activeAbilitySlot = 0;
+    }
+
+    function slotClassName(slotIndex) {
+        return slotIndex === 1 ? 'slot-2' : 'slot-1';
+    }
+
+    function pairOwnerIndex(pair, selectedId) {
+        var target = String(selectedId || '');
+        if (!target) return -1;
+        if (String(pair[0] || '') === target) return 0;
+        if (String(pair[1] || '') === target) return 1;
+        return -1;
+    }
+
+    function assignSharedSlotSelection(pair, activeSlot, selectedId) {
+        var selected = String(selectedId || '');
+        var active = activeSlot === 1 ? 1 : 0;
+        var other = active === 0 ? 1 : 0;
+        var next = [
+            String(pair && pair[0] || ''),
+            String(pair && pair[1] || '')
+        ];
+        if (!selected || next[active] === selected) return null;
+        if (next[other] === selected) {
+            next[other] = next[active];
+        }
+        next[active] = selected;
+        return next;
     }
 
     function currentRuntimeAbilityLoadout() {
@@ -276,18 +304,12 @@
         return { ok: false, message: parts.join(' | ') };
     }
 
-    function isNodeWithin(node, target) {
-        var current = node || null;
-        while (current) {
-            if (current === target) return true;
-            current = current.parentNode || null;
-        }
-        return false;
-    }
-
     function sectionChrome() {
         return {
             root: document.getElementById('menu-loadout-band'),
+            expandedShell: document.getElementById('loadout-expanded-shell'),
+            collapsedRow: document.getElementById('loadout-collapsed-row'),
+            collapseBtn: document.getElementById('loadout-collapse-btn'),
             weaponsSummary: document.getElementById('weapon-slot-summary'),
             weaponsPanel: document.getElementById('weapon-slot-panel'),
             throwableSummary: document.getElementById('throwable-slot-summary'),
@@ -319,23 +341,37 @@
 
     function renderSectionChrome() {
         var chrome = sectionChrome();
-        var next = String(state.expandedSection || '');
-        if (chrome.weaponsSummary) chrome.weaponsSummary.setAttribute('aria-expanded', next === 'weapons' ? 'true' : 'false');
-        if (chrome.throwableSummary) chrome.throwableSummary.setAttribute('aria-expanded', next === 'throwable' ? 'true' : 'false');
-        if (chrome.abilitySummary) chrome.abilitySummary.setAttribute('aria-expanded', next === 'abilities' ? 'true' : 'false');
-        if (chrome.weaponsPanel) chrome.weaponsPanel.hidden = next !== 'weapons';
-        if (chrome.throwablePanel) chrome.throwablePanel.hidden = next !== 'throwable';
-        if (chrome.abilityPanel) chrome.abilityPanel.hidden = next !== 'abilities';
+        if (chrome.root) chrome.root.setAttribute('data-state', state.loadoutExpanded ? 'expanded' : 'collapsed');
+        if (chrome.expandedShell) chrome.expandedShell.hidden = !state.loadoutExpanded;
+        if (chrome.collapsedRow) chrome.collapsedRow.hidden = state.loadoutExpanded;
+        if (chrome.collapseBtn) {
+            chrome.collapseBtn.textContent = state.loadoutExpanded ? 'Collapse' : 'open loadout';
+            chrome.collapseBtn.setAttribute('aria-expanded', state.loadoutExpanded ? 'true' : 'false');
+        }
+        if (chrome.weaponsSummary) chrome.weaponsSummary.setAttribute('aria-expanded', state.loadoutExpanded ? 'true' : 'false');
+        if (chrome.throwableSummary) chrome.throwableSummary.setAttribute('aria-expanded', state.loadoutExpanded ? 'true' : 'false');
+        if (chrome.abilitySummary) chrome.abilitySummary.setAttribute('aria-expanded', state.loadoutExpanded ? 'true' : 'false');
+        if (chrome.weaponsPanel) chrome.weaponsPanel.hidden = false;
+        if (chrome.throwablePanel) chrome.throwablePanel.hidden = false;
+        if (chrome.abilityPanel) chrome.abilityPanel.hidden = false;
+    }
+
+    function setLoadoutExpanded(expanded) {
+        var next = !!expanded;
+        if (state.loadoutExpanded === next) return false;
+        state.loadoutExpanded = next;
+        renderSummaries();
+        renderSectionChrome();
+        return true;
     }
 
     function setExpandedSection(sectionId) {
-        var next = String(sectionId || '');
-        if (next !== 'weapons' && next !== 'throwable' && next !== 'abilities') {
-            next = '';
+        var normalized = String(sectionId || '').trim();
+        if (normalized) {
+            setLoadoutExpanded(true);
+            return;
         }
-        state.expandedSection = next;
-        renderSectionChrome();
-        notifySubscribers();
+        setLoadoutExpanded(false);
     }
 
     function bindSectionChrome() {
@@ -343,26 +379,18 @@
         if (!chrome.root || chrome.root.__loadoutSummaryBound) return;
         chrome.root.__loadoutSummaryBound = true;
 
-        function toggle(sectionId) {
-            return function () {
-                setExpandedSection(state.expandedSection === sectionId ? '' : sectionId);
-            };
+        function expandAll() {
+            setLoadoutExpanded(true);
         }
 
-        if (chrome.weaponsSummary) chrome.weaponsSummary.addEventListener('click', toggle('weapons'));
-        if (chrome.throwableSummary) chrome.throwableSummary.addEventListener('click', toggle('throwable'));
-        if (chrome.abilitySummary) chrome.abilitySummary.addEventListener('click', toggle('abilities'));
-
-        document.addEventListener('click', function (event) {
-            if (!state.expandedSection) return;
-            if (isNodeWithin(event.target, chrome.root)) return;
-            setExpandedSection('');
-        });
-        document.addEventListener('focusin', function (event) {
-            if (!state.expandedSection) return;
-            if (isNodeWithin(event.target, chrome.root)) return;
-            setExpandedSection('');
-        });
+        if (chrome.collapseBtn) {
+            chrome.collapseBtn.addEventListener('click', function () {
+                setLoadoutExpanded(!state.loadoutExpanded);
+            });
+        }
+        if (chrome.weaponsSummary) chrome.weaponsSummary.addEventListener('click', expandAll);
+        if (chrome.throwableSummary) chrome.throwableSummary.addEventListener('click', expandAll);
+        if (chrome.abilitySummary) chrome.abilitySummary.addEventListener('click', expandAll);
 
         renderSummaries();
         renderSectionChrome();
@@ -380,15 +408,9 @@
 
         function assignWeaponToSlot(activeSlot, weaponId) {
             compactWeaponSlots();
-            var selectedId = String(weaponId || '');
-            var active = activeSlot === 1 ? 1 : 0;
-            var other = active === 0 ? 1 : 0;
-            if (!selectedId) return false;
-            if (state.weaponSlots[active] === selectedId) return false;
-            if (state.weaponSlots[other] === selectedId) {
-                state.weaponSlots[other] = '';
-            }
-            state.weaponSlots[active] = selectedId;
+            var next = assignSharedSlotSelection(state.weaponSlots.slice(0, 2), activeSlot, weaponId);
+            if (!next) return false;
+            state.weaponSlots = next;
             return true;
         }
 
@@ -400,6 +422,7 @@
             for (var i = 0; i < slotBtns.length; i++) {
                 var btn = slotBtns[i];
                 var slotId = slots[i] || '';
+                btn.classList.add(slotClassName(i));
                 btn.textContent = 'SLOT ' + (i + 1) + ' :: ' + (slotId ? String(names[slotId] || slotId).toUpperCase() : 'UNEQUIPPED');
                 btn.classList.toggle('active', i === state.activeWeaponSlot);
             }
@@ -409,15 +432,15 @@
                 var weaponId = selectableWeaponIds[n];
                 var choice = document.createElement('button');
                 choice.type = 'button';
-                choice.className = 'weapon-choice-btn';
+                choice.classList.add('weapon-choice-btn');
                 choice.dataset.weaponId = weaponId;
                 choice.textContent = String(names[weaponId] || weaponId).toUpperCase();
-                if (slots[state.activeWeaponSlot] === weaponId) {
-                    choice.classList.add('active');
+                var ownerIndex = pairOwnerIndex(slots, weaponId);
+                if (ownerIndex !== -1) {
+                    choice.classList.add(slotClassName(ownerIndex));
                 }
-                var otherSlot = state.activeWeaponSlot === 0 ? 1 : 0;
-                if (slots[otherSlot] === weaponId) {
-                    choice.classList.add('owned-other');
+                if (ownerIndex === state.activeWeaponSlot) {
+                    choice.classList.add('active');
                 }
                 choice.addEventListener('click', function () {
                     var selectedId = String(this.dataset.weaponId || '');
@@ -481,6 +504,11 @@
 
             choiceGrid.innerHTML = '';
             var activeCat = categories[state.activeThrowableCategory];
+            if (state.activeThrowableCategory) {
+                choiceGrid.setAttribute('data-category-id', state.activeThrowableCategory);
+            } else {
+                choiceGrid.removeAttribute('data-category-id');
+            }
             if (!activeCat) return;
             for (var i = 0; i < activeCat.items.length; i++) {
                 var item = activeCat.items[i];
@@ -488,6 +516,7 @@
                 choice.type = 'button';
                 choice.className = 'throwable-choice-btn';
                 choice.dataset.throwableId = item.id;
+                choice.dataset.categoryId = state.activeThrowableCategory;
                 choice.textContent = String(item.label || item.id || '').toUpperCase();
                 if (state.selectedThrowableId === item.id) choice.classList.add('active');
                 choice.addEventListener('click', function () {
@@ -506,53 +535,84 @@
     }
 
     function bindAbilityUi() {
-        var abilityGrid1 = document.getElementById('ability-slot1-grid');
-        var abilityGrid2 = document.getElementById('ability-slot2-grid');
-        if (!abilityGrid1 || !abilityGrid2) return;
-        if (abilityGrid1.__abilityMenuBound) return;
-        abilityGrid1.__abilityMenuBound = true;
+        var primaryBtn = document.getElementById('ability-slot-primary');
+        var secondaryBtn = document.getElementById('ability-slot-secondary');
+        var choiceGrid = document.getElementById('ability-choice-grid');
+        if (!primaryBtn || !secondaryBtn || !choiceGrid) return;
+        if (choiceGrid.__abilityMenuBound) return;
+        choiceGrid.__abilityMenuBound = true;
 
         var catalog = abilityList();
+        var slotBtns = [primaryBtn, secondaryBtn];
 
         function assignAbilityToSlot(slotIndex, abilityId) {
-            var ownKey = slotIndex === 2 ? 'slot2' : 'slot1';
-            if (String(state.abilityLoadout[ownKey] || '') === String(abilityId || '')) return false;
-            state.abilityLoadout[ownKey] = String(abilityId || '');
+            normalizeAbilityState();
+            var next = assignSharedSlotSelection(
+                [state.abilityLoadout.slot1, state.abilityLoadout.slot2],
+                slotIndex,
+                abilityId
+            );
+            if (!next) return false;
+            state.abilityLoadout = {
+                slot1: next[0],
+                slot2: next[1]
+            };
             normalizeAbilityState();
             return true;
         }
 
-        function appendChoices(slotIndex, gridEl, selectedId, blockedId) {
+        function render() {
+            normalizeAbilityState();
+            var slots = [
+                String(state.abilityLoadout.slot1 || ''),
+                String(state.abilityLoadout.slot2 || '')
+            ];
+
+            for (var i = 0; i < slotBtns.length; i++) {
+                var btn = slotBtns[i];
+                var abilityId = slots[i] || '';
+                btn.classList.add(slotClassName(i));
+                btn.textContent = 'ABILITY ' + (i + 1) + ' :: ' + (abilityId ? abilityName(abilityId).toUpperCase() : 'UNEQUIPPED');
+                btn.classList.toggle('active', i === state.activeAbilitySlot);
+            }
+
+            choiceGrid.innerHTML = '';
             for (var i = 0; i < catalog.length; i++) {
                 var def = catalog[i];
                 if (!def || !def.id) continue;
                 var btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'ability-choice-btn';
+                btn.classList.add('ability-choice-btn');
                 btn.dataset.abilityId = def.id;
                 btn.textContent = String(def.name || def.id).toUpperCase();
-                if (def.id === selectedId) btn.classList.add('active');
-                if (def.id === blockedId) btn.classList.add('owned-other');
+                var ownerIndex = pairOwnerIndex(slots, def.id);
+                if (ownerIndex !== -1) {
+                    btn.classList.add(slotClassName(ownerIndex));
+                }
+                if (ownerIndex === state.activeAbilitySlot) btn.classList.add('active');
                 btn.addEventListener('click', function () {
                     var id = this.dataset.abilityId;
-                    if (!assignAbilityToSlot(slotIndex, id)) return;
+                    if (!assignAbilityToSlot(state.activeAbilitySlot, id)) return;
                     applyToGameplayRuntime(true);
                     render();
                     saveState();
                     notifySubscribers();
                 });
-                gridEl.appendChild(btn);
+                choiceGrid.appendChild(btn);
             }
-        }
-
-        function render() {
-            normalizeAbilityState();
-            abilityGrid1.innerHTML = '';
-            abilityGrid2.innerHTML = '';
-            appendChoices(1, abilityGrid1, state.abilityLoadout.slot1, state.abilityLoadout.slot2);
-            appendChoices(2, abilityGrid2, state.abilityLoadout.slot2, state.abilityLoadout.slot1);
             renderSummaries();
         }
+
+        primaryBtn.addEventListener('click', function () {
+            state.activeAbilitySlot = 0;
+            render();
+            notifySubscribers();
+        });
+        secondaryBtn.addEventListener('click', function () {
+            state.activeAbilitySlot = 1;
+            render();
+            notifySubscribers();
+        });
 
         render();
     }
@@ -596,7 +656,7 @@
     };
 
     GameMenuLoadout.getExpandedSection = function () {
-        return String(state.expandedSection || '');
+        return state.loadoutExpanded ? 'all' : '';
     };
 
     GameMenuLoadout.syncToRuntime = function (multiplayerMode) {

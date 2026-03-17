@@ -7,17 +7,20 @@ const { buildReport, buildUnitAreaReport } = require('../../scripts/biome-map-li
 
 test('arctic biome map uses raw biome edges and tracks glacier fields', () => {
   const report = buildReport('arctic');
+  const southWestPackCell = report.denseCells.find((cell) => cell.labels.includes('south-west-pack'));
+  const southEastPackCell = report.denseCells.find((cell) => cell.labels.includes('south-east-pack'));
 
   assert.ok(report.content.includes('Arctic biome distribution map'));
   assert.ok(report.content.includes('Bounds x:[2, 56] z:[2, 56]  grid:14x14'));
   assert.equal(report.countsByKind.get('glacier'), 6);
   assert.equal(report.countsByKind.get('spire'), 31);
-  assert.equal(report.occupiedCells, 44);
+  assert.equal(report.occupiedCells, 45);
   assert.ok(report.denseCells.some((cell) => cell.row === 0));
-  assert.ok(report.denseCells.some((cell) => cell.row === 13));
   assert.ok(report.denseCells.some((cell) => cell.col === 0));
   assert.ok(report.denseCells.some((cell) => cell.col === 13));
   assert.ok(report.denseCells.some((cell) => cell.row >= 8 && cell.row <= 10 && cell.col >= 4 && cell.col <= 10));
+  assert.equal(southWestPackCell && southWestPackCell.row, 12);
+  assert.equal(southEastPackCell && southEastPackCell.row, 12);
 });
 
 test('arctic unit-area report shows exact edges and neighboring object slices', () => {

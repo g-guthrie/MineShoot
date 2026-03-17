@@ -15,6 +15,7 @@ import {
   BODY_HITBOX_CENTER_OFFSET_Y,
   BODY_HITBOX_SQUARE_PADDING,
   BODY_HITBOX_SIZE,
+  HEAD_HITBOX_LINEAR_SCALE,
   HEAD_HITBOX_SQUARE_PADDING,
   HEAD_HITBOX_TOP_PADDING,
   HEAD_HITBOX_CENTER_OFFSET_Y,
@@ -76,10 +77,10 @@ test('combat hitbox vertical split is derived from avatar torso and head primiti
   assert.ok(Math.abs(bodyBottomY - legBottomY) < 1e-9);
   assert.equal(BODY_HITBOX_SIZE.x, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
   assert.equal(BODY_HITBOX_SIZE.z, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
-  assert.equal(HEAD_HITBOX_SIZE.x, headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING);
-  assert.equal(HEAD_HITBOX_SIZE.z, headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING);
-  assert.equal(HEAD_HITBOX_SIZE.y, AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING);
-  assert.equal(headBottomY, primitiveHeadBottomY);
+  assert.equal(HEAD_HITBOX_SIZE.x, (headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE);
+  assert.equal(HEAD_HITBOX_SIZE.z, (headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE);
+  assert.equal(HEAD_HITBOX_SIZE.y, (AVATAR_HEAD_SIZE.y + HEAD_HITBOX_TOP_PADDING) * HEAD_HITBOX_LINEAR_SCALE);
+  assert.ok(Math.abs(headBottomY - primitiveHeadBottomY) < 1e-9);
 });
 
 test('logical hitscan origin pushes forward from the eye by the shared muzzle offset', () => {

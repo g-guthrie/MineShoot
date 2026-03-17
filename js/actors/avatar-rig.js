@@ -190,23 +190,26 @@
         var reach = Math.sin(t * Math.PI);
         var wiggle = Math.sin(t * Math.PI * 5) * reach;
         var longGun = weaponId === 'rifle' || weaponId === 'machinegun' || weaponId === 'shotgun' || weaponId === 'sniper';
+        var supportBias = longGun ? 1 : 0;
 
         return {
-            armX: longGun ? 0.1 + (wiggle * 0.02) : 0.04 + (wiggle * 0.015),
-            armY: -0.02 - (reach * (longGun ? 0.06 : 0.03)),
-            armZ: -0.05 - (reach * (longGun ? 0.08 : 0.04)),
-            palmX: LEFT_PALM_NEUTRAL.x - 0.015,
-            palmY: LEFT_PALM_NEUTRAL.y + (reach * 0.08),
-            palmZ: LEFT_PALM_NEUTRAL.z - (longGun ? 0.07 : 0.04),
+            // Restore the broader support-hand sweep from the older runtime so
+            // reloads read clearly in multiplayer instead of barely twitching.
+            armX: 0.9 + (reach * (longGun ? 0.42 : 0.3)) + (wiggle * (longGun ? 0.08 : 0.05)),
+            armY: -0.14 - (reach * (0.18 + (supportBias * 0.06))),
+            armZ: -0.28 - (reach * (0.22 + (supportBias * 0.1))) - (wiggle * 0.05),
+            palmX: LEFT_PALM_NEUTRAL.x - 0.03 - (supportBias * 0.02),
+            palmY: LEFT_PALM_NEUTRAL.y + (reach * 0.18),
+            palmZ: LEFT_PALM_NEUTRAL.z - 0.14 - (supportBias * 0.05),
             gunYaw: wiggle * 0.012,
             gunRoll: wiggle * 0.02,
             rightArmX: reach * 0.05,
-            targetOffsetX: longGun ? -0.02 : -0.005,
-            targetOffsetY: 0.03 + (reach * (longGun ? 0.05 : 0.03)),
-            targetOffsetZ: (longGun ? 0.14 : 0.07) + (wiggle * 0.03),
-            aimX: longGun ? 0.1 : 0.06,
-            aimY: longGun ? -0.05 : -0.03,
-            aimZ: longGun ? -0.04 : -0.02
+            targetOffsetX: longGun ? -0.05 : -0.02,
+            targetOffsetY: 0.05 + (reach * (longGun ? 0.08 : 0.05)),
+            targetOffsetZ: (longGun ? 0.2 : 0.11) + (wiggle * 0.04),
+            aimX: longGun ? 0.12 : 0.08,
+            aimY: longGun ? -0.06 : -0.04,
+            aimZ: longGun ? -0.05 : -0.03
         };
     }
 
@@ -823,6 +826,23 @@
             firePoseStrength = Math.max(0.4, Math.min(1.8, Number(strength || 1)));
         }
 
+        var reloadPoseTimer = 0;
+        var reloadPoseDuration = 0.6;
+        function applyReloadAction(dt) {
+            if (reloadPoseTimer <= 0) return false;
+            reloadPoseTimer -= dt;
+            if (reloadPoseTimer < 0) reloadPoseTimer = 0;
+            var elapsed = Math.max(0, reloadPoseDuration - reloadPoseTimer);
+            var pct = reloadPoseDuration > 0 ? clamp01(elapsed / reloadPoseDuration) : 1;
+            applyReloadPose(rig, rig.weaponId, pct, rig.upperBodyPivot);
+            return true;
+        }
+
+        function startReloadAction(duration) {
+            reloadPoseDuration = Math.max(0.12, Number(duration || 0.6));
+            reloadPoseTimer = reloadPoseDuration;
+        }
+
         var chokeGripTimer = 0;
         function applyChokeGripAction(dt) {
             if (chokeGripTimer <= 0) return;
@@ -870,6 +890,10 @@
                 startFireAction(opts.duration, opts.strength);
                 return true;
             }
+            if (kind === 'reload') {
+                startReloadAction(opts.duration);
+                return true;
+            }
             if (kind === 'choke_grip') {
                 startChokeGripAction(opts.duration);
                 return true;
@@ -885,6 +909,11 @@
             animState = animState || {};
             setAimPitch(animState.aimPitch || 0);
             applyAnimState(animState, dt);
+            if (animState.reloading) {
+                reloadPoseTimer = Math.max(0, reloadPoseTimer - Math.max(0, Number(dt || 0)));
+            } else {
+                applyReloadAction(dt);
+            }
             applyThrowAction(dt);
             applyFireAction(dt);
             applyChokeGripAction(dt);

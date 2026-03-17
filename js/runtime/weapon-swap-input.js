@@ -8,8 +8,8 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 
     var DEFAULT_CONFIG = {
-        // Collapse duplicate browser events from a single mouse-wheel notch.
-        discreteLockoutMs: 140,
+        // After any successful weapon toggle, ignore all further wheel/swipe toggles briefly.
+        switchLockoutMs: 1000,
         // End a swipe burst even if the device never emits a quiet release packet.
         gestureTimeoutMs: 420,
         // Ignore tiny jitter before treating wheel input as deliberate movement.
@@ -40,11 +40,14 @@
         var burstState = {
             accumMagnitude: 0,
             blocked: false,
-            lastEventAt: 0
+            lastEventAt: 0,
+            lockUntil: 0,
+            sawQuietRelease: false
         };
         var discreteState = {
             lockUntil: 0
         };
+        var switchLockUntil = 0;
         var inputCaptureOverride = null;
 
         function readNow() {
@@ -65,6 +68,8 @@
             burstState.accumMagnitude = 0;
             burstState.blocked = false;
             burstState.lastEventAt = 0;
+            burstState.lockUntil = 0;
+            burstState.sawQuietRelease = false;
         }
 
         function resetDiscreteState() {
@@ -74,6 +79,7 @@
         function resetState() {
             resetBurstState();
             resetDiscreteState();
+            switchLockUntil = 0;
         }
 
         function setInputCaptureOverride(value) {
@@ -91,11 +97,14 @@
                 burst: {
                     accumMagnitude: Number(burstState.accumMagnitude || 0),
                     blocked: !!burstState.blocked,
-                    lastEventAt: Number(burstState.lastEventAt || 0)
+                    lastEventAt: Number(burstState.lastEventAt || 0),
+                    lockUntil: Number(burstState.lockUntil || 0),
+                    sawQuietRelease: !!burstState.sawQuietRelease
                 },
                 discrete: {
                     lockUntil: Number(discreteState.lockUntil || 0)
                 },
+                switchLockUntil: Number(switchLockUntil || 0),
                 inputCaptureOverride: inputCaptureOverride,
                 inputCaptureActive: hasInputCapture()
             };
@@ -144,6 +153,9 @@
             if (e.preventDefault) e.preventDefault();
 
             var now = readNow();
+            if (switchLockUntil > now) {
+                return { handled: true, toggled: false, reason: 'switch_lockout' };
+            }
             var dx = normalizeWheelAxis(e.deltaX, e.deltaMode);
             var dy = normalizeWheelAxis(e.deltaY, e.deltaMode);
             var absDx = Math.abs(dx);
@@ -165,13 +177,26 @@
                 resetBurstState();
                 var discreteResult = applyToggle('discrete');
                 if (discreteResult.toggled) {
-                    discreteState.lockUntil = now + config.discreteLockoutMs;
+                    discreteState.lockUntil = now + config.switchLockoutMs;
+                    switchLockUntil = now + config.switchLockoutMs;
                 }
                 return discreteResult;
             }
 
             if (burstState.blocked) {
-                if (quietRelease || gestureTimedOut) {
+                if (quietRelease) {
+                    burstState.sawQuietRelease = true;
+                    burstState.lastEventAt = now;
+                    if (now >= burstState.lockUntil) {
+                        resetBurstState();
+                    }
+                    return { handled: true, toggled: false, mode: 'burst', reason: 'quiet_release' };
+                }
+                if (now < burstState.lockUntil) {
+                    burstState.lastEventAt = now;
+                    return { handled: true, toggled: false, mode: 'burst', reason: 'lockout' };
+                }
+                if (burstState.sawQuietRelease || gestureTimedOut) {
                     resetBurstState();
                 } else {
                     burstState.lastEventAt = now;
@@ -195,7 +220,13 @@
 
             burstState.accumMagnitude = 0;
             burstState.blocked = true;
-            return applyToggle('burst');
+            burstState.lockUntil = now + config.switchLockoutMs;
+            burstState.sawQuietRelease = false;
+            var burstResult = applyToggle('burst');
+            if (burstResult.toggled) {
+                switchLockUntil = now + config.switchLockoutMs;
+            }
+            return burstResult;
         }
 
         return {
