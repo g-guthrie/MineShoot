@@ -249,7 +249,9 @@ test('desert adds a mid-scale hero arch while keeping the fortress edges', () =>
   assert.ok(stats.centerHeroArchHeight >= 8.8);
   assert.ok(stats.centerHeroArchHeight <= 9.2);
   assert.ok(stats.centerHeroArchSpan >= 11.5);
-  assert.equal(stats.centerSupportCount, 2);
+  assert.ok(stats.centerHeroArchClearWidth >= 4.8);
+  assert.equal(stats.centerSupportCount, 4);
+  assert.ok(stats.centerHeroArchHeight > stats.westArchPeakHeight);
 
   const northTouches = recorder.collidables.filter((box) =>
     Math.abs(box.min.z - rawBounds.minZ) < 0.0001

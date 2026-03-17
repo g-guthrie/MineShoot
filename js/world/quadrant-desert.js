@@ -113,6 +113,10 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx - 3.8, 0.15, cz + 1.2, 0.6, 0.3, 0.5, mats.rubble, false);
         place.addBlock(cx + 3.5, 0.12, cz - 1.0, 0.5, 0.24, 0.6, mats.rubble, false);
         place.addBlock(cx - 2.5, 0.1, cz - 1.3, 0.4, 0.2, 0.3, mats.rubble, false);
+
+        return {
+            peakHeight: 5.45
+        };
     }
 
     function buildGrandSpanArch(cx, cz, place, mats) {
@@ -123,6 +127,8 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(cx - 0.4, 8.1, cz - 0.1, 7.2, 0.56, 2.1, mats.mesa, true);
         place.addBlock(cx + 0.6, 8.8, cz + 0.2, 3.8, 0.42, 1.4, mats.sandstone, false);
         place.addBlock(cx - 0.3, 6.2, cz, 8.4, 0.48, 2.2, mats.darkRock, false);
+        place.addBlock(cx - 1.4, 7.9, cz - 1.2, 2.8, 0.36, 1.1, mats.sandstone, false);
+        place.addBlock(cx + 2.1, 8.4, cz + 1.1, 2.1, 0.3, 0.9, mats.darkRock, false);
         place.addBlock(cx - 5.1, 1.2, cz + 1.0, 2.0, 2.4, 1.7, mats.darkRock, true);
         place.addBlock(cx + 5.0, 1.1, cz - 0.9, 1.8, 2.2, 1.6, mats.mesa, true);
         place.addBlock(cx - 3.3, 4.8, cz + 0.9, 1.5, 0.58, 2.1, mats.sandstone, true);
@@ -134,7 +140,8 @@ import { pointInBounds as pt } from './biome-utils.js';
 
         return {
             peakHeight: 9.01,
-            spanWidth: 11.8
+            spanWidth: 11.8,
+            clearWidth: 5.9
         };
     }
 
@@ -448,8 +455,13 @@ import { pointInBounds as pt } from './biome-utils.js';
         var centerFence = pt(bounds, 0.64, 0.50);
         buildFenceRuins(centerFence.x, centerFence.z, place, mats);
 
+        place.addBlock(centerHero.x - 0.3, 0.46, centerHero.z + 3.6, 6.2, 0.92, 1.7, mats.rubble, true);
+        place.addBlock(centerHero.x + 0.6, 0.92, centerHero.z + 3.8, 3.8, 0.24, 1.1, mats.darkRock, false);
+        place.addBlock(centerHero.x + 0.4, 0.7, centerHero.z - 3.2, 5.4, 1.4, 1.9, mats.mesa, true);
+        place.addBlock(centerHero.x + 1.1, 1.48, centerHero.z - 3.4, 3.1, 0.42, 1.2, mats.sandstone, false);
+
         var westArch = pt(bounds, 0.12, 0.52);
-        buildArch(westArch.x, westArch.z, place, mats);
+        var westArchStats = buildArch(westArch.x, westArch.z, place, mats);
         ctx.addExclusion(westArch.x, westArch.z, 4.8);
 
         var southOutcrop = pt(bounds, 0.56, 0.88);
@@ -530,7 +542,9 @@ import { pointInBounds as pt } from './biome-utils.js';
             centerHeroArchZ: centerHero.z,
             centerHeroArchHeight: centerArchStats.peakHeight,
             centerHeroArchSpan: centerArchStats.spanWidth,
-            centerSupportCount: 2
+            centerHeroArchClearWidth: centerArchStats.clearWidth,
+            centerSupportCount: 4,
+            westArchPeakHeight: westArchStats.peakHeight
         };
     }
 

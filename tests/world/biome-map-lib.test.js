@@ -54,10 +54,13 @@ test('desert map gains a center hero beat without creating a new hotspot', () =>
   const centerBand = report.denseCells.filter((cell) =>
     cell.row >= 6 && cell.row <= 9 && cell.col >= 5 && cell.col <= 8
   );
+  const westArchPocket = report.denseCells.filter((cell) =>
+    cell.row >= 6 && cell.row <= 8 && cell.col >= 0 && cell.col <= 3
+  );
 
   assert.ok(report.content.includes('Desert biome distribution map'));
-  assert.ok(report.occupiedCells >= 52);
-  assert.ok(report.occupiedCells <= 56);
+  assert.ok(report.occupiedCells >= 54);
+  assert.ok(report.occupiedCells <= 60);
   assert.equal(report.countsByKind.get('heroArch'), 1);
   assert.equal(report.countsByKind.get('butte'), 1);
   assert.equal(report.countsByKind.get('fence'), 1);
@@ -66,6 +69,7 @@ test('desert map gains a center hero beat without creating a new hotspot', () =>
   assert.ok(heroArchCell.row >= 6 && heroArchCell.row <= 8);
   assert.ok(heroArchCell.col >= 6 && heroArchCell.col <= 8);
   assert.ok(centerBand.length >= 4);
+  assert.ok(centerBand.length > westArchPocket.length);
 });
 
 test('wall street map starts earlier, stays center-dominant, and avoids new hotspots', () => {
