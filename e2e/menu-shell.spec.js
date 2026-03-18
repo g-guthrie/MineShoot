@@ -82,7 +82,7 @@ test('three-menu hero layout keeps the home hero contained without horizontal ov
   expect(metrics.viewportOverflow).toBe(false);
 });
 
-test('active-match shell keeps the header friend bar and pill stats contained at narrow width', async ({ page }) => {
+test('active-match shell wraps the stat pills cleanly at narrow width without rendering hidden placeholders', async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 1200 });
   await page.goto('/');
 
@@ -123,9 +123,13 @@ test('active-match shell keeps the header friend bar and pill stats contained at
     const sessionContext = document.getElementById('active-match-context-pill');
     const sessionKd = document.getElementById('active-match-primary-stat-pill');
     const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
+    const headerFeedback = document.getElementById('active-match-header-feedback');
+    const activeBanner = document.getElementById('active-match-primary-banner');
     const friendInput = document.getElementById('active-match-friend-id-input');
     const inviteFriend = document.getElementById('active-match-invite-friend-btn');
     const joinFriend = document.getElementById('active-match-join-friend-btn');
+    const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
+    const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
 
     function alphaOf(color) {
       if (!color || color === 'transparent') return 0;
@@ -153,6 +157,9 @@ test('active-match shell keeps the header friend bar and pill stats contained at
       sessionActionsVisible: !!(sessionActions && !sessionActions.hidden),
       headerContainsFriendControls: withinRect(friendInput, headerRect) && withinRect(inviteFriend, headerRect) && withinRect(joinFriend, headerRect),
       sessionPillsContained: withinRect(sessionStats, sessionRect) && withinRect(sessionStatus, sessionRect) && withinRect(sessionContext, sessionRect) && withinRect(sessionKd, sessionRect) && withinRect(sessionMeta, sessionRect),
+      hiddenHeaderFeedback: headerFeedback ? getComputedStyle(headerFeedback).display === 'none' : false,
+      hiddenBanner: activeBanner ? getComputedStyle(activeBanner).display === 'none' : false,
+      pillRowCount: pillRows,
       overlayContext: overlay ? overlay.getAttribute('data-menu-context') : '',
       surfaceContext: menuSurface ? menuSurface.getAttribute('data-menu-context') : '',
       surfaceIsGlassy: alphaOf(menuSurface ? getComputedStyle(menuSurface).backgroundColor : '') < 0.9,
@@ -177,6 +184,9 @@ test('active-match shell keeps the header friend bar and pill stats contained at
   expect(metrics.sessionActionsVisible).toBe(true);
   expect(metrics.headerContainsFriendControls).toBe(true);
   expect(metrics.sessionPillsContained).toBe(true);
+  expect(metrics.hiddenHeaderFeedback).toBe(true);
+  expect(metrics.hiddenBanner).toBe(true);
+  expect(metrics.pillRowCount).toBeGreaterThan(1);
   expect(metrics.overlayContext).toBe('active-match');
   expect(metrics.surfaceContext).toBe('active-match');
   expect(metrics.surfaceIsGlassy).toBe(true);
@@ -184,11 +194,196 @@ test('active-match shell keeps the header friend bar and pill stats contained at
   expect(metrics.viewportOverflow).toBe(false);
 });
 
-test('rounded container language stays consistent across active banner, loadout shell, room tray, and member block', async ({ page }) => {
+test('active-match shell keeps the full four-pill layout on one row at wide width', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
+      detail: {
+        runtimeReady: true,
+        inMatch: false,
+        awaitingInputCapture: false,
+        canResume: true,
+        activityState: 'paused',
+        launchContext: {}
+      }
+    }));
+    window.dispatchEvent(new CustomEvent('mayhem-menu-match-model', {
+      detail: {
+        ready: true,
+        banner: null,
+        modePill: { label: 'MODE', value: 'TDM' },
+        contextPill: { label: 'LEAD', value: '7' },
+        primaryPill: { label: 'KILLS', value: '12' },
+        secondaryPill: { label: 'DEATHS', value: '3' }
+      }
+    }));
+  });
+
+  const metrics = await page.evaluate(() => {
+    const sessionStats = document.getElementById('active-match-pill-grid');
+    const sessionStatus = document.getElementById('active-match-mode-pill');
+    const sessionContext = document.getElementById('active-match-context-pill');
+    const sessionKd = document.getElementById('active-match-primary-stat-pill');
+    const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
+    const hiddenHeaderFeedback = document.getElementById('active-match-header-feedback');
+    const hiddenBanner = document.getElementById('active-match-primary-banner');
+    const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
+    const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
+
+    return {
+      statsVisible: !!(sessionStats && getComputedStyle(sessionStats).display !== 'none'),
+      rowCount: pillRows,
+      hiddenHeaderFeedback: hiddenHeaderFeedback ? getComputedStyle(hiddenHeaderFeedback).display === 'none' : false,
+      hiddenBanner: hiddenBanner ? getComputedStyle(hiddenBanner).display === 'none' : false
+    };
+  });
+
+  expect(metrics.statsVisible).toBe(true);
+  expect(metrics.rowCount).toBe(1);
+  expect(metrics.hiddenHeaderFeedback).toBe(true);
+  expect(metrics.hiddenBanner).toBe(true);
+});
+
+test('active-match header feedback wraps long text without overflowing the shell', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 1200 });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
+      detail: {
+        runtimeReady: true,
+        inMatch: false,
+        awaitingInputCapture: false,
+        canResume: true,
+        activityState: 'paused',
+        launchContext: {}
+      }
+    }));
+    const feedback = document.getElementById('active-match-header-feedback');
+    if (feedback) {
+      feedback.hidden = false;
+      feedback.textContent = 'Invite pending for EXTRAORDINARILY-LONG-PLAYER-NAME-WITH-MULTIPLE-SECTIONS.';
+    }
+  });
+
+  const metrics = await page.evaluate(() => {
+    const shell = document.getElementById('menu-surface');
+    const feedback = document.getElementById('active-match-header-feedback');
+    if (!shell || !feedback) return { contained: false, wraps: false };
+    const shellRect = shell.getBoundingClientRect();
+    const feedbackRect = feedback.getBoundingClientRect();
+    return {
+      contained: feedbackRect.left >= shellRect.left - 1 && feedbackRect.right <= shellRect.right + 1,
+      wraps: feedbackRect.height > 30
+    };
+  });
+
+  expect(metrics.contained).toBe(true);
+  expect(metrics.wraps).toBe(true);
+});
+
+test('clicking the dimmed paused background resumes gameplay while clicks inside the menu do not', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    window.__pauseOverlayResumeCalls = [];
+    window.__MAYHEM_RUNTIME = window.__MAYHEM_RUNTIME || {};
+    window.__MAYHEM_RUNTIME.GameSession = window.__MAYHEM_RUNTIME.GameSession || {};
+    window.__MAYHEM_RUNTIME.GameSession.resumeGameplay = function () {
+      window.__pauseOverlayResumeCalls.push('resume');
+      return Promise.resolve({ ok: true, entered: false, error: 'Pointer lock denied.' });
+    };
+    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
+      detail: {
+        runtimeReady: true,
+        inMatch: false,
+        awaitingInputCapture: false,
+        canResume: true,
+        activityState: 'paused',
+        launchContext: {}
+      }
+    }));
+  });
+
+  await page.locator('#menu-surface').click();
+  expect(await page.evaluate(() => window.__pauseOverlayResumeCalls.length)).toBe(0);
+
+  const surfaceBox = await page.locator('#menu-surface').boundingBox();
+  expect(surfaceBox).toBeTruthy();
+  await page.mouse.click(Math.max(5, surfaceBox.x - 20), surfaceBox.y + 20);
+
+  expect(await page.evaluate(() => window.__pauseOverlayResumeCalls.length)).toBe(1);
+});
+
+test('paused fallback state hides blank banner chrome and empty stat pills', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
+      detail: {
+        runtimeReady: true,
+        inMatch: false,
+        awaitingInputCapture: false,
+        canResume: true,
+        activityState: 'paused',
+        launchContext: {}
+      }
+    }));
+  });
+
+  const metrics = await page.evaluate(() => {
+    const headerFeedback = document.getElementById('active-match-header-feedback');
+    const activeBanner = document.getElementById('active-match-primary-banner');
+    const sessionStats = document.getElementById('active-match-pill-grid');
+    const sessionStatus = document.getElementById('active-match-mode-pill');
+    const sessionContext = document.getElementById('active-match-context-pill');
+    const sessionKd = document.getElementById('active-match-primary-stat-pill');
+    const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
+    const loadoutShell = document.getElementById('loadout-expanded-shell');
+    const statsStyle = sessionStats ? getComputedStyle(sessionStats) : null;
+    const loadoutStyle = loadoutShell ? getComputedStyle(loadoutShell) : null;
+    const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
+    const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
+
+    return {
+      hiddenHeaderFeedback: headerFeedback ? getComputedStyle(headerFeedback).display === 'none' : false,
+      hiddenBanner: activeBanner ? getComputedStyle(activeBanner).display === 'none' : false,
+      hiddenSecondaryPill: sessionMeta ? getComputedStyle(sessionMeta).display === 'none' : false,
+      statsRole: sessionStats ? sessionStats.getAttribute('data-rounded-role') : '',
+      statsRadius: statsStyle ? statsStyle.borderRadius : '',
+      loadoutRadius: loadoutStyle ? loadoutStyle.borderRadius : '',
+      visiblePillCount: visiblePills.length,
+      rowCount: pillRows,
+      modeText: sessionStatus ? sessionStatus.textContent.trim() : '',
+      contextText: sessionContext ? sessionContext.textContent.trim() : '',
+      primaryText: sessionKd ? sessionKd.textContent.trim() : '',
+      statsHeight: sessionStats ? Math.round(sessionStats.getBoundingClientRect().height) : 0
+    };
+  });
+
+  expect(metrics.hiddenHeaderFeedback).toBe(true);
+  expect(metrics.hiddenBanner).toBe(true);
+  expect(metrics.hiddenSecondaryPill).toBe(true);
+  expect(metrics.statsRole).toBe('container');
+  expect(metrics.statsRadius).toBe(metrics.loadoutRadius);
+  expect(metrics.visiblePillCount).toBe(3);
+  expect(metrics.rowCount).toBe(1);
+  expect(metrics.modeText).toBe('FFA');
+  expect(metrics.contextText).toBe('PAUSED');
+  expect(metrics.primaryText).toBe('Change loadout or return to the match.');
+  expect(metrics.statsHeight).toBeGreaterThan(0);
+});
+
+test('rounded container language stays consistent across active banner, active stats shell, loadout shell, room tray, and member block', async ({ page }) => {
   await page.goto('/');
 
   const metrics = await page.evaluate(() => {
     const activeBanner = document.getElementById('active-match-primary-banner');
+    const activeStats = document.getElementById('active-match-pill-grid');
     const loadoutShell = document.getElementById('loadout-expanded-shell');
     const menuSurface = document.getElementById('menu-surface');
     if (activeBanner) {
@@ -196,6 +391,7 @@ test('rounded container language stays consistent across active banner, loadout 
       const copy = document.getElementById('active-match-primary-banner-copy');
       if (copy) copy.textContent = 'Invite from BRAVO.';
     }
+    if (activeStats) activeStats.hidden = false;
 
     const fixtureTray = document.createElement('div');
     fixtureTray.id = 'fixture-rounded-room-tray';
@@ -210,16 +406,19 @@ test('rounded container language stays consistent across active banner, loadout 
     (menuSurface || document.body).appendChild(fixtureTray);
 
     const bannerStyle = activeBanner ? getComputedStyle(activeBanner) : null;
+    const statsStyle = activeStats ? getComputedStyle(activeStats) : null;
     const shellStyle = loadoutShell ? getComputedStyle(loadoutShell) : null;
     const trayStyle = getComputedStyle(fixtureTray);
     const memberStyle = getComputedStyle(fixtureMember);
 
     return {
       activeBannerRole: activeBanner ? activeBanner.getAttribute('data-rounded-role') : '',
+      activeStatsRole: activeStats ? activeStats.getAttribute('data-rounded-role') : '',
       loadoutShellRole: loadoutShell ? loadoutShell.getAttribute('data-rounded-role') : '',
       trayRole: fixtureTray.getAttribute('data-rounded-role') || '',
       memberRole: fixtureMember.getAttribute('data-rounded-role') || '',
       activeBannerRadius: bannerStyle ? bannerStyle.borderRadius : '',
+      activeStatsRadius: statsStyle ? statsStyle.borderRadius : '',
       loadoutShellRadius: shellStyle ? shellStyle.borderRadius : '',
       trayRadius: trayStyle.borderRadius,
       memberRadius: memberStyle.borderRadius
@@ -227,10 +426,12 @@ test('rounded container language stays consistent across active banner, loadout 
   });
 
   expect(metrics.activeBannerRole).toBe('container');
+  expect(metrics.activeStatsRole).toBe('container');
   expect(metrics.loadoutShellRole).toBe('container');
   expect(metrics.trayRole).toBe('container');
   expect(metrics.memberRole).toBe('container');
   expect(metrics.activeBannerRadius).toBe(metrics.loadoutShellRadius);
+  expect(metrics.activeStatsRadius).toBe(metrics.loadoutShellRadius);
   expect(metrics.trayRadius).toBe(metrics.loadoutShellRadius);
   expect(metrics.memberRadius).toBe(metrics.loadoutShellRadius);
 });

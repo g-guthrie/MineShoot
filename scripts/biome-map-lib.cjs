@@ -18,7 +18,7 @@ const BIOME_CELLS = {
   citadel: { row: 1, col: 1 },
   nuclear: { row: 1, col: 2 },
   quarry: { row: 2, col: 0 },
-  basin: { row: 2, col: 1 },
+  'wall-street': { row: 2, col: 1 },
   urban: { row: 2, col: 2 }
 };
 
@@ -934,7 +934,7 @@ const BIOME_SPECS = {
       ];
     }
   },
-  basin: {
+  'wall-street': {
     name: 'Wall Street',
     displayBiomeId: 'wall-street',
     outputFile: 'wall-street.txt',

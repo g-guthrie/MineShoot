@@ -34,7 +34,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     var BIOME_NUCLEAR = SHARED_LAYOUT.BIOME_NUCLEAR;
     var BIOME_CITADEL = SHARED_LAYOUT.BIOME_CITADEL;
     var BIOME_QUARRY = SHARED_LAYOUT.BIOME_QUARRY;
-    var BIOME_BASIN = SHARED_LAYOUT.BIOME_BASIN;
+    var BIOME_WALL_STREET = SHARED_LAYOUT.BIOME_WALL_STREET;
     var BIOME_RADAR = SHARED_LAYOUT.BIOME_RADAR;
 
     var DEFAULT_QUADRANT_MAP = SHARED_LAYOUT.DEFAULT_QUADRANT_MAP.slice();
@@ -70,9 +70,9 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     GROUND_COLORS[BIOME_DESERT] = 0xd6bf7f;
     GROUND_COLORS[BIOME_JUNGLE] = 0x3b7c3f;
     GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
-    GROUND_COLORS[BIOME_CITADEL] = 0x7d766d;
+    GROUND_COLORS[BIOME_CITADEL] = 0xeee9df;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
-    GROUND_COLORS[BIOME_BASIN] = 0x658798;
+    GROUND_COLORS[BIOME_WALL_STREET] = 0x658798;
     GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
 
     function cloneWorldFlags(flags) {
@@ -385,15 +385,15 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
                 nuclearBase: matLib.getLambert({ color: 0x737a80 }),
                 nuclearAccent: matLib.getLambert({ color: 0xcaa43c }),
                 nuclearDetail: matLib.getLambert({ color: 0x50575d }),
-                citadelBase: matLib.getLambert({ color: 0x6d6961 }),
-                citadelAccent: matLib.getLambert({ color: 0x989086 }),
-                citadelDetail: matLib.getLambert({ color: 0x4b4740 }),
+                citadelBase: matLib.getLambert({ color: 0xe8e2d6 }),
+                citadelAccent: matLib.getLambert({ color: 0xf7f3eb }),
+                citadelDetail: matLib.getLambert({ color: 0xc6bbac }),
                 quarryBase: matLib.getLambert({ color: 0x866f61 }),
                 quarryAccent: matLib.getLambert({ color: 0xb39984 }),
                 quarryDetail: matLib.getLambert({ color: 0x5e4c40 }),
-                basinBase: matLib.getLambert({ color: 0x69757b }),
-                basinAccent: matLib.getLambert({ color: 0x5aa1b7 }),
-                basinDetail: matLib.getLambert({ color: 0x355965 }),
+                wallStreetBase: matLib.getLambert({ color: 0x69757b }),
+                wallStreetAccent: matLib.getLambert({ color: 0x5aa1b7 }),
+                wallStreetDetail: matLib.getLambert({ color: 0x355965 }),
                 radarBase: matLib.getLambert({ color: 0x8c958e }),
                 radarAccent: matLib.getLambert({ color: 0xc7d5d0 }),
                 radarDetail: matLib.getLambert({ color: 0x56636b })
@@ -615,8 +615,18 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         for (var fi = 0; fi < animatedFlickers.length; fi++) {
             var flk = animatedFlickers[fi];
             if (!flk || !flk.material) continue;
-            var v = 0.7 + Math.sin((animClock * flk.freq) + flk.phase) * 0.3;
-            flk.material.emissiveIntensity = v;
+            var baseIntensity = Number(flk.baseIntensity);
+            if (!isFinite(baseIntensity)) baseIntensity = 0.7;
+            var amplitude = Number(flk.amplitude);
+            if (!isFinite(amplitude)) amplitude = 0.3;
+            var wave = Math.sin((animClock * flk.freq) + flk.phase);
+            flk.material.emissiveIntensity = baseIntensity + (wave * amplitude);
+            var opacityBase = Number(flk.opacityBase);
+            if (isFinite(opacityBase) && typeof flk.material.opacity === 'number') {
+                var opacityAmplitude = Number(flk.opacityAmplitude);
+                if (!isFinite(opacityAmplitude)) opacityAmplitude = 0;
+                flk.material.opacity = Math.max(0, Math.min(1, opacityBase + (wave * opacityAmplitude)));
+            }
         }
 
         for (var sti = 0; sti < animatedSteamColumns.length; sti++) {

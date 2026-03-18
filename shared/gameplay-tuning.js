@@ -290,7 +290,7 @@ export const gameplayTuning = {
     },
     molotov: {
       id: 'molotov', category: 'grenade', label: 'Molotov', speed: 16.5, upward: 4.6, gravity: 21, fuse: 2.8, fireRadius: 4.0,
-      fireDuration: 6.5, fireTickDamage: 14, fireTickRate: 0.4, fireInnerRadius: 2.2, fireOuterDamageScale: 0.45,
+      fireDuration: 6.0, fireTickDamage: 14, fireTickRate: 0.4, fireInnerRadius: 2.2, fireOuterDamageScale: 0.45,
       fireLingerDuration: 1.2, fireLingerTickDamage: 5, fireLingerTickRate: 0.5, fireMaxHeightDelta: 1.5, regen: 10,
       armorBufferMode: 'normal'
     },
@@ -328,7 +328,7 @@ export const gameplayTuning = {
       description: 'Fast guided micro-rocket that bends toward nearby targets.',
       debugSummary: 'Fires from muzzle and gently seeks toward nearby hostile hitboxes.',
       tunableParams: ['range', 'cooldownMs', 'damage', 'radius', 'travelSpeed', 'acquireRange', 'catchRadius', 'lockHalfAngleDeg', 'homingBoost', 'homingLerp'],
-      cooldownMs: 8500, range: 36, damage: 70, radius: 2.0, travelSpeed: 34, acquireRange: 6.0, catchRadius: 1.1,
+      cooldownMs: 7500, range: 36, damage: 70, radius: 2.0, travelSpeed: 34, acquireRange: 6.0, catchRadius: 1.1,
       lockHalfAngleDeg: 10, homingBoost: 4.5, homingLerp: 6.0, gravity: 0.7, fuse: 1.1
     },
     deadeye: {

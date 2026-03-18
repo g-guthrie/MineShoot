@@ -1,5 +1,5 @@
 import './quadrant-arctic.js';
-import './quadrant-basin.js';
+import './quadrant-wall-street.js';
 import './quadrant-citadel.js';
 import './quadrant-desert.js';
 import './quadrant-jungle.js';
@@ -12,12 +12,12 @@ const quadrants = (globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.Wo
 
 export const GameWorldQuadrants = {
   arctic: quadrants.arctic,
-  basin: quadrants.basin,
   citadel: quadrants.citadel,
   desert: quadrants.desert,
   jungle: quadrants.jungle,
   nuclear: quadrants.nuclear,
   quarry: quadrants.quarry,
   radar: quadrants.radar,
+  'wall-street': quadrants['wall-street'],
   urban: quadrants.urban
 };

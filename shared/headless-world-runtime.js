@@ -161,6 +161,37 @@ export function ensureHeadlessWorldRuntime() {
       this.radialSegments = radialSegments;
     };
   }
+  if (!globalThis.THREE.Shape) {
+    globalThis.THREE.Shape = function Shape() {
+      this.commands = [];
+      this.holes = [];
+    };
+    globalThis.THREE.Shape.prototype.moveTo = function moveTo(x, y) {
+      this.commands.push({ type: 'moveTo', x, y });
+      return this;
+    };
+    globalThis.THREE.Shape.prototype.lineTo = function lineTo(x, y) {
+      this.commands.push({ type: 'lineTo', x, y });
+      return this;
+    };
+    globalThis.THREE.Shape.prototype.quadraticCurveTo = function quadraticCurveTo(cpx, cpy, x, y) {
+      this.commands.push({ type: 'quadraticCurveTo', cpx, cpy, x, y });
+      return this;
+    };
+    globalThis.THREE.Shape.prototype.absarc = function absarc(cx, cy, radius, startAngle, endAngle, clockwise) {
+      this.commands.push({ type: 'absarc', cx, cy, radius, startAngle, endAngle, clockwise: !!clockwise });
+      return this;
+    };
+    globalThis.THREE.Shape.prototype.closePath = function closePath() {
+      this.commands.push({ type: 'closePath' });
+      return this;
+    };
+  }
+  if (!globalThis.THREE.ShapeGeometry) {
+    globalThis.THREE.ShapeGeometry = function ShapeGeometry(shape) {
+      this.shape = shape || null;
+    };
+  }
   if (!globalThis.THREE.Mesh) {
     globalThis.THREE.Mesh = function Mesh(geometry, material) {
       this.geometry = geometry || null;

@@ -40,7 +40,7 @@ import '../domain/weapons/visuals.js';
 import '../world/material-library.js';
 import '../presentation/asset-factory.js';
 import '../world/quadrant-arctic.js';
-import '../world/quadrant-basin.js';
+import '../world/quadrant-wall-street.js';
 import '../world/quadrant-citadel.js';
 import '../world/quadrant-desert.js';
 import '../world/quadrant-jungle.js';

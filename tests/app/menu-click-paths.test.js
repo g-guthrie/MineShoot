@@ -244,7 +244,9 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   };
 
   const ids = [
+    ['div', 'overlay'],
     ['div', 'menu-header'],
+    ['div', 'menu-surface'],
     ['div', 'menu-inline-toast'],
     ['div', 'menu-feedback'],
     ['button', 'menu-return-btn'],
@@ -332,6 +334,12 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['button', 'party-hero-lock-btn'],
     ['button', 'party-hero-leave-btn'],
     ['div', 'private-room-status'],
+    ['div', 'room-social-feedback'],
+    ['div', 'room-social-invite-banner'],
+    ['div', 'room-social-invite-copy'],
+    ['div', 'room-social-invite-actions'],
+    ['button', 'room-social-invite-accept-btn'],
+    ['button', 'room-social-invite-dismiss-btn'],
     ['div', 'room-share-panel'],
     ['div', 'room-share-code'],
     ['button', 'copy-room-code-btn'],
@@ -370,6 +378,8 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   documentObj.elements['active-match-header-feedback'].hidden = true;
   documentObj.elements['active-match-primary-banner'].hidden = true;
   documentObj.elements['active-match-primary-banner-actions'].hidden = true;
+  documentObj.elements['room-social-invite-banner'].hidden = true;
+  documentObj.elements['room-social-invite-actions'].hidden = true;
   documentObj.elements['social-direct-invite-banner'].hidden = true;
   documentObj.elements['menu-social-friends-pane'].hidden = !loggedIn;
   documentObj.elements['menu-inline-toast'].hidden = true;
@@ -379,6 +389,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   const friendActionCalls = [];
   const launchCalls = [];
   const matchmakingCalls = [];
+  const resumeGameplayCalls = [];
   const sessionCallbacks = {};
   const partyState = {
     self: { id: 'usr_alpha', username: 'ALPHA' },
@@ -736,10 +747,12 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     },
     GameSession: {
       prepareLaunch() {},
-      startGameplayFromMenu() {
+      startGameplayFromMenu(event) {
+        resumeGameplayCalls.push({ source: 'start', event });
         return Promise.resolve({ ok: true, entered: false, error: 'Pointer lock denied.' });
       },
-      resumeGameplay() {
+      resumeGameplay(event) {
+        resumeGameplayCalls.push({ source: 'resume', event });
         return Promise.resolve({ ok: true, entered: false, error: 'Pointer lock denied.' });
       },
       returnToMenu() {}
@@ -802,6 +815,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     friendActionCalls,
     launchCalls,
     matchmakingCalls,
+    resumeGameplayCalls,
     flush,
     emitPartyUnavailable(message) {
       sessionCallbacks.onPartyUnavailable(message);
@@ -923,6 +937,21 @@ test('invite friend uses the shared social input and shows the outgoing status',
   assert.equal(elements['social-hero-status'].textContent, 'Invite pending for FRIEND-123.');
 });
 
+test('home with party hero still shows visible validation feedback for empty friend actions', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  elements['party-id-input'].value = 'usr_bravo';
+  elements['join-friend-btn'].click();
+  elements['party-id-input'].value = '';
+  elements['party-id-input'].input();
+  elements['invite-friend-btn'].click();
+
+  assert.equal(elements['menu-party-hero'].hidden, false);
+  assert.equal(elements['social-hero-status'].hidden, false);
+  assert.equal(elements['social-hero-status'].textContent, 'Enter a friend ID.');
+});
+
 test('direct invite banner accepts and dismisses inline from the social hero', async () => {
   const harness = await loadHarness();
   const { elements, runPartyActionCalls } = harness;
@@ -1030,6 +1059,45 @@ test('room invite banner uses the shared invite controls with room-specific acti
   });
   elements['social-direct-invite-accept-btn'].click();
   assert.equal(runPartyActionCalls[1].action, 'accept_room_invite');
+});
+
+test('room surface shows the room invite banner and hides the home invite slot', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitPrivateRoomState();
+  await harness.flush();
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: null, outgoing: null },
+    roomInvite: {
+      incoming: {
+        roomId: 'private-room1',
+        roomCode: 'ROOM1',
+        roomMode: 'ffa',
+        roomPhase: 'lobby',
+        inviterActorId: 'usr_bravo',
+        inviterDisplayName: 'BRAVO',
+        createdAt: 1
+      },
+      outgoing: null
+    },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 1,
+      members: [{ id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }]
+    }
+  });
+
+  assert.equal(elements['room-social-invite-banner'].hidden, false);
+  assert.equal(elements['room-social-invite-copy'].textContent, 'BRAVO invited you to room ROOM1.');
+  assert.equal(elements['social-direct-invite-banner'].hidden, true);
 });
 
 test('game modes reveal below the launch row and the primary launch pill starts the selected mode', async () => {
@@ -1394,6 +1462,27 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   assert.equal(elements['active-match-friend-bar'].hidden, false);
 });
 
+test('clicking the dimmed paused background resumes gameplay but clicking the menu surface does not', async () => {
+  const harness = await loadHarness();
+  const { elements, resumeGameplayCalls } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  elements['menu-surface'].click();
+  assert.equal(resumeGameplayCalls.length, 0);
+
+  elements['overlay'].click();
+  assert.equal(resumeGameplayCalls.length, 1);
+  assert.equal(resumeGameplayCalls[0].source, 'resume');
+});
+
 test('active-match header friend controls mirror the home friend id and reuse the same party actions', async () => {
   const harness = await loadHarness();
   const { elements, runPartyActionCalls } = harness;
@@ -1515,6 +1604,55 @@ test('hidden menu caches structured match model and applies it when the active s
   assert.equal(elements['active-match-context-pill'].textContent, 'WAITING');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, '2');
   assert.equal(elements['active-match-secondary-stat-pill'].textContent, '1');
+});
+
+test('paused fallback hides the empty optional stat slot while keeping the stats shell visible', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  assert.equal(elements['active-match-pill-grid'].hidden, false);
+  assert.equal(elements['active-match-mode-pill'].hidden, false);
+  assert.equal(elements['active-match-context-pill'].hidden, false);
+  assert.equal(elements['active-match-primary-stat-pill'].hidden, false);
+  assert.equal(elements['active-match-secondary-stat-pill'].hidden, true);
+});
+
+test('active-match hides the stats shell when the structured model has no visible pills', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+  harness.emitMatchMenuModel({
+    ready: true,
+    banner: null,
+    modePill: null,
+    contextPill: null,
+    primaryPill: null,
+    secondaryPill: null
+  });
+
+  assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['active-match-pill-grid'].hidden, true);
+  assert.equal(elements['active-match-mode-pill'].hidden, true);
+  assert.equal(elements['active-match-context-pill'].hidden, true);
+  assert.equal(elements['active-match-primary-stat-pill'].hidden, true);
+  assert.equal(elements['active-match-secondary-stat-pill'].hidden, true);
 });
 
 test('paused escape keeps focus on the pause rail instead of trying to resume directly', async () => {

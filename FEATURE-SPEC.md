@@ -49,7 +49,7 @@ Menu/subtitle/debug text must always match the effective room ID for clarity.
 - Open sightline density rebalance: jungle `-40%`, arctic/desert `-60%`.
 
 ### Phase 3: Waterfall Hero Feature
-- Static rock cut + basin geometry.
+- Static rock cut + Wall Street geometry.
 - Waterfall planes with animated UV scrolling.
 - Lightweight mist cards (no heavy particle systems).
 - `GameWorld.update(dtSec)` introduced for world animation updates.

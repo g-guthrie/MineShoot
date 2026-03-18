@@ -5,7 +5,7 @@ import {
   ensureHeadlessWorldRuntime
 } from './headless-world-runtime.js';
 import '../js/world/quadrant-arctic.js';
-import '../js/world/quadrant-basin.js';
+import '../js/world/quadrant-wall-street.js';
 import '../js/world/quadrant-citadel.js';
 import '../js/world/quadrant-desert.js';
 import '../js/world/quadrant-jungle.js';

@@ -135,7 +135,7 @@
                     <div id="menu-feedback" aria-live="polite" hidden></div>
 
                     <div id="active-match-shell" hidden>
-                        <div id="active-match-pill-grid" hidden>
+                        <div id="active-match-pill-grid" data-rounded-role="container" hidden>
                             <div id="active-match-mode-pill">Paused</div>
                             <div id="active-match-context-pill" hidden></div>
                             <div id="active-match-primary-stat-pill">Change loadout or resume.</div>
@@ -220,6 +220,14 @@
                                     <div class="menu-card-kicker">Room</div>
                                     <h2 class="menu-card-title">Private Room</h2>
                                     <div id="private-room-status" aria-live="polite"></div>
+                                    <div id="room-social-feedback" class="menu-panel-status menu-status-pill" hidden></div>
+                                    <div id="room-social-invite-banner" class="menu-panel-status menu-status-banner" hidden>
+                                        <div id="room-social-invite-copy"></div>
+                                        <div id="room-social-invite-actions" class="menu-pill-flow menu-pill-flow-secondary">
+                                            <button id="room-social-invite-accept-btn" type="button">Accept Invite</button>
+                                            <button id="room-social-invite-dismiss-btn" type="button">Dismiss</button>
+                                        </div>
+                                    </div>
                                     <div id="room-share-panel" hidden>
                                         <span id="room-share-label">Room Code</span>
                                         <span id="room-share-code">------</span>

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 
 import {
   createRotatedBoxAabb,
@@ -8,7 +9,7 @@ import {
 } from '../../shared/headless-world-runtime.js';
 import {
   BIOME_ARCTIC,
-  BIOME_BASIN,
+  BIOME_WALL_STREET,
   BIOME_CITADEL,
   BIOME_DESERT,
   BIOME_GRID_COLS,
@@ -49,7 +50,7 @@ test('world layout expands to a 3x3 biome grid', () => {
       BIOME_CITADEL,
       BIOME_NUCLEAR,
       BIOME_QUARRY,
-      BIOME_BASIN,
+      BIOME_WALL_STREET,
       BIOME_URBAN
     ]
   );
@@ -106,10 +107,17 @@ test('headless world collision data no longer includes thin seam colliders on bi
 
 function createGeometryRecorder() {
   const blocks = [];
+  const decors = [];
+  const flickers = [];
+  const steamColumns = [];
   return {
     blocks,
+    decors,
+    flickers,
+    steamColumns,
     place: {
       addBlock(x, y, z, w, h, d, material, isSolid) {
+        const userData = {};
         blocks.push({
           kind: 'block',
           x: Number(x || 0),
@@ -119,14 +127,17 @@ function createGeometryRecorder() {
           h: Number(h || 0),
           d: Number(d || 0),
           material,
-          isSolid: isSolid !== false
+          isSolid: isSolid !== false,
+          userData
         });
         return {
           position: { x: Number(x || 0), y: Number(y || 0), z: Number(z || 0) },
-          material: material || null
+          material: material || null,
+          userData
         };
       },
       addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
+        const userData = {};
         blocks.push({
           kind: 'ramp',
           x: Number(x || 0),
@@ -138,18 +149,35 @@ function createGeometryRecorder() {
           rotY: Number(rotY || 0),
           tiltX: Number(tiltX || 0),
           material,
-          isSolid: isSolid !== false
+          isSolid: isSolid !== false,
+          userData
         });
         return {
           position: { x: Number(x || 0), y: Number(y || 0), z: Number(z || 0) },
-          material: material || null
+          material: material || null,
+          userData
         };
       },
-      addDecor() {
+      addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
+        const userData = {};
+        decors.push({
+          kind: 'decor',
+          x: Number(x || 0),
+          y: Number(y || 0),
+          z: Number(z || 0),
+          geometry,
+          material,
+          rotY: Number(rotY || 0),
+          rotX: Number(rotX || 0),
+          rotZ: Number(rotZ || 0),
+          userData
+        });
         return {
-          position: { x: 0, y: 0, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 },
-          material: null
+          position: { x: Number(x || 0), y: Number(y || 0), z: Number(z || 0) },
+          rotation: { x: Number(rotX || 0), y: Number(rotY || 0), z: Number(rotZ || 0) },
+          material: material || null,
+          geometry: geometry || null,
+          userData
         };
       }
     },
@@ -160,8 +188,8 @@ function createGeometryRecorder() {
       addMistCard() {},
       addLeafSway() {},
       addIceShimmer() {},
-      addFlicker() {},
-      addSteamColumn() {}
+      addFlicker(data) { flickers.push(data); },
+      addSteamColumn(data) { steamColumns.push(data); }
     }
   };
 }
@@ -265,7 +293,7 @@ test('desert adds a mid-scale hero arch while keeping the fortress edges', () =>
   assert.ok(eastTouches.length >= 1);
 });
 
-test('nuclear cooling towers sit flush to the east wall and tower over the old profile', () => {
+test('nuclear cooling towers stay flush to the east wall while the plant becomes two clean reactor buildings', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
   assert.equal(typeof builder, 'function');
@@ -279,100 +307,149 @@ test('nuclear cooling towers sit flush to the east wall and tower over the old p
   });
 
   assert.ok(stats);
-  assert.ok(stats.towerPeakHeight >= 26);
-  assert.ok(stats.towerPeakHeight <= 28.5);
+  assert.ok(stats.towerPeakHeight >= 42.3);
+  assert.ok(stats.towerPeakHeight <= 42.7);
   assert.ok(Math.abs(stats.towerEastFaceX - rawBounds.maxX) < 0.001);
-  assert.ok(stats.campusCenterX < 132);
+  assert.ok(stats.towerBaseWidth >= 15.5);
+  assert.equal(stats.reactorBuildings, 2);
+  assert.ok(stats.buildingGap >= 4);
+  assert.equal(stats.stairBuildingNorth, 1);
+  assert.equal(stats.northStairStepCount, 5);
+  assert.ok(stats.northStairTopY < stats.northBuildingRoofY);
+
+  const reactorBodies = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.userData &&
+    block.userData.role === 'reactor-building'
+  );
+  assert.equal(reactorBodies.length, 2);
+
+  const northReactor = reactorBodies.find((block) => block.userData.reactorId === 'north');
+  const southReactor = reactorBodies.find((block) => block.userData.reactorId === 'south');
+  assert.ok(northReactor);
+  assert.ok(southReactor);
+  assert.ok(northReactor.z < southReactor.z);
+  assert.ok((southReactor.w / northReactor.w) >= 1.28);
+  assert.ok((southReactor.d / northReactor.d) >= 1.28);
+  assert.ok((southReactor.h / northReactor.h) >= 1.28);
+
+  const northStairs = recorder.blocks.filter((block) =>
+    block.userData &&
+    block.userData.role === 'reactor-stair-step' &&
+    block.userData.reactorId === 'north'
+  );
+  const southStairs = recorder.blocks.filter((block) =>
+    block.userData &&
+    block.userData.role === 'reactor-stair-step' &&
+    block.userData.reactorId === 'south'
+  );
+  assert.equal(northStairs.length, 5);
+  assert.equal(southStairs.length, 0);
+  assert.ok(northStairs.every((step) => step.w <= 1.1));
+  assert.ok(northStairs.every((step) => step.d <= 1.0));
+  const sortedNorthStairs = northStairs.slice().sort((a, b) => a.userData.stepIndex - b.userData.stepIndex);
+  assert.ok(sortedNorthStairs.at(-1).x > sortedNorthStairs[0].x);
+  assert.ok(sortedNorthStairs.at(-1).z < sortedNorthStairs[0].z);
+  assert.ok(sortedNorthStairs.at(-1).y < northReactor.h);
+
+  const oldCampusBody = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    Math.abs(block.w - 18.4) < 0.0001 &&
+    Math.abs(block.h - 7.2) < 0.0001 &&
+    Math.abs(block.d - 13.8) < 0.0001
+  );
+  assert.equal(oldCampusBody, undefined);
 });
 
-test('nuclear reactor sign renders as a centered radiation trefoil bitmap', () => {
+test('nuclear keeps only a restrained green glow strip while removing the warning sign', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
   assert.equal(typeof builder, 'function');
 
   const rawBounds = quadrantBounds('r1c2');
   const recorder = createGeometryRecorder();
-  builder(rawBounds, recorder.place, {
+  const stats = builder(rawBounds, recorder.place, {
     ...recorder.ctx,
     biomeEntry: { biome: BIOME_NUCLEAR },
     rawBounds
   });
 
-  const signTile = 0.42;
-  const signCellSize = signTile * 0.88;
-  const expectedPattern = [
-    '00000011111000000',
-    '00000111111100000',
-    '00001111111110000',
-    '00001111111110000',
-    '00000111111100000',
-    '00000011111000000',
-    '00000000000000000',
-    '01100001110000110',
-    '11110001110001111',
-    '11111001110011111',
-    '11111001110011111',
-    '01111100000011110',
-    '00111100000011100',
-    '00011100000011000',
-    '00001100000010000',
-    '00000000000000000',
-    '00000000000000000'
-  ];
-  const signBacking = recorder.blocks.find((block) =>
+  const signParts = recorder.decors.filter((decor) =>
+    decor.userData &&
+    String(decor.userData.role || '').indexOf('warning-sign') === 0
+  );
+  assert.equal(signParts.length, 0);
+  assert.equal(stats.warningSignCount, 0);
+
+  const oldBitmapBacking = recorder.blocks.find((block) =>
     block.kind === 'block' &&
     block.isSolid === false &&
     Math.abs(block.w - 7.3) < 0.0001 &&
     Math.abs(block.h - 7.3) < 0.0001 &&
     Math.abs(block.d - 0.08) < 0.0001
   );
-  assert.ok(signBacking);
+  assert.equal(oldBitmapBacking, undefined);
 
-  const signOriginX = signBacking.x - (((expectedPattern[0].length - 1) * signTile) * 0.5);
-  const signOriginY = signBacking.y + (((expectedPattern.length - 1) * signTile) * 0.5);
-  const signBlocks = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    Math.abs(block.d - 0.08) < 0.0001 &&
-    Math.abs(block.w - signCellSize) < 0.0001 &&
-    Math.abs(block.h - signCellSize) < 0.0001
+  const glowSegments = recorder.blocks.filter((block) =>
+    block.userData &&
+    block.userData.role === 'reactor-glow-strip' &&
+    block.userData.reactorId === 'south'
   );
-  const actualPattern = expectedPattern.map((row) => row.split(''));
-
-  for (let row = 0; row < actualPattern.length; row += 1) {
-    for (let col = 0; col < actualPattern[row].length; col += 1) {
-      actualPattern[row][col] = '0';
-    }
-  }
-
-  for (const block of signBlocks) {
-    const col = Math.round((block.x - signOriginX) / signTile);
-    const row = Math.round((signOriginY - block.y) / signTile);
-    assert.ok(col >= 0 && col < expectedPattern[0].length, 'sign tile column should fit the bitmap');
-    assert.ok(row >= 0 && row < expectedPattern.length, 'sign tile row should fit the bitmap');
-    actualPattern[row][col] = '1';
-  }
-
-  assert.equal(
-    signBlocks.length,
-    expectedPattern.join('').split('').filter((cell) => cell === '1').length
-  );
+  assert.equal(glowSegments.length, 3);
+  assert.equal(stats.glowMainFace, 'south');
   assert.deepEqual(
-    actualPattern.map((row) => row.join('')),
-    expectedPattern
+    glowSegments.map((segment) => segment.userData.face).sort(),
+    ['east', 'south', 'west']
   );
+  assert.deepEqual(stats.glowWrapFaces.slice().sort(), ['east', 'west']);
+  const westGlow = glowSegments.find((segment) => segment.userData.face === 'west');
+  const eastGlow = glowSegments.find((segment) => segment.userData.face === 'east');
+  const southGlow = glowSegments.find((segment) => segment.userData.face === 'south');
+  assert.ok(Math.abs(southGlow.y - stats.glowStripY) < 0.0001);
+  assert.ok(southGlow.w < stats.glowMainSpan);
+  assert.ok(southGlow.w > (stats.glowMainSpan * 0.55));
+  assert.ok(westGlow.d < stats.glowWrapSpan);
+  assert.ok(westGlow.d > (stats.glowWrapSpan * 0.55));
+  assert.ok(eastGlow.d < stats.glowWrapSpan);
+  assert.ok(eastGlow.d > (stats.glowWrapSpan * 0.55));
+  assert.ok(southGlow.w > westGlow.d);
+  assert.ok(southGlow.w > eastGlow.d);
+  assert.ok(westGlow.w <= 0.12);
+  assert.ok(eastGlow.w <= 0.12);
+  assert.ok(Math.abs(stats.glowBackingHeight - 0.46) < 0.0001);
+  assert.ok(Math.abs(stats.glowVisibleHeight - 0.26) < 0.0001);
+  assert.ok(stats.glowBackingHeight > 0.2);
+  assert.ok(stats.glowVisibleHeight > 0.1);
+  assert.ok(Math.abs(stats.glowStandOff - 0.06) < 0.0001);
+
+  const glowFlickers = recorder.flickers.filter((flicker) => flicker && flicker.pulseFamily === 'nuclear-window');
+  assert.equal(glowFlickers.length, 3);
+  for (const flicker of glowFlickers) {
+    assert.ok(Math.abs(Number(flicker.baseIntensity || 0) - 0.44) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.amplitude || 0) - 0.16) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.freq || 0) - 0.42) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.opacityBase || 0) - 0.74) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.opacityAmplitude || 0) - 0.16) < 0.0001);
+  }
+  assert.ok(glowFlickers.every((flicker) => Math.abs(Number(flicker.phase || 0) - 0.85) < 0.0001));
+
+  assert.equal(recorder.steamColumns.length, 2);
+  assert.ok(recorder.steamColumns.every((steam) => Number(steam.rise || 0) >= 13));
+  assert.ok(recorder.steamColumns.every((steam) => Array.isArray(steam.tiles) && steam.tiles.length >= 100));
+  assert.ok(stats.steamTileCount >= 200);
+  assert.ok(Math.abs(stats.glowWrapSpan - 1.1) < 0.0001);
 });
 
 test('wall street keeps the south hero wall while differentiating the flanks', () => {
   const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.basin;
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
 
   const rawBounds = quadrantBounds('r2c1');
   const recorder = createGeometryRecorder();
   const stats = builder(rawBounds, recorder.place, {
     ...recorder.ctx,
-    biomeEntry: { biome: BIOME_BASIN },
+    biomeEntry: { biome: BIOME_WALL_STREET },
     rawBounds
   });
 
@@ -384,10 +461,64 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
   assert.ok(stats.upperShaftWidth >= 8);
   assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
   assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.866))) < 0.0001);
+  const expectedWallStreetZ = (v) => rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * v);
+  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.66)) < 0.0001);
+  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.64)) < 0.0001);
+  assert.ok(Math.abs(stats.westSupportCenterZ - expectedWallStreetZ(0.52)) < 0.0001);
+  assert.ok(Math.abs(stats.eastSupportCenterZ - expectedWallStreetZ(0.50)) < 0.0001);
+  assert.ok(Math.abs(stats.westKioskCenterZ - expectedWallStreetZ(0.34)) < 0.0001);
+  assert.ok(Math.abs(stats.eastKioskCenterZ - expectedWallStreetZ(0.34)) < 0.0001);
+  assert.ok(Math.abs(stats.westOfficeCenterZ - expectedWallStreetZ(0.21)) < 0.0001);
+  assert.ok(Math.abs(stats.eastOfficeCenterZ - expectedWallStreetZ(0.21)) < 0.0001);
+  assert.ok(Math.abs(stats.westBusStopCenterZ - expectedWallStreetZ(0.39)) < 0.0001);
+  assert.ok(Math.abs(stats.eastBusStopCenterZ - expectedWallStreetZ(0.39)) < 0.0001);
   assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
   assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
   assert.equal(stats.northSupportCount, 4);
   assert.ok(stats.westAlleyCoverCount > stats.eastAlleyCoverCount);
+
+  const plazaSpan = (rawBounds.maxX - rawBounds.minX) - 1.2;
+  const broadPlazaBase = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.y - 0.04) < 0.0001 &&
+    Math.abs(block.w - plazaSpan) < 0.0001 &&
+    Math.abs(block.h - 0.08) < 0.0001 &&
+    Math.abs(block.d - plazaSpan) < 0.0001
+  );
+  assert.equal(broadPlazaBase.length, 1);
+
+  const centerApproachStrip = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.y - 0.082) < 0.0001 &&
+    Math.abs(block.w - 9.2) < 0.0001 &&
+    Math.abs(block.h - 0.084) < 0.0001 &&
+    block.d > 26
+  );
+  assert.equal(centerApproachStrip.length, 1);
+
+  const alleyStrips = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.y - 0.082) < 0.0001 &&
+    Math.abs(block.w - 4.8) < 0.0001 &&
+    Math.abs(block.h - 0.084) < 0.0001 &&
+    Math.abs(block.d - 21.2) < 0.0001
+  );
+  assert.equal(alleyStrips.length, 2);
+
+  const perimeterPlanters = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs(block.y - 0.56) < 0.0001 &&
+    Math.abs(block.h - 1.12) < 0.0001 &&
+    (
+      (Math.abs(block.w - 2.4) < 0.0001 && Math.abs(block.d - 1.4) < 0.0001) ||
+      (Math.abs(block.w - 1.4) < 0.0001 && Math.abs(block.d - 2.6) < 0.0001)
+    )
+  );
+  assert.equal(perimeterPlanters.length, 4);
 
   const busStopRoofs = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
@@ -416,16 +547,16 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
   assert.ok(southFlushSolids.length >= 1);
 });
 
-test('basin geometry and collidables stay inside the biome bounds', () => {
+test('wall street geometry and collidables stay inside the biome bounds', () => {
   const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.basin;
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
 
   const rawBounds = quadrantBounds('r2c1');
   const geometryRecorder = createGeometryRecorder();
   builder(rawBounds, geometryRecorder.place, {
     ...geometryRecorder.ctx,
-    biomeEntry: { biome: BIOME_BASIN },
+    biomeEntry: { biome: BIOME_WALL_STREET },
     rawBounds
   });
 
@@ -450,7 +581,7 @@ test('basin geometry and collidables stay inside the biome bounds', () => {
   const collisionRecorder = createHeadlessRecorder();
   builder(rawBounds, collisionRecorder.place, {
     ...collisionRecorder.ctx,
-    biomeEntry: { biome: BIOME_BASIN },
+    biomeEntry: { biome: BIOME_WALL_STREET },
     rawBounds
   });
   const overflowColliders = collisionRecorder.collidables.filter((box) =>
@@ -460,4 +591,60 @@ test('basin geometry and collidables stay inside the biome bounds', () => {
     box.max.z > rawBounds.maxZ + 0.0001
   );
   assert.equal(overflowColliders.length, 0);
+});
+
+test('server headless collider builder uses raw biome bounds instead of padded bounds', async () => {
+  const source = await fs.readFile(new URL('../../cloudflare/server/room/runtime/headless-world-colliders.mjs', import.meta.url), 'utf8');
+  assert.match(source, /builder\(rawBounds,\s*place,\s*\{/);
+  assert.doesNotMatch(source, /builder\(paddedBounds,\s*place,\s*\{/);
+});
+
+test('desert arch shadow slabs sit below the solid spans instead of overlapping them', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r0c2');
+  const recorder = createGeometryRecorder();
+  builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_DESERT },
+    rawBounds
+  });
+
+  const smallSpan = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs(block.w - 8.0) < 0.0001 &&
+    Math.abs(block.h - 1.2) < 0.0001 &&
+    Math.abs(block.d - 2.0) < 0.0001
+  );
+  const smallShadow = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.w - 6.0) < 0.0001 &&
+    Math.abs(block.h - 0.28) < 0.0001 &&
+    Math.abs(block.d - 1.4) < 0.0001
+  );
+  const largeSpan = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    Math.abs(block.w - 11.8) < 0.0001 &&
+    Math.abs(block.h - 1.4) < 0.0001 &&
+    Math.abs(block.d - 3.0) < 0.0001
+  );
+  const largeShadow = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.w - 7.8) < 0.0001 &&
+    Math.abs(block.h - 0.24) < 0.0001 &&
+    Math.abs(block.d - 1.8) < 0.0001
+  );
+
+  assert.ok(smallSpan);
+  assert.ok(smallShadow);
+  assert.ok(largeSpan);
+  assert.ok(largeShadow);
+  assert.ok((smallShadow.y + (smallShadow.h * 0.5)) < (smallSpan.y - (smallSpan.h * 0.5)));
+  assert.ok((largeShadow.y + (largeShadow.h * 0.5)) < (largeSpan.y - (largeSpan.h * 0.5)));
 });

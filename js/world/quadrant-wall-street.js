@@ -1,7 +1,7 @@
 import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
 /**
- * quadrant-basin.js - Toontown Wall Street occupying the south-center biome slot.
+ * quadrant-wall-street.js - Toontown Wall Street occupying the south-center biome slot.
  * Current bounds are the full biome cell footprint: x:[56,110] z:[110,164]
  */
 (function () {
@@ -14,8 +14,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var lib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
         MATS = {
             stoneLight: lib.getLambert({ color: 0xe5ddcf }),
-            stoneMid: lib.getLambert({ color: 0xcbbca0 }),
-            stoneDark: lib.getLambert({ color: 0x6b6660 }),
+            stoneMid: lib.getLambert({ color: 0xd6c5a3 }),
+            stoneDark: lib.getLambert({ color: 0x8a7866 }),
+            towerStone: lib.getLambert({ color: 0x8e8275 }),
             roof: lib.getLambert({ color: 0x7a5f58 }),
             trim: lib.getLambert({ color: 0xd3ad5f }),
             bronze: lib.getLambert({ color: 0xb17b46 }),
@@ -23,7 +24,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             signRed: lib.getLambert({ color: 0xc84e50 }),
             signBlue: lib.getLambert({ color: 0x4a7da6 }),
             hedge: lib.getLambert({ color: 0x617d56 }),
-            pavement: lib.getLambert({ color: 0x3c3f46 }),
+            pavement: lib.getLambert({ color: 0x6a6258 }),
+            pavementDark: lib.getLambert({ color: 0x4a443e }),
+            curb: lib.getLambert({ color: 0xb39c7d }),
             glass: lib.getLambert({ color: 0xeaf8ff, transparent: true, opacity: 0.4 }),
             window: lib.getLambert({ color: 0x7dd7f1, transparent: true, opacity: 0.72 }),
             glow: new THREE.MeshStandardMaterial({ color: 0xffdc7d, emissive: 0xffdc7d, emissiveIntensity: 0.72 })
@@ -53,12 +56,13 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     function addCornice(place, cx, y, cz, w, d, mats) {
         place.addBlock(cx, y, cz, w + 0.72, 0.34, d + 0.72, mats.stoneMid, true);
-        place.addBlock(cx, y + 0.24, cz, w + 0.28, 0.1, d + 0.28, mats.trim, false);
+        place.addBlock(cx, y + 0.24, cz, w + 0.28, 0.1, d + 0.28, mats.trim, true);
     }
 
     function addStreetLamp(x, z, place, mats, ctx, phase) {
-        place.addBlock(x, 2.6, z, 0.14, 5.2, 0.14, mats.stoneDark, false);
-        place.addBlock(x, 5.0, z + 0.38, 0.12, 0.12, 0.76, mats.stoneDark, false);
+        var postMat = mats.towerStone || mats.stoneDark;
+        place.addBlock(x, 2.6, z, 0.14, 5.2, 0.14, postMat, false);
+        place.addBlock(x, 5.0, z + 0.38, 0.12, 0.12, 0.76, postMat, false);
         var glow = place.addBlock(x, 4.82, z + 0.78, 0.28, 0.15, 0.28, cloneMaterial(mats.glow), false);
         if (ctx && typeof ctx.addFlicker === 'function') {
             ctx.addFlicker({ material: glow.material, freq: 2.7, phase: Number(phase || 0) });
@@ -66,12 +70,13 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function addClockMedallion(x, y, z, place, mats) {
+        var detailMat = mats.towerStone || mats.stoneDark;
         var ringGeo = new THREE.CylinderGeometry(1.02, 1.02, 0.16, 18);
         var faceGeo = new THREE.CylinderGeometry(0.78, 0.78, 0.08, 18);
         place.addDecor(x, y, z, ringGeo, mats.trim, 0, Math.PI * 0.5, 0);
         place.addDecor(x, y, z - 0.04, faceGeo, mats.stoneLight, 0, Math.PI * 0.5, 0);
-        place.addBlock(x, y, z - 0.12, 0.08, 0.08, 0.76, mats.stoneDark, false);
-        place.addBlock(x + 0.22, y + 0.18, z - 0.12, 0.08, 0.08, 0.42, mats.stoneDark, false);
+        place.addBlock(x, y, z - 0.12, 0.08, 0.08, 0.76, detailMat, false);
+        place.addBlock(x + 0.22, y + 0.18, z - 0.12, 0.08, 0.08, 0.42, detailMat, false);
     }
 
     function addGlowStrip(place, x, y, z, w, d, mats, ctx, color, phase) {
@@ -87,10 +92,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function addVaultWheel(x, y, z, place, mats) {
+        var coreMat = mats.towerStone || mats.stoneDark;
         var ringGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.12, 18);
         var coreGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.18, 12);
         place.addDecor(x, y, z, ringGeo, mats.bronze, 0, Math.PI * 0.5, 0);
-        place.addDecor(x, y, z - 0.02, coreGeo, mats.stoneDark, 0, Math.PI * 0.5, 0);
+        place.addDecor(x, y, z - 0.02, coreGeo, coreMat, 0, Math.PI * 0.5, 0);
         for (var i = 0; i < 6; i++) {
             var angle = (Math.PI * 2 * i) / 6;
             var spokeX = x + (Math.cos(angle) * 0.42);
@@ -120,10 +126,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     function buildRearWallMask(bounds, centerX, place, mats) {
         var wallZ = bounds.maxZ - 2.1;
         var fullWidth = Math.max(52.0, (bounds.maxX - bounds.minX) - 0.6);
-        place.addBlock(centerX, 8.6, wallZ, fullWidth, 17.2, 4.2, mats.stoneDark, true);
-        place.addBlock(centerX, 17.0, wallZ - 0.95, fullWidth - 2.0, 16.8, 2.6, mats.stoneDark, true);
-        place.addBlock(bounds.minX + 2.2, 10.4, wallZ - 0.4, 4.4, 20.8, 2.9, mats.stoneDark, true);
-        place.addBlock(bounds.maxX - 2.2, 10.0, wallZ - 0.2, 4.4, 20.0, 2.9, mats.stoneDark, true);
+        place.addBlock(centerX, 8.6, wallZ, fullWidth, 17.2, 4.2, mats.towerStone, true);
+        place.addBlock(centerX, 17.0, wallZ - 0.95, fullWidth - 2.0, 16.8, 2.6, mats.towerStone, true);
+        place.addBlock(bounds.minX + 2.2, 10.4, wallZ - 0.4, 4.4, 20.8, 2.9, mats.towerStone, true);
+        place.addBlock(bounds.maxX - 2.2, 10.0, wallZ - 0.2, 4.4, 20.0, 2.9, mats.towerStone, true);
         addWindowStack(place, centerX, 7.3, wallZ - 2.1, fullWidth - 12.0, 0.2, 4, 2.6, mats, 0.82, 0.1);
         return {
             southFaceZ: wallZ + 2.1
@@ -140,15 +146,45 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         ];
         for (var i = 0; i < steps.length; i++) {
             var step = steps[i];
-            place.addBlock(centerX, step.y, step.z, step.w, 0.84, step.d, mats.stoneLight, true);
+            place.addBlock(centerX, step.y, step.z, step.w, 0.84, step.d, mats.stoneMid, true);
         }
 
         place.addBlock(centerX, 4.12, terraceZ, 12.6, 1.02, 3.4, mats.stoneMid, true);
         place.addBlock(centerX, 4.58, terraceZ - 0.05, 7.1, 0.08, 10.0, mats.signRed, false);
-        place.addBlock(centerX - 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneDark, true);
-        place.addBlock(centerX + 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneDark, true);
-        place.addBlock(centerX - 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, false);
-        place.addBlock(centerX + 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, false);
+        place.addBlock(centerX - 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneMid, true);
+        place.addBlock(centerX + 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneMid, true);
+        place.addBlock(centerX - 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, true);
+        place.addBlock(centerX + 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, true);
+    }
+
+    function buildDistrictPaving(bounds, centerX, streetBandZ, exchangeZ, place, mats) {
+        var inset = 0.6;
+        var curbThickness = 0.36;
+        var plazaW = (bounds.maxX - bounds.minX) - (inset * 2);
+        var plazaD = (bounds.maxZ - bounds.minZ) - (inset * 2);
+        var plazaCenterZ = (bounds.minZ + bounds.maxZ) * 0.5;
+        var northCurbZ = bounds.minZ + inset + (curbThickness * 0.5);
+        var southCurbZ = bounds.maxZ - inset - (curbThickness * 0.5);
+        var westCurbX = bounds.minX + inset + (curbThickness * 0.5);
+        var eastCurbX = bounds.maxX - inset - (curbThickness * 0.5);
+        var southGap = 22.0;
+        var southSegmentW = Math.max(6.0, (plazaW - southGap) * 0.5);
+        var southSegmentOffset = (southGap * 0.5) + (southSegmentW * 0.5);
+        var centerLaneCenterZ = ((exchangeZ - 0.6) + streetBandZ) * 0.5;
+        var centerLaneDepth = Math.max(26.4, (exchangeZ - streetBandZ) + 5.4);
+        var westLane = pt(bounds, 0.36, 0.62);
+        var eastLane = pt(bounds, 0.64, 0.60);
+
+        place.addBlock(centerX, 0.04, plazaCenterZ, plazaW, 0.08, plazaD, mats.pavement, false);
+        place.addBlock(centerX, 0.082, centerLaneCenterZ, 9.2, 0.084, centerLaneDepth, mats.pavementDark, false);
+        place.addBlock(westLane.x, 0.082, westLane.z, 4.8, 0.084, 21.2, mats.pavementDark, false);
+        place.addBlock(eastLane.x, 0.082, eastLane.z, 4.8, 0.084, 21.2, mats.pavementDark, false);
+
+        place.addBlock(centerX, 0.09, northCurbZ, plazaW, 0.18, curbThickness, mats.curb, false);
+        place.addBlock(westCurbX, 0.09, plazaCenterZ, curbThickness, 0.18, plazaD, mats.curb, false);
+        place.addBlock(eastCurbX, 0.09, plazaCenterZ, curbThickness, 0.18, plazaD, mats.curb, false);
+        place.addBlock(centerX - southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, curbThickness, mats.curb, false);
+        place.addBlock(centerX + southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, curbThickness, mats.curb, false);
     }
 
     function buildExchangeFrontage(centerX, facadeZ, bounds, place, mats, ctx) {
@@ -158,7 +194,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var lobbyPilasters = [-7.2, -2.4, 2.4, 7.2];
 
         place.addBlock(centerX, 6.4, facadeZ + 1.0, 30.2, 2.2, 10.4, mats.stoneMid, true);
-        place.addBlock(centerX, 11.2, facadeZ + 1.3, 27.2, 9.0, 6.8, mats.stoneDark, true);
+        place.addBlock(centerX, 11.2, facadeZ + 1.3, 27.2, 9.0, 6.8, mats.stoneMid, true);
         place.addBlock(centerX, 15.95, facadeZ + 0.5, (bounds.maxX - bounds.minX) - 0.6, 0.92, 2.6, mats.stoneMid, true);
 
         place.addBlock(wingCenterLeft, 8.8, facadeZ + 1.2, 6.0, 9.6, 7.4, mats.stoneMid, true);
@@ -167,10 +203,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         place.addBlock(wingCenterRight, 14.25, facadeZ + 0.78, 6.6, 1.0, 2.1, mats.stoneMid, true);
         place.addBlock(wingCenterLeft, 17.85, facadeZ + 0.88, 5.2, 0.58, 1.3, mats.roof, false);
         place.addBlock(wingCenterRight, 17.85, facadeZ + 0.88, 5.2, 0.58, 1.3, mats.roof, false);
-        place.addBlock(wingCenterLeft, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneDark, true);
-        place.addBlock(wingCenterRight, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneDark, true);
-        place.addBlock(centerX - 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneDark, true);
-        place.addBlock(centerX + 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneDark, true);
+        place.addBlock(wingCenterLeft, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneMid, true);
+        place.addBlock(wingCenterRight, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneMid, true);
+        place.addBlock(centerX - 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneMid, true);
+        place.addBlock(centerX + 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneMid, true);
         addWindowStack(place, wingCenterLeft, 7.2, facadeZ + 1.2, 6.0, 7.4, 2, 2.15, mats, 0.56, 0.62);
         addWindowStack(place, wingCenterRight, 7.2, facadeZ + 1.2, 6.0, 7.4, 2, 2.15, mats, 0.56, 0.62);
 
@@ -213,11 +249,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     function buildTowerStack(centerX, towerZ, bounds, place, mats, ctx) {
         var towerSideLeftX = bounds.minX + 4.76;
         var towerSideRightX = bounds.maxX - 4.76;
-        place.addBlock(centerX, 9.0, towerZ + 0.2, 24.6, 18.0, 13.2, mats.stoneDark, true);
-        place.addBlock(towerSideLeftX, 9.3, towerZ + 0.58, 8.8, 18.6, 11.6, mats.stoneDark, true);
-        place.addBlock(towerSideRightX, 9.1, towerZ + 0.54, 8.8, 18.2, 11.2, mats.stoneDark, true);
-        place.addBlock(centerX - 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.stoneDark, true);
-        place.addBlock(centerX + 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.stoneDark, true);
+        place.addBlock(centerX, 9.0, towerZ + 0.2, 24.6, 18.0, 13.2, mats.towerStone, true);
+        place.addBlock(towerSideLeftX, 9.3, towerZ + 0.58, 8.8, 18.6, 11.6, mats.towerStone, true);
+        place.addBlock(towerSideRightX, 9.1, towerZ + 0.54, 8.8, 18.2, 11.2, mats.towerStone, true);
+        place.addBlock(centerX - 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.towerStone, true);
+        place.addBlock(centerX + 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.towerStone, true);
         place.addBlock(centerX, 10.2, towerZ - 5.42, 15.8, 8.8, 0.92, mats.window, false);
         addWindowStack(place, centerX, 7.05, towerZ + 0.2, 24.6, 13.2, 4, 2.36, mats, 0.68, 0.58);
         addWindowStack(place, towerSideLeftX, 6.95, towerZ + 0.58, 8.8, 11.6, 4, 2.24, mats, 0.58, 0.46);
@@ -226,22 +262,22 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         addCornice(place, towerSideLeftX, 18.1, towerZ + 0.58, 8.8, 11.6, mats);
         addCornice(place, towerSideRightX, 18.0, towerZ + 0.54, 8.8, 11.2, mats);
 
-        place.addBlock(centerX, 24.8, towerZ - 0.08, 12.6, 13.6, 12.6, mats.stoneDark, true);
+        place.addBlock(centerX, 24.8, towerZ - 0.08, 12.6, 13.6, 12.6, mats.towerStone, true);
         addWindowStack(place, centerX, 21.15, towerZ - 0.08, 12.6, 12.6, 4, 2.34, mats, 0.6, 0.56);
         addCornice(place, centerX, 31.86, towerZ - 0.08, 12.6, 12.6, mats);
 
-        place.addBlock(centerX + 0.38, 36.15, towerZ - 0.03, 11.0, 9.4, 11.0, mats.stoneDark, true);
+        place.addBlock(centerX + 0.38, 36.15, towerZ - 0.03, 11.0, 9.4, 11.0, mats.towerStone, true);
         addWindowStack(place, centerX + 0.38, 32.8, towerZ - 0.03, 11.0, 11.0, 4, 1.96, mats, 0.58, 0.54);
         addCornice(place, centerX + 0.38, 40.98, towerZ - 0.03, 11.0, 11.0, mats);
 
-        place.addBlock(centerX - 0.2, 44.9, towerZ + 0.08, 9.4, 8.4, 9.4, mats.stoneDark, true);
+        place.addBlock(centerX - 0.2, 44.9, towerZ + 0.08, 9.4, 8.4, 9.4, mats.towerStone, true);
         addWindowStack(place, centerX - 0.2, 41.95, towerZ + 0.08, 9.4, 9.4, 3, 1.95, mats, 0.56, 0.52);
         addCornice(place, centerX - 0.2, 49.2, towerZ + 0.08, 9.4, 9.4, mats);
 
-        place.addBlock(centerX + 0.16, 52.8, towerZ + 0.12, 8.2, 8.2, 8.2, mats.stoneDark, true);
+        place.addBlock(centerX + 0.16, 52.8, towerZ + 0.12, 8.2, 8.2, 8.2, mats.towerStone, true);
         addWindowStack(place, centerX + 0.16, 50.4, towerZ + 0.12, 8.2, 8.2, 3, 1.85, mats, 0.54, 0.5);
 
-        place.addBlock(centerX + 0.16, 57.18, towerZ + 0.12, 9.4, 0.34, 9.4, mats.trim, false);
+        place.addBlock(centerX + 0.16, 57.18, towerZ + 0.12, 9.4, 0.34, 9.4, mats.trim, true);
         place.addBlock(centerX - 2.74, 56.48, towerZ - 2.74, 0.56, 2.0, 0.56, mats.trim, false);
         place.addBlock(centerX + 3.02, 56.48, towerZ - 2.74, 0.56, 2.0, 0.56, mats.trim, false);
         place.addBlock(centerX - 2.66, 56.48, towerZ + 3.02, 0.56, 2.0, 0.56, mats.trim, false);
@@ -298,7 +334,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         addCornice(place, toeX, 6.15, toeZ, w * 0.82, toeDepth, mats);
 
         place.addBlock(bridgeX, 6.1, z, w * 0.34, 1.4, gapDepth + 0.8, mats.stoneMid, true);
-        place.addBlock(bridgeX, 6.92, z, w * 0.28, 0.12, gapDepth + 0.4, mats.trim, false);
+        place.addBlock(bridgeX, 6.92, z, w * 0.28, 0.12, gapDepth + 0.4, mats.trim, true);
 
         place.addBlock(balconyX, 6.25, southZ - 0.45, 1.4, 1.0, 3.5, mats.stoneLight, true);
         place.addBlock(signX, 9.0, southZ, 0.18, 3.95, southDepth * 0.92, mats.trim, false);
@@ -423,6 +459,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildStreetDressings(bounds, centerX, place, mats, ctx) {
+        var northwestEdge = { pos: pt(bounds, 0.18, 0.18), w: 2.4, d: 1.4 };
+        var northeastEdge = { pos: pt(bounds, 0.82, 0.18), w: 2.4, d: 1.4 };
+        var westEdge = { pos: pt(bounds, 0.11, 0.60), w: 1.4, d: 2.6 };
+        var eastEdge = { pos: pt(bounds, 0.89, 0.58), w: 1.4, d: 2.6 };
         var westPlanter = { pos: pt(bounds, 0.38, 0.46), w: 3.4, d: 1.8 };
         var eastPlanter = { pos: pt(bounds, 0.61, 0.43), w: 2.6, d: 1.5 };
         var statue = pt(bounds, 0.50, 0.54);
@@ -437,6 +477,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var westArch = { pos: pt(bounds, 0.31, 0.67), width: 3.5, depth: 1.24 };
         var eastArch = { pos: pt(bounds, 0.69, 0.63), width: 2.8, depth: 1.0 };
 
+        buildPlanter(northwestEdge.pos.x, northwestEdge.pos.z, northwestEdge.w, northwestEdge.d, place, mats);
+        buildPlanter(northeastEdge.pos.x, northeastEdge.pos.z, northeastEdge.w, northeastEdge.d, place, mats);
+        buildPlanter(westEdge.pos.x, westEdge.pos.z, westEdge.w, westEdge.d, place, mats);
+        buildPlanter(eastEdge.pos.x, eastEdge.pos.z, eastEdge.w, eastEdge.d, place, mats);
         buildPlanter(westPlanter.pos.x, westPlanter.pos.z, westPlanter.w, westPlanter.d, place, mats);
         buildPlanter(eastPlanter.pos.x, eastPlanter.pos.z, eastPlanter.w, eastPlanter.d, place, mats);
         buildPlanter(westPocket.pos.x, westPocket.pos.z, westPocket.w, westPocket.d, place, mats);
@@ -470,25 +514,25 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         };
     }
 
-    function buildBasinQuadrant(bounds, place, ctx) {
+    function buildWallStreetQuadrant(bounds, place, ctx) {
         var mats = ensureMats();
         var centerX = (bounds.minX + bounds.maxX) * 0.5;
         var exchange = pt(bounds, 0.50, 0.84);
         var tower = pt(bounds, 0.50, 0.866);
-        var westBlock = pt(bounds, 0.25, 0.62);
-        var eastBlock = pt(bounds, 0.81, 0.60);
-        var westKiosk = pt(bounds, 0.28, 0.36);
-        var eastKiosk = pt(bounds, 0.74, 0.34);
-        var westOffice = pt(bounds, 0.15, 0.24);
-        var eastOffice = pt(bounds, 0.86, 0.24);
-        var westSupport = pt(bounds, 0.39, 0.44);
-        var eastSupport = pt(bounds, 0.66, 0.41);
-        var westBusStop = pt(bounds, 0.30, 0.41);
-        var eastBusStop = pt(bounds, 0.69, 0.39);
+        var westBlock = pt(bounds, 0.25, 0.66);
+        var eastBlock = pt(bounds, 0.81, 0.64);
+        var westKiosk = pt(bounds, 0.32, 0.34);
+        var eastKiosk = pt(bounds, 0.70, 0.34);
+        var westOffice = pt(bounds, 0.18, 0.21);
+        var eastOffice = pt(bounds, 0.82, 0.21);
+        var westSupport = pt(bounds, 0.42, 0.52);
+        var eastSupport = pt(bounds, 0.62, 0.50);
+        var westBusStop = pt(bounds, 0.34, 0.39);
+        var eastBusStop = pt(bounds, 0.65, 0.39);
         var streetBand = pt(bounds, 0.50, 0.39);
         var northSupportCount = 4;
 
-        place.addBlock(centerX, 0.06, streetBand.z, 34.0, 0.12, 9.4, mats.pavement, false);
+        buildDistrictPaving(bounds, centerX, streetBand.z, exchange.z, place, mats);
 
         var rearWallStats = buildRearWallMask(bounds, centerX, place, mats);
         buildGrandStair(centerX, exchange.z - 0.6, place, mats);
@@ -531,6 +575,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             upperShaftWidth: towerStats.upperShaftWidth,
             exchangeCenterZ: exchange.z,
             towerCenterZ: tower.z,
+            westBlockCenterZ: westBlock.z,
+            eastBlockCenterZ: eastBlock.z,
+            westSupportCenterZ: westSupport.z,
+            eastSupportCenterZ: eastSupport.z,
+            westKioskCenterZ: westKiosk.z,
+            eastKioskCenterZ: eastKiosk.z,
+            westOfficeCenterZ: westOffice.z,
+            eastOfficeCenterZ: eastOffice.z,
+            westBusStopCenterZ: westBusStop.z,
+            eastBusStopCenterZ: eastBusStop.z,
             rearWallSouthFaceZ: rearWallStats.southFaceZ,
             westBlockPeakHeight: westBlockStats.peakHeight,
             eastBlockPeakHeight: eastBlockStats.peakHeight,
@@ -542,5 +596,5 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     var ns = (globalThis.__MAYHEM_RUNTIME.WorldQuadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {});
-    ns.basin = buildBasinQuadrant;
+    ns['wall-street'] = buildWallStreetQuadrant;
 })();

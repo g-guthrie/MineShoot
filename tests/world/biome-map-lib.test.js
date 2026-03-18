@@ -73,7 +73,7 @@ test('desert map gains a center hero beat without creating a new hotspot', () =>
 });
 
 test('wall street map starts earlier, stays center-dominant, and avoids new hotspots', () => {
-  const report = buildReport('basin');
+  const report = buildReport('wall-street');
   const topBandCells = report.denseCells.filter((cell) => cell.row <= 3);
   const northInteriorSupport = report.denseCells.filter((cell) =>
     cell.row >= 3 && cell.row <= 6 && cell.col >= 5 && cell.col <= 8

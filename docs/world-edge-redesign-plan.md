@@ -22,7 +22,7 @@ North
 
   [ Arctic ] [ Radar   ] [ Desert ]
   [ Jungle ] [ Citadel ] [ Nuclear]
-  [ Quarry ] [ Basin   ] [ Urban  ]
+  [ Quarry ] [ Wall St ] [ Urban  ]
 
 South
 ```
@@ -30,7 +30,7 @@ South
 Relevant biome bounds now use the full cell footprint from `quadrantBounds(...)`:
 
 - Desert: `x:[110,164] z:[2,56]`
-- Basin: `x:[56,110] z:[110,164]`
+- Wall Street: `x:[56,110] z:[110,164]`
 - Hidden perimeter walls sit just outside the playable span:
   - north wall near `z:2`
   - south wall near `z:164`
@@ -39,7 +39,7 @@ Relevant biome bounds now use the full cell footprint from `quadrantBounds(...)`
 Implication:
 
 - Desert is a corner biome and can use both its north and east borders as a giant L-shaped masking landmark.
-- The `basin` cell should be redesigned as `Wall Street`: a south-edge biome with one massive south-facing hero facade and secondary buildings stepping inward.
+- The `wall-street` cell is the south-edge finance biome: one massive south-facing hero facade with secondary buildings stepping inward.
 
 ## High-Level Strategy
 
@@ -72,7 +72,7 @@ For each biome landmark, define:
 
 ### Phase B: Blockout in Code
 
-Use the existing imperative world builder pattern in [`js/world/quadrant-desert.js`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world/quadrant-desert.js) and [`js/world/quadrant-basin.js`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world/quadrant-basin.js).
+Use the existing imperative world builder pattern in [`js/world/quadrant-desert.js`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world/quadrant-desert.js) and [`js/world/quadrant-wall-street.js`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world/quadrant-wall-street.js).
 
 Blockout pass goals:
 
@@ -123,7 +123,7 @@ Recommended new targets:
 - Wall Street exchange podium/lobby roof: `18-24` units tall
 - Wall Street CEO tower total height: `65-78` units tall
 
-That keeps the desert wall in the same hero class as the waterfall, while the basin tower becomes the unmatched skyline piece the user described.
+That keeps the desert wall in the same hero class as the waterfall, while the Wall Street tower becomes the unmatched skyline piece the user described.
 
 ## Desert Concept: Mega Mesa Corner Wall
 
@@ -227,7 +227,7 @@ This should feel like a collapsed desert escarpment, not a neat fortress wall.
 
 ### Design Goal
 
-Replace the weak flood-control basin with a giant toon-finance district:
+Replace the old flood-control concept with a giant toon-finance district:
 
 - absurd CEO tower on the south wall
 - giant formal lobby and stairs facing inward

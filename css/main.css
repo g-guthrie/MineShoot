@@ -5967,6 +5967,16 @@ body {
 #menu-shell.menu-shell-v4 #social-direct-invite-banner[hidden],
 #menu-shell.menu-shell-v4 #social-hero-status[hidden],
 #menu-shell.menu-shell-v4 #menu-screen-room[hidden],
+#menu-shell.menu-shell-v4 #active-match-shell[hidden],
+#menu-shell.menu-shell-v4 #active-match-friend-bar[hidden],
+#menu-shell.menu-shell-v4 #active-match-header-feedback[hidden],
+#menu-shell.menu-shell-v4 #active-match-primary-banner[hidden],
+#menu-shell.menu-shell-v4 #active-match-primary-banner-actions[hidden],
+#menu-shell.menu-shell-v4 #active-match-pill-grid[hidden],
+#menu-shell.menu-shell-v4 #active-match-mode-pill[hidden],
+#menu-shell.menu-shell-v4 #active-match-context-pill[hidden],
+#menu-shell.menu-shell-v4 #active-match-primary-stat-pill[hidden],
+#menu-shell.menu-shell-v4 #active-match-secondary-stat-pill[hidden],
 #menu-shell.menu-shell-v4 #loadout-expanded-shell[hidden],
 #menu-shell.menu-shell-v4 #loadout-collapsed-row[hidden],
 #menu-shell.menu-shell-v4 .menu-pill-stack > button[hidden],
@@ -6010,6 +6020,7 @@ body {
     border-radius: 0;
     box-shadow: none;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
 }
 
@@ -6064,7 +6075,8 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    width: fit-content;
+    width: min(100%, 520px);
+    max-width: 100%;
     margin-top: 12px;
     padding: 10px 14px;
     border-radius: var(--menu-pill-radius-full);
@@ -6074,6 +6086,8 @@ body {
     font-size: var(--menu-pill-font-sm);
     font-weight: 700;
     line-height: 1.2;
+    white-space: normal;
+    text-wrap: balance;
 }
 
 #menu-shell.menu-shell-v4 #active-match-header-feedback.error {
@@ -6100,6 +6114,50 @@ body {
     font-size: 14px;
     font-weight: 700;
     line-height: 1.35;
+    text-wrap: balance;
+}
+
+#menu-shell.menu-shell-v4 #room-social-feedback {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: min(100%, 520px);
+    max-width: 100%;
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: var(--menu-pill-radius-full);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    color: #11161d;
+    font-size: var(--menu-pill-font-sm);
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: normal;
+    text-wrap: balance;
+}
+
+#menu-shell.menu-shell-v4 #room-social-feedback.error {
+    color: #b32d2d;
+}
+
+#menu-shell.menu-shell-v4 #room-social-invite-banner {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 14px;
+    border-radius: var(--menu-radius-container);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: inset 0 0 0 1px var(--menu-container-border);
+}
+
+#menu-shell.menu-shell-v4 #room-social-invite-copy,
+#menu-shell.menu-shell-v4 #social-direct-invite-copy {
+    color: #1d2737;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-wrap: balance;
 }
 
 #menu-shell.menu-shell-v4 #active-match-friend-bar[hidden] {
@@ -6143,9 +6201,17 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #active-match-pill-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
     gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px;
+    border-radius: var(--menu-radius-container);
+    background: rgba(245, 248, 252, 0.92);
+    box-shadow: inset 0 0 0 1px var(--menu-container-border);
+    justify-content: flex-start;
 }
 
 #menu-shell.menu-shell-v4 #active-match-mode-pill,
@@ -6153,9 +6219,12 @@ body {
 #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
 #menu-shell.menu-shell-v4 #active-match-secondary-stat-pill {
     display: inline-flex;
+    flex: 1 1 180px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    min-width: min(100%, 180px);
+    max-width: 100%;
     min-height: 72px;
     padding: 14px 20px;
     border-radius: var(--menu-pill-radius-full);
@@ -6164,6 +6233,7 @@ body {
     color: #11161d;
     text-align: center;
     text-transform: uppercase;
+    text-wrap: balance;
 }
 
 #menu-shell.menu-shell-v4 #active-match-mode-pill::before,
@@ -6213,10 +6283,6 @@ body {
     #menu-shell.menu-shell-v4 #active-match-friend-id-input {
         grid-column: 1 / -1;
     }
-
-    #menu-shell.menu-shell-v4 #active-match-pill-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
 }
 
 @media (max-width: 560px) {
@@ -6228,8 +6294,11 @@ body {
         justify-content: flex-start;
     }
 
-    #menu-shell.menu-shell-v4 #active-match-pill-grid {
-        grid-template-columns: minmax(0, 1fr);
+    #menu-shell.menu-shell-v4 #active-match-mode-pill,
+    #menu-shell.menu-shell-v4 #active-match-context-pill,
+    #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
+    #menu-shell.menu-shell-v4 #active-match-secondary-stat-pill {
+        flex-basis: 100%;
     }
 }
 
@@ -6496,17 +6565,11 @@ body {
 #menu-shell.menu-shell-v4 #social-direct-invite-banner {
     display: grid;
     gap: 12px;
-    padding: 12px;
-    border-radius: 22px;
-    background: rgba(247, 249, 253, 0.98);
-    box-shadow: inset 0 0 0 1px var(--menu-shell-border);
-}
-
-#menu-shell.menu-shell-v4 #social-direct-invite-copy {
-    color: #44546c;
-    font-size: clamp(13px, 4.5cqw, 14px);
-    font-weight: 650;
-    line-height: 1.25;
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--menu-radius-container);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: inset 0 0 0 1px var(--menu-container-border);
 }
 
 #menu-shell.menu-shell-v4 #social-direct-invite-actions {

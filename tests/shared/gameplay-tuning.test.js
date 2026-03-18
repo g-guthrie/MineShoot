@@ -196,7 +196,7 @@ test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
   assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 0.5);
   assert.equal(gameplayTuning.abilityCatalog.hook.pullSpeed, 20);
   assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 90);
-  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 8500);
+  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 7500);
   assert.equal(gameplayTuning.abilityCatalog.deadeye.damage, 160);
   assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
   assert.equal(gameplayTuning.weaponStats.sniper.armorBufferMode, 'heavy');

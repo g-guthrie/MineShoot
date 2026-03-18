@@ -92,9 +92,9 @@
         }
         if (biomeId === 'citadel') {
             return {
-                base: matLib.getLambert({ color: 0x74706a }),
-                accent: matLib.getLambert({ color: 0x999289 }),
-                detail: matLib.getLambert({ color: 0x4a463f })
+                base: matLib.getLambert({ color: 0xe8e2d6 }),
+                accent: matLib.getLambert({ color: 0xf7f3eb }),
+                detail: matLib.getLambert({ color: 0xc6bbac })
             };
         }
         if (biomeId === 'quarry') {
@@ -104,7 +104,7 @@
                 detail: matLib.getLambert({ color: 0x5c4a3e })
             };
         }
-        if (biomeId === 'basin') {
+        if (biomeId === 'wall-street') {
             return {
                 base: matLib.getLambert({ color: 0x65737a }),
                 accent: matLib.getLambert({ color: 0x67a8ba }),
@@ -209,7 +209,7 @@
         ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.74, 0.96).x, 0.42, pointOnEdge(ctx.bounds, ctx.edge, 0.74, 0.96).z, 0.9, 0.84, 0.72, ctx.palette.accent, false);
     }
 
-    function buildBasinEdge(ctx) {
+    function buildWallStreetEdge(ctx) {
         if (seamAxis(ctx.edge) === 'vertical') {
             addStrip(ctx, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6), 0.9, 0.24, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.76, ctx.palette.base, false);
             ctx.place.addBlock(pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).x, 0.08, pointOnEdge(ctx.bounds, ctx.edge, 0.5, 0.6).z, 0.5, 0.08, (ctx.bounds.maxZ - ctx.bounds.minZ) * 0.62, ctx.palette.accent, false);
@@ -239,7 +239,7 @@
         if (ctx.biome === 'nuclear') return buildNuclearEdge(ctx);
         if (ctx.biome === 'citadel') return buildCitadelEdge(ctx);
         if (ctx.biome === 'quarry') return buildQuarryEdge(ctx);
-        if (ctx.biome === 'basin') return buildBasinEdge(ctx);
+        if (ctx.biome === 'wall-street') return buildWallStreetEdge(ctx);
         if (ctx.biome === 'radar') return buildRadarEdge(ctx);
         return buildUrbanEdge(ctx);
     }
@@ -475,7 +475,7 @@
     ns.registerEdgeKit('nuclear', buildNuclearEdge);
     ns.registerEdgeKit('citadel', buildCitadelEdge);
     ns.registerEdgeKit('quarry', buildQuarryEdge);
-    ns.registerEdgeKit('basin', buildBasinEdge);
+    ns.registerEdgeKit('wall-street', buildWallStreetEdge);
     ns.registerEdgeKit('radar', buildRadarEdge);
     ns.registerJunctionBuilder('hybrid_pylon', buildHybridPylon);
 })();

@@ -124,7 +124,7 @@ function buildHeadlessColliders(worldMeta) {
     if (typeof builder !== 'function') continue;
     const rawBounds = SHARED_LAYOUT.quadrantBounds(entry.quadrant, 0);
     const paddedBounds = SHARED_LAYOUT.quadrantBounds(entry.quadrant, 6);
-    builder(paddedBounds, place, {
+    builder(rawBounds, place, {
       ...quadrantCtx,
       biomeEntry: entry,
       rawBounds,
