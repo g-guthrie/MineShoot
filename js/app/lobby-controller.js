@@ -106,6 +106,8 @@
     }
 
     function launchPillLabel(modeId) {
+        var mode = normalizeMode(modeId);
+        if (!mode || mode === 'ffa') return 'PLAY MAYHEM';
         return 'Play ' + modePillLabel(modeId);
     }
 

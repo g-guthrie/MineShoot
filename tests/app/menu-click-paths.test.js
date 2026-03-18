@@ -844,7 +844,7 @@ test('menu boots on the main screen with play ffa as the default launch action',
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['loadout-start-btn'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play FFA');
+  assert.equal(elements['primary-launch-btn'].textContent, 'PLAY MAYHEM');
   assert.equal(elements['play-mode-options'].hidden, true);
   assert.equal(elements['room-access-status'].hidden, true);
   assert.equal(elements['menu-feedback'].hidden, true);

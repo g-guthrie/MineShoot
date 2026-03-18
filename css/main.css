@@ -1283,7 +1283,6 @@ canvas {
     box-shadow: 0 0 0 1px rgba(255, 155, 69, 0.22);
 }
 
-#join-party-btn,
 #view-party-btn,
 #leave-party-btn {
     border: 1px solid #8e3d3d;
@@ -1297,7 +1296,6 @@ canvas {
     cursor: pointer;
 }
 
-#join-party-btn:hover,
 #view-party-btn:hover,
 #leave-party-btn:hover {
     border-color: #ff8f8f;
@@ -1536,13 +1534,6 @@ canvas {
     display: grid;
     gap: 6px;
     align-content: start;
-}
-
-#friends-quick-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
-    margin-bottom: 8px;
 }
 
 #friend-id-input {
@@ -4779,7 +4770,6 @@ canvas {
 
 #private-room-controls-grid,
 #party-join-row,
-#friends-quick-row,
 .social-room-join-row {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -4972,8 +4962,7 @@ canvas {
     }
 
     #private-room-controls-grid,
-    #party-join-row,
-    #friends-quick-row {
+    #party-join-row {
         grid-template-columns: 1fr;
     }
 
@@ -4983,669 +4972,7 @@ canvas {
     }
 }
 
-#menu-shell.menu-shell-v3 {
-    width: min(1100px, calc(100vw - 28px));
-    max-width: 1100px;
-    margin: 20px auto;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    border: 1px solid rgba(255, 196, 120, 0.22);
-    background:
-        radial-gradient(circle at top left, rgba(255, 180, 94, 0.12), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(255, 219, 102, 0.08), transparent 32%),
-        rgba(10, 14, 18, 0.94);
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
-}
 
-#menu-shell.menu-shell-v3 #menu-header {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-#menu-shell.menu-shell-v3 #menu-header-top,
-#menu-shell.menu-shell-v3 #menu-header-share-row,
-#menu-shell.menu-shell-v3 #active-match-action-row,
-#menu-shell.menu-shell-v3 #party-lock-row,
-#menu-shell.menu-shell-v3 #friends-filter-row,
-#menu-shell.menu-shell-v3 .menu-card-actions,
-#menu-shell.menu-shell-v3 #loadout-screen-actions,
-#menu-shell.menu-shell-v3 #private-room-mode-actions,
-#menu-shell.menu-shell-v3 #utility-menu-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-}
-
-#menu-shell.menu-shell-v3 #menu-header-top {
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-#menu-shell.menu-shell-v3 #menu-header-share-row {
-    justify-content: space-between;
-}
-
-#menu-shell.menu-shell-v3 #menu-brand-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-width: 640px;
-}
-
-#menu-shell.menu-shell-v3 #menu-brand-subtitle {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 1rem;
-    letter-spacing: 0.08em;
-    color: rgba(255, 221, 176, 0.82);
-    text-transform: uppercase;
-}
-
-#menu-shell.menu-shell-v3 button,
-#utility-modal button {
-    border-radius: 999px;
-    border: 1px solid rgba(255, 203, 122, 0.24);
-    background: rgba(255, 255, 255, 0.04);
-    color: #ffe7c2;
-    padding: 11px 16px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
-}
-
-#menu-shell.menu-shell-v3 button:hover,
-#utility-modal button:hover {
-    transform: translateY(-1px);
-    border-color: rgba(255, 203, 122, 0.45);
-    background: rgba(255, 255, 255, 0.08);
-}
-
-#menu-shell.menu-shell-v3 button:disabled,
-#utility-modal button:disabled {
-    opacity: 0.45;
-    transform: none;
-    cursor: not-allowed;
-}
-
-#menu-shell.menu-shell-v3 input {
-    width: 100%;
-    min-width: 0;
-    border-radius: 14px;
-    border: 1px solid rgba(255, 203, 122, 0.18);
-    background: rgba(255, 255, 255, 0.04);
-    color: #fff0d9;
-    padding: 12px 14px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-#menu-shell.menu-shell-v3 input::placeholder {
-    color: rgba(255, 226, 189, 0.45);
-}
-
-#menu-party-id-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 14px;
-    border-radius: 18px;
-    border: 1px solid rgba(255, 203, 122, 0.18);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-#menu-party-id-value,
-#room-share-code {
-    color: #fff0d9;
-    font-weight: 700;
-}
-
-#menu-party-join-inline,
-#private-room-join-row,
-#friends-quick-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-}
-
-#mode-subtitle {
-    flex: 1 1 260px;
-    min-height: 20px;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 0.98rem;
-    color: #ffd6a5;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-#menu-screen-shell {
-    min-height: 580px;
-}
-
-.menu-screen[hidden] {
-    display: none !important;
-}
-
-#menu-screen-mode,
-#menu-screen-loadout,
-#menu-screen-party {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
-
-.menu-screen-copy,
-.screen-header {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.screen-header {
-    align-items: flex-start;
-}
-
-.menu-screen-kicker {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 0.82rem;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: rgba(255, 206, 141, 0.76);
-}
-
-#play-mode-group {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.play-mode-btn.active,
-#practice-mode-btn.active,
-.friends-filter-btn.active,
-#private-room-mode-actions button.active {
-    background: rgba(255, 181, 79, 0.16);
-    border-color: rgba(255, 203, 122, 0.55);
-}
-
-#mode-screen-actions,
-#loadout-screen-actions {
-    margin-top: auto;
-}
-
-#continue-loadout-btn,
-#loadout-start-btn,
-#private-room-start-btn,
-#private-room-enter-btn {
-    background: linear-gradient(135deg, rgba(255, 193, 94, 0.18), rgba(255, 118, 0, 0.16));
-}
-
-#room-access-status,
-#party-status,
-#private-room-status,
-#friends-status {
-    min-height: 22px;
-    font-family: 'Rajdhani', sans-serif;
-    letter-spacing: 0.05em;
-}
-
-#menu-shell.menu-shell-v3 #loadout-row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-}
-
-#menu-shell.menu-shell-v3 #weapon-slot-panel,
-#menu-shell.menu-shell-v3 #throwable-slot-panel,
-#menu-shell.menu-shell-v3 #ability-slot-panel,
-#menu-shell.menu-shell-v3 .menu-card {
-    min-width: 0;
-    padding: 18px;
-    border: 1px solid rgba(255, 203, 122, 0.16);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
-}
-
-.menu-card {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.menu-card-kicker {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 0.82rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: rgba(255, 206, 141, 0.76);
-}
-
-.menu-card-title {
-    margin: 0;
-}
-
-#party-screen-grid {
-    display: grid;
-    gap: 16px;
-}
-
-#social-party-members,
-#friends-preview,
-#private-room-view {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.party-modal-row,
-.friend-modal-row,
-.private-room-member {
-    padding: 12px 14px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 203, 122, 0.12);
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.party-modal-row,
-.friend-preview-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: flex-start;
-}
-
-.party-modal-main,
-.friend-preview-main {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.party-modal-name,
-.friend-preview-name {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 1rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #fff0d9;
-}
-
-.party-modal-meta,
-.friend-preview-meta,
-.private-room-member-id,
-.private-room-member-direction {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 0.88rem;
-    letter-spacing: 0.06em;
-    color: rgba(255, 214, 165, 0.82);
-}
-
-.friend-preview-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-#private-room-roster-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-}
-
-#active-match-shell {
-    border: 1px solid rgba(255, 203, 122, 0.16);
-    background: rgba(255, 255, 255, 0.03);
-    padding: 14px 16px;
-}
-
-#active-match-primary-stat-pill {
-    color: rgba(255, 214, 165, 0.84);
-}
-
-#utility-modal {
-    width: min(480px, calc(100vw - 24px));
-}
-
-#utility-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-}
-
-#utility-modal-copy {
-    margin: 14px 0;
-    color: rgba(255, 214, 165, 0.84);
-    letter-spacing: 0.05em;
-}
-
-#utility-menu-buttons {
-    flex-direction: column;
-    align-items: stretch;
-}
-
-#utility-menu-buttons button {
-    width: 100%;
-    justify-content: center;
-}
-
-@media (max-width: 900px) {
-    #menu-shell.menu-shell-v3 #menu-header-top,
-    #menu-shell.menu-shell-v3 #menu-header-share-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    #play-mode-group,
-    #menu-shell.menu-shell-v3 #loadout-row,
-    #private-room-roster-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 640px) {
-    #menu-shell.menu-shell-v3 {
-        width: min(100vw - 16px, 100%);
-        margin: 8px auto;
-        padding: 16px;
-    }
-
-    #menu-party-join-inline,
-    #private-room-join-row,
-    #friends-quick-row {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* v3 visual pass: simplify palette, strengthen selected states, keep loadout CTA visible */
-#menu-shell.menu-shell-v3 {
-    border-color: rgba(10, 92, 36, 0.48);
-    background:
-        radial-gradient(circle at top left, rgba(24, 120, 51, 0.16), transparent 30%),
-        radial-gradient(circle at bottom right, rgba(109, 83, 26, 0.08), transparent 36%),
-        rgba(3, 12, 5, 0.97);
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
-}
-
-#menu-shell.menu-shell-v3 #menu-brand,
-#menu-shell.menu-shell-v3 .screen-title,
-#menu-shell.menu-shell-v3 .menu-card-title,
-#menu-shell.menu-shell-v3 #mode-screen-title {
-    color: #d8ffd8;
-}
-
-#menu-shell.menu-shell-v3 #menu-brand-subtitle,
-#menu-shell.menu-shell-v3 #mode-screen-copy,
-#menu-shell.menu-shell-v3 #active-match-primary-stat-pill,
-#menu-shell.menu-shell-v3 #utility-modal-copy {
-    color: rgba(168, 226, 176, 0.78);
-}
-
-#menu-shell.menu-shell-v3 button,
-#utility-modal button {
-    border-color: rgba(21, 99, 42, 0.58);
-    background: rgba(3, 18, 6, 0.96);
-    color: #b7f4c0;
-}
-
-#menu-shell.menu-shell-v3 button:hover,
-#utility-modal button:hover {
-    border-color: rgba(81, 172, 102, 0.72);
-    background: rgba(8, 33, 12, 0.98);
-}
-
-#menu-shell.menu-shell-v3 button.active,
-#menu-shell.menu-shell-v3 .play-mode-btn.active,
-#menu-shell.menu-shell-v3 #practice-mode-btn.active,
-#menu-shell.menu-shell-v3 #open-party-btn.active,
-#menu-shell.menu-shell-v3 #utility-toggle-btn.active,
-#menu-shell.menu-shell-v3 .friends-filter-btn.active,
-#menu-shell.menu-shell-v3 #private-room-mode-actions button.active {
-    border-color: #7adf94;
-    background: linear-gradient(180deg, rgba(12, 63, 23, 0.98), rgba(6, 40, 14, 0.98));
-    color: #effff0;
-    box-shadow: inset 0 0 0 1px rgba(173, 255, 191, 0.12), 0 0 0 1px rgba(8, 50, 19, 0.22);
-}
-
-#menu-shell.menu-shell-v3 #practice-mode-btn.active {
-    border-color: #ffb16b;
-    background: linear-gradient(180deg, rgba(84, 53, 21, 0.96), rgba(55, 34, 12, 0.98));
-    color: #fff4e3;
-}
-
-#menu-shell.menu-shell-v3 #menu-party-id-btn {
-    border-color: rgba(21, 99, 42, 0.5);
-    background: rgba(5, 20, 8, 0.97);
-}
-
-#menu-shell.menu-shell-v3 #menu-party-id-value,
-#menu-shell.menu-shell-v3 #room-share-code {
-    color: #f0ffe9;
-}
-
-#menu-shell.menu-shell-v3 #mode-subtitle,
-#menu-shell.menu-shell-v3 #room-access-status,
-#menu-shell.menu-shell-v3 #party-status,
-#menu-shell.menu-shell-v3 #private-room-status,
-#menu-shell.menu-shell-v3 #friends-status {
-    color: #b7e9be;
-}
-
-#menu-screen-shell {
-    min-height: 0;
-    overflow: hidden;
-}
-
-#menu-screen-loadout,
-#menu-screen-party {
-    min-height: calc(100vh - 250px);
-    max-height: calc(100vh - 250px);
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-#menu-screen-party {
-    grid-template-rows: auto minmax(0, 1fr);
-}
-
-#menu-shell.menu-shell-v3 #loadout-row {
-    gap: 14px;
-    align-items: start;
-    min-height: 0;
-    overflow-y: auto;
-    padding-right: 6px;
-}
-
-#party-screen-grid {
-    min-height: 0;
-    overflow-y: auto;
-    padding-right: 6px;
-    align-content: start;
-}
-
-#party-screen-grid > .menu-card {
-    position: relative;
-    z-index: 1;
-}
-
-#party-current-section {
-    z-index: 3;
-}
-
-#menu-shell.menu-shell-v3 #loadout-row::-webkit-scrollbar,
-#party-screen-grid::-webkit-scrollbar {
-    width: 10px;
-}
-
-#menu-shell.menu-shell-v3 #loadout-row::-webkit-scrollbar-thumb,
-#party-screen-grid::-webkit-scrollbar-thumb {
-    background: rgba(55, 121, 67, 0.48);
-    border-radius: 999px;
-}
-
-#menu-shell.menu-shell-v3 #weapon-slot-panel,
-#menu-shell.menu-shell-v3 #throwable-slot-panel,
-#menu-shell.menu-shell-v3 #ability-slot-panel,
-#menu-shell.menu-shell-v3 .menu-card {
-    border-color: rgba(12, 87, 34, 0.34);
-    background: linear-gradient(180deg, rgba(2, 18, 7, 0.98), rgba(1, 13, 5, 0.96));
-    min-height: 0;
-}
-
-#menu-shell.menu-shell-v3 .menu-card-kicker,
-#menu-shell.menu-shell-v3 .menu-screen-kicker {
-    color: rgba(129, 207, 146, 0.78);
-}
-
-#menu-shell.menu-shell-v3 .screen-header {
-    position: sticky;
-    top: 0;
-    z-index: 6;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    padding: 2px 0 12px;
-    background: linear-gradient(180deg, rgba(3, 12, 5, 0.98), rgba(3, 12, 5, 0.92) 72%, rgba(3, 12, 5, 0));
-}
-
-#menu-shell.menu-shell-v3 #loadout-screen-actions {
-    z-index: 3;
-    display: flex;
-    justify-content: flex-end;
-    padding-top: 12px;
-    padding-bottom: 2px;
-    background: linear-gradient(180deg, rgba(3, 12, 5, 0), rgba(3, 12, 5, 0.84) 26%, rgba(3, 12, 5, 0.98));
-}
-
-#menu-shell.menu-shell-v3 #loadout-start-btn {
-    min-width: 220px;
-}
-
-#menu-shell.menu-shell-v3 .weapon-slot-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    min-height: 44px;
-    padding: 8px 12px;
-}
-
-#menu-shell.menu-shell-v3 .weapon-slot-btn,
-#menu-shell.menu-shell-v3 .weapon-choice-btn,
-#menu-shell.menu-shell-v3 .throwable-cat-btn,
-#menu-shell.menu-shell-v3 .throwable-choice-btn,
-#menu-shell.menu-shell-v3 .ability-choice-btn {
-    border-color: rgba(14, 81, 32, 0.72);
-    background: rgba(3, 18, 7, 0.98);
-    color: #82da91;
-}
-
-#menu-shell.menu-shell-v3 .weapon-slot-btn:hover,
-#menu-shell.menu-shell-v3 .weapon-choice-btn:hover,
-#menu-shell.menu-shell-v3 .ability-choice-btn:hover,
-#menu-shell.menu-shell-v3 .throwable-choice-btn:hover,
-#menu-shell.menu-shell-v3 .throwable-cat-btn:hover {
-    border-color: rgba(108, 198, 127, 0.58);
-    background: rgba(9, 32, 13, 0.98);
-    color: #dffff0;
-}
-
-#menu-shell.menu-shell-v3 .weapon-slot-btn.active {
-    border-color: #5ca8ff;
-    background: rgba(18, 56, 90, 0.34);
-    color: #d5ecff;
-    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
-}
-
-#menu-shell.menu-shell-v3 .weapon-choice-btn.active,
-#menu-shell.menu-shell-v3 .ability-choice-btn.active,
-#menu-shell.menu-shell-v3 .throwable-choice-btn.active {
-    border-color: #5ca8ff;
-    background: rgba(18, 56, 90, 0.38);
-    color: #dff0ff;
-    text-shadow: 0 0 4px rgba(92, 168, 255, 0.32);
-}
-
-#menu-shell.menu-shell-v3 .throwable-cat-btn.active,
-#menu-shell.menu-shell-v3 .throwable-choice-btn.active {
-    border-color: #ff9148;
-    background: rgba(94, 52, 17, 0.38);
-    color: #ffe2c8;
-    text-shadow: 0 0 4px rgba(255, 145, 72, 0.32);
-}
-
-#menu-shell.menu-shell-v3 .weapon-choice-btn.owned-other,
-#menu-shell.menu-shell-v3 .ability-choice-btn.owned-other {
-    border-color: #e16060;
-    background: rgba(98, 26, 26, 0.34);
-    color: #ffcaca;
-    text-shadow: 0 0 4px rgba(225, 96, 96, 0.28);
-}
-
-#menu-shell.menu-shell-v3 .weapon-choice-btn.owned-other:hover,
-#menu-shell.menu-shell-v3 .ability-choice-btn.owned-other:hover {
-    border-color: #ff9191;
-    background: rgba(118, 34, 34, 0.42);
-    color: #ffe5e5;
-}
-
-#menu-shell.menu-shell-v3 #weapon-slot-title,
-#menu-shell.menu-shell-v3 #throwable-slot-title,
-#menu-shell.menu-shell-v3 #ability-slot-title,
-#menu-shell.menu-shell-v3 #weapon-slot-note,
-#menu-shell.menu-shell-v3 #throwable-slot-note,
-#menu-shell.menu-shell-v3 #ability-slot-note,
-#menu-shell.menu-shell-v3 .ability-slot-label {
-    color: #9ad6a5;
-}
-
-#menu-shell.menu-shell-v3 .party-modal-row,
-#menu-shell.menu-shell-v3 .friend-modal-row,
-#menu-shell.menu-shell-v3 .private-room-member {
-    border-color: rgba(12, 87, 34, 0.28);
-    background: rgba(5, 20, 8, 0.88);
-}
-
-#menu-shell.menu-shell-v3 .party-modal-action {
-    position: relative;
-    z-index: 4;
-}
-
-#menu-shell.menu-shell-v3 .party-modal-name,
-#menu-shell.menu-shell-v3 .friend-preview-name {
-    color: #dffff0;
-}
-
-#menu-shell.menu-shell-v3 .party-modal-meta,
-#menu-shell.menu-shell-v3 .friend-preview-meta,
-#menu-shell.menu-shell-v3 .private-room-member-id,
-#menu-shell.menu-shell-v3 .private-room-member-direction {
-    color: rgba(169, 224, 177, 0.74);
-}
-
-@media (max-width: 900px) {
-    #menu-screen-loadout,
-    #menu-screen-party {
-        min-height: calc(100vh - 220px);
-        max-height: calc(100vh - 220px);
-    }
-}
-
-@media (max-width: 640px) {
-    #menu-screen-loadout,
-    #menu-screen-party {
-        min-height: calc(100vh - 190px);
-        max-height: calc(100vh - 190px);
-    }
-
-    #menu-shell.menu-shell-v3 #loadout-start-btn {
-        width: 100%;
-        min-width: 0;
-    }
-}
 
 body {
     cursor: default;
@@ -5683,7 +5010,7 @@ body {
     background: transparent;
     box-shadow: none;
     color: #162133;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Rajdhani', 'Trebuchet MS', sans-serif;
     display: block;
     overflow: visible;
 }
@@ -5713,6 +5040,9 @@ body {
     --menu-subaction-border: rgba(188, 197, 209, 0.96);
     --menu-action-fill: rgba(255, 255, 255, 0.96);
     --menu-subaction-fill: rgba(244, 247, 251, 0.98);
+    --menu-accent: #3b6eff;
+    --menu-accent-warm: #d6bf7f;
+    --menu-accent-green: #3b7c3f;
     background: rgba(251, 252, 255, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.82);
     border-radius: var(--menu-radius-shell);
@@ -5790,9 +5120,7 @@ body {
 
 #menu-shell.menu-shell-v4 #menu-party-id-btn,
 #menu-shell.menu-shell-v4 #menu-return-btn,
-#menu-shell.menu-shell-v4 #join-party-trigger-btn,
 #menu-shell.menu-shell-v4 #continue-loadout-btn,
-#menu-shell.menu-shell-v4 #open-party-btn,
 #menu-shell.menu-shell-v4 #account-toggle-btn,
 #menu-shell.menu-shell-v4 #utility-toggle-btn,
 #menu-shell.menu-shell-v4 #party-back-btn {
@@ -5805,12 +5133,36 @@ body {
     font-weight: 650;
     box-shadow: inset 0 0 0 1px rgba(214, 222, 235, 0.9);
     cursor: pointer;
+    transition: background 120ms ease, box-shadow 120ms ease, color 120ms ease;
+}
+
+#menu-shell.menu-shell-v4 #menu-party-id-btn:hover,
+#menu-shell.menu-shell-v4 #menu-return-btn:hover,
+#menu-shell.menu-shell-v4 #continue-loadout-btn:hover,
+#menu-shell.menu-shell-v4 #account-toggle-btn:hover,
+#menu-shell.menu-shell-v4 #utility-toggle-btn:hover,
+#menu-shell.menu-shell-v4 #party-back-btn:hover {
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: inset 0 0 0 1px rgba(180, 191, 209, 0.95);
+    color: #3b475d;
+}
+
+#menu-shell.menu-shell-v4 #menu-party-id-btn:focus-visible,
+#menu-shell.menu-shell-v4 #menu-return-btn:focus-visible,
+#menu-shell.menu-shell-v4 #continue-loadout-btn:focus-visible,
+#menu-shell.menu-shell-v4 #account-toggle-btn:focus-visible,
+#menu-shell.menu-shell-v4 #utility-toggle-btn:focus-visible,
+#menu-shell.menu-shell-v4 #party-back-btn:focus-visible {
+    outline: 2px solid var(--menu-accent);
+    outline-offset: 2px;
 }
 
 #menu-shell.menu-shell-v4 #menu-party-id-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    width: auto;
+    min-width: 0;
 }
 
 #menu-shell.menu-shell-v4 #menu-party-id-label {
@@ -5821,14 +5173,7 @@ body {
     color: #243148;
 }
 
-#menu-shell.menu-shell-v4 #utility-toggle-btn,
-#menu-shell.menu-shell-v4 #menu-return-btn {
-    background: rgba(255, 255, 255, 0.72);
-    box-shadow: inset 0 0 0 1px rgba(214, 222, 235, 0.9);
-    padding-inline: 12px;
-}
 
-#menu-shell.menu-shell-v4 #open-party-btn.active,
 #menu-shell.menu-shell-v4 #utility-toggle-btn.active,
 #menu-shell.menu-shell-v4 #continue-loadout-btn.active {
     background: rgba(58, 110, 255, 0.12);
@@ -5842,10 +5187,10 @@ body {
     box-shadow: inset 0 0 0 1px rgba(87, 129, 255, 0.18);
 }
 
-#join-party-popover,
 #utility-overlay {
     position: absolute;
     top: calc(100% + 10px);
+    right: 22px;
     width: min(320px, calc(100vw - 80px));
     background: rgba(255, 255, 255, 0.97);
     border: 1px solid rgba(223, 229, 240, 0.95);
@@ -5855,20 +5200,10 @@ body {
     z-index: 8;
 }
 
-#join-party-popover {
-    left: 0;
-}
-
-#utility-overlay {
-    right: 22px;
-}
-
-#join-party-popover[hidden],
 #utility-overlay[hidden] {
     display: none !important;
 }
 
-#join-party-popover-title,
 #utility-modal-title {
     font-size: 15px;
     font-weight: 700;
@@ -5893,27 +5228,8 @@ body {
     gap: 8px;
 }
 
-#join-party-recent {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.join-recent-btn {
-    border: none;
-    background: rgba(236, 241, 251, 0.96);
-    color: #4b5a72;
-    border-radius: 999px;
-    padding: 6px 12px;
-    cursor: pointer;
-}
-
-#join-party-popover input,
 #utility-modal button,
-#leave-confirm-panel button,
-#menu-shell.menu-shell-v4 #party-room-entry input,
-#menu-shell.menu-shell-v4 #friends-quick-row input {
+#leave-confirm-panel button {
     border: none;
     background: rgba(242, 245, 250, 0.96);
     color: #1a2233;
@@ -5922,17 +5238,13 @@ body {
     padding: 12px 12px;
 }
 
-#join-party-popover input,
 #party-id-input {
     width: 100%;
     margin-bottom: 10px;
 }
 
-#join-party-btn,
 #utility-modal button,
-#leave-confirm-panel button,
-#menu-shell.menu-shell-v4 #party-room-entry button,
-#menu-shell.menu-shell-v4 #friends-quick-row button {
+#leave-confirm-panel button {
     border: none;
     background: rgba(236, 241, 251, 0.96);
     color: #34507f;
@@ -6399,6 +5711,9 @@ body {
     display: grid;
     gap: 14px;
     align-content: start;
+    background:
+        radial-gradient(circle at top right, rgba(214, 191, 127, 0.16), transparent 40%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(253, 250, 244, 0.96));
 }
 
 #menu-shell.menu-shell-v4 #menu-party-hero {
@@ -6435,6 +5750,16 @@ body {
     border-radius: 36px;
     background: rgba(250, 252, 255, 0.76);
     box-shadow: inset 0 0 0 1px var(--menu-shell-border);
+}
+
+#menu-shell.menu-shell-v4 .menu-subsection-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #70809a;
+    padding: 0 4px;
 }
 
 #menu-shell.menu-shell-v4 .menu-panel-list-title {
@@ -6534,6 +5859,27 @@ body {
     line-height: 1.15;
     text-align: center;
     white-space: normal;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack > button:hover,
+#menu-shell.menu-shell-v4 .menu-pill-flow > button:hover {
+    background: rgba(59, 110, 255, 0.06);
+    color: #1e4ab8;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack > button:focus-visible,
+#menu-shell.menu-shell-v4 .menu-pill-flow > button:focus-visible,
+#menu-shell.menu-shell-v4 .menu-pill-stack > input:focus-visible,
+#menu-shell.menu-shell-v4 .menu-pill-flow > input:focus-visible {
+    outline: 2px solid var(--menu-accent);
+    outline-offset: 2px;
+}
+
+#menu-shell.menu-shell-v4 .menu-pill-stack > input:focus,
+#menu-shell.menu-shell-v4 .menu-pill-flow > input:focus {
+    box-shadow: inset 0 0 0 1px var(--menu-accent);
 }
 
 #menu-shell.menu-shell-v4 .menu-pill-stack > button.active,
@@ -6560,6 +5906,12 @@ body {
 #menu-shell.menu-shell-v4 #party-id-input::placeholder,
 #menu-shell.menu-shell-v4 #room-code-input::placeholder {
     color: #95a3b8;
+}
+
+#menu-shell.menu-shell-v4 #party-id-input:focus,
+#menu-shell.menu-shell-v4 #room-code-input:focus {
+    box-shadow: inset 0 0 0 1px var(--menu-accent);
+    outline: none;
 }
 
 #menu-shell.menu-shell-v4 #social-direct-invite-banner {
@@ -6619,20 +5971,23 @@ body {
     border-radius: 999px;
     background: rgba(58, 110, 255, 0.12);
     color: #2d5fdc;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
 }
 
 #menu-shell.menu-shell-v4 #mode-screen-title {
     margin: 12px 0 10px;
+    font-family: 'Orbitron', sans-serif;
     font-size: clamp(26px, 18cqw, 58px);
     line-height: 0.98;
-    font-weight: 800;
-    letter-spacing: -0.04em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     color: #151e30;
     white-space: nowrap;
+    text-shadow: 0 2px 12px rgba(59, 110, 255, 0.18);
 }
 
 #menu-shell.menu-shell-v4 #mode-screen-copy {
@@ -6663,17 +6018,39 @@ body {
 }
 
 #menu-shell.menu-shell-v4 #primary-launch-btn {
-    background: #3b6eff;
+    background: var(--menu-accent);
     color: #fff;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.06em;
     box-shadow:
         inset 0 0 0 1px var(--menu-action-border),
         0 18px 32px rgba(59, 110, 255, 0.24);
+    transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+#menu-shell.menu-shell-v4 #primary-launch-btn:hover {
+    background: #5584ff;
+    box-shadow:
+        inset 0 0 0 1px var(--menu-action-border),
+        0 22px 40px rgba(59, 110, 255, 0.32);
+    transform: translateY(-1px);
+}
+
+#menu-shell.menu-shell-v4 #primary-launch-btn:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
 }
 
 #menu-shell.menu-shell-v4 #game-modes-toggle-btn {
     background: var(--menu-action-fill);
     color: #263246;
     box-shadow: inset 0 0 0 1px var(--menu-action-border);
+    transition: background 120ms ease, color 120ms ease;
+}
+
+#menu-shell.menu-shell-v4 #game-modes-toggle-btn:hover {
+    background: rgba(59, 110, 255, 0.06);
+    color: #1e4ab8;
 }
 
 #menu-shell.menu-shell-v4 #game-modes-toggle-btn.active {
@@ -6700,6 +6077,11 @@ body {
     line-height: 1.2;
     text-align: center;
     white-space: normal;
+}
+
+#menu-shell.menu-shell-v4 .play-mode-btn:hover {
+    background: rgba(59, 110, 255, 0.06);
+    color: #1e4ab8;
 }
 
 #menu-shell.menu-shell-v4 .play-mode-btn.active {
@@ -6812,11 +6194,6 @@ body {
     box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.24);
 }
 
-#menu-shell.menu-shell-v4 #party-room-entry {
-    display: grid;
-    gap: 12px;
-}
-
 #menu-shell.menu-shell-v4 #private-room-join-row {
     display: flex;
     flex-wrap: wrap;
@@ -6883,7 +6260,6 @@ body {
 
 #menu-shell.menu-shell-v4 #private-room-action-row,
 #menu-shell.menu-shell-v4 #party-lock-row,
-#menu-shell.menu-shell-v4 #friends-quick-row,
 #menu-shell.menu-shell-v4 #friends-filter-row,
 #menu-shell.menu-shell-v4 .friend-preview-actions,
 #menu-shell.menu-shell-v4 .menu-card-actions {
@@ -7737,15 +7113,10 @@ body {
         margin-bottom: 16px;
     }
 
-    #join-party-popover,
     #utility-overlay {
         left: 16px;
         right: 16px;
         width: auto;
-    }
-
-    #utility-overlay {
-        left: auto;
     }
 }
 #menu-shell.menu-shell-v4 .throwable-cat-btn {

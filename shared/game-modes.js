@@ -3,7 +3,7 @@ const GAME_MODE_DEFS = {
     id: 'ffa',
     label: 'Free For All',
     menuButtonLabel: 'FREE FOR ALL',
-    primaryButtonLabel: 'QUICK MATCH (FFA)',
+    primaryButtonLabel: 'PLAY MAYHEM',
     shortLabel: 'FFA',
     showInMainMenu: true,
     supportsPrivateRoom: true,
