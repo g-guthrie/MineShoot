@@ -171,14 +171,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var southSegmentW = Math.max(6.0, (plazaW - southGap) * 0.5);
         var southSegmentOffset = (southGap * 0.5) + (southSegmentW * 0.5);
         var centerLaneCenterZ = ((exchangeZ - 0.6) + streetBandZ) * 0.5;
-        var centerLaneDepth = Math.max(26.4, (exchangeZ - streetBandZ) + 5.4);
-        var westLane = pt(bounds, 0.36, 0.62);
-        var eastLane = pt(bounds, 0.64, 0.60);
+        var centerLaneDepth = Math.max(29.6, (exchangeZ - streetBandZ) + 7.2);
+        var westLane = pt(bounds, 0.22, 0.48);
+        var eastLane = pt(bounds, 0.78, 0.48);
+        var centerStreetWidth = 13.4;
+        var edgeLaneWidth = 3.8;
 
         place.addBlock(centerX, 0.04, plazaCenterZ, plazaW, 0.08, plazaD, mats.pavement, false);
-        place.addBlock(centerX, 0.082, centerLaneCenterZ, 9.2, 0.084, centerLaneDepth, mats.pavementDark, false);
-        place.addBlock(westLane.x, 0.082, westLane.z, 4.8, 0.084, 21.2, mats.pavementDark, false);
-        place.addBlock(eastLane.x, 0.082, eastLane.z, 4.8, 0.084, 21.2, mats.pavementDark, false);
+        place.addBlock(centerX, 0.082, centerLaneCenterZ, centerStreetWidth, 0.084, centerLaneDepth, mats.pavementDark, false);
+        place.addBlock(westLane.x, 0.082, westLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
+        place.addBlock(eastLane.x, 0.082, eastLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
 
         place.addBlock(centerX, 0.09, northCurbZ, plazaW, 0.18, curbThickness, mats.curb, false);
         place.addBlock(westCurbX, 0.09, plazaCenterZ, curbThickness, 0.18, plazaD, mats.curb, false);
@@ -459,58 +461,33 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildStreetDressings(bounds, centerX, place, mats, ctx) {
-        var northwestEdge = { pos: pt(bounds, 0.18, 0.18), w: 2.4, d: 1.4 };
-        var northeastEdge = { pos: pt(bounds, 0.82, 0.18), w: 2.4, d: 1.4 };
-        var westEdge = { pos: pt(bounds, 0.11, 0.60), w: 1.4, d: 2.6 };
-        var eastEdge = { pos: pt(bounds, 0.89, 0.58), w: 1.4, d: 2.6 };
-        var westPlanter = { pos: pt(bounds, 0.38, 0.46), w: 3.4, d: 1.8 };
-        var eastPlanter = { pos: pt(bounds, 0.61, 0.43), w: 2.6, d: 1.5 };
-        var statue = pt(bounds, 0.50, 0.54);
-        var westPocket = { pos: pt(bounds, 0.30, 0.58), w: 2.8, d: 1.6 };
-        var westBuffer = { pos: pt(bounds, 0.24, 0.50), w: 1.8, d: 1.1 };
-        var eastPocket = { pos: pt(bounds, 0.70, 0.53), w: 2.0, d: 1.2 };
-        var northMedian = { pos: pt(bounds, 0.47, 0.36), w: 2.2, d: 1.1 };
-        var centerLipWest = { pos: pt(bounds, 0.46, 0.56), w: 1.8, d: 1.0 };
-        var centerLipEast = { pos: pt(bounds, 0.58, 0.60), w: 1.8, d: 1.0 };
-        var lampA = pt(bounds, 0.45, 0.47);
-        var lampB = pt(bounds, 0.60, 0.45);
-        var westArch = { pos: pt(bounds, 0.31, 0.67), width: 3.5, depth: 1.24 };
-        var eastArch = { pos: pt(bounds, 0.69, 0.63), width: 2.8, depth: 1.0 };
+        var westNorthPad = { pos: pt(bounds, 0.12, 0.09), w: 1.8, d: 1.2 };
+        var eastNorthPad = { pos: pt(bounds, 0.88, 0.09), w: 1.8, d: 1.2 };
+        var westMidPad = { pos: pt(bounds, 0.23, 0.44), w: 1.6, d: 2.1 };
+        var eastMidPad = { pos: pt(bounds, 0.77, 0.44), w: 1.6, d: 2.1 };
+        var westSouthPad = { pos: pt(bounds, 0.27, 0.74), w: 2.4, d: 1.5 };
+        var eastSouthPad = { pos: pt(bounds, 0.73, 0.74), w: 2.4, d: 1.5 };
+        var westShoulder = { pos: pt(bounds, 0.31, 0.82), w: 1.8, d: 1.0 };
+        var eastShoulder = { pos: pt(bounds, 0.69, 0.82), w: 1.8, d: 1.0 };
+        var lampA = pt(bounds, 0.34, 0.46);
+        var lampB = pt(bounds, 0.66, 0.46);
 
-        buildPlanter(northwestEdge.pos.x, northwestEdge.pos.z, northwestEdge.w, northwestEdge.d, place, mats);
-        buildPlanter(northeastEdge.pos.x, northeastEdge.pos.z, northeastEdge.w, northeastEdge.d, place, mats);
-        buildPlanter(westEdge.pos.x, westEdge.pos.z, westEdge.w, westEdge.d, place, mats);
-        buildPlanter(eastEdge.pos.x, eastEdge.pos.z, eastEdge.w, eastEdge.d, place, mats);
-        buildPlanter(westPlanter.pos.x, westPlanter.pos.z, westPlanter.w, westPlanter.d, place, mats);
-        buildPlanter(eastPlanter.pos.x, eastPlanter.pos.z, eastPlanter.w, eastPlanter.d, place, mats);
-        buildPlanter(westPocket.pos.x, westPocket.pos.z, westPocket.w, westPocket.d, place, mats);
-        buildPlanter(westBuffer.pos.x, westBuffer.pos.z, westBuffer.w, westBuffer.d, place, mats);
-        buildPlanter(eastPocket.pos.x, eastPocket.pos.z, eastPocket.w, eastPocket.d, place, mats);
-        buildPlanter(northMedian.pos.x, northMedian.pos.z, northMedian.w, northMedian.d, place, mats);
-        buildPlanter(centerLipWest.pos.x, centerLipWest.pos.z, centerLipWest.w, centerLipWest.d, place, mats);
-        buildPlanter(centerLipEast.pos.x, centerLipEast.pos.z, centerLipEast.w, centerLipEast.d, place, mats);
+        buildPlanter(westNorthPad.pos.x, westNorthPad.pos.z, westNorthPad.w, westNorthPad.d, place, mats);
+        buildPlanter(eastNorthPad.pos.x, eastNorthPad.pos.z, eastNorthPad.w, eastNorthPad.d, place, mats);
+        buildPlanter(westMidPad.pos.x, westMidPad.pos.z, westMidPad.w, westMidPad.d, place, mats);
+        buildPlanter(eastMidPad.pos.x, eastMidPad.pos.z, eastMidPad.w, eastMidPad.d, place, mats);
+        buildPlanter(westSouthPad.pos.x, westSouthPad.pos.z, westSouthPad.w, westSouthPad.d, place, mats);
+        buildPlanter(eastSouthPad.pos.x, eastSouthPad.pos.z, eastSouthPad.w, eastSouthPad.d, place, mats);
 
-        place.addBlock(statue.x, 1.0, statue.z, 4.6, 2.0, 1.7, mats.stoneDark, true);
-        place.addBlock(statue.x, 2.56, statue.z, 0.56, 3.12, 0.56, mats.trim, false);
-        place.addBlock(statue.x, 4.2, statue.z, 2.2, 0.32, 2.2, mats.trim, false);
-        place.addBlock(statue.x, 0.12, statue.z, 8.0, 0.24, 1.0, mats.signRed, false);
-
-        place.addBlock(centerX - 9.6, 0.24, statue.z + 0.72, 2.2, 0.48, 1.4, mats.stoneDark, true);
-        place.addBlock(centerX + 8.4, 0.24, statue.z - 0.2, 1.5, 0.42, 1.0, mats.stoneDark, true);
-
-        buildAlleyArch(westArch.pos.x, westArch.pos.z, westArch.width, westArch.depth, place, mats);
-        buildAlleyArch(eastArch.pos.x, eastArch.pos.z, eastArch.width, eastArch.depth, place, mats);
-        place.addBlock(westArch.pos.x + 1.4, 8.3, westArch.pos.z + 0.34, 2.4, 1.0, 3.2, mats.stoneDark, false);
-        place.addBlock(eastArch.pos.x - 0.96, 7.9, eastArch.pos.z - 0.14, 1.5, 0.82, 2.1, mats.stoneDark, false);
-        addTickerRibbon(westArch.pos.x - 0.06, 9.08, westArch.pos.z + 0.62, 3.5, place, mats);
-        addTickerRibbon(eastArch.pos.x + 0.06, 8.64, eastArch.pos.z + 0.36, 2.2, place, mats);
+        place.addBlock(westShoulder.pos.x, 0.24, westShoulder.pos.z, westShoulder.w, 0.48, westShoulder.d, mats.stoneDark, true);
+        place.addBlock(eastShoulder.pos.x, 0.24, eastShoulder.pos.z, eastShoulder.w, 0.48, eastShoulder.d, mats.stoneDark, true);
         addStreetLamp(lampA.x, lampA.z, place, mats, ctx, 0.8);
         addStreetLamp(lampB.x, lampB.z, place, mats, ctx, 2.1);
 
         return {
-            centerCoverCount: 7,
+            centerCoverCount: 0,
             westAlleyCoverCount: 4,
-            eastAlleyCoverCount: 2
+            eastAlleyCoverCount: 4
         };
     }
 
@@ -519,18 +496,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var centerX = (bounds.minX + bounds.maxX) * 0.5;
         var exchange = pt(bounds, 0.50, 0.84);
         var tower = pt(bounds, 0.50, 0.866);
-        var westBlock = pt(bounds, 0.25, 0.66);
-        var eastBlock = pt(bounds, 0.81, 0.64);
-        var westKiosk = pt(bounds, 0.32, 0.34);
-        var eastKiosk = pt(bounds, 0.70, 0.34);
-        var westOffice = pt(bounds, 0.18, 0.21);
-        var eastOffice = pt(bounds, 0.82, 0.21);
-        var westSupport = pt(bounds, 0.42, 0.52);
-        var eastSupport = pt(bounds, 0.62, 0.50);
-        var westBusStop = pt(bounds, 0.34, 0.39);
-        var eastBusStop = pt(bounds, 0.65, 0.39);
-        var streetBand = pt(bounds, 0.50, 0.39);
-        var northSupportCount = 4;
+        var westBlock = pt(bounds, 0.13, 0.47);
+        var eastBlock = pt(bounds, 0.87, 0.47);
+        var westKiosk = pt(bounds, 0.12, 0.22);
+        var eastKiosk = pt(bounds, 0.88, 0.22);
+        var westSupport = pt(bounds, 0.11, 0.72);
+        var eastSupport = pt(bounds, 0.89, 0.72);
+        var westBusStop = pt(bounds, 0.18, 0.31);
+        var eastBusStop = pt(bounds, 0.82, 0.31);
+        var streetBand = pt(bounds, 0.50, 0.33);
+        var northSupportCount = 2;
 
         buildDistrictPaving(bounds, centerX, streetBand.z, exchange.z, place, mats);
 
@@ -538,12 +513,10 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildGrandStair(centerX, exchange.z - 0.6, place, mats);
         buildExchangeFrontage(centerX, exchange.z, bounds, place, mats, ctx);
         var towerStats = buildTowerStack(centerX, tower.z, bounds, place, mats, ctx);
-        var westBlockStats = buildFinanceBlock({ x: westBlock.x, z: westBlock.z, w: 9.8, d: 16.4, h: 17.4, alleySide: 1, signMat: mats.signRed, profile: 'west' }, place, mats, ctx);
-        var eastBlockStats = buildFinanceBlock({ x: eastBlock.x, z: eastBlock.z, w: 7.4, d: 13.2, h: 14.4, alleySide: -1, signMat: mats.signBlue, profile: 'east' }, place, mats, ctx);
+        var westBlockStats = buildFinanceBlock({ x: westBlock.x, z: westBlock.z, w: 10.2, d: 11.8, h: 17.4, alleySide: 1, signMat: mats.signRed, profile: 'west' }, place, mats, ctx);
+        var eastBlockStats = buildFinanceBlock({ x: eastBlock.x, z: eastBlock.z, w: 8.2, d: 10.4, h: 14.4, alleySide: -1, signMat: mats.signBlue, profile: 'east' }, place, mats, ctx);
         buildTickerKiosk(westKiosk.x, westKiosk.z, place, mats, ctx, 0.4);
         buildTickerKiosk(eastKiosk.x, eastKiosk.z, place, mats, ctx, 1.2);
-        buildShortOffice({ x: westOffice.x, z: westOffice.z, w: 7.2, d: 5.8, h: 9.1, signMat: mats.signBlue, profile: 'west' }, place, mats, ctx);
-        buildShortOffice({ x: eastOffice.x, z: eastOffice.z, w: 5.8, d: 5.0, h: 7.5, signMat: mats.signRed, profile: 'east' }, place, mats, ctx);
         buildArcadeSupport(westSupport.x, westSupport.z, place, mats, ctx);
         buildTickerSupport(eastSupport.x, eastSupport.z, place, mats, ctx);
         buildGlassBusStop(westBusStop.x, westBusStop.z, place, mats);
@@ -556,8 +529,6 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             ctx.addExclusion(eastBlock.x, eastBlock.z, 5.2);
             ctx.addExclusion(westKiosk.x, westKiosk.z, 3.15);
             ctx.addExclusion(eastKiosk.x, eastKiosk.z, 3.15);
-            ctx.addExclusion(westOffice.x, westOffice.z, 2.9);
-            ctx.addExclusion(eastOffice.x, eastOffice.z, 2.9);
             ctx.addExclusion(westSupport.x, westSupport.z, 3.4);
             ctx.addExclusion(eastSupport.x, eastSupport.z, 3.0);
             ctx.addExclusion(westBusStop.x, westBusStop.z, 3.2);
@@ -569,7 +540,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             heroBuildings: 2,
             financeBlocks: 6,
             alleys: 2,
-            cover: 10,
+            cover: 8,
             busStops: 2,
             towerPeakHeight: towerStats.peakHeight,
             upperShaftWidth: towerStats.upperShaftWidth,
@@ -581,8 +552,6 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             eastSupportCenterZ: eastSupport.z,
             westKioskCenterZ: westKiosk.z,
             eastKioskCenterZ: eastKiosk.z,
-            westOfficeCenterZ: westOffice.z,
-            eastOfficeCenterZ: eastOffice.z,
             westBusStopCenterZ: westBusStop.z,
             eastBusStopCenterZ: eastBusStop.z,
             rearWallSouthFaceZ: rearWallStats.southFaceZ,

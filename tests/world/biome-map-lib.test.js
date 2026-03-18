@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildReport, buildUnitAreaReport } = require('../../scripts/biome-map-lib.cjs');
+const { buildReport, buildUnitAreaReport, buildVerticalSeamReport } = require('../../scripts/biome-map-lib.cjs');
 
 test('arctic biome map uses raw biome edges and tracks glacier fields', () => {
   const report = buildReport('arctic');
@@ -72,30 +72,51 @@ test('desert map gains a center hero beat without creating a new hotspot', () =>
   assert.ok(centerBand.length > westArchPocket.length);
 });
 
-test('wall street map starts earlier, stays center-dominant, and avoids new hotspots', () => {
+test('wall street map pushes mass to the edges while keeping the center street open', () => {
   const report = buildReport('wall-street');
-  const topBandCells = report.denseCells.filter((cell) => cell.row <= 3);
-  const northInteriorSupport = report.denseCells.filter((cell) =>
-    cell.row >= 3 && cell.row <= 6 && cell.col >= 5 && cell.col <= 8
+  const cellWithLabel = (label) => report.denseCells.find((cell) => cell.labels.includes(label));
+  const topBandCells = report.denseCells.filter((cell) => cell.row <= 1);
+  const westEdgeRun = report.denseCells.filter((cell) => cell.row <= 10 && cell.col <= 2);
+  const eastEdgeRun = report.denseCells.filter((cell) => cell.row <= 10 && cell.col >= 11);
+  const centerStreet = report.denseCells.filter((cell) =>
+    cell.row <= 10 && cell.col >= 5 && cell.col <= 8
   );
-  const westFlank = report.denseCells.filter((cell) =>
-    cell.row >= 5 && cell.row <= 11 && cell.col >= 3 && cell.col <= 5
+  const southEndcap = report.denseCells.filter((cell) =>
+    cell.row >= 10 && cell.col >= 6 && cell.col <= 8
   );
-  const eastFlank = report.denseCells.filter((cell) =>
-    cell.row >= 5 && cell.row <= 11 && cell.col >= 9 && cell.col <= 11
+  const northPlanters = report.denseCells.filter((cell) =>
+    cell.labels.some((label) => label.startsWith('north-planter'))
   );
-  const centerBand = report.denseCells.filter((cell) =>
-    cell.row >= 5 && cell.row <= 12 && cell.col >= 6 && cell.col <= 8
-  );
+  const westAnnex = cellWithLabel('west-annex');
+  const eastBrokerage = cellWithLabel('east-brokerage');
+  const grandStair = cellWithLabel('grand-stair');
 
   assert.ok(report.content.includes('Wall Street biome distribution map'));
-  assert.ok(report.occupiedCells >= 34);
-  assert.ok(report.occupiedCells <= 38);
+  assert.ok(report.occupiedCells >= 24);
+  assert.ok(report.occupiedCells <= 30);
   assert.ok(report.denseCells.every((cell) => cell.count <= 2));
-  assert.ok(topBandCells.length >= 2);
-  assert.ok(northInteriorSupport.length >= 2);
-  assert.ok(westFlank.length >= 1);
-  assert.ok(eastFlank.length >= 1);
-  assert.ok(centerBand.length > westFlank.length);
-  assert.ok(centerBand.length > eastFlank.length);
+  assert.equal(topBandCells.length, 2);
+  assert.equal(northPlanters.length, 2);
+  assert.ok(westEdgeRun.length >= 8);
+  assert.ok(eastEdgeRun.length >= 8);
+  assert.ok(centerStreet.length <= 1);
+  assert.ok(southEndcap.length >= 3);
+  assert.ok(westAnnex && westAnnex.row >= 5 && westAnnex.row <= 7 && westAnnex.col <= 1);
+  assert.ok(eastBrokerage && eastBrokerage.row >= 5 && eastBrokerage.row <= 7 && eastBrokerage.col >= 12);
+  assert.ok(grandStair && grandStair.row >= 10);
+});
+
+test('citadel to wall street seam report shows the shared border and authored placements on both sides', () => {
+  const report = buildVerticalSeamReport('citadel', 'wall-street');
+
+  assert.equal(report.outputFile, 'citadel-wall-street-seam.txt');
+  assert.equal(report.seamZ, 110);
+  assert.ok(report.content.includes('Citadel to Wall Street seam map'));
+  assert.ok(report.content.includes('Shared biome border: z=110'));
+  assert.ok(report.content.includes('Biome mask (C = Citadel, W = Wall Street)'));
+  assert.ok(report.content.includes('Citadel legend'));
+  assert.ok(report.content.includes('Wall Street legend'));
+  assert.match(report.content, /\n    -{54}\n110 /);
+  assert.ok(report.content.includes('  B base'));
+  assert.ok(report.content.includes('  F exchange'));
 });

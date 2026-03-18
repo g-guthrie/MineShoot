@@ -113,9 +113,9 @@ export const gameplayTuning = {
       { maxDistance: 120, scale: 0.76 }
     ],
     pistol: [
-      { maxDistance: 12, scale: 1.0 },
-      { maxDistance: 20, scale: 0.88 },
-      { maxDistance: 26, scale: 0.62 },
+      { maxDistance: 14, scale: 1.0 },
+      { maxDistance: 22, scale: 0.88 },
+      { maxDistance: 27, scale: 0.62 },
       { maxDistance: 28, scale: 0.45 }
     ],
     machinegun: [

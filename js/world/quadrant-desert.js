@@ -206,60 +206,6 @@ import { pointInBounds as pt } from './biome-utils.js';
         place.addBlock(x + 0.15, 0.04, z + 0.2, 0.08, 0.06, 0.4, mats.bone, false);
     }
 
-    function addFencePost(x, z, place, mats, height, leanYaw, leanTilt, brokenTop) {
-        var h = height || 2.0;
-        var postYaw = leanYaw || 0;
-        var postTilt = leanTilt || 0;
-        if (postTilt) {
-            place.addRamp(x, h * 0.5, z, 0.18, h, 0.18, mats.bleachedWood, postYaw, postTilt, false);
-        } else {
-            place.addBlock(x, h * 0.5, z, 0.18, h, 0.18, mats.bleachedWood, false);
-        }
-        if (brokenTop) {
-            place.addRamp(x, h - 0.05, z, 0.28, 0.08, 0.16, mats.bleachedWood, postYaw + 0.45, 0.28, false);
-            return;
-        }
-        place.addBlock(x, h + 0.05, z, 0.24, 0.1, 0.24, mats.bleachedWood, false);
-    }
-
-    function addFenceRail(x1, z1, x2, z2, y, thickness, place, mats) {
-        var dx = x2 - x1;
-        var dz = z2 - z1;
-        var len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 0.1) return;
-        place.addRamp(
-            (x1 + x2) * 0.5,
-            y,
-            (z1 + z2) * 0.5,
-            thickness,
-            thickness,
-            len + 0.18,
-            mats.bleachedWood,
-            Math.atan2(dx, dz),
-            0,
-            false
-        );
-    }
-
-    function buildFenceRuins(x, z, place, mats) {
-        var postA = { x: x - 0.95, z: z - 1.25, h: 2.3 };
-        var postB = { x: x - 0.95, z: z + 1.05, h: 1.9 };
-        var postC = { x: x + 0.9, z: z - 0.45, h: 1.65, yaw: 1.2, tilt: -0.24 };
-
-        addFencePost(postA.x, postA.z, place, mats, postA.h, 0, 0, false);
-        addFencePost(postB.x, postB.z, place, mats, postB.h, 0, 0, true);
-        addFencePost(postC.x, postC.z, place, mats, postC.h, postC.yaw, postC.tilt, true);
-
-        addFenceRail(postA.x, postA.z, postB.x, postB.z, 1.5, 0.1, place, mats);
-        addFenceRail(postA.x, postA.z, postB.x, postB.z, 0.9, 0.08, place, mats);
-        addFenceRail(postA.x, postA.z, x + 0.3, z - 0.8, 1.3, 0.08, place, mats);
-
-        // Collapsed slats and debris so the silhouette reads as a ruined corral.
-        addFenceRail(x - 0.15, z + 0.6, x + 1.15, z + 0.05, 0.08, 0.08, place, mats);
-        place.addRamp(x + 0.55, 0.22, z - 0.1, 0.14, 0.14, 1.35, mats.bleachedWood, 0.95, -0.18, false);
-        place.addBlock(x - 0.9, 0.14, z + 1.35, 0.55, 0.16, 0.35, mats.darkRock, false);
-    }
-
     function addSandDune(x, z, w, d, place, mats) {
         place.addBlock(x, 0.12, z, w, 0.24, d, mats.sandDune, false);
         place.addBlock(x + w * 0.15, 0.22, z, w * 0.6, 0.12, d * 0.7, mats.sandDune, false);
@@ -454,9 +400,6 @@ import { pointInBounds as pt } from './biome-utils.js';
         var centerButte = pt(bounds, 0.42, 0.56);
         buildButte(centerButte.x, centerButte.z, place, mats);
         ctx.addExclusion(centerButte.x, centerButte.z, 3.8);
-
-        var centerFence = pt(bounds, 0.64, 0.50);
-        buildFenceRuins(centerFence.x, centerFence.z, place, mats);
 
         place.addBlock(centerHero.x - 0.3, 0.46, centerHero.z + 3.6, 6.2, 0.92, 1.7, mats.rubble, true);
         place.addBlock(centerHero.x + 0.6, 0.92, centerHero.z + 3.8, 3.8, 0.24, 1.1, mats.darkRock, false);

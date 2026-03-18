@@ -29,6 +29,10 @@ import {
 import { buildLmsBeaconAnchors } from '../../shared/lms-mode.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
 
+const NUCLEAR_REACTOR_HEIGHT_SCALE = 1.25;
+const NUCLEAR_STEAM_TILE_COUNT_PER_TOWER = 160;
+const CITADEL_STEAM_TILE_COUNT = 56;
+
 test('world layout expands to a 3x3 biome grid', () => {
   assert.equal(BIOME_GRID_COLS, 3);
   assert.equal(BIOME_GRID_ROWS, 3);
@@ -194,6 +198,32 @@ function createGeometryRecorder() {
   };
 }
 
+function solidGeometryAabbs(blocks) {
+  return blocks
+    .filter((block) => block.isSolid)
+    .map((block) => createRotatedBoxAabb(
+      block.x,
+      block.y,
+      block.z,
+      block.w,
+      block.h,
+      block.d,
+      block.rotY || 0,
+      block.tiltX || 0
+    ));
+}
+
+function pointHitsSolid(aabbs, x, y, z) {
+  return aabbs.some((aabb) =>
+    x >= aabb.min.x &&
+    x <= aabb.max.x &&
+    y >= aabb.min.y &&
+    y <= aabb.max.y &&
+    z >= aabb.min.z &&
+    z <= aabb.max.z
+  );
+}
+
 test('arctic mountain keeps a lower summit while adding more glacier texture', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.arctic;
@@ -259,6 +289,50 @@ test('jungle keeps the waterfall and shrine anchors while opening the shrine cou
   assert.equal(exactBorderTouches.length, 0);
 });
 
+test('citadel grows a larger flickering summit flame with a fuller steam plume', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.citadel;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r1c1');
+  const recorder = createGeometryRecorder();
+  const stats = builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_CITADEL },
+    rawBounds
+  });
+
+  assert.ok(stats);
+  assert.equal(stats.terraces, 5);
+  assert.equal(stats.stairs, 4);
+  assert.equal(stats.flameLayers, 3);
+  assert.equal(recorder.steamColumns.length, 1);
+  assert.equal(stats.steamTileCount, CITADEL_STEAM_TILE_COUNT);
+  assert.ok(Math.abs(recorder.steamColumns[0].tiles.length - CITADEL_STEAM_TILE_COUNT) < 0.0001);
+  assert.ok(Math.abs(Number(recorder.steamColumns[0].rise || 0) - 4.6) < 0.0001);
+  assert.ok(Math.abs(Number(recorder.steamColumns[0].baseOpacity || 0) - 0.11) < 0.0001);
+  assert.ok(stats.steamPeakHeight > 33);
+  assert.ok(stats.flameTopHeight > 24);
+
+  const flameBlocks = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    block.y >= 20 &&
+    block.h >= 1.5
+  );
+  assert.equal(flameBlocks.length, 3);
+  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 6.8) < 0.0001 && Math.abs(block.h - 1.9) < 0.0001));
+  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 4.8) < 0.0001 && Math.abs(block.h - 2.4) < 0.0001));
+  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 2.8) < 0.0001 && Math.abs(block.h - 2.9) < 0.0001));
+
+  const flameFlickers = recorder.flickers.filter((flicker) => flicker && flicker.pulseFamily === 'citadel-flame');
+  assert.equal(flameFlickers.length, 3);
+  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.28) < 0.0001));
+  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.22) < 0.0001));
+  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.18) < 0.0001));
+  assert.ok(flameFlickers.every((flicker) => Number(flicker.opacityAmplitude || 0) >= 0.12));
+});
+
 test('desert adds a mid-scale hero arch while keeping the fortress edges', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
@@ -291,6 +365,39 @@ test('desert adds a mid-scale hero arch while keeping the fortress edges', () =>
   );
   assert.ok(northTouches.length >= 1);
   assert.ok(eastTouches.length >= 1);
+});
+
+test('desert removes the broken fence clutter from the interior', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r0c2');
+  const recorder = createGeometryRecorder();
+  builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: BIOME_DESERT },
+    rawBounds
+  });
+
+  const fencePosts = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    Math.abs(block.w - 0.18) < 0.0001 &&
+    Math.abs(block.d - 0.18) < 0.0001 &&
+    block.h >= 1.6 &&
+    block.h <= 2.4
+  );
+  const fenceRails = recorder.blocks.filter((block) =>
+    block.kind === 'ramp' &&
+    block.isSolid === false &&
+    block.w <= 0.14 &&
+    block.h <= 0.14 &&
+    block.d >= 1.3
+  );
+
+  assert.equal(fencePosts.length, 0);
+  assert.equal(fenceRails.length, 0);
 });
 
 test('nuclear cooling towers stay flush to the east wall while the plant becomes two clean reactor buildings', () => {
@@ -329,6 +436,14 @@ test('nuclear cooling towers stay flush to the east wall while the plant becomes
   assert.ok(northReactor);
   assert.ok(southReactor);
   assert.ok(northReactor.z < southReactor.z);
+  assert.ok(Math.abs(northReactor.w - 11.8) < 0.0001);
+  assert.ok(Math.abs(northReactor.d - 17.6) < 0.0001);
+  assert.ok(Math.abs(northReactor.h - (6.2 * NUCLEAR_REACTOR_HEIGHT_SCALE)) < 0.0001);
+  assert.ok(Math.abs(southReactor.w - 15.4) < 0.0001);
+  assert.ok(Math.abs(southReactor.d - 22.9) < 0.0001);
+  assert.ok(Math.abs(southReactor.h - (8.3 * NUCLEAR_REACTOR_HEIGHT_SCALE)) < 0.0001);
+  assert.ok(Math.abs(stats.northBuildingRoofY - northReactor.h) < 0.0001);
+  assert.ok(Math.abs(stats.southBuildingRoofY - southReactor.h) < 0.0001);
   assert.ok((southReactor.w / northReactor.w) >= 1.28);
   assert.ok((southReactor.d / northReactor.d) >= 1.28);
   assert.ok((southReactor.h / northReactor.h) >= 1.28);
@@ -361,7 +476,7 @@ test('nuclear cooling towers stay flush to the east wall while the plant becomes
   assert.equal(oldCampusBody, undefined);
 });
 
-test('nuclear keeps only a restrained green glow strip while removing the warning sign', () => {
+test('nuclear keeps a continuous flush green window band while removing the warning sign', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
   assert.equal(typeof builder, 'function');
@@ -395,6 +510,12 @@ test('nuclear keeps only a restrained green glow strip while removing the warnin
     block.userData.role === 'reactor-glow-strip' &&
     block.userData.reactorId === 'south'
   );
+  const glowBacking = recorder.blocks.filter((block) =>
+    block.userData &&
+    block.userData.role === 'reactor-window-back' &&
+    block.userData.reactorId === 'south'
+  );
+  assert.equal(glowBacking.length, 0);
   assert.equal(glowSegments.length, 3);
   assert.equal(stats.glowMainFace, 'south');
   assert.deepEqual(
@@ -406,41 +527,46 @@ test('nuclear keeps only a restrained green glow strip while removing the warnin
   const eastGlow = glowSegments.find((segment) => segment.userData.face === 'east');
   const southGlow = glowSegments.find((segment) => segment.userData.face === 'south');
   assert.ok(Math.abs(southGlow.y - stats.glowStripY) < 0.0001);
-  assert.ok(southGlow.w < stats.glowMainSpan);
-  assert.ok(southGlow.w > (stats.glowMainSpan * 0.55));
-  assert.ok(westGlow.d < stats.glowWrapSpan);
-  assert.ok(westGlow.d > (stats.glowWrapSpan * 0.55));
-  assert.ok(eastGlow.d < stats.glowWrapSpan);
-  assert.ok(eastGlow.d > (stats.glowWrapSpan * 0.55));
+  assert.ok(Math.abs(stats.glowStripY - ((stats.southBuildingRoofY - 0.75) - (stats.southBuildingRoofY * 0.05))) < 0.0001);
+  assert.ok(stats.glowStripY < stats.southBuildingRoofY);
+  assert.ok((stats.southBuildingRoofY - stats.glowStripY) < 1.5);
+  assert.ok(Math.abs(southGlow.w - stats.glowMainSpan) < 0.0001);
+  assert.ok(Math.abs(westGlow.d - stats.glowWrapSpan) < 0.0001);
+  assert.ok(Math.abs(eastGlow.d - stats.glowWrapSpan) < 0.0001);
   assert.ok(southGlow.w > westGlow.d);
   assert.ok(southGlow.w > eastGlow.d);
-  assert.ok(westGlow.w <= 0.12);
-  assert.ok(eastGlow.w <= 0.12);
-  assert.ok(Math.abs(stats.glowBackingHeight - 0.46) < 0.0001);
-  assert.ok(Math.abs(stats.glowVisibleHeight - 0.26) < 0.0001);
-  assert.ok(stats.glowBackingHeight > 0.2);
-  assert.ok(stats.glowVisibleHeight > 0.1);
-  assert.ok(Math.abs(stats.glowStandOff - 0.06) < 0.0001);
+  assert.ok(Math.abs(southGlow.h - stats.glowVisibleHeight) < 0.0001);
+  assert.ok(Math.abs(westGlow.h - stats.glowVisibleHeight) < 0.0001);
+  assert.ok(Math.abs(eastGlow.h - stats.glowVisibleHeight) < 0.0001);
+  assert.ok(Math.abs(southGlow.d - stats.glowBandDepth) < 0.0001);
+  assert.ok(Math.abs(westGlow.w - stats.glowBandDepth) < 0.0001);
+  assert.ok(Math.abs(eastGlow.w - stats.glowBandDepth) < 0.0001);
+  assert.ok(Math.abs(stats.glowBackingHeight - 0) < 0.0001);
+  assert.ok(Math.abs(stats.glowVisibleHeight - 0.96) < 0.0001);
+  assert.ok(stats.glowVisibleHeight > 0.8);
+  assert.ok(Math.abs(stats.glowBandDepth - 0.18) < 0.0001);
+  assert.ok(Math.abs(stats.glowStandOff - 0.01) < 0.0001);
 
   const glowFlickers = recorder.flickers.filter((flicker) => flicker && flicker.pulseFamily === 'nuclear-window');
   assert.equal(glowFlickers.length, 3);
   for (const flicker of glowFlickers) {
-    assert.ok(Math.abs(Number(flicker.baseIntensity || 0) - 0.44) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.amplitude || 0) - 0.16) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.freq || 0) - 0.42) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.opacityBase || 0) - 0.74) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.opacityAmplitude || 0) - 0.16) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.baseIntensity || 0) - 0.62) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.amplitude || 0) - 0.08) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.freq || 0) - 0.34) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.opacityBase || 0) - 0.88) < 0.0001);
+    assert.ok(Math.abs(Number(flicker.opacityAmplitude || 0) - 0.05) < 0.0001);
   }
   assert.ok(glowFlickers.every((flicker) => Math.abs(Number(flicker.phase || 0) - 0.85) < 0.0001));
 
   assert.equal(recorder.steamColumns.length, 2);
-  assert.ok(recorder.steamColumns.every((steam) => Number(steam.rise || 0) >= 13));
-  assert.ok(recorder.steamColumns.every((steam) => Array.isArray(steam.tiles) && steam.tiles.length >= 100));
-  assert.ok(stats.steamTileCount >= 200);
-  assert.ok(Math.abs(stats.glowWrapSpan - 1.1) < 0.0001);
+  assert.ok(recorder.steamColumns.every((steam) => Math.abs(Number(steam.rise || 0) - 16.8) < 0.0001));
+  assert.ok(recorder.steamColumns.every((steam) => Array.isArray(steam.tiles) && steam.tiles.length === NUCLEAR_STEAM_TILE_COUNT_PER_TOWER));
+  assert.ok(Math.abs(stats.steamTileCount - (NUCLEAR_STEAM_TILE_COUNT_PER_TOWER * 2)) < 0.0001);
+  assert.ok(Math.abs(stats.glowWrapSpan - 2.748) < 0.0001);
+  assert.ok(stats.glowMainSpan > 15);
 });
 
-test('wall street keeps the south hero wall while differentiating the flanks', () => {
+test('wall street keeps an open center street while shifting building mass to the biome edges', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
@@ -455,27 +581,27 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
 
   assert.ok(stats);
   assert.equal(stats.busStops, 2);
-  assert.equal(stats.cover, 10);
+  assert.equal(stats.cover, 8);
   assert.ok(stats.towerPeakHeight >= 59);
   assert.ok(stats.towerPeakHeight <= 60);
   assert.ok(stats.upperShaftWidth >= 8);
   assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
   assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.866))) < 0.0001);
   const expectedWallStreetZ = (v) => rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * v);
-  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.66)) < 0.0001);
-  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.64)) < 0.0001);
-  assert.ok(Math.abs(stats.westSupportCenterZ - expectedWallStreetZ(0.52)) < 0.0001);
-  assert.ok(Math.abs(stats.eastSupportCenterZ - expectedWallStreetZ(0.50)) < 0.0001);
-  assert.ok(Math.abs(stats.westKioskCenterZ - expectedWallStreetZ(0.34)) < 0.0001);
-  assert.ok(Math.abs(stats.eastKioskCenterZ - expectedWallStreetZ(0.34)) < 0.0001);
-  assert.ok(Math.abs(stats.westOfficeCenterZ - expectedWallStreetZ(0.21)) < 0.0001);
-  assert.ok(Math.abs(stats.eastOfficeCenterZ - expectedWallStreetZ(0.21)) < 0.0001);
-  assert.ok(Math.abs(stats.westBusStopCenterZ - expectedWallStreetZ(0.39)) < 0.0001);
-  assert.ok(Math.abs(stats.eastBusStopCenterZ - expectedWallStreetZ(0.39)) < 0.0001);
+  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.47)) < 0.0001);
+  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.47)) < 0.0001);
+  assert.ok(Math.abs(stats.westSupportCenterZ - expectedWallStreetZ(0.72)) < 0.0001);
+  assert.ok(Math.abs(stats.eastSupportCenterZ - expectedWallStreetZ(0.72)) < 0.0001);
+  assert.ok(Math.abs(stats.westKioskCenterZ - expectedWallStreetZ(0.22)) < 0.0001);
+  assert.ok(Math.abs(stats.eastKioskCenterZ - expectedWallStreetZ(0.22)) < 0.0001);
+  assert.ok(Math.abs(stats.westBusStopCenterZ - expectedWallStreetZ(0.31)) < 0.0001);
+  assert.ok(Math.abs(stats.eastBusStopCenterZ - expectedWallStreetZ(0.31)) < 0.0001);
   assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
   assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
-  assert.equal(stats.northSupportCount, 4);
-  assert.ok(stats.westAlleyCoverCount > stats.eastAlleyCoverCount);
+  assert.equal(stats.northSupportCount, 2);
+  assert.equal(stats.centerCoverCount, 0);
+  assert.equal(stats.westAlleyCoverCount, 4);
+  assert.equal(stats.eastAlleyCoverCount, 4);
 
   const plazaSpan = (rawBounds.maxX - rawBounds.minX) - 1.2;
   const broadPlazaBase = recorder.blocks.filter((block) =>
@@ -492,9 +618,9 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
     block.kind === 'block' &&
     block.isSolid === false &&
     Math.abs(block.y - 0.082) < 0.0001 &&
-    Math.abs(block.w - 9.2) < 0.0001 &&
+    Math.abs(block.w - 13.4) < 0.0001 &&
     Math.abs(block.h - 0.084) < 0.0001 &&
-    block.d > 26
+    block.d > 30
   );
   assert.equal(centerApproachStrip.length, 1);
 
@@ -502,23 +628,31 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
     block.kind === 'block' &&
     block.isSolid === false &&
     Math.abs(block.y - 0.082) < 0.0001 &&
-    Math.abs(block.w - 4.8) < 0.0001 &&
+    Math.abs(block.w - 3.8) < 0.0001 &&
     Math.abs(block.h - 0.084) < 0.0001 &&
-    Math.abs(block.d - 21.2) < 0.0001
+    Math.abs(block.d - 19.8) < 0.0001
   );
   assert.equal(alleyStrips.length, 2);
 
-  const perimeterPlanters = recorder.blocks.filter((block) =>
+  const curbPlanters = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === true &&
     Math.abs(block.y - 0.56) < 0.0001 &&
     Math.abs(block.h - 1.12) < 0.0001 &&
     (
-      (Math.abs(block.w - 2.4) < 0.0001 && Math.abs(block.d - 1.4) < 0.0001) ||
-      (Math.abs(block.w - 1.4) < 0.0001 && Math.abs(block.d - 2.6) < 0.0001)
+      (Math.abs(block.w - 1.8) < 0.0001 && Math.abs(block.d - 1.2) < 0.0001) ||
+      (Math.abs(block.w - 1.6) < 0.0001 && Math.abs(block.d - 2.1) < 0.0001) ||
+      (Math.abs(block.w - 2.4) < 0.0001 && Math.abs(block.d - 1.5) < 0.0001)
     )
   );
-  assert.equal(perimeterPlanters.length, 4);
+  assert.equal(curbPlanters.length, 6);
+
+  const northEdgePlanters = curbPlanters.filter((block) =>
+    Math.abs(block.w - 1.8) < 0.0001 &&
+    Math.abs(block.d - 1.2) < 0.0001 &&
+    block.z < expectedWallStreetZ(0.12)
+  );
+  assert.equal(northEdgePlanters.length, 2);
 
   const busStopRoofs = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
@@ -530,6 +664,16 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
   );
   assert.equal(busStopRoofs.length, 2);
 
+  const northOfficeBodies = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === true &&
+    (
+      (Math.abs(block.w - 7.2) < 0.0001 && Math.abs(block.d - 5.8) < 0.0001 && Math.abs(block.h - 9.1) < 0.0001) ||
+      (Math.abs(block.w - 5.8) < 0.0001 && Math.abs(block.d - 5.0) < 0.0001 && Math.abs(block.h - 7.5) < 0.0001)
+    )
+  );
+  assert.equal(northOfficeBodies.length, 0);
+
   const lobbyPilasters = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === true &&
@@ -538,6 +682,27 @@ test('wall street keeps the south hero wall while differentiating the flanks', (
     Math.abs(block.d - 4.8) < 0.0001
   );
   assert.equal(lobbyPilasters.length, 4);
+
+  const solidAabbs = solidGeometryAabbs(recorder.blocks);
+  const centerX = (rawBounds.minX + rawBounds.maxX) * 0.5;
+  const westShotX = rawBounds.minX + 3.5;
+  const eastShotX = rawBounds.maxX - 3.5;
+
+  for (const z of [118, 124, 132, 140, 146]) {
+    assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, z), false);
+  }
+  assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, 152), true);
+
+  assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, 122), true);
+  for (const z of [116, 118, 128, 144]) {
+    assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, z), false);
+  }
+  for (const z of [122, 126]) {
+    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), true);
+  }
+  for (const z of [116, 118, 134, 144]) {
+    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), false);
+  }
 
   const southFlushSolids = recorder.blocks.filter((block) =>
     block.kind === 'block' &&

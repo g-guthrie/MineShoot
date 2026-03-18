@@ -6,6 +6,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 (function () {
     'use strict';
 
+    var REACTOR_HEIGHT_SCALE = 1.25;
     var MATS = null;
 
     function ensureMats() {
@@ -15,20 +16,22 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             towerWhite: lib.getLambert({ color: 0xf6f7f3 }),
             towerShade: lib.getLambert({ color: 0xe0e3e0 }),
             towerCap: lib.getLambert({ color: 0xeaede8 }),
-            buildingDark: lib.getLambert({ color: 0x353c40 }),
-            buildingMid: lib.getLambert({ color: 0x474f53 }),
-            buildingLight: lib.getLambert({ color: 0x596166 }),
-            trim: lib.getLambert({ color: 0x70787d }),
-            duct: lib.getLambert({ color: 0x667076 }),
-            ductDark: lib.getLambert({ color: 0x485055 }),
+            buildingDark: lib.getLambert({ color: 0x6f767b }),
+            buildingMid: lib.getLambert({ color: 0x858c91 }),
+            buildingLight: lib.getLambert({ color: 0x9ca3a8 }),
+            trim: lib.getLambert({ color: 0xb1b8bc }),
+            duct: lib.getLambert({ color: 0x8f979c }),
+            ductDark: lib.getLambert({ color: 0x747c81 }),
             windowDark: lib.getLambert({ color: 0x11190f }),
             steam: lib.getLambert({ color: 0xf8faf6, transparent: true, opacity: 0.09 }),
             glow: new THREE.MeshStandardMaterial({
-                color: 0x5bea3d,
-                emissive: 0x5bea3d,
-                emissiveIntensity: 0.5,
+                color: 0x79ff77,
+                emissive: 0x79ff77,
+                emissiveIntensity: 0.82,
+                roughness: 0.22,
+                metalness: 0.02,
                 transparent: true,
-                opacity: 0.92,
+                opacity: 0.9,
                 side: THREE.DoubleSide
             })
         };
@@ -59,20 +62,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         return setMeta(place.addDecor(x, y, z, geometry, material, rotY, rotX, rotZ), role, meta);
     }
 
-    function addGlowStripSegment(place, reactorId, x, y, z, w, h, d, glowH, mats, ctx, face, phase) {
-        var glowBacking = addTaggedBlock(
-            place,
-            'reactor-window-back',
-            { face: face, reactorId: reactorId },
-            x,
-            y,
-            z,
-            w,
-            h,
-            d,
-            mats.windowDark,
-            false
-        );
+    function addGlowStripSegment(place, reactorId, x, y, z, w, h, d, mats, ctx, face, phase) {
         var glowMat = cloneMaterial(mats.glow);
         var glowStrip = addTaggedBlock(
             place,
@@ -81,47 +71,55 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             x,
             y,
             z,
-            Math.max(0.12, w * 0.58),
-            Math.max(0.14, glowH),
-            Math.max(0.12, d * 0.58),
+            Math.max(0.14, w),
+            Math.max(0.18, h),
+            Math.max(0.14, d),
             glowMat,
             false
         );
         if (ctx && typeof ctx.addFlicker === 'function') {
             ctx.addFlicker({
                 material: glowMat,
-                freq: 0.42,
+                freq: 0.34,
                 phase: Number(phase || 0),
-                baseIntensity: 0.44,
-                amplitude: 0.16,
-                opacityBase: 0.74,
-                opacityAmplitude: 0.16,
+                baseIntensity: 0.62,
+                amplitude: 0.08,
+                opacityBase: 0.88,
+                opacityAmplitude: 0.05,
                 pulseFamily: 'nuclear-window'
             });
         }
         return {
-            backing: glowBacking,
             glow: glowStrip
         };
     }
 
     function buildCoolingTower(eastFaceX, cz, towerId, place, mats, ctx) {
-        var baseWidth = 15.8;
+        var baseWidth = 16.6;
         var cx = eastFaceX - (baseWidth * 0.5);
+        var steamCols = 10;
+        var steamRows = 16;
+        var steamWidth = 1.78;
+        var steamHeight = 1.02;
+        var steamDepth = 1.78;
+        var steamColSpacing = 1.12;
+        var steamRowSpacing = 0.82;
+        var steamStartX = cx - (((steamCols - 1) * steamColSpacing) * 0.5);
+        var steamRise = 16.8;
         var tiers = [
-            { w: 15.8, h: 4.0, mat: mats.towerWhite },
-            { w: 15.2, h: 3.6, mat: mats.towerShade },
-            { w: 14.4, h: 3.4, mat: mats.towerWhite },
-            { w: 13.5, h: 3.2, mat: mats.towerShade },
-            { w: 12.5, h: 3.0, mat: mats.towerWhite },
+            { w: 16.6, h: 4.0, mat: mats.towerWhite },
+            { w: 15.9, h: 3.6, mat: mats.towerShade },
+            { w: 14.8, h: 3.4, mat: mats.towerWhite },
+            { w: 13.7, h: 3.2, mat: mats.towerShade },
+            { w: 12.6, h: 3.0, mat: mats.towerWhite },
             { w: 11.7, h: 2.9, mat: mats.towerShade },
-            { w: 11.0, h: 2.8, mat: mats.towerWhite },
-            { w: 10.6, h: 2.8, mat: mats.towerShade },
+            { w: 10.9, h: 2.8, mat: mats.towerWhite },
+            { w: 10.4, h: 2.8, mat: mats.towerShade },
             { w: 10.8, h: 2.9, mat: mats.towerWhite },
-            { w: 11.3, h: 3.0, mat: mats.towerShade },
-            { w: 12.0, h: 3.2, mat: mats.towerWhite },
-            { w: 12.9, h: 3.5, mat: mats.towerShade },
-            { w: 13.8, h: 3.8, mat: mats.towerCap }
+            { w: 11.6, h: 3.0, mat: mats.towerShade },
+            { w: 12.8, h: 3.2, mat: mats.towerWhite },
+            { w: 14.1, h: 3.5, mat: mats.towerShade },
+            { w: 15.2, h: 3.8, mat: mats.towerCap }
         ];
         var currentBaseY = 0;
         var peakHeight = 0;
@@ -145,25 +143,25 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             peakHeight = Math.max(peakHeight, centerY + (tier.h * 0.5));
         }
 
-        addTaggedBlock(place, 'cooling-tower-ring', { towerId: towerId }, cx, 0.48, cz, 16.8, 0.96, 16.8, mats.towerShade, true);
-        addTaggedBlock(place, 'cooling-tower-cap', { towerId: towerId }, cx, currentBaseY + 0.2, cz, 12.8, 0.4, 12.8, mats.towerCap, true);
+        addTaggedBlock(place, 'cooling-tower-ring', { towerId: towerId }, cx, 0.48, cz, 17.6, 0.96, 17.6, mats.towerShade, true);
+        addTaggedBlock(place, 'cooling-tower-cap', { towerId: towerId }, cx, currentBaseY + 0.2, cz, 14.0, 0.4, 14.0, mats.towerCap, true);
         peakHeight = Math.max(peakHeight, currentBaseY + 0.4);
 
         var steamTiles = [];
-        for (var col = 0; col < 8; col++) {
-            for (var row = 0; row < 13; row++) {
+        for (var col = 0; col < steamCols; col++) {
+            for (var row = 0; row < steamRows; row++) {
                 var phase = (col * 0.21) + (row * 0.11);
                 var steamMat = cloneMaterial(mats.steam);
                 var tile = addTaggedBlock(
                     place,
                     'cooling-tower-steam',
                     { towerId: towerId, column: col, row: row },
-                    cx - 4.9 + (col * 1.34),
-                    currentBaseY + 1.5 + (row * 0.88),
-                    cz - 2.0 + ((col % 2) * 0.52),
-                    1.66,
-                    0.96,
-                    1.66,
+                    steamStartX + (col * steamColSpacing),
+                    currentBaseY + 1.3 + (row * steamRowSpacing),
+                    cz - 2.35 + ((col % 3) * 0.52),
+                    steamWidth,
+                    steamHeight,
+                    steamDepth,
                     steamMat,
                     false
                 );
@@ -182,12 +180,12 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             ctx.addSteamColumn({
                 towerId: towerId,
                 tiles: steamTiles,
-                cycle: 3.5,
-                rise: 13.2,
-                baseOpacity: 0.09,
-                swayAmp: 0.52,
-                depthAmp: 0.3,
-                swayFreq: 0.56
+                cycle: 3.8,
+                rise: steamRise,
+                baseOpacity: 0.12,
+                swayAmp: 0.66,
+                depthAmp: 0.38,
+                swayFreq: 0.52
             });
         }
 
@@ -199,7 +197,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             peakHeight: peakHeight,
             eastFaceX: eastFaceX,
             steamTileCount: steamTiles.length,
-            steamRise: 13.2
+            steamRise: steamRise
         };
     }
 
@@ -319,45 +317,201 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     function buildInterBuildingDuct(northBuilding, southBuilding, place, mats) {
-        var startX = northBuilding.centerX + (northBuilding.width * 0.18);
-        var startZ = northBuilding.southZ + 0.9;
-        var endX = southBuilding.centerX + (southBuilding.width * 0.26);
-        var endZ = southBuilding.northZ - 1.2;
-        var midX = (startX + endX) * 0.5;
-        var midZ = (startZ + endZ) * 0.5;
-        var dx = endX - startX;
-        var dz = endZ - startZ;
-        var runLength = Math.sqrt((dx * dx) + (dz * dz));
-        var rotY = Math.atan2(dx, dz);
-        var ductY = 5.35;
+        var landingWidth = 2.2;
+        var landingDepth = 1.1;
+        var bridgeThickness = 0.56;
+        var wallOverlap = 0.18;
+        var trimWidth = 0.14;
+        var trimHeight = 0.18;
+        var trimLift = 0.18;
+        var supportWidth = 0.28;
+        var northAttach = {
+            x: northBuilding.eastFaceX - 1.2,
+            y: northBuilding.roofY - 1.25,
+            z: northBuilding.southZ
+        };
+        var southAttach = {
+            x: southBuilding.eastFaceX - 1.6,
+            y: southBuilding.roofY - 1.25,
+            z: southBuilding.northZ
+        };
+        var dx = southAttach.x - northAttach.x;
+        var dz = southAttach.z - northAttach.z;
+        var horizontalLength = Math.sqrt((dx * dx) + (dz * dz));
+        if (horizontalLength < 0.001) {
+            return {
+                length: 0,
+                rotY: 0
+            };
+        }
 
-        addTaggedRamp(place, 'reactor-duct', { part: 'body' }, midX, ductY, midZ, 1.5, 0.82, runLength + 0.4, mats.duct, rotY, 0, false);
-        addTaggedRamp(place, 'reactor-duct', { part: 'top-cap' }, midX, ductY + 0.26, midZ, 0.92, 0.12, runLength, mats.ductDark, rotY, 0, false);
-        addTaggedBlock(place, 'reactor-duct-support', { reactorId: northBuilding.id }, startX, 4.25, startZ, 0.24, 1.8, 0.24, mats.ductDark, false);
-        addTaggedBlock(place, 'reactor-duct-support', { reactorId: southBuilding.id }, endX, 4.35, endZ, 0.24, 1.9, 0.24, mats.ductDark, false);
+        var dirX = dx / horizontalLength;
+        var dirZ = dz / horizontalLength;
+        var sideX = dirZ;
+        var sideZ = -dirX;
+        var rotY = Math.atan2(dx, dz);
+        var landingCenterOffset = (landingDepth * 0.5) - wallOverlap;
+        var railOffset = (landingWidth * 0.5) - (trimWidth * 0.5);
+        var northLanding = {
+            x: northAttach.x + (dirX * landingCenterOffset),
+            y: northAttach.y,
+            z: northAttach.z + (dirZ * landingCenterOffset)
+        };
+        var southLanding = {
+            x: southAttach.x - (dirX * landingCenterOffset),
+            y: southAttach.y,
+            z: southAttach.z - (dirZ * landingCenterOffset)
+        };
+        var spanStart = {
+            x: northLanding.x + (dirX * landingDepth * 0.5),
+            y: northLanding.y,
+            z: northLanding.z + (dirZ * landingDepth * 0.5)
+        };
+        var spanEnd = {
+            x: southLanding.x - (dirX * landingDepth * 0.5),
+            y: southLanding.y,
+            z: southLanding.z - (dirZ * landingDepth * 0.5)
+        };
+        var spanDx = spanEnd.x - spanStart.x;
+        var spanDz = spanEnd.z - spanStart.z;
+        var spanDy = spanEnd.y - spanStart.y;
+        var spanHorizontal = Math.sqrt((spanDx * spanDx) + (spanDz * spanDz));
+        var spanLength = Math.sqrt((spanHorizontal * spanHorizontal) + (spanDy * spanDy));
+        var tiltRatio = spanLength > 0.001 ? Math.max(-1, Math.min(1, spanDy / spanLength)) : 0;
+        var tiltX = spanLength > 0.001 ? -Math.asin(tiltRatio) : 0;
+        var spanMidX = (spanStart.x + spanEnd.x) * 0.5;
+        var spanMidY = (spanStart.y + spanEnd.y) * 0.5;
+        var spanMidZ = (spanStart.z + spanEnd.z) * 0.5;
+        var undersideOffset = (bridgeThickness * 0.5) * Math.cos(tiltX || 0);
+
+        function addBridgeRails(centerX, centerY, centerZ, depth, tilt, partPrefix) {
+            addTaggedRamp(
+                place,
+                'reactor-duct',
+                { part: partPrefix + '-left-rail' },
+                centerX + (sideX * railOffset),
+                centerY + trimLift,
+                centerZ + (sideZ * railOffset),
+                trimWidth,
+                trimHeight,
+                depth,
+                mats.ductDark,
+                rotY,
+                tilt,
+                false
+            );
+            addTaggedRamp(
+                place,
+                'reactor-duct',
+                { part: partPrefix + '-right-rail' },
+                centerX - (sideX * railOffset),
+                centerY + trimLift,
+                centerZ - (sideZ * railOffset),
+                trimWidth,
+                trimHeight,
+                depth,
+                mats.ductDark,
+                rotY,
+                tilt,
+                false
+            );
+        }
+
+        addTaggedRamp(
+            place,
+            'reactor-duct',
+            { part: 'north-landing' },
+            northLanding.x,
+            northLanding.y,
+            northLanding.z,
+            landingWidth,
+            bridgeThickness,
+            landingDepth,
+            mats.duct,
+            rotY,
+            0,
+            true
+        );
+        addBridgeRails(northLanding.x, northLanding.y, northLanding.z, landingDepth * 0.96, 0, 'north-landing');
+
+        addTaggedRamp(
+            place,
+            'reactor-duct',
+            { part: 'body' },
+            spanMidX,
+            spanMidY,
+            spanMidZ,
+            landingWidth,
+            bridgeThickness,
+            spanLength,
+            mats.duct,
+            rotY,
+            tiltX,
+            true
+        );
+        addBridgeRails(spanMidX, spanMidY, spanMidZ, Math.max(0.3, spanLength - 0.12), tiltX, 'body');
+
+        addTaggedRamp(
+            place,
+            'reactor-duct',
+            { part: 'south-landing' },
+            southLanding.x,
+            southLanding.y,
+            southLanding.z,
+            landingWidth,
+            bridgeThickness,
+            landingDepth,
+            mats.duct,
+            rotY,
+            0,
+            true
+        );
+        addBridgeRails(southLanding.x, southLanding.y, southLanding.z, landingDepth * 0.96, 0, 'south-landing');
+
+        for (var i = 0; i < 2; i++) {
+            var supportT = i === 0 ? 0.25 : 0.75;
+            var supportX = spanStart.x + (spanDx * supportT);
+            var supportZ = spanStart.z + (spanDz * supportT);
+            var supportCenterlineY = spanStart.y + (spanDy * supportT);
+            var supportTopY = Math.max(0.3, supportCenterlineY - undersideOffset);
+            addTaggedBlock(
+                place,
+                'reactor-duct-support',
+                { supportIndex: i },
+                supportX,
+                supportTopY * 0.5,
+                supportZ,
+                supportWidth,
+                supportTopY,
+                supportWidth,
+                mats.ductDark,
+                false
+            );
+        }
 
         return {
-            length: runLength,
+            length: spanLength,
             rotY: rotY
         };
     }
 
     function buildGlowStrip(building, place, mats, ctx) {
-        var backingHeight = 0.46;
-        var glowHeight = 0.26;
-        var stripY = building.height - 0.75;
-        var standOff = 0.06;
-        var southFaceZ = building.southZ + standOff;
-        var westX = building.westFaceX - standOff;
-        var eastX = building.eastFaceX + standOff;
-        var wrapZ = building.southZ - 0.56;
-        var mainSpan = building.width * 0.56;
-        var wrapSpan = 1.1;
+        var backingHeight = 0;
+        var glowHeight = 0.96;
+        var glowDepth = 0.18;
+        var stripY = (building.height - 0.75) - (building.height * 0.05);
+        var standOff = 0.01;
+        var southFaceZ = building.southZ - (glowDepth * 0.5) + standOff;
+        var westX = building.westFaceX + (glowDepth * 0.5) - standOff;
+        var eastX = building.eastFaceX - (glowDepth * 0.5) + standOff;
+        var mainSpan = Math.max(2.0, building.width - glowDepth);
+        var wrapSpan = Math.max(2.4, Math.min(3.1, building.depth * 0.12));
+        var wrapZ = building.southZ - (wrapSpan * 0.5) + standOff;
         var phase = 0.85;
 
-        addGlowStripSegment(place, building.id, building.centerX, stripY, southFaceZ, mainSpan, backingHeight, 0.12, glowHeight, mats, ctx, 'south', phase);
-        addGlowStripSegment(place, building.id, westX, stripY, wrapZ, 0.12, backingHeight, wrapSpan, glowHeight, mats, ctx, 'west', phase);
-        addGlowStripSegment(place, building.id, eastX, stripY, wrapZ, 0.12, backingHeight, wrapSpan, glowHeight, mats, ctx, 'east', phase);
+        addGlowStripSegment(place, building.id, building.centerX, stripY, southFaceZ, mainSpan, glowHeight, glowDepth, mats, ctx, 'south', phase);
+        addGlowStripSegment(place, building.id, westX, stripY, wrapZ, glowDepth, glowHeight, wrapSpan, mats, ctx, 'west', phase);
+        addGlowStripSegment(place, building.id, eastX, stripY, wrapZ, glowDepth, glowHeight, wrapSpan, mats, ctx, 'east', phase);
 
         return {
             y: stripY,
@@ -368,7 +522,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             wrapSpan: wrapSpan,
             backingHeight: backingHeight,
             visibleHeight: glowHeight,
-            standOff: standOff
+            standOff: standOff,
+            bandDepth: glowDepth
         };
     }
 
@@ -393,7 +548,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             z: northAnchor.z,
             w: 11.8,
             d: 17.6,
-            h: 6.2
+            h: 6.2 * REACTOR_HEIGHT_SCALE
         }, place, mats);
         var southBuilding = buildReactorBuilding({
             id: 'south',
@@ -401,7 +556,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             z: southAnchor.z,
             w: 15.4,
             d: 22.9,
-            h: 8.3
+            h: 8.3 * REACTOR_HEIGHT_SCALE
         }, place, mats);
 
         if (ctx && typeof ctx.addExclusion === 'function') {
@@ -455,8 +610,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             glowBackingHeight: glowInfo.backingHeight,
             glowVisibleHeight: glowInfo.visibleHeight,
             glowStandOff: glowInfo.standOff,
-            glowPulseBase: 0.44,
-            glowPulseAmplitude: 0.16,
+            glowBandDepth: glowInfo.bandDepth,
+            glowPulseBase: 0.62,
+            glowPulseAmplitude: 0.08,
             steamRise: Math.max(towerNorth.steamRise, towerSouth.steamRise),
             steamTileCount: towerNorth.steamTileCount + towerSouth.steamTileCount,
             ductLength: ductInfo.length

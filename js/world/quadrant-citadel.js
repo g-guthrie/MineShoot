@@ -25,9 +25,33 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
             trim: lib.getLambert({ color: 0xcda555 }),
             trimSoft: lib.getLambert({ color: 0xe3c98e }),
             steam: lib.getLambert({ color: 0xf6fbff, transparent: true, opacity: 0.09 }),
-            flameOuter: new THREE.MeshStandardMaterial({ color: 0xffc76a, emissive: 0xffc76a, emissiveIntensity: 0.92 }),
-            flameMid: new THREE.MeshStandardMaterial({ color: 0xffefb5, emissive: 0xffefb5, emissiveIntensity: 1.02 }),
-            flameCore: new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffee, emissiveIntensity: 1.12 })
+            flameOuter: new THREE.MeshStandardMaterial({
+                color: 0xffc76a,
+                emissive: 0xffc76a,
+                emissiveIntensity: 0.98,
+                roughness: 0.34,
+                metalness: 0.03,
+                transparent: true,
+                opacity: 0.84
+            }),
+            flameMid: new THREE.MeshStandardMaterial({
+                color: 0xffefb5,
+                emissive: 0xffefb5,
+                emissiveIntensity: 1.08,
+                roughness: 0.3,
+                metalness: 0.02,
+                transparent: true,
+                opacity: 0.78
+            }),
+            flameCore: new THREE.MeshStandardMaterial({
+                color: 0xffffee,
+                emissive: 0xffffee,
+                emissiveIntensity: 1.18,
+                roughness: 0.26,
+                metalness: 0.01,
+                transparent: true,
+                opacity: 0.72
+            })
         };
         return MATS;
     }
@@ -70,8 +94,6 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         addCenteredBlock(center, 0.16, courtW, 0.28, courtD, mats.marble, true, place);
         addCenteredBlock(center, 0.34, 15.2, 0.12, courtD - 4.8, mats.ivory, true, place);
         addCenteredBlock(center, 0.34, courtW - 4.8, 0.12, 15.2, mats.ivory, true, place);
-
-        addPerimeterRing(center, 0.64, courtW - 5.2, courtD - 5.2, 1.0, 0.64, mats.shadow, true, place);
 
         addCornerBlocks(center, [
             { x: -18.0, z: -18.0 }, { x: 18.0, z: -18.0 }, { x: -18.0, z: 18.0 }, { x: 18.0, z: 18.0 }
@@ -198,34 +220,82 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
     }
 
     function buildTorchAndSteam(center, place, mats, ctx) {
+        var flameOuterY = 20.72;
+        var flameOuterH = 1.9;
+        var flameMidY = 22.0;
+        var flameMidH = 2.4;
+        var flameCoreY = 22.92;
+        var flameCoreH = 2.9;
+        var steamCols = 7;
+        var steamRows = 8;
+        var steamTileW = 1.16;
+        var steamTileH = 0.78;
+        var steamTileD = 1.16;
+        var steamColSpacing = 0.82;
+        var steamRowSpacing = 0.74;
+        var steamRise = 4.6;
+        var steamTopHeight = 0;
         place.addBlock(center.x, 18.84, center.z, 6.6, 1.56, 6.6, mats.warmShadow, true);
         addPerimeterRing(center, 19.48, 7.4, 7.4, 0.52, 0.38, mats.trim, true, place);
         addCenteredBlock(center, 19.22, 5.4, 0.28, 5.4, mats.shadow, false, place);
 
-        var flameOuter = place.addBlock(center.x, 20.35, center.z, 5.2, 1.4, 5.2, cloneMaterial(mats.flameOuter), false);
-        var flameMid = place.addBlock(center.x, 21.45, center.z, 3.6, 1.8, 3.6, cloneMaterial(mats.flameMid), false);
-        var flameCore = place.addBlock(center.x, 22.15, center.z, 2.0, 2.1, 2.0, cloneMaterial(mats.flameCore), false);
+        var flameOuter = place.addBlock(center.x, flameOuterY, center.z, 6.8, flameOuterH, 6.8, cloneMaterial(mats.flameOuter), false);
+        var flameMid = place.addBlock(center.x, flameMidY, center.z, 4.8, flameMidH, 4.8, cloneMaterial(mats.flameMid), false);
+        var flameCore = place.addBlock(center.x, flameCoreY, center.z, 2.8, flameCoreH, 2.8, cloneMaterial(mats.flameCore), false);
+        var flameTopHeight = Math.max(
+            flameOuterY + (flameOuterH * 0.5),
+            flameMidY + (flameMidH * 0.5),
+            flameCoreY + (flameCoreH * 0.5)
+        );
 
         if (ctx && typeof ctx.addFlicker === 'function') {
-            ctx.addFlicker({ material: flameOuter.material, freq: 1.45, phase: 0.2, baseIntensity: 0.9, amplitude: 0.14 });
-            ctx.addFlicker({ material: flameMid.material, freq: 1.85, phase: 0.9, baseIntensity: 0.98, amplitude: 0.12 });
-            ctx.addFlicker({ material: flameCore.material, freq: 2.3, phase: 1.8, baseIntensity: 1.08, amplitude: 0.1 });
+            ctx.addFlicker({
+                material: flameOuter.material,
+                freq: 1.35,
+                phase: 0.2,
+                baseIntensity: 0.86,
+                amplitude: 0.28,
+                opacityBase: 0.82,
+                opacityAmplitude: 0.12,
+                pulseFamily: 'citadel-flame'
+            });
+            ctx.addFlicker({
+                material: flameMid.material,
+                freq: 1.95,
+                phase: 0.9,
+                baseIntensity: 1.02,
+                amplitude: 0.22,
+                opacityBase: 0.74,
+                opacityAmplitude: 0.16,
+                pulseFamily: 'citadel-flame'
+            });
+            ctx.addFlicker({
+                material: flameCore.material,
+                freq: 2.55,
+                phase: 1.8,
+                baseIntensity: 1.14,
+                amplitude: 0.18,
+                opacityBase: 0.68,
+                opacityAmplitude: 0.18,
+                pulseFamily: 'citadel-flame'
+            });
         }
 
         var steamTiles = [];
-        for (var col = 0; col < 5; col++) {
-            for (var row = 0; row < 5; row++) {
+        for (var col = 0; col < steamCols; col++) {
+            for (var row = 0; row < steamRows; row++) {
                 var steamMat = cloneMaterial(mats.steam);
                 var tile = place.addBlock(
-                    center.x - 1.8 + (col * 0.9),
-                    23.15 + (row * 0.78),
-                    center.z - 0.22 + ((col % 2) * 0.22),
-                    1.04,
-                    0.68,
-                    1.04,
+                    center.x - (((steamCols - 1) * steamColSpacing) * 0.5) + (col * steamColSpacing),
+                    23.55 + (row * steamRowSpacing),
+                    center.z - 0.38 + ((col % 3) * 0.24),
+                    steamTileW,
+                    steamTileH,
+                    steamTileD,
                     steamMat,
                     false
                 );
+                steamTopHeight = Math.max(steamTopHeight, tile.position.y + steamRise + (steamTileH * 0.5));
                 steamTiles.push({
                     mesh: tile,
                     material: steamMat,
@@ -240,18 +310,18 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         if (ctx && typeof ctx.addSteamColumn === 'function') {
             ctx.addSteamColumn({
                 tiles: steamTiles,
-                cycle: 2.8,
-                rise: 2.6,
-                baseOpacity: 0.08,
-                swayAmp: 0.16,
-                depthAmp: 0.08,
-                swayFreq: 0.42
+                cycle: 3.1,
+                rise: steamRise,
+                baseOpacity: 0.11,
+                swayAmp: 0.22,
+                depthAmp: 0.12,
+                swayFreq: 0.55
             });
         }
 
         return {
-            flameTopHeight: 23.2,
-            steamPeakHeight: 29.18,
+            flameTopHeight: flameTopHeight,
+            steamPeakHeight: steamTopHeight,
             steamTileCount: steamTiles.length
         };
     }

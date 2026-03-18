@@ -216,6 +216,18 @@ function internalBoundaries(regionMin, regionMax, boundsMin, boundsMax) {
   return values.sort((a, b) => a - b);
 }
 
+function normalizeBoundaries(regionMin, regionMax, boundaries) {
+  const values = Array.isArray(boundaries)
+    ? boundaries
+    : boundaries instanceof Set
+      ? Array.from(boundaries)
+      : [];
+  const clamped = values
+    .map((value) => Math.floor(Number(value)))
+    .filter((value) => Number.isFinite(value) && value > regionMin && value < regionMax);
+  return new Set(clamped);
+}
+
 function axisHeader(prefix, regionMin, regionMax, boundarySet, digitFn) {
   let line = prefix;
   for (let value = regionMin; value < regionMax; value++) {
@@ -234,27 +246,36 @@ function separatorRow(prefix, regionMin, regionMax, boundarySet) {
   return line;
 }
 
-function renderUnitMap(region, bounds, cellRenderer) {
-  const boundaryCols = new Set(internalBoundaries(region.minX, region.maxX, bounds.minX, bounds.maxX));
-  const boundaryRows = new Set(internalBoundaries(region.minZ, region.maxZ, bounds.minZ, bounds.maxZ));
+function renderBoundaryAwareUnitMap(region, boundaryCols, boundaryRows, cellRenderer) {
+  const columnBoundaries = normalizeBoundaries(region.minX, region.maxX, boundaryCols);
+  const rowBoundaries = normalizeBoundaries(region.minZ, region.maxZ, boundaryRows);
   const lines = [];
 
-  lines.push(axisHeader('x10 ', region.minX, region.maxX, boundaryCols, (value) => String(Math.floor(value / 10) % 10)));
-  lines.push(axisHeader('x01 ', region.minX, region.maxX, boundaryCols, (value) => String(Math.abs(value % 10))));
+  lines.push(axisHeader('x10 ', region.minX, region.maxX, columnBoundaries, (value) => String(Math.floor(value / 10) % 10)));
+  lines.push(axisHeader('x01 ', region.minX, region.maxX, columnBoundaries, (value) => String(Math.abs(value % 10))));
 
   for (let z = region.minZ; z < region.maxZ; z++) {
-    if (boundaryRows.has(z) && z > region.minZ) {
-      lines.push(separatorRow('    ', region.minX, region.maxX, boundaryCols));
+    if (rowBoundaries.has(z) && z > region.minZ) {
+      lines.push(separatorRow('    ', region.minX, region.maxX, columnBoundaries));
     }
     let line = String(z).padStart(3, ' ') + ' ';
     for (let x = region.minX; x < region.maxX; x++) {
-      if (boundaryCols.has(x) && x > region.minX) line += '|';
+      if (columnBoundaries.has(x) && x > region.minX) line += '|';
       line += cellRenderer(x, z);
     }
     lines.push(line);
   }
 
   return lines.join('\n');
+}
+
+function renderUnitMap(region, bounds, cellRenderer) {
+  return renderBoundaryAwareUnitMap(
+    region,
+    internalBoundaries(region.minX, region.maxX, bounds.minX, bounds.maxX),
+    internalBoundaries(region.minZ, region.maxZ, bounds.minZ, bounds.maxZ),
+    cellRenderer
+  );
 }
 
 function visibleBiomeSlices(region) {
@@ -468,11 +489,96 @@ function buildUnitAreaReport(biomeId, options) {
   };
 }
 
+function buildVerticalSeamReport(northBiomeId, southBiomeId, options) {
+  const north = buildBiomeDataset(northBiomeId);
+  const south = buildBiomeDataset(southBiomeId);
+  if (Math.abs(north.bounds.minX - south.bounds.minX) > 0.0001 || Math.abs(north.bounds.maxX - south.bounds.maxX) > 0.0001) {
+    throw new Error(`Biomes do not share the same x-span: ${northBiomeId}, ${southBiomeId}`);
+  }
+  if (Math.abs(north.bounds.maxZ - south.bounds.minZ) > 0.0001) {
+    throw new Error(`Biomes are not vertically adjacent: ${northBiomeId}, ${southBiomeId}`);
+  }
+
+  const region = {
+    minX: north.bounds.minX,
+    maxX: north.bounds.maxX,
+    minZ: north.bounds.minZ,
+    maxZ: south.bounds.maxZ
+  };
+  const seamZ = south.bounds.minZ;
+  const datasets = [north, south];
+  const { buckets, usedKinds } = buildObjectBuckets(region, datasets);
+  const kindsByBiome = new Map();
+
+  for (const meta of usedKinds.values()) {
+    const kinds = kindsByBiome.get(meta.biomeId) || new Set();
+    kinds.add(meta.kind);
+    kindsByBiome.set(meta.biomeId, kinds);
+  }
+
+  const northMask = String(options && options.northMaskGlyph ? options.northMaskGlyph : north.spec.name[0]).slice(0, 1) || 'N';
+  const southMask = String(options && options.southMaskGlyph ? options.southMaskGlyph : south.spec.name[0]).slice(0, 1) || 'S';
+  const outputFile = String((options && options.outputFile) || `${northBiomeId}-${southBiomeId}-seam.txt`);
+  const lines = [];
+
+  lines.push(`${north.spec.name} to ${south.spec.name} seam map`);
+  lines.push(`North biome: ${northBiomeId}  x:[${north.bounds.minX}, ${north.bounds.maxX}) z:[${north.bounds.minZ}, ${north.bounds.maxZ})`);
+  lines.push(`South biome: ${southBiomeId}  x:[${south.bounds.minX}, ${south.bounds.maxX}) z:[${south.bounds.minZ}, ${south.bounds.maxZ})`);
+  lines.push(`Shared biome border: z=${seamZ}`);
+  lines.push(`Sample region x:[${region.minX}, ${region.maxX}) z:[${region.minZ}, ${region.maxZ})`);
+  lines.push('');
+  lines.push(`Biome mask (${northMask} = ${north.spec.name}, ${southMask} = ${south.spec.name})`);
+  lines.push(renderBoundaryAwareUnitMap(
+    region,
+    [],
+    [seamZ],
+    (_x, z) => z < seamZ ? northMask : southMask
+  ));
+  lines.push('');
+  lines.push('Object map (sampled authored placements across both biomes)');
+  lines.push(renderBoundaryAwareUnitMap(
+    region,
+    [],
+    [seamZ],
+    (x, z) => {
+      const bucket = buckets.get(`${z}:${x}`);
+      if (!bucket || !bucket.size) return '.';
+      if (bucket.size > 1) return '*';
+      const [key] = bucket;
+      const meta = usedKinds.get(key);
+      return (meta && meta.spec && meta.spec.glyphs && meta.spec.glyphs[meta.kind]) || '?';
+    }
+  ));
+  lines.push('');
+  lines.push(`${north.spec.name} legend`);
+  for (const kind of Array.from(kindsByBiome.get(northBiomeId) || []).sort()) {
+    lines.push(`  ${north.spec.glyphs[kind] || '?'} ${kind}`);
+  }
+  lines.push('');
+  lines.push(`${south.spec.name} legend`);
+  for (const kind of Array.from(kindsByBiome.get(southBiomeId) || []).sort()) {
+    lines.push(`  ${south.spec.glyphs[kind] || '?'} ${kind}`);
+  }
+  lines.push('  * mixed unit (multiple object kinds overlap in the same 1x1 cell)');
+  lines.push('  . empty unit');
+
+  return {
+    name: `${north.spec.name} / ${south.spec.name} seam`,
+    northBiomeId,
+    southBiomeId,
+    region,
+    seamZ,
+    outputFile,
+    content: lines.join('\n') + '\n'
+  };
+}
+
 function writeAllReports(outputDir) {
   fs.mkdirSync(outputDir, { recursive: true });
   const biomeIds = Object.keys(BIOME_SPECS);
   const reports = biomeIds.map((biomeId) => buildReport(biomeId));
   const arcticUnitArea = buildUnitAreaReport('arctic');
+  const citadelWallStreetSeam = buildVerticalSeamReport('citadel', 'wall-street');
 
   for (const report of reports) {
     fs.writeFileSync(path.join(outputDir, report.outputFile), report.content, 'utf8');
@@ -482,6 +588,7 @@ function writeAllReports(outputDir) {
     }
   }
   fs.writeFileSync(path.join(outputDir, 'arctic-unit-area.txt'), arcticUnitArea.content, 'utf8');
+  fs.writeFileSync(path.join(outputDir, citadelWallStreetSeam.outputFile), citadelWallStreetSeam.content, 'utf8');
 
   const summaryLines = ['# Biome ASCII Maps', '', 'Generated by `npm run maps:biomes`.', ''];
   summaryLines.push('| Biome | Features | Occupied Cells | Hotspot | File |');
@@ -497,6 +604,7 @@ function writeAllReports(outputDir) {
   summaryLines.push('## Specialized maps');
   summaryLines.push('');
   summaryLines.push('- [Arctic unit-area boundary map](./arctic-unit-area.txt) - 1x1 world-unit mask with exact Arctic biome edges and sampled neighboring object strips.');
+  summaryLines.push('- [Citadel / Wall Street seam map](./citadel-wall-street-seam.txt) - 1x1 shared corridor map with the exact biome border and sampled authored buildings on both sides.');
   summaryLines.push('');
   fs.writeFileSync(path.join(outputDir, 'README.md'), summaryLines.join('\n') + '\n', 'utf8');
 
@@ -956,36 +1064,27 @@ const BIOME_SPECS = {
       const exchange = pt(bounds, 0.50, 0.84);
       const podium = pt(bounds, 0.50, 0.94);
       return [
-        uvLine(bounds, 'stairs', { u: 0.50, v: 0.38 }, { u: 0.50, v: 0.79 }, 8, 'grand-stair'),
-        uvLine(bounds, 'alley', { u: 0.31, v: 0.40 }, { u: 0.32, v: 0.82 }, 7, 'west-alley'),
-        uvLine(bounds, 'alley', { u: 0.67, v: 0.38 }, { u: 0.68, v: 0.80 }, 7, 'east-alley'),
+        uvPoint(bounds, 'kiosk', 0.12, 0.22, 'west-kiosk'),
+        uvPoint(bounds, 'kiosk', 0.88, 0.22, 'east-kiosk'),
+        uvLine(bounds, 'village', { u: 0.13, v: 0.34 }, { u: 0.13, v: 0.58 }, 5, 'west-street-wall'),
+        uvLine(bounds, 'village', { u: 0.87, v: 0.34 }, { u: 0.87, v: 0.58 }, 5, 'east-street-wall'),
         point('exchange', exchange.x, exchange.z, 'stock-exchange'),
         point('podium', podium.x, podium.z, 'ceo-podium'),
         uvPoint(bounds, 'tower', 0.50, 0.94, 'ceo-tower'),
-        uvPoint(bounds, 'annex', 0.25, 0.62, 'west-annex'),
-        uvPoint(bounds, 'brokerage', 0.81, 0.60, 'east-brokerage'),
-        ...uvPoints(bounds, 'village', [
-          { u: 0.15, v: 0.24 },
-          { u: 0.86, v: 0.24 },
-          { u: 0.39, v: 0.44 },
-          { u: 0.66, v: 0.41 }
-        ], 'support'),
-        ...uvPoints(bounds, 'kiosk', [{ u: 0.28, v: 0.36 }, { u: 0.74, v: 0.34 }], 'ticker-kiosk'),
-        ...uvPoints(bounds, 'arch', [{ u: 0.31, v: 0.67 }, { u: 0.69, v: 0.63 }], 'alley-arch'),
-        ...uvPoints(bounds, 'lamp', [{ u: 0.45, v: 0.47 }, { u: 0.60, v: 0.45 }], 'street-lamp'),
+        uvPoint(bounds, 'annex', 0.13, 0.47, 'west-annex'),
+        uvPoint(bounds, 'brokerage', 0.87, 0.47, 'east-brokerage'),
+        uvLine(bounds, 'village', { u: 0.11, v: 0.68 }, { u: 0.11, v: 0.76 }, 3, 'west-south-shoulder'),
+        uvLine(bounds, 'village', { u: 0.89, v: 0.68 }, { u: 0.89, v: 0.76 }, 3, 'east-south-shoulder'),
+        ...uvPoints(bounds, 'arch', [{ u: 0.18, v: 0.31 }, { u: 0.82, v: 0.31 }], 'side-shot'),
+        ...uvPoints(bounds, 'lamp', [{ u: 0.34, v: 0.46 }, { u: 0.66, v: 0.46 }], 'street-lamp'),
+        ...uvPoints(bounds, 'cover', [{ u: 0.12, v: 0.09 }, { u: 0.88, v: 0.09 }], 'north-planter'),
         ...uvPoints(bounds, 'cover', [
-          { u: 0.47, v: 0.36 },
-          { u: 0.24, v: 0.50 },
-          { u: 0.38, v: 0.46 },
-          { u: 0.50, v: 0.44 },
-          { u: 0.61, v: 0.43 },
-          { u: 0.50, v: 0.54 },
-          { u: 0.46, v: 0.56 },
-          { u: 0.58, v: 0.60 },
-          { u: 0.30, v: 0.58 },
-          { u: 0.22, v: 0.56 },
-          { u: 0.70, v: 0.53 }
-        ], 'cover')
+          { u: 0.24, v: 0.44 },
+          { u: 0.76, v: 0.44 },
+          { u: 0.29, v: 0.74 },
+          { u: 0.71, v: 0.74 }
+        ], 'cover'),
+        uvLine(bounds, 'stairs', { u: 0.50, v: 0.72 }, { u: 0.50, v: 0.84 }, 4, 'grand-stair')
       ];
     }
   },
@@ -1030,5 +1129,6 @@ module.exports = {
   BIOME_SPECS,
   buildReport,
   buildUnitAreaReport,
+  buildVerticalSeamReport,
   writeAllReports
 };
