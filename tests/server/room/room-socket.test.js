@@ -37,12 +37,13 @@ test('room socket message replays welcome payload for join-room', () => {
   assert.deepEqual(sent, [{ target: ws, payload: { t: 'welcome', selfId: 'u1' } }]);
 });
 
-test('room socket leave-room removes the player immediately', () => {
+test('room socket leave-room marks the player disconnected and broadcasts a removal snapshot', () => {
   const ws = createSocket();
+  const player = { id: 'u1', disconnectedAt: 0 };
   const room = {
     clients: new Map([[ws, { userId: 'u1' }]]),
     activeSocketByUserId: new Map([['u1', ws]]),
-    players: new Map([['u1', { id: 'u1' }]]),
+    players: new Map([['u1', player]]),
     snapshots: [],
     stopTickCalls: 0,
     broadcastSnapshot(forceFull) { this.snapshots.push(forceFull); },
@@ -50,6 +51,7 @@ test('room socket leave-room removes the player immediately', () => {
   };
 
   handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'leave_room' }), {
+    findSocketForUserId() { return null; },
     safeJsonParse: JSON.parse,
     nowMs: () => 123,
     isPrivateMatchRoom: () => false,
@@ -60,7 +62,48 @@ test('room socket leave-room removes the player immediately', () => {
 
   assert.equal(room.clients.has(ws), false);
   assert.equal(room.activeSocketByUserId.has('u1'), false);
-  assert.equal(room.players.has('u1'), false);
+  assert.equal(room.players.get('u1'), player);
+  assert.equal(room.players.get('u1').disconnectedAt, 123);
+  assert.deepEqual(room.snapshots, [true]);
+  assert.equal(room.stopTickCalls, 1);
+});
+
+test('room socket leave-room promotes a replacement socket when one already exists', () => {
+  const closing = createSocket();
+  const replacement = createSocket();
+  const player = { id: 'u1', disconnectedAt: 10 };
+  const room = {
+    clients: new Map([
+      [closing, { userId: 'u1' }],
+      [replacement, { userId: 'u1' }]
+    ]),
+    activeSocketByUserId: new Map([['u1', closing]]),
+    players: new Map([['u1', player]]),
+    snapshots: [],
+    stopTickCalls: 0,
+    broadcastSnapshot(forceFull) { this.snapshots.push(forceFull); },
+    stopTickIfEmpty() { this.stopTickCalls += 1; }
+  };
+
+  handleRoomSocketMessage(room, closing, JSON.stringify({ t: 'leave_room' }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 222,
+    findSocketForUserId(clients, userId, excludeWs) {
+      for (const [ws, meta] of clients.entries()) {
+        if (ws === excludeWs) continue;
+        if (meta.userId === userId) return ws;
+      }
+      return null;
+    },
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { LEAVE_ROOM: 'leave_room', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(room.clients.has(closing), false);
+  assert.equal(room.activeSocketByUserId.get('u1'), replacement);
+  assert.equal(room.players.get('u1').disconnectedAt, 0);
   assert.deepEqual(room.snapshots, [true]);
   assert.equal(room.stopTickCalls, 1);
 });

@@ -251,13 +251,28 @@ export function queueAuthoritativeInput(player, msg, deps) {
   const canEntityUseWeapon = deps.canEntityUseWeapon;
   const clamp = deps.clamp;
   const createMovementInputState = deps.createMovementInputState;
+  const hasIntentInputMessage = deps.hasIntentInputMessage;
   const movementLocked = !!deps.movementLocked;
   if (!player || !msg) return;
 
+  const nextSeq = Number(msg.seq);
+  const hasOrderedSeq = Number.isFinite(nextSeq);
+  const latestAppliedOrPendingSeq = Math.max(
+    Number(player.seq || 0),
+    Number(player.pendingInputSeq || 0)
+  );
+  if (hasOrderedSeq && nextSeq <= latestAppliedOrPendingSeq) {
+    return false;
+  }
+
   if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
   if (!movementLocked && typeof msg.pitch === 'number' && clamp) player.pitch = clamp(msg.pitch, -1.55, 1.55);
-  if (typeof msg.seq === 'number') {
-    player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
+  if (hasOrderedSeq) {
+    player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), nextSeq);
+  }
+
+  if (hasIntentInputMessage && !hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') {
+    return true;
   }
 
   // Weapon changes are authoritative through explicit equip/reload/fire flows.
@@ -317,6 +332,7 @@ export function tickPlayers(room, dtSec, deps) {
   for (const player of room.players.values()) {
     room.respawnIfNeeded(player);
     room.tickAuthoritativePlayerMovement(player, dtSec);
+    if (player && player.alive) applyPendingInputAck(player);
     room.regenArmor(player, dtSec);
     room.tickStreamState(player, dtSec);
     room.tickThrowableRegen(player, dtSec);

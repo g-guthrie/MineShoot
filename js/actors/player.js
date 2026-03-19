@@ -65,7 +65,8 @@
 
     var EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var RUN_SPEED = Number(movementTuning.runSpeed || 14);
-    var MOUSE_SENSITIVITY = 0.002;
+    var MOUSE_SENSITIVITY_BASE = 0.002;
+    var MOUSE_SENSITIVITY_DEFAULT = 65;
     var PITCH_LIMIT = 89 * (Math.PI / 180);
 
     var PLAYER_RADIUS = Number(entityConstants.PLAYER_RADIUS || 0.35);
@@ -99,6 +100,7 @@
     var jumpHoldTimer = 0;
     var jumpPressedLastFrame = false;
     var scopeHeld = false;
+    var mouseSensitivity = loadMouseSensitivity();
 
     var keys = {
         forward: false,
@@ -118,6 +120,44 @@
     var avatarRigApi = null;
     var actorVisual = null;
     var sceneRef = null;
+
+    function localStore() {
+        try {
+            return window.localStorage || null;
+        } catch (_err) {
+            return null;
+        }
+    }
+
+    function normalizeMouseSensitivity(value) {
+        var next = Number(value);
+        if (!Number.isFinite(next)) return MOUSE_SENSITIVITY_DEFAULT;
+        return Math.max(10, Math.min(100, Math.round(next)));
+    }
+
+    function loadMouseSensitivity() {
+        var store = localStore();
+        if (!store || typeof store.getItem !== 'function') return MOUSE_SENSITIVITY_DEFAULT;
+        try {
+            return normalizeMouseSensitivity(store.getItem('mayhem_mouse_sensitivity'));
+        } catch (_err) {
+            return MOUSE_SENSITIVITY_DEFAULT;
+        }
+    }
+
+    function saveMouseSensitivity() {
+        var store = localStore();
+        if (!store || typeof store.setItem !== 'function') return;
+        try {
+            store.setItem('mayhem_mouse_sensitivity', String(mouseSensitivity));
+        } catch (_err) {
+            // no-op
+        }
+    }
+
+    function currentMouseSensitivity() {
+        return MOUSE_SENSITIVITY_BASE * (mouseSensitivity / MOUSE_SENSITIVITY_DEFAULT);
+    }
     var hitboxVisible = false;
 
     var bobTimer = 0;
@@ -548,7 +588,7 @@
             if (!hasInputCapture()) return;
             var sensitivityMult = isSniperScopeWeapon() ? SNIPER_SCOPE_SENSITIVITY_MULT : ADS_SENSITIVITY_MULT;
             var blend = viewHelper() && viewHelper().getScopeBlend ? viewHelper().getScopeBlend() : 0;
-            var sensitivity = MOUSE_SENSITIVITY * (1 - (blend * (1 - sensitivityMult)));
+            var sensitivity = currentMouseSensitivity() * (1 - (blend * (1 - sensitivityMult)));
             yaw -= (e.movementX || 0) * sensitivity;
             pitch -= (e.movementY || 0) * sensitivity;
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
@@ -1025,6 +1065,16 @@
             sprint: !!isSprintInputActive(),
             adsActive: !!isAdsActive()
         };
+    };
+
+    GamePlayer.getMouseSensitivity = function () {
+        return mouseSensitivity;
+    };
+
+    GamePlayer.setMouseSensitivity = function (nextValue) {
+        mouseSensitivity = normalizeMouseSensitivity(nextValue);
+        saveMouseSensitivity();
+        return mouseSensitivity;
     };
 
     GamePlayer.setLoadout = function (loadoutConfig) {

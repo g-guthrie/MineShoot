@@ -1,0 +1,320 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tactical Glass Material */
+    --glass-bg: 220 23% 5%;
+    --glass-border: 0 0% 100% / 0.1;
+    --glass-highlight: 0 0% 100% / 0.05;
+
+    /* Brand */
+    --background: 220 20% 4%;
+    --foreground: 210 40% 98%;
+
+    --primary: 190 80% 50%;
+    --primary-foreground: 220 20% 4%;
+
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 210 30% 85%;
+
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 190 80% 50%;
+    --accent-foreground: 220 20% 4%;
+
+    --card: 220 20% 7%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 20% 7%;
+    --popover-foreground: 210 40% 98%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 190 80% 50%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --glass-blur: 24px;
+    --radius-xl: 32px;
+    --radius-lg: 18px;
+    --radius-md: 12px;
+    --shadow-lift: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px hsl(var(--glass-border));
+    --shadow-glow: 0 0 20px hsl(190 80% 50% / 0.15);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --tempo: 300ms;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', sans-serif;
+  }
+}
+
+/* Glass material utilities */
+@layer components {
+  .glass-surface {
+    background: hsl(var(--glass-bg) / 0.75);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    border: 1px solid hsl(var(--glass-border));
+  }
+
+  .glass-card {
+    background: hsl(var(--glass-bg) / 0.5);
+    backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid hsl(var(--glass-border));
+    border-radius: var(--radius-lg);
+    transition: all var(--tempo) var(--ease-out-expo);
+  }
+
+  .glass-card:hover {
+    border-color: hsl(var(--primary) / 0.2);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .pill-btn {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-widest rounded-xl transition-all;
+    font-family: 'Orbitron', sans-serif;
+    background: hsl(var(--glass-highlight));
+    border: 1px solid hsl(var(--glass-border));
+    color: hsl(var(--foreground));
+  }
+
+  .pill-btn:hover {
+    background: hsl(var(--primary) / 0.15);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  .pill-btn.active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.3);
+  }
+
+  .launch-btn {
+    @apply inline-flex items-center justify-center px-8 py-4 text-sm font-extrabold uppercase tracking-wider rounded-xl transition-all;
+    font-family: 'Orbitron', sans-serif;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 0 30px hsl(var(--primary) / 0.3), 0 4px 15px rgba(0,0,0,0.3);
+  }
+
+  .launch-btn:hover {
+    filter: brightness(1.15);
+    box-shadow: 0 0 40px hsl(var(--primary) / 0.5), 0 4px 20px rgba(0,0,0,0.4);
+  }
+
+  .launch-btn:active {
+    transform: scale(0.98);
+  }
+
+  .slot-btn {
+    @apply flex items-center justify-center rounded-xl p-3 text-xs font-bold uppercase tracking-wide transition-all cursor-pointer;
+    font-family: 'Orbitron', sans-serif;
+    background: hsl(var(--glass-highlight));
+    border: 1px solid hsl(var(--glass-border));
+    color: hsl(var(--foreground));
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .slot-btn:hover {
+    background: hsl(var(--primary) / 0.1);
+    border-color: hsl(var(--primary) / 0.3);
+  }
+
+  .slot-btn.active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.3);
+  }
+
+  .item-grid-btn {
+    @apply flex flex-col items-center justify-center gap-1 rounded-xl p-3 text-xs transition-all cursor-pointer;
+    font-family: 'Rajdhani', sans-serif;
+    background: hsl(var(--glass-highlight));
+    border: 1px solid hsl(var(--glass-border));
+    color: hsl(var(--muted-foreground));
+    min-height: 56px;
+  }
+
+  .item-grid-btn:hover {
+    background: hsl(var(--primary) / 0.1);
+    border-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
+  }
+
+  .item-grid-btn.selected {
+    background: hsl(var(--primary) / 0.15);
+    border-color: hsl(var(--primary) / 0.5);
+    color: hsl(var(--foreground));
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.2);
+  }
+
+  .section-label {
+    @apply block text-[10px] font-semibold uppercase tracking-[0.15em] mb-2;
+    font-family: 'Orbitron', sans-serif;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .glass-input {
+    @apply w-full px-4 py-3 rounded-xl text-sm transition-all outline-none;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    background: hsl(var(--glass-highlight));
+    border: 1px solid hsl(var(--glass-border));
+    color: hsl(var(--foreground));
+  }
+
+  .glass-input::placeholder {
+    color: hsl(var(--muted-foreground));
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .glass-input:focus {
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1);
+  }
+
+  .tab-btn {
+    @apply px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer;
+    font-family: 'Orbitron', sans-serif;
+    background: transparent;
+    color: hsl(var(--muted-foreground));
+    border: 1px solid transparent;
+  }
+
+  .tab-btn:hover {
+    color: hsl(var(--foreground));
+    background: hsl(var(--glass-highlight));
+  }
+
+  .tab-btn.active {
+    background: hsl(var(--primary) / 0.15);
+    color: hsl(var(--primary));
+    border-color: hsl(var(--primary) / 0.3);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 100px;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.2);
+  }
+  50% {
+    box-shadow: 0 0 35px hsl(var(--primary) / 0.4);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s var(--ease-out-expo) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Screen slide transitions */
+@keyframes slideOutLeft {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-40px); }
+}
+@keyframes slideOutRight {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(40px); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.screen-slide-out-left {
+  animation: slideOutLeft 0.2s var(--ease-out-expo) forwards;
+}
+.screen-slide-out-right {
+  animation: slideOutRight 0.2s var(--ease-out-expo) forwards;
+}
+.screen-slide-in-right {
+  animation: slideInRight 0.25s var(--ease-out-expo) forwards;
+}
+.screen-slide-in-left {
+  animation: slideInLeft 0.25s var(--ease-out-expo) forwards;
+}
+
+/* Hide scrollbar on tabs */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+}
+
+#root {
+  position: relative;
+  z-index: 40;
+}
+
+#debug-info:empty {
+  display: none;
+}

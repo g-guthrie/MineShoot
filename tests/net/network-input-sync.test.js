@@ -15,6 +15,7 @@ import { logicalHitscanOriginFromEye } from '../../shared/entity-points.js';
 
 async function loadGameNetHarness(options = {}) {
   const renderMap = new Map();
+  const respawnCalls = [];
   const currentInputState = {
     forward: true,
     backward: false,
@@ -119,7 +120,12 @@ async function loadGameNetHarness(options = {}) {
           adsActive: !!currentInputState.adsActive
         };
       },
-      respawn() {}
+      respawn(x, z) {
+        respawnCalls.push({
+          x: Number(x || 0),
+          z: Number(z || 0)
+        });
+      }
     },
     GameNetTransport: null
   };
@@ -199,6 +205,7 @@ async function loadGameNetHarness(options = {}) {
   return {
     GameNet,
     renderMap,
+    respawnCalls,
     sentMessages,
     timeState,
     handleMessage(message) {
@@ -613,6 +620,50 @@ test('GameNet clears stale snapshot timing after transport close', async () => {
   timeState.now = 6000;
   assert.equal(GameNet.getEstimatedServerTime(), 0);
   assert.equal(GameNet.getConnectionTimingState().snapshot, null);
+});
+
+test('GameNet clears authoritative self and pending spawn or respawn state after transport close', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, closeTransport, respawnCalls, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 960,
+    delta: false,
+    entities: [{ id: 'usr_test', x: 4, y: 1.6, z: 5, yaw: 0, pitch: 0, seq: 3, hp: 400 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+  harness.handleMessage({
+    t: 'death_respawn',
+    entityId: 'usr_test',
+    respawnAt: 1400,
+    x: 8,
+    z: 12
+  });
+
+  assert.equal(GameNet.getAuthoritativeSelfState().id, 'usr_test');
+  assert.equal(GameNet.getRespawnState().active, true);
+
+  closeTransport();
+
+  assert.equal(GameNet.getAuthoritativeSelfState(), null);
+  assert.equal(GameNet.getRespawnState(), null);
+
+  timeState.now = 2000;
+  GameNet.update(0.016, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
+  assert.deepEqual(respawnCalls, []);
 });
 
 test('GameNet remaps death respawn timing onto the local clock when snapshot timing is available', async () => {

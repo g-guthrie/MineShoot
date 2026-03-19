@@ -11,14 +11,24 @@
     var unlockInFlight = false;
     var pendingPlaybacks = [];
     var muted = false;
+    var masterVolume = 75;
+    var sfxVolume = 50;
     var noiseBuffer = null;
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
+    var masterGainNode = null;
+    var sfxGainNode = null;
     var chokeLoops = {
         caster: null,
         victim: null
     };
+
+    function clampVolume(value, fallback) {
+        var next = Number(value);
+        if (!Number.isFinite(next)) return fallback;
+        return Math.max(0, Math.min(100, Math.round(next)));
+    }
 
     function weaponPresentationFor(weaponId) {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
@@ -39,6 +49,17 @@
         }
     }
 
+    function loadVolumePreferences() {
+        try {
+            var store = window.localStorage || null;
+            masterVolume = clampVolume(store ? store.getItem('mayhem_audio_master_volume') : null, 75);
+            sfxVolume = clampVolume(store ? store.getItem('mayhem_audio_sfx_volume') : null, 50);
+        } catch (err) {
+            masterVolume = 75;
+            sfxVolume = 50;
+        }
+    }
+
     function saveMutedPreference() {
         try {
             if (window.localStorage) {
@@ -49,11 +70,54 @@
         }
     }
 
+    function saveVolumePreference(key, value) {
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem(key, String(value));
+            }
+        } catch (err) {
+            // noop
+        }
+    }
+
+    function syncGainLevels(c) {
+        var currentCtx = c || ctx;
+        if (masterGainNode && currentCtx) {
+            masterGainNode.gain.setValueAtTime(masterVolume / 100, currentCtx.currentTime);
+        }
+        if (sfxGainNode && currentCtx) {
+            sfxGainNode.gain.setValueAtTime(sfxVolume / 100, currentCtx.currentTime);
+        }
+    }
+
+    function ensureGainGraph(c) {
+        if (!c) return null;
+        if (!masterGainNode || masterGainNode.context !== c) {
+            masterGainNode = c.createGain();
+            masterGainNode.connect(c.destination);
+        }
+        if (!sfxGainNode || sfxGainNode.context !== c) {
+            sfxGainNode = c.createGain();
+            sfxGainNode.connect(masterGainNode);
+        }
+        syncGainLevels(c);
+        return {
+            master: masterGainNode,
+            sfx: sfxGainNode
+        };
+    }
+
+    function sfxDestination(c) {
+        var graph = ensureGainGraph(c);
+        return graph && graph.sfx ? graph.sfx : (c ? c.destination : null);
+    }
+
     function getCtx() {
         if (ctx) return ctx;
         var C = window.AudioContext || window.webkitAudioContext;
         if (!C) return null;
         ctx = new C();
+        ensureGainGraph(ctx);
         return ctx;
     }
 
@@ -123,7 +187,7 @@
         var osc = c.createOscillator();
         var gain = c.createGain();
         osc.connect(gain);
-        gain.connect(c.destination);
+        gain.connect(sfxDestination(c));
         osc.type = type;
         osc.frequency.setValueAtTime(freq, c.currentTime);
         gain.gain.setValueAtTime(0, c.currentTime);
@@ -255,7 +319,7 @@
         }
         gain.gain.setValueAtTime(opts.gain !== undefined ? opts.gain : 1, start);
         nodes.push(gain);
-        connectNodeChain(source, nodes, c.destination);
+        connectNodeChain(source, nodes, sfxDestination(c));
         source.start(start);
         if (opts.duration) {
             source.stop(start + Math.max(0.01, Number(opts.duration)));
@@ -300,7 +364,7 @@
         gain.gain.exponentialRampToValueAtTime(peak, start + attack);
         gain.gain.exponentialRampToValueAtTime(0.0001, end);
         osc.connect(gain);
-        gain.connect(c.destination);
+        gain.connect(sfxDestination(c));
         osc.start(start);
         osc.stop(end + 0.02);
     }
@@ -324,7 +388,7 @@
         gain.gain.setValueAtTime(0.0001, start);
         gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Number(opts.vol || 0.06)), start + Math.max(0.0008, Number(opts.attack || 0.002)));
         gain.gain.exponentialRampToValueAtTime(0.0001, end);
-        connectNodeChain(source, [filter, gain], c.destination);
+        connectNodeChain(source, [filter, gain], sfxDestination(c));
         source.start(start);
         source.stop(end + 0.02);
     }
@@ -764,7 +828,7 @@
         noise.connect(noiseGain);
         noiseGain.connect(filter);
         filter.connect(master);
-        master.connect(c.destination);
+        master.connect(sfxDestination(c));
 
         master.gain.setValueAtTime(0.0001, c.currentTime);
         master.gain.exponentialRampToValueAtTime(role === 'victim' ? 0.034 : 0.022, c.currentTime + 0.08);
@@ -891,6 +955,28 @@
         return !!muted;
     };
 
+    GameAudio.setMasterVolume = function (nextVolume) {
+        masterVolume = clampVolume(nextVolume, masterVolume);
+        saveVolumePreference('mayhem_audio_master_volume', masterVolume);
+        syncGainLevels();
+        return masterVolume;
+    };
+
+    GameAudio.getMasterVolume = function () {
+        return masterVolume;
+    };
+
+    GameAudio.setSfxVolume = function (nextVolume) {
+        sfxVolume = clampVolume(nextVolume, sfxVolume);
+        saveVolumePreference('mayhem_audio_sfx_volume', sfxVolume);
+        syncGainLevels();
+        return sfxVolume;
+    };
+
+    GameAudio.getSfxVolume = function () {
+        return sfxVolume;
+    };
+
     GameAudio.setChokeAudioState = function (state) {
         state = state || {};
         if (muted) {
@@ -907,6 +993,7 @@
     };
 
     loadMutedPreference();
+    loadVolumePreferences();
 
     globalThis.__MAYHEM_RUNTIME.GameAudio = GameAudio;
 })();

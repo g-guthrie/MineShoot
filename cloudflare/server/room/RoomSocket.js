@@ -1,5 +1,33 @@
+export function disconnectRoomSocket(room, ws, deps) {
+  deps = deps || {};
+  const findSocketForUserId = deps.findSocketForUserId;
+  const nowMs = deps.nowMs;
+
+  const meta = room.clients.get(ws) || ws.deserializeAttachment();
+  room.clients.delete(ws);
+
+  if (meta && meta.userId && room.activeSocketByUserId.get(meta.userId) === ws) {
+    const replacement = findSocketForUserId ? findSocketForUserId(room.clients, meta.userId, ws) : null;
+    if (replacement) {
+      room.activeSocketByUserId.set(meta.userId, replacement);
+      const player = room.players.get(meta.userId);
+      if (player) player.disconnectedAt = 0;
+    } else {
+      room.activeSocketByUserId.delete(meta.userId);
+      const player = room.players.get(meta.userId);
+      if (player) {
+        player.disconnectedAt = nowMs ? nowMs() : 0;
+      }
+    }
+  }
+
+  room.stopTickIfEmpty();
+  return meta || null;
+}
+
 export function handleRoomSocketMessage(room, ws, message, deps) {
   deps = deps || {};
+  const findSocketForUserId = deps.findSocketForUserId;
   const safeJsonParse = deps.safeJsonParse;
   const nowMs = deps.nowMs;
   const handleClassCast = deps.handleClassCast;
@@ -28,13 +56,13 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     return;
   }
   if (type === msgC2s.LEAVE_ROOM) {
-    room.clients.delete(ws);
-    room.activeSocketByUserId.delete(meta.userId);
-    room.players.delete(meta.userId);
+    disconnectRoomSocket(room, ws, {
+      findSocketForUserId,
+      nowMs
+    });
     if (typeof room.broadcastSnapshot === 'function') {
       room.broadcastSnapshot(true);
     }
-    room.stopTickIfEmpty();
     return;
   }
   if (type === msgC2s.INPUT) {
@@ -80,27 +108,5 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
 }
 
 export function handleRoomSocketClose(room, ws, deps) {
-  deps = deps || {};
-  const findSocketForUserId = deps.findSocketForUserId;
-  const nowMs = deps.nowMs;
-
-  const meta = room.clients.get(ws) || ws.deserializeAttachment();
-  room.clients.delete(ws);
-
-  if (meta && meta.userId && room.activeSocketByUserId.get(meta.userId) === ws) {
-    const replacement = findSocketForUserId ? findSocketForUserId(room.clients, meta.userId, ws) : null;
-    if (replacement) {
-      room.activeSocketByUserId.set(meta.userId, replacement);
-      const player = room.players.get(meta.userId);
-      if (player) player.disconnectedAt = 0;
-    } else {
-      room.activeSocketByUserId.delete(meta.userId);
-      const player = room.players.get(meta.userId);
-      if (player) {
-        player.disconnectedAt = nowMs ? nowMs() : 0;
-      }
-    }
-  }
-
-  room.stopTickIfEmpty();
+  return disconnectRoomSocket(room, ws, deps);
 }

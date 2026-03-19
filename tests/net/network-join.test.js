@@ -218,3 +218,12 @@ test('GameNet join attempt rejects on timeout before authoritative join', async 
 
   await assert.rejects(joinPromise, /Timed out joining room FFA-01\./);
 });
+
+test('GameNet join attempt still times out when it begins after the transport is already connected', async () => {
+  const harness = await createNetHarness();
+  harness.init();
+
+  const joinPromise = harness.net.beginJoinAttempt({ expectedRoomId: 'ffa-01', timeoutMs: 5 });
+
+  await assert.rejects(joinPromise, /Timed out joining room FFA-01\./);
+});

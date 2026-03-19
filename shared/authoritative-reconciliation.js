@@ -50,6 +50,7 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
   const bounds = options.bounds || { minX: -Infinity, maxX: Infinity, minZ: -Infinity, maxZ: Infinity };
   const collisionBoxes = Array.isArray(options.collisionBoxes) ? options.collisionBoxes : [];
   const getGroundHeightAt = typeof options.getGroundHeightAt === 'function' ? options.getGroundHeightAt : (() => 0);
+  const maxReplayStepMs = Math.max(1, Number(options.maxReplayStepMs || 75));
   const movementLocked = typeof options.movementLocked === 'function'
     ? options.movementLocked
     : (() => !!options.movementLocked);
@@ -58,20 +59,25 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (!entry || !entry.inputState) continue;
-    const dtSec = Math.max(1 / 240, Math.min(0.075, Number(entry.dtMs || 50) / 1000));
+    let remainingDtMs = Math.max(1, Number(entry.dtMs || 50));
     state.yaw = (typeof entry.yaw === 'number' && isFinite(entry.yaw)) ? Number(entry.yaw) : state.yaw;
     state.pitch = (typeof entry.pitch === 'number' && isFinite(entry.pitch)) ? Number(entry.pitch) : state.pitch;
-    stepMovement(state, entry.inputState, {
-      dtSec: dtSec,
-      bounds: bounds,
-      collisionBoxes: collisionBoxes,
-      getGroundHeightAt: getGroundHeightAt,
-      movementLocked: !!movementLocked(entry, state),
-      eyeHeight: Number(options.eyeHeight || EYE_HEIGHT),
-      playerHeight: Number(options.playerHeight || PLAYER_HEIGHT),
-      playerRadius: Number(options.playerRadius || PLAYER_RADIUS),
-      epsilon: Number(options.epsilon || 0.001)
-    });
+    while (remainingDtMs > 0.0001) {
+      const stepDtMs = Math.min(maxReplayStepMs, remainingDtMs);
+      const dtSec = Math.max(1 / 240, Number(stepDtMs || 0) / 1000);
+      stepMovement(state, entry.inputState, {
+        dtSec: dtSec,
+        bounds: bounds,
+        collisionBoxes: collisionBoxes,
+        getGroundHeightAt: getGroundHeightAt,
+        movementLocked: !!movementLocked(entry, state),
+        eyeHeight: Number(options.eyeHeight || EYE_HEIGHT),
+        playerHeight: Number(options.playerHeight || PLAYER_HEIGHT),
+        playerRadius: Number(options.playerRadius || PLAYER_RADIUS),
+        epsilon: Number(options.epsilon || 0.001)
+      });
+      remainingDtMs -= stepDtMs;
+    }
   }
   return state;
 }

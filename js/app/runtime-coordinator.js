@@ -568,6 +568,7 @@
                     return renderer ? renderer.domElement : null;
                 },
                 validateLaunch: validateMenuSelections,
+                headlessMenuUi: true,
                 beforeGameplayEntry: function () {
                     if (globalThis.__MAYHEM_RUNTIME.GameAudio && globalThis.__MAYHEM_RUNTIME.GameAudio.unlock) {
                         globalThis.__MAYHEM_RUNTIME.GameAudio.unlock();
@@ -668,8 +669,23 @@
                     controlsApi.bind();
                 }
                 animate();
-                if (gameSession && gameSession.emitSessionState) {
-                    gameSession.emitSessionState();
+                if (gameSession) {
+                    var launchContext = {
+                        launchKind: multiplayerMode ? 'network' : 'offline',
+                        modeId: activeRuntimeMode && activeRuntimeMode.id ? String(activeRuntimeMode.id || '') : '',
+                        gameMode: activeRuntimeMode && activeRuntimeMode.gameMode ? String(activeRuntimeMode.gameMode || '') : '',
+                        roomId: activeRuntimeMode && activeRuntimeMode.roomId ? String(activeRuntimeMode.roomId || '') : '',
+                        roomCode: activeRuntimeMode && activeRuntimeMode.roomId && runtimeModeUi() && runtimeModeUi().roomCodeFromRoomId
+                            ? String(runtimeModeUi().roomCodeFromRoomId(activeRuntimeMode.roomId) || '')
+                            : '',
+                        requiresNetwork: !!multiplayerMode,
+                        canResume: false
+                    };
+                    if (gameSession.showInputCapturePrompt) {
+                        gameSession.showInputCapturePrompt(launchContext);
+                    } else if (gameSession.emitSessionState) {
+                        gameSession.emitSessionState();
+                    }
                 }
             });
         }

@@ -38,8 +38,8 @@ Started in this branch:
 
 - extracted runtime launch and boot ownership into `js/app/runtime-shell.js`
 - reduced `js/main.js` so mode launch and runtime startup are app-owned lifecycle concerns instead of being embedded directly in the gameplay orchestrator
-- extracted net runtime composition into `js/net/runtime.js`
-- reduced `js/network.js` to a compatibility wrapper over the dedicated net runtime owner
+- extracted net lifecycle, state, and view ownership into `js/net/*`
+- kept `js/net/network.js` as the active gameplay entrypoint over that split runtime surface
 
 ## Stage 4
 

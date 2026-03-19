@@ -108,6 +108,7 @@ import {
   enforceEntityTerrainFloor as enforceRoomEntityTerrainFloor,
   ensurePlayer as ensureRoomPlayer,
   planEntityRespawn as planRoomEntityRespawn,
+  queueAuthoritativeInput,
   respawnIfNeeded as respawnRoomEntityIfNeeded,
   spawnEntityRandomly as spawnRoomEntityRandomly,
   syncRoomFixtures as syncRoomRuntimeFixtures,
@@ -1218,24 +1219,12 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
 
     const now = nowMs();
-    const movementLocked = this.isEntityMovementLocked(player, now);
-    if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
-    if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
-
-    // Weapon changes are authoritative through explicit equip/reload/fire flows.
-    // Movement input can arrive stale and must not rewind player.weaponId.
-    if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
-
-    player.inputMode = 'intent';
-    player.inputState = player.inputState || createMovementInputState();
-    player.inputState.forward = !!msg.forward;
-    player.inputState.backward = !!msg.backward;
-    player.inputState.left = !!msg.left;
-    player.inputState.right = !!msg.right;
-    player.inputState.jump = !!msg.jump;
-    player.inputState.sprint = !!msg.sprint;
-    player.inputState.adsActive = !!msg.adsActive;
+    queueAuthoritativeInput(player, msg, {
+      clamp,
+      createMovementInputState,
+      hasIntentInputMessage,
+      movementLocked: this.isEntityMovementLocked(player, now)
+    });
   }
 
   tickAuthoritativePlayerMovement(player, dtSec) {
@@ -1523,6 +1512,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   webSocketMessage(ws, message) {
     return handleRoomSocketMessage(this, ws, message, {
+      findSocketForUserId,
       safeJsonParse,
       nowMs,
       handleClassCast,

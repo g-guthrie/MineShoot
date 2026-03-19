@@ -5,5 +5,5 @@ Owns client protocol, transport, prediction, reconciliation, state views, author
 Status:
 - Rewrite landing zone created.
 - Authoritative room, self, match, world, input-history, and queue state now starts in `js/net/runtime-state.js`.
-- Net runtime composition now starts in `js/net/runtime.js`.
-- `js/network.js` is now a backward-compatible facade entrypoint instead of the primary owner.
+- Active multiplayer client entrypoint is `js/net/network.js`.
+- Connection lifecycle and send cadence live in `js/net/runtime-core.js`.

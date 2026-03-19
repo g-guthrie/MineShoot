@@ -86,6 +86,10 @@
                 : null);
         var motionSyncKey = buildMotionSyncKey(authoritativeState);
         var motionChanged = motionSyncKey !== lastMotionSyncKey;
+        var inputStillUnsettled =
+            Number(normalizedState.pendingInputCount || 0) > 0 ||
+            !!normalizedState.hasUnsentInputTail ||
+            Number(normalizedState.ackDrift || 0) > 0;
         var serverNow = authoritativeNow(netApi);
 
         if (
@@ -99,7 +103,7 @@
         }
 
         if (
-            motionChanged &&
+            (motionChanged || inputStillUnsettled) &&
             authoritativeState.alive !== false &&
             RT.GamePlayer &&
             RT.GamePlayer.reconcileAuthoritativeMotion

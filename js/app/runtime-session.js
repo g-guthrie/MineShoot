@@ -108,6 +108,10 @@
             return opts.getActivityState ? String(opts.getActivityState() || 'menu') : 'menu';
         }
 
+        function headlessMenuUi() {
+            return !!opts.headlessMenuUi;
+        }
+
         function currentActivityState() {
             if (!opts.isRuntimeReady || !opts.isRuntimeReady()) return 'menu';
             if (pauseState.active) return 'paused';
@@ -120,6 +124,7 @@
         }
 
         function setMenuButtonsVisible(playVisible, backVisible) {
+            if (headlessMenuUi()) return;
             var els = ensureMenuSessionEls();
             if (els.playBtn) {
                 els.playBtn.style.display = playVisible ? 'inline-block' : 'none';
@@ -332,7 +337,18 @@
                     awaitingInputCapture: !!(pendingInputCapture && opts.isRuntimeReady && opts.isRuntimeReady() && !isPlaying),
                     canResume: canResumeGameplay(),
                     activityState: currentActivityState(),
-                    launchContext: cloneLaunchContext(launchContext)
+                    launchContext: cloneLaunchContext(launchContext),
+                    pauseState: {
+                        active: !!pauseState.active,
+                        reason: String(pauseState.reason || ''),
+                        triggeredAt: Number(pauseState.triggeredAt || 0)
+                    },
+                    postGame: postGameState.active ? {
+                        active: true,
+                        phase: String(postGameState.phase || ''),
+                        matchEndedAt: Number(postGameState.matchEndedAt || 0),
+                        snapshot: cloneMatchData(postGameState.snapshot)
+                    } : null
                 }
             }));
         }
@@ -357,6 +373,7 @@
         }
 
         function hideLaunchHandoff() {
+            if (headlessMenuUi()) return;
             var els = ensureLaunchHandoffEls();
             if (els.flow) els.flow.hidden = true;
             if (els.enterBtn) els.enterBtn.hidden = true;
@@ -366,6 +383,14 @@
         }
 
         function showLaunchHandoff(context) {
+            if (headlessMenuUi()) {
+                if (overlayEl) overlayEl.style.display = 'flex';
+                isPlaying = false;
+                pendingInputCapture = true;
+                clearIdleMonitor();
+                emitSessionState();
+                return;
+            }
             var els = ensureLaunchHandoffEls();
             var modeLabel = String(context && context.gameMode || '').toUpperCase();
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
@@ -417,12 +442,16 @@
         }
 
         function hidePostGameFlow() {
-            var els = ensurePostGameEls();
             clearPostGameTimer();
             postGameState.active = false;
             postGameState.phase = '';
             postGameState.snapshot = null;
             clearIdleMonitor();
+            if (headlessMenuUi()) {
+                emitSessionState();
+                return;
+            }
+            var els = ensurePostGameEls();
             if (els.flow) els.flow.hidden = true;
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = true;
@@ -444,17 +473,21 @@
         }
 
         function showPostGameResults() {
-            var els = ensurePostGameEls();
             var snapshot = postGameState.snapshot || {};
             var matchState = snapshot.matchState || null;
             var selfState = snapshot.selfState || null;
+
+            postGameState.phase = 'results';
+            clearPostGameTimer();
+            if (headlessMenuUi()) {
+                emitSessionState();
+                return;
+            }
+            var els = ensurePostGameEls();
             var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'PLAYER') : 'PLAYER';
             var won = opts.didSelfWin ? !!opts.didSelfWin(matchState, selfState) : false;
             var kills = Math.max(0, Number(selfState && selfState.kills || 0));
             var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
-
-            postGameState.phase = 'results';
-            clearPostGameTimer();
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = false;
             if (els.resultsOutcome) els.resultsOutcome.textContent = won ? 'VICTORY' : 'DEFEAT';
@@ -481,11 +514,7 @@
             var matchState = matchContext ? matchContext.matchState : null;
             if (!matchState || !matchState.ended || !Number(matchState.endedAt || 0)) return;
             if (postGameState.active && postGameState.matchEndedAt === Number(matchState.endedAt || 0)) return;
-
-            var els = ensurePostGameEls();
             var selfState = matchContext ? matchContext.selfState : null;
-            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'PLAYER') : 'PLAYER';
-            var won = opts.didSelfWin ? !!opts.didSelfWin(matchState, selfState) : false;
 
             postGameState.active = true;
             postGameState.phase = 'celebration';
@@ -507,6 +536,14 @@
             pendingInputCapture = false;
             hideLaunchHandoff();
             setResumeButtonsVisible(false);
+            if (headlessMenuUi()) {
+                postGameState.timer = setTimeout(showPostGameResults, 2600);
+                emitSessionState();
+                return;
+            }
+            var els = ensurePostGameEls();
+            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'PLAYER') : 'PLAYER';
+            var won = opts.didSelfWin ? !!opts.didSelfWin(matchState, selfState) : false;
             if (els.menuStage) els.menuStage.hidden = true;
             if (els.flow) els.flow.hidden = false;
             if (els.results) els.results.hidden = true;
@@ -685,53 +722,55 @@
 
                 runtime.GameSession = api;
 
-                if (playBtn) {
-                    playBtn.addEventListener('click', triggerResumeGameplay);
-                    playBtn.addEventListener('pointerup', triggerResumeGameplay);
-                    playBtn.addEventListener('mousedown', triggerResumeGameplay);
-                    playBtn.addEventListener('touchend', triggerResumeGameplay, { passive: false });
-                }
+                if (!headlessMenuUi()) {
+                    if (playBtn) {
+                        playBtn.addEventListener('click', triggerResumeGameplay);
+                        playBtn.addEventListener('pointerup', triggerResumeGameplay);
+                        playBtn.addEventListener('mousedown', triggerResumeGameplay);
+                        playBtn.addEventListener('touchend', triggerResumeGameplay, { passive: false });
+                    }
 
-                if (backModeBtn) {
-                    backModeBtn.addEventListener('click', function (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        if (pauseState.active || canResumeGameplay()) {
-                            requestLeaveGame();
-                            return;
-                        }
-                        api.returnToMenu();
-                    });
-                }
+                    if (backModeBtn) {
+                        backModeBtn.addEventListener('click', function (event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (pauseState.active || canResumeGameplay()) {
+                                requestLeaveGame();
+                                return;
+                            }
+                            api.returnToMenu();
+                        });
+                    }
 
-                if (postGameEls.celebration) {
-                    postGameEls.celebration.addEventListener('click', function () {
-                        if (postGameState.active && postGameState.phase === 'celebration') {
-                            showPostGameResults();
-                        }
-                    });
-                }
+                    if (postGameEls.celebration) {
+                        postGameEls.celebration.addEventListener('click', function () {
+                            if (postGameState.active && postGameState.phase === 'celebration') {
+                                showPostGameResults();
+                            }
+                        });
+                    }
 
-                if (postGameEls.continueBtn) {
-                    postGameEls.continueBtn.addEventListener('click', function (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        completePostGameFlow();
-                    });
-                }
+                    if (postGameEls.continueBtn) {
+                        postGameEls.continueBtn.addEventListener('click', function (event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            completePostGameFlow();
+                        });
+                    }
 
-                if (handoffEls.enterBtn) {
-                    handoffEls.enterBtn.addEventListener('click', function (event) {
-                        api.enterGameplay(event, launchContext);
-                    });
-                }
+                    if (handoffEls.enterBtn) {
+                        handoffEls.enterBtn.addEventListener('click', function (event) {
+                            api.enterGameplay(event, launchContext);
+                        });
+                    }
 
-                if (handoffEls.cancelBtn) {
-                    handoffEls.cancelBtn.addEventListener('click', function (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        api.returnToMenu();
-                    });
+                    if (handoffEls.cancelBtn) {
+                        handoffEls.cancelBtn.addEventListener('click', function (event) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            api.returnToMenu();
+                        });
+                    }
                 }
 
                 document.addEventListener('keydown', function (event) {
@@ -827,7 +866,7 @@
                     emitSessionState();
                 });
 
-                if (modeButtonsWrap && modeButtonsWrap.style.display !== 'none') {
+                if (!headlessMenuUi() && modeButtonsWrap && modeButtonsWrap.style.display !== 'none') {
                     setResumeButtonsVisible(false);
                 }
 
@@ -839,6 +878,7 @@
             canResumeGameplay: canResumeGameplay,
             setResumeButtonsVisible: setResumeButtonsVisible,
             emitSessionState: emitSessionState,
+            completePostGameFlow: completePostGameFlow,
             prepareLaunch: function (context) {
                 launchContext = cloneLaunchContext(context);
                 var handoffEls = ensureLaunchHandoffEls();
@@ -849,6 +889,10 @@
                 hideLaunchHandoff();
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
+                if (headlessMenuUi()) {
+                    emitSessionState();
+                    return;
+                }
                 if (handoffEls.flow) handoffEls.flow.hidden = true;
                 if (handoffEls.title) handoffEls.title.textContent = 'CONNECTING';
                 if (handoffEls.copy) handoffEls.copy.textContent = 'Loading gameplay runtime...';

@@ -41,7 +41,29 @@ test('replay motion uses recorded sample dt values', () => {
   );
 
   assert.equal(replayed.x, 0);
-  assert.ok(replayed.z < -0.99 && replayed.z > -1.01);
+  assert.ok(replayed.z < -1.19 && replayed.z > -1.21);
+});
+
+test('replay motion preserves long sample duration by chunking capped steps', () => {
+  const input = createMovementInputState();
+  input.forward = true;
+  input.sprint = true;
+
+  const replayed = replayMotionState(
+    { x: 0, y: 1.6, z: 0, yaw: 0, isGrounded: true },
+    [
+      { dtMs: 180, yaw: 0, pitch: 0, inputState: input }
+    ],
+    {
+      bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+      collisionBoxes: [],
+      getGroundHeightAt: flatGround,
+      movementLocked: false
+    }
+  );
+
+  assert.equal(replayed.x, 0);
+  assert.ok(replayed.z < -2.51 && replayed.z > -2.53);
 });
 
 test('replay motion carries jump state across pending samples', () => {

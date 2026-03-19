@@ -11,6 +11,7 @@ import {
   queueAuthoritativeInput,
   respawnIfNeeded,
   syncRoomFixtures,
+  tickPlayers,
   terrainFeetYAt,
   terrainEyeYAt
 } from '../../../cloudflare/server/room/RoomRuntime.js';
@@ -147,6 +148,60 @@ test('room runtime keeps latest intent and applies the ack after authoritative m
   applyPendingInputAck(player);
 
   assert.equal(player.seq, 7);
+});
+
+test('room runtime ignores stale input packets and only advances ack during shared player ticks', () => {
+  const room = makeRoom();
+  const player = {
+    id: 'u1',
+    kind: 'player',
+    alive: true,
+    seq: 7,
+    pendingInputSeq: 7,
+    yaw: 0,
+    pitch: 0,
+    inputState: {}
+  };
+  room.players.set('u1', player);
+
+  queueAuthoritativeInput(player, {
+    seq: 9,
+    yaw: 0.75,
+    pitch: 0.4,
+    forward: true,
+    jump: true,
+    adsActive: false
+  }, {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+  queueAuthoritativeInput(player, {
+    seq: 8,
+    yaw: -0.25,
+    pitch: -0.5,
+    forward: false,
+    jump: false,
+    adsActive: false
+  }, {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(player.seq, 7);
+  assert.equal(player.pendingInputSeq, 9);
+  assert.equal(player.yaw, 0.75);
+  assert.equal(player.pitch, 0.4);
+  assert.equal(player.inputState.forward, true);
+  assert.equal(player.inputState.jump, true);
+
+  tickPlayers(room, 0.016, {});
+
+  assert.equal(room.tickAuthoritativePlayerMovementCalls, 1);
+  assert.equal(player.seq, 9);
+  assert.equal(player.yaw, 0.75);
+  assert.equal(player.inputState.forward, true);
 });
 
 test('room runtime input samples do not rewind weapon selection from stale client anim state', () => {

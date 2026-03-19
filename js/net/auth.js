@@ -18,7 +18,6 @@
     var ownProfile = null;
     var publicSessionUser = null;
     var menuGuestUser = null;
-    var uiBound = false;
     var sessionFetchPromise = null;
     var socketPlayerId = '';
     var FRIENDLY_GUEST_ID_RE = /^[a-z]+-[a-z]+-\d{3}$/i;
@@ -27,7 +26,6 @@
     var runtimeTabToken = '';
     var arenaIdentityReadyPromise = null;
     var identityChannel = null;
-    var authUi = null;
     var GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
     var GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
 
@@ -368,41 +366,15 @@
         };
     }
 
-    function authUiApi() {
-        if (authUi) return authUi;
-        var factory = globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameAuthUi;
-        if (!factory || typeof factory.create !== 'function') return null;
-        authUi = factory.create({
-            getUser: function () { return user; },
-            isGuest: function () { return guestMode; },
-            getOwnProfile: function () { return ownProfile; },
-            login: function (username, pin) { return GameNetAuth.login(username, pin); },
-            logout: function () { return GameNetAuth.logout(); },
-            localMode: function () {
-                guestMode = true;
-                user = null;
-                ownProfile = null;
-                emitAuthChanged();
-            },
-            loadProfile: function () { return loadOwnProfile(); }
-        });
-        return authUi;
-    }
-
     function setAuthStatus(msg, isErr) {
-        var ui = authUiApi();
-        if (ui && ui.setStatus) ui.setStatus(msg, isErr);
+        return { message: msg || '', error: !!isErr };
     }
 
     function setAuthVisible(visible) {
-        var ui = authUiApi();
-        if (ui && ui.setVisible) ui.setVisible(visible);
+        return !!visible;
     }
 
-    function renderAuthPanel() {
-        var ui = authUiApi();
-        if (ui && ui.render) ui.render();
-    }
+    function renderAuthPanel() {}
 
     function rememberSignedInUser(nextUser) {
         guestMode = false;
@@ -459,13 +431,7 @@
             });
     }
 
-    function bindMenuAuthUi() {
-        if (uiBound) return;
-        uiBound = true;
-        var ui = authUiApi();
-        if (ui && ui.bind) ui.bind();
-        renderAuthPanel();
-    }
+    function bindMenuAuthUi() {}
 
     // --- Public API ---
 

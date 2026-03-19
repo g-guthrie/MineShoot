@@ -500,6 +500,12 @@
         }
         netState.setRemoteProjectileState([]);
         netState.setRemoteFireZoneState([]);
+        netState.setSelfState(null);
+        netState.setPendingRespawnInfo(null);
+        netState.setPendingSpawnSync(null);
+        if (netState.setInitialSpawnApplied) {
+            netState.setInitialSpawnApplied(false);
+        }
         GameNetEntities.cleanup();
     }
 
@@ -759,6 +765,7 @@
                 resolve: resolve,
                 reject: reject
             };
+            markJoinConnectStart();
         });
     };
 
