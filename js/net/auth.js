@@ -27,9 +27,14 @@
     var GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
     var GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
 
+    function runtimeUtils() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeUtils || null;
+    }
+
     function randomToken(prefix) {
-        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-            return String(prefix || '') + globalThis.crypto.randomUUID().replace(/-/g, '');
+        var utils = runtimeUtils();
+        if (utils && utils.randomToken) {
+            return utils.randomToken(prefix);
         }
         return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
@@ -60,6 +65,30 @@
             username: String(source.username || source.displayName || guestDisplayNameFromId(normalizedId)),
             displayName: String(source.displayName || source.username || guestDisplayNameFromId(normalizedId)),
             classId: String(source.classId || 'abilities')
+        };
+    }
+
+    function accountIdentityFromUser(nextUser) {
+        var source = nextUser && typeof nextUser === 'object' ? nextUser : {};
+        return {
+            id: String(source.id || ''),
+            username: String(source.username || source.displayName || 'PLAYER'),
+            displayName: String(source.displayName || source.username || 'PLAYER'),
+            classId: String(source.classId || 'abilities'),
+            label: 'PLAYER ID',
+            kind: 'account'
+        };
+    }
+
+    function guestIdentityFor(sourceUser, label) {
+        var guest = normalizeGuestIdentity(sourceUser || makeGuestUser());
+        return {
+            id: String(guest.id || ''),
+            username: String(guest.username || guest.displayName || 'PLAYER'),
+            displayName: String(guest.displayName || guest.username || 'PLAYER'),
+            classId: String(guest.classId || 'abilities'),
+            label: String(label || 'PLAYER ID'),
+            kind: 'guest'
         };
     }
 
@@ -399,22 +428,9 @@
 
     function getPartyIdentity() {
         if (user && !guestMode) {
-            return {
-                id: String(user.id || ''),
-                username: String(user.username || user.displayName || 'PLAYER'),
-                classId: String(user.classId || 'abilities'),
-                label: 'PLAYER ID',
-                kind: 'account'
-            };
+            return accountIdentityFromUser(user);
         }
-        var guest = getMenuGuestUser();
-        return {
-            id: String(guest.id || ''),
-            username: String(guest.username || 'PLAYER'),
-            classId: String(guest.classId || 'abilities'),
-            label: 'PLAYER ID',
-            kind: 'guest'
-        };
+        return guestIdentityFor(getMenuGuestUser(), 'PLAYER ID');
     }
 
     function authUiApi() {
@@ -591,6 +607,7 @@
         return {
             id: String(identity.id || ''),
             username: String(identity.username || identity.id || 'PLAYER'),
+            displayName: String(identity.displayName || identity.username || identity.id || 'PLAYER'),
             classId: String(identity.classId || 'abilities')
         };
     };

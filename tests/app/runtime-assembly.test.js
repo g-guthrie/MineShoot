@@ -50,6 +50,18 @@ test('applyRuntimeAssembly wires explicit dependency bags onto the runtime regis
   assert.equal(runtime.GamePlayerDeps.getHitscanApi(), runtime.GameHitscan);
 });
 
+test('gameplay coordinator deps stay live when runtime modules are attached later', () => {
+  const runtime = {};
+  applyRuntimeAssembly(runtime);
+
+  assert.equal(runtime.GameRuntimeCoordinatorDeps.GameAudio, null);
+
+  const lateAudio = { play() {} };
+  runtime.GameAudio = lateAudio;
+
+  assert.equal(runtime.GameRuntimeCoordinatorDeps.GameAudio, lateAudio);
+});
+
 test('gameNet runtime script list keeps join-state and timing ahead of network entry', () => {
   const hrefs = gameNetRuntimeScriptUrls.map((url) => String(url));
   const joinIndex = hrefs.findIndex((value) => value.endsWith('/js/net/join-state.js'));

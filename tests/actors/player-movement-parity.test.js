@@ -94,8 +94,12 @@ function createInputState(patch = {}) {
 }
 
 async function loadPlayerMovementHarness(options = {}) {
-  const statusCode = await fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8');
-  const code = await fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8');
+  const [inputBindingsCode, inputLabelsCode, statusCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8')
+  ]);
   const documentObj = new FakeDocument();
   const windowObj = new FakeWindow();
   const calls = {
@@ -276,7 +280,13 @@ async function loadPlayerMovementHarness(options = {}) {
     console,
     THREE,
     document: documentObj,
-    window: windowObj,
+    window: Object.assign(windowObj, {
+      localStorage: {
+        getItem() { return null; },
+        setItem() {},
+        removeItem() {}
+      }
+    }),
     Date,
     performance: {
       now() {
@@ -286,6 +296,8 @@ async function loadPlayerMovementHarness(options = {}) {
   };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
+  vm.runInContext(inputBindingsCode, context);
+  vm.runInContext(inputLabelsCode, context);
   vm.runInContext(statusCode, context);
   vm.runInContext(code, context);
 

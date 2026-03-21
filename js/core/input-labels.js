@@ -17,7 +17,24 @@
         return String(fallbackLabel || '--');
     }
 
+    function matchesBinding(actionId, event, fallbackCodes) {
+        var bindingsApi = runtime.GameInputBindings || null;
+        if (bindingsApi && bindingsApi.matchesWithFallback) {
+            return bindingsApi.matchesWithFallback(actionId, event, fallbackCodes);
+        }
+        if (bindingsApi && bindingsApi.matches) {
+            return bindingsApi.matches(actionId, event);
+        }
+        var code = String(event && event.code || '');
+        var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
+        for (var i = 0; i < fallbacks.length; i++) {
+            if (String(fallbacks[i] || '') === code) return true;
+        }
+        return false;
+    }
+
     runtime.GameInputLabels = {
-        getBindingLabel: getBindingLabel
+        getBindingLabel: getBindingLabel,
+        matchesBinding: matchesBinding
     };
 })();

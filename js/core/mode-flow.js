@@ -6,13 +6,15 @@
     'use strict';
 
     var GameModeFlow = {};
-    var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
-        ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
-        : null;
+
+    function runtimeUtils() {
+        return globalThis.__MAYHEM_RUNTIME.GameRuntimeUtils || null;
+    }
 
     function sanitizeRoomId(raw) {
-        if (protocol && typeof protocol.sanitizeRoomId === 'function') {
-            return protocol.sanitizeRoomId(raw);
+        var utils = runtimeUtils();
+        if (utils && utils.sanitizeRoomId) {
+            return utils.sanitizeRoomId(raw, 'global');
         }
         var id = String(raw || '').toLowerCase().trim();
         id = id.replace(/[^a-z0-9-]/g, '');

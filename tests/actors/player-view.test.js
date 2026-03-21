@@ -192,3 +192,26 @@ test('player view clears muzzle flash on frame updates without relying on timers
   view.updateCamera(0.04, cameraState);
   assert.deepEqual(muzzleStates, [true, false]);
 });
+
+test('player view getter helpers fill provided output vectors without allocating fallback results', async () => {
+  const view = await loadPlayerView(() => null);
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 100);
+  camera.position.set(4, 5, 6);
+  camera.lookAt(4, 5, -10);
+  camera.updateMatrixWorld(true);
+
+  const muzzleOut = new THREE.Vector3();
+  const coreOut = new THREE.Vector3();
+  const eyeOut = new THREE.Vector3();
+  const throwOut = new THREE.Vector3();
+  const state = { camera, actorVisual: null, avatarRigApi: null };
+
+  assert.equal(view.getMuzzleWorldPosition(state, muzzleOut), muzzleOut);
+  assert.equal(view.getCoreWorldPosition(state, coreOut), coreOut);
+  assert.equal(view.getEyeWorldPosition(state, eyeOut), eyeOut);
+  assert.equal(view.getThrowableOriginWorldPosition(state, throwOut), throwOut);
+  assert.equal(eyeOut.x, camera.position.x);
+  assert.equal(eyeOut.y, camera.position.y);
+  assert.ok(coreOut.y < eyeOut.y);
+  assert.ok(throwOut.y < eyeOut.y);
+});

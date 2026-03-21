@@ -16,9 +16,14 @@
 
     function noop() {}
 
+    function runtimeUtils() {
+        return runtime.GameRuntimeUtils || null;
+    }
+
     function randomToken(prefix) {
-        if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-            return String(prefix || '') + globalThis.crypto.randomUUID().replace(/-/g, '');
+        var utils = runtimeUtils();
+        if (utils && utils.randomToken) {
+            return utils.randomToken(prefix);
         }
         return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
     }

@@ -7,33 +7,97 @@
 
     var GameMenuLoadout = {};
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
-    var inputLabels = runtime.GameInputLabels || null;
-    var shared = runtime.GameShared || {};
-    var tuning = shared.gameplayTuning || {};
 
-    var selectableWeaponIds = (shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper']);
-    var defaultWeaponLoadout = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : ['machinegun', 'shotgun'];
-    var defaultAbilityLoadout = shared.getDefaultAbilityLoadout ? shared.getDefaultAbilityLoadout() : (tuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' });
-    var throwableCategories = tuning.throwableCategories || {};
-    var throwableDefs = tuning.throwables || {};
-    var abilityCatalog = tuning.abilityCatalog || {};
-    var weaponStats = tuning.weaponStats || {};
+    function inputLabelsApi() {
+        return runtime.GameInputLabels || null;
+    }
+
+    function sharedApi() {
+        return runtime.GameShared || {};
+    }
+
+    function tuningApi() {
+        return sharedApi().gameplayTuning || {};
+    }
+
+    function selectableWeaponIds() {
+        var shared = sharedApi();
+        var ids = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
+        return Array.isArray(ids) && ids.length ? ids : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'];
+    }
+
+    function defaultWeaponLoadout() {
+        var shared = sharedApi();
+        var defaults = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : null;
+        return Array.isArray(defaults) && defaults.length ? defaults : ['machinegun', 'shotgun'];
+    }
+
+    function defaultAbilityLoadout() {
+        var shared = sharedApi();
+        var tuning = tuningApi();
+        var defaults = shared.getDefaultAbilityLoadout ? shared.getDefaultAbilityLoadout() : null;
+        return defaults || tuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' };
+    }
+
+    function throwableCategories() {
+        return tuningApi().throwableCategories || {};
+    }
+
+    function throwableDefs() {
+        return tuningApi().throwables || {};
+    }
+
+    function abilityCatalog() {
+        return tuningApi().abilityCatalog || {};
+    }
+
+    function weaponStats() {
+        return tuningApi().weaponStats || {};
+    }
+
     var STORAGE_KEY = 'mayhem.menu.loadout.v1';
 
     var state = {
-        weaponSlots: defaultWeaponLoadout.slice(0, 2),
+        weaponSlots: ['machinegun', 'shotgun'],
         activeWeaponSlot: 0,
         activeAbilitySlot: 0,
         selectedThrowableId: 'frag',
         activeThrowableCategory: 'grenade',
         loadoutExpanded: true,
         abilityLoadout: {
-            slot1: String(defaultAbilityLoadout.slot1 || ''),
-            slot2: String(defaultAbilityLoadout.slot2 || '')
+            slot1: 'choke',
+            slot2: 'missile'
         },
         initialized: false
     };
     var subscribers = [];
+
+    function applySharedDefaults() {
+        var weaponDefaults = defaultWeaponLoadout();
+        var abilityDefaults = defaultAbilityLoadout();
+        if (!Array.isArray(state.weaponSlots) || !state.weaponSlots.length) {
+            state.weaponSlots = weaponDefaults.slice(0, 2);
+        }
+        if (!state.weaponSlots[0] && weaponDefaults[0]) state.weaponSlots[0] = String(weaponDefaults[0] || '');
+        if (!state.weaponSlots[1] && weaponDefaults[1]) state.weaponSlots[1] = String(weaponDefaults[1] || '');
+        if (!state.abilityLoadout || typeof state.abilityLoadout !== 'object') {
+            state.abilityLoadout = { slot1: '', slot2: '' };
+        }
+        if (!state.abilityLoadout.slot1) state.abilityLoadout.slot1 = String(abilityDefaults.slot1 || '');
+        if (!state.abilityLoadout.slot2) state.abilityLoadout.slot2 = String(abilityDefaults.slot2 || '');
+        var categories = throwableCategories();
+        var categoryIds = Object.keys(categories);
+        var currentThrowableCategory = findThrowableCategory(state.selectedThrowableId);
+        if (categoryIds.length && !currentThrowableCategory) {
+            state.activeThrowableCategory = state.activeThrowableCategory || categoryIds[0];
+            var items = Array.isArray(categories[state.activeThrowableCategory] && categories[state.activeThrowableCategory].items)
+                ? categories[state.activeThrowableCategory].items
+                : [];
+            state.selectedThrowableId = String(items[0] || '');
+        } else if (currentThrowableCategory) {
+            state.activeThrowableCategory = currentThrowableCategory;
+        }
+    }
 
     function localStore() {
         try {
@@ -44,11 +108,14 @@
     }
 
     function refreshBindingCopy() {
+        var inputLabels = inputLabelsApi();
         var weaponTitle = document.getElementById('weapon-slot-title');
         var throwableTitle = document.getElementById('throwable-slot-title');
         var abilityTitle = document.getElementById('ability-slot-title');
 
-        var throwableKey = inputLabels.getBindingLabel('throwable', 'Q');
+        var throwableKey = inputLabels && inputLabels.getBindingLabel
+            ? inputLabels.getBindingLabel('throwable', 'Q')
+            : 'Q';
 
         if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
         if (throwableTitle) throwableTitle.textContent = 'Throwables [' + throwableKey + ']';
@@ -56,23 +123,26 @@
     }
 
     function weaponNameLookup() {
+        var stats = weaponStats();
         var out = {};
-        for (var weaponId in weaponStats) {
-            if (!Object.prototype.hasOwnProperty.call(weaponStats, weaponId)) continue;
-            out[weaponId] = String((weaponStats[weaponId] && weaponStats[weaponId].name) || weaponId);
+        for (var weaponId in stats) {
+            if (!Object.prototype.hasOwnProperty.call(stats, weaponId)) continue;
+            out[weaponId] = String((stats[weaponId] && stats[weaponId].name) || weaponId);
         }
         return out;
     }
 
     function throwableCatalogByCategory() {
+        var categories = throwableCategories();
+        var defs = throwableDefs();
         var out = {};
-        for (var catId in throwableCategories) {
-            if (!Object.prototype.hasOwnProperty.call(throwableCategories, catId)) continue;
-            var cat = throwableCategories[catId];
+        for (var catId in categories) {
+            if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
+            var cat = categories[catId];
             out[catId] = {
                 label: String(cat.label || catId),
                 items: (cat.items || []).map(function (id) {
-                    var def = throwableDefs[id] || {};
+                    var def = defs[id] || {};
                     return {
                         id: String(id || ''),
                         label: String(def.label || id || '')
@@ -84,20 +154,21 @@
     }
 
     function throwableName(throwableId) {
-        var def = throwableDefs[String(throwableId || '')] || {};
+        var def = throwableDefs()[String(throwableId || '')] || {};
         return String(def.label || throwableId || '');
     }
 
     function abilityName(abilityId) {
-        var def = abilityCatalog[String(abilityId || '')] || {};
+        var def = abilityCatalog()[String(abilityId || '')] || {};
         return String(def.name || abilityId || '');
     }
 
     function findThrowableCategory(throwableId) {
         var targetId = String(throwableId || '');
-        for (var catId in throwableCategories) {
-            if (!Object.prototype.hasOwnProperty.call(throwableCategories, catId)) continue;
-            var cat = throwableCategories[catId];
+        var categories = throwableCategories();
+        for (var catId in categories) {
+            if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
+            var cat = categories[catId];
             var items = Array.isArray(cat.items) ? cat.items : [];
             for (var i = 0; i < items.length; i++) {
                 if (String(items[i] || '') === targetId) return catId;
@@ -107,10 +178,11 @@
     }
 
     function abilityList() {
+        var catalog = abilityCatalog();
         var out = [];
-        for (var abilityId in abilityCatalog) {
-            if (!Object.prototype.hasOwnProperty.call(abilityCatalog, abilityId)) continue;
-            var def = abilityCatalog[abilityId];
+        for (var abilityId in catalog) {
+            if (!Object.prototype.hasOwnProperty.call(catalog, abilityId)) continue;
+            var def = catalog[abilityId];
             out.push({
                 id: String(def.id || abilityId),
                 name: String(def.name || abilityId)
@@ -121,8 +193,9 @@
 
     function compactWeaponSlots() {
         var allowed = {};
-        for (var i = 0; i < selectableWeaponIds.length; i++) {
-            allowed[String(selectableWeaponIds[i] || '')] = true;
+        var weaponIds = selectableWeaponIds();
+        for (var i = 0; i < weaponIds.length; i++) {
+            allowed[String(weaponIds[i] || '')] = true;
         }
         var next = ['', ''];
         for (var n = 0; n < 2; n++) {
@@ -171,6 +244,7 @@
     }
 
     function normalizeAbilityState() {
+        var shared = sharedApi();
         if (!shared.normalizeAbilityLoadout) {
             return {
                 slot1: String(state.abilityLoadout && state.abilityLoadout.slot1 || ''),
@@ -273,13 +347,14 @@
 
     function validateSelections() {
         compactWeaponSlots();
+        var inputLabels = inputLabelsApi();
         var missingWeapons = [];
         var missingAbilities = [];
         if (!state.weaponSlots[0]) missingWeapons.push('weapon slot 1');
         if (!state.weaponSlots[1]) missingWeapons.push('weapon slot 2');
         normalizeAbilityState();
-        if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot ' + inputLabels.getBindingLabel('ability_1', 'E'));
-        if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot ' + inputLabels.getBindingLabel('ability_2', 'F'));
+        if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_1', 'E') : 'E'));
+        if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_2', 'F') : 'F'));
         if (!missingWeapons.length && !missingAbilities.length) return { ok: true, message: '' };
         var parts = [];
         if (missingWeapons.length) parts.push('Missing ' + missingWeapons.join(' and '));
@@ -411,8 +486,9 @@
             }
 
             weaponChoiceGrid.innerHTML = '';
-            for (var n = 0; n < selectableWeaponIds.length; n++) {
-                var weaponId = selectableWeaponIds[n];
+            var weaponIds = selectableWeaponIds();
+            for (var n = 0; n < weaponIds.length; n++) {
+                var weaponId = weaponIds[n];
                 var choice = document.createElement('button');
                 choice.type = 'button';
                 choice.classList.add('weapon-choice-btn');
@@ -602,7 +678,9 @@
 
     GameMenuLoadout.init = function () {
         if (state.initialized) return;
+        applySharedDefaults();
         loadStoredState();
+        applySharedDefaults();
         state.initialized = true;
         bindSectionChrome();
         bindWeaponUi();

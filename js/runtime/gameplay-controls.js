@@ -9,6 +9,10 @@
     var domUtils = runtime.GameDomUtils || null;
     var activeTestHandle = null;
 
+    function inputLabelsApi() {
+        return runtime.GameInputLabels || null;
+    }
+
     function create(opts) {
         opts = opts || {};
 
@@ -30,16 +34,8 @@
         };
 
         function matchesBinding(actionId, event, fallbackCodes) {
-            var bindingsApi = runtime.GameInputBindings || null;
-            if (bindingsApi && bindingsApi.matches) {
-                return bindingsApi.matches(actionId, event);
-            }
-            var code = String(event && event.code || '');
-            var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
-            for (var i = 0; i < fallbacks.length; i++) {
-                if (String(fallbacks[i] || '') === code) return true;
-            }
-            return false;
+            var labelsApi = inputLabelsApi();
+            return !!(labelsApi && labelsApi.matchesBinding && labelsApi.matchesBinding(actionId, event, fallbackCodes));
         }
 
         function getCamera() {

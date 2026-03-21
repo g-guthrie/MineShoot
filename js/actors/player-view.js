@@ -32,6 +32,10 @@
         var eyeWorld = new THREE.Vector3();
         var plasmaForwardDir = new THREE.Vector3();
         var throwableRightDir = new THREE.Vector3();
+        var fallbackMuzzleWorld = new THREE.Vector3();
+        var fallbackCoreWorld = new THREE.Vector3();
+        var fallbackEyeWorld = new THREE.Vector3();
+        var fallbackThrowableWorld = new THREE.Vector3();
         var viewRay = new THREE.Raycaster();
         var chokeCameraState = {
             offsetX: 0,
@@ -371,7 +375,7 @@
                 return state.avatarRigApi.getMuzzleWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            var out = outVec3 || new THREE.Vector3();
+            var out = outVec3 || fallbackMuzzleWorld;
             state.camera.getWorldDirection(plasmaForwardDir);
             return out.copy(state.camera.position).addScaledVector(plasmaForwardDir, 0.65);
         }
@@ -381,7 +385,7 @@
                 return state.actorVisual.getCoreWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            var out = outVec3 || new THREE.Vector3();
+            var out = outVec3 || fallbackCoreWorld;
             return out.copy(state.camera.position).setY(state.camera.position.y - 0.6);
         }
 
@@ -393,7 +397,7 @@
                 return state.avatarRigApi.getEyeWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            var out = outVec3 || new THREE.Vector3();
+            var out = outVec3 || fallbackEyeWorld;
             return out.copy(state.camera.position);
         }
 
@@ -402,7 +406,7 @@
                 return state.actorVisual.getThrowableOriginWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            var out = outVec3 || new THREE.Vector3();
+            var out = outVec3 || fallbackThrowableWorld;
             state.camera.getWorldDirection(plasmaForwardDir);
             throwableRightDir.set(1, 0, 0).applyQuaternion(state.camera.quaternion);
             return out.copy(state.camera.position)

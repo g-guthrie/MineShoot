@@ -427,7 +427,7 @@
             readMap('getRenderMap').forEach(function (r) {
                 if (!r || !r.alive) return;
                 var worldPos = typeof opts.getRenderCoreWorldPosition === 'function'
-                    ? opts.getRenderCoreWorldPosition(r, new THREE.Vector3())
+                    ? opts.getRenderCoreWorldPosition(r, r.lockTargetWorldPos || (r.lockTargetWorldPos = new THREE.Vector3()))
                     : null;
                 if (!worldPos) return;
                 out.push({

@@ -6,7 +6,14 @@
     'use strict';
 
     var GameActorVisualFactory = {};
-    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
+
+    function sharedApi() {
+        return (globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameShared) || {};
+    }
+
+    function entityPointsApi() {
+        return sharedApi().entityPoints || {};
+    }
 
     function cloneVisualForRevealGhost(visual) {
         if (!visual || !visual.clone) return null;
@@ -245,6 +252,7 @@
         }
 
         function syncHitboxes(rootPosition) {
+            var entityPoints = entityPointsApi();
             rootPosition = rootPosition || root.position;
             if (!rootPosition) return;
             if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxYFromFeet ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);

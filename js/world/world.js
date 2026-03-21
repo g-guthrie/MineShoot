@@ -10,44 +10,54 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 
     var GameWorld = {};
 
-    var SHARED_PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
-        ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
-        : null;
-    var SHARED_WORLD_CFG = (SHARED_PROTOCOL && SHARED_PROTOCOL.world) ? SHARED_PROTOCOL.world : null;
-    var SHARED_LAYOUT = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.worldLayout)
-        ? globalThis.__MAYHEM_RUNTIME.GameShared.worldLayout
-        : null;
+    function sharedApi() {
+        return (globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameShared) || {};
+    }
 
-    var BASE_WORLD_SIZE = SHARED_LAYOUT.BASE_WORLD_SIZE;
-    var WORLD_AREA_SCALE = SHARED_LAYOUT.WORLD_AREA_SCALE;
-    var WORLD_SIZE = SHARED_LAYOUT.WORLD_SIZE;
-    var WORLD_CENTER = SHARED_LAYOUT.WORLD_CENTER;
-    var WORLD_MARGIN = SHARED_LAYOUT.WORLD_MARGIN;
-    var WORLD_MIN = SHARED_LAYOUT.WORLD_MIN;
-    var WORLD_MAX = SHARED_LAYOUT.WORLD_MAX;
-    var DEFAULT_SPAWN_PADDING = SHARED_LAYOUT.DEFAULT_SPAWN_PADDING;
+    function sharedProtocol() {
+        return sharedApi().protocol || null;
+    }
 
-    var BIOME_ARCTIC = SHARED_LAYOUT.BIOME_ARCTIC;
-    var BIOME_URBAN = SHARED_LAYOUT.BIOME_URBAN;
-    var BIOME_DESERT = SHARED_LAYOUT.BIOME_DESERT;
-    var BIOME_JUNGLE = SHARED_LAYOUT.BIOME_JUNGLE;
-    var BIOME_NUCLEAR = SHARED_LAYOUT.BIOME_NUCLEAR;
-    var BIOME_CITADEL = SHARED_LAYOUT.BIOME_CITADEL;
-    var BIOME_QUARRY = SHARED_LAYOUT.BIOME_QUARRY;
-    var BIOME_WALL_STREET = SHARED_LAYOUT.BIOME_WALL_STREET;
-    var BIOME_RADAR = SHARED_LAYOUT.BIOME_RADAR;
+    function sharedWorldConfig() {
+        var protocol = sharedProtocol();
+        return (protocol && protocol.world) ? protocol.world : null;
+    }
 
-    var DEFAULT_QUADRANT_MAP = SHARED_LAYOUT.DEFAULT_QUADRANT_MAP.slice();
+    function sharedLayout() {
+        return sharedApi().worldLayout || null;
+    }
 
-    var DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(SHARED_WORLD_CFG && SHARED_WORLD_CFG.profileVersion) || 6));
+    var BASE_WORLD_SIZE = 32;
+    var WORLD_AREA_SCALE = 1;
+    var WORLD_SIZE = 32;
+    var WORLD_CENTER = 16;
+    var WORLD_MARGIN = 0;
+    var WORLD_MIN = 0;
+    var WORLD_MAX = 32;
+    var DEFAULT_SPAWN_PADDING = 2;
+
+    var BIOME_ARCTIC = 'arctic';
+    var BIOME_URBAN = 'urban';
+    var BIOME_DESERT = 'desert';
+    var BIOME_JUNGLE = 'jungle';
+    var BIOME_NUCLEAR = 'nuclear';
+    var BIOME_CITADEL = 'citadel';
+    var BIOME_QUARRY = 'quarry';
+    var BIOME_WALL_STREET = 'wall-street';
+    var BIOME_RADAR = 'radar';
+
+    var DEFAULT_QUADRANT_MAP = [];
+
+    var DEFAULT_WORLD_PROFILE_VERSION = 6;
     var DEFAULT_WORLD_FLAGS = {
-        envV2: (SHARED_WORLD_CFG && SHARED_WORLD_CFG.flags) ? !!SHARED_WORLD_CFG.flags.envV2 : true,
-        terrainPhysicsV2: (SHARED_WORLD_CFG && SHARED_WORLD_CFG.flags) ? !!SHARED_WORLD_CFG.flags.terrainPhysicsV2 : true
+        envV2: true,
+        terrainPhysicsV2: true
     };
 
     var WORLD_PROFILE_VERSION = DEFAULT_WORLD_PROFILE_VERSION;
     var WORLD_FLAGS = cloneWorldFlags(DEFAULT_WORLD_FLAGS);
-    var WORLD_SEED = String((SHARED_WORLD_CFG && SHARED_WORLD_CFG.seedPrefix) || 'room-env-v6-static') + '-global';
+    var WORLD_SEED = 'room-env-v6-static-global';
+    var worldConfigInitialized = false;
 
     var terrainSampler = null;
     var collidables = [];
@@ -85,7 +95,56 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         };
     }
 
+    function refreshSharedWorldConfig() {
+        var layout = sharedLayout();
+        if (layout) {
+            BASE_WORLD_SIZE = Number(layout.BASE_WORLD_SIZE || BASE_WORLD_SIZE);
+            WORLD_AREA_SCALE = Number(layout.WORLD_AREA_SCALE || WORLD_AREA_SCALE);
+            WORLD_SIZE = Number(layout.WORLD_SIZE || WORLD_SIZE);
+            WORLD_CENTER = Number(layout.WORLD_CENTER || WORLD_CENTER);
+            WORLD_MARGIN = Number(layout.WORLD_MARGIN || WORLD_MARGIN);
+            WORLD_MIN = Number(layout.WORLD_MIN || WORLD_MIN);
+            WORLD_MAX = Number(layout.WORLD_MAX || WORLD_MAX);
+            DEFAULT_SPAWN_PADDING = Number(layout.DEFAULT_SPAWN_PADDING || DEFAULT_SPAWN_PADDING);
+            BIOME_ARCTIC = String(layout.BIOME_ARCTIC || BIOME_ARCTIC);
+            BIOME_URBAN = String(layout.BIOME_URBAN || BIOME_URBAN);
+            BIOME_DESERT = String(layout.BIOME_DESERT || BIOME_DESERT);
+            BIOME_JUNGLE = String(layout.BIOME_JUNGLE || BIOME_JUNGLE);
+            BIOME_NUCLEAR = String(layout.BIOME_NUCLEAR || BIOME_NUCLEAR);
+            BIOME_CITADEL = String(layout.BIOME_CITADEL || BIOME_CITADEL);
+            BIOME_QUARRY = String(layout.BIOME_QUARRY || BIOME_QUARRY);
+            BIOME_WALL_STREET = String(layout.BIOME_WALL_STREET || BIOME_WALL_STREET);
+            BIOME_RADAR = String(layout.BIOME_RADAR || BIOME_RADAR);
+            DEFAULT_QUADRANT_MAP = Array.isArray(layout.DEFAULT_QUADRANT_MAP) ? layout.DEFAULT_QUADRANT_MAP.slice() : DEFAULT_QUADRANT_MAP;
+        }
+
+        var config = sharedWorldConfig();
+        if (config) {
+            DEFAULT_WORLD_PROFILE_VERSION = Math.max(1, Math.round(Number(config.profileVersion) || DEFAULT_WORLD_PROFILE_VERSION));
+            DEFAULT_WORLD_FLAGS = {
+                envV2: config.flags ? !!config.flags.envV2 : true,
+                terrainPhysicsV2: config.flags ? !!config.flags.terrainPhysicsV2 : true
+            };
+            if (!worldConfigInitialized) {
+                WORLD_PROFILE_VERSION = DEFAULT_WORLD_PROFILE_VERSION;
+                WORLD_FLAGS = cloneWorldFlags(DEFAULT_WORLD_FLAGS);
+                WORLD_SEED = String(config.seedPrefix || 'room-env-v6-static') + '-global';
+                worldConfigInitialized = true;
+            }
+        }
+    }
+
+    function requireSharedLayout() {
+        refreshSharedWorldConfig();
+        var layout = sharedLayout();
+        if (!layout) {
+            throw new Error('GameWorld requires GameShared.worldLayout before world creation.');
+        }
+        return layout;
+    }
+
     function normalizeWorldMeta(rawMeta) {
+        refreshSharedWorldConfig();
         if (!rawMeta || typeof rawMeta !== 'object') {
             return {
                 worldSeed: '',
@@ -139,7 +198,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     }
 
     function quadrantBounds(quadrant) {
-        return SHARED_LAYOUT.quadrantBounds(quadrant);
+        return requireSharedLayout().quadrantBounds(quadrant);
     }
 
     function boxGeometryKey(w, h, d) {
@@ -211,7 +270,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     }
 
     function biomeAt(x, z) {
-        return SHARED_LAYOUT.biomeAtPosition(x, z, DEFAULT_QUADRANT_MAP);
+        return requireSharedLayout().biomeAtPosition(x, z, DEFAULT_QUADRANT_MAP);
     }
 
     function biomeBounds(biomeId) {
@@ -298,6 +357,8 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     // ---------------------------------------------------------------
 
     GameWorld.create = function (scene, options) {
+        refreshSharedWorldConfig();
+        var layout = requireSharedLayout();
         clearWorldScene();
         activeScene = scene;
 
@@ -447,7 +508,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 
         // --- Biome-themed perimeter walls ---
         (function buildBiomeWalls() {
-            SHARED_LAYOUT.buildBiomePerimeter(place, {
+            layout.buildBiomePerimeter(place, {
                 arcticBase: matLib.getLambert({ color: 0x8aafcc }),
                 arcticAccent: matLib.getLambert({ color: 0xc8e8f8 }),
                 arcticDetail: matLib.getLambert({ color: 0x9ad4f0, transparent: true, opacity: 0.7 }),
@@ -737,10 +798,12 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     GameWorld.getCollidables = function () { return collidables; };
 
     GameWorld.getBounds = function () {
+        refreshSharedWorldConfig();
         return { min: WORLD_MIN, max: WORLD_MAX, size: WORLD_SIZE, center: WORLD_CENTER };
     };
 
     GameWorld.getWorldMeta = function () {
+        refreshSharedWorldConfig();
         return {
             seed: WORLD_SEED,
             worldSeed: WORLD_SEED,
@@ -753,13 +816,16 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 
     GameWorld.getSpawnExclusionZones = function () { return spawnExclusionZones.slice(); };
     GameWorld.getGenerationStats = function () { return cloneGenerationStats(generationStats); };
-    GameWorld.getSize = function () { return WORLD_SIZE; };
-    GameWorld.getCenter = function () { return WORLD_CENTER; };
-    GameWorld.getAreaScale = function () { return WORLD_AREA_SCALE; };
-    GameWorld.getSpawnPadding = function () { return DEFAULT_SPAWN_PADDING; };
+    GameWorld.getSize = function () { refreshSharedWorldConfig(); return WORLD_SIZE; };
+    GameWorld.getCenter = function () { refreshSharedWorldConfig(); return WORLD_CENTER; };
+    GameWorld.getAreaScale = function () { refreshSharedWorldConfig(); return WORLD_AREA_SCALE; };
+    GameWorld.getSpawnPadding = function () { refreshSharedWorldConfig(); return DEFAULT_SPAWN_PADDING; };
     GameWorld.getRandomSpawnPoint = function (padding, options) { return randomSpawnPoint(padding, options); };
     GameWorld.getGroundHeightAt = function (x, z) { return getGroundHeightAt(x, z); };
-    GameWorld.getRecommendedEnemyCount = function () { return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE))); };
+    GameWorld.getRecommendedEnemyCount = function () {
+        refreshSharedWorldConfig();
+        return Math.max(8, Math.round(5 * Math.sqrt(WORLD_AREA_SCALE)));
+    };
     GameWorld.getSeed = function () { return WORLD_SEED; };
     GameWorld.setSeed = function (seedText) { return setSeed(seedText); };
 

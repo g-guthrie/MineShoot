@@ -256,6 +256,16 @@
         return tokenFromEvent(event) === token;
     }
 
+    function matchesWithFallback(actionId, event, fallbackCodes) {
+        if (matches(actionId, event)) return true;
+        var code = String(event && event.code || '');
+        var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
+        for (var i = 0; i < fallbacks.length; i++) {
+            if (String(fallbacks[i] || '') === code) return true;
+        }
+        return false;
+    }
+
     function subscribe(listener) {
         if (typeof listener !== 'function') {
             return function () {};
@@ -305,6 +315,7 @@
         },
         tokenFromEvent: tokenFromEvent,
         matches: matches,
+        matchesWithFallback: matchesWithFallback,
         assign: assign,
         resetAll: resetAll,
         subscribe: subscribe,

@@ -36,6 +36,7 @@
         var hookScratchStart = new THREE.Vector3();
         var hookScratchEnd = new THREE.Vector3();
         var hookScratchHead = new THREE.Vector3();
+        var hookForwardScratch = new THREE.Vector3();
         var deadeyeOriginScratch = new THREE.Vector3();
         var deadeyeForwardScratch = new THREE.Vector3();
         var deadeyeWorldPosScratch = new THREE.Vector3();
@@ -124,7 +125,7 @@
         function currentHookOriginWorldPosition(out, fallback) {
             var player = runtime().GamePlayer || null;
             if (player && player.getThrowableOriginWorldPosition) {
-                var liveOrigin = player.getThrowableOriginWorldPosition();
+                var liveOrigin = player.getThrowableOriginWorldPosition(out || hookScratchStart);
                 if (liveOrigin) return copyVector3Like(out, liveOrigin);
             }
             return copyVector3Like(out, fallback);
@@ -166,7 +167,7 @@
         function deadeyeOriginWorldPosition(camera, out) {
             var player = runtime().GamePlayer || null;
             if (player && player.getEyeWorldPosition) {
-                var eye = player.getEyeWorldPosition();
+                var eye = player.getEyeWorldPosition(out || deadeyeOriginScratch);
                 if (eye) return copyVector3Like(out, eye);
             }
             return camera && camera.position ? copyVector3Like(out, camera.position) : null;
@@ -407,17 +408,17 @@
             if (!camera || !playerPos || !rotation) {
                 return { ok: false, message: 'Hook targeting unavailable.' };
             }
-            var forward = new THREE.Vector3();
+            var forward = hookForwardScratch;
             camera.getWorldDirection(forward);
             var centerTarget = (RT.GameHitscan && RT.GameHitscan.peekCenterTarget)
                 ? RT.GameHitscan.peekCenterTarget(camera, Number(cfg.range || 24))
                 : null;
             var startPos = (RT.GamePlayer && RT.GamePlayer.getThrowableOriginWorldPosition)
-                ? makeVector3Like(RT.GamePlayer.getThrowableOriginWorldPosition())
-                : camera.position.clone();
+                ? makeVector3Like(RT.GamePlayer.getThrowableOriginWorldPosition(hookScratchStart))
+                : copyVector3Like(hookScratchStart, camera.position);
             var endPos = centerTarget && centerTarget.point
                 ? makeVector3Like(centerTarget.point)
-                : camera.position.clone().addScaledVector(forward, Number(cfg.range || 24));
+                : copyVector3Like(hookScratchEnd, camera.position).addScaledVector(forward, Number(cfg.range || 24));
             var travelDistance = Math.max(1, endPos.distanceTo(startPos));
             var travelSpeed = Math.max(8, Number(cfg.travelSpeed || 24));
             var travelMs = Math.max(120, Math.round((travelDistance / travelSpeed) * 1000));

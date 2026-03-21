@@ -2,14 +2,30 @@
     'use strict';
 
     var RT = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
-    var sharedMatchRules = RT.GameShared && RT.GameShared.matchRules ? RT.GameShared.matchRules : null;
-    var MATCH_TEAM_ALPHA = sharedMatchRules && sharedMatchRules.teamAlpha ? sharedMatchRules.teamAlpha : 'alpha';
-    var MATCH_TEAM_BRAVO = sharedMatchRules && sharedMatchRules.teamBravo ? sharedMatchRules.teamBravo : 'bravo';
-    var matchResetDelayMs = sharedMatchRules && Number(sharedMatchRules.matchResetDelayMs || 0) > 0
-        ? Number(sharedMatchRules.matchResetDelayMs)
-        : 5000;
+
+    function sharedMatchRulesApi() {
+        return RT.GameShared && RT.GameShared.matchRules ? RT.GameShared.matchRules : null;
+    }
+
+    function matchTeamAlpha() {
+        var rules = sharedMatchRulesApi();
+        return rules && rules.teamAlpha ? rules.teamAlpha : 'alpha';
+    }
+
+    function matchTeamBravo() {
+        var rules = sharedMatchRulesApi();
+        return rules && rules.teamBravo ? rules.teamBravo : 'bravo';
+    }
+
+    function matchResetDelayMs() {
+        var rules = sharedMatchRulesApi();
+        return rules && Number(rules.matchResetDelayMs || 0) > 0
+            ? Number(rules.matchResetDelayMs)
+            : 5000;
+    }
 
     function targetProgressForMode(mode) {
+        var sharedMatchRules = sharedMatchRulesApi();
         if (sharedMatchRules && sharedMatchRules.targetProgressForGameMode) {
             return Number(sharedMatchRules.targetProgressForGameMode(mode) || 0);
         }
@@ -36,6 +52,7 @@
     }
 
     function emptyMatchState() {
+        var sharedMatchRules = sharedMatchRulesApi();
         var match = (sharedMatchRules && sharedMatchRules.createMatchState)
             ? sharedMatchRules.createMatchState(modeId)
             : {
@@ -81,18 +98,18 @@
         var bravoSize = 0;
         participants.forEach(function (entry) {
             if (!entry) return;
-            if (entry.teamId === MATCH_TEAM_ALPHA) alphaSize++;
-            else if (entry.teamId === MATCH_TEAM_BRAVO) bravoSize++;
+            if (entry.teamId === matchTeamAlpha()) alphaSize++;
+            else if (entry.teamId === matchTeamBravo()) bravoSize++;
         });
-        matchState.teamBaselineSize[MATCH_TEAM_ALPHA] = Math.max(1, alphaSize);
-        matchState.teamBaselineSize[MATCH_TEAM_BRAVO] = Math.max(1, bravoSize);
-        matchState.teamProgress[MATCH_TEAM_ALPHA] = 0;
-        matchState.teamProgress[MATCH_TEAM_BRAVO] = 0;
+        matchState.teamBaselineSize[matchTeamAlpha()] = Math.max(1, alphaSize);
+        matchState.teamBaselineSize[matchTeamBravo()] = Math.max(1, bravoSize);
+        matchState.teamProgress[matchTeamAlpha()] = 0;
+        matchState.teamProgress[matchTeamBravo()] = 0;
         participants.forEach(function (entry) {
             if (!entry) return;
-            entry.progressScore = entry.teamId === MATCH_TEAM_ALPHA
-                ? teamProgress(MATCH_TEAM_ALPHA)
-                : teamProgress(MATCH_TEAM_BRAVO);
+            entry.progressScore = entry.teamId === matchTeamAlpha()
+                ? teamProgress(matchTeamAlpha())
+                : teamProgress(matchTeamBravo());
         });
     }
 
@@ -114,8 +131,8 @@
             return;
         }
         if (modeId === 'tdm') {
-            var alphaProgress = Number((matchState.teamProgress && matchState.teamProgress[MATCH_TEAM_ALPHA]) || 0);
-            var bravoProgress = Number((matchState.teamProgress && matchState.teamProgress[MATCH_TEAM_BRAVO]) || 0);
+            var alphaProgress = Number((matchState.teamProgress && matchState.teamProgress[matchTeamAlpha()]) || 0);
+            var bravoProgress = Number((matchState.teamProgress && matchState.teamProgress[matchTeamBravo()]) || 0);
             matchState.leaderId = '';
             matchState.leaderProgress = Number(Math.max(alphaProgress, bravoProgress).toFixed(3));
         }
@@ -125,7 +142,7 @@
         if (!matchState || matchState.ended) return;
         matchState.ended = true;
         matchState.endedAt = nowMs();
-        matchState.resetAt = matchState.endedAt + matchResetDelayMs;
+        matchState.resetAt = matchState.endedAt + matchResetDelayMs();
         matchState.winnerId = String(winnerId || '');
         matchState.winnerTeam = String(winnerTeam || '');
         resetAt = matchState.resetAt;
@@ -139,7 +156,7 @@
         participants.forEach(function (entry) {
             entry.alive = true;
             entry.teamId = modeId === 'tdm'
-                ? (entry.id === SELF_ID ? MATCH_TEAM_ALPHA : (entry.teamId || MATCH_TEAM_BRAVO))
+                ? (entry.id === SELF_ID ? matchTeamAlpha() : (entry.teamId || matchTeamBravo()))
                 : '';
             entry.kills = 0;
             entry.deaths = 0;
@@ -173,7 +190,7 @@
     function ensureSelf() {
         if (!selfState) {
             selfState = baseParticipant(SELF_ID, 'PLAYER');
-            selfState.teamId = modeId === 'tdm' ? MATCH_TEAM_ALPHA : '';
+            selfState.teamId = modeId === 'tdm' ? matchTeamAlpha() : '';
             participants.set(selfState.id, selfState);
         }
     }
@@ -222,7 +239,7 @@
         enemy.localMatchId = id;
         var entry = baseParticipant(id, enemy.displayName || ('BOT_' + String((enemy.index || 0) + 1)));
         if (modeId === 'tdm') {
-            entry.teamId = (Math.max(0, Number(enemy.index || 0)) % 2 === 0) ? MATCH_TEAM_BRAVO : MATCH_TEAM_ALPHA;
+            entry.teamId = (Math.max(0, Number(enemy.index || 0)) % 2 === 0) ? matchTeamBravo() : matchTeamAlpha();
         }
         participants.set(id, entry);
         enemyById.set(id, enemy);
@@ -243,7 +260,7 @@
         target.deaths += 1;
 
         if (modeId === 'tdm') {
-            var selfTeam = String(selfState.teamId || MATCH_TEAM_ALPHA);
+            var selfTeam = String(selfState.teamId || matchTeamAlpha());
             var baseline = Math.max(1, Number((matchState.teamBaselineSize && matchState.teamBaselineSize[selfTeam]) || 1));
             matchState.teamProgress[selfTeam] = Number((teamProgress(selfTeam) + (1 / baseline)).toFixed(3));
             participants.forEach(function (entry) {

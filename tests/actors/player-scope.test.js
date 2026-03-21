@@ -4,10 +4,14 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-async function loadPlayerHarness(runtimeOverrides = {}) {
-  const statusCode = await fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8');
-  const viewCode = await fs.readFile(new URL('../../js/actors/player-view.js', import.meta.url), 'utf8');
-  const code = await fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8');
+async function loadPlayerHarness(runtimeOverrides = {}, options = {}) {
+  const [inputBindingsCode, inputLabelsCode, statusCode, viewCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-view.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8')
+  ]);
   const documentObj = runtimeOverrides.__document || {
     pointerLockElement: null,
     addEventListener() {},
@@ -15,7 +19,12 @@ async function loadPlayerHarness(runtimeOverrides = {}) {
   };
   const windowObj = runtimeOverrides.__window || {
     addEventListener() {},
-    removeEventListener() {}
+    removeEventListener() {},
+    localStorage: {
+      getItem() { return null; },
+      setItem() {},
+      removeItem() {}
+    }
   };
   const defaultWorld = {
     getBounds() {
@@ -107,9 +116,17 @@ async function loadPlayerHarness(runtimeOverrides = {}) {
   };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
+  vm.runInContext(inputBindingsCode, context);
+  vm.runInContext(inputLabelsCode, context);
   vm.runInContext(statusCode, context);
   vm.runInContext(viewCode, context);
   vm.runInContext(code, context);
+  if (options.returnRuntime) {
+    return {
+      player: sandbox.__MAYHEM_RUNTIME.GamePlayer,
+      runtime: sandbox.__MAYHEM_RUNTIME
+    };
+  }
   return sandbox.__MAYHEM_RUNTIME.GamePlayer;
 }
 
@@ -223,4 +240,37 @@ test('player getters fill provided vectors and equipSlot changes the equipped we
   );
   assert.ok(coreOut.y < eyeOut.y);
   assert.ok(throwOut.y < eyeOut.y);
+});
+
+test('player resolves shared tuning lazily when GameShared arrives after script load', async () => {
+  const harness = await loadPlayerHarness({
+    GameShared: null
+  }, { returnRuntime: true });
+  const { player, runtime } = harness;
+  runtime.GameShared = {
+    gameplayTuning: {
+      movement: {},
+      weaponStats: {
+        rifle: { adsFovDeg: 56 },
+        sniper: { adsFovDeg: 24 }
+      }
+    },
+    entityConstants: {},
+    getWeaponStats(weaponId) {
+      return this.gameplayTuning.weaponStats[weaponId] || null;
+    },
+    resolveWeaponAdsFovDeg(weaponStats) {
+      return Number(weaponStats && weaponStats.adsFovDeg || 56);
+    },
+    getSelectableWeaponIds() {
+      return ['rifle', 'sniper'];
+    }
+  };
+
+  const scene = new THREE.Scene();
+
+  assert.doesNotThrow(() => {
+    player.init(scene);
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(player.getLoadout())), { slots: ['rifle', 'sniper'] });
 });

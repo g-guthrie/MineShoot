@@ -4,6 +4,7 @@ import '../../shared/game-modes.js';
 import '../../shared/runtime-modes.js';
 import '../../shared/protocol.js';
 import '../../shared/private-room-codes.js';
+import '../core/runtime-utils.js';
 import '../core/input-bindings.js';
 import '../core/input-labels.js';
 import '../core/dom-utils.js';

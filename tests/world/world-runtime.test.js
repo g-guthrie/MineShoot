@@ -4,58 +4,59 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-async function loadWorldRuntime() {
-  const runtime = {
-    GameShared: {
-      protocol: {
-        world: {
-          profileVersion: 6,
-          flags: {
-            envV2: true,
-            terrainPhysicsV2: true
-          },
-          seedPrefix: 'test-seed'
-        }
-      },
-      worldLayout: {
-        BASE_WORLD_SIZE: 32,
-        WORLD_AREA_SCALE: 1,
-        WORLD_SIZE: 32,
-        WORLD_CENTER: 16,
-        WORLD_MARGIN: 0,
-        WORLD_MIN: 0,
-        WORLD_MAX: 32,
-        DEFAULT_SPAWN_PADDING: 2,
-        BIOME_ARCTIC: 'arctic',
-        BIOME_URBAN: 'urban',
-        BIOME_DESERT: 'desert',
-        BIOME_JUNGLE: 'jungle',
-        BIOME_NUCLEAR: 'nuclear',
-        BIOME_CITADEL: 'citadel',
-        BIOME_QUARRY: 'quarry',
-        BIOME_WALL_STREET: 'wall-street',
-        BIOME_RADAR: 'radar',
-        DEFAULT_QUADRANT_MAP: [
-          { quadrant: 'r0c0', biome: 'jungle' }
-        ],
-        quadrantBounds() {
-          return { minX: 0, maxX: 32, minZ: 0, maxZ: 32 };
+async function loadWorldRuntime(options = {}) {
+  const shared = {
+    protocol: {
+      world: {
+        profileVersion: 6,
+        flags: {
+          envV2: true,
+          terrainPhysicsV2: true
         },
-        biomeAtPosition() {
-          return 'jungle';
-        },
-        buildBiomePerimeter() {}
-      },
-      terrainSampler: {
-        createTerrainSampler() {
-          return {
-            getGroundHeightAt() {
-              return 0;
-            }
-          };
-        }
+        seedPrefix: 'test-seed'
       }
     },
+    worldLayout: {
+      BASE_WORLD_SIZE: 32,
+      WORLD_AREA_SCALE: 1,
+      WORLD_SIZE: 32,
+      WORLD_CENTER: 16,
+      WORLD_MARGIN: 0,
+      WORLD_MIN: 0,
+      WORLD_MAX: 32,
+      DEFAULT_SPAWN_PADDING: 2,
+      BIOME_ARCTIC: 'arctic',
+      BIOME_URBAN: 'urban',
+      BIOME_DESERT: 'desert',
+      BIOME_JUNGLE: 'jungle',
+      BIOME_NUCLEAR: 'nuclear',
+      BIOME_CITADEL: 'citadel',
+      BIOME_QUARRY: 'quarry',
+      BIOME_WALL_STREET: 'wall-street',
+      BIOME_RADAR: 'radar',
+      DEFAULT_QUADRANT_MAP: [
+        { quadrant: 'r0c0', biome: 'jungle' }
+      ],
+      quadrantBounds() {
+        return { minX: 0, maxX: 32, minZ: 0, maxZ: 32 };
+      },
+      biomeAtPosition() {
+        return 'jungle';
+      },
+      buildBiomePerimeter() {}
+    },
+    terrainSampler: {
+      createTerrainSampler() {
+        return {
+          getGroundHeightAt() {
+            return 0;
+          }
+        };
+      }
+    }
+  };
+  const runtime = {
+    GameShared: options.deferShared ? null : shared,
     WorldQuadrants: {}
   };
 
@@ -117,6 +118,8 @@ async function loadWorldRuntime() {
 
   return {
     GameWorld: sandbox.__MAYHEM_RUNTIME.GameWorld,
+    runtime: sandbox.__MAYHEM_RUNTIME,
+    shared,
     tracked
   };
 }
@@ -147,4 +150,16 @@ test('world runtime rebuild removes old world objects while reusing shared block
   assert.equal(firstUniqueGeometry.wasDisposed, true);
   assert.equal(firstUniqueMaterial.wasDisposed, true);
   assert.equal(secondCollidables[0].geometry, firstSharedGeometry);
+});
+
+test('world runtime can load before GameShared and resolve layout on create', async () => {
+  const { GameWorld, runtime, shared } = await loadWorldRuntime({ deferShared: true });
+  runtime.GameShared = shared;
+  const scene = new THREE.Scene();
+
+  assert.doesNotThrow(() => {
+    GameWorld.create(scene);
+  });
+  assert.equal(GameWorld.getSize(), 32);
+  assert.equal(GameWorld.getBounds().max, 32);
 });

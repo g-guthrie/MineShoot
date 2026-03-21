@@ -74,6 +74,10 @@ test('input bindings expose the shipped defaults and normalize modifier labels',
   assert.equal(api.getDisplayLabel('weapon_slot_1'), '1');
   assert.equal(api.tokenFromEvent({ code: 'ShiftRight' }), 'Shift');
   assert.equal(api.matches('ads_key', { code: 'AltLeft' }), true);
+  assert.equal(api.matchesWithFallback('reload', { code: 'KeyR' }, 'KeyX'), true);
+  assert.equal(labels.matchesBinding('reload', { code: 'KeyR' }, 'KeyX'), true);
+  assert.equal(labels.matchesBinding('move_forward', { code: 'KeyW' }, 'ArrowUp'), true);
+  assert.equal(labels.matchesBinding('move_forward', { code: 'ArrowUp' }, 'ArrowUp'), true);
 });
 
 test('input bindings reject reserved targets', async () => {

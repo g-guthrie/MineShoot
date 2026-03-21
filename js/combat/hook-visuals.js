@@ -213,7 +213,7 @@
 
     function playerCoreWorldPosition(out) {
         if (runtime.GamePlayer && runtime.GamePlayer.getCoreWorldPosition) {
-            var core = runtime.GamePlayer.getCoreWorldPosition();
+            var core = runtime.GamePlayer.getCoreWorldPosition(out);
             if (core) return out.copy(core);
         }
         return null;
@@ -221,7 +221,7 @@
 
     function playerHookOriginWorldPosition(out) {
         if (runtime.GamePlayer && runtime.GamePlayer.getThrowableOriginWorldPosition) {
-            var origin = runtime.GamePlayer.getThrowableOriginWorldPosition();
+            var origin = runtime.GamePlayer.getThrowableOriginWorldPosition(out);
             if (origin) return out.copy(origin);
         }
         return playerCoreWorldPosition(out);

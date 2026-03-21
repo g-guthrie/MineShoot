@@ -58,7 +58,9 @@ class FakeWindow {
 }
 
 async function loadControlsHarness(options = {}) {
-  const [domUtilsCode, weaponSwapCode, controlsCode] = await Promise.all([
+  const [inputBindingsCode, inputLabelsCode, domUtilsCode, weaponSwapCode, controlsCode] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/runtime/weapon-swap-input.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/runtime/gameplay-controls.js', import.meta.url), 'utf8')
@@ -155,7 +157,13 @@ async function loadControlsHarness(options = {}) {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
     document: documentObj,
-    window: windowObj,
+    window: Object.assign(windowObj, {
+      localStorage: {
+        getItem() { return null; },
+        setItem() {},
+        removeItem() {}
+      }
+    }),
     console,
     Date,
     performance: {
@@ -165,6 +173,8 @@ async function loadControlsHarness(options = {}) {
   sandbox.globalThis = sandbox;
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(inputBindingsCode, context);
+  vm.runInContext(inputLabelsCode, context);
   vm.runInContext(domUtilsCode, context);
   vm.runInContext(weaponSwapCode, context);
   vm.runInContext(controlsCode, context);

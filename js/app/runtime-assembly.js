@@ -31,41 +31,54 @@ export function buildLobbyControllerDeps(runtime) {
 
 export function buildGameplayCoordinatorDeps(runtime) {
     runtime = createRuntimeRegistry(runtime);
-    return {
-        GameShared: runtimeValue(runtime, 'GameShared'),
-        GameUI: runtimeValue(runtime, 'GameUI'),
-        GamePlayer: runtimeValue(runtime, 'GamePlayer'),
-        GameEnemy: runtimeValue(runtime, 'GameEnemy'),
-        GameHitscan: runtimeValue(runtime, 'GameHitscan'),
-        GameAudio: runtimeValue(runtime, 'GameAudio'),
-        GameRuntimeLoader: runtimeValue(runtime, 'GameRuntimeLoader'),
-        GameDocs: runtimeValue(runtime, 'GameDocs'),
-        GameAbilities: runtimeValue(runtime, 'GameAbilities'),
-        GameThrowables: runtimeValue(runtime, 'GameThrowables'),
-        GameOverhead: runtimeValue(runtime, 'GameOverhead'),
-        GameNet: runtimeValue(runtime, 'GameNet'),
-        GameLocalMatch: runtimeValue(runtime, 'GameLocalMatch'),
-        GameNetFeedbackSync: runtimeValue(runtime, 'GameNetFeedbackSync'),
-        GameHookVisuals: runtimeValue(runtime, 'GameHookVisuals'),
-        GameMenuLoadout: runtimeValue(runtime, 'GameMenuLoadout'),
-        GameRuntimeMatchActions: runtimeValue(runtime, 'GameRuntimeMatchActions'),
-        GameRuntimeMatchHost: runtimeValue(runtime, 'GameRuntimeMatchHost'),
-        GamePlayerCombat: runtimeValue(runtime, 'GamePlayerCombat'),
-        GameRuntimeMatchView: runtimeValue(runtime, 'GameRuntimeMatchView'),
-        GameRuntimeSession: runtimeValue(runtime, 'GameRuntimeSession'),
-        GameRuntimeProfile: runtimeValue(runtime, 'GameRuntimeProfile'),
-        GameGameplayRuntimeBootstrap: runtimeValue(runtime, 'GameGameplayRuntimeBootstrap'),
-        GameBootstrap: runtimeValue(runtime, 'GameBootstrap'),
-        GameWorld: runtimeValue(runtime, 'GameWorld'),
-        GameGameplayHudSync: runtimeValue(runtime, 'GameGameplayHudSync'),
-        GameGameplayControls: runtimeValue(runtime, 'GameGameplayControls'),
-        GameGameplayRuntimeLoop: runtimeValue(runtime, 'GameGameplayRuntimeLoop'),
-        GamePresentationRuntimeLoop: runtimeValue(runtime, 'GamePresentationRuntimeLoop'),
-        GameLoop: runtimeValue(runtime, 'GameLoop'),
-        GameRuntimeModeUi: runtimeValue(runtime, 'GameRuntimeModeUi'),
-        GameRuntimeShell: runtimeValue(runtime, 'GameRuntimeShell'),
-        GameNetAuth: runtimeValue(runtime, 'GameNetAuth')
-    };
+    var deps = {};
+    var names = [
+        'GameShared',
+        'GameUI',
+        'GamePlayer',
+        'GameEnemy',
+        'GameHitscan',
+        'GameAudio',
+        'GameRuntimeLoader',
+        'GameDocs',
+        'GameAbilities',
+        'GameThrowables',
+        'GameOverhead',
+        'GameNet',
+        'GameLocalMatch',
+        'GameNetFeedbackSync',
+        'GameHookVisuals',
+        'GameMenuLoadout',
+        'GameRuntimeMatchActions',
+        'GameRuntimeMatchHost',
+        'GamePlayerCombat',
+        'GameRuntimeMatchView',
+        'GameRuntimeSession',
+        'GameRuntimeProfile',
+        'GameGameplayRuntimeBootstrap',
+        'GameBootstrap',
+        'GameWorld',
+        'GameGameplayHudSync',
+        'GameGameplayControls',
+        'GameGameplayRuntimeLoop',
+        'GamePresentationRuntimeLoop',
+        'GameLoop',
+        'GameRuntimeModeUi',
+        'GameRuntimeShell',
+        'GameNetAuth'
+    ];
+    for (var i = 0; i < names.length; i++) {
+        (function (name) {
+            Object.defineProperty(deps, name, {
+                configurable: true,
+                enumerable: true,
+                get: function () {
+                    return runtimeValue(runtime, name);
+                }
+            });
+        })(names[i]);
+    }
+    return deps;
 }
 
 export function buildGameNetAssemblyDeps(runtime) {

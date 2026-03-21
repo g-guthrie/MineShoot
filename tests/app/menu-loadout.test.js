@@ -94,7 +94,7 @@ function classTokens(element) {
   return element && element._classSet ? Array.from(element._classSet) : [];
 }
 
-async function loadMenuLoadoutHarness({ storageMap } = {}) {
+async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoInit = true } = {}) {
   const [inputLabelsCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/menu-loadout.js', import.meta.url), 'utf8')
@@ -163,48 +163,50 @@ async function loadMenuLoadoutHarness({ storageMap } = {}) {
     }
   };
 
+  const shared = {
+    gameplayTuning: {
+      weaponStats: {
+        machinegun: { name: 'Machinegun' },
+        shotgun: { name: 'Shotgun' },
+        rifle: { name: 'Rifle' }
+      },
+      throwableCategories: {
+        grenade: { label: 'Grenades', items: ['frag', 'plasma'] }
+      },
+      throwables: {
+        frag: { label: 'Frag' },
+        plasma: { label: 'Plasma' }
+      },
+      abilityCatalog: {
+        choke: { id: 'choke', name: 'Choke' },
+        missile: { id: 'missile', name: 'Missile' },
+        hook: { id: 'hook', name: 'Hook' }
+      },
+      defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
+    },
+    getSelectableWeaponIds() {
+      return ['machinegun', 'shotgun', 'rifle'];
+    },
+    getDefaultWeaponLoadout() {
+      return ['machinegun', 'shotgun'];
+    },
+    getDefaultAbilityLoadout() {
+      return { slot1: 'choke', slot2: 'missile' };
+    },
+    normalizeAbilityLoadout(slot1, slot2) {
+      return {
+        slot1: String(slot1 || 'choke'),
+        slot2: String(slot2 || 'missile')
+      };
+    }
+  };
+
   const sandbox = {
     console,
     window: windowObj,
     document: documentObj,
     __MAYHEM_RUNTIME: {
-      GameShared: {
-        gameplayTuning: {
-          weaponStats: {
-            machinegun: { name: 'Machinegun' },
-            shotgun: { name: 'Shotgun' },
-            rifle: { name: 'Rifle' }
-          },
-          throwableCategories: {
-            grenade: { label: 'Grenades', items: ['frag', 'plasma'] }
-          },
-          throwables: {
-            frag: { label: 'Frag' },
-            plasma: { label: 'Plasma' }
-          },
-          abilityCatalog: {
-            choke: { id: 'choke', name: 'Choke' },
-            missile: { id: 'missile', name: 'Missile' },
-            hook: { id: 'hook', name: 'Hook' }
-          },
-          defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
-        },
-        getSelectableWeaponIds() {
-          return ['machinegun', 'shotgun', 'rifle'];
-        },
-        getDefaultWeaponLoadout() {
-          return ['machinegun', 'shotgun'];
-        },
-        getDefaultAbilityLoadout() {
-          return { slot1: 'choke', slot2: 'missile' };
-        },
-        normalizeAbilityLoadout(slot1, slot2) {
-          return {
-            slot1: String(slot1 || 'choke'),
-            slot2: String(slot2 || 'missile')
-          };
-        }
-      },
+      GameShared: deferShared ? null : shared,
       GameThrowables: {
         setSelectedThrowable() {}
       },
@@ -227,10 +229,11 @@ async function loadMenuLoadoutHarness({ storageMap } = {}) {
   const context = vm.createContext(sandbox);
   vm.runInContext(inputLabelsCode, context);
   vm.runInContext(code, context);
-  sandbox.__MAYHEM_RUNTIME.GameMenuLoadout.init();
+  if (autoInit) sandbox.__MAYHEM_RUNTIME.GameMenuLoadout.init();
 
   return {
     runtime: sandbox.__MAYHEM_RUNTIME,
+    shared,
     elements: documentObj.elements,
     storage: store
   };
@@ -367,4 +370,17 @@ test('abilities swap ownership and use slot-specific classes in the shared grid'
   assert.ok(classTokens(chokeAfter).includes('active'));
   assert.ok(classTokens(missileAfter).includes('slot-1'));
   assert.ok(!classTokens(chokeAfter).includes('owned-other'));
+});
+
+test('menu loadout resolves shared defaults after GameShared arrives post-load', async () => {
+  const harness = await loadMenuLoadoutHarness({ deferShared: true, autoInit: false });
+  harness.runtime.GameShared = harness.shared;
+
+  harness.runtime.GameMenuLoadout.init();
+
+  assert.deepEqual(Array.from(harness.runtime.GameMenuLoadout.getWeaponSlots()), ['machinegun', 'shotgun']);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(harness.runtime.GameMenuLoadout.getAbilityLoadout())),
+    { slot1: 'choke', slot2: 'missile' }
+  );
 });

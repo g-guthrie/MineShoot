@@ -2,21 +2,29 @@
     'use strict';
 
     var GameRuntimeProfile = {};
-    var protocol = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
-        ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
-        : null;
-    var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
-
     var PROD_WORKER_ORIGIN = 'https://mayhem.gguthrie-minecraft-fps.workers.dev';
     var LOCAL_WORKER_ORIGIN = 'http://127.0.0.1:8787';
     var ROOM_STORAGE_PREFIX = 'mayhem.runtime.room.';
-    var DEFAULT_MODE_ID = (shared.getDefaultRuntimeModeId && shared.getDefaultRuntimeModeId()) || 'cloud_multiplayer';
+    var DEFAULT_MODE_ID = 'cloud_multiplayer';
 
     var selectedModeId = '';
 
+    function runtimeRoot() {
+        return globalThis.__MAYHEM_RUNTIME || {};
+    }
+
+    function sharedApi() {
+        return runtimeRoot().GameShared || {};
+    }
+
+    function runtimeUtils() {
+        return runtimeRoot().GameRuntimeUtils || null;
+    }
+
     function sanitizeRoomId(raw) {
-        if (protocol && typeof protocol.sanitizeRoomId === 'function') {
-            return protocol.sanitizeRoomId(raw);
+        var utils = runtimeUtils();
+        if (utils && utils.sanitizeRoomId) {
+            return utils.sanitizeRoomId(raw, 'global');
         }
         var id = String(raw || '').toLowerCase().trim();
         id = id.replace(/[^a-z0-9-]/g, '');
@@ -25,11 +33,18 @@
         return id;
     }
 
+    function defaultModeId() {
+        var shared = sharedApi();
+        return (shared.getDefaultRuntimeModeId && shared.getDefaultRuntimeModeId()) || DEFAULT_MODE_ID;
+    }
+
     function runtimeModeCatalog() {
+        var shared = sharedApi();
         return shared.getRuntimeModeCatalog ? shared.getRuntimeModeCatalog() || [] : [];
     }
 
     function runtimeModeDef(modeId) {
+        var shared = sharedApi();
         if (shared.getRuntimeMode) return shared.getRuntimeMode(modeId);
         return null;
     }
@@ -182,6 +197,7 @@
     }
 
     function resolveMode(modeId) {
+        var shared = sharedApi();
         var normalizedModeId = shared.normalizeRuntimeModeId ? shared.normalizeRuntimeModeId(modeId) : String(modeId || '');
         var def = runtimeModeDef(normalizedModeId);
         if (!def || !isModeVisible(normalizedModeId)) return null;
@@ -215,7 +231,7 @@
             if (resolved) return resolved;
         }
 
-        return resolveMode(DEFAULT_MODE_ID);
+        return resolveMode(defaultModeId());
     }
 
     function absolutize(path, base) {

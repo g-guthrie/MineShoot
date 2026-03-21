@@ -22,6 +22,41 @@
             }
         };
 
+        function createPointScratch() {
+            if (typeof THREE !== 'undefined' && THREE && typeof THREE.Vector3 === 'function') {
+                return new THREE.Vector3();
+            }
+            return {
+                x: 0,
+                y: 0,
+                z: 0,
+                set: function (x, y, z) {
+                    this.x = x;
+                    this.y = y;
+                    this.z = z;
+                    return this;
+                },
+                copy: function (other) {
+                    return this.set(other.x, other.y, other.z);
+                }
+            };
+        }
+
+        var renderCoreWorldPosScratch = createPointScratch();
+
+        function setPoint(out, x, y, z) {
+            if (out && typeof out.set === 'function') {
+                return out.set(x, y, z);
+            }
+            if (out && typeof out === 'object') {
+                out.x = x;
+                out.y = y;
+                out.z = z;
+                return out;
+            }
+            return { x: x, y: y, z: z };
+        }
+
         function GameNetEntities() {
             return opts.getEntitiesApi ? opts.getEntitiesApi() : null;
         }
@@ -98,7 +133,7 @@
             }
         }
 
-        function pointForEntityId(entityId, yTransformKey) {
+        function pointForEntityId(entityId, yTransformKey, outPoint) {
             if (!entityId) return null;
             var state = netState();
             var access = runtimeAccess();
@@ -111,34 +146,31 @@
                 var playerApi = access && access.getPlayerApi ? access.getPlayerApi() : null;
                 var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition(selfPointScratch) : null;
                 if (!selfPos) return null;
-                return {
-                    x: selfPos.x,
-                    y: translateY ? translateY(selfPos.y) : selfPos.y,
-                    z: selfPos.z
-                };
+                return setPoint(outPoint, selfPos.x, translateY ? translateY(selfPos.y) : selfPos.y, selfPos.z);
             }
 
             var renderMap = entitiesApi && entitiesApi.getRenderMap ? entitiesApi.getRenderMap() : null;
             var render = renderMap ? renderMap.get(entityId) : null;
             if (!render || !render.group) return null;
-            return {
-                x: render.group.position.x,
-                y: translateY ? translateY(render.group.position.y) : render.group.position.y,
-                z: render.group.position.z
-            };
+            return setPoint(
+                outPoint,
+                render.group.position.x,
+                translateY ? translateY(render.group.position.y) : render.group.position.y,
+                render.group.position.z
+            );
         }
 
-        function damagePointForEntityId(entityId) {
-            return pointForEntityId(entityId, 'damagePointY');
+        function damagePointForEntityId(entityId, outPoint) {
+            return pointForEntityId(entityId, 'damagePointY', outPoint);
         }
 
-        function markerPointForEntityId(entityId) {
-            return pointForEntityId(entityId, 'markerPointY');
+        function markerPointForEntityId(entityId, outPoint) {
+            return pointForEntityId(entityId, 'markerPointY', outPoint);
         }
 
         function getRenderCoreWorldPosition(render, outVec3) {
             if (!render) return null;
-            var out = outVec3 || new THREE.Vector3();
+            var out = outVec3 || renderCoreWorldPosScratch;
             if (render.actorVisual && render.actorVisual.getCoreWorldPosition) {
                 return render.actorVisual.getCoreWorldPosition(out);
             }

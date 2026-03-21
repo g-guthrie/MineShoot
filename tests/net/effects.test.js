@@ -79,3 +79,51 @@ test('GameNetEffects uses the same point resolution rules for damage and marker 
   assert.deepEqual(JSON.parse(JSON.stringify(effects.markerPointForEntityId('remote-1'))), { x: 1, y: 3.5, z: 3 });
   assert.equal(effects.damagePointForEntityId('missing-entity'), null);
 });
+
+test('GameNetEffects fills provided output objects for marker and damage points', async () => {
+  const GameNetEffects = await loadEffectsFactory();
+  const renderMap = new Map([
+    ['remote-1', { group: { position: { x: 7, y: 8, z: 9 } } }]
+  ]);
+  const effects = GameNetEffects.create({
+    getNetState() {
+      return {
+        getSelfId() {
+          return 'self-1';
+        }
+      };
+    },
+    getRuntimeAccess() {
+      return {
+        getPlayerApi() {
+          return {
+            getPosition(outVec3) {
+              return outVec3.set(1, 2, 3);
+            }
+          };
+        },
+        damagePointY(y) {
+          return y + 0.25;
+        },
+        markerPointY(y) {
+          return y + 1.25;
+        }
+      };
+    },
+    getEntitiesApi() {
+      return {
+        getRenderMap() {
+          return renderMap;
+        }
+      };
+    }
+  });
+
+  const damageOut = { x: 0, y: 0, z: 0 };
+  const markerOut = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } };
+
+  assert.equal(effects.damagePointForEntityId('self-1', damageOut), damageOut);
+  assert.equal(effects.markerPointForEntityId('remote-1', markerOut), markerOut);
+  assert.deepEqual(damageOut, { x: 1, y: 2.25, z: 3 });
+  assert.deepEqual({ x: markerOut.x, y: markerOut.y, z: markerOut.z }, { x: 7, y: 9.25, z: 9 });
+});

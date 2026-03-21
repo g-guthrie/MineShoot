@@ -26,9 +26,21 @@
         return deps.getSharedApi ? deps.getSharedApi() : (runtimeRoot().GameShared || {});
     }
 
-    function inputBindingsApi() {
-        var deps = playerDeps();
-        return deps.getInputBindingsApi ? deps.getInputBindingsApi() : (runtimeRoot().GameInputBindings || null);
+    function gameplayTuningApi() {
+        return sharedApi().gameplayTuning || {};
+    }
+
+    function movementTuningApi() {
+        var gameplayTuning = gameplayTuningApi();
+        return gameplayTuning && gameplayTuning.movement ? gameplayTuning.movement : {};
+    }
+
+    function entityConstantsApi() {
+        return sharedApi().entityConstants || {};
+    }
+
+    function inputLabelsApi() {
+        return runtimeRoot().GameInputLabels || null;
     }
 
     function playerStatusFactory() {
@@ -71,12 +83,6 @@
         return deps.getWorldApi ? deps.getWorldApi() : (runtimeRoot().GameWorld || null);
     }
 
-    var sharedGameplay = sharedApi().gameplayTuning;
-    var movementTuning = sharedGameplay && sharedGameplay.movement ? sharedGameplay.movement : {};
-    var entityConstants = sharedApi().entityConstants
-        ? sharedApi().entityConstants
-        : {};
-
     function selectableWeaponIds() {
         var shared = sharedApi();
         var selected = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
@@ -102,6 +108,13 @@
         return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
     }
 
+    function ensureLoadoutSlots() {
+        if (Array.isArray(loadoutSlots) && loadoutSlots.length) return loadoutSlots;
+        loadoutSlots = selectableWeaponIds().slice();
+        if (!loadoutSlots.length) loadoutSlots = ['rifle'];
+        return loadoutSlots;
+    }
+
     function networkTuning() {
         var shared = sharedApi();
         return shared.gameplayTuning && shared.gameplayTuning.network
@@ -110,25 +123,28 @@
     }
 
     function matchesBinding(actionId, event, fallbackCodes) {
-        var bindingsApi = inputBindingsApi();
-        if (bindingsApi && bindingsApi.matches) {
-            return bindingsApi.matches(actionId, event);
-        }
-        var code = String(event && event.code || '');
-        var fallbacks = Array.isArray(fallbackCodes) ? fallbackCodes : [fallbackCodes];
-        for (var i = 0; i < fallbacks.length; i++) {
-            if (String(fallbacks[i] || '') === code) return true;
-        }
-        return false;
+        var labelsApi = inputLabelsApi();
+        return !!(labelsApi && labelsApi.matchesBinding && labelsApi.matchesBinding(actionId, event, fallbackCodes));
     }
 
-    var EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
-    var RUN_SPEED = Number(movementTuning.runSpeed || 14);
+    function eyeHeight() {
+        return Number(entityConstantsApi().EYE_HEIGHT || 1.6);
+    }
+
+    function runSpeed() {
+        return Number(movementTuningApi().runSpeed || 14);
+    }
+
+    function playerRadius() {
+        return Number(entityConstantsApi().PLAYER_RADIUS || 0.35);
+    }
+
+    function playerHeight() {
+        return Number(entityConstantsApi().PLAYER_HEIGHT || 1.7);
+    }
+
     var MOUSE_SENSITIVITY = 0.002;
     var PITCH_LIMIT = 89 * (Math.PI / 180);
-
-    var PLAYER_RADIUS = Number(entityConstants.PLAYER_RADIUS || 0.35);
-    var PLAYER_HEIGHT = Number(entityConstants.PLAYER_HEIGHT || 1.7);
     var EPSILON = 0.001;
 
     var THIRD_HEIGHT = 0.7;
@@ -153,7 +169,7 @@
     var playerX = 25;
     var playerZ = 45;
     var velocityY = 0;
-    var posY = EYE_HEIGHT;
+    var posY = eyeHeight();
     var isGrounded = true;
     var jumpHoldTimer = 0;
     var jumpPressedLastFrame = false;
@@ -183,7 +199,34 @@
     var bobTimer = 0;
     var sprinting = false;
     var lastMoveSpeedNorm = 0;
-    var loadoutSlots = selectableWeaponIds();
+    var loadoutSlots = [];
+    var motionStateScratch = {
+        x: 0,
+        y: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        velocityY: 0,
+        isGrounded: true,
+        jumpHoldTimer: 0,
+        jumpHeldLast: false,
+        moveSpeedNorm: 0,
+        sprinting: false
+    };
+    var inputStateScratch = {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        jump: false,
+        sprint: false,
+        adsActive: false
+    };
+    var avatarTransformScratch = {
+        x: 0,
+        y: 0,
+        z: 0
+    };
 
     var lastReplayAckSeq = 0;
     var lastReconciledMotionKey = '';
@@ -242,8 +285,8 @@
         var helper = playerWorldFactory();
         if (!helper || !helper.create) return null;
         playerWorld = helper.create({
-            playerRadius: PLAYER_RADIUS,
-            playerHeight: PLAYER_HEIGHT,
+            playerRadius: playerRadius(),
+            playerHeight: playerHeight(),
             epsilon: EPSILON
         });
         return playerWorld;
@@ -412,7 +455,7 @@
         viewApi.updateAvatarAnimation(dt, speed, {
             actorVisual: actorVisual,
             avatarRigApi: avatarRigApi,
-            runSpeed: RUN_SPEED,
+            runSpeed: runSpeed(),
             sprinting: sprinting,
             isGrounded: isGrounded,
             pitch: pitch,
@@ -487,9 +530,12 @@
 
     function updateAvatarPose() {
         if (!avatarGroup) return;
-        var feetY = posY - EYE_HEIGHT + activeChokeLift();
+        var feetY = posY - eyeHeight() + activeChokeLift();
         if (actorVisual && actorVisual.setWorldTransform) {
-            actorVisual.setWorldTransform({ x: playerX, y: feetY, z: playerZ }, yaw);
+            avatarTransformScratch.x = playerX;
+            avatarTransformScratch.y = feetY;
+            avatarTransformScratch.z = playerZ;
+            actorVisual.setWorldTransform(avatarTransformScratch, yaw);
             return;
         }
         avatarGroup.position.set(playerX, feetY, playerZ);
@@ -498,9 +544,12 @@
     }
 
     function syncHitboxPositions() {
-        var feetY = posY - EYE_HEIGHT + activeChokeLift();
+        var feetY = posY - eyeHeight() + activeChokeLift();
         if (actorVisual && actorVisual.syncHitboxes) {
-            actorVisual.syncHitboxes({ x: playerX, y: feetY, z: playerZ });
+            avatarTransformScratch.x = playerX;
+            avatarTransformScratch.y = feetY;
+            avatarTransformScratch.z = playerZ;
+            actorVisual.syncHitboxes(avatarTransformScratch);
         }
     }
 
@@ -662,7 +711,7 @@
 
     function resetVerticalState(feetY) {
         velocityY = 0;
-        posY = feetY + EYE_HEIGHT;
+        posY = feetY + eyeHeight();
         isGrounded = true;
         jumpHoldTimer = 0;
         jumpPressedLastFrame = false;
@@ -684,31 +733,29 @@
     }
 
     function buildLocalMotionState() {
-        return {
-            x: playerX,
-            y: posY,
-            z: playerZ,
-            yaw: yaw,
-            pitch: pitch,
-            velocityY: velocityY,
-            isGrounded: isGrounded,
-            jumpHoldTimer: jumpHoldTimer,
-            jumpHeldLast: !!jumpPressedLastFrame,
-            moveSpeedNorm: lastMoveSpeedNorm,
-            sprinting: !!sprinting
-        };
+        motionStateScratch.x = playerX;
+        motionStateScratch.y = posY;
+        motionStateScratch.z = playerZ;
+        motionStateScratch.yaw = yaw;
+        motionStateScratch.pitch = pitch;
+        motionStateScratch.velocityY = velocityY;
+        motionStateScratch.isGrounded = isGrounded;
+        motionStateScratch.jumpHoldTimer = jumpHoldTimer;
+        motionStateScratch.jumpHeldLast = !!jumpPressedLastFrame;
+        motionStateScratch.moveSpeedNorm = lastMoveSpeedNorm;
+        motionStateScratch.sprinting = !!sprinting;
+        return motionStateScratch;
     }
 
     function buildCurrentInputState() {
-        return {
-            forward: !!keys.forward,
-            backward: !!keys.backward,
-            left: !!keys.left,
-            right: !!keys.right,
-            jump: !!keys.jump,
-            sprint: !!isSprintInputActive(),
-            adsActive: !!isAdsActive()
-        };
+        inputStateScratch.forward = !!keys.forward;
+        inputStateScratch.backward = !!keys.backward;
+        inputStateScratch.left = !!keys.left;
+        inputStateScratch.right = !!keys.right;
+        inputStateScratch.jump = !!keys.jump;
+        inputStateScratch.sprint = !!isSprintInputActive();
+        inputStateScratch.adsActive = !!isAdsActive();
+        return inputStateScratch;
     }
 
     function copyMotionStateFields(state, options) {
@@ -721,7 +768,7 @@
             var groundHeightAt = options && typeof options.getGroundHeightAt === 'function'
                 ? options.getGroundHeightAt
                 : null;
-            posY = groundHeightAt ? (Number(groundHeightAt(playerX, playerZ) || 0) + EYE_HEIGHT) : EYE_HEIGHT;
+            posY = groundHeightAt ? (Number(groundHeightAt(playerX, playerZ) || 0) + eyeHeight()) : eyeHeight();
         }
         yaw = (typeof state.yaw === 'number' && isFinite(state.yaw)) ? Number(state.yaw) : yaw;
         pitch = (typeof state.pitch === 'number' && isFinite(state.pitch))
@@ -785,9 +832,9 @@
             collisionBoxes: world.getCollisionBoxes(),
             getGroundHeightAt: world.getGroundHeightAt,
             movementLocked: function () { return isMovementLocked(); },
-            eyeHeight: EYE_HEIGHT,
-            playerHeight: PLAYER_HEIGHT,
-            playerRadius: PLAYER_RADIUS,
+            eyeHeight: eyeHeight(),
+            playerHeight: playerHeight(),
+            playerRadius: playerRadius(),
             epsilon: EPSILON,
             fallbackYaw: yaw,
             fallbackPitch: pitch
@@ -1053,7 +1100,11 @@
         var spawn = world.getRandomSpawnPoint(world.getSpawnPadding(8)) || world.getDefaultSpawnPoint();
         playerX = spawn.x;
         playerZ = spawn.z;
-        posY = EYE_HEIGHT;
+        posY = eyeHeight();
+        ensureLoadoutSlots();
+        if (loadoutSlots.indexOf(currentWeaponId) === -1) {
+            currentWeaponId = loadoutSlots[0];
+        }
 
         ensureHitboxes();
 
@@ -1085,9 +1136,9 @@
             collisionBoxes: world.getCollisionBoxes(),
             getGroundHeightAt: world.getGroundHeightAt,
             movementLocked: isMovementLocked(),
-            eyeHeight: EYE_HEIGHT,
-            playerHeight: PLAYER_HEIGHT,
-            playerRadius: PLAYER_RADIUS,
+            eyeHeight: eyeHeight(),
+            playerHeight: playerHeight(),
+            playerRadius: playerRadius(),
             epsilon: EPSILON
         });
         copyMotionStateFields(motionState, {
@@ -1107,7 +1158,7 @@
             }
         }
 
-        var horizontalSpeed = lastMoveSpeedNorm * RUN_SPEED;
+        var horizontalSpeed = lastMoveSpeedNorm * runSpeed();
         var view = viewHelper();
         updateAvatarPose();
         updateAvatarAnimation(frameDt, horizontalSpeed, view);
@@ -1223,6 +1274,7 @@
     };
 
     GamePlayer.setLoadout = function (loadoutConfig) {
+        ensureLoadoutSlots();
         if (!loadoutConfig || !Array.isArray(loadoutConfig.slots)) {
             return { slots: loadoutSlots.slice() };
         }
@@ -1260,6 +1312,7 @@
     };
 
     GamePlayer.getLoadout = function () {
+        ensureLoadoutSlots();
         return { slots: loadoutSlots.slice() };
     };
 
