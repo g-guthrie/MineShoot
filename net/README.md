@@ -5,5 +5,6 @@ Owns client protocol, transport, prediction, reconciliation, state views, author
 Status:
 - Rewrite landing zone created.
 - Authoritative room, self, match, world, input-history, and queue state now starts in `js/net/runtime-state.js`.
-- Net runtime composition now starts in `js/net/runtime.js`.
-- `js/network.js` is now a backward-compatible facade entrypoint instead of the primary owner.
+- Net effects and helper state now start in `js/net/effects.js`.
+- The public browser networking surface now starts in `js/net/facade.js`.
+- The live browser networking surface remains `js/net/network.js`, with ownership split across `js/net/runtime-state.js`, `js/net/runtime-core.js`, `js/net/state-view.js`, `js/net/effects.js`, `js/net/facade.js`, and neighboring helpers.

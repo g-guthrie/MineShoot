@@ -36,7 +36,6 @@ function randomToken(length) {
 
 function normalizePublicGameMode(raw) {
   const mode = String(raw || 'ffa').trim().toLowerCase();
-  if (mode === 'lms') return 'lms';
   return mode === 'tdm' ? 'tdm' : 'ffa';
 }
 
@@ -149,12 +148,6 @@ function chooseBestRoom(entries, predicate) {
 
 function selectQuickMatchRoom(entries, gameMode, startThreshold, roomCapacity, groupSize) {
   const size = Math.max(1, Number(groupSize) || 1);
-  if (gameMode === 'lms') {
-    return (
-      chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && (entry.connectedPlayers + size) <= startThreshold) ||
-      chooseBestRoom(entries, (entry) => !entry.matchStarted && (entry.connectedPlayers + size) <= startThreshold)
-    );
-  }
   return (
     chooseBestRoom(entries, (entry) => !entry.matchStarted && entry.connectedPlayers > 0 && (entry.connectedPlayers + size) <= startThreshold) ||
     chooseBestRoom(entries, (entry) => entry.matchStarted && (entry.connectedPlayers + size) <= PUBLIC_ROOM_SOFT_TARGET) ||
@@ -391,14 +384,6 @@ export async function handleMatchmaking(env, request) {
         await releasePublicMatchQueueLock(env, queueKey).catch(() => null);
       }
     }
-  }
-
-  if (action === 'private') {
-    const result = await delegatePrivateRoomAction(env, request, body, 'create');
-    if (!result.ok) {
-      return json({ ok: false, error: result.error }, result.status || 400);
-    }
-    return json(result.payload);
   }
 
   if (action === 'join') {

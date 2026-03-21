@@ -26,8 +26,7 @@
         };
     }
 
-    function installResizeHandler(renderer) {
-        var bootstrapApi = runtime.GameBootstrap || null;
+    function installResizeHandler(renderer, bootstrapApi) {
         if (bootstrapApi && bootstrapApi.installResizeHandler) {
             bootstrapApi.installResizeHandler(renderer);
             return;
@@ -40,8 +39,16 @@
 
     GameGameplayRuntimeBootstrap.start = function (options) {
         options = options || {};
+        var runtimeDeps = options.runtimeDeps || {};
 
-        var bootstrapApi = runtime.GameBootstrap || null;
+        function depGet(name) {
+            if (Object.prototype.hasOwnProperty.call(runtimeDeps, name)) {
+                return runtimeDeps[name];
+            }
+            return runtime[name] || null;
+        }
+
+        var bootstrapApi = depGet('GameBootstrap');
         var renderCtx = bootstrapApi && bootstrapApi.createRenderContext
             ? bootstrapApi.createRenderContext()
             : createFallbackRenderContext();
@@ -50,7 +57,7 @@
         var scene = renderCtx.scene;
         var clock = renderCtx.clock;
         var multiplayerMode = !!(options.activeRuntimeMode && options.activeRuntimeMode.authorityMode === 'networked');
-        var net = runtime.GameNet || null;
+        var net = depGet('GameNet');
         var netRuntime = net && net.runtime ? net.runtime : net;
         var netView = net && net.view ? net.view : net;
         var netRuntimeInitStarted = false;
@@ -66,75 +73,97 @@
         }
 
         function finalizeWorldBootstrap(worldMeta) {
+            var runtimeLoader = depGet('GameRuntimeLoader');
+            var gameWorld = depGet('GameWorld');
+            var gameUi = depGet('GameUI');
+            var gameDocs = runtimeLoader && runtimeLoader.getLoadedDocsRuntime
+                ? runtimeLoader.getLoadedDocsRuntime()
+                : depGet('GameDocs');
+            var gameOverhead = depGet('GameOverhead');
+            var gamePlayer = depGet('GamePlayer');
+            var gameThrowables = depGet('GameThrowables');
+            var gameLocalMatch = depGet('GameLocalMatch');
+            var gameEnemy = depGet('GameEnemy');
+            var gameAbilities = depGet('GameAbilities');
+            var gameHookVisuals = depGet('GameHookVisuals');
+            var gamePlayerCombat = depGet('GamePlayerCombat');
+            var gameplayHudSync = depGet('GameGameplayHudSync');
+            var gameHitscan = depGet('GameHitscan');
+            var gameplayControls = depGet('GameGameplayControls');
             var worldOptions = (worldMeta && worldMeta.worldSeed) ? { worldMeta: worldMeta } : undefined;
-            runtime.GameWorld.create(scene, worldOptions);
+            gameWorld.create(scene, worldOptions);
 
-            runtime.GameUI.init();
-            if (runtime.GameDocs && runtime.GameDocs.init) {
-                runtime.GameDocs.init();
+            gameUi.init();
+            if (gameDocs && gameDocs.init) {
+                gameDocs.init();
             }
-            runtime.GameOverhead.init();
+            gameOverhead.init();
 
             if (options.startupDebugNotice) {
                 options.setTransientDebug(options.startupDebugNotice, 2100);
             }
 
-            var camera = runtime.GamePlayer.init(scene);
-            runtime.GameThrowables.init(scene);
+            var camera = gamePlayer.init(scene);
+            gameThrowables.init(scene);
 
             if (multiplayerMode) {
                 ensureNetRuntimeInit();
             } else {
-                var enemyCount = runtime.GameWorld.getRecommendedEnemyCount
-                    ? runtime.GameWorld.getRecommendedEnemyCount()
+                var enemyCount = gameWorld.getRecommendedEnemyCount
+                    ? gameWorld.getRecommendedEnemyCount()
                     : 5;
-                if (runtime.GameLocalMatch && runtime.GameLocalMatch.init) {
-                    runtime.GameLocalMatch.init({
+                if (gameLocalMatch && gameLocalMatch.init) {
+                    gameLocalMatch.init({
                         gameMode: (options.activeRuntimeMode && options.activeRuntimeMode.gameMode)
                             ? options.activeRuntimeMode.gameMode
                             : 'ffa'
                     });
                 }
-                if (runtime.GameEnemy && runtime.GameEnemy.init) {
-                    runtime.GameEnemy.init(scene, enemyCount);
+                if (gameEnemy && gameEnemy.init) {
+                    gameEnemy.init(scene, enemyCount);
                 }
-                if (runtime.GameUI && runtime.GameUI.updateThrowableInfo && runtime.GameThrowables.getState) {
-                    runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
+                if (gameUi && gameUi.updateThrowableInfo && gameThrowables.getState) {
+                    gameUi.updateThrowableInfo(gameThrowables.getState());
                 }
             }
 
-            runtime.GameAbilities.init(scene);
-            if (runtime.GameHookVisuals && runtime.GameHookVisuals.init) {
-                runtime.GameHookVisuals.init(scene);
+            gameAbilities.init(scene);
+            if (gameHookVisuals && gameHookVisuals.init) {
+                gameHookVisuals.init(scene);
             }
 
             options.applyAbilityProfile('abilities');
 
-            runtime.GamePlayerCombat.init({
+            gamePlayerCombat.init({
                 isPlaying: options.isPlaying,
                 isMultiplayer: function () { return multiplayerMode; }
             });
-            var initArmor = runtime.GameAbilities.getArmorMax ? runtime.GameAbilities.getArmorMax() : 90;
-            runtime.GamePlayerCombat.applyArmorProfile(initArmor);
-            if (runtime.GameGameplayHudSync && runtime.GameGameplayHudSync.syncSelfCombatHud) {
-                runtime.GameGameplayHudSync.syncSelfCombatHud();
+            var initArmor = gameAbilities.getArmorMax ? gameAbilities.getArmorMax() : 90;
+            gamePlayerCombat.applyArmorProfile(initArmor);
+            if (gameplayHudSync && gameplayHudSync.syncSelfCombatHud) {
+                gameplayHudSync.syncSelfCombatHud();
             }
-            runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
+            gameUi.updateAbilityInfo(gameAbilities.getHudState());
 
             options.applyDebugVisuals(false);
 
             var syncedWeapons = options.syncMenuWeaponSlotsToRuntime();
             if (syncedWeapons && syncedWeapons[0]) {
-                options.applyWeapon(runtime.GameHitscan.setWeapon(syncedWeapons[0]));
+                options.applyWeapon(gameHitscan.setWeapon(syncedWeapons[0]));
             } else {
-                options.applyWeapon(runtime.GameHitscan.getCurrentWeapon());
+                options.applyWeapon(gameHitscan.getCurrentWeapon());
             }
 
-            var controlsApi = runtime.GameGameplayControls && runtime.GameGameplayControls.create
-                ? runtime.GameGameplayControls.create({
+            var controlsApi = gameplayControls && gameplayControls.create
+                ? gameplayControls.create({
                     applyWeapon: options.applyWeapon,
                     canUseLocalAction: options.canUseLocalAction,
                     getCamera: function () { return camera; },
+                    getDocsApi: function () {
+                        return runtimeLoader && runtimeLoader.getLoadedDocsRuntime
+                            ? runtimeLoader.getLoadedDocsRuntime()
+                            : null;
+                    },
                     getMultiplayerMode: function () { return multiplayerMode; },
                     handleEnemyHit: options.handleEnemyHit,
                     hasInputCapture: options.hasInputCapture,
@@ -144,7 +173,7 @@
                 })
                 : null;
 
-            installResizeHandler(renderer);
+            installResizeHandler(renderer, depGet('GameBootstrap'));
 
             return {
                 renderer: renderer,

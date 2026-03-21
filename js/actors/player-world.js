@@ -14,6 +14,7 @@
         var playerRadius = Math.max(0, Number(options.playerRadius || 0.35));
         var playerHeight = Math.max(playerRadius, Number(options.playerHeight || 1.7));
         var epsilon = Math.max(0.000001, Number(options.epsilon || 0.001));
+        var collisionBoxesScratch = [];
 
         function getWorldBounds() {
             return runtime.GameWorld.getBounds();
@@ -82,26 +83,33 @@
         }
 
         function getCollisionBoxes() {
-            if (!runtime.GameWorld || !runtime.GameWorld.getCollidables) return [];
+            collisionBoxesScratch.length = 0;
+            if (!runtime.GameWorld || !runtime.GameWorld.getCollidables) return collisionBoxesScratch;
 
             var meshes = runtime.GameWorld.getCollidables();
-            if (!meshes || meshes.length === 0) return [];
+            if (!meshes || meshes.length === 0) return collisionBoxesScratch;
 
-            var boxes = [];
             for (var i = 0; i < meshes.length; i++) {
                 var mesh = meshes[i];
                 if (!mesh) continue;
                 if (!mesh.userData) mesh.userData = {};
 
+                mesh.updateMatrixWorld(true);
                 var box = mesh.userData.collisionBox;
-                if (!box) {
-                    mesh.updateMatrixWorld(true);
-                    box = new THREE.Box3().setFromObject(mesh);
+                var boxMatrix = mesh.userData.collisionBoxMatrixWorld;
+                if (!box || !boxMatrix || !boxMatrix.equals(mesh.matrixWorld)) {
+                    if (!box) box = new THREE.Box3();
+                    box.setFromObject(mesh);
+                    if (!boxMatrix) {
+                        boxMatrix = new THREE.Matrix4();
+                        mesh.userData.collisionBoxMatrixWorld = boxMatrix;
+                    }
+                    boxMatrix.copy(mesh.matrixWorld);
                     mesh.userData.collisionBox = box;
                 }
-                boxes.push(box);
+                collisionBoxesScratch.push(box);
             }
-            return boxes;
+            return collisionBoxesScratch;
         }
 
         function intersectsXZ(x, z, radius, box) {

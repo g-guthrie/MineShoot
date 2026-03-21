@@ -53,6 +53,9 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     var collidables = [];
     var spawnExclusionZones = [];
     var generationStats = null;
+    var activeScene = null;
+    var worldSceneObjects = [];
+    var boxGeometryCache = {};
 
     var animatedWaterfallSheets = [];
     var animatedMistCards = [];
@@ -72,7 +75,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
     GROUND_COLORS[BIOME_CITADEL] = 0xeee9df;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
-    GROUND_COLORS[BIOME_WALL_STREET] = 0x658798;
+    GROUND_COLORS[BIOME_WALL_STREET] = 0x6a6258;
     GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
 
     function cloneWorldFlags(flags) {
@@ -137,6 +140,74 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 
     function quadrantBounds(quadrant) {
         return SHARED_LAYOUT.quadrantBounds(quadrant);
+    }
+
+    function boxGeometryKey(w, h, d) {
+        return [Number(w || 0), Number(h || 0), Number(d || 0)].join('|');
+    }
+
+    function getSharedBoxGeometry(w, h, d) {
+        var key = boxGeometryKey(w, h, d);
+        if (boxGeometryCache[key]) return boxGeometryCache[key];
+        var geometry = new THREE.BoxGeometry(w, h, d);
+        geometry.userData = geometry.userData || {};
+        geometry.userData.__mayhemSharedGeometry = true;
+        boxGeometryCache[key] = geometry;
+        return geometry;
+    }
+
+    function trackWorldObject(object) {
+        if (!object) return object;
+        worldSceneObjects.push(object);
+        return object;
+    }
+
+    function addTrackedObject(targetScene, object) {
+        if (!object) return object;
+        targetScene.add(object);
+        return trackWorldObject(object);
+    }
+
+    function disposeObjectGeometry(object, disposedGeometries) {
+        if (!object || !object.geometry || typeof object.geometry.dispose !== 'function') return;
+        if (object.geometry.userData && object.geometry.userData.__mayhemSharedGeometry) return;
+        if (disposedGeometries.indexOf(object.geometry) !== -1) return;
+        disposedGeometries.push(object.geometry);
+        object.geometry.dispose();
+    }
+
+    function disposeObjectMaterial(object, disposedMaterials) {
+        if (!object || !object.material) return;
+        var materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (var i = 0; i < materials.length; i++) {
+            var material = materials[i];
+            if (!material || typeof material.dispose !== 'function') continue;
+            if (material.userData && material.userData.__mayhemSharedMaterial) continue;
+            if (disposedMaterials.indexOf(material) !== -1) continue;
+            disposedMaterials.push(material);
+            material.dispose();
+        }
+    }
+
+    function clearWorldScene() {
+        if (!activeScene || !worldSceneObjects.length) return;
+        var disposedGeometries = [];
+        var disposedMaterials = [];
+        for (var i = 0; i < worldSceneObjects.length; i++) {
+            var root = worldSceneObjects[i];
+            if (!root) continue;
+            root.traverse(function (object) {
+                disposeObjectGeometry(object, disposedGeometries);
+                disposeObjectMaterial(object, disposedMaterials);
+            });
+            if (root.parent) {
+                root.parent.remove(root);
+            } else {
+                activeScene.remove(root);
+            }
+        }
+        worldSceneObjects = [];
+        activeScene = null;
     }
 
     function biomeAt(x, z) {
@@ -227,6 +298,9 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     // ---------------------------------------------------------------
 
     GameWorld.create = function (scene, options) {
+        clearWorldScene();
+        activeScene = scene;
+
         var meta = normalizeWorldMeta(options && options.worldMeta ? options.worldMeta : null);
         if (meta.worldSeed) {
             setSeed(meta.worldSeed);
@@ -266,25 +340,25 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         }
 
         function addBlock(x, y, z, w, h, d, material, isSolid) {
-            var geo = new THREE.BoxGeometry(w, h, d);
+            var geo = getSharedBoxGeometry(w, h, d);
             var mesh = new THREE.Mesh(geo, material);
             mesh.position.set(x, y, z);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            scene.add(mesh);
+            addTrackedObject(scene, mesh);
             if (isSolid !== false) markSolid(mesh);
             return mesh;
         }
 
         function addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
-            var geo = new THREE.BoxGeometry(w, h, d);
+            var geo = getSharedBoxGeometry(w, h, d);
             var mesh = new THREE.Mesh(geo, material);
             mesh.position.set(x, y, z);
             mesh.rotation.y = rotY || 0;
             mesh.rotation.x = tiltX || 0;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            scene.add(mesh);
+            addTrackedObject(scene, mesh);
             if (isSolid !== false) markSolid(mesh);
             return mesh;
         }
@@ -297,7 +371,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             if (rotZ) mesh.rotation.z = rotZ;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
-            scene.add(mesh);
+            addTrackedObject(scene, mesh);
             return mesh;
         }
 
@@ -308,7 +382,11 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         };
 
         var quadrantCtx = {
-            scene: scene,
+            scene: {
+                add: function (object) {
+                    return addTrackedObject(scene, object);
+                }
+            },
             addExclusion: function (x, z, r) { addSpawnExclusionCircle(x, z, r); },
             addWaterfallSheet: function (data) { animatedWaterfallSheets.push(data); },
             addMistCard: function (data) { animatedMistCards.push(data); },
@@ -354,7 +432,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         var groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
         var ground = new THREE.Mesh(groundGeo, groundMat);
         ground.receiveShadow = true;
-        scene.add(ground);
+        addTrackedObject(scene, ground);
 
         var matLib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
 
@@ -365,7 +443,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         lowerGround.rotation.x = -Math.PI / 2;
         lowerGround.position.set(WORLD_CENTER, -6, WORLD_CENTER);
         lowerGround.receiveShadow = true;
-        scene.add(lowerGround);
+        addTrackedObject(scene, lowerGround);
 
         // --- Biome-themed perimeter walls ---
         (function buildBiomeWalls() {
@@ -423,18 +501,18 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         }
 
         // --- Lighting ---
-        scene.add(new THREE.AmbientLight(0x6a7584, 0.94));
+        addTrackedObject(scene, new THREE.AmbientLight(0x6a7584, 0.94));
 
         var dirLight = new THREE.DirectionalLight(0xfff4d8, 1.12);
         dirLight.position.set(WORLD_CENTER + (WORLD_SIZE * 0.22), WORLD_SIZE * 0.95, WORLD_CENTER - (WORLD_SIZE * 0.12));
         dirLight.castShadow = false;
-        scene.add(dirLight);
+        addTrackedObject(scene, dirLight);
 
-        scene.add(new THREE.HemisphereLight(0xd4e8ff, 0x4d6149, 0.7));
+        addTrackedObject(scene, new THREE.HemisphereLight(0xd4e8ff, 0x4d6149, 0.7));
 
         var arcticFillLight = new THREE.PointLight(0x8ed5ff, 0.32, WORLD_SIZE * 0.95);
         arcticFillLight.position.set(WORLD_CENTER * 0.48, WORLD_SIZE * 0.28, WORLD_CENTER * 0.5);
-        scene.add(arcticFillLight);
+        addTrackedObject(scene, arcticFillLight);
 
         // --- Sky & atmosphere ---
         scene.background = new THREE.Color(0x6a9bc2);
@@ -451,12 +529,12 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
                 root.position.set(cx, cy, cz);
                 root.userData.baseX = cx;
                 root.userData.baseZ = cz;
-                scene.add(root);
+                addTrackedObject(scene, root);
 
                 for (var i = 0; i < cells.length; i++) {
                     var cell = cells[i];
                     var block = new THREE.Mesh(
-                        new THREE.BoxGeometry(
+                        getSharedBoxGeometry(
                             (cell.w || 1) * BLOCK_W,
                             (cell.h || 1) * BLOCK_H,
                             (cell.d || 1) * BLOCK_D

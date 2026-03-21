@@ -1,8 +1,5 @@
-import { LMS_MODE_ID, lmsRules } from './lms-mode.js';
-
 export const MATCH_GAME_MODE_FFA = 'ffa';
 export const MATCH_GAME_MODE_TDM = 'tdm';
-export const MATCH_GAME_MODE_LMS = LMS_MODE_ID;
 export const MATCH_TEAM_ALPHA = 'alpha';
 export const MATCH_TEAM_BRAVO = 'bravo';
 export const MATCH_TEAM_CHARLIE = 'charlie';
@@ -15,7 +12,6 @@ export const MATCH_RESET_DELAY_MS = 5000;
 export function normalizeMatchGameMode(rawMode) {
   const mode = String(rawMode || '').trim().toLowerCase();
   if (mode === MATCH_GAME_MODE_TDM) return MATCH_GAME_MODE_TDM;
-  if (mode === MATCH_GAME_MODE_LMS) return MATCH_GAME_MODE_LMS;
   return MATCH_GAME_MODE_FFA;
 }
 
@@ -103,17 +99,6 @@ export function createMatchState(gameMode, options = {}) {
     winnerId: '',
     winnerTeam: '',
     teamIds: mode === MATCH_GAME_MODE_TDM ? teamIds.slice() : [],
-    lms: mode === MATCH_GAME_MODE_LMS ? {
-      startingLives: lmsRules.startingLives,
-      maxLives: lmsRules.maxLives,
-      chargePerExtraLife: lmsRules.chargePerExtraLife,
-      remainingPlayers: 0,
-      finalBankingCutoffRemaining: lmsRules.finalBankingCutoffRemaining,
-      warmupEndsAt: 0,
-      nextRotateAt: 0,
-      bankingEnabled: false,
-      activeBeacon: null
-    } : null,
     teamProgress: buildTeamStatMap(teamIds, null),
     teamBaselineSize: buildTeamStatMap(teamIds, null)
   };
@@ -152,20 +137,7 @@ export function formatMatchHudCounter(matchState, selfState) {
   if (!match || !match.started) {
     return 'Kills: ' + ownKills;
   }
-
   const mode = normalizeMatchGameMode(match.gameMode);
-  if (mode === MATCH_GAME_MODE_LMS) {
-    if (selfState && selfState.outOfRound && !match.ended) {
-      const remaining = Math.max(0, Number(match.lms && match.lms.remainingPlayers || 0));
-      return 'OUT | Left: ' + remaining;
-    }
-    const lmsLives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
-    const lmsCharge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
-    const chargeGoal = Math.max(1, Number(match.lms && match.lms.chargePerExtraLife || lmsRules.chargePerExtraLife));
-    const remaining = Math.max(0, Number(match.lms && match.lms.remainingPlayers || 0));
-    return 'Lives: ' + lmsLives + ' | Charge: ' + lmsCharge + '/' + chargeGoal + ' | Left: ' + remaining;
-  }
-
   if (mode === MATCH_GAME_MODE_TDM) {
     const teamId = String(selfState && selfState.teamId || '');
     const teamProgress = Number(match.teamProgress && match.teamProgress[teamId] || 0);
@@ -183,11 +155,6 @@ export function formatMatchHudCounter(matchState, selfState) {
 export function formatMenuMatchStats(matchState, selfState) {
   const match = matchState || null;
   const mode = normalizeMatchGameMode(match && match.gameMode);
-  if (mode === MATCH_GAME_MODE_LMS) {
-    const lives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
-    const charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
-    return 'LIVES ' + lives + ' | CHARGE ' + charge;
-  }
   const kills = Math.max(0, Number(selfState && selfState.kills || 0));
   const deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
   return 'KILLS ' + kills + ' | DEATHS ' + deaths;
@@ -222,26 +189,6 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
       ' | OPP ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
   }
 
-  if (mode === MATCH_GAME_MODE_LMS) {
-    if (selfState && selfState.outOfRound) {
-      const remainingOut = Math.max(0, Number(match.lms && match.lms.remainingPlayers || 0));
-      return 'OUT OF ROUND | LEFT ' + remainingOut;
-    }
-    const lives = Math.max(0, Number(selfState && selfState.lmsLives || 0));
-    const charge = Math.max(0, Number(selfState && selfState.lmsCharge || 0));
-    const lms = match.lms || null;
-    const chargeGoal = Math.max(1, Number(lms && lms.chargePerExtraLife || lmsRules.chargePerExtraLife));
-    const remaining = Math.max(0, Number(lms && lms.remainingPlayers || 0));
-    const beaconLabel = lms && lms.activeBeacon && lms.activeBeacon.label ? String(lms.activeBeacon.label) : '---';
-    const beaconClock = lms && Number(lms.nextRotateAt || 0) > 0
-      ? formatSecondsRemaining(Number(lms.nextRotateAt || 0) - nowMs())
-      : '0.0s';
-    return 'LMS ' + lives + ' ' + (lives === 1 ? 'LIFE' : 'LIVES') +
-      ' | CHARGE ' + charge + '/' + chargeGoal +
-      ' | LEFT ' + remaining +
-      ' | BEACON ' + beaconLabel + ' ' + beaconClock;
-  }
-
   const kills = Math.max(0, Number(selfState && selfState.kills || 0));
   return 'FFA ' + kills +
     ' / ' + formatMatchProgress(match.targetProgress, 0) +
@@ -251,7 +198,6 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
 export const matchRules = {
   gameModeFfa: MATCH_GAME_MODE_FFA,
   gameModeTdm: MATCH_GAME_MODE_TDM,
-  gameModeLms: MATCH_GAME_MODE_LMS,
   teamAlpha: MATCH_TEAM_ALPHA,
   teamBravo: MATCH_TEAM_BRAVO,
   teamCharlie: MATCH_TEAM_CHARLIE,

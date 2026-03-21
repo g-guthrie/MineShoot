@@ -1,5 +1,7 @@
 # Mayhem Rewrite Findings
 
+Current terminology: **Offline Sandbox** is the canonical offline mode name.
+
 This document captures the major issues that justified the clean Mayhem rewrite, what the current game got right, and what the rewrite must preserve while fixing the internals.
 
 These are architecture findings, not optional ideas.
@@ -285,7 +287,7 @@ Rewrite rule:
 
 ## Implementation Priorities Derived From These Findings
 
-1. Finish breaking lifecycle ownership out of [js/main.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/main.js) by leaving it as a compatibility entrypoint only.
+1. Finish narrowing the app-owned lifecycle surfaces now centered in [js/app/runtime-session.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-session.js), [js/app/runtime-shell.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-shell.js), and [js/app/runtime-coordinator.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/app/runtime-coordinator.js).
 2. Narrow `GameNet` ownership further so the facade stops acting like the real runtime owner.
 3. Make authoritative self state, predicted self state, and reconciliation explicit.
 4. Split self combat, weapon state, abilities, and throwables into narrow owners with net as transport only.

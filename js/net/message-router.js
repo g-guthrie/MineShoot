@@ -179,7 +179,15 @@
 
     function create(opts) {
         opts = opts || {};
-        var msgTypes = opts.msgTypes || defaultMsgTypes();
+        var msgTypes = defaultMsgTypes();
+        var configuredMsgTypes = opts.msgTypes && typeof opts.msgTypes === 'object' ? opts.msgTypes : null;
+        if (configuredMsgTypes) {
+            for (var key in configuredMsgTypes) {
+                if (Object.prototype.hasOwnProperty.call(configuredMsgTypes, key)) {
+                    msgTypes[key] = configuredMsgTypes[key];
+                }
+            }
+        }
 
         function handleMessage(raw) {
             var msg = null;
@@ -190,12 +198,12 @@
             }
             if (!msg || !msg.t) return;
 
-            if (msg.t === (msgTypes.WELCOME || 'welcome')) {
+            if (msg.t === msgTypes.WELCOME) {
                 handleWelcome(msg, opts);
                 return;
             }
 
-            if (msg.t === (msgTypes.SNAPSHOT || 'snapshot')) {
+            if (msg.t === msgTypes.SNAPSHOT) {
                 opts.setGameMode(String(msg.gameMode || opts.getGameMode() || '').toLowerCase());
                 opts.setPrivateRoomPhase(String(msg.privateRoomPhase || opts.getPrivateRoomPhase() || '').toLowerCase());
                 opts.setMatchState((msg.matchState && typeof msg.matchState === 'object') ? msg.matchState : opts.getMatchState());
@@ -210,7 +218,7 @@
                 return;
             }
 
-            if (msg.t === (msgTypes.THROW_SPAWN || 'throw_spawn')) {
+            if (msg.t === msgTypes.THROW_SPAWN) {
                 pushBounded(opts.throwAckQueue, {
                     projectileId: msg.projectileId || '',
                     ownerId: msg.ownerId || '',
@@ -220,7 +228,7 @@
                 return;
             }
 
-            if (msg.t === (msgTypes.THROW_REJECT || 'throw_reject')) {
+            if (msg.t === msgTypes.THROW_REJECT) {
                 pushBounded(opts.throwRejectQueue, {
                     throwableId: msg.throwableId || '',
                     clientThrowId: msg.clientThrowId || '',
@@ -230,51 +238,56 @@
             }
 
             if (
-                msg.t === (msgTypes.THROW_IMPACT || 'throw_impact') ||
-                msg.t === (msgTypes.THROW_EXPLODE || 'throw_explode') ||
-                msg.t === (msgTypes.AOE_END || 'aoe_end')
+                msg.t === msgTypes.THROW_IMPACT ||
+                msg.t === msgTypes.THROW_EXPLODE ||
+                msg.t === msgTypes.AOE_END
             ) {
                 pushBounded(opts.throwableEventQueue, msg, 64);
                 return;
             }
 
-            if (msg.t === (msgTypes.DAMAGE_EVENT || 'damage_event')) {
+            if (msg.t === msgTypes.DAMAGE_EVENT) {
                 handleDamageEvent(msg, opts);
                 return;
             }
 
-            if (msg.t === (msgTypes.DEATH_RESPAWN || 'death_respawn')) {
+            if (msg.t === msgTypes.DEATH_RESPAWN) {
                 handleDeathRespawn(msg, opts);
                 return;
             }
 
-            if (msg.t === (msgTypes.ABILITY_EVENT || 'ability_event')) {
+            if (msg.t === msgTypes.ABILITY_EVENT) {
                 pushBounded(opts.abilityEventQueue, msg, 32);
                 return;
             }
 
             if (
-                msg.t === (msgTypes.CLASS_CAST_OK || 'class_cast_ok') ||
-                msg.t === (msgTypes.CLASS_CAST_REJECT || 'class_cast_reject')
+                msg.t === msgTypes.CLASS_CAST_OK ||
+                msg.t === msgTypes.CLASS_CAST_REJECT
             ) {
                 pushBounded(opts.classCastResultQueue, msg, 16);
                 return;
             }
 
-            if (msg.t === (msgTypes.CLASS_CHANGED || 'class_changed')) {
+            if (msg.t === msgTypes.CLASS_CHANGED) {
                 handleClassChanged(msg, opts);
                 return;
             }
 
-            if (msg.t === (msgTypes.ERROR || 'error')) {
+            if (msg.t === msgTypes.ERROR) {
                 opts.pushNotice(msg.message || 'Server error');
                 return;
             }
 
-            if (msg.t === (msgTypes.PONG || 'pong')) {
+            if (msg.t === msgTypes.PONG) {
                 if (opts.handlePong) {
                     opts.handlePong(msg, Date.now());
                 }
+                return;
+            }
+
+            if (typeof opts.debugWarn === 'function') {
+                opts.debugWarn('Unhandled GameNet message type "' + String(msg.t) + '".', msg);
             }
         }
 

@@ -114,8 +114,9 @@ function findByDataset(root, key, value) {
 }
 
 async function loadBindingsUiHarness() {
-  const [bindingsCode, modalCode, uiCode] = await Promise.all([
+  const [bindingsCode, domUtilsCode, modalCode, uiCode] = await Promise.all([
     fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/modal-manager.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/input-bindings-ui.js', import.meta.url), 'utf8')
   ]);
@@ -170,6 +171,7 @@ async function loadBindingsUiHarness() {
 
   const context = vm.createContext(sandbox);
   vm.runInContext(bindingsCode, context);
+  vm.runInContext(domUtilsCode, context);
   vm.runInContext(modalCode, context);
   vm.runInContext(uiCode, context);
 

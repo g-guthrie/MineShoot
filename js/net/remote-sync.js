@@ -15,6 +15,10 @@
         return Math.max(min, Math.min(max, value));
     }
 
+    function choosePresentationValue(olderValue, newerValue, t) {
+        return t >= 0.5 ? newerValue : olderValue;
+    }
+
     function remoteInterpolationTuning() {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
         var network = shared.gameplayTuning && shared.gameplayTuning.network
@@ -140,7 +144,14 @@
                 footY: Number(older.footY || 0) + ((Number(newer.footY || 0) - Number(older.footY || 0)) * t),
                 z: Number(older.z || 0) + ((Number(newer.z || 0) - Number(older.z || 0)) * t),
                 yaw: Number(older.yaw || 0) + (normalizeAngle(Number(newer.yaw || 0) - Number(older.yaw || 0)) * t),
-                pitch: Number(older.pitch || 0) + ((Number(newer.pitch || 0) - Number(older.pitch || 0)) * t)
+                pitch: Number(older.pitch || 0) + ((Number(newer.pitch || 0) - Number(older.pitch || 0)) * t),
+                moveSpeedNorm: Number(older.moveSpeedNorm || 0) + ((Number(newer.moveSpeedNorm || 0) - Number(older.moveSpeedNorm || 0)) * t),
+                sprinting: !!choosePresentationValue(!!older.sprinting, !!newer.sprinting, t),
+                movingForward: !!choosePresentationValue(!!older.movingForward, !!newer.movingForward, t),
+                movingBackward: !!choosePresentationValue(!!older.movingBackward, !!newer.movingBackward, t),
+                isGrounded: choosePresentationValue(older.isGrounded !== false, newer.isGrounded !== false, t) !== false,
+                velocityY: Number(older.velocityY || 0) + ((Number(newer.velocityY || 0) - Number(older.velocityY || 0)) * t),
+                muzzleFlashUntil: Number(choosePresentationValue(Number(older.muzzleFlashUntil || 0), Number(newer.muzzleFlashUntil || 0), t) || 0)
             };
         }
 
@@ -162,7 +173,14 @@
                 footY: Number(last.footY || 0),
                 z: Number(last.z || 0),
                 yaw: Number(last.yaw || 0),
-                pitch: Number(last.pitch || 0)
+                pitch: Number(last.pitch || 0),
+                moveSpeedNorm: Number(last.moveSpeedNorm || 0),
+                sprinting: !!last.sprinting,
+                movingForward: !!last.movingForward,
+                movingBackward: !!last.movingBackward,
+                isGrounded: last.isGrounded !== false,
+                velocityY: Number(last.velocityY || 0),
+                muzzleFlashUntil: Number(last.muzzleFlashUntil || 0)
             };
         }
         var stepMs = Math.max(1, Number(last.serverTime || 0) - Number(prev.serverTime || 0));
@@ -182,7 +200,14 @@
             footY: Number(last.footY || 0) + ((Number(last.footY || 0) - Number(prev.footY || 0)) * extrapolationScale),
             z: Number(last.z || 0) + ((Number(last.z || 0) - Number(prev.z || 0)) * extrapolationScale),
             yaw: Number(last.yaw || 0) + (normalizeAngle(Number(last.yaw || 0) - Number(prev.yaw || 0)) * extrapolationScale),
-            pitch: Number(last.pitch || 0) + ((Number(last.pitch || 0) - Number(prev.pitch || 0)) * extrapolationScale)
+            pitch: Number(last.pitch || 0) + ((Number(last.pitch || 0) - Number(prev.pitch || 0)) * extrapolationScale),
+            moveSpeedNorm: Number(last.moveSpeedNorm || 0),
+            sprinting: !!last.sprinting,
+            movingForward: !!last.movingForward,
+            movingBackward: !!last.movingBackward,
+            isGrounded: last.isGrounded !== false,
+            velocityY: Number(last.velocityY || 0),
+            muzzleFlashUntil: Number(last.muzzleFlashUntil || 0)
         };
     }
 
@@ -209,6 +234,7 @@
             var nextYaw = bufferedTransform
                 ? renderYaw
                 : (r.group.rotation.y + (normalizeAngle(renderYaw - r.group.rotation.y) * lerp));
+            var presentState = bufferedTransform || r;
 
             if (r.actorVisual && r.actorVisual.setWorldTransform) {
                 r.actorVisual.setWorldTransform({ x: nextX, y: nextY, z: nextZ }, nextYaw);
@@ -238,9 +264,9 @@
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
                     animationApi.updateAnimation(dt, {
-                        speedNorm: r.moveSpeedNorm || 0,
-                        sprinting: !!r.sprinting,
-                        airborne: r.isGrounded === false,
+                        speedNorm: presentState.moveSpeedNorm || 0,
+                        sprinting: !!presentState.sprinting,
+                        airborne: presentState.isGrounded === false,
                         aimPitch: renderPitch,
                         hooked: hookedNow,
                         hookStartedAt: toLocalTime(r.hookedStartedAt),
@@ -250,22 +276,28 @@
                         reloadPct: remoteReloadState.reloadPct,
                         reloadPhase: remoteReloadState.phase,
                         reloadPhasePct: remoteReloadState.phasePct,
-                        worldSpeed: (r.moveSpeedNorm || 0) * 14,
-                        movingForward: !!r.movingForward,
-                        movingBackward: !!r.movingBackward
+                        worldSpeed: (presentState.moveSpeedNorm || 0) * 14,
+                        movingForward: !!presentState.movingForward,
+                        movingBackward: !!presentState.movingBackward
                     });
                 }
                 var triggerApi = (r.actorVisual && r.actorVisual.triggerAction) ? r.actorVisual : r.rigApi;
                 if (triggerApi && triggerApi.triggerAction) {
-                    var jumpStarted = r._prevIsGrounded !== false && r.isGrounded === false && Number(r.velocityY || 0) > 0.1;
+                    var jumpStarted = r._prevIsGrounded !== false && presentState.isGrounded === false && Number(presentState.velocityY || 0) > 0.1;
                     if (jumpStarted) {
                         triggerApi.triggerAction('jump', {
-                            reverseLegTilt: !!r.movingBackward && !r.movingForward
+                            reverseLegTilt: !!presentState.movingBackward && !presentState.movingForward
                         });
                     }
                 }
+                var muzzleVisible = Number(presentState.muzzleFlashUntil || 0) > serverNowMs;
                 if (r.actorVisual && r.actorVisual.setMuzzleVisible) {
-                    r.actorVisual.setMuzzleVisible((r.muzzleFlashUntil || 0) > serverNowMs);
+                    r.actorVisual.setMuzzleVisible(muzzleVisible);
+                }
+                if (triggerApi && triggerApi.triggerAction) {
+                    if (muzzleVisible && !r._muzzleVisible) {
+                        triggerApi.triggerAction('fire', { duration: 0.09, strength: 1 });
+                    }
                 }
                 if (triggerApi && triggerApi.triggerAction) {
                     if (r.chokeState && r.chokeState.endsAt > serverNowMs) {
@@ -279,7 +311,8 @@
                         r._chokeGripTriggered = false;
                     }
                 }
-                r._prevIsGrounded = r.isGrounded !== false;
+                r._muzzleVisible = muzzleVisible;
+                r._prevIsGrounded = presentState.isGrounded !== false;
             }
 
             if (r.actorVisual && r.actorVisual.setHealFlash) {

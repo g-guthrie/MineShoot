@@ -1,5 +1,4 @@
 import { cloneWorldFlags } from '../../../shared/protocol.js';
-import { lmsRules } from '../../../shared/lms-mode.js';
 
 const SNAPSHOT_SELF_CADENCE_MS = 1000 / 60;
 const SNAPSHOT_ENGAGED_CADENCE_MS = 1000 / 60;
@@ -57,17 +56,6 @@ export function serializeMatchState(room, deps) {
     winnerId: match.winnerId || '',
     winnerTeam: match.winnerTeam || '',
     teamIds: teamIds,
-    lms: match.lms ? {
-      startingLives: Number(match.lms.startingLives || lmsRules.startingLives),
-      maxLives: Number(match.lms.maxLives || lmsRules.maxLives),
-      chargePerExtraLife: Number(match.lms.chargePerExtraLife || lmsRules.chargePerExtraLife),
-      remainingPlayers: Number(match.lms.remainingPlayers || 0),
-      finalBankingCutoffRemaining: Number(match.lms.finalBankingCutoffRemaining || lmsRules.finalBankingCutoffRemaining),
-      warmupEndsAt: Number(match.lms.warmupEndsAt || 0),
-      nextRotateAt: Number(match.lms.nextRotateAt || 0),
-      bankingEnabled: !!match.lms.bankingEnabled,
-      activeBeacon: match.lms.activeBeacon ? { ...match.lms.activeBeacon } : null
-    } : null,
     teamProgress: teamProgress,
     teamBaselineSize: teamBaselineSize
   };

@@ -106,7 +106,10 @@ class FakeWindow {
 }
 
 async function loadRuntimeSessionHarness() {
-  const code = await fs.readFile(new URL('../../js/app/runtime-session.js', import.meta.url), 'utf8');
+  const [domUtilsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/app/runtime-session.js', import.meta.url), 'utf8')
+  ]);
 
   let nowMs = 0;
   let perfNowMs = 0;
@@ -199,7 +202,9 @@ async function loadRuntimeSessionHarness() {
   sandbox.globalThis.document = document;
   sandbox.globalThis.CustomEvent = FakeCustomEvent;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(domUtilsCode, context);
+  vm.runInContext(code, context);
 
   const session = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeSession.create({
     isRuntimeReady() {

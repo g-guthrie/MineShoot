@@ -26,7 +26,10 @@ class FakeElement {
 }
 
 async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
-  const code = await fs.readFile(new URL('../../js/app/menu-shell.js', import.meta.url), 'utf8');
+  const [domUtilsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/app/menu-shell.js', import.meta.url), 'utf8')
+  ]);
   const elements = {
     'open-manual-btn': new FakeElement('button', 'open-manual-btn'),
     'hud-manual-btn': new FakeElement('button', 'hud-manual-btn'),
@@ -81,7 +84,9 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
     console
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(domUtilsCode, context);
+  vm.runInContext(code, context);
 
   return {
     authUsername: elements['auth-username'],

@@ -14,6 +14,11 @@
     var hookTmpPos = new THREE.Vector3();
     var hookTmpDir = new THREE.Vector3();
     var hookTmpLook = new THREE.Vector3();
+    var hookSelfStart = new THREE.Vector3();
+    var hookSelfEnd = new THREE.Vector3();
+    var hookRemoteStart = new THREE.Vector3();
+    var hookRemoteEnd = new THREE.Vector3();
+    var hookTargetScratch = new THREE.Vector3();
 
     function netView() {
         var net = runtime.GameNet || null;
@@ -63,17 +68,14 @@
 
     function createHookVisual() {
         if (!sceneRef) return null;
-
         var chainSegments = [];
         for (var i = 0; i < 12; i++) {
             var seg = createChainSegment(i);
             sceneRef.add(seg);
             chainSegments.push(seg);
         }
-
         var head = createHookHead();
         sceneRef.add(head);
-
         return {
             chainSegments: chainSegments,
             head: head,
@@ -92,6 +94,62 @@
         }
         if (visual.head) visual.head.visible = false;
         visual.seeded = false;
+    }
+
+    function disposeRenderable(node, disposedGeometries, disposedMaterials) {
+        if (!node) return;
+        if (node.parent) node.parent.remove(node);
+        if (node.traverse) {
+            node.traverse(function (child) {
+                if (child && child.geometry && disposedGeometries.indexOf(child.geometry) === -1) {
+                    disposedGeometries.push(child.geometry);
+                    child.geometry.dispose();
+                }
+                var materials = child && child.material
+                    ? (Array.isArray(child.material) ? child.material : [child.material])
+                    : [];
+                for (var i = 0; i < materials.length; i++) {
+                    var material = materials[i];
+                    if (material && disposedMaterials.indexOf(material) === -1) {
+                        disposedMaterials.push(material);
+                        material.dispose();
+                    }
+                }
+            });
+            return;
+        }
+        if (node.geometry && disposedGeometries.indexOf(node.geometry) === -1) {
+            disposedGeometries.push(node.geometry);
+            node.geometry.dispose();
+        }
+        var mats = node.material ? (Array.isArray(node.material) ? node.material : [node.material]) : [];
+        for (var mi = 0; mi < mats.length; mi++) {
+            if (mats[mi] && disposedMaterials.indexOf(mats[mi]) === -1) {
+                disposedMaterials.push(mats[mi]);
+                mats[mi].dispose();
+            }
+        }
+    }
+
+    function disposeHookVisual(visual) {
+        if (!visual) return;
+        var disposedGeometries = [];
+        var disposedMaterials = [];
+        if (visual.chainSegments) {
+            for (var i = 0; i < visual.chainSegments.length; i++) {
+                disposeRenderable(visual.chainSegments[i], disposedGeometries, disposedMaterials);
+            }
+        }
+        disposeRenderable(visual.head, disposedGeometries, disposedMaterials);
+    }
+
+    function clearAllVisuals() {
+        disposeHookVisual(selfHookVisual);
+        selfHookVisual = null;
+        remoteHookVisuals.forEach(function (visual) {
+            disposeHookVisual(visual);
+        });
+        remoteHookVisuals.clear();
     }
 
     function setHookVisual(visual, start, end) {
@@ -142,54 +200,68 @@
         var existing = remoteHookVisuals.get(entityId);
         if (existing) return existing;
         existing = createHookVisual();
-        remoteHookVisuals.set(entityId, existing);
+        if (existing) remoteHookVisuals.set(entityId, existing);
         return existing;
     }
 
-    function playerCoreWorldPosition() {
+    function destroyRemoteHookVisual(entityId) {
+        var existing = remoteHookVisuals.get(entityId);
+        if (!existing) return;
+        disposeHookVisual(existing);
+        remoteHookVisuals.delete(entityId);
+    }
+
+    function playerCoreWorldPosition(out) {
         if (runtime.GamePlayer && runtime.GamePlayer.getCoreWorldPosition) {
-            return runtime.GamePlayer.getCoreWorldPosition();
+            var core = runtime.GamePlayer.getCoreWorldPosition();
+            if (core) return out.copy(core);
         }
         return null;
     }
 
-    function playerHookOriginWorldPosition() {
+    function playerHookOriginWorldPosition(out) {
         if (runtime.GamePlayer && runtime.GamePlayer.getThrowableOriginWorldPosition) {
-            return runtime.GamePlayer.getThrowableOriginWorldPosition();
+            var origin = runtime.GamePlayer.getThrowableOriginWorldPosition();
+            if (origin) return out.copy(origin);
         }
-        return playerCoreWorldPosition();
+        return playerCoreWorldPosition(out);
     }
 
-    function localEnemyCoreByTargetId(targetId) {
+    function localEnemyCoreByTargetId(targetId, out) {
         if (!targetId || !runtime.GameEnemy || !runtime.GameEnemy.getLockTargets) return null;
         var targets = runtime.GameEnemy.getLockTargets() || [];
         for (var i = 0; i < targets.length; i++) {
             var target = targets[i];
-            if (target && String(target.targetId || '') === String(targetId) && target.worldPos) return target.worldPos;
+            if (target && String(target.targetId || '') === String(targetId) && target.worldPos) {
+                return out.copy(target.worldPos);
+            }
         }
         return null;
     }
 
-    function netEntityHookAttachById(targetId) {
+    function netEntityHookAttachById(targetId, out) {
         if (!targetId) return null;
         if (runtime.GameNetEntities && runtime.GameNetEntities.getCoreWorldPosition) {
-            var core = runtime.GameNetEntities.getCoreWorldPosition(targetId, new THREE.Vector3());
-            if (core) return core;
+            var core = runtime.GameNetEntities.getCoreWorldPosition(targetId, out);
+            if (core) return out.copy(core);
         }
         var netApi = netView();
         if (netApi && netApi.getEntityMarkerWorldPos) {
-            return netApi.getEntityMarkerWorldPos(targetId);
+            var marker = netApi.getEntityMarkerWorldPos(targetId);
+            if (marker) return out.copy(marker);
         }
         return null;
     }
 
-    function hookVisualEndWorldPosition(state, resolveTargetPosition) {
+    function hookVisualEndWorldPosition(state, resolveTargetPosition, out) {
         var abilityFxView = runtime.GameAbilityFx || null;
         var resolved = abilityFxView && abilityFxView.resolveHookVisualEnd
-            ? abilityFxView.resolveHookVisualEnd(state, resolveTargetPosition)
+            ? abilityFxView.resolveHookVisualEnd(state, function (targetId) {
+                return resolveTargetPosition(targetId, hookTargetScratch);
+            })
             : null;
         if (!resolved) return null;
-        return new THREE.Vector3(Number(resolved.x || 0), Number(resolved.y || 0), Number(resolved.z || 0));
+        return out.set(Number(resolved.x || 0), Number(resolved.y || 0), Number(resolved.z || 0));
     }
 
     function renderSelf(multiplayerMode) {
@@ -204,16 +276,16 @@
 
         var selfVisual = ensureSelfHookVisual();
         if (!selfVisual) return;
-
         if (!selfState) {
             hideHookVisual(selfVisual);
             return;
         }
 
-        var selfStart = playerHookOriginWorldPosition();
+        var selfStart = playerHookOriginWorldPosition(hookSelfStart);
         var selfEnd = hookVisualEndWorldPosition(
             selfState,
-            multiplayerMode ? netEntityHookAttachById : localEnemyCoreByTargetId
+            multiplayerMode ? netEntityHookAttachById : localEnemyCoreByTargetId,
+            hookSelfEnd
         );
         setHookVisual(selfVisual, selfStart, selfEnd);
     }
@@ -226,20 +298,26 @@
                 var hookState = render && render.hookState ? render.hookState : null;
                 if (!hookState) return;
                 var start = runtime.GameNetEntities.getHookOriginWorldPosition
-                    ? runtime.GameNetEntities.getHookOriginWorldPosition(entityId, new THREE.Vector3())
-                    : new THREE.Vector3(render.group.position.x, render.group.position.y + 1.0, render.group.position.z);
-                var end = hookVisualEndWorldPosition(hookState, netEntityHookAttachById);
+                    ? runtime.GameNetEntities.getHookOriginWorldPosition(entityId, hookRemoteStart)
+                    : hookRemoteStart.set(
+                        Number(render.group && render.group.position && render.group.position.x || 0),
+                        Number(render.group && render.group.position && render.group.position.y || 0) + 1.0,
+                        Number(render.group && render.group.position && render.group.position.z || 0)
+                    );
+                var end = hookVisualEndWorldPosition(hookState, netEntityHookAttachById, hookRemoteEnd);
                 var visual = ensureRemoteHookVisual(entityId);
+                if (!visual) return;
                 setHookVisual(visual, start, end);
                 activeRemote[entityId] = true;
             });
         }
-        remoteHookVisuals.forEach(function (visual, entityId) {
-            if (!activeRemote[entityId]) hideHookVisual(visual);
+        remoteHookVisuals.forEach(function (_visual, entityId) {
+            if (!activeRemote[entityId]) destroyRemoteHookVisual(entityId);
         });
     }
 
     GameHookVisuals.init = function (scene) {
+        clearAllVisuals();
         sceneRef = scene || null;
     };
 
@@ -250,8 +328,8 @@
             renderRemote();
             return;
         }
-        remoteHookVisuals.forEach(function (visual) {
-            hideHookVisual(visual);
+        remoteHookVisuals.forEach(function (_visual, entityId) {
+            destroyRemoteHookVisual(entityId);
         });
     };
 

@@ -16,7 +16,6 @@
     "push:main": "./scripts/push-main.sh",
     "blender:check": "zsh -lic 'Blender --version'",
     "blender:export": "./scripts/blender-export.sh",
-    "maps:biomes": "node scripts/generate-biome-ascii-maps.js",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "test:smoke": "node --experimental-default-type=module --test tests",

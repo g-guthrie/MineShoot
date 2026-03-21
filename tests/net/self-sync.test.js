@@ -189,47 +189,6 @@ test('GameNetSelfSync only reapplies combat weapon state when the authoritative 
   assert.equal(hitscanSyncCalls, 0);
 });
 
-test('GameNetSelfSync locks the player out for the rest of an LMS round when out of round', async () => {
-  const harness = await loadSelfSyncHarness({
-    GameNet: {
-      getMatchState() {
-        return {
-          gameMode: 'lms',
-          started: true,
-          ended: false,
-          resetAt: 4200
-        };
-      }
-    }
-  });
-  harness.syncPlayerState({
-    id: 'usr_test',
-    alive: false,
-    outOfRound: true,
-    stunUntil: 0,
-    spawnShieldUntil: 0,
-    weaponLockUntil: 0,
-    throwableLockUntil: 0,
-    abilityLockUntil: 0,
-    abilityFx: null
-  }, 0.05);
-
-  assert.deepEqual(harness.statusCalls.at(-1), {
-    stunUntil: 86401000,
-    hookPullStartedAt: 0,
-    hookPullUntil: 0,
-    chokeStartedAt: 0,
-    chokeUntil: 0,
-    chokeLift: 0,
-    spawnShieldUntil: 0
-  });
-  assert.deepEqual(harness.actionRestrictionCalls.at(-1), {
-    weaponUntil: 86401000,
-    throwableUntil: 86401000,
-    abilityUntil: 86401000
-  });
-});
-
 test('GameNetSelfSync enables replay correction when reconciling authoritative motion', async () => {
   const harness = await loadSelfSyncHarness({
     GameNet: {

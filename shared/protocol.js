@@ -118,8 +118,6 @@ export function normalizeClassCastPayload(slot, castData) {
 }
 
 export const MSG_C2S = {
-  JOIN_ROOM: 'join_room',
-  LEAVE_ROOM: 'leave_room',
   INPUT: 'input',
   FIRE: 'fire',
   RELOAD: 'reload',

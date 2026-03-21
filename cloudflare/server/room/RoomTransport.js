@@ -58,7 +58,7 @@ function handleWebSocketRequest(room, request, url) {
 
   const userId = url.searchParams.get('userId');
   const username = url.searchParams.get('username') || 'player';
-  const classId = 'abilities';
+  const classId = String(url.searchParams.get('classId') || request.headers.get('X-Class-Id') || 'abilities').trim() || 'abilities';
   const actorId = String(url.searchParams.get('actorId') || request.headers.get('X-Actor-Id') || userId || '').trim();
   const actorName = String(url.searchParams.get('actorName') || request.headers.get('X-Actor-Name') || username || '').trim();
 
@@ -67,15 +67,6 @@ function handleWebSocketRequest(room, request, url) {
   }
   if (room.privateRoomConfig && room.privateRoomConfig.teams.size > 0 && !room.privateRoomConfig.teams.has(actorId)) {
     return new Response('Private room access denied.', { status: 403 });
-  }
-  if (
-    String(room.gameMode || '').toLowerCase() === 'lms' &&
-    room.matchState &&
-    room.matchState.started &&
-    !room.matchState.ended &&
-    !room.players.has(userId)
-  ) {
-    return new Response('LMS match already in progress.', { status: 409 });
   }
 
   const pair = new WebSocketPair();
@@ -112,9 +103,19 @@ function handleWebSocketRequest(room, request, url) {
   return new Response(null, { status: 101, webSocket: client });
 }
 
+function resolveRequestedRoomId(room, url) {
+  const requestedRoomId = sanitizeRoomId(url.searchParams.get('roomId') || '');
+  const currentRoomId = sanitizeRoomId(room.roomName || '');
+  const defaultRoomId = sanitizeRoomId(room.env.ROOM_NAME || 'global');
+  if (requestedRoomId && (!currentRoomId || currentRoomId === defaultRoomId)) {
+    return requestedRoomId;
+  }
+  return currentRoomId || requestedRoomId || defaultRoomId;
+}
+
 export async function handleRoomRequest(room, request) {
   const url = new URL(request.url);
-  const nextRoomId = sanitizeRoomId(url.searchParams.get('roomId') || room.roomName || room.env.ROOM_NAME || 'global');
+  const nextRoomId = resolveRequestedRoomId(room, url);
   const needsWorldRefresh =
     String(room.roomName || '') !== String(nextRoomId) ||
     !room.worldCollision ||

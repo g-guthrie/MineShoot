@@ -6,8 +6,14 @@ import * as THREE from 'three';
 
 import { gameplayTuning } from '../../shared/gameplay-tuning.js';
 
-async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides = {}) {
-  const code = await fs.readFile(new URL('../../js/combat/throwables.js', import.meta.url), 'utf8');
+async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides = {}, options = {}) {
+  const [projectileRuntimeCode, trajectoryCode, fireZonesCode, authoritativeSyncCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/combat/throwables-projectile-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/throwables-trajectory.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/throwables-fire-zones.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/throwables-authoritative-sync.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/throwables.js', import.meta.url), 'utf8')
+  ]);
   const scene = new THREE.Scene();
   const timeState = { now: 1000 };
   const runtime = {
@@ -36,13 +42,24 @@ async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides =
     }
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(projectileRuntimeCode, context);
+  vm.runInContext(trajectoryCode, context);
+  vm.runInContext(fireZonesCode, context);
+  vm.runInContext(authoritativeSyncCode, context);
+  vm.runInContext(code, context);
   const GameThrowables = sandbox.__MAYHEM_RUNTIME.GameThrowables;
-  GameThrowables.init(scene);
+  if (!options.skipInit) {
+    GameThrowables.init(scene);
+  }
   return {
     GameThrowables,
     scene,
-    timeState
+    timeState,
+    runtime: sandbox.__MAYHEM_RUNTIME,
+    init() {
+      GameThrowables.init(scene);
+    }
   };
 }
 
@@ -87,6 +104,52 @@ test('throwables runtime falls back to id labels when shared defs are missing', 
   assert.equal(state.frag.label, 'FRAG');
   assert.equal(state.knife.label, 'KNIFE');
   assert.equal(state.plasma.charges, 1);
+});
+
+test('throwables runtime refreshes shared tuning that arrives after module evaluation', async () => {
+  const harness = await loadThrowablesHarness({}, {
+    GameShared: {},
+    GameCombatTuning: {}
+  }, {
+    skipInit: true
+  });
+
+  harness.runtime.GameShared = {
+    gameplayTuning
+  };
+  harness.runtime.GameCombatTuning = {
+    getThrowableDistanceTuning() {
+      return {
+        fragRadius: 5.4,
+        plasmaRadius: 5.0,
+        plasmaCatchRadius: 1.5,
+        missileRadius: 2.4,
+        molotovFireRadius: 3.2,
+        plasmaAcquireRange: 18,
+        plasmaAcquireHalfAngleDeg: 35,
+        plasmaStickExplodeDelay: 2.2
+      };
+    },
+    getThrowableMechanicsTuning() {
+      return {
+        aimRayRange: 100,
+        fragBounceMaxCount: 2,
+        fragBounceVelocityDamping: 0.4,
+        fragBounceVerticalDamping: 0.42,
+        fragBounceStopSpeedSq: 2.5,
+        predictedTtlMs: 5000,
+        throwIntentOriginMaxOffset: 1.2,
+        throwIntentDirectionMinDot: -0.2
+      };
+    }
+  };
+
+  harness.init();
+  const missileTuning = harness.GameThrowables.getMissileTuning();
+
+  assert.ok(missileTuning);
+  assert.equal(missileTuning.speed, gameplayTuning.throwables.missile.speed);
+  assert.deepEqual(harness.GameThrowables.getTypes(), gameplayTuning.throwables.order);
 });
 
 test('throwables runtime eases remote projectile meshes toward new authoritative positions', async () => {
@@ -179,6 +242,57 @@ test('throwables runtime attaches remote stuck plasma to the authoritative targe
   assert.equal(mesh.position.x, 10.2);
   assert.equal(mesh.position.y, 1.1);
   assert.equal(mesh.position.z, -4.3);
+});
+
+test('throwables runtime attaches stuck plasma to the local self position when the authoritative target is the player', async () => {
+  const harness = await loadThrowablesHarness(gameplayTuning, {
+    GameShared: {
+      gameplayTuning,
+      entityConstants: {
+        EYE_HEIGHT: 1.6
+      }
+    },
+    GameNet: {
+      getAuthoritativeSelfState() {
+        return { id: 'usr_self' };
+      }
+    },
+    GamePlayer: {
+      getPosition() {
+        return { x: 3, y: 1.6, z: -2 };
+      }
+    }
+  });
+  const { GameThrowables, scene } = harness;
+
+  GameThrowables.syncAuthoritativeState({
+    projectiles: [{
+      id: 'proj_self_stuck',
+      type: 'plasma',
+      ownerId: 'usr_other',
+      x: 0,
+      y: 0,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      age: 1.2,
+      stickyUntil: 2200,
+      stuckToTargetId: 'usr_self',
+      stuckOffsetX: 0.2,
+      stuckOffsetY: 0.1,
+      stuckOffsetZ: -0.3
+    }],
+    fireZones: []
+  }, 'usr_self');
+
+  const mesh = scene.children.find((node) => node && node.userData && node.userData.projectileType === 'plasma');
+  assert.ok(mesh);
+  GameThrowables.update(0.016, function () {});
+
+  assert.equal(mesh.position.x, 3.2);
+  assert.equal(mesh.position.y, 1.1);
+  assert.equal(mesh.position.z, -2.3);
 });
 
 test('plasma grenade stays ballistic instead of steering toward nearby enemies after launch', async () => {

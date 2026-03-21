@@ -7,10 +7,6 @@
 
     var GameNetAuth = {};
 
-    var PROTOCOL = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol) ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol : null;
-    var AUTH_PATH = (PROTOCOL && PROTOCOL.authPath) ? PROTOCOL.authPath : {};
-    var PROFILE_PATH = (PROTOCOL && PROTOCOL.profilePath) ? PROTOCOL.profilePath : {};
-
     var AUTH_COOKIE_HELP = 'Any unique username + 4-digit PIN';
 
     var user = null;
@@ -77,6 +73,22 @@
         return globalThis.__MAYHEM_RUNTIME.GameRuntimeProfile || null;
     }
 
+    function protocolConfig() {
+        return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.protocol)
+            ? globalThis.__MAYHEM_RUNTIME.GameShared.protocol
+            : null;
+    }
+
+    function authPathConfig() {
+        var protocol = protocolConfig();
+        return (protocol && protocol.authPath) ? protocol.authPath : {};
+    }
+
+    function profilePathConfig() {
+        var protocol = protocolConfig();
+        return (protocol && protocol.profilePath) ? protocol.profilePath : {};
+    }
+
     function selectedMode() {
         var runtime = runtimeProfile();
         return (runtime && runtime.getSelectedMode) ? runtime.getSelectedMode() : null;
@@ -101,24 +113,68 @@
         return path;
     }
 
+    function locationHref() {
+        if (window && window.location && window.location.href) {
+            return String(window.location.href);
+        }
+        if (globalThis.location && globalThis.location.href) {
+            return String(globalThis.location.href);
+        }
+        return 'https://mayhem.invalid/';
+    }
+
+    function resolveUrlForComparison(url) {
+        if (typeof URL !== 'function') return null;
+        try {
+            return new URL(String(url || ''), locationHref());
+        } catch (_err) {
+            return null;
+        }
+    }
+
+    function apiOriginSet() {
+        var origins = {};
+        var authOrigin = resolveUrlForComparison(resolveApiUrl(authPathConfig().me || '/api/me'));
+        var profileOrigin = resolveUrlForComparison(resolveApiUrl(profilePathConfig().me || '/api/profile/me'));
+        if (authOrigin && authOrigin.origin) {
+            origins[authOrigin.origin] = true;
+        }
+        if (profileOrigin && profileOrigin.origin) {
+            origins[profileOrigin.origin] = true;
+        }
+        return origins;
+    }
+
+    function isAllowedApiRequestUrl(url) {
+        if (typeof URL !== 'function') return true;
+        var requestUrl = resolveUrlForComparison(url);
+        if (!requestUrl || !requestUrl.origin) return false;
+        var allowedOrigins = apiOriginSet();
+        return !!allowedOrigins[requestUrl.origin];
+    }
+
     function sessionMeUrl() {
-        return resolveApiUrl(AUTH_PATH.me || '/api/me');
+        return authPathConfig().me || '/api/me';
     }
 
     function sessionLoginUrl() {
-        return resolveApiUrl(AUTH_PATH.login || '/api/auth/login');
+        return authPathConfig().login || '/api/auth/login';
     }
 
     function sessionLogoutUrl() {
-        return resolveApiUrl(AUTH_PATH.logout || '/api/auth/logout');
+        return authPathConfig().logout || '/api/auth/logout';
     }
 
     function profileMeUrl() {
-        return resolveApiUrl(PROFILE_PATH.me || '/api/profile/me');
+        return profilePathConfig().me || '/api/profile/me';
     }
 
     function apiFetch(url, options) {
         options = options || {};
+        var requestUrl = resolveApiUrl(url);
+        if (!isAllowedApiRequestUrl(requestUrl)) {
+            return Promise.reject(new Error('Refusing to send auth cookies to an unexpected origin.'));
+        }
         var cfg = {
             method: options.method || 'GET',
             headers: options.headers || {},
@@ -127,7 +183,7 @@
         if (options.body !== undefined) {
             cfg.body = options.body;
         }
-        return fetch(resolveApiUrl(url), cfg);
+        return fetch(requestUrl, cfg);
     }
 
     function parseApiBody(text) {
@@ -207,14 +263,7 @@
         return socketPlayerId;
     }
 
-    function makePublicSessionUser() {
-        return normalizeGuestIdentity({
-            id: getSocketPlayerId(),
-            classId: 'abilities'
-        });
-    }
-
-    function makeMenuGuestUser() {
+    function makeGuestUser() {
         return normalizeGuestIdentity({
             id: getSocketPlayerId(),
             classId: 'abilities'
@@ -223,7 +272,7 @@
 
     function writePublicSessionUser(nextUser) {
         var store = sessionStore();
-        publicSessionUser = normalizeGuestIdentity(nextUser || makePublicSessionUser());
+        publicSessionUser = normalizeGuestIdentity(nextUser || makeGuestUser());
         if (store) {
             try {
                 store.setItem(SOCKET_PLAYER_ID_KEY, socketPlayerId);
@@ -333,7 +382,7 @@
                 }
             }
             if (!publicSessionUser || typeof publicSessionUser !== 'object') {
-                publicSessionUser = makePublicSessionUser();
+                publicSessionUser = makeGuestUser();
             }
             publicSessionUser = normalizeGuestIdentity(publicSessionUser);
             writePublicSessionUser(publicSessionUser);
@@ -343,7 +392,7 @@
 
     function getMenuGuestUser() {
         if (!menuGuestUser || String(menuGuestUser.id || '') !== String(getSocketPlayerId() || '')) {
-            menuGuestUser = normalizeGuestIdentity(makeMenuGuestUser());
+            menuGuestUser = makeGuestUser();
         }
         return menuGuestUser;
     }

@@ -1,5 +1,83 @@
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 
+const MIN_INPUT_SAMPLE_DT_SEC = 1 / 240;
+const MAX_INPUT_SAMPLE_DT_SEC = 0.075;
+const MAX_INPUT_QUEUE_SIZE = 96;
+
+function cloneInputState(inputState, createMovementInputState) {
+  const base = typeof createMovementInputState === 'function'
+    ? (createMovementInputState() || {})
+    : {};
+  const source = inputState && typeof inputState === 'object' ? inputState : {};
+  base.forward = !!source.forward;
+  base.backward = !!source.backward;
+  base.left = !!source.left;
+  base.right = !!source.right;
+  base.jump = !!source.jump;
+  base.sprint = !!source.sprint;
+  base.adsActive = !!source.adsActive;
+  return base;
+}
+
+function clampInputSampleDtSec(dtMs) {
+  const parsedMs = Number(dtMs || 0);
+  const dtSec = Number.isFinite(parsedMs) ? (parsedMs / 1000) : 0;
+  return Math.max(MIN_INPUT_SAMPLE_DT_SEC, Math.min(MAX_INPUT_SAMPLE_DT_SEC, dtSec || 0));
+}
+
+function normalizeInputSample(player, msg, deps) {
+  deps = deps || {};
+  const clamp = deps.clamp;
+  const movementLocked = !!deps.movementLocked;
+  const createMovementInputState = deps.createMovementInputState;
+  const fallbackYaw = Number(player && player.yaw || 0);
+  const fallbackPitch = Number(player && player.pitch || 0);
+  const nextYaw = typeof msg.yaw !== 'number'
+    ? fallbackYaw
+    : Number(msg.yaw || 0);
+  const nextPitch = typeof msg.pitch !== 'number'
+    ? fallbackPitch
+    : (clamp ? clamp(msg.pitch, -1.55, 1.55) : Number(msg.pitch || 0));
+  return {
+    seq: Math.max(0, Math.floor(Number(msg.seq || 0))),
+    dtMs: Math.max(0, Number(msg.dtMs || 0)),
+    yaw: nextYaw,
+    pitch: nextPitch,
+    movementLocked,
+    inputState: cloneInputState({
+      forward: !!msg.forward,
+      backward: !!msg.backward,
+      left: !!msg.left,
+      right: !!msg.right,
+      jump: !!msg.jump,
+      sprint: !!msg.sprint,
+      adsActive: !!msg.adsActive
+    }, createMovementInputState)
+  };
+}
+
+function ensureInputQueue(entity) {
+  if (!entity) return [];
+  if (!Array.isArray(entity.inputQueue)) entity.inputQueue = [];
+  return entity.inputQueue;
+}
+
+function insertInputSample(queue, sample) {
+  if (!Array.isArray(queue) || !sample || !(sample.seq > 0)) return false;
+  for (let i = 0; i < queue.length; i++) {
+    const queuedSeq = Math.max(0, Number(queue[i] && queue[i].seq || 0));
+    if (queuedSeq === sample.seq) return false;
+    if (queuedSeq > sample.seq) {
+      queue.splice(i, 0, sample);
+      while (queue.length > MAX_INPUT_QUEUE_SIZE) queue.shift();
+      return true;
+    }
+  }
+  queue.push(sample);
+  while (queue.length > MAX_INPUT_QUEUE_SIZE) queue.shift();
+  return true;
+}
+
 export function terrainFeetYAt(room, x, z) {
   if (room.worldFlags && room.worldFlags.terrainPhysicsV2 && room.terrainSampler && typeof room.terrainSampler.getGroundHeightAt === 'function') {
     return Number(room.terrainSampler.getGroundHeightAt(Number(x || 0), Number(z || 0)) || 0);
@@ -146,6 +224,16 @@ export function buildPlayerEntity(room, userId, username, _classId, options, dep
     createThrowableRuntime: () => room.createThrowableRuntime()
   });
 
+  player.seq = Math.max(0, Number(player.seq || 0));
+  player.lastProcessedInputSeq = Math.max(0, Number(player.lastProcessedInputSeq || player.seq || 0));
+  player.lastReceivedInputSeq = Math.max(
+    player.lastProcessedInputSeq,
+    Number(player.lastReceivedInputSeq || player.pendingInputSeq || player.seq || 0)
+  );
+  player.pendingInputSeq = Math.max(player.lastReceivedInputSeq, Number(player.pendingInputSeq || 0));
+  player.inputState = player.inputState || (createMovementInputState ? createMovementInputState() : null) || {};
+  player.inputQueue = ensureInputQueue(player);
+
   spawnEntityRandomly(room, player, deps);
   applySpawnShield(player, deps);
   if (room && typeof room.seedEntityPoseHistory === 'function') {
@@ -214,8 +302,6 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
   const isPrivateMatchRoom = deps.isPrivateMatchRoom;
   const teamAlpha = deps.teamAlpha || 'alpha';
   const gameModeTdm = deps.gameModeTdm || 'tdm';
-  const gameModeLms = deps.gameModeLms || 'lms';
-  const lmsRules = deps.lmsRules || {};
 
   if (room.players.has(userId)) {
     const player = room.players.get(userId);
@@ -248,34 +334,37 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
 
 export function queueAuthoritativeInput(player, msg, deps) {
   deps = deps || {};
-  const canEntityUseWeapon = deps.canEntityUseWeapon;
   const clamp = deps.clamp;
   const createMovementInputState = deps.createMovementInputState;
   const movementLocked = !!deps.movementLocked;
   if (!player || !msg) return;
 
-  if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-  if (!movementLocked && typeof msg.pitch === 'number' && clamp) player.pitch = clamp(msg.pitch, -1.55, 1.55);
-  if (typeof msg.seq === 'number') {
-    player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), Number(msg.seq || 0));
-  }
-
-  // Weapon changes are authoritative through explicit equip/reload/fire flows.
-  // Movement input can arrive stale and must not rewind player.weaponId.
+  player.seq = Math.max(0, Number(player.seq || 0));
+  player.lastProcessedInputSeq = Math.max(0, Number(player.lastProcessedInputSeq || player.seq || 0));
   player.inputMode = 'intent';
-  player.inputState = player.inputState || (createMovementInputState ? createMovementInputState() : null) || {};
-  player.inputState.forward = !!msg.forward;
-  player.inputState.backward = !!msg.backward;
-  player.inputState.left = !!msg.left;
-  player.inputState.right = !!msg.right;
-  player.inputState.jump = !!msg.jump;
-  player.inputState.sprint = !!msg.sprint;
-  player.inputState.adsActive = !!msg.adsActive;
+  const sample = normalizeInputSample(player, msg, {
+    clamp,
+    movementLocked,
+    createMovementInputState
+  });
+
+  player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), sample.seq);
+  player.lastReceivedInputSeq = Math.max(Number(player.lastReceivedInputSeq || 0), sample.seq);
+  player.inputState = cloneInputState(sample.inputState, createMovementInputState);
+  player.yaw = sample.yaw;
+  player.pitch = sample.pitch;
+
+  if (sample.seq <= Math.max(0, Number(player.lastProcessedInputSeq || 0))) return;
+  insertInputSample(ensureInputQueue(player), sample);
 }
 
 export function applyPendingInputAck(entity) {
   if (!entity) return 0;
-  const pendingSeq = Number(entity.pendingInputSeq || 0);
+  const pendingSeq = Math.max(
+    0,
+    Number(entity.lastProcessedInputSeq || 0),
+    Number(entity.seq || 0)
+  );
   const currentSeq = Number(entity.seq || 0);
   if (pendingSeq > currentSeq) {
     entity.seq = pendingSeq;
@@ -283,15 +372,79 @@ export function applyPendingInputAck(entity) {
   return Number(entity.seq || 0);
 }
 
+export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
+  deps = deps || {};
+  const createMovementInputState = deps.createMovementInputState;
+  const totalDtSec = Math.max(0, Number(dtSec || 0));
+  if (!entity || !(totalDtSec > 0)) {
+    return { steps: [], processedSeq: 0 };
+  }
+
+  const queue = ensureInputQueue(entity);
+  if (queue.length === 0) {
+    return {
+      steps: [{
+        dtSec: totalDtSec,
+        yaw: Number(entity.yaw || 0),
+        pitch: Number(entity.pitch || 0),
+        inputState: cloneInputState(entity.inputState, createMovementInputState)
+      }],
+      processedSeq: 0
+    };
+  }
+
+  const samples = queue.slice();
+  queue.length = 0;
+  let totalWeightSec = 0;
+  const weights = [];
+  for (let i = 0; i < samples.length; i++) {
+    const weightSec = clampInputSampleDtSec(samples[i] && samples[i].dtMs);
+    weights.push(weightSec);
+    totalWeightSec += weightSec;
+  }
+  if (!(totalWeightSec > 0)) {
+    return {
+      steps: [{
+        dtSec: totalDtSec,
+        yaw: Number(entity.yaw || 0),
+        pitch: Number(entity.pitch || 0),
+        inputState: cloneInputState(entity.inputState, createMovementInputState)
+      }],
+      processedSeq: 0
+    };
+  }
+
+  let remainingDtSec = totalDtSec;
+  const steps = [];
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i];
+    const stepDtSec = i === (samples.length - 1)
+      ? remainingDtSec
+      : Math.max(0, totalDtSec * (weights[i] / totalWeightSec));
+    remainingDtSec = Math.max(0, remainingDtSec - stepDtSec);
+    steps.push({
+      dtSec: stepDtSec,
+      yaw: Number(sample && sample.yaw || entity.yaw || 0),
+      pitch: Number(sample && sample.pitch || entity.pitch || 0),
+      inputState: cloneInputState(sample && sample.inputState, createMovementInputState),
+      seq: Math.max(0, Number(sample && sample.seq || 0)),
+      movementLocked: !!(sample && sample.movementLocked)
+    });
+  }
+
+  return {
+    steps,
+    processedSeq: Math.max(0, Number(samples[samples.length - 1] && samples[samples.length - 1].seq || 0))
+  };
+}
+
 export function respawnIfNeeded(room, entity, deps) {
   deps = deps || {};
   const nowMs = deps.nowMs;
-  const gameModeLms = deps.gameModeLms || 'lms';
   const resetEntityForRespawn = deps.resetEntityForRespawn;
   const createWeaponAmmoRuntime = deps.createWeaponAmmoRuntime;
   const createMovementInputState = deps.createMovementInputState;
   if (entity.alive) return;
-  if (room.gameMode === gameModeLms && Number(entity.lmsLives || 0) <= 0) return;
   if ((entity.respawnAt || 0) > nowMs()) return;
 
   if (entity.plannedSpawnPoint) {
@@ -307,6 +460,11 @@ export function respawnIfNeeded(room, entity, deps) {
     createMovementInputState,
     zeroAim: entity.fixtureType === 'sim_player'
   });
+  entity.inputQueue = [];
+  entity.lastProcessedInputSeq = Math.max(0, Number(entity.lastProcessedInputSeq || entity.seq || 0));
+  entity.lastReceivedInputSeq = entity.lastProcessedInputSeq;
+  entity.pendingInputSeq = entity.lastProcessedInputSeq;
+  entity.seq = entity.lastProcessedInputSeq;
   if (typeof room.seedEntityPoseHistory === 'function') {
     room.seedEntityPoseHistory(entity, nowMs());
   }
@@ -317,6 +475,7 @@ export function tickPlayers(room, dtSec, deps) {
   for (const player of room.players.values()) {
     room.respawnIfNeeded(player);
     room.tickAuthoritativePlayerMovement(player, dtSec);
+    applyPendingInputAck(player);
     room.regenArmor(player, dtSec);
     room.tickStreamState(player, dtSec);
     room.tickThrowableRegen(player, dtSec);

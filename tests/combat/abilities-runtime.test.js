@@ -4,15 +4,19 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-import { gameplayTuning, getDefaultAbilityLoadout, normalizeAbilityLoadout } from '../../shared/gameplay-tuning.js';
+import { gameplayTuning, getClassPreset, getDefaultAbilityLoadout, normalizeAbilityLoadout } from '../../shared/gameplay-tuning.js';
 
 async function loadAbilitiesRuntime(runtimeOverrides = {}, globalOverrides = {}) {
-  const boundaryCode = await fs.readFile(new URL('../../js/combat/ability-boundary.js', import.meta.url), 'utf8');
-  const localSimCode = await fs.readFile(new URL('../../js/combat/ability-local-sim.js', import.meta.url), 'utf8');
-  const code = await fs.readFile(new URL('../../js/combat/abilities.js', import.meta.url), 'utf8');
+  const [inputLabelsCode, boundaryCode, localSimCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/ability-boundary.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/ability-local-sim.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/abilities.js', import.meta.url), 'utf8')
+  ]);
   const runtime = {
     GameShared: {
       gameplayTuning,
+      getClassPreset,
       getDefaultAbilityLoadout,
       normalizeAbilityLoadout
     },
@@ -37,10 +41,13 @@ async function loadAbilitiesRuntime(runtimeOverrides = {}, globalOverrides = {})
   sandbox.globalThis = sandbox;
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(inputLabelsCode, context);
   vm.runInContext(boundaryCode, context);
   vm.runInContext(localSimCode, context);
   vm.runInContext(code, context);
-  return sandbox.__MAYHEM_RUNTIME.GameAbilities;
+  const abilities = sandbox.__MAYHEM_RUNTIME.GameAbilities;
+  abilities.__runtime = sandbox.__MAYHEM_RUNTIME;
+  return abilities;
 }
 
 test('prepareNetCast shapes choke target selection behind the abilities boundary', async () => {
@@ -701,4 +708,36 @@ test('local choke only applies the lifted state to the victim', async () => {
   assert.equal(enemyRef.chokeVictimState.sourceId, 'player');
   assert.ok(enemyRef.chokeVictimState.endsAt > enemyRef.chokeVictimState.startedAt);
   assert.deepEqual(audioCalls, ['chokeCast']);
+});
+
+test('abilities runtime picks up shared defaults that arrive after module evaluation', async () => {
+  const abilities = await loadAbilitiesRuntime({
+    GameShared: {}
+  });
+
+  abilities.__runtime.GameShared = {
+    gameplayTuning: {
+      ...gameplayTuning,
+      defaultAbilityLoadout: { slot1: 'hook', slot2: 'heal' },
+      classPresets: {
+        ...gameplayTuning.classPresets,
+        abilities: { armorMax: 140, wallhackRadius: 120, loadoutWeapon: 'sniper' }
+      }
+    },
+    getClassPreset,
+    getDefaultAbilityLoadout() {
+      return { slot1: 'hook', slot2: 'heal' };
+    },
+    normalizeAbilityLoadout
+  };
+
+  abilities.init();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(abilities.getLoadout())), {
+    slot1: 'hook',
+    slot2: 'heal',
+    activeAbility: 'hook'
+  });
+  assert.equal(abilities.getArmorMax(), 140);
+  assert.equal(abilities.getWallhackRadius(), 120);
 });

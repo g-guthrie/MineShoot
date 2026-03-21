@@ -6,7 +6,6 @@ import vm from 'node:vm';
 async function loadGameplayRuntimeLoopHarness(runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../gameplay/runtime-loop.js', import.meta.url), 'utf8');
   const calls = {
-    motion: [],
     selfSync: []
   };
   const runtime = {
@@ -48,11 +47,6 @@ async function loadGameplayRuntimeLoopHarness(runtimeOverrides = {}) {
       getSelfAbilityState() { return null; },
       consumeNotice() { return ''; }
     },
-    GameNetSelfMotionSync: {
-      syncPlayerMotion(state, dt) {
-        calls.motion.push({ state: JSON.parse(JSON.stringify(state)), dt });
-      }
-    },
     GameNetSelfSync: {
       syncPlayerState(state, dt, options) {
         calls.selfSync.push({
@@ -77,7 +71,7 @@ async function loadGameplayRuntimeLoopHarness(runtimeOverrides = {}) {
   };
 }
 
-test('gameplay runtime loop wires net reconciliation state into motion sync separately from self-state sync', async () => {
+test('gameplay runtime loop passes reconciliation state through self-state sync', async () => {
   const harness = await loadGameplayRuntimeLoopHarness();
   const loop = harness.createLoop({
     readMatchContext() {
@@ -90,12 +84,13 @@ test('gameplay runtime loop wires net reconciliation state into motion sync sepa
 
   loop.step(0.016);
 
-  assert.equal(harness.calls.motion.length, 1);
-  assert.equal(harness.calls.motion[0].state.authoritativeState.seq, 1);
   assert.equal(harness.calls.selfSync.length, 1);
   assert.equal(harness.calls.selfSync[0].state.id, 'usr_test');
   assert.deepEqual(harness.calls.selfSync[0].options, {
     respawnState: { active: true, respawnAt: 1800, remainingMs: 800 },
-    skipMotionSync: true
+    reconciliationState: {
+      authoritativeState: { id: 'usr_test', seq: 1 },
+      pendingInputs: []
+    }
   });
 });

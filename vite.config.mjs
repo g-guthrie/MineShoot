@@ -31,6 +31,9 @@ export default defineConfig({
             path.includes('/js/actors/player.js') ||
             path.includes('/js/combat/player-combat.js') ||
             path.includes('/js/combat/abilities.js') ||
+            path.includes('/js/combat/throwables-projectile-runtime.js') ||
+            path.includes('/js/combat/throwables-trajectory.js') ||
+            path.includes('/js/combat/throwables-fire-zones.js') ||
             path.includes('/js/combat/throwables.js') ||
             path.includes('/js/combat/hitscan.js') ||
             path.includes('/js/combat/combat-tuning.js') ||
@@ -58,7 +61,6 @@ export default defineConfig({
             path.includes('/shared/seek-profiles.js') ||
             path.includes('/shared/entity-constants.js') ||
             path.includes('/shared/entity-points.js') ||
-            path.includes('/shared/lms-mode.js') ||
             path.includes('/shared/protocol.js') ||
             path.includes('/shared/gameplay-tuning.js')
           ) return 'gameplay-core';

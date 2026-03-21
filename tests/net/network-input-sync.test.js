@@ -12,6 +12,7 @@ import {
   sanitizeRoomId
 } from '../../shared/protocol.js';
 import { logicalHitscanOriginFromEye } from '../../shared/entity-points.js';
+import { gameNetRuntimeScriptUrls } from '../../js/app/runtime-assembly.js';
 
 async function loadGameNetHarness(options = {}) {
   const renderMap = new Map();
@@ -149,17 +150,9 @@ async function loadGameNetHarness(options = {}) {
   };
 
   const context = vm.createContext(sandbox);
-  for (const path of [
-    '../../js/combat/ability-fx.js',
-    '../../js/net/runtime-state.js',
-    '../../js/net/commands.js',
-    '../../js/net/runtime-access.js',
-    '../../js/net/message-router.js',
-    '../../js/net/runtime-core.js',
-    '../../js/net/state-view.js',
-    '../../js/net/network.js'
-  ]) {
-    const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');
+  const scriptUrls = [new URL('../../js/combat/ability-fx.js', import.meta.url)].concat(gameNetRuntimeScriptUrls);
+  for (const scriptUrl of scriptUrls) {
+    const code = await fs.readFile(scriptUrl, 'utf8');
     vm.runInContext(code, context);
   }
   const GameNet = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { getWeaponPresentation, resolveReloadPresentationState } from '../../shared/gameplay-tuning.js';
 
 async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/combat/player-combat.js', import.meta.url), 'utf8');
@@ -19,6 +20,8 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
       getWeaponStats(weaponId) {
         return this.gameplayTuning.weaponStats[weaponId] || null;
       },
+      getWeaponPresentation,
+      resolveReloadPresentationState,
       getDefaultWeaponLoadout() {
         return ['rifle', 'sniper'];
       },
@@ -67,6 +70,7 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   vm.runInContext(code, vm.createContext(sandbox));
   return {
     GamePlayerCombat: sandbox.__MAYHEM_RUNTIME.GamePlayerCombat,
+    runtime: sandbox.__MAYHEM_RUNTIME,
     getClearTransientCalls() {
       return clearTransientCalls;
     },
@@ -165,52 +169,6 @@ test('player combat exposes survivability state and preserves respawn countdown 
   assert.equal(harness.GamePlayerCombat.canUseGameplayActions(1900), true);
 });
 
-test('player combat clears respawn countdown when a network snapshot marks the player out of round', async () => {
-  const harness = await loadPlayerCombatHarness();
-  harness.GamePlayerCombat.init({
-    isPlaying() { return true; },
-    isMultiplayer() { return true; }
-  });
-
-  harness.GamePlayerCombat.syncFromNetwork({
-    hp: 0,
-    hpMax: 500,
-    armor: 0,
-    armorMax: 90,
-    alive: false,
-    outOfRound: false,
-    spawnShieldUntil: 0
-  }, {
-    respawnState: {
-      active: true,
-      respawnAt: 1800
-    }
-  });
-
-  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getRespawnState(1000))), {
-    active: true,
-    respawnAt: 1800,
-    remainingMs: 800
-  });
-
-  harness.GamePlayerCombat.syncFromNetwork({
-    hp: 0,
-    hpMax: 500,
-    armor: 0,
-    armorMax: 90,
-    alive: false,
-    outOfRound: true,
-    spawnShieldUntil: 0
-  }, {
-    respawnState: {
-      active: true,
-      respawnAt: 1800
-    }
-  });
-
-  assert.equal(harness.GamePlayerCombat.getRespawnState(1000), null);
-});
-
 test('player combat owns weapon presentation state and repairs it from authoritative snapshots', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
@@ -302,6 +260,47 @@ test('player combat manual reload ignores full magazines and starts once rounds 
 
   assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1100), true);
   assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1100).reloading, true);
+});
+
+test('player combat uses a damage helper that arrives after initialization', async () => {
+  const harness = await loadPlayerCombatHarness({
+    GameShared: {
+      gameplayTuning: {
+        weaponStats: {
+          rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 30, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 }
+        }
+      },
+      getWeaponStats(weaponId) {
+        return this.gameplayTuning.weaponStats[weaponId] || null;
+      },
+      getWeaponPresentation,
+      resolveReloadPresentationState,
+      getDefaultWeaponLoadout() {
+        return ['rifle'];
+      },
+      getSelectableWeaponIds() {
+        return ['rifle'];
+      }
+    }
+  });
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return false; }
+  });
+
+  harness.runtime.GameShared.damage = {
+    applyDamage(target, damage) {
+      target.hp = Math.max(0, Number(target.hp || 0) - (damage * 2));
+      target.armor = Number(target.armor || 0);
+      target.armorRegenDelay = 99;
+      return { hpLost: damage * 2 };
+    }
+  };
+
+  harness.GamePlayerCombat.consumeDamage(10, 'body', null);
+
+  assert.equal(harness.GamePlayerCombat.getHP(), 340);
+  assert.equal(harness.GamePlayerCombat.getArmor(), 90);
 });
 
 test('player combat keeps a local multiplayer reload alive until authoritative ammo catches up', async () => {

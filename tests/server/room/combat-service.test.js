@@ -203,3 +203,53 @@ test('heavy hits are fully absorbed by any remaining armor', () => {
     killed: false
   });
 });
+
+test('explodeProjectile ignores targets that are only close on the ground plane but too far vertically', () => {
+  const broadcasts = [];
+  const target = { id: 'usr_target', alive: true, x: 0, y: 8, z: 0, hp: 360, armor: 0, spawnShieldUntil: 0, respawnAt: 0 };
+  const room = {
+    broadcast(payload) { broadcasts.push(payload); },
+    getEntityById() { return null; },
+    getAliveEntities() { return [target]; },
+    canTargetEntity() { return true; },
+    entityAimTargetPosition(entity) { return { x: entity.x, y: entity.y, z: entity.z }; },
+    hasWorldLineOfSight() { return true; }
+  };
+
+  explodeProjectile(room, { id: 'proj_missile', type: 'missile', ownerId: 'usr_test' }, 0, 0, 0);
+
+  assert.deepEqual(broadcasts, [{
+    t: 'throw_explode',
+    projectileId: 'proj_missile',
+    projectileType: 'missile',
+    x: 0,
+    y: 0,
+    z: 0,
+    radius: 2
+  }]);
+});
+
+test('explodeProjectile ignores targets blocked by world geometry', () => {
+  const broadcasts = [];
+  const target = { id: 'usr_target', alive: true, x: 1, y: 0, z: 0, hp: 360, armor: 0, spawnShieldUntil: 0, respawnAt: 0 };
+  const room = {
+    broadcast(payload) { broadcasts.push(payload); },
+    getEntityById() { return null; },
+    getAliveEntities() { return [target]; },
+    canTargetEntity() { return true; },
+    entityAimTargetPosition(entity) { return { x: entity.x, y: entity.y, z: entity.z }; },
+    hasWorldLineOfSight() { return false; }
+  };
+
+  explodeProjectile(room, { id: 'proj_missile', type: 'missile', ownerId: 'usr_test' }, 0, 0, 0);
+
+  assert.deepEqual(broadcasts, [{
+    t: 'throw_explode',
+    projectileId: 'proj_missile',
+    projectileType: 'missile',
+    x: 0,
+    y: 0,
+    z: 0,
+    radius: 2
+  }]);
+});

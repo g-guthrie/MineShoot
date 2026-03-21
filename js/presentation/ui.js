@@ -5,6 +5,8 @@
 (function () {
     'use strict';
 
+    var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var inputLabels = runtime.GameInputLabels || null;
     var GameUI = {};
 
     var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, plasmaCurveLeftEl, plasmaCurveRightEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
@@ -34,25 +36,11 @@
     var lastThrowableInfoState = null;
 
     function sharedMatchRules() {
-        return globalThis.__MAYHEM_RUNTIME &&
-            globalThis.__MAYHEM_RUNTIME.GameShared &&
-            globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
-            ? globalThis.__MAYHEM_RUNTIME.GameShared.matchRules
+        return runtime &&
+            runtime.GameShared &&
+            runtime.GameShared.matchRules
+            ? runtime.GameShared.matchRules
             : null;
-    }
-
-    function inputBindingsApi() {
-        return globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameInputBindings
-            ? globalThis.__MAYHEM_RUNTIME.GameInputBindings
-            : null;
-    }
-
-    function bindingLabel(actionId, fallback) {
-        var bindingsApi = inputBindingsApi();
-        if (bindingsApi && bindingsApi.getDisplayLabel) {
-            return bindingsApi.getDisplayLabel(actionId);
-        }
-        return String(fallback || '--');
     }
 
     function formatCooldown(seconds) {
@@ -198,8 +186,8 @@
         damageTickTimers = [];
         damageFlashLevel = 0;
         GameUI.setIdleWarning('');
-        if (inputBindingsApi() && inputBindingsApi().subscribe) {
-            inputBindingsApi().subscribe(function () {
+        if (runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
+            runtime.GameInputBindings.subscribe(function () {
                 if (lastAbilityInfoState) GameUI.updateAbilityInfo(lastAbilityInfoState);
                 if (lastThrowableInfoState) GameUI.updateThrowableInfo(lastThrowableInfoState);
             });
@@ -558,8 +546,8 @@
             return seconds.toFixed(1) + 's';
         }
 
-        var slot1 = bindingLabel('ability_1', 'E') + ' ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
-        var slot2 = bindingLabel('ability_2', 'F') + ' ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
+        var slot1 = inputLabels.getBindingLabel('ability_1', 'E') + ' ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
+        var slot2 = inputLabels.getBindingLabel('ability_2', 'F') + ' ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
         var extra = state.extra ? (' | ' + state.extra) : '';
         abilityInfoEl.textContent = slot1 + ' | ' + slot2 + extra;
     };
@@ -641,11 +629,11 @@
         var selectedId = (GT && GT.getSelectedThrowable) ? GT.getSelectedThrowable() : 'frag';
         var entry = state[selectedId];
         if (!entry) {
-            throwableInfoEl.textContent = bindingLabel('throwable', 'Q') + ' --';
+            throwableInfoEl.textContent = inputLabels.getBindingLabel('throwable', 'Q') + ' --';
             return;
         }
         var cd = entry.charges > 0 ? '' : (' (' + formatCooldown(entry.cooldownRemaining) + ')');
-        throwableInfoEl.textContent = bindingLabel('throwable', 'Q') + ' ' + entry.label + ': ' + entry.charges + cd;
+        throwableInfoEl.textContent = inputLabels.getBindingLabel('throwable', 'Q') + ' ' + entry.label + ': ' + entry.charges + cd;
     };
 
     GameUI.updatePlasmaState = function (state) {

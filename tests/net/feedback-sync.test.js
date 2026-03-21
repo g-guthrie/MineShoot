@@ -50,6 +50,16 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     GamePlayerCombat: {
       showIncomingFeedback() {}
     },
+    GameShared: {
+      gameplayTuning: {
+        network: {
+          feedback: {
+            predictedHitTtlMs: 900,
+            confirmedShotTtlMs: 2000
+          }
+        }
+      }
+    },
     ...runtimeOverrides
   };
   const sandbox = {
@@ -473,6 +483,55 @@ test('feedback sync keeps confirmed-shot suppression alive past the predicted-hi
     assert.deepEqual(harness.audioCalls, ['bulletImpact', 'bulletImpact']);
     assert.deepEqual(harness.uiCalls, ['hit', 'damage', 'damage']);
     assert.equal(harness.damageCalls.length, 2);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('feedback sync reads suppression TTLs from shared tuning', async () => {
+  const queue = [{
+    damage: 21,
+    hitType: 'body',
+    weaponId: 'rifle',
+    shotToken: 'shared-ttl',
+    pelletIndex: 0,
+    killed: false,
+    worldPos: { x: 6, y: 7, z: 8 }
+  }];
+  const originalDateNow = Date.now;
+  let now = 7000;
+  Date.now = () => now;
+  try {
+    const harness = await loadFeedbackSyncHarness({
+      GameShared: {
+        gameplayTuning: {
+          network: {
+            feedback: {
+              predictedHitTtlMs: 100,
+              confirmedShotTtlMs: 150
+            }
+          }
+        }
+      },
+      GameNet: {
+        consumeClassCastResult() { return null; },
+        consumeDamageFeedback() { return queue.shift() || null; },
+        consumeIncomingDamageFeedback() { return null; },
+        consumeThrowAck() { return null; },
+        consumeThrowReject() { return null; },
+        getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
+        consumeThrowableEvent() { return null; },
+        consumeAbilityEvent() { return null; },
+        damagePointForEntityId() { return null; }
+      }
+    });
+
+    harness.notifyPredictedLocalHit({ weaponId: 'rifle', shotToken: 'shared-ttl', pelletIndex: 0 });
+    now = 7120;
+    harness.syncGameplayFeedback({ camera: {} });
+
+    assert.deepEqual(harness.audioCalls, ['bulletImpact']);
+    assert.equal(harness.damageCalls.length, 1);
   } finally {
     Date.now = originalDateNow;
   }

@@ -1,19 +1,21 @@
 # Mayhem Rewrite Plan
 
+Historical note: this file started as a branch-stage log. Current live terminology uses **Offline Sandbox** as the canonical offline mode name.
+
 This branch starts the clean Mayhem rewrite around one rule:
 
-- the server is authoritative
+- the server is authoritative for networked play
 - the client may predict, but prediction is disposable
-- there is no offline sandbox lane
+- Offline Sandbox remains a supported local-only mode and should share the same launch/session contracts where possible
 
 ## Stage 0
 
 Completed in this branch:
 
-- removed the offline sandbox runtime mode
-- removed sandbox menu/UI wiring
+- removed the older duplicate offline sandbox runtime path
+- removed older sandbox-specific menu/UI wiring that duplicated the live shell
 - removed the local-match bootstrap path from the main Mayhem runtime
-- removed sandbox-specific tests and old offline launch expectations
+- removed outdated sandbox-specific tests and old offline launch expectations
 - removed all Demonic code, docs, tests, and alternate entry paths
 - created the target top-level ownership folders
 
@@ -38,8 +40,8 @@ Started in this branch:
 
 - extracted runtime launch and boot ownership into `js/app/runtime-shell.js`
 - reduced `js/main.js` so mode launch and runtime startup are app-owned lifecycle concerns instead of being embedded directly in the gameplay orchestrator
-- extracted net runtime composition into `js/net/runtime.js`
-- reduced `js/network.js` to a compatibility wrapper over the dedicated net runtime owner
+- reduced the networking surface so runtime state, commands, transport, and view logic live under `js/net/*`
+- kept `js/net/network.js` as the live browser entrypoint while ownership moved into narrower helpers
 
 ## Stage 4
 
@@ -87,5 +89,5 @@ The first rewrite slice must satisfy this:
 - no gameplay ownership in `app`
 - no presentation ownership in `gameplay`
 - no client-only rules forks
-- no offline-only codepaths in Mayhem
+- no duplicate offline-only ownership forks in Mayhem
 - all multiplayer bug fixes should land on the owning module, not on adapter glue

@@ -21,6 +21,7 @@ test('runtime mode helpers normalize unknown ids safely', () => {
   assert.equal(normalizeRuntimeModeId('single_dev_server'), 'single_dev_server');
   assert.equal(normalizeRuntimeModeId('local_multiplayer'), 'single_dev_server');
   assert.equal(normalizeRuntimeModeId('single_full_sandbox'), 'single_full_sandbox');
+  assert.equal(normalizeRuntimeModeId('sandbox'), 'single_full_sandbox');
   assert.equal(normalizeRuntimeModeId('unknown'), 'cloud_multiplayer');
   assert.equal(getRuntimeMode('cloud_multiplayer').backendKind, 'cloudflare-prod');
   assert.equal(getRuntimeMode('single_cloudflare').label, 'Private Cloudflare Room');

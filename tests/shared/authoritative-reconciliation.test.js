@@ -67,7 +67,7 @@ test('replay motion carries jump state across pending samples', () => {
   assert.ok(replayed.velocityY > 0);
 });
 
-test('replay correction only runs when ack sequence advances and positional drift is meaningful', () => {
+test('replay correction runs for meaningful drift even when ack sequence does not advance', () => {
   assert.equal(
     shouldReplayAuthoritativeCorrection({
       pendingInputCount: 2,
@@ -94,9 +94,10 @@ test('replay correction only runs when ack sequence advances and positional drif
       lastAckedSeq: 8,
       lastReplayAckSeq: 8,
       horizontalDistSq: 0.36,
-      replayCorrectionDistance: 0.55
+      replayCorrectionDistance: 0.55,
+      allowReplayWithoutAckAdvance: true
     }),
-    false
+    true
   );
   assert.equal(
     shouldReplayAuthoritativeCorrection({

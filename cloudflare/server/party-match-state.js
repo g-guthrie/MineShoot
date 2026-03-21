@@ -14,7 +14,6 @@ function normalizeActorKey(actorId) {
 export function normalizePublicMatchMode(value) {
   const next = String(value || '').trim().toLowerCase();
   if (next === 'tdm') return 'tdm';
-  if (next === 'lms') return 'lms';
   return 'ffa';
 }
 

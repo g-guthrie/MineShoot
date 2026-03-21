@@ -7,6 +7,7 @@ import {
   applySpawnShield,
   buildPlayerEntity,
   chooseEntitySpawnPoint,
+  consumeQueuedAuthoritativeInputs,
   ensurePlayer,
   queueAuthoritativeInput,
   respawnIfNeeded,
@@ -91,7 +92,6 @@ function makeRoom() {
     respawnIfNeeded(entity) {
       return respawnIfNeeded(this, entity, {
         nowMs: () => 1000,
-        gameModeLms: 'lms',
         resetEntityForRespawn(target) {
           target.alive = true;
           target.respawnAt = 0;
@@ -120,13 +120,17 @@ test('room runtime keeps latest intent and applies the ack after authoritative m
   const player = {
     seq: 4,
     pendingInputSeq: 4,
+    lastProcessedInputSeq: 4,
+    lastReceivedInputSeq: 4,
     yaw: 0,
     pitch: 0,
-    inputState: {}
+    inputState: {},
+    inputQueue: []
   };
 
   queueAuthoritativeInput(player, {
     seq: 7,
+    dtMs: 50,
     yaw: 0.25,
     pitch: 0.5,
     forward: true,
@@ -141,9 +145,13 @@ test('room runtime keeps latest intent and applies the ack after authoritative m
 
   assert.equal(player.seq, 4);
   assert.equal(player.pendingInputSeq, 7);
+  assert.equal(player.lastReceivedInputSeq, 7);
+  assert.equal(player.lastProcessedInputSeq, 4);
   assert.equal(player.yaw, 0.25);
   assert.equal(player.inputState.forward, true);
   assert.equal(player.inputState.jump, true);
+  assert.equal(player.inputQueue.length, 1);
+  player.lastProcessedInputSeq = 7;
   applyPendingInputAck(player);
 
   assert.equal(player.seq, 7);
@@ -154,7 +162,10 @@ test('room runtime input samples do not rewind weapon selection from stale clien
     alive: true,
     weaponId: 'sniper',
     pendingInputSeq: 0,
-    inputState: {}
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    inputState: {},
+    inputQueue: []
   };
 
   queueAuthoritativeInput(player, {
@@ -173,14 +184,101 @@ test('room runtime input samples do not rewind weapon selection from stale clien
   assert.equal(player.inputState.forward, true);
 });
 
+test('room runtime preserves look updates while movement is locked', () => {
+  const player = {
+    alive: true,
+    yaw: 0.1,
+    pitch: 0.2,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    inputState: {},
+    inputQueue: []
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 2,
+    yaw: 0.75,
+    pitch: -0.5
+  }, {
+    movementLocked: true,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(player.yaw, 0.75);
+  assert.equal(player.pitch, -0.5);
+  assert.equal(player.inputQueue[0].movementLocked, true);
+});
+
+test('room runtime consumes queued input samples in sequence and weights their tick share by dt', () => {
+  const player = {
+    seq: 0,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    yaw: 0,
+    pitch: 0,
+    inputState: {},
+    inputQueue: []
+  };
+  const deps = {
+    movementLocked: false,
+    canEntityUseWeapon() { return true; },
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 9,
+    dtMs: 40,
+    yaw: 0.9,
+    forward: true
+  }, deps);
+  queueAuthoritativeInput(player, {
+    seq: 7,
+    dtMs: 20,
+    yaw: 0.7,
+    left: true
+  }, deps);
+  queueAuthoritativeInput(player, {
+    seq: 9,
+    dtMs: 40,
+    yaw: 0.9,
+    forward: true
+  }, deps);
+
+  const movementPlan = consumeQueuedAuthoritativeInputs(player, 0.09, {
+    createMovementInputState() { return {}; }
+  });
+
+  assert.deepEqual(movementPlan.steps.map((step) => step.seq), [7, 9]);
+  assert.ok(Math.abs(movementPlan.steps[0].dtSec - 0.03) < 0.000001);
+  assert.ok(Math.abs(movementPlan.steps[1].dtSec - 0.06) < 0.000001);
+  assert.equal(movementPlan.steps[0].inputState.left, true);
+  assert.equal(movementPlan.steps[1].inputState.forward, true);
+  assert.equal(movementPlan.processedSeq, 9);
+  assert.equal(player.inputQueue.length, 0);
+});
+
+test('room runtime ack only advances to the last processed input seq', () => {
+  const player = {
+    seq: 4,
+    pendingInputSeq: 7,
+    lastProcessedInputSeq: 5
+  };
+
+  applyPendingInputAck(player);
+
+  assert.equal(player.seq, 5);
+});
+
 test('room runtime ensures players and simulated fixtures through one boundary', () => {
   const room = makeRoom();
   const player = ensurePlayer(room, 'u1', 'ALPHA', 'abilities', 'actor-a', 'ALPHA', {
     isPrivateMatchRoom: () => true,
     teamAlpha: 'alpha',
-    gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
-    lmsRules: { startingLives: 3 }
+    gameModeTdm: 'tdm'
   });
 
   assert.equal(room.players.get('u1'), player);
@@ -207,7 +305,6 @@ test('room runtime respawns dead entities and ticks live players through shared 
     kind: 'player',
     fixtureType: '',
     alive: false,
-    lmsLives: 1,
     respawnAt: 0,
     plannedSpawnPoint: { x: 7, z: 8 }
   };

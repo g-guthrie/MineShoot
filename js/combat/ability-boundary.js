@@ -1,6 +1,13 @@
 (function () {
     'use strict';
 
+    var chokeRectCache = {
+        fovDeg: NaN,
+        viewportHeight: NaN,
+        minDot: NaN,
+        rect: null
+    };
+
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
     }
@@ -66,15 +73,32 @@
     function getChokeRectSize(camera, cfg) {
         var deadeyeDef = getAbilityDef('deadeye') || {};
         var deadeyeMinDot = Number(deadeyeDef.minDot || 0.22);
+        var cameraFov = Number(camera && camera.fov || 60);
+        var viewportHeight = Number(window.innerHeight || 0);
+        if (
+            chokeRectCache.rect &&
+            chokeRectCache.fovDeg === cameraFov &&
+            chokeRectCache.viewportHeight === viewportHeight &&
+            chokeRectCache.minDot === deadeyeMinDot
+        ) {
+            return {
+                width: widenedChokeWidth(cfg && cfg.lockBoxPx),
+                height: chokeRectCache.rect.height
+            };
+        }
         var halfAngleRad = Math.acos(Math.max(-1, Math.min(1, deadeyeMinDot)));
-        var vFovRad = Number(camera && camera.fov || 60) * Math.PI / 180;
+        var vFovRad = cameraFov * Math.PI / 180;
         var tanHalf = Math.tan(halfAngleRad);
         var tanV = Math.tan(vFovRad * 0.5);
         var height = 180;
         if (isFinite(tanHalf) && isFinite(tanV) && tanV > 0.000001) {
             var yNdc = tanHalf / tanV;
-            height = Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight));
+            height = Math.max(60, Math.min(viewportHeight * 0.86, yNdc * viewportHeight));
         }
+        chokeRectCache.fovDeg = cameraFov;
+        chokeRectCache.viewportHeight = viewportHeight;
+        chokeRectCache.minDot = deadeyeMinDot;
+        chokeRectCache.rect = { width: 0, height: height };
         return {
             width: widenedChokeWidth(cfg && cfg.lockBoxPx),
             height: height

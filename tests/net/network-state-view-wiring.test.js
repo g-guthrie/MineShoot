@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { gameNetRuntimeScriptUrls } from '../../js/app/runtime-assembly.js';
 
 async function loadScript(modulePath, sandbox) {
   const code = await fs.readFile(new URL(modulePath, import.meta.url), 'utf8');
@@ -86,10 +87,16 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
     }
   };
 
+  const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
+    const href = String(scriptUrl);
+    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+  });
   await loadScript('../../js/net/state-view.js', sandbox);
-  await loadScript('../../js/net/runtime-state.js', sandbox);
-  await loadScript('../../js/net/commands.js', sandbox);
-  await loadScript('../../js/net/network.js', sandbox);
+  for (const scriptUrl of scriptUrls) {
+    const href = String(scriptUrl);
+    if (href.endsWith('/js/net/state-view.js')) continue;
+    await loadScript(scriptUrl, sandbox);
+  }
 
   assert.equal(
     sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState(),
@@ -175,10 +182,16 @@ test('GameNet forwards self reconciliation selectors through GameNetStateView wi
     }
   };
 
+  const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
+    const href = String(scriptUrl);
+    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+  });
   await loadScript('../../js/net/state-view.js', sandbox);
-  await loadScript('../../js/net/runtime-state.js', sandbox);
-  await loadScript('../../js/net/commands.js', sandbox);
-  await loadScript('../../js/net/network.js', sandbox);
+  for (const scriptUrl of scriptUrls) {
+    const href = String(scriptUrl);
+    if (href.endsWith('/js/net/state-view.js')) continue;
+    await loadScript(scriptUrl, sandbox);
+  }
 
   const GameNet = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;
   const selfState = { id: 'usr_test', x: 1, y: 1.6, z: 2, seq: 4 };

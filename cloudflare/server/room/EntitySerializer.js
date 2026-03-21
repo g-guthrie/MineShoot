@@ -98,7 +98,11 @@ export function toEntityState(entity) {
     z: Number(entity.z.toFixed(3)),
     yaw: Number((entity.yaw || 0).toFixed(4)),
     pitch: Number((entity.pitch || 0).toFixed(4)),
-    seq: Math.max(0, Number(entity.seq || 0)),
+    seq: Math.max(0, Number(
+      entity.lastProcessedInputSeq != null
+        ? entity.lastProcessedInputSeq
+        : entity.seq || 0
+    )),
     weaponId: entity.weaponId || 'rifle',
     moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
     sprinting: !!entity.sprinting,
@@ -115,14 +119,6 @@ export function toEntityState(entity) {
     kills: Math.max(0, Number(entity.kills || 0)),
     deaths: Math.max(0, Number(entity.deaths || 0)),
     progressScore: Number((entity.progressScore || 0).toFixed(3)),
-    lmsLives: Math.max(0, Number(entity.lmsLives || 0)),
-    lmsCharge: Math.max(0, Number(entity.lmsCharge || 0)),
-    lmsBankState: entity.lmsBankState ? {
-      beaconId: entity.lmsBankState.beaconId || '',
-      startedAt: Number(entity.lmsBankState.startedAt || 0),
-      endsAt: Number(entity.lmsBankState.endsAt || 0)
-    } : null,
-    outOfRound: !!entity.outOfRound,
     teamId: entity.teamId || '',
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,

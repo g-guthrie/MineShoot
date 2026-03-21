@@ -17,6 +17,25 @@ export function createRetryableMemoizedLoader(factory) {
     };
 }
 
+export function resolveGameplayRuntimeApi(moduleNs, runtimeNs) {
+    var moduleApi = moduleNs && moduleNs.gameplayRuntimeApi
+        ? moduleNs.gameplayRuntimeApi
+        : (moduleNs && moduleNs.default ? moduleNs.default : null);
+    return moduleApi && moduleApi.launchModeById ? moduleApi : null;
+}
+
+export function resolveDocsRuntimeApi(moduleNs, runtimeNs) {
+    var moduleApi = null;
+    if (moduleNs && typeof moduleNs.getDocsRuntimeApi === 'function') {
+        moduleApi = moduleNs.getDocsRuntimeApi();
+    } else if (moduleNs && moduleNs.docsRuntimeApi) {
+        moduleApi = moduleNs.docsRuntimeApi;
+    } else if (moduleNs && moduleNs.default) {
+        moduleApi = moduleNs.default;
+    }
+    return moduleApi && (moduleApi.init || moduleApi.open || moduleApi.toggle) ? moduleApi : null;
+}
+
 /**
  * runtime-loader.js - Lazy runtime loaders for docs and gameplay bundles.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameRuntimeLoader
@@ -26,6 +45,8 @@ export function createRetryableMemoizedLoader(factory) {
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameRuntimeLoader = {};
+    var loadedGameplayRuntimeApi = null;
+    var loadedDocsRuntimeApi = null;
     function loadThreeGlobal() {
         return ensureThreeGlobal();
     }
@@ -35,23 +56,34 @@ export function createRetryableMemoizedLoader(factory) {
             .then(function () {
                 return import('./gameplay-modules.js');
             })
-            .then(function () {
-                return runtime.GameMain || null;
+            .then(function (moduleNs) {
+                loadedGameplayRuntimeApi = resolveGameplayRuntimeApi(moduleNs, runtime);
+                return loadedGameplayRuntimeApi;
             });
     });
 
     GameRuntimeLoader.isGameplayRuntimeReady = function () {
-        return !!(runtime.GameMain && runtime.GameMain.launchModeById);
+        var gameplayApi = loadedGameplayRuntimeApi || resolveGameplayRuntimeApi(null, runtime);
+        return !!(gameplayApi && gameplayApi.launchModeById);
+    };
+
+    GameRuntimeLoader.getLoadedGameplayRuntime = function () {
+        return loadedGameplayRuntimeApi || null;
     };
 
     GameRuntimeLoader.loadDocsRuntime = createRetryableMemoizedLoader(function () {
-        return import('../runtime/docs.js').then(function () {
-            if (runtime.GameDocs && runtime.GameDocs.init) {
-                runtime.GameDocs.init();
+        return import('../runtime/docs-runtime.js').then(function (moduleNs) {
+            loadedDocsRuntimeApi = resolveDocsRuntimeApi(moduleNs, runtime);
+            if (loadedDocsRuntimeApi && loadedDocsRuntimeApi.init) {
+                loadedDocsRuntimeApi.init();
             }
-            return runtime.GameDocs || null;
+            return loadedDocsRuntimeApi;
         });
     });
+
+    GameRuntimeLoader.getLoadedDocsRuntime = function () {
+        return loadedDocsRuntimeApi || null;
+    };
 
     GameRuntimeLoader.toggleDocs = function (triggerEl) {
         return GameRuntimeLoader.loadDocsRuntime().then(function (docsApi) {

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 
 async function loadPlayerHarness(runtimeOverrides = {}) {
+  const statusCode = await fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8');
   const viewCode = await fs.readFile(new URL('../../js/actors/player-view.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8');
   const documentObj = runtimeOverrides.__document || {
@@ -105,8 +106,10 @@ async function loadPlayerHarness(runtimeOverrides = {}) {
     }
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(viewCode, vm.createContext(sandbox));
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(statusCode, context);
+  vm.runInContext(viewCode, context);
+  vm.runInContext(code, context);
   return sandbox.__MAYHEM_RUNTIME.GamePlayer;
 }
 
@@ -121,37 +124,66 @@ test('loadout sync repairs a stale equipped weapon id so sniper scope can recove
   assert.equal(adsState.sniper, true);
 });
 
-test('player init binds movement input listeners only once across repeated init calls', async () => {
-  const listenerCounts = new Map();
-  const windowCounts = new Map();
+test('player init replaces prior input bindings cleanly across repeated init calls', async () => {
+  const listenerAdds = new Map();
+  const listenerRemoves = new Map();
+  const listenerActive = new Map();
+  const windowAdds = new Map();
+  const windowRemoves = new Map();
+  const windowActive = new Map();
   const player = await loadPlayerHarness({
     __document: {
       pointerLockElement: null,
       addEventListener(type) {
-        listenerCounts.set(type, (listenerCounts.get(type) || 0) + 1);
+        listenerAdds.set(type, (listenerAdds.get(type) || 0) + 1);
+        listenerActive.set(type, (listenerActive.get(type) || 0) + 1);
       },
-      removeEventListener() {}
+      removeEventListener(type) {
+        listenerRemoves.set(type, (listenerRemoves.get(type) || 0) + 1);
+        listenerActive.set(type, Math.max(0, (listenerActive.get(type) || 0) - 1));
+      }
     },
     __window: {
       addEventListener(type) {
-        windowCounts.set(type, (windowCounts.get(type) || 0) + 1);
+        windowAdds.set(type, (windowAdds.get(type) || 0) + 1);
+        windowActive.set(type, (windowActive.get(type) || 0) + 1);
       },
-      removeEventListener() {}
+      removeEventListener(type) {
+        windowRemoves.set(type, (windowRemoves.get(type) || 0) + 1);
+        windowActive.set(type, Math.max(0, (windowActive.get(type) || 0) - 1));
+      }
     }
   });
 
   const scene = new THREE.Scene();
   player.init(scene);
   player.init(scene);
+  player.destroy();
 
-  assert.equal(listenerCounts.get('keydown'), 1);
-  assert.equal(listenerCounts.get('keyup'), 1);
-  assert.equal(listenerCounts.get('mousemove'), 1);
-  assert.equal(listenerCounts.get('mousedown'), 1);
-  assert.equal(listenerCounts.get('contextmenu'), 1);
-  assert.equal(listenerCounts.get('pointerlockchange'), 1);
-  assert.equal(windowCounts.get('resize'), 1);
-  assert.equal(windowCounts.get('blur'), 1);
+  assert.equal(listenerAdds.get('keydown'), 2);
+  assert.equal(listenerAdds.get('keyup'), 2);
+  assert.equal(listenerAdds.get('mousemove'), 2);
+  assert.equal(listenerAdds.get('mousedown'), 2);
+  assert.equal(listenerAdds.get('contextmenu'), 2);
+  assert.equal(listenerAdds.get('pointerlockchange'), 2);
+  assert.equal(listenerRemoves.get('keydown'), 2);
+  assert.equal(listenerRemoves.get('keyup'), 2);
+  assert.equal(listenerRemoves.get('mousemove'), 2);
+  assert.equal(listenerRemoves.get('mousedown'), 2);
+  assert.equal(listenerRemoves.get('contextmenu'), 2);
+  assert.equal(listenerRemoves.get('pointerlockchange'), 2);
+  assert.equal(listenerActive.get('keydown'), 0);
+  assert.equal(listenerActive.get('keyup'), 0);
+  assert.equal(listenerActive.get('mousemove'), 0);
+  assert.equal(listenerActive.get('mousedown'), 0);
+  assert.equal(listenerActive.get('contextmenu'), 0);
+  assert.equal(listenerActive.get('pointerlockchange'), 0);
+  assert.equal(windowAdds.get('resize'), 2);
+  assert.equal(windowAdds.get('blur'), 2);
+  assert.equal(windowRemoves.get('resize'), 2);
+  assert.equal(windowRemoves.get('blur'), 2);
+  assert.equal(windowActive.get('resize'), 0);
+  assert.equal(windowActive.get('blur'), 0);
 });
 
 test('fire action is a no-op when the player view rig is not initialized', async () => {
@@ -160,4 +192,35 @@ test('fire action is a no-op when the player view rig is not initialized', async
   assert.doesNotThrow(() => {
     player.triggerAction('fire');
   });
+});
+
+test('player getters fill provided vectors and equipSlot changes the equipped weapon', async () => {
+  const player = await loadPlayerHarness();
+  const scene = new THREE.Scene();
+  player.init(scene);
+  player.setLoadout({ slots: ['sniper', 'rifle'] });
+
+  const posOut = new THREE.Vector3();
+  const eyeOut = new THREE.Vector3();
+  const coreOut = new THREE.Vector3();
+  const throwOut = new THREE.Vector3();
+  const muzzleOut = new THREE.Vector3();
+  const camera = player.getCamera();
+
+  assert.equal(player.equipSlot(0), 'sniper');
+  assert.equal(player.getEquippedWeaponId(), 'sniper');
+  assert.equal(player.getPosition(posOut), posOut);
+  assert.deepEqual({ x: posOut.x, y: posOut.y, z: posOut.z }, { x: 5, y: 1.6, z: 6 });
+  assert.notEqual(player.getPosition(), posOut);
+
+  assert.equal(player.getEyeWorldPosition(eyeOut), eyeOut);
+  assert.equal(player.getCoreWorldPosition(coreOut), coreOut);
+  assert.equal(player.getThrowableOriginWorldPosition(throwOut), throwOut);
+  assert.equal(player.getMuzzleWorldPosition(muzzleOut), muzzleOut);
+  assert.deepEqual(
+    { x: eyeOut.x, y: eyeOut.y, z: eyeOut.z },
+    { x: camera.position.x, y: camera.position.y, z: camera.position.z }
+  );
+  assert.ok(coreOut.y < eyeOut.y);
+  assert.ok(throwOut.y < eyeOut.y);
 });

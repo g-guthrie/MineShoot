@@ -1,7 +1,6 @@
 export const PUBLIC_ROOM_PREFIX = {
   ffa: 'ffa',
-  tdm: 'tdm',
-  lms: 'lms'
+  tdm: 'tdm'
 };
 
 export const PRIVATE_ROOM_PREFIX = 'private';
@@ -16,8 +15,7 @@ export const PRIVATE_ROOM_CODE_LENGTH = 6;
 
 export const PUBLIC_ROOM_START_THRESHOLDS = {
   ffa: 1,
-  tdm: 2,
-  lms: 2
+  tdm: 2
 };
 
 export function publicRoomStartThresholdForMode(gameMode) {

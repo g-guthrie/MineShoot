@@ -4,9 +4,12 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
+const SHARED_HITBOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
+SHARED_HITBOX_GEOMETRY.userData = { sharedHitboxGeometry: true };
+
 function createHitbox(type, ownerType, options) {
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
+    SHARED_HITBOX_GEOMETRY,
     new THREE.MeshBasicMaterial({ transparent: true, opacity: Number(options && options.opacity || 0) })
   );
   mesh.userData = {
@@ -118,6 +121,55 @@ test('actor visual boundary owns a root wrapper, syncs transform, and cleans it 
   assert.equal(actor.root.parent, null);
   assert.equal(actor.bodyHitbox.parent, null);
   assert.equal(actor.headHitbox.parent, null);
+});
+
+test('actor visual destroy keeps shared hitbox geometry alive while disposing per-actor resources', async () => {
+  const factory = await loadActorVisualFactory();
+  const actor = factory.create({ ownerType: 'net', targetId: 'remote-cleanup', weaponId: 'rifle', includeRevealGhost: true });
+  const secondActor = factory.create({ ownerType: 'net', targetId: 'remote-cleanup-b', weaponId: 'rifle', includeRevealGhost: true });
+  let rigDisposed = 0;
+  let revealDisposed = 0;
+  let chokeDisposed = 0;
+  let hitboxMaterialDisposed = 0;
+  let hitboxGeometryDisposed = 0;
+
+  const originalRigDispose = actor.rigApi.dispose.bind(actor.rigApi);
+  actor.rigApi.dispose = function () {
+    rigDisposed += 1;
+    return originalRigDispose();
+  };
+  const originalRevealDispose = actor.revealGhost.userData.revealMaterials[0].dispose.bind(actor.revealGhost.userData.revealMaterials[0]);
+  actor.revealGhost.userData.revealMaterials[0].dispose = function () {
+    revealDisposed += 1;
+    return originalRevealDispose();
+  };
+  const originalChokeDispose = actor.chokeFx.userData.parts.neckGrip.geometry.dispose.bind(actor.chokeFx.userData.parts.neckGrip.geometry);
+  actor.chokeFx.userData.parts.neckGrip.geometry.dispose = function () {
+    chokeDisposed += 1;
+    return originalChokeDispose();
+  };
+  const originalHitboxMaterialDispose = actor.bodyHitbox.material.dispose.bind(actor.bodyHitbox.material);
+  actor.bodyHitbox.material.dispose = function () {
+    hitboxMaterialDisposed += 1;
+    return originalHitboxMaterialDispose();
+  };
+  const originalHitboxGeometryDispose = actor.bodyHitbox.geometry.dispose.bind(actor.bodyHitbox.geometry);
+  actor.bodyHitbox.geometry.dispose = function () {
+    hitboxGeometryDisposed += 1;
+    return originalHitboxGeometryDispose();
+  };
+
+  assert.equal(actor.bodyHitbox.geometry, secondActor.bodyHitbox.geometry);
+
+  actor.destroy();
+  secondActor.destroy();
+  actor.destroy();
+
+  assert.equal(rigDisposed, 1);
+  assert.equal(revealDisposed, 1);
+  assert.equal(chokeDisposed, 1);
+  assert.equal(hitboxMaterialDisposed, 1);
+  assert.equal(hitboxGeometryDisposed, 0);
 });
 
 test('reveal ghost can be tinted per ability state without affecting the base actor materials', async () => {

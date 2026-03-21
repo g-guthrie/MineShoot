@@ -13,6 +13,14 @@
     function create(opts) {
         opts = opts || {};
 
+        function sharedApi() {
+            return opts.getSharedApi ? (opts.getSharedApi() || {}) : (globalThis.__MAYHEM_RUNTIME.GameShared || {});
+        }
+
+        function abilityFxApi() {
+            return opts.getAbilityFxApi ? (opts.getAbilityFxApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null);
+        }
+
         function readArray(name) {
             var fn = opts[name];
             var value = typeof fn === 'function' ? fn() : [];
@@ -240,7 +248,7 @@
             var user = opts.getCurrentUser();
             if (!user) return null;
             var defaults = opts.classStats(user.classId || 'abilities');
-            var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+            var shared = sharedApi();
             var survivability = shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
             return {
                 id: user.id,
@@ -250,9 +258,6 @@
                 armorMax: defaults.armorMax,
                 classId: user.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
-                lmsLives: 0,
-                lmsCharge: 0,
-                outOfRound: false,
                 throwables: null,
                 kills: 0,
                 deaths: 0,
@@ -274,7 +279,7 @@
         function getSelfAbilityState() {
             var selfState = typeof opts.getSelfState === 'function' ? opts.getSelfState() : null;
             if (!selfState) return null;
-            var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+            var abilityFxView = abilityFxApi();
             var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
                 ? abilityFxView.buildSnapshotAbilityState(selfState)
                 : {
@@ -397,8 +402,6 @@
         }
 
         function getRespawnState() {
-            var selfState = getAuthoritativeSelfState();
-            if (selfState && selfState.outOfRound) return null;
             var pendingRespawnInfo = typeof opts.getPendingRespawnInfo === 'function' ? opts.getPendingRespawnInfo() : null;
             if (!pendingRespawnInfo || !pendingRespawnInfo.active) return null;
             return {

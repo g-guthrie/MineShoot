@@ -6,11 +6,16 @@ cd "$ROOT_DIR"
 
 WORKER_PORT="${WORKER_PORT:-8791}"
 PERSIST_DIR="${WRANGLER_PERSIST_DIR:-$ROOT_DIR/.wrangler/e2e-state}"
+REUSE_EXISTING_SERVER="${REUSE_EXISTING_SERVER:-0}"
 
 mkdir -p "$ROOT_DIR/.wrangler"
 rm -rf "$PERSIST_DIR"
 
 if lsof -nP -iTCP:"${WORKER_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  if [[ "$REUSE_EXISTING_SERVER" == "1" ]]; then
+    echo "Reusing existing worker on port ${WORKER_PORT}." >&2
+    exit 0
+  fi
   echo "Port ${WORKER_PORT} is already in use. Stop the existing process before starting E2E worker." >&2
   exit 1
 fi

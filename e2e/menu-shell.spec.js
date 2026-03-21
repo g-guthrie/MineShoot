@@ -23,7 +23,7 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await expect(page.locator('#menu-party-id-value')).not.toHaveText('------');
   await expect(page.locator('#menu-screen-mode')).toBeVisible();
   expect(await page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(false);
-  expect(await page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(false);
+  expect(await page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime()))).toBe(false);
 
   await openAuth(page);
   await expect.poll(() => page.evaluate(() => document.activeElement && document.activeElement.id)).toBe('auth-username');
@@ -43,10 +43,10 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.locator('#utility-close-btn').click();
 
   await page.locator('#game-modes-toggle-btn').click();
-  await page.locator('#practice-mode-btn').click();
+  await page.locator('#sandbox-mode-btn').click();
   await page.locator('#primary-launch-btn').click();
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
-  await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime()))).toBe(true);
 });
 
 test('three-menu hero layout keeps the home hero contained without horizontal overflow', async ({ page }) => {

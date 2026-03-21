@@ -6,14 +6,8 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var domUtils = runtime.GameDomUtils || null;
     var activeTestHandle = null;
-
-    function editableTarget(target) {
-        var node = target || null;
-        var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
-        if (node && node.isContentEditable) return true;
-        return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-    }
 
     function create(opts) {
         opts = opts || {};
@@ -23,6 +17,17 @@
         var throwableHeldType = '';
         var bound = false;
         var listenerRemovers = [];
+        var localAbilityPos = {
+            x: 0,
+            y: 0,
+            z: 0,
+            set: function (x, y, z) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                return this;
+            }
+        };
 
         function matchesBinding(actionId, event, fallbackCodes) {
             var bindingsApi = runtime.GameInputBindings || null;
@@ -52,6 +57,22 @@
 
         function hasInputCapture() {
             return !!(opts.hasInputCapture && opts.hasInputCapture());
+        }
+
+        function docsLoaderApi() {
+            return runtime.GameRuntimeLoader || null;
+        }
+
+        function docsApi() {
+            if (opts.getDocsApi) {
+                var providedApi = opts.getDocsApi();
+                if (providedApi) return providedApi;
+            }
+            var loader = docsLoaderApi();
+            if (loader && loader.getLoadedDocsRuntime) {
+                return loader.getLoadedDocsRuntime() || null;
+            }
+            return null;
         }
 
         function canUseLocalAction(actionType) {
@@ -217,7 +238,7 @@
                 return;
             }
 
-            var playerPos = runtime.GamePlayer.getPosition();
+            var playerPos = runtime.GamePlayer.getPosition(localAbilityPos);
             var rot = runtime.GamePlayer.getRotation();
             var outcome = runtime.GameAbilities.triggerAbility(
                 slotIndex,
@@ -273,19 +294,19 @@
 
         function bindDocsControls() {
             listen(document, 'keydown', function (e) {
-                if (editableTarget(e.target)) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
+                var loader = docsLoaderApi();
                 if (matchesBinding('open_manual', e, 'KeyI')) {
                     e.preventDefault();
-                    if (runtime.GameRuntimeLoader && runtime.GameRuntimeLoader.toggleDocs) {
-                        runtime.GameRuntimeLoader.toggleDocs();
-                    } else if (runtime.GameDocs && runtime.GameDocs.toggle) {
-                        runtime.GameDocs.toggle();
+                    if (loader && loader.toggleDocs) {
+                        loader.toggleDocs();
                     }
                     return;
                 }
 
-                if (e.code === 'Escape' && runtime.GameDocs && runtime.GameDocs.isOpen && runtime.GameDocs.isOpen()) {
-                    runtime.GameDocs.close();
+                var loadedDocsApi = docsApi();
+                if (e.code === 'Escape' && loadedDocsApi && loadedDocsApi.isOpen && loadedDocsApi.isOpen()) {
+                    loadedDocsApi.close();
                 }
             });
         }

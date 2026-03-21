@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var inputLabels = runtime.GameInputLabels || null;
     var GameGameplayHudSync = {};
     var lastReloadPresentationByWeaponId = {};
 
@@ -20,14 +21,6 @@
             ? Number(netApi.getAuthoritativeNow() || 0)
             : 0;
         return stamp > 0 ? stamp : Date.now();
-    }
-
-    function bindingLabel(actionId, fallbackLabel) {
-        var bindingsApi = runtime.GameInputBindings || null;
-        if (bindingsApi && bindingsApi.getDisplayLabel) {
-            return bindingsApi.getDisplayLabel(actionId);
-        }
-        return String(fallbackLabel || '--');
     }
 
     function currentSelfCombatState(nowMs) {
@@ -296,8 +289,8 @@
                 });
             }
 
-            addAbilitySlot(1, bindingLabel('ability_1', 'E'), options.abilityLoadoutState.slot1, Number(abilityDebug && abilityDebug.cooldownSlot1 || 0));
-            addAbilitySlot(2, bindingLabel('ability_2', 'F'), options.abilityLoadoutState.slot2, Number(abilityDebug && abilityDebug.cooldownSlot2 || 0));
+            addAbilitySlot(1, inputLabels.getBindingLabel('ability_1', 'E'), options.abilityLoadoutState.slot1, Number(abilityDebug && abilityDebug.cooldownSlot1 || 0));
+            addAbilitySlot(2, inputLabels.getBindingLabel('ability_2', 'F'), options.abilityLoadoutState.slot2, Number(abilityDebug && abilityDebug.cooldownSlot2 || 0));
         }
 
         if (options.weaponDebugState) {
@@ -328,7 +321,7 @@
             }
             sections.push({
                 tone: 'throwable',
-                title: bindingLabel('throwable', 'Q') + ' ' + String(throwable.label || throwable.selectedThrowableId || '--').toUpperCase() +
+                title: inputLabels.getBindingLabel('throwable', 'Q') + ' ' + String(throwable.label || throwable.selectedThrowableId || '--').toUpperCase() +
                     ' :: ' + Number(throwable.charges || 0) +
                     (throwable.cooldownRemaining > 0 && !throwable.charges ? ' (' + throwable.cooldownRemaining.toFixed(1) + 's)' : ''),
                 body: throwableLines.join('\n')

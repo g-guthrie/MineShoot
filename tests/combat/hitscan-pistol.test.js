@@ -26,7 +26,12 @@ function createHitbox(type, center, size, targetId = 'target') {
 }
 
 async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
-  const code = await fs.readFile(new URL('../../js/combat/hitscan.js', import.meta.url), 'utf8');
+  const [tracerCode, weaponRuntimeCode, shotRuntimeCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/combat/hitscan-tracer-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan-weapon-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan-shot-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan.js', import.meta.url), 'utf8')
+  ]);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 200);
   camera.position.set(0, 1.6, 0);
@@ -111,7 +116,11 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
   };
   sandbox.globalThis = sandbox;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(tracerCode, context);
+  vm.runInContext(weaponRuntimeCode, context);
+  vm.runInContext(shotRuntimeCode, context);
+  vm.runInContext(code, context);
   sandbox.__MAYHEM_RUNTIME.GameHitscan.setWeapon('pistol');
 
   return {

@@ -12,10 +12,12 @@ import {
 } from '../../shared/gameplay-tuning.js';
 import { getGameModeCatalog } from '../../shared/game-modes.js';
 import { matchRules } from '../../shared/match-rules.js';
-import { lmsRules } from '../../shared/lms-mode.js';
 
 async function loadDocsHarness(loadoutOverride = null, runtimeOverrides = {}) {
-  const code = await fs.readFile(new URL('../../js/runtime/docs.js', import.meta.url), 'utf8');
+  const [inputLabelsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/runtime/docs.js', import.meta.url), 'utf8')
+  ]);
   const sandbox = {
     console,
     window: {},
@@ -28,8 +30,7 @@ async function loadDocsHarness(loadoutOverride = null, runtimeOverrides = {}) {
         getWeaponPresentation,
         resolveWeaponAimProfile,
         getGameModeCatalog,
-        matchRules,
-        lmsMode: { rules: lmsRules }
+        matchRules
       },
       GameMenuLoadout: {
         getRuntimeSnapshot() {
@@ -45,7 +46,9 @@ async function loadDocsHarness(loadoutOverride = null, runtimeOverrides = {}) {
   };
   sandbox.globalThis = sandbox;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(inputLabelsCode, context);
+  vm.runInContext(code, context);
   return sandbox.__MAYHEM_RUNTIME.GameDocs._test;
 }
 

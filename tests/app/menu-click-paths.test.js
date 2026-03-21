@@ -203,6 +203,8 @@ class FakeElement {
 
 async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
   const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
+  const rendererCode = await fs.readFile(new URL('../../js/app/lobby-renderer.js', import.meta.url), 'utf8');
+  const actionsCode = await fs.readFile(new URL('../../js/app/lobby-actions.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/app/lobby-controller.js', import.meta.url), 'utf8');
 
   const storageMap = new Map();
@@ -307,8 +309,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['div', 'play-mode-options'],
     ['button', 'play-mode-ffa-btn'],
     ['button', 'play-mode-tdm-btn'],
-    ['button', 'play-mode-lms-btn'],
-    ['button', 'practice-mode-btn'],
+    ['button', 'sandbox-mode-btn'],
     ['div', 'room-access-status'],
     ['button', 'loadout-start-btn'],
     ['button', 'continue-loadout-btn'],
@@ -347,7 +348,6 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
     ['div', 'private-room-summary'],
     ['button', 'private-room-mode-ffa-btn'],
     ['button', 'private-room-mode-tdm-btn'],
-    ['button', 'private-room-mode-lms-btn'],
     ['button', 'private-room-teams-2-btn'],
     ['button', 'private-room-teams-3-btn'],
     ['button', 'private-room-teams-4-btn'],
@@ -781,6 +781,8 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
 
   const context = vm.createContext(sandbox);
   vm.runInContext(viewCode, context);
+  vm.runInContext(rendererCode, context);
+  vm.runInContext(actionsCode, context);
   vm.runInContext(code, context);
 
   sandbox.__MAYHEM_RUNTIME.GameLobbyController.init({
@@ -1134,12 +1136,35 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(elements['room-access-status'].hidden, true);
 });
 
+test('sandbox mode launches the offline sandbox without requesting matchmaking', async () => {
+  const harness = await loadHarness();
+  const { elements, matchmakingCalls, launchCalls } = harness;
+
+  elements['game-modes-toggle-btn'].click();
+  assert.equal(elements['play-mode-options'].hidden, false);
+
+  elements['sandbox-mode-btn'].click();
+  assert.equal(elements['play-mode-options'].hidden, true);
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Sandbox');
+
+  elements['primary-launch-btn'].click();
+  await harness.flush();
+
+  assert.equal(matchmakingCalls.length, 0);
+  assert.equal(launchCalls.length, 1);
+  assert.equal(launchCalls[0].modeId, 'single_full_sandbox');
+  assert.equal(launchCalls[0].options.gameMode, 'ffa');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'SANDBOX');
+  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
+});
+
 test('main room action creates a room and opens the party surface', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
   elements['game-modes-toggle-btn'].click();
-  elements['play-mode-lms-btn'].click();
+  elements['play-mode-tdm-btn'].click();
   elements['continue-loadout-btn'].click();
   await harness.flush();
 
@@ -1583,10 +1608,10 @@ test('hidden menu caches structured match model and applies it when the active s
   harness.emitMatchMenuModel({
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'LMS' },
+    modePill: { label: 'MODE', value: 'TDM' },
     contextPill: { label: 'STATE', value: 'WAITING' },
-    primaryPill: { label: 'LIVES', value: '2' },
-    secondaryPill: { label: 'CHARGE', value: '1' }
+    primaryPill: { label: 'KILLS', value: '2' },
+    secondaryPill: { label: 'DEATHS', value: '1' }
   });
 
   assert.equal(elements['active-match-shell'].hidden, true);
@@ -1600,7 +1625,7 @@ test('hidden menu caches structured match model and applies it when the active s
     launchContext: {}
   });
 
-  assert.equal(elements['active-match-mode-pill'].textContent, 'LMS');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
   assert.equal(elements['active-match-context-pill'].textContent, 'WAITING');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, '2');
   assert.equal(elements['active-match-secondary-stat-pill'].textContent, '1');

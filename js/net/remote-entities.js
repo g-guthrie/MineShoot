@@ -11,18 +11,37 @@
     var renderMap = new Map();
     var hitboxArray = [];
     var hitboxVisible = false;
-    var entityConstants = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityConstants) || {};
+    var deps = {};
+
+    function sharedApi() {
+        return deps.getSharedApi ? (deps.getSharedApi() || {}) : ((globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared) || {});
+    }
+
+    function combatTuningApi() {
+        return deps.getCombatTuningApi ? (deps.getCombatTuningApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameCombatTuning || null);
+    }
+
+    function actorVisualFactory() {
+        return deps.getActorVisualFactory ? (deps.getActorVisualFactory() || null) : (globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null);
+    }
+
+    function abilityFxApi() {
+        return deps.getAbilityFxApi ? (deps.getAbilityFxApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null);
+    }
+
+    var entityConstants = sharedApi().entityConstants || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
     var DEFAULT_INTERPOLATION_DELAY_MS = 78;
     var MAX_SNAPSHOT_HISTORY = 20;
+    var TELEPORT_RESET_DISTANCE_SQ = 64;
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
     }
 
     function remoteInterpolationTuning() {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
+        var shared = sharedApi();
         var network = shared.gameplayTuning && shared.gameplayTuning.network
             ? shared.gameplayTuning.network
             : null;
@@ -68,13 +87,34 @@
             footY: snapshotFootY(entity),
             z: Number(entity.z || 0),
             yaw: Number(entity.yaw || 0),
-            pitch: Number(entity.pitch || 0)
+            pitch: Number(entity.pitch || 0),
+            alive: entity.alive !== false,
+            moveSpeedNorm: Number(entity.moveSpeedNorm || 0),
+            sprinting: !!entity.sprinting,
+            movingForward: !!entity.movingForward,
+            movingBackward: !!entity.movingBackward,
+            isGrounded: entity.isGrounded !== false,
+            velocityY: Number(entity.velocityY || 0),
+            muzzleFlashUntil: Number(entity.muzzleFlashUntil || 0)
         };
         var interpolationTuning = remoteInterpolationTuning();
         var maxSnapshotHistory = Math.max(8, Math.round(Number(interpolationTuning.historySize || MAX_SNAPSHOT_HISTORY)));
         var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory.slice() : [];
         var previous = history.length > 0 ? history[history.length - 1] : null;
-        if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
+        var dx = previous ? (Number(previous.x || 0) - sample.x) : 0;
+        var dy = previous ? (Number(previous.footY || 0) - sample.footY) : 0;
+        var dz = previous ? (Number(previous.z || 0) - sample.z) : 0;
+        var teleported = !!(
+            previous &&
+            (
+                ((dx * dx) + (dy * dy) + (dz * dz)) > TELEPORT_RESET_DISTANCE_SQ ||
+                (!previous.alive && sample.alive)
+            )
+        );
+        if (teleported) {
+            history.length = 0;
+            history.push(sample);
+        } else if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
             history[history.length - 1] = sample;
         } else {
             history.push(sample);
@@ -141,17 +181,59 @@
                 Number(interpolationTuning.defaultDelayMs || DEFAULT_INTERPOLATION_DELAY_MS)
             );
         }
+        return teleported;
+    }
+
+    function applyImmediateRemoteTransform(render, entity) {
+        if (!render || !entity || !render.group) return;
+        var nextX = Number(entity.x || 0);
+        var nextFootY = snapshotFootY(entity);
+        var nextZ = Number(entity.z || 0);
+        var nextYaw = Number(entity.yaw || 0);
+        var nextPitch = Number(entity.pitch || 0);
+        if (render.actorVisual && render.actorVisual.setWorldTransform) {
+            render.actorVisual.setWorldTransform({
+                x: nextX,
+                y: nextFootY,
+                z: nextZ
+            }, nextYaw);
+        } else {
+            render.group.position.x = nextX;
+            render.group.position.y = nextFootY;
+            render.group.position.z = nextZ;
+            render.group.rotation.y = nextYaw;
+        }
+        render.combatX = nextX;
+        render.combatY = nextFootY + REMOTE_EYE_HEIGHT;
+        render.combatZ = nextZ;
+        render.combatYaw = nextYaw;
+        render.combatPitch = nextPitch;
+        if (render.actorVisual && render.actorVisual.syncHitboxes) {
+            render.actorVisual.syncHitboxes({
+                x: nextX,
+                y: nextFootY,
+                z: nextZ
+            });
+        } else {
+            if (render.bodyHitbox && render.bodyHitbox.position && render.bodyHitbox.position.set) {
+                render.bodyHitbox.position.set(nextX, nextFootY + 0.7625, nextZ);
+            }
+            if (render.headHitbox && render.headHitbox.position && render.headHitbox.position.set) {
+                render.headHitbox.position.set(nextX, nextFootY + 2.0, nextZ);
+            }
+        }
     }
 
     function classWallhackRadiusFor(classId) {
-        if (globalThis.__MAYHEM_RUNTIME.GameCombatTuning && globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius) {
-            return globalThis.__MAYHEM_RUNTIME.GameCombatTuning.getClassWallhackRadius(classId);
+        var tuningApi = combatTuningApi();
+        if (tuningApi && tuningApi.getClassWallhackRadius) {
+            return tuningApi.getClassWallhackRadius(classId);
         }
         return 90;
     }
 
     function sharedClassPreset(classId) {
-        var shared = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning) || {};
+        var shared = sharedApi().gameplayTuning || {};
         var presets = shared.classPresets || {};
         return presets[classId] || presets.abilities || null;
     }
@@ -168,7 +250,7 @@
 
     function createRemoteVisual(entity, snapshotMeta) {
         var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
-        var actorFactory = globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null;
+        var actorFactory = actorVisualFactory();
         if (!actorFactory || !actorFactory.create) {
             throw new Error('GameNetEntities requires GameActorVisualFactory.create.');
         }
@@ -209,7 +291,7 @@
         sceneRef.add(group);
         if (bodyHitbox) hitboxArray.push(bodyHitbox);
         if (headHitbox) hitboxArray.push(headHitbox);
-        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+        var abilityFxView = abilityFxApi();
         var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
             ? abilityFxView.buildSnapshotAbilityState(entity)
             : {
@@ -319,7 +401,7 @@
         r.targetZ = entity.z;
         r.targetYaw = (entity.yaw || 0);
         r.targetPitch = entity.pitch || 0;
-        appendSnapshotHistory(r, entity, snapshotMeta);
+        var teleported = appendSnapshotHistory(r, entity, snapshotMeta);
         r.hp = entity.hp;
         r.hpMax = entity.hpMax;
         r.armor = entity.armor;
@@ -341,7 +423,7 @@
         r.streamHeat = entity.streamHeat || 0;
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
-        var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx;
+        var abilityFxView = abilityFxApi();
         var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
             ? abilityFxView.buildSnapshotAbilityState(entity)
             : {
@@ -364,6 +446,9 @@
         if (r.actorVisual && r.actorVisual.setAlive) {
             r.actorVisual.setAlive(entity.alive);
             r.actorVisual.setHitboxVisibility(hitboxVisible);
+        }
+        if (teleported) {
+            applyImmediateRemoteTransform(r, entity);
         }
     };
 
@@ -388,6 +473,11 @@
 
     GameNetEntities.getRenderMap = function () {
         return renderMap;
+    };
+
+    GameNetEntities.configure = function (nextDeps) {
+        deps = nextDeps && typeof nextDeps === 'object' ? nextDeps : {};
+        entityConstants = sharedApi().entityConstants || {};
     };
 
     GameNetEntities.getCoreWorldPosition = function (entityId, outVec3) {

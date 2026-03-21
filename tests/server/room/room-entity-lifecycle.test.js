@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   createBotEntity,
   createPlayerEntity,
-  resetEntityForLmsRound,
   resetEntityForRespawn
 } from '../../../cloudflare/server/room/EntityLifecycle.js';
 
@@ -110,7 +109,6 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   player.lastShotAt = { rifle: 10 };
   player.lastShotTokenByWeapon = { rifle: 'dup' };
   player.muzzleFlashUntil = 200;
-  player.lmsBankState = { beaconId: 'b1' };
   player.throwables.frag.charges = 0;
   player.lastThrowAt = 22;
   player.slot1CooldownUntil = 100;
@@ -146,7 +144,6 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   assert.deepEqual(player.lastShotAt, {});
   assert.deepEqual(player.lastShotTokenByWeapon, {});
   assert.equal(player.muzzleFlashUntil, 0);
-  assert.equal(player.lmsBankState, null);
   assert.deepEqual(player.throwables, createThrowableRuntime());
   assert.equal(player.lastThrowAt, 0);
   assert.notEqual(player.inputState, previousInput);
@@ -164,40 +161,4 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   assert.equal(player.moveSpeedNorm, 0);
   assert.equal(player.sprinting, false);
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
-});
-
-test('resetEntityForLmsRound applies LMS progression state on top of respawn defaults', () => {
-  const player = createPlayerEntity({
-    id: 'usr_3',
-    username: 'CHARLIE',
-    eyeHeight: 1.6,
-    createMovementInputState,
-    createThrowableRuntime,
-    createWeaponAmmoRuntime
-  });
-
-  player.teamId = 'alpha';
-  player.progressScore = 99;
-  player.lmsLives = 0;
-  player.lmsCharge = 7;
-  player.yaw = 1.1;
-  player.pitch = -0.25;
-
-  resetEntityForLmsRound(player, {
-    startingLives: 4,
-    createMovementInputState,
-    createThrowableRuntime,
-    createWeaponAmmoRuntime,
-    zeroAim: false
-  });
-
-  assert.equal(player.teamId, '');
-  assert.equal(player.progressScore, 4);
-  assert.equal(player.lmsLives, 4);
-  assert.equal(player.lmsCharge, 0);
-  assert.equal(player.alive, true);
-  assert.equal(player.yaw, 1.1);
-  assert.equal(player.pitch, -0.25);
-  assert.equal(player.slot2CooldownUntil, 0);
-  assert.equal(player.abilityLockUntil, 0);
 });

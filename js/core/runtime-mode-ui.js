@@ -49,8 +49,10 @@
         var el = document.getElementById('runtime-indicator');
         if (!el) return;
         options = options || {};
-        el.classList.toggle('debug-active', !!options.debugActive);
-        el.textContent = runtimeIndicatorText(mode, !!options.debugActive);
+        var debugActive = !!options.debugActive;
+        el.hidden = !debugActive;
+        el.classList.toggle('debug-active', debugActive);
+        el.textContent = runtimeIndicatorText(mode, debugActive);
     }
 
     function startupSubtitleForMode(mode) {
@@ -60,9 +62,6 @@
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
                 return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
             }
-            if (String(mode.gameMode || 'ffa').toLowerCase() === 'lms') {
-                return 'Connecting to Last Man Standing: ' + mode.roomId + '...';
-            }
             return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
         if (mode.id === 'single_cloudflare') {
@@ -71,9 +70,7 @@
         if (mode.id === 'single_dev_server') {
             return 'Connecting to Local Multiplayer: ' + mode.roomId + '...';
         }
-        return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
-            ? 'Starting Offline Sandbox: LMS...'
-            : 'Starting Offline Sandbox: FFA...';
+        return 'Starting Offline Sandbox: FFA...';
     }
 
     function startupNoticeForMode(mode) {
@@ -84,9 +81,6 @@
             }
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
                 return 'Team Deathmatch joined room ' + mode.roomId + '.';
-            }
-            if (String(mode.gameMode || 'ffa').toLowerCase() === 'lms') {
-                return 'Last Man Standing joined room ' + mode.roomId + '.';
             }
             return 'Free For All joined room ' + mode.roomId + '.';
         }
@@ -99,9 +93,7 @@
         if (mode.id === 'single_dev_server') {
             return 'Local Multiplayer: shared local-worker room ' + mode.roomId + '.';
         }
-        return String(mode.gameMode || 'ffa').toLowerCase() === 'lms'
-            ? 'Offline Sandbox LMS: local simulated players.'
-            : 'Offline Sandbox FFA: local simulated players.';
+        return 'Offline Sandbox FFA: local simulated players.';
     }
 
     GameRuntimeModeUi.roomCodeFromRoomId = roomCodeFromRoomId;

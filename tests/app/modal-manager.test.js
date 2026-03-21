@@ -31,7 +31,10 @@ class FakeElement {
 }
 
 test('modal manager registers, opens, and closes a dialog with aria/hidden semantics', async () => {
-  const code = await fs.readFile(new URL('../../js/app/modal-manager.js', import.meta.url), 'utf8');
+  const [domUtilsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/app/modal-manager.js', import.meta.url), 'utf8')
+  ]);
   const overlay = new FakeElement('overlay');
   const trigger = new FakeElement('trigger');
   let keydownHandler = null;
@@ -54,7 +57,9 @@ test('modal manager registers, opens, and closes a dialog with aria/hidden seman
     window: windowObj
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(domUtilsCode, context);
+  vm.runInContext(code, context);
   const modalManager = sandbox.globalThis.__MAYHEM_RUNTIME.GameModalManager;
 
   modalManager.register('test', {

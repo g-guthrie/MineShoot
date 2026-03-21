@@ -5,6 +5,7 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var domUtils = runtime.GameDomUtils || null;
     var menuBootReleased = false;
 
     function releaseMenuBoot() {
@@ -56,9 +57,23 @@
         }
     }
 
+    function runtimeLoaderApi() {
+        return runtime.GameRuntimeLoader || null;
+    }
+
+    function gameplayRuntimeApi() {
+        var loader = runtimeLoaderApi();
+        if (loader && loader.getLoadedGameplayRuntime) {
+            var loadedApi = loader.getLoadedGameplayRuntime();
+            if (loadedApi) return loadedApi;
+        }
+        return null;
+    }
+
     function currentGameplayActivityState() {
-        if (runtime.GameMain && runtime.GameMain.getActivityState) {
-            return runtime.GameMain.getActivityState();
+        var gameplayApi = gameplayRuntimeApi();
+        if (gameplayApi && gameplayApi.getActivityState) {
+            return gameplayApi.getActivityState();
         }
         return 'menu';
     }
@@ -66,13 +81,6 @@
     function bindDocsControls() {
         var pauseOpenBtnEl = document.getElementById('open-manual-btn');
         var hudOpenBtnEl = document.getElementById('hud-manual-btn');
-
-        function editableTarget(target) {
-            var node = target || null;
-            var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
-            if (node && node.isContentEditable) return true;
-            return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-        }
 
         function openDocs(event) {
             if (event) {
@@ -102,7 +110,7 @@
                 } else if (event.code !== 'KeyI') {
                     return;
                 }
-                if (editableTarget(event.target)) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return;
                 openDocs(event);
             });
         }
@@ -125,17 +133,19 @@
 
     function launchModeById(modeId, options) {
         options = options || {};
-        if (runtime.GameMain && runtime.GameMain.launchModeById) {
-            return runtime.GameMain.launchModeById(modeId, options);
+        var gameplayApi = gameplayRuntimeApi();
+        if (gameplayApi && gameplayApi.launchModeById) {
+            return gameplayApi.launchModeById(modeId, options);
         }
-        if (!runtime.GameRuntimeLoader || !runtime.GameRuntimeLoader.loadGameplayRuntime) {
+        var loader = runtimeLoaderApi();
+        if (!loader || !loader.loadGameplayRuntime) {
             return Promise.resolve({ ok: false, error: 'Gameplay runtime loader unavailable.' });
         }
-        return runtime.GameRuntimeLoader.loadGameplayRuntime().then(function (gameMain) {
-            if (!gameMain || !gameMain.launchModeById) {
+        return loader.loadGameplayRuntime().then(function (loadedGameplayApi) {
+            if (!loadedGameplayApi || !loadedGameplayApi.launchModeById) {
                 return { ok: false, error: 'Gameplay launcher unavailable.' };
             }
-            return gameMain.launchModeById(modeId, options);
+            return loadedGameplayApi.launchModeById(modeId, options);
         }).catch(function (err) {
             return {
                 ok: false,
@@ -149,6 +159,7 @@
 
         if (runtime.GameLobbyController && runtime.GameLobbyController.init) {
             runtime.GameLobbyController.init({
+                deps: runtime.GameLobbyControllerDeps || null,
                 prepareMenu: prepareMenuUi,
                 setRuntimeIndicator: setRuntimeIndicator,
                 launchModeById: launchModeById,

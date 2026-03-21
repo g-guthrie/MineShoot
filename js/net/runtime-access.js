@@ -5,9 +5,17 @@
 (function () {
     'use strict';
 
-    function create() {
+    function create(opts) {
+        opts = opts || {};
+        var explicitRuntime = opts.runtime && typeof opts.runtime === 'object'
+            ? opts.runtime
+            : null;
+        var fireOriginScratch = (typeof THREE !== 'undefined' && THREE && THREE.Vector3)
+            ? new THREE.Vector3()
+            : null;
+
         function runtime() {
-            return globalThis.__MAYHEM_RUNTIME || {};
+            return explicitRuntime || globalThis.__MAYHEM_RUNTIME || {};
         }
 
         function shared() {
@@ -144,7 +152,9 @@
             if (!payload.aimOrigin) {
                 var fireOrigin = null;
                 if (playerApi && playerApi.getEyeWorldPosition) {
-                    fireOrigin = playerApi.getEyeWorldPosition();
+                    fireOrigin = fireOriginScratch
+                        ? playerApi.getEyeWorldPosition(fireOriginScratch)
+                        : playerApi.getEyeWorldPosition();
                 }
                 if ((!fireOrigin || !isFinite(Number(fireOrigin.x)) || !isFinite(Number(fireOrigin.y)) || !isFinite(Number(fireOrigin.z))) && playerApi && playerApi.getCamera) {
                     var fireCamera = playerApi.getCamera();

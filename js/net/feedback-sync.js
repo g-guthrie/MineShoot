@@ -9,11 +9,35 @@
     var confirmedShotFeedback = [];
     var PREDICTED_HIT_MAX = 128;
     var CONFIRMED_SHOT_MAX = 64;
-    var PREDICTED_HIT_TTL_MS = 900;
-    var CONFIRMED_SHOT_TTL_MS = 2000;
+    var feedbackSelfPos = {
+        x: 0,
+        y: 0,
+        z: 0,
+        set: function (x, y, z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            return this;
+        }
+    };
 
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
+    }
+
+    function feedbackTuning() {
+        var shared = runtime().GameShared || {};
+        var network = shared.gameplayTuning && shared.gameplayTuning.network
+            ? shared.gameplayTuning.network
+            : null;
+        var feedback = network && network.feedback ? network.feedback : {};
+        return {
+            predictedHitTtlMs: Math.max(1, Number(feedback.predictedHitTtlMs || 900)),
+            confirmedShotTtlMs: Math.max(
+                Math.max(1, Number(feedback.predictedHitTtlMs || 900)),
+                Number(feedback.confirmedShotTtlMs || (Math.max(1, Number(feedback.predictedHitTtlMs || 900)) * 2.25))
+            )
+        };
     }
 
     function normalizePelletIndex(value) {
@@ -36,7 +60,7 @@
             var entry = predictedHitFeedback[i];
             if (!entry) continue;
             var ageMs = stamp - Number(entry.at || 0);
-            if (ageMs < 0 || ageMs > PREDICTED_HIT_TTL_MS) continue;
+            if (ageMs < 0 || ageMs > feedbackTuning().predictedHitTtlMs) continue;
             next.push(entry);
         }
         predictedHitFeedback = next;
@@ -49,7 +73,7 @@
             var entry = confirmedShotFeedback[i];
             if (!entry) continue;
             var ageMs = stamp - Number(entry.at || 0);
-            if (ageMs < 0 || ageMs > CONFIRMED_SHOT_TTL_MS) continue;
+            if (ageMs < 0 || ageMs > feedbackTuning().confirmedShotTtlMs) continue;
             next.push(entry);
         }
         confirmedShotFeedback = next;
@@ -208,9 +232,9 @@
             });
         }
         if (feedback.killed) {
-            RT.GameUI.showKillMarker();
+            if (RT.GameUI && RT.GameUI.showKillMarker) RT.GameUI.showKillMarker();
         } else if (shouldShowAuthoritativeConfirm) {
-            RT.GameUI.showHitMarker();
+            if (RT.GameUI && RT.GameUI.showHitMarker) RT.GameUI.showHitMarker();
         }
 
         if (!suppressDamageNumber) showDamageNumber(feedback, camera);
@@ -232,7 +256,7 @@
             shouldHear = true;
         }
         if (!shouldHear && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GameNet.damagePointForEntityId) {
-            var selfPos = RT.GamePlayer.getPosition();
+            var selfPos = RT.GamePlayer.getPosition(feedbackSelfPos);
             var sourcePos = RT.GameNet.damagePointForEntityId(sourceId);
             if (selfPos && sourcePos) {
                 var dx = Number(selfPos.x || 0) - Number(sourcePos.x || 0);

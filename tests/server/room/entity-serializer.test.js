@@ -30,9 +30,6 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     kills: 0,
     deaths: 0,
     progressScore: 0,
-    lmsLives: 0,
-    lmsCharge: 0,
-    outOfRound: true,
     teamId: '',
     wallhackRadius: 90,
     alive: true,
@@ -76,7 +73,6 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.equal(state.weaponLockUntil, 0);
   assert.equal(state.throwableLockUntil, 0);
   assert.equal(state.abilityLockUntil, 0);
-  assert.equal(state.outOfRound, true);
   assert.equal(state.movingForward, true);
   assert.equal(state.movingBackward, false);
   assert.equal(state.chokeState, undefined);
@@ -113,8 +109,6 @@ test('toEntityState carries authoritative action lock timers', () => {
     kills: 0,
     deaths: 0,
     progressScore: 0,
-    lmsLives: 0,
-    lmsCharge: 0,
     teamId: '',
     wallhackRadius: 90,
     alive: true,
@@ -134,6 +128,49 @@ test('toEntityState carries authoritative action lock timers', () => {
   assert.equal(state.weaponLockUntil, 2100);
   assert.equal(state.throwableLockUntil, 2200);
   assert.equal(state.abilityLockUntil, 2300);
+});
+
+test('toEntityState exposes last processed input seq for snapshot acknowledgements', () => {
+  const state = toEntityState({
+    id: 'usr_test',
+    kind: 'player',
+    username: 'TEST',
+    classId: 'abilities',
+    x: 0,
+    y: 1.6,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    seq: 9,
+    lastProcessedInputSeq: 4,
+    weaponId: 'rifle',
+    moveSpeedNorm: 0,
+    sprinting: false,
+    velocityY: 0,
+    isGrounded: true,
+    jumpHoldTimer: 0,
+    jumpHeldLast: false,
+    hp: 500,
+    hpMax: 500,
+    armor: 90,
+    armorMax: 90,
+    kills: 0,
+    deaths: 0,
+    progressScore: 0,
+    teamId: '',
+    wallhackRadius: 90,
+    alive: true,
+    spawnShieldUntil: 0,
+    streamHeat: 0,
+    streamOverheatedUntil: 0,
+    muzzleFlashUntil: 0,
+    weaponLoadout: ['rifle', 'shotgun'],
+    weaponAmmo: {},
+    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    throwables: {}
+  });
+
+  assert.equal(state.seq, 4);
 });
 
 test('toEntityState resolves completed weapon reloads into a full authoritative magazine for snapshots', () => {
@@ -165,8 +202,6 @@ test('toEntityState resolves completed weapon reloads into a full authoritative 
       kills: 0,
       deaths: 0,
       progressScore: 0,
-      lmsLives: 0,
-      lmsCharge: 0,
       teamId: '',
       wallhackRadius: 90,
       alive: true,

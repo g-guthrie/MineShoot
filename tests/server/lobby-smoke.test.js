@@ -145,23 +145,6 @@ test('party state bootstraps on a fresh local schema', async () => {
   assert.equal(body.state.party.isLeader, true);
 });
 
-test('create room supports LMS mode and starts active', async () => {
-  const env = createFakeEnv();
-
-  const response = await handlePrivateRoomLobby(env, request('/api/private-room', 'POST', {
-    actorId: 'ACTOR_LMS1',
-    displayName: 'SURVIVOR',
-    activityState: 'menu',
-    action: 'create',
-    roomMode: 'lms'
-  }));
-  const body = await jsonBody(response);
-
-  assert.equal(body.ok, true);
-  assert.equal(body.state.room.roomMode, 'lms');
-  assert.equal(body.state.room.roomPhase, 'active');
-});
-
 test('party join lock blocks new joiners until the leader unlocks it', async () => {
   const env = createFakeEnv();
 
@@ -698,51 +681,6 @@ test('empty private rooms are deleted when the last member leaves', async () => 
 
   assert.equal(env.__state.privateRooms.has(roomId), false);
   assert.equal(env.__state.privateRoomState.has(roomId), false);
-});
-
-test('legacy matchmaking private create requires actor identity instead of returning unusable success', async () => {
-  const env = createFakeEnv();
-
-  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
-    action: 'private'
-  }));
-  const body = await jsonBody(response);
-
-  assert.equal(response.status, 400);
-  assert.match(body.error, /actor identity/i);
-});
-
-test('legacy matchmaking private create delegates to private-room lobby when actor identity is present', async () => {
-  const env = createFakeEnv();
-
-  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
-    action: 'private',
-    actorId: 'LEGACY01',
-    displayName: 'LEGACY01',
-    activityState: 'menu'
-  }));
-  const body = await jsonBody(response);
-
-  assert.equal(body.ok, true);
-  assert.equal(body.modeId, 'single_cloudflare');
-  assert.ok(body.state && body.state.room);
-
-  const state = await jsonBody(await handlePrivateRoomLobby(env, request('/api/private-room?actorId=LEGACY01&displayName=LEGACY01', 'GET')));
-  assert.equal(state.state.room.roomId, body.roomId);
-});
-
-test('quick matchmaking returns LMS public rooms when requested', async () => {
-  const env = createFakeEnv();
-
-  const response = await handleMatchmaking(env, request('/api/matchmaking', 'POST', {
-    action: 'quick',
-    gameMode: 'lms'
-  }));
-  const body = await jsonBody(response);
-
-  assert.equal(body.ok, true);
-  assert.equal(body.gameMode, 'lms');
-  assert.match(body.roomId, /^lms-/);
 });
 
 test('quick matchmaking reuses deterministic overflow shards before minting emergency room ids', async () => {

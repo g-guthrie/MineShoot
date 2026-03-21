@@ -237,9 +237,7 @@
                 remoteSyncApi.updateRemoteEntities(
                     dt,
                     opts.getRenderMap(),
-                    opts.getChokeVictimStateForEntity,
-                    opts.sampleRemoteEntityPresentation,
-                    Date.now()
+                    opts.getChokeVictimStateForEntity
                 );
             }
         }

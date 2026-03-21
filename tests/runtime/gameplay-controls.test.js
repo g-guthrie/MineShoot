@@ -58,7 +58,8 @@ class FakeWindow {
 }
 
 async function loadControlsHarness(options = {}) {
-  const [weaponSwapCode, controlsCode] = await Promise.all([
+  const [domUtilsCode, weaponSwapCode, controlsCode] = await Promise.all([
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/runtime/weapon-swap-input.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/runtime/gameplay-controls.js', import.meta.url), 'utf8')
   ]);
@@ -73,6 +74,7 @@ async function loadControlsHarness(options = {}) {
     updateTrackingReticle: [],
     tryPlayerFire: 0,
     docsToggle: 0,
+    docsClose: 0,
     abilityCasts: [],
     debugToggles: 0,
     reloads: 0,
@@ -128,9 +130,22 @@ async function loadControlsHarness(options = {}) {
         return { ok: true };
       }
     },
-    GameDocs: {
-      toggle() {
+    GameRuntimeLoader: {
+      toggleDocs() {
         calls.docsToggle += 1;
+      },
+      getLoadedDocsRuntime() {
+        return {
+          toggle() {
+            calls.docsToggle += 1;
+          },
+          isOpen() {
+            return !!options.docsOpen;
+          },
+          close() {
+            calls.docsClose += 1;
+          }
+        };
       }
     },
     ...options.runtimeOverrides
@@ -150,6 +165,7 @@ async function loadControlsHarness(options = {}) {
   sandbox.globalThis = sandbox;
 
   const context = vm.createContext(sandbox);
+  vm.runInContext(domUtilsCode, context);
   vm.runInContext(weaponSwapCode, context);
   vm.runInContext(controlsCode, context);
   const controls = sandbox.__MAYHEM_RUNTIME.GameGameplayControls.create({
@@ -555,4 +571,18 @@ test('gameplay controls honor remapped throwable, ability, debug, and manual key
   assert.deepEqual(harness.calls.abilityCasts, [1]);
   assert.equal(harness.calls.debugToggles, 1);
   assert.equal(harness.calls.docsToggle, 1);
+});
+
+test('gameplay controls close the loaded docs runtime on escape', async () => {
+  const harness = await loadControlsHarness({
+    docsOpen: true
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'Escape',
+    repeat: false,
+    target: { tagName: 'DIV', isContentEditable: false }
+  });
+
+  assert.equal(harness.calls.docsClose, 1);
 });

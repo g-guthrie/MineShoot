@@ -290,7 +290,7 @@
                 canTogglePrivateRoomInviteLock: canTogglePrivateRoomInviteLock,
                 canInvitePartyToPrivateRoom: canInvitePartyToPrivateRoom,
                 canEditPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost),
-                canRandomizeTeams: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomMode !== 'lms'),
+                canRandomizeTeams: !!(hasPrivateRoom && isPrivateRoomHost),
                 canStartPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomPhase === 'lobby')
             };
         }

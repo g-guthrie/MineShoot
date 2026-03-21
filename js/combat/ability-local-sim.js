@@ -11,6 +11,11 @@
         return new THREE.Vector3(Number(value.x || 0), Number(value.y || 0), Number(value.z || 0));
     }
 
+    function copyVector3Like(out, value) {
+        if (!out || !value) return null;
+        return out.set(Number(value.x || 0), Number(value.y || 0), Number(value.z || 0));
+    }
+
     function distanceSqXYZ(a, b) {
         if (!a || !b) return Infinity;
         var dx = Number(a.x || 0) - Number(b.x || 0);
@@ -28,17 +33,26 @@
         var deadeyeState = null;
         var losRaycaster = new THREE.Raycaster();
         var losDir = new THREE.Vector3();
+        var hookScratchStart = new THREE.Vector3();
+        var hookScratchEnd = new THREE.Vector3();
+        var hookScratchHead = new THREE.Vector3();
+        var deadeyeOriginScratch = new THREE.Vector3();
+        var deadeyeForwardScratch = new THREE.Vector3();
+        var deadeyeWorldPosScratch = new THREE.Vector3();
+        var deadeyeToScratch = new THREE.Vector3();
+
+        function setVectorField(target, key, value) {
+            if (!target) return null;
+            if (!value) {
+                target[key] = null;
+                return null;
+            }
+            if (!target[key]) target[key] = new THREE.Vector3();
+            return copyVector3Like(target[key], value);
+        }
 
         function runtime() {
             return globalThis.__MAYHEM_RUNTIME || {};
-        }
-
-        function bindingLabel(actionId, fallbackLabel) {
-            var bindingsApi = runtime().GameInputBindings || null;
-            if (bindingsApi && bindingsApi.getDisplayLabel) {
-                return bindingsApi.getDisplayLabel(actionId);
-            }
-            return String(fallbackLabel || '--');
         }
 
         function cooldownUntilForSlot(slotIndex) {
@@ -107,34 +121,34 @@
             });
         }
 
-        function currentHookOriginWorldPosition(fallback) {
+        function currentHookOriginWorldPosition(out, fallback) {
             var player = runtime().GamePlayer || null;
             if (player && player.getThrowableOriginWorldPosition) {
                 var liveOrigin = player.getThrowableOriginWorldPosition();
-                if (liveOrigin) return makeVector3Like(liveOrigin);
+                if (liveOrigin) return copyVector3Like(out, liveOrigin);
             }
-            return makeVector3Like(fallback);
+            return copyVector3Like(out, fallback);
         }
 
-        function hookHeadWorldPosition(state, now) {
+        function hookHeadWorldPosition(state, now, out) {
             if (!state) return null;
             if (state.phase === 'retract') {
-                var retractStart = makeVector3Like(state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
-                var retractEnd = currentHookOriginWorldPosition(state.startPos);
+                var retractStart = copyVector3Like(hookScratchStart, state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
+                var retractEnd = currentHookOriginWorldPosition(hookScratchEnd, state.startPos);
                 if (!retractStart || !retractEnd) return null;
                 var retractStartedAt = Number(state.retractStartedAt || 0);
                 var retractEndsAt = Math.max(retractStartedAt + 1, Number(state.endsAt || retractStartedAt + 1));
                 var retractT = Math.max(0, Math.min(1, (Number(now || nowMs()) - retractStartedAt) / (retractEndsAt - retractStartedAt)));
-                return retractStart.lerp(retractEnd, retractT);
+                return out ? copyVector3Like(out, retractStart).lerp(retractEnd, retractT) : retractStart.lerp(retractEnd, retractT);
             }
             if (!state.startPos || !state.endPos) return null;
-            var start = makeVector3Like(state.startPos);
-            var end = makeVector3Like(state.endPos);
+            var start = copyVector3Like(hookScratchStart, state.startPos);
+            var end = copyVector3Like(hookScratchEnd, state.endPos);
             if (!start || !end) return null;
             var startAt = Number(state.startedAt || 0);
             var hitAt = Math.max(startAt + 1, Number(state.hitAt || startAt + 1));
             var t = Math.max(0, Math.min(1, (Number(now || nowMs()) - startAt) / (hitAt - startAt)));
-            return start.lerp(end, t);
+            return out ? copyVector3Like(out, start).lerp(end, t) : start.lerp(end, t);
         }
 
         function beginHookRetract(state, now) {
@@ -142,20 +156,20 @@
             var retractDuration = Math.max(120, Number(state.hitAt || 0) - Number(state.startedAt || 0));
             state.phase = 'retract';
             state.targetId = '';
-            state.retractStartPos = makeVector3Like(state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
+            setVectorField(state, 'retractStartPos', state.retractStartPos || state.attachPos || state.endPos || state.headPos || state.startPos);
             state.attachPos = null;
             state.retractStartedAt = now;
-            state.headPos = makeVector3Like(state.retractStartPos);
+            setVectorField(state, 'headPos', state.retractStartPos);
             state.endsAt = now + retractDuration;
         }
 
-        function deadeyeOriginWorldPosition(camera) {
+        function deadeyeOriginWorldPosition(camera, out) {
             var player = runtime().GamePlayer || null;
             if (player && player.getEyeWorldPosition) {
                 var eye = player.getEyeWorldPosition();
-                if (eye) return makeVector3Like(eye);
+                if (eye) return copyVector3Like(out, eye);
             }
-            return camera && camera.position ? camera.position.clone() : null;
+            return camera && camera.position ? copyVector3Like(out, camera.position) : null;
         }
 
         function deadeyeHasLOS(origin, targetPos, maxRange) {
@@ -185,7 +199,7 @@
                 if (!target || target.alive === false || !target.worldPos || !target.enemyRef || !target.hitbox) continue;
                 var distSq = distanceSqXYZ(target.worldPos, point);
                 if (distSq > bestDistSq) continue;
-                if (!deadeyeHasLOS(makeVector3Like(point), makeVector3Like(target.worldPos), Math.sqrt(distSq) + 0.25)) continue;
+                if (!deadeyeHasLOS(point, target.worldPos, Math.sqrt(distSq) + 0.25)) continue;
                 best = target;
                 bestDistSq = distSq;
             }
@@ -211,17 +225,17 @@
             var list = enemyApi.getLockTargets() || [];
             if (!list.length) return [];
 
-            var origin = deadeyeOriginWorldPosition(camera);
+            var origin = deadeyeOriginWorldPosition(camera, deadeyeOriginScratch);
             if (!origin) return [];
-            var forward = new THREE.Vector3();
+            var forward = deadeyeForwardScratch;
             camera.getWorldDirection(forward);
             var out = [];
             for (var i = 0; i < list.length; i++) {
                 var target = list[i];
                 if (!target || !target.worldPos || !target.hitbox) continue;
-                var worldPos = makeVector3Like(target.worldPos);
+                var worldPos = copyVector3Like(deadeyeWorldPosScratch, target.worldPos);
                 if (!worldPos) continue;
-                var to = worldPos.clone().sub(origin);
+                var to = deadeyeToScratch.copy(worldPos).sub(origin);
                 var dist = to.length();
                 if (dist <= 0.001 || dist > range) continue;
                 to.divideScalar(dist);
@@ -229,7 +243,7 @@
                 if (!deadeyeHasLOS(origin, worldPos, range)) continue;
                 out.push({
                     targetId: String(target.targetId || ''),
-                    worldPos: worldPos,
+                    worldPos: makeVector3Like(worldPos),
                     hitbox: target.hitbox,
                     dist: dist,
                     dot: forward.dot(to)
@@ -257,9 +271,9 @@
                 if (!stored || !stored.targetId || stored.dead) continue;
                 var live = byId[stored.targetId];
                 if (live && live.worldPos) {
-                    var nextWorldPos = makeVector3Like(live.worldPos);
-                    var origin = deadeyeOriginWorldPosition(camera);
-                    var forward = new THREE.Vector3();
+                    var nextWorldPos = copyVector3Like(deadeyeWorldPosScratch, live.worldPos);
+                    var origin = deadeyeOriginWorldPosition(camera, deadeyeOriginScratch);
+                    var forward = deadeyeForwardScratch;
                     if (camera && camera.getWorldDirection) camera.getWorldDirection(forward);
                     if (
                         camera &&
@@ -267,12 +281,14 @@
                         nextWorldPos &&
                         (
                             !deadeyeHasLOS(origin, nextWorldPos, cfg && cfg.range || 80) ||
-                            forward.dot(nextWorldPos.clone().sub(origin).normalize()) < Number(cfg && cfg.minDot || 0.18)
+                            forward.dot(deadeyeToScratch.copy(nextWorldPos).sub(origin).normalize()) < Number(cfg && cfg.minDot || 0.18)
                         )
                     ) {
                         stored.dead = true;
                     } else {
-                        stored.worldPos = nextWorldPos;
+                        stored.worldPos = stored.worldPos
+                            ? copyVector3Like(stored.worldPos, nextWorldPos)
+                            : makeVector3Like(nextWorldPos);
                         if (live.hitbox) stored.hitbox = live.hitbox;
                     }
                 } else {
@@ -295,12 +311,12 @@
                 return { ok: false, message: 'No Deadeye locks acquired.' };
             }
 
-            var origin = deadeyeOriginWorldPosition(camera);
+            var origin = deadeyeOriginWorldPosition(camera, deadeyeOriginScratch);
             var landed = 0;
             for (var i = 0; i < count; i++) {
                 var item = deadeyeState.targets[i];
                 if (!item || item.dead || !item.hitbox || !enemyApi || !enemyApi.damage) continue;
-                if (origin && item.worldPos && !deadeyeHasLOS(origin, makeVector3Like(item.worldPos), cfg.range || 70)) continue;
+                if (origin && item.worldPos && !deadeyeHasLOS(origin, item.worldPos, cfg.range || 70)) continue;
                 var result = enemyApi.damage(item.hitbox, cfg.damage || 180);
                 if (!result) continue;
                 landed++;
@@ -397,7 +413,7 @@
                 ? RT.GameHitscan.peekCenterTarget(camera, Number(cfg.range || 24))
                 : null;
             var startPos = (RT.GamePlayer && RT.GamePlayer.getThrowableOriginWorldPosition)
-                ? RT.GamePlayer.getThrowableOriginWorldPosition()
+                ? makeVector3Like(RT.GamePlayer.getThrowableOriginWorldPosition())
                 : camera.position.clone();
             var endPos = centerTarget && centerTarget.point
                 ? makeVector3Like(centerTarget.point)
@@ -420,7 +436,7 @@
                 playerYaw: Number(rotation.yaw || 0),
                 startPos: startPos,
                 endPos: endPos,
-                headPos: startPos.clone(),
+                headPos: makeVector3Like(startPos),
                 attachPos: null,
                 startedAt: now,
                 hitAt: now + travelMs,
@@ -471,7 +487,7 @@
             };
             syncActionRestrictions();
             setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
-            if (notifier) notifier('Deadeye primed. Press ' + bindingLabel(slotIndex === 2 ? 'ability_2' : 'ability_1', slotIndex === 2 ? 'F' : 'E') + ' again to fire.', 900);
+            if (notifier) notifier('Deadeye primed. Press ' + runtime().GameInputLabels.getBindingLabel(slotIndex === 2 ? 'ability_2' : 'ability_1', slotIndex === 2 ? 'F' : 'E') + ' again to fire.', 900);
             return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
         }
 
@@ -537,7 +553,7 @@
             var now = nowMs();
             if (hookState && hookState.active) {
                 if (hookState.phase === 'travel') {
-                    hookState.headPos = hookHeadWorldPosition(hookState, now);
+                    setVectorField(hookState, 'headPos', hookHeadWorldPosition(hookState, now, hookScratchHead));
                     var hookTarget = findHookTargetNearPoint(hookState.headPos, hookState.catchRadius);
                     if (hookTarget) {
                         var hookResult = null;
@@ -556,8 +572,8 @@
                         }
                         hookState.phase = 'latched';
                         hookState.targetId = String(hookTarget.targetId || '');
-                        hookState.attachPos = makeVector3Like(hookTarget.worldPos);
-                        hookState.headPos = makeVector3Like(hookTarget.worldPos);
+                        setVectorField(hookState, 'attachPos', hookTarget.worldPos);
+                        setVectorField(hookState, 'headPos', hookTarget.worldPos);
                         hookState.endsAt = now + 140;
                         hookState.lockEndsAt = hookState.endsAt;
                         syncActionRestrictions();
@@ -579,20 +595,20 @@
                 } else if (hookState.phase === 'latched') {
                     var liveHookTarget = findHookTargetById(hookState.targetId);
                     if (!liveHookTarget) {
-                        hookState.retractStartPos = makeVector3Like(hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
+                        setVectorField(hookState, 'retractStartPos', hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
                         beginHookRetract(hookState, now);
                     } else {
-                        hookState.attachPos = makeVector3Like(liveHookTarget.worldPos);
-                        hookState.headPos = makeVector3Like(liveHookTarget.worldPos);
+                        setVectorField(hookState, 'attachPos', liveHookTarget.worldPos);
+                        setVectorField(hookState, 'headPos', liveHookTarget.worldPos);
                         if (now >= (hookState.endsAt || 0)) {
-                            hookState.retractStartPos = makeVector3Like(hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
+                            setVectorField(hookState, 'retractStartPos', hookState.attachPos || hookState.headPos || hookState.endPos || hookState.startPos);
                             beginHookRetract(hookState, now);
                             hookState.lockEndsAt = hookState.endsAt;
                             syncActionRestrictions();
                         }
                     }
                 } else if (hookState.phase === 'retract') {
-                    hookState.headPos = hookHeadWorldPosition(hookState, now) || hookState.headPos || hookState.startPos;
+                    setVectorField(hookState, 'headPos', hookHeadWorldPosition(hookState, now, hookScratchHead) || hookState.headPos || hookState.startPos);
                     if (now >= (hookState.endsAt || 0)) {
                         clearHookState();
                     }

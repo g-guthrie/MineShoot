@@ -39,11 +39,6 @@
             ? netApi.getMatchState()
             : null;
         var serverNow = authoritativeNow(netApi);
-        var spectatorLockUntil = Date.now() + 86400000;
-        var matchResetAt = toLocalTime(netApi, matchState && matchState.resetAt);
-        var outOfRoundLockUntil = selfState.outOfRound && matchState && !matchState.ended
-            ? Math.max(matchResetAt, spectatorLockUntil)
-            : 0;
         var respawnState = opts && Object.prototype.hasOwnProperty.call(opts, 'respawnState')
             ? opts.respawnState
             : null;
@@ -88,7 +83,7 @@
                 ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, serverNow)
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
-                stunUntil: Math.max(toLocalTime(netApi, selfState.stunUntil), outOfRoundLockUntil),
+                stunUntil: toLocalTime(netApi, selfState.stunUntil),
                 hookPullStartedAt: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedStartedAt : 0),
                 hookPullUntil: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedUntil : 0),
                 chokeStartedAt: toLocalTime(netApi, selfChokeVictimState.startedAt),
@@ -99,15 +94,17 @@
 
             if (RT.GamePlayer.setActionRestrictions) {
                 RT.GamePlayer.setActionRestrictions({
-                    weaponUntil: Math.max(toLocalTime(netApi, selfState.weaponLockUntil), outOfRoundLockUntil),
-                    throwableUntil: Math.max(toLocalTime(netApi, selfState.throwableLockUntil), outOfRoundLockUntil),
-                    abilityUntil: Math.max(toLocalTime(netApi, selfState.abilityLockUntil), outOfRoundLockUntil)
+                    weaponUntil: toLocalTime(netApi, selfState.weaponLockUntil),
+                    throwableUntil: toLocalTime(netApi, selfState.throwableLockUntil),
+                    abilityUntil: toLocalTime(netApi, selfState.abilityLockUntil)
                 });
             }
         }
 
         if (opts.skipMotionSync !== true) {
-            if (
+            if (RT.GameNetSelfMotionSync && RT.GameNetSelfMotionSync.syncPlayerMotion) {
+                RT.GameNetSelfMotionSync.syncPlayerMotion(opts.reconciliationState || selfState, dt);
+            } else if (
                 selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > serverNow &&
                 RT.GamePlayer &&
                 RT.GamePlayer.applyAuthoritativeMotion

@@ -19,7 +19,10 @@ function createStorage(seed = {}) {
 }
 
 async function loadBindingsHarness(seed = {}) {
-  const code = await fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8');
+  const [bindingsCode, labelsCode] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8')
+  ]);
   const storage = createStorage(seed);
   const sandbox = {
     console,
@@ -31,9 +34,12 @@ async function loadBindingsHarness(seed = {}) {
   };
   sandbox.globalThis = sandbox;
   sandbox.globalThis.window = sandbox.window;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(bindingsCode, context);
+  vm.runInContext(labelsCode, context);
   return {
     api: sandbox.__MAYHEM_RUNTIME.GameInputBindings,
+    labels: sandbox.__MAYHEM_RUNTIME.GameInputLabels,
     storage
   };
 }
@@ -59,10 +65,12 @@ function defaultBindings() {
 }
 
 test('input bindings expose the shipped defaults and normalize modifier labels', async () => {
-  const { api } = await loadBindingsHarness();
+  const { api, labels } = await loadBindingsHarness();
 
   assert.deepEqual(JSON.parse(JSON.stringify(api.getBindings())), defaultBindings());
   assert.equal(api.getDisplayLabel('ads_key'), 'ALT');
+  assert.equal(labels.getBindingLabel('ads_key', 'Alt'), 'ALT');
+  assert.equal(labels.getBindingLabel('missing_action', 'Fallback'), 'Fallback');
   assert.equal(api.getDisplayLabel('weapon_slot_1'), '1');
   assert.equal(api.tokenFromEvent({ code: 'ShiftRight' }), 'Shift');
   assert.equal(api.matches('ads_key', { code: 'AltLeft' }), true);

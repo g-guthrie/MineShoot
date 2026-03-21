@@ -94,6 +94,7 @@ function createInputState(patch = {}) {
 }
 
 async function loadPlayerMovementHarness(options = {}) {
+  const statusCode = await fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8');
   const documentObj = new FakeDocument();
   const windowObj = new FakeWindow();
@@ -284,7 +285,9 @@ async function loadPlayerMovementHarness(options = {}) {
     }
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(statusCode, context);
+  vm.runInContext(code, context);
 
   const player = sandbox.__MAYHEM_RUNTIME.GamePlayer;
   const scene = new THREE.Scene();

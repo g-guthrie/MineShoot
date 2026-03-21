@@ -124,7 +124,6 @@ HYTOPIA's useful pattern is not "voxel look". It is the architecture:
 ### Suggested local targets
 
 - `js/world/world.js`
-- `js/world/intersection-builder.js`
 - `shared/world-layout.js`
 - `shared/world-collision.js`
 - `shared/headless-world-runtime.js`

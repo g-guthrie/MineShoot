@@ -11,7 +11,11 @@
     var entries = new Map();
     var revealUntilByTargetId = new Map();
     var REVEAL_HOLD_MS = 1500;
-    var entityPoints = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.entityPoints) || {};
+    var sharedRuntime = (globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameShared) || {};
+    var entityPoints = sharedRuntime.entityPoints || {};
+    var entityConstants = sharedRuntime.entityConstants || {};
+    var projectionScratch = new THREE.Vector3();
+    var OVERHEAD_HEAD_CLEARANCE_Y = 0.18;
 
     function ensureContainer() {
         if (container) return;
@@ -79,10 +83,14 @@
 
     function descriptorMarkerY(desc) {
         if (!desc || !desc.worldPos) return 0;
-        if (entityPoints && entityPoints.entityMarkerPointYFromFeet) {
-            return entityPoints.entityMarkerPointYFromFeet(desc.worldPos.y);
-        }
-        return Number(desc.worldPos.y || 0) + 2.25;
+        var feetY = Number(desc.worldPos.y || 0);
+        var markerY = entityPoints && entityPoints.entityMarkerPointYFromFeet
+            ? entityPoints.entityMarkerPointYFromFeet(feetY)
+            : (feetY + 2.25);
+        var headTopY = feetY +
+            Number(entityConstants.AVATAR_HEAD_CENTER_OFFSET && entityConstants.AVATAR_HEAD_CENTER_OFFSET.y || 2.1) +
+            (Number(entityConstants.AVATAR_HEAD_SIZE && entityConstants.AVATAR_HEAD_SIZE.y || 0.55) * 0.5);
+        return Math.max(markerY, headTopY + OVERHEAD_HEAD_CLEARANCE_Y);
     }
 
     function pruneExpiredRevealTargets(stamp) {
@@ -156,7 +164,7 @@
             return;
         }
 
-        var p = new THREE.Vector3(desc.worldPos.x, descriptorMarkerY(desc), desc.worldPos.z);
+        var p = projectionScratch.set(desc.worldPos.x, descriptorMarkerY(desc), desc.worldPos.z);
         p.project(camera);
 
         if (p.z < -1 || p.z > 1) {

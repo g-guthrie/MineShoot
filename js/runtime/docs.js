@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var inputLabels = runtime.GameInputLabels || null;
     var GameDocs = {};
 
     var panelEl = null;
@@ -31,20 +32,12 @@
         return runtime.GameInputBindings || null;
     }
 
-    function bindingLabel(actionId, fallbackLabel) {
-        var bindingsApi = inputBindingsApi();
-        if (bindingsApi && bindingsApi.getDisplayLabel) {
-            return bindingsApi.getDisplayLabel(actionId);
-        }
-        return String(fallbackLabel || '--');
-    }
-
     function bindingCombo(actionIds, fallbackLabels) {
         var ids = Array.isArray(actionIds) ? actionIds : [];
         var fallbacks = Array.isArray(fallbackLabels) ? fallbackLabels : [];
         var labels = [];
         for (var i = 0; i < ids.length; i++) {
-            labels.push(bindingLabel(ids[i], fallbacks[i] || '--'));
+            labels.push(inputLabels.getBindingLabel(ids[i], fallbacks[i] || '--'));
         }
         return labels.join(' / ');
     }
@@ -570,11 +563,9 @@
         var api = sharedApi();
         var modes = api.getGameModeCatalog ? api.getGameModeCatalog() : [
             { id: 'ffa', label: 'Free For All' },
-            { id: 'tdm', label: 'Team Deathmatch' },
-            { id: 'lms', label: 'Last Man Standing' }
+            { id: 'tdm', label: 'Team Deathmatch' }
         ];
         var matchRules = api.matchRules || {};
-        var lmsRules = api.lmsMode && api.lmsMode.rules ? api.lmsMode.rules : {};
         var out = [];
         for (var i = 0; i < modes.length; i++) {
             var mode = modes[i];
@@ -584,10 +575,6 @@
             if (mode.id === 'tdm') {
                 objective = 'First team to ' + formatNumber(matchRules.tdmTargetProgress || 10, 0) + ' kills.';
                 note = 'Trade space for crossfires. Individual peeks matter less than team timing.';
-            } else if (mode.id === 'lms') {
-                objective = 'Start with ' + formatNumber(lmsRules.startingLives || 4, 0) +
-                    ' lives. Last player alive wins the round.';
-                note = 'Eliminations build charge toward extra lives, so surviving early chaos matters.';
             }
             out.push({
                 id: String(mode.id),
@@ -778,7 +765,7 @@
                 if (!keyLabel && Array.isArray(row.actionIds)) {
                     keyLabel = bindingCombo(row.actionIds, row.fallbackKeys || []);
                 } else if (!keyLabel && row.actionId) {
-                    keyLabel = bindingLabel(row.actionId, row.fallbackKey || '--');
+                    keyLabel = inputLabels.getBindingLabel(row.actionId, row.fallbackKey || '--');
                 }
                 if (row.fixedPrefix) {
                     keyLabel = String(row.fixedPrefix || '') + keyLabel;
@@ -1012,7 +999,7 @@
     function throwablePreviewLabel(throwable) {
         if (!throwable) return '--';
         if (throwable.id === 'knife') return 'Instant throw';
-        return 'Hold ' + bindingLabel('throwable', 'Q') + ' for trajectory preview';
+        return 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for trajectory preview';
     }
 
     function formatThrowableValue(key, throwable) {
@@ -1080,7 +1067,7 @@
     function throwableStats(throwable) {
         if (!throwable) return [];
         var stats = [
-            { label: 'Preview', value: throwablePreviewLabel(throwable), note: 'Hold/release behavior on ' + bindingLabel('throwable', 'Q') + '.' },
+            { label: 'Preview', value: throwablePreviewLabel(throwable), note: 'Hold/release behavior on ' + inputLabels.getBindingLabel('throwable', 'Q') + '.' },
             { label: 'Speed', value: formatNumber(throwable.speed, 2), note: 'Initial launch speed.' }
         ];
         if (throwable.fuse != null) stats.push({ label: 'Fuse', value: formatSeconds(throwable.fuse), note: 'Time before detonation.' });
@@ -1111,7 +1098,7 @@
                 data.weapons.length + ' weapons',
                 data.abilities.length + ' abilities',
                 data.throwables.length + ' throwables',
-                bindingLabel('reload', 'R') + ' reload'
+                inputLabels.getBindingLabel('reload', 'R') + ' reload'
             ]),
             '</section>',
             '<div class="docs-grid">',
@@ -1119,20 +1106,20 @@
             '<h3>Quick Start</h3>',
             renderList([
                 'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
-                'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + bindingLabel('sprint', 'Shift') + ', jump with ' + bindingLabel('jump', 'Space') + ', and ADS with RMB or ' + bindingLabel('ads_key', 'Alt') + '.',
-                'Fire on LMB, reload on ' + bindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
-                'Use ' + bindingLabel('throwable', 'Q') + ' for the current throwable, ' + bindingLabel('ability_1', 'E') + ' for ability slot 1, and ' + bindingLabel('ability_2', 'F') + ' for ability slot 2.',
+                'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and ADS with RMB or ' + inputLabels.getBindingLabel('ads_key', 'Alt') + '.',
+                'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
+                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable, ' + inputLabels.getBindingLabel('ability_1', 'E') + ' for ability slot 1, and ' + inputLabels.getBindingLabel('ability_2', 'F') + ' for ability slot 2.',
                 'Break line of sight during long cooldowns instead of forcing low-odds trades.'
             ]),
             '</section>',
             '<section class="docs-card">',
             '<h3>Current Kit</h3>',
             renderStatGrid([
-                { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + bindingLabel('weapon_slot_1', '1') + '.' },
-                { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + bindingLabel('weapon_slot_2', '2') + '.' },
-                { label: bindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + bindingLabel('throwable', 'Q') + ' for preview if supported.' },
-                { label: bindingLabel('ability_1', 'E') + ' Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
-                { label: bindingLabel('ability_2', 'F') + ' Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
+                { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_1', '1') + '.' },
+                { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_2', '2') + '.' },
+                { label: inputLabels.getBindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for preview if supported.' },
+                { label: inputLabels.getBindingLabel('ability_1', 'E') + ' Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
+                { label: inputLabels.getBindingLabel('ability_2', 'F') + ' Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
             ]),
             '</section>',
             '</div>',
@@ -1157,10 +1144,10 @@
             '<p>The game only really feels correct once pointer lock is active. Enter the match, capture the cursor, and keep your inputs layered instead of playing one system at a time.</p>',
             renderTagRow([
                 bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
-                'RMB / ' + bindingLabel('ads_key', 'Alt') + ' ADS',
-                bindingLabel('reload', 'R') + ' reload',
+                'RMB / ' + inputLabels.getBindingLabel('ads_key', 'Alt') + ' ADS',
+                inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
-                bindingLabel('throwable', 'Q') + ' / ' + bindingLabel('ability_1', 'E') + ' / ' + bindingLabel('ability_2', 'F')
+                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('ability_1', 'E') + ' / ' + inputLabels.getBindingLabel('ability_2', 'F')
             ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
@@ -1169,10 +1156,10 @@
             '<h3>Important Notes</h3>',
             renderList([
                 'Sniper cannot fire until you are scoped in.',
-                bindingLabel('throwable', 'Q') + ' previews grenades on hold, but knife throws immediately on press.',
-                bindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
-                bindingLabel('ads_key', 'Alt') + ' and RMB both toggle ADS. Jumping no longer cancels ADS, so you stay aimed through the full jump.',
-                'The field manual is available in menu and in live gameplay on ' + bindingLabel('open_manual', 'I') + '.'
+                inputLabels.getBindingLabel('throwable', 'Q') + ' previews grenades on hold, but knife throws immediately on press.',
+                inputLabels.getBindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
+                inputLabels.getBindingLabel('ads_key', 'Alt') + ' and RMB both toggle ADS. Jumping no longer cancels ADS, so you stay aimed through the full jump.',
+                'The field manual is available in menu and in live gameplay on ' + inputLabels.getBindingLabel('open_manual', 'I') + '.'
             ]),
             '</section>',
             '</div>'
@@ -1257,7 +1244,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || ability.description || 'No mechanics note.',
-                'Menu binding: slot 1 fires on ' + bindingLabel('ability_1', 'E') + ', slot 2 fires on ' + bindingLabel('ability_2', 'F') + '.',
+                'Menu binding: slot 1 fires on ' + inputLabels.getBindingLabel('ability_1', 'E') + ', slot 2 fires on ' + inputLabels.getBindingLabel('ability_2', 'F') + '.',
                 ability.debugSummary || 'No extra debug summary.'
             ].concat(briefing.tips || [])),
             '</section>',
@@ -1293,7 +1280,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || 'Throwable profile.',
-                'Throw input is on ' + bindingLabel('throwable', 'Q') + '. Preview behavior depends on the selected item.'
+                'Throw input is on ' + inputLabels.getBindingLabel('throwable', 'Q') + '. Preview behavior depends on the selected item.'
             ].concat(briefing.tips || [])),
             '</section>',
             '<section class="docs-card">',
@@ -1500,7 +1487,7 @@
             hintEl.textContent = 'Use this page as the glossary, then drill into a specific weapon profile for live values and role notes.';
             return;
         }
-        hintEl.textContent = 'Press ' + bindingLabel('open_manual', 'I') + ' to open or close the field manual at any time.';
+        hintEl.textContent = 'Press ' + inputLabels.getBindingLabel('open_manual', 'I') + ' to open or close the field manual at any time.';
     }
 
     function render() {

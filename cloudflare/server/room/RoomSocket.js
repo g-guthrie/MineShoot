@@ -23,20 +23,6 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   const privateLobbyLocked = isPrivateMatchRoom && isPrivateMatchRoom(room.roomName) &&
     String((room.privateRoomConfig && room.privateRoomConfig.roomPhase) || roomPhaseActive) !== roomPhaseActive;
 
-  if (type === msgC2s.JOIN_ROOM) {
-    room.send(ws, room.buildWelcomePayload(player.id));
-    return;
-  }
-  if (type === msgC2s.LEAVE_ROOM) {
-    room.clients.delete(ws);
-    room.activeSocketByUserId.delete(meta.userId);
-    room.players.delete(meta.userId);
-    if (typeof room.broadcastSnapshot === 'function') {
-      room.broadcastSnapshot(true);
-    }
-    room.stopTickIfEmpty();
-    return;
-  }
   if (type === msgC2s.INPUT) {
     if (privateLobbyLocked) return;
     room.handleInput(player, msg);

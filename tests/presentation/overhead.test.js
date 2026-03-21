@@ -46,6 +46,10 @@ async function loadOverheadHarness() {
   const sandbox = {
     __MAYHEM_RUNTIME: {
       GameShared: {
+        entityConstants: {
+          AVATAR_HEAD_CENTER_OFFSET: { y: 2.1 },
+          AVATAR_HEAD_SIZE: { y: 0.55 }
+        },
         entityPoints: {
           entityMarkerPointYFromFeet(feetY) {
             markerCalls.push(Number(feetY || 0));
@@ -155,6 +159,31 @@ test('overhead uses the shared marker helper for both local and network enemies'
   assert.equal(netEntry.style.display, 'block');
   assert.equal(localEntry.style.top, netEntry.style.top);
   assert.deepEqual(harness.markerCalls, [0, 0]);
+});
+
+test('overhead anchor stays above the top of the avatar head', async () => {
+  const harness = await loadOverheadHarness();
+
+  harness.localEnemies.push({
+    alive: true,
+    index: 0,
+    hp: 100,
+    maxHp: 100,
+    armor: 20,
+    armorMax: 20,
+    group: { position: new THREE.Vector3(0, 0, -10) }
+  });
+
+  harness.GameOverhead.update(harness.camera, { x: 0, y: 0, z: 0 }, 'enemy:0');
+
+  const entry = harness.getEntryById('enemy:0');
+  const top = Number.parseInt(entry.style.top, 10);
+  const headTopWorld = new THREE.Vector3(0, 2.1 + (0.55 * 0.5), -10).project(harness.camera);
+  const headTopScreenY = (-headTopWorld.y * 0.5 + 0.5) * 720;
+
+  assert.equal(entry.style.display, 'block');
+  assert.ok(Number.isFinite(top));
+  assert.ok(top < headTopScreenY, 'expected overhead anchor to stay above the avatar head');
 });
 
 test('overhead visibility is aim plus recent damage linger, not proximity', async () => {

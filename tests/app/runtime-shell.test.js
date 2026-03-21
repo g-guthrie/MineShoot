@@ -74,6 +74,7 @@ async function loadRuntimeShellHarness({ modes, netApi } = {}) {
 
 test('runtime shell waits for authoritative join before resolving networked launches', async () => {
   let resolveJoin = null;
+  let beginJoinArgs = null;
   const harness = await loadRuntimeShellHarness({
     modes: {
       cloud_multiplayer: {
@@ -84,7 +85,8 @@ test('runtime shell waits for authoritative join before resolving networked laun
       }
     },
     netApi: {
-      beginJoinAttempt() {
+      beginJoinAttempt(opts) {
+        beginJoinArgs = opts;
         return new Promise((resolve) => {
           resolveJoin = resolve;
         });
@@ -111,6 +113,10 @@ test('runtime shell waits for authoritative join before resolving networked laun
 
   assert.equal(result.ok, true);
   assert.equal(result.mode.roomId, 'ffa-01');
+  assert.deepEqual(JSON.parse(JSON.stringify(beginJoinArgs)), {
+    expectedRoomId: 'ffa-01',
+    timeoutMs: 5000
+  });
 });
 
 test('runtime shell supports offline launches without requiring net join state', async () => {
@@ -121,7 +127,7 @@ test('runtime shell supports offline launches without requiring net join state',
         id: 'single_full_sandbox',
         authorityMode: 'offline',
         roomId: '',
-        gameMode: 'lms'
+        gameMode: 'ffa'
       }
     },
     netApi: {
@@ -133,7 +139,7 @@ test('runtime shell supports offline launches without requiring net join state',
   });
 
   const result = await harness.runtimeShell.launchModeById('single_full_sandbox', {
-    gameMode: 'lms'
+    gameMode: 'ffa'
   });
 
   assert.equal(result.ok, true);

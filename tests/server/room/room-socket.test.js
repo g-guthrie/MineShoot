@@ -12,7 +12,7 @@ function createSocket() {
   };
 }
 
-test('room socket message replays welcome payload for join-room', () => {
+test('room socket ignores legacy join-room messages', () => {
   const ws = createSocket();
   const sent = [];
   const room = {
@@ -30,14 +30,14 @@ test('room socket message replays welcome payload for join-room', () => {
     nowMs: () => 123,
     isPrivateMatchRoom: () => false,
     roomPhaseActive: 'active',
-    msgC2s: { JOIN_ROOM: 'join_room', PING: 'ping' },
+    msgC2s: { PING: 'ping' },
     msgS2c: { PONG: 'pong' }
   });
 
-  assert.deepEqual(sent, [{ target: ws, payload: { t: 'welcome', selfId: 'u1' } }]);
+  assert.deepEqual(sent, []);
 });
 
-test('room socket leave-room removes the player immediately', () => {
+test('room socket ignores legacy leave-room messages', () => {
   const ws = createSocket();
   const room = {
     clients: new Map([[ws, { userId: 'u1' }]]),
@@ -54,15 +54,15 @@ test('room socket leave-room removes the player immediately', () => {
     nowMs: () => 123,
     isPrivateMatchRoom: () => false,
     roomPhaseActive: 'active',
-    msgC2s: { LEAVE_ROOM: 'leave_room', PING: 'ping' },
+    msgC2s: { PING: 'ping' },
     msgS2c: { PONG: 'pong' }
   });
 
-  assert.equal(room.clients.has(ws), false);
-  assert.equal(room.activeSocketByUserId.has('u1'), false);
-  assert.equal(room.players.has('u1'), false);
-  assert.deepEqual(room.snapshots, [true]);
-  assert.equal(room.stopTickCalls, 1);
+  assert.equal(room.clients.has(ws), true);
+  assert.equal(room.activeSocketByUserId.has('u1'), true);
+  assert.equal(room.players.has('u1'), true);
+  assert.deepEqual(room.snapshots, []);
+  assert.equal(room.stopTickCalls, 0);
 });
 
 test('room socket message blocks live actions while a private room is still in lobby', () => {

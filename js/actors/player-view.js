@@ -8,68 +8,6 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GamePlayerView = {};
 
-    function resolveReloadPresentationState(weaponState, getWeaponPresentation) {
-        var state = weaponState || null;
-        if (!state) {
-            return {
-                reloading: false,
-                reloadPct: 1,
-                phase: 'ready',
-                phasePct: 1
-            };
-        }
-        if (typeof state.reloadPct === 'number' && typeof state.reloadPhase === 'string') {
-            return {
-                reloading: !!state.reloading,
-                reloadPct: Math.max(0, Math.min(1, Number(state.reloadPct || 0))),
-                phase: String(state.reloadPhase || 'ready'),
-                phasePct: Math.max(0, Math.min(1, Number(state.reloadPhasePct != null ? state.reloadPhasePct : 1)))
-            };
-        }
-        var shared = runtime.GameShared || {};
-        if (shared.resolveReloadPresentationState) {
-            return shared.resolveReloadPresentationState({
-                reloadMs: Number(state.reloadMs || 0),
-                reloadRemaining: Number(state.reloadRemaining || 0),
-                reloadedFlashRemaining: Number(state.reloadedFlashRemaining || 0),
-                reload: getWeaponPresentation && state.id
-                    ? ((getWeaponPresentation(state.id) || {}).reload || null)
-                    : null
-            }, null);
-        }
-        var reloading = !!state.reloading;
-        var reloadConfig = getWeaponPresentation && state.id
-            ? (((getWeaponPresentation(state.id) || {}).reload) || null)
-            : null;
-        var raiseEnd = Math.max(0.05, Math.min(0.7, Number(reloadConfig && reloadConfig.raiseEnd || 0.16)));
-        var manipulateEnd = Math.max(raiseEnd + 0.05, Math.min(0.95, Number(reloadConfig && reloadConfig.manipulateEnd || 0.68)));
-        var reloadPct = reloading && Number(state.reloadMs || 0) > 0
-            ? (1 - (Math.max(0, Number(state.reloadRemaining || 0)) / Math.max(1, Number(state.reloadMs || 1))))
-            : 1;
-        var phase = 'ready';
-        var phasePct = 1;
-        if (reloading) {
-            if (reloadPct < raiseEnd) {
-                phase = 'raise';
-                phasePct = reloadPct / Math.max(0.0001, raiseEnd);
-            } else if (reloadPct < manipulateEnd) {
-                phase = 'manipulate';
-                phasePct = (reloadPct - raiseEnd) / Math.max(0.0001, manipulateEnd - raiseEnd);
-            } else {
-                phase = 'settle';
-                phasePct = (reloadPct - manipulateEnd) / Math.max(0.0001, 1 - manipulateEnd);
-            }
-        } else if (Number(state.reloadedFlashRemaining || 0) > 0) {
-            phase = 'complete';
-        }
-        return {
-            reloading: reloading,
-            reloadPct: Math.max(0, Math.min(1, reloadPct)),
-            phase: phase,
-            phasePct: Math.max(0, Math.min(1, phasePct))
-        };
-    }
-
     GamePlayerView.create = function (options) {
         options = options || {};
 
@@ -84,6 +22,7 @@
         var cameraKickRoll = 0;
         var firePoseKick = 0;
         var sprintFovBlend = 0;
+        var muzzleFlashTimer = 0;
 
         var viewOrigin = new THREE.Vector3();
         var viewDesired = new THREE.Vector3();
@@ -94,6 +33,11 @@
         var plasmaForwardDir = new THREE.Vector3();
         var throwableRightDir = new THREE.Vector3();
         var viewRay = new THREE.Raycaster();
+        var chokeCameraState = {
+            offsetX: 0,
+            offsetZ: 0,
+            roll: 0
+        };
 
         function syncAvatarVisibility(state) {
             if (!state.avatarGroup) return;
@@ -167,7 +111,44 @@
             if (!animationApi) return;
             var speedNorm = Math.max(0, Math.min(1.4, speed / state.runSpeed));
             var activeWeaponState = options.getCurrentWeaponState ? options.getCurrentWeaponState() : null;
-            var reloadPresentation = resolveReloadPresentationState(activeWeaponState, options.getWeaponPresentation);
+            var reloadPresentation = {
+                reloading: false,
+                reloadPct: 1,
+                phase: 'ready',
+                phasePct: 1
+            };
+            if (activeWeaponState) {
+                if (typeof activeWeaponState.reloadPct === 'number' && typeof activeWeaponState.reloadPhase === 'string') {
+                    reloadPresentation = {
+                        reloading: !!activeWeaponState.reloading,
+                        reloadPct: Math.max(0, Math.min(1, Number(activeWeaponState.reloadPct || 0))),
+                        phase: String(activeWeaponState.reloadPhase || 'ready'),
+                        phasePct: Math.max(0, Math.min(1, Number(activeWeaponState.reloadPhasePct != null ? activeWeaponState.reloadPhasePct : 1)))
+                    };
+                } else {
+                    var shared = runtime.GameShared || {};
+                    var presentation = options.getWeaponPresentation && activeWeaponState.id
+                        ? options.getWeaponPresentation(activeWeaponState.id)
+                        : null;
+                    if (shared.resolveReloadPresentationState) {
+                        reloadPresentation = shared.resolveReloadPresentationState({
+                            reloadMs: Number(activeWeaponState.reloadMs || 0),
+                            reloadRemaining: Number(activeWeaponState.reloadRemaining || 0),
+                            reloadedFlashRemaining: Number(activeWeaponState.reloadedFlashRemaining || 0),
+                            reload: presentation && presentation.reload ? presentation.reload : null
+                        }, null);
+                    } else {
+                        reloadPresentation = {
+                            reloading: !!activeWeaponState.reloading,
+                            reloadPct: Number(activeWeaponState.reloadRemaining || 0) > 0
+                                ? Math.max(0, Math.min(1, 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)))))
+                                : 1,
+                            phase: Number(activeWeaponState.reloadedFlashRemaining || 0) > 0 ? 'complete' : 'ready',
+                            phasePct: 1
+                        };
+                    }
+                }
+            }
             animationApi.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: state.sprinting,
@@ -190,49 +171,84 @@
             });
         }
 
-        function updateCamera(dt, state) {
-            if (!state.camera) return;
-
-            var renderYaw = state.yaw + cameraKickYaw;
-            var renderPitch = Math.max(-state.pitchLimit, Math.min(state.pitchLimit, state.pitch + cameraKickPitch));
-            var cosPitch = Math.cos(renderPitch);
-            var forwardX = -Math.sin(renderYaw) * cosPitch;
-            var forwardY = Math.sin(renderPitch);
-            var forwardZ = -Math.cos(renderYaw) * cosPitch;
-            var rightX = Math.cos(renderYaw);
-            var rightZ = -Math.sin(renderYaw);
-            var chokeOffsetX = 0;
-            var chokeOffsetZ = 0;
-            var chokeRoll = 0;
-            if (state.choked) {
-                var chokeStamp = Date.now();
-                var chokePhase = state.chokeStartedAt
-                    ? ((chokeStamp - state.chokeStartedAt) * 0.012)
-                    : (chokeStamp * 0.012);
-                chokeOffsetX = Math.sin(chokePhase) * 0.08;
-                chokeOffsetZ = Math.cos(chokePhase * 0.8) * 0.04;
-                chokeRoll = Math.sin(chokePhase * 0.9) * 0.028;
+        function setMuzzleVisible(state, visible) {
+            if (state.actorVisual && state.actorVisual.setMuzzleVisible) {
+                state.actorVisual.setMuzzleVisible(visible);
+                return true;
             }
+            if (state.avatarRigApi && state.avatarRigApi.setMuzzleVisible) {
+                state.avatarRigApi.setMuzzleVisible(visible);
+                return true;
+            }
+            return false;
+        }
 
+        function updateMuzzleFlash(dt, state) {
+            if (!(muzzleFlashTimer > 0)) return;
+            muzzleFlashTimer -= Math.max(0, Number(dt || 0));
+            if (muzzleFlashTimer > 0) return;
+            muzzleFlashTimer = 0;
+            setMuzzleVisible(state, false);
+        }
+
+        function resolveChokeCameraState(state) {
+            chokeCameraState.offsetX = 0;
+            chokeCameraState.offsetZ = 0;
+            chokeCameraState.roll = 0;
+            if (!state.choked) return chokeCameraState;
+
+            var chokeStamp = Date.now();
+            var chokePhase = state.chokeStartedAt
+                ? ((chokeStamp - state.chokeStartedAt) * 0.012)
+                : (chokeStamp * 0.012);
+            chokeCameraState.offsetX = Math.sin(chokePhase) * 0.08;
+            chokeCameraState.offsetZ = Math.cos(chokePhase * 0.8) * 0.04;
+            chokeCameraState.roll = Math.sin(chokePhase * 0.9) * 0.028;
+            return chokeCameraState;
+        }
+
+        function updateViewBlendState(dt, state) {
             var targetScopeBlend = state.adsActive ? 1 : 0;
             var blendSpeed = state.sniperMode ? state.sniperScopeBlendSpeed : state.adsBlendSpeed;
             scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
             if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
             if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
+
             var targetSprintFovBlend = (!state.adsActive && !state.sniperMode && state.sprinting)
                 ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
                 : 0;
             sprintFovBlend += (targetSprintFovBlend - sprintFovBlend) * Math.min(1, dt * 10);
             if (Math.abs(sprintFovBlend) < 0.001) sprintFovBlend = 0;
 
-            var scopedEyeMode = state.sniperMode && scopeBlend > 0.55;
-            syncAvatarVisibility(state);
-            if (state.updateAvatarPose) state.updateAvatarPose();
+            return !!(state.sniperMode && scopeBlend > 0.55);
+        }
 
+        function resolveViewTargetPosition(state, forwardX, forwardY, forwardZ, rightX, rightZ, chokeState) {
             viewTarget.set(state.playerX + forwardX * 20, state.posY + forwardY * 20, state.playerZ + forwardZ * 20);
             viewTarget.y += state.chokeLift;
-            viewTarget.x += rightX * chokeOffsetX;
-            viewTarget.z += rightZ * chokeOffsetX;
+            viewTarget.x += rightX * chokeState.offsetX;
+            viewTarget.z += rightZ * chokeState.offsetX;
+        }
+
+        function applyCameraCollision(state) {
+            var worldMeshes = state.getWorldCollidables ? state.getWorldCollidables() : [];
+            if (!worldMeshes || worldMeshes.length === 0) return;
+
+            viewDir.copy(viewDesired).sub(viewOrigin);
+            var dist = viewDir.length();
+            if (dist <= 0.001) return;
+
+            viewDir.divideScalar(dist);
+            viewRay.set(viewOrigin, viewDir);
+            viewRay.far = dist;
+            var hits = viewRay.intersectObjects(worldMeshes, false);
+            if (hits.length <= 0) return;
+
+            var safeDist = Math.max(0.8, hits[0].distance - 0.2);
+            viewDesired.copy(viewOrigin).addScaledVector(viewDir, safeDist);
+        }
+
+        function resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ, chokeState) {
             if (scopedEyeMode) {
                 if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
                     state.avatarRigApi.getEyeWorldPosition(eyeWorld);
@@ -241,43 +257,31 @@
                     viewOrigin.set(state.playerX, state.posY + state.chokeLift, state.playerZ);
                 }
                 viewDesired.copy(viewOrigin);
-                viewDesired.x += rightX * chokeOffsetX;
-                viewDesired.z += rightZ * chokeOffsetX;
-            } else {
-                viewOrigin.set(state.playerX, state.posY + 0.3 + state.chokeLift, state.playerZ);
-                viewDesired.set(
-                    state.playerX + (rightX * state.cameraShoulder) - (forwardX * state.cameraDist),
-                    state.posY + state.thirdHeight + state.chokeLift,
-                    state.playerZ + (rightZ * state.cameraShoulder) - (forwardZ * state.cameraDist)
-                );
-                viewDesired.x += rightX * chokeOffsetX;
-                viewDesired.z += rightZ * chokeOffsetX + chokeOffsetZ;
-                adsDesired.set(
-                    state.playerX + (rightX * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardX * (state.sniperMode ? state.sniperScopeDist : state.adsDist)),
-                    state.posY + (state.sniperMode ? state.sniperScopeHeight : state.adsHeight) + state.chokeLift,
-                    state.playerZ + (rightZ * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardZ * (state.sniperMode ? state.sniperScopeDist : state.adsDist))
-                );
-                adsDesired.x += rightX * chokeOffsetX;
-                adsDesired.z += rightZ * chokeOffsetX + chokeOffsetZ;
-                viewDesired.lerp(adsDesired, scopeBlend);
-
-                var worldMeshes = state.getWorldCollidables ? state.getWorldCollidables() : [];
-                if (worldMeshes && worldMeshes.length > 0) {
-                    viewDir.copy(viewDesired).sub(viewOrigin);
-                    var dist = viewDir.length();
-                    if (dist > 0.001) {
-                        viewDir.divideScalar(dist);
-                        viewRay.set(viewOrigin, viewDir);
-                        viewRay.far = dist;
-                        var hits = viewRay.intersectObjects(worldMeshes, false);
-                        if (hits.length > 0) {
-                            var safeDist = Math.max(0.8, hits[0].distance - 0.2);
-                            viewDesired.copy(viewOrigin).addScaledVector(viewDir, safeDist);
-                        }
-                    }
-                }
+                viewDesired.x += rightX * chokeState.offsetX;
+                viewDesired.z += rightZ * chokeState.offsetX;
+                return;
             }
 
+            viewOrigin.set(state.playerX, state.posY + 0.3 + state.chokeLift, state.playerZ);
+            viewDesired.set(
+                state.playerX + (rightX * state.cameraShoulder) - (forwardX * state.cameraDist),
+                state.posY + state.thirdHeight + state.chokeLift,
+                state.playerZ + (rightZ * state.cameraShoulder) - (forwardZ * state.cameraDist)
+            );
+            viewDesired.x += rightX * chokeState.offsetX;
+            viewDesired.z += rightZ * chokeState.offsetX + chokeState.offsetZ;
+            adsDesired.set(
+                state.playerX + (rightX * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardX * (state.sniperMode ? state.sniperScopeDist : state.adsDist)),
+                state.posY + (state.sniperMode ? state.sniperScopeHeight : state.adsHeight) + state.chokeLift,
+                state.playerZ + (rightZ * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardZ * (state.sniperMode ? state.sniperScopeDist : state.adsDist))
+            );
+            adsDesired.x += rightX * chokeState.offsetX;
+            adsDesired.z += rightZ * chokeState.offsetX + chokeState.offsetZ;
+            viewDesired.lerp(adsDesired, scopeBlend);
+            applyCameraCollision(state);
+        }
+
+        function applyCameraPose(state, dt, scopedEyeMode, chokeRoll) {
             if (!thirdCameraInitialized) {
                 state.camera.position.copy(viewDesired);
                 thirdCameraInitialized = true;
@@ -292,6 +296,28 @@
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
             state.camera.rotation.z += cameraKickRoll + chokeRoll;
+        }
+
+        function updateCamera(dt, state) {
+            if (!state.camera) return;
+            updateMuzzleFlash(dt, state);
+
+            var renderYaw = state.yaw + cameraKickYaw;
+            var renderPitch = Math.max(-state.pitchLimit, Math.min(state.pitchLimit, state.pitch + cameraKickPitch));
+            var cosPitch = Math.cos(renderPitch);
+            var forwardX = -Math.sin(renderYaw) * cosPitch;
+            var forwardY = Math.sin(renderPitch);
+            var forwardZ = -Math.cos(renderYaw) * cosPitch;
+            var rightX = Math.cos(renderYaw);
+            var rightZ = -Math.sin(renderYaw);
+            var chokeState = resolveChokeCameraState(state);
+            var scopedEyeMode = updateViewBlendState(dt, state);
+            syncAvatarVisibility(state);
+            if (state.updateAvatarPose) state.updateAvatarPose();
+
+            resolveViewTargetPosition(state, forwardX, forwardY, forwardZ, rightX, rightZ, chokeState);
+            resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ, chokeState);
+            applyCameraPose(state, dt, scopedEyeMode, chokeState.roll);
         }
 
         function triggerFireAction(state) {
@@ -318,12 +344,8 @@
             cameraKickRoll += rollKick;
             firePoseKick += 1 * scopeMultiplier;
 
-            if (state.actorVisual && state.actorVisual.setMuzzleVisible) {
-                state.actorVisual.setMuzzleVisible(true);
-                setTimeout(function () {
-                    if (state.actorVisual && state.actorVisual.setMuzzleVisible) state.actorVisual.setMuzzleVisible(false);
-                }, recoil.muzzleMs);
-            }
+            muzzleFlashTimer = Math.max(0, Number(recoil.muzzleMs || 0)) / 1000;
+            setMuzzleVisible(state, muzzleFlashTimer > 0);
             if (state.actorVisual && state.actorVisual.triggerAction) {
                 state.actorVisual.triggerAction('fire', {
                     duration: recoil.muzzleMs / 1000,
@@ -341,45 +363,49 @@
             }
         }
 
-        function getMuzzleWorldPosition(state) {
+        function getMuzzleWorldPosition(state, outVec3) {
             if (state.actorVisual && state.actorVisual.getMuzzleWorldPosition) {
-                return state.actorVisual.getMuzzleWorldPosition();
+                return state.actorVisual.getMuzzleWorldPosition(outVec3);
             }
             if (state.avatarRigApi && state.avatarRigApi.getMuzzleWorldPosition) {
-                return state.avatarRigApi.getMuzzleWorldPosition();
+                return state.avatarRigApi.getMuzzleWorldPosition(outVec3);
             }
             if (!state.camera) return null;
+            var out = outVec3 || new THREE.Vector3();
             state.camera.getWorldDirection(plasmaForwardDir);
-            return state.camera.position.clone().addScaledVector(plasmaForwardDir, 0.65);
+            return out.copy(state.camera.position).addScaledVector(plasmaForwardDir, 0.65);
         }
 
-        function getCoreWorldPosition(state) {
+        function getCoreWorldPosition(state, outVec3) {
             if (state.actorVisual && state.actorVisual.getCoreWorldPosition) {
-                return state.actorVisual.getCoreWorldPosition();
+                return state.actorVisual.getCoreWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            return state.camera.position.clone().setY(state.camera.position.y - 0.6);
+            var out = outVec3 || new THREE.Vector3();
+            return out.copy(state.camera.position).setY(state.camera.position.y - 0.6);
         }
 
-        function getEyeWorldPosition(state) {
+        function getEyeWorldPosition(state, outVec3) {
             if (state.actorVisual && state.actorVisual.getEyeWorldPosition) {
-                return state.actorVisual.getEyeWorldPosition();
+                return state.actorVisual.getEyeWorldPosition(outVec3);
             }
             if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
-                return state.avatarRigApi.getEyeWorldPosition();
+                return state.avatarRigApi.getEyeWorldPosition(outVec3);
             }
             if (!state.camera) return null;
-            return state.camera.position.clone();
+            var out = outVec3 || new THREE.Vector3();
+            return out.copy(state.camera.position);
         }
 
-        function getThrowableOriginWorldPosition(state) {
+        function getThrowableOriginWorldPosition(state, outVec3) {
             if (state.actorVisual && state.actorVisual.getThrowableOriginWorldPosition) {
-                return state.actorVisual.getThrowableOriginWorldPosition();
+                return state.actorVisual.getThrowableOriginWorldPosition(outVec3);
             }
             if (!state.camera) return null;
+            var out = outVec3 || new THREE.Vector3();
             state.camera.getWorldDirection(plasmaForwardDir);
             throwableRightDir.set(1, 0, 0).applyQuaternion(state.camera.quaternion);
-            return state.camera.position.clone()
+            return out.copy(state.camera.position)
                 .addScaledVector(plasmaForwardDir, 0.55)
                 .addScaledVector(throwableRightDir, -0.34)
                 .setY(state.camera.position.y - 0.58);

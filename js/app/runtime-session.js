@@ -6,16 +6,10 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var domUtils = runtime.GameDomUtils || null;
     var GameRuntimeSession = {};
     var IDLE_TIMEOUT_MS = 30000;
     var IDLE_WARNING_WINDOW_MS = 5000;
-
-    function editableTarget(target) {
-        var node = target || null;
-        var tagName = node && node.tagName ? String(node.tagName).toUpperCase() : '';
-        if (node && node.isContentEditable) return true;
-        return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-    }
 
     function ensureMenuSessionEls() {
         return {
@@ -178,7 +172,7 @@
             if (!event || event.key !== 'Escape') return false;
             if (event.__mayhemResumeHandled) return false;
             if (event.repeat) return false;
-            if (editableTarget(event.target)) return false;
+            if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return false;
             if (!document.pointerLockElement) return false;
             if (!isPlaying) return false;
             if (escapeModalOpen()) return false;
@@ -304,7 +298,7 @@
             if (!event || event.key !== 'Escape' || event.type !== 'keydown') return false;
             if (event.__mayhemResumeHandled) return false;
             if (event.repeat) return false;
-            if (editableTarget(event.target)) return false;
+            if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return false;
             if (document.pointerLockElement) return false;
             if (pendingInputCapture) return false;
             if (!canResumeGameplay()) return false;
@@ -315,7 +309,7 @@
 
         function shouldArmEscapeResume(event) {
             if (!event || event.key !== 'Escape' || event.type !== 'keyup') return false;
-            if (editableTarget(event.target)) return false;
+            if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return false;
             if (document.pointerLockElement) return false;
             if (pendingInputCapture) return false;
             if (!canResumeGameplay()) return false;

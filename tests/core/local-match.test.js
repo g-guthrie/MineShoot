@@ -29,7 +29,6 @@ async function loadLocalMatch(runtimeOverrides = {}) {
               leaderId: '',
               winnerId: '',
               winnerTeam: '',
-              lms: null,
               teamProgress: { alpha: 0, bravo: 0 },
               teamBaselineSize: { alpha: 0, bravo: 0 }
             };

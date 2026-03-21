@@ -5,7 +5,7 @@ This is the current click graph for the live menu shell in `/Users/gguthrie/Desk
 Two important constraints:
 
 - The live menu graph is driven by `js/app/lobby-controller.js`, `js/app/menu-shell.js`, `js/app/menu-loadout.js`, `js/app/auth-ui.js`, `js/app/input-bindings-ui.js`, `js/app/runtime-session.js`, and `js/runtime/docs.js`.
-- `js/app/lobby-clickables.js`, `js/app/lobby-controller-ui.js`, `js/app/lobby-party-view.js`, and `js/app/lobby-friends-view.js` contain legacy or dormant paths. They are not the source of truth for the current shell unless called out explicitly below.
+- Older split-out lobby helper files were deleted during release cleanup. If a menu path is not described through the live modules above, it is not part of the current shell.
 
 ## Surface Graph
 
@@ -69,19 +69,17 @@ flowchart TD
 | Utility overlay | `alt-mode-toggle` | No active click path in the current shell | Hidden in HTML and never bound by `lobby-controller.js`. |
 | Session rail | `play-btn` | Attempts pointer lock and re-enters gameplay | Label changes between `ENTER MATCH` and `RESUME MATCH`. |
 | Session rail | `back-mode-btn` | Opens `#leave-confirm-overlay` when the session is resumable; otherwise returns straight to menu | The real leave flow starts here, not from the hidden header return button. |
-| Main surface | `primary-launch-btn` | Launches the selected quick-match mode | `practice` launches local sandbox; `ffa`/`tdm`/`lms` request matchmaking first. |
+| Main surface | `primary-launch-btn` | Launches the selected quick-match mode | `sandbox` launches Offline Sandbox locally; `ffa` and `tdm` request matchmaking first. |
 | Main surface | `game-modes-toggle-btn` | Opens or closes `#play-mode-options` | Local UI only. |
 | Main surface | `play-mode-ffa-btn` | Sets selected mode to `ffa` and closes mode list | No navigation change. |
 | Main surface | `play-mode-tdm-btn` | Sets selected mode to `tdm` and closes mode list | No navigation change. |
-| Main surface | `play-mode-lms-btn` | Sets selected mode to `lms` and closes mode list | No navigation change. |
-| Main surface | `practice-mode-btn` | Sets selected mode to `practice` and closes mode list | No navigation change until launch. |
+| Main surface | `sandbox-mode-btn` | Sets selected mode to `sandbox` and closes mode list | No navigation change until launch. |
 | Main surface | `loadout-start-btn` | Bound to the same launch path as `primary-launch-btn` | Current render in `lobby-controller.js` forces it hidden, so it is effectively unreachable in the present shell. Some e2e specs still expect the older visible behavior. |
-| Party surface | `create-private-room-btn` | Calls `session.createPrivateRoom()` and stays on the party surface | Optionally seeds TDM/LMS from the selected quick-match mode. |
+| Party surface | `create-private-room-btn` | Calls `session.createPrivateRoom()` and stays on the party surface | Optionally seeds TDM from the selected quick-match mode. |
 | Party surface | `join-private-room-btn` | Calls `session.joinPrivateRoom(roomCode)` and stays on the party surface | Enter on `#private-room-input` triggers the same path. |
 | Party surface | `copy-room-code-btn` | Copies the room code from `#room-share-code` | No navigation change. |
 | Party surface | `private-room-mode-ffa-btn` | Calls `session.setPrivateRoomMode('ffa')` | Host-only. |
 | Party surface | `private-room-mode-tdm-btn` | Calls `session.setPrivateRoomMode('tdm')` | Host-only. |
-| Party surface | `private-room-mode-lms-btn` | Calls `session.setPrivateRoomMode('lms')` | Host-only. |
 | Party surface | `private-room-randomize-btn` | Calls `session.randomizePrivateRoomTeams()` | Host-only. |
 | Party surface | `private-room-start-btn` | Calls `session.startPrivateRoomMatch()` | Host-only, lobby-phase only. |
 | Party surface | `private-room-enter-btn` | Launches the active room through `launchModeById('single_cloudflare', { roomId, gameMode })` | This is the party-to-gameplay handoff. |
@@ -137,8 +135,6 @@ These buttons are created at runtime and are part of the real click graph even t
 - `menu-return-btn` is bound but effectively shadowed by the session rail.
 - `loadout-start-btn` is bound but current render keeps it hidden.
 - `party-roster-overlay` and `friends-overlay` still exist in the DOM, but there is no active open path from the current menu shell.
-- `lobby-clickables.js` and `lobby-controller-ui.js` describe an older graph and should not be used as the current click-path source of truth.
-- `lobby-friends-view.js` and `lobby-party-view.js` define richer modal paths such as `DISMISS` and `+ FRIEND`, but those views are not instantiated by the current controller.
 
 ## Coverage Snapshot
 
@@ -148,4 +144,4 @@ Current automated coverage hits only part of this graph:
 - `tests/app/menu-loadout.test.js` covers the loadout band and its generated choice buttons.
 - `tests/app/input-bindings-ui.test.js` covers controls open, rebind, and reset.
 - `tests/app/runtime-session.test.js` covers session rail and handoff state, but mostly at the state-transition level.
-- `e2e/menu-shell.spec.js` and `e2e/social.spec.js` still exercise some top-level flows, but at least one expectation (`loadout-start-btn` becoming visible for practice mode) now conflicts with the current controller render and appears stale.
+- `e2e/menu-shell.spec.js` and `e2e/social.spec.js` still exercise some top-level flows, but at least one expectation (`loadout-start-btn` becoming visible for the Offline Sandbox mode) now conflicts with the current controller render and appears stale.

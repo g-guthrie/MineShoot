@@ -74,6 +74,8 @@ export function createPlayerEntity(options = {}) {
     lastDamageAt: 0,
     seq: 0,
     pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
     inputMode: 'intent',
     inputState: typeof options.createMovementInputState === 'function'
       ? options.createMovementInputState()
@@ -102,10 +104,6 @@ export function createPlayerEntity(options = {}) {
     kills: 0,
     deaths: 0,
     progressScore: 0,
-    lmsLives: 0,
-    lmsCharge: 0,
-    lmsBankState: null,
-    outOfRound: false,
     teamId: '',
     disconnectedAt: 0
   };
@@ -153,10 +151,6 @@ export function createBotEntity(index, options = {}) {
       : {},
     lastThrowAt: 0,
     poseHistory: [],
-    lmsLives: 0,
-    lmsCharge: 0,
-    lmsBankState: null,
-    outOfRound: false,
     aiDirX: Math.cos(Math.random() * Math.PI * 2),
     aiDirZ: Math.sin(Math.random() * Math.PI * 2),
     aiSpeed: 2.2,
@@ -180,13 +174,11 @@ export function resetEntityForRespawn(entity, options = {}) {
   entity.lastShotAt = {};
   entity.lastShotTokenByWeapon = {};
   entity.muzzleFlashUntil = 0;
-  entity.lmsBankState = null;
   entity.throwables = typeof options.createThrowableRuntime === 'function'
     ? options.createThrowableRuntime()
     : {};
   entity.lastThrowAt = 0;
   entity.poseHistory = [];
-  entity.outOfRound = false;
 
   if (typeof options.createWeaponAmmoRuntime === 'function') {
     entity.weaponAmmo = options.createWeaponAmmoRuntime(entity.weaponLoadout || cloneWeaponLoadout());
@@ -195,6 +187,11 @@ export function resetEntityForRespawn(entity, options = {}) {
   if (typeof options.createMovementInputState === 'function') {
     entity.inputState = options.createMovementInputState();
   }
+  entity.inputQueue = [];
+  entity.lastProcessedInputSeq = Math.max(0, Number(entity.lastProcessedInputSeq || entity.seq || 0));
+  entity.lastReceivedInputSeq = entity.lastProcessedInputSeq;
+  entity.pendingInputSeq = entity.lastProcessedInputSeq;
+  entity.seq = entity.lastProcessedInputSeq;
 
   entity.velocityY = 0;
   entity.isGrounded = true;
@@ -210,18 +207,5 @@ export function resetEntityForRespawn(entity, options = {}) {
     entity.pitch = 0;
   }
 
-  return entity;
-}
-
-export function resetEntityForLmsRound(entity, options = {}) {
-  if (!entity) return entity;
-
-  resetEntityForRespawn(entity, options);
-  entity.teamId = '';
-  entity.progressScore = Math.max(0, Number(options.startingLives || 0));
-  entity.lmsLives = Math.max(0, Number(options.startingLives || 0));
-  entity.lmsCharge = 0;
-  entity.lmsBankState = null;
-  entity.outOfRound = false;
   return entity;
 }

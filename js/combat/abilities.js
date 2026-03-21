@@ -7,10 +7,7 @@
 
     var GameAbilities = {};
 
-    var DEFAULT_ABILITY_LOADOUT = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.getDefaultAbilityLoadout)
-        ? globalThis.__MAYHEM_RUNTIME.GameShared.getDefaultAbilityLoadout()
-        : { slot1: 'choke', slot2: 'missile' };
-    var abilityLoadout = cloneLoadout(DEFAULT_ABILITY_LOADOUT);
+    var abilityLoadout = cloneLoadout(defaultAbilityLoadout());
     var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
@@ -57,14 +54,34 @@
         }
     };
 
-    var profileDefaults = {
-        armorMax: 90,
-        wallhackRadius: 90,
-        loadoutWeapon: 'rifle'
-    };
-
     function nowMs() {
         return Date.now();
+    }
+
+    function sharedApi() {
+        return globalThis.__MAYHEM_RUNTIME.GameShared || null;
+    }
+
+    function defaultAbilityLoadout() {
+        var shared = sharedApi();
+        if (shared && typeof shared.getDefaultAbilityLoadout === 'function') {
+            return shared.getDefaultAbilityLoadout() || { slot1: 'choke', slot2: 'missile' };
+        }
+        var tuning = shared && shared.gameplayTuning ? shared.gameplayTuning : null;
+        return (tuning && tuning.defaultAbilityLoadout) || { slot1: 'choke', slot2: 'missile' };
+    }
+
+    function classProfileDefaults() {
+        var shared = sharedApi();
+        var tuningPreset = (((shared && shared.gameplayTuning) || {}).classPresets || {}).abilities;
+        var preset = tuningPreset || (shared && typeof shared.getClassPreset === 'function'
+            ? shared.getClassPreset('abilities')
+            : null);
+        return {
+            armorMax: Math.max(0, Number(preset && preset.armorMax || 90)),
+            wallhackRadius: Math.max(0, Number(preset && preset.wallhackRadius || 90)),
+            loadoutWeapon: String(preset && preset.loadoutWeapon || 'rifle')
+        };
     }
 
     function abilityBoundary() {
@@ -76,9 +93,10 @@
     }
 
     function cloneLoadout(loadout) {
+        var defaults = defaultAbilityLoadout();
         return {
-            slot1: loadout && loadout.slot1 ? loadout.slot1 : DEFAULT_ABILITY_LOADOUT.slot1,
-            slot2: loadout && loadout.slot2 ? loadout.slot2 : DEFAULT_ABILITY_LOADOUT.slot2
+            slot1: loadout && loadout.slot1 ? loadout.slot1 : defaults.slot1,
+            slot2: loadout && loadout.slot2 ? loadout.slot2 : defaults.slot2
         };
     }
 
@@ -181,7 +199,7 @@
         ensureLocalSim();
         resetAbilityRuntimeState();
 
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning;
+        var shared = sharedApi() && sharedApi().gameplayTuning;
         if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
             abilityLoadout = normalizedLoadout(shared.defaultAbilityLoadout.slot1, shared.defaultAbilityLoadout.slot2);
         }
@@ -242,6 +260,7 @@
     };
 
     GameAbilities.setClass = function (_id) {
+        var profileDefaults = classProfileDefaults();
         return {
             id: 'abilities',
             name: 'Abilities',
@@ -252,11 +271,11 @@
     };
 
     GameAbilities.getArmorMax = function () {
-        return profileDefaults.armorMax;
+        return classProfileDefaults().armorMax;
     };
 
     GameAbilities.getWallhackRadius = function () {
-        return profileDefaults.wallhackRadius;
+        return classProfileDefaults().wallhackRadius;
     };
 
     GameAbilities.triggerAbility = function (slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {

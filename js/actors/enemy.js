@@ -33,6 +33,7 @@
     var ENEMY_ARMOR_REGEN_DELAY = Number((globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.getSurvivabilityTuning
         ? (globalThis.__MAYHEM_RUNTIME.GameShared.getSurvivabilityTuning() || {}).armorRegenDelaySec
         : 8.0) || 8.0);
+    var sharedDamageMod = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.damage) || null;
 
     var combatRaycaster = new THREE.Raycaster();
     var revealRaycaster = new THREE.Raycaster();
@@ -41,6 +42,7 @@
     var enemyShootDir = new THREE.Vector3();
     var revealTarget = new THREE.Vector3();
     var revealDir = new THREE.Vector3();
+    var playerHookSourcePos = new THREE.Vector3();
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
 
@@ -239,7 +241,7 @@
         return blocks.length === 0;
     }
 
-    function updateEnemyAnimation(enemy, dt, engaging) {
+    function updateEnemyAnimation(enemy, dt, engaging, nowMs) {
         if (enemy.actorVisual && enemy.actorVisual.updateAnimation) {
             var speedNorm = Math.max(0, Math.min(1.4, enemy.moveSpeed / 2.3));
             enemy.actorVisual.updateAnimation(dt, {
@@ -247,11 +249,11 @@
                 sprinting: speedNorm > 0.85,
                 airborne: false,
                 aimPitch: engaging ? -0.05 : 0,
-                hooked: !!enemy.hookPullState || Number(enemy.justBeenHookedUntil || 0) > Date.now(),
+                hooked: !!enemy.hookPullState || Number(enemy.justBeenHookedUntil || 0) > nowMs,
                 hookStartedAt: enemy.hookPullState
                     ? Number(enemy.hookPullState.startedAt || 0)
                     : Number(enemy.justBeenHookedStartedAt || 0),
-                choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > Date.now()),
+                choked: !!(enemy.chokeVictimState && enemy.chokeVictimState.endsAt > nowMs),
                 startedAt: enemy.chokeVictimState ? Number(enemy.chokeVictimState.startedAt || 0) : 0,
                 adsActive: !!engaging,
                 worldSpeed: enemy.moveSpeed,
@@ -260,7 +262,7 @@
         }
     }
 
-    function updateStatusTimers(enemy, dt) {
+    function updateStatusTimers(enemy, dt, nowMs) {
         if (enemy.stunTimer > 0) {
             enemy.stunTimer -= dt;
             if (enemy.stunTimer < 0) enemy.stunTimer = 0;
@@ -272,7 +274,7 @@
                 enemy.slowMultiplier = 1;
             }
         }
-        if (enemy.chokeVictimState && enemy.chokeVictimState.endsAt <= Date.now()) {
+        if (enemy.chokeVictimState && enemy.chokeVictimState.endsAt <= nowMs) {
             enemy.chokeVictimState = null;
         }
 
@@ -289,19 +291,29 @@
         }
     }
 
-    function updateAI(enemy, dt) {
+    function finalizeHookPull(enemy, pull, desiredX, desiredZ, nowMs) {
+        enemy.group.position.x = desiredX;
+        enemy.group.position.z = desiredZ;
+        if (Number(pull.postHookStunDuration || 0) > 0) {
+            enemy.justBeenHookedStartedAt = nowMs;
+            enemy.justBeenHookedUntil = nowMs + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
+            GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
+        }
+        enemy.hookPullState = null;
+    }
+
+    function updateAI(enemy, dt, nowMs, patrolBounds) {
         if (!enemy.alive) return;
         if (enemy.hookPullState) {
             var pull = enemy.hookPullState;
             var playerState = globalThis.__MAYHEM_RUNTIME.GamePlayer;
-            var sourcePos = playerState && playerState.getPosition ? playerState.getPosition() : null;
+            var sourcePos = playerState && playerState.getPosition ? playerState.getPosition(playerHookSourcePos) : null;
             var sourceRot = playerState && playerState.getRotation ? playerState.getRotation() : null;
             if (!sourcePos || !sourceRot) {
                 enemy.hookPullState = null;
                 return;
             }
             var targetDist = Math.max(1.5, Number(pull.pullDistance || 3.2));
-            var patrolBounds = getPatrolBounds();
             var desiredX = Math.max(patrolBounds.minX, Math.min(patrolBounds.maxX, sourcePos.x + (-Math.sin(sourceRot.yaw || 0) * targetDist)));
             var desiredZ = Math.max(patrolBounds.minZ, Math.min(patrolBounds.maxZ, sourcePos.z + (-Math.cos(sourceRot.yaw || 0) * targetDist)));
             var toX = desiredX - enemy.group.position.x;
@@ -312,15 +324,8 @@
             var sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
             var baseStep = Math.max(0.001, Number(pull.pullSpeed || 26)) * dt;
             var step = Math.min(dist, Math.max(baseStep * 0.45, dist * 0.24));
-            if (sourceDist <= (targetDist + 0.08) || dist <= 0.08 || Date.now() >= Number(pull.endsAt || 0)) {
-                enemy.group.position.x = desiredX;
-                enemy.group.position.z = desiredZ;
-                if (Number(pull.postHookStunDuration || 0) > 0) {
-                    enemy.justBeenHookedStartedAt = Date.now();
-                    enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
-                    GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
-                }
-                enemy.hookPullState = null;
+            if (sourceDist <= (targetDist + 0.08) || dist <= 0.08 || nowMs >= Number(pull.endsAt || 0)) {
+                finalizeHookPull(enemy, pull, desiredX, desiredZ, nowMs);
             } else {
                 enemy.group.position.x += (toX / dist) * step;
                 enemy.group.position.z += (toZ / dist) * step;
@@ -328,12 +333,7 @@
                 sourceDz = sourcePos.z - enemy.group.position.z;
                 sourceDist = Math.sqrt((sourceDx * sourceDx) + (sourceDz * sourceDz));
                 if (sourceDist <= (targetDist + 0.08)) {
-                    if (Number(pull.postHookStunDuration || 0) > 0) {
-                        enemy.justBeenHookedStartedAt = Date.now();
-                        enemy.justBeenHookedUntil = Date.now() + Math.round(Number(pull.postHookStunDuration || 0) * 1000);
-                        GameEnemy.applyStun(enemy, Number(pull.postHookStunDuration || 0));
-                    }
-                    enemy.hookPullState = null;
+                    finalizeHookPull(enemy, pull, desiredX, desiredZ, nowMs);
                 }
             }
             pull.facingYaw = Math.atan2(sourcePos.x - enemy.group.position.x, sourcePos.z - enemy.group.position.z) + Math.PI;
@@ -355,7 +355,6 @@
             pos.z += enemy.wanderDir.z * enemy.wanderSpeed * slowScale * dt;
             enemy.moveSpeed = enemy.wanderSpeed * slowScale;
 
-            var patrolBounds = getPatrolBounds();
             if (pos.x < patrolBounds.minX) { pos.x = patrolBounds.minX; enemy.wanderDir.x = Math.abs(enemy.wanderDir.x); }
             if (pos.x > patrolBounds.maxX) { pos.x = patrolBounds.maxX; enemy.wanderDir.x = -Math.abs(enemy.wanderDir.x); }
             if (pos.z < patrolBounds.minZ) { pos.z = patrolBounds.minZ; enemy.wanderDir.z = Math.abs(enemy.wanderDir.z); }
@@ -500,13 +499,13 @@
     function removeHitboxes(enemy) {
         var idx = hitboxArray.indexOf(enemy.bodyHitbox);
         if (idx !== -1) hitboxArray.splice(idx, 1);
-        if (enemy.bodyHitbox.parent) {
+        if (enemy.bodyHitbox && enemy.bodyHitbox.parent) {
             enemy.bodyHitbox.parent.remove(enemy.bodyHitbox);
         }
 
         idx = hitboxArray.indexOf(enemy.headHitbox);
         if (idx !== -1) hitboxArray.splice(idx, 1);
-        if (enemy.headHitbox.parent) {
+        if (enemy.headHitbox && enemy.headHitbox.parent) {
             enemy.headHitbox.parent.remove(enemy.headHitbox);
         }
     }
@@ -528,6 +527,7 @@
     }
 
     GameEnemy.init = function (scene, count) {
+        GameEnemy.dispose();
         enemies = [];
         hitboxArray = [];
         sceneRef = scene;
@@ -547,6 +547,33 @@
         }
     };
 
+    function destroyEnemy(enemy) {
+        if (!enemy) return;
+        removeHitboxes(enemy);
+        if (enemy.actorVisual && enemy.actorVisual.destroy) {
+            enemy.actorVisual.destroy();
+        } else {
+            if (enemy.group && enemy.group.parent) enemy.group.parent.remove(enemy.group);
+            if (enemy.bodyHitbox && enemy.bodyHitbox.parent) enemy.bodyHitbox.parent.remove(enemy.bodyHitbox);
+            if (enemy.headHitbox && enemy.headHitbox.parent) enemy.headHitbox.parent.remove(enemy.headHitbox);
+        }
+        enemy.actorVisual = null;
+        enemy.group = null;
+        enemy.bodyHitbox = null;
+        enemy.headHitbox = null;
+        enemy.visual = null;
+        enemy.revealGhost = null;
+    }
+
+    GameEnemy.dispose = function () {
+        for (var i = 0; i < enemies.length; i++) {
+            destroyEnemy(enemies[i]);
+        }
+        enemies = [];
+        hitboxArray = [];
+        sceneRef = null;
+    };
+
     function chokeLiftAt(state, now) {
         var abilityFxView = globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null;
         if (abilityFxView && abilityFxView.chokeLiftAt) {
@@ -564,6 +591,8 @@
     GameEnemy.update = function (dt, playerPos, cameraOrCallback, maybeOnPlayerHit) {
         var camera = null;
         var onPlayerHit = maybeOnPlayerHit;
+        var nowMs = Date.now();
+        var patrolBounds = getPatrolBounds();
 
         if (typeof cameraOrCallback === 'function') {
             onPlayerHit = cameraOrCallback;
@@ -575,11 +604,11 @@
             var enemy = enemies[i];
 
             if (enemy.alive) {
-                updateStatusTimers(enemy, dt);
-                updateAI(enemy, dt);
+                updateStatusTimers(enemy, dt, nowMs);
+                updateAI(enemy, dt, nowMs, patrolBounds);
                 var engaging = updateCombat(enemy, dt, playerPos, onPlayerHit);
-                enemy.group.position.y = chokeLiftAt(enemy.chokeVictimState, Date.now());
-                updateEnemyAnimation(enemy, dt, engaging);
+                enemy.group.position.y = chokeLiftAt(enemy.chokeVictimState, nowMs);
+                updateEnemyAnimation(enemy, dt, engaging, nowMs);
                 updateRevealGhost(enemy, playerPos, camera, dt);
                 updateFlash(enemy, dt);
                 updateMuzzleFlash(enemy, dt);
@@ -595,8 +624,6 @@
             }
         }
     };
-
-    var sharedDamageMod = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.damage) || null;
 
     GameEnemy.damage = function (hitboxMesh, damage) {
         var enemy = hitboxMesh.userData.enemyRef;
@@ -716,14 +743,16 @@
             var enemy = enemies[i];
             if (!enemy || !enemy.alive) continue;
 
-            var corePos = null;
+            var corePos = enemy.lockTargetWorldPos || (enemy.lockTargetWorldPos = new THREE.Vector3());
             if (enemy.actorVisual && enemy.actorVisual.getCoreWorldPosition) {
-                corePos = enemy.actorVisual.getCoreWorldPosition(new THREE.Vector3());
+                corePos = enemy.actorVisual.getCoreWorldPosition(corePos);
             } else if (enemy.bodyHitbox && enemy.bodyHitbox.position) {
-                corePos = enemy.bodyHitbox.position.clone();
+                corePos.copy(enemy.bodyHitbox.position);
             } else if (enemy.group && enemy.group.position) {
-                corePos = enemy.group.position.clone();
+                corePos.copy(enemy.group.position);
                 corePos.y += 1.0;
+            } else {
+                corePos = null;
             }
             if (!corePos) continue;
 

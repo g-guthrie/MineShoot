@@ -131,6 +131,156 @@ test('remote sync forwards airborne movement intent to animation', async () => {
   assert.equal(calls[0].movingBackward, true);
 });
 
+test('remote sync triggers replicated fire animation when muzzle flash starts', async () => {
+  const remoteSync = await loadRemoteSync(null, {
+    GameNet: {
+      getAuthoritativeNow() {
+        return 900;
+      }
+    }
+  });
+  const calls = [];
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 1000,
+    chokeState: null,
+    actorVisual: {
+      setMuzzleVisible(visible) {
+        calls.push({ kind: 'muzzle', visible });
+      },
+      updateAnimation() {},
+      triggerAction(action, options) {
+        calls.push({ kind: 'trigger', action, options });
+      }
+    },
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation() {},
+      triggerAction() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].kind, 'muzzle');
+  assert.equal(calls[0].visible, true);
+  assert.equal(calls[1].kind, 'trigger');
+  assert.equal(calls[1].action, 'fire');
+  assert.equal(calls[1].options.duration, 0.09);
+  assert.equal(calls[1].options.strength, 1);
+});
+
+test('remote sync uses buffered movement state for animation, not just the latest snapshot flags', async () => {
+  const remoteSync = await loadRemoteSync();
+  let latestAnimState = null;
+  const render = {
+    id: 'usr_remote',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    snapshotHistory: [
+      {
+        serverTime: 800,
+        receivedAt: 1000,
+        x: 0,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 0.25,
+        sprinting: false,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      },
+      {
+        serverTime: 900,
+        receivedAt: 1010,
+        x: 1,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 0.5,
+        sprinting: true,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      }
+    ],
+    serverTimeOffsetMs: 100,
+    snapshotIntervalMs: 100,
+    snapshotJitterMs: 0,
+    interpolationDelayMs: 180,
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 1,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: true,
+    isGrounded: false,
+    velocityY: 3,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        latestAnimState = animState;
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+  const originalDateNow = Date.now;
+  Date.now = () => 1000;
+  try {
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  assert.equal(latestAnimState.sprinting, false);
+  assert.equal(latestAnimState.movingBackward, false);
+  assert.ok(latestAnimState.speedNorm < 0.4);
+});
+
 test('remote sync forwards replicated reload progress to remote animation', async () => {
   const remoteSync = await loadRemoteSync(null, {
     GameShared: {

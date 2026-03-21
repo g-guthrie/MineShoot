@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 import { getWeaponPresentation } from '../../shared/gameplay-tuning.js';
 
-async function loadAvatarRig(runtimeOverrides = {}) {
+async function loadAvatarRig(runtimeOverrides = {}, threeImpl = THREE) {
   const visualsCode = await fs.readFile(new URL('../../js/domain/weapons/visuals.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/actors/avatar-rig.js', import.meta.url), 'utf8');
   const runtime = {
@@ -19,7 +19,7 @@ async function loadAvatarRig(runtimeOverrides = {}) {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
     console,
-    THREE
+    THREE: threeImpl
   };
   sandbox.globalThis = sandbox;
 
@@ -105,6 +105,115 @@ test('reload action trigger applies the reload pose even before replicated reloa
   assert.ok(api.rig.armL.position.x < 0);
   assert.ok(api.rig.armL.position.x > -0.5);
   assert.ok(support.distanceTo(palm) < 0.8);
+});
+
+test('reload animation does not allocate new Vector3 instances every frame', async () => {
+  let vector3Count = 0;
+  class CountingVector3 extends THREE.Vector3 {
+    constructor(...args) {
+      super(...args);
+      vector3Count += 1;
+    }
+  }
+  const countingThree = { ...THREE, Vector3: CountingVector3 };
+  const avatarRig = await loadAvatarRig({}, countingThree);
+  const api = avatarRig.create({ weaponId: 'rifle' });
+  const countAfterCreate = vector3Count;
+
+  for (let i = 0; i < 60; i += 1) {
+    api.updateAnimation(0.016, {
+      speedNorm: 0,
+      sprinting: false,
+      airborne: false,
+      aimPitch: 0,
+      adsActive: false,
+      reloading: true,
+      reloadPct: 0.35
+    });
+  }
+
+  assert.equal(vector3Count, countAfterCreate);
+});
+
+test('reload animation does not accumulate right-arm twist or leave the gun stuck rotated afterward', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    adsActive: false,
+    reloading: false,
+    reloadPct: 0
+  });
+  api.root.updateMatrixWorld(true);
+
+  const baselineGunQuat = new THREE.Quaternion();
+  api.rig.gun.getWorldQuaternion(baselineGunQuat);
+
+  for (let i = 0; i < 60; i += 1) {
+    api.updateAnimation(0.016, {
+      speedNorm: 0,
+      sprinting: false,
+      airborne: false,
+      aimPitch: 0,
+      adsActive: false,
+      reloading: true,
+      reloadPct: 0.35
+    });
+  }
+
+  assert.ok(Math.abs(api.rig.armR.rotation.y) < 0.1);
+
+  api.updateAnimation(0.016, {
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false,
+    aimPitch: 0,
+    adsActive: false,
+    reloading: false,
+    reloadPct: 0
+  });
+  api.root.updateMatrixWorld(true);
+
+  const finalGunQuat = new THREE.Quaternion();
+  api.rig.gun.getWorldQuaternion(finalGunQuat);
+
+  assert.ok(Math.abs(api.rig.armR.rotation.y) < 0.000001);
+  assert.ok(baselineGunQuat.angleTo(finalGunQuat) < 0.000001);
+});
+
+test('avatar rig dispose releases mesh resources and is safe to call twice', async () => {
+  const avatarRig = await loadAvatarRig();
+  const api = avatarRig.create({ weaponId: 'rifle' });
+  let bodyGeometryDisposals = 0;
+  let bodyMaterialDisposals = 0;
+  let gunMaterialDisposals = 0;
+
+  const originalBodyGeometryDispose = api.rig.bodyMesh.geometry.dispose.bind(api.rig.bodyMesh.geometry);
+  api.rig.bodyMesh.geometry.dispose = function () {
+    bodyGeometryDisposals += 1;
+    return originalBodyGeometryDispose();
+  };
+  const originalBodyMaterialDispose = api.rig.bodyMesh.material.dispose.bind(api.rig.bodyMesh.material);
+  api.rig.bodyMesh.material.dispose = function () {
+    bodyMaterialDisposals += 1;
+    return originalBodyMaterialDispose();
+  };
+  const originalGunMaterialDispose = api.rig.gunBody.material.dispose.bind(api.rig.gunBody.material);
+  api.rig.gunBody.material.dispose = function () {
+    gunMaterialDisposals += 1;
+    return originalGunMaterialDispose();
+  };
+
+  api.dispose();
+  api.dispose();
+
+  assert.equal(bodyGeometryDisposals, 1);
+  assert.equal(bodyMaterialDisposals, 1);
+  assert.equal(gunMaterialDisposals, 1);
 });
 
 test('built-in weapon visuals keep the sniper support anchor tucked under the fore-end', async () => {

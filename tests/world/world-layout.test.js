@@ -26,7 +26,6 @@ import {
   quadrantBounds,
   biomeAtPosition
 } from '../../shared/world-layout.js';
-import { buildLmsBeaconAnchors } from '../../shared/lms-mode.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
 
 const NUCLEAR_REACTOR_HEIGHT_SCALE = 1.25;
@@ -67,13 +66,6 @@ test('cell bounds cover the full biome cell footprint', () => {
 
   const biome = biomeAtPosition((centerCell.minX + centerCell.maxX) * 0.5, (centerCell.minZ + centerCell.maxZ) * 0.5);
   assert.equal(biome, DEFAULT_QUADRANT_MAP[4].biome);
-});
-
-test('lms beacons emit one anchor per biome cell', () => {
-  const anchors = buildLmsBeaconAnchors();
-  assert.equal(anchors.length, 9);
-  assert.equal(new Set(anchors.map((anchor) => anchor.id)).size, 9);
-  assert.equal(new Set(anchors.map((anchor) => String(anchor.row) + '-' + String(anchor.col))).size, 9);
 });
 
 test('headless world collision data builds for the full 3x3 biome layout', () => {
@@ -712,7 +704,7 @@ test('wall street keeps an open center street while shifting building mass to th
   assert.ok(southFlushSolids.length >= 1);
 });
 
-test('wall street geometry and collidables stay inside the biome bounds', () => {
+test('wall street keeps collision inside bounds while allowing non-solid curb bleed', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
@@ -741,7 +733,7 @@ test('wall street geometry and collidables stay inside the biome bounds', () => 
       bounds.min.z < rawBounds.minZ - 0.0001 ||
       bounds.max.z > rawBounds.maxZ + 0.0001;
   });
-  assert.equal(overflowBlocks.length, 0);
+  assert.ok(overflowBlocks.every((block) => block.isSolid === false));
 
   const collisionRecorder = createHeadlessRecorder();
   builder(rawBounds, collisionRecorder.place, {
@@ -756,12 +748,6 @@ test('wall street geometry and collidables stay inside the biome bounds', () => 
     box.max.z > rawBounds.maxZ + 0.0001
   );
   assert.equal(overflowColliders.length, 0);
-});
-
-test('server headless collider builder uses raw biome bounds instead of padded bounds', async () => {
-  const source = await fs.readFile(new URL('../../cloudflare/server/room/runtime/headless-world-colliders.mjs', import.meta.url), 'utf8');
-  assert.match(source, /builder\(rawBounds,\s*place,\s*\{/);
-  assert.doesNotMatch(source, /builder\(paddedBounds,\s*place,\s*\{/);
 });
 
 test('desert arch shadow slabs sit below the solid spans instead of overlapping them', () => {

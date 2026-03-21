@@ -43,7 +43,12 @@ function expectedPointForPellet(camera, hitbox, weaponStats, pelletIndex, shotTo
 }
 
 async function loadHitscanHarness({ weaponId, targets, netActive = true, netConnected = netActive, cameraPosition = null, eyeWorldPosition = null, adsActive = false, authorityOverride = null, randomValues = null }) {
-  const code = await fs.readFile(new URL('../../js/combat/hitscan.js', import.meta.url), 'utf8');
+  const [tracerCode, weaponRuntimeCode, shotRuntimeCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/combat/hitscan-tracer-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan-weapon-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan-shot-runtime.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/combat/hitscan.js', import.meta.url), 'utf8')
+  ]);
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 200);
   const initialCameraPosition = cameraPosition || { x: 0, y: 1.6, z: 0 };
   camera.position.set(initialCameraPosition.x, initialCameraPosition.y, initialCameraPosition.z);
@@ -119,7 +124,11 @@ async function loadHitscanHarness({ weaponId, targets, netActive = true, netConn
   };
   sandbox.globalThis = sandbox;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(tracerCode, context);
+  vm.runInContext(weaponRuntimeCode, context);
+  vm.runInContext(shotRuntimeCode, context);
+  vm.runInContext(code, context);
   sandbox.__MAYHEM_RUNTIME.GameHitscan.setWeapon(weaponId);
 
   return {

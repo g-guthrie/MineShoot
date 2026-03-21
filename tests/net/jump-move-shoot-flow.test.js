@@ -19,7 +19,12 @@ import { gameplayTuning } from '../../shared/gameplay-tuning.js';
 import { resolveHitscanShot } from '../../shared/hitscan-authority.js';
 import { handleFire } from '../../cloudflare/server/room/RoomCombatRuntime.js';
 import { applyDamageFromSource, broadcastDamageEvent } from '../../cloudflare/server/room/CombatService.js';
-import { applyPendingInputAck, queueAuthoritativeInput } from '../../cloudflare/server/room/RoomRuntime.js';
+import {
+  applyPendingInputAck,
+  consumeQueuedAuthoritativeInputs,
+  queueAuthoritativeInput
+} from '../../cloudflare/server/room/RoomRuntime.js';
+import { gameNetRuntimeScriptUrls } from '../../js/app/runtime-assembly.js';
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -60,7 +65,10 @@ function createMotionState(patch = {}) {
     armor: Number(patch.armor || 0),
     classId: String(patch.classId || 'abilities'),
     seq: Number(patch.seq || 0),
+    lastProcessedInputSeq: Number(patch.lastProcessedInputSeq || 0),
+    lastReceivedInputSeq: Number(patch.lastReceivedInputSeq || 0),
     pendingInputSeq: Number(patch.pendingInputSeq || 0),
+    inputQueue: Array.isArray(patch.inputQueue) ? patch.inputQueue.slice() : [],
     muzzleFlashUntil: Number(patch.muzzleFlashUntil || 0),
     spawnShieldUntil: Number(patch.spawnShieldUntil || 0)
   };
@@ -85,6 +93,33 @@ function flatMovementOptions(dtMs) {
     playerRadius: 0.35,
     epsilon: 0.001
   };
+}
+
+function processQueuedServerInput(serverPlayer, inputMessage) {
+  queueAuthoritativeInput(serverPlayer, inputMessage, {
+    createMovementInputState,
+    canEntityUseWeapon() { return true; },
+    clamp(value, min, max) {
+      return Math.max(min, Math.min(max, Number(value || 0)));
+    }
+  });
+  const movementPlan = consumeQueuedAuthoritativeInputs(serverPlayer, flatMovementOptions(inputMessage.dtMs).dtSec, {
+    createMovementInputState
+  });
+  for (let i = 0; i < movementPlan.steps.length; i++) {
+    const step = movementPlan.steps[i];
+    serverPlayer.yaw = Number(step.yaw || 0);
+    serverPlayer.pitch = Number(step.pitch || 0);
+    stepAuthoritativeMovement(
+      serverPlayer,
+      step.inputState,
+      flatMovementOptions(Number(step.dtSec || 0) * 1000)
+    );
+  }
+  if (movementPlan.processedSeq > Number(serverPlayer.lastProcessedInputSeq || 0)) {
+    serverPlayer.lastProcessedInputSeq = movementPlan.processedSeq;
+  }
+  applyPendingInputAck(serverPlayer);
 }
 
 function aimForward(from, to) {
@@ -409,19 +444,14 @@ async function loadJumpMoveShootHarness(options = {}) {
   };
 
   const context = vm.createContext(sandbox);
-  for (const path of [
-    '../../js/combat/ability-fx.js',
-    '../../js/net/runtime-state.js',
-    '../../js/net/commands.js',
-    '../../js/net/runtime-access.js',
-    '../../js/net/message-router.js',
-    '../../js/net/runtime-core.js',
-    '../../js/net/state-view.js',
-    '../../js/net/network.js',
-    '../../js/net/feedback-sync.js',
-    '../../js/net/self-sync.js'
-  ]) {
-    const code = await fs.readFile(new URL(path, import.meta.url), 'utf8');
+  const scriptUrls = [
+    new URL('../../js/combat/ability-fx.js', import.meta.url)
+  ].concat(gameNetRuntimeScriptUrls, [
+    new URL('../../js/net/feedback-sync.js', import.meta.url),
+    new URL('../../js/net/self-sync.js', import.meta.url)
+  ]);
+  for (const scriptUrl of scriptUrls) {
+    const code = await fs.readFile(scriptUrl, 'utf8');
     vm.runInContext(code, context);
   }
 
@@ -516,30 +546,14 @@ async function runMeasuredScenario(options = {}) {
   GameNet.update(0.05, { x: localMotion.x, y: localMotion.y, z: localMotion.z }, { yaw: localMotion.yaw, pitch: localMotion.pitch });
   const firstInput = sentMessages.find((message) => message.t === 'input');
   stepAuthoritativeMovement(localMotion, createInputFromMessage(firstInput), flatMovementOptions(firstInput.dtMs));
-  queueAuthoritativeInput(serverPlayer, firstInput, {
-    createMovementInputState,
-    canEntityUseWeapon() { return true; },
-    clamp(value, min, max) {
-      return Math.max(min, Math.min(max, Number(value || 0)));
-    }
-  });
-  stepAuthoritativeMovement(serverPlayer, serverPlayer.inputState, flatMovementOptions(firstInput.dtMs));
-  applyPendingInputAck(serverPlayer);
+  processQueuedServerInput(serverPlayer, firstInput);
 
   timeState.now = 1050;
   GameNet.update(0.05, { x: localMotion.x, y: localMotion.y, z: localMotion.z }, { yaw: localMotion.yaw, pitch: localMotion.pitch });
   const secondInput = sentMessages.filter((message) => message.t === 'input').at(-1);
   stepAuthoritativeMovement(localMotion, createInputFromMessage(secondInput), flatMovementOptions(secondInput.dtMs));
   if (options.processSecondInputOnServer) {
-    queueAuthoritativeInput(serverPlayer, secondInput, {
-      createMovementInputState,
-      canEntityUseWeapon() { return true; },
-      clamp(value, min, max) {
-        return Math.max(min, Math.min(max, Number(value || 0)));
-      }
-    });
-    stepAuthoritativeMovement(serverPlayer, serverPlayer.inputState, flatMovementOptions(secondInput.dtMs));
-    applyPendingInputAck(serverPlayer);
+    processQueuedServerInput(serverPlayer, secondInput);
   }
 
   const shots = Array.isArray(options.shots) && options.shots.length > 0
@@ -744,15 +758,7 @@ test('jump move shoot flow records hitmarker timing, server registrations, and r
   const firstInput = sentMessages.find((msg) => msg.t === 'input');
   assert.ok(firstInput);
   stepAuthoritativeMovement(localMotion, createInputFromMessage(firstInput), flatMovementOptions(firstInput.dtMs));
-  queueAuthoritativeInput(serverPlayer, firstInput, {
-    createMovementInputState,
-    canEntityUseWeapon() { return true; },
-    clamp(value, min, max) {
-      return Math.max(min, Math.min(max, Number(value || 0)));
-    }
-  });
-  stepAuthoritativeMovement(serverPlayer, serverPlayer.inputState, flatMovementOptions(firstInput.dtMs));
-  applyPendingInputAck(serverPlayer);
+  processQueuedServerInput(serverPlayer, firstInput);
 
   timeState.now = 1050;
   GameNet.update(0.05, { x: localMotion.x, y: localMotion.y, z: localMotion.z }, { yaw: localMotion.yaw, pitch: localMotion.pitch });

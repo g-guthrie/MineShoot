@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import { gameNetRuntimeScriptUrls } from '../../js/app/runtime-assembly.js';
 
 async function loadScript(modulePath, sandbox) {
-  const code = await fs.readFile(new URL(modulePath, import.meta.url), 'utf8');
+  const code = await fs.readFile(modulePath instanceof URL ? modulePath : new URL(modulePath, import.meta.url), 'utf8');
   vm.runInContext(code, vm.createContext(sandbox));
 }
 
@@ -121,11 +122,14 @@ async function createNetHarness() {
     }
   };
 
-  await loadScript('../../js/net/state-view.js', sandbox);
-  await loadScript('../../js/net/message-router.js', sandbox);
-  await loadScript('../../js/net/runtime-state.js', sandbox);
-  await loadScript('../../js/net/commands.js', sandbox);
-  await loadScript('../../js/net/network.js', sandbox);
+  const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
+    const href = String(scriptUrl);
+    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+  });
+
+  for (const scriptUrl of scriptUrls) {
+    await loadScript(scriptUrl, sandbox);
+  }
 
   const net = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;
   net.setRoomId('ffa-01');

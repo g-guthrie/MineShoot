@@ -18,16 +18,6 @@ export function applyWeaponFalloff(weaponId, baseDamage, distance) {
   return applyDistanceFalloffDamage(baseDamage, distance, profile);
 }
 
-export function applyIncomingDamageModifier(_target, damage) {
-  return Math.max(1, Math.round(damage));
-}
-
-export function applyOutgoingDamageModifier(source, damage, _hitType, _weaponId, sourceKind) {
-  let out = Math.max(1, Math.round(damage));
-  if (!source || sourceKind !== 'weapon') return out;
-  return out;
-}
-
 export function applyDamage(target, damage, options = {}) {
   if (!target || !target.alive) return null;
 
@@ -61,20 +51,36 @@ export function applyDamage(target, damage, options = {}) {
 
 export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   if (!target || !target.alive) return null;
-  const hitType = opts.hitType === 'head' ? 'head' : 'body';
-  const weaponId = String(opts.weaponId || '');
-  const sourceKind = String(opts.sourceKind || 'weapon');
   const armorBufferMode = String(opts.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL);
-  let damage = Math.max(1, Math.round(baseDamage));
-
-  if (opts.applyOutgoing !== false) {
-    damage = applyOutgoingDamageModifier(source, damage, hitType, weaponId, sourceKind);
-  }
-  if (opts.applyIncoming !== false) {
-    damage = applyIncomingDamageModifier(target, damage);
-  }
+  const damage = Math.max(1, Math.round(baseDamage));
 
   return applyDamage(target, damage, { armorBufferMode });
+}
+
+function entitySplashPoint(room, entity) {
+  if (!entity) return null;
+  if (room && typeof room.entityAimTargetPosition === 'function') {
+    return room.entityAimTargetPosition(entity);
+  }
+  return {
+    x: Number(entity && entity.x || 0),
+    y: Number(entity && entity.y || 0),
+    z: Number(entity && entity.z || 0)
+  };
+}
+
+function canApplyExplosionDamage(room, projectile, target, center, radius) {
+  if (!target || !center) return false;
+  const targetPos = entitySplashPoint(room, target);
+  const dx = Number(targetPos.x || 0) - Number(center.x || 0);
+  const dy = Number(targetPos.y || 0) - Number(center.y || 0);
+  const dz = Number(targetPos.z || 0) - Number(center.z || 0);
+  const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+  if (dist > radius) return false;
+  if (room && typeof room.hasWorldLineOfSight === 'function') {
+    if (!room.hasWorldLineOfSight(center, targetPos, radius)) return false;
+  }
+  return dist;
 }
 
 export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '', pelletIndex = null) {
@@ -168,10 +174,8 @@ export function explodeProjectile(room, projectile, x, y, z) {
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
     if (!room.canTargetEntity(e, projectile.ownerId)) continue;
-    const dx = e.x - x;
-    const dz = e.z - z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist > radius) continue;
+    const dist = canApplyExplosionDamage(room, projectile, e, { x, y, z }, radius);
+    if (dist === false) continue;
     const falloff = 1 - (dist / Math.max(0.001, radius));
     const blastDamage = Math.max(Number(def.minBlastDamage || 0), Math.round(damage * falloff));
     const out = applyDamageFromSource(owner, e, blastDamage, {

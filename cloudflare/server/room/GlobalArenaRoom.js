@@ -33,24 +33,18 @@ import {
   hasIntentInputMessage,
   stepAuthoritativeMovement
 } from '../../../shared/authoritative-movement.js';
-import { LMS_MODE_ID, lmsRules, buildLmsBeaconAnchors } from '../../../shared/lms-mode.js';
 import {
   MATCH_GAME_MODE_FFA,
   MATCH_GAME_MODE_TDM,
+  MATCH_TEAM_IDS,
   MATCH_RESET_DELAY_MS,
-  createMatchState,
   targetProgressForGameMode
 } from '../../../shared/match-rules.js';
-import {
-  PUBLIC_ROOM_START_THRESHOLD,
-  PRIVATE_ROOM_ID_PREFIX
-} from '../../../shared/matchmaking-config.js';
+import { PUBLIC_ROOM_START_THRESHOLD } from '../../../shared/matchmaking-config.js';
 
-import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
 import { ensureBots, tickBots } from './BotAI.js';
 import {
   createPlayerEntity,
-  resetEntityForLmsRound,
   resetEntityForRespawn
 } from './EntityLifecycle.js';
 import {
@@ -63,10 +57,19 @@ import { handleClassCast, tickClassAbilityState } from './AbilityService.js';
 import { handleRoomRequest, findSocketForUserId } from './RoomTransport.js';
 import { handleRoomSocketMessage, handleRoomSocketClose } from './RoomSocket.js';
 import {
-  buildViewerEntitySnapshot,
-  buildSnapshotPayload,
   buildWelcomePayload as buildRoomWelcomePayload
 } from './RoomState.js';
+import {
+  broadcastSnapshot as broadcastRoomSnapshot,
+  collectSnapshotFrame as collectRoomSnapshotFrame,
+  ensureClientSnapshotState as ensureRoomClientSnapshotState,
+  ensureSnapshotBurstState as ensureRoomSnapshotBurstState,
+  isEntityEngagedForViewer as isRoomEntityEngagedForViewer,
+  markEntityEngaged as markRoomEntityEngaged,
+  markFireEngagement as markRoomFireEngagement,
+  markSnapshotBurst as markRoomSnapshotBurst,
+  sendSnapshotToClient as sendRoomSnapshotToClient
+} from './RoomSnapshotRuntime.js';
 import {
   buildRewoundTargetEntity,
   clampRewindShotTime,
@@ -88,26 +91,25 @@ import {
   updateLeaderProgress as updateRoomLeaderProgress
 } from './RoomMatch.js';
 import {
-  configureLmsBeaconAnchors as configureRoomLmsBeaconAnchors,
-  currentLmsBeacon as currentRoomLmsBeacon,
-  ensureLmsStartedState as ensureRoomLmsStartedState,
-  initializeLmsMatchState as initializeRoomLmsMatchState,
-  lmsMatchEntities as roomLmsMatchEntities,
-  lmsRemainingPlayers as roomLmsRemainingPlayers,
-  lmsWinnerId as roomLmsWinnerId,
-  maybeRotateLmsBeacon as maybeRotateRoomLmsBeacon,
-  rotateLmsBeacon as rotateRoomLmsBeacon,
-  syncLmsPublicState as syncRoomLmsPublicState,
-  tickLmsMode as tickRoomLmsMode
-} from './RoomLms.js';
+  DEV_LOCAL_ROOM_NAME,
+  createDefaultPrivateRoomConfig,
+  detectGameMode,
+  emptyMatchState as buildRoomMatchState,
+  isPrivateMatchRoom,
+  isPublicMatchRoom,
+  usesConfiguredBots as roomUsesConfiguredBots
+} from './RoomIdentity.js';
+import { applyPrivateRoomConfig as applyRoomPrivateConfig } from './RoomPrivateConfig.js';
 import {
   applyEntitySpawnPoint as applyRoomEntitySpawnPoint,
   applySpawnShield as applyRoomSpawnShield,
   buildPlayerEntity as buildRoomPlayerEntity,
   chooseEntitySpawnPoint as chooseRoomEntitySpawnPoint,
+  consumeQueuedAuthoritativeInputs,
   enforceEntityTerrainFloor as enforceRoomEntityTerrainFloor,
   ensurePlayer as ensureRoomPlayer,
   planEntityRespawn as planRoomEntityRespawn,
+  queueAuthoritativeInput,
   respawnIfNeeded as respawnRoomEntityIfNeeded,
   spawnEntityRandomly as spawnRoomEntityRandomly,
   syncRoomFixtures as syncRoomRuntimeFixtures,
@@ -116,6 +118,13 @@ import {
   terrainFeetYAt as roomTerrainFeetYAt,
   tickPlayers as tickRoomPlayers
 } from './RoomRuntime.js';
+import {
+  canEntityEquipWeaponId,
+  createThrowableRuntime as buildThrowableRuntime,
+  createWeaponAmmoRuntime as buildWeaponAmmoRuntime,
+  entityWeaponLoadout as resolveEntityWeaponLoadout,
+  normalizeWeaponLoadout as normalizeRoomWeaponLoadout
+} from './RoomLoadout.js';
 import {
   applyJustBeenHooked as applyCombatJustBeenHooked,
   applyPlasmaStreamHeat as applyCombatPlasmaStreamHeat,
@@ -176,9 +185,9 @@ const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const ABILITY_CATALOG = GAMEPLAY_TUNING_WU.abilityCatalog || {};
 const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
+const SELECTABLE_WEAPON_IDS = getSelectableWeaponIds();
 
 const ROOM_SIM_TICK_MS = 1000 / 60;
 const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
@@ -201,23 +210,14 @@ const THROWABLE_SPAWN_LEFT_WU = 0.34;
 const THROWABLE_SPAWN_HEIGHT_WU = 1.0;
 const THROW_INTENT_ORIGIN_MAX_OFFSET_WU = 1.2;
 const THROW_INTENT_DIRECTION_MIN_DOT = -0.2;
-const DEV_LOCAL_ROOM_NAME = 'dev-local';
-const LOCAL_SHARED_ROOM_NAME = 'local-shared';
-const SOLO_CLOUDFLARE_ROOM_PREFIX = 'cf-solo-';
-const PUBLIC_FFA_ROOM_PREFIX = 'ffa-';
-const PUBLIC_TDM_ROOM_PREFIX = 'tdm-';
-const PUBLIC_LMS_ROOM_PREFIX = 'lms-';
-const PRIVATE_SHARE_ROOM_PREFIX = PRIVATE_ROOM_ID_PREFIX;
-const DEV_LOCAL_BOT_COUNT = 2;
 const DEV_LOCAL_SIM_PLAYER_IDS = ['sim-player-1', 'sim-player-2'];
 const DEV_LOCAL_SIM_PLAYER_NAMES = ['SIM_PLAYER_1', 'SIM_PLAYER_2'];
 const GAME_MODE_FFA = MATCH_GAME_MODE_FFA;
 const GAME_MODE_TDM = MATCH_GAME_MODE_TDM;
-const GAME_MODE_LMS = LMS_MODE_ID;
 const ROOM_PHASE_ACTIVE = 'active';
 const TDM_TEAM_A = 'alpha';
 const TDM_TEAM_B = 'bravo';
-const TDM_TEAM_ORDER = [TDM_TEAM_A, TDM_TEAM_B, 'charlie', 'delta'];
+const TDM_TEAM_ORDER = MATCH_TEAM_IDS.slice();
 const FFA_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_FFA);
 const TDM_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_TDM);
 const PLAYER_SPAWN_PADDING_WU = 8;
@@ -228,6 +228,41 @@ const RELOADED_FLASH_HOLD_MS = 900;
 const HITSCAN_REWIND_HISTORY_MS = DEFAULT_REWIND_HISTORY_MS;
 const HITSCAN_MAX_REWIND_MS = DEFAULT_MAX_REWIND_MS;
 const HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU = 0.9;
+const ROOM_LOADOUT_DEPS = {
+  selectableWeaponIds: SELECTABLE_WEAPON_IDS,
+  weaponStats: WEAPON_STATS,
+  defaultWeaponLoadout: DEFAULT_WEAPON_LOADOUT
+};
+
+function emptyMatchState(gameMode) {
+  return buildRoomMatchState(gameMode, {
+    teamAlpha: TDM_TEAM_A,
+    teamBravo: TDM_TEAM_B
+  });
+}
+
+function defaultPrivateRoomConfig() {
+  return createDefaultPrivateRoomConfig({
+    roomPhaseActive: ROOM_PHASE_ACTIVE,
+    teamOrder: TDM_TEAM_ORDER
+  });
+}
+
+function normalizeWeaponLoadout(rawSlots, fallbackSlots) {
+  return normalizeRoomWeaponLoadout(rawSlots, fallbackSlots, ROOM_LOADOUT_DEPS);
+}
+
+function entityWeaponLoadout(entity) {
+  return resolveEntityWeaponLoadout(entity, ROOM_LOADOUT_DEPS);
+}
+
+function canEquipWeaponId(entity, weaponId) {
+  return canEntityEquipWeaponId(entity, weaponId, ROOM_LOADOUT_DEPS);
+}
+
+function createWeaponAmmoRuntime(loadout) {
+  return buildWeaponAmmoRuntime(loadout, ROOM_LOADOUT_DEPS);
+}
 
 function intersectRayAabb(origin, dir, box, maxDistance) {
   if (!box || !box.min || !box.max) return null;
@@ -260,83 +295,6 @@ function intersectRayAabb(origin, dir, box, maxDistance) {
   return hitDistance;
 }
 
-function detectGameMode(roomName) {
-  const room = String(roomName || '');
-  if (room.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return GAME_MODE_TDM;
-  if (room.startsWith(PUBLIC_LMS_ROOM_PREFIX)) return GAME_MODE_LMS;
-  if (room.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return GAME_MODE_FFA;
-  return '';
-}
-
-function isPublicMatchRoom(roomName) {
-  const mode = detectGameMode(roomName);
-  return mode === GAME_MODE_FFA || mode === GAME_MODE_TDM || mode === GAME_MODE_LMS;
-}
-
-function isPrivateMatchRoom(roomName) {
-  return String(roomName || '').startsWith(PRIVATE_SHARE_ROOM_PREFIX);
-}
-
-function emptyMatchState(gameMode) {
-  return createMatchState(gameMode || '', {
-    teamAlpha: TDM_TEAM_A,
-    teamBravo: TDM_TEAM_B
-  });
-}
-
-function isSelectableWeaponId(weaponId) {
-  const id = String(weaponId || '');
-  const selectable = getSelectableWeaponIds();
-  return selectable.indexOf(id) !== -1 && !!WEAPON_STATS[id];
-}
-
-function normalizeWeaponLoadout(rawSlots, fallbackSlots) {
-  const fallback = Array.isArray(fallbackSlots) && fallbackSlots.length ? fallbackSlots : DEFAULT_WEAPON_LOADOUT;
-  const next = [];
-  const seen = {};
-  const combined = Array.isArray(rawSlots) ? rawSlots.slice(0) : [];
-  for (let i = 0; i < fallback.length; i++) combined.push(fallback[i]);
-  for (let i = 0; i < combined.length && next.length < 2; i++) {
-    const id = String(combined[i] || '');
-    if (!isSelectableWeaponId(id) || seen[id]) continue;
-    seen[id] = true;
-    next.push(id);
-  }
-  return next.length ? next : DEFAULT_WEAPON_LOADOUT.slice();
-}
-
-function entityWeaponLoadout(entity) {
-  if (!entity) return DEFAULT_WEAPON_LOADOUT.slice();
-  entity.weaponLoadout = normalizeWeaponLoadout(entity.weaponLoadout, DEFAULT_WEAPON_LOADOUT);
-  return entity.weaponLoadout;
-}
-
-function canEntityUseWeapon(entity, weaponId) {
-  const id = String(weaponId || '');
-  if (!isSelectableWeaponId(id)) return false;
-  const loadout = entityWeaponLoadout(entity);
-  for (let i = 0; i < loadout.length; i++) {
-    if (loadout[i] === id) return true;
-  }
-  return false;
-}
-
-function createWeaponAmmoRuntime(loadout) {
-  const ammo = {};
-  const ids = Array.isArray(loadout) ? loadout : DEFAULT_WEAPON_LOADOUT;
-  for (let i = 0; i < ids.length; i++) {
-    const weaponId = String(ids[i] || '');
-    const stats = WEAPON_STATS[weaponId];
-    if (!stats || !(Number(stats.magazineSize || 0) > 0)) continue;
-    ammo[weaponId] = {
-      ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
-      reloadUntil: 0,
-      reloadedFlashUntil: 0
-    };
-  }
-  return ammo;
-}
-
 export class GlobalArenaRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -365,16 +323,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.nextFireZoneSeq = 1;
     this.gameMode = detectGameMode(this.roomName);
     this.matchState = emptyMatchState(this.gameMode);
-    this.lmsBeaconAnchors = [];
-    this.privateRoomConfig = {
-      roomMode: '',
-      roomPhase: ROOM_PHASE_ACTIVE,
-      hostActorId: '',
-      teamCount: 2,
-      teamIds: TDM_TEAM_ORDER.slice(0, 2),
-      teams: new Map()
-    };
-    this.configureLmsBeaconAnchors();
+    this.privateRoomConfig = defaultPrivateRoomConfig();
   }
 
   refreshWorldMeta() {
@@ -398,23 +347,9 @@ export class GlobalArenaRoom extends DurableObject {
       worldProfileVersion: this.worldProfileVersion,
       worldFlags: cloneWorldFlags(this.worldFlags)
     });
-    this.configureLmsBeaconAnchors();
     if (!isPrivateMatchRoom(this.roomName)) {
-      this.privateRoomConfig = {
-        roomMode: '',
-        roomPhase: ROOM_PHASE_ACTIVE,
-        hostActorId: '',
-        teamCount: 2,
-        teamIds: TDM_TEAM_ORDER.slice(0, 2),
-        teams: new Map()
-      };
+      this.privateRoomConfig = defaultPrivateRoomConfig();
     }
-  }
-
-  configureLmsBeaconAnchors() {
-    return configureRoomLmsBeaconAnchors(this, {
-      buildLmsBeaconAnchors
-    });
   }
 
   modeEntities() {
@@ -428,55 +363,6 @@ export class GlobalArenaRoom extends DurableObject {
     return out;
   }
 
-  lmsMatchEntities() {
-    return roomLmsMatchEntities(this);
-  }
-
-  currentLmsBeacon() {
-    return currentRoomLmsBeacon(this);
-  }
-
-  syncLmsPublicState() {
-    return syncRoomLmsPublicState(this, {
-      nowMs,
-      lmsRules
-    });
-  }
-
-  initializeLmsMatchState(now = nowMs()) {
-    return initializeRoomLmsMatchState(this, {
-      nowMs,
-      lmsRules,
-      resetEntityForLmsRound,
-      createWeaponAmmoRuntime,
-      createMovementInputState,
-      gameModeLms: GAME_MODE_LMS
-    }, now);
-  }
-
-  ensureLmsStartedState() {
-    return ensureRoomLmsStartedState(this, {
-      gameModeLms: GAME_MODE_LMS,
-      nowMs
-    });
-  }
-
-  lmsRemainingPlayers() {
-    return roomLmsRemainingPlayers(this);
-  }
-
-  lmsWinnerId() {
-    return roomLmsWinnerId(this);
-  }
-
-  maybeRotateLmsBeacon(now = nowMs()) {
-    return maybeRotateRoomLmsBeacon(this, { nowMs }, now);
-  }
-
-  rotateLmsBeacon(now = nowMs()) {
-    return rotateRoomLmsBeacon(this, { nowMs, lmsRules }, now);
-  }
-
   syncPrivateRoomMatchState() {
     return syncRoomPrivateRoomMatchState(this, {
       isPrivateMatchRoom,
@@ -484,70 +370,17 @@ export class GlobalArenaRoom extends DurableObject {
       nowMs,
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS,
       teamAlpha: TDM_TEAM_A
     });
   }
 
-  privateConfigEquals(nextConfig) {
-    const currentTeams = (this.privateRoomConfig && this.privateRoomConfig.teams) || new Map();
-    const nextTeams = (nextConfig && nextConfig.teams) || new Map();
-    if (String((this.privateRoomConfig && this.privateRoomConfig.roomMode) || '') !== String((nextConfig && nextConfig.roomMode) || '')) return false;
-    if (String((this.privateRoomConfig && this.privateRoomConfig.roomPhase) || '') !== String((nextConfig && nextConfig.roomPhase) || '')) return false;
-    if (String((this.privateRoomConfig && this.privateRoomConfig.hostActorId) || '') !== String((nextConfig && nextConfig.hostActorId) || '')) return false;
-    if (Number((this.privateRoomConfig && this.privateRoomConfig.teamCount) || 2) !== Number((nextConfig && nextConfig.teamCount) || 2)) return false;
-    if (currentTeams.size !== nextTeams.size) return false;
-    for (const [actorId, teamId] of nextTeams.entries()) {
-      if (String(currentTeams.get(actorId) || '') !== String(teamId || '')) return false;
-    }
-    return true;
-  }
-
   applyPrivateRoomConfig(config) {
-    if (!config || !isPrivateMatchRoom(this.roomName)) return;
-    const teamCount = Math.max(2, Math.min(4, Math.round(Number(config.teamCount || 2) || 2)));
-    const teamIds = TDM_TEAM_ORDER.slice(0, teamCount);
-    const teams = new Map();
-    const teamEntries = Array.isArray(config.teams) ? config.teams : [];
-    for (let i = 0; i < teamEntries.length; i++) {
-      const entry = teamEntries[i];
-      if (!entry || !entry.actorId) continue;
-      const normalizedTeamId = String(entry.teamId || '').trim().toLowerCase();
-      teams.set(String(entry.actorId), teamIds.indexOf(normalizedTeamId) >= 0 ? normalizedTeamId : teamIds[0]);
-    }
-    const nextConfig = {
-      roomMode: String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_TDM
-        ? GAME_MODE_TDM
-        : (String(config.roomMode || GAME_MODE_FFA) === GAME_MODE_LMS ? GAME_MODE_LMS : GAME_MODE_FFA),
-      roomPhase: String(config.roomPhase || 'lobby') === 'active' ? 'active' : 'lobby',
-      hostActorId: String(config.hostActorId || ''),
-      teamCount,
-      teamIds: teamIds.slice(),
-      teams
-    };
-    const syncMode = String(config.syncMode || 'lobby_update') === 'hydrate' ? 'hydrate' : 'lobby_update';
-    const changed = !this.privateConfigEquals(nextConfig);
-    this.privateRoomConfig = nextConfig;
-    if (!changed) {
-      for (const player of this.players.values()) {
-        if (!player || player.fixtureType === 'sim_player') continue;
-        player.teamId = String(teams.get(player.actorId || player.id) || nextConfig.teamIds[0] || TDM_TEAM_A);
-      }
-      return;
-    }
-    if (
-      syncMode === 'hydrate' &&
-      this.matchState &&
-      this.gameMode === nextConfig.roomMode &&
-      this.matchState.started === (nextConfig.roomPhase === 'active')
-    ) {
-      for (const player of this.players.values()) {
-        if (!player || player.fixtureType === 'sim_player') continue;
-        player.teamId = String(teams.get(player.actorId || player.id) || nextConfig.teamIds[0] || TDM_TEAM_A);
-      }
-      return;
-    }
-    this.syncPrivateRoomMatchState();
+    return applyRoomPrivateConfig(this, config, {
+      isPrivateMatchRoom,
+      roomPhaseActive: ROOM_PHASE_ACTIVE,
+      roomPhaseLobby: 'lobby',
+      teamOrder: TDM_TEAM_ORDER
+    });
   }
 
   buildWelcomePayload(selfId) {
@@ -597,14 +430,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   usesConfiguredBots() {
-    if (this.roomName === LOCAL_SHARED_ROOM_NAME) return true;
-    if (this.roomName.startsWith(SOLO_CLOUDFLARE_ROOM_PREFIX)) return true;
-    if (this.roomName === 'global') return false;
-    if (this.roomName.startsWith(PUBLIC_FFA_ROOM_PREFIX)) return false;
-    if (this.roomName.startsWith(PUBLIC_TDM_ROOM_PREFIX)) return false;
-    if (this.roomName.startsWith(PUBLIC_LMS_ROOM_PREFIX)) return false;
-    if (this.roomName.startsWith(PRIVATE_SHARE_ROOM_PREFIX)) return false;
-    return false;
+    return roomUsesConfiguredBots(this.roomName);
   }
 
   isPublicMatchRoom() {
@@ -636,7 +462,6 @@ export class GlobalArenaRoom extends DurableObject {
     return applyRoomJoinBaseline(this, player, {
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS,
       teamAlpha: TDM_TEAM_A,
       teamBravo: TDM_TEAM_B
     });
@@ -651,7 +476,6 @@ export class GlobalArenaRoom extends DurableObject {
       tdmTargetProgress: TDM_TARGET_PROGRESS,
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS,
       teamAlpha: TDM_TEAM_A,
       teamBravo: TDM_TEAM_B
     });
@@ -662,15 +486,13 @@ export class GlobalArenaRoom extends DurableObject {
       emptyMatchState,
       isPrivateMatchRoom,
       nowMs,
-      roomPhaseActive: ROOM_PHASE_ACTIVE,
-      gameModeLms: GAME_MODE_LMS
+      roomPhaseActive: ROOM_PHASE_ACTIVE
     });
   }
 
   updateLeaderProgress() {
     return updateRoomLeaderProgress(this, {
       gameModeFfa: GAME_MODE_FFA,
-      gameModeLms: GAME_MODE_LMS,
       teamAlpha: TDM_TEAM_A,
       teamBravo: TDM_TEAM_B
     });
@@ -681,20 +503,17 @@ export class GlobalArenaRoom extends DurableObject {
       nowMs,
       matchResetDelayMs: MATCH_RESET_DELAY_MS,
       gameModeFfa: GAME_MODE_FFA,
-      gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS
+      gameModeTdm: GAME_MODE_TDM
     }, winnerId, winnerTeam);
   }
 
   recordElimination(sourceId, targetId) {
     return recordRoomElimination(this, {
       nowMs,
-      lmsRules,
       ffaTargetProgress: FFA_TARGET_PROGRESS,
       tdmTargetProgress: TDM_TARGET_PROGRESS,
       gameModeFfa: GAME_MODE_FFA,
-      gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS
+      gameModeTdm: GAME_MODE_TDM
     }, sourceId, targetId);
   }
 
@@ -729,21 +548,6 @@ export class GlobalArenaRoom extends DurableObject {
       spawnMinClearance: PLAYER_SPAWN_MIN_CLEARANCE_WU,
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU
     });
-  }
-
-  buildSpawnAvoidPoints(entity) {
-    const avoidPoints = [];
-    const selfId = entity && entity.id ? entity.id : '';
-    const entities = this.getAliveEntities();
-    for (let i = 0; i < entities.length; i++) {
-      const other = entities[i];
-      if (!other || !other.alive || other.id === selfId) continue;
-      avoidPoints.push({
-        x: Number(other.x || 0),
-        z: Number(other.z || 0)
-      });
-    }
-    return avoidPoints;
   }
 
   chooseEntitySpawnPoint(entity) {
@@ -805,9 +609,7 @@ export class GlobalArenaRoom extends DurableObject {
     return ensureRoomPlayer(this, userId, username, classId, actorId, actorName, {
       isPrivateMatchRoom,
       teamAlpha: TDM_TEAM_A,
-      gameModeTdm: GAME_MODE_TDM,
-      gameModeLms: GAME_MODE_LMS,
-      lmsRules
+      gameModeTdm: GAME_MODE_TDM
     });
   }
 
@@ -833,230 +635,65 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   ensureClientSnapshotState(meta) {
-    if (!meta.snapshotState) {
-      meta.snapshotState = {
-        entityStateById: new Map(),
-        entityLastSentAtById: new Map()
-      };
-    }
-    return meta.snapshotState;
+    return ensureRoomClientSnapshotState(meta);
   }
 
   ensureSnapshotBurstState(meta) {
-    if (!meta.snapshotBurstState) {
-      meta.snapshotBurstState = {
-        untilAt: 0,
-        lastSentAt: 0,
-        entityIds: new Set()
-      };
-    }
-    if (!(meta.snapshotBurstState.entityIds instanceof Set)) {
-      meta.snapshotBurstState.entityIds = new Set();
-    }
-    return meta.snapshotBurstState;
+    return ensureRoomSnapshotBurstState(meta);
   }
 
   collectSnapshotFrame(now = nowMs()) {
-    const entities = [];
-    for (const player of this.players.values()) {
-      if (!player || this.isEntityDisconnected(player)) continue;
-      this.materializeTrackedWeaponAmmo(player, now);
-      entities.push(toEntityState(player));
-    }
-    for (const bot of this.bots.values()) {
-      if (!bot) continue;
-      this.materializeTrackedWeaponAmmo(bot, now);
-      entities.push(toEntityState(bot));
-    }
-    const serializedById = new Map();
-    for (let i = 0; i < entities.length; i++) {
-      const entity = entities[i];
-      if (!entity || !entity.id) continue;
-      serializedById.set(entity.id, JSON.stringify(entity));
-    }
-    const projectiles = [];
-    this.projectiles.forEach((p) => {
-      if (!p || !p.alive) return;
-      projectiles.push(toProjectileState(p));
-    });
-    const fireZones = [];
-    this.fireZones.forEach((z) => {
-      fireZones.push(toFireZoneState(z));
-    });
-    return {
-      now,
-      entities,
-      serializedById,
-      projectiles,
-      fireZones,
-      projectilesSerialized: JSON.stringify(projectiles),
-      fireZonesSerialized: JSON.stringify(fireZones)
-    };
+    return collectRoomSnapshotFrame(this, now);
   }
 
   sendSnapshotToClient(ws, meta, frame, options = {}) {
-    if (!meta || !meta.userId) return false;
-    if (this.activeSocketByUserId.get(meta.userId) !== ws) return false;
-    const viewer = this.players.get(meta.userId) || null;
-    this.ensureClientSnapshotState(meta);
-    const selection = buildViewerEntitySnapshot(frame.entities, viewer, meta.snapshotState, {
-      forceFull: !!options.forceFull,
-      nowMs: frame.now,
-      serializedById: frame.serializedById,
-      distanceBetween: distance3,
-      isEngaged: (_viewer, entity, stamp) => this.isEntityEngagedForViewer(viewer, entity && entity.id ? entity.id : '', stamp),
-      priorityEntityIds: options.priorityEntityIds instanceof Set
-        ? options.priorityEntityIds
-        : new Set(Array.isArray(options.priorityEntityIds) ? options.priorityEntityIds : [])
-    });
-    meta.snapshotState = selection.snapshotState;
-
-    const includeProjectiles = options.includeProjectiles !== false;
-    const includeFireZones = options.includeFireZones !== false;
-    const projectileChanged = includeProjectiles && (!!options.forceFull || meta.lastProjectilesSerialized !== frame.projectilesSerialized);
-    const fireZonesChanged = includeFireZones && (!!options.forceFull || meta.lastFireZonesSerialized !== frame.fireZonesSerialized);
-    if (!options.forceFull && selection.entities.length === 0 && selection.removedEntityIds.length === 0 && !projectileChanged && !fireZonesChanged) {
-      return false;
-    }
-
-    if (projectileChanged) meta.lastProjectilesSerialized = frame.projectilesSerialized;
-    if (fireZonesChanged) meta.lastFireZonesSerialized = frame.fireZonesSerialized;
-    this.send(ws, buildSnapshotPayload(this, {
-      forceFull: !!options.forceFull,
-      entities: frame.entities,
-      changedEntities: selection.entities,
-      removedEntityIds: selection.removedEntityIds,
-      projectiles: projectileChanged ? frame.projectiles : undefined,
-      fireZones: fireZonesChanged ? frame.fireZones : undefined
-    }, {
+    return sendRoomSnapshotToClient(this, ws, meta, frame, options, {
       msgType: MSG_S2C.SNAPSHOT,
-      nowMs: () => frame.now,
+      distanceBetween: distance3,
+      isEntityEngagedForViewer: isRoomEntityEngagedForViewer,
       isPrivateMatchRoom,
       roomPhaseActive: ROOM_PHASE_ACTIVE,
       emptyMatchState,
       teamAlpha: TDM_TEAM_A,
       teamBravo: TDM_TEAM_B
-    }));
-    return true;
+    });
   }
 
   markSnapshotBurst(viewerIds, entityIds, now = nowMs(), ttlMs = SNAPSHOT_BURST_WINDOW_MS) {
-    if (!COMBAT_BURST_SNAPSHOTS) return false;
-    const viewerList = Array.isArray(viewerIds) ? viewerIds : [viewerIds];
-    const entityList = Array.isArray(entityIds) ? entityIds : [entityIds];
-    const normalizedEntityIds = [];
-    for (let i = 0; i < entityList.length; i++) {
-      const entityId = String(entityList[i] || '');
-      if (!entityId) continue;
-      normalizedEntityIds.push(entityId);
-    }
-    if (normalizedEntityIds.length === 0) return false;
-
-    const frame = this.collectSnapshotFrame(now);
-    let sentAny = false;
-    for (let i = 0; i < viewerList.length; i++) {
-      const viewerId = String(viewerList[i] || '');
-      if (!viewerId) continue;
-      const ws = this.activeSocketByUserId.get(viewerId);
-      if (!ws) continue;
-      const meta = this.clients.get(ws);
-      if (!meta) continue;
-      const burstState = this.ensureSnapshotBurstState(meta);
-      if (Number(burstState.untilAt || 0) <= now) {
-        burstState.entityIds.clear();
-      }
-      burstState.untilAt = Math.max(Number(burstState.untilAt || 0), now + Math.max(1, Number(ttlMs || SNAPSHOT_BURST_WINDOW_MS)));
-      burstState.entityIds.add(viewerId);
-      for (let r = 0; r < normalizedEntityIds.length; r++) {
-        burstState.entityIds.add(normalizedEntityIds[r]);
-      }
-      if ((now - Number(burstState.lastSentAt || 0)) < SNAPSHOT_BURST_CADENCE_MS) continue;
-      if (this.sendSnapshotToClient(ws, meta, frame, {
-        priorityEntityIds: burstState.entityIds,
-        includeProjectiles: false,
-        includeFireZones: false
-      })) {
-        burstState.lastSentAt = now;
-        sentAny = true;
-      }
-    }
-    return sentAny;
+    return markRoomSnapshotBurst(this, viewerIds, entityIds, now, ttlMs, {
+      combatBurstSnapshots: COMBAT_BURST_SNAPSHOTS,
+      snapshotBurstCadenceMs: SNAPSHOT_BURST_CADENCE_MS,
+      snapshotBurstWindowMs: SNAPSHOT_BURST_WINDOW_MS,
+      msgType: MSG_S2C.SNAPSHOT,
+      distanceBetween: distance3,
+      isEntityEngagedForViewer: isRoomEntityEngagedForViewer,
+      isPrivateMatchRoom,
+      roomPhaseActive: ROOM_PHASE_ACTIVE,
+      emptyMatchState,
+      teamAlpha: TDM_TEAM_A,
+      teamBravo: TDM_TEAM_B
+    });
   }
 
   markEntityEngaged(sourceId, targetId, ttlMs = SNAPSHOT_ENGAGEMENT_TTL_MS, now = nowMs()) {
-    const source = this.getEntityById(sourceId);
-    const target = this.getEntityById(targetId);
-    const until = Math.max(0, Number(now || 0)) + Math.max(1, Number(ttlMs || SNAPSHOT_ENGAGEMENT_TTL_MS));
-    if (!source || !target || source.id === target.id) return false;
-    if (!source.snapshotEngagements) source.snapshotEngagements = new Map();
-    if (!target.snapshotEngagements) target.snapshotEngagements = new Map();
-    source.snapshotEngagements.set(target.id, until);
-    target.snapshotEngagements.set(source.id, until);
-    return true;
+    return markRoomEntityEngaged(this, sourceId, targetId, ttlMs, now);
   }
 
   isEntityEngagedForViewer(viewerEntity, entityId, now = nowMs()) {
-    if (!viewerEntity || !entityId) return false;
-    const engagements = viewerEntity.snapshotEngagements;
-    if (!(engagements instanceof Map)) return false;
-    const until = Number(engagements.get(entityId) || 0);
-    if (until <= Math.max(0, Number(now || 0))) {
-      if (until > 0) engagements.delete(entityId);
-      return false;
-    }
-    return true;
+    return isRoomEntityEngagedForViewer(viewerEntity, entityId, now);
   }
 
   markFireEngagement(player, msg, now = nowMs()) {
-    if (!player || !player.alive) return [];
-    let aimForward = this.entityForward(player);
-    if (msg && msg.aimForward && typeof msg.aimForward === 'object') {
-      const rawX = Number(msg.aimForward.x || 0);
-      const rawY = Number(msg.aimForward.y || 0);
-      const rawZ = Number(msg.aimForward.z || 0);
-      const len = Math.sqrt((rawX * rawX) + (rawY * rawY) + (rawZ * rawZ));
-      if (Number.isFinite(len) && len > 0.000001) {
-        const normalized = { x: rawX / len, y: rawY / len, z: rawZ / len };
-        const authoritativeForward = this.entityForward(player);
-        if (dot3(normalized, authoritativeForward) >= 0.1) {
-          aimForward = normalized;
-        }
-      }
-    }
-
-    const candidates = [];
-    const entities = this.getAliveEntities();
-    for (let i = 0; i < entities.length; i++) {
-      const entity = entities[i];
-      if (!this.canTargetEntity(entity, player.id)) continue;
-      const dist = distance3(player, entity);
-      if (!Number.isFinite(dist) || dist > SNAPSHOT_ENGAGEMENT_RANGE_WU) continue;
-      const toTarget = normalize3(
-        Number(entity.x || 0) - Number(player.x || 0),
-        Number((entity.y || PLAYER_EYE_HEIGHT_WU) - (player.y || PLAYER_EYE_HEIGHT_WU)),
-        Number(entity.z || 0) - Number(player.z || 0)
-      );
-      const alignment = dot3(aimForward, toTarget);
-      if (alignment < SNAPSHOT_ENGAGEMENT_MIN_DOT) continue;
-      candidates.push({ entity, alignment, dist });
-    }
-
-    candidates.sort((a, b) => {
-      if (Math.abs(Number(b.alignment || 0) - Number(a.alignment || 0)) > 0.0001) {
-        return Number(b.alignment || 0) - Number(a.alignment || 0);
-      }
-      return Number(a.dist || 0) - Number(b.dist || 0);
+    return markRoomFireEngagement(this, player, msg, now, {
+      distance3,
+      normalize3,
+      dot3,
+      playerEyeHeight: PLAYER_EYE_HEIGHT_WU,
+      snapshotEngagementRangeWu: SNAPSHOT_ENGAGEMENT_RANGE_WU,
+      snapshotEngagementMinDot: SNAPSHOT_ENGAGEMENT_MIN_DOT,
+      snapshotEngagementMaxTargets: SNAPSHOT_ENGAGEMENT_MAX_TARGETS,
+      snapshotEngagementTtlMs: SNAPSHOT_ENGAGEMENT_TTL_MS
     });
-
-    const engagedIds = [];
-    for (let i = 0; i < candidates.length && engagedIds.length < SNAPSHOT_ENGAGEMENT_MAX_TARGETS; i++) {
-      const target = candidates[i].entity;
-      if (!target) continue;
-      if (this.markEntityEngaged(player.id, target.id, SNAPSHOT_ENGAGEMENT_TTL_MS, now)) {
-        engagedIds.push(target.id);
-      }
-    }
-    return engagedIds;
   }
 
   seedEntityPoseHistory(entity, now = nowMs()) {
@@ -1127,19 +764,9 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   createThrowableRuntime() {
-    const out = {};
-    const order = THROWABLE_STATS.order || [];
-    for (let i = 0; i < order.length; i++) {
-      const id = order[i];
-      const def = THROWABLE_STATS[id];
-      if (!def) continue;
-      out[id] = {
-        charges: 1,
-        maxCharges: 1,
-        cooldownRemaining: 0
-      };
-    }
-    return out;
+    return buildThrowableRuntime({
+      throwableStats: THROWABLE_STATS
+    });
   }
 
   terrainFeetYAt(x, z) {
@@ -1219,23 +846,16 @@ export class GlobalArenaRoom extends DurableObject {
 
     const now = nowMs();
     const movementLocked = this.isEntityMovementLocked(player, now);
-    if (!movementLocked && typeof msg.yaw === 'number') player.yaw = msg.yaw;
-    if (!movementLocked && typeof msg.pitch === 'number') player.pitch = clamp(msg.pitch, -1.55, 1.55);
-    if (typeof msg.seq === 'number') player.seq = Math.max(player.seq, msg.seq);
 
     // Weapon changes are authoritative through explicit equip/reload/fire flows.
     // Movement input can arrive stale and must not rewind player.weaponId.
     if (!hasIntentInputMessage(msg) && String(msg.inputMode || '') !== 'intent') return;
 
-    player.inputMode = 'intent';
-    player.inputState = player.inputState || createMovementInputState();
-    player.inputState.forward = !!msg.forward;
-    player.inputState.backward = !!msg.backward;
-    player.inputState.left = !!msg.left;
-    player.inputState.right = !!msg.right;
-    player.inputState.jump = !!msg.jump;
-    player.inputState.sprint = !!msg.sprint;
-    player.inputState.adsActive = !!msg.adsActive;
+    queueAuthoritativeInput(player, msg, {
+      movementLocked,
+      clamp,
+      createMovementInputState
+    });
   }
 
   tickAuthoritativePlayerMovement(player, dtSec) {
@@ -1246,22 +866,37 @@ export class GlobalArenaRoom extends DurableObject {
       ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
       : 1;
     const boundsPad = PLAYER_RADIUS_WU;
-    stepAuthoritativeMovement(player, player.inputState || createMovementInputState(), {
-      dtSec: Math.max(0, Number(dtSec || 0)) * slowMult,
-      bounds: {
-        minX: this.boundsMin,
-        maxX: this.boundsMax,
-        minZ: this.boundsMin,
-        maxZ: this.boundsMax
-      },
-      collisionBoxes: this.worldCollidables(),
-      getGroundHeightAt: (x, z) => this.terrainFeetYAt(x, z),
-      movementLocked: this.isEntityMovementLocked(player, now),
-      eyeHeight: PLAYER_EYE_HEIGHT_WU,
-      playerHeight: PLAYER_HEIGHT_WU,
-      playerRadius: boundsPad,
-      epsilon: WORLD_RAY_EPSILON
-    });
+    const movementPlan = consumeQueuedAuthoritativeInputs(
+      player,
+      Math.max(0, Number(dtSec || 0)) * slowMult,
+      { createMovementInputState }
+    );
+    for (let i = 0; i < movementPlan.steps.length; i++) {
+      const step = movementPlan.steps[i];
+      if (!step || !(Number(step.dtSec || 0) > 0)) continue;
+      player.yaw = Number(step.yaw || 0);
+      player.pitch = clamp(Number(step.pitch || 0), -1.55, 1.55);
+      const movementLocked = !!step.movementLocked;
+      stepAuthoritativeMovement(player, step.inputState || createMovementInputState(), {
+        dtSec: Number(step.dtSec || 0),
+        bounds: {
+          minX: this.boundsMin,
+          maxX: this.boundsMax,
+          minZ: this.boundsMin,
+          maxZ: this.boundsMax
+        },
+        collisionBoxes: this.worldCollidables(),
+        getGroundHeightAt: (x, z) => this.terrainFeetYAt(x, z),
+        movementLocked,
+        eyeHeight: PLAYER_EYE_HEIGHT_WU,
+        playerHeight: PLAYER_HEIGHT_WU,
+        playerRadius: boundsPad,
+        epsilon: WORLD_RAY_EPSILON
+      });
+    }
+    if (movementPlan.processedSeq > Number(player.lastProcessedInputSeq || 0)) {
+      player.lastProcessedInputSeq = movementPlan.processedSeq;
+    }
     this.enforceEntityTerrainFloor(player);
   }
 
@@ -1423,7 +1058,7 @@ export class GlobalArenaRoom extends DurableObject {
       applyDamageFromSource,
       broadcastDamageEvent,
       broadcastDeathRespawn,
-      canEquipWeaponId: canEntityUseWeapon,
+      canEquipWeaponId,
       markFireEngagement: (firingPlayer, fireMsg, stamp) => this.markFireEngagement(firingPlayer, fireMsg, stamp),
       markSnapshotBurst: (viewerIds, entityIds, stamp, ttlMs) => this.markSnapshotBurst(viewerIds, entityIds, stamp, ttlMs),
       resolveHitscanShotTime: (fireMsg, stamp) => this.resolveHitscanShotTime(fireMsg, stamp),
@@ -1442,14 +1077,14 @@ export class GlobalArenaRoom extends DurableObject {
       normalizeWeaponLoadout,
       entityWeaponLoadout,
       createWeaponAmmoRuntime,
-      canEquipWeaponId: canEntityUseWeapon
+      canEquipWeaponId
     });
   }
 
   handleEquipWeapon(player, msg) {
     return handleCombatEquipWeapon(this, player, msg, {
       weaponStats: WEAPON_STATS,
-      canEquipWeaponId: canEntityUseWeapon
+      canEquipWeaponId
     });
   }
 
@@ -1457,7 +1092,7 @@ export class GlobalArenaRoom extends DurableObject {
     return handleCombatReload(this, player, msg, {
       nowMs,
       weaponStats: WEAPON_STATS,
-      canEquipWeaponId: canEntityUseWeapon
+      canEquipWeaponId
     });
   }
 
@@ -1574,18 +1209,9 @@ export class GlobalArenaRoom extends DurableObject {
     }
   }
 
-  tickLmsMode(now = nowMs()) {
-    return tickRoomLmsMode(this, {
-      nowMs,
-      lmsRules,
-      gameModeLms: GAME_MODE_LMS
-    }, now);
-  }
-
   respawnIfNeeded(entity) {
     return respawnRoomEntityIfNeeded(this, entity, {
       nowMs,
-      gameModeLms: GAME_MODE_LMS,
       resetEntityForRespawn,
       createWeaponAmmoRuntime,
       createMovementInputState
@@ -1599,16 +1225,17 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   broadcastSnapshot(forceFull = false) {
-    const frame = this.collectSnapshotFrame(nowMs());
-
-    for (const [ws, meta] of this.clients.entries()) {
-      if (!meta || !meta.userId) continue;
-      this.sendSnapshotToClient(ws, meta, frame, {
-        forceFull,
-        includeProjectiles: true,
-        includeFireZones: true
-      });
-    }
+    return broadcastRoomSnapshot(this, forceFull, {
+      nowMs,
+      msgType: MSG_S2C.SNAPSHOT,
+      distanceBetween: distance3,
+      isEntityEngagedForViewer: isRoomEntityEngagedForViewer,
+      isPrivateMatchRoom,
+      roomPhaseActive: ROOM_PHASE_ACTIVE,
+      emptyMatchState,
+      teamAlpha: TDM_TEAM_A,
+      teamBravo: TDM_TEAM_B
+    });
   }
 
   tick() {
@@ -1623,7 +1250,6 @@ export class GlobalArenaRoom extends DurableObject {
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
     this.recordAliveEntityPoseHistories(now);
-    this.tickLmsMode(now);
     tickProjectiles(this, dtSec);
     tickFireZones(this, dtSec);
     this.updateLeaderProgress();

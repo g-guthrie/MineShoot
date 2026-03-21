@@ -14,13 +14,12 @@ import {
 test('shared match rules centralize target progress and reset delay defaults', () => {
   assert.equal(targetProgressForGameMode('ffa'), 10);
   assert.equal(targetProgressForGameMode('tdm'), 10);
-  assert.equal(targetProgressForGameMode('lms'), 0);
   assert.equal(MATCH_RESET_DELAY_MS, 5000);
 
-  const lmsState = createMatchState('lms');
-  assert.equal(lmsState.gameMode, 'lms');
-  assert.equal(lmsState.targetProgress, 0);
-  assert.equal(typeof lmsState.lms, 'object');
+  const tdmState = createMatchState('tdm');
+  assert.equal(tdmState.gameMode, 'tdm');
+  assert.equal(tdmState.targetProgress, 10);
+  assert.deepEqual(tdmState.teamIds, ['alpha', 'bravo']);
 });
 
 test('shared match rules format ffa win progress and winner labels', () => {
@@ -106,48 +105,5 @@ test('shared match rules use the leading opposing team in multi-team tdm summari
   assert.equal(
     formatMenuMatchStatus(matchState, selfState),
     'TDM TEAM 2 / 10 | OPP CHARLIE 5'
-  );
-});
-
-test('shared match rules format lms lives, charge, and beacon state', () => {
-  const matchState = {
-    gameMode: 'lms',
-    started: true,
-    ended: false,
-    lms: {
-      chargePerExtraLife: 2,
-      remainingPlayers: 3,
-      activeBeacon: { label: 'B2' },
-      nextRotateAt: 12000
-    }
-  };
-  const selfState = {
-    id: 'u3',
-    lmsLives: 1,
-    lmsCharge: 1
-  };
-
-  assert.equal(
-    formatMatchHudCounter(matchState, selfState),
-    'Lives: 1 | Charge: 1/2 | Left: 3'
-  );
-  assert.equal(
-    formatMenuMatchStatus(matchState, selfState, { nowMs: () => 7000 }),
-    'LMS 1 LIFE | CHARGE 1/2 | LEFT 3 | BEACON B2 5.0s'
-  );
-
-  const outState = {
-    id: 'u3',
-    lmsLives: 0,
-    lmsCharge: 0,
-    outOfRound: true
-  };
-  assert.equal(
-    formatMatchHudCounter(matchState, outState),
-    'OUT | Left: 3'
-  );
-  assert.equal(
-    formatMenuMatchStatus(matchState, outState, { nowMs: () => 7000 }),
-    'OUT OF ROUND | LEFT 3'
   );
 });

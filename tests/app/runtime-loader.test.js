@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRetryableMemoizedLoader } from '../../js/app/runtime-loader.js';
+import {
+  createRetryableMemoizedLoader,
+  resolveGameplayRuntimeApi,
+  resolveDocsRuntimeApi
+} from '../../js/app/runtime-loader.js';
 
 test('createRetryableMemoizedLoader retries after a rejected load', async () => {
   let attempts = 0;
@@ -31,4 +35,28 @@ test('createRetryableMemoizedLoader memoizes a successful load', async () => {
   assert.equal(firstResolved, sentinel);
   assert.equal(secondResolved, sentinel);
   assert.equal(attempts, 1);
+});
+
+test('resolveGameplayRuntimeApi prefers explicit module exports over the compatibility global', () => {
+  const moduleApi = { launchModeById() {} };
+  const runtimeApi = { launchModeById() {} };
+
+  assert.equal(
+    resolveGameplayRuntimeApi({ gameplayRuntimeApi: moduleApi }, { GameMain: runtimeApi }),
+    moduleApi
+  );
+});
+
+test('resolveGameplayRuntimeApi returns null when the gameplay module export is missing', () => {
+  assert.equal(resolveGameplayRuntimeApi({}, { GameMain: { launchModeById() {} } }), null);
+});
+
+test('resolveDocsRuntimeApi prefers explicit module exports over the compatibility global', () => {
+  const moduleApi = { init() {}, open() {} };
+  const runtimeApi = { init() {}, open() {} };
+
+  assert.equal(
+    resolveDocsRuntimeApi({ docsRuntimeApi: moduleApi }, { GameDocs: runtimeApi }),
+    moduleApi
+  );
 });

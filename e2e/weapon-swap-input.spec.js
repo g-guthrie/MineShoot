@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
 
-async function launchPracticeRuntime(page) {
+async function launchSandboxRuntime(page) {
   await page.goto('/');
-  await page.locator('#practice-mode-btn').click();
-  await expect(page.locator('#loadout-start-btn')).toBeVisible();
-  await page.locator('#loadout-start-btn').click();
+  await page.locator('#game-modes-toggle-btn').click();
+  await page.locator('#sandbox-mode-btn').click();
+  await page.locator('#primary-launch-btn').click();
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
-  await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameMain)).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime()))).toBe(true);
 }
 
 async function ensureWeaponSwapTestHandle(page) {
@@ -64,7 +64,7 @@ async function currentWeaponId(page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await launchPracticeRuntime(page);
+  await launchSandboxRuntime(page);
 });
 
 test('browser wheel path toggles once and swallows duplicate notch events', async ({ page }) => {

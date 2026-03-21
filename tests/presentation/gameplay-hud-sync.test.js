@@ -5,7 +5,10 @@ import vm from 'node:vm';
 import { getWeaponPresentation, resolveReloadPresentationState } from '../../shared/gameplay-tuning.js';
 
 async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
-  const code = await fs.readFile(new URL('../../js/presentation/gameplay-hud-sync.js', import.meta.url), 'utf8');
+  const [inputLabelsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/presentation/gameplay-hud-sync.js', import.meta.url), 'utf8')
+  ]);
   const calls = {
     health: [],
     armor: [],
@@ -160,7 +163,9 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     ...globals
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(inputLabelsCode, context);
+  vm.runInContext(code, context);
   return {
     hudSync: sandbox.__MAYHEM_RUNTIME.GameGameplayHudSync,
     calls

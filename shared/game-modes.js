@@ -20,17 +20,6 @@ const GAME_MODE_DEFS = {
     supportsPrivateRoom: true,
     primaryQuickPlay: false,
     sortOrder: 20
-  },
-  lms: {
-    id: 'lms',
-    label: 'Last Man Standing',
-    menuButtonLabel: 'LAST MAN STANDING',
-    primaryButtonLabel: 'QUICK MATCH (LMS)',
-    shortLabel: 'LMS',
-    showInMainMenu: true,
-    supportsPrivateRoom: true,
-    primaryQuickPlay: false,
-    sortOrder: 30
   }
 };
 

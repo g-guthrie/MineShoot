@@ -31,7 +31,17 @@
     // weapon id snaps the local switch back.
     var MULTIPLAYER_WEAPON_PREDICTION_GRACE_MS = 2500;
 
-    var sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
+    var playerDamagePosScratch = {
+        x: 0,
+        y: 0,
+        z: 0,
+        set: function (x, y, z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            return this;
+        }
+    };
 
     var _isPlayingFn = null;
     var _isMultiplayerFn = null;
@@ -60,15 +70,15 @@
     function weaponTimeMs(now) {
         var stamp = Number(now);
         if (isFinite(stamp) && stamp >= 0) return stamp;
-        if (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') {
-            var perfNow = Number(performance.now());
-            if (isFinite(perfNow) && perfNow >= 0) return perfNow;
-        }
         return nowMs();
     }
 
     function sharedWeaponApi() {
         return RT.GameShared || {};
+    }
+
+    function sharedDamageApi() {
+        return (RT.GameShared && RT.GameShared.damage) || null;
     }
 
     function survivabilityTuning() {
@@ -132,50 +142,6 @@
         var shared = sharedWeaponApi();
         if (shared.getWeaponPresentation) return shared.getWeaponPresentation(id);
         return null;
-    }
-
-    function resolveReloadPresentationState(weaponId, reloadMs, reloadRemaining, reloadedFlashRemaining, previousState) {
-        var shared = sharedWeaponApi();
-        if (shared.resolveReloadPresentationState) {
-            return shared.resolveReloadPresentationState({
-                reloadMs: reloadMs,
-                reloadRemaining: reloadRemaining,
-                reloadedFlashRemaining: reloadedFlashRemaining,
-                reload: getWeaponPresentation(weaponId) ? getWeaponPresentation(weaponId).reload : null
-            }, previousState || null);
-        }
-        var reloadConfig = getWeaponPresentation(weaponId) ? getWeaponPresentation(weaponId).reload : {
-            raiseEnd: 0.16,
-            manipulateEnd: 0.68
-        };
-        var reloading = Number(reloadMs || 0) > 0 && Number(reloadRemaining || 0) > 0;
-        var reloadPct = reloading ? Math.max(0, Math.min(1, 1 - (Number(reloadRemaining || 0) / Math.max(1, Number(reloadMs || 1))))) : 1;
-        var phase = 'ready';
-        var phasePct = 1;
-        if (reloading) {
-            if (reloadPct < Number(reloadConfig.raiseEnd || 0.16)) {
-                phase = 'raise';
-                phasePct = reloadPct / Math.max(0.0001, Number(reloadConfig.raiseEnd || 0.16));
-            } else if (reloadPct < Number(reloadConfig.manipulateEnd || 0.68)) {
-                phase = 'manipulate';
-                phasePct = (reloadPct - Number(reloadConfig.raiseEnd || 0.16)) / Math.max(0.0001, Number(reloadConfig.manipulateEnd || 0.68) - Number(reloadConfig.raiseEnd || 0.16));
-            } else {
-                phase = 'settle';
-                phasePct = (reloadPct - Number(reloadConfig.manipulateEnd || 0.68)) / Math.max(0.0001, 1 - Number(reloadConfig.manipulateEnd || 0.68));
-            }
-        } else if (Number(reloadedFlashRemaining || 0) > 0) {
-            phase = 'complete';
-        }
-        return {
-            reloading: reloading,
-            reloadPct: reloadPct,
-            phase: phase,
-            phasePct: Math.max(0, Math.min(1, phasePct)),
-            justStarted: false,
-            justCompleted: false,
-            reloadRemaining: Math.max(0, Number(reloadRemaining || 0)),
-            reloadedFlashRemaining: Math.max(0, Number(reloadedFlashRemaining || 0))
-        };
     }
 
     function isKnownWeaponId(weaponId) {
@@ -291,12 +257,23 @@
         var ammoState = syncWeaponAmmoState(id, stamp);
         var reloadRemaining = reloadRemainingForWeapon(id, stamp);
         var reloadedFlashRemaining = Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - stamp);
-        var reloadPresentation = resolveReloadPresentationState(
-            id,
-            Math.max(0, Number(stats.reloadMs || 0)),
-            reloadRemaining,
-            reloadedFlashRemaining
-        );
+        var shared = sharedWeaponApi();
+        var presentation = getWeaponPresentation(id);
+        var reloadPresentation = shared.resolveReloadPresentationState
+            ? shared.resolveReloadPresentationState({
+                reloadMs: Math.max(0, Number(stats.reloadMs || 0)),
+                reloadRemaining: reloadRemaining,
+                reloadedFlashRemaining: reloadedFlashRemaining,
+                reload: presentation && presentation.reload ? presentation.reload : null
+            }, null)
+            : {
+                reloading: Math.max(0, Number(stats.reloadMs || 0)) > 0 && reloadRemaining > 0,
+                reloadPct: reloadRemaining > 0
+                    ? Math.max(0, Math.min(1, 1 - (reloadRemaining / Math.max(1, Number(stats.reloadMs || 1)))))
+                    : 1,
+                phase: reloadedFlashRemaining > 0 ? 'complete' : 'ready',
+                phasePct: 1
+            };
         return {
             id: id,
             name: String(stats.name || id),
@@ -562,7 +539,6 @@
             if (typeof opts.isPlaying === 'function') _isPlayingFn = opts.isPlaying;
             if (typeof opts.isMultiplayer === 'function') _isMultiplayerFn = opts.isMultiplayer;
         }
-        sharedDamageMod = (RT.GameShared && RT.GameShared.damage) || null;
         DEFAULT_ARMOR_REGEN_DELAY = defaultArmorRegenDelay();
         ARMOR_REGEN_PER_SEC = defaultArmorRegenPerSec();
         playerMaxHP = defaultPlayerHp();
@@ -586,6 +562,7 @@
 
         var damage = Math.max(1, Math.round(rawDamage));
         var playerTarget = { hp: playerHP, armor: playerArmor, armorMax: playerArmorMax, armorRegenDelay: armorRegenDelay };
+        var sharedDamageMod = sharedDamageApi();
         if (sharedDamageMod && sharedDamageMod.applyDamage) {
             var result = sharedDamageMod.applyDamage(playerTarget, damage);
             playerHP = playerTarget.hp;
@@ -610,7 +587,7 @@
         }
 
         if (attackerEnemy && attackerEnemy.group && attackerEnemy.group.position) {
-            var playerPos = RT.GamePlayer.getPosition();
+            var playerPos = RT.GamePlayer.getPosition(playerDamagePosScratch);
             var rot = RT.GamePlayer.getRotation();
             RT.GameUI.showDirectionalDamage(
                 attackerEnemy.group.position,
@@ -677,6 +654,7 @@
     function tickArmorRegen(dt) {
         if (isMultiplayer()) return;
         var regenTarget = { armor: playerArmor, armorMax: playerArmorMax, armorRegenDelay: armorRegenDelay };
+        var sharedDamageMod = sharedDamageApi();
         if (sharedDamageMod && sharedDamageMod.tickArmorRegen) {
             sharedDamageMod.tickArmorRegen(regenTarget, dt);
         } else {
@@ -724,10 +702,6 @@
         if (!options || options.skipWeaponSync !== true) {
             syncWeaponState(selfState, options && options.weaponNow);
         }
-        if (selfState && selfState.outOfRound) {
-            clearRespawnCountdown();
-            return;
-        }
         var respawnState = options && Object.prototype.hasOwnProperty.call(options, 'respawnState')
             ? options.respawnState
             : null;
@@ -747,7 +721,7 @@
             RT.GameAudio.play('playerHit');
         }
         if (sourcePos && RT.GamePlayer && RT.GamePlayer.getPosition && RT.GamePlayer.getRotation) {
-            var playerPos = RT.GamePlayer.getPosition();
+            var playerPos = RT.GamePlayer.getPosition(playerDamagePosScratch);
             var rot = RT.GamePlayer.getRotation();
             RT.GameUI.showDirectionalDamage(
                 sourcePos,

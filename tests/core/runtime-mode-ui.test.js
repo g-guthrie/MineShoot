@@ -7,6 +7,7 @@ async function loadRuntimeModeUi() {
   const code = await fs.readFile(new URL('../../js/core/runtime-mode-ui.js', import.meta.url), 'utf8');
   const indicator = {
     textContent: '',
+    hidden: false,
     classList: {
       toggle(_token, _force) {}
     }
@@ -52,6 +53,10 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
     harness.ui.startupSubtitleForMode({ id: 'single_dev_server', roomId: 'local-shared', gameMode: 'ffa' }),
     'Connecting to Local Multiplayer: local-shared...'
   );
+  assert.equal(
+    harness.ui.startupSubtitleForMode({ id: 'single_full_sandbox', roomId: '', gameMode: 'ffa' }),
+    'Starting Offline Sandbox: FFA...'
+  );
 });
 
 test('runtime mode ui renders indicator text from one shared formatter', async () => {
@@ -62,11 +67,30 @@ test('runtime mode ui renders indicator text from one shared formatter', async (
     label: 'Private Cloudflare Room',
     backendLabel: 'Cloudflare Prod',
     roomId: 'private-room1',
-    gameMode: 'lms'
+    gameMode: 'tdm'
   }, { debugActive: false });
 
   assert.equal(
     harness.indicator.textContent,
-    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: LMS CODE ROOM1'
+    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: TDM CODE ROOM1'
+  );
+  assert.equal(harness.indicator.hidden, true);
+});
+
+test('runtime mode ui only shows the indicator while debug mode is active', async () => {
+  const harness = await loadRuntimeModeUi();
+
+  harness.ui.setRuntimeIndicator({
+    id: 'single_dev_server',
+    label: 'Local Multiplayer',
+    backendLabel: 'Local Worker',
+    roomId: 'ffa-01',
+    gameMode: 'ffa'
+  }, { debugActive: true });
+
+  assert.equal(harness.indicator.hidden, false);
+  assert.equal(
+    harness.indicator.textContent,
+    'DEBUG MODE :: PRESS H TO SWITCH'
   );
 });

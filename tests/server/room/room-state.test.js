@@ -24,17 +24,6 @@ function emptyMatchState(gameMode) {
     leaderId: '',
     winnerId: '',
     winnerTeam: '',
-    lms: gameMode === 'lms' ? {
-      startingLives: 3,
-      maxLives: 5,
-      chargePerExtraLife: 100,
-      remainingPlayers: 0,
-      finalBankingCutoffRemaining: 2,
-      warmupEndsAt: 0,
-      nextRotateAt: 0,
-      bankingEnabled: false,
-      activeBeacon: null
-    } : null,
     teamProgress: { alpha: 0, bravo: 0 },
     teamBaselineSize: { alpha: 0, bravo: 0 }
   };
@@ -58,7 +47,6 @@ test('room state helper normalizes private room phase and match state payloads',
       leaderId: 'lead',
       winnerId: '',
       winnerTeam: '',
-      lms: null,
       teamProgress: { alpha: 2, bravo: 1 },
       teamBaselineSize: { alpha: 2, bravo: 2 }
     }
@@ -87,7 +75,6 @@ test('room state helper normalizes private room phase and match state payloads',
     winnerId: '',
     winnerTeam: '',
     teamIds: ['alpha', 'bravo'],
-    lms: null,
     teamProgress: { alpha: 2, bravo: 1 },
     teamBaselineSize: { alpha: 2, bravo: 2 }
   });
@@ -112,7 +99,6 @@ test('room state helper serializes dynamic private tdm team ids and progress map
       winnerId: '',
       winnerTeam: '',
       teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
-      lms: null,
       teamProgress: { alpha: 2, bravo: 1, charlie: 5, delta: 4 },
       teamBaselineSize: { alpha: 1, bravo: 1, charlie: 1, delta: 1 }
     }
@@ -136,7 +122,6 @@ test('room state helper serializes dynamic private tdm team ids and progress map
     winnerId: '',
     winnerTeam: '',
     teamIds: ['alpha', 'bravo', 'charlie', 'delta'],
-    lms: null,
     teamProgress: { alpha: 2, bravo: 1, charlie: 5, delta: 4 },
     teamBaselineSize: { alpha: 1, bravo: 1, charlie: 1, delta: 1 }
   });
@@ -145,37 +130,27 @@ test('room state helper serializes dynamic private tdm team ids and progress map
 test('room state helper builds welcome and snapshot payloads from shared room state', () => {
   const room = {
     roomName: 'private-room2',
-    gameMode: 'lms',
+    gameMode: 'tdm',
     worldSeed: 'seed-1',
     worldProfileVersion: 6,
     worldFlags: { envV2: true, terrainPhysicsV2: false },
     privateRoomConfig: { roomPhase: 'active' },
     matchState: {
-      gameMode: 'lms',
+      gameMode: 'tdm',
       started: true,
       ended: false,
       startedAt: 50,
       endedAt: 0,
       resetAt: 0,
       matchBaselinePlayerCount: 3,
-      targetProgress: 0,
-      leaderProgress: 1,
+      targetProgress: 10,
+      leaderProgress: 6,
       leaderId: 'u1',
       winnerId: '',
       winnerTeam: '',
-      lms: {
-        startingLives: 3,
-        maxLives: 5,
-        chargePerExtraLife: 100,
-        remainingPlayers: 2,
-        finalBankingCutoffRemaining: 1,
-        warmupEndsAt: 60,
-        nextRotateAt: 90,
-        bankingEnabled: true,
-        activeBeacon: { id: 'b1', x: 1, z: 2 }
-      },
-      teamProgress: { alpha: 0, bravo: 0 },
-      teamBaselineSize: { alpha: 0, bravo: 0 }
+      teamIds: ['alpha', 'bravo'],
+      teamProgress: { alpha: 6, bravo: 4 },
+      teamBaselineSize: { alpha: 2, bravo: 1 }
     }
   };
 
@@ -195,7 +170,7 @@ test('room state helper builds welcome and snapshot payloads from shared room st
   assert.equal(welcome.tickRate, 60);
   assert.equal(welcome.inputSendHz, 30);
   assert.deepEqual(welcome.worldFlags, { envV2: true, terrainPhysicsV2: false });
-  assert.equal(welcome.matchState.lms.activeBeacon.id, 'b1');
+  assert.equal(welcome.matchState.teamProgress.alpha, 6);
 
   const snapshot = buildSnapshotPayload(room, {
     forceFull: false,
@@ -209,7 +184,7 @@ test('room state helper builds welcome and snapshot payloads from shared room st
     t: 'snapshot',
     serverTime: 999,
     delta: true,
-    gameMode: 'lms',
+    gameMode: 'tdm',
     privateRoomPhase: 'active',
     matchState: welcome.matchState,
     entities: [{ id: 'delta' }],

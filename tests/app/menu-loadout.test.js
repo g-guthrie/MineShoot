@@ -95,7 +95,10 @@ function classTokens(element) {
 }
 
 async function loadMenuLoadoutHarness({ storageMap } = {}) {
-  const code = await fs.readFile(new URL('../../js/app/menu-loadout.js', import.meta.url), 'utf8');
+  const [inputLabelsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/app/menu-loadout.js', import.meta.url), 'utf8')
+  ]);
   const store = storageMap || new Map();
 
   const documentObj = {
@@ -221,7 +224,9 @@ async function loadMenuLoadoutHarness({ storageMap } = {}) {
   sandbox.globalThis.window = windowObj;
   sandbox.globalThis.document = documentObj;
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(inputLabelsCode, context);
+  vm.runInContext(code, context);
   sandbox.__MAYHEM_RUNTIME.GameMenuLoadout.init();
 
   return {

@@ -9,7 +9,8 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     enemyInit: [],
     localMatchInit: [],
     netInit: 0,
-    throwableInfo: []
+    throwableInfo: [],
+    docsInit: 0
   };
   const runtime = {
     GameBootstrap: {
@@ -34,7 +35,9 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
       updateAbilityInfo() {}
     },
     GameDocs: {
-      init() {}
+      init() {
+        calls.docsInit += 1;
+      }
     },
     GameOverhead: {
       init() {}
@@ -126,7 +129,7 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
     activeRuntimeMode: {
       id: 'single_full_sandbox',
       authorityMode: 'offline',
-      gameMode: 'lms'
+      gameMode: 'ffa'
     },
     applyAbilityProfile() {},
     applyDebugVisuals() {},
@@ -145,12 +148,13 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
   assert.equal(result.multiplayerMode, false);
   assert.deepEqual(
     JSON.parse(JSON.stringify(harness.calls.localMatchInit)),
-    [{ gameMode: 'lms' }]
+    [{ gameMode: 'ffa' }]
   );
   assert.equal(harness.calls.enemyInit.length, 1);
   assert.equal(harness.calls.enemyInit[0].count, 6);
   assert.deepEqual(harness.calls.throwableInfo, [{ throwable: 'frag' }]);
   assert.equal(harness.calls.netInit, 0);
+  assert.equal(harness.calls.docsInit, 1);
 });
 
 test('gameplay runtime bootstrap does not double-init multiplayer networking when net runtime lacks isActive', async () => {
@@ -189,4 +193,46 @@ test('gameplay runtime bootstrap does not double-init multiplayer networking whe
 
   assert.equal(result.multiplayerMode, true);
   assert.equal(harness.calls.netInit, 1);
+});
+
+test('gameplay runtime bootstrap prefers the loaded docs runtime over the legacy global docs reference', async () => {
+  const harness = await loadBootstrapHarness({
+    GameDocs: {
+      init() {
+        throw new Error('legacy docs global should not initialize when loader runtime is available');
+      }
+    },
+    GameRuntimeLoader: {
+      getLoadedDocsRuntime() {
+        return {
+          init() {
+            harness.calls.docsInit += 1;
+          }
+        };
+      }
+    }
+  });
+
+  const result = await harness.bootstrap.start({
+    activeRuntimeMode: {
+      id: 'single_full_sandbox',
+      authorityMode: 'offline',
+      gameMode: 'ffa'
+    },
+    applyAbilityProfile() {},
+    applyDebugVisuals() {},
+    applyWeapon() {},
+    canUseLocalAction() { return true; },
+    handleEnemyHit() {},
+    hasInputCapture() { return false; },
+    isPlaying() { return false; },
+    setTransientDebug() {},
+    startupDebugNotice: '',
+    syncMenuWeaponSlotsToRuntime() { return []; },
+    toggleDebugVisuals() { return false; },
+    tryPlayerFire() {}
+  });
+
+  assert.equal(result.multiplayerMode, false);
+  assert.equal(harness.calls.docsInit, 1);
 });

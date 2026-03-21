@@ -129,9 +129,7 @@ test('room helper stack interoperates across transport, state, runtime, socket, 
         return ensurePlayer(this, userId, username, classId, actorId, actorName, {
           isPrivateMatchRoom: () => false,
           teamAlpha: 'alpha',
-          gameModeTdm: 'tdm',
-          gameModeLms: 'lms',
-          lmsRules: { startingLives: 3 }
+          gameModeTdm: 'tdm'
         });
       },
       buildWelcomePayload(userId) {

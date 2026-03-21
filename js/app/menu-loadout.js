@@ -7,6 +7,7 @@
 
     var GameMenuLoadout = {};
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    var inputLabels = runtime.GameInputLabels || null;
     var shared = runtime.GameShared || {};
     var tuning = shared.gameplayTuning || {};
 
@@ -42,24 +43,12 @@
         }
     }
 
-    function inputBindingsApi() {
-        return runtime.GameInputBindings || null;
-    }
-
-    function bindingLabel(actionId, fallbackLabel) {
-        var bindingsApi = inputBindingsApi();
-        if (bindingsApi && bindingsApi.getDisplayLabel) {
-            return bindingsApi.getDisplayLabel(actionId);
-        }
-        return String(fallbackLabel || '--');
-    }
-
     function refreshBindingCopy() {
         var weaponTitle = document.getElementById('weapon-slot-title');
         var throwableTitle = document.getElementById('throwable-slot-title');
         var abilityTitle = document.getElementById('ability-slot-title');
 
-        var throwableKey = bindingLabel('throwable', 'Q');
+        var throwableKey = inputLabels.getBindingLabel('throwable', 'Q');
 
         if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
         if (throwableTitle) throwableTitle.textContent = 'Throwables [' + throwableKey + ']';
@@ -289,8 +278,8 @@
         if (!state.weaponSlots[0]) missingWeapons.push('weapon slot 1');
         if (!state.weaponSlots[1]) missingWeapons.push('weapon slot 2');
         normalizeAbilityState();
-        if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot ' + bindingLabel('ability_1', 'E'));
-        if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot ' + bindingLabel('ability_2', 'F'));
+        if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot ' + inputLabels.getBindingLabel('ability_1', 'E'));
+        if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot ' + inputLabels.getBindingLabel('ability_2', 'F'));
         if (!missingWeapons.length && !missingAbilities.length) return { ok: true, message: '' };
         var parts = [];
         if (missingWeapons.length) parts.push('Missing ' + missingWeapons.join(' and '));
@@ -620,8 +609,8 @@
         bindThrowableUi();
         bindAbilityUi();
         refreshBindingCopy();
-        if (inputBindingsApi() && inputBindingsApi().subscribe) {
-            inputBindingsApi().subscribe(refreshBindingCopy);
+        if (runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
+            runtime.GameInputBindings.subscribe(refreshBindingCopy);
         }
         GameMenuLoadout.syncToRuntime(false);
         saveState();

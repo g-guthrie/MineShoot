@@ -160,13 +160,15 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     function buildDistrictPaving(bounds, centerX, streetBandZ, exchangeZ, place, mats) {
         var inset = 0.6;
         var curbThickness = 0.36;
+        var seamBleed = 0.9;
         var plazaW = (bounds.maxX - bounds.minX) - (inset * 2);
         var plazaD = (bounds.maxZ - bounds.minZ) - (inset * 2);
         var plazaCenterZ = (bounds.minZ + bounds.maxZ) * 0.5;
-        var northCurbZ = bounds.minZ + inset + (curbThickness * 0.5);
-        var southCurbZ = bounds.maxZ - inset - (curbThickness * 0.5);
-        var westCurbX = bounds.minX + inset + (curbThickness * 0.5);
-        var eastCurbX = bounds.maxX - inset - (curbThickness * 0.5);
+        var borderDepth = inset + curbThickness + seamBleed;
+        var northCurbZ = bounds.minZ + ((inset + curbThickness - seamBleed) * 0.5);
+        var southCurbZ = bounds.maxZ + ((seamBleed - inset - curbThickness) * 0.5);
+        var westCurbX = bounds.minX + ((inset + curbThickness - seamBleed) * 0.5);
+        var eastCurbX = bounds.maxX + ((seamBleed - inset - curbThickness) * 0.5);
         var southGap = 22.0;
         var southSegmentW = Math.max(6.0, (plazaW - southGap) * 0.5);
         var southSegmentOffset = (southGap * 0.5) + (southSegmentW * 0.5);
@@ -182,11 +184,16 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         place.addBlock(westLane.x, 0.082, westLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
         place.addBlock(eastLane.x, 0.082, eastLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
 
-        place.addBlock(centerX, 0.09, northCurbZ, plazaW, 0.18, curbThickness, mats.curb, false);
-        place.addBlock(westCurbX, 0.09, plazaCenterZ, curbThickness, 0.18, plazaD, mats.curb, false);
-        place.addBlock(eastCurbX, 0.09, plazaCenterZ, curbThickness, 0.18, plazaD, mats.curb, false);
-        place.addBlock(centerX - southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, curbThickness, mats.curb, false);
-        place.addBlock(centerX + southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, curbThickness, mats.curb, false);
+        place.addBlock(centerX, 0.09, northCurbZ, plazaW, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(westCurbX, 0.09, plazaCenterZ, borderDepth, 0.18, plazaD, mats.curb, false);
+        place.addBlock(eastCurbX, 0.09, plazaCenterZ, borderDepth, 0.18, plazaD, mats.curb, false);
+        place.addBlock(centerX - southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(centerX + southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, borderDepth, mats.curb, false);
+
+        place.addBlock(westCurbX, 0.09, northCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(eastCurbX, 0.09, northCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(westCurbX, 0.09, southCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(eastCurbX, 0.09, southCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
     }
 
     function buildExchangeFrontage(centerX, facadeZ, bounds, place, mats, ctx) {

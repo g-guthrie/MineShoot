@@ -55,7 +55,7 @@ test('non-websocket room requests delegate private config and state responses th
   const applied = [];
   const room = {
     env: { ROOM_NAME: 'global' },
-    roomName: '',
+    roomName: 'ffa-01',
     gameMode: 'ffa',
     matchState: { started: false, ended: false },
     bots: new Map(),
@@ -113,6 +113,58 @@ test('room transport does not rebuild world metadata on every request when the r
 
   assert.equal(body.roomId, 'ffa-01');
   assert.equal(room.refreshWorldMetaCalled, 0);
+});
+
+test('room transport ignores request roomId when the durable object already has a room identity', async () => {
+  const room = {
+    env: { ROOM_NAME: 'global' },
+    roomName: 'ffa-01',
+    gameMode: 'ffa',
+    matchState: { started: false, ended: false },
+    bots: new Map(),
+    worldCollision: { collidables: [] },
+    terrainSampler: { getGroundHeightAt() { return 0; } },
+    refreshWorldMetaCalled: 0,
+    refreshWorldMeta() { this.refreshWorldMetaCalled += 1; },
+    humanPlayerCount() { return 1; },
+    connectedHumanCount() { return 1; },
+    simulatedPlayerCount() { return 0; }
+  };
+
+  const response = await handleRoomRequest(
+    room,
+    new Request('https://room/state?roomId=tdm-99')
+  );
+  const body = await response.json();
+
+  assert.equal(room.roomName, 'ffa-01');
+  assert.equal(body.roomId, 'ffa-01');
+  assert.equal(room.refreshWorldMetaCalled, 0);
+});
+
+test('room transport adopts the requested roomId for a fresh durable object still on the default room name', async () => {
+  const room = {
+    env: { ROOM_NAME: 'global' },
+    roomName: 'global',
+    gameMode: '',
+    matchState: { started: false, ended: false },
+    bots: new Map(),
+    refreshWorldMetaCalled: 0,
+    refreshWorldMeta() { this.refreshWorldMetaCalled += 1; },
+    humanPlayerCount() { return 0; },
+    connectedHumanCount() { return 0; },
+    simulatedPlayerCount() { return 0; }
+  };
+
+  const response = await handleRoomRequest(
+    room,
+    new Request('https://room/state?roomId=FFA-01')
+  );
+  const body = await response.json();
+
+  assert.equal(room.roomName, 'ffa-01');
+  assert.equal(body.roomId, 'ffa-01');
+  assert.equal(room.refreshWorldMetaCalled, 1);
 });
 
 test('websocket room requests are handled by the transport helper, including duplicate socket eviction', async () => {
@@ -178,14 +230,14 @@ test('websocket room requests are handled by the transport helper, including dup
 
     const response = await handleRoomRequest(
       room,
-      new Request('https://room/connect?roomId=global&userId=user-1&username=PLAYER&actorId=actor-1', {
+      new Request('https://room/connect?roomId=global&userId=user-1&username=PLAYER&classId=sniper&actorId=actor-1', {
         headers: { Upgrade: 'websocket' }
       })
     );
 
     assert.equal(response.status, 101);
     assert.equal(accepted.length, 1);
-    assert.deepEqual(room.ensurePlayerArgs, ['user-1', 'PLAYER', 'abilities', 'actor-1', 'PLAYER']);
+    assert.deepEqual(room.ensurePlayerArgs, ['user-1', 'PLAYER', 'sniper', 'actor-1', 'PLAYER']);
     assert.equal(room.activeSocketByUserId.get('user-1'), accepted[0]);
     assert.deepEqual(staleSocket.closed, [{ code: 4001, reason: 'Superseded by a newer connection' }]);
     assert.deepEqual(room.broadcastSnapshotArgs, [true]);
@@ -257,87 +309,6 @@ test('room transport accepts case-insensitive websocket upgrade headers', async 
 
     assert.equal(response.status, 101);
     assert.equal(accepted, 1);
-  } finally {
-    globalThis.Response = originalResponse;
-    globalThis.WebSocketPair = originalPair;
-  }
-});
-
-test('active LMS rooms reject fresh websocket joins without blocking reconnects', async () => {
-  const originalResponse = globalThis.Response;
-  const originalPair = globalThis.WebSocketPair;
-
-  class FakeResponse {
-    constructor(body, init = {}) {
-      this.body = body;
-      this.status = init.status || 200;
-      this.webSocket = init.webSocket;
-    }
-
-    async text() {
-      return String(this.body || '');
-    }
-  }
-
-  globalThis.Response = FakeResponse;
-  globalThis.WebSocketPair = class {
-    constructor() {
-      this[0] = { label: 'client' };
-      this[1] = {
-        label: 'server',
-        serializeAttachment() {},
-        deserializeAttachment() { return null; }
-      };
-    }
-  };
-
-  try {
-    const room = {
-      env: { ROOM_NAME: 'lms-01' },
-      roomName: 'lms-01',
-      gameMode: 'lms',
-      matchState: { started: true, ended: false },
-      bots: new Map(),
-      players: new Map(),
-      privateRoomConfig: { teams: new Map() },
-      clients: new Map(),
-      activeSocketByUserId: new Map(),
-      ctx: { acceptWebSocket() { throw new Error('should not accept new join'); } },
-      refreshWorldMeta() {},
-      syncRoomFixtures() {},
-      ensurePlayer() { throw new Error('should not create a new player'); },
-      startPublicMatchIfReady() {},
-      ensureTick() {},
-      buildWelcomePayload() { return {}; },
-      send() {},
-      broadcastSnapshot() {}
-    };
-
-    const denied = await handleRoomRequest(
-      room,
-      new Request('https://room/connect?roomId=lms-01&userId=u1&username=PLAYER&actorId=a1', {
-        headers: { Upgrade: 'websocket' }
-      })
-    );
-
-    assert.equal(denied.status, 409);
-    assert.equal(await denied.text(), 'LMS match already in progress.');
-
-    room.players.set('u1', { id: 'u1' });
-    let ensured = 0;
-    let accepted = 0;
-    room.ctx.acceptWebSocket = function () { accepted += 1; };
-    room.ensurePlayer = function () { ensured += 1; };
-    const allowed = await handleRoomRequest(
-      room,
-      new Request('https://room/connect?roomId=lms-01&userId=u1&username=PLAYER&actorId=a1', {
-        headers: { Upgrade: 'websocket' }
-      })
-    );
-
-    assert.equal(allowed.status, 101);
-    assert.equal(accepted, 1);
-    assert.equal(ensured, 1);
   } finally {
     globalThis.Response = originalResponse;
     globalThis.WebSocketPair = originalPair;

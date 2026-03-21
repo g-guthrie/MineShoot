@@ -24,7 +24,6 @@ import { PRIVATE_ROOM_CODE_LENGTH } from '../../shared/matchmaking-config.js';
 
 const ROOM_MODE_FFA = 'ffa';
 const ROOM_MODE_TDM = 'tdm';
-const ROOM_MODE_LMS = 'lms';
 const ROOM_PHASE_LOBBY = 'lobby';
 const ROOM_PHASE_ACTIVE = 'active';
 const TEAM_ALPHA = 'alpha';
@@ -41,7 +40,6 @@ function nowSec() {
 function normalizeRoomMode(value) {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === ROOM_MODE_TDM) return ROOM_MODE_TDM;
-  if (mode === ROOM_MODE_LMS) return ROOM_MODE_LMS;
   return ROOM_MODE_FFA;
 }
 

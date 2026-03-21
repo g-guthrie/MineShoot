@@ -908,8 +908,7 @@ canvas {
     transform: translateY(-1px);
 }
 
-#tdm-play-btn,
-#lms-play-btn {
+#tdm-play-btn {
     width: 100%;
     padding: 9px 16px;
     border: 1px solid #158f3d;
@@ -924,8 +923,7 @@ canvas {
     transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
-#tdm-play-btn:hover,
-#lms-play-btn:hover {
+#tdm-play-btn:hover {
     border-color: #5bff95;
     background: linear-gradient(180deg, rgba(8, 48, 19, 0.96), rgba(3, 20, 9, 0.98));
     box-shadow: 0 0 24px rgba(0, 66, 37, 0.24);
@@ -1004,8 +1002,7 @@ canvas {
     gap: 8px;
 }
 
-#sandbox-ffa-btn,
-#sandbox-lms-btn {
+#sandbox-ffa-btn {
     border: 1px solid #7d65b8;
     background: rgba(28, 18, 49, 0.92);
     color: #eadfff;
@@ -1017,15 +1014,13 @@ canvas {
     cursor: pointer;
 }
 
-#sandbox-ffa-btn:hover,
-#sandbox-lms-btn:hover {
+#sandbox-ffa-btn:hover {
     border-color: #d3bcff;
     background: rgba(41, 26, 70, 0.96);
     color: #fff7ff;
 }
 
-#sandbox-ffa-btn.active,
-#sandbox-lms-btn.active {
+#sandbox-ffa-btn.active {
     border-color: #efe2ff;
     background: linear-gradient(180deg, rgba(78, 48, 126, 0.98), rgba(50, 29, 86, 1));
     color: #ffffff;
@@ -1355,7 +1350,6 @@ canvas {
 
 #private-room-mode-ffa-btn,
 #private-room-mode-tdm-btn,
-#private-room-mode-lms-btn,
 #private-room-randomize-btn,
 #private-room-start-btn {
     border: 1px solid #8d5b22;
@@ -1371,7 +1365,6 @@ canvas {
 
 #private-room-mode-ffa-btn:hover,
 #private-room-mode-tdm-btn:hover,
-#private-room-mode-lms-btn:hover,
 #private-room-randomize-btn:hover,
 #private-room-start-btn:hover {
     border-color: #ffb56a;
@@ -1380,8 +1373,7 @@ canvas {
 }
 
 #private-room-mode-ffa-btn.active,
-#private-room-mode-tdm-btn.active,
-#private-room-mode-lms-btn.active {
+#private-room-mode-tdm-btn.active {
     border-color: #ffce8a;
     background: rgba(104, 54, 12, 0.92);
     color: #fff3e1;
@@ -4461,7 +4453,6 @@ canvas {
     }
 
     #tdm-play-btn,
-    #lms-play-btn,
     #sandbox-play-btn {
         font-size: 12px;
         letter-spacing: 2px;
@@ -5163,7 +5154,6 @@ canvas {
 }
 
 .play-mode-btn.active,
-#practice-mode-btn.active,
 .friends-filter-btn.active,
 #private-room-mode-actions button.active {
     background: rgba(255, 181, 79, 0.16);
@@ -5398,7 +5388,7 @@ canvas {
 
 #menu-shell.menu-shell-v3 button.active,
 #menu-shell.menu-shell-v3 .play-mode-btn.active,
-#menu-shell.menu-shell-v3 #practice-mode-btn.active,
+#menu-shell.menu-shell-v3 #sandbox-mode-btn.active,
 #menu-shell.menu-shell-v3 #open-party-btn.active,
 #menu-shell.menu-shell-v3 #utility-toggle-btn.active,
 #menu-shell.menu-shell-v3 .friends-filter-btn.active,
@@ -5409,7 +5399,7 @@ canvas {
     box-shadow: inset 0 0 0 1px rgba(173, 255, 191, 0.12), 0 0 0 1px rgba(8, 50, 19, 0.22);
 }
 
-#menu-shell.menu-shell-v3 #practice-mode-btn.active {
+#menu-shell.menu-shell-v3 #sandbox-mode-btn.active {
     border-color: #ffb16b;
     background: linear-gradient(180deg, rgba(84, 53, 21, 0.96), rgba(55, 34, 12, 0.98));
     color: #fff4e3;
@@ -5657,9 +5647,8 @@ body {
 
 #overlay {
     background:
-        radial-gradient(circle at top left, rgba(218, 231, 255, 0.9), transparent 38%),
-        radial-gradient(circle at bottom right, rgba(255, 227, 214, 0.72), transparent 34%),
-        linear-gradient(180deg, #eef2f8 0%, #e8edf4 100%);
+        linear-gradient(180deg, rgba(241, 245, 252, 0.18), rgba(230, 236, 246, 0.22)),
+        url('/images/mine-shoot-image.png') center center / cover no-repeat;
 }
 
 #overlay[data-menu-context="active-match"] {
@@ -5667,12 +5656,23 @@ body {
 }
 
 #overlay::before {
-    background: none;
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(244, 247, 252, 0.2), rgba(227, 233, 243, 0.28)),
+        url('/images/mine-shoot-image.png') center center / cover no-repeat;
+    filter: none;
+    transform: none;
+    opacity: 0;
 }
 
 #menu-stage {
     width: min(1120px, calc(100vw - 48px));
     max-height: calc(100vh - 48px);
+    position: relative;
+    z-index: 1;
 }
 
 #menu-shell.menu-shell-v4 {
@@ -5709,27 +5709,35 @@ body {
     --menu-panel-flow-gap: 12px;
     --menu-shell-border: rgba(220, 227, 236, 0.96);
     --menu-container-border: rgba(56, 66, 82, 0.16);
+    --menu-ground-glass-fill: rgba(251, 252, 255, 0.55);
+    --menu-ground-glass-fill-strong: rgba(251, 252, 255, 0.62);
+    --menu-ground-glass-highlight: rgba(255, 255, 255, 0.18);
+    --menu-ground-glass-shadow: 0 20px 48px rgba(28, 44, 76, 0.1);
     --menu-action-border: rgba(56, 66, 82, 0.78);
     --menu-subaction-border: rgba(188, 197, 209, 0.96);
     --menu-action-fill: rgba(255, 255, 255, 0.96);
     --menu-subaction-fill: rgba(244, 247, 251, 0.98);
-    background: rgba(251, 252, 255, 0.97);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06)),
+        var(--menu-ground-glass-fill);
     border: 1px solid rgba(255, 255, 255, 0.82);
     border-radius: var(--menu-radius-shell);
     box-shadow:
         0 18px 48px rgba(28, 44, 76, 0.08),
         0 42px 110px rgba(28, 44, 76, 0.07);
-    backdrop-filter: blur(14px);
+    backdrop-filter: blur(26px) saturate(175%);
     overflow: hidden;
 }
 
 #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] {
-    background: rgba(251, 252, 255, 0.74);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
+        var(--menu-ground-glass-fill);
     border: 1px solid rgba(255, 255, 255, 0.58);
     box-shadow:
         0 24px 52px rgba(10, 18, 31, 0.22),
         0 48px 120px rgba(10, 18, 31, 0.2);
-    backdrop-filter: blur(22px) saturate(138%);
+    backdrop-filter: blur(28px) saturate(175%);
 }
 
 #menu-shell.menu-shell-v4 button,
@@ -5757,17 +5765,6 @@ body {
     line-height: 1;
     pointer-events: none;
     box-shadow: 0 10px 24px rgba(26, 39, 66, 0.18);
-}
-
-#menu-shell.menu-shell-v4 #menu-header::after {
-    content: '';
-    position: absolute;
-    left: var(--menu-shell-padding-inline);
-    right: var(--menu-shell-padding-inline);
-    bottom: 0;
-    height: 1px;
-    background: var(--menu-divider-color);
-    pointer-events: none;
 }
 
 #menu-shell.menu-shell-v4 #menu-header-main {
@@ -5847,10 +5844,13 @@ body {
     position: absolute;
     top: calc(100% + 10px);
     width: min(320px, calc(100vw - 80px));
-    background: rgba(255, 255, 255, 0.97);
+    background:
+        linear-gradient(180deg, var(--menu-ground-glass-highlight), rgba(255, 255, 255, 0.08)),
+        var(--menu-ground-glass-fill);
     border: 1px solid rgba(223, 229, 240, 0.95);
     border-radius: 22px;
-    box-shadow: 0 22px 40px rgba(28, 44, 76, 0.16);
+    box-shadow: var(--menu-ground-glass-shadow);
+    backdrop-filter: blur(24px) saturate(170%);
     padding: 12px;
     z-index: 8;
 }
@@ -6382,11 +6382,13 @@ body {
     padding: 26px 24px 22px;
     border-radius: 32px;
     background:
-        radial-gradient(circle at top right, rgba(73, 125, 255, 0.14), transparent 36%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 255, 0.96));
+        radial-gradient(circle at top right, rgba(73, 125, 255, 0.12), transparent 36%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
+        var(--menu-ground-glass-fill);
     box-shadow:
         inset 0 0 0 1px var(--menu-shell-border),
-        0 18px 40px rgba(31, 47, 80, 0.06);
+        var(--menu-ground-glass-shadow);
+    backdrop-filter: blur(24px) saturate(170%);
 }
 
 #menu-shell.menu-shell-v4 #menu-home-hero {
@@ -6751,12 +6753,15 @@ body {
 }
 
 #menu-shell.menu-shell-v4 .menu-card {
-    background: rgba(255, 255, 255, 0.84);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
+        var(--menu-ground-glass-fill);
     border-radius: 24px;
     padding: 12px;
     box-shadow: inset 0 0 0 1px var(--menu-shell-border);
     position: static;
     z-index: auto;
+    backdrop-filter: blur(24px) saturate(170%);
 }
 
 #menu-shell.menu-shell-v4 #party-current-section {
@@ -7270,19 +7275,9 @@ body {
     position: relative;
     padding: var(--menu-loadout-divider-gap) var(--menu-shell-padding-inline) 12px;
     background:
-        linear-gradient(180deg, rgba(248, 250, 255, 0), rgba(244, 247, 252, 0.8) 32%, rgba(244, 247, 252, 0.96));
+        linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.06) 28%, rgba(251, 252, 255, 0.55) 100%);
     border-top: none;
-}
-
-#menu-shell.menu-shell-v4 #menu-loadout-band::before {
-    content: '';
-    position: absolute;
-    left: var(--menu-shell-padding-inline);
-    right: var(--menu-shell-padding-inline);
-    top: 0;
-    height: 1px;
-    background: var(--menu-divider-color);
-    pointer-events: none;
+    backdrop-filter: blur(22px) saturate(165%);
 }
 
 #menu-shell.menu-shell-v4 #loadout-band-actions {
@@ -7303,8 +7298,11 @@ body {
 #menu-shell.menu-shell-v4 #loadout-expanded-shell {
     padding: 12px 12px 12px;
     border-radius: var(--menu-radius-container);
-    background: rgba(245, 248, 252, 0.92);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+        rgba(245, 248, 252, 0.55);
     box-shadow: inset 0 0 0 1px var(--menu-container-border);
+    backdrop-filter: blur(22px) saturate(165%);
 }
 
 #menu-shell.menu-shell-v4 #loadout-collapse-btn,

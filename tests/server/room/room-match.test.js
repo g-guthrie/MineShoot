@@ -26,17 +26,6 @@ function emptyMatchState(gameMode) {
     leaderId: '',
     winnerId: '',
     winnerTeam: '',
-    lms: gameMode === 'lms' ? {
-      startingLives: 3,
-      maxLives: 5,
-      chargePerExtraLife: 100,
-      remainingPlayers: 0,
-      finalBankingCutoffRemaining: 2,
-      warmupEndsAt: 0,
-      nextRotateAt: 0,
-      bankingEnabled: false,
-      activeBeacon: null
-    } : null,
     teamProgress: { alpha: 0, bravo: 0 },
     teamBaselineSize: { alpha: 0, bravo: 0 }
   };
@@ -63,7 +52,6 @@ test('private room match sync normalizes mode and team assignment', () => {
     nowMs: () => 50,
     gameModeFfa: 'ffa',
     gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
     teamAlpha: 'alpha'
   });
 
@@ -98,7 +86,6 @@ test('public match helpers start tdm and assign the lighter team on join baselin
     tdmTargetProgress: 10,
     gameModeFfa: 'ffa',
     gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
     teamAlpha: 'alpha',
     teamBravo: 'bravo'
   }), true);
@@ -111,7 +98,6 @@ test('public match helpers start tdm and assign the lighter team on join baselin
   applyJoinBaseline(room, joiner, {
     gameModeFfa: 'ffa',
     gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
     teamAlpha: 'alpha',
     teamBravo: 'bravo'
   });
@@ -139,7 +125,6 @@ test('public matches start immediately when the first human connects', () => {
     tdmTargetProgress: 10,
     gameModeFfa: 'ffa',
     gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
     teamAlpha: 'alpha',
     teamBravo: 'bravo'
   }), true);
@@ -161,7 +146,6 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
     updateLeaderProgress() {
       return updateLeaderProgress(this, {
         gameModeFfa: 'ffa',
-        gameModeLms: 'lms',
         teamAlpha: 'alpha',
         teamBravo: 'bravo'
       });
@@ -171,13 +155,9 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
         nowMs: () => 500,
         matchResetDelayMs: 5000,
         gameModeFfa: 'ffa',
-        gameModeTdm: 'tdm',
-        gameModeLms: 'lms'
+        gameModeTdm: 'tdm'
       }, winnerId, winnerTeam);
     },
-    syncLmsPublicState() {},
-    lmsRemainingPlayers() { return 0; },
-    lmsWinnerId() { return ''; },
     assignPlayerToCurrentTeam() { return 'alpha'; },
     isPublicMatchRoom() { return true; },
     startPublicMatchIfReadyCalled: 0,
@@ -191,12 +171,10 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
 
   recordElimination(room, {
     nowMs: () => 100,
-    lmsRules: { startingLives: 3, chargePerExtraLife: 100, chargePerElimination: 30, respawnDelayMs: 1500 },
     ffaTargetProgress: 3,
     tdmTargetProgress: 10,
     gameModeFfa: 'ffa',
-    gameModeTdm: 'tdm',
-    gameModeLms: 'lms'
+    gameModeTdm: 'tdm'
   }, 'u1', 'u2');
   assert.equal(room.matchState.ended, true);
   assert.equal(room.matchState.winnerId, 'u1');
@@ -207,45 +185,10 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
     emptyMatchState,
     isPrivateMatchRoom: () => false,
     nowMs: () => 1000,
-    roomPhaseActive: 'active',
-    gameModeLms: 'lms'
+    roomPhaseActive: 'active'
   }), true);
   assert.equal(room.startPublicMatchIfReadyCalled, 1);
   assert.equal(room.players.get('u1').kills, 0);
-});
-
-test('lms elimination marks players out of round when they lose their last life', () => {
-  const room = {
-    roomName: 'lms-01',
-    gameMode: 'lms',
-    players: new Map([
-      ['u1', { id: 'u1', fixtureType: '', lmsLives: 2, lmsCharge: 0, progressScore: 2, kills: 0, deaths: 0 }],
-      ['u2', { id: 'u2', fixtureType: '', lmsLives: 1, lmsCharge: 0, progressScore: 1, kills: 0, deaths: 0, outOfRound: false, respawnAt: 0 }]
-    ]),
-    matchState: Object.assign(emptyMatchState('lms'), { started: true }),
-    getEntityById(id) { return this.players.get(id) || null; },
-    syncLmsPublicState() {},
-    updateLeaderProgress() {},
-    lmsRemainingPlayers() { return 1; },
-    lmsWinnerId() { return 'u1'; },
-    finishCalls: [],
-    finishPublicMatch(winnerId, winnerTeam) { this.finishCalls.push({ winnerId, winnerTeam }); }
-  };
-
-  recordElimination(room, {
-    nowMs: () => 100,
-    lmsRules: { startingLives: 3, chargePerExtraLife: 100, chargePerElimination: 30, respawnDelayMs: 1500 },
-    ffaTargetProgress: 3,
-    tdmTargetProgress: 10,
-    gameModeFfa: 'ffa',
-    gameModeTdm: 'tdm',
-    gameModeLms: 'lms'
-  }, 'u1', 'u2');
-
-  assert.equal(room.players.get('u2').lmsLives, 0);
-  assert.equal(room.players.get('u2').outOfRound, true);
-  assert.equal(room.players.get('u2').respawnAt, 0);
-  assert.deepEqual(room.finishCalls, [{ winnerId: 'u1', winnerTeam: '' }]);
 });
 
 test('private room four-team tdm preserves assignments and scores the winning team', () => {
@@ -279,7 +222,6 @@ test('private room four-team tdm preserves assignments and scores the winning te
     updateLeaderProgress() {
       return updateLeaderProgress(this, {
         gameModeFfa: 'ffa',
-        gameModeLms: 'lms',
         teamAlpha: 'alpha',
         teamBravo: 'bravo'
       });
@@ -295,7 +237,6 @@ test('private room four-team tdm preserves assignments and scores the winning te
     nowMs: () => 50,
     gameModeFfa: 'ffa',
     gameModeTdm: 'tdm',
-    gameModeLms: 'lms',
     teamAlpha: 'alpha'
   });
 
@@ -307,12 +248,10 @@ test('private room four-team tdm preserves assignments and scores the winning te
   room.matchState.targetProgress = 1;
   recordElimination(room, {
     nowMs: () => 100,
-    lmsRules: { startingLives: 3, chargePerExtraLife: 100, chargePerElimination: 30, respawnDelayMs: 1500 },
     ffaTargetProgress: 10,
     tdmTargetProgress: 1,
     gameModeFfa: 'ffa',
-    gameModeTdm: 'tdm',
-    gameModeLms: 'lms'
+    gameModeTdm: 'tdm'
   }, 'u2', 'u1');
 
   assert.equal(room.matchState.teamProgress.charlie, 1);

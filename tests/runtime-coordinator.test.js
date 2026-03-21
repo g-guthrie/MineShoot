@@ -8,7 +8,12 @@ async function readModule(modulePath) {
 }
 
 test('runtime coordinator creates the runtime shell lazily and delegates launch/activity calls', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let shellCreateCalls = 0;
   let launchCalls = 0;
   let activityCalls = 0;
@@ -49,7 +54,11 @@ test('runtime coordinator creates the runtime shell lazily and delegates launch/
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const factory = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator;
   assert.equal(typeof factory.create, 'function');
@@ -69,35 +78,13 @@ test('runtime coordinator creates the runtime shell lazily and delegates launch/
   assert.equal(launchCalls, 1);
 });
 
-test('runtime main registers a GameMain api', async () => {
-  const code = await readModule('../js/runtime/main.js');
-  const sandbox = {
-    console,
-    document: {
-      getElementById() { return null; },
-      querySelector() { return null; }
-    },
-    window: {
-      location: {
-        pathname: '/'
-      }
-    },
-    globalThis: {
-      __MAYHEM_RUNTIME: {}
-    }
-  };
-  sandbox.globalThis.window = sandbox.window;
-  sandbox.globalThis.document = sandbox.document;
-
-  vm.runInContext(code, vm.createContext(sandbox));
-
-  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain, 'object');
-  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain.launchModeById, 'function');
-  assert.equal(typeof sandbox.globalThis.__MAYHEM_RUNTIME.GameMain.getActivityState, 'function');
-});
-
 test('runtime coordinator reads respawn countdown from self combat instead of net selectors', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let capturedReadMatchContext = null;
   const expectedRespawnState = {
     active: true,
@@ -156,7 +143,11 @@ test('runtime coordinator reads respawn countdown from self combat instead of ne
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
   coordinator.getActivityState();
@@ -168,7 +159,12 @@ test('runtime coordinator reads respawn countdown from self combat instead of ne
 });
 
 test('runtime coordinator reads local-match state when offline runtime is active', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let capturedReadMatchContext = null;
 
   const sandbox = {
@@ -190,10 +186,10 @@ test('runtime coordinator reads local-match state when offline runtime is active
       __MAYHEM_RUNTIME: {
         GameLocalMatch: {
           getMatchState() {
-            return { started: true, gameMode: 'lms' };
+            return { started: true, gameMode: 'ffa' };
           },
           getSelfState() {
-            return { id: 'guest-self', alive: true, lmsLives: 3 };
+            return { id: 'guest-self', alive: true, kills: 3 };
           }
         },
         GamePlayerCombat: {
@@ -214,19 +210,28 @@ test('runtime coordinator reads local-match state when offline runtime is active
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
   coordinator.getActivityState();
 
   assert.equal(typeof capturedReadMatchContext, 'function');
   const matchContext = capturedReadMatchContext();
-  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.matchState)), { started: true, gameMode: 'lms' });
-  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.selfState)), { id: 'guest-self', alive: true, lmsLives: 3 });
+  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.matchState)), { started: true, gameMode: 'ffa' });
+  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.selfState)), { id: 'guest-self', alive: true, kills: 3 });
 });
 
 test('runtime coordinator seeds network room ids through GameNet before multiplayer init flips on', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let capturedSetRoomId = null;
   const gameNetCalls = [];
   const localMatchCalls = [];
@@ -271,7 +276,11 @@ test('runtime coordinator seeds network room ids through GameNet before multipla
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
   coordinator.getActivityState();
@@ -284,7 +293,12 @@ test('runtime coordinator seeds network room ids through GameNet before multipla
 });
 
 test('runtime coordinator breaks sprint and still fires on the same click', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let capturedStartOptions = null;
   let sprinting = true;
   let sprintRequested = true;
@@ -435,7 +449,11 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
   await coordinator.launchModeById('single_full_sandbox', {});
@@ -450,7 +468,12 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
 });
 
 test('runtime coordinator reveals the local overhead target when a local hit lands', async () => {
-  const code = await readModule('../js/app/runtime-coordinator.js');
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
   let capturedStartOptions = null;
   const revealedTargets = [];
 
@@ -604,7 +627,11 @@ test('runtime coordinator reveals the local overhead target when a local hit lan
     }
   };
 
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
 
   const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
   await coordinator.launchModeById('single_full_sandbox', {});

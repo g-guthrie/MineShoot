@@ -29,6 +29,8 @@
         if (lambertCache[key]) return lambertCache[key];
         created++;
         var mat = new THREE.MeshLambertMaterial(opts);
+        mat.userData = mat.userData || {};
+        mat.userData.__mayhemSharedMaterial = true;
         lambertCache[key] = mat;
         return mat;
     }
@@ -39,6 +41,8 @@
         if (basicCache[key]) return basicCache[key];
         created++;
         var mat = new THREE.MeshBasicMaterial(opts);
+        mat.userData = mat.userData || {};
+        mat.userData.__mayhemSharedMaterial = true;
         basicCache[key] = mat;
         return mat;
     }

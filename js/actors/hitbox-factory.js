@@ -13,13 +13,18 @@
     var HEAD_COLOR_NET = 0xff6666;
     var BODY_COLOR_ENEMY = 0x00aaff;
     var BODY_COLOR_NET = 0x22bbff;
+    var HEAD_GEOMETRY = new THREE.BoxGeometry(HEAD.x, HEAD.y, HEAD.z);
+    var BODY_GEOMETRY = new THREE.BoxGeometry(BODY.x, BODY.y, BODY.z);
+
+    HEAD_GEOMETRY.userData = HEAD_GEOMETRY.userData || {};
+    HEAD_GEOMETRY.userData.sharedHitboxGeometry = true;
+    BODY_GEOMETRY.userData = BODY_GEOMETRY.userData || {};
+    BODY_GEOMETRY.userData.sharedHitboxGeometry = true;
 
     function createCombatHitbox(type, ownerType, opts) {
         opts = opts || {};
         var isHead = (type === 'head');
-        var geo = isHead
-            ? new THREE.BoxGeometry(HEAD.x, HEAD.y, HEAD.z)
-            : new THREE.BoxGeometry(BODY.x, BODY.y, BODY.z);
+        var geo = isHead ? HEAD_GEOMETRY : BODY_GEOMETRY;
 
         var isEnemy = (ownerType === 'enemy');
         var color = isHead

@@ -125,7 +125,7 @@ export async function initializePrivateRoomState(env, roomId, roomMode = 'ffa', 
        updated_at = excluded.updated_at`
   ).bind(
     sanitizeRoomId(roomId),
-    String(roomMode || 'ffa') === 'tdm' ? 'tdm' : (String(roomMode || 'ffa') === 'lms' ? 'lms' : 'ffa'),
+    String(roomMode || 'ffa') === 'tdm' ? 'tdm' : 'ffa',
     String(roomPhase || 'lobby') === 'active' ? 'active' : 'lobby',
     String(hostActorId || ''),
     1,
@@ -148,7 +148,7 @@ export async function setPrivateRoomState(env, roomId, updates) {
   const current = await getPrivateRoomState(env, roomId);
   if (!current) return null;
   const rawMode = String((updates && updates.roomMode) || current.room_mode || 'ffa');
-  const nextMode = rawMode === 'tdm' ? 'tdm' : (rawMode === 'lms' ? 'lms' : 'ffa');
+  const nextMode = rawMode === 'tdm' ? 'tdm' : 'ffa';
   const nextPhase = String((updates && updates.roomPhase) || current.room_phase || 'lobby') === 'active' ? 'active' : 'lobby';
   const nextHost = String((updates && updates.hostActorId) || current.host_actor_id || '');
   const nextInviteLocked = updates && Object.prototype.hasOwnProperty.call(updates, 'inviteLocked')

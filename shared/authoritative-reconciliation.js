@@ -36,9 +36,12 @@ export function shouldReplayAuthoritativeCorrection(options = {}) {
   const movingIntent = !!options.movingIntent;
   const canCorrectWhileMoving = options.canCorrectWhileMoving !== false;
   const allowFreshPendingReplay = options.allowFreshPendingReplay === true;
+  const authoritativeStateChanged = options.authoritativeStateChanged !== false;
+  const ackAdvanced = lastAckedSeq !== lastReplayAckSeq;
   return pendingInputCount > 0 &&
     lastAckedSeq > 0 &&
-    lastAckedSeq !== lastReplayAckSeq &&
+    authoritativeStateChanged &&
+    (ackAdvanced || options.allowReplayWithoutAckAdvance === true) &&
     horizontalDistSq >= (replayDistance * replayDistance) &&
     (!movingIntent || canCorrectWhileMoving) &&
     (allowFreshPendingReplay || latestPendingAgeMs >= minPendingAgeMs);
@@ -66,7 +69,9 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
       bounds: bounds,
       collisionBoxes: collisionBoxes,
       getGroundHeightAt: getGroundHeightAt,
-      movementLocked: !!movementLocked(entry, state),
+      movementLocked: !!(Object.prototype.hasOwnProperty.call(entry, 'movementLocked')
+        ? entry.movementLocked
+        : movementLocked(entry, state)),
       eyeHeight: Number(options.eyeHeight || EYE_HEIGHT),
       playerHeight: Number(options.playerHeight || PLAYER_HEIGHT),
       playerRadius: Number(options.playerRadius || PLAYER_RADIUS),

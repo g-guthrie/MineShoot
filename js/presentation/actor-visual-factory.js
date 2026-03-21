@@ -109,6 +109,46 @@
         return group;
     }
 
+    function disposeMaterials(materials) {
+        if (!Array.isArray(materials)) return;
+        var seen = [];
+        for (var i = 0; i < materials.length; i++) {
+            var material = materials[i];
+            if (!material || typeof material.dispose !== 'function' || seen.indexOf(material) !== -1) continue;
+            seen.push(material);
+            material.dispose();
+        }
+    }
+
+    function disposeObjectResources(root) {
+        if (!root || !root.traverse) return;
+        var geometries = [];
+        var materials = [];
+        root.traverse(function (node) {
+            if (
+                node &&
+                node.geometry &&
+                typeof node.geometry.dispose === 'function' &&
+                !(node.geometry.userData && node.geometry.userData.sharedHitboxGeometry) &&
+                geometries.indexOf(node.geometry) === -1
+            ) {
+                geometries.push(node.geometry);
+            }
+            if (!node || !node.material) return;
+            var nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+            for (var i = 0; i < nodeMaterials.length; i++) {
+                var material = nodeMaterials[i];
+                if (material && typeof material.dispose === 'function' && materials.indexOf(material) === -1) {
+                    materials.push(material);
+                }
+            }
+        });
+        for (var g = 0; g < geometries.length; g++) {
+            geometries[g].dispose();
+        }
+        disposeMaterials(materials);
+    }
+
     GameActorVisualFactory.create = function (opts) {
         opts = opts || {};
         var ownerType = String(opts.ownerType || 'net');
@@ -145,6 +185,7 @@
         };
         var alive = true;
         var hitboxesEnabled = hitboxOpacity > 0;
+        var destroyed = false;
 
         var bodyHitbox = null;
         var headHitbox = null;
@@ -325,9 +366,16 @@
         }
 
         function destroy() {
+            if (destroyed) return;
+            destroyed = true;
             if (root && root.parent) root.parent.remove(root);
             if (bodyHitbox && bodyHitbox.parent) bodyHitbox.parent.remove(bodyHitbox);
             if (headHitbox && headHitbox.parent) headHitbox.parent.remove(headHitbox);
+            if (rigApi && rigApi.dispose) rigApi.dispose();
+            disposeMaterials(revealState.materials);
+            disposeObjectResources(chokeFx);
+            disposeObjectResources(bodyHitbox);
+            disposeObjectResources(headHitbox);
         }
 
         function getCoreWorldPosition(outVec3) {
