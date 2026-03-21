@@ -88,6 +88,13 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     GROUND_COLORS[BIOME_WALL_STREET] = 0x6a6258;
     GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
 
+    function groundColorForBiome(biomeId) {
+        if (Object.prototype.hasOwnProperty.call(GROUND_COLORS, biomeId)) {
+            return GROUND_COLORS[biomeId];
+        }
+        return GROUND_COLORS[BIOME_JUNGLE];
+    }
+
     function cloneWorldFlags(flags) {
         return {
             envV2: !!(flags && flags.envV2),
@@ -457,45 +464,44 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             addSteamColumn: function (data) { animatedSteamColumns.push(data); }
         };
 
-        // --- Ground plane with per-biome vertex colors ---
-        var groundSeg = Math.max(48, Math.round(WORLD_SIZE * 1.15));
-        var groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, groundSeg, groundSeg);
-        groundGeo.rotateX(-Math.PI / 2);
-        groundGeo.translate(WORLD_CENTER, 0, WORLD_CENTER);
-
-        var groundPos = groundGeo.attributes.position;
-        var groundColors = new Float32Array(groundPos.count * 3);
-        var color = new THREE.Color();
-
-        var biomeColorCache = {};
-        for (var bk in GROUND_COLORS) {
-            biomeColorCache[bk] = new THREE.Color(GROUND_COLORS[bk]);
-        }
-
-        for (var vi = 0; vi < groundPos.count; vi++) {
-            var gx = groundPos.getX(vi);
-            var gz = groundPos.getZ(vi);
-            var gy = getGroundHeightAt(gx, gz);
-            groundPos.setY(vi, gy);
-
-            var biomeId = biomeAt(gx, gz);
-            color.copy(biomeColorCache[biomeId] || biomeColorCache[BIOME_JUNGLE]);
-
-            groundColors[(vi * 3)] = color.r;
-            groundColors[(vi * 3) + 1] = color.g;
-            groundColors[(vi * 3) + 2] = color.b;
-        }
-
-        groundGeo.setAttribute('color', new THREE.BufferAttribute(groundColors, 3));
-        groundPos.needsUpdate = true;
-        groundGeo.computeVertexNormals();
-
-        var groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-        var ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.receiveShadow = true;
-        addTrackedObject(scene, ground);
-
         var matLib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
+
+        // --- Ground plane split per biome cell to keep edges crisp ---
+        for (var gi = 0; gi < DEFAULT_QUADRANT_MAP.length; gi++) {
+            var groundEntry = DEFAULT_QUADRANT_MAP[gi];
+            if (!groundEntry) continue;
+            var groundBounds = quadrantBounds(groundEntry.quadrant);
+            var groundWidth = Math.max(0.01, Number(groundBounds.maxX - groundBounds.minX) || 0.01);
+            var groundDepth = Math.max(0.01, Number(groundBounds.maxZ - groundBounds.minZ) || 0.01);
+            var groundSegX = Math.max(16, Math.round(groundWidth * 1.15));
+            var groundSegZ = Math.max(16, Math.round(groundDepth * 1.15));
+            var groundCenterX = (groundBounds.minX + groundBounds.maxX) * 0.5;
+            var groundCenterZ = (groundBounds.minZ + groundBounds.maxZ) * 0.5;
+            var groundGeo = new THREE.PlaneGeometry(groundWidth, groundDepth, groundSegX, groundSegZ);
+            groundGeo.rotateX(-Math.PI / 2);
+            groundGeo.translate(groundCenterX, 0, groundCenterZ);
+
+            var groundPos = groundGeo.attributes.position;
+            for (var vi = 0; vi < groundPos.count; vi++) {
+                var gx = groundPos.getX(vi);
+                var gz = groundPos.getZ(vi);
+                groundPos.setY(vi, getGroundHeightAt(gx, gz));
+            }
+
+            groundPos.needsUpdate = true;
+            groundGeo.computeVertexNormals();
+
+            var ground = new THREE.Mesh(
+                groundGeo,
+                matLib.getLambert({ color: groundColorForBiome(groundEntry.biome) })
+            );
+            ground.receiveShadow = true;
+            ground.userData = ground.userData || {};
+            ground.userData.isBiomeGround = true;
+            ground.userData.biome = groundEntry.biome;
+            ground.userData.cell = groundEntry.quadrant;
+            addTrackedObject(scene, ground);
+        }
 
         // Abyss plane far below to hide the void.
         var lowerGroundGeo = new THREE.PlaneGeometry(WORLD_SIZE * 3, WORLD_SIZE * 3);
