@@ -9,7 +9,6 @@
     var GameLobbyController = {};
     var initialized = false;
     var RETURN_STATE_KEY = 'mayhem.menu.returnShell.v2';
-    var RECENT_JOIN_KEY = 'mayhem.menu.recentJoinIds.v1';
 
     function runtimeModeUi() {
         var deps = runtime.GameLobbyControllerDeps || null;
@@ -335,7 +334,6 @@
             leaveConfirmCancelBtn: document.getElementById('leave-confirm-cancel-btn'),
             leaveConfirmAcceptBtn: document.getElementById('leave-confirm-accept-btn'),
             partyRoomSection: document.getElementById('party-room-section'),
-            partyStatus: document.getElementById('party-status'),
             partyHeroLeaveBtn: document.getElementById('party-hero-leave-btn'),
             privateRoomStatus: document.getElementById('private-room-status'),
             roomSocialFeedback: document.getElementById('room-social-feedback'),

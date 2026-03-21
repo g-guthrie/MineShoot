@@ -565,22 +565,22 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
 
   const metrics = await page.evaluate(() => {
     const loadoutShell = document.getElementById('loadout-expanded-shell');
-    const partyScreen = document.getElementById('menu-screen-party');
+    const roomScreen = document.getElementById('menu-screen-room');
     const modeScreen = document.getElementById('menu-screen-mode');
     if (modeScreen) modeScreen.hidden = true;
-    if (partyScreen) partyScreen.hidden = false;
+    if (roomScreen) roomScreen.hidden = false;
 
     const loadoutOverflow = loadoutShell ? loadoutShell.scrollWidth > loadoutShell.clientWidth + 1 : false;
-    const partyGrid = document.getElementById('party-screen-grid');
-    const partyOverflow = partyGrid ? partyGrid.scrollWidth > partyGrid.clientWidth + 1 : false;
+    const roomGrid = document.getElementById('room-screen-grid');
+    const roomOverflow = roomGrid ? roomGrid.scrollWidth > roomGrid.clientWidth + 1 : false;
     return {
       loadoutOverflow,
-      partyOverflow,
+      roomOverflow,
       viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
     };
   });
 
   expect(metrics.loadoutOverflow).toBe(false);
-  expect(metrics.partyOverflow).toBe(false);
+  expect(metrics.roomOverflow).toBe(false);
   expect(metrics.viewportOverflow).toBe(false);
 });

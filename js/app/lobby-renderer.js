@@ -102,7 +102,7 @@
             if (!elements.partyHeroMembers) return;
             elements.partyHeroMembers.innerHTML = '';
             var partyState = state.party;
-            if (!partyState || !partyState.party || !Array.isArray(partyState.party.members) || partyState.party.memberCount <= 1) return;
+            if (!partyState || !partyState.party || !Array.isArray(partyState.party.members) || partyState.party.members.length <= 1) return;
             var memberIds = savedFriendIds(state);
             for (var i = 0; i < partyState.party.members.length; i++) {
                 var member = partyState.party.members[i];
@@ -673,7 +673,10 @@
 
             var showMainHeroes = state.activeSurface === 'main' && !activeMatchShell;
             var showHomeHero = showMainHeroes;
-            var showPartyHero = showMainHeroes && caps.partyMemberCount > 1;
+            var partyMembers = state.party && state.party.party && Array.isArray(state.party.party.members)
+                ? state.party.party.members
+                : [];
+            var showPartyHero = showMainHeroes && partyMembers.length > 1;
             var heroCount = 0;
             if (showHomeHero) heroCount += 1;
             if (showMainHeroes) heroCount += 1;

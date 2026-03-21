@@ -201,7 +201,12 @@ class FakeElement {
   }
 }
 
-async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
+async function loadHarness({
+  localEnvironment = false,
+  loggedIn = true,
+  loadoutValidation = { ok: true, message: '' },
+  lobbyApiOverride = null
+} = {}) {
   const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
   const rendererCode = await fs.readFile(new URL('../../js/app/lobby-renderer.js', import.meta.url), 'utf8');
   const actionsCode = await fs.readFile(new URL('../../js/app/lobby-actions.js', import.meta.url), 'utf8');
@@ -563,7 +568,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
         };
       }
     },
-    GameLobbyApi: {
+    GameLobbyApi: lobbyApiOverride || {
       matchmakingPath() {
         return '/api/matchmaking';
       },
@@ -597,7 +602,10 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
         };
       },
       validateSelections() {
-        return { ok: true, message: '' };
+        return {
+          ok: !!(loadoutValidation && loadoutValidation.ok),
+          message: String(loadoutValidation && loadoutValidation.message || '')
+        };
       },
       subscribe() {
         return function () {};
@@ -615,12 +623,12 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
             const room = privateRoomState.room;
             return {
               hasParty: true,
-              partyMemberCount: partyState.party.memberCount,
+              partyMemberCount: partyState.party.members.length,
               canTogglePartyJoinLock: true,
               partyJoinLocked: !!partyState.party.joinLocked,
               partyJoinLockTitle: 'Toggle party privacy.',
               partyJoinLockNote: partyState.party.joinLocked ? 'Party Closed' : 'Party Open',
-              canLeaveParty: partyState.party.memberCount > 1,
+              canLeaveParty: partyState.party.members.length > 1,
               hasPrivateRoom: !!room,
               privateRoomPhase: room ? room.roomPhase : '',
               privateRoomMode: room ? room.roomMode : '',
@@ -1392,6 +1400,58 @@ test('party hero appears only after the party grows beyond one member', async ()
   assert.equal(elements['menu-party-hero'].hidden, false);
   assert.equal(elements['party-hero-members'].children.length > 0, true);
   assert.equal(elements['menu-main-heroes'].attributes['data-columns'], '3');
+});
+
+test('party hero stays hidden when memberCount is stale but the roster only has one member', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  harness.emitPartyState({
+    self: { id: 'usr_alpha', username: 'ALPHA' },
+    directInvite: { incoming: null, outgoing: null },
+    party: {
+      id: 'pty_alpha',
+      leaderId: 'usr_alpha',
+      joinLocked: false,
+      isLeader: true,
+      memberCount: 2,
+      members: [
+        { id: 'usr_alpha', displayName: 'ALPHA', isLeader: true, isAccount: true, accountUserId: 'usr_alpha', username: 'ALPHA' }
+      ]
+    }
+  });
+
+  assert.equal(elements['menu-party-hero'].hidden, true);
+  assert.equal(elements['party-hero-members'].children.length, 0);
+  assert.equal(elements['menu-main-heroes'].attributes['data-columns'], '2');
+});
+
+test('launch validation failure stays promise-compatible and shows the validation message', async () => {
+  const harness = await loadHarness({
+    loadoutValidation: { ok: false, message: 'Choose an ability first.' }
+  });
+  const { elements, matchmakingCalls } = harness;
+
+  elements['primary-launch-btn'].click();
+  await harness.flush();
+
+  assert.equal(matchmakingCalls.length, 0);
+  assert.equal(elements['room-access-status'].hidden, false);
+  assert.equal(elements['room-access-status'].textContent, 'Choose an ability first.');
+});
+
+test('missing matchmaking api surfaces a controlled launch error instead of crashing', async () => {
+  const harness = await loadHarness({
+    lobbyApiOverride: {}
+  });
+  const { elements, launchCalls } = harness;
+
+  elements['primary-launch-btn'].click();
+  await harness.flush();
+
+  assert.equal(launchCalls.length, 0);
+  assert.equal(elements['room-access-status'].hidden, false);
+  assert.equal(elements['room-access-status'].textContent, 'Matchmaking unavailable.');
 });
 
 test('party hero shows roster actions and leave party', async () => {

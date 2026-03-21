@@ -46,28 +46,31 @@
     --glass-blur:         blur(26px) saturate(175%);
     --glass-blur-panel:   blur(24px) saturate(170%);
     --glass-blur-card:    blur(18px) saturate(160%);
+    --glass-blur-pill:    blur(16px) saturate(150%);
     --glass-shadow:       0 20px 48px rgba(28, 44, 76, 0.1);
     --glass-gradient:
         linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
 
     /* -- Surfaces ------------------------------------------ */
-    --fill-action:     rgba(255, 255, 255, 0.96);
-    --fill-subaction:  rgba(244, 247, 251, 0.98);
-    --fill-inner-card: rgba(250, 252, 255, 0.4);
-    --fill-header-pill:rgba(255, 255, 255, 0.6);
-    --fill-soft:       rgba(248, 250, 255, 0.96);
-    --fill-chip:       rgba(236, 241, 251, 0.96);
-    --fill-tray:       rgba(243, 246, 252, 0.98);
-    --fill-solid:      rgba(246, 248, 252, 0.98);
+    --fill-action:     rgba(255, 255, 255, 0.76);
+    --fill-subaction:  rgba(246, 249, 253, 0.82);
+    --fill-inner-card: rgba(250, 252, 255, 0.48);
+    --fill-header-pill:rgba(255, 255, 255, 0.5);
+    --fill-soft:       rgba(248, 250, 255, 0.9);
+    --fill-chip:       rgba(240, 245, 251, 0.84);
+    --fill-tray:       rgba(243, 246, 252, 0.88);
+    --fill-solid:      rgba(246, 248, 252, 0.9);
 
     /* -- Borders ------------------------------------------- */
     --border-shell:     rgba(220, 227, 236, 0.96);
     --border-container: rgba(56, 66, 82, 0.16);
-    --border-action:    rgba(56, 66, 82, 0.78);
-    --border-subaction: rgba(188, 197, 209, 0.96);
+    --border-action:    rgba(218, 226, 238, 0.96);
+    --border-subaction: rgba(226, 232, 241, 0.98);
     --border-white:     rgba(255, 255, 255, 0.82);
     --border-soft:      rgba(214, 222, 235, 0.9);
     --border-softer:    rgba(223, 229, 239, 0.92);
+    --pill-shadow:      0 10px 24px rgba(27, 41, 67, 0.06);
+    --pill-shadow-active: 0 12px 24px rgba(59, 110, 255, 0.12);
 
     /* -- Radii --------------------------------------------- */
     --r-shell:     34px;
@@ -275,14 +278,25 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #active-match-mode-pill,
 #menu-shell.menu-shell-v4 #active-match-context-pill,
 #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
-#menu-shell.menu-shell-v4 #active-match-secondary-stat-pill,
-#menu-shell.menu-shell-v4 #weapon-slot-panel,
-#menu-shell.menu-shell-v4 #throwable-slot-panel,
-#menu-shell.menu-shell-v4 #ability-slot-panel {
+#menu-shell.menu-shell-v4 #active-match-secondary-stat-pill {
     border-radius: var(--r-card);
     background: var(--fill-inner-card);
     box-shadow: inset 0 0 0 1px var(--border-shell);
     backdrop-filter: var(--glass-blur-card);
+}
+
+#menu-shell.menu-shell-v4 #weapon-slot-panel,
+#menu-shell.menu-shell-v4 #throwable-slot-panel,
+#menu-shell.menu-shell-v4 #ability-slot-panel {
+    border: none;
+    border-radius: var(--r-panel);
+    background:
+        radial-gradient(circle at top right, var(--c-blue-accent), transparent 36%),
+        var(--glass-gradient), var(--glass-fill);
+    box-shadow:
+        inset 0 0 0 1px var(--border-shell),
+        var(--glass-shadow);
+    backdrop-filter: var(--glass-blur-panel);
 }
 
 #menu-shell.menu-shell-v4 #room-social-invite-banner,
@@ -317,9 +331,13 @@ body { cursor: default; }
     padding: var(--pill-py-lg) var(--pill-px-lg);
     font-size: var(--pill-font-lg);
     font-weight: 700;
-    background: var(--fill-action);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78));
     color: var(--c-body);
-    box-shadow: inset 0 0 0 1px var(--border-action);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        inset 0 0 0 1px var(--border-action),
+        var(--pill-shadow);
+    backdrop-filter: var(--glass-blur-pill);
     line-height: 1.15;
     text-align: center;
     white-space: normal;
@@ -329,9 +347,12 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 .menu-pill-flow > button.active,
 #menu-shell.menu-shell-v4 .menu-pill-stack > button.locked,
 #menu-shell.menu-shell-v4 .menu-pill-flow > button.locked {
-    background: var(--c-blue-wash);
+    background: linear-gradient(180deg, rgba(232, 240, 255, 0.92), rgba(219, 231, 255, 0.84));
     color: var(--c-blue-text);
-    box-shadow: inset 0 0 0 1px var(--c-blue-ring);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.76),
+        inset 0 0 0 1px var(--c-blue-ring),
+        var(--pill-shadow-active);
 }
 
 /* Header pills */
@@ -392,14 +413,18 @@ body { cursor: default; }
     justify-content: center;
     width: 100%;
     border: none;
-    background: var(--fill-action);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78));
     color: var(--c-body);
     border-radius: var(--r-pill);
     padding: var(--pill-py-xl) var(--pill-px-xl);
     font-size: var(--pill-font-xl);
     font-weight: 750;
     line-height: 1.15;
-    box-shadow: inset 0 0 0 1px var(--border-action);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        inset 0 0 0 1px var(--border-action),
+        var(--pill-shadow);
+    backdrop-filter: var(--glass-blur-pill);
     cursor: pointer;
 }
 
@@ -412,7 +437,7 @@ body { cursor: default; }
 /* Mode pills */
 #menu-shell.menu-shell-v4 .play-mode-btn {
     border: none;
-    background: var(--fill-action);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78));
     color: var(--c-body);
     border-radius: var(--r-pill);
     display: inline-flex;
@@ -421,7 +446,11 @@ body { cursor: default; }
     width: 100%;
     min-width: 0;
     padding: var(--pill-py-md) var(--pill-px-md);
-    box-shadow: inset 0 0 0 1px var(--border-action);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        inset 0 0 0 1px var(--border-action),
+        var(--pill-shadow);
+    backdrop-filter: var(--glass-blur-pill);
     font-size: var(--pill-font-md);
     font-weight: 650;
     cursor: pointer;
@@ -557,8 +586,12 @@ body { cursor: default; }
     border: none;
     border-radius: var(--r-pill);
     padding: var(--pill-py-md) var(--pill-px-lg);
-    background: var(--fill-action);
-    box-shadow: inset 0 0 0 1px var(--border-action);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        inset 0 0 0 1px var(--border-action),
+        var(--pill-shadow);
+    backdrop-filter: var(--glass-blur-pill);
     color: var(--c-body);
     font-size: var(--pill-font-md);
     font-weight: 650;
@@ -567,7 +600,14 @@ body { cursor: default; }
 }
 
 #menu-shell.menu-shell-v4 .menu-member-pill.active,
-#menu-shell.menu-shell-v4 .menu-friend-pill.active { background: var(--c-blue-wash); box-shadow: inset 0 0 0 1px var(--c-blue-ring); color: var(--c-blue-text); }
+#menu-shell.menu-shell-v4 .menu-friend-pill.active {
+    background: linear-gradient(180deg, rgba(232, 240, 255, 0.92), rgba(219, 231, 255, 0.84));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.76),
+        inset 0 0 0 1px var(--c-blue-ring),
+        var(--pill-shadow-active);
+    color: var(--c-blue-text);
+}
 
 #menu-shell.menu-shell-v4 .menu-member-pill-name,
 #menu-shell.menu-shell-v4 .menu-friend-pill-name { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
@@ -693,7 +733,6 @@ body { cursor: default; }
 
 #menu-shell.menu-shell-v4 #mode-screen-kicker { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: var(--r-pill); background: var(--c-blue-wash); color: #2d5fdc; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 #menu-shell.menu-shell-v4 #mode-screen-title { margin: 12px 0 10px; font-size: clamp(26px, 18cqw, 58px); line-height: 0.98; font-weight: 800; letter-spacing: -0.04em; color: #151e30; white-space: nowrap; }
-#menu-shell.menu-shell-v4 #mode-screen-copy { max-width: 640px; color: #5d6e89; font-size: 15px; line-height: 1.55; margin-bottom: 18px; }
 #menu-shell.menu-shell-v4 #play-mode-group { gap: var(--gap-panel); }
 #menu-shell.menu-shell-v4 #mode-screen-actions { display: flex; align-items: center; gap: 12px; padding: 12px 4px 0; }
 #menu-shell.menu-shell-v4 #active-match-primary-banner { display: grid; gap: 12px; width: 100%; margin-top: 12px; padding: 14px; }
@@ -727,9 +766,28 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #active-match-friend-bar { display: grid; grid-template-columns: minmax(160px, 220px) repeat(2, minmax(140px, 1fr)); gap: 10px; align-items: center; min-width: 0; width: min(100%, 620px); }
 #menu-shell.menu-shell-v4 #active-match-friend-id-input,
 #menu-shell.menu-shell-v4 #active-match-invite-friend-btn,
-#menu-shell.menu-shell-v4 #active-match-join-friend-btn { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 0; border: none; border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-lg); background: rgba(255, 255, 255, 0.98); color: #131820; box-shadow: inset 0 0 0 2px rgba(12, 16, 22, 0.96); font-size: var(--pill-font-md); font-weight: 700; line-height: 1.15; }
+#menu-shell.menu-shell-v4 #active-match-join-friend-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    border: none;
+    border-radius: var(--r-pill);
+    padding: var(--pill-py-md) var(--pill-px-lg);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 252, 0.8));
+    color: var(--c-body);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.78),
+        inset 0 0 0 1px var(--border-action),
+        var(--pill-shadow);
+    backdrop-filter: var(--glass-blur-pill);
+    font-size: var(--pill-font-md);
+    font-weight: 700;
+    line-height: 1.15;
+}
 #menu-shell.menu-shell-v4 #active-match-friend-id-input { justify-content: flex-start; }
-#menu-shell.menu-shell-v4 #active-match-friend-id-input::placeholder { color: rgba(19, 24, 32, 0.48); }
+#menu-shell.menu-shell-v4 #active-match-friend-id-input::placeholder { color: rgba(88, 105, 131, 0.72); }
 
 
 /* ------------------------------------------------------------
@@ -744,15 +802,15 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #room-share-label { color: #6b7b95; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 #menu-shell.menu-shell-v4 #room-share-code,
 #menu-shell.menu-shell-v4 #private-room-summary { display: inline-flex; align-items: center; gap: 8px; padding: 12px; border-radius: var(--r-pill); background: var(--fill-subaction); box-shadow: inset 0 0 0 1px var(--border-subaction); color: #21304b; font-weight: 650; }
-#menu-shell.menu-shell-v4 #copy-room-code-btn { border: none; background: var(--fill-action); color: var(--c-body); border-radius: var(--r-pill); padding: 12px 14px; box-shadow: inset 0 0 0 1px var(--border-action); cursor: pointer; }
+#menu-shell.menu-shell-v4 #copy-room-code-btn { border: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78)); color: var(--c-body); border-radius: var(--r-pill); padding: 12px 14px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-action), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); cursor: pointer; }
 
 #menu-shell.menu-shell-v4 #party-id-input,
-#menu-shell.menu-shell-v4 #room-code-input { border: none; justify-content: flex-start; background: var(--fill-action); color: var(--c-ink); margin: 0; padding: clamp(12px, 4.8cqw, 16px) clamp(14px, 5.5cqw, 18px); font-size: clamp(15px, 5.5cqw, 16px); box-shadow: inset 0 0 0 1px var(--border-action); }
+#menu-shell.menu-shell-v4 #room-code-input { border: none; justify-content: flex-start; background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78)); color: var(--c-ink); margin: 0; padding: clamp(12px, 4.8cqw, 16px) clamp(14px, 5.5cqw, 18px); font-size: clamp(15px, 5.5cqw, 16px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-action), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
 #menu-shell.menu-shell-v4 #party-id-input::placeholder,
 #menu-shell.menu-shell-v4 #room-code-input::placeholder { color: var(--c-placeholder); }
 
-#menu-shell.menu-shell-v4 #private-room-mode-actions { display: inline-flex; gap: 8px; padding: 6px; background: var(--fill-solid); border-radius: var(--r-compact); margin: 12px 0; box-shadow: inset 0 0 0 1px var(--border-shell); }
-#menu-shell.menu-shell-v4 #private-room-mode-actions button { border: none; background: var(--fill-action); color: var(--c-body); padding: var(--pill-py-md) var(--pill-px-md); border-radius: var(--r-pill); font-weight: 650; box-shadow: inset 0 0 0 1px var(--border-action); cursor: pointer; }
+#menu-shell.menu-shell-v4 #private-room-mode-actions { display: inline-flex; gap: 8px; padding: 6px; background: rgba(245, 248, 252, 0.56); border-radius: var(--r-compact); margin: 12px 0; box-shadow: inset 0 0 0 1px var(--border-shell); backdrop-filter: var(--glass-blur-pill); }
+#menu-shell.menu-shell-v4 #private-room-mode-actions button { border: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78)); color: var(--c-body); padding: var(--pill-py-md) var(--pill-px-md); border-radius: var(--r-pill); font-weight: 650; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-action), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); cursor: pointer; }
 #menu-shell.menu-shell-v4 #private-room-mode-actions button.active { background: var(--c-blue-wash); color: var(--c-blue-text); box-shadow: inset 0 0 0 1px var(--c-blue-ring); }
 
 #menu-shell.menu-shell-v4 #private-room-action-row,
@@ -840,7 +898,7 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #menu-loadout-band { position: relative; padding: 16px; margin: 0 var(--pad-inline) 12px; border: none; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #menu-shell.menu-shell-v4 #loadout-band-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 10px; min-height: 33px; padding: 0; margin-bottom: 12px; }
 #menu-shell.menu-shell-v4 #menu-loadout-band[data-state="collapsed"] #loadout-band-actions { margin-bottom: 10px; }
-#menu-shell.menu-shell-v4 #loadout-expanded-shell { padding: 0; border: none; border-radius: var(--r-card); background: transparent; box-shadow: none; backdrop-filter: none; }
+#menu-shell.menu-shell-v4 #loadout-expanded-shell { padding: 0; border: none; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 
 #menu-shell.menu-shell-v4 #loadout-collapse-btn,
 #menu-shell.menu-shell-v4 .loadout-summary-btn { display: inline-flex; align-items: center; border: none; border-radius: var(--r-pill); padding: var(--pill-py-sm) var(--pill-px-sm); background: var(--fill-header-pill); color: var(--c-muted); box-shadow: inset 0 0 0 1px var(--border-soft); font-size: var(--pill-font-sm); font-weight: 650; cursor: pointer; }
@@ -851,7 +909,7 @@ body { cursor: default; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-panel,
 #menu-shell.menu-shell-v4 #throwable-slot-panel,
-#menu-shell.menu-shell-v4 #ability-slot-panel { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+#menu-shell.menu-shell-v4 #ability-slot-panel { display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-title,
 #menu-shell.menu-shell-v4 #throwable-slot-title,
@@ -879,7 +937,7 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 .weapon-choice-btn,
 #menu-shell.menu-shell-v4 .throwable-cat-btn,
 #menu-shell.menu-shell-v4 .throwable-choice-btn,
-#menu-shell.menu-shell-v4 .ability-choice-btn { border: none; background: var(--fill-action); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 0 0 1px var(--border-action); }
+#menu-shell.menu-shell-v4 .ability-choice-btn { border: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 248, 252, 0.78)); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-action), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
 
 #menu-shell.menu-shell-v4 .weapon-slot-btn,
 #menu-shell.menu-shell-v4 .ability-slot-btn,
@@ -894,37 +952,37 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 /* Weapon 1 (blue) */
-#menu-shell.menu-shell-v4 .weapon-slot-btn.slot-1         { background: var(--slot1-bg); color: var(--slot1-fg); box-shadow: inset 0 0 0 1px var(--slot1-ring); }
+#menu-shell.menu-shell-v4 .weapon-slot-btn.slot-1         { background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(235, 242, 255, 0.82)); color: #3b5fb2; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(156, 180, 235, 0.54), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 .weapon-slot-btn.active.slot-1   { background: var(--slot1-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(34, 76, 196, 0.96), 0 8px 18px var(--slot1-glow); }
 #menu-shell.menu-shell-v4 .weapon-choice-btn.slot-1        { background: var(--slot1-wash); color: var(--slot1-wash-fg); box-shadow: inset 0 0 0 1px var(--slot1-wash-ring); }
 #menu-shell.menu-shell-v4 .weapon-choice-btn.active.slot-1 { background: rgba(59, 110, 255, 0.2); color: #1f4ecc; box-shadow: inset 0 0 0 1px rgba(82, 124, 255, 0.34), 0 0 0 1px rgba(82, 124, 255, 0.08); }
 
 /* Weapon 2 (red) */
-#menu-shell.menu-shell-v4 .weapon-slot-btn.slot-2         { background: var(--slot2-bg); color: var(--slot2-fg); box-shadow: inset 0 0 0 1px var(--slot2-ring); }
+#menu-shell.menu-shell-v4 .weapon-slot-btn.slot-2         { background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 237, 237, 0.82)); color: #b45151; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(231, 177, 177, 0.56), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 .weapon-slot-btn.active.slot-2   { background: var(--slot2-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(174, 42, 42, 0.94), 0 8px 18px var(--slot2-glow); }
 #menu-shell.menu-shell-v4 .weapon-choice-btn.slot-2        { background: var(--slot2-wash); color: var(--slot2-wash-fg); box-shadow: inset 0 0 0 1px var(--slot2-wash-ring); }
 #menu-shell.menu-shell-v4 .weapon-choice-btn.active.slot-2 { background: rgba(219, 73, 73, 0.2); color: #b43030; box-shadow: inset 0 0 0 1px rgba(214, 81, 81, 0.34), 0 0 0 1px rgba(214, 81, 81, 0.08); }
 
 /* Ability 1 (yellow) */
-#menu-shell.menu-shell-v4 .ability-slot-btn.slot-1         { background: var(--abil1-bg); color: var(--abil1-fg); box-shadow: inset 0 0 0 1px var(--abil1-ring); }
+#menu-shell.menu-shell-v4 .ability-slot-btn.slot-1         { background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 246, 212, 0.84)); color: #916d00; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(230, 202, 110, 0.56), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 .ability-slot-btn.active.slot-1   { background: var(--abil1-active); color: #4e3700; box-shadow: inset 0 0 0 1px rgba(175, 129, 0, 0.94), 0 8px 18px var(--abil1-glow); }
 #menu-shell.menu-shell-v4 .ability-choice-btn.slot-1        { background: var(--abil1-wash); color: var(--abil1-wash-fg); box-shadow: inset 0 0 0 1px var(--abil1-wash-ring); }
 #menu-shell.menu-shell-v4 .ability-choice-btn.active.slot-1 { background: rgba(246, 212, 88, 0.22); color: #9f7600; box-shadow: inset 0 0 0 1px rgba(236, 196, 66, 0.4), 0 0 0 1px rgba(236, 196, 66, 0.1); }
 
 /* Ability 2 (green) */
-#menu-shell.menu-shell-v4 .ability-slot-btn.slot-2         { background: var(--abil2-bg); color: var(--abil2-fg); box-shadow: inset 0 0 0 1px var(--abil2-ring); }
+#menu-shell.menu-shell-v4 .ability-slot-btn.slot-2         { background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(233, 247, 236, 0.84)); color: #2f7d3d; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(152, 210, 165, 0.56), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 .ability-slot-btn.active.slot-2   { background: var(--abil2-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(35, 102, 46, 0.92), 0 8px 18px var(--abil2-glow); }
 #menu-shell.menu-shell-v4 .ability-choice-btn.slot-2        { background: var(--abil2-wash); color: var(--abil2-wash-fg); box-shadow: inset 0 0 0 1px var(--abil2-wash-ring); }
 #menu-shell.menu-shell-v4 .ability-choice-btn.active.slot-2 { background: rgba(76, 163, 95, 0.22); color: #256f31; box-shadow: inset 0 0 0 1px rgba(76, 163, 95, 0.36), 0 0 0 1px rgba(76, 163, 95, 0.08); }
 
 /* Grenade (orange) */
-#menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="grenade"] { background: var(--grenade-bg); color: var(--grenade-fg); box-shadow: inset 0 0 0 1px var(--grenade-ring); }
+#menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="grenade"] { background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 241, 223, 0.84)); color: #a56416; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(236, 190, 125, 0.58), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 #throwable-choice-grid[data-category-id="grenade"] .throwable-choice-btn:hover,
 #menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="grenade"].active,
 #menu-shell.menu-shell-v4 #throwable-choice-grid[data-category-id="grenade"] .throwable-choice-btn.active { background: var(--grenade-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(176, 93, 14, 0.94), 0 8px 18px var(--grenade-glow); }
 
 /* Blade (purple) */
-#menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="blade"] { background: var(--blade-bg); color: var(--blade-fg); box-shadow: inset 0 0 0 1px var(--blade-ring); }
+#menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="blade"] { background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 235, 255, 0.84)); color: #6b48a9; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(191, 167, 235, 0.56), var(--pill-shadow); }
 #menu-shell.menu-shell-v4 #throwable-choice-grid[data-category-id="blade"] .throwable-choice-btn:hover,
 #menu-shell.menu-shell-v4 .throwable-cat-btn[data-cat-id="blade"].active,
 #menu-shell.menu-shell-v4 #throwable-choice-grid[data-category-id="blade"] .throwable-choice-btn.active { background: var(--blade-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(91, 46, 160, 0.94), 0 8px 18px var(--blade-glow); }
@@ -991,7 +1049,7 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #menu-home-hero,
     #menu-shell.menu-shell-v4 #menu-social-hero,
     #menu-shell.menu-shell-v4 #menu-party-hero { padding: 24px 12px 12px; border-radius: var(--r-modal); }
-    #menu-shell.menu-shell-v4 #party-screen-grid,
+    #menu-shell.menu-shell-v4 #room-screen-grid,
     #menu-shell.menu-shell-v4 #private-room-roster-grid,
     #menu-shell.menu-shell-v4 #loadout-row { grid-template-columns: 1fr; }
     #menu-shell.menu-shell-v4 #active-match-friend-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
@@ -1009,7 +1067,6 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #menu-social-hero,
     #menu-shell.menu-shell-v4 #menu-party-hero { padding: 22px 12px 12px; border-radius: var(--r-card); }
     #menu-shell.menu-shell-v4 #mode-screen-title { margin: 10px 0 8px; font-size: clamp(32px, 10vw, 42px); }
-    #menu-shell.menu-shell-v4 #mode-screen-copy { font-size: 14px; margin-bottom: 16px; }
     #join-party-popover, #utility-overlay { left: 16px; right: 16px; width: auto; }
     #utility-overlay { left: auto; }
 }

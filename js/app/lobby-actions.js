@@ -116,6 +116,10 @@
             return false;
         }
 
+        function rejectLaunch(message) {
+            return Promise.resolve(setLaunchError(message));
+        }
+
         function completeLaunch(modeId, launchOptions, fallbackMessage) {
             return Promise.resolve(launchModeById(modeId, launchOptions))
                 .then(function (result) {
@@ -214,7 +218,7 @@
             var mode = normalizeMode(modeId || (state.launch && state.launch.selectedMode));
             var invalid = validationError();
             if (invalid) {
-                return setLaunchError(invalid);
+                return rejectLaunch(invalid);
             }
             if (!mode) return Promise.resolve(false);
 
@@ -234,6 +238,10 @@
 
             var actor = currentPartyIdentity();
             var lobbyApi = opts.lobbyApi || null;
+            if (!lobbyApi || !lobbyApi.requestJson || !lobbyApi.matchmakingPath) {
+                setBusy(false);
+                return rejectLaunch('Matchmaking unavailable.');
+            }
             return lobbyApi.requestJson(lobbyApi.matchmakingPath(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
