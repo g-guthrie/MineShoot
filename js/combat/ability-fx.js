@@ -1,13 +1,26 @@
 (function () {
     'use strict';
 
-    function cloneVec3(value) {
+    function copyVec3(out, value) {
         if (!value || typeof value !== 'object') return null;
         var x = Number(value.x);
         var y = Number(value.y);
         var z = Number(value.z);
         if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
-        return { x: x, y: y, z: z };
+        if (!out) {
+            return { x: x, y: y, z: z };
+        }
+        if (typeof out.set === 'function') {
+            return out.set(x, y, z);
+        }
+        out.x = x;
+        out.y = y;
+        out.z = z;
+        return out;
+    }
+
+    function cloneVec3(value) {
+        return copyVec3(null, value);
     }
 
     function readAbilityFx(entity) {
@@ -84,15 +97,15 @@
         };
     }
 
-    function resolveHookVisualEnd(state, resolveTargetPosition) {
+    function resolveHookVisualEnd(state, resolveTargetPosition, outVec3) {
         if (!state || typeof state !== 'object') return null;
         if (state.phase === 'latched' && state.attachPos) {
-            return cloneVec3(state.attachPos);
+            return copyVec3(outVec3, state.attachPos);
         }
         if (state.phase === 'latched' && state.targetId && typeof resolveTargetPosition === 'function') {
-            return cloneVec3(resolveTargetPosition(state.targetId));
+            return copyVec3(outVec3, resolveTargetPosition(state.targetId));
         }
-        return cloneVec3(state.headPos || null);
+        return copyVec3(outVec3, state.headPos || null);
     }
 
     globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};

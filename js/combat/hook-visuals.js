@@ -258,9 +258,10 @@
         var resolved = abilityFxView && abilityFxView.resolveHookVisualEnd
             ? abilityFxView.resolveHookVisualEnd(state, function (targetId) {
                 return resolveTargetPosition(targetId, hookTargetScratch);
-            })
+            }, out)
             : null;
         if (!resolved) return null;
+        if (resolved === out) return out;
         return out.set(Number(resolved.x || 0), Number(resolved.y || 0), Number(resolved.z || 0));
     }
 

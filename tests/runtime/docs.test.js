@@ -36,7 +36,7 @@ async function loadDocsHarness(loadoutOverride = null, runtimeOverrides = {}) {
         getRuntimeSnapshot() {
           return loadoutOverride || {
             weaponSlots: ['machinegun', 'pistol'],
-            abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+            selectedAbilityId: 'choke',
             selectedThrowableId: 'frag'
           };
         }
@@ -52,12 +52,12 @@ async function loadDocsHarness(loadoutOverride = null, runtimeOverrides = {}) {
   return sandbox.__MAYHEM_RUNTIME.GameDocs._test;
 }
 
-test('briefing page teaches swapping weapons, throwables, and ability slots with current bindings', async () => {
+test('briefing page teaches swapping weapons, throwables, and the equipped ability with current bindings', async () => {
   const docs = await loadDocsHarness();
   const html = docs.buildContent('home');
 
   assert.match(html, /reload on R, and swap weapons on 1 \/ 2 or the mouse wheel/i);
-  assert.match(html, /Use Q for the current throwable, E for ability slot 1, and F for ability slot 2/i);
+  assert.match(html, /Use Q for the current throwable and E for your equipped ability/i);
   assert.match(html, /Machine Gun/i);
   assert.match(html, /Pistol/i);
 });
@@ -117,7 +117,6 @@ test('docs pages reflect remapped slot, throwable, and manual labels', async () 
           reload: 'T',
           throwable: 'C',
           ability_1: 'G',
-          ability_2: 'V',
           sprint: 'LEFT',
           jump: 'SPACE',
           ads_key: 'ALT',
@@ -140,7 +139,7 @@ test('docs pages reflect remapped slot, throwable, and manual labels', async () 
 
   assert.match(homeHtml, /swap with key Z/i);
   assert.match(homeHtml, /reload on T/i);
-  assert.match(homeHtml, /Use C for the current throwable, G for ability slot 1, and V for ability slot 2/i);
+  assert.match(homeHtml, /Use C for the current throwable and G for your equipped ability/i);
   assert.match(controlsHtml, /I \/ J \/ K \/ L/i);
   assert.match(controlsHtml, /RMB \/ ALT ADS/i);
   assert.match(controlsHtml, /T reload/i);

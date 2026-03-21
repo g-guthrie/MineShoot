@@ -1,5 +1,5 @@
 /**
- * abilities.js - Player ability runtime with mix-and-match loadout
+ * abilities.js - Player ability runtime with a single equipped ability
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAbilities
  */
 (function () {
@@ -7,8 +7,8 @@
 
     var GameAbilities = {};
 
-    var abilityLoadout = cloneLoadout(defaultAbilityLoadout());
-    var cooldownUntilBySlot = { slot1: 0, slot2: 0 };
+    var equippedAbilityId = normalizeAbilityId(defaultAbilityId());
+    var cooldownUntil = 0;
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
     var localSimApi = null;
@@ -62,13 +62,29 @@
         return globalThis.__MAYHEM_RUNTIME.GameShared || null;
     }
 
-    function defaultAbilityLoadout() {
+    function defaultAbilityId() {
         var shared = sharedApi();
+        if (shared && typeof shared.getDefaultAbilityId === 'function') {
+            return shared.getDefaultAbilityId() || 'deadeye';
+        }
         if (shared && typeof shared.getDefaultAbilityLoadout === 'function') {
-            return shared.getDefaultAbilityLoadout() || { slot1: 'choke', slot2: 'missile' };
+            var legacyLoadout = shared.getDefaultAbilityLoadout() || null;
+            if (legacyLoadout && legacyLoadout.slot1) return String(legacyLoadout.slot1 || '');
         }
         var tuning = shared && shared.gameplayTuning ? shared.gameplayTuning : null;
-        return (tuning && tuning.defaultAbilityLoadout) || { slot1: 'choke', slot2: 'missile' };
+        return (tuning && (tuning.defaultAbilityId || (tuning.defaultAbilityLoadout && tuning.defaultAbilityLoadout.slot1))) || 'deadeye';
+    }
+
+    function normalizeAbilityId(abilityId) {
+        var shared = sharedApi();
+        if (shared && typeof shared.normalizeAbilityId === 'function') {
+            return shared.normalizeAbilityId(abilityId);
+        }
+        if (shared && typeof shared.normalizeAbilityLoadout === 'function') {
+            var legacyLoadout = shared.normalizeAbilityLoadout(abilityId, '');
+            if (legacyLoadout && legacyLoadout.slot1) return String(legacyLoadout.slot1 || '');
+        }
+        return String(abilityId || defaultAbilityId() || '');
     }
 
     function classProfileDefaults() {
@@ -92,52 +108,30 @@
         return Math.max(0, (Number(until || 0) - nowMs()) / 1000);
     }
 
-    function cloneLoadout(loadout) {
-        var defaults = defaultAbilityLoadout();
-        return {
-            slot1: loadout && loadout.slot1 ? loadout.slot1 : defaults.slot1,
-            slot2: loadout && loadout.slot2 ? loadout.slot2 : defaults.slot2
-        };
-    }
-
-    function normalizedLoadout(slot1, slot2) {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || null;
-        if (shared && typeof shared.normalizeAbilityLoadout === 'function') {
-            return shared.normalizeAbilityLoadout(slot1, slot2);
-        }
-        return cloneLoadout({ slot1: slot1, slot2: slot2 });
-    }
-
-    function slotKeyForIndex(slotIndex) {
-        return Number(slotIndex) === 2 ? 'slot2' : 'slot1';
-    }
-
     function buildLoadoutState() {
         var boundary = abilityBoundary();
         return boundary && boundary.buildLoadoutState
-            ? boundary.buildLoadoutState(abilityLoadout)
+            ? boundary.buildLoadoutState({ abilityId: equippedAbilityId })
             : {
-                slot1: abilityLoadout.slot1,
-                slot2: abilityLoadout.slot2,
-                activeAbility: abilityLoadout.slot1
+                abilityId: equippedAbilityId,
+                activeAbility: equippedAbilityId
             };
     }
 
-    function getAbilityIdForSlot(slotIndex) {
-        return abilityLoadout[slotKeyForIndex(slotIndex)] || '';
+    function getAbilityId() {
+        return String(equippedAbilityId || '');
     }
 
-    function cooldownUntilForSlot(slotIndex) {
-        return cooldownUntilBySlot[slotKeyForIndex(slotIndex)] || 0;
+    function getCooldownUntil() {
+        return Number(cooldownUntil || 0);
     }
 
-    function setCooldownForSlot(slotIndex, until) {
-        cooldownUntilBySlot[slotKeyForIndex(slotIndex)] = Number(until || 0);
+    function setCooldownUntil(until) {
+        cooldownUntil = Number(until || 0);
     }
 
-    function resetCooldowns() {
-        cooldownUntilBySlot.slot1 = 0;
-        cooldownUntilBySlot.slot2 = 0;
+    function resetCooldown() {
+        cooldownUntil = 0;
     }
 
     function clearTransientStates() {
@@ -146,18 +140,13 @@
     }
 
     function resetAbilityRuntimeState() {
-        resetCooldowns();
+        resetCooldown();
         clearTransientStates();
     }
 
     function getCatalog() {
         var boundary = abilityBoundary();
         return boundary && boundary.getCatalog ? boundary.getCatalog() : {};
-    }
-
-    function getAbilityDef(abilityId) {
-        var boundary = abilityBoundary();
-        return boundary && boundary.getAbilityDef ? boundary.getAbilityDef(abilityId) : null;
     }
 
     function getConfigForAbility(abilityId) {
@@ -179,13 +168,12 @@
         var helper = globalThis.__MAYHEM_RUNTIME.GameAbilityLocalSim || null;
         if (!helper || !helper.create) return null;
         localSimApi = helper.create({
-            cooldownUntilForSlot: cooldownUntilForSlot,
-            getAbilityIdForSlot: getAbilityIdForSlot,
+            cooldownUntil: getCooldownUntil,
+            getAbilityId: getAbilityId,
             getChokeRectSize: getChokeRectSize,
             getConfigForAbility: getConfigForAbility,
             isDebugMode: function () { return debugMode; },
-            setCooldownForSlot: setCooldownForSlot,
-            slotKeyForIndex: slotKeyForIndex
+            setCooldownUntil: setCooldownUntil
         });
         return localSimApi;
     }
@@ -200,8 +188,8 @@
         resetAbilityRuntimeState();
 
         var shared = sharedApi() && sharedApi().gameplayTuning;
-        if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityLoadout) {
-            abilityLoadout = normalizedLoadout(shared.defaultAbilityLoadout.slot1, shared.defaultAbilityLoadout.slot2);
+        if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityId) {
+            equippedAbilityId = normalizeAbilityId(shared.defaultAbilityId);
         }
     };
 
@@ -214,49 +202,38 @@
         return buildLoadoutState();
     };
 
-    GameAbilities.setLoadoutSlot = function (slotIndex, abilityId) {
-        var catalog = getCatalog();
-        var id = abilityId && catalog[abilityId] ? abilityId : '';
-        if (!id) {
-            return GameAbilities.getLoadout();
-        }
-        var ownKey = slotKeyForIndex(slotIndex);
-        var nextSlot1 = ownKey === 'slot1' ? id : abilityLoadout.slot1;
-        var nextSlot2 = ownKey === 'slot2' ? id : abilityLoadout.slot2;
-        abilityLoadout = normalizedLoadout(nextSlot1, nextSlot2);
-        hasExplicitLoadoutSelection = true;
-        resetAbilityRuntimeState();
-        return buildLoadoutState();
+    GameAbilities.getAbilityId = function () {
+        return getAbilityId();
     };
 
-    GameAbilities.setLoadout = function (slot1OrActive, slot2) {
+    GameAbilities.setLoadout = function (abilityId) {
         var catalog = getCatalog();
-        var firstId = slot1OrActive && catalog[slot1OrActive] ? slot1OrActive : '';
-        var secondId = slot2 && catalog[slot2] ? slot2 : '';
-        if (firstId || secondId) {
-            abilityLoadout = normalizedLoadout(
-                firstId || abilityLoadout.slot1,
-                secondId || abilityLoadout.slot2
-            );
+        var id = abilityId && catalog[abilityId] ? String(abilityId) : '';
+        if (id) {
+            equippedAbilityId = normalizeAbilityId(id);
             hasExplicitLoadoutSelection = true;
         }
         resetAbilityRuntimeState();
         return buildLoadoutState();
     };
 
+    GameAbilities.setLoadoutSlot = function (_slotIndex, abilityId) {
+        return GameAbilities.setLoadout(abilityId);
+    };
+
     GameAbilities.getHudState = function () {
         var boundary = abilityBoundary();
         var snapshot = localSimSnapshot();
         return boundary && boundary.buildHudState
-            ? boundary.buildHudState(abilityLoadout, cooldownUntilBySlot, snapshot ? snapshot.deadeyeState : null, nowMs())
-            : { name: 'Abilities', slot1Name: '', slot1Cooldown: 0, slot2Name: '', slot2Cooldown: 0, extra: '' };
+            ? boundary.buildHudState({ abilityId: equippedAbilityId }, cooldownUntil, snapshot ? snapshot.deadeyeState : null, nowMs())
+            : { name: 'Ability', abilityName: '', cooldown: 0, extra: '' };
     };
 
     GameAbilities.getNetworkHudState = function (abilityState) {
         var boundary = abilityBoundary();
         return boundary && boundary.buildNetworkHudState
-            ? boundary.buildNetworkHudState(abilityLoadout, abilityState)
-            : { name: 'Abilities', slot1Name: '', slot1Cooldown: 0, slot2Name: '', slot2Cooldown: 0, extra: '' };
+            ? boundary.buildNetworkHudState({ abilityId: equippedAbilityId }, abilityState)
+            : { name: 'Ability', abilityName: '', cooldown: 0, extra: '' };
     };
 
     GameAbilities.setClass = function (_id) {
@@ -278,22 +255,34 @@
         return classProfileDefaults().wallhackRadius;
     };
 
-    GameAbilities.triggerAbility = function (slot, camera, _playerPos, _rotation, onEnemyHit, notifier) {
+    GameAbilities.triggerAbility = function (cameraOrSlot, playerPosOrCamera, rotationOrPlayerPos, onEnemyHitOrRotation, notifierOrOnEnemyHit, maybeNotifier) {
+        var camera = cameraOrSlot;
+        var playerPos = playerPosOrCamera;
+        var rotation = rotationOrPlayerPos;
+        var onEnemyHit = onEnemyHitOrRotation;
+        var notifier = notifierOrOnEnemyHit;
+        if (typeof cameraOrSlot === 'number') {
+            camera = playerPosOrCamera;
+            playerPos = rotationOrPlayerPos;
+            rotation = onEnemyHitOrRotation;
+            onEnemyHit = notifierOrOnEnemyHit;
+            notifier = maybeNotifier;
+        }
         var localSim = ensureLocalSim();
         return localSim && localSim.triggerAbility
-            ? localSim.triggerAbility(slot, camera, _playerPos, _rotation, onEnemyHit, notifier)
+            ? localSim.triggerAbility(camera, playerPos, rotation, onEnemyHit, notifier)
             : { ok: false, message: 'Local ability sim unavailable.' };
     };
 
-    GameAbilities.prepareNetCast = function (slot, camera) {
-        var castSlot = Number(slot) === 2 ? 2 : 1;
-        var abilityId = getAbilityIdForSlot(castSlot);
+    GameAbilities.prepareNetCast = function (cameraOrSlot, maybeCamera) {
+        var camera = typeof cameraOrSlot === 'number' ? maybeCamera : cameraOrSlot;
+        var abilityId = getAbilityId();
         var boundary = abilityBoundary();
         return boundary && boundary.prepareNetCast
-            ? boundary.prepareNetCast(castSlot, abilityId, camera, {
+            ? boundary.prepareNetCast(abilityId, camera, {
                 getConfigForAbility: getConfigForAbility
             })
-            : { ok: false, slot: castSlot, abilityId: abilityId, message: 'Ability boundary unavailable.' };
+            : { ok: false, abilityId: abilityId, message: 'Ability boundary unavailable.' };
     };
 
     GameAbilities.update = function (_dt, camera, _playerPos, _rotation, onEnemyHit, notifier) {
@@ -347,11 +336,8 @@
         var snapshot = localSimSnapshot();
         var deadeyeState = snapshot ? snapshot.deadeyeState : null;
         return {
-            debugMode: debugMode,
-            slot1: abilityLoadout.slot1,
-            slot2: abilityLoadout.slot2,
-            cooldownSlot1: cooldownSec(cooldownUntilForSlot(1)),
-            cooldownSlot2: cooldownSec(cooldownUntilForSlot(2)),
+            abilityId: equippedAbilityId,
+            cooldown: cooldownSec(getCooldownUntil()),
             deadeye: deadeyeState ? {
                 lockCount: deadeyeState.lockCount,
                 targetCount: deadeyeState.targets.length

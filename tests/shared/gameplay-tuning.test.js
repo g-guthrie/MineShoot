@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 
 import {
   gameplayTuning,
+  getDefaultAbilityId,
   getSelectableWeaponIds,
   getWeaponFalloffProfile,
   getWeaponPresentation,
-  normalizeAbilityLoadout,
+  normalizeAbilityId,
   resolveReloadPresentationState,
   resolveWeaponAdsFovDeg,
   resolveWeaponAimProfile
@@ -204,16 +205,10 @@ test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
   assert.equal(gameplayTuning.throwables.molotov.armorBufferMode, 'normal');
 });
 
-test('ability loadout normalization repairs invalid and duplicate picks', () => {
-  assert.deepEqual(
-    normalizeAbilityLoadout('missile', 'missile'),
-    { slot1: 'missile', slot2: 'choke' }
-  );
-
-  assert.deepEqual(
-    normalizeAbilityLoadout('not-real', ''),
-    { slot1: 'choke', slot2: 'missile' }
-  );
+test('ability defaults and normalization resolve to a single equipped ability', () => {
+  assert.equal(getDefaultAbilityId(), 'deadeye');
+  assert.equal(normalizeAbilityId('missile'), 'missile');
+  assert.equal(normalizeAbilityId('not-real'), 'deadeye');
 });
 
 test('network tuning exposes the canonical ping, reconcile, burst, and feedback defaults', () => {

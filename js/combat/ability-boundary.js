@@ -177,8 +177,7 @@
         };
     }
 
-    function prepareNetCast(slot, abilityId, camera, options) {
-        var castSlot = Number(slot) === 2 ? 2 : 1;
+    function prepareNetCast(abilityId, camera, options) {
         if (!abilityId) {
             return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
@@ -198,14 +197,12 @@
         if (!prepared || prepared.ok === false) {
             return {
                 ok: false,
-                slot: castSlot,
                 abilityId: abilityId,
                 message: prepared && prepared.message ? prepared.message : ('Unable to prepare cast for ' + abilityId + '.')
             };
         }
         return {
             ok: true,
-            slot: castSlot,
             abilityId: abilityId,
             castData: prepared.castData || null,
             commit: typeof prepared.commit === 'function' ? prepared.commit : null
@@ -215,9 +212,8 @@
     function buildLoadoutState(loadout) {
         var state = loadout || {};
         return {
-            slot1: state.slot1 || '',
-            slot2: state.slot2 || '',
-            activeAbility: state.slot1 || ''
+            abilityId: state.abilityId || '',
+            activeAbility: state.abilityId || ''
         };
     }
 
@@ -236,25 +232,20 @@
         return Math.max(0, (Number(until || 0) - Number(now || Date.now())) / 1000);
     }
 
-    function buildAbilityHudState(loadout, slot1Cooldown, slot2Cooldown, extra) {
-        var slot1Def = getAbilityDef(loadout && loadout.slot1);
-        var slot2Def = getAbilityDef(loadout && loadout.slot2);
+    function buildAbilityHudState(abilityId, cooldown, extra) {
+        var def = getAbilityDef(abilityId);
         return {
-            name: 'Abilities',
-            slot1Name: slot1Def ? slot1Def.name : (loadout && loadout.slot1) || '',
-            slot1Cooldown: Math.max(0, Number(slot1Cooldown || 0)),
-            slot2Name: slot2Def ? slot2Def.name : (loadout && loadout.slot2) || '',
-            slot2Cooldown: Math.max(0, Number(slot2Cooldown || 0)),
+            name: 'Ability',
+            abilityName: def ? def.name : abilityId || '',
+            cooldown: Math.max(0, Number(cooldown || 0)),
             extra: extra || ''
         };
     }
 
-    function buildHudState(loadout, cooldownUntilBySlot, deadeyeState, now) {
-        var cooldowns = cooldownUntilBySlot || {};
+    function buildHudState(loadout, cooldownUntil, deadeyeState, now) {
         return buildAbilityHudState(
-            loadout,
-            cooldownSec(cooldowns.slot1 || 0, now),
-            cooldownSec(cooldowns.slot2 || 0, now),
+            loadout && loadout.abilityId,
+            cooldownSec(cooldownUntil || 0, now),
             deadeyeState && deadeyeState.active
                 ? ('DEADEYE ' + deadeyeState.lockCount + '/' + deadeyeState.targets.length)
                 : ''
@@ -264,16 +255,11 @@
     function buildNetworkHudState(loadout, abilityState) {
         var state = abilityState || {};
         return buildAbilityHudState(
-            loadout,
+            loadout && loadout.abilityId,
             Number(
-                state.slot1CooldownRemaining != null
-                    ? state.slot1CooldownRemaining
+                state.cooldownRemaining != null
+                    ? state.cooldownRemaining
                     : state.abilityCooldownRemaining || 0
-            ),
-            Number(
-                state.slot2CooldownRemaining != null
-                    ? state.slot2CooldownRemaining
-                    : state.ultimateCooldownRemaining || 0
             ),
             state.deadeyeState && state.deadeyeState.maxLocks > 0
                 ? ('DEADEYE ' + Number(state.deadeyeState.lockCount || 0) + '/' + Number(state.deadeyeState.maxLocks || 0))

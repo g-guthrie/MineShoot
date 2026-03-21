@@ -1,10 +1,10 @@
-import { gameplayTuning, getDefaultAbilityLoadout, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { gameplayTuning, getDefaultAbilityId, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import { nowMs } from '../transport.js';
 
 const THROWABLE_STATS = gameplayTuning.throwables;
 const WEAPON_STATS = gameplayTuning.weaponStats || {};
-const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
+const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
 function cloneVec3(value) {
@@ -54,8 +54,7 @@ function buildAbilityFx(entity) {
 
 export function toEntityState(entity) {
   const now = nowMs();
-  const slot1CooldownRemaining = Math.max(0, ((entity.slot1CooldownUntil || 0) - now) / 1000);
-  const slot2CooldownRemaining = Math.max(0, ((entity.slot2CooldownUntil || 0) - now) / 1000);
+  const cooldownRemaining = Math.max(0, ((entity.abilityCooldownUntil || 0) - now) / 1000);
   const weaponAmmo = {};
   if (entity.weaponAmmo && typeof entity.weaponAmmo === 'object') {
     for (const weaponId in entity.weaponAmmo) {
@@ -130,11 +129,9 @@ export function toEntityState(entity) {
       ? entity.weaponLoadout.slice(0, 2)
       : DEFAULT_WEAPON_LOADOUT.slice(),
     weaponAmmo,
-    abilityLoadout: entity.abilityLoadout || { slot1: DEFAULT_ABILITY_LOADOUT.slot1, slot2: DEFAULT_ABILITY_LOADOUT.slot2 },
-    slot1CooldownRemaining,
-    slot2CooldownRemaining,
-    abilityCooldownRemaining: slot1CooldownRemaining,
-    ultimateCooldownRemaining: slot2CooldownRemaining,
+    abilityId: entity.abilityId || DEFAULT_ABILITY_ID,
+    cooldownRemaining,
+    abilityCooldownRemaining: cooldownRemaining,
     weaponLockUntil: Number(entity.weaponLockUntil || 0),
     throwableLockUntil: Number(entity.throwableLockUntil || 0),
     abilityLockUntil: Number(entity.abilityLockUntil || 0),

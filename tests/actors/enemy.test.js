@@ -147,8 +147,8 @@ test('enemy lock targets reuse cached world position vectors across calls', asyn
 
   assert.equal(firstTargets.length, 1);
   assert.equal(secondTargets.length, 1);
-  assert.notEqual(firstTargets, secondTargets);
-  assert.notEqual(firstTargets[0], secondTargets[0]);
+  assert.equal(firstTargets, secondTargets);
+  assert.equal(firstTargets[0], secondTargets[0]);
   assert.equal(firstTargets[0].worldPos, secondTargets[0].worldPos);
 });
 

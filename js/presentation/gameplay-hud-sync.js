@@ -192,7 +192,7 @@
         var netApi = netView();
         if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
             var netState = netApi.getSelfAbilityState();
-            return netState && netState.abilityLoadout ? netState.abilityLoadout : null;
+            return netState && netState.abilityId ? { abilityId: netState.abilityId } : null;
         }
         if (runtime.GameAbilities && runtime.GameAbilities.getLoadout) {
             return runtime.GameAbilities.getLoadout();
@@ -210,10 +210,8 @@
         if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
             var netState = netApi.getSelfAbilityState() || null;
             return netState ? {
-                slot1: netState.abilityLoadout ? netState.abilityLoadout.slot1 || '' : '',
-                slot2: netState.abilityLoadout ? netState.abilityLoadout.slot2 || '' : '',
-                cooldownSlot1: Number(netState.slot1CooldownRemaining || netState.abilityCooldownRemaining || 0),
-                cooldownSlot2: Number(netState.slot2CooldownRemaining || netState.ultimateCooldownRemaining || 0),
+                abilityId: netState.abilityId || '',
+                cooldown: Number(netState.cooldownRemaining || netState.abilityCooldownRemaining || 0),
                 deadeye: netState.deadeyeState ? {
                     lockCount: Number(netState.deadeyeState.lockCount || 0),
                     targetCount: Array.isArray(netState.deadeyeState.targetIds) ? netState.deadeyeState.targetIds.length : 0
@@ -261,8 +259,8 @@
         return Math.max(0, (radius * window.innerHeight) / (distance * tanV));
     }
 
-    function toneForAbilitySlot(slotIndex) {
-        return Number(slotIndex) === 2 ? 'ability2' : 'ability1';
+    function toneForAbility() {
+        return 'ability1';
     }
 
     function buildDebugPanelSections(options) {
@@ -273,9 +271,8 @@
 
         if (options.abilityLoadoutState) {
             var abilityDebug = options.abilityDebugState || null;
-
-            function addAbilitySlot(slotIndex, label, abilityId, cooldownSec) {
-                if (!abilityId) return;
+            var abilityId = String(options.abilityLoadoutState.abilityId || '');
+            if (abilityId) {
                 var def = catalog[abilityId] || null;
                 var body = [];
                 body.push(String((def && def.debugSummary) || 'No dev overlay summary.'));
@@ -283,14 +280,11 @@
                     body.push('tune: ' + def.tunableParams.join(', '));
                 }
                 sections.push({
-                    tone: toneForAbilitySlot(slotIndex),
-                    title: label + ' ' + String((def && def.name) || abilityId).toUpperCase() + ' :: ' + (cooldownSec > 0 ? cooldownSec.toFixed(1) + 's' : 'READY'),
+                    tone: toneForAbility(),
+                    title: inputLabels.getBindingLabel('ability_1', 'E') + ' ' + String((def && def.name) || abilityId).toUpperCase() + ' :: ' + (Number(abilityDebug && abilityDebug.cooldown || 0) > 0 ? Number(abilityDebug.cooldown || 0).toFixed(1) + 's' : 'READY'),
                     body: body.join('\n')
                 });
             }
-
-            addAbilitySlot(1, inputLabels.getBindingLabel('ability_1', 'E'), options.abilityLoadoutState.slot1, Number(abilityDebug && abilityDebug.cooldownSlot1 || 0));
-            addAbilitySlot(2, inputLabels.getBindingLabel('ability_2', 'F'), options.abilityLoadoutState.slot2, Number(abilityDebug && abilityDebug.cooldownSlot2 || 0));
         }
 
         if (options.weaponDebugState) {
@@ -488,13 +482,12 @@
         var abilityTuningState = runtime.GameCombatTuning && runtime.GameCombatTuning.getClassAbilityTuning
             ? runtime.GameCombatTuning.getClassAbilityTuning() || {}
             : {};
-        var slot1Ability = abilityLoadoutState ? String(abilityLoadoutState.slot1 || '') : '';
-        var slot2Ability = abilityLoadoutState ? String(abilityLoadoutState.slot2 || '') : '';
+        var abilityId = abilityLoadoutState ? String(abilityLoadoutState.abilityId || '') : '';
         var deadeyeUiState = currentDeadeyeUiState(multiplayerMode);
         var weaponDebugState = debugVisualsOn ? buildWeaponDebugState(weaponState) : null;
 
         if (runtime.GameUI && runtime.GameUI.updateChokeReticle) {
-            var chokeVisible = !!debugVisualsOn && (slot1Ability === 'choke' || slot2Ability === 'choke');
+            var chokeVisible = !!debugVisualsOn && abilityId === 'choke';
             var chokeRectSize = runtime.GameAbilities && runtime.GameAbilities.getChokeRectSize
                 ? runtime.GameAbilities.getChokeRectSize(camera)
                 : { width: 216, height: 180 };
@@ -502,29 +495,29 @@
                 chokeVisible,
                 chokeRectSize.width,
                 chokeRectSize.height,
-                slot1Ability === 'choke' ? toneForAbilitySlot(1) : toneForAbilitySlot(2)
+                toneForAbility()
             );
         }
 
         if (runtime.GameUI && runtime.GameUI.updateHookReticle) {
-            var hookVisible = !!debugVisualsOn && (slot1Ability === 'hook' || slot2Ability === 'hook');
+            var hookVisible = !!debugVisualsOn && abilityId === 'hook';
             var hookReticleSize = Number(abilityTuningState.hookReticleRadiusPx || 52) * 2;
             runtime.GameUI.updateHookReticle(
                 hookVisible,
                 hookReticleSize,
-                slot1Ability === 'hook' ? toneForAbilitySlot(1) : toneForAbilitySlot(2)
+                toneForAbility()
             );
         }
 
         if (runtime.GameUI && runtime.GameUI.updateDeadeyeDebugRect) {
-            var deadeyeVisible = !!debugVisualsOn && (slot1Ability === 'deadeye' || slot2Ability === 'deadeye');
+            var deadeyeVisible = !!debugVisualsOn && abilityId === 'deadeye';
             var deadeyeMinDot = Number(((currentAbilityCatalogMap().deadeye || {}).minDot) || 0.18);
             var deadeyeRect = deadeyeDebugRectSizePx(camera, deadeyeMinDot);
             runtime.GameUI.updateDeadeyeDebugRect(
                 deadeyeVisible,
                 deadeyeRect ? deadeyeRect.width : 220,
                 deadeyeRect ? deadeyeRect.height : 160,
-                slot1Ability === 'deadeye' ? toneForAbilitySlot(1) : toneForAbilitySlot(2)
+                toneForAbility()
             );
         }
 

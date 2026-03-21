@@ -12,6 +12,7 @@
 
     function create(opts) {
         opts = opts || {};
+        var lockTargetsScratch = [];
 
         function sharedApi() {
             return opts.getSharedApi ? (opts.getSharedApi() || {}) : (globalThis.__MAYHEM_RUNTIME.GameShared || {});
@@ -288,12 +289,10 @@
                     healState: null
                 };
             return {
-                slot1CooldownRemaining: selfState.slot1CooldownRemaining || 0,
-                slot2CooldownRemaining: selfState.slot2CooldownRemaining || 0,
+                cooldownRemaining: selfState.cooldownRemaining || 0,
                 abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
-                ultimateCooldownRemaining: selfState.ultimateCooldownRemaining || 0,
                 weaponLoadout: selfState.weaponLoadout || null,
-                abilityLoadout: selfState.abilityLoadout || null,
+                abilityId: selfState.abilityId || '',
                 chokeState: snapshotAbilityState.chokeState,
                 hookState: snapshotAbilityState.hookState,
                 healState: snapshotAbilityState.healState,
@@ -423,25 +422,34 @@
         }
 
         function getLockTargets() {
-            var out = [];
+            lockTargetsScratch.length = 0;
             readMap('getRenderMap').forEach(function (r) {
                 if (!r || !r.alive) return;
                 var worldPos = typeof opts.getRenderCoreWorldPosition === 'function'
                     ? opts.getRenderCoreWorldPosition(r, r.lockTargetWorldPos || (r.lockTargetWorldPos = new THREE.Vector3()))
                     : null;
                 if (!worldPos) return;
-                out.push({
-                    targetId: 'net:' + r.id,
+                var desc = r.lockTargetDescriptor || (r.lockTargetDescriptor = {
+                    targetId: '',
                     ownerType: 'net',
                     worldPos: worldPos,
-                    hitbox: r.bodyHitbox || null,
-                    bodyHitbox: r.bodyHitbox || null,
-                    headHitbox: r.headHitbox || null,
+                    hitbox: null,
+                    bodyHitbox: null,
+                    headHitbox: null,
                     alive: true,
-                    netEntityId: r.id
+                    netEntityId: ''
                 });
+                desc.targetId = 'net:' + r.id;
+                desc.ownerType = 'net';
+                desc.worldPos = worldPos;
+                desc.hitbox = r.bodyHitbox || null;
+                desc.bodyHitbox = r.bodyHitbox || null;
+                desc.headHitbox = r.headHitbox || null;
+                desc.alive = true;
+                desc.netEntityId = r.id;
+                lockTargetsScratch.push(desc);
             });
-            return out;
+            return lockTargetsScratch;
         }
 
         return {

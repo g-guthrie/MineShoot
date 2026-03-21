@@ -77,11 +77,10 @@ export function normalizeWeaponLoadoutPayload(slot1, slot2) {
   };
 }
 
-export function normalizeAbilityLoadoutPayload(slot1, slot2) {
+export function normalizeAbilityLoadoutPayload(abilityId) {
   return {
     t: MSG_C2S.CLASS_QUEUE,
-    slot1: String(slot1 || ''),
-    slot2: String(slot2 || '')
+    abilityId: String(abilityId || '')
   };
 }
 
@@ -103,10 +102,10 @@ export function normalizeReloadPayload(weaponId) {
   };
 }
 
-export function normalizeClassCastPayload(slot, castData) {
+export function normalizeClassCastPayload(slotOrCastData, maybeCastData) {
+  const castData = maybeCastData !== undefined ? maybeCastData : slotOrCastData;
   const payload = {
-    t: MSG_C2S.CLASS_CAST,
-    slot: Number(slot || 0)
+    t: MSG_C2S.CLASS_CAST
   };
   const aimPoint = normalizeVec3(castData && castData.aimPoint);
   const projectileIntent = normalizeThrowIntent(castData && castData.projectileIntent);

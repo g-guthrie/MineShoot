@@ -92,7 +92,7 @@ function baseEntity(id, overrides = {}) {
     muzzleFlashUntil: 0,
     weaponLoadout: ['rifle', 'shotgun'],
     weaponAmmo: {},
-    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    abilityId: 'choke',
     throwables: {},
     ...overrides
   };

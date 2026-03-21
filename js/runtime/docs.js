@@ -349,7 +349,7 @@
                 { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload.' },
                 { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots.' },
                 { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
-                { actionIds: ['ability_1', 'ability_2'], fallbackKeys: ['E', 'F'], title: 'Abilities', note: 'Slot 1 and slot 2 can be remapped independently from the menu.' }
+                { actionId: 'ability_1', fallbackKey: 'E', title: 'Ability', note: 'Fires your equipped ability from the loadout menu.' }
             ]
         },
         {
@@ -590,8 +590,7 @@
         var summary = {
             slot1Weapon: '',
             slot2Weapon: '',
-            slot1Ability: '',
-            slot2Ability: '',
+            ability: '',
             throwable: ''
         };
         var menuLoadout = runtime.GameMenuLoadout && runtime.GameMenuLoadout.getRuntimeSnapshot
@@ -602,8 +601,8 @@
             : (runtime.GameHitscan && runtime.GameHitscan.getWeaponOrder
                 ? runtime.GameHitscan.getWeaponOrder().slice(0, 2)
                 : []);
-        var abilityLoadout = menuLoadout && menuLoadout.abilityLoadout
-            ? menuLoadout.abilityLoadout
+        var abilityLoadout = menuLoadout && menuLoadout.selectedAbilityId
+            ? { abilityId: menuLoadout.selectedAbilityId }
             : (runtime.GameAbilities && runtime.GameAbilities.getLoadout
                 ? runtime.GameAbilities.getLoadout()
                 : {});
@@ -614,13 +613,11 @@
                 : '');
         var weapon1 = findById(data.weapons, String(weaponSlots[0] || ''));
         var weapon2 = findById(data.weapons, String(weaponSlots[1] || ''));
-        var ability1 = findById(data.abilities, String(abilityLoadout && abilityLoadout.slot1 || ''));
-        var ability2 = findById(data.abilities, String(abilityLoadout && abilityLoadout.slot2 || ''));
+        var ability = findById(data.abilities, String(abilityLoadout && abilityLoadout.abilityId || ''));
         var throwable = findById(data.throwables, String(throwableId || ''));
         summary.slot1Weapon = weapon1 ? weapon1.name : 'Unassigned';
         summary.slot2Weapon = weapon2 ? weapon2.name : 'Unassigned';
-        summary.slot1Ability = ability1 ? ability1.name : 'Unassigned';
-        summary.slot2Ability = ability2 ? ability2.name : 'Unassigned';
+        summary.ability = ability ? ability.name : 'Unassigned';
         summary.throwable = throwable ? (throwable.label || throwable.name || throwable.id) : 'Unassigned';
         return summary;
     }
@@ -1108,7 +1105,7 @@
                 'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
                 'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and ADS with RMB or ' + inputLabels.getBindingLabel('ads_key', 'Alt') + '.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
-                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable, ' + inputLabels.getBindingLabel('ability_1', 'E') + ' for ability slot 1, and ' + inputLabels.getBindingLabel('ability_2', 'F') + ' for ability slot 2.',
+                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('ability_1', 'E') + ' for your equipped ability.',
                 'Break line of sight during long cooldowns instead of forcing low-odds trades.'
             ]),
             '</section>',
@@ -1118,8 +1115,7 @@
                 { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_1', '1') + '.' },
                 { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_2', '2') + '.' },
                 { label: inputLabels.getBindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for preview if supported.' },
-                { label: inputLabels.getBindingLabel('ability_1', 'E') + ' Ability', value: loadout.slot1Ability || 'Unassigned', note: 'Primary ability slot.' },
-                { label: inputLabels.getBindingLabel('ability_2', 'F') + ' Ability', value: loadout.slot2Ability || 'Unassigned', note: 'Secondary ability slot.' }
+                { label: inputLabels.getBindingLabel('ability_1', 'E') + ' Ability', value: loadout.ability || 'Unassigned', note: 'Your equipped ability.' }
             ]),
             '</section>',
             '</div>',
@@ -1147,7 +1143,7 @@
                 'RMB / ' + inputLabels.getBindingLabel('ads_key', 'Alt') + ' ADS',
                 inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
-                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('ability_1', 'E') + ' / ' + inputLabels.getBindingLabel('ability_2', 'F')
+                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('ability_1', 'E')
             ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
@@ -1244,7 +1240,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || ability.description || 'No mechanics note.',
-                'Menu binding: slot 1 fires on ' + inputLabels.getBindingLabel('ability_1', 'E') + ', slot 2 fires on ' + inputLabels.getBindingLabel('ability_2', 'F') + '.',
+                'Menu binding: fire this ability on ' + inputLabels.getBindingLabel('ability_1', 'E') + '.',
                 ability.debugSummary || 'No extra debug summary.'
             ].concat(briefing.tips || [])),
             '</section>',

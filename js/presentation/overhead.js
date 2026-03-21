@@ -15,6 +15,16 @@
     var entityPoints = sharedRuntime.entityPoints || {};
     var entityConstants = sharedRuntime.entityConstants || {};
     var projectionScratch = new THREE.Vector3();
+    var descriptorScratch = {
+        id: '',
+        targetId: '',
+        name: '',
+        hp: 0,
+        hpMax: 0,
+        armor: 0,
+        armorMax: 0,
+        worldPos: null
+    };
     var OVERHEAD_HEAD_CLEARANCE_Y = 0.18;
 
     function ensureContainer() {
@@ -101,53 +111,69 @@
         });
     }
 
-    function getLocalEnemyDescriptors() {
+    function syncDescriptor(id, targetId, name, hp, hpMax, armor, armorMax, worldPos, camera, stamp, crosshairTargetId) {
+        descriptorScratch.id = id;
+        descriptorScratch.targetId = targetId;
+        descriptorScratch.name = name;
+        descriptorScratch.hp = hp;
+        descriptorScratch.hpMax = hpMax;
+        descriptorScratch.armor = armor;
+        descriptorScratch.armorMax = armorMax;
+        descriptorScratch.worldPos = worldPos;
+        var entry = entries.get(id);
+        if (!entry) {
+            entry = makeEntry(id);
+            entries.set(id, entry);
+        }
+        updateEntry(entry, descriptorScratch, camera, stamp, crosshairTargetId);
+    }
+
+    function syncLocalEnemyEntries(camera, stamp, crosshairTargetId) {
         if (!globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return [];
 
         var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies();
-        var out = [];
-
         for (var i = 0; i < enemies.length; i++) {
             var e = enemies[i];
             if (!e || !e.alive || !e.group) continue;
-            out.push({
-                id: 'enemy:' + e.index,
-                targetId: 'enemy:' + e.index,
-                name: 'AI_' + (e.index + 1),
-                hp: e.hp,
-                hpMax: e.maxHp || 500,
-                armor: typeof e.armor === 'number' ? e.armor : 0,
-                armorMax: typeof e.armorMax === 'number' ? e.armorMax : 100,
-                worldPos: e.group.position
-            });
+            syncDescriptor(
+                'enemy:' + e.index,
+                'enemy:' + e.index,
+                'AI_' + (e.index + 1),
+                e.hp,
+                e.maxHp || 500,
+                typeof e.armor === 'number' ? e.armor : 0,
+                typeof e.armorMax === 'number' ? e.armorMax : 100,
+                e.group.position,
+                camera,
+                stamp,
+                crosshairTargetId
+            );
         }
-
-        return out;
     }
 
-    function getNetworkDescriptors() {
+    function syncNetworkEntries(camera, stamp, crosshairTargetId) {
         var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
         var netView = net && net.view ? net.view : net;
         if (!netView || !netView.getEntityStateList) return [];
         var list = netView.getEntityStateList();
-        var out = [];
 
         for (var i = 0; i < list.length; i++) {
             var e = list[i];
             if (!e || !e.alive || !e.worldPos) continue;
-            out.push({
-                id: 'net:' + e.id,
-                targetId: e.targetId || ('net:' + e.id),
-                name: e.username || e.id,
-                hp: e.hp,
-                hpMax: e.hpMax,
-                armor: e.armor,
-                armorMax: e.armorMax,
-                worldPos: e.worldPos
-            });
+            syncDescriptor(
+                'net:' + e.id,
+                e.targetId || ('net:' + e.id),
+                e.username || e.id,
+                e.hp,
+                e.hpMax,
+                e.armor,
+                e.armorMax,
+                e.worldPos,
+                camera,
+                stamp,
+                crosshairTargetId
+            );
         }
-
-        return out;
     }
 
     function descriptorVisible(desc, stamp, crosshairTargetId) {
@@ -222,17 +248,8 @@
 
         var stamp = nowStamp();
         pruneExpiredRevealTargets(stamp);
-        var descriptors = getLocalEnemyDescriptors().concat(getNetworkDescriptors());
-
-        for (var i = 0; i < descriptors.length; i++) {
-            var desc = descriptors[i];
-            var entry = entries.get(desc.id);
-            if (!entry) {
-                entry = makeEntry(desc.id);
-                entries.set(desc.id, entry);
-            }
-            updateEntry(entry, desc, camera, stamp, crosshairTargetId);
-        }
+        syncLocalEnemyEntries(camera, stamp, crosshairTargetId);
+        syncNetworkEntries(camera, stamp, crosshairTargetId);
 
         cleanupUntouched(stamp);
     };

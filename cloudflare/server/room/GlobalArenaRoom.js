@@ -1,10 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
   gameplayTuning,
-  getDefaultAbilityLoadout,
+  getDefaultAbilityId,
   getDefaultWeaponLoadout,
   getSelectableWeaponIds,
-  normalizeAbilityLoadout
+  normalizeAbilityId
 } from '../../../shared/gameplay-tuning.js';
 import {
   buildExpectedWorldMeta,
@@ -185,7 +185,7 @@ const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
+const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 const SELECTABLE_WEAPON_IDS = getSelectableWeaponIds();
 
@@ -1139,9 +1139,9 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleClassQueue(player, msg, ws) {
     return handleCombatClassQueue(this, player, msg, ws, {
-      normalizeAbilityLoadout,
+      normalizeAbilityId,
       msgClassChanged: MSG_S2C.CLASS_CHANGED,
-      defaultAbilityLoadout: DEFAULT_ABILITY_LOADOUT
+      defaultAbilityId: DEFAULT_ABILITY_ID
     });
   }
 

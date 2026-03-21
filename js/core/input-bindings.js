@@ -17,8 +17,7 @@
         { id: 'weapon_slot_1', title: 'Weapon Slot 1', group: 'Combat', defaultToken: 'Digit1', note: 'Select your first loadout weapon.' },
         { id: 'weapon_slot_2', title: 'Weapon Slot 2', group: 'Combat', defaultToken: 'Digit2', note: 'Select your second loadout weapon.' },
         { id: 'throwable', title: 'Throwable', group: 'Combat', defaultToken: 'KeyQ', note: 'Throw or preview the selected throwable.' },
-        { id: 'ability_1', title: 'Ability Slot 1', group: 'Combat', defaultToken: 'KeyE', note: 'Trigger the first equipped ability.' },
-        { id: 'ability_2', title: 'Ability Slot 2', group: 'Combat', defaultToken: 'KeyF', note: 'Trigger the second equipped ability.' },
+        { id: 'ability_1', title: 'Ability', group: 'Combat', defaultToken: 'KeyE', note: 'Trigger your equipped ability.' },
         { id: 'open_manual', title: 'Open Field Manual', group: 'Session', defaultToken: 'KeyI', note: 'Open or close the field manual.' },
         { id: 'toggle_debug', title: 'Toggle Debug Visuals', group: 'Session', defaultToken: 'KeyH', note: 'Toggle extra combat debug helpers.' }
     ];

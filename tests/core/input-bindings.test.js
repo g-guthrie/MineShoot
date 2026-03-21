@@ -58,7 +58,6 @@ function defaultBindings() {
     weapon_slot_2: 'Digit2',
     throwable: 'KeyQ',
     ability_1: 'KeyE',
-    ability_2: 'KeyF',
     open_manual: 'KeyI',
     toggle_debug: 'KeyH'
   };

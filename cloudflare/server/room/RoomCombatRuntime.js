@@ -618,18 +618,14 @@ export function handleReload(room, player, msg, deps) {
 
 export function handleClassQueue(room, player, msg, ws, deps) {
   deps = deps || {};
-  const normalizeAbilityLoadout = deps.normalizeAbilityLoadout;
+  const normalizeAbilityId = deps.normalizeAbilityId;
   if (!player) return;
-  const nextLoadout = normalizeAbilityLoadout(msg && msg.slot1, msg && msg.slot2);
-  player.abilityLoadout = {
-    slot1: nextLoadout.slot1,
-    slot2: nextLoadout.slot2
-  };
+  player.abilityId = normalizeAbilityId(msg && msg.abilityId);
   room.send(ws, {
     t: deps.msgClassChanged,
     classId: 'abilities',
     weaponId: player.weaponId || 'rifle',
-    abilityLoadout: player.abilityLoadout || deps.defaultAbilityLoadout
+    abilityId: player.abilityId || deps.defaultAbilityId
   });
 }
 

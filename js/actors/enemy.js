@@ -24,6 +24,7 @@
     var revealTarget = new THREE.Vector3();
     var revealDir = new THREE.Vector3();
     var playerHookSourcePos = new THREE.Vector3();
+    var lockTargetsScratch = [];
 
     var skinColors = [0x44aa44, 0xaa4444, 0x4444aa, 0xaa44aa, 0xaaaa44, 0x44aaaa, 0xff8800, 0x8800ff];
 
@@ -565,6 +566,7 @@
         GameEnemy.dispose();
         enemies = [];
         hitboxArray = [];
+        lockTargetsScratch.length = 0;
         sceneRef = scene;
         count = count || 8;
 
@@ -598,6 +600,8 @@
         enemy.headHitbox = null;
         enemy.visual = null;
         enemy.revealGhost = null;
+        enemy.lockTargetWorldPos = null;
+        enemy.lockTargetDescriptor = null;
     }
 
     GameEnemy.dispose = function () {
@@ -606,6 +610,7 @@
         }
         enemies = [];
         hitboxArray = [];
+        lockTargetsScratch.length = 0;
         sceneRef = null;
     };
 
@@ -774,7 +779,7 @@
     };
 
     GameEnemy.getLockTargets = function () {
-        var out = [];
+        lockTargetsScratch.length = 0;
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];
             if (!enemy || !enemy.alive) continue;
@@ -792,18 +797,27 @@
             }
             if (!corePos) continue;
 
-            out.push({
-                targetId: (enemy.bodyHitbox && enemy.bodyHitbox.userData && enemy.bodyHitbox.userData.targetId) || ('enemy:' + enemy.index),
+            var desc = enemy.lockTargetDescriptor || (enemy.lockTargetDescriptor = {
+                targetId: '',
                 ownerType: 'enemy',
                 worldPos: corePos,
-                hitbox: enemy.bodyHitbox || null,
-                bodyHitbox: enemy.bodyHitbox || null,
-                headHitbox: enemy.headHitbox || null,
+                hitbox: null,
+                bodyHitbox: null,
+                headHitbox: null,
                 alive: true,
                 enemyRef: enemy
             });
+            desc.targetId = (enemy.bodyHitbox && enemy.bodyHitbox.userData && enemy.bodyHitbox.userData.targetId) || ('enemy:' + enemy.index);
+            desc.ownerType = 'enemy';
+            desc.worldPos = corePos;
+            desc.hitbox = enemy.bodyHitbox || null;
+            desc.bodyHitbox = enemy.bodyHitbox || null;
+            desc.headHitbox = enemy.headHitbox || null;
+            desc.alive = true;
+            desc.enemyRef = enemy;
+            lockTargetsScratch.push(desc);
         }
-        return out;
+        return lockTargetsScratch;
     };
 
     GameEnemy.setDeadeyeHighlights = function (markMap) {

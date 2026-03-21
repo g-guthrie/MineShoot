@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-async function loadHookVisualsHarness() {
+async function loadHookVisualsHarness(runtimeOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/combat/hook-visuals.js', import.meta.url), 'utf8');
   let renderMap = new Map();
   const runtime = {
@@ -34,7 +34,8 @@ async function loadHookVisualsHarness() {
       getCoreWorldPosition(_targetId, out) {
         return out.set(6, 7, 8);
       }
-    }
+    },
+    ...runtimeOverrides
   };
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,
@@ -81,4 +82,48 @@ test('hook visuals dispose stale remote chains and clear old scenes on reinit', 
   harness.api.init(secondScene);
   assert.equal(firstScene.children.length, 0);
   assert.equal(secondScene.children.length, 0);
+});
+
+test('hook visuals pass a reusable output vector into hook-end resolution', async () => {
+  const receivedOuts = [];
+  const harness = await loadHookVisualsHarness({
+    GameAbilityFx: {
+      resolveHookVisualEnd(state, resolveTargetPosition, out) {
+        receivedOuts.push(out);
+        const resolved = resolveTargetPosition(state.targetId);
+        return out.set(resolved.x, resolved.y, resolved.z);
+      }
+    },
+    GameAbilities: {
+      getHookState() {
+        return {
+          phase: 'latched',
+          targetId: 'enemy:1'
+        };
+      }
+    },
+    GamePlayer: {
+      getThrowableOriginWorldPosition(out) {
+        return out.set(1, 2, 3);
+      }
+    },
+    GameEnemy: {
+      getLockTargets() {
+        return [{
+          targetId: 'enemy:1',
+          worldPos: new THREE.Vector3(6, 7, 8),
+          alive: true
+        }];
+      }
+    }
+  });
+  const scene = new THREE.Scene();
+
+  harness.api.init(scene);
+  harness.api.render(false);
+  harness.api.render(false);
+
+  assert.equal(receivedOuts.length, 2);
+  assert.ok(receivedOuts[0] instanceof THREE.Vector3);
+  assert.equal(receivedOuts[0], receivedOuts[1]);
 });

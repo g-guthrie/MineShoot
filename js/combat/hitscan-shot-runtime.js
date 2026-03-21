@@ -28,6 +28,9 @@
         var eyeWorldScratch = new THREE.Vector3();
         var playerPositionScratch = new THREE.Vector3();
         var hitboxBoundsBox = new THREE.Box3();
+        var projectedWorldPosScratch = new THREE.Vector3();
+        var combatHitboxesScratch = [];
+        var lockTargetsScratch = [];
 
         var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
         var LOCAL_CIRCLE_SCAN_PATTERN = buildLocalCircleScanPattern(4);
@@ -65,6 +68,14 @@
             var stamp = Number(timing && timing.wallNow);
             if (isFinite(stamp) && stamp >= 0) return stamp;
             return Date.now();
+        }
+
+        function appendArrayItems(out, list) {
+            if (!list || !list.length) return out;
+            for (var i = 0; i < list.length; i++) {
+                out.push(list[i]);
+            }
+            return out;
         }
 
         function buildLocalCircleScanPattern(radiusSteps) {
@@ -136,8 +147,12 @@
                 viewportWidth: window.innerWidth,
                 viewportHeight: window.innerHeight,
                 projectToNdc: function (worldPos) {
-                    if (!worldPos || !worldPos.clone || !worldPos.project) return null;
-                    var projected = worldPos.clone().project(camera);
+                    if (!worldPos) return null;
+                    var projected = projectedWorldPosScratch.set(
+                        Number(worldPos.x || 0),
+                        Number(worldPos.y || 0),
+                        Number(worldPos.z || 0)
+                    ).project(camera);
                     return { x: projected.x, y: projected.y, z: projected.z };
                 },
                 hasWorldLos: function (worldPos) {
@@ -155,44 +170,50 @@
         }
 
         function getCombatHitboxes() {
-            var out = [];
+            combatHitboxesScratch.length = 0;
             var net = netApi();
             var netRemote = net && net.remoteEntities ? net.remoteEntities : net;
             if (runtime().GameEnemy && runtime().GameEnemy.getHitboxArray) {
-                out = out.concat(runtime().GameEnemy.getHitboxArray() || []);
+                appendArrayItems(combatHitboxesScratch, runtime().GameEnemy.getHitboxArray() || []);
             }
             if (isNetCombatReady() && netRemote && netRemote.getHitboxArray) {
-                out = out.concat(netRemote.getHitboxArray() || []);
+                appendArrayItems(combatHitboxesScratch, netRemote.getHitboxArray() || []);
             }
-            return out;
+            return combatHitboxesScratch;
         }
 
         function getLockTargets() {
-            var out = [];
+            lockTargetsScratch.length = 0;
             var net = netApi();
             var netView = net && net.view ? net.view : net;
 
             if (runtime().GameEnemy && runtime().GameEnemy.getLockTargets) {
-                out = out.concat(runtime().GameEnemy.getLockTargets() || []);
+                appendArrayItems(lockTargetsScratch, runtime().GameEnemy.getLockTargets() || []);
             }
             if (isNetCombatReady() && netView && netView.getLockTargets) {
-                out = out.concat(netView.getLockTargets() || []);
+                appendArrayItems(lockTargetsScratch, netView.getLockTargets() || []);
             }
-            if (out.length > 0) return out;
+            if (lockTargetsScratch.length > 0) return lockTargetsScratch;
 
             var hitboxes = getCombatHitboxes();
             for (var i = 0; i < hitboxes.length; i++) {
                 var hitbox = hitboxes[i];
                 if (!hitbox || !hitbox.userData || hitbox.userData.type !== 'body') continue;
-                out.push({
-                    targetId: hitbox.userData.targetId || '',
-                    ownerType: hitbox.userData.ownerType || 'unknown',
-                    worldPos: hitbox.position.clone(),
+                var desc = hitbox.userData.hitscanLockTargetDesc || (hitbox.userData.hitscanLockTargetDesc = {
+                    targetId: '',
+                    ownerType: 'unknown',
+                    worldPos: hitbox.position,
                     hitbox: hitbox,
                     alive: true
                 });
+                desc.targetId = hitbox.userData.targetId || '';
+                desc.ownerType = hitbox.userData.ownerType || 'unknown';
+                desc.worldPos = hitbox.position;
+                desc.hitbox = hitbox;
+                desc.alive = true;
+                lockTargetsScratch.push(desc);
             }
-            return out;
+            return lockTargetsScratch;
         }
 
         function worldCollisionBoxes() {
@@ -508,8 +529,12 @@
                 viewportWidth: window.innerWidth,
                 viewportHeight: window.innerHeight,
                 projectToNdc: function (worldPos) {
-                    if (!worldPos || !worldPos.clone || !worldPos.project) return null;
-                    var projected = worldPos.clone().project(camera);
+                    if (!worldPos) return null;
+                    var projected = projectedWorldPosScratch.set(
+                        Number(worldPos.x || 0),
+                        Number(worldPos.y || 0),
+                        Number(worldPos.z || 0)
+                    ).project(camera);
                     return { x: projected.x, y: projected.y, z: projected.z };
                 },
                 hasWorldLos: function (worldPos) {

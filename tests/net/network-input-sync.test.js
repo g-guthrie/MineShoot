@@ -435,9 +435,8 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
         yaw: 0,
         pitch: 0,
         seq: 1,
-        abilityLoadout: { slot1: 'choke', slot2: 'missile' },
-        slot1CooldownRemaining: 1.25,
-        slot2CooldownRemaining: 5,
+        abilityId: 'choke',
+        cooldownRemaining: 1.25,
         abilityFx: {
           chokeCasterUntil: 1250,
           chokeVictim: { startedAt: 900, endsAt: 1300, liftHeight: 1.5 },
@@ -468,7 +467,8 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
   const abilityState = GameNet.getSelfAbilityState();
   const chokeVictim = GameNet.getChokeVictimStateForEntity('usr_test');
 
-  assert.equal(abilityState.slot1CooldownRemaining, 1.25);
+  assert.equal(abilityState.cooldownRemaining, 1.25);
+  assert.equal(abilityState.abilityId, 'choke');
   assert.equal(abilityState.chokeState.endsAt, 1250);
   assert.equal(abilityState.hookState.phase, 'travel');
   assert.deepEqual(JSON.parse(JSON.stringify(abilityState.hookState.headPos)), { x: 1, y: 2, z: 3 });
@@ -504,9 +504,8 @@ test('GameNet updates self ability loadout immediately on class_changed before t
         yaw: 0,
         pitch: 0,
         seq: 1,
-        abilityLoadout: { slot1: 'choke', slot2: 'missile' },
-        slot1CooldownRemaining: 2.5,
-        slot2CooldownRemaining: 7.5,
+        abilityId: 'choke',
+        cooldownRemaining: 2.5,
         abilityFx: null
       }
     ],
@@ -518,13 +517,10 @@ test('GameNet updates self ability loadout immediately on class_changed before t
   harness.handleMessage({
     t: 'class_changed',
     classId: 'abilities',
-    abilityLoadout: { slot1: 'hook', slot2: 'heal' }
+    abilityId: 'hook'
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfAbilityState().abilityLoadout)), {
-    slot1: 'hook',
-    slot2: 'heal'
-  });
+  assert.equal(GameNet.getSelfAbilityState().abilityId, 'hook');
 });
 
 test('GameNet stores snapshot timing and estimates current server time from snapshots', async () => {

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-import { gameplayTuning, getClassPreset, getDefaultAbilityLoadout, normalizeAbilityLoadout } from '../../shared/gameplay-tuning.js';
+import { gameplayTuning, getClassPreset, getDefaultAbilityId, normalizeAbilityId } from '../../shared/gameplay-tuning.js';
 
 async function loadAbilitiesRuntime(runtimeOverrides = {}, globalOverrides = {}) {
   const [inputLabelsCode, boundaryCode, localSimCode, code] = await Promise.all([
@@ -17,8 +17,8 @@ async function loadAbilitiesRuntime(runtimeOverrides = {}, globalOverrides = {})
     GameShared: {
       gameplayTuning,
       getClassPreset,
-      getDefaultAbilityLoadout,
-      normalizeAbilityLoadout
+      getDefaultAbilityId,
+      normalizeAbilityId
     },
     ...runtimeOverrides
   };
@@ -64,10 +64,11 @@ test('prepareNetCast shapes choke target selection behind the abilities boundary
     }
   });
 
+  abilities.setLoadout('choke');
   const prepared = abilities.prepareNetCast(1, { fov: 60 });
 
   assert.equal(prepared.ok, true);
-  assert.equal(prepared.slot, 1);
+  assert.equal('slot' in prepared, false);
   assert.equal(prepared.abilityId, 'choke');
   assert.deepEqual(JSON.parse(JSON.stringify(prepared.castData)), {
     lockTargetId: 'usr_target',
@@ -107,6 +108,7 @@ test('prepareNetCast returns missile local feedback as a commit callback', async
     }
   });
 
+  abilities.setLoadout('missile');
   const prepared = abilities.prepareNetCast(2, { fov: 60 });
 
   assert.equal(prepared.ok, true);
@@ -460,7 +462,7 @@ test('deadeye starts cooldown when primed, not only when released', async () => 
 
   assert.equal(start.ok, true);
   assert.equal(start.kind, 'deadeye_start');
-  assert.ok(abilities.getHudState().slot1Cooldown > 14);
+  assert.ok(abilities.getHudState().cooldown > 14);
 });
 
 test('deadeye keeps the player locked out of weapon and throwable use until release or expiry', async () => {
@@ -718,24 +720,23 @@ test('abilities runtime picks up shared defaults that arrive after module evalua
   abilities.__runtime.GameShared = {
     gameplayTuning: {
       ...gameplayTuning,
-      defaultAbilityLoadout: { slot1: 'hook', slot2: 'heal' },
+      defaultAbilityId: 'hook',
       classPresets: {
         ...gameplayTuning.classPresets,
         abilities: { armorMax: 140, wallhackRadius: 120, loadoutWeapon: 'sniper' }
       }
     },
     getClassPreset,
-    getDefaultAbilityLoadout() {
-      return { slot1: 'hook', slot2: 'heal' };
+    getDefaultAbilityId() {
+      return 'hook';
     },
-    normalizeAbilityLoadout
+    normalizeAbilityId
   };
 
   abilities.init();
 
   assert.deepEqual(JSON.parse(JSON.stringify(abilities.getLoadout())), {
-    slot1: 'hook',
-    slot2: 'heal',
+    abilityId: 'hook',
     activeAbility: 'hook'
   });
   assert.equal(abilities.getArmorMax(), 140);

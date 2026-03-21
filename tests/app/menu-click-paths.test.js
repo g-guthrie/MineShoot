@@ -592,7 +592,7 @@ async function loadHarness({ localEnvironment = false, loggedIn = true } = {}) {
       getRuntimeSnapshot() {
         return {
           weaponSlots: ['machinegun', 'shotgun'],
-          abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+          selectedAbilityId: 'choke',
           selectedThrowableId: 'frag'
         };
       },

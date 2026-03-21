@@ -19,6 +19,7 @@
     var SEGMENTS = awarenessTuning.segments;
     var RADAR_RANGE = awarenessTuning.radarRange;
     var CORE_RANGE = awarenessTuning.coreRange;
+    var collectTargetsScratch = [];
 
     function normalizeSectorIndex(idx, segCount) {
         return ((idx % segCount) + segCount) % segCount;
@@ -31,32 +32,30 @@
         return angle >= (-Math.PI * 0.5) ? 3 : 2;
     }
 
+    function appendTargets(out, seen, list) {
+        if (!list || !list.length) return;
+        for (var i = 0; i < list.length; i++) {
+            var t = list[i];
+            if (!t || t.alive === false || !t.worldPos) continue;
+            var key = (t.targetId || '') + '|' + Number(t.worldPos.x).toFixed(2) + '|' + Number(t.worldPos.z).toFixed(2);
+            if (seen[key]) continue;
+            seen[key] = true;
+            out.push(t);
+        }
+    }
+
     function collectTargets() {
-        var out = [];
-        var seen = {};
+        var seen = Object.create(null);
         var net = RT.GameNet || null;
         var netView = net && net.view ? net.view : net;
-        function appendTargets(list) {
-            if (!list || !list.length) return;
-            for (var i = 0; i < list.length; i++) {
-                var t = list[i];
-                if (!t || t.alive === false || !t.worldPos) continue;
-                var key = (t.targetId || '') + '|' + Number(t.worldPos.x).toFixed(2) + '|' + Number(t.worldPos.z).toFixed(2);
-                if (seen[key]) continue;
-                seen[key] = true;
-                out.push({
-                    targetId: t.targetId || '',
-                    worldPos: t.worldPos.clone ? t.worldPos.clone() : t.worldPos
-                });
-            }
-        }
+        collectTargetsScratch.length = 0;
         if (RT.GameEnemy && RT.GameEnemy.getLockTargets) {
-            appendTargets(RT.GameEnemy.getLockTargets() || []);
+            appendTargets(collectTargetsScratch, seen, RT.GameEnemy.getLockTargets() || []);
         }
         if (netView && netView.getLockTargets) {
-            appendTargets(netView.getLockTargets() || []);
+            appendTargets(collectTargetsScratch, seen, netView.getLockTargets() || []);
         }
-        return out;
+        return collectTargetsScratch;
     }
 
     function buildState(playerPos, playerYaw) {

@@ -102,7 +102,7 @@ function snapshotEntity(id, overrides = {}) {
     muzzleFlashUntil: 0,
     streamHeat: 0,
     streamOverheatedUntil: 0,
-    abilityLoadout: null,
+    abilityId: '',
     ...overrides
   };
 }

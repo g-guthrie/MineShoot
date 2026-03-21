@@ -39,7 +39,7 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     muzzleFlashUntil: 0,
     weaponLoadout: ['rifle', 'shotgun'],
     weaponAmmo: {},
-    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    abilityId: 'choke',
     throwables: {},
     stunUntil: 0,
     slowUntil: 0,
@@ -118,7 +118,7 @@ test('toEntityState carries authoritative action lock timers', () => {
     muzzleFlashUntil: 0,
     weaponLoadout: ['rifle', 'shotgun'],
     weaponAmmo: {},
-    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    abilityId: 'choke',
     throwables: {},
     weaponLockUntil: 2100,
     throwableLockUntil: 2200,
@@ -166,7 +166,7 @@ test('toEntityState exposes last processed input seq for snapshot acknowledgemen
     muzzleFlashUntil: 0,
     weaponLoadout: ['rifle', 'shotgun'],
     weaponAmmo: {},
-    abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+    abilityId: 'choke',
     throwables: {}
   });
 
@@ -217,7 +217,7 @@ test('toEntityState resolves completed weapon reloads into a full authoritative 
           reloadedFlashUntil: 0
         }
       },
-      abilityLoadout: { slot1: 'choke', slot2: 'missile' },
+      abilityId: 'choke',
       throwables: {}
     });
 

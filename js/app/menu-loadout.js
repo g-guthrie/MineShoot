@@ -32,11 +32,15 @@
         return Array.isArray(defaults) && defaults.length ? defaults : ['machinegun', 'shotgun'];
     }
 
-    function defaultAbilityLoadout() {
+    function defaultAbilityId() {
         var shared = sharedApi();
         var tuning = tuningApi();
-        var defaults = shared.getDefaultAbilityLoadout ? shared.getDefaultAbilityLoadout() : null;
-        return defaults || tuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' };
+        var defaultId = shared.getDefaultAbilityId ? shared.getDefaultAbilityId() : '';
+        if (!defaultId && shared.getDefaultAbilityLoadout) {
+            var legacyLoadout = shared.getDefaultAbilityLoadout() || null;
+            defaultId = legacyLoadout && legacyLoadout.slot1 ? legacyLoadout.slot1 : '';
+        }
+        return String(defaultId || tuning.defaultAbilityId || 'deadeye');
     }
 
     function throwableCategories() {
@@ -60,31 +64,23 @@
     var state = {
         weaponSlots: ['machinegun', 'shotgun'],
         activeWeaponSlot: 0,
-        activeAbilitySlot: 0,
+        selectedAbilityId: 'deadeye',
         selectedThrowableId: 'frag',
         activeThrowableCategory: 'grenade',
         loadoutExpanded: true,
-        abilityLoadout: {
-            slot1: 'choke',
-            slot2: 'missile'
-        },
         initialized: false
     };
     var subscribers = [];
 
     function applySharedDefaults() {
         var weaponDefaults = defaultWeaponLoadout();
-        var abilityDefaults = defaultAbilityLoadout();
+        var abilityDefault = defaultAbilityId();
         if (!Array.isArray(state.weaponSlots) || !state.weaponSlots.length) {
             state.weaponSlots = weaponDefaults.slice(0, 2);
         }
         if (!state.weaponSlots[0] && weaponDefaults[0]) state.weaponSlots[0] = String(weaponDefaults[0] || '');
         if (!state.weaponSlots[1] && weaponDefaults[1]) state.weaponSlots[1] = String(weaponDefaults[1] || '');
-        if (!state.abilityLoadout || typeof state.abilityLoadout !== 'object') {
-            state.abilityLoadout = { slot1: '', slot2: '' };
-        }
-        if (!state.abilityLoadout.slot1) state.abilityLoadout.slot1 = String(abilityDefaults.slot1 || '');
-        if (!state.abilityLoadout.slot2) state.abilityLoadout.slot2 = String(abilityDefaults.slot2 || '');
+        if (!state.selectedAbilityId) state.selectedAbilityId = String(abilityDefault || '');
         var categories = throwableCategories();
         var categoryIds = Object.keys(categories);
         var currentThrowableCategory = findThrowableCategory(state.selectedThrowableId);
@@ -204,7 +200,6 @@
         }
         state.weaponSlots = next;
         if (state.activeWeaponSlot < 0 || state.activeWeaponSlot > 1) state.activeWeaponSlot = 0;
-        if (state.activeAbilitySlot < 0 || state.activeAbilitySlot > 1) state.activeAbilitySlot = 0;
     }
 
     function slotClassName(slotIndex) {
@@ -235,30 +230,26 @@
         return next;
     }
 
-    function currentRuntimeAbilityLoadout() {
+    function currentSelectedAbilityId() {
         normalizeAbilityState();
-        return {
-            slot1: String(state.abilityLoadout.slot1 || ''),
-            slot2: String(state.abilityLoadout.slot2 || '')
-        };
+        return String(state.selectedAbilityId || '');
     }
 
     function normalizeAbilityState() {
         var shared = sharedApi();
-        if (!shared.normalizeAbilityLoadout) {
-            return {
-                slot1: String(state.abilityLoadout && state.abilityLoadout.slot1 || ''),
-                slot2: String(state.abilityLoadout && state.abilityLoadout.slot2 || '')
-            };
+        var legacyAbilityId = '';
+        if (!state.selectedAbilityId && state.abilityLoadout && typeof state.abilityLoadout === 'object') {
+            legacyAbilityId = String(state.abilityLoadout.slot1 || '');
         }
-        state.abilityLoadout = shared.normalizeAbilityLoadout(
-            state.abilityLoadout && state.abilityLoadout.slot1,
-            state.abilityLoadout && state.abilityLoadout.slot2
-        );
-        return {
-            slot1: String(state.abilityLoadout.slot1 || ''),
-            slot2: String(state.abilityLoadout.slot2 || '')
-        };
+        if (shared.normalizeAbilityId) {
+            state.selectedAbilityId = shared.normalizeAbilityId(state.selectedAbilityId || legacyAbilityId);
+        } else if (shared.normalizeAbilityLoadout) {
+            var normalizedLegacy = shared.normalizeAbilityLoadout(state.selectedAbilityId || legacyAbilityId, '');
+            state.selectedAbilityId = String(normalizedLegacy && normalizedLegacy.slot1 || '');
+        } else {
+            state.selectedAbilityId = String(state.selectedAbilityId || legacyAbilityId || defaultAbilityId());
+        }
+        return String(state.selectedAbilityId || '');
     }
 
     function applyToGameplayRuntime(multiplayerMode) {
@@ -279,15 +270,14 @@
             runtime.GameThrowables.setSelectedThrowable(state.selectedThrowableId);
         }
         normalizeAbilityState();
-        if (runtime.GameAbilities && runtime.GameAbilities.setLoadoutSlot) {
-            runtime.GameAbilities.setLoadoutSlot(1, state.abilityLoadout.slot1 || '');
-            runtime.GameAbilities.setLoadoutSlot(2, state.abilityLoadout.slot2 || '');
+        if (runtime.GameAbilities && runtime.GameAbilities.setLoadout) {
+            runtime.GameAbilities.setLoadout(state.selectedAbilityId || '');
             if (runtime.GameUI && runtime.GameUI.updateAbilityInfo && runtime.GameAbilities.getHudState) {
                 runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
             }
         }
         if (netCommands && netCommands.sendAbilityLoadout && multiplayerMode) {
-            netCommands.sendAbilityLoadout(state.abilityLoadout.slot1 || '', state.abilityLoadout.slot2 || '');
+            netCommands.sendAbilityLoadout(state.selectedAbilityId || '');
         }
     }
 
@@ -327,11 +317,10 @@
                     return String(weaponId || '');
                 });
             }
-            if (parsed.abilityLoadout && typeof parsed.abilityLoadout === 'object') {
-                state.abilityLoadout = {
-                    slot1: String(parsed.abilityLoadout.slot1 || ''),
-                    slot2: String(parsed.abilityLoadout.slot2 || '')
-                };
+            if (parsed.selectedAbilityId) state.selectedAbilityId = String(parsed.selectedAbilityId || '');
+            if (!state.selectedAbilityId && parsed.abilityId) state.selectedAbilityId = String(parsed.abilityId || '');
+            if (!state.selectedAbilityId && parsed.abilityLoadout && typeof parsed.abilityLoadout === 'object') {
+                state.selectedAbilityId = String(parsed.abilityLoadout.slot1 || '');
             }
             if (parsed.selectedThrowableId) {
                 state.selectedThrowableId = String(parsed.selectedThrowableId || '');
@@ -353,8 +342,7 @@
         if (!state.weaponSlots[0]) missingWeapons.push('weapon slot 1');
         if (!state.weaponSlots[1]) missingWeapons.push('weapon slot 2');
         normalizeAbilityState();
-        if (!state.abilityLoadout.slot1) missingAbilities.push('ability slot ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_1', 'E') : 'E'));
-        if (!state.abilityLoadout.slot2) missingAbilities.push('ability slot ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_2', 'F') : 'F'));
+        if (!state.selectedAbilityId) missingAbilities.push('ability ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_1', 'E') : 'E'));
         if (!missingWeapons.length && !missingAbilities.length) return { ok: true, message: '' };
         var parts = [];
         if (missingWeapons.length) parts.push('Missing ' + missingWeapons.join(' and '));
@@ -387,10 +375,7 @@
             state.weaponSlots[1] ? String(names[state.weaponSlots[1]] || state.weaponSlots[1]) : 'Empty'
         ].join(' / ');
         var throwableCopy = throwableName(state.selectedThrowableId) || 'Empty';
-        var abilityCopy = [
-            abilityName(state.abilityLoadout.slot1) || 'Empty',
-            abilityName(state.abilityLoadout.slot2) || 'Empty'
-        ].join(' / ');
+        var abilityCopy = abilityName(state.selectedAbilityId) || 'Empty';
 
         if (chrome.weaponsSummary) chrome.weaponsSummary.textContent = 'Weapons: ' + weaponCopy;
         if (chrome.throwableSummary) chrome.throwableSummary.textContent = 'Throwable: ' + throwableCopy;
@@ -594,47 +579,15 @@
     }
 
     function bindAbilityUi() {
-        var primaryBtn = document.getElementById('ability-slot-primary');
-        var secondaryBtn = document.getElementById('ability-slot-secondary');
         var choiceGrid = document.getElementById('ability-choice-grid');
-        if (!primaryBtn || !secondaryBtn || !choiceGrid) return;
+        if (!choiceGrid) return;
         if (choiceGrid.__abilityMenuBound) return;
         choiceGrid.__abilityMenuBound = true;
 
         var catalog = abilityList();
-        var slotBtns = [primaryBtn, secondaryBtn];
-
-        function assignAbilityToSlot(slotIndex, abilityId) {
-            normalizeAbilityState();
-            var next = assignSharedSlotSelection(
-                [state.abilityLoadout.slot1, state.abilityLoadout.slot2],
-                slotIndex,
-                abilityId
-            );
-            if (!next) return false;
-            state.abilityLoadout = {
-                slot1: next[0],
-                slot2: next[1]
-            };
-            normalizeAbilityState();
-            return true;
-        }
 
         function render() {
-            normalizeAbilityState();
-            var slots = [
-                String(state.abilityLoadout.slot1 || ''),
-                String(state.abilityLoadout.slot2 || '')
-            ];
-
-            for (var i = 0; i < slotBtns.length; i++) {
-                var btn = slotBtns[i];
-                var abilityId = slots[i] || '';
-                btn.classList.add(slotClassName(i));
-                btn.textContent = 'ABILITY ' + (i + 1) + ' :: ' + (abilityId ? abilityName(abilityId).toUpperCase() : 'UNEQUIPPED');
-                btn.classList.toggle('active', i === state.activeAbilitySlot);
-            }
-
+            var selectedAbilityId = normalizeAbilityState();
             choiceGrid.innerHTML = '';
             for (var i = 0; i < catalog.length; i++) {
                 var def = catalog[i];
@@ -644,14 +597,13 @@
                 btn.classList.add('ability-choice-btn');
                 btn.dataset.abilityId = def.id;
                 btn.textContent = String(def.name || def.id).toUpperCase();
-                var ownerIndex = pairOwnerIndex(slots, def.id);
-                if (ownerIndex !== -1) {
-                    btn.classList.add(slotClassName(ownerIndex));
-                }
-                if (ownerIndex === state.activeAbilitySlot) btn.classList.add('active');
+                if (selectedAbilityId === def.id) btn.classList.add('active');
                 btn.addEventListener('click', function () {
-                    var id = this.dataset.abilityId;
-                    if (!assignAbilityToSlot(state.activeAbilitySlot, id)) return;
+                    var id = String(this.dataset.abilityId || '');
+                    normalizeAbilityState();
+                    if (!id || state.selectedAbilityId === id) return;
+                    state.selectedAbilityId = id;
+                    normalizeAbilityState();
                     applyToGameplayRuntime(true);
                     render();
                     saveState();
@@ -661,17 +613,6 @@
             }
             renderSummaries();
         }
-
-        primaryBtn.addEventListener('click', function () {
-            state.activeAbilitySlot = 0;
-            render();
-            notifySubscribers();
-        });
-        secondaryBtn.addEventListener('click', function () {
-            state.activeAbilitySlot = 1;
-            render();
-            notifySubscribers();
-        });
 
         render();
     }
@@ -700,8 +641,14 @@
         return state.weaponSlots.slice(0, 2);
     };
 
+    GameMenuLoadout.getSelectedAbilityId = function () {
+        return currentSelectedAbilityId();
+    };
+
     GameMenuLoadout.getAbilityLoadout = function () {
-        return currentRuntimeAbilityLoadout();
+        return {
+            abilityId: currentSelectedAbilityId()
+        };
     };
 
     GameMenuLoadout.getSelectedThrowable = function () {
@@ -727,7 +674,7 @@
     GameMenuLoadout.getRuntimeSnapshot = function () {
         return {
             weaponSlots: GameMenuLoadout.getWeaponSlots(),
-            abilityLoadout: GameMenuLoadout.getAbilityLoadout(),
+            selectedAbilityId: GameMenuLoadout.getSelectedAbilityId(),
             selectedThrowableId: GameMenuLoadout.getSelectedThrowable()
         };
     };

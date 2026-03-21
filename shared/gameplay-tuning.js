@@ -339,7 +339,7 @@ export const gameplayTuning = {
       cooldownMs: 20000, range: 60, duration: 1.6, maxTargets: 2, minDot: 0.28, damage: 160
     }
   },
-  defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
+  defaultAbilityId: 'deadeye'
 };
 
 export function getClassPreset(classId) {
@@ -529,55 +529,19 @@ export function getAbilityCatalog() {
   return gameplayTuning.abilityCatalog || {};
 }
 
-export function getDefaultAbilityLoadout() {
-  return gameplayTuning.defaultAbilityLoadout || { slot1: 'choke', slot2: 'missile' };
-}
-
-function resolveAbilityChoice(requestedId, blockedId, fallbacks, catalogIds, catalog) {
-  const choices = [requestedId];
-  if (Array.isArray(fallbacks)) {
-    for (let i = 0; i < fallbacks.length; i++) {
-      choices.push(fallbacks[i]);
-    }
-  }
-  if (Array.isArray(catalogIds)) {
-    for (let i = 0; i < catalogIds.length; i++) {
-      choices.push(catalogIds[i]);
-    }
-  }
-
-  const blocked = String(blockedId || '');
-  for (let i = 0; i < choices.length; i++) {
-    const id = String(choices[i] || '');
-    if (!id || id === blocked || !catalog[id]) continue;
-    return id;
-  }
-  return '';
-}
-
-export function normalizeAbilityLoadout(slot1, slot2) {
+export function getDefaultAbilityId() {
+  const requested = String(gameplayTuning.defaultAbilityId || '');
   const catalog = getAbilityCatalog();
+  if (requested && catalog[requested]) return requested;
   const catalogIds = Object.keys(catalog);
-  const defaults = getDefaultAbilityLoadout() || {};
-  const normalizedSlot1 = resolveAbilityChoice(
-    slot1,
-    '',
-    [defaults.slot1, defaults.slot2],
-    catalogIds,
-    catalog
-  );
-  const normalizedSlot2 = resolveAbilityChoice(
-    slot2,
-    normalizedSlot1,
-    [defaults.slot2, defaults.slot1],
-    catalogIds,
-    catalog
-  );
+  return catalogIds.length ? catalogIds[0] : '';
+}
 
-  return {
-    slot1: normalizedSlot1,
-    slot2: normalizedSlot2
-  };
+export function normalizeAbilityId(requestedId) {
+  const catalog = getAbilityCatalog();
+  const requested = String(requestedId || '');
+  if (requested && catalog[requested]) return requested;
+  return getDefaultAbilityId();
 }
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
@@ -594,6 +558,6 @@ runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;
 runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
 runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;
-runtime.GameShared.getDefaultAbilityLoadout = getDefaultAbilityLoadout;
-runtime.GameShared.normalizeAbilityLoadout = normalizeAbilityLoadout;
+runtime.GameShared.getDefaultAbilityId = getDefaultAbilityId;
+runtime.GameShared.normalizeAbilityId = normalizeAbilityId;
 runtime.GameShared.resolveWeaponAimProfile = resolveWeaponAimProfile;

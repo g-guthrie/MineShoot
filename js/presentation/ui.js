@@ -546,10 +546,9 @@
             return seconds.toFixed(1) + 's';
         }
 
-        var slot1 = inputLabels.getBindingLabel('ability_1', 'E') + ' ' + (state.slot1Name || 'Ability 1') + ': ' + fmtCd(state.slot1Cooldown);
-        var slot2 = inputLabels.getBindingLabel('ability_2', 'F') + ' ' + (state.slot2Name || 'Ability 2') + ': ' + fmtCd(state.slot2Cooldown);
+        var ability = inputLabels.getBindingLabel('ability_1', 'E') + ' ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.cooldown);
         var extra = state.extra ? (' | ' + state.extra) : '';
-        abilityInfoEl.textContent = slot1 + ' | ' + slot2 + extra;
+        abilityInfoEl.textContent = ability + extra;
     };
 
     GameUI.updateReticle = function (weapon, spec, adsState) {

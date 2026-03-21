@@ -56,20 +56,20 @@
             return globalThis.__MAYHEM_RUNTIME || {};
         }
 
-        function cooldownUntilForSlot(slotIndex) {
-            return opts.cooldownUntilForSlot ? opts.cooldownUntilForSlot(slotIndex) : 0;
+        function cooldownUntil() {
+            return opts.cooldownUntil ? opts.cooldownUntil() : 0;
         }
 
-        function setCooldownForSlot(slotIndex, until) {
-            if (opts.setCooldownForSlot) opts.setCooldownForSlot(slotIndex, until);
+        function setCooldownUntil(until) {
+            if (opts.setCooldownUntil) opts.setCooldownUntil(until);
         }
 
-        function getAbilityIdForSlot(slotIndex) {
-            return opts.getAbilityIdForSlot ? opts.getAbilityIdForSlot(slotIndex) : '';
+        function getAbilityId() {
+            return opts.getAbilityId ? opts.getAbilityId() : '';
         }
 
-        function getConfigForSlot(slotIndex) {
-            return opts.getConfigForAbility ? opts.getConfigForAbility(getAbilityIdForSlot(slotIndex)) : null;
+        function getConfig() {
+            return opts.getConfigForAbility ? opts.getConfigForAbility(getAbilityId()) : null;
         }
 
         function isDebugMode() {
@@ -298,13 +298,13 @@
             }
         }
 
-        function fireDeadeye(slotIndex, camera, onEnemyHit, notifier, reason) {
+        function fireDeadeye(camera, onEnemyHit, notifier, reason) {
             var enemyApi = runtime().GameEnemy;
             if (!deadeyeState || !deadeyeState.active) {
                 return { ok: false, message: 'Deadeye not active.' };
             }
 
-            var cfg = getConfigForSlot(slotIndex) || {};
+            var cfg = getConfig() || {};
             var count = Math.max(0, Math.min(deadeyeState.targets.length, deadeyeState.lockCount));
             if (count <= 0) {
                 deadeyeState = null;
@@ -337,14 +337,14 @@
             return { ok: landed > 0, landed: landed, reason: reason || 'manual' };
         }
 
-        function castChoke(slotIndex, camera, onEnemyHit, notifier) {
+        function castChoke(camera, onEnemyHit, notifier) {
             var RT = runtime();
             var now = nowMs();
-            var cfg = getConfigForSlot(slotIndex);
+            var cfg = getConfig();
             if (!cfg) return { ok: false, message: 'Choke not configured.' };
             var endsAt = now + Math.round((cfg.duration || 1.6) * 1000);
 
-            if (!isDebugMode() && now < cooldownUntilForSlot(slotIndex)) {
+            if (!isDebugMode() && now < cooldownUntil()) {
                 return { ok: false, message: 'Choke is cooling down.' };
             }
             if (!camera || !RT.GameHitscan || !RT.GameHitscan.selectLockTargetByRect) {
@@ -384,7 +384,7 @@
             if (RT.GameAudio && RT.GameAudio.play) {
                 RT.GameAudio.play('chokeCast');
             }
-            setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (chokeResult && onEnemyHit) {
                 onEnemyHit({
                     hitPoint: makeVector3Like(target.worldPos),
@@ -397,12 +397,12 @@
             return { ok: true, kind: 'choke' };
         }
 
-        function castHook(slotIndex, camera, playerPos, rotation, notifier) {
+        function castHook(camera, playerPos, rotation, notifier) {
             var RT = runtime();
             var now = nowMs();
-            var cfg = getConfigForSlot(slotIndex);
+            var cfg = getConfig();
             if (!cfg) return { ok: false, message: 'Hook not configured.' };
-            if (!isDebugMode() && now < cooldownUntilForSlot(slotIndex)) {
+            if (!isDebugMode() && now < cooldownUntil()) {
                 return { ok: false, message: 'Hook is cooling down.' };
             }
             if (!camera || !playerPos || !rotation) {
@@ -424,7 +424,6 @@
             var travelMs = Math.max(120, Math.round((travelDistance / travelSpeed) * 1000));
             hookState = {
                 active: true,
-                slotIndex: slotIndex,
                 phase: 'travel',
                 targetId: '',
                 catchRadius: Number(cfg.catchRadius || 1.6),
@@ -445,20 +444,20 @@
                 lockEndsAt: now + travelMs
             };
             syncActionRestrictions();
-            setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Chain Hook out.', 550);
             return { ok: true, kind: 'hook_start' };
         }
 
-        function castDeadeye(slotIndex, camera, onEnemyHit, notifier) {
+        function castDeadeye(camera, onEnemyHit, notifier) {
             var now = nowMs();
-            var cfg = getConfigForSlot(slotIndex);
+            var cfg = getConfig();
             if (!cfg) return { ok: false, message: 'Deadeye not configured.' };
 
-            if (deadeyeState && deadeyeState.active && deadeyeState.slotKey === opts.slotKeyForIndex(slotIndex)) {
-                return fireDeadeye(slotIndex, camera, onEnemyHit, notifier, 'manual');
+            if (deadeyeState && deadeyeState.active) {
+                return fireDeadeye(camera, onEnemyHit, notifier, 'manual');
             }
-            if (!isDebugMode() && now < cooldownUntilForSlot(slotIndex)) {
+            if (!isDebugMode() && now < cooldownUntil()) {
                 return { ok: false, message: 'Deadeye is cooling down.' };
             }
 
@@ -476,8 +475,7 @@
             var lockEveryMs = Math.max(1, Math.round(durationMs / Math.max(1, candidates.length)));
             deadeyeState = {
                 active: true,
-                abilityId: getAbilityIdForSlot(slotIndex),
-                slotKey: opts.slotKeyForIndex(slotIndex),
+                abilityId: getAbilityId(),
                 startedAt: now,
                 endsAt: now + durationMs,
                 lockEveryMs: lockEveryMs,
@@ -487,21 +485,20 @@
                 lockEndsAt: now + durationMs
             };
             syncActionRestrictions();
-            setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
-            if (notifier) notifier('Deadeye primed. Press ' + runtime().GameInputLabels.getBindingLabel(slotIndex === 2 ? 'ability_2' : 'ability_1', slotIndex === 2 ? 'F' : 'E') + ' again to fire.', 900);
+            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+            if (notifier) notifier('Deadeye primed. Press ' + runtime().GameInputLabels.getBindingLabel('ability_1', 'E') + ' again to fire.', 900);
             return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
         }
 
-        function castHeal(slotIndex, notifier) {
+        function castHeal(notifier) {
             var now = nowMs();
-            var cfg = getConfigForSlot(slotIndex);
+            var cfg = getConfig();
             if (!cfg) return { ok: false, message: 'Heal not configured.' };
-            if (!isDebugMode() && now < cooldownUntilForSlot(slotIndex)) {
+            if (!isDebugMode() && now < cooldownUntil()) {
                 return { ok: false, message: 'Heal is cooling down.' };
             }
             healState = {
                 active: true,
-                slotIndex: slotIndex,
                 startedAt: now,
                 endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
                 healAmount: Number(cfg.healAmount || 150),
@@ -509,17 +506,17 @@
                 lockEndsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000)
             };
             syncActionRestrictions();
-            setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Healing...', 450);
             return { ok: true, kind: 'heal_start' };
         }
 
-        function castMissile(slotIndex, camera, notifier) {
+        function castMissile(camera, notifier) {
             var RT = runtime();
             var now = nowMs();
-            var cfg = getConfigForSlot(slotIndex);
+            var cfg = getConfig();
             if (!cfg) return { ok: false, message: 'Missile not configured.' };
-            if (!isDebugMode() && now < cooldownUntilForSlot(slotIndex)) {
+            if (!isDebugMode() && now < cooldownUntil()) {
                 return { ok: false, message: 'Missile is cooling down.' };
             }
             if (!camera || !RT.GameThrowables || !RT.GameThrowables.fireAbilityMissile) {
@@ -533,19 +530,18 @@
             if (RT.GameAudio && RT.GameAudio.play) {
                 RT.GameAudio.play('fire', { weapon: 'missile' });
             }
-            setCooldownForSlot(slotIndex, isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
+            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
             if (notifier) notifier('Missile away.', 500);
             return { ok: true, kind: 'missile_launch' };
         }
 
-        function triggerAbility(slot, camera, playerPos, rotation, onEnemyHit, notifier) {
-            var castSlot = Number(slot) === 2 ? 2 : 1;
-            var abilityId = getAbilityIdForSlot(castSlot);
-            if (abilityId === 'choke') return castChoke(castSlot, camera, onEnemyHit, notifier);
-            if (abilityId === 'hook') return castHook(castSlot, camera, playerPos, rotation, notifier);
-            if (abilityId === 'missile') return castMissile(castSlot, camera, notifier);
-            if (abilityId === 'heal') return castHeal(castSlot, notifier);
-            if (abilityId === 'deadeye') return castDeadeye(castSlot, camera, onEnemyHit, notifier);
+        function triggerAbility(camera, playerPos, rotation, onEnemyHit, notifier) {
+            var abilityId = getAbilityId();
+            if (abilityId === 'choke') return castChoke(camera, onEnemyHit, notifier);
+            if (abilityId === 'hook') return castHook(camera, playerPos, rotation, notifier);
+            if (abilityId === 'missile') return castMissile(camera, notifier);
+            if (abilityId === 'heal') return castHeal(notifier);
+            if (abilityId === 'deadeye') return castDeadeye(camera, onEnemyHit, notifier);
             return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
 
@@ -645,7 +641,7 @@
                 deadeyeState.nextLockAt += deadeyeState.lockEveryMs;
             }
             if (now >= deadeyeState.endsAt) {
-                fireDeadeye(deadeyeState.slotKey === 'slot2' ? 2 : 1, camera, onEnemyHit, notifier, 'auto');
+                fireDeadeye(camera, onEnemyHit, notifier, 'auto');
             }
         }
 

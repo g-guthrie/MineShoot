@@ -50,14 +50,15 @@
                     ? opts.normalizeThrowPayload(throwableId, clientThrowId, throwIntent)
                     : null);
             },
-            sendAbilityLoadout: function (slot1, slot2) {
+            sendAbilityLoadout: function (abilityId) {
                 return wsSend(opts.normalizeAbilityLoadoutPayload
-                    ? opts.normalizeAbilityLoadoutPayload(slot1, slot2)
+                    ? opts.normalizeAbilityLoadoutPayload(abilityId)
                     : null);
             },
-            sendAbilityCast: function (slot, castData) {
+            sendAbilityCast: function (castDataOrSlot, maybeCastData) {
+                var castData = maybeCastData !== undefined ? maybeCastData : castDataOrSlot;
                 return wsSend(opts.normalizeClassCastPayload
-                    ? opts.normalizeClassCastPayload(slot, castData)
+                    ? opts.normalizeClassCastPayload(castData)
                     : null);
             }
         };

@@ -440,7 +440,7 @@
         r.hookedUntil = snapshotAbilityState.hookedUntil;
         r.hookState = snapshotAbilityState.hookState;
         r.healState = snapshotAbilityState.healState;
-        r.abilityLoadout = entity.abilityLoadout || null;
+        r.abilityId = entity.abilityId || '';
 
         r.group.visible = !!entity.alive;
         if (r.actorVisual && r.actorVisual.setAlive) {

@@ -211,7 +211,7 @@
             return outcome;
         }
 
-        function triggerAbility(slotIndex) {
+        function triggerAbility() {
             if (!hasInputCapture()) return;
             if (!canUseLocalAction('ability')) return;
 
@@ -219,15 +219,15 @@
             var commandsApi = netCommands();
             if (multiplayerMode() && commandsApi && commandsApi.sendAbilityCast) {
                 var preparedCast = runtime.GameAbilities.prepareNetCast
-                    ? runtime.GameAbilities.prepareNetCast(slotIndex, camera)
-                    : { ok: true, slot: Number(slotIndex) === 2 ? 2 : 1, castData: null, commit: null };
+                    ? runtime.GameAbilities.prepareNetCast(camera)
+                    : { ok: true, castData: null, commit: null };
                 if (!preparedCast || preparedCast.ok === false) {
                     if (preparedCast && preparedCast.message) {
                         setTransientDebug(preparedCast.message, 700);
                     }
                     return;
                 }
-                commandsApi.sendAbilityCast(preparedCast.slot, preparedCast.castData);
+                commandsApi.sendAbilityCast(preparedCast.castData);
                 if (preparedCast.commit) {
                     preparedCast.commit();
                 }
@@ -237,7 +237,6 @@
             var playerPos = runtime.GamePlayer.getPosition(localAbilityPos);
             var rot = runtime.GamePlayer.getRotation();
             var outcome = runtime.GameAbilities.triggerAbility(
-                slotIndex,
                 camera,
                 playerPos,
                 rot,
@@ -428,9 +427,7 @@
             listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (matchesBinding('ability_1', e, 'KeyE')) {
-                    triggerAbility(1);
-                } else if (matchesBinding('ability_2', e, 'KeyF')) {
-                    triggerAbility(2);
+                    triggerAbility();
                 }
             });
         }

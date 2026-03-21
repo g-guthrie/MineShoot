@@ -90,8 +90,8 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       }
     },
     GameAbilities: {
-      getHudState() { return { slot1Cooldown: 3, slot2Cooldown: 5 }; },
-      getLoadout() { return { slot1: 'choke', slot2: 'deadeye' }; },
+      getHudState() { return { abilityName: 'Vader Choke', cooldown: 3 }; },
+      getLoadout() { return { abilityId: 'choke' }; },
       getChokeState() { return { endsAt: 1400 }; },
       getHealState() { return { endsAt: 1500 }; },
       getDeadeyeState() { return { targets: [{ id: 'a' }] }; },
@@ -196,19 +196,19 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
   assert.deepEqual(harness.calls.health[0], { hp: 410, maxHp: 500 });
   assert.deepEqual(harness.calls.armor[0], { armor: 55, armorMax: 90 });
   assert.equal(harness.calls.damageEffects[0], 0.16);
-  assert.deepEqual(harness.calls.abilityInfo[0], { slot1Cooldown: 3, slot2Cooldown: 5 });
+  assert.deepEqual(harness.calls.abilityInfo[0], { abilityName: 'Vader Choke', cooldown: 3 });
   assert.equal(harness.calls.healFlash[0], true);
   assert.equal(harness.calls.statusState.length, 1);
   assert.deepEqual(harness.calls.chokeReticle[0], { visible: true, width: 240, height: 180 });
   assert.deepEqual(harness.calls.hookReticle[0], { visible: false, size: 120 });
   assert.equal(harness.calls.plasmaState[0].visible, false);
-  assert.equal(harness.calls.deadeyeRect[0].visible, true);
+  assert.equal(harness.calls.deadeyeRect[0].visible, false);
   assert.equal(harness.calls.abilityDebugPanel[0].visible, true);
   assert.equal(Array.isArray(harness.calls.abilityDebugPanel[0].text), true);
-  assert.equal(harness.calls.abilityDebugPanel[0].text.length, 4);
-  assert.deepEqual(Array.from(harness.calls.abilityDebugPanel[0].text, (section) => section.tone), ['weapon', 'ability1', 'ability2', 'throwable']);
+  assert.equal(harness.calls.abilityDebugPanel[0].text.length, 3);
+  assert.deepEqual(Array.from(harness.calls.abilityDebugPanel[0].text, (section) => section.tone), ['weapon', 'ability1', 'throwable']);
   assert.ok(harness.calls.abilityDebugPanel[0].text[1].title.includes('VADER CHOKE'));
-  assert.ok(harness.calls.abilityDebugPanel[0].text[3].title.includes('Q FRAG :: 1'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[2].title.includes('Q FRAG :: 1'));
   assert.deepEqual(harness.calls.deadeyeReticle[0].state, { targets: [{ id: 'a' }] });
   assert.deepEqual(harness.calls.deadeyeHighlights[0], {});
   assert.deepEqual(harness.calls.chokeAudio[0], { casterActive: true, victimActive: false });
@@ -300,10 +300,10 @@ test('gameplay hud sync projects the plasma catch radius when debug visuals are 
   assert.equal(harness.calls.plasmaState[0].fuseSec, 2.2);
   assert.ok(harness.calls.plasmaState[0].curveStrength > 0.8);
   assert.equal(harness.calls.chokeReticle[0].visible, true);
-  assert.equal(harness.calls.deadeyeRect[0].visible, true);
+  assert.equal(harness.calls.deadeyeRect[0].visible, false);
   assert.equal(Array.isArray(harness.calls.abilityDebugPanel[0].text), true);
-  assert.ok(harness.calls.abilityDebugPanel[0].text[3].title.includes('Q PLASMA GRENADE :: 1'));
-  assert.ok(harness.calls.abilityDebugPanel[0].text[3].body.includes('track: 0.20s @ 10.0'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[2].title.includes('Q PLASMA GRENADE :: 1'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[2].body.includes('track: 0.20s @ 10.0'));
 });
 
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {
@@ -314,7 +314,7 @@ test('gameplay hud sync uses network deadeye shaping in multiplayer', async () =
       },
       getSelfAbilityState() {
         return {
-          abilityLoadout: { slot1: 'deadeye', slot2: 'choke' },
+          abilityId: 'deadeye',
           chokeState: { endsAt: 950 },
           deadeyeState: {
             maxLocks: 2,

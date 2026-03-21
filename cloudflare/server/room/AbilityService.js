@@ -1,6 +1,6 @@
 import { nowMs } from '../transport.js';
 import { buildDeadeyeState } from '../sim/abilities.js';
-import { gameplayTuning, getDefaultAbilityLoadout } from '../../../shared/gameplay-tuning.js';
+import { gameplayTuning, getDefaultAbilityId } from '../../../shared/gameplay-tuning.js';
 import { normalizeClassCastPayload, protocol } from '../../../shared/protocol.js';
 import {
   applyDamageFromSource,
@@ -9,7 +9,7 @@ import {
 } from './CombatService.js';
 
 const ABILITY_CATALOG = gameplayTuning.abilityCatalog || {};
-const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
+const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 
 const MSG_S2C = protocol.msg.s2c;
 const DEAD_EYE_LOCKS = { weapon: true, throwable: true };
@@ -293,20 +293,17 @@ export function castAbility(room, player, abilityId, cfg, msg, now) {
 
 export function handleClassCast(room, player, msg, ws) {
   if (!player || !player.alive) return;
-  const normalizedMsg = normalizeClassCastPayload(msg && msg.slot, msg);
+  const normalizedMsg = normalizeClassCastPayload(msg);
   if (room && typeof room.canEntityUseAbility === 'function' && !room.canEntityUseAbility(player)) {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', slot: Number(normalizedMsg.slot || 0), classId: 'abilities' });
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'action_locked', classId: 'abilities' });
     return;
   }
-  const slot = Number(normalizedMsg.slot || 0);
-  if (slot !== 1 && slot !== 2) return;
   const now = nowMs();
 
-  const loadout = player.abilityLoadout || DEFAULT_ABILITY_LOADOUT;
-  const abilityId = slot === 1 ? loadout.slot1 : loadout.slot2;
+  const abilityId = String(player.abilityId || DEFAULT_ABILITY_ID || '');
   const cfg = getAbilityConfig(abilityId);
   if (!cfg || !cfg.id) {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'cast_failed', slot });
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'cast_failed', classId: 'abilities' });
     return;
   }
 
@@ -314,7 +311,6 @@ export function handleClassCast(room, player, msg, ws) {
     const release = fireDeadeyeLocks(room, player);
     room.send(ws, {
       t: MSG_S2C.CLASS_CAST_OK,
-      slot,
       classId: 'abilities',
       kind: 'deadeye_release',
       landed: release.landed || 0
@@ -322,33 +318,23 @@ export function handleClassCast(room, player, msg, ws) {
     return;
   }
 
-  const slotCooldownUntil = slot === 2
-    ? Math.max(0, Number(player.slot2CooldownUntil || 0))
-    : Math.max(0, Number(player.slot1CooldownUntil || 0));
-  if (now < slotCooldownUntil) {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'ability_cooldown' });
+  const cooldownUntil = Math.max(0, Number(player.abilityCooldownUntil || 0));
+  if (now < cooldownUntil) {
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'ability_cooldown', classId: 'abilities' });
     return;
   }
 
   const result = castAbility(room, player, abilityId, cfg, normalizedMsg, now);
   if (result.ok) {
-    const cooldownUntil = now + Math.max(0, cfg.cooldownMs || 0);
-    if (slot === 2) {
-      player.slot2CooldownUntil = cooldownUntil;
-      player.ultimateCooldownUntil = cooldownUntil;
-    } else {
-      player.slot1CooldownUntil = cooldownUntil;
-      player.abilityCooldownUntil = cooldownUntil;
-    }
+    player.abilityCooldownUntil = now + Math.max(0, cfg.cooldownMs || 0);
     room.send(ws, {
       t: MSG_S2C.CLASS_CAST_OK,
-      slot,
       classId: 'abilities',
       kind: result.kind || ('ability_' + abilityId),
       ...result.payload
     });
   } else {
-    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'cast_failed', slot, classId: 'abilities' });
+    room.send(ws, { t: MSG_S2C.CLASS_CAST_REJECT, reason: 'cast_failed', classId: 'abilities' });
   }
 }
 

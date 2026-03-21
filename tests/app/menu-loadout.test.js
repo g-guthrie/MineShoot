@@ -180,9 +180,10 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
       abilityCatalog: {
         choke: { id: 'choke', name: 'Choke' },
         missile: { id: 'missile', name: 'Missile' },
-        hook: { id: 'hook', name: 'Hook' }
+        hook: { id: 'hook', name: 'Hook' },
+        deadeye: { id: 'deadeye', name: 'Deadeye' }
       },
-      defaultAbilityLoadout: { slot1: 'choke', slot2: 'missile' }
+      defaultAbilityId: 'deadeye'
     },
     getSelectableWeaponIds() {
       return ['machinegun', 'shotgun', 'rifle'];
@@ -190,14 +191,11 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     getDefaultWeaponLoadout() {
       return ['machinegun', 'shotgun'];
     },
-    getDefaultAbilityLoadout() {
-      return { slot1: 'choke', slot2: 'missile' };
+    getDefaultAbilityId() {
+      return 'deadeye';
     },
-    normalizeAbilityLoadout(slot1, slot2) {
-      return {
-        slot1: String(slot1 || 'choke'),
-        slot2: String(slot2 || 'missile')
-      };
+    normalizeAbilityId(abilityId) {
+      return String(abilityId || 'deadeye');
     }
   };
 
@@ -286,7 +284,6 @@ test('loadout updates collapsed summary pills after selections change', async ()
   const { elements, runtime } = harness;
 
   elements['weapon-slot-secondary'].click();
-  elements['ability-slot-secondary'].click();
   const rifleChoice = findByDataset(elements['weapon-choice-grid'], 'weaponId', 'rifle');
   const plasmaChoice = findByDataset(elements['throwable-choice-grid'], 'throwableId', 'plasma');
   const hookChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
@@ -304,7 +301,7 @@ test('loadout updates collapsed summary pills after selections change', async ()
 
   assert.deepEqual(Array.from(snapshot.weaponSlots), ['machinegun', 'rifle']);
   assert.equal(snapshot.selectedThrowableId, 'plasma');
-  assert.equal(snapshot.abilityLoadout.slot2, 'hook');
+  assert.equal(snapshot.selectedAbilityId, 'hook');
   assert.match(elements['weapon-slot-summary'].textContent, /Rifle/i);
   assert.match(elements['throwable-slot-summary'].textContent, /Plasma/i);
   assert.match(elements['ability-slot-summary'].textContent, /Hook/i);
@@ -340,36 +337,28 @@ test('weapons swap ownership and use slot-specific classes in the shared grid', 
   assert.ok(!classTokens(machinegunAfter).includes('owned-other'));
 });
 
-test('abilities swap ownership and use slot-specific classes in the shared grid', async () => {
+test('abilities use a single active option in the shared grid', async () => {
   const harness = await loadMenuLoadoutHarness();
   const { elements, runtime } = harness;
 
   const chokeChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'choke');
-  const missileChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'missile');
+  const hookChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
 
   assert.ok(chokeChoice);
-  assert.ok(missileChoice);
-  assert.equal(runtime.GameMenuLoadout.getAbilityLoadout().slot1, 'choke');
-  assert.equal(runtime.GameMenuLoadout.getAbilityLoadout().slot2, 'missile');
-  assert.ok(classTokens(chokeChoice).includes('slot-1'));
-  assert.ok(classTokens(chokeChoice).includes('active'));
-  assert.ok(classTokens(missileChoice).includes('slot-2'));
-  assert.ok(!classTokens(missileChoice).includes('owned-other'));
+  assert.ok(hookChoice);
+  assert.equal(runtime.GameMenuLoadout.getSelectedAbilityId(), 'deadeye');
+  assert.ok(!classTokens(chokeChoice).includes('active'));
+  assert.ok(!classTokens(hookChoice).includes('active'));
 
-  elements['ability-slot-secondary'].click();
-  const swappedChokeChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'choke');
-  swappedChokeChoice.click();
+  hookChoice.click();
 
   const loadout = runtime.GameMenuLoadout.getAbilityLoadout();
   const chokeAfter = findByDataset(elements['ability-choice-grid'], 'abilityId', 'choke');
-  const missileAfter = findByDataset(elements['ability-choice-grid'], 'abilityId', 'missile');
+  const hookAfter = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
 
-  assert.equal(loadout.slot1, 'missile');
-  assert.equal(loadout.slot2, 'choke');
-  assert.ok(classTokens(chokeAfter).includes('slot-2'));
-  assert.ok(classTokens(chokeAfter).includes('active'));
-  assert.ok(classTokens(missileAfter).includes('slot-1'));
-  assert.ok(!classTokens(chokeAfter).includes('owned-other'));
+  assert.equal(loadout.abilityId, 'hook');
+  assert.ok(!classTokens(chokeAfter).includes('active'));
+  assert.ok(classTokens(hookAfter).includes('active'));
 });
 
 test('menu loadout resolves shared defaults after GameShared arrives post-load', async () => {
@@ -381,6 +370,6 @@ test('menu loadout resolves shared defaults after GameShared arrives post-load',
   assert.deepEqual(Array.from(harness.runtime.GameMenuLoadout.getWeaponSlots()), ['machinegun', 'shotgun']);
   assert.deepEqual(
     JSON.parse(JSON.stringify(harness.runtime.GameMenuLoadout.getAbilityLoadout())),
-    { slot1: 'choke', slot2: 'missile' }
+    { abilityId: 'deadeye' }
   );
 });

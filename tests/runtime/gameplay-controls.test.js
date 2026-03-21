@@ -127,8 +127,8 @@ async function loadControlsHarness(options = {}) {
     },
     GameAbilities: {
       getHudState() { return {}; },
-      triggerAbility(slotIndex) {
-        calls.abilityCasts.push(Number(slotIndex || 0));
+      triggerAbility() {
+        calls.abilityCasts.push(1);
         return { ok: true };
       }
     },

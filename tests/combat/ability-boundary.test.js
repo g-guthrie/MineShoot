@@ -3,15 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-import { gameplayTuning, getDefaultAbilityLoadout, normalizeAbilityLoadout } from '../../shared/gameplay-tuning.js';
+import { gameplayTuning } from '../../shared/gameplay-tuning.js';
 
 async function loadBoundary(runtimeOverrides = {}, globalOverrides = {}) {
   const code = await fs.readFile(new URL('../../js/combat/ability-boundary.js', import.meta.url), 'utf8');
   const runtime = {
     GameShared: {
-      gameplayTuning,
-      getDefaultAbilityLoadout,
-      normalizeAbilityLoadout
+      gameplayTuning
     },
     ...runtimeOverrides
   };
@@ -82,10 +80,9 @@ test('buildNetworkHudState centralizes multiplayer ability HUD shaping', async (
   const boundary = await loadBoundary();
 
   const state = boundary.buildNetworkHudState(
-    { slot1: 'choke', slot2: 'missile' },
+    { abilityId: 'choke' },
     {
-      slot1CooldownRemaining: 1.25,
-      slot2CooldownRemaining: 5,
+      cooldownRemaining: 1.25,
       deadeyeState: {
         lockCount: 1,
         maxLocks: 2
@@ -94,11 +91,9 @@ test('buildNetworkHudState centralizes multiplayer ability HUD shaping', async (
   );
 
   assert.deepEqual(JSON.parse(JSON.stringify(state)), {
-    name: 'Abilities',
-    slot1Name: 'Vader Choke',
-    slot1Cooldown: 1.25,
-    slot2Name: 'Missile',
-    slot2Cooldown: 5,
+    name: 'Ability',
+    abilityName: 'Vader Choke',
+    cooldown: 1.25,
     extra: 'DEADEYE 1/2'
   });
 });

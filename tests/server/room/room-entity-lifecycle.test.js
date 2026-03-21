@@ -62,12 +62,12 @@ test('createPlayerEntity centralizes default runtime state', () => {
   assert.equal(player.actorName, 'ALPHA_ACTOR');
   assert.equal(player.classId, 'abilities');
   assert.equal(player.weaponId, 'machinegun');
-  assert.deepEqual(player.abilityLoadout, { slot1: 'choke', slot2: 'missile' });
+  assert.equal(player.abilityId, 'deadeye');
   assert.deepEqual(player.weaponLoadout, ['machinegun', 'shotgun']);
   assert.deepEqual(player.throwables, createThrowableRuntime());
   assert.deepEqual(player.inputState, createMovementInputState());
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
-  assert.equal(player.slot1CooldownUntil, 0);
+  assert.equal(player.abilityCooldownUntil, 0);
   assert.equal(player.weaponLockUntil, 0);
   assert.equal(player.healState, null);
 });
@@ -81,10 +81,10 @@ test('createBotEntity keeps bot defaults aligned with shared room lifecycle stat
   assert.equal(bot.id, 'bot-2');
   assert.equal(bot.username, 'BOT_2');
   assert.equal(bot.classId, 'abilities');
-  assert.deepEqual(bot.abilityLoadout, { slot1: 'choke', slot2: 'missile' });
+  assert.equal(bot.abilityId, 'deadeye');
   assert.deepEqual(bot.weaponLoadout, ['machinegun', 'shotgun']);
   assert.deepEqual(bot.throwables, createThrowableRuntime());
-  assert.equal(bot.slot2CooldownUntil, 0);
+  assert.equal(bot.abilityCooldownUntil, 0);
   assert.equal(bot.chokeVictimState, null);
   assert.equal(bot.hookPullState, null);
 });
@@ -111,7 +111,7 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   player.muzzleFlashUntil = 200;
   player.throwables.frag.charges = 0;
   player.lastThrowAt = 22;
-  player.slot1CooldownUntil = 100;
+  player.abilityCooldownUntil = 100;
   player.weaponLockUntil = 100;
   player.stunUntil = 100;
   player.deadeye = { lockIndex: 2 };
@@ -148,7 +148,7 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   assert.equal(player.lastThrowAt, 0);
   assert.notEqual(player.inputState, previousInput);
   assert.deepEqual(player.inputState, createMovementInputState());
-  assert.equal(player.slot1CooldownUntil, 0);
+  assert.equal(player.abilityCooldownUntil, 0);
   assert.equal(player.weaponLockUntil, 0);
   assert.equal(player.stunUntil, 0);
   assert.equal(player.deadeye, null);

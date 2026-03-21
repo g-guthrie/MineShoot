@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=optional" rel="stylesheet">
     <title>Mayhem</title>
     <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/menu-shell-v4.css">
 </head>
 <body class="menu-booting">
     <button id="hud-manual-btn" type="button">MANUAL</button>
@@ -81,7 +82,7 @@
             </section>
         </div>
         <div id="menu-stage">
-            <div id="menu-shell" class="menu-shell-v4">
+            <div id="menu-shell" class="menu-shell menu-shell-v4">
                 <div id="menu-surface">
                     <div id="menu-header">
                         <div id="menu-header-main">
@@ -309,10 +310,6 @@
                                 <section class="loadout-section" data-loadout-section="abilities">
                                     <div id="ability-slot-panel" class="menu-panel-shell menu-loadout-panel" data-rounded-role="container">
                                         <div id="ability-slot-title">Abilities</div>
-                                        <div id="ability-slot-buttons">
-                                            <button id="ability-slot-primary" class="ability-slot-btn active" type="button" data-slot-index="0">Ability 1</button>
-                                            <button id="ability-slot-secondary" class="ability-slot-btn" type="button" data-slot-index="1">Ability 2</button>
-                                        </div>
                                         <div id="ability-choice-grid" class="ability-choice-grid"></div>
                                     </div>
                                 </section>
@@ -359,7 +356,7 @@
     </div>
 
     <div id="leave-confirm-overlay" class="app-modal-overlay" hidden>
-        <div id="leave-confirm-panel" class="app-modal-surface">
+        <div id="leave-confirm-panel" class="app-modal-surface menu-modal-panel">
             <div id="leave-confirm-title">Leave Match?</div>
             <div id="leave-confirm-copy">You will return to the main shell.</div>
             <div id="leave-confirm-actions">
@@ -370,7 +367,7 @@
     </div>
 
     <div id="auth-overlay" class="app-modal-overlay" hidden>
-        <div id="auth-panel" class="app-modal-surface">
+        <div id="auth-panel" class="app-modal-surface menu-modal-panel">
             <button id="auth-close-btn" type="button" aria-label="Close account panel">CLOSE</button>
             <div id="auth-login-view">
                 <h2>Optional Profile</h2>
@@ -411,7 +408,7 @@
     </div>
 
     <div id="dev-overlay" class="app-modal-overlay" hidden>
-        <div id="dev-modal" class="app-modal-surface">
+        <div id="dev-modal" class="app-modal-surface menu-modal-panel">
             <div id="dev-modal-header">
                 <span id="dev-modal-title">DEV / TEST</span>
                 <button id="dev-close-btn" type="button">CLOSE</button>
@@ -424,7 +421,7 @@
     </div>
 
     <div id="docs-panel" class="app-modal-overlay" aria-hidden="true" hidden>
-        <div id="docs-terminal" class="app-modal-surface">
+        <div id="docs-terminal" class="app-modal-surface menu-modal-panel">
             <div id="docs-header">
                 <span id="docs-title">MAYHEM :: OPEN FIELD MANUAL</span>
                 <button id="docs-close-btn" type="button">CLOSE</button>
@@ -439,7 +436,7 @@
     </div>
 
     <div id="controls-overlay" class="app-modal-overlay" hidden>
-        <div id="controls-modal" class="app-modal-surface">
+        <div id="controls-modal" class="app-modal-surface menu-modal-panel">
             <div id="controls-modal-header">
                 <span id="controls-modal-title">KEY BINDINGS</span>
                 <button id="controls-close-btn" type="button">CLOSE</button>

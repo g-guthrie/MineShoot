@@ -1,15 +1,12 @@
-import { getClassPreset, getDefaultAbilityLoadout, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { getClassPreset, getDefaultAbilityId, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { DEFAULT_HP_MAX } from '../../../shared/entity-constants.js';
 
 const DEFAULT_CLASS_ID = 'abilities';
-const DEFAULT_ABILITY_LOADOUT = getDefaultAbilityLoadout();
+const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
-function cloneAbilityLoadout() {
-  return {
-    slot1: DEFAULT_ABILITY_LOADOUT.slot1,
-    slot2: DEFAULT_ABILITY_LOADOUT.slot2
-  };
+function defaultAbilityId() {
+  return DEFAULT_ABILITY_ID;
 }
 
 function cloneWeaponLoadout() {
@@ -17,10 +14,7 @@ function cloneWeaponLoadout() {
 }
 
 function applyActionRuntimeDefaults(entity) {
-  entity.slot1CooldownUntil = 0;
-  entity.slot2CooldownUntil = 0;
   entity.abilityCooldownUntil = 0;
-  entity.ultimateCooldownUntil = 0;
   entity.weaponLockUntil = 0;
   entity.throwableLockUntil = 0;
   entity.abilityLockUntil = 0;
@@ -55,7 +49,7 @@ export function createPlayerEntity(options = {}) {
     username,
     classId,
     fixtureType: String(options.fixtureType || ''),
-    abilityLoadout: cloneAbilityLoadout(),
+    abilityId: defaultAbilityId(),
     weaponLoadout,
     x: 0,
     y: Number(options.eyeHeight || 0),
@@ -123,7 +117,7 @@ export function createBotEntity(index, options = {}) {
     kind: 'bot',
     username: `BOT_${botIndex + 1}`,
     classId,
-    abilityLoadout: cloneAbilityLoadout(),
+    abilityId: defaultAbilityId(),
     weaponLoadout,
     x: 10 + (Math.random() * 90),
     y: Number(options.eyeHeight || 0),

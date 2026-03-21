@@ -48,7 +48,7 @@ test('normalizeThrowPayload preserves valid throw intent and drops invalid vecto
 });
 
 test('normalizeClassCastPayload centralizes aim point and projectile intent shaping', () => {
-  const payload = normalizeClassCastPayload(2, {
+  const payload = normalizeClassCastPayload({
     lockTargetId: 'usr_target',
     aimPoint: { x: 10, y: 11, z: 12 },
     projectileIntent: {
@@ -59,7 +59,7 @@ test('normalizeClassCastPayload centralizes aim point and projectile intent shap
   });
 
   assert.equal(payload.t, MSG_C2S.CLASS_CAST);
-  assert.equal(payload.slot, 2);
+  assert.equal('slot' in payload, false);
   assert.equal(payload.lockTargetId, 'usr_target');
   assert.deepEqual(payload.aimPoint, { x: 10, y: 11, z: 12 });
   assert.deepEqual(payload.projectileIntent, {
@@ -83,7 +83,6 @@ test('normalizeAbilityLoadoutPayload always emits strings', () => {
 
   assert.deepEqual(payload, {
     t: MSG_C2S.CLASS_QUEUE,
-    slot1: 'choke',
-    slot2: ''
+    abilityId: 'choke'
   });
 });
