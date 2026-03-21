@@ -10,9 +10,9 @@ async function getMenuBorderTokens(page) {
     const surface = document.getElementById('menu-surface');
     const styles = surface ? getComputedStyle(surface) : null;
     return {
-      shell: styles ? styles.getPropertyValue('--menu-shell-border').trim() : '',
-      action: styles ? styles.getPropertyValue('--menu-action-border').trim() : '',
-      subaction: styles ? styles.getPropertyValue('--menu-subaction-border').trim() : ''
+      shell: styles ? styles.getPropertyValue('--border-shell').trim() : '',
+      action: styles ? styles.getPropertyValue('--border-action').trim() : '',
+      subaction: styles ? styles.getPropertyValue('--border-subaction').trim() : ''
     };
   });
 }
