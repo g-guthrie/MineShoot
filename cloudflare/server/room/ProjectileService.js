@@ -332,32 +332,6 @@ export function tickProjectiles(room, dtSec) {
       return;
     }
 
-    if (p.type === 'plasma' && p.trackingTargetId) {
-      if ((p.trackingUntil || 0) <= now) {
-        p.trackingTargetId = '';
-        p.trackingUntil = 0;
-      } else {
-        const tracked = room.getEntityById(p.trackingTargetId);
-        if (!room.canTargetEntity(tracked, p.ownerId)) {
-          p.trackingTargetId = '';
-          p.trackingUntil = 0;
-        } else {
-          const nextVel = steerHomingVelocity({
-            projectilePos: { x: p.x, y: p.y, z: p.z },
-            targetPos: entityTrackPoint(tracked),
-            velocity: { x: p.vx, y: p.vy, z: p.vz },
-            speed: Number(def.speed || 14),
-            boost: 0,
-            lerp: Number(def.trackLerp || 10),
-            dt: dtSec
-          });
-          p.vx = Number(nextVel.x || 0);
-          p.vy = Number(nextVel.y || 0);
-          p.vz = Number(nextVel.z || 0);
-        }
-      }
-    }
-
     const isTrackingProjectile = (p.type === 'missile' || p.type === 'plasma_stream');
     if (isTrackingProjectile) {
       const acquireRange = Number(def.acquireRange || 24);
@@ -520,11 +494,22 @@ export function tickProjectiles(room, dtSec) {
         }
       }
 
-      if (!p.trackingTargetId) {
-        const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0));
-        if (catchHit) {
-          p.trackingTargetId = catchHit.entity.id;
-          p.trackingUntil = now + Math.max(50, Math.round(Number(def.trackDuration || 0.2) * 1000));
+      const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0));
+      if (catchHit) {
+        if (stickProjectile(p, catchHit.entity, catchHit.point.x, catchHit.point.y, catchHit.point.z)) {
+          p.trackingTargetId = '';
+          p.trackingUntil = 0;
+          room.broadcast({
+            t: MSG_S2C.THROW_IMPACT,
+            projectileId: p.id,
+            projectileType: p.type,
+            impactType: 'enemy',
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            targetId: catchHit.entity.id
+          });
+          return;
         }
       }
     }

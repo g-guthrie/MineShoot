@@ -7,80 +7,6 @@
 
     var GameCombatTuning = {};
 
-    var DEFAULTS = {
-        awareness: {
-            segments: 8,
-            radarRange: 56,
-            coreRange: 10,
-            beaconMinRange: 56,
-            beaconMaxCount: 2
-        },
-        enemy: {
-            fireRange: 34,
-            headshotNearRange: 12,
-            headshotMidRange: 22,
-            defaultWallhackRadius: 90
-        },
-        throwables: {
-            fragRadius: 6.8,
-            plasmaRadius: 5.0,
-            plasmaCatchRadius: 0.5,
-            missileRadius: 2.4,
-            molotovFireRadius: 3.8,
-            plasmaAcquireRange: 0,
-            plasmaAcquireHalfAngleDeg: 0,
-            plasmaStickExplodeDelay: 2.2
-        },
-        throwableMechanics: {
-            aimRayRange: 100,
-            fragBounceMaxCount: 2,
-            fragBounceVelocityDamping: 0.4,
-            fragBounceVerticalDamping: 0.42,
-            fragBounceStopSpeedSq: 2.5,
-            predictedTtlMs: 5000,
-            throwIntentOriginMaxOffset: 1.2,
-            throwIntentDirectionMinDot: -0.2
-        },
-        classWallhackRadius: {
-            abilities: 90
-        },
-        classAbilities: {
-            chokeLockBoxPx: 315,
-            chokeRange: 26,
-            chokeTargetTolerance: 1.35,
-            chokeDuration: 1.25,
-            chokeLiftHeight: 1.6,
-            chokeTickRate: 0.25,
-            chokeDotPerTick: 0,
-            chokeCastDamage: 0,
-            hookLockBoxPx: 150,
-            hookReticleRadiusPx: 68,
-            hookRange: 22,
-            hookCastDamage: 20,
-            hookStunDuration: 0.5,
-            hookPullDistance: 4.0,
-            hookCatchRadius: 1.8,
-            hookTravelSpeed: 26,
-            hookPullSpeed: 20,
-            missileRange: 36,
-            missileDamage: 70,
-            missileRadius: 2.0,
-            missileTravelSpeed: 34,
-            missileAcquireRange: 6.0,
-            missileCatchRadius: 1.1,
-            missileLockHalfAngleDeg: 10,
-            missileHomingBoost: 4.5,
-            missileHomingLerp: 6.0,
-            healDuration: 1.0,
-            healAmount: 90,
-            deadeyeLockBoxPx: 220,
-            deadeyeLockRange: 60,
-            deadeyeDuration: 1.6,
-            deadeyeMaxTargets: 2,
-            deadeyeDamage: 160
-        }
-    };
-
     function runtimeSharedTuning() {
         return (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning)
             ? globalThis.__MAYHEM_RUNTIME.GameShared.gameplayTuning
@@ -131,9 +57,7 @@
     var cachedClassAbilityTuning = null;
 
     function buildBase() {
-        var shared = sharedTuning();
-        if (!shared) return deepCopy(DEFAULTS);
-
+        var shared = sharedTuning() || {};
         var throwables = shared.throwables || {};
         var classPresets = shared.classPresets || {};
         var catalog = shared.abilityCatalog || {};
@@ -144,56 +68,76 @@
         var heal = catalog.heal || {};
 
         return {
-            awareness: shared.awareness || deepCopy(DEFAULTS.awareness),
-            enemy: shared.enemy || deepCopy(DEFAULTS.enemy),
-            throwables: {
-                fragRadius: finiteOr(throwables.frag && throwables.frag.radius, DEFAULTS.throwables.fragRadius),
-                plasmaRadius: finiteOr(throwables.plasma && throwables.plasma.radius, DEFAULTS.throwables.plasmaRadius),
-                plasmaCatchRadius: finiteOr(throwables.plasma && throwables.plasma.catchRadius, DEFAULTS.throwables.plasmaCatchRadius),
-                missileRadius: finiteOr(throwables.missile && throwables.missile.radius, DEFAULTS.throwables.missileRadius),
-                molotovFireRadius: finiteOr(throwables.molotov && throwables.molotov.fireRadius, DEFAULTS.throwables.molotovFireRadius),
-                plasmaAcquireRange: finiteOr(throwables.plasma && throwables.plasma.acquireRange, DEFAULTS.throwables.plasmaAcquireRange),
-                plasmaAcquireHalfAngleDeg: finiteOr(throwables.plasma && throwables.plasma.acquireHalfAngleDeg, DEFAULTS.throwables.plasmaAcquireHalfAngleDeg),
-                plasmaStickExplodeDelay: finiteOr(throwables.plasma && throwables.plasma.stickExplodeDelay, DEFAULTS.throwables.plasmaStickExplodeDelay)
+            awareness: {
+                segments: finiteOr(shared.awareness && shared.awareness.segments, 0),
+                radarRange: finiteOr(shared.awareness && shared.awareness.radarRange, 0),
+                coreRange: finiteOr(shared.awareness && shared.awareness.coreRange, 0),
+                beaconMinRange: finiteOr(shared.awareness && shared.awareness.beaconMinRange, 0),
+                beaconMaxCount: finiteOr(shared.awareness && shared.awareness.beaconMaxCount, 0)
             },
-            throwableMechanics: shared.throwableMechanics || deepCopy(DEFAULTS.throwableMechanics),
+            enemy: {
+                fireRange: finiteOr(shared.enemy && shared.enemy.fireRange, 0),
+                headshotNearRange: finiteOr(shared.enemy && shared.enemy.headshotNearRange, 0),
+                headshotMidRange: finiteOr(shared.enemy && shared.enemy.headshotMidRange, 0),
+                defaultWallhackRadius: finiteOr(shared.enemy && shared.enemy.defaultWallhackRadius, 0)
+            },
+            throwables: {
+                fragRadius: finiteOr(throwables.frag && throwables.frag.radius, 0),
+                plasmaRadius: finiteOr(throwables.plasma && throwables.plasma.radius, 0),
+                plasmaCatchRadius: finiteOr(throwables.plasma && throwables.plasma.catchRadius, 0),
+                missileRadius: finiteOr(throwables.missile && throwables.missile.radius, 0),
+                molotovFireRadius: finiteOr(throwables.molotov && throwables.molotov.fireRadius, 0),
+                plasmaAcquireRange: finiteOr(throwables.plasma && throwables.plasma.acquireRange, 0),
+                plasmaAcquireHalfAngleDeg: finiteOr(throwables.plasma && throwables.plasma.acquireHalfAngleDeg, 0),
+                plasmaStickExplodeDelay: finiteOr(throwables.plasma && throwables.plasma.stickExplodeDelay, 0)
+            },
+            throwableMechanics: {
+                aimRayRange: finiteOr(shared.throwableMechanics && shared.throwableMechanics.aimRayRange, 0),
+                fragBounceMaxCount: finiteOr(shared.throwableMechanics && shared.throwableMechanics.fragBounceMaxCount, 0),
+                fragBounceVelocityDamping: finiteOr(shared.throwableMechanics && shared.throwableMechanics.fragBounceVelocityDamping, 0),
+                fragBounceVerticalDamping: finiteOr(shared.throwableMechanics && shared.throwableMechanics.fragBounceVerticalDamping, 0),
+                fragBounceStopSpeedSq: finiteOr(shared.throwableMechanics && shared.throwableMechanics.fragBounceStopSpeedSq, 0),
+                predictedTtlMs: finiteOr(shared.throwableMechanics && shared.throwableMechanics.predictedTtlMs, 0),
+                throwIntentOriginMaxOffset: finiteOr(shared.throwableMechanics && shared.throwableMechanics.throwIntentOriginMaxOffset, 0),
+                throwIntentDirectionMinDot: finiteOr(shared.throwableMechanics && shared.throwableMechanics.throwIntentDirectionMinDot, 0)
+            },
             classWallhackRadius: {
-                abilities: finiteOr(classPresets.abilities && classPresets.abilities.wallhackRadius, DEFAULTS.classWallhackRadius.abilities)
+                abilities: finiteOr(classPresets.abilities && classPresets.abilities.wallhackRadius, 0)
             },
             classAbilities: {
-                chokeLockBoxPx: finiteOr(choke.lockBoxPx, DEFAULTS.classAbilities.chokeLockBoxPx),
-                chokeRange: finiteOr(choke.range, DEFAULTS.classAbilities.chokeRange),
-                chokeTargetTolerance: finiteOr(choke.targetTolerance, DEFAULTS.classAbilities.chokeTargetTolerance),
-                chokeDuration: finiteOr(choke.duration, DEFAULTS.classAbilities.chokeDuration),
-                chokeLiftHeight: finiteOr(choke.liftHeight, DEFAULTS.classAbilities.chokeLiftHeight),
-                chokeTickRate: finiteOr(choke.tickRate, DEFAULTS.classAbilities.chokeTickRate),
-                chokeDotPerTick: finiteOr(choke.dotPerTick, DEFAULTS.classAbilities.chokeDotPerTick),
-                chokeCastDamage: finiteOr(choke.castDamage, DEFAULTS.classAbilities.chokeCastDamage),
-                hookLockBoxPx: finiteOr(hook.lockBoxPx, DEFAULTS.classAbilities.hookLockBoxPx),
-                hookReticleRadiusPx: finiteOr(hook.reticleRadiusPx, DEFAULTS.classAbilities.hookReticleRadiusPx),
-                hookRange: finiteOr(hook.range, DEFAULTS.classAbilities.hookRange),
-                hookCastDamage: finiteOr(hook.castDamage, DEFAULTS.classAbilities.hookCastDamage),
-                hookStunDuration: finiteOr(hook.stunDuration, DEFAULTS.classAbilities.hookStunDuration),
-                hookPullDistance: finiteOr(hook.pullDistance, DEFAULTS.classAbilities.hookPullDistance),
-                hookCatchRadius: finiteOr(hook.catchRadius, DEFAULTS.classAbilities.hookCatchRadius),
-                hookTravelSpeed: finiteOr(hook.travelSpeed, DEFAULTS.classAbilities.hookTravelSpeed),
-                hookPullSpeed: finiteOr(hook.pullSpeed, DEFAULTS.classAbilities.hookPullSpeed),
-                missileRange: finiteOr(missile.range, DEFAULTS.classAbilities.missileRange),
-                missileDamage: finiteOr(missile.damage, DEFAULTS.classAbilities.missileDamage),
-                missileRadius: finiteOr(missile.radius, DEFAULTS.classAbilities.missileRadius),
-                missileTravelSpeed: finiteOr(missile.travelSpeed, DEFAULTS.classAbilities.missileTravelSpeed),
-                missileAcquireRange: finiteOr(missile.acquireRange, DEFAULTS.classAbilities.missileAcquireRange),
-                missileCatchRadius: finiteOr(missile.catchRadius, DEFAULTS.classAbilities.missileCatchRadius),
-                missileLockHalfAngleDeg: finiteOr(missile.lockHalfAngleDeg, DEFAULTS.classAbilities.missileLockHalfAngleDeg),
-                missileHomingBoost: finiteOr(missile.homingBoost, DEFAULTS.classAbilities.missileHomingBoost),
-                missileHomingLerp: finiteOr(missile.homingLerp, DEFAULTS.classAbilities.missileHomingLerp),
-                healDuration: finiteOr(heal.duration, DEFAULTS.classAbilities.healDuration),
-                healAmount: finiteOr(heal.healAmount, DEFAULTS.classAbilities.healAmount),
-                deadeyeLockBoxPx: DEFAULTS.classAbilities.deadeyeLockBoxPx,
-                deadeyeLockRange: finiteOr(deadeye.range, DEFAULTS.classAbilities.deadeyeLockRange),
-                deadeyeDuration: finiteOr(deadeye.duration, DEFAULTS.classAbilities.deadeyeDuration),
-                deadeyeMaxTargets: finiteOr(deadeye.maxTargets, DEFAULTS.classAbilities.deadeyeMaxTargets),
-                deadeyeDamage: finiteOr(deadeye.damage, DEFAULTS.classAbilities.deadeyeDamage)
+                chokeLockBoxPx: finiteOr(choke.lockBoxPx, 0),
+                chokeRange: finiteOr(choke.range, 0),
+                chokeTargetTolerance: finiteOr(choke.targetTolerance, 0),
+                chokeDuration: finiteOr(choke.duration, 0),
+                chokeLiftHeight: finiteOr(choke.liftHeight, 0),
+                chokeTickRate: finiteOr(choke.tickRate, 0),
+                chokeDotPerTick: finiteOr(choke.dotPerTick, 0),
+                chokeCastDamage: finiteOr(choke.castDamage, 0),
+                hookLockBoxPx: finiteOr(hook.lockBoxPx, 0),
+                hookReticleRadiusPx: finiteOr(hook.reticleRadiusPx, 0),
+                hookRange: finiteOr(hook.range, 0),
+                hookCastDamage: finiteOr(hook.castDamage, 0),
+                hookStunDuration: finiteOr(hook.stunDuration, 0),
+                hookPullDistance: finiteOr(hook.pullDistance, 0),
+                hookCatchRadius: finiteOr(hook.catchRadius, 0),
+                hookTravelSpeed: finiteOr(hook.travelSpeed, 0),
+                hookPullSpeed: finiteOr(hook.pullSpeed, 0),
+                missileRange: finiteOr(missile.range, 0),
+                missileDamage: finiteOr(missile.damage, 0),
+                missileRadius: finiteOr(missile.radius, 0),
+                missileTravelSpeed: finiteOr(missile.travelSpeed, 0),
+                missileAcquireRange: finiteOr(missile.acquireRange, 0),
+                missileCatchRadius: finiteOr(missile.catchRadius, 0),
+                missileLockHalfAngleDeg: finiteOr(missile.lockHalfAngleDeg, 0),
+                missileHomingBoost: finiteOr(missile.homingBoost, 0),
+                missileHomingLerp: finiteOr(missile.homingLerp, 0),
+                healDuration: finiteOr(heal.duration, 0),
+                healAmount: finiteOr(heal.healAmount, 0),
+                deadeyeLockBoxPx: finiteOr(deadeye.lockBoxPx, 0),
+                deadeyeLockRange: finiteOr(deadeye.range, 0),
+                deadeyeDuration: finiteOr(deadeye.duration, 0),
+                deadeyeMaxTargets: finiteOr(deadeye.maxTargets, 0),
+                deadeyeDamage: finiteOr(deadeye.damage, 0)
             }
         };
     }
@@ -268,7 +212,7 @@
         var base = buildBase();
         var id = classId || 'abilities';
         var meters = base.classWallhackRadius[id];
-        if (typeof meters !== 'number') meters = base.classWallhackRadius.abilities || 90;
+        if (typeof meters !== 'number') meters = base.classWallhackRadius.abilities || 0;
         return meters;
     };
 

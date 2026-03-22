@@ -32,9 +32,8 @@
     var entityConstants = sharedApi().entityConstants || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
-    var DEFAULT_INTERPOLATION_DELAY_MS = 78;
     var MAX_SNAPSHOT_HISTORY = 20;
-    var TELEPORT_RESET_DISTANCE_SQ = 64;
+    var DEFAULT_TELEPORT_RESET_DISTANCE_WU = 8;
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
@@ -46,6 +45,21 @@
             ? shared.gameplayTuning.network
             : null;
         return network && network.remoteInterpolation ? network.remoteInterpolation : {};
+    }
+
+    function interpolationApi() {
+        return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || {};
+    }
+
+    function defaultInterpolationDelayMs() {
+        var interpolationTuning = remoteInterpolationTuning();
+        return Math.max(1, Number(interpolationTuning.defaultDelayMs || 1));
+    }
+
+    function movementTuning() {
+        var shared = sharedApi();
+        var gameplayTuning = shared && shared.gameplayTuning ? shared.gameplayTuning : {};
+        return gameplayTuning && gameplayTuning.movement ? gameplayTuning.movement : {};
     }
 
     function snapshotFootY(entity) {
@@ -75,6 +89,28 @@
         return out;
     }
 
+    function clonePresentationState(state) {
+        if (!state) return null;
+        var interpModule = interpolationApi();
+        if (interpModule && interpModule.cloneTransform) {
+            return interpModule.cloneTransform(state);
+        }
+        return {
+            x: Number(state.x || 0),
+            footY: Number(state.footY || 0),
+            z: Number(state.z || 0),
+            yaw: Number(state.yaw || 0),
+            pitch: Number(state.pitch || 0),
+            moveSpeedNorm: Number(state.moveSpeedNorm || 0),
+            sprinting: !!state.sprinting,
+            movingForward: !!state.movingForward,
+            movingBackward: !!state.movingBackward,
+            isGrounded: state.isGrounded !== false,
+            velocityY: Number(state.velocityY || 0),
+            muzzleFlashUntil: Number(state.muzzleFlashUntil || 0)
+        };
+    }
+
     function appendSnapshotHistory(render, entity, snapshotMeta) {
         if (!render || !entity) return;
         var receivedAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || Date.now()));
@@ -98,87 +134,157 @@
             muzzleFlashUntil: Number(entity.muzzleFlashUntil || 0)
         };
         var interpolationTuning = remoteInterpolationTuning();
-        var maxSnapshotHistory = Math.max(8, Math.round(Number(interpolationTuning.historySize || MAX_SNAPSHOT_HISTORY)));
+        var interpModule = interpolationApi();
+        var lossHistoryBonus = Math.max(0, Math.round(
+            Number(Number(render.lossDelayPaddingMs || 0) > 0 ? (interpolationTuning.lossHistoryBonus || 10) : 0)
+        ));
+        var maxSnapshotHistory = Math.max(
+            8,
+            Math.round(Number(interpolationTuning.historySize || MAX_SNAPSHOT_HISTORY)) + lossHistoryBonus
+        );
         var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory.slice() : [];
         var previous = history.length > 0 ? history[history.length - 1] : null;
         var dx = previous ? (Number(previous.x || 0) - sample.x) : 0;
         var dy = previous ? (Number(previous.footY || 0) - sample.footY) : 0;
         var dz = previous ? (Number(previous.z || 0) - sample.z) : 0;
+        var movement = movementTuning();
+        var maxMoveSpeedWuPerSec = Math.max(0, Number(movement.runSpeed || 14));
+        var priorSpeedNorm = previous ? Math.max(0, Number(previous.moveSpeedNorm || 0)) : 0;
+        var sampleSpeedNorm = Math.max(0, Number(sample.moveSpeedNorm || 0));
+        var speedNorm = Math.max(priorSpeedNorm, sampleSpeedNorm);
+        var gapDurationSec = previous
+            ? Math.max(0, Number(serverTime - Number(previous.serverTime || serverTime)) / 1000)
+            : 0;
+        var teleportBaseThresholdWu = Math.max(
+            0,
+            Number(interpolationTuning.teleportBaseThresholdWu || DEFAULT_TELEPORT_RESET_DISTANCE_WU)
+        );
+        var teleportSpeedAllowanceScale = Math.max(
+            0,
+            Number(interpolationTuning.teleportSpeedAllowanceScale || 1.5)
+        );
+        var teleportResetDistanceWu = teleportBaseThresholdWu + (maxMoveSpeedWuPerSec * speedNorm * gapDurationSec * teleportSpeedAllowanceScale);
+        var teleportResetDistanceSq = teleportResetDistanceWu * teleportResetDistanceWu;
         var teleported = !!(
             previous &&
             (
-                ((dx * dx) + (dy * dy) + (dz * dz)) > TELEPORT_RESET_DISTANCE_SQ ||
+                ((dx * dx) + (dy * dy) + (dz * dz)) > teleportResetDistanceSq ||
                 (!previous.alive && sample.alive)
             )
         );
         if (teleported) {
             history.length = 0;
             history.push(sample);
+            render.freezePresentation = null;
+            render.freezePresentationAt = 0;
+            render.freezeBlendFrom = null;
+            render.freezeBlendStartAt = 0;
         } else if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
             history[history.length - 1] = sample;
         } else {
             history.push(sample);
             if (history.length > maxSnapshotHistory) history.shift();
         }
+        if (!teleported && render.freezePresentation && previous && serverTime > Number(previous.serverTime || 0)) {
+            render.freezeBlendFrom = clonePresentationState(render.freezePresentation);
+            render.freezeBlendStartAt = receivedAt;
+            render.freezeBlendDurationMs = Math.max(24, Number(interpolationTuning.freezeRecoveryBlendMs || 48));
+            render.freezePresentation = null;
+            render.freezePresentationAt = 0;
+        }
         render.snapshotHistory = history;
         var measuredOffsetMs = receivedAt - serverTime;
         var offsetSnapDeltaMs = Math.max(60, Number(interpolationTuning.serverOffsetSnapDeltaMs || 150));
-        var offsetLerpAlpha = clamp(Number(interpolationTuning.offsetLerpAlpha || 0.08), 0.01, 1);
-        if (!isFinite(Number(render.serverTimeOffsetMs))) {
-            render.serverTimeOffsetMs = measuredOffsetMs;
-        } else if (Math.abs(measuredOffsetMs - Number(render.serverTimeOffsetMs || 0)) > offsetSnapDeltaMs) {
-            render.serverTimeOffsetMs = measuredOffsetMs;
+        if (interpModule && interpModule.smoothClockOffset) {
+            render.serverTimeOffsetMs = interpModule.smoothClockOffset(
+                Number(render.serverTimeOffsetMs),
+                measuredOffsetMs,
+                offsetSnapDeltaMs
+            );
         } else {
-            render.serverTimeOffsetMs += (measuredOffsetMs - render.serverTimeOffsetMs) * offsetLerpAlpha;
+            var offsetLerpAlpha = clamp(Number(interpolationTuning.offsetLerpAlpha || 0.08), 0.01, 1);
+            if (!isFinite(Number(render.serverTimeOffsetMs))) {
+                render.serverTimeOffsetMs = measuredOffsetMs;
+            } else {
+                render.serverTimeOffsetMs += (measuredOffsetMs - render.serverTimeOffsetMs) * offsetLerpAlpha;
+            }
         }
 
         if (previous && serverTime > Number(previous.serverTime || 0)) {
-            var nextIntervalMs = clamp(serverTime - Number(previous.serverTime || 0), 16, 140);
+            var rawIntervalMs = Math.max(1, serverTime - Number(previous.serverTime || 0));
             var priorIntervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
+            var nextIntervalMs = clamp(
+                rawIntervalMs,
+                Math.max(16, priorIntervalMs * 0.5),
+                Math.max(16, priorIntervalMs * 3)
+            );
             var priorStepMs = clamp(Number(render.lastSnapshotStepMs || priorIntervalMs), 16, 140);
             render.lastSnapshotStepMs = nextIntervalMs;
             render.snapshotIntervalMs = (priorIntervalMs * 0.7) + (nextIntervalMs * 0.3);
             var jitterSampleMs = Math.abs(nextIntervalMs - priorStepMs);
             var priorJitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
             render.snapshotJitterMs = (priorJitterMs * 0.65) + (clamp(jitterSampleMs, 0, 120) * 0.35);
+            var lossThresholdScale = Math.max(1.1, Number(interpolationTuning.lossBurstThresholdScale || 1.5));
+            var expectedIntervalMs = Math.max(16, priorIntervalMs);
+            var missedSnapshots = rawIntervalMs > (expectedIntervalMs * lossThresholdScale)
+                ? Math.max(1, Math.round(rawIntervalMs / expectedIntervalMs) - 1)
+                : 0;
+            var priorLossPaddingMs = Math.max(0, Number(render.lossDelayPaddingMs || 0));
+            if (missedSnapshots > 0) {
+                render.consecutiveMissedSnapshots = Math.max(0, Number(render.consecutiveMissedSnapshots || 0)) + missedSnapshots;
+            } else {
+                render.consecutiveMissedSnapshots = 0;
+            }
+            var lossTriggerCount = Math.max(2, Math.round(Number(interpolationTuning.lossDelayPaddingTriggerCount || 2)));
+            if (Number(render.consecutiveMissedSnapshots || 0) >= lossTriggerCount) {
+                var paddingFloorMs = expectedIntervalMs * Math.max(0.5, Number(interpolationTuning.lossDelayPaddingIntervalScale || 1));
+                var paddingCapMs = Math.max(
+                    paddingFloorMs,
+                    Number(interpolationTuning.lossDelayPaddingMaxMs || (expectedIntervalMs * 2))
+                );
+                render.lossDelayPaddingMs = Math.min(
+                    paddingCapMs,
+                    Math.max(priorLossPaddingMs * 0.8, paddingFloorMs)
+                );
+            } else {
+                render.lossDelayPaddingMs = priorLossPaddingMs * 0.6;
+            }
         } else if (!render.snapshotIntervalMs) {
             render.snapshotIntervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS;
             render.lastSnapshotStepMs = DEFAULT_SNAPSHOT_INTERVAL_MS;
             render.snapshotJitterMs = 0;
+            render.lossDelayPaddingMs = 0;
+            render.consecutiveMissedSnapshots = 0;
         }
 
         var intervalMs = clamp(Number(render.snapshotIntervalMs || DEFAULT_SNAPSHOT_INTERVAL_MS), 16, 140);
         var jitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
-        var minDelayMs = Math.max(32, Number(interpolationTuning.minDelayMs || 95));
-        var maxDelayMs = Math.max(minDelayMs, Number(interpolationTuning.maxDelayMs || 260));
-        var targetDelayMs = clamp(
-            (intervalMs * Number(interpolationTuning.intervalDelayScale || 2.6)) +
-            (jitterMs * Number(interpolationTuning.jitterDelayScale || 2.1)),
-            minDelayMs,
-            maxDelayMs
+        var targetDelayMs = interpModule && interpModule.computeInterpolationDelay
+            ? interpModule.computeInterpolationDelay(intervalMs, jitterMs, interpolationTuning)
+            : defaultInterpolationDelayMs();
+        var minDelayMs = Math.max(1, Number(interpolationTuning.minDelayMs || 1));
+        var maxDelayMs = Math.max(minDelayMs, Number(interpolationTuning.maxDelayMs || targetDelayMs));
+        var lossDelayPaddingMs = Math.max(0, Number(render.lossDelayPaddingMs || 0));
+        var maxExtraDelayMs = Math.max(
+            lossDelayPaddingMs,
+            Number(interpolationTuning.lossDelayPaddingMaxMs || intervalMs)
         );
-        var priorDelayMs = clamp(
-            Number(render.interpolationDelayMs || targetDelayMs),
-            minDelayMs,
-            maxDelayMs
-        );
-        render.interpolationDelayMs = (priorDelayMs * 0.6) + (targetDelayMs * 0.4);
-        render.maxExtrapolationMs = clamp(
-            (intervalMs * Number(interpolationTuning.maxExtrapolationIntervalScale || 0.45)) +
-            (jitterMs * Number(interpolationTuning.maxExtrapolationJitterScale || 0.65)),
-            Math.max(1, Number(interpolationTuning.maxExtrapolationMinMs || 20)),
-            Math.max(1, Number(interpolationTuning.maxExtrapolationMaxMs || 72))
-        );
-        render.freezeGapMs = clamp(
-            (intervalMs * Number(interpolationTuning.freezeGapIntervalScale || 1.85)) +
-            (jitterMs * Number(interpolationTuning.freezeGapJitterScale || 2.5)),
-            Math.max(1, Number(interpolationTuning.freezeGapMinMs || 90)),
-            Math.max(1, Number(interpolationTuning.freezeGapMaxMs || 240))
-        );
+        targetDelayMs = clamp(targetDelayMs + lossDelayPaddingMs, minDelayMs, maxDelayMs + maxExtraDelayMs);
+        var priorDelayMs = Math.max(1, Number(render.interpolationDelayMs || targetDelayMs));
+        var targetWeight = targetDelayMs > priorDelayMs
+            ? clamp(Number(interpolationTuning.delayIncreaseTargetWeight || 0.7), 0.05, 1)
+            : clamp(Number(interpolationTuning.delayDecreaseTargetWeight || 0.2), 0.01, 1);
+        render.interpolationDelayMs = (priorDelayMs * (1 - targetWeight)) + (targetDelayMs * targetWeight);
+        render.maxExtrapolationMs = interpModule && interpModule.computeMaxExtrapolation
+            ? interpModule.computeMaxExtrapolation(intervalMs, jitterMs, interpolationTuning)
+            : Math.max(1, Number(interpolationTuning.maxExtrapolationMinMs || 1));
+        render.freezeGapMs = interpModule && interpModule.computeFreezeGap
+            ? interpModule.computeFreezeGap(intervalMs, jitterMs, interpolationTuning)
+            : Math.max(1, Number(interpolationTuning.freezeGapMinMs || 1));
         if (!render.interpolationDelayMs) {
             render.interpolationDelayMs = Math.max(
                 1,
-                Number(interpolationTuning.defaultDelayMs || DEFAULT_INTERPOLATION_DELAY_MS)
+                Number(interpolationTuning.defaultDelayMs || targetDelayMs)
             );
         }
         return teleported;
@@ -208,6 +314,20 @@
         render.combatZ = nextZ;
         render.combatYaw = nextYaw;
         render.combatPitch = nextPitch;
+        render.lastPresentedTransform = clonePresentationState({
+            x: nextX,
+            footY: nextFootY,
+            z: nextZ,
+            yaw: nextYaw,
+            pitch: nextPitch,
+            moveSpeedNorm: Number(entity.moveSpeedNorm || 0),
+            sprinting: !!entity.sprinting,
+            movingForward: !!entity.movingForward,
+            movingBackward: !!entity.movingBackward,
+            isGrounded: entity.isGrounded !== false,
+            velocityY: Number(entity.velocityY || 0),
+            muzzleFlashUntil: Number(entity.muzzleFlashUntil || 0)
+        });
         if (render.actorVisual && render.actorVisual.syncHitboxes) {
             render.actorVisual.syncHitboxes({
                 x: nextX,
@@ -241,7 +361,9 @@
     function classStats(classId) {
         var preset = sharedClassPreset(classId);
         return {
-            armorMax: preset && Number(preset.armorMax || 0) > 0 ? Number(preset.armorMax) : 90,
+            armorMax: preset && Number(preset.armorMax || 0) > 0
+                ? Number(preset.armorMax)
+                : Math.max(0, Number(entityConstants.DEFAULT_ARMOR_MAX || entityConstants.DEFAULT_ARMOR || 0)),
             wallhackRadius: preset && Number(preset.wallhackRadius || 0) > 0
                 ? Number(preset.wallhackRadius)
                 : classWallhackRadiusFor(classId)
@@ -321,10 +443,18 @@
             snapshotIntervalMs: DEFAULT_SNAPSHOT_INTERVAL_MS,
             lastSnapshotStepMs: DEFAULT_SNAPSHOT_INTERVAL_MS,
             snapshotJitterMs: 0,
-            interpolationDelayMs: DEFAULT_INTERPOLATION_DELAY_MS,
+            interpolationDelayMs: defaultInterpolationDelayMs(),
             maxExtrapolationMs: 32,
             freezeGapMs: 96,
             serverTimeOffsetMs: NaN,
+            lossDelayPaddingMs: 0,
+            consecutiveMissedSnapshots: 0,
+            freezePresentation: null,
+            freezePresentationAt: 0,
+            freezeBlendFrom: null,
+            freezeBlendStartAt: 0,
+            freezeBlendDurationMs: 48,
+            lastPresentedTransform: null,
             hp: entity.hp,
             hpMax: entity.hpMax,
             armor: entity.armor,

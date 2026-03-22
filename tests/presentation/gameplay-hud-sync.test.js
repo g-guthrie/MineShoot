@@ -274,11 +274,10 @@ test('gameplay hud sync projects the plasma catch radius when debug visuals are 
           cooldownRemaining: 0,
           telemetry: { predictedCount: 0 },
           plasma: {
-            catchRadius: 1.5,
-            fuseSec: 2.2,
-            trackDuration: 0.2,
-            trackLerp: 10,
-            curveStrength: 0.8647,
+            catchRadius: 3.0,
+            stickDelaySec: 2.2,
+            maxLifeSec: 6.0,
+            blastRadius: 5.0,
             referenceDistance: 10
           }
         };
@@ -294,16 +293,18 @@ test('gameplay hud sync projects the plasma catch radius when debug visuals are 
   });
 
   assert.equal(harness.calls.plasmaState[0].visible, true);
-  assert.ok(harness.calls.plasmaState[0].diameterPx > 185);
-  assert.ok(harness.calls.plasmaState[0].diameterPx < 190);
-  assert.equal(harness.calls.plasmaState[0].catchRadius, 1.5);
-  assert.equal(harness.calls.plasmaState[0].fuseSec, 2.2);
-  assert.ok(harness.calls.plasmaState[0].curveStrength > 0.8);
+  assert.equal(Array.isArray(harness.calls.plasmaState[0].ringDiametersPx), true);
+  assert.equal(harness.calls.plasmaState[0].ringDiametersPx.length, 1);
+  assert.ok(harness.calls.plasmaState[0].ringDiametersPx[0] > 185);
+  assert.ok(harness.calls.plasmaState[0].ringDiametersPx[0] < 190);
+  assert.equal(harness.calls.plasmaState[0].catchRadius, 3.0);
+  assert.equal(harness.calls.plasmaState[0].stickDelaySec, 2.2);
   assert.equal(harness.calls.chokeReticle[0].visible, true);
   assert.equal(harness.calls.deadeyeRect[0].visible, false);
   assert.equal(Array.isArray(harness.calls.abilityDebugPanel[0].text), true);
   assert.ok(harness.calls.abilityDebugPanel[0].text[2].title.includes('Q PLASMA GRENADE :: 1'));
-  assert.ok(harness.calls.abilityDebugPanel[0].text[2].body.includes('track: 0.20s @ 10.0'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[2].body.includes('catch: 3.00m | stick: 2.2s'));
+  assert.ok(harness.calls.abilityDebugPanel[0].text[2].body.includes('blast: 5.00m | life: 6.0s'));
 });
 
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {

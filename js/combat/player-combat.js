@@ -81,25 +81,36 @@
         return (RT.GameShared && RT.GameShared.damage) || null;
     }
 
+    function sharedEntityConstants() {
+        return (sharedWeaponApi() && sharedWeaponApi().entityConstants) || {};
+    }
+
+    function sharedCombatTimings() {
+        var shared = sharedWeaponApi();
+        return shared.getCombatTimings ? (shared.getCombatTimings() || {}) : (shared.combatTimings || {});
+    }
+
     function survivabilityTuning() {
         var shared = sharedWeaponApi();
         return shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
     }
 
     function defaultPlayerHp() {
-        return clampNumber(survivabilityTuning().hpMax, 360, 1);
+        return clampNumber(survivabilityTuning().hpMax, sharedEntityConstants().DEFAULT_HP_MAX, 1);
     }
 
     function defaultPlayerArmor() {
-        return clampNumber(survivabilityTuning().armorMax, 90, 0);
+        return clampNumber(survivabilityTuning().armorMax, sharedEntityConstants().DEFAULT_ARMOR_MAX, 0);
     }
 
     function defaultArmorRegenDelay() {
-        return clampNumber(survivabilityTuning().armorRegenDelaySec, 8.0, 0);
+        var survivability = (sharedWeaponApi() && sharedWeaponApi().survivability) || {};
+        return clampNumber(survivabilityTuning().armorRegenDelaySec, survivability.ARMOR_REGEN_DELAY_SEC, 0);
     }
 
     function defaultArmorRegenPerSec() {
-        return clampNumber(survivabilityTuning().armorRegenPerSec, 10, 0);
+        var survivability = (sharedWeaponApi() && sharedWeaponApi().survivability) || {};
+        return clampNumber(survivabilityTuning().armorRegenPerSec, survivability.ARMOR_REGEN_PER_SEC, 0);
     }
 
     function getAllSelectableWeaponIds() {
@@ -637,7 +648,7 @@
 
         if (!isMultiplayer()) {
             RT.GamePlayer.respawnRandom();
-            respawnInvulnTimer = 1.0;
+            respawnInvulnTimer = Math.max(0, Number(sharedCombatTimings().PLAYER_SPAWN_SHIELD_MS || 0)) / 1000;
         }
 
         RT.GameUI.updateDamageEffects(5);

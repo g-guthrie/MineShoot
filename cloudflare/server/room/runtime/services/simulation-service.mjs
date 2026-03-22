@@ -17,18 +17,18 @@ export function tickPlayers(runtime, dtSec) {
 }
 
 export function buildSnapshot(runtime, forceFull) {
-  const entities = [];
+  const snapshotServerTime = runtime.nowMs();
+  const entityStates = [];
   for (const player of runtime.players.values()) {
-    entities.push(player);
+    entityStates.push(toEntityState(player));
   }
 
   const snapshot = buildSnapshotPayload({
     messageType: runtime.MSG_S2C.SNAPSHOT,
-    serverTime: runtime.nowMs(),
+    serverTime: snapshotServerTime,
     gameMode: runtime.gameMode,
     matchState: runtime.serializeMatchState(),
-    entities,
-    toEntityState,
+    entityStates,
     previousState: runtime.lastBroadcastEntityState,
     forceFull
   });

@@ -16,8 +16,11 @@ function createVec3() {
   };
 }
 
-async function loadRemoteEntities() {
-  const code = await fs.readFile(new URL('../../js/net/remote-entities.js', import.meta.url), 'utf8');
+async function loadRemoteEntities(gameplayTuning = null) {
+  const [interpCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/net/interpolation.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/net/remote-entities.js', import.meta.url), 'utf8')
+  ]);
   const scene = {
     added: [],
     add(node) {
@@ -29,7 +32,7 @@ async function loadRemoteEntities() {
     __MAYHEM_RUNTIME: {
       GameShared: {
         entityConstants: { EYE_HEIGHT: 1.6 },
-        gameplayTuning: null
+        gameplayTuning
       },
       GameActorVisualFactory: {
         create() {
@@ -67,7 +70,9 @@ async function loadRemoteEntities() {
     Date
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(interpCode, context);
+  vm.runInContext(code, context);
   const entitiesApi = sandbox.__MAYHEM_RUNTIME.GameNetEntities;
   entitiesApi.init(scene);
   return { entitiesApi, scene };
@@ -171,4 +176,160 @@ test('remote entities reseed history on dead-to-alive transitions', async () => 
   assert.equal(render.group.position.x, 7);
   assert.equal(render.group.position.z, 9);
   assert.equal(render.group.visible, true);
+});
+
+test('remote entities keep sprint movement gaps in history when the speed-aware teleport threshold covers them', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    movement: {
+      runSpeed: 14
+    },
+    network: {
+      remoteInterpolation: {
+        teleportBaseThresholdWu: 8,
+        teleportSpeedAllowanceScale: 1.5
+      }
+    }
+  });
+  const entityId = 'usr_sprint_gap';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 0,
+    z: 0,
+    moveSpeedNorm: 1,
+    sprinting: true,
+    movingForward: true
+  }), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 10,
+    z: 0,
+    moveSpeedNorm: 1,
+    sprinting: true,
+    movingForward: true
+  }), {
+    serverTime: 1200,
+    receivedAt: 1200
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  assert.ok(render);
+  assert.equal(render.snapshotHistory.length, 2);
+  assert.equal(render.snapshotHistory[0].x, 0);
+  assert.equal(render.snapshotHistory[1].x, 10);
+  assert.equal(render.group.position.x, 0);
+});
+
+test('remote entities clamp extreme interval spikes before smoothing cadence', async () => {
+  const { entitiesApi } = await loadRemoteEntities();
+  const entityId = 'usr_outlier_interval';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1600,
+    receivedAt: 1600
+  });
+
+  assert.ok(render);
+  assert.equal(Number(render.snapshotIntervalMs.toFixed(2)), 160);
+  assert.equal(Number(render.lastSnapshotStepMs.toFixed(2)), 300);
+});
+
+test('remote entities add and decay temporary delay padding during packet loss bursts', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        lossBurstThresholdScale: 1.5,
+        lossDelayPaddingTriggerCount: 2,
+        lossDelayPaddingIntervalScale: 1.0,
+        lossDelayPaddingMaxMs: 120
+      }
+    }
+  });
+  const entityId = 'usr_loss_padding';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 100;
+  render.lastSnapshotStepMs = 100;
+  render.snapshotJitterMs = 0;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1360,
+    receivedAt: 1360
+  });
+
+  const paddingAfterBurst = Number(render.lossDelayPaddingMs || 0);
+  assert.equal(paddingAfterBurst > 0, true);
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1460,
+    receivedAt: 1460
+  });
+
+  assert.equal(Number(render.lossDelayPaddingMs || 0) < paddingAfterBurst, true);
+});
+
+test('remote entities raise interpolation delay faster than they lower it', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        minDelayMs: 1,
+        maxDelayMs: 400,
+        intervalDelayScale: 1.6,
+        jitterDelayScale: 1.4,
+        delayIncreaseTargetWeight: 0.7,
+        delayDecreaseTargetWeight: 0.2
+      }
+    }
+  });
+  const entityId = 'usr_delay_weights';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.snapshotIntervalMs = 120;
+  render.snapshotJitterMs = 0;
+  render.interpolationDelayMs = 80;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1001
+  });
+
+  const raisedDelay = Number(render.interpolationDelayMs || 0);
+  const increaseAmount = raisedDelay - 80;
+
+  render.snapshotIntervalMs = 50;
+  render.snapshotJitterMs = 0;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1002
+  });
+
+  const loweredDelay = Number(render.interpolationDelayMs || 0);
+  const decreaseAmount = raisedDelay - loweredDelay;
+
+  assert.equal(Number(raisedDelay.toFixed(2)), 158.4);
+  assert.equal(Number(loweredDelay.toFixed(2)), 142.72);
+  assert.equal(increaseAmount > decreaseAmount, true);
 });

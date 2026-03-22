@@ -18,7 +18,9 @@
         var lastAppliedSelfServerTime = 0;
         var lastAcceptedSelfAckAt = 0;
         var estimatedRttMs = NaN;
+        var pessimisticRttMs = NaN;
         var rttJitterMs = 0;
+        var recentRttSamples = [];
         var lastPongAt = 0;
         var pingSendTimer = 0.5;
 
@@ -37,7 +39,7 @@
         function readSelfSnapshotSeq(entity) {
             var raw = Number(entity && entity.seq);
             if (!isFinite(raw)) return 0;
-            return Math.max(0, Math.floor(raw));
+            return normalizeSelfSeq(raw);
         }
 
         function readSnapshotServerTime(snapshotMeta) {
@@ -56,17 +58,43 @@
             lastAppliedSelfServerTime = 0;
             lastAcceptedSelfAckAt = 0;
             estimatedRttMs = NaN;
+            pessimisticRttMs = NaN;
             rttJitterMs = 0;
+            recentRttSamples = [];
             lastPongAt = 0;
             pingSendTimer = pingCadenceMs() / 1000;
+        }
+
+        function selfSeqModulo() {
+            var explicitModulo = opts.getSelfSeqModulo ? Number(opts.getSelfSeqModulo() || 0) : 0;
+            return explicitModulo > 1 ? explicitModulo : 4294967296;
+        }
+
+        function normalizeSelfSeq(value) {
+            var modulo = selfSeqModulo();
+            var floored = Math.max(0, Math.floor(Number(value || 0)));
+            if (!(modulo > 1)) return floored;
+            return ((floored % modulo) + modulo) % modulo;
+        }
+
+        function compareSelfSeq(nextSeq, priorSeq) {
+            var modulo = selfSeqModulo();
+            var next = normalizeSelfSeq(nextSeq);
+            var prior = normalizeSelfSeq(priorSeq);
+            if (next === prior) return 0;
+            if (!(modulo > 1)) return next > prior ? 1 : -1;
+            var diff = ((next - prior) % modulo + modulo) % modulo;
+            if (diff === 0) return 0;
+            return diff < (modulo / 2) ? 1 : -1;
         }
 
         function shouldAcceptSelfSnapshot(entity, snapshotMeta) {
             var seq = readSelfSnapshotSeq(entity);
             var serverTime = readSnapshotServerTime(snapshotMeta);
             if (seq > 0 && lastAppliedSelfSeq > 0) {
-                if (seq < lastAppliedSelfSeq) return false;
-                if (seq === lastAppliedSelfSeq) {
+                var seqOrder = compareSelfSeq(seq, lastAppliedSelfSeq);
+                if (seqOrder < 0) return false;
+                if (seqOrder === 0) {
                     return serverTime > lastAppliedSelfServerTime;
                 }
                 return true;
@@ -81,7 +109,7 @@
             var ackSeq = readSelfSnapshotSeq(entity);
             var acceptedServerTime = readSnapshotServerTime(snapshotMeta);
             if (ackSeq > 0) {
-                lastAppliedSelfSeq = Math.max(lastAppliedSelfSeq, ackSeq);
+                lastAppliedSelfSeq = ackSeq;
                 lastAcceptedSelfAckAt = Math.max(0, Number(snapshotMeta && snapshotMeta.receivedAt || nowMs()));
             }
             if (acceptedServerTime > 0) {
@@ -101,6 +129,11 @@
             var rttSample = Math.max(0, stamp - clientTime);
             var pingTuning = opts.getPingTuning ? (opts.getPingTuning() || {}) : {};
             var rttAlpha = Number(pingTuning.rttAlpha || 0.15);
+            var pessimisticRttAlpha = Number(pingTuning.pessimisticRttAlpha || 0.05);
+            var pessimisticWindowMs = Math.max(
+                pingCadenceMs(),
+                Number(pingTuning.pessimisticWindowMs || 2000)
+            );
             var jitterAlpha = Number(pingTuning.jitterAlpha || 0.2);
             if (!isFinite(estimatedRttMs)) {
                 estimatedRttMs = rttSample;
@@ -109,6 +142,24 @@
                 var jitterSample = Math.abs(rttSample - estimatedRttMs);
                 estimatedRttMs += (rttSample - estimatedRttMs) * Math.max(0.01, Math.min(1, rttAlpha));
                 rttJitterMs += (jitterSample - rttJitterMs) * Math.max(0.01, Math.min(1, jitterAlpha));
+            }
+            recentRttSamples.push({
+                receivedAt: stamp,
+                rttMs: rttSample
+            });
+            while (recentRttSamples.length > 0 && (stamp - Number(recentRttSamples[0].receivedAt || 0)) > pessimisticWindowMs) {
+                recentRttSamples.shift();
+            }
+            var pessimisticSample = recentRttSamples.reduce(function (maxValue, sample) {
+                return Math.max(maxValue, Number(sample && sample.rttMs || 0));
+            }, rttSample);
+            if (!isFinite(pessimisticRttMs)) {
+                pessimisticRttMs = pessimisticSample;
+            } else {
+                pessimisticRttMs = Math.max(
+                    rttSample,
+                    pessimisticRttMs + ((pessimisticSample - pessimisticRttMs) * Math.max(0.01, Math.min(1, pessimisticRttAlpha)))
+                );
             }
             lastPongAt = stamp;
             return true;
@@ -148,6 +199,8 @@
                     jitterMs: Math.max(0, Number(snapshotJitterMs || 0))
                 } : null,
                 rttMs: isFinite(estimatedRttMs) ? Math.max(0, Number(estimatedRttMs || 0)) : 0,
+                responsiveRttMs: isFinite(estimatedRttMs) ? Math.max(0, Number(estimatedRttMs || 0)) : 0,
+                pessimisticRttMs: isFinite(pessimisticRttMs) ? Math.max(0, Number(pessimisticRttMs || 0)) : 0,
                 rttJitterMs: Math.max(0, Number(rttJitterMs || 0)),
                 lastPongAt: Math.max(0, Number(lastPongAt || 0)),
                 pingCadenceMs: pingCadenceMs()
@@ -177,7 +230,14 @@
             lastSnapshotServerTime = serverTime;
             lastSnapshotReceivedAt = receivedAt;
             var measuredOffsetMs = receivedAt - serverTime;
-            if (!isFinite(serverTimeOffsetMs) || Math.abs(measuredOffsetMs - serverTimeOffsetMs) > 120) {
+            var interpModule = (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || null;
+            var interpTuning = interpModule && interpModule.readInterpolationTuning
+                ? (interpModule.readInterpolationTuning() || {})
+                : {};
+            var offsetSnapDeltaMs = Math.max(1, Number(interpTuning.serverOffsetSnapDeltaMs || 150));
+            if (interpModule && interpModule.smoothClockOffset) {
+                serverTimeOffsetMs = interpModule.smoothClockOffset(serverTimeOffsetMs, measuredOffsetMs, offsetSnapDeltaMs);
+            } else if (!isFinite(serverTimeOffsetMs)) {
                 serverTimeOffsetMs = measuredOffsetMs;
             } else {
                 serverTimeOffsetMs += (measuredOffsetMs - serverTimeOffsetMs) * 0.12;

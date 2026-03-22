@@ -19,6 +19,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "test:smoke": "node --experimental-default-type=module --test tests",
+    "test:worker-integration": "node --test tests/integration/real-worker-multiplayer.test.js",
     "test:e2e": "playwright test"
   },
   "keywords": [],

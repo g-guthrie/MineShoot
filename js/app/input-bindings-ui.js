@@ -50,10 +50,25 @@
             return runtime.GameModalManager || null;
         }
 
-        function setStatus(text, isErr) {
+        var statusTimer = 0;
+
+        function setStatus(text, isErr, autoHideMs) {
+            if (statusTimer) { clearTimeout(statusTimer); statusTimer = 0; }
             if (!statusEl) return;
-            statusEl.textContent = text || '';
-            statusEl.style.color = isErr ? '#ffb0b0' : '#baf8c8';
+            if (!text) {
+                statusEl.hidden = true;
+                statusEl.textContent = '';
+                return;
+            }
+            statusEl.textContent = text;
+            statusEl.hidden = false;
+            statusEl.style.background = isErr ? '#e45b57' : '#3b6eff';
+            statusEl.style.color = '#fff';
+            if (autoHideMs > 0) {
+                statusTimer = setTimeout(function () {
+                    setStatus('', false);
+                }, autoHideMs);
+            }
         }
 
         function currentLabel(actionId) {
@@ -61,9 +76,11 @@
             return api && api.getDisplayLabel ? api.getDisplayLabel(actionId) : '--';
         }
 
-        function stopCapture() {
+        function stopCapture(clearStatus) {
+            if (!captureActionId && !clearStatus) return;
             captureActionId = '';
             if (captureInputEl && captureInputEl.blur) captureInputEl.blur();
+            if (clearStatus) setStatus('', false);
         }
 
         function renderLegend() {
@@ -127,8 +144,20 @@
             });
         }
 
+        function scrollContainer() {
+            // The modal-card is the scrollable container
+            return overlayEl
+                ? (overlayEl.querySelector('.modal-card') || overlayEl)
+                : null;
+        }
+
         function renderModal() {
             if (!groupsWrapEl) return;
+
+            // Preserve scroll position across re-renders
+            var scroller = scrollContainer();
+            var savedScroll = scroller ? scroller.scrollTop : 0;
+
             groupsWrapEl.innerHTML = '';
             var groups = groupedActionDefs();
             for (var i = 0; i < groups.length; i++) {
@@ -174,7 +203,10 @@
                         captureActionId = String(this.dataset.actionId || '');
                         setStatus('Press a new key for ' + String(this.dataset.actionTitle || 'this action') + '.', false);
                         renderModal();
-                        if (captureInputEl && captureInputEl.focus) captureInputEl.focus();
+                        // Focus the hidden capture input without scrolling
+                        if (captureInputEl && captureInputEl.focus) {
+                            captureInputEl.focus({ preventScroll: true });
+                        }
                     });
 
                     row.appendChild(copy);
@@ -183,6 +215,11 @@
                 }
 
                 groupsWrapEl.appendChild(section);
+            }
+
+            // Restore scroll position after DOM rebuild
+            if (scroller && savedScroll > 0) {
+                scroller.scrollTop = savedScroll;
             }
         }
 
@@ -199,8 +236,8 @@
 
         function openModal(triggerEl) {
             closeControlsDropdown();
-            setStatus('Choose an action, then press a new key. Mouse, wheel, and Escape stay fixed.', false);
-            stopCapture();
+            setStatus('', false);
+            stopCapture(true);
             syncAll();
             var manager = modalManager();
             if (manager && manager.open) {
@@ -238,25 +275,24 @@
 
                 var token = api.tokenFromEvent(event);
                 if (token === 'Escape') {
-                    setStatus('Binding change canceled.', false);
-                    stopCapture();
+                    stopCapture(true);
                     renderModal();
                     return;
                 }
 
                 var outcome = api.assign(captureActionId, token);
                 if (!outcome || outcome.ok === false) {
-                    setStatus('That key is reserved. Pick another keyboard key.', true);
+                    setStatus('That key is reserved.', true, 2500);
                     return;
                 }
 
                 var boundLabel = currentLabel(captureActionId);
                 if (outcome.changed === false) {
-                    setStatus('Binding already set to ' + boundLabel + '.', false);
+                    setStatus('Already set to ' + boundLabel + '.', false, 2000);
                 } else if (outcome.swappedActionId) {
-                    setStatus('Swapped to ' + boundLabel + ' and preserved the previous action on ' + api.getDisplayLabel(outcome.swappedActionId) + '.', false);
+                    setStatus('Set to ' + boundLabel + '. Previous key moved to ' + api.getDisplayLabel(outcome.swappedActionId) + '.', false, 3000);
                 } else {
-                    setStatus('Bound to ' + boundLabel + '.', false);
+                    setStatus('Set to ' + boundLabel + '.', false, 2000);
                 }
                 stopCapture();
                 syncAll();
@@ -296,9 +332,24 @@
                     var api = bindingsApi();
                     if (!api || !api.resetAll) return;
                     api.resetAll();
-                    setStatus('Defaults restored.', false);
+                    setStatus('Defaults restored.', false, 2000);
                     stopCapture();
                     syncAll();
+                });
+            }
+            // Click anywhere in the modal that isn't a bind button → cancel capture
+            if (overlayEl && !overlayEl.__clickOffBound) {
+                overlayEl.__clickOffBound = true;
+                overlayEl.addEventListener('click', function (event) {
+                    if (!captureActionId) return;
+                    var target = event.target;
+                    // Don't cancel if they clicked another bind button (that handler takes over)
+                    while (target && target !== overlayEl) {
+                        if (target.classList && target.classList.contains('controls-bind-btn')) return;
+                        target = target.parentNode;
+                    }
+                    stopCapture(true);
+                    renderModal();
                 });
             }
             bindCapture();

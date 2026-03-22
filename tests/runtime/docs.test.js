@@ -99,8 +99,8 @@ test('throwable detail pages expose the richer projectile and denial tuning knob
   docs.setState({ selectedThrowableId: 'molotov' });
   const molotovHtml = docs.buildContent('throwables');
 
-  assert.match(plasmaHtml, /trackDuration/i);
-  assert.match(plasmaHtml, /trackLerp/i);
+  assert.match(plasmaHtml, /catchRadius/i);
+  assert.match(plasmaHtml, /stickExplodeDelay/i);
   assert.match(plasmaHtml, /maxLife/i);
   assert.match(molotovHtml, /fireInnerRadius/i);
   assert.match(molotovHtml, /fireLingerDuration/i);

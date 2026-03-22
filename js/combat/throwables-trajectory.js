@@ -535,10 +535,9 @@
                 : (intent.aimPoint || null);
             return {
                 catchRadius: Math.max(0, Number(def.catchRadius || tuning.plasmaCatchRadius || 0)),
-                fuseSec: Math.max(0.2, Number(def.stickExplodeDelay != null ? def.stickExplodeDelay : def.fuse || 0)),
-                trackDuration: Math.max(0, Number(def.trackDuration || 0)),
-                trackLerp: Math.max(0, Number(def.trackLerp || 0)),
-                curveStrength: Math.max(0, Math.min(1, 1 - Math.exp(-(Math.max(0, Number(def.trackLerp || 0)) * Math.max(0, Number(def.trackDuration || 0)))))),
+                stickDelaySec: Math.max(0.2, Number(def.stickExplodeDelay != null ? def.stickExplodeDelay : def.fuse || 0)),
+                maxLifeSec: Math.max(0.2, Number(plasmaMaxLife(def) || 0)),
+                blastRadius: Math.max(0, Number(def.radius || tuning.plasmaRadius || 0)),
                 referenceDistance: referencePoint
                     ? Math.max(0.1, referencePoint.distanceTo(camera.position))
                     : Math.max(0.1, Number(tuning.plasmaAcquireRange || 18))

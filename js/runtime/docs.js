@@ -55,11 +55,11 @@
             });
         }
         return [
-            { key: 'Mouse', title: 'Look', note: 'Pointer lock starts when you enter the match. Escape releases it.' },
-            { key: 'LMB', title: 'Fire', note: 'Primary fire stays on left mouse.' },
-            { key: 'RMB', title: 'ADS Mouse', note: 'Right mouse ADS stays fixed.' },
-            { key: 'Wheel', title: 'Toggle Weapon', note: 'Mouse wheel toggles between your two loadout weapons when pointer lock is active.' },
-            { key: 'Esc', title: 'Release / Close', note: 'Escape releases pointer lock and closes overlays when you are not typing.' }
+            { key: 'Mouse', title: 'Look', note: 'Pointer lock activates on match entry. Escape releases it.' },
+            { key: 'LMB', title: 'Fire', note: 'Primary fire. Hold for automatic weapons.' },
+            { key: 'RMB', title: 'ADS', note: 'Aim down sights. Tightens spread on supported weapons.' },
+            { key: 'Wheel', title: 'Swap Weapon', note: 'Toggles between your two loadout weapons.' },
+            { key: 'Esc', title: 'Pause / Menu', note: 'Releases pointer lock and opens the pause menu.' }
         ];
     }
 
@@ -117,121 +117,121 @@
 
     var WEAPON_BRIEFINGS = {
         machinegun: {
-            niche: 'Default generalist. Best for sustained pressure, tracking, and burning armor before a swap.',
-            mechanics: 'Single-ray automatic hitscan. The large magazine forgives misses, but ADS mainly zooms and does not tighten spread.',
+            niche: 'Full-auto generalist. High fire rate, large magazine, reliable at mid range.',
+            mechanics: 'Automatic hitscan. Forgiving magazine size with moderate spread. ADS zooms but does not tighten spread.',
             tips: [
-                'Start fights with it, then quick-swap once the target is cracked or forced into cover.',
-                'Treat the spread like a controllable hose. Mid-range is the sweet spot, not cross-map beams.'
+                'Lead with this to strip armor, then weapon-swap to finish.',
+                'Best at mid range. Spread widens at distance.'
             ]
         },
         shotgun: {
-            niche: 'Breach-and-finish weapon. It dominates corners, short peeks, and panic trades.',
-            mechanics: 'Twelve independent pellet rays per trigger. Unlike the pistol, every pellet can connect, so spacing decides the whole gun.',
+            niche: 'Close-range burst. Devastating up close, drops off fast with distance.',
+            mechanics: 'Fires multiple pellets per shot. All pellets can connect, so positioning is everything.',
             tips: [
-                'Close space with movement or hook first. The damage falls off sharply once the circle reticle no longer covers the body.',
-                'Use it to punish pushes and to confirm kills after machinegun or rifle chip damage.'
+                'Close the gap before firing. Use movement abilities or corners to get in range.',
+                'Strong for punishing pushes and finishing cracked targets.'
             ]
         },
         rifle: {
-            niche: 'Precision dueling rifle for controlled mid and long sightlines.',
-            mechanics: 'Single-ray hitscan with true precision ADS. Scoping drops spread to zero and stretches effective range.',
+            niche: 'Precision semi-auto. Rewards accuracy with high headshot damage.',
+            mechanics: 'Single-shot hitscan. ADS gives perfect accuracy and extends effective range.',
             tips: [
-                'Play cover-to-cover and take deliberate shots instead of panic spamming hipfire.',
-                'The headshot reward is high enough that clean ADS peeks outvalue raw volume fire.'
+                'Take deliberate shots. Spam-firing wastes the precision advantage.',
+                'Headshot multiplier is high. Always scope when you can.'
             ]
         },
         pistol: {
-            niche: 'Quick-swap hand cannon and finisher. It rewards clean aim without behaving like a shotgun.',
-            mechanics: 'World-space cylinder scan weapon. It is authored as multi-pellet, but `singleHitFromPellets` keeps only the first winning sample, so one shot still deals one damage result.',
+            niche: 'Quick-draw sidearm. Fast swap speed, forgiving hit area.',
+            mechanics: 'World-space cylinder scan weapon. Single shot with a wide hit zone, easy body shots, still rewards center aim.',
             tips: [
-                'Use it like a forgiving body-hit finisher: the cylinder is wide, but headshots still reward center alignment.',
-                'The pistol ring is a midrange guide, not a perfect all-distance truth.'
+                'Swap to this after landing damage with your primary.',
+                'The reticle ring is a midrange guide. Keep targets inside it.'
             ]
         },
         sniper: {
-            niche: 'Long-lane punish tool for picks, spawn punish, and hard opening damage.',
-            mechanics: 'Single-ray hitscan with ADS required before the shot is allowed. Hipfire exists for camera state, but the fire path is scope-gated.',
+            niche: 'Long-range one-shot threat. Must scope before firing.',
+            mechanics: 'Single-shot hitscan. ADS required to fire. High damage per hit with a long cooldown.',
             tips: [
-                'Scope early, hold angles, and leave after the shot. The cooldown is too long for brawling.',
-                'Use the massive body damage to force cover even when you do not secure the headshot.'
+                'Hold angles and take your shot. Reposition after firing.',
+                'Body shots still force enemies into cover even without the headshot kill.'
             ]
         }
     };
 
     var ABILITY_BRIEFINGS = {
         choke: {
-            useCase: 'Stops a peek, isolates one target, and gives you or your teammate a free follow-up window.',
-            mechanics: 'Acquires a target inside a widened on-screen box, then lifts and stuns them in place.',
+            useCase: 'Locks down a single target. Lifts and stuns them in place.',
+            mechanics: 'Targets an enemy on screen, then suspends them mid-air. They cannot move or shoot while held.',
             tips: [
-                'Best when enemies have already committed to a line or doorway.',
-                'Use it to pin shotgun rushers and to guarantee clean rifle or pistol follow-up shots.'
+                'Use on enemies committed to a push or holding a doorway.',
+                'Follow up with a shotgun or rifle for a free kill while they are stunned.'
             ]
         },
         hook: {
-            useCase: 'Forces close range on demand and turns bad spacing into your spacing.',
-            mechanics: 'Launches a catch check toward the center aim point, then yanks the victim to a fixed close distance.',
+            useCase: 'Pulls an enemy to close range on demand.',
+            mechanics: 'Fires a hook at your crosshair. If it connects, the target is yanked to point-blank distance.',
             tips: [
-                'Hook into shotgun or machinegun clean-up rather than using it as a standalone damage button.',
-                'It is strongest against players who think they are safe at medium range.'
+                'Hook into shotgun or machinegun follow-up for a fast kill.',
+                'Punishes players who rely on keeping distance.'
             ]
         },
         heal: {
-            useCase: 'Resets a fight after you break line of sight or win a short trade.',
-            mechanics: 'Simple self-heal with a brief visible windup before the health chunk lands.',
+            useCase: 'Self-heal. Restores health after a short windup.',
+            mechanics: 'Activate to begin healing. Health is applied after a brief delay.',
             tips: [
-                'Use it behind cover, not in the middle of open tracking duels.',
-                'Good on loadouts that play extended poke windows instead of one-shot bursts.'
+                'Break line of sight before healing. Do not use it in the open.',
+                'Best on loadouts that play longer engagements rather than one-shot trades.'
             ]
         },
         missile: {
-            useCase: 'Fast finisher and movement-forcing tool. Great for chasing weak targets around corners.',
-            mechanics: 'Spawns a micro-rocket from the muzzle and lets nearby hostile hitboxes bend the flight path.',
+            useCase: 'Tracking rocket. Curves toward nearby enemies.',
+            mechanics: 'Fires a small guided projectile that bends toward hostile targets.',
             tips: [
-                'Fire it when the enemy is already moving or healing so the tracking matters.',
-                'Low cooldown means it is part of your regular damage loop, not a once-per-fight panic key.'
+                'Fire when the target is already moving or low health for the best tracking value.',
+                'Short cooldown. Use it as part of your regular damage rotation.'
             ]
         },
         deadeye: {
-            useCase: 'High-threat execution button for exposed enemies and clustered pushes.',
-            mechanics: 'Scans a wide forward rectangle, stores a limited number of locks, then cashes them out as burst damage.',
+            useCase: 'Multi-target burst. Locks onto visible enemies and deals damage to all of them.',
+            mechanics: 'Scans a wide area, stores target locks, then cashes them out as burst damage.',
             tips: [
-                'Open angles wide enough to see multiple targets before committing the cast.',
-                'The value is in lock discipline. Do not waste it on a single target you already hard win.'
+                'Position to see multiple targets before activating.',
+                'Save it for multi-locks. Single target locks waste the ability.'
             ]
         }
     };
 
     var THROWABLE_BRIEFINGS = {
         frag: {
-            useCase: 'Generic lethal grenade for flushes, corners, and post-damage confirms.',
-            mechanics: 'Trajectory-preview explosive with limited bounce and a short fuse.',
+            useCase: 'Standard frag grenade. Area damage with bounce physics.',
+            mechanics: 'Hold to preview the trajectory arc, release to throw. Bounces off surfaces before detonating.',
             tips: [
-                'Cook the space, not the target. Throw where they have to move next.',
-                'Bounce it off cover when direct arcs are too readable.'
+                'Aim where the enemy will be, not where they are.',
+                'Bounce off walls to reach targets behind cover.'
             ]
         },
         plasma: {
-            useCase: 'Area denial with stickiness and soft homing on nearby targets.',
-            mechanics: 'Trajectory grenade that can acquire nearby targets inside a cone and explode after a stick delay.',
+            useCase: 'Tracking grenade. Locks onto nearby targets and sticks before detonating.',
+            mechanics: 'Hold to aim, release to throw. Acquires enemies in a cone and sticks on contact.',
             tips: [
-                'Strong against players tucking behind single pieces of cover.',
-                'The slower travel rewards setup throws more than panic tosses.'
+                'Effective against enemies holding a single piece of cover.',
+                'Slower travel speed. Throw early and let the tracking work.'
             ]
         },
         molotov: {
-            useCase: 'Space control and chase denial rather than pure burst damage.',
-            mechanics: 'Creates a burning zone that ticks damage over time after impact.',
+            useCase: 'Area denial. Creates a damage zone on the ground.',
+            mechanics: 'Lands and creates a burning area. Enemies inside take damage over time.',
             tips: [
-                'Throw it into exits or revives, not directly at a strafing duel target.',
-                'Use the fire field to split teams and punish predictable retreats.'
+                'Block doorways, chokepoints, and retreat paths.',
+                'Forces enemies to reposition or take sustained damage.'
             ]
         },
         knife: {
-            useCase: 'Fast instant throw for clean-up, burst finishers, and explosive refill plays.',
-            mechanics: 'No-preview projectile with direct hit damage and headshot refill utility.',
+            useCase: 'Instant throw. No arc preview, fast travel, headshot refill.',
+            mechanics: 'Fires instantly on press. Direct damage on hit. Headshot kills refill throwable charges.',
             tips: [
-                'Because there is no hold preview, treat it like a quick skill shot rather than a zoning tool.',
-                'A headshot instantly refills explosives, so it snowballs throw-focused loadouts.'
+                'Use as a fast finisher on low-health targets.',
+                'Headshot refill rewards accuracy and keeps your throwables cycling.'
             ]
         }
     };
@@ -531,6 +531,8 @@
             maxRange: hipAim && hipAim.maxRange === Infinity ? Infinity : Number(hipAim && hipAim.maxRange || 0),
             adsMaxRange: adsAim && adsAim.maxRange === Infinity ? Infinity : Number(adsAim && adsAim.maxRange || 0),
             adsFovDeg: Number(stats.adsFovDeg || 0),
+            hipfireCylinderRadiusWu: Number(stats.hipfireCylinderRadiusWu || 0),
+            adsCylinderRadiusWu: Number(stats.adsCylinderRadiusWu || 0),
             hipfireBloomScale: Number(stats.hipfireBloomScale != null ? stats.hipfireBloomScale : 1),
             adsBloomScale: Number(stats.adsBloomScale != null ? stats.adsBloomScale : 1),
             singleHitFromPellets: !!stats.singleHitFromPellets,

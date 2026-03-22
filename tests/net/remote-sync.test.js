@@ -4,25 +4,43 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 async function loadRemoteSync(remoteInterpolationTuning = null, runtimeOverrides = {}) {
+  const interpCode = await fs.readFile(new URL('../../js/net/interpolation.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/net/remote-sync.js', import.meta.url), 'utf8');
+  const baseGameplayTuning = remoteInterpolationTuning ? {
+    network: {
+      remoteInterpolation: remoteInterpolationTuning
+    }
+  } : null;
+  const overrideGameplayTuning = runtimeOverrides.GameShared && runtimeOverrides.GameShared.gameplayTuning
+    ? runtimeOverrides.GameShared.gameplayTuning
+    : null;
+  const mergedGameShared = {
+    entityPoints: {},
+    gameplayTuning: baseGameplayTuning && overrideGameplayTuning
+      ? { ...baseGameplayTuning, ...overrideGameplayTuning }
+      : (overrideGameplayTuning || baseGameplayTuning),
+    ...(runtimeOverrides.GameShared || {})
+  };
+  const mergedRuntime = {
+    ...runtimeOverrides,
+    GameShared: mergedGameShared
+  };
   const sandbox = {
     __MAYHEM_RUNTIME: {
-      GameShared: {
-        entityPoints: {},
-        gameplayTuning: remoteInterpolationTuning ? {
-          network: {
-            remoteInterpolation: remoteInterpolationTuning
-          }
-        } : null
-      },
-      ...runtimeOverrides
+      ...mergedRuntime
     },
     globalThis: null,
     console,
-    Date
+    Date,
+    Math,
+    Number,
+    isFinite,
+    Array
   };
   sandbox.globalThis = sandbox;
-  vm.runInContext(code, vm.createContext(sandbox));
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(interpCode, ctx);
+  vm.runInContext(code, ctx);
   return sandbox.__MAYHEM_RUNTIME.GameNetRemoteSync;
 }
 
@@ -279,6 +297,84 @@ test('remote sync uses buffered movement state for animation, not just the lates
   assert.equal(latestAnimState.sprinting, false);
   assert.equal(latestAnimState.movingBackward, false);
   assert.ok(latestAnimState.speedNorm < 0.4);
+});
+
+test('remote sync smooths animation-facing sprint and movement changes over a short transition', async () => {
+  const remoteSync = await loadRemoteSync({
+    animationStateBlendMs: 120
+  });
+  let latestAnimState = null;
+  const render = {
+    id: 'usr_remote_anim_blend',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    snapshotHistory: [
+      {
+        serverTime: 1000,
+        receivedAt: 1000,
+        x: 0,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 1,
+        sprinting: true,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      }
+    ],
+    serverTimeOffsetMs: 0,
+    snapshotIntervalMs: 50,
+    snapshotJitterMs: 0,
+    interpolationDelayMs: 1,
+    _presentedSpeedNorm: 0,
+    _presentedSprintBlend: 0,
+    _presentedMovingForwardBlend: 0,
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        latestAnimState = animState;
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote_anim_blend', render]]);
+  const originalDateNow = Date.now;
+  Date.now = () => 1000;
+  try {
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+  } finally {
+    Date.now = originalDateNow;
+  }
+
+  assert.equal(latestAnimState.sprinting, false);
+  assert.equal(latestAnimState.movingForward, false);
+  assert.equal(latestAnimState.speedNorm > 0 && latestAnimState.speedNorm < 1, true);
 });
 
 test('remote sync forwards replicated reload progress to remote animation', async () => {
@@ -600,6 +696,87 @@ test('remote sync uses authoritative network time for remote ability timers', as
   }
 });
 
+test('remote sync still shows a short muzzle flash when presentation delay would otherwise miss it', async () => {
+  const originalDateNow = Date.now;
+  Date.now = () => 1200;
+  try {
+    const remoteSync = await loadRemoteSync({
+      muzzleFlashPresentationMs: 70
+    }, {
+      GameNet: {
+        getAuthoritativeNow() {
+          return 1200;
+        }
+      }
+    });
+    const calls = [];
+    const render = {
+      id: 'usr_remote_flash_delay',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      snapshotHistory: [
+        {
+          serverTime: 1200,
+          receivedAt: 1200,
+          x: 0,
+          footY: 0,
+          z: 0,
+          yaw: 0,
+          pitch: 0,
+          moveSpeedNorm: 0,
+          sprinting: false,
+          movingForward: false,
+          movingBackward: false,
+          isGrounded: true,
+          velocityY: 0,
+          muzzleFlashUntil: 1000
+        }
+      ],
+      interpolationDelayMs: 180,
+      serverTimeOffsetMs: 0,
+      snapshotIntervalMs: 50,
+      snapshotJitterMs: 0,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 1000,
+      chokeState: null,
+      actorVisual: {
+        setMuzzleVisible(visible) {
+          calls.push({ kind: 'muzzle', visible });
+        },
+        updateAnimation() {},
+        triggerAction(action) {
+          calls.push({ kind: 'trigger', action });
+        }
+      },
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {}
+      }
+    };
+    const renderMap = new Map([['usr_remote_flash_delay', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(calls.some((entry) => entry.kind === 'muzzle' && entry.visible === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'trigger' && entry.action === 'fire'), true);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
 test('remote sync can lead remote combat hitboxes slightly ahead of the rendered model', async () => {
   const remoteSync = await loadRemoteSync({
     hitboxLeadMs: 24
@@ -707,10 +884,12 @@ test('remote sync renders from buffered snapshot history instead of chasing the 
       return { lift: 0, startedAt: 0 };
     });
 
-    assert.equal(Number(render.group.position.x.toFixed(2)), 10.5);
-    assert.equal(Number(render.group.position.y.toFixed(2)), 1.05);
-    assert.equal(Number(render.group.position.z.toFixed(2)), -2.1);
-    assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.42);
+    // With interpolationDelayMs=90, renderServerTime = 1000 - 0 - 90 = 910
+    // t = (910-900)/(1000-900) = 0.1, so x = 10 + 10*0.1 = 11
+    assert.equal(Number(render.group.position.x.toFixed(2)), 11);
+    assert.equal(Number(render.group.position.y.toFixed(2)), 1.1);
+    assert.equal(Number(render.group.position.z.toFixed(2)), -2.2);
+    assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.44);
   } finally {
     Date.now = originalDateNow;
   }
@@ -763,6 +942,219 @@ test('remote sync holds the latest buffered pose instead of over-extrapolating s
     assert.equal(Number(render.group.position.y.toFixed(2)), 2);
     assert.equal(Number(render.group.position.z.toFixed(2)), -4);
     assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.8);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('remote sync fallback catch-up is effectively frame-rate independent', async () => {
+  const remoteSync = await loadRemoteSync({
+    fallbackCatchupRemainingPerSecond: 0.001
+  });
+  function makeRender() {
+    return {
+      id: 'usr_fallback',
+      group: {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { y: 0 }
+      },
+      targetX: 12,
+      targetFootY: 3,
+      targetZ: -6,
+      targetYaw: 1.2,
+      targetPitch: 0.2,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: null,
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {},
+        setMuzzleVisible() {}
+      }
+    };
+  }
+
+  const render60 = makeRender();
+  const render144 = makeRender();
+  const map60 = new Map([['usr_fallback_60', render60]]);
+  const map144 = new Map([['usr_fallback_144', render144]]);
+
+  for (let i = 0; i < 60; i++) {
+    remoteSync.updateRemoteEntities(1 / 60, map60, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+  }
+  for (let i = 0; i < 144; i++) {
+    remoteSync.updateRemoteEntities(1 / 144, map144, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+  }
+
+  assert.ok(Math.abs(render60.group.position.x - render144.group.position.x) < 0.05);
+  assert.ok(Math.abs(render60.group.position.y - render144.group.position.y) < 0.05);
+  assert.ok(Math.abs(render60.group.position.z - render144.group.position.z) < 0.05);
+  assert.ok(Math.abs(render60.group.rotation.y - render144.group.rotation.y) < 0.01);
+});
+
+test('remote sync holds the last presented pose instead of snapping to the newest stale snapshot', async () => {
+  const remoteSync = await loadRemoteSync();
+  const originalDateNow = Date.now;
+  Date.now = () => 1200;
+  try {
+    const render = {
+      id: 'usr_stale_hold',
+      group: {
+        position: { x: 18, y: 1.8, z: -3.6 },
+        rotation: { y: 0.72 }
+      },
+      snapshotHistory: [
+        { serverTime: 900, receivedAt: 900, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1 },
+        { serverTime: 1000, receivedAt: 1000, x: 20, footY: 2, z: -4, yaw: 0.8, pitch: 0.2 }
+      ],
+      snapshotIntervalMs: 50,
+      interpolationDelayMs: 90,
+      freezeGapMs: 80,
+      serverTimeOffsetMs: 0,
+      lastPresentedTransform: {
+        x: 18,
+        footY: 1.8,
+        z: -3.6,
+        yaw: 0.72,
+        pitch: 0.18,
+        moveSpeedNorm: 0.4,
+        sprinting: false,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      },
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: null,
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {},
+        setMuzzleVisible() {}
+      }
+    };
+    const renderMap = new Map([['usr_stale_hold', render]]);
+
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(Number(render.group.position.x.toFixed(2)), 18);
+    assert.equal(Number(render.group.position.y.toFixed(2)), 1.8);
+    assert.equal(Number(render.group.position.z.toFixed(2)), -3.6);
+    assert.equal(Number(render.group.rotation.y.toFixed(2)), 0.72);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('remote sync blends back in after a stale-gap freeze instead of hard popping', async () => {
+  const remoteSync = await loadRemoteSync({
+    freezeRecoveryBlendMs: 40
+  });
+  const originalDateNow = Date.now;
+  try {
+    const render = {
+      id: 'usr_freeze_recovery',
+      group: {
+        position: { x: 18, y: 1.8, z: -3.6 },
+        rotation: { y: 0.72 }
+      },
+      snapshotHistory: [
+        { serverTime: 1000, receivedAt: 1000, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1 },
+        { serverTime: 1100, receivedAt: 1100, x: 30, footY: 3, z: -6, yaw: 1.2, pitch: 0.3 }
+      ],
+      snapshotIntervalMs: 50,
+      interpolationDelayMs: 1,
+      serverTimeOffsetMs: 0,
+      freezeBlendFrom: {
+        x: 18,
+        footY: 1.8,
+        z: -3.6,
+        yaw: 0.72,
+        pitch: 0.18,
+        moveSpeedNorm: 0.4,
+        sprinting: false,
+        movingForward: true,
+        movingBackward: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      },
+      freezeBlendStartAt: 1000,
+      freezeBlendDurationMs: 40,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      hookedUntil: 0,
+      muzzleFlashUntil: 0,
+      chokeState: null,
+      actorVisual: null,
+      bodyHitbox: null,
+      headHitbox: null,
+      rigApi: {
+        setWeapon() {},
+        updateAnimation() {},
+        triggerAction() {},
+        setMuzzleVisible() {}
+      }
+    };
+    const renderMap = new Map([['usr_freeze_recovery', render]]);
+
+    Date.now = () => 1010;
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    const firstX = render.group.position.x;
+    const firstY = render.group.position.y;
+    const firstYaw = render.group.rotation.y;
+
+    assert.equal(firstX > 18 && firstX < 30, true);
+    assert.equal(firstY > 1.8 && firstY < 3, true);
+    assert.equal(firstYaw > 0.72 && firstYaw < 1.2, true);
+
+    Date.now = () => 1050;
+    remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+      return { lift: 0, startedAt: 0 };
+    });
+
+    assert.equal(render.group.position.x > firstX, true);
+    assert.equal(render.group.position.y > firstY, true);
+    assert.equal(render.group.rotation.y > firstYaw, true);
+    assert.equal(Number(render.group.position.x.toFixed(2)) > 29.5, true);
+    assert.equal(Number(render.group.position.y.toFixed(2)) > 2.95, true);
+    assert.equal(Number(render.group.position.z.toFixed(2)) < -5.9, true);
+    assert.equal(Number(render.group.rotation.y.toFixed(2)) > 1.18, true);
+    assert.equal(render.freezeBlendFrom, null);
   } finally {
     Date.now = originalDateNow;
   }

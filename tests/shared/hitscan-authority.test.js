@@ -28,8 +28,8 @@ function makePistolStats(overrides = {}) {
     maxRange: 24,
     adsMaxRange: 28,
     pellets: 12,
-    hipfireCylinderRadiusWu: 0.8,
-    adsCylinderRadiusWu: 1.0,
+    hipfireCylinderRadiusWu: 2.53,
+    adsCylinderRadiusWu: 3.16,
     singleHitFromPellets: true,
     aimProfile: {
       hipfire: { spread: 0.137, maxRange: 24 },
@@ -70,8 +70,8 @@ function hitAreaAtDistance(spread, fovDeg, distance) {
 
 test('shared pistol tuning keeps the legacy spread values for compatibility while exposing cylinder radii', () => {
   const pistol = gameplayTuning.weaponStats.pistol;
-  assert.equal(pistol.hipfireCylinderRadiusWu, 0.8);
-  assert.equal(pistol.adsCylinderRadiusWu, 1.0);
+  assert.equal(pistol.hipfireCylinderRadiusWu, 2.53);
+  assert.equal(pistol.adsCylinderRadiusWu, 3.16);
   assert.ok(Math.abs(hitAreaAtDistance(pistol.hipfireSpread, 75, 24) - 20) < 0.05);
   assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 25.9) < 0.1);
 });
@@ -158,8 +158,8 @@ test('pistol cylinder width does not widen with distance the way a cone would', 
     targets: [{
       id: 'near-body',
       bodyBox: {
-        min: { x: 0.72, y: 1.0, z: -8.4 },
-        max: { x: 1.1, y: 2.0, z: -7.6 }
+        min: { x: 0.55, y: 1.0, z: -8.4 },
+        max: { x: 0.95, y: 2.0, z: -7.6 }
       }
     }],
     worldBoxes: []
@@ -173,8 +173,8 @@ test('pistol cylinder width does not widen with distance the way a cone would', 
     targets: [{
       id: 'far-body',
       bodyBox: {
-        min: { x: 0.72, y: 1.0, z: -20.4 },
-        max: { x: 1.1, y: 2.0, z: -19.6 }
+        min: { x: 0.55, y: 1.0, z: -20.4 },
+        max: { x: 0.95, y: 2.0, z: -19.6 }
       }
     }],
     worldBoxes: []

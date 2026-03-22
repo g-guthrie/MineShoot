@@ -23,6 +23,13 @@
         return stamp > 0 ? stamp : Date.now();
     }
 
+    function combatTimings() {
+        var shared = runtime.GameShared || null;
+        return shared && shared.getCombatTimings
+            ? (shared.getCombatTimings() || {})
+            : ((shared && shared.combatTimings) || {});
+    }
+
     function currentSelfCombatState(nowMs) {
         var combat = runtime.GamePlayerCombat || null;
         if (!combat) return null;
@@ -36,7 +43,9 @@
             armorMax: combat.getArmorMax ? combat.getArmorMax() : 1,
             alive: combat.isAlive ? combat.isAlive() : true,
             invulnerable: combat.isInvulnerable ? combat.isInvulnerable() : false,
-            spawnShieldUntil: combat.isInvulnerable && combat.isInvulnerable() ? (Number(nowMs || Date.now()) + 120) : 0,
+            spawnShieldUntil: combat.isInvulnerable && combat.isInvulnerable()
+                ? (Number(nowMs || Date.now()) + Math.max(0, Number(combatTimings().PLAYER_SPAWN_SHIELD_MS || 0)))
+                : 0,
             respawn: combat.getRespawnState ? combat.getRespawnState(nowMs) : null
         };
     }
@@ -294,7 +303,6 @@
             } else {
                 weaponLines.push('hit area: off');
             }
-            weaponLines.push('reticle: ' + String(options.weaponDebugState.reticleKind || 'crosshair'));
             sections.unshift({
                 tone: 'weapon',
                 title: 'WEAPON ' + String(options.weaponDebugState.label || '--').toUpperCase(),
@@ -310,8 +318,8 @@
                 throwableLines.push('predicted: ' + Number(throwable.telemetry.predictedCount || 0));
             }
             if (throwable.plasma) {
-                throwableLines.push('catch: ' + Number(throwable.plasma.catchRadius || 0).toFixed(2) + 'm | fuse: ' + Number(throwable.plasma.fuseSec || 0).toFixed(1) + 's');
-                throwableLines.push('track: ' + Number(throwable.plasma.trackDuration || 0).toFixed(2) + 's @ ' + Number(throwable.plasma.trackLerp || 0).toFixed(1));
+                throwableLines.push('catch: ' + Number(throwable.plasma.catchRadius || 0).toFixed(2) + 'm | stick: ' + Number(throwable.plasma.stickDelaySec || 0).toFixed(1) + 's');
+                throwableLines.push('blast: ' + Number(throwable.plasma.blastRadius || 0).toFixed(2) + 'm | life: ' + Number(throwable.plasma.maxLifeSec || 0).toFixed(1) + 's');
             }
             sections.push({
                 tone: 'throwable',
@@ -451,6 +459,9 @@
         if (!multiplayerMode && runtime.GameUI && runtime.GameUI.updateAbilityInfo && runtime.GameAbilities && runtime.GameAbilities.getHudState) {
             runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
         }
+        if (runtime.GameUI && runtime.GameUI.updateThrowableInfo && runtime.GameThrowables && runtime.GameThrowables.getState) {
+            runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
+        }
 
         if (runtime.GamePlayer && runtime.GamePlayer.setHealFlash) {
             var selfHealState = currentHealState(multiplayerMode);
@@ -540,12 +551,13 @@
                 : null;
             runtime.GameUI.updatePlasmaState({
                 visible: !!plasmaDebugState,
-                diameterPx: plasmaDebugState
-                    ? screenDiameterForWorldRadius(camera, plasmaDebugState.catchRadius, plasmaDebugState.referenceDistance)
-                    : 0,
+                ringDiametersPx: plasmaDebugState
+                    ? [
+                        screenDiameterForWorldRadius(camera, plasmaDebugState.catchRadius, 20)
+                    ]
+                    : [],
                 catchRadius: plasmaDebugState ? plasmaDebugState.catchRadius : 0,
-                fuseSec: plasmaDebugState ? plasmaDebugState.fuseSec : 0,
-                curveStrength: plasmaDebugState ? plasmaDebugState.curveStrength : 0,
+                stickDelaySec: plasmaDebugState ? plasmaDebugState.stickDelaySec : 0,
                 tone: 'throwable'
             });
         }

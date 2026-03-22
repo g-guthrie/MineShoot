@@ -211,52 +211,63 @@
                         </section>
                         <section id="menu-screen-room" class="menu-screen" data-screen="room" hidden>
                             <div id="room-screen-grid">
+                                <!-- Invite banner (floats above cards) -->
+                                <div id="room-social-invite-banner" class="banner" hidden>
+                                    <div id="room-social-invite-copy"></div>
+                                    <div id="room-social-invite-actions" class="flow">
+                                        <button id="room-social-invite-accept-btn" class="btn btn-confirm" type="button">Join Room</button>
+                                        <button id="room-social-invite-dismiss-btn" class="btn btn-danger" type="button">Dismiss</button>
+                                    </div>
+                                </div>
+
+                                <!-- Header card: room identity + code + status -->
                                 <section id="party-room-section" class="card stack">
                                     <div class="kicker">Room</div>
                                     <h2 class="title">Private Room</h2>
-                                    <div id="private-room-status" class="status" aria-live="polite" hidden></div>
-                                    <div id="room-social-feedback" class="status" aria-live="polite" hidden></div>
-                                    <div id="room-social-invite-banner" class="banner" hidden>
-                                        <div id="room-social-invite-copy"></div>
-                                        <div id="room-social-invite-actions" class="flow">
-                                            <button id="room-social-invite-accept-btn" class="btn btn-confirm btn-sm" type="button">Accept Invite</button>
-                                            <button id="room-social-invite-dismiss-btn" class="btn btn-danger btn-sm" type="button">Dismiss</button>
-                                        </div>
-                                    </div>
-                                    <div id="room-share-panel" class="card" hidden>
-                                        <div id="room-share-label" class="kicker">Room Code</div>
+                                    <div id="room-share-panel" class="room-share-row" hidden>
                                         <div id="room-share-code" class="room-code-display">------</div>
                                         <button id="copy-room-code-btn" class="btn btn-sm" type="button" aria-label="Copy room code"><span id="copy-room-code-label">Copy</span></button>
                                     </div>
-                                    <div id="private-room-view" class="stack" hidden>
-                                        <div id="private-room-summary"></div>
-                                        <div id="private-room-mode-actions" class="flow">
-                                            <button id="private-room-mode-ffa-btn" class="btn btn-sm" type="button">FFA</button>
-                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button">TDM</button>
+                                    <div id="private-room-status" class="status" aria-live="polite" hidden></div>
+                                    <div id="room-social-feedback" class="status" aria-live="polite" hidden></div>
+                                </section>
+
+                                <!-- Roster section: settings + team grid -->
+                                <div id="private-room-view" class="stack" hidden>
+                                    <div id="private-room-summary"></div>
+                                    <div id="private-room-settings-row" class="flow">
+                                        <div id="private-room-mode-actions" role="radiogroup" aria-label="Game mode">
+                                            <button id="private-room-mode-ffa-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">FFA</button>
+                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">TDM</button>
                                         </div>
-                                        <div id="private-room-team-count-actions" class="flow">
-                                            <button id="private-room-teams-2-btn" class="btn btn-sm" type="button">2 Teams</button>
-                                            <button id="private-room-teams-3-btn" class="btn btn-sm" type="button">3 Teams</button>
-                                            <button id="private-room-teams-4-btn" class="btn btn-sm" type="button">4 Teams</button>
+                                        <div id="private-room-team-count-actions" role="radiogroup" aria-label="Team count">
+                                            <button id="private-room-teams-2-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">2 Teams</button>
+                                            <button id="private-room-teams-3-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">3 Teams</button>
+                                            <button id="private-room-teams-4-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">4 Teams</button>
                                         </div>
-                                        <div id="private-room-unassigned-wrap">
-                                            <div class="kicker">Unassigned</div>
-                                            <div id="private-room-unassigned"></div>
-                                        </div>
-                                        <div id="private-room-roster-grid"></div>
-                                        <div id="private-room-roster-note">Tap a team to join it.</div>
-                                        <div id="private-room-invite-row" class="flow">
+                                    </div>
+                                    <div id="private-room-unassigned-wrap">
+                                        <div class="kicker">Unassigned</div>
+                                        <div id="private-room-unassigned"></div>
+                                    </div>
+                                    <div id="private-room-roster-grid"></div>
+                                    <div id="private-room-roster-note" class="kicker">Tap a team to join it.</div>
+
+                                    <!-- Action footer card -->
+                                    <div id="private-room-footer" class="card stack">
+                                        <div id="private-room-invite-row" class="flow" role="toolbar" aria-label="Room invites">
                                             <button id="private-room-invite-party-btn" class="btn btn-sm" type="button">Invite Party</button>
                                             <button id="private-room-invite-lock-btn" class="btn btn-sm" type="button" aria-label="Toggle room invite lock">Room Invites Locked</button>
                                         </div>
-                                        <div id="private-room-action-row" class="flow">
+                                        <div id="private-room-action-row" role="toolbar" aria-label="Room actions">
                                             <button id="private-room-leave-btn" class="btn btn-danger" type="button">Leave Room</button>
+                                            <div class="private-room-action-spacer"></div>
                                             <button id="private-room-randomize-btn" class="btn btn-primary" type="button">Balance Teams</button>
-                                            <button id="private-room-start-btn" class="btn btn-primary" type="button">Start Match</button>
-                                            <button id="private-room-enter-btn" class="btn btn-primary" type="button" hidden>Enter Match</button>
+                                            <button id="private-room-start-btn" class="btn btn-primary btn-lg" type="button">Start Match</button>
+                                            <button id="private-room-enter-btn" class="btn btn-primary btn-lg" type="button" hidden>Enter Match</button>
                                         </div>
                                     </div>
-                                </section>
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -408,33 +419,33 @@
     <div id="docs-panel" class="modal-overlay" aria-hidden="true" hidden>
         <div id="docs-terminal" class="modal-card">
             <div id="docs-header">
-                <span id="docs-title">MAYHEM :: OPEN FIELD MANUAL</span>
-                <button id="docs-close-btn" type="button">CLOSE</button>
+                <span id="docs-title">MAYHEM — FIELD MANUAL</span>
+                <button id="docs-close-btn" type="button">Close</button>
             </div>
             <div id="docs-nav"></div>
             <div id="docs-main">
                 <div id="docs-subnav"></div>
                 <div id="docs-content">LOADING MANUAL...</div>
             </div>
-            <div id="docs-hint">Top row switches pages. Left rail drills into a weapon, ability, or throwable.</div>
+            <div id="docs-hint">Tabs switch pages. Sidebar selects individual weapons, abilities, or throwables.</div>
         </div>
     </div>
 
     <div id="controls-overlay" class="modal-overlay" hidden>
         <div id="controls-modal" class="modal-card">
             <div id="controls-modal-header">
-                <span id="controls-modal-title">KEY BINDINGS</span>
-                <button id="controls-close-btn" type="button">CLOSE</button>
+                <span id="controls-modal-title">Key Bindings</span>
+                <button id="controls-close-btn" type="button">Close</button>
             </div>
-            <div id="controls-modal-copy">Keyboard bindings save instantly to this browser. Mouse, wheel, and Escape stay fixed.</div>
+            <div id="controls-modal-copy">Bindings save automatically. Mouse, scroll wheel, and Escape cannot be rebound.</div>
             <div id="controls-fixed-panel">
-                <div id="controls-fixed-title">FIXED CONTROLS</div>
+                <div id="controls-fixed-title">Fixed Controls</div>
                 <div id="controls-fixed-grid"></div>
             </div>
+            <div id="controls-rebind-status" aria-live="polite" hidden></div>
             <div id="controls-bindings-groups"></div>
-            <div id="controls-rebind-status" aria-live="polite"></div>
             <div id="controls-modal-actions">
-                <button id="controls-reset-btn" type="button">RESET DEFAULTS</button>
+                <button id="controls-reset-btn" type="button">Reset to Defaults</button>
             </div>
             <input id="controls-capture-input" class="visually-hidden" type="text" aria-label="Keyboard capture input" autocomplete="off" spellcheck="false">
         </div>

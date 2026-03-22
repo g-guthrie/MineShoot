@@ -523,6 +523,75 @@ test('GameNet updates self ability loadout immediately on class_changed before t
   assert.equal(GameNet.getSelfAbilityState().abilityId, 'hook');
 });
 
+test('GameNet preserves the selected weapon loadout locally until snapshots catch up', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, sentMessages } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  assert.equal(GameNet.sendWeaponLoadout('sniper', 'rifle'), true);
+  assert.deepEqual(sentMessages.at(-1), {
+    t: 'weapon_loadout',
+    slot1: 'sniper',
+    slot2: 'rifle'
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 1,
+        weaponId: 'rifle',
+        weaponLoadout: ['rifle', 'shotgun']
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfState().weaponLoadout)), ['sniper', 'rifle']);
+  assert.equal(GameNet.getSelfState().weaponId, 'sniper');
+
+  harness.handleMessage({
+    t: 'snapshot',
+    delta: false,
+    entities: [
+      {
+        id: 'usr_test',
+        x: 0,
+        y: 1.6,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        seq: 2,
+        weaponId: 'sniper',
+        weaponLoadout: ['sniper', 'rifle']
+      }
+    ],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfState().weaponLoadout)), ['sniper', 'rifle']);
+  assert.equal(GameNet.getSelfState().weaponId, 'sniper');
+});
+
 test('GameNet stores snapshot timing and estimates current server time from snapshots', async () => {
   const harness = await loadGameNetHarness();
   const { GameNet, timeState } = harness;
@@ -555,6 +624,8 @@ test('GameNet stores snapshot timing and estimates current server time from snap
       jitterMs: 0
     },
     rttMs: 0,
+    responsiveRttMs: 0,
+    pessimisticRttMs: 0,
     rttJitterMs: 0,
     lastPongAt: 0,
     pingCadenceMs: 500
@@ -716,9 +787,35 @@ test('GameNet tracks pong RTT and jitter in connection timing state', async () =
 
   const timing = JSON.parse(JSON.stringify(GameNet.getConnectionTimingState()));
   assert.equal(timing.rttMs, 120);
+  assert.equal(timing.responsiveRttMs, 120);
+  assert.equal(timing.pessimisticRttMs, 120);
   assert.equal(timing.rttJitterMs, 0);
   assert.equal(timing.lastPongAt, 1120);
   assert.equal(timing.snapshot.serverTimeOffsetMs, 60);
+});
+
+test('GameNet keeps a separate pessimistic RTT estimate for delay decisions after a spike', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  timeState.now = 1050;
+  harness.handleMessage({
+    t: 'pong',
+    clientTime: 1000,
+    serverTime: 1040
+  });
+
+  timeState.now = 1300;
+  harness.handleMessage({
+    t: 'pong',
+    clientTime: 1100,
+    serverTime: 1280
+  });
+
+  const timing = JSON.parse(JSON.stringify(GameNet.getConnectionTimingState()));
+  assert.equal(Number(timing.responsiveRttMs.toFixed(1)), 72.5);
+  assert.equal(timing.pessimisticRttMs > timing.responsiveRttMs, true);
+  assert.equal(timing.pessimisticRttMs, 200);
 });
 
 test('GameNet rejects stale self snapshots before mutating self state', async () => {
@@ -757,6 +854,44 @@ test('GameNet rejects stale self snapshots before mutating self state', async ()
   assert.equal(GameNet.getSelfState().x, 4);
   assert.equal(GameNet.getSelfState().hp, 400);
   assert.equal(GameNet.getInputSyncState().lastAckedSeq, 3);
+});
+
+test('GameNet accepts wrapped self snapshot sequences when they are newer in modular order', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1000;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 960,
+    delta: false,
+    entities: [{ id: 'usr_test', x: 4, y: 1.6, z: 5, yaw: 0, pitch: 0, seq: 4294967294, hp: 400 }],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+  timeState.now = 1010;
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 970,
+    delta: true,
+    entities: [{ id: 'usr_test', x: 9, y: 1.6, z: 8, yaw: 0, pitch: 0, seq: 1, hp: 375 }],
+    removedEntityIds: []
+  });
+
+  assert.equal(GameNet.getSelfState().seq, 1);
+  assert.equal(GameNet.getSelfState().x, 9);
+  assert.equal(GameNet.getSelfState().hp, 375);
+  assert.equal(GameNet.getInputSyncState().lastAckedSeq, 1);
 });
 
 test('GameNet preserves authoritative projectile and fire zone state when delta snapshots omit them', async () => {

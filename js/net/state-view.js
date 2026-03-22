@@ -22,6 +22,10 @@
             return opts.getAbilityFxApi ? (opts.getAbilityFxApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null);
         }
 
+        function interpolationApi() {
+            return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || {};
+        }
+
         function readArray(name) {
             var fn = opts[name];
             var value = typeof fn === 'function' ? fn() : [];
@@ -96,10 +100,21 @@
             var base = older || newer || null;
             var head = newer || older || null;
             if (!base || !head) return null;
+            var api = interpolationApi();
+            var spanMs = Math.max(1, Number(head.serverTime || 0) - Number(base.serverTime || 0));
+            var baseFootY = base.footY != null ? base.footY : base.y;
+            var headFootY = head.footY != null ? head.footY : head.y;
             return {
                 serverTime: Math.max(0, Number(serverTime != null ? serverTime : choosePresentationValue(base.serverTime, head.serverTime, sampleT)) || 0),
                 x: lerpNumber(base.x, head.x, sampleT),
-                y: lerpNumber(base.y, head.y, sampleT),
+                y: api.interpolateFootY
+                    ? api.interpolateFootY(
+                        Object.assign({}, base, { footY: baseFootY }),
+                        Object.assign({}, head, { footY: headFootY }),
+                        sampleT,
+                        spanMs
+                    )
+                    : lerpNumber(base.y, head.y, sampleT),
                 z: lerpNumber(base.z, head.z, sampleT),
                 yaw: Number(base.yaw || 0) + (normalizeAngle(Number(head.yaw || 0) - Number(base.yaw || 0)) * sampleT),
                 pitch: lerpNumber(base.pitch, head.pitch, sampleT),
@@ -115,30 +130,10 @@
 
         function getRemotePresentationClock(nowMs) {
             if (!opts.getRemoteSnapshotTiming) return null;
-            var timing = opts.getRemoteSnapshotTiming();
-            var latestServerTime = Math.max(0, Number(timing && timing.latestServerTime || 0));
-            var latestReceivedAt = Math.max(0, Number(timing && timing.latestReceivedAt || 0));
-            if (!(latestServerTime > 0) || !(latestReceivedAt > 0)) return null;
-            var clockOffsetMs = Number(timing && timing.clockOffsetMs || 0);
-            var cadenceMs = Math.max(0, Number(timing && timing.cadenceMs || 0));
-            var sampleNowMs = Math.max(0, Number(nowMs || Date.now()));
-            var estimatedServerTime = Math.max(
-                latestServerTime,
-                sampleNowMs - clockOffsetMs
-            );
-            var interpolationDelayMs = cadenceMs > 0
-                ? clamp(cadenceMs * 2, 48, 180)
-                : 95;
-            return {
-                nowMs: sampleNowMs,
-                latestServerTime: latestServerTime,
-                latestReceivedAt: latestReceivedAt,
-                clockOffsetMs: clockOffsetMs,
-                cadenceMs: cadenceMs,
-                estimatedServerTime: estimatedServerTime,
-                interpolationDelayMs: interpolationDelayMs,
-                renderServerTime: Math.max(0, estimatedServerTime - interpolationDelayMs)
-            };
+            var api = interpolationApi();
+            return api.buildPresentationClock
+                ? api.buildPresentationClock(opts.getRemoteSnapshotTiming(), nowMs)
+                : null;
         }
 
         function sampleRemoteEntityPresentation(entityId, nowMs) {
@@ -170,16 +165,28 @@
             var last = history[history.length - 1];
             var prev = history.length > 1 ? history[history.length - 2] : last;
             var stepMs = Math.max(1, Number(last && last.serverTime || 0) - Number(prev && prev.serverTime || 0));
-            var extrapolationMs = clamp(
+            var api = interpolationApi();
+            var maxExtrapMs = api.computeMaxExtrapolation
+                ? api.computeMaxExtrapolation(
+                    clamp(Number(clock.cadenceMs || stepMs), 16, 140),
+                    0
+                )
+                : 0;
+            var rawExtrapMs = clamp(
                 renderServerTime - Number(last && last.serverTime || 0),
                 0,
-                Math.max(24, Math.min(96, Math.max(stepMs, Number(clock.cadenceMs || 0))))
+                maxExtrapMs
             );
-            var extrapolationT = extrapolationMs / stepMs;
+            var extrapolationT = api.dampedExtrapolationScale
+                ? api.dampedExtrapolationScale(rawExtrapMs, maxExtrapMs, stepMs)
+                : 0;
+            var extrapolationMs = extrapolationT * stepMs;
             return buildRemotePresentationSample(last, {
                 serverTime: Number(last && last.serverTime || 0) + extrapolationMs,
                 x: Number(last && last.x || 0) + ((Number(last && last.x || 0) - Number(prev && prev.x || 0)) * extrapolationT),
-                y: Number(last && last.y || 0) + ((Number(last && last.y || 0) - Number(prev && prev.y || 0)) * extrapolationT),
+                y: api.projectBallisticFootY && last && last.isGrounded === false
+                    ? api.projectBallisticFootY(Object.assign({}, last, { footY: last.y }), extrapolationMs)
+                    : (Number(last && last.y || 0) + ((Number(last && last.y || 0) - Number(prev && prev.y || 0)) * extrapolationT)),
                 z: Number(last && last.z || 0) + ((Number(last && last.z || 0) - Number(prev && prev.z || 0)) * extrapolationT),
                 yaw: Number(last && last.yaw || 0) + (normalizeAngle(Number(last && last.yaw || 0) - Number(prev && prev.yaw || 0)) * extrapolationT),
                 pitch: Number(last && last.pitch || 0) + ((Number(last && last.pitch || 0) - Number(prev && prev.pitch || 0)) * extrapolationT),
@@ -251,12 +258,15 @@
             var defaults = opts.classStats(user.classId || 'abilities');
             var shared = sharedApi();
             var survivability = shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
+            var entityConstants = shared.entityConstants || {};
+            var hpMax = Math.max(0, Number(survivability.hpMax || entityConstants.DEFAULT_HP_MAX || 0));
+            var armorMax = Math.max(0, Number(defaults.armorMax || entityConstants.DEFAULT_ARMOR_MAX || 0));
             return {
                 id: user.id,
-                hp: Number(survivability.hpMax || 360),
-                hpMax: Number(survivability.hpMax || 360),
-                armor: defaults.armorMax,
-                armorMax: defaults.armorMax,
+                hp: hpMax,
+                hpMax: hpMax,
+                armor: armorMax,
+                armorMax: armorMax,
                 classId: user.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
                 throwables: null,

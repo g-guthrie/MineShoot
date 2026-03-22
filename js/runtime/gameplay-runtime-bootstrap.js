@@ -147,7 +147,7 @@
 
             options.applyDebugVisuals(false);
 
-            var syncedWeapons = options.syncMenuWeaponSlotsToRuntime();
+            var syncedWeapons = options.syncCommittedLoadoutToRuntime();
             if (syncedWeapons && syncedWeapons[0]) {
                 options.applyWeapon(gameHitscan.setWeapon(syncedWeapons[0]));
             } else {

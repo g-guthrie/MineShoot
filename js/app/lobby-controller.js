@@ -52,33 +52,46 @@
     }
 
     function readReturnState() {
-        var store = sessionStore();
-        if (!store || typeof store.getItem !== 'function') return null;
-        try {
-            var raw = String(store.getItem(RETURN_STATE_KEY) || '').trim();
-            if (!raw) return null;
-            store.removeItem(RETURN_STATE_KEY);
-            var parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object') return null;
-            return {
-                activeSurface: parsed.activeSurface === 'room' ? 'room' : 'main',
-                selectedMode: normalizeMode(parsed.selectedMode)
-            };
-        } catch (_err) {
-            return null;
+        var result = null;
+        // Read from sessionStorage first, fall back to localStorage
+        var stores = [sessionStore(), localStore()];
+        for (var i = 0; i < stores.length; i++) {
+            var store = stores[i];
+            if (!store || typeof store.getItem !== 'function') continue;
+            try {
+                var raw = String(store.getItem(RETURN_STATE_KEY) || '').trim();
+                if (raw && !result) {
+                    var parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        result = {
+                            activeSurface: parsed.activeSurface === 'room' ? 'room' : 'main',
+                            selectedMode: normalizeMode(parsed.selectedMode)
+                        };
+                    }
+                }
+                store.removeItem(RETURN_STATE_KEY);
+            } catch (_err) {
+                // no-op
+            }
         }
+        return result;
     }
 
     function writeReturnState(payload) {
-        var store = sessionStore();
-        if (!store || typeof store.setItem !== 'function') return;
-        try {
-            store.setItem(RETURN_STATE_KEY, JSON.stringify({
-                activeSurface: payload && payload.activeSurface === 'room' ? 'room' : 'main',
-                selectedMode: normalizeMode(payload && payload.selectedMode)
-            }));
-        } catch (_err) {
-            // no-op
+        var value = JSON.stringify({
+            activeSurface: payload && payload.activeSurface === 'room' ? 'room' : 'main',
+            selectedMode: normalizeMode(payload && payload.selectedMode)
+        });
+        // Write to both sessionStorage and localStorage so state survives page refresh
+        var stores = [sessionStore(), localStore()];
+        for (var i = 0; i < stores.length; i++) {
+            var store = stores[i];
+            if (!store || typeof store.setItem !== 'function') continue;
+            try {
+                store.setItem(RETURN_STATE_KEY, value);
+            } catch (_err) {
+                // no-op
+            }
         }
     }
 
@@ -270,6 +283,7 @@
             activeFriendBar: document.getElementById('active-match-friend-bar'),
             activePartyIdInput: document.getElementById('active-match-friend-id-input'),
             activeInviteFriendBtn: document.getElementById('active-match-invite-friend-btn'),
+            activeJoinFriendBtn: document.getElementById('active-match-join-friend-btn'),
             activeHeaderStatus: document.getElementById('active-match-header-feedback'),
             activeInviteBanner: document.getElementById('active-match-primary-banner'),
             activeInviteCopy: document.getElementById('active-match-primary-banner-copy'),
@@ -317,6 +331,7 @@
             playModeFfaBtn: document.getElementById('play-mode-ffa-btn'),
             playModeTdmBtn: document.getElementById('play-mode-tdm-btn'),
             sandboxModeBtn: document.getElementById('sandbox-mode-btn'),
+            loadoutStartBtn: document.getElementById('loadout-start-btn'),
             roomAccessStatus: document.getElementById('room-access-status'),
             roomActionBtn: document.getElementById('continue-loadout-btn'),
             menuSessionActions: document.getElementById('active-match-shell'),
@@ -347,6 +362,7 @@
             privateRoomSummary: document.getElementById('private-room-summary'),
             privateRoomModeFfaBtn: document.getElementById('private-room-mode-ffa-btn'),
             privateRoomModeTdmBtn: document.getElementById('private-room-mode-tdm-btn'),
+            privateRoomTeamCountActions: document.getElementById('private-room-team-count-actions'),
             privateRoomTeams2Btn: document.getElementById('private-room-teams-2-btn'),
             privateRoomTeams3Btn: document.getElementById('private-room-teams-3-btn'),
             privateRoomTeams4Btn: document.getElementById('private-room-teams-4-btn'),
@@ -546,6 +562,7 @@
 
         function openLeaveConfirm() {
             patchState({ confirmLeaveOpen: true });
+            if (elements.leaveConfirmCancelBtn) setTimeout(function () { elements.leaveConfirmCancelBtn.focus(); }, 0);
         }
 
         function closeLeaveConfirm() {
@@ -816,6 +833,12 @@
                     privateRoomViewController.resetFailures();
                 }
                 render();
+                // Auto-launch when private room phase becomes active (WS fast path)
+                if (nextState && nextState.room && String(nextState.room.roomPhase || '') === 'active') {
+                    if (actionApi && actionApi.launchFromPrivateRoomState) {
+                        actionApi.launchFromPrivateRoomState(nextState);
+                    }
+                }
             },
             onPrivateRoomUnavailable: function (message) {
                 if (privateRoomViewController && privateRoomViewController.setUnavailable) {
@@ -859,6 +882,7 @@
         bindClick(elements.inviteFriendBtn, handleInviteFriendAction);
         bindClick(elements.joinFriendBtn, handleJoinFriendAction);
         bindClick(elements.activeInviteFriendBtn, handleInviteFriendAction);
+        bindClick(elements.activeJoinFriendBtn, handleJoinFriendAction);
         bindEnter(elements.partyIdInput, function () {
             if (elements.joinFriendBtn) elements.joinFriendBtn.click();
         });
@@ -1002,6 +1026,7 @@
         bindClick(elements.privateRoomLeaveBtn, function () {
             patchState({ leaveRoomConfirmOpen: true });
             render();
+            if (elements.leaveRoomConfirmCancelBtn) setTimeout(function () { elements.leaveRoomConfirmCancelBtn.focus(); }, 0);
         });
         bindClick(elements.leaveRoomConfirmCancelBtn, function () {
             patchState({ leaveRoomConfirmOpen: false });
@@ -1040,6 +1065,30 @@
             });
         }
         document.addEventListener('keydown', function (event) {
+            // Focus trap for inline confirm dialogs
+            if (event.key === 'Tab') {
+                var trapTarget = null;
+                if (getState().leaveRoomConfirmOpen && elements.leaveRoomConfirmOverlay) {
+                    trapTarget = elements.leaveRoomConfirmOverlay;
+                } else if (getState().confirmLeaveOpen && elements.leaveConfirmOverlay) {
+                    trapTarget = elements.leaveConfirmOverlay;
+                }
+                if (trapTarget) {
+                    var focusable = trapTarget.querySelectorAll(
+                        'button:not([hidden]):not([disabled]), input:not([hidden]):not([disabled]), [tabindex]:not([tabindex="-1"]):not([hidden])'
+                    );
+                    if (focusable.length) {
+                        var first = focusable[0];
+                        var last = focusable[focusable.length - 1];
+                        if (event.shiftKey) {
+                            if (document.activeElement === first) { event.preventDefault(); last.focus(); }
+                        } else {
+                            if (document.activeElement === last) { event.preventDefault(); first.focus(); }
+                        }
+                    }
+                    return;
+                }
+            }
             if (event.key !== 'Escape') return;
             if (getState().leaveRoomConfirmOpen) {
                 event.preventDefault();
@@ -1065,14 +1114,12 @@
             if (getState().paused) {
                 if (modalIsOpen()) return;
                 event.preventDefault();
-                event.stopImmediatePropagation();
-                // Browsers block requestPointerLock() from Escape keydown events,
-                // so we can't call resumeGameplay (which tries to lock). Instead,
-                // programmatically click the resume button — this fires as a
-                // trusted click gesture that the browser will accept for pointer lock.
+                if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                else if (event.stopPropagation) event.stopPropagation();
+                // Browsers block requestPointerLock() from Escape keydown,
+                // so just focus the resume button — player taps Enter or clicks.
                 if (elements.playBtn) {
                     elements.playBtn.focus();
-                    elements.playBtn.click();
                 }
                 return;
             }

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 
-import { gameplayTuning } from '../../shared/gameplay-tuning.js';
+import { gameplayTuning, getDefaultThrowableId, normalizeThrowableId } from '../../shared/gameplay-tuning.js';
 
 async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides = {}, options = {}) {
   const [projectileRuntimeCode, trajectoryCode, fireZonesCode, authoritativeSyncCode, code] = await Promise.all([
@@ -16,10 +16,14 @@ async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides =
   ]);
   const scene = new THREE.Scene();
   const timeState = { now: 1000 };
+  const shared = {
+    gameplayTuning: tuning,
+    getDefaultThrowableId,
+    normalizeThrowableId,
+    ...((runtimeOverrides && runtimeOverrides.GameShared) || {})
+  };
   const runtime = {
-    GameShared: {
-      gameplayTuning: tuning
-    },
+    GameShared: shared,
     GameWorld: {
       getCollidables() { return []; },
       getGroundHeightAt() { return -50; }
@@ -30,6 +34,7 @@ async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides =
     },
     ...runtimeOverrides
   };
+  runtime.GameShared = shared;
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
@@ -115,32 +120,26 @@ test('throwables runtime refreshes shared tuning that arrives after module evalu
   });
 
   harness.runtime.GameShared = {
-    gameplayTuning
+    gameplayTuning,
+    getDefaultThrowableId,
+    normalizeThrowableId
   };
   harness.runtime.GameCombatTuning = {
     getThrowableDistanceTuning() {
+      const throwables = gameplayTuning.throwables;
       return {
-        fragRadius: 5.4,
-        plasmaRadius: 5.0,
-        plasmaCatchRadius: 1.5,
-        missileRadius: 2.4,
-        molotovFireRadius: 3.2,
-        plasmaAcquireRange: 18,
-        plasmaAcquireHalfAngleDeg: 35,
-        plasmaStickExplodeDelay: 2.2
+        fragRadius: throwables.frag.radius,
+        plasmaRadius: throwables.plasma.radius,
+        plasmaCatchRadius: throwables.plasma.catchRadius,
+        missileRadius: throwables.missile.radius,
+        molotovFireRadius: throwables.molotov.fireRadius,
+        plasmaAcquireRange: throwables.plasma.acquireRange,
+        plasmaAcquireHalfAngleDeg: throwables.plasma.acquireHalfAngleDeg,
+        plasmaStickExplodeDelay: throwables.plasma.stickExplodeDelay
       };
     },
     getThrowableMechanicsTuning() {
-      return {
-        aimRayRange: 100,
-        fragBounceMaxCount: 2,
-        fragBounceVelocityDamping: 0.4,
-        fragBounceVerticalDamping: 0.42,
-        fragBounceStopSpeedSq: 2.5,
-        predictedTtlMs: 5000,
-        throwIntentOriginMaxOffset: 1.2,
-        throwIntentDirectionMinDot: -0.2
-      };
+      return gameplayTuning.throwableMechanics;
     }
   };
 
@@ -150,6 +149,24 @@ test('throwables runtime refreshes shared tuning that arrives after module evalu
   assert.ok(missileTuning);
   assert.equal(missileTuning.speed, gameplayTuning.throwables.missile.speed);
   assert.deepEqual(harness.GameThrowables.getTypes(), gameplayTuning.throwables.order);
+});
+
+test('throwables runtime uses the shared throwable default selection', async () => {
+  const harness = await loadThrowablesHarness(gameplayTuning, {
+    GameShared: {
+      gameplayTuning,
+      getDefaultThrowableId() {
+        return 'plasma';
+      },
+      normalizeThrowableId(requestedId) {
+        return requestedId === 'frag' ? 'frag' : 'plasma';
+      }
+    }
+  });
+
+  assert.equal(harness.GameThrowables.getSelectedThrowable(), 'plasma');
+  assert.equal(harness.GameThrowables.setSelectedThrowable('frag'), true);
+  assert.equal(harness.GameThrowables.getSelectedThrowable(), 'frag');
 });
 
 test('throwables runtime eases remote projectile meshes toward new authoritative positions', async () => {
@@ -325,7 +342,12 @@ test('plasma grenade stays ballistic instead of steering toward nearby enemies a
   assert.ok(mesh.position.z < -3);
 });
 
-test('plasma grenade acquires near a target and curves toward it without snapping on acquire', async () => {
+test('plasma grenade stops early and stays stuck when a target enters the catch radius', async () => {
+  const plasmaTrackingTuning = JSON.parse(JSON.stringify(gameplayTuning));
+  plasmaTrackingTuning.throwables.plasma.catchRadius = 1.5;
+  plasmaTrackingTuning.throwables.plasma.acquireRange = 18;
+  plasmaTrackingTuning.throwables.plasma.acquireHalfAngleDeg = 35;
+  plasmaTrackingTuning.throwables.plasma.stickExplodeDelay = 2.2;
   const bodyHitbox = new THREE.Mesh(
     new THREE.BoxGeometry(0.8, 1.2, 0.8),
     new THREE.MeshBasicMaterial()
@@ -336,7 +358,7 @@ test('plasma grenade acquires near a target and curves toward it without snappin
     group: { position: new THREE.Vector3(1.15, 0, -2.8) },
     bodyHitbox
   };
-  const harness = await loadThrowablesHarness(gameplayTuning, {
+  const harness = await loadThrowablesHarness(plasmaTrackingTuning, {
     GameEnemy: {
       getEnemies() { return [enemy]; },
       getHitboxArray() { return [bodyHitbox]; }
@@ -353,19 +375,20 @@ test('plasma grenade acquires near a target and curves toward it without snappin
   GameThrowables.update(0.05, function () {});
   const mesh = scene.children.find((node) => node && node.userData && node.userData.projectileType === 'plasma');
   assert.ok(mesh);
-  const xAfterAcquire = mesh.position.x;
-  const zAfterAcquire = mesh.position.z;
+  assert.ok(Math.abs(mesh.position.x) < 0.05);
+  assert.ok(mesh.position.z > -1.2);
 
-  assert.ok(xAfterAcquire < 0.25);
-  assert.ok(zAfterAcquire < -0.8);
+  const afterStickX = mesh.position.x;
+  const afterStickY = mesh.position.y;
+  const afterStickZ = mesh.position.z;
 
   for (let i = 0; i < 4; i++) {
     GameThrowables.update(0.05, function () {});
   }
 
-  assert.ok(mesh.position.x > xAfterAcquire + 0.15);
-  assert.ok(mesh.position.x > 0.6);
-  assert.ok(mesh.position.z < zAfterAcquire);
+  assert.equal(mesh.position.x, afterStickX);
+  assert.equal(mesh.position.y, afterStickY);
+  assert.equal(mesh.position.z, afterStickZ);
 });
 
 test('ability missile launch aims from the muzzle toward the crosshair hit point', async () => {

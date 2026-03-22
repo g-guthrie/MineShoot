@@ -140,7 +140,7 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
     isPlaying() { return false; },
     setTransientDebug() {},
     startupDebugNotice: '',
-    syncMenuWeaponSlotsToRuntime() { return []; },
+    syncCommittedLoadoutToRuntime() { return []; },
     toggleDebugVisuals() { return false; },
     tryPlayerFire() {}
   });
@@ -186,7 +186,7 @@ test('gameplay runtime bootstrap does not double-init multiplayer networking whe
     isPlaying() { return false; },
     setTransientDebug() {},
     startupDebugNotice: '',
-    syncMenuWeaponSlotsToRuntime() { return []; },
+    syncCommittedLoadoutToRuntime() { return []; },
     toggleDebugVisuals() { return false; },
     tryPlayerFire() {}
   });
@@ -228,7 +228,7 @@ test('gameplay runtime bootstrap prefers the loaded docs runtime over the legacy
     isPlaying() { return false; },
     setTransientDebug() {},
     startupDebugNotice: '',
-    syncMenuWeaponSlotsToRuntime() { return []; },
+    syncCommittedLoadoutToRuntime() { return []; },
     toggleDebugVisuals() { return false; },
     tryPlayerFire() {}
   });

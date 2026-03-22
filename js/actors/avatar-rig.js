@@ -258,7 +258,7 @@
                 aimX: 0.07, aimY: -0.03, aimZ: -0.01,
                 gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.14,
                 rightArmX: 0.04, rightArmY: -0.02, rightArmZ: 0.03, rightWristX: 0.05,
-                torsoRoll: 0.03, torsoLeanX: 0.01
+                torsoRoll: 0, torsoLeanX: 0
             },
             manipulate: {
                 armX: 0.15, armY: 0.11, armZ: 0.13,
@@ -268,7 +268,7 @@
                 aimX: 0.09, aimY: -0.02, aimZ: 0.0,
                 gunPitch: -0.12, gunYaw: 0.09, gunRoll: -0.22,
                 rightArmX: 0.08, rightArmY: -0.04, rightArmZ: 0.05, rightWristX: 0.12,
-                torsoRoll: 0.05, torsoLeanX: 0.02
+                torsoRoll: 0, torsoLeanX: 0
             },
             actionPulse: { gunYaw: -0.025, gunRoll: 0.05, palmRotX: 0.05, targetOffsetZ: 0.015, rightWristX: 0.03 }
         },
@@ -288,7 +288,7 @@
                 aimX: 0.1, aimY: -0.04, aimZ: -0.02,
                 gunPitch: -0.04, gunYaw: 0.05, gunRoll: -0.1,
                 rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.04,
-                torsoRoll: 0.05, torsoLeanX: 0.02
+                torsoRoll: 0, torsoLeanX: 0
             },
             manipulate: {
                 armX: 0.17, armY: 0.08, armZ: 0.18,
@@ -298,7 +298,7 @@
                 aimX: 0.12, aimY: -0.03, aimZ: -0.01,
                 gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.18,
                 rightArmX: 0.07, rightArmY: -0.02, rightArmZ: 0.06, rightWristX: 0.1,
-                torsoRoll: 0.08, torsoLeanX: 0.03
+                torsoRoll: 0, torsoLeanX: 0
             },
             actionPulse: { gunYaw: -0.015, gunRoll: 0.04, palmRotX: 0.03, targetOffsetZ: 0.012, rightWristX: 0.02 }
         },
@@ -318,7 +318,7 @@
                 aimX: 0.1, aimY: -0.04, aimZ: -0.02,
                 gunPitch: -0.03, gunYaw: 0.04, gunRoll: -0.1,
                 rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.05,
-                torsoRoll: 0.05, torsoLeanX: 0.02
+                torsoRoll: 0, torsoLeanX: 0
             },
             manipulate: {
                 armX: 0.22, armY: 0.06, armZ: 0.21,
@@ -328,7 +328,7 @@
                 aimX: 0.12, aimY: -0.04, aimZ: -0.01,
                 gunPitch: -0.05, gunYaw: 0.05, gunRoll: -0.16,
                 rightArmX: 0.06, rightArmY: -0.02, rightArmZ: 0.05, rightWristX: 0.08,
-                torsoRoll: 0.07, torsoLeanX: 0.02
+                torsoRoll: 0, torsoLeanX: 0
             },
             actionPulse: { gunYaw: 0.01, gunRoll: 0.035, palmRotX: 0.02, targetOffsetZ: 0.03, rightWristX: 0.015 }
         },
@@ -348,7 +348,7 @@
                 aimX: 0.1, aimY: -0.04, aimZ: -0.02,
                 gunPitch: -0.035, gunYaw: 0.04, gunRoll: -0.08,
                 rightArmX: 0.03, rightArmY: -0.01, rightArmZ: 0.03, rightWristX: 0.035,
-                torsoRoll: 0.03, torsoLeanX: 0.015
+                torsoRoll: 0, torsoLeanX: 0
             },
             manipulate: {
                 armX: 0.16, armY: 0.1, armZ: 0.15,
@@ -358,7 +358,7 @@
                 aimX: 0.11, aimY: -0.03, aimZ: -0.01,
                 gunPitch: -0.06, gunYaw: 0.05, gunRoll: -0.12,
                 rightArmX: 0.06, rightArmY: -0.02, rightArmZ: 0.04, rightWristX: 0.08,
-                torsoRoll: 0.05, torsoLeanX: 0.025
+                torsoRoll: 0, torsoLeanX: 0
             },
             actionPulse: { gunYaw: -0.01, gunRoll: 0.025, palmRotX: 0.02, targetOffsetZ: 0.012, rightWristX: 0.01 }
         },
@@ -378,7 +378,7 @@
                 aimX: 0.1, aimY: -0.04, aimZ: -0.02,
                 gunPitch: -0.04, gunYaw: 0.05, gunRoll: -0.1,
                 rightArmX: 0.04, rightArmY: -0.01, rightArmZ: 0.04, rightWristX: 0.04,
-                torsoRoll: 0.05, torsoLeanX: 0.02
+                torsoRoll: 0, torsoLeanX: 0
             },
             manipulate: {
                 armX: 0.2, armY: 0.08, armZ: 0.18,
@@ -388,7 +388,7 @@
                 aimX: 0.12, aimY: -0.03, aimZ: -0.01,
                 gunPitch: -0.07, gunYaw: 0.06, gunRoll: -0.18,
                 rightArmX: 0.07, rightArmY: -0.02, rightArmZ: 0.05, rightWristX: 0.1,
-                torsoRoll: 0.07, torsoLeanX: 0.03
+                torsoRoll: 0, torsoLeanX: 0
             },
             actionPulse: { gunYaw: -0.015, gunRoll: 0.03, palmRotX: 0.025, targetOffsetZ: 0.015, rightWristX: 0.012 }
         }
@@ -1085,17 +1085,38 @@
         applyAnimState({ speedNorm: 0, sprinting: false, airborne: false }, 0);
 
         var throwPoseTimer = 0;
+        var throwPhaseDuration = 0.4;
         function applyThrowAction(dt) {
             if (throwPoseTimer <= 0) return;
             throwPoseTimer -= dt;
             if (throwPoseTimer < 0) throwPoseTimer = 0;
-            var t = Math.min(1, throwPoseTimer * 4);
-            rig.armL.rotation.x = -1.4 * t;
-            rig.armL.rotation.z = -0.3 * t;
+            var elapsed = throwPhaseDuration - throwPoseTimer;
+            var t = Math.min(1, elapsed / Math.max(0.01, throwPhaseDuration));
+
+            // Windup (0-40%): arm pulls back
+            // Release (40-70%): arm swings forward past center
+            // Follow-through (70-100%): arm settles back to rest
+            var armX = 0;
+            var armZ = 0;
+            if (t < 0.4) {
+                var windup = t / 0.4;
+                armX = -0.6 * windup;       // pull back
+                armZ = -0.15 * windup;
+            } else if (t < 0.7) {
+                var release = (t - 0.4) / 0.3;
+                armX = -0.6 + 1.8 * release; // swing forward (net +1.2 forward)
+                armZ = -0.15 + 0.3 * release;
+            } else {
+                var settle = (t - 0.7) / 0.3;
+                armX = 1.2 * (1 - settle);   // ease back to rest
+                armZ = 0.15 * (1 - settle);
+            }
+            rig.armL.rotation.x = armX;
+            rig.armL.rotation.z = armZ;
         }
 
         function startThrowAction() {
-            throwPoseTimer = 0.35;
+            throwPoseTimer = throwPhaseDuration;
         }
 
         var firePoseTimer = 0;

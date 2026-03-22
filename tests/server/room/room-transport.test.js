@@ -89,6 +89,128 @@ test('non-websocket room requests delegate private config and state responses th
   assert.deepEqual(applied, [{ roomMode: 'tdm' }]);
 });
 
+test('room transport applies enabled local test fixtures and rebroadcasts a full snapshot', async () => {
+  const room = {
+    env: { ROOM_NAME: 'global', ENABLE_TEST_FIXTURES: '1' },
+    roomName: 'global',
+    gameMode: 'ffa',
+    matchState: { started: false, ended: false },
+    bots: new Map(),
+    players: new Map([[
+      'u1',
+      {
+        id: 'u1',
+        x: 4,
+        y: 1.6,
+        z: 5,
+        yaw: 0,
+        pitch: 0,
+        weaponId: 'pistol',
+        spawnShieldUntil: 900,
+        velocityY: 3,
+        isGrounded: false,
+        jumpHoldTimer: 0.2,
+        jumpHeldLast: true,
+        inputState: {
+          forward: true,
+          backward: false,
+          left: true,
+          right: false,
+          jump: true,
+          sprint: true,
+          adsActive: true
+        },
+        inputQueue: [{ seq: 1 }]
+      }
+    ]]),
+    refreshWorldMetaCalled: 0,
+    refreshWorldMeta() { this.refreshWorldMetaCalled += 1; },
+    humanPlayerCount() { return 1; },
+    connectedHumanCount() { return 1; },
+    simulatedPlayerCount() { return 0; },
+    applyEntitySpawnPointCalls: [],
+    applyEntitySpawnPoint(player, spawn) {
+      this.applyEntitySpawnPointCalls.push({ playerId: player.id, spawn });
+      player.x = spawn.x;
+      player.y = 1.6;
+      player.z = spawn.z;
+    },
+    seedEntityPoseHistoryCalls: [],
+    seedEntityPoseHistory(player) {
+      this.seedEntityPoseHistoryCalls.push(player.id);
+    },
+    broadcastSnapshotArgs: [],
+    broadcastSnapshot(forceFull) {
+      this.broadcastSnapshotArgs.push(forceFull);
+    }
+  };
+
+  const response = await handleRoomRequest(
+    room,
+    new Request('https://room/test-fixture?roomId=itest-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        players: [{
+          userId: 'u1',
+          x: 12,
+          z: 18,
+          yaw: 0.5,
+          pitch: -0.2,
+          clearSpawnShield: true,
+          weaponId: 'rifle'
+        }]
+      })
+    })
+  );
+  const body = await response.json();
+  const player = room.players.get('u1');
+
+  assert.equal(response.status, 200);
+  assert.equal(room.roomName, 'itest-room');
+  assert.equal(room.refreshWorldMetaCalled, 1);
+  assert.deepEqual(room.applyEntitySpawnPointCalls, [{
+    playerId: 'u1',
+    spawn: { x: 12, z: 18 }
+  }]);
+  assert.deepEqual(room.seedEntityPoseHistoryCalls, ['u1']);
+  assert.deepEqual(room.broadcastSnapshotArgs, [true]);
+  assert.equal(player.x, 12);
+  assert.equal(player.z, 18);
+  assert.equal(player.yaw, 0.5);
+  assert.equal(player.pitch, -0.2);
+  assert.equal(player.weaponId, 'rifle');
+  assert.equal(player.spawnShieldUntil, 0);
+  assert.equal(player.velocityY, 0);
+  assert.equal(player.isGrounded, true);
+  assert.equal(player.jumpHoldTimer, 0);
+  assert.equal(player.jumpHeldLast, false);
+  assert.equal(player.inputQueue.length, 0);
+  assert.deepEqual(player.inputState, {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    adsActive: false
+  });
+  assert.deepEqual(body, {
+    ok: true,
+    roomId: 'itest-room',
+    players: [{
+      userId: 'u1',
+      x: 12,
+      y: 1.6,
+      z: 18,
+      yaw: 0.5,
+      pitch: -0.2,
+      spawnShieldUntil: 0,
+      weaponId: 'rifle'
+    }]
+  });
+});
+
 test('room transport does not rebuild world metadata on every request when the room id is unchanged', async () => {
   const room = {
     env: { ROOM_NAME: 'global' },

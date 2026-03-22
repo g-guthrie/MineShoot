@@ -90,6 +90,7 @@ async function loadControlsHarness(options = {}) {
     GameThrowables: {
       getSelectedThrowable() { return 'plasma'; },
       getPreviewType() { return 'trajectory'; },
+      getState() { return { plasma: { charges: 2 } }; },
       clearTrajectoryPreview() { calls.clearTrajectoryPreview += 1; },
       updateTrajectoryPreview() { calls.updateTrajectoryPreview += 1; }
     },
@@ -580,7 +581,8 @@ test('gameplay controls honor remapped throwable, ability, debug, and manual key
 
   assert.deepEqual(harness.calls.abilityCasts, [1]);
   assert.equal(harness.calls.debugToggles, 1);
-  assert.equal(harness.calls.docsToggle, 1);
+  // Docs toggle is handled by menu-shell.js, not gameplay-controls
+  assert.equal(harness.calls.docsToggle, 0);
 });
 
 test('gameplay controls close the loaded docs runtime on escape', async () => {
@@ -591,7 +593,9 @@ test('gameplay controls close the loaded docs runtime on escape', async () => {
   harness.documentObj.dispatch('keydown', {
     code: 'Escape',
     repeat: false,
-    target: { tagName: 'DIV', isContentEditable: false }
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
   });
 
   assert.equal(harness.calls.docsClose, 1);

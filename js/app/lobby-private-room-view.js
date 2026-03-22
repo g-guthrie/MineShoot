@@ -127,7 +127,67 @@
 
         function removeAllChildren(el) {
             if (!el) return;
-            while (el.firstChild) el.removeChild(el.firstChild);
+            if (typeof el.replaceChildren === 'function') {
+                el.replaceChildren();
+                return;
+            }
+            if (Array.isArray(el.children)) {
+                el.children.length = 0;
+                el.childNodes = el.children;
+            }
+            el.textContent = '';
+            el.innerHTML = '';
+        }
+
+        function childElements(root) {
+            return root && Array.isArray(root.children) ? root.children : [];
+        }
+
+        function hasClass(node, className) {
+            if (!node || !className) return false;
+            if (node.classList && node.classList.contains && node.classList.contains(className)) return true;
+            var raw = String(node.className || '').trim();
+            if (!raw) return false;
+            var parts = raw.split(/\s+/);
+            for (var i = 0; i < parts.length; i++) {
+                if (parts[i] === className) return true;
+            }
+            return false;
+        }
+
+        function elementContains(root, target) {
+            var node = target || null;
+            while (node) {
+                if (node === root) return true;
+                node = node.parentNode || null;
+            }
+            return false;
+        }
+
+        function collectTeamTrays() {
+            var out = [];
+            var stack = childElements(ctx.privateRoomRosterGrid).slice();
+            while (stack.length) {
+                var node = stack.shift();
+                if (!node) continue;
+                if (hasClass(node, 'private-room-team-tray')) out.push(node);
+                var children = childElements(node);
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return out;
+        }
+
+        function findMemberPill(root, memberId) {
+            var targetId = String(memberId || '');
+            var stack = childElements(root).slice();
+            while (stack.length) {
+                var node = stack.shift();
+                if (!node) continue;
+                if (node.dataset && String(node.dataset.memberId || '') === targetId) return node;
+                var children = childElements(node);
+                for (var i = 0; i < children.length; i++) stack.push(children[i]);
+            }
+            return null;
         }
 
         // ── Skeleton loading UI ──────────────────────────────────────
@@ -261,9 +321,7 @@
         }
 
         function clearDropHighlights() {
-            var trays = ctx.privateRoomRosterGrid
-                ? ctx.privateRoomRosterGrid.querySelectorAll('.private-room-team-tray')
-                : [];
+            var trays = collectTeamTrays();
             for (var i = 0; i < trays.length; i++) trays[i].classList.remove('drag-over');
             if (ctx.privateRoomUnassigned) ctx.privateRoomUnassigned.classList.remove('drag-over');
         }
@@ -329,9 +387,7 @@
         }
 
         function findDropTarget(x, y) {
-            var trays = ctx.privateRoomRosterGrid
-                ? ctx.privateRoomRosterGrid.querySelectorAll('.private-room-team-tray')
-                : [];
+            var trays = collectTeamTrays();
             for (var i = 0; i < trays.length; i++) {
                 var rect = trays[i].getBoundingClientRect();
                 if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
@@ -366,12 +422,8 @@
             event.preventDefault();
 
             if (!touchDragGhost) {
-                var pillEl = ctx.privateRoomRosterGrid
-                    ? ctx.privateRoomRosterGrid.querySelector('[data-member-id="' + touchDragMemberId + '"]')
-                    : null;
-                if (!pillEl) pillEl = ctx.privateRoomUnassigned
-                    ? ctx.privateRoomUnassigned.querySelector('[data-member-id="' + touchDragMemberId + '"]')
-                    : null;
+                var pillEl = ctx.privateRoomRosterGrid ? findMemberPill(ctx.privateRoomRosterGrid, touchDragMemberId) : null;
+                if (!pillEl) pillEl = ctx.privateRoomUnassigned ? findMemberPill(ctx.privateRoomUnassigned, touchDragMemberId) : null;
                 if (pillEl) {
                     touchDragGhost = createTouchGhost(pillEl);
                     pillEl.classList.add('pending');
@@ -422,7 +474,7 @@
             targetEl.addEventListener('dragleave', function (ev) {
                 // Only remove highlight when actually leaving the target
                 var related = ev.relatedTarget;
-                if (related && targetEl.contains(related)) return;
+                if (related && elementContains(targetEl, related)) return;
                 targetEl.classList.remove('drag-over');
             });
             targetEl.addEventListener('drop', function (event) {
@@ -469,6 +521,7 @@
                 + (selectedMemberId === memberId ? ' selected' : '');
             pill.setAttribute('data-member-id', memberId);
             pill.setAttribute('data-team-id', String(currentTeamId || ''));
+            pill.setAttribute('data-rounded-role', 'container');
             if (movePending) pill.className += ' pending';
 
             if (canEditRoom) {
@@ -595,6 +648,7 @@
             var tray = document.createElement('div');
             tray.className = 'private-room-team-tray';
             tray.setAttribute('data-team-id', teamId);
+            tray.setAttribute('data-rounded-role', 'container');
             lane.appendChild(tray);
 
             renderMemberTray(tray, members, canEditRoom, teamId, teamIds, 'Drop players here.');
@@ -684,15 +738,6 @@
             var nextKey = buildSnapshotKey(room);
             if (nextKey === lastSnapshotKey && !movePending) return;
             lastSnapshotKey = nextKey;
-
-            // Show empty state for solo rooms
-            var memberCount = Number(room.memberCount || 0);
-            if (memberCount <= 1 && String(room.roomPhase || '') === 'lobby') {
-                removeAllChildren(ctx.privateRoomRosterGrid);
-                ctx.privateRoomRosterGrid.appendChild(buildEmptyState(room));
-                if (ctx.privateRoomUnassignedWrap) ctx.privateRoomUnassignedWrap.hidden = true;
-                return;
-            }
 
             renderUnassignedTray(room, canEditRoom);
             renderTeamBoard(room, canEditRoom);

@@ -6,6 +6,7 @@ import { handleFriends } from './server/friends.js';
 import { handleProfileMe, handleProfileUpdate, handlePublicProfile } from './server/profile.js';
 import { handleWsUpgrade } from './server/ws-upgrade.js';
 import { handleWsLobbyUpgrade } from './server/ws-lobby-upgrade.js';
+import { handleTestRoomFixture } from './server/test-room-fixture.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
 import { gameplayTuning } from '../shared/gameplay-tuning.js';
 import { protocol } from '../shared/protocol.js';
@@ -20,6 +21,7 @@ const MATCHMAKING_PATH = SHARED_PROTOCOL.matchmakingPath || '/api/matchmaking';
 const PARTY_PATH = SHARED_PROTOCOL.partyPath || '/api/party';
 const PRIVATE_ROOM_PATH = SHARED_PROTOCOL.privateRoomPath || '/api/private-room';
 const FRIENDS_PATH = SHARED_PROTOCOL.friendsPath || '/api/friends';
+const TEST_ROOM_FIXTURE_PATH = '/api/test/room-fixture';
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 
@@ -67,6 +69,10 @@ export default {
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === FRIENDS_PATH) {
       return handleFriends(env, request);
+    }
+
+    if (request.method === 'POST' && url.pathname === TEST_ROOM_FIXTURE_PATH) {
+      return handleTestRoomFixture(env, request);
     }
 
     if (url.pathname === WS_LOBBY_PATH) {

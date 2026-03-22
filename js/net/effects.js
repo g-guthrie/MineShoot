@@ -83,9 +83,6 @@
                 slot1: pending.slot1,
                 slot2: pending.slot2
             })) return false;
-            if (state && state.setPendingWeaponLoadout) {
-                state.setPendingWeaponLoadout(null);
-            }
             return true;
         }
 

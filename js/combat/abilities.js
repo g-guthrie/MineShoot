@@ -65,24 +65,16 @@
     function defaultAbilityId() {
         var shared = sharedApi();
         if (shared && typeof shared.getDefaultAbilityId === 'function') {
-            return shared.getDefaultAbilityId() || 'deadeye';
-        }
-        if (shared && typeof shared.getDefaultAbilityLoadout === 'function') {
-            var legacyLoadout = shared.getDefaultAbilityLoadout() || null;
-            if (legacyLoadout && legacyLoadout.slot1) return String(legacyLoadout.slot1 || '');
+            return String(shared.getDefaultAbilityId() || '');
         }
         var tuning = shared && shared.gameplayTuning ? shared.gameplayTuning : null;
-        return (tuning && (tuning.defaultAbilityId || (tuning.defaultAbilityLoadout && tuning.defaultAbilityLoadout.slot1))) || 'deadeye';
+        return String(tuning && tuning.defaultAbilityId || '');
     }
 
     function normalizeAbilityId(abilityId) {
         var shared = sharedApi();
         if (shared && typeof shared.normalizeAbilityId === 'function') {
-            return shared.normalizeAbilityId(abilityId);
-        }
-        if (shared && typeof shared.normalizeAbilityLoadout === 'function') {
-            var legacyLoadout = shared.normalizeAbilityLoadout(abilityId, '');
-            if (legacyLoadout && legacyLoadout.slot1) return String(legacyLoadout.slot1 || '');
+            return String(shared.normalizeAbilityId(abilityId) || defaultAbilityId());
         }
         return String(abilityId || defaultAbilityId() || '');
     }
@@ -94,8 +86,8 @@
             ? shared.getClassPreset('abilities')
             : null);
         return {
-            armorMax: Math.max(0, Number(preset && preset.armorMax || 90)),
-            wallhackRadius: Math.max(0, Number(preset && preset.wallhackRadius || 90)),
+            armorMax: Math.max(0, Number(preset && preset.armorMax || 0)),
+            wallhackRadius: Math.max(0, Number(preset && preset.wallhackRadius || 0)),
             loadoutWeapon: String(preset && preset.loadoutWeapon || 'rifle')
         };
     }
@@ -187,9 +179,8 @@
         ensureLocalSim();
         resetAbilityRuntimeState();
 
-        var shared = sharedApi() && sharedApi().gameplayTuning;
-        if (!hasExplicitLoadoutSelection && shared && shared.defaultAbilityId) {
-            equippedAbilityId = normalizeAbilityId(shared.defaultAbilityId);
+        if (!hasExplicitLoadoutSelection) {
+            equippedAbilityId = normalizeAbilityId(defaultAbilityId());
         }
     };
 

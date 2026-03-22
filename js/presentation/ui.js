@@ -9,7 +9,8 @@
     var inputLabels = runtime.GameInputLabels || null;
     var GameUI = {};
 
-    var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, plasmaCurveLeftEl, plasmaCurveRightEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var plasmaReticleRings = [];
     var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, idleWarningEl, abilityDebugPanelEl;
     var trackingReticleEl, trackingReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
@@ -104,19 +105,6 @@
         }
     }
 
-    function ensurePlasmaReticleDecorations() {
-        if (!plasmaReticleEl || plasmaReticleEl.__decorated) return;
-        var left = document.createElement('div');
-        left.className = 'plasma-reticle-curve left';
-        plasmaReticleEl.appendChild(left);
-        var right = document.createElement('div');
-        right.className = 'plasma-reticle-curve right';
-        plasmaReticleEl.appendChild(right);
-        plasmaReticleEl.__curveLeft = left;
-        plasmaReticleEl.__curveRight = right;
-        plasmaReticleEl.__decorated = true;
-    }
-
     function clearChildren(el) {
         if (!el) return;
         if (typeof el.replaceChildren === 'function') {
@@ -128,6 +116,16 @@
         }
         el.textContent = '';
         el.innerHTML = '';
+    }
+
+    function ensurePlasmaReticleRings() {
+        if (!plasmaReticleEl) return;
+        while (plasmaReticleRings.length < 1) {
+            var ring = document.createElement('div');
+            ring.className = 'plasma-reticle-ring';
+            plasmaReticleEl.appendChild(ring);
+            plasmaReticleRings.push(ring);
+        }
     }
 
     function appendWeaponInfoLine(text, className) {
@@ -147,9 +145,8 @@
             : null;
         shotgunReticleEl = document.getElementById('shotgun-reticle');
         plasmaReticleEl = document.getElementById('plasma-reticle');
-        ensurePlasmaReticleDecorations();
-        plasmaCurveLeftEl = plasmaReticleEl ? plasmaReticleEl.__curveLeft || null : null;
-        plasmaCurveRightEl = plasmaReticleEl ? plasmaReticleEl.__curveRight || null : null;
+        plasmaReticleRings = [];
+        ensurePlasmaReticleRings();
         sniperScopeEl = document.getElementById('sniper-scope');
         chokeReticleEl = document.getElementById('choke-reticle');
         hookReticleEl = document.getElementById('hook-reticle');
@@ -625,7 +622,10 @@
         lastThrowableInfoState = state;
 
         var GT = globalThis.__MAYHEM_RUNTIME.GameThrowables;
-        var selectedId = (GT && GT.getSelectedThrowable) ? GT.getSelectedThrowable() : 'frag';
+        var shared = (globalThis.__MAYHEM_RUNTIME || {}).GameShared || {};
+        var selectedId = (GT && GT.getSelectedThrowable)
+            ? GT.getSelectedThrowable()
+            : (shared.getDefaultThrowableId ? shared.getDefaultThrowableId() : '');
         var entry = state[selectedId];
         if (!entry) {
             throwableInfoEl.textContent = inputLabels.getBindingLabel('throwable', 'Q') + ' --';
@@ -641,21 +641,17 @@
             plasmaReticleEl.style.display = 'none';
             return;
         }
-        var size = Math.max(24, Math.round(Number(state.diameterPx || 120)));
-        var curveStrength = Math.max(0, Math.min(1, Number(state.curveStrength || 0)));
-        var curveWidth = Math.max(30, Math.round(size * (0.42 + (curveStrength * 0.34))));
-        var curveHeight = Math.max(18, Math.round(size * (0.18 + (curveStrength * 0.3))));
         applyOverlayTone(plasmaReticleEl, state.tone || 'throwable', { useBackground: false });
-        plasmaReticleEl.style.width = size + 'px';
-        plasmaReticleEl.style.height = size + 'px';
         plasmaReticleEl.style.display = 'block';
-        if (plasmaCurveLeftEl) {
-            plasmaCurveLeftEl.style.width = curveWidth + 'px';
-            plasmaCurveLeftEl.style.height = curveHeight + 'px';
-        }
-        if (plasmaCurveRightEl) {
-            plasmaCurveRightEl.style.width = curveWidth + 'px';
-            plasmaCurveRightEl.style.height = curveHeight + 'px';
+        ensurePlasmaReticleRings();
+        var sizes = Array.isArray(state.ringDiametersPx) ? state.ringDiametersPx : [];
+        for (var i = 0; i < plasmaReticleRings.length; i++) {
+            var ringEl = plasmaReticleRings[i];
+            if (!ringEl) continue;
+            var size = Math.max(16, Math.round(Number(sizes[i] || 0)));
+            ringEl.style.width = size + 'px';
+            ringEl.style.height = size + 'px';
+            ringEl.style.display = size > 0 ? 'block' : 'none';
         }
     };
 

@@ -426,6 +426,10 @@
             );
             if (nextPresenceState === lastObservedPartyPresenceState) return;
             lastObservedPartyPresenceState = nextPresenceState;
+            // Disconnect lobby WS when transitioning to gameplay
+            if (nextPresenceState === 'in_match' && lobbyWsConnected) {
+                disconnectLobbyWs();
+            }
             refreshPartyStateInternal(true, true, nextPresenceState);
         }
 

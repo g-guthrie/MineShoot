@@ -575,47 +575,6 @@
             return best;
         }
 
-        function beginPlasmaTracking(projectile, candidate, def) {
-            if (!projectile || !candidate || !candidate.enemy) return;
-            projectile.trackingEnemy = candidate.enemy;
-            projectile.trackingHitbox = candidate.hitbox || null;
-            projectile.trackingUntil = projectile.age + Math.max(0.05, Number(def && def.trackDuration || 0.2));
-        }
-
-        function resolvePlasmaTrackingPoint(projectile) {
-            if (!projectile || !projectile.trackingEnemy || projectile.trackingEnemy.alive === false) return null;
-            var hitbox = projectile.trackingHitbox || projectile.trackingEnemy.bodyHitbox || null;
-            if (hitbox && hitbox.position) return hitbox.position;
-            if (projectile.trackingEnemy.group && projectile.trackingEnemy.group.position) {
-                tmpEnemyCenter.copy(projectile.trackingEnemy.group.position);
-                tmpEnemyCenter.y += 1.05;
-                return tmpEnemyCenter;
-            }
-            return null;
-        }
-
-        function updatePlasmaTracking(projectile, def, dt) {
-            if (!projectile || !def) return;
-            if (!projectile.trackingEnemy || projectile.trackingUntil <= projectile.age) {
-                projectile.trackingEnemy = null;
-                projectile.trackingHitbox = null;
-                projectile.trackingUntil = 0;
-                return;
-            }
-            var targetPoint = resolvePlasmaTrackingPoint(projectile);
-            if (!targetPoint) {
-                projectile.trackingEnemy = null;
-                projectile.trackingHitbox = null;
-                projectile.trackingUntil = 0;
-                return;
-            }
-            var speed = Math.max(Number(def.speed || 0), projectile.velocity.length());
-            tmpDesiredVelocity.copy(targetPoint).sub(projectile.mesh.position);
-            if (tmpDesiredVelocity.lengthSq() <= 0.000001) return;
-            tmpDesiredVelocity.normalize().multiplyScalar(speed);
-            projectile.velocity.lerp(tmpDesiredVelocity, Math.min(1, Math.max(0, dt) * Math.max(0, Number(def.trackLerp || 10))));
-        }
-
         function stickPlasmaProjectile(projectile, point, enemy, def) {
             if (!projectile || !point) return;
             projectile.mesh.position.copy(point);
@@ -880,7 +839,13 @@
             tmpEnd.copy(p.mesh.position).addScaledVector(p.velocity, dt);
 
             var hit = segmentCollision(tmpStart, tmpEnd);
-            /* Plasma catch/tracking removed — sticks only on direct hit */
+            if (p.type === 'plasma') {
+                var catchHit = findPlasmaCatchCandidate(tmpStart, tmpEnd, hit ? hit.distance : Infinity, def.catchRadius, null);
+                if (catchHit && (!hit || catchHit.distance <= hit.distance)) {
+                    stickPlasmaProjectile(p, catchHit.point, catchHit.enemy, def);
+                    return;
+                }
+            }
 
             if (hit) {
                 if (hit.kind === 'enemy') {

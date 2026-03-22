@@ -108,13 +108,34 @@
             return current;
         }
 
+        function inputSeqModulo() {
+            return 4294967296;
+        }
+
+        function normalizeInputSeq(value) {
+            var modulo = inputSeqModulo();
+            var floored = Math.max(0, Math.floor(Number(value || 0)));
+            return ((floored % modulo) + modulo) % modulo;
+        }
+
+        function compareInputSeq(nextSeq, priorSeq) {
+            var modulo = inputSeqModulo();
+            var next = normalizeInputSeq(nextSeq);
+            var prior = normalizeInputSeq(priorSeq);
+            if (next === prior) return 0;
+            var diff = ((next - prior) % modulo + modulo) % modulo;
+            return diff < (modulo / 2) ? 1 : -1;
+        }
+
         function ackInputSeq(seq) {
             var nextAck = Math.floor(Number(seq || 0));
             if (!isFinite(nextAck)) return state.lastInputSeqAcked;
-            state.lastInputSeqAcked = Math.max(state.lastInputSeqAcked, nextAck);
+            if (state.lastInputSeqAcked <= 0 || compareInputSeq(nextAck, state.lastInputSeqAcked) >= 0) {
+                state.lastInputSeqAcked = normalizeInputSeq(nextAck);
+            }
             if (state.inputSeqHistory.length > 0) {
                 state.inputSeqHistory = state.inputSeqHistory.filter(function (entry) {
-                    return entry && Number(entry.seq || 0) > state.lastInputSeqAcked;
+                    return entry && compareInputSeq(entry.seq, state.lastInputSeqAcked) > 0;
                 });
             }
             return state.lastInputSeqAcked;

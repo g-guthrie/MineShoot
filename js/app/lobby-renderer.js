@@ -100,6 +100,7 @@
 
         function renderPartyMembers(state) {
             if (!elements.partyHeroMembers) return;
+            var savedScroll = elements.partyHeroMembers.scrollTop || 0;
             elements.partyHeroMembers.innerHTML = '';
             var partyState = state.party;
             if (!partyState || !partyState.party || !Array.isArray(partyState.party.members) || partyState.party.members.length <= 1) return;
@@ -152,10 +153,16 @@
 
                 elements.partyHeroMembers.appendChild(wrapper);
             }
+            if (savedScroll > 0) {
+                elements.partyHeroMembers.scrollTop = savedScroll;
+            }
         }
 
         function renderFriends(state) {
             if (!elements.socialFriendsPane || !elements.socialFriendsList || !elements.socialLayout) return;
+
+            // Preserve scroll position across full rebuild
+            var savedScroll = elements.socialFriendsList.scrollTop || 0;
             elements.socialFriendsList.innerHTML = '';
 
             var loggedIn = !!state.utilities.isLoggedIn;
@@ -238,6 +245,11 @@
 
                 elements.socialFriendsList.appendChild(wrapper);
             }
+
+            // Restore scroll position after rebuild
+            if (savedScroll > 0) {
+                elements.socialFriendsList.scrollTop = savedScroll;
+            }
         }
 
         function renderPrivateRoom(state) {
@@ -264,23 +276,37 @@
             }
 
             if (elements.privateRoomModeFfaBtn) {
-                elements.privateRoomModeFfaBtn.classList.toggle('active', hasRoom && roomMode === 'ffa');
+                var ffaActive = hasRoom && roomMode === 'ffa';
+                elements.privateRoomModeFfaBtn.classList.toggle('active', ffaActive);
+                elements.privateRoomModeFfaBtn.setAttribute('aria-checked', String(ffaActive));
                 elements.privateRoomModeFfaBtn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomModeTdmBtn) {
-                elements.privateRoomModeTdmBtn.classList.toggle('active', hasRoom && roomMode === 'tdm');
+                var tdmActive = hasRoom && roomMode === 'tdm';
+                elements.privateRoomModeTdmBtn.classList.toggle('active', tdmActive);
+                elements.privateRoomModeTdmBtn.setAttribute('aria-checked', String(tdmActive));
                 elements.privateRoomModeTdmBtn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
+            var isTdm = hasRoom && roomMode === 'tdm';
+            if (elements.privateRoomTeamCountActions) {
+                elements.privateRoomTeamCountActions.hidden = !isTdm;
+            }
             if (elements.privateRoomTeams2Btn) {
-                elements.privateRoomTeams2Btn.classList.toggle('active', hasRoom && teamCount === 2);
+                var t2Active = hasRoom && teamCount === 2;
+                elements.privateRoomTeams2Btn.classList.toggle('active', t2Active);
+                elements.privateRoomTeams2Btn.setAttribute('aria-checked', String(t2Active));
                 elements.privateRoomTeams2Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomTeams3Btn) {
-                elements.privateRoomTeams3Btn.classList.toggle('active', hasRoom && teamCount === 3);
+                var t3Active = hasRoom && teamCount === 3;
+                elements.privateRoomTeams3Btn.classList.toggle('active', t3Active);
+                elements.privateRoomTeams3Btn.setAttribute('aria-checked', String(t3Active));
                 elements.privateRoomTeams3Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomTeams4Btn) {
-                elements.privateRoomTeams4Btn.classList.toggle('active', hasRoom && teamCount === 4);
+                var t4Active = hasRoom && teamCount === 4;
+                elements.privateRoomTeams4Btn.classList.toggle('active', t4Active);
+                elements.privateRoomTeams4Btn.setAttribute('aria-checked', String(t4Active));
                 elements.privateRoomTeams4Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomInvitePartyBtn) {
@@ -293,7 +319,10 @@
                 elements.privateRoomInviteLockBtn.textContent = caps.privateRoomInviteLocked ? 'Room Invites Locked' : 'Room Invites Open';
                 elements.privateRoomInviteLockBtn.classList.toggle('locked', !!caps.privateRoomInviteLocked);
             }
-            if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = isBusy || !caps.canRandomizeTeams;
+            if (elements.privateRoomRandomizeBtn) {
+                elements.privateRoomRandomizeBtn.hidden = !isTdm;
+                elements.privateRoomRandomizeBtn.disabled = isBusy || !caps.canRandomizeTeams;
+            }
             if (elements.privateRoomLeaveBtn) {
                 elements.privateRoomLeaveBtn.hidden = !hasRoom;
                 elements.privateRoomLeaveBtn.disabled = isBusy;
@@ -612,6 +641,7 @@
             if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room' || activeMatchShell;
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
+            if (elements.loadoutStartBtn) elements.loadoutStartBtn.hidden = true;
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
             if (elements.activeFriendBar) elements.activeFriendBar.hidden = !activeMatchShell;
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
@@ -675,6 +705,7 @@
             if (elements.joinFriendBtn) elements.joinFriendBtn.disabled = isBusy;
             if (elements.activePartyIdInput) elements.activePartyIdInput.disabled = isBusy;
             if (elements.activeInviteFriendBtn) elements.activeInviteFriendBtn.disabled = isBusy;
+            if (elements.activeJoinFriendBtn) elements.activeJoinFriendBtn.disabled = isBusy;
             if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
             if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {

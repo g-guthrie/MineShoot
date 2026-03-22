@@ -704,7 +704,7 @@ test('wall street keeps an open center street while shifting building mass to th
   assert.ok(southFlushSolids.length >= 1);
 });
 
-test('wall street keeps collision inside bounds while allowing non-solid curb bleed', () => {
+test('wall street keeps all paving and collision inside the biome bounds', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
@@ -733,7 +733,7 @@ test('wall street keeps collision inside bounds while allowing non-solid curb bl
       bounds.min.z < rawBounds.minZ - 0.0001 ||
       bounds.max.z > rawBounds.maxZ + 0.0001;
   });
-  assert.ok(overflowBlocks.every((block) => block.isSolid === false));
+  assert.equal(overflowBlocks.length, 0);
 
   const collisionRecorder = createHeadlessRecorder();
   builder(rawBounds, collisionRecorder.place, {

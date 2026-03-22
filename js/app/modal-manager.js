@@ -62,11 +62,38 @@
         return entry.element;
     }
 
+    function trapFocus(event) {
+        var entry = currentEntry();
+        if (!entry || !entry.element) return;
+        if (event.key !== 'Tab') return;
+        var focusable = entry.element.querySelectorAll(
+            'button:not([hidden]):not([disabled]), [href], input:not([hidden]):not([disabled]), select:not([hidden]):not([disabled]), textarea:not([hidden]):not([disabled]), [tabindex]:not([tabindex="-1"]):not([hidden])'
+        );
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (event.shiftKey) {
+            if (doc().activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            }
+        } else {
+            if (doc().activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    }
+
     function bindGlobalListeners() {
         if (listenersBound) return;
         listenersBound = true;
 
         window.addEventListener('keydown', function (event) {
+            if (event.key === 'Tab' && activeId) {
+                trapFocus(event);
+                return;
+            }
             if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return;
             if (event.key !== 'Escape') return;
             if (!activeId) return;

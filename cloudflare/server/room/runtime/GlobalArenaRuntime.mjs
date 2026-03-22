@@ -5,7 +5,12 @@ import { WORLD_MIN, WORLD_MAX } from '../../../../shared/world-layout.js';
 import { nowMs, clamp, sanitizeRoomId } from '../../transport.js';
 import { chooseSpawnPoint } from '../../../../shared/spawn-logic.js';
 import { getRateConfig } from '../../../../shared/rate-presets.js';
+import { PLAYER_SPAWN_SHIELD_MS } from '../../../../shared/combat-timings.js';
 import { DEFAULT_HP_MAX, DEFAULT_ARMOR_MAX } from '../../../../shared/entity-constants.js';
+import {
+  ARMOR_REGEN_DELAY_MS,
+  ARMOR_REGEN_PER_SEC
+} from '../../../../shared/survivability.js';
 
 import {
   recordHistorySample,
@@ -86,8 +91,6 @@ const FFA_TARGET_PROGRESS = 10;
 const MATCH_RESET_DELAY_MS = 5000;
 const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
-const PLAYER_SPAWN_SHIELD_MS = 1000;
-
 function classPreset() {
   return CLASS_PRESETS.ffa || CLASS_PRESETS.abilities || { armorMax: DEFAULT_ARMOR_MAX, wallhackRadius: 90 };
 }
@@ -423,8 +426,8 @@ export class GlobalArenaRuntime {
       entity,
       dtSec,
       now: this.nowMs(),
-      regenDelayMs: 6000,
-      regenPerSec: 12
+      regenDelayMs: ARMOR_REGEN_DELAY_MS,
+      regenPerSec: ARMOR_REGEN_PER_SEC
     });
   }
 

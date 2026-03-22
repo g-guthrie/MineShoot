@@ -5,26 +5,57 @@
 (function () {
     'use strict';
 
-    function normalizeAngle(rad) {
-        while (rad > Math.PI) rad -= Math.PI * 2;
-        while (rad < -Math.PI) rad += Math.PI * 2;
-        return rad;
+    function interpApi() {
+        return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || {};
+    }
+    function normalizeAngle(rad) { return interpApi().normalizeAngle ? interpApi().normalizeAngle(rad) : rad; }
+    function clamp(value, min, max) { return interpApi().clamp ? interpApi().clamp(value, min, max) : Math.max(min, Math.min(max, value)); }
+    function lerpAngle(a, b, t) {
+        return interpApi().lerpAngle
+            ? interpApi().lerpAngle(a, b, t)
+            : (Number(a || 0) + (normalizeAngle(Number(b || 0) - Number(a || 0)) * t));
+    }
+    function frameRateIndependentAlpha(dt, remainingPerSecond) {
+        return interpApi().frameRateIndependentAlpha
+            ? interpApi().frameRateIndependentAlpha(dt, remainingPerSecond)
+            : Math.min(1, Math.max(0, Number(dt || 0)) * 10);
+    }
+    function blendTransforms(from, to, t) {
+        return interpApi().blendTransforms ? interpApi().blendTransforms(from, to, t) : to;
+    }
+    function cloneTransform(value) {
+        return interpApi().cloneTransform ? interpApi().cloneTransform(value) : value;
+    }
+    function easeOutCubic(t) {
+        return interpApi().easeOutCubic ? interpApi().easeOutCubic(t) : t;
     }
 
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
+    function durationBlendAlpha(dtSec, blendMs) {
+        var dtMs = Math.max(0, Number(dtSec || 0) * 1000);
+        var durationMs = Math.max(1, Number(blendMs || 1));
+        return clamp(1 - Math.exp(-dtMs / durationMs), 0, 1);
     }
 
-    function choosePresentationValue(olderValue, newerValue, t) {
-        return t >= 0.5 ? newerValue : olderValue;
+    function smoothPresentationValue(render, key, targetValue, alpha) {
+        var target = Number(targetValue || 0);
+        var current = Number(render[key]);
+        if (!isFinite(current)) current = target;
+        current += (target - current) * clamp(Number(alpha || 0), 0, 1);
+        render[key] = current;
+        return current;
+    }
+
+    function smoothPresentationFlag(render, key, targetValue, alpha) {
+        var target = targetValue ? 1 : 0;
+        var current = Number(render[key]);
+        if (!isFinite(current)) current = target;
+        current += (target - current) * clamp(Number(alpha || 0), 0, 1);
+        render[key] = current;
+        return current >= 0.5;
     }
 
     function remoteInterpolationTuning() {
-        var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
-        var network = shared.gameplayTuning && shared.gameplayTuning.network
-            ? shared.gameplayTuning.network
-            : null;
-        return network && network.remoteInterpolation ? network.remoteInterpolation : {};
+        return interpApi().readInterpolationTuning ? interpApi().readInterpolationTuning() : {};
     }
 
     function authoritativeNowMs() {
@@ -100,115 +131,11 @@
     }
 
     function interpolateBufferedTransform(render, nowMs, options) {
-        if (!render || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) return null;
-        var opts = options || {};
-        var history = render.snapshotHistory;
-        var latest = history[history.length - 1];
-        var intervalMs = clamp(Number(render.snapshotIntervalMs || 50), 16, 140);
-        var jitterMs = clamp(Number(render.snapshotJitterMs || 0), 0, 120);
-        var interpolationTuning = remoteInterpolationTuning();
-        var minDelayMs = Math.max(32, Number(interpolationTuning.minDelayMs || 95));
-        var maxDelayMs = Math.max(minDelayMs, Number(interpolationTuning.maxDelayMs || 260));
-        var explicitDelayMs = Number(render.interpolationDelayMs);
-        var interpolationDelayMs = explicitDelayMs > 0
-            ? Math.max(minDelayMs, explicitDelayMs)
-            : clamp(
-                (intervalMs * Number(interpolationTuning.intervalDelayScale || 2.6)) +
-                (jitterMs * Number(interpolationTuning.jitterDelayScale || 2.1)),
-                minDelayMs,
-                maxDelayMs
-            );
-        var overrideDelayMs = Number(opts.delayMs);
-        if (isFinite(overrideDelayMs) && overrideDelayMs >= 0) {
-            interpolationDelayMs = overrideDelayMs;
+        var api = interpApi();
+        if (api.interpolateBufferedTransform) {
+            return api.interpolateBufferedTransform(render, nowMs, options);
         }
-        var serverTimeOffsetMs = Number(render.serverTimeOffsetMs);
-        if (!isFinite(serverTimeOffsetMs)) {
-            serverTimeOffsetMs = Number(latest.receivedAt || nowMs) - Number(latest.serverTime || nowMs);
-        }
-        var renderServerTime = nowMs - serverTimeOffsetMs - interpolationDelayMs;
-        if (history.length === 1 || renderServerTime <= Number(history[0].serverTime || 0)) {
-            return history[0];
-        }
-
-        for (var i = history.length - 1; i > 0; i--) {
-            var newer = history[i];
-            var older = history[i - 1];
-            var olderTime = Number(older.serverTime || 0);
-            var newerTime = Number(newer.serverTime || 0);
-            if (renderServerTime < olderTime || renderServerTime > newerTime) continue;
-            var span = Math.max(1, newerTime - olderTime);
-            var t = clamp((renderServerTime - olderTime) / span, 0, 1);
-            return {
-                x: Number(older.x || 0) + ((Number(newer.x || 0) - Number(older.x || 0)) * t),
-                footY: Number(older.footY || 0) + ((Number(newer.footY || 0) - Number(older.footY || 0)) * t),
-                z: Number(older.z || 0) + ((Number(newer.z || 0) - Number(older.z || 0)) * t),
-                yaw: Number(older.yaw || 0) + (normalizeAngle(Number(newer.yaw || 0) - Number(older.yaw || 0)) * t),
-                pitch: Number(older.pitch || 0) + ((Number(newer.pitch || 0) - Number(older.pitch || 0)) * t),
-                moveSpeedNorm: Number(older.moveSpeedNorm || 0) + ((Number(newer.moveSpeedNorm || 0) - Number(older.moveSpeedNorm || 0)) * t),
-                sprinting: !!choosePresentationValue(!!older.sprinting, !!newer.sprinting, t),
-                movingForward: !!choosePresentationValue(!!older.movingForward, !!newer.movingForward, t),
-                movingBackward: !!choosePresentationValue(!!older.movingBackward, !!newer.movingBackward, t),
-                isGrounded: choosePresentationValue(older.isGrounded !== false, newer.isGrounded !== false, t) !== false,
-                velocityY: Number(older.velocityY || 0) + ((Number(newer.velocityY || 0) - Number(older.velocityY || 0)) * t),
-                muzzleFlashUntil: Number(choosePresentationValue(Number(older.muzzleFlashUntil || 0), Number(newer.muzzleFlashUntil || 0), t) || 0)
-            };
-        }
-
-        var last = history[history.length - 1];
-        var prev = history.length > 1 ? history[history.length - 2] : last;
-        var latestGapMs = Math.max(0, nowMs - Number(last.receivedAt || nowMs));
-        var explicitFreezeGapMs = Number(render.freezeGapMs);
-        var freezeGapMs = explicitFreezeGapMs > 0
-            ? explicitFreezeGapMs
-            : clamp(
-                (intervalMs * Number(interpolationTuning.freezeGapIntervalScale || 1.85)) +
-                (jitterMs * Number(interpolationTuning.freezeGapJitterScale || 2.5)),
-                Math.max(1, Number(interpolationTuning.freezeGapMinMs || 90)),
-                Math.max(1, Number(interpolationTuning.freezeGapMaxMs || 240))
-            );
-        if (history.length < 2 || latestGapMs > freezeGapMs) {
-            return {
-                x: Number(last.x || 0),
-                footY: Number(last.footY || 0),
-                z: Number(last.z || 0),
-                yaw: Number(last.yaw || 0),
-                pitch: Number(last.pitch || 0),
-                moveSpeedNorm: Number(last.moveSpeedNorm || 0),
-                sprinting: !!last.sprinting,
-                movingForward: !!last.movingForward,
-                movingBackward: !!last.movingBackward,
-                isGrounded: last.isGrounded !== false,
-                velocityY: Number(last.velocityY || 0),
-                muzzleFlashUntil: Number(last.muzzleFlashUntil || 0)
-            };
-        }
-        var stepMs = Math.max(1, Number(last.serverTime || 0) - Number(prev.serverTime || 0));
-        var explicitMaxExtrapolationMs = Number(render.maxExtrapolationMs);
-        var maxExtrapolationMs = explicitMaxExtrapolationMs > 0
-            ? explicitMaxExtrapolationMs
-            : clamp(
-                (intervalMs * Number(interpolationTuning.maxExtrapolationIntervalScale || 0.45)) +
-                (jitterMs * Number(interpolationTuning.maxExtrapolationJitterScale || 0.65)),
-                Math.max(1, Number(interpolationTuning.maxExtrapolationMinMs || 20)),
-                Math.max(1, Number(interpolationTuning.maxExtrapolationMaxMs || 72))
-            );
-        var extrapolationMs = clamp(renderServerTime - Number(last.serverTime || 0), 0, Math.min(maxExtrapolationMs, intervalMs + jitterMs));
-        var extrapolationScale = extrapolationMs / stepMs;
-        return {
-            x: Number(last.x || 0) + ((Number(last.x || 0) - Number(prev.x || 0)) * extrapolationScale),
-            footY: Number(last.footY || 0) + ((Number(last.footY || 0) - Number(prev.footY || 0)) * extrapolationScale),
-            z: Number(last.z || 0) + ((Number(last.z || 0) - Number(prev.z || 0)) * extrapolationScale),
-            yaw: Number(last.yaw || 0) + (normalizeAngle(Number(last.yaw || 0) - Number(prev.yaw || 0)) * extrapolationScale),
-            pitch: Number(last.pitch || 0) + ((Number(last.pitch || 0) - Number(prev.pitch || 0)) * extrapolationScale),
-            moveSpeedNorm: Number(last.moveSpeedNorm || 0),
-            sprinting: !!last.sprinting,
-            movingForward: !!last.movingForward,
-            movingBackward: !!last.movingBackward,
-            isGrounded: last.isGrounded !== false,
-            velocityY: Number(last.velocityY || 0),
-            muzzleFlashUntil: Number(last.muzzleFlashUntil || 0)
-        };
+        return null;
     }
 
     function updateRemoteEntities(dt, renderMap, getChokeVictimStateForEntity) {
@@ -219,22 +146,65 @@
         renderMap.forEach(function (r) {
             if (!r || !r.group || !r.group.position || !r.group.rotation) return;
             var bufferedTransform = interpolateBufferedTransform(r, nowMs);
-            var lerp = Math.min(1, dt * 10);
-            var nextX = bufferedTransform
-                ? Number(bufferedTransform.x || 0)
-                : (r.group.position.x + (r.targetX - r.group.position.x) * lerp);
-            var nextY = bufferedTransform
-                ? Number(bufferedTransform.footY || 0)
-                : (r.group.position.y + ((r.targetFootY || 0) - r.group.position.y) * lerp);
-            var nextZ = bufferedTransform
-                ? Number(bufferedTransform.z || 0)
-                : (r.group.position.z + (r.targetZ - r.group.position.z) * lerp);
-            var renderYaw = bufferedTransform ? Number(bufferedTransform.yaw || 0) : Number(r.targetYaw || 0);
-            var renderPitch = bufferedTransform ? Number(bufferedTransform.pitch || 0) : Number(r.targetPitch || 0);
-            var nextYaw = bufferedTransform
+            var presentState = bufferedTransform ? cloneTransform(bufferedTransform) : null;
+            if (presentState && r.freezeBlendFrom && Number(r.freezeBlendStartAt || 0) > 0) {
+                var freezeBlendDurationMs = Math.max(
+                    1,
+                    Number(r.freezeBlendDurationMs || interpolationTuning.freezeRecoveryBlendMs || 48)
+                );
+                var freezeBlendT = clamp((nowMs - Number(r.freezeBlendStartAt || 0)) / freezeBlendDurationMs, 0, 1);
+                presentState = blendTransforms(r.freezeBlendFrom, presentState, easeOutCubic(freezeBlendT));
+                if (freezeBlendT >= 1) {
+                    r.freezeBlendFrom = null;
+                    r.freezeBlendStartAt = 0;
+                }
+            }
+
+            var fallbackAlpha = frameRateIndependentAlpha(
+                dt,
+                Number(interpolationTuning.fallbackCatchupRemainingPerSecond || 0.001)
+            );
+            var nextX = presentState
+                ? Number(presentState.x || 0)
+                : (r.group.position.x + (r.targetX - r.group.position.x) * fallbackAlpha);
+            var nextY = presentState
+                ? Number(presentState.footY || 0)
+                : (r.group.position.y + ((r.targetFootY || 0) - r.group.position.y) * fallbackAlpha);
+            var nextZ = presentState
+                ? Number(presentState.z || 0)
+                : (r.group.position.z + (r.targetZ - r.group.position.z) * fallbackAlpha);
+            var renderYaw = presentState ? Number(presentState.yaw || 0) : Number(r.targetYaw || 0);
+            var renderPitch = presentState ? Number(presentState.pitch || 0) : Number(r.targetPitch || 0);
+            var nextYaw = presentState
                 ? renderYaw
-                : (r.group.rotation.y + (normalizeAngle(renderYaw - r.group.rotation.y) * lerp));
-            var presentState = bufferedTransform || r;
+                : lerpAngle(r.group.rotation.y, renderYaw, fallbackAlpha);
+            if (!presentState) presentState = r;
+            var animationBlendMs = Math.max(1, Number(interpolationTuning.animationStateBlendMs || 120));
+            var animationAlpha = durationBlendAlpha(dt, animationBlendMs);
+            var presentedSpeedNorm = smoothPresentationValue(
+                r,
+                '_presentedSpeedNorm',
+                Number(presentState.moveSpeedNorm || 0),
+                animationAlpha
+            );
+            var presentedSprinting = smoothPresentationFlag(
+                r,
+                '_presentedSprintBlend',
+                !!presentState.sprinting,
+                animationAlpha
+            );
+            var presentedMovingForward = smoothPresentationFlag(
+                r,
+                '_presentedMovingForwardBlend',
+                !!presentState.movingForward,
+                animationAlpha
+            );
+            var presentedMovingBackward = smoothPresentationFlag(
+                r,
+                '_presentedMovingBackwardBlend',
+                !!presentState.movingBackward,
+                animationAlpha
+            );
 
             if (r.actorVisual && r.actorVisual.setWorldTransform) {
                 r.actorVisual.setWorldTransform({ x: nextX, y: nextY, z: nextZ }, nextYaw);
@@ -264,8 +234,8 @@
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
                     animationApi.updateAnimation(dt, {
-                        speedNorm: presentState.moveSpeedNorm || 0,
-                        sprinting: !!presentState.sprinting,
+                        speedNorm: presentedSpeedNorm,
+                        sprinting: presentedSprinting,
                         airborne: presentState.isGrounded === false,
                         aimPitch: renderPitch,
                         hooked: hookedNow,
@@ -276,9 +246,9 @@
                         reloadPct: remoteReloadState.reloadPct,
                         reloadPhase: remoteReloadState.phase,
                         reloadPhasePct: remoteReloadState.phasePct,
-                        worldSpeed: (presentState.moveSpeedNorm || 0) * 14,
-                        movingForward: !!presentState.movingForward,
-                        movingBackward: !!presentState.movingBackward
+                        worldSpeed: presentedSpeedNorm * 14,
+                        movingForward: presentedMovingForward,
+                        movingBackward: presentedMovingBackward
                     });
                 }
                 var triggerApi = (r.actorVisual && r.actorVisual.triggerAction) ? r.actorVisual : r.rigApi;
@@ -290,7 +260,22 @@
                         });
                     }
                 }
-                var muzzleVisible = Number(presentState.muzzleFlashUntil || 0) > serverNowMs;
+                var presentationServerNowMs = Math.max(
+                    0,
+                    serverNowMs - Math.max(0, Number(r.interpolationDelayMs || 0))
+                );
+                var latestMuzzleFlashUntil = Number(r.muzzleFlashUntil || 0);
+                if (latestMuzzleFlashUntil > Number(r._lastReceivedMuzzleFlashUntil || 0)) {
+                    if (!(latestMuzzleFlashUntil > presentationServerNowMs)) {
+                        r._localMuzzleFlashUntilMs = Math.max(
+                            Number(r._localMuzzleFlashUntilMs || 0),
+                            nowMs + Math.max(16, Number(interpolationTuning.muzzleFlashPresentationMs || 70))
+                        );
+                    }
+                    r._lastReceivedMuzzleFlashUntil = latestMuzzleFlashUntil;
+                }
+                var muzzleVisible = Number(presentState.muzzleFlashUntil || 0) > presentationServerNowMs;
+                muzzleVisible = muzzleVisible || Number(r._localMuzzleFlashUntilMs || 0) > nowMs;
                 if (r.actorVisual && r.actorVisual.setMuzzleVisible) {
                     r.actorVisual.setMuzzleVisible(muzzleVisible);
                 }
@@ -314,6 +299,21 @@
                 r._muzzleVisible = muzzleVisible;
                 r._prevIsGrounded = presentState.isGrounded !== false;
             }
+
+            r.lastPresentedTransform = cloneTransform({
+                x: nextX,
+                footY: nextY,
+                z: nextZ,
+                yaw: nextYaw,
+                pitch: renderPitch,
+                moveSpeedNorm: Number(presentState.moveSpeedNorm || 0),
+                sprinting: !!presentState.sprinting,
+                movingForward: !!presentState.movingForward,
+                movingBackward: !!presentState.movingBackward,
+                isGrounded: presentState.isGrounded !== false,
+                velocityY: Number(presentState.velocityY || 0),
+                muzzleFlashUntil: Number(presentState.muzzleFlashUntil || 0)
+            });
 
             if (r.actorVisual && r.actorVisual.setHealFlash) {
                 r.actorVisual.setHealFlash(!!(r.healState && r.healState.endsAt > serverNowMs));

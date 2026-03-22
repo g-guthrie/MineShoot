@@ -176,7 +176,7 @@ test('normal hits still spill excess damage into health after armor breaks', () 
   });
 });
 
-test('heavy hits are fully absorbed by any remaining armor', () => {
+test('sniper hits now spill excess damage into health after armor breaks', () => {
   const target = {
     id: 'usr_target',
     alive: true,
@@ -190,16 +190,44 @@ test('heavy hits are fully absorbed by any remaining armor', () => {
     hitType: 'body',
     weaponId: 'sniper',
     sourceKind: 'weapon',
-    armorBufferMode: 'heavy'
+    armorBufferMode: 'normal'
   });
 
   assert.deepEqual(out, {
     id: 'usr_target',
-    hp: 360,
+    hp: 200,
     armor: 0,
     armorDamage: 10,
-    healthDamage: 0,
-    damageApplied: 10,
+    healthDamage: 160,
+    damageApplied: 170,
+    killed: false
+  });
+});
+
+test('explosive hits now spill excess damage into health after armor breaks', () => {
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    hp: 360,
+    armor: 10,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+
+  const out = applyDamageFromSource({ id: 'usr_attacker' }, target, 110, {
+    hitType: 'body',
+    weaponId: 'frag',
+    sourceKind: 'throwable',
+    armorBufferMode: 'normal'
+  });
+
+  assert.deepEqual(out, {
+    id: 'usr_target',
+    hp: 260,
+    armor: 0,
+    armorDamage: 10,
+    healthDamage: 100,
+    damageApplied: 110,
     killed: false
   });
 });

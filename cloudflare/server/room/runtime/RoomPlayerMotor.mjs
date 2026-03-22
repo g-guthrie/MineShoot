@@ -5,6 +5,11 @@ import {
   DEFAULT_ARMOR_MAX
 } from '../../../../shared/entity-constants.js';
 import {
+  ARMOR_REGEN_DELAY_MS,
+  ARMOR_REGEN_PER_SEC,
+  regenArmorFromLastDamage
+} from '../../../../shared/survivability.js';
+import {
   PLAYER_HEIGHT,
   PITCH_LIMIT,
   COLLISION_EPSILON,
@@ -247,12 +252,10 @@ export function regenArmor(options = {}) {
   const entity = options.entity;
   const now = Number(options.now || 0);
   const dtSec = Math.max(0, Number(options.dtSec || 0));
-  const regenDelayMs = Math.max(0, Number(options.regenDelayMs || 6000));
-  const regenPerSec = Math.max(0, Number(options.regenPerSec || 12));
-
-  if (!entity || !entity.alive || entity.armor >= entity.armorMax) return;
-  if ((now - Number(entity.lastDamageAt || 0)) < regenDelayMs) return;
-  entity.armor = Math.min(entity.armorMax, entity.armor + (regenPerSec * dtSec));
+  return regenArmorFromLastDamage(entity, dtSec, now, {
+    regenDelayMs: options.regenDelayMs || ARMOR_REGEN_DELAY_MS,
+    regenPerSec: options.regenPerSec || ARMOR_REGEN_PER_SEC
+  });
 }
 
 export function respawnIfNeeded(options = {}) {

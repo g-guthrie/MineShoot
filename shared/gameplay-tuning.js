@@ -42,22 +42,24 @@ export const gameplayTuning = {
       cadenceMs: 500,
       staleAfterMs: 4000,
       rttAlpha: 0.15,
+      pessimisticRttAlpha: 0.05,
+      pessimisticWindowMs: 2000,
       jitterAlpha: 0.2
     },
     selfReconciliation: {
       hardSnapDistanceWu: 4.5,
       hardSnapVerticalWu: 1.35,
-      idleReplayDistanceWu: 1.1,
-      movingReplayDistanceWu: 1.75,
-      emergencyReplayDistanceWu: 2.4,
-      baseGraceMs: 150,
-      maxExtraGraceMs: 120,
-      movingAckDriftLimit: 2,
+      idleReplayDistanceWu: 0.7,
+      movingReplayDistanceWu: 1.25,
+      emergencyReplayDistanceWu: 2.0,
+      baseGraceMs: 100,
+      maxExtraGraceMs: 80,
+      movingAckDriftLimit: 3,
       airborneHardSnapDistanceWu: 6.25,
       airborneHardSnapVerticalWu: 2.75,
-      airborneReplayDistanceWu: 2.6,
-      airborneGraceMs: 260,
-      airborneMovingAckDriftLimit: 4
+      airborneReplayDistanceWu: 2.0,
+      airborneGraceMs: 200,
+      airborneMovingAckDriftLimit: 5
     },
     combatPriority: {
       burstCadenceMs: 16,
@@ -72,17 +74,32 @@ export const gameplayTuning = {
       maxDelayMs: 160,
       intervalDelayScale: 1.6,
       jitterDelayScale: 1.4,
+      delayIncreaseTargetWeight: 0.7,
+      delayDecreaseTargetWeight: 0.2,
       freezeGapMinMs: 48,
       freezeGapMaxMs: 160,
       freezeGapIntervalScale: 1.25,
       freezeGapJitterScale: 1.8,
+      freezeRecoveryBlendMs: 48,
       maxExtrapolationMinMs: 8,
       maxExtrapolationMaxMs: 36,
       maxExtrapolationIntervalScale: 0.28,
       maxExtrapolationJitterScale: 0.45,
+      extrapolationDecay: 1.2,
+      verticalBallisticEnabled: true,
+      animationStateBlendMs: 120,
+      muzzleFlashPresentationMs: 70,
       serverOffsetSnapDeltaMs: 120,
       offsetLerpAlpha: 0.12,
-      hitboxLeadMs: 0
+      fallbackCatchupRemainingPerSecond: 0.001,
+      lossBurstThresholdScale: 1.5,
+      lossDelayPaddingTriggerCount: 2,
+      lossDelayPaddingIntervalScale: 1.0,
+      lossDelayPaddingMaxMs: 120,
+      lossHistoryBonus: 10,
+      teleportBaseThresholdWu: 8,
+      teleportSpeedAllowanceScale: 1.5,
+      hitboxLeadMs: 24
     },
     feedback: {
       predictedHitTtlMs: 900,
@@ -178,8 +195,8 @@ export const gameplayTuning = {
       name: 'Pistol', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 360, reloadMs: 1350, magazineSize: 10,
       bodyDamage: 46, headDamage: 96, maxRange: 24, pellets: 12, hipfireSpread: 0.137, adsSpread: 0.225, adsFovDeg: 56, adsMaxRange: 28,
       aimProfile: { hipfire: { spread: 0.137, maxRange: 24 }, ads: { spread: 0.225, maxRange: 28 } },
-      hipfireCylinderRadiusWu: 0.80,
-      adsCylinderRadiusWu: 1.00,
+      hipfireCylinderRadiusWu: 2.53,
+      adsCylinderRadiusWu: 3.16,
       singleHitFromPellets: true,
       armorBufferMode: 'normal',
       presentation: {
@@ -244,7 +261,7 @@ export const gameplayTuning = {
       name: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
       bodyDamage: 170, headDamage: 360, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
       aimProfile: { hipfire: { spread: 0.32, maxRange: 170 }, ads: { spread: 0, maxRange: 170 } }, infiniteRange: true,
-      armorBufferMode: 'heavy',
+      armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.12, speed: 320, segmentLength: 2.6 },
         recoil: { z: -0.12, x: -0.2, pitch: 0.04, yaw: 0.01, roll: 0.007, armR: 0.3, armL: 0.12, muzzleMs: 90 },
@@ -262,7 +279,7 @@ export const gameplayTuning = {
       }
     },
   },
-  defaultWeaponLoadout: ['rifle', 'shotgun'],
+  defaultWeaponLoadout: ['machinegun', 'shotgun'],
   selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
   throwables: {
     order: ['frag', 'plasma', 'molotov', 'knife'],
@@ -272,17 +289,17 @@ export const gameplayTuning = {
       bounceVerticalDamping: 0.42,
       bounceMaxCount: 2,
       bounceStopSpeedSq: 2.5,
-      armorBufferMode: 'heavy'
+      armorBufferMode: 'normal'
     },
     plasma: {
-      id: 'plasma', label: 'Plasma Grenade', previewType: 'trajectory', speed: 26, upward: 2.0, gravity: 22, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
-      catchRadius: 0.5, trackDuration: 0, trackLerp: 0, acquireRange: 0, acquireHalfAngleDeg: 0, stickExplodeDelay: 1.8,
-      armorBufferMode: 'heavy'
+      id: 'plasma', label: 'Plasma Grenade', previewType: 'none', speed: 30, upward: 0.0, gravity: 6.0, fuse: 2.0, maxLife: 3.2, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
+      catchRadius: 1.0, trackDuration: 0, trackLerp: 0, acquireRange: 0, acquireHalfAngleDeg: 0, stickExplodeDelay: 1.8,
+      armorBufferMode: 'normal'
     },
     missile: {
       id: 'missile', label: 'Missile', speed: 34, upward: 0.2, gravity: 0.7, fuse: 1.1, radius: 2.0, damage: 70, minBlastDamage: 10,
       homingBoost: 4.5, homingLerp: 6.0, lockHalfAngleDeg: 10, acquireRange: 6.0, hitRadius: 0.9,
-      armorBufferMode: 'heavy'
+      armorBufferMode: 'normal'
     },
     molotov: {
       id: 'molotov', label: 'Molotov', previewType: 'trajectory', speed: 16.5, upward: 4.6, gravity: 21, fuse: 2.8, fireRadius: 4.0,
@@ -332,7 +349,7 @@ export const gameplayTuning = {
       description: 'Lock and execute marked targets.',
       debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
       tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
-      cooldownMs: 20000, range: 60, duration: 1.6, maxTargets: 2, minDot: 0.28, damage: 160
+      cooldownMs: 20000, range: 60, duration: 1.6, maxTargets: 2, minDot: 0.28, damage: 160, lockBoxPx: 220
     }
   },
   defaultAbilityId: 'deadeye'
@@ -525,6 +542,20 @@ export function getAbilityCatalog() {
   return gameplayTuning.abilityCatalog || {};
 }
 
+export function getDefaultThrowableId() {
+  const throwables = gameplayTuning.throwables || {};
+  const order = Array.isArray(throwables.order) ? throwables.order : Object.keys(throwables).filter((key) => key !== 'order');
+  return order.length ? String(order[0] || '') : '';
+}
+
+export function normalizeThrowableId(requestedId) {
+  const throwables = gameplayTuning.throwables || {};
+  const order = Array.isArray(throwables.order) ? throwables.order : Object.keys(throwables).filter((key) => key !== 'order');
+  const requested = String(requestedId || '');
+  if (requested && order.indexOf(requested) >= 0 && throwables[requested]) return requested;
+  return getDefaultThrowableId();
+}
+
 export function getDefaultAbilityId() {
   const requested = String(gameplayTuning.defaultAbilityId || '');
   const catalog = getAbilityCatalog();
@@ -554,6 +585,8 @@ runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;
 runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
 runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;
+runtime.GameShared.getDefaultThrowableId = getDefaultThrowableId;
+runtime.GameShared.normalizeThrowableId = normalizeThrowableId;
 runtime.GameShared.getDefaultAbilityId = getDefaultAbilityId;
 runtime.GameShared.normalizeAbilityId = normalizeAbilityId;
 runtime.GameShared.resolveWeaponAimProfile = resolveWeaponAimProfile;

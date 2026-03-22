@@ -6,6 +6,11 @@ import {
   getSelectableWeaponIds,
   normalizeAbilityId
 } from '../../../shared/gameplay-tuning.js';
+import { PLAYER_SPAWN_SHIELD_MS } from '../../../shared/combat-timings.js';
+import {
+  ARMOR_REGEN_DELAY_MS,
+  regenArmorFromLastDamage
+} from '../../../shared/survivability.js';
 import {
   buildExpectedWorldMeta,
   cloneWorldFlags,
@@ -222,7 +227,6 @@ const FFA_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_FFA);
 const TDM_TARGET_PROGRESS = targetProgressForGameMode(MATCH_GAME_MODE_TDM);
 const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
-const PLAYER_SPAWN_SHIELD_MS = 1000;
 const WORLD_RAY_EPSILON = 0.001;
 const RELOADED_FLASH_HOLD_MS = 900;
 const HITSCAN_REWIND_HISTORY_MS = DEFAULT_REWIND_HISTORY_MS;
@@ -1246,13 +1250,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   regenArmor(entity, dtSec) {
-    if (!entity.alive) return;
-    if (entity.armor >= entity.armorMax) return;
-
-    const sinceDamageMs = nowMs() - (entity.lastDamageAt || 0);
-    if (sinceDamageMs < 6000) return;
-
-    entity.armor = Math.min(entity.armorMax, entity.armor + (12 * dtSec));
+    regenArmorFromLastDamage(entity, dtSec, nowMs(), { regenDelayMs: ARMOR_REGEN_DELAY_MS });
   }
 
   tickStreamState(entity, dtSec) {

@@ -11,6 +11,18 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   const runtime = {
     GameShared: {
       damage: null,
+      entityConstants: {
+        DEFAULT_HP_MAX: 360,
+        DEFAULT_ARMOR_MAX: 90
+      },
+      survivability: {
+        ARMOR_REGEN_DELAY_SEC: 8,
+        ARMOR_REGEN_PER_SEC: 10
+      },
+      combatTimings: {
+        PLAYER_SPAWN_SHIELD_MS: 1000,
+        RESPAWN_DELAY_MS: 2200
+      },
       gameplayTuning: {
         weaponStats: {
           rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 30, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 },
@@ -265,6 +277,18 @@ test('player combat manual reload ignores full magazines and starts once rounds 
 test('player combat uses a damage helper that arrives after initialization', async () => {
   const harness = await loadPlayerCombatHarness({
     GameShared: {
+      entityConstants: {
+        DEFAULT_HP_MAX: 360,
+        DEFAULT_ARMOR_MAX: 90
+      },
+      survivability: {
+        ARMOR_REGEN_DELAY_SEC: 8,
+        ARMOR_REGEN_PER_SEC: 10
+      },
+      combatTimings: {
+        PLAYER_SPAWN_SHIELD_MS: 1000,
+        RESPAWN_DELAY_MS: 2200
+      },
       gameplayTuning: {
         weaponStats: {
           rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 30, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 }

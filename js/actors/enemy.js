@@ -65,11 +65,13 @@
     }
 
     function enemyHpDefault() {
-        return Number(entityConstantsApi().ENEMY_HP || 360);
+        var constants = entityConstantsApi();
+        return Number(constants.ENEMY_HP || constants.ENEMY_HP_MAX || constants.DEFAULT_HP_MAX || constants.DEFAULT_HP || 0);
     }
 
     function enemyArmorDefault() {
-        return Number(entityConstantsApi().ENEMY_ARMOR || 90);
+        var constants = entityConstantsApi();
+        return Number(constants.ENEMY_ARMOR || constants.ENEMY_ARMOR_MAX || constants.DEFAULT_ARMOR_MAX || constants.DEFAULT_ARMOR || 0);
     }
 
     function enemyArmorRegenDelay() {

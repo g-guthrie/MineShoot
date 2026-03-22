@@ -5,6 +5,10 @@
  * Optionally: { armorRegenDelay }
  */
 import { gameplayTuning } from './gameplay-tuning.js';
+import {
+  ARMOR_REGEN_DELAY_SEC as DEFAULT_SHARED_ARMOR_REGEN_DELAY_SEC,
+  ARMOR_REGEN_PER_SEC as DEFAULT_SHARED_ARMOR_REGEN_PER_SEC
+} from './survivability.js';
 
 export function applyFalloff(baseDamage, distance, bands) {
   if (!Array.isArray(bands) || bands.length === 0) return Math.max(1, Math.round(baseDamage));
@@ -23,8 +27,8 @@ export function applyFalloff(baseDamage, distance, bands) {
 }
 
 var SURVIVABILITY = gameplayTuning.survivability || {};
-var DEFAULT_ARMOR_REGEN_DELAY = Number.isFinite(Number(SURVIVABILITY.armorRegenDelaySec)) ? Number(SURVIVABILITY.armorRegenDelaySec) : 6.0;
-var DEFAULT_ARMOR_REGEN_PER_SEC = Number.isFinite(Number(SURVIVABILITY.armorRegenPerSec)) ? Number(SURVIVABILITY.armorRegenPerSec) : 12;
+var DEFAULT_ARMOR_REGEN_DELAY = DEFAULT_SHARED_ARMOR_REGEN_DELAY_SEC;
+var DEFAULT_ARMOR_REGEN_PER_SEC = DEFAULT_SHARED_ARMOR_REGEN_PER_SEC;
 export var ARMOR_BUFFER_MODE_NORMAL = 'normal';
 export var ARMOR_BUFFER_MODE_HEAVY = 'heavy';
 

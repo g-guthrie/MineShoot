@@ -79,8 +79,8 @@
                     return renderer ? renderer.domElement : null;
                 },
                 validateLaunch: function () {
-                    return actionsApi && actionsApi.validateMenuSelections
-                        ? actionsApi.validateMenuSelections()
+                    return actionsApi && actionsApi.validateLoadoutSelections
+                        ? actionsApi.validateLoadoutSelections()
                         : { ok: false, message: 'Menu loadout unavailable.' };
                 },
                 beforeGameplayEntry: function () {
@@ -175,7 +175,7 @@
                     if (opts.setTransientDebug) opts.setTransientDebug(text, ms);
                 },
                 startupDebugNotice: params.startupDebugNotice || '',
-                syncMenuWeaponSlotsToRuntime: actionsApi.syncMenuWeaponSlotsToRuntime,
+                syncCommittedLoadoutToRuntime: actionsApi.syncCommittedLoadoutToRuntime,
                 toggleDebugVisuals: actionsApi.toggleDebugVisuals,
                 tryPlayerFire: actionsApi.tryPlayerFire,
                 runtimeDeps: opts.buildBootstrapRuntimeDeps ? opts.buildBootstrapRuntimeDeps() : {}

@@ -226,16 +226,13 @@ test('plasma debug reticle shows the projected catch diameter only while active'
 
   harness.GameUI.updatePlasmaState({
     visible: true,
-    diameterPx: 188,
-    curveStrength: 0.86
+    ringDiametersPx: [188]
   });
 
   assert.equal(harness.getElement('plasma-reticle').style.display, 'block');
-  assert.equal(harness.getElement('plasma-reticle').style.width, '188px');
-  assert.equal(harness.getElement('plasma-reticle').style.height, '188px');
-  assert.equal(harness.getElement('plasma-reticle').children.length, 2);
-  assert.notEqual(harness.getElement('plasma-reticle').children[0].style.width, undefined);
-  assert.notEqual(harness.getElement('plasma-reticle').children[1].style.height, undefined);
+  assert.equal(harness.getElement('plasma-reticle').children.length, 1);
+  assert.equal(harness.getElement('plasma-reticle').children[0].style.width, '188px');
+  assert.equal(harness.getElement('plasma-reticle').children[0].style.height, '188px');
 
   harness.GameUI.updatePlasmaState({ visible: false });
   assert.equal(harness.getElement('plasma-reticle').style.display, 'none');

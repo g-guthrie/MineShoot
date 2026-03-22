@@ -15,6 +15,8 @@ import './modal-manager.js';
 import './menu-state.js';
 import './input-bindings-ui.js';
 import './runtime-loader.js';
+import './loadout-state.js';
+import './loadout-runtime-sync.js';
 import './menu-loadout.js';
 import './auth-ui.js';
 import './lobby-private-room-view.js';

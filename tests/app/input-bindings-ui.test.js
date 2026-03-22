@@ -63,6 +63,17 @@ class FakeElement {
     this.attributes[String(name || '')] = String(value || '');
   }
 
+  querySelector(selector) {
+    const className = selector && selector.startsWith('.') ? selector.slice(1) : '';
+    if (!className) return null;
+    for (const child of this.children) {
+      if (child._classSet && child._classSet.has(className)) return child;
+      const found = child.querySelector ? child.querySelector(selector) : null;
+      if (found) return found;
+    }
+    return null;
+  }
+
   focus() {
     if (this.ownerDocument) this.ownerDocument.activeElement = this;
     return true;
@@ -163,7 +174,9 @@ async function loadBindingsUiHarness() {
     window: windowObj,
     document: documentObj,
     __MAYHEM_RUNTIME: {},
-    globalThis: null
+    globalThis: null,
+    setTimeout,
+    clearTimeout
   };
   sandbox.globalThis = sandbox;
   sandbox.globalThis.window = windowObj;

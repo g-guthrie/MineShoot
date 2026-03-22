@@ -277,9 +277,6 @@ async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   if (!room || !roomState) {
     return { ok: false, status: 404, error: 'Private room code not found.' };
   }
-  if (!!Number(roomState.invite_locked || 0)) {
-    return { ok: false, status: 403, error: 'That private room has locked invites. Ask the host for an invite.' };
-  }
   const actorIds = [String(actor.id || '')];
   const canFit = await ensureRoomCapacity(env, roomId, actorIds);
   if (!canFit) {

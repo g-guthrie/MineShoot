@@ -17,29 +17,30 @@
         lastReconcileClientThrowId: '',
         predictedCount: 0
     };
-    var fallbackThrowableDistanceTuning = {
-        fragRadius: 5.4,
-        plasmaRadius: 5.0,
-        plasmaCatchRadius: 1.5,
-        missileRadius: 2.4,
-        molotovFireRadius: 3.2,
-        plasmaAcquireRange: 18,
-        plasmaAcquireHalfAngleDeg: 35,
-        plasmaStickExplodeDelay: 2.2
+    var EMPTY_THROWABLE_DISTANCE_TUNING = {
+        fragRadius: 0,
+        plasmaRadius: 0,
+        plasmaCatchRadius: 0,
+        missileRadius: 0,
+        molotovFireRadius: 0,
+        plasmaAcquireRange: 0,
+        plasmaAcquireHalfAngleDeg: 0,
+        plasmaStickExplodeDelay: 0
     };
-    var fallbackThrowableMechanicsTuning = {
-        aimRayRange: 100,
-        fragBounceMaxCount: 2,
-        fragBounceVelocityDamping: 0.4,
-        fragBounceVerticalDamping: 0.42,
-        fragBounceStopSpeedSq: 2.5,
-        predictedTtlMs: 5000,
-        throwIntentOriginMaxOffset: 1.2,
-        throwIntentDirectionMinDot: -0.2
+    var EMPTY_THROWABLE_MECHANICS_TUNING = {
+        aimRayRange: 0,
+        fragBounceMaxCount: 0,
+        fragBounceVelocityDamping: 0,
+        fragBounceVerticalDamping: 0,
+        fragBounceStopSpeedSq: 0,
+        predictedTtlMs: 0,
+        throwIntentOriginMaxOffset: 0,
+        throwIntentDirectionMinDot: 0
     };
-    var throwableDistanceTuning = fallbackThrowableDistanceTuning;
-    var throwableMechanicsTuning = fallbackThrowableMechanicsTuning;
-    var throwableOrder = ['frag', 'plasma', 'molotov', 'knife'];
+    var FALLBACK_THROWABLE_ORDER = ['frag', 'plasma', 'molotov', 'knife'];
+    var throwableDistanceTuning = EMPTY_THROWABLE_DISTANCE_TUNING;
+    var throwableMechanicsTuning = EMPTY_THROWABLE_MECHANICS_TUNING;
+    var throwableOrder = FALLBACK_THROWABLE_ORDER.slice();
     var defs = {};
     var configSnapshot = {
         sharedTuning: null,
@@ -47,10 +48,68 @@
         getDistance: null,
         getMechanics: null
     };
-    var selectedThrowableId = 'frag';
+    var selectedThrowableId = '';
 
     function runtime() {
         return globalThis.__MAYHEM_RUNTIME || {};
+    }
+
+    function sharedApi() {
+        return runtime().GameShared || {};
+    }
+
+    function defaultThrowableId() {
+        var shared = sharedApi();
+        if (shared && typeof shared.getDefaultThrowableId === 'function') {
+            return String(shared.getDefaultThrowableId() || '');
+        }
+        return '';
+    }
+
+    function normalizeSelectedThrowableId(throwableId) {
+        var shared = sharedApi();
+        if (shared && typeof shared.normalizeThrowableId === 'function') {
+            return String(shared.normalizeThrowableId(throwableId || '') || defaultThrowableId());
+        }
+        return String(throwableId || defaultThrowableId() || '');
+    }
+
+    function copyOwn(source) {
+        var out = {};
+        var input = source && typeof source === 'object' ? source : {};
+        for (var key in input) {
+            if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+            out[key] = input[key];
+        }
+        return out;
+    }
+
+    function sharedDistanceTuning(sharedTuning) {
+        var throwables = (sharedTuning && sharedTuning.throwables) || {};
+        return {
+            fragRadius: Number((throwables.frag && throwables.frag.radius) || 0),
+            plasmaRadius: Number((throwables.plasma && throwables.plasma.radius) || 0),
+            plasmaCatchRadius: Number((throwables.plasma && throwables.plasma.catchRadius) || 0),
+            missileRadius: Number((throwables.missile && throwables.missile.radius) || 0),
+            molotovFireRadius: Number((throwables.molotov && throwables.molotov.fireRadius) || 0),
+            plasmaAcquireRange: Number((throwables.plasma && throwables.plasma.acquireRange) || 0),
+            plasmaAcquireHalfAngleDeg: Number((throwables.plasma && throwables.plasma.acquireHalfAngleDeg) || 0),
+            plasmaStickExplodeDelay: Number((throwables.plasma && throwables.plasma.stickExplodeDelay) || 0)
+        };
+    }
+
+    function fallbackDefs() {
+        var out = {};
+        for (var i = 0; i < FALLBACK_THROWABLE_ORDER.length; i++) {
+            var id = FALLBACK_THROWABLE_ORDER[i];
+            out[id] = {
+                id: id,
+                label: id.toUpperCase(),
+                previewType: 'none',
+                regen: 0
+            };
+        }
+        return out;
     }
 
     function buildDefsFromShared(sharedThrowables, distanceTuning) {
@@ -67,11 +126,11 @@
             if (id === 'frag') def.radius = distanceTuning.fragRadius;
             if (id === 'plasma') {
                 def.radius = distanceTuning.plasmaRadius;
-                def.catchRadius = distanceTuning.plasmaCatchRadius || def.catchRadius || 1.5;
-                def.acquireHalfAngleDeg = distanceTuning.plasmaAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 35;
-                def.stickExplodeDelay = distanceTuning.plasmaStickExplodeDelay || def.stickExplodeDelay || 2.2;
-                def.trackDuration = Number.isFinite(Number(def.trackDuration)) ? Number(def.trackDuration) : 0.2;
-                def.trackLerp = Number.isFinite(Number(def.trackLerp)) ? Number(def.trackLerp) : 10;
+                def.catchRadius = distanceTuning.plasmaCatchRadius || def.catchRadius || 0;
+                def.acquireHalfAngleDeg = distanceTuning.plasmaAcquireHalfAngleDeg || def.acquireHalfAngleDeg || 0;
+                def.stickExplodeDelay = distanceTuning.plasmaStickExplodeDelay || def.stickExplodeDelay || 0;
+                def.trackDuration = Number.isFinite(Number(def.trackDuration)) ? Number(def.trackDuration) : 0;
+                def.trackLerp = Number.isFinite(Number(def.trackLerp)) ? Number(def.trackLerp) : 0;
             }
             if (id === 'missile') def.radius = distanceTuning.missileRadius;
             if (id === 'molotov') def.fireRadius = distanceTuning.molotovFireRadius;
@@ -99,16 +158,26 @@
         configSnapshot.getMechanics = tuningApi && tuningApi.getThrowableMechanicsTuning;
 
         throwableDistanceTuning = (tuningApi && tuningApi.getThrowableDistanceTuning)
-            ? (tuningApi.getThrowableDistanceTuning() || fallbackThrowableDistanceTuning)
-            : fallbackThrowableDistanceTuning;
+            ? (tuningApi.getThrowableDistanceTuning() || sharedDistanceTuning(sharedTuning))
+            : sharedDistanceTuning(sharedTuning);
         throwableMechanicsTuning = (tuningApi && tuningApi.getThrowableMechanicsTuning)
-            ? (tuningApi.getThrowableMechanicsTuning() || fallbackThrowableMechanicsTuning)
-            : fallbackThrowableMechanicsTuning;
+            ? (tuningApi.getThrowableMechanicsTuning() || copyOwn(sharedTuning && sharedTuning.throwableMechanics))
+            : copyOwn(sharedTuning && sharedTuning.throwableMechanics);
+        if (!Object.keys(throwableMechanicsTuning).length) {
+            throwableMechanicsTuning = EMPTY_THROWABLE_MECHANICS_TUNING;
+        }
+        if (!Object.keys(throwableDistanceTuning).length) {
+            throwableDistanceTuning = EMPTY_THROWABLE_DISTANCE_TUNING;
+        }
         var sharedThrowables = (sharedTuning && sharedTuning.throwables) || {};
-        throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || ['frag', 'plasma', 'molotov', 'knife'];
+        throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || FALLBACK_THROWABLE_ORDER.slice();
         defs = buildDefsFromShared(sharedThrowables, throwableDistanceTuning);
+        if (!Object.keys(defs).length) defs = fallbackDefs();
         if (!defs[selectedThrowableId]) {
-            selectedThrowableId = throwableOrder[0] || 'frag';
+            var nextSelectedThrowableId = normalizeSelectedThrowableId(selectedThrowableId || '');
+            selectedThrowableId = defs[nextSelectedThrowableId]
+                ? nextSelectedThrowableId
+                : String(throwableOrder[0] || '');
         }
     }
 
@@ -132,7 +201,7 @@
 
     function plasmaFuseDelay(def) {
         var seconds = Number(def && (def.stickExplodeDelay != null ? def.stickExplodeDelay : def.fuse));
-        return Math.max(0.2, isFinite(seconds) ? seconds : 2.2);
+        return Math.max(0.2, isFinite(seconds) ? seconds : 0.2);
     }
 
     function plasmaMaxLife(def) {
@@ -143,7 +212,7 @@
 
     function explosiveMinDamage(def) {
         var value = Number(def && def.minBlastDamage);
-        if (!isFinite(value)) value = 20;
+        if (!isFinite(value)) value = 0;
         return Math.max(0, Math.round(value));
     }
 
@@ -390,8 +459,6 @@
                 maxLife: def.maxLife,
                 radius: def.radius,
                 catchRadius: def.catchRadius,
-                trackDuration: def.trackDuration,
-                trackLerp: def.trackLerp,
                 damage: def.damage,
                 stickExplodeDelay: def.stickExplodeDelay,
                 fireRadius: def.fireRadius,
@@ -637,8 +704,9 @@
 
     GameThrowables.setSelectedThrowable = function (id) {
         refreshThrowableConfig();
-        if (defs[id] && throwableOrder.indexOf(id) !== -1) {
-            selectedThrowableId = id;
+        var nextId = normalizeSelectedThrowableId(id);
+        if (defs[nextId] && throwableOrder.indexOf(nextId) !== -1) {
+            selectedThrowableId = nextId;
             return true;
         }
         return false;
@@ -666,9 +734,9 @@
         camera.getWorldDirection(forward);
 
         var plasmaDef = defs['plasma'];
-        var halfAngleDeg = (plasmaDef && plasmaDef.acquireHalfAngleDeg) ? plasmaDef.acquireHalfAngleDeg : 35;
+        var halfAngleDeg = Math.max(0, Number(plasmaDef && plasmaDef.acquireHalfAngleDeg || 0));
         var cosLimit = Math.cos(halfAngleDeg * Math.PI / 180);
-        var maxRange = throwableDistanceTuning.plasmaAcquireRange || 18;
+        var maxRange = Math.max(0, Number(throwableDistanceTuning.plasmaAcquireRange || 0));
 
         for (var i = 0; i < enemies.length; i++) {
             var enemy = enemies[i];

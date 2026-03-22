@@ -941,16 +941,18 @@
     }
 
     function applyIdleBlendCorrection(dt, x, z, authoritativeY, dx, dz, dy, horizontalDistSq, idleBlendRate) {
-        var blend = Math.min(1, dt * Math.max(0.1, idleBlendRate));
+        var rate = Math.max(0.1, idleBlendRate);
+        var distFactor = Math.min(1, Math.sqrt(horizontalDistSq) * 0.6);
+        var blend = Math.min(1, dt * (rate + rate * distFactor));
         playerX += dx * blend;
         playerZ += dz * blend;
         posY += dy * blend;
 
-        if (horizontalDistSq < 0.0004) {
+        if (horizontalDistSq < 0.005) {
             playerX = x;
             playerZ = z;
         }
-        if (Math.abs(dy) < 0.02) {
+        if (Math.abs(dy) < 0.05) {
             posY = authoritativeY;
         }
 
@@ -1020,10 +1022,13 @@
             return replayed;
         }
 
-        if (pendingInputCount > 0 || movingIntent || horizontalDistSq < (thresholds.idleBlendDistance * thresholds.idleBlendDistance)) {
+        if (movingIntent || horizontalDistSq < (thresholds.idleBlendDistance * thresholds.idleBlendDistance)) {
             return false;
         }
 
+        var blendRate = pendingInputCount > 0
+            ? Math.max(0.1, thresholds.idleBlendRate * 0.35)
+            : thresholds.idleBlendRate;
         var blended = applyIdleBlendCorrection(
             dt,
             x,
@@ -1033,7 +1038,7 @@
             dz,
             dy,
             horizontalDistSq,
-            thresholds.idleBlendRate
+            blendRate
         );
         if (blended) lastReconciledMotionKey = motionKey;
         return blended;

@@ -172,12 +172,14 @@
             });
         }
 
+        function isLaunchBlocked() {
+            var launchState = getState().launch || {};
+            return !!(launchState.hasRuntime || launchState.phase === 'matching' || launchState.phase === 'joining' || launchState.phase === 'entering' || launchState.phase === 'in_match');
+        }
+
         function launchAssignedMatch(nextPartyState) {
             if (!nextPartyState || !nextPartyState.self) return;
-            var launchState = getState().launch || {};
-            if (launchState.hasRuntime || launchState.phase === 'matching' || launchState.phase === 'joining' || launchState.phase === 'entering' || launchState.phase === 'in_match') {
-                return;
-            }
+            if (isLaunchBlocked()) return;
             var self = nextPartyState.self;
             var modeId = '';
             var roomId = '';
@@ -211,6 +213,34 @@
                 roomId: roomId,
                 gameMode: gameMode || 'ffa'
             }, modeId === 'single_cloudflare' ? 'Room ready.' : 'Match ready.');
+        }
+
+        /**
+         * Launch directly from private room state (used by WS push path).
+         * This bypasses the party state check that launchAssignedMatch uses,
+         * so non-hosts can auto-launch as soon as the WS delivers roomPhase: 'active'.
+         */
+        function launchFromPrivateRoomState(privateRoomState) {
+            if (!privateRoomState || !privateRoomState.room) return;
+            if (isLaunchBlocked()) return;
+            var room = privateRoomState.room;
+            if (String(room.roomPhase || '') !== 'active') return;
+            var roomId = String(room.roomId || '');
+            if (!roomId) return;
+            var gameMode = String(room.roomMode || 'ffa');
+            setBusy(true);
+            writeReturnState({ activeSurface: 'room', selectedMode: normalizeMode(gameMode) });
+            setLaunchState({
+                selectedMode: normalizeMode(gameMode),
+                phase: 'joining',
+                message: 'Joining room ' + roomCodeFromRoomId(roomId).toUpperCase() + '...',
+                error: false
+            });
+            render();
+            completeLaunch('single_cloudflare', {
+                roomId: roomId,
+                gameMode: gameMode || 'ffa'
+            }, 'Room ready.');
         }
 
         function launchGame(modeId) {
@@ -526,6 +556,7 @@
         return {
             handleLaunchResult: handleLaunchResult,
             launchAssignedMatch: launchAssignedMatch,
+            launchFromPrivateRoomState: launchFromPrivateRoomState,
             launchGame: launchGame,
             handleInviteFriendAction: handleInviteFriendAction,
             handleJoinFriendAction: handleJoinFriendAction,

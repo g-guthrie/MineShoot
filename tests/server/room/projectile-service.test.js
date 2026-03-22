@@ -98,7 +98,7 @@ test('tickProjectiles reflects frag grenades off authoritative world colliders i
   assert.equal(projectile.bounces, 1);
 });
 
-test('tickProjectiles lets plasma acquire before it sticks and then follows the stuck target', () => {
+test('tickProjectiles lets plasma stick immediately once a target enters the catch radius', () => {
   const target = {
     id: 'usr_target',
     alive: true,
@@ -130,8 +130,6 @@ test('tickProjectiles lets plasma acquire before it sticks and then follows the 
     alive: true,
     stickyDelaySec: 2.2,
     catchRadius: 1.5,
-    trackDurationSec: 0.2,
-    trackLerp: 10,
     trackingTargetId: '',
     trackingUntil: 0,
     stickyUntil: 0,
@@ -143,11 +141,10 @@ test('tickProjectiles lets plasma acquire before it sticks and then follows the 
   room.projectiles.set(projectile.id, projectile);
   room.players.set(target.id, target);
 
-  tickProjectiles(room, 0.05);
-  assert.equal(projectile.trackingTargetId, target.id);
-  assert.equal(projectile.stickyUntil, 0);
+  for (let i = 0; i < 3 && projectile.stickyUntil <= 0; i++) {
+    tickProjectiles(room, 0.05);
+  }
 
-  tickProjectiles(room, 0.05);
   assert.equal(projectile.stickyUntil > 0, true);
   assert.equal(projectile.stuckToTargetId, target.id);
   const stuckX = projectile.x;

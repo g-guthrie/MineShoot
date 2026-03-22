@@ -1,5 +1,6 @@
 import { nowMs } from '../transport.js';
 import { applyDistanceFalloffDamage } from '../sim/combat.js';
+import { RESPAWN_DELAY_MS } from '../../../shared/combat-timings.js';
 import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { protocol } from '../../../shared/protocol.js';
 import {
@@ -35,7 +36,7 @@ export function applyDamage(target, damage, options = {}) {
   if (target.hp <= 0 && target.alive) {
     killed = true;
     target.alive = false;
-    target.respawnAt = now + 2200;
+    target.respawnAt = now + RESPAWN_DELAY_MS;
   }
 
   return {

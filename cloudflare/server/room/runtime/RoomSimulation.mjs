@@ -1,14 +1,15 @@
 export function buildSnapshotDelta(options = {}) {
   const entities = Array.isArray(options.entities) ? options.entities : [];
+  const entityStates = Array.isArray(options.entityStates) ? options.entityStates : null;
   const toEntityState = options.toEntityState;
   const previousState = options.previousState instanceof Map ? options.previousState : new Map();
   const forceFull = !!options.forceFull;
 
-  if (typeof toEntityState !== 'function') {
+  if (!entityStates && typeof toEntityState !== 'function') {
     throw new Error('Room simulation requires toEntityState.');
   }
 
-  const serializedEntities = entities.map((entity) => toEntityState(entity));
+  const serializedEntities = entityStates ? entityStates.slice() : entities.map((entity) => toEntityState(entity));
   const nextEntityState = new Map();
   const changedEntities = [];
   const removedEntityIds = [];

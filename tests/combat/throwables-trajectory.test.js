@@ -169,10 +169,9 @@ test('throwables trajectory exposes plasma debug state from the simulated arc', 
 
   assert.ok(state);
   assert.equal(state.catchRadius, gameplayTuning.throwables.plasma.catchRadius);
-  assert.ok(state.fuseSec > 0);
-  assert.ok(state.trackDuration > 0);
-  assert.ok(state.trackLerp > 0);
-  assert.ok(state.curveStrength > 0);
+  assert.ok(state.stickDelaySec > 0);
+  assert.ok(state.maxLifeSec > 0);
+  assert.ok(state.blastRadius > 0);
   assert.ok(state.referenceDistance > 1);
   assert.ok(state.referenceDistance < 16);
 });

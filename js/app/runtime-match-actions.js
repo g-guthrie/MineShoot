@@ -74,8 +74,12 @@
             return opts.getCurrentMatchRemoteEntitiesApi ? opts.getCurrentMatchRemoteEntitiesApi() : null;
         }
 
-        function menuLoadoutApi() {
-            return opts.getMenuLoadoutApi ? opts.getMenuLoadoutApi() : null;
+        function loadoutStateApi() {
+            return opts.getLoadoutStateApi ? opts.getLoadoutStateApi() : null;
+        }
+
+        function loadoutRuntimeApi() {
+            return opts.getLoadoutRuntimeApi ? opts.getLoadoutRuntimeApi() : null;
         }
 
         function camera() {
@@ -197,21 +201,29 @@
             setTransientDebug('Weapon: ' + weapon.name, 950);
         }
 
-        function syncMenuWeaponSlotsToRuntime() {
-            var menuLoadout = menuLoadoutApi();
-            if (!menuLoadout || !menuLoadout.syncToRuntime || !menuLoadout.getWeaponSlots) {
-                return [];
-            }
-            menuLoadout.syncToRuntime(multiplayerMode());
-            return menuLoadout.getWeaponSlots().slice(0, 2);
+        function committedLoadout() {
+            var loadoutState = loadoutStateApi();
+            return loadoutState && loadoutState.getCommittedLoadout
+                ? loadoutState.getCommittedLoadout()
+                : null;
         }
 
-        function validateMenuSelections() {
-            var menuLoadout = menuLoadoutApi();
-            if (!menuLoadout || !menuLoadout.validateSelections) {
-                return { ok: false, message: 'Menu loadout unavailable.' };
+        function syncCommittedLoadoutToRuntime() {
+            var loadoutRuntime = loadoutRuntimeApi();
+            if (loadoutRuntime && loadoutRuntime.applyCommittedLoadout) {
+                var committed = loadoutRuntime.applyCommittedLoadout(multiplayerMode());
+                return committed && Array.isArray(committed.weaponSlots)
+                    ? committed.weaponSlots.slice(0, 2)
+                    : [];
             }
-            return menuLoadout.validateSelections();
+            return [];
+        }
+
+        function validateLoadoutSelections() {
+            var loadoutState = loadoutStateApi();
+            return loadoutState && loadoutState.validateSelections
+                ? loadoutState.validateSelections()
+                : { ok: false, message: 'Loadout state unavailable.' };
         }
 
         function applyAbilityProfile(profileId) {
@@ -224,8 +236,9 @@
             var selected = abilitiesApi.setClass(profileId);
             if (!selected) return null;
 
-            var currentMenuWeapons = menuLoadoutApi() && menuLoadoutApi().getWeaponSlots
-                ? menuLoadoutApi().getWeaponSlots()
+            var currentCommittedLoadout = committedLoadout();
+            var currentMenuWeapons = currentCommittedLoadout && Array.isArray(currentCommittedLoadout.weaponSlots)
+                ? currentCommittedLoadout.weaponSlots
                 : [];
             if (selected.loadoutWeapon || (currentMenuWeapons && currentMenuWeapons.length > 0)) {
                 var preferredWeapon = (currentMenuWeapons && currentMenuWeapons.length > 0)
@@ -378,8 +391,8 @@
             toggleDebugVisuals: toggleDebugVisuals,
             syncReticleWithWeapon: syncReticleWithWeapon,
             applyWeapon: applyWeapon,
-            syncMenuWeaponSlotsToRuntime: syncMenuWeaponSlotsToRuntime,
-            validateMenuSelections: validateMenuSelections,
+            syncCommittedLoadoutToRuntime: syncCommittedLoadoutToRuntime,
+            validateLoadoutSelections: validateLoadoutSelections,
             applyAbilityProfile: applyAbilityProfile,
             handleEnemyHit: handleEnemyHit,
             tryPlayerFire: tryPlayerFire

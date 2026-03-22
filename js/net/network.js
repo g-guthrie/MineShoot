@@ -121,6 +121,62 @@
         }
     }
 
+    function seedCommittedWeaponLoadoutPending() {
+        var loadoutState = runtime.GameLoadoutState || null;
+        if (!loadoutState || !loadoutState.getCommittedLoadout || !netState.setPendingWeaponLoadout) return;
+        var committed = loadoutState.getCommittedLoadout();
+        var slots = committed && Array.isArray(committed.weaponSlots)
+            ? committed.weaponSlots.slice(0, 2)
+            : [];
+        if (!slots[0] || !slots[1]) return;
+        netState.setPendingWeaponLoadout(PROTOCOL.normalizeWeaponLoadoutPayload(slots[0], slots[1]));
+    }
+
+    function normalizeLoadoutPair(slots) {
+        if (!Array.isArray(slots)) return [];
+        var out = [];
+        var seen = {};
+        for (var i = 0; i < slots.length && out.length < 2; i++) {
+            var id = String(slots[i] || '');
+            if (!id || seen[id]) continue;
+            seen[id] = true;
+            out.push(id);
+        }
+        return out;
+    }
+
+    function pendingSelfWeaponLoadout(entity) {
+        var pending = netState.getPendingWeaponLoadout ? netState.getPendingWeaponLoadout() : null;
+        if (!pending || !entity || entity.id !== netState.getSelfId()) return entity;
+
+        var pendingSlots = normalizeLoadoutPair([pending.slot1, pending.slot2]);
+        if (!pendingSlots.length) return entity;
+
+        var authoritativeSlots = normalizeLoadoutPair(entity.weaponLoadout);
+        var authoritativeWeaponId = String(entity.weaponId || '');
+        var loadoutMatches = authoritativeSlots.length === pendingSlots.length;
+        if (loadoutMatches) {
+            for (var i = 0; i < pendingSlots.length; i++) {
+                if (authoritativeSlots[i] !== pendingSlots[i]) {
+                    loadoutMatches = false;
+                    break;
+                }
+            }
+        }
+        var preferredWeaponId = String(pendingSlots[0] || '');
+        if (loadoutMatches && authoritativeWeaponId === preferredWeaponId) {
+            netState.setPendingWeaponLoadout(null);
+            return entity;
+        }
+
+        var nextEntity = Object.assign({}, entity);
+        nextEntity.weaponLoadout = pendingSlots.slice();
+        if (preferredWeaponId) {
+            nextEntity.weaponId = preferredWeaponId;
+        }
+        return nextEntity;
+    }
+
     function consumeNotice() {
         return netState.consumeNotice();
     }
@@ -150,6 +206,7 @@
 
     function updateRemoteFromSnapshot(entity, snapshotMeta) {
         if (!sceneRef) return;
+        entity = pendingSelfWeaponLoadout(entity);
         if (entity.id === netState.getSelfId()) {
             if (!connectionTiming.shouldAcceptSelfSnapshot(entity, snapshotMeta)) return;
             netState.setSelfState(entity);
@@ -463,6 +520,7 @@
         onInit: function (scene) {
             sceneRef = scene;
             active = true;
+            seedCommittedWeaponLoadoutPending();
             GameNetEntities.init(scene);
             initSnapshotHelper();
             connectWs();

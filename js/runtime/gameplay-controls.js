@@ -180,8 +180,13 @@
             if (!canUseLocalAction('throwable')) return null;
             if (!hasInputCapture()) return null;
 
-            var camera = getCamera();
             var throwablesApi = runtime.GameThrowables;
+            if (!throwableHasCharges(throwablesApi, type)) {
+                setTransientDebug(type + ' is recharging.', 600);
+                return { ok: false, reason: 'cooldown' };
+            }
+
+            var camera = getCamera();
             var throwIntent = throwIntentOverride || (throwablesApi && throwablesApi.buildThrowIntent
                 ? throwablesApi.buildThrowIntent(camera)
                 : null);
@@ -380,6 +385,13 @@
             refreshLabel();
         }
 
+        function throwableHasCharges(throwablesApi, type) {
+            if (!throwablesApi || !throwablesApi.getState) return false;
+            var state = throwablesApi.getState();
+            var entry = state && state[type];
+            return !!(entry && entry.charges > 0);
+        }
+
         function bindThrowableControls() {
             listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
@@ -392,6 +404,12 @@
 
                 var selectedType = throwablesApi.getSelectedThrowable();
                 if (!selectedType) return;
+
+                // Don't arm preview or throw if no charges available
+                if (!throwableHasCharges(throwablesApi, selectedType)) {
+                    setTransientDebug(selectedType + ' is recharging.', 600);
+                    return;
+                }
 
                 var previewType = throwablesApi.getPreviewType ? throwablesApi.getPreviewType(selectedType) : 'none';
                 if (previewType === 'none') {

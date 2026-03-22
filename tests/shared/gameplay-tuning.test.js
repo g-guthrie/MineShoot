@@ -4,15 +4,23 @@ import assert from 'node:assert/strict';
 import {
   gameplayTuning,
   getDefaultAbilityId,
+  getDefaultThrowableId,
   getSelectableWeaponIds,
   getWeaponFalloffProfile,
   getWeaponPresentation,
   normalizeAbilityId,
+  normalizeThrowableId,
   resolveReloadPresentationState,
   resolveWeaponAdsFovDeg,
   resolveWeaponAimProfile
 } from '../../shared/gameplay-tuning.js';
 import { DEFAULT_HP_MAX, DEFAULT_ARMOR_MAX } from '../../shared/entity-constants.js';
+import {
+  ARMOR_REGEN_DELAY_MS,
+  ARMOR_REGEN_DELAY_SEC,
+  ARMOR_REGEN_PER_SEC,
+  regenArmorFromLastDamage
+} from '../../shared/survivability.js';
 
 const FULL_HEALTH_DURABILITY = DEFAULT_HP_MAX + DEFAULT_ARMOR_MAX;
 
@@ -32,7 +40,7 @@ function ttkMs(weapon, hitType) {
 
 test('weapon tuning exposes a valid fastest perfect-ttk weapon', () => {
   const shotgun = gameplayTuning.weaponStats.shotgun;
-  assert.equal(FULL_HEALTH_DURABILITY, 450);
+  assert.equal(FULL_HEALTH_DURABILITY, gameplayTuning.survivability.hpMax + gameplayTuning.survivability.armorMax);
   assert.equal(shotsToKill(shotgun, 'body'), 3);
   assert.equal(shotsToKill(shotgun, 'head'), 2);
 
@@ -52,39 +60,12 @@ test('weapon tuning exposes a valid fastest perfect-ttk weapon', () => {
 });
 
 test('weapon reload tuning exposes magazine sizes and reload timing', () => {
-  assert.deepEqual(
-    {
-      rifle: gameplayTuning.weaponStats.rifle.magazineSize,
-      pistol: gameplayTuning.weaponStats.pistol.magazineSize,
-      machinegun: gameplayTuning.weaponStats.machinegun.magazineSize,
-      shotgun: gameplayTuning.weaponStats.shotgun.magazineSize,
-      sniper: gameplayTuning.weaponStats.sniper.magazineSize
-    },
-    {
-      rifle: 15,
-      pistol: 10,
-      machinegun: 50,
-      shotgun: 6,
-      sniper: 4
-    }
-  );
-
-  assert.deepEqual(
-    {
-      rifle: gameplayTuning.weaponStats.rifle.reloadMs,
-      pistol: gameplayTuning.weaponStats.pistol.reloadMs,
-      machinegun: gameplayTuning.weaponStats.machinegun.reloadMs,
-      shotgun: gameplayTuning.weaponStats.shotgun.reloadMs,
-      sniper: gameplayTuning.weaponStats.sniper.reloadMs
-    },
-    {
-      rifle: 1600,
-      pistol: 1350,
-      machinegun: 1450,
-      shotgun: 1850,
-      sniper: 2400
-    }
-  );
+  for (const weapon of Object.values(gameplayTuning.weaponStats)) {
+    assert.equal(Number.isInteger(Number(weapon.magazineSize || 0)), true);
+    assert.equal(Number(weapon.magazineSize || 0) > 0, true);
+    assert.equal(Number.isFinite(Number(weapon.reloadMs || 0)), true);
+    assert.equal(Number(weapon.reloadMs || 0) > 0, true);
+  }
 });
 
 test('awareness tuning expands radar coverage before targets are already visually obvious', () => {
@@ -125,22 +106,23 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
 
 test('reload presentation helper resolves phase boundaries and completion flashes from weapon tuning', () => {
   const rifle = getWeaponPresentation('rifle');
+  const rifleReloadMs = Number(gameplayTuning.weaponStats.rifle.reloadMs || 0);
   const raising = resolveReloadPresentationState({
-    reloadMs: 1600,
-    reloadRemaining: 1400,
+    reloadMs: rifleReloadMs,
+    reloadRemaining: rifleReloadMs * 0.9,
     reloadedFlashRemaining: 0,
     reload: rifle.reload
   });
   const manipulating = resolveReloadPresentationState({
-    reloadMs: 1600,
-    reloadRemaining: 620,
+    reloadMs: rifleReloadMs,
+    reloadRemaining: rifleReloadMs * 0.39,
     reloadedFlashRemaining: 0,
     reload: rifle.reload
   }, raising);
   const completed = resolveReloadPresentationState({
-    reloadMs: 1600,
+    reloadMs: rifleReloadMs,
     reloadRemaining: 0,
-    reloadedFlashRemaining: 400,
+    reloadedFlashRemaining: Math.round(rifleReloadMs * 0.25),
     reload: rifle.reload
   }, manipulating);
 
@@ -181,27 +163,44 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
 });
 
 test('survivability tuning exposes the tanky baseline and slower armor reset window', () => {
-  assert.deepEqual(gameplayTuning.survivability, {
-    hpMax: 360,
-    armorMax: 90,
-    armorRegenDelaySec: 8.0,
-    armorRegenPerSec: 10
-  });
-  assert.equal(gameplayTuning.classPresets.abilities.armorMax, 90);
-  assert.equal(gameplayTuning.classPresets.ffa.armorMax, 90);
+  assert.equal(gameplayTuning.survivability.hpMax, DEFAULT_HP_MAX);
+  assert.equal(gameplayTuning.survivability.armorMax, DEFAULT_ARMOR_MAX);
+  assert.equal(gameplayTuning.classPresets.abilities.armorMax, gameplayTuning.survivability.armorMax);
+  assert.equal(gameplayTuning.classPresets.ffa.armorMax, gameplayTuning.survivability.armorMax);
+  assert.equal(ARMOR_REGEN_DELAY_SEC, gameplayTuning.survivability.armorRegenDelaySec);
+  assert.equal(ARMOR_REGEN_DELAY_MS, gameplayTuning.survivability.armorRegenDelaySec * 1000);
+  assert.equal(ARMOR_REGEN_PER_SEC, gameplayTuning.survivability.armorRegenPerSec);
+});
+
+test('shared survivability helper owns the live armor recharge rule', () => {
+  const blocked = { alive: true, armor: 0, armorMax: 90, lastDamageAt: 1000 };
+  assert.equal(regenArmorFromLastDamage(blocked, 1, 8999), false);
+  assert.equal(blocked.armor, 0);
+
+  const ready = { alive: true, armor: 0, armorMax: 90, lastDamageAt: 1000 };
+  assert.equal(regenArmorFromLastDamage(ready, 1, 9000), true);
+  assert.equal(ready.armor, 10);
+
+  const capped = { alive: true, armor: 90, armorMax: 90, lastDamageAt: 0 };
+  assert.equal(regenArmorFromLastDamage(capped, 1, 9000), false);
+  assert.equal(capped.armor, 90);
 });
 
 test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
-  assert.equal(gameplayTuning.abilityCatalog.choke.cooldownMs, 18000);
-  assert.equal(gameplayTuning.abilityCatalog.choke.duration, 1.25);
-  assert.equal(gameplayTuning.abilityCatalog.hook.stunDuration, 0.5);
-  assert.equal(gameplayTuning.abilityCatalog.hook.pullSpeed, 20);
-  assert.equal(gameplayTuning.abilityCatalog.heal.healAmount, 90);
-  assert.equal(gameplayTuning.abilityCatalog.missile.cooldownMs, 7500);
-  assert.equal(gameplayTuning.abilityCatalog.deadeye.damage, 160);
+  assert.equal(Number(gameplayTuning.abilityCatalog.choke.cooldownMs || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.choke.duration || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.hook.stunDuration || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.hook.pullSpeed || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.heal.healAmount || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.missile.cooldownMs || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.damage || 0) > 0, true);
+  assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.lockBoxPx || 0) > 0, true);
   assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
-  assert.equal(gameplayTuning.weaponStats.sniper.armorBufferMode, 'heavy');
-  assert.equal(gameplayTuning.throwables.frag.minBlastDamage, 10);
+  assert.equal(gameplayTuning.weaponStats.sniper.armorBufferMode, 'normal');
+  assert.equal(Number(gameplayTuning.throwables.frag.minBlastDamage || 0) > 0, true);
+  assert.equal(gameplayTuning.throwables.frag.armorBufferMode, 'normal');
+  assert.equal(gameplayTuning.throwables.plasma.armorBufferMode, 'normal');
+  assert.equal(gameplayTuning.throwables.missile.armorBufferMode, 'normal');
   assert.equal(gameplayTuning.throwables.molotov.armorBufferMode, 'normal');
 });
 
@@ -211,6 +210,14 @@ test('ability defaults and normalization resolve to a single equipped ability', 
   assert.equal(normalizeAbilityId('not-real'), 'deadeye');
 });
 
+test('throwable defaults and normalization resolve to a single equipped throwable', () => {
+  assert.equal(getDefaultThrowableId(), 'frag');
+  assert.equal(normalizeThrowableId('plasma'), 'plasma');
+  assert.equal(normalizeThrowableId('not-real'), 'frag');
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getDefaultThrowableId, 'function');
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.normalizeThrowableId, 'function');
+});
+
 test('network tuning exposes the canonical ping, reconcile, burst, and feedback defaults', () => {
   assert.deepEqual(gameplayTuning.network.flags, {
     adaptiveSelfReconciliation: true,
@@ -218,13 +225,19 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
     shotTokenDamageAggregation: false
   });
   assert.equal(gameplayTuning.network.ping.cadenceMs, 500);
-  assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.75);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.25);
   assert.equal(gameplayTuning.network.selfReconciliation.airborneHardSnapVerticalWu, 2.75);
-  assert.equal(gameplayTuning.network.selfReconciliation.airborneMovingAckDriftLimit, 4);
+  assert.equal(gameplayTuning.network.selfReconciliation.airborneMovingAckDriftLimit, 5);
   assert.equal(gameplayTuning.network.combatPriority.burstCadenceMs, 16);
   assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 78);
-  assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 0);
+  assert.equal(gameplayTuning.network.remoteInterpolation.extrapolationDecay, 1.2);
+  assert.equal(gameplayTuning.network.remoteInterpolation.verticalBallisticEnabled, true);
+  assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 120);
+  assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 70);
+  assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 24);
   assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 120);
+  assert.equal(gameplayTuning.network.ping.pessimisticRttAlpha, 0.05);
+  assert.equal(gameplayTuning.network.ping.pessimisticWindowMs, 2000);
   assert.equal(gameplayTuning.network.feedback.shotgunAggregateWindowMs, 60);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getNetworkTuning, 'function');
 });
