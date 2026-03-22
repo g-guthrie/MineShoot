@@ -29,7 +29,7 @@
     function defaultWeaponLoadout() {
         var shared = sharedApi();
         var defaults = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : null;
-        return Array.isArray(defaults) && defaults.length ? defaults : ['machinegun', 'shotgun'];
+        return Array.isArray(defaults) && defaults.length ? defaults : ['rifle', 'shotgun'];
     }
 
     function resolvedDefaultWeaponLoadout() {
@@ -93,7 +93,7 @@
     var STORAGE_KEY = 'mayhem.menu.loadout.v1';
 
     var state = {
-        weaponSlots: ['machinegun', 'shotgun'],
+        weaponSlots: ['rifle', 'shotgun'],
         activeWeaponSlot: 0,
         selectedAbilityId: 'deadeye',
         selectedThrowableId: 'frag',
@@ -142,7 +142,14 @@
             ? inputLabels.getBindingLabel('throwable', 'Q')
             : 'Q';
 
-        if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
+        if (weaponTitle) {
+            var flag = document.getElementById('weapon-pick-flag');
+            if (flag && flag.parentNode === weaponTitle) {
+                weaponTitle.childNodes[0].textContent = 'Weapons ';
+            } else {
+                weaponTitle.textContent = 'Weapons';
+            }
+        }
         if (throwableTitle) throwableTitle.textContent = 'Throwables';
         if (abilityTitle) abilityTitle.textContent = 'Abilities';
     }
@@ -254,6 +261,15 @@
 
     function applyToGameplayRuntime(multiplayerMode) {
         compactWeaponSlots();
+        // If loadout is incomplete (mid-pick), fill from defaults so the game always gets two weapons
+        if (!state.weaponSlots[0] || !state.weaponSlots[1]) {
+            var defaults = resolvedDefaultWeaponLoadout();
+            if (!state.weaponSlots[0]) state.weaponSlots[0] = defaults[0] || '';
+            if (!state.weaponSlots[1]) {
+                state.weaponSlots[1] = (defaults[1] && defaults[1] !== state.weaponSlots[0])
+                    ? defaults[1] : '';
+            }
+        }
         var net = runtime.GameNet || null;
         var netCommands = net && net.commands ? net.commands : net;
         var weaponSlots = state.weaponSlots.slice(0, 2).filter(Boolean);
@@ -439,21 +455,14 @@
     }
 
     function bindWeaponUi() {
-        var primaryBtn = document.getElementById('weapon-slot-primary');
-        var secondaryBtn = document.getElementById('weapon-slot-secondary');
         var weaponChoiceGrid = document.getElementById('weapon-choice-grid');
-        if (!primaryBtn || !secondaryBtn || !weaponChoiceGrid) return;
+        var pickFlag = document.getElementById('weapon-pick-flag');
+        if (!weaponChoiceGrid) return;
         if (weaponChoiceGrid.__menuLoadoutBound) return;
         weaponChoiceGrid.__menuLoadoutBound = true;
 
-        var slotBtns = [primaryBtn, secondaryBtn];
-
-        function assignWeaponToSlot(activeSlot, weaponId) {
-            compactWeaponSlots();
-            var next = assignSharedSlotSelection(state.weaponSlots.slice(0, 2), activeSlot, weaponId);
-            if (!next) return false;
-            state.weaponSlots = next;
-            return true;
+        function needsSecondPick() {
+            return !!(state.weaponSlots[0] && !state.weaponSlots[1]);
         }
 
         function render() {
@@ -461,55 +470,47 @@
             var slots = state.weaponSlots.slice(0, 2);
             var names = weaponNameLookup();
 
-            for (var i = 0; i < slotBtns.length; i++) {
-                var btn = slotBtns[i];
-                var slotId = slots[i] || '';
-                btn.classList.remove('slot-1', 'slot-2');
-                btn.classList.add(i === 0 ? 'slot-1' : 'slot-2');
-                btn.textContent = 'SLOT ' + (i + 1) + ' :: ' + (slotId ? String(names[slotId] || slotId).toUpperCase() : 'UNEQUIPPED');
-                btn.classList.toggle('active', i === state.activeWeaponSlot);
-            }
-
             weaponChoiceGrid.innerHTML = '';
             var weaponIds = selectableWeaponIds();
             for (var n = 0; n < weaponIds.length; n++) {
                 var weaponId = weaponIds[n];
                 var choice = document.createElement('button');
                 choice.type = 'button';
-                choice.classList.add('btn');
+                choice.classList.add('weapon-choice-btn');
                 choice.dataset.weaponId = weaponId;
                 choice.textContent = String(names[weaponId] || weaponId).toUpperCase();
                 var ownerIndex = pairOwnerIndex(slots, weaponId);
-                if (ownerIndex !== -1 && ownerIndex !== state.activeWeaponSlot) {
-                    continue; // hide weapons taken by the other slot
-                }
-                if (ownerIndex === state.activeWeaponSlot) {
-                    choice.classList.add('slot-1', 'active');
+                if (ownerIndex === 0) {
+                    choice.classList.add('weapon-primary', 'active');
+                } else if (ownerIndex === 1) {
+                    choice.classList.add('weapon-secondary', 'active');
                 }
                 choice.addEventListener('click', function (e) {
                     e.stopPropagation();
                     var selectedId = String(this.dataset.weaponId || '');
-                    if (!assignWeaponToSlot(state.activeWeaponSlot, selectedId)) return;
-                    applyToGameplayRuntime(true);
+                    var currentOwner = pairOwnerIndex(state.weaponSlots, selectedId);
+                    if (currentOwner !== -1) return; // already selected, ignore
+
+                    if (needsSecondPick()) {
+                        state.weaponSlots[1] = selectedId;
+                    } else {
+                        state.weaponSlots = [selectedId, ''];
+                    }
+                    if (state.weaponSlots[0] && state.weaponSlots[1]) {
+                        applyToGameplayRuntime(true);
+                    }
                     render();
                     saveState();
                     notifySubscribers();
                 });
                 weaponChoiceGrid.appendChild(choice);
             }
+
+            if (pickFlag) {
+                pickFlag.classList.toggle('hidden', !needsSecondPick());
+            }
             renderSummaries();
         }
-
-        primaryBtn.addEventListener('click', function () {
-            state.activeWeaponSlot = 0;
-            render();
-            notifySubscribers();
-        });
-        secondaryBtn.addEventListener('click', function () {
-            state.activeWeaponSlot = 1;
-            render();
-            notifySubscribers();
-        });
 
         render();
     }

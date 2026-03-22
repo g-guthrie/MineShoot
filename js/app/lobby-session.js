@@ -13,6 +13,8 @@
     var PARTY_POLL_INTERVAL_MS = 3000;
     var FRIENDS_POLL_INTERVAL_MS = 15000;
     var PRIVATE_ROOM_POLL_INTERVAL_MS = 3000;
+    var PRIVATE_ROOM_POLL_FALLBACK_MS = 30000;
+    var LOBBY_WS_RECONNECT_MS = 3000;
 
     function noop() {}
 
@@ -44,6 +46,10 @@
         var lifecycleStarted = false;
         var pollOwnerToken = randomToken('menu_');
         var lastObservedPartyPresenceState = '';
+        var lobbyWs = null;
+        var lobbyWsReconnectHandle = 0;
+        var lobbyWsConnected = false;
+        var lobbyWsRoomId = '';
 
         function setPartyStatus(text, isErr) {
             if (ctx.setPartyStatus) ctx.setPartyStatus(text, isErr);
@@ -360,6 +366,10 @@
         function applyPrivateRoomState(nextState) {
             var previousState = privateRoomState;
             privateRoomState = nextState || null;
+            // Disconnect lobby WS when leaving a private room
+            if (!privateRoomState && lobbyWsConnected) {
+                disconnectLobbyWs();
+            }
             if (ctx.onPrivateRoomStateChanged) {
                 ctx.onPrivateRoomStateChanged(privateRoomState, { previousState: previousState });
             }
@@ -583,12 +593,127 @@
             });
         }
 
+        function buildLobbyWsUrl(roomId) {
+            if (!lobbyApi || !lobbyApi.resolveWsUrl || !lobbyApi.wsLobbyPath) return '';
+            var basePath = lobbyApi.wsLobbyPath();
+            var wsUrl = lobbyApi.resolveWsUrl(basePath);
+            var identity = currentPartyIdentity();
+            var url = new URL(wsUrl, window.location.origin);
+            // Ensure ws:// or wss://
+            if (url.protocol === 'http:') url.protocol = 'ws:';
+            if (url.protocol === 'https:') url.protocol = 'wss:';
+            url.searchParams.set('room', String(roomId || ''));
+            url.searchParams.set('actorId', String(identity && identity.id || ''));
+            return url.toString();
+        }
+
+        function reconstructSelf(roomPayload) {
+            var identity = currentPartyIdentity();
+            var selfId = String(identity && identity.id || '');
+            var members = Array.isArray(roomPayload && roomPayload.members) ? roomPayload.members : [];
+            for (var i = 0; i < members.length; i++) {
+                if (String(members[i].id || '') === selfId) {
+                    return {
+                        actorId: selfId,
+                        displayName: String(members[i].displayName || identity && identity.username || selfId || 'PLAYER'),
+                        isHost: !!members[i].isHost
+                    };
+                }
+            }
+            return {
+                actorId: selfId,
+                displayName: String(identity && identity.username || selfId || 'PLAYER'),
+                isHost: false
+            };
+        }
+
+        function handleLobbyWsMessage(event) {
+            var data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (_err) {
+                return;
+            }
+            if (!data || String(data.t || '') !== 'lobby_state') return;
+            var room = data.room || null;
+            if (!room) return;
+            // Reconstruct the self field from our identity
+            var state = {
+                self: reconstructSelf(room),
+                room: room
+            };
+            // Add computed fields the renderer expects
+            if (room.roomId) {
+                var code = String(room.roomCode || room.roomId || '').replace(/^private-/i, '').toUpperCase();
+                room.roomCode = code;
+            }
+            if (room.canToggleInviteLock === undefined) {
+                room.canToggleInviteLock = state.self.isHost;
+            }
+            if (room.canInviteParty === undefined) {
+                room.canInviteParty = state.self.isHost || !room.inviteLocked;
+            }
+            applyPrivateRoomState(state);
+        }
+
+        function connectLobbyWs(roomId) {
+            if (lobbyWsConnected && lobbyWsRoomId === roomId && lobbyWs) return;
+            disconnectLobbyWs();
+            var url = buildLobbyWsUrl(roomId);
+            if (!url) return;
+            try {
+                lobbyWs = new WebSocket(url);
+            } catch (_err) {
+                return;
+            }
+            lobbyWsRoomId = roomId;
+            lobbyWs.addEventListener('open', function () {
+                lobbyWsConnected = true;
+            });
+            lobbyWs.addEventListener('message', handleLobbyWsMessage);
+            lobbyWs.addEventListener('close', function () {
+                lobbyWs = null;
+                lobbyWsConnected = false;
+                // Schedule reconnect if still in a private room
+                if (lobbyWsReconnectHandle) clearTimeout(lobbyWsReconnectHandle);
+                lobbyWsReconnectHandle = setTimeout(function () {
+                    lobbyWsReconnectHandle = 0;
+                    if (!lifecycleStarted) return;
+                    var assigned = currentAssignedPrivateRoom();
+                    if (assigned && assigned.roomId) {
+                        connectLobbyWs(assigned.roomId);
+                    }
+                }, LOBBY_WS_RECONNECT_MS);
+            });
+            lobbyWs.addEventListener('error', function () {
+                // Error triggers close, which handles reconnect
+            });
+        }
+
+        function disconnectLobbyWs() {
+            if (lobbyWsReconnectHandle) {
+                clearTimeout(lobbyWsReconnectHandle);
+                lobbyWsReconnectHandle = 0;
+            }
+            lobbyWsConnected = false;
+            lobbyWsRoomId = '';
+            if (lobbyWs) {
+                try { lobbyWs.close(); } catch (_err) {}
+                lobbyWs = null;
+            }
+        }
+
         function refreshPrivateRoomState(silent) {
             var assigned = currentAssignedPrivateRoom();
             if (!assigned) {
                 applyPrivateRoomState(null);
+                disconnectLobbyWs();
                 setPrivateRoomStatus('', false);
                 return Promise.resolve(null);
+            }
+            // Attempt to connect lobby WebSocket if not already connected
+            if (!lobbyWsConnected && assigned.roomId) {
+                connectLobbyWs(assigned.roomId);
             }
             return fetchPrivateRoomState()
                 .then(function (state) {
@@ -943,6 +1068,8 @@
             if (privateRoomPollHandle) window.clearInterval(privateRoomPollHandle);
             privateRoomPollHandle = window.setInterval(function () {
                 if (!shouldRunBackgroundSync()) return;
+                // Skip HTTP poll when lobby WebSocket is active (fallback only)
+                if (lobbyWsConnected) return;
                 refreshPrivateRoomState(true);
             }, PRIVATE_ROOM_POLL_INTERVAL_MS);
 
@@ -971,6 +1098,8 @@
                 window.clearInterval(privateRoomPollHandle);
                 privateRoomPollHandle = 0;
             }
+
+            disconnectLobbyWs();
 
             if (typeof window.removeEventListener === 'function') {
                 window.removeEventListener('focus', focusListener);

@@ -806,9 +806,7 @@
                 return;
             }
 
-            if (p.type === 'plasma') {
-                updatePlasmaTracking(p, def, dt);
-            }
+            /* Plasma no longer tracks — pure arc throw, Halo-style sticky */
 
             var isTrackingProjectile = (p.type === 'missile' || p.type === 'plasma_stream');
             if (isTrackingProjectile && p.age > 0.03) {
@@ -882,18 +880,7 @@
             tmpEnd.copy(p.mesh.position).addScaledVector(p.velocity, dt);
 
             var hit = segmentCollision(tmpStart, tmpEnd);
-            if (p.type === 'plasma' && !p.trackingEnemy) {
-                var catchHit = findPlasmaCatchCandidate(
-                    tmpStart,
-                    tmpEnd,
-                    hit ? Number(hit.distance || 0) : Infinity,
-                    def.catchRadius || rangeTuning.plasmaCatchRadius || 0,
-                    null
-                );
-                if (catchHit) {
-                    beginPlasmaTracking(p, catchHit, def);
-                }
-            }
+            /* Plasma catch/tracking removed — sticks only on direct hit */
 
             if (hit) {
                 if (hit.kind === 'enemy') {

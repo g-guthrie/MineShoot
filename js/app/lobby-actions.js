@@ -189,7 +189,7 @@
                 roomId = String(self.publicMatch.roomId || '');
                 gameMode = String(self.publicMatch.gameMode || 'ffa');
                 message = 'Joining room ' + roomId.toUpperCase() + '...';
-            } else if (self.privateRoom && self.privateRoom.roomId) {
+            } else if (self.privateRoom && self.privateRoom.roomId && String(self.privateRoom.roomPhase || '') === 'active') {
                 modeId = 'single_cloudflare';
                 roomId = String(self.privateRoom.roomId || '');
                 gameMode = String(self.privateRoom.roomMode || 'ffa');

@@ -262,7 +262,7 @@ export const gameplayTuning = {
       }
     },
   },
-  defaultWeaponLoadout: ['machinegun', 'shotgun'],
+  defaultWeaponLoadout: ['rifle', 'shotgun'],
   selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
   throwables: {
     order: ['frag', 'plasma', 'molotov', 'knife'],
@@ -275,8 +275,8 @@ export const gameplayTuning = {
       armorBufferMode: 'heavy'
     },
     plasma: {
-      id: 'plasma', label: 'Plasma Grenade', previewType: 'trajectory', speed: 19, upward: 3.0, gravity: 18, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
-      catchRadius: 1.3, trackDuration: 0.15, trackLerp: 8, acquireRange: 16, acquireHalfAngleDeg: 28, stickExplodeDelay: 1.8,
+      id: 'plasma', label: 'Plasma Grenade', previewType: 'trajectory', speed: 26, upward: 2.0, gravity: 22, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
+      catchRadius: 0.5, trackDuration: 0, trackLerp: 0, acquireRange: 0, acquireHalfAngleDeg: 0, stickExplodeDelay: 1.8,
       armorBufferMode: 'heavy'
     },
     missile: {

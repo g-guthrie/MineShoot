@@ -41,10 +41,35 @@ export function closeDuplicateSockets(clients, userId, keepWs) {
   }
 }
 
+function handleLobbyWebSocketRequest(room, request, url) {
+  const actorId = String(url.searchParams.get('actorId') || '').trim();
+  if (!actorId) {
+    return new Response('Missing actorId', { status: 400 });
+  }
+
+  const pair = new WebSocketPair();
+  const client = pair[0];
+  const server = pair[1];
+
+  room.ctx.acceptWebSocket(server);
+  server.serializeAttachment({ actorId, isLobbyObserver: true });
+
+  if (!room.lobbyObservers) room.lobbyObservers = new Map();
+  room.lobbyObservers.set(server, { actorId });
+
+  // Send current lobby state immediately
+  if (room.buildLobbyBroadcastPayload) {
+    room.send(server, room.buildLobbyBroadcastPayload());
+  }
+
+  return new Response(null, { status: 101, webSocket: client });
+}
+
 async function handleHttpRequest(room, request, url) {
   if (url.pathname === '/private-config' && request.method === 'POST') {
     const body = await request.json().catch(() => null);
     room.applyPrivateRoomConfig(body || {});
+    if (room.broadcastLobbyState) room.broadcastLobbyState();
     return json({ ok: true, roomId: room.roomName, gameMode: room.gameMode || '' });
   }
   if (url.pathname === '/state') {
@@ -128,6 +153,9 @@ export async function handleRoomRequest(room, request) {
   const upgradeHeader = String(request.headers.get('Upgrade') || '').trim().toLowerCase();
   if (upgradeHeader !== 'websocket') {
     return handleHttpRequest(room, request, url);
+  }
+  if (url.pathname === '/lobby-connect') {
+    return handleLobbyWebSocketRequest(room, request, url);
   }
   return handleWebSocketRequest(room, request, url);
 }

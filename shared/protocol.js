@@ -1,5 +1,6 @@
 export const DEFAULT_ROOM_ID = 'global';
 export const WS_PATH = '/api/ws';
+export const WS_LOBBY_PATH = '/api/ws/lobby';
 export const MATCHMAKING_PATH = '/api/matchmaking';
 export const PARTY_PATH = '/api/party';
 export const PRIVATE_ROOM_PATH = '/api/private-room';
@@ -125,7 +126,8 @@ export const MSG_C2S = {
   THROW: 'throw',
   CLASS_QUEUE: 'class_queue',
   CLASS_CAST: 'class_cast',
-  PING: 'ping'
+  PING: 'ping',
+  LOBBY_PING: 'lobby_ping'
 };
 
 export const MSG_S2C = {
@@ -143,7 +145,8 @@ export const MSG_S2C = {
   CLASS_CAST_REJECT: 'class_cast_reject',
   CLASS_CHANGED: 'class_changed',
   ERROR: 'error',
-  PONG: 'pong'
+  PONG: 'pong',
+  LOBBY_STATE: 'lobby_state'
 };
 
 export const protocol = {
@@ -152,6 +155,7 @@ export const protocol = {
   },
   world: WORLD_DEFAULTS,
   wsPath: WS_PATH,
+  wsLobbyPath: WS_LOBBY_PATH,
   matchmakingPath: MATCHMAKING_PATH,
   partyPath: PARTY_PATH,
   privateRoomPath: PRIVATE_ROOM_PATH,

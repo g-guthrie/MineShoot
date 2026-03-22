@@ -13,6 +13,17 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   if (!msg || typeof msg !== 'object') return;
 
   const meta = room.clients.get(ws) || ws.deserializeAttachment();
+
+  // Lobby observers only handle keepalive pings
+  if (meta && meta.isLobbyObserver) {
+    if (room.restoreLobbyObserver) room.restoreLobbyObserver(ws, meta);
+    const parsed = safeJsonParse ? safeJsonParse(typeof message === 'string' ? message : new TextDecoder().decode(message)) : null;
+    if (parsed && String(parsed.t || '') === (msgC2s.LOBBY_PING || 'lobby_ping')) {
+      room.send(ws, { t: msgS2c.PONG || 'pong', serverTime: nowMs ? nowMs() : 0 });
+    }
+    return;
+  }
+
   if (!meta || !meta.userId) return;
   if (room.activeSocketByUserId.get(meta.userId) !== ws) return;
 
@@ -71,6 +82,13 @@ export function handleRoomSocketClose(room, ws, deps) {
   const nowMs = deps.nowMs;
 
   const meta = room.clients.get(ws) || ws.deserializeAttachment();
+
+  // Lobby observer cleanup — no player entity involved
+  if (meta && meta.isLobbyObserver) {
+    if (room.lobbyObservers) room.lobbyObservers.delete(ws);
+    return;
+  }
+
   room.clients.delete(ws);
 
   if (meta && meta.userId && room.activeSocketByUserId.get(meta.userId) === ws) {

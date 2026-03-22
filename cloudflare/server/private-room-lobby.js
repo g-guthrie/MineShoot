@@ -32,6 +32,32 @@ const TEAM_CHARLIE = 'charlie';
 const TEAM_DELTA = 'delta';
 const ROOM_TEAM_IDS = [TEAM_ALPHA, TEAM_BRAVO, TEAM_CHARLIE, TEAM_DELTA];
 const ROOM_MEMBER_MAX = 16;
+const SYNC_MODE_LOBBY = 'lobby_update';
+const SYNC_MODE_HYDRATE = 'hydrate';
+const JOIN_RATE_CACHE_MAX = 5000;
+
+// Rate limiting for join attempts (per-IP, in-memory)
+const JOIN_RATE_WINDOW_MS = 60_000;
+const JOIN_RATE_MAX = 10;
+const joinAttempts = new Map();
+
+function checkJoinRateLimit(ip) {
+  const now = Date.now();
+  const key = String(ip || 'unknown');
+  let entry = joinAttempts.get(key);
+  if (!entry || (now - entry.windowStart) > JOIN_RATE_WINDOW_MS) {
+    entry = { windowStart: now, count: 0 };
+    joinAttempts.set(key, entry);
+  }
+  entry.count += 1;
+  // Evict stale entries periodically
+  if (joinAttempts.size > JOIN_RATE_CACHE_MAX) {
+    for (const [k, v] of joinAttempts) {
+      if ((now - v.windowStart) > JOIN_RATE_WINDOW_MS) joinAttempts.delete(k);
+    }
+  }
+  return entry.count <= JOIN_RATE_MAX;
+}
 
 function nowSec() {
   return Math.floor(Date.now() / 1000);
@@ -66,7 +92,7 @@ function randomCode(length) {
   return out;
 }
 
-async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_update') {
+async function syncPrivateRoomDurableObject(env, roomId, syncMode = SYNC_MODE_LOBBY) {
   const roomState = await getPrivateRoomState(env, roomId);
   const members = await getPrivateRoomMembers(env, roomId);
   if (!roomState) return null;
@@ -86,7 +112,9 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       syncMode: String(syncMode || 'lobby_update'),
       teams: members.map((member) => ({
         actorId: String(member.actor_id || ''),
-        teamId: normalizeTeamId(member.team_id, teamCount)
+        teamId: normalizeTeamId(member.team_id, teamCount),
+        displayName: String(member.display_name || member.actor_id || 'PLAYER'),
+        isHost: String(member.actor_id || '') === String(roomState.host_actor_id || '')
       }))
     })
   }).catch(() => null);
@@ -161,15 +189,17 @@ async function detachActorFromPrivateRoom(env, actorId) {
   await removeActorFromPrivateRoom(env, actorId);
   const remaining = await getPrivateRoomMembers(env, roomId);
   if (remaining.length === 0) {
-    await clearPrivateRoomInvitesByRoom(env, roomId);
-    await deletePrivateRoom(env, roomId);
+    await Promise.all([
+      clearPrivateRoomInvitesByRoom(env, roomId),
+      deletePrivateRoom(env, roomId)
+    ]);
     return roomId;
   }
   const roomState = await getPrivateRoomState(env, roomId);
   if (roomState && String(roomState.host_actor_id || '') === String(actorId || '')) {
     await setPrivateRoomState(env, roomId, { hostActorId: remaining.length > 0 ? String(remaining[0].actor_id || '') : '' });
   }
-  await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
+  await syncPrivateRoomDurableObject(env, roomId, SYNC_MODE_LOBBY);
   return roomId;
 }
 
@@ -192,18 +222,18 @@ async function createPrivateRoomWithMode(env, request, actor, roomMode) {
         roomId,
         normalizedMode,
         actor.id,
-        normalizedMode === ROOM_MODE_TDM ? ROOM_PHASE_LOBBY : ROOM_PHASE_ACTIVE
+        ROOM_PHASE_LOBBY
       );
       await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, TEAM_ALPHA);
       await touchPrivateRoomById(env, roomId);
-      await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
+      await syncPrivateRoomDurableObject(env, roomId, SYNC_MODE_LOBBY);
       const state = await buildLobbyState(env, actor, roomId);
       return {
         ok: true,
         state,
         movedCount: 1,
         skippedCount: 0,
-        autoStart: normalizedMode !== ROOM_MODE_TDM
+        autoStart: false
       };
     } catch (_err) {
       // retry collision
@@ -266,14 +296,14 @@ async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   const allowed = activeTeamIds(roomState.team_count);
   await assignActorToPrivateRoom(env, roomId, actor.id, actor.displayName, pickBalancedTeamId(members, allowed));
   await touchPrivateRoomById(env, roomId);
-  await syncPrivateRoomDurableObject(env, roomId, 'lobby_update');
+  await syncPrivateRoomDurableObject(env, roomId, SYNC_MODE_LOBBY);
   const state = await buildLobbyState(env, actor, roomId);
   return {
     ok: true,
     state,
     movedCount: 1,
     skippedCount: 0,
-    autoStart: normalizeRoomMode(roomState.room_mode) !== ROOM_MODE_TDM
+    autoStart: false
   };
 }
 
@@ -393,6 +423,10 @@ export async function handlePrivateRoomLobby(env, request) {
   }
 
   if (action === 'join') {
+    const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '';
+    if (!checkJoinRateLimit(clientIp)) {
+      return json({ ok: false, error: 'Too many join attempts. Try again in a minute.' }, 429);
+    }
     const result = await joinPrivateRoomSolo(env, actor, body.roomCode || body.roomId || '');
     if (!result.ok) return json({ ok: false, error: result.error }, result.status || 400);
     return json(result);
@@ -423,10 +457,10 @@ export async function handlePrivateRoomLobby(env, request) {
     const nextMode = normalizeRoomMode(body.roomMode || ROOM_MODE_FFA);
     await setPrivateRoomState(env, currentRoomId, {
       roomMode: nextMode,
-      roomPhase: nextMode === ROOM_MODE_TDM ? ROOM_PHASE_LOBBY : ROOM_PHASE_ACTIVE
+      roomPhase: ROOM_PHASE_LOBBY
     });
     await normalizeMemberTeams(env, currentRoomId, Number(currentState.team_count || 2));
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
@@ -436,7 +470,7 @@ export async function handlePrivateRoomLobby(env, request) {
     const teamCount = normalizeTeamCount(body.teamCount || 2);
     await setPrivateRoomState(env, currentRoomId, { teamCount });
     await normalizeMemberTeams(env, currentRoomId, teamCount);
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
@@ -461,7 +495,7 @@ export async function handlePrivateRoomLobby(env, request) {
   if (action === 'randomize') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can randomize teams.' }, 403);
     await randomizeTeams(env, currentRoomId, Number(currentState.team_count || 2));
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
@@ -474,12 +508,15 @@ export async function handlePrivateRoomLobby(env, request) {
       return json({ ok: false, error: 'That player is not in this room.' }, 404);
     }
     await moveActorToPrivateRoomTeam(env, targetId, normalizeTeamId(body.teamId || TEAM_ALPHA, Number(currentState.team_count || 2)));
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
 
   if (action === 'self_pick_team') {
+    if (String(currentState.room_phase || '') !== ROOM_PHASE_LOBBY) {
+      return json({ ok: false, error: 'Team changes are locked while the match is active.' }, 403);
+    }
     const teamCount = Number(currentState.team_count || 2);
     const allowed = activeTeamIds(teamCount);
     const requestedTeam = String(body.teamId || '').trim().toLowerCase();
@@ -491,7 +528,7 @@ export async function handlePrivateRoomLobby(env, request) {
       return json({ ok: false, error: 'You are not in this room.' }, 404);
     }
     await moveActorToPrivateRoomTeam(env, actor.id, requestedTeam);
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
@@ -516,7 +553,7 @@ export async function handlePrivateRoomLobby(env, request) {
       }
     }
     await setPrivateRoomState(env, currentRoomId, { roomPhase: ROOM_PHASE_ACTIVE });
-    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }
@@ -526,5 +563,5 @@ export async function handlePrivateRoomLobby(env, request) {
 
 export async function primePrivateRoomDurableObject(env, roomId) {
   if (!roomId) return null;
-  return syncPrivateRoomDurableObject(env, roomId, 'hydrate');
+  return syncPrivateRoomDurableObject(env, roomId, SYNC_MODE_HYDRATE);
 }

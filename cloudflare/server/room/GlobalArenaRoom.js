@@ -302,6 +302,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.env = env;
     this.clients = new Map();
     this.activeSocketByUserId = new Map();
+    this.lobbyObservers = new Map();
     this.players = new Map();
     this.bots = new Map();
     this.tickHandle = null;
@@ -631,6 +632,62 @@ export class GlobalArenaRoom extends DurableObject {
       } catch (err) {
         // noop
       }
+    }
+  }
+
+  buildLobbyBroadcastPayload() {
+    const config = this.privateRoomConfig || {};
+    const teams = config.teams instanceof Map ? config.teams : new Map();
+    const memberNames = config.memberNames instanceof Map ? config.memberNames : new Map();
+    const teamIds = Array.isArray(config.teamIds) ? config.teamIds : ['alpha', 'bravo'];
+    const hostActorId = String(config.hostActorId || '');
+    const teamBuckets = {};
+    for (let i = 0; i < teamIds.length; i++) teamBuckets[teamIds[i]] = [];
+    const allMembers = [];
+    for (const [actorId, teamId] of teams.entries()) {
+      const entry = {
+        id: actorId,
+        displayName: memberNames.get(actorId) || actorId || 'PLAYER',
+        teamId: teamId,
+        isHost: actorId === hostActorId
+      };
+      allMembers.push(entry);
+      if (teamBuckets[teamId]) teamBuckets[teamId].push(entry);
+    }
+    return {
+      t: MSG_S2C.LOBBY_STATE,
+      room: {
+        roomId: this.roomName,
+        roomCode: String(this.roomName || '').replace(/^private-/, '').toUpperCase(),
+        roomMode: String(config.roomMode || 'ffa'),
+        roomPhase: String(config.roomPhase || 'lobby'),
+        teamCount: Number(config.teamCount || 2),
+        teamIds: teamIds,
+        hostActorId: hostActorId,
+        inviteLocked: false,
+        memberCount: allMembers.length,
+        teams: teamBuckets,
+        members: allMembers
+      }
+    };
+  }
+
+  broadcastLobbyState() {
+    if (!this.lobbyObservers || this.lobbyObservers.size === 0) return;
+    const payload = JSON.stringify(this.buildLobbyBroadcastPayload());
+    for (const [ws] of this.lobbyObservers.entries()) {
+      try {
+        ws.send(payload);
+      } catch (err) {
+        // noop
+      }
+    }
+  }
+
+  restoreLobbyObserver(ws, meta) {
+    if (!this.lobbyObservers) this.lobbyObservers = new Map();
+    if (!this.lobbyObservers.has(ws)) {
+      this.lobbyObservers.set(ws, { actorId: String(meta && meta.actorId || '') });
     }
   }
 

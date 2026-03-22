@@ -16,6 +16,17 @@
     GameLobbyPrivateRoomView.create = function (ctx) {
         var selectedMemberId = '';
         var movePending = false;
+        var lastSnapshotKey = '';
+        var statusDismissTimer = 0;
+        var touchDragMemberId = '';
+        var touchDragGhost = null;
+        var touchStartX = 0;
+        var touchStartY = 0;
+        var consecutiveFailures = 0;
+        var MAX_CONSECUTIVE_FAILURES = 8;
+        var optimisticMove = null; // { memberId, fromTeamId, toTeamId }
+        var hasReceivedFirstState = false;
+        var touchCancelHandler = null;
 
         function currentState() {
             return ctx.getState();
@@ -28,9 +39,23 @@
 
         function setStatus(text, isErr) {
             if (!ctx.privateRoomStatusEl) return;
+            if (statusDismissTimer) {
+                clearTimeout(statusDismissTimer);
+                statusDismissTimer = 0;
+            }
             ctx.privateRoomStatusEl.textContent = text || '';
             ctx.privateRoomStatusEl.hidden = !text;
             ctx.privateRoomStatusEl.classList.toggle('error', !!isErr);
+            // Auto-dismiss non-error statuses after 3 seconds
+            if (text && !isErr) {
+                statusDismissTimer = setTimeout(function () {
+                    if (ctx.privateRoomStatusEl) {
+                        ctx.privateRoomStatusEl.hidden = true;
+                        ctx.privateRoomStatusEl.textContent = '';
+                    }
+                    statusDismissTimer = 0;
+                }, 3000);
+            }
         }
 
         function teamLabel(teamId) {
@@ -68,14 +93,36 @@
             selectedMemberId = '';
         }
 
-        function walkNodeTree(root, visitor) {
-            if (!root) return;
-            visitor(root);
-            var children = root.childNodes;
-            if (!children || !children.length) return;
-            for (var i = 0; i < children.length; i++) {
-                walkNodeTree(children[i], visitor);
+        /**
+         * Build a snapshot key from room state so we can skip DOM rebuilds
+         * when nothing meaningful changed.
+         */
+        function buildSnapshotKey(room) {
+            if (!room) return '';
+            var parts = [
+                String(room.roomMode || ''),
+                String(room.roomPhase || ''),
+                String(room.teamCount || 2),
+                String(room.memberCount || 0),
+                selectedMemberId,
+                movePending ? '1' : '0'
+            ];
+            var teamIds = activeTeamIds(room);
+            for (var i = 0; i < teamIds.length; i++) {
+                var teamId = teamIds[i];
+                var members = room.teams && room.teams[teamId] ? room.teams[teamId] : [];
+                for (var j = 0; j < members.length; j++) {
+                    parts.push(String(members[j].id || '') + ':' + String(members[j].teamId || ''));
+                }
             }
+            // Include unassigned members
+            var allMembers = Array.isArray(room.members) ? room.members : [];
+            for (var k = 0; k < allMembers.length; k++) {
+                if (teamIds.indexOf(String(allMembers[k].teamId || '')) < 0) {
+                    parts.push('u:' + String(allMembers[k].id || ''));
+                }
+            }
+            return parts.join('|');
         }
 
         function removeAllChildren(el) {
@@ -83,13 +130,142 @@
             while (el.firstChild) el.removeChild(el.firstChild);
         }
 
+        // ── Skeleton loading UI ──────────────────────────────────────
+        function buildSkeletonPill() {
+            var pill = document.createElement('div');
+            pill.className = 'private-room-member-pill skeleton';
+            var top = document.createElement('div');
+            top.className = 'private-room-member-topline';
+            var bar = document.createElement('div');
+            bar.className = 'skeleton-bar skeleton-bar-name';
+            top.appendChild(bar);
+            pill.appendChild(top);
+            var meta = document.createElement('div');
+            meta.className = 'skeleton-bar skeleton-bar-meta';
+            pill.appendChild(meta);
+            return pill;
+        }
+
+        function buildSkeletonLane(teamId) {
+            var lane = document.createElement('section');
+            lane.className = 'private-room-team-lane skeleton-lane';
+            lane.setAttribute('data-team-id', teamId);
+            var header = document.createElement('div');
+            header.className = 'private-room-team-header';
+            var copy = document.createElement('div');
+            copy.className = 'private-room-team-copy';
+            var title = document.createElement('div');
+            title.className = 'skeleton-bar skeleton-bar-title';
+            copy.appendChild(title);
+            var subtitle = document.createElement('div');
+            subtitle.className = 'skeleton-bar skeleton-bar-subtitle';
+            copy.appendChild(subtitle);
+            header.appendChild(copy);
+            lane.appendChild(header);
+            var tray = document.createElement('div');
+            tray.className = 'private-room-team-tray';
+            tray.appendChild(buildSkeletonPill());
+            lane.appendChild(tray);
+            return lane;
+        }
+
+        function renderSkeleton() {
+            if (!ctx.privateRoomRosterGrid) return;
+            removeAllChildren(ctx.privateRoomRosterGrid);
+            ctx.privateRoomRosterGrid.appendChild(buildSkeletonLane('alpha'));
+            ctx.privateRoomRosterGrid.appendChild(buildSkeletonLane('bravo'));
+            if (ctx.privateRoomSummaryEl) {
+                ctx.privateRoomSummaryEl.textContent = '';
+                ctx.privateRoomSummaryEl.appendChild(createSkeletonBar('skeleton-bar-summary'));
+            }
+        }
+
+        function createSkeletonBar(className) {
+            var bar = document.createElement('div');
+            bar.className = 'skeleton-bar ' + (className || '');
+            return bar;
+        }
+
+        // ── Empty state (solo player) ────────────────────────────────
+        function buildEmptyState(room) {
+            var wrap = document.createElement('div');
+            wrap.className = 'private-room-empty-state';
+            var icon = document.createElement('div');
+            icon.className = 'private-room-empty-icon';
+            icon.textContent = '\uD83C\uDFAE'; // 🎮
+            wrap.appendChild(icon);
+            var heading = document.createElement('div');
+            heading.className = 'private-room-empty-heading';
+            heading.textContent = 'Waiting for players';
+            wrap.appendChild(heading);
+            var detail = document.createElement('div');
+            detail.className = 'private-room-empty-detail';
+            detail.textContent = 'Share the room code or invite your party to get started.';
+            wrap.appendChild(detail);
+            return wrap;
+        }
+
+        // ── Optimistic move ──────────────────────────────────────────
+        function applyOptimisticMove(room) {
+            if (!optimisticMove) return room;
+            var move = optimisticMove;
+            // Deep-clone teams
+            var teams = {};
+            var teamIds = activeTeamIds(room);
+            for (var i = 0; i < teamIds.length; i++) {
+                var tid = teamIds[i];
+                teams[tid] = room.teams && room.teams[tid] ? room.teams[tid].slice() : [];
+            }
+            // Find and move member
+            var member = null;
+            for (var t = 0; t < teamIds.length; t++) {
+                var arr = teams[teamIds[t]];
+                for (var m = arr.length - 1; m >= 0; m--) {
+                    if (String(arr[m].id || '') === move.memberId) {
+                        member = arr[m];
+                        arr.splice(m, 1);
+                        break;
+                    }
+                }
+                if (member) break;
+            }
+            // Also check unassigned
+            var members = Array.isArray(room.members) ? room.members.slice() : [];
+            if (!member) {
+                for (var u = 0; u < members.length; u++) {
+                    if (String(members[u].id || '') === move.memberId) {
+                        member = members[u];
+                        break;
+                    }
+                }
+            }
+            if (member && teams[move.toTeamId]) {
+                var moved = { id: member.id, displayName: member.displayName, teamId: move.toTeamId, isHost: member.isHost };
+                teams[move.toTeamId].push(moved);
+                // Update in members array too
+                for (var k = 0; k < members.length; k++) {
+                    if (String(members[k].id || '') === move.memberId) {
+                        members[k] = moved;
+                        break;
+                    }
+                }
+            }
+            // Return patched room
+            var patched = {};
+            for (var key in room) {
+                if (Object.prototype.hasOwnProperty.call(room, key)) patched[key] = room[key];
+            }
+            patched.teams = teams;
+            patched.members = members;
+            return patched;
+        }
+
         function clearDropHighlights() {
-            walkNodeTree(ctx.privateRoomRosterGrid, function (node) {
-                if (node && node.classList && node.classList.remove) node.classList.remove('drag-over');
-            });
-            walkNodeTree(ctx.privateRoomUnassigned, function (node) {
-                if (node && node.classList && node.classList.remove) node.classList.remove('drag-over');
-            });
+            var trays = ctx.privateRoomRosterGrid
+                ? ctx.privateRoomRosterGrid.querySelectorAll('.private-room-team-tray')
+                : [];
+            for (var i = 0; i < trays.length; i++) trays[i].classList.remove('drag-over');
+            if (ctx.privateRoomUnassigned) ctx.privateRoomUnassigned.classList.remove('drag-over');
         }
 
         function moveMember(memberId, nextTeamId) {
@@ -97,25 +273,137 @@
             movePending = true;
             selectedMemberId = '';
             clearDropHighlights();
-            setStatus('Updating teams...', false);
+            // Apply optimistic move immediately
+            optimisticMove = { memberId: memberId, toTeamId: nextTeamId };
+            lastSnapshotKey = ''; // Force re-render
             applyState(currentState());
             return Promise.resolve(ctx.moveMember(memberId, nextTeamId))
                 .then(function (result) {
                     movePending = false;
+                    optimisticMove = null;
                     clearDropHighlights();
-                    setStatus(result ? 'Team layout updated.' : 'Team update failed.', !result);
+                    if (result) {
+                        consecutiveFailures = 0;
+                        setStatus('Team layout updated.', false);
+                    } else {
+                        consecutiveFailures++;
+                        setStatus('Team update failed.', true);
+                    }
+                    lastSnapshotKey = ''; // Force re-render to reconcile with server state
                     applyState(currentState());
                     return result;
                 })
                 .catch(function () {
                     movePending = false;
+                    optimisticMove = null;
+                    consecutiveFailures++;
                     clearDropHighlights();
                     setStatus('Team update failed.', true);
+                    lastSnapshotKey = '';
                     applyState(currentState());
                     return null;
                 });
         }
 
+        // ── Touch drag-and-drop ──────────────────────────────────────
+        function createTouchGhost(memberEl) {
+            var ghost = memberEl.cloneNode(true);
+            ghost.className = 'private-room-member-pill touch-ghost';
+            ghost.style.position = 'fixed';
+            ghost.style.zIndex = '9999';
+            ghost.style.pointerEvents = 'none';
+            ghost.style.opacity = '0.88';
+            ghost.style.transform = 'scale(1.05)';
+            ghost.style.width = memberEl.offsetWidth + 'px';
+            ghost.style.transition = 'none';
+            document.body.appendChild(ghost);
+            return ghost;
+        }
+
+        function removeTouchGhost() {
+            if (touchDragGhost && touchDragGhost.parentNode) {
+                touchDragGhost.parentNode.removeChild(touchDragGhost);
+            }
+            touchDragGhost = null;
+            touchDragMemberId = '';
+        }
+
+        function findDropTarget(x, y) {
+            var trays = ctx.privateRoomRosterGrid
+                ? ctx.privateRoomRosterGrid.querySelectorAll('.private-room-team-tray')
+                : [];
+            for (var i = 0; i < trays.length; i++) {
+                var rect = trays[i].getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    return trays[i];
+                }
+            }
+            if (ctx.privateRoomUnassigned) {
+                var uRect = ctx.privateRoomUnassigned.getBoundingClientRect();
+                if (x >= uRect.left && x <= uRect.right && y >= uRect.top && y <= uRect.bottom) {
+                    return ctx.privateRoomUnassigned;
+                }
+            }
+            return null;
+        }
+
+        function handleTouchStart(event, memberId, pillEl) {
+            if (movePending) return;
+            var touch = event.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchDragMemberId = memberId;
+            // Don't create ghost yet — wait for touchmove to confirm drag intent
+        }
+
+        function handleTouchMove(event) {
+            if (!touchDragMemberId) return;
+            var touch = event.touches[0];
+            var dx = touch.clientX - touchStartX;
+            var dy = touch.clientY - touchStartY;
+            // Require 10px movement to start drag
+            if (!touchDragGhost && Math.abs(dx) + Math.abs(dy) < 10) return;
+            event.preventDefault();
+
+            if (!touchDragGhost) {
+                var pillEl = ctx.privateRoomRosterGrid
+                    ? ctx.privateRoomRosterGrid.querySelector('[data-member-id="' + touchDragMemberId + '"]')
+                    : null;
+                if (!pillEl) pillEl = ctx.privateRoomUnassigned
+                    ? ctx.privateRoomUnassigned.querySelector('[data-member-id="' + touchDragMemberId + '"]')
+                    : null;
+                if (pillEl) {
+                    touchDragGhost = createTouchGhost(pillEl);
+                    pillEl.classList.add('pending');
+                }
+            }
+
+            if (touchDragGhost) {
+                touchDragGhost.style.left = (touch.clientX - 40) + 'px';
+                touchDragGhost.style.top = (touch.clientY - 20) + 'px';
+            }
+
+            // Highlight drop target
+            clearDropHighlights();
+            var target = findDropTarget(touch.clientX, touch.clientY);
+            if (target && target.__dropEnabled) {
+                target.classList.add('drag-over');
+            }
+        }
+
+        function handleTouchEnd(event) {
+            if (!touchDragMemberId) return;
+            var touch = event.changedTouches[0];
+            var target = findDropTarget(touch.clientX, touch.clientY);
+            clearDropHighlights();
+
+            if (touchDragGhost && target && target.__dropEnabled && target.__dropTeamId !== undefined) {
+                moveMember(touchDragMemberId, target.__dropTeamId);
+            }
+            removeTouchGhost();
+        }
+
+        // ── Desktop drag-and-drop ────────────────────────────────────
         function bindDropTarget(targetEl, teamId, enabled) {
             if (!targetEl) return;
             if (targetEl.__dropBound) {
@@ -131,7 +419,10 @@
                 event.preventDefault();
                 targetEl.classList.add('drag-over');
             });
-            targetEl.addEventListener('dragleave', function () {
+            targetEl.addEventListener('dragleave', function (ev) {
+                // Only remove highlight when actually leaving the target
+                var related = ev.relatedTarget;
+                if (related && targetEl.contains(related)) return;
                 targetEl.classList.remove('drag-over');
             });
             targetEl.addEventListener('drop', function (event) {
@@ -144,6 +435,7 @@
             });
         }
 
+        // ── UI builders ──────────────────────────────────────────────
         function buildMoveRail(memberId, currentTeamId, teamIds) {
             var rail = document.createElement('div');
             rail.className = 'private-room-destination-rail';
@@ -172,16 +464,18 @@
         function buildMemberPill(member, canEditRoom, currentTeamId, teamIds) {
             var memberId = String(member && member.id || '');
             var pill = document.createElement('div');
-            pill.className = 'private-room-member-pill' + (member && member.isHost ? ' host' : '') + (selectedMemberId === memberId ? ' selected' : '');
+            pill.className = 'private-room-member-pill'
+                + (member && member.isHost ? ' host' : '')
+                + (selectedMemberId === memberId ? ' selected' : '');
             pill.setAttribute('data-member-id', memberId);
             pill.setAttribute('data-team-id', String(currentTeamId || ''));
-            pill.setAttribute('data-rounded-role', 'container');
             if (movePending) pill.className += ' pending';
 
             if (canEditRoom) {
                 pill.draggable = !movePending;
                 pill.tabIndex = 0;
                 pill.setAttribute('role', 'button');
+                pill.setAttribute('aria-label', 'Move ' + String(member && member.displayName || 'Player') + ' to another team');
                 pill.addEventListener('dragstart', function (event) {
                     if (movePending) return;
                     if (!event.dataTransfer) return;
@@ -191,6 +485,10 @@
                 pill.addEventListener('dragend', function () {
                     clearDropHighlights();
                 });
+                // Touch drag support
+                pill.addEventListener('touchstart', function (event) {
+                    handleTouchStart(event, memberId, pill);
+                }, { passive: true });
                 pill.addEventListener('click', function () {
                     if (movePending) return;
                     selectedMemberId = selectedMemberId === memberId ? '' : memberId;
@@ -249,14 +547,16 @@
             }
         }
 
-        function buildTeamLane(teamId, members, canEditRoom, teamIds, selfPickEnabled) {
+        function buildTeamLane(teamId, members, canEditRoom, teamIds, selfPickEnabled, isFirstRender) {
             var lane = document.createElement('section');
-            lane.className = 'private-room-team-lane';
+            lane.className = 'private-room-team-lane' + (isFirstRender ? ' bloom' : '');
             lane.setAttribute('data-team-id', teamId);
+            lane.setAttribute('aria-label', teamLabel(teamId) + ', ' + members.length + ' players');
 
             if (selfPickEnabled && !movePending) {
                 lane.setAttribute('role', 'button');
                 lane.tabIndex = 0;
+                lane.setAttribute('aria-label', 'Switch to ' + teamLabel(teamId));
                 lane.addEventListener('click', function () {
                     if (movePending) return;
                     ctx.selfPickTeam(teamId);
@@ -295,7 +595,6 @@
             var tray = document.createElement('div');
             tray.className = 'private-room-team-tray';
             tray.setAttribute('data-team-id', teamId);
-            tray.setAttribute('data-rounded-role', 'container');
             lane.appendChild(tray);
 
             renderMemberTray(tray, members, canEditRoom, teamId, teamIds, 'Drop players here.');
@@ -317,7 +616,7 @@
             renderMemberTray(
                 ctx.privateRoomUnassigned,
                 unassigned,
-                false,
+                canEditRoom,
                 '',
                 teamIds,
                 canEditRoom ? 'Fresh players land here until they are slotted.' : 'Everyone is assigned.'
@@ -329,10 +628,11 @@
             removeAllChildren(ctx.privateRoomRosterGrid);
             var teamIds = activeTeamIds(room);
             var selfPick = canSelfPick(room);
+            var isFirstRender = !lastSnapshotKey;
             for (var i = 0; i < teamIds.length; i++) {
                 var teamId = String(teamIds[i] || '');
                 var members = room.teams && room.teams[teamId] ? room.teams[teamId] : [];
-                ctx.privateRoomRosterGrid.appendChild(buildTeamLane(teamId, members, canEditRoom, teamIds, selfPick));
+                ctx.privateRoomRosterGrid.appendChild(buildTeamLane(teamId, members, canEditRoom, teamIds, selfPick, isFirstRender));
             }
         }
 
@@ -341,22 +641,37 @@
             var privateRoomState = currentState();
 
             if (!privateRoomState || !privateRoomState.room) {
+                // Show skeleton if we know we're in a room but haven't loaded state yet
+                if (!hasReceivedFirstState && ctx.getPartyState && ctx.getPartyState() &&
+                    ctx.getPartyState().self && ctx.getPartyState().self.privateRoom) {
+                    renderSkeleton();
+                    return;
+                }
                 if (ctx.privateRoomSummaryEl) ctx.privateRoomSummaryEl.textContent = '';
                 removeAllChildren(ctx.privateRoomUnassigned);
                 removeAllChildren(ctx.privateRoomRosterGrid);
+                lastSnapshotKey = '';
+                hasReceivedFirstState = false;
                 return;
             }
 
+            hasReceivedFirstState = true;
             var room = privateRoomState.room;
+
+            // Apply optimistic move if pending
+            if (optimisticMove) {
+                room = applyOptimisticMove(room);
+            }
+
             var canEditRoom = allowEditing(room);
             syncSelection(room);
 
             if (ctx.privateRoomSummaryEl) {
                 ctx.privateRoomSummaryEl.textContent =
                     String(room.roomCode || '').toUpperCase() +
-                    ' • ' + (String(room.roomPhase || '') === 'active' ? 'LIVE' : 'LOBBY') +
-                    ' • ' + String(room.memberCount || 0) + '/16' +
-                    ' • ' + String(room.teamCount || 2) + ' TEAMS';
+                    ' \u2022 ' + (String(room.roomPhase || '') === 'active' ? 'LIVE' : 'LOBBY') +
+                    ' \u2022 ' + String(room.memberCount || 0) + '/16' +
+                    ' \u2022 ' + String(room.teamCount || 2) + ' TEAMS';
             }
 
             if (ctx.privateRoomRandomizeBtn) {
@@ -365,20 +680,64 @@
                     : 'Shuffle';
             }
 
+            // Skip full DOM rebuild if nothing changed (prevents poll flashing)
+            var nextKey = buildSnapshotKey(room);
+            if (nextKey === lastSnapshotKey && !movePending) return;
+            lastSnapshotKey = nextKey;
+
+            // Show empty state for solo rooms
+            var memberCount = Number(room.memberCount || 0);
+            if (memberCount <= 1 && String(room.roomPhase || '') === 'lobby') {
+                removeAllChildren(ctx.privateRoomRosterGrid);
+                ctx.privateRoomRosterGrid.appendChild(buildEmptyState(room));
+                if (ctx.privateRoomUnassignedWrap) ctx.privateRoomUnassignedWrap.hidden = true;
+                return;
+            }
+
             renderUnassignedTray(room, canEditRoom);
             renderTeamBoard(room, canEditRoom);
         }
 
         function setUnavailable(message) {
-            if (ctx.privateRoomSummaryEl && ctx.getPartyState() && ctx.getPartyState().self && ctx.getPartyState().self.privateRoom) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                setStatus('Connection lost. Retrying\u2026', true);
+            } else if (ctx.privateRoomSummaryEl && ctx.getPartyState() && ctx.getPartyState().self && ctx.getPartyState().self.privateRoom) {
                 ctx.privateRoomSummaryEl.textContent = String(message || 'Private room service unavailable. Retrying...').toUpperCase();
             }
+        }
+
+        function resetFailures() {
+            consecutiveFailures = 0;
+        }
+
+        // Global touch listeners for drag (tracked for cleanup)
+        touchCancelHandler = function () {
+            clearDropHighlights();
+            removeTouchGhost();
+        };
+        if (typeof document !== 'undefined' && document) {
+            document.addEventListener('touchmove', handleTouchMove, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+            document.addEventListener('touchcancel', touchCancelHandler, { passive: true });
+        }
+
+        function destroy() {
+            if (typeof document !== 'undefined' && document) {
+                document.removeEventListener('touchmove', handleTouchMove);
+                document.removeEventListener('touchend', handleTouchEnd);
+                if (touchCancelHandler) document.removeEventListener('touchcancel', touchCancelHandler);
+            }
+            if (statusDismissTimer) clearTimeout(statusDismissTimer);
+            removeTouchGhost();
         }
 
         return {
             applyState: applyState,
             setUnavailable: setUnavailable,
-            setStatus: setStatus
+            setStatus: setStatus,
+            resetFailures: resetFailures,
+            destroy: destroy
         };
     };
 

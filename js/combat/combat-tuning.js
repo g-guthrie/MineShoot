@@ -24,11 +24,11 @@
         throwables: {
             fragRadius: 6.8,
             plasmaRadius: 5.0,
-            plasmaCatchRadius: 1.5,
+            plasmaCatchRadius: 0.5,
             missileRadius: 2.4,
             molotovFireRadius: 3.8,
-            plasmaAcquireRange: 18,
-            plasmaAcquireHalfAngleDeg: 35,
+            plasmaAcquireRange: 0,
+            plasmaAcquireHalfAngleDeg: 0,
             plasmaStickExplodeDelay: 2.2
         },
         throwableMechanics: {

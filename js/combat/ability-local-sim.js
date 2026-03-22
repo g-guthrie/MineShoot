@@ -221,9 +221,19 @@
         }
 
         function collectDeadeyeCandidates(camera, range, minDot, maxTargets) {
+            if (!camera) return [];
+            var list = [];
             var enemyApi = runtime().GameEnemy;
-            if (!camera || !enemyApi || !enemyApi.getLockTargets) return [];
-            var list = enemyApi.getLockTargets() || [];
+            if (enemyApi && enemyApi.getLockTargets) {
+                var localTargets = enemyApi.getLockTargets() || [];
+                for (var li = 0; li < localTargets.length; li++) list.push(localTargets[li]);
+            }
+            var net = runtime().GameNet || null;
+            var netView = net && net.view ? net.view : net;
+            if (netView && netView.getLockTargets) {
+                var netTargets = netView.getLockTargets() || [];
+                for (var ni = 0; ni < netTargets.length; ni++) list.push(netTargets[ni]);
+            }
             if (!list.length) return [];
 
             var origin = deadeyeOriginWorldPosition(camera, deadeyeOriginScratch);

@@ -46,13 +46,16 @@ export function normalizePrivateRoomConfig(config, deps = {}) {
   const teamCount = Math.max(2, Math.min(teamOrder.length, Math.round(Number(config && config.teamCount || 2) || 2)));
   const teamIds = normalizeMatchTeamIds(teamOrder.slice(0, teamCount), teamOrder.slice(0, 2));
   const teams = new Map();
+  const memberNames = new Map();
   const teamEntries = Array.isArray(config && config.teams) ? config.teams : [];
 
   for (let i = 0; i < teamEntries.length; i++) {
     const entry = teamEntries[i];
     if (!entry || !entry.actorId) continue;
+    const actorId = String(entry.actorId);
     const normalizedTeamId = String(entry.teamId || '').trim().toLowerCase();
-    teams.set(String(entry.actorId), teamIds.indexOf(normalizedTeamId) >= 0 ? normalizedTeamId : teamIds[0]);
+    teams.set(actorId, teamIds.indexOf(normalizedTeamId) >= 0 ? normalizedTeamId : teamIds[0]);
+    memberNames.set(actorId, String(entry.displayName || actorId || 'PLAYER'));
   }
 
   return {
@@ -65,7 +68,8 @@ export function normalizePrivateRoomConfig(config, deps = {}) {
     hostActorId: String(config && config.hostActorId || ''),
     teamCount,
     teamIds: teamIds.slice(),
-    teams
+    teams,
+    memberNames
   };
 }
 

@@ -43,6 +43,16 @@
         return (cfg && cfg.friendsPath) ? cfg.friendsPath : '/api/friends';
     }
 
+    function wsLobbyPath() {
+        var cfg = protocol();
+        return (cfg && cfg.wsLobbyPath) ? cfg.wsLobbyPath : '/api/ws/lobby';
+    }
+
+    function resolveWsUrl(path) {
+        var httpUrl = resolveApiUrl(path);
+        return httpUrl.replace(/^http/, 'ws');
+    }
+
     function buildRequestError(message, status, url, body) {
         var err = new Error(message || 'Request failed.');
         err.status = Number(status) || 0;
@@ -93,10 +103,12 @@
     }
 
     GameLobbyApi.resolveApiUrl = resolveApiUrl;
+    GameLobbyApi.resolveWsUrl = resolveWsUrl;
     GameLobbyApi.partyPath = partyPath;
     GameLobbyApi.privateRoomPath = privateRoomPath;
     GameLobbyApi.matchmakingPath = matchmakingPath;
     GameLobbyApi.friendsPath = friendsPath;
+    GameLobbyApi.wsLobbyPath = wsLobbyPath;
     GameLobbyApi.requestJson = requestJson;
 
     globalThis.__MAYHEM_RUNTIME.GameLobbyApi = GameLobbyApi;

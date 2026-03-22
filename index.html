@@ -174,16 +174,20 @@
                                     </div>
                                     <div id="menu-social-layout" class="grid" data-layout="stack" style="--cols: 1">
                                         <div id="menu-social-actions-pane" class="stack">
-                                            <div id="social-connect-card" class="card stack">
-                                                <input id="party-id-input" class="input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter Friend ID">
-                                                <div class="flow">
-                                                    <button id="invite-friend-btn" class="btn" type="button">Invite Friend</button>
-                                                    <button id="join-friend-btn" class="btn" type="button">Join Friend</button>
+                                            <div id="social-connect-cards" class="social-connect-row">
+                                                <div id="social-friend-card" class="card stack">
+                                                    <input id="party-id-input" class="input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter Friend ID">
+                                                    <div class="flow">
+                                                        <button id="invite-friend-btn" class="btn" type="button">Invite Friend</button>
+                                                        <button id="join-friend-btn" class="btn" type="button">Join Friend</button>
+                                                    </div>
                                                 </div>
-                                                <input id="room-code-input" class="input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter Room Number">
-                                                <div class="flow">
-                                                    <button id="join-room-btn" class="btn" type="button">Join Room</button>
-                                                    <button id="continue-loadout-btn" class="btn" type="button">Create Room</button>
+                                                <div id="social-room-card" class="card stack">
+                                                    <input id="room-code-input" class="input" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter Room Number">
+                                                    <div class="flow">
+                                                        <button id="join-room-btn" class="btn" type="button">Join Room</button>
+                                                        <button id="continue-loadout-btn" class="btn" type="button">Create Room</button>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div id="social-hero-status" class="status" aria-live="polite" hidden></div>
@@ -265,11 +269,7 @@
                             <div id="loadout-row">
                                 <section class="loadout-section" data-loadout-section="weapons">
                                     <div id="weapon-slot-panel" class="card stack">
-                                        <div id="weapon-slot-title">Weapons</div>
-                                        <div id="weapon-slot-buttons">
-                                            <button id="weapon-slot-primary" class="weapon-slot-btn active" type="button" data-slot-index="0">Slot 1</button>
-                                            <button id="weapon-slot-secondary" class="weapon-slot-btn" type="button" data-slot-index="1">Slot 2</button>
-                                        </div>
+                                        <div id="weapon-slot-title">Weapons <span id="weapon-pick-flag" class="hidden">— Select second weapon</span></div>
                                         <div id="weapon-choice-grid"></div>
                                     </div>
                                 </section>

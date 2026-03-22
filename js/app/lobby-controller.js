@@ -812,9 +812,15 @@
             },
             onPrivateRoomStateChanged: function (nextState) {
                 patchState({ privateRoom: nextState || null });
+                if (privateRoomViewController && privateRoomViewController.resetFailures) {
+                    privateRoomViewController.resetFailures();
+                }
                 render();
             },
             onPrivateRoomUnavailable: function (message) {
+                if (privateRoomViewController && privateRoomViewController.setUnavailable) {
+                    privateRoomViewController.setUnavailable(message);
+                }
                 setRoomStatus(message, true);
                 render();
             },
@@ -897,6 +903,7 @@
         });
 
         bindClick(elements.partyBackBtn, function () {
+            patchState({ leaveRoomConfirmOpen: false });
             setActiveSurface('main');
             render();
         });

@@ -5,6 +5,7 @@ import { handlePrivateRoomLobby } from './server/private-room-lobby.js';
 import { handleFriends } from './server/friends.js';
 import { handleProfileMe, handleProfileUpdate, handlePublicProfile } from './server/profile.js';
 import { handleWsUpgrade } from './server/ws-upgrade.js';
+import { handleWsLobbyUpgrade } from './server/ws-lobby-upgrade.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
 import { gameplayTuning } from '../shared/gameplay-tuning.js';
 import { protocol } from '../shared/protocol.js';
@@ -14,6 +15,7 @@ const SHARED_PROTOCOL = protocol;
 const AUTH_PATH = SHARED_PROTOCOL.authPath || {};
 const PROFILE_PATH = SHARED_PROTOCOL.profilePath || {};
 const WS_PATH = SHARED_PROTOCOL.wsPath || '/api/ws';
+const WS_LOBBY_PATH = SHARED_PROTOCOL.wsLobbyPath || '/api/ws/lobby';
 const MATCHMAKING_PATH = SHARED_PROTOCOL.matchmakingPath || '/api/matchmaking';
 const PARTY_PATH = SHARED_PROTOCOL.partyPath || '/api/party';
 const PRIVATE_ROOM_PATH = SHARED_PROTOCOL.privateRoomPath || '/api/private-room';
@@ -65,6 +67,10 @@ export default {
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === FRIENDS_PATH) {
       return handleFriends(env, request);
+    }
+
+    if (url.pathname === WS_LOBBY_PATH) {
+      return handleWsLobbyUpgrade(env, request);
     }
 
     if (url.pathname === WS_PATH) {

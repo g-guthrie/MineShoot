@@ -245,54 +245,58 @@
             var room = privateRoomState && privateRoomState.room ? privateRoomState.room : null;
             var caps = capabilities();
             var hasRoom = !!room;
+            var isBusy = busy();
+            var roomPhase = hasRoom ? String(room.roomPhase || '') : '';
+            var roomMode = hasRoom ? String(room.roomMode || '') : '';
+            var teamCount = hasRoom ? Number(room.teamCount || 2) : 2;
 
             if (elements.roomSharePanel) elements.roomSharePanel.hidden = !hasRoom;
             if (elements.roomShareCode) setText(elements.roomShareCode, hasRoom ? String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase() : '------');
             if (elements.privateRoomView) elements.privateRoomView.hidden = !hasRoom;
             if (elements.privateRoomEnterBtn) {
-                var active = !!(hasRoom && String(room.roomPhase || '') === 'active');
+                var active = hasRoom && roomPhase === 'active';
                 elements.privateRoomEnterBtn.hidden = !active;
-                elements.privateRoomEnterBtn.disabled = busy();
+                elements.privateRoomEnterBtn.disabled = isBusy;
             }
             if (elements.privateRoomStartBtn) {
-                elements.privateRoomStartBtn.hidden = !(hasRoom && String(room.roomPhase || '') === 'lobby');
-                elements.privateRoomStartBtn.disabled = busy() || !caps.canStartPrivateRoom;
+                elements.privateRoomStartBtn.hidden = !(hasRoom && roomPhase === 'lobby');
+                elements.privateRoomStartBtn.disabled = isBusy || !caps.canStartPrivateRoom;
             }
 
             if (elements.privateRoomModeFfaBtn) {
-                elements.privateRoomModeFfaBtn.classList.toggle('active', hasRoom && String(room.roomMode || '') === 'ffa');
-                elements.privateRoomModeFfaBtn.disabled = busy() || !caps.canEditPrivateRoom;
+                elements.privateRoomModeFfaBtn.classList.toggle('active', hasRoom && roomMode === 'ffa');
+                elements.privateRoomModeFfaBtn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomModeTdmBtn) {
-                elements.privateRoomModeTdmBtn.classList.toggle('active', hasRoom && String(room.roomMode || '') === 'tdm');
-                elements.privateRoomModeTdmBtn.disabled = busy() || !caps.canEditPrivateRoom;
+                elements.privateRoomModeTdmBtn.classList.toggle('active', hasRoom && roomMode === 'tdm');
+                elements.privateRoomModeTdmBtn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomTeams2Btn) {
-                elements.privateRoomTeams2Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 2);
-                elements.privateRoomTeams2Btn.disabled = busy() || !caps.canEditPrivateRoom;
+                elements.privateRoomTeams2Btn.classList.toggle('active', hasRoom && teamCount === 2);
+                elements.privateRoomTeams2Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomTeams3Btn) {
-                elements.privateRoomTeams3Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 3);
-                elements.privateRoomTeams3Btn.disabled = busy() || !caps.canEditPrivateRoom;
+                elements.privateRoomTeams3Btn.classList.toggle('active', hasRoom && teamCount === 3);
+                elements.privateRoomTeams3Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomTeams4Btn) {
-                elements.privateRoomTeams4Btn.classList.toggle('active', hasRoom && Number(room.teamCount || 2) === 4);
-                elements.privateRoomTeams4Btn.disabled = busy() || !caps.canEditPrivateRoom;
+                elements.privateRoomTeams4Btn.classList.toggle('active', hasRoom && teamCount === 4);
+                elements.privateRoomTeams4Btn.disabled = isBusy || !caps.canEditPrivateRoom;
             }
             if (elements.privateRoomInvitePartyBtn) {
                 elements.privateRoomInvitePartyBtn.hidden = !hasRoom;
-                elements.privateRoomInvitePartyBtn.disabled = busy() || !caps.canInvitePartyToPrivateRoom;
+                elements.privateRoomInvitePartyBtn.disabled = isBusy || !caps.canInvitePartyToPrivateRoom;
             }
             if (elements.privateRoomInviteLockBtn) {
                 elements.privateRoomInviteLockBtn.hidden = !hasRoom;
-                elements.privateRoomInviteLockBtn.disabled = busy() || !caps.canTogglePrivateRoomInviteLock;
+                elements.privateRoomInviteLockBtn.disabled = isBusy || !caps.canTogglePrivateRoomInviteLock;
                 elements.privateRoomInviteLockBtn.textContent = caps.privateRoomInviteLocked ? 'Room Invites Locked' : 'Room Invites Open';
                 elements.privateRoomInviteLockBtn.classList.toggle('locked', !!caps.privateRoomInviteLocked);
             }
-            if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = busy() || !caps.canRandomizeTeams;
+            if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = isBusy || !caps.canRandomizeTeams;
             if (elements.privateRoomLeaveBtn) {
                 elements.privateRoomLeaveBtn.hidden = !hasRoom;
-                elements.privateRoomLeaveBtn.disabled = busy();
+                elements.privateRoomLeaveBtn.disabled = isBusy;
             }
             if (elements.leaveRoomConfirmOverlay) {
                 elements.leaveRoomConfirmOverlay.hidden = !state.leaveRoomConfirmOpen;
@@ -300,7 +304,7 @@
             if (elements.privateRoomRosterNote) {
                 elements.privateRoomRosterNote.hidden = !hasRoom;
                 elements.privateRoomRosterNote.textContent = caps.canEditPrivateRoom
-                    ? 'Drag players or tap pills to assign teams.'
+                    ? 'Tap a player pill then pick a team, or drag players between lanes.'
                     : 'Tap a team lane to switch teams.';
             }
 
