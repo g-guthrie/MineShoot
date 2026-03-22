@@ -38,7 +38,7 @@ function waitForTargetEvent(target, type) {
   });
 }
 
-async function reservePort() {
+function reservePort() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.unref();
@@ -46,10 +46,7 @@ async function reservePort() {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
       const port = address && typeof address === 'object' ? address.port : 0;
-      server.close((err) => {
-        if (err) reject(err);
-        else resolve(port);
-      });
+      resolve({ port, release() { return new Promise((res) => server.close(() => res())); } });
     });
   });
 }
@@ -395,7 +392,13 @@ function buildClientApi(client) {
 }
 
 export async function createRealWorkerHarness(options = {}) {
-  const port = options.port || await reservePort();
+  let port = options.port;
+  let portRelease = null;
+  if (!port) {
+    const reserved = await reservePort();
+    port = reserved.port;
+    portRelease = reserved.release;
+  }
   const persistDir = options.persistDir || path.join(
     ROOT_DIR,
     '.wrangler',
@@ -414,6 +417,8 @@ export async function createRealWorkerHarness(options = {}) {
     exited: false,
     process: null
   };
+
+  if (portRelease) await portRelease();
 
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   worker.process = spawn(npmCommand, ['run', 'dev:e2e:worker'], {

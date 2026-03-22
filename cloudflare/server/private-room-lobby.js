@@ -418,6 +418,9 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'set_mode') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can change mode.' }, 403);
+    if (String(currentState.room_phase || '') !== ROOM_PHASE_LOBBY) {
+      return json({ ok: false, error: 'Mode changes are locked while the match is active.' }, 403);
+    }
     const nextMode = normalizeRoomMode(body.roomMode || ROOM_MODE_FFA);
     await setPrivateRoomState(env, currentRoomId, {
       roomMode: nextMode,
@@ -431,6 +434,9 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'set_team_count') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can change team count.' }, 403);
+    if (String(currentState.room_phase || '') !== ROOM_PHASE_LOBBY) {
+      return json({ ok: false, error: 'Team changes are locked while the match is active.' }, 403);
+    }
     const teamCount = normalizeTeamCount(body.teamCount || 2);
     await setPrivateRoomState(env, currentRoomId, { teamCount });
     await normalizeMemberTeams(env, currentRoomId, teamCount);
@@ -459,6 +465,9 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'randomize') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can randomize teams.' }, 403);
+    if (String(currentState.room_phase || '') !== ROOM_PHASE_LOBBY) {
+      return json({ ok: false, error: 'Team changes are locked while the match is active.' }, 403);
+    }
     await randomizeTeams(env, currentRoomId, Number(currentState.team_count || 2));
     await syncPrivateRoomDurableObject(env, currentRoomId, SYNC_MODE_LOBBY);
     const state = await buildLobbyState(env, actor, currentRoomId);
@@ -467,6 +476,9 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'move_member') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can move players.' }, 403);
+    if (String(currentState.room_phase || '') !== ROOM_PHASE_LOBBY) {
+      return json({ ok: false, error: 'Team changes are locked while the match is active.' }, 403);
+    }
     const targetId = String(body.targetId || '');
     const member = await getPrivateRoomMember(env, targetId);
     if (!member || String(member.room_id || '') !== currentRoomId) {

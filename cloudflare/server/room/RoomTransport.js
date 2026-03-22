@@ -3,6 +3,7 @@ import {
   PUBLIC_ROOM_SOFT_TARGET,
   PUBLIC_ROOM_HARD_CAP
 } from '../../../shared/matchmaking-config.js';
+import { isRegisteredPrivateRoomId } from '../private-rooms.js';
 
 const ENABLED_RE = /^(1|true|yes|on)$/i;
 
@@ -194,6 +195,16 @@ function handleWebSocketRequest(room, request, url) {
   }
   if (room.privateRoomConfig && room.privateRoomConfig.teams.size > 0 && !room.privateRoomConfig.teams.has(actorId)) {
     return new Response('Private room access denied.', { status: 403 });
+  }
+
+  const roomId = sanitizeRoomId(room.roomName || '');
+  const isPrivate = isRegisteredPrivateRoomId(roomId);
+  const isReconnect = room.players.has(userId);
+  if (!isReconnect && !isPrivate) {
+    const currentCount = room.connectedHumanCount();
+    if (currentCount >= PUBLIC_ROOM_HARD_CAP) {
+      return new Response('Room is full.', { status: 409 });
+    }
   }
 
   const pair = new WebSocketPair();

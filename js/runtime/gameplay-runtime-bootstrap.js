@@ -239,9 +239,15 @@
         ensureNetRuntimeInit();
         var metaWaitStartedAt = performance.now();
         var metaTimeoutMs = 1400;
+        var isCancelled = options.isCancelled || function () { return false; };
 
         return new Promise(function (resolve) {
             (function waitForWorldMeta() {
+                if (isCancelled()) {
+                    resolve(finalizeWorldBootstrap(null));
+                    return;
+                }
+
                 var receivedMeta = netView && netView.getWorldMeta ? netView.getWorldMeta() : null;
                 if (receivedMeta && receivedMeta.worldSeed) {
                     resolve(finalizeWorldBootstrap(receivedMeta));

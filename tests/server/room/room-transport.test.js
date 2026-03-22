@@ -347,7 +347,10 @@ test('websocket room requests are handled by the transport helper, including dup
       buildWelcomePayload(userId) { return { ok: true, userId }; },
       send(ws, payload) { sent.push({ ws, payload }); },
       broadcastSnapshotArgs: [],
-      broadcastSnapshot(forceFull) { this.broadcastSnapshotArgs.push(forceFull); }
+      broadcastSnapshot(forceFull) { this.broadcastSnapshotArgs.push(forceFull); },
+      humanPlayerCount() { return 1; },
+      connectedHumanCount() { return 1; },
+      simulatedPlayerCount() { return 0; }
     };
 
     const response = await handleRoomRequest(
@@ -365,6 +368,142 @@ test('websocket room requests are handled by the transport helper, including dup
     assert.deepEqual(room.broadcastSnapshotArgs, [true]);
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].payload, { ok: true, userId: 'user-1' });
+  } finally {
+    globalThis.Response = originalResponse;
+    globalThis.WebSocketPair = originalPair;
+  }
+});
+
+test('room transport rejects websocket connections that would exceed the public room hard cap', async () => {
+  const originalResponse = globalThis.Response;
+  const originalPair = globalThis.WebSocketPair;
+
+  class FakeResponse {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.webSocket = init.webSocket;
+    }
+  }
+
+  function createSocket() {
+    return {
+      serializeAttachment() {},
+      deserializeAttachment() { return null; },
+      close() {}
+    };
+  }
+
+  globalThis.Response = FakeResponse;
+  globalThis.WebSocketPair = class {
+    constructor() {
+      this[0] = createSocket();
+      this[1] = createSocket();
+    }
+  };
+
+  try {
+    const room = {
+      env: { ROOM_NAME: 'global' },
+      roomName: 'ffa-01',
+      gameMode: 'ffa',
+      matchState: { started: true, ended: false },
+      bots: new Map(),
+      players: new Map(),
+      privateRoomConfig: { teams: new Map() },
+      clients: new Map(),
+      activeSocketByUserId: new Map(),
+      ctx: { acceptWebSocket() {} },
+      refreshWorldMeta() {},
+      syncRoomFixtures() {},
+      ensurePlayer() {},
+      startPublicMatchIfReady() {},
+      ensureTick() {},
+      buildWelcomePayload() { return { ok: true }; },
+      send() {},
+      broadcastSnapshot() {},
+      humanPlayerCount() { return 16; },
+      connectedHumanCount() { return 16; },
+      simulatedPlayerCount() { return 0; }
+    };
+
+    const response = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=ffa-01&userId=user-17&username=OVERFLOW&actorId=actor-17', {
+        headers: { Upgrade: 'websocket' }
+      })
+    );
+
+    assert.equal(response.status, 409);
+  } finally {
+    globalThis.Response = originalResponse;
+    globalThis.WebSocketPair = originalPair;
+  }
+});
+
+test('room transport allows reconnecting players even when at hard cap', async () => {
+  const originalResponse = globalThis.Response;
+  const originalPair = globalThis.WebSocketPair;
+  let accepted = 0;
+
+  class FakeResponse {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.webSocket = init.webSocket;
+    }
+  }
+
+  function createSocket() {
+    return {
+      serializeAttachment() {},
+      deserializeAttachment() { return null; },
+      close() {}
+    };
+  }
+
+  globalThis.Response = FakeResponse;
+  globalThis.WebSocketPair = class {
+    constructor() {
+      this[0] = createSocket();
+      this[1] = createSocket();
+    }
+  };
+
+  try {
+    const room = {
+      env: { ROOM_NAME: 'global' },
+      roomName: 'ffa-01',
+      gameMode: 'ffa',
+      matchState: { started: true, ended: false },
+      bots: new Map(),
+      players: new Map([['user-1', { id: 'user-1' }]]),
+      privateRoomConfig: { teams: new Map() },
+      clients: new Map(),
+      activeSocketByUserId: new Map(),
+      ctx: { acceptWebSocket() { accepted += 1; } },
+      refreshWorldMeta() {},
+      syncRoomFixtures() {},
+      ensurePlayer() {},
+      startPublicMatchIfReady() {},
+      ensureTick() {},
+      buildWelcomePayload() { return { ok: true }; },
+      send() {},
+      broadcastSnapshot() {},
+      humanPlayerCount() { return 16; },
+      connectedHumanCount() { return 16; },
+      simulatedPlayerCount() { return 0; }
+    };
+
+    const response = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=ffa-01&userId=user-1&username=PLAYER&actorId=actor-1', {
+        headers: { Upgrade: 'websocket' }
+      })
+    );
+
+    assert.equal(response.status, 101);
+    assert.equal(accepted, 1);
   } finally {
     globalThis.Response = originalResponse;
     globalThis.WebSocketPair = originalPair;
@@ -419,7 +558,10 @@ test('room transport accepts case-insensitive websocket upgrade headers', async 
       ensureTick() {},
       buildWelcomePayload() { return { ok: true }; },
       send() {},
-      broadcastSnapshot() {}
+      broadcastSnapshot() {},
+      humanPlayerCount() { return 0; },
+      connectedHumanCount() { return 0; },
+      simulatedPlayerCount() { return 0; }
     };
 
     const response = await handleRoomRequest(
