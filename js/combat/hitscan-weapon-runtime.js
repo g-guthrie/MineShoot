@@ -675,6 +675,7 @@
         function setWeapon(weaponId, timing) {
             refreshWeaponCatalogIfNeeded();
             if (!weapons[weaponId]) return null;
+            if (activeWeaponOrder().indexOf(String(weaponId || '')) === -1) return getCurrentWeapon(timing);
             currentWeaponId = weaponId;
             var combat = combatRuntime();
             if (combat && combat.equipWeapon) {

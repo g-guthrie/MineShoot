@@ -434,7 +434,7 @@
 
     function equipWeapon(weaponId) {
         var id = String(weaponId || '');
-        if (!isKnownWeaponId(id)) return null;
+        if (!isKnownWeaponId(id) || weaponLoadout.indexOf(id) === -1) return null;
         equippedWeaponId = id;
         rememberPredictedMultiplayerWeapon(id);
         return buildWeaponState(equippedWeaponId);
@@ -569,7 +569,7 @@
     }
 
     function consumeDamage(rawDamage, hitType, attackerEnemy) {
-        if (respawnInvulnTimer > 0 || !isPlaying()) return;
+        if (effectiveSpawnShieldUntil(nowMs()) > nowMs() || !isPlaying()) return;
 
         var damage = Math.max(1, Math.round(rawDamage));
         var playerTarget = { hp: playerHP, armor: playerArmor, armorMax: playerArmorMax, armorRegenDelay: armorRegenDelay };

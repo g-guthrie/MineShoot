@@ -64,6 +64,9 @@
                     predictedState[key].authoritativeSeen = true;
                     delete predictedState[key];
                 }
+                if (opts.releasePredictedCharge) {
+                    opts.releasePredictedCharge(key, false);
+                }
                 if (telemetry) telemetry.lastReconcileClientThrowId = key;
                 for (var j = projectileState.length - 1; j >= 0; j--) {
                     var localP = projectileState[j];
@@ -93,6 +96,9 @@
             if (!id) return false;
             var telemetry = debugTelemetry();
             if (telemetry) telemetry.lastRejectClientThrowId = id;
+            if (opts.releasePredictedCharge) {
+                opts.releasePredictedCharge(id, true);
+            }
             return !!(opts.removePredictedProjectileByClientThrowId && opts.removePredictedProjectileByClientThrowId(id));
         }
 

@@ -211,3 +211,22 @@ test('overhead visibility is aim plus recent damage linger, not proximity', asyn
   harness.GameOverhead.update(harness.camera, { x: 0, y: 0, z: 0 }, '');
   assert.equal(entry.style.display, 'none');
 });
+
+test('overhead hides targets that project outside the viewport bounds', async () => {
+  const harness = await loadOverheadHarness();
+
+  harness.localEnemies.push({
+    alive: true,
+    index: 2,
+    hp: 100,
+    maxHp: 100,
+    armor: 10,
+    armorMax: 10,
+    group: { position: new THREE.Vector3(25, 0, -10) }
+  });
+
+  harness.GameOverhead.update(harness.camera, { x: 0, y: 0, z: 0 }, 'enemy:2');
+
+  const entry = harness.getEntryById('enemy:2');
+  assert.equal(entry.style.display, 'none');
+});

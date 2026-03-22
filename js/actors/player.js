@@ -1105,7 +1105,7 @@
         var spawn = world.getRandomSpawnPoint(world.getSpawnPadding(8)) || world.getDefaultSpawnPoint();
         playerX = spawn.x;
         playerZ = spawn.z;
-        posY = eyeHeight();
+        posY = Number(world.getGroundHeightAt(playerX, playerZ) || 0) + eyeHeight();
         ensureLoadoutSlots();
         if (loadoutSlots.indexOf(currentWeaponId) === -1) {
             currentWeaponId = loadoutSlots[0];
@@ -1125,11 +1125,15 @@
 
     GamePlayer.update = function (dt) {
         if (!camera) return;
-        if (!hasInputCapture()) return;
         clearExpiredStatusState(nowMs());
         var helper = movementHelper();
         var world = worldHelper();
         if (!helper || !helper.stepAuthoritativeMovement || !world) return;
+        if (!hasInputCapture()) {
+            updateAvatarPose();
+            updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))), viewHelper(), lastMoveSpeedNorm);
+            return;
+        }
 
         var frameDt = Math.max(0, Number(dt || 0));
         var wasGrounded = !!isGrounded;

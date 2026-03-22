@@ -87,7 +87,8 @@ export async function handleWsUpgrade(env, request, classPresets) {
     };
   }
 
-  const playerId = /^[a-zA-Z0-9_-]{6,64}$/.test(requestedPlayerId)
+  const allowRequestedPlayerId = !session || !session.userId || !requestedPlayerId;
+  const playerId = allowRequestedPlayerId && /^[a-zA-Z0-9_-]{6,64}$/.test(requestedPlayerId)
     ? requestedPlayerId
     : session.userId;
   const playerName = validUsername(requestedPlayerName)

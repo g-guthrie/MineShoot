@@ -101,6 +101,22 @@ test('throwables runtime clears predicted knives once the authoritative impact e
   assert.equal(GameThrowables.getDebugTelemetry().predictedCount, 0);
 });
 
+test('throwables runtime spends and restores predicted charges around rejected throws', async () => {
+  const harness = await loadThrowablesHarness();
+  const { GameThrowables } = harness;
+
+  assert.equal(GameThrowables.getState().knife.charges, 1);
+  assert.equal(GameThrowables.throwPredicted('knife', {}, 'cthrow_knife_reject', {
+    origin: { x: 0, y: 1, z: 0 },
+    direction: { x: 0, y: 0, z: -1 }
+  }), true);
+  assert.equal(GameThrowables.getState().knife.charges, 0);
+
+  GameThrowables.rejectPredictedThrow('cthrow_knife_reject');
+
+  assert.equal(GameThrowables.getState().knife.charges, 1);
+});
+
 test('throwables runtime falls back to id labels when shared defs are missing', async () => {
   const harness = await loadThrowablesHarness({});
   const state = harness.GameThrowables.getState();

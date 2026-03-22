@@ -181,6 +181,27 @@ test('player combat exposes survivability state and preserves respawn countdown 
   assert.equal(harness.GamePlayerCombat.canUseGameplayActions(1900), true);
 });
 
+test('player combat ignores local damage while an authoritative spawn shield is active', async () => {
+  const harness = await loadPlayerCombatHarness();
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  harness.GamePlayerCombat.syncAuthoritativeState({
+    hp: 360,
+    hpMax: 360,
+    armor: 90,
+    armorMax: 90,
+    alive: true,
+    spawnShieldUntil: 1400
+  });
+  harness.GamePlayerCombat.consumeDamage(40, 'body', null);
+
+  assert.equal(harness.GamePlayerCombat.getHP(), 360);
+  assert.equal(harness.GamePlayerCombat.getArmor(), 90);
+});
+
 test('player combat owns weapon presentation state and repairs it from authoritative snapshots', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
@@ -548,5 +569,51 @@ test('player combat keeps multiplayer weapon prediction through stale snapshots 
     weaponId: 'rifle',
     weaponLoadout: ['rifle', 'sniper']
   }, 3800);
+  assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
+});
+
+test('player combat rejects equipping weapons outside the active loadout', async () => {
+  const harness = await loadPlayerCombatHarness({
+    GameShared: {
+      entityConstants: {
+        DEFAULT_HP_MAX: 360,
+        DEFAULT_ARMOR_MAX: 90
+      },
+      survivability: {
+        ARMOR_REGEN_DELAY_SEC: 8,
+        ARMOR_REGEN_PER_SEC: 10
+      },
+      combatTimings: {
+        PLAYER_SPAWN_SHIELD_MS: 1000,
+        RESPAWN_DELAY_MS: 2200
+      },
+      gameplayTuning: {
+        weaponStats: {
+          rifle: { name: 'Rifle', cooldownMs: 100, reloadMs: 1200, magazineSize: 30, automatic: false, bodyDamage: 48, headDamage: 110, pellets: 1 },
+          sniper: { name: 'Sniper', cooldownMs: 900, reloadMs: 1800, magazineSize: 5, automatic: false, bodyDamage: 140, headDamage: 240, pellets: 1 },
+          shotgun: { name: 'Shotgun', cooldownMs: 800, reloadMs: 1600, magazineSize: 8, automatic: false, bodyDamage: 80, headDamage: 120, pellets: 8 }
+        }
+      },
+      getWeaponStats(weaponId) {
+        return this.gameplayTuning.weaponStats[weaponId] || null;
+      },
+      getWeaponPresentation,
+      resolveReloadPresentationState,
+      getDefaultWeaponLoadout() {
+        return ['rifle', 'sniper'];
+      },
+      getSelectableWeaponIds() {
+        return ['rifle', 'sniper', 'shotgun'];
+      }
+    }
+  });
+  harness.GamePlayerCombat.init({
+    isPlaying() { return true; },
+    isMultiplayer() { return true; }
+  });
+
+  const equipped = harness.GamePlayerCombat.equipWeapon('shotgun');
+
+  assert.equal(equipped, null);
   assert.equal(harness.GamePlayerCombat.getEquippedWeaponId(), 'rifle');
 });

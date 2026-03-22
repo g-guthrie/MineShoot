@@ -180,6 +180,7 @@
         function launchAssignedMatch(nextPartyState) {
             if (!nextPartyState || !nextPartyState.self) return;
             if (isLaunchBlocked()) return;
+            var launchState = getState().launch || {};
             var self = nextPartyState.self;
             var modeId = '';
             var roomId = '';
@@ -420,10 +421,17 @@
                     }
                     return null;
                 })
-                .finally(function () {
+                .then(function () {
                     setBusy(false);
                     setActiveSurface('room');
                     render();
+                    return true;
+                })
+                .catch(function (err) {
+                    setBusy(false);
+                    setRoomStatus((err && err.message) ? err.message : 'Room creation failed.', true);
+                    render();
+                    return false;
                 });
         }
 
@@ -486,7 +494,13 @@
             setRoomStatus('Leaving room...', false);
             render();
             return session.leavePrivateRoom()
-                .then(function () {
+                .then(function (left) {
+                    if (!left) {
+                        setBusy(false);
+                        setRoomStatus('Leave failed.', true);
+                        render();
+                        return false;
+                    }
                     setBusy(false);
                     setActiveSurface('main');
                     render();

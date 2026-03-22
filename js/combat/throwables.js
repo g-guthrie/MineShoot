@@ -42,6 +42,8 @@
     var throwableMechanicsTuning = EMPTY_THROWABLE_MECHANICS_TUNING;
     var throwableOrder = FALLBACK_THROWABLE_ORDER.slice();
     var defs = {};
+    var inventory = {};
+    var predictedChargeSpendByClientId = {};
     var configSnapshot = {
         sharedTuning: null,
         combatTuningApi: null,
@@ -219,6 +221,7 @@
     function resetInventory() {
         refreshThrowableConfig();
         inventory = {};
+        predictedChargeSpendByClientId = {};
         for (var i = 0; i < throwableOrder.length; i++) {
             var id = throwableOrder[i];
             inventory[id] = {
@@ -265,6 +268,37 @@
             inv.cooldownRemaining = 0;
         } else if (inv.charges < inv.maxCharges && inv.cooldownRemaining <= 0) {
             inv.cooldownRemaining = regenSecondsForType(type);
+        }
+        return true;
+    }
+
+    function restoreCharge(type) {
+        var inv = inventory[type];
+        if (!inv) return false;
+        inv.charges = Math.min(Math.max(1, Number(inv.maxCharges || 1)), Math.max(0, Number(inv.charges || 0)) + 1);
+        if (inv.charges >= inv.maxCharges) {
+            inv.cooldownRemaining = 0;
+        } else if (inv.cooldownRemaining <= 0) {
+            inv.cooldownRemaining = regenSecondsForType(type);
+        }
+        return true;
+    }
+
+    function consumePredictedCharge(type, clientThrowId) {
+        var id = String(clientThrowId || '');
+        if (!id) return false;
+        if (!consumeCharge(type)) return false;
+        predictedChargeSpendByClientId[id] = String(type || '');
+        return true;
+    }
+
+    function releasePredictedCharge(clientThrowId, restore) {
+        var id = String(clientThrowId || '');
+        var type = predictedChargeSpendByClientId[id];
+        if (!type) return false;
+        delete predictedChargeSpendByClientId[id];
+        if (restore) {
+            return restoreCharge(type);
         }
         return true;
     }
@@ -630,13 +664,20 @@
             removePredictedProjectileByAuthoritativeId: projectileApi.removePredictedProjectileByAuthoritativeId,
             removeNetProjectileVisual: projectileApi.removeNetProjectileVisual,
             removeNetProjectileById: projectileApi.removeNetProjectileById,
-            removeNetFireZoneById: removeNetFireZoneById
+            removeNetFireZoneById: removeNetFireZoneById,
+            consumePredictedCharge: consumePredictedCharge,
+            releasePredictedCharge: releasePredictedCharge
         })
         : null;
 
     GameThrowables.throwPredicted = function (type, camera, clientThrowId, intentPayload) {
+        if (!consumePredictedCharge(type, clientThrowId)) return false;
         var intent = intentToVectors(intentPayload);
-        return projectileApi.throwPredicted(type, camera, clientThrowId, intent || null);
+        var spawned = projectileApi.throwPredicted(type, camera, clientThrowId, intent || null);
+        if (!spawned) {
+            releasePredictedCharge(clientThrowId, true);
+        }
+        return spawned;
     };
 
     GameThrowables.confirmPredictedThrow = function (clientThrowId, ack) {

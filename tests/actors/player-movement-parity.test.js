@@ -353,6 +353,21 @@ test('player live forward movement matches the shared authoritative step', async
   assertPlayerMatchesExpected(harness.player, expected);
 });
 
+test('player initial spawn uses terrain height instead of a flat eye-height fallback', async () => {
+  const harness = await loadPlayerMovementHarness({
+    spawn: { x: 5, z: 6 },
+    getGroundHeightAt() {
+      return 3.5;
+    }
+  });
+
+  const pos = harness.player.getPosition();
+
+  assertClose(pos.x, 5);
+  assertClose(pos.z, 6);
+  assertClose(pos.y, 5.1);
+});
+
 test('player movement honors remapped forward input and ignores the old key', async () => {
   const harness = await loadPlayerMovementHarness({
     runtimeOverrides: {

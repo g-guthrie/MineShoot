@@ -222,3 +222,34 @@ test('GameNet join attempt rejects on timeout before authoritative join', async 
 
   await assert.rejects(joinPromise, /Timed out joining room FFA-01\./);
 });
+
+test('GameNet join attempt rejects an older attempt when a newer join begins', async () => {
+  const harness = await createNetHarness();
+  const firstJoin = harness.net.beginJoinAttempt({ expectedRoomId: 'ffa-01', timeoutMs: 100 });
+  const secondJoin = harness.net.beginJoinAttempt({ expectedRoomId: 'tdm-02', timeoutMs: 100 });
+
+  await assert.rejects(firstJoin, /Superseded by a newer room join attempt\./);
+
+  harness.init();
+  harness.dispatch({
+    t: 'welcome',
+    selfId: 'user-1',
+    roomId: 'tdm-02',
+    gameMode: 'tdm',
+    matchState: { gameMode: 'tdm', started: false, ended: false },
+    worldSeed: 'seed-tdm-02',
+    worldProfileVersion: 1,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+  harness.dispatch({
+    t: 'snapshot',
+    gameMode: 'tdm',
+    matchState: { gameMode: 'tdm', started: false, ended: false },
+    entities: [{ id: 'user-1', username: 'ALPHA', alive: true }],
+    projectiles: [],
+    fireZones: []
+  });
+
+  const result = await secondJoin;
+  assert.equal(result.roomId, 'tdm-02');
+});

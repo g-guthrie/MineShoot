@@ -193,7 +193,7 @@
         var p = projectionScratch.set(desc.worldPos.x, descriptorMarkerY(desc), desc.worldPos.z);
         p.project(camera);
 
-        if (p.z < -1 || p.z > 1) {
+        if (p.z < -1 || p.z > 1 || p.x < -1 || p.x > 1 || p.y < -1 || p.y > 1) {
             entry.root.style.display = 'none';
             return;
         }

@@ -188,3 +188,33 @@ test('GameHitscan passes wall-clock timestamps into combat presentation APIs', a
     { kind: 'weapon', now: 9100 }
   ]);
 });
+
+test('GameHitscan.setWeapon ignores weapons outside the active loadout', async () => {
+  const harness = await loadToggleHarness(['rifle', 'sniper'], 'rifle', {
+    runtimeOverrides: {
+      GameShared: {
+        gameplayTuning: {
+          ...gameplayTuning,
+          weaponStats: {
+            ...gameplayTuning.weaponStats,
+            shotgun: {
+              ...gameplayTuning.weaponStats.shotgun
+            }
+          }
+        },
+        getSelectableWeaponIds() {
+          return ['rifle', 'sniper', 'shotgun'];
+        },
+        getWeaponFalloffProfile,
+        getWeaponPresentation,
+        resolveWeaponAimProfile,
+        damage: null
+      }
+    }
+  });
+
+  const current = harness.GameHitscan.setWeapon('shotgun');
+
+  assert.equal(current.id, 'rifle');
+  assert.equal(harness.getEquippedWeaponId(), 'rifle');
+});

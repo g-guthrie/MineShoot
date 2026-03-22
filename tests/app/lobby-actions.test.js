@@ -10,9 +10,13 @@ async function loadLobbyActionsHarness(options = {}) {
     launch: { selectedMode: options.selectedMode || 'ffa', phase: '', message: '', error: false },
     loadout: {
       validation: options.validation || { ok: true, message: '' }
-    }
+    },
+    privateRoom: options.privateRoom || null
   };
   const busyStates = [];
+  const roomStatuses = [];
+  const activeSurfaces = [];
+  const returnStates = [];
 
   const sandbox = {
     console,
@@ -31,6 +35,9 @@ async function loadLobbyActionsHarness(options = {}) {
       busyStates.push(!!value);
     },
     render() {},
+    setRoomStatus(text, isErr) {
+      roomStatuses.push({ text: String(text || ''), isErr: !!isErr });
+    },
     normalizeMode(modeId) {
       return String(modeId || '');
     },
@@ -50,6 +57,15 @@ async function loadLobbyActionsHarness(options = {}) {
     getSessionApi() {
       return null;
     },
+    getSession() {
+      return options.session || null;
+    },
+    setActiveSurface(surfaceId) {
+      activeSurfaces.push(String(surfaceId || ''));
+    },
+    writeReturnState(payload) {
+      returnStates.push(payload || {});
+    },
     roomCodeFromRoomId(roomId) {
       return String(roomId || '').toUpperCase();
     },
@@ -59,7 +75,10 @@ async function loadLobbyActionsHarness(options = {}) {
   return {
     actions,
     state,
-    busyStates
+    busyStates,
+    roomStatuses,
+    activeSurfaces,
+    returnStates
   };
 }
 
@@ -92,4 +111,69 @@ test('launchGame handles missing matchmaking api without throwing', async () => 
   assert.equal(harness.state.launch.phase, 'error');
   assert.equal(harness.state.launch.message, 'Matchmaking unavailable.');
   assert.deepEqual(harness.busyStates, [true, false]);
+});
+
+test('launchAssignedMatch falls back to the current selected mode without throwing', async () => {
+  const harness = await loadLobbyActionsHarness({
+    selectedMode: 'tdm'
+  });
+
+  assert.doesNotThrow(() => {
+    harness.actions.launchAssignedMatch({
+      self: {
+        publicMatch: {
+          roomId: 'ffa-01',
+          gameMode: ''
+        }
+      }
+    });
+  });
+
+  assert.equal(harness.state.launch.phase, 'joining');
+  assert.equal(harness.state.launch.selectedMode, 'ffa');
+  assert.equal(harness.returnStates[0].activeSurface, 'main');
+  assert.equal(harness.returnStates[0].selectedMode, 'ffa');
+});
+
+test('handleRoomAction keeps the menu on the main surface when room creation fails', async () => {
+  const harness = await loadLobbyActionsHarness({
+    session: {
+      createPrivateRoom() {
+        return Promise.reject(new Error('Create failed.'));
+      }
+    }
+  });
+
+  const result = await harness.actions.handleRoomAction();
+
+  assert.equal(result, false);
+  assert.deepEqual(harness.activeSurfaces, []);
+  assert.deepEqual(harness.roomStatuses[harness.roomStatuses.length - 1], {
+    text: 'Create failed.',
+    isErr: true
+  });
+});
+
+test('leavePrivateRoom keeps the room surface active when the leave request resolves false', async () => {
+  const harness = await loadLobbyActionsHarness({
+    privateRoom: {
+      room: {
+        roomId: 'room-1'
+      }
+    },
+    session: {
+      leavePrivateRoom() {
+        return Promise.resolve(false);
+      }
+    }
+  });
+
+  const result = await harness.actions.leavePrivateRoom();
+
+  assert.equal(result, false);
+  assert.deepEqual(harness.activeSurfaces, []);
+  assert.deepEqual(harness.roomStatuses[harness.roomStatuses.length - 1], {
+    text: 'Leave failed.',
+    isErr: true
+  });
 });

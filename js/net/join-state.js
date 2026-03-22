@@ -84,6 +84,7 @@
 
         function beginJoinAttempt(rawOpts) {
             var nextOpts = rawOpts || {};
+            failJoin('Superseded by a newer room join attempt.');
             resetJoinAttempt();
             return new Promise(function (resolve, reject) {
                 joinAttempt = {
