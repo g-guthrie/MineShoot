@@ -1,6 +1,7 @@
 {
   "name": "mineshoot",
   "version": "1.0.0",
+  "type": "module",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "vite": "^6.4.1",
@@ -18,7 +19,8 @@
     "blender:export": "./scripts/blender-export.sh",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
-    "test:smoke": "node --experimental-default-type=module --test tests",
+    "test:smoke": "find tests -name '*.test.js' -print0 | xargs -0 node --test",
+    "test:networking": "node --test tests/integration/real-worker-multiplayer.test.js",
     "test:worker-integration": "node --test tests/integration/real-worker-multiplayer.test.js",
     "test:e2e": "playwright test"
   },

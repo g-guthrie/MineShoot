@@ -205,6 +205,37 @@ function snapshotEntitySamples(client, entityId, startIndex) {
   return samples;
 }
 
+function countMessages(client, type, predicate = null) {
+  let count = 0;
+  for (let i = 0; i < client.messages.length; i++) {
+    const message = client.messages[i] && client.messages[i].message;
+    if (String(message && message.t || '') !== String(type || '')) continue;
+    if (predicate && !predicate(message)) continue;
+    count += 1;
+  }
+  return count;
+}
+
+async function expectNoMessage(client, type, predicate, waitMs = 700) {
+  const before = countMessages(client, type, predicate);
+  await delay(waitMs);
+  const after = countMessages(client, type, predicate);
+  assert.equal(after, before, `expected no new ${type} for ${client.userId}`);
+}
+
+async function equipLoadout(client, slot1, slot2, weaponId, timeoutMs = SNAPSHOT_TIMEOUT_MS) {
+  await client.sendWeaponLoadout(slot1, slot2);
+  await client.sendEquipWeapon(weaponId);
+  await client.waitForSnapshot(() => {
+    const entity = client.latestEntity(client.userId);
+    return entity &&
+      String(entity.weaponId || '') === String(weaponId || '') &&
+      Array.isArray(entity.weaponLoadout) &&
+      String(entity.weaponLoadout[0] || '') === String(slot1 || '') &&
+      String(entity.weaponLoadout[1] || '') === String(slot2 || '');
+  }, timeoutMs);
+}
+
 test('real worker: join and snapshot flow', { timeout: TEST_TIMEOUT_MS }, async () => {
   const roomId = buildRoomId('join');
   const alpha = await worker.connectClient({ roomId, userId: buildUserId('join_alpha'), username: 'JOIN_ALPHA' });
@@ -324,15 +355,7 @@ test('real worker: authoritative fire produces damage and death through the serv
       { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
     ]);
 
-    await shooter.sendWeaponLoadout('rifle', 'shotgun');
-    await shooter.sendEquipWeapon('rifle');
-    await shooter.waitForSnapshot(() => {
-      const entity = shooter.latestEntity(shooter.userId);
-      return entity &&
-        String(entity.weaponId || '') === 'rifle' &&
-        Array.isArray(entity.weaponLoadout) &&
-        String(entity.weaponLoadout[0] || '') === 'rifle';
-    }, SNAPSHOT_TIMEOUT_MS);
+    await equipLoadout(shooter, 'rifle', 'shotgun', 'rifle');
 
     let killed = false;
     let sawRespawn = false;
@@ -394,6 +417,231 @@ test('real worker: authoritative fire produces damage and death through the serv
 
     assert.equal(killed, true);
     assert.equal(sawRespawn, true);
+  });
+});
+
+test('real worker: sniper fire without ads is rejected by the server', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('sniper');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('sniper_shooter'), username: 'SNIPER_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('sniper_target'), username: 'SNIPER_TARGET' });
+
+  await withDebug(roomId, [shooter, target], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+
+    await applyFixtureAndWait(roomId, [shooter, target], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'sniper' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await equipLoadout(shooter, 'sniper', 'rifle', 'sniper');
+
+    const shooterState = shooter.latestEntity(shooter.userId);
+    const targetState = shooter.latestEntity(target.userId);
+    const beforeAmmo = Number(shooterState.weaponAmmo.sniper.ammoInMag || 0);
+    const beforeArmor = Number(targetState.armor || 0);
+    const shotToken = 'sniper-no-ads';
+
+    await shooter.sendFire({
+      weaponId: 'sniper',
+      shotToken,
+      adsActive: false,
+      viewFovDeg: 75,
+      aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+      aimForward: normalizeForward(shooterState, targetState),
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === shotToken, 900);
+    await target.waitForSnapshot(() => {
+      const current = target.latestEntity(target.userId);
+      return current && Number(current.armor || 0) === beforeArmor;
+    }, SNAPSHOT_TIMEOUT_MS);
+    await shooter.waitForSnapshot(() => {
+      const current = shooter.latestEntity(shooter.userId);
+      const ammo = current && current.weaponAmmo && current.weaponAmmo.sniper;
+      return ammo && Number(ammo.ammoInMag || 0) === beforeAmmo;
+    }, SNAPSHOT_TIMEOUT_MS);
+  });
+});
+
+test('real worker: firing faster than cooldown only produces one authoritative hit', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('cooldown');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('cooldown_shooter'), username: 'COOLDOWN_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('cooldown_target'), username: 'COOLDOWN_TARGET' });
+
+  await withDebug(roomId, [shooter, target], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+
+    await applyFixtureAndWait(roomId, [shooter, target], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await equipLoadout(shooter, 'rifle', 'shotgun', 'rifle');
+
+    const shooterState = shooter.latestEntity(shooter.userId);
+    const targetState = shooter.latestEntity(target.userId);
+    const beforeAmmo = Number(shooterState.weaponAmmo.rifle.ammoInMag || 0);
+    const aimForward = normalizeForward(shooterState, targetState);
+
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken: 'cooldown-1',
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+      aimForward,
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken: 'cooldown-2',
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+      aimForward,
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    await target.waitForMessage('damage_event', (message) => String(message.shotToken || '') === 'cooldown-1', SNAPSHOT_TIMEOUT_MS);
+    await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === 'cooldown-2', 900);
+    await shooter.waitForSnapshot(() => {
+      const current = shooter.latestEntity(shooter.userId);
+      const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
+      return ammo && Number(ammo.ammoInMag || 0) === (beforeAmmo - 1);
+    }, SNAPSHOT_TIMEOUT_MS);
+  });
+});
+
+test('real worker: reload blocks fire until the server finishes reloading', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('reload');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('reload_shooter'), username: 'RELOAD_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('reload_target'), username: 'RELOAD_TARGET' });
+
+  await withDebug(roomId, [shooter, target], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+
+    await applyFixtureAndWait(roomId, [shooter, target], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await equipLoadout(shooter, 'rifle', 'shotgun', 'rifle');
+    const aim = normalizeForward(shooter.latestEntity(shooter.userId), target.latestEntity(target.userId));
+
+    for (let shotIndex = 0; shotIndex < 2; shotIndex++) {
+      const shooterState = shooter.latestEntity(shooter.userId);
+      await shooter.sendFire({
+        weaponId: 'rifle',
+        shotToken: `reload-primer-${shotIndex}`,
+        adsActive: true,
+        viewFovDeg: COMBAT_FOV_DEG,
+        aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+        aimForward: aim,
+        estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+      });
+      await target.waitForMessage('damage_event', (message) => String(message.shotToken || '') === `reload-primer-${shotIndex}`, SNAPSHOT_TIMEOUT_MS);
+      await delay(320);
+    }
+
+    await shooter.sendReload('rifle');
+    await shooter.waitForSnapshot(() => {
+      const current = shooter.latestEntity(shooter.userId);
+      const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
+      return ammo && !!ammo.reloading;
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    const duringReloadAmmo = Number(shooter.latestEntity(shooter.userId).weaponAmmo.rifle.ammoInMag || 0);
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken: 'reload-blocked',
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: {
+        x: shooter.latestEntity(shooter.userId).x,
+        y: shooter.latestEntity(shooter.userId).y,
+        z: shooter.latestEntity(shooter.userId).z
+      },
+      aimForward: aim,
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === 'reload-blocked', 900);
+    await shooter.waitForSnapshot(() => {
+      const current = shooter.latestEntity(shooter.userId);
+      const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
+      return ammo && Number(ammo.ammoInMag || 0) === duringReloadAmmo;
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    await shooter.waitForSnapshot(() => {
+      const current = shooter.latestEntity(shooter.userId);
+      const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
+      return ammo && !ammo.reloading && Number(ammo.ammoInMag || 0) >= 15;
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    const postReloadState = shooter.latestEntity(shooter.userId);
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken: 'reload-after',
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: { x: postReloadState.x, y: postReloadState.y, z: postReloadState.z },
+      aimForward: aim,
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+    await target.waitForMessage('damage_event', (message) => String(message.shotToken || '') === 'reload-after', SNAPSHOT_TIMEOUT_MS);
+  });
+});
+
+test('real worker: third player observer receives the same authoritative damage event', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('observe');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('observe_shooter'), username: 'OBS_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('observe_target'), username: 'OBS_TARGET' });
+  const observer = await worker.connectClient({ roomId, userId: buildUserId('observe_viewer'), username: 'OBS_VIEWER' });
+
+  await withDebug(roomId, [shooter, target, observer], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+    await observer.waitForSnapshot(() => {
+      return observer.latestEntity(shooter.userId) &&
+        observer.latestEntity(target.userId) &&
+        observer.latestEntity(observer.userId);
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    await applyFixtureAndWait(roomId, [shooter, target, observer], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: observer.userId, x: openLayout.observer.x, z: openLayout.observer.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await equipLoadout(shooter, 'rifle', 'shotgun', 'rifle');
+    const shooterState = shooter.latestEntity(shooter.userId);
+    const targetState = shooter.latestEntity(target.userId);
+
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken: 'observer-damage',
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+      aimForward: normalizeForward(shooterState, targetState),
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    const observedDamage = await observer.waitForMessage('damage_event', (message) => {
+      return String(message.shotToken || '') === 'observer-damage' &&
+        String(message.sourceId || '') === shooter.userId &&
+        String(message.targetId || '') === target.userId;
+    }, SNAPSHOT_TIMEOUT_MS);
+    assert.equal(String(observedDamage.weaponId || ''), 'rifle');
   });
 });
 

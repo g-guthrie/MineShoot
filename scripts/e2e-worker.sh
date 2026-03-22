@@ -9,11 +9,6 @@ PERSIST_DIR="${WRANGLER_PERSIST_DIR:-$ROOT_DIR/.wrangler/e2e-state}"
 REUSE_EXISTING_SERVER="${REUSE_EXISTING_SERVER:-0}"
 WRANGLER_ENV="${WRANGLER_ENV:-}"
 
-WRANGLER_ENV_ARGS=()
-if [[ -n "$WRANGLER_ENV" ]]; then
-  WRANGLER_ENV_ARGS=(--env "$WRANGLER_ENV")
-fi
-
 mkdir -p "$ROOT_DIR/.wrangler"
 rm -rf "$PERSIST_DIR"
 
@@ -27,7 +22,30 @@ if lsof -nP -iTCP:"${WORKER_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 for migration in "$ROOT_DIR"/migrations/*.sql; do
-  "$ROOT_DIR/scripts/wrangler.sh" d1 execute minecraft-fps-db-prod --config wrangler.toml "${WRANGLER_ENV_ARGS[@]}" --local --persist-to "$PERSIST_DIR" --file="$migration" >/dev/null
+  migration_cmd=(
+    "$ROOT_DIR/scripts/wrangler.sh"
+    d1 execute minecraft-fps-db-prod
+    --config wrangler.toml
+    --local
+    --persist-to "$PERSIST_DIR"
+    --file="$migration"
+  )
+  if [[ -n "$WRANGLER_ENV" ]]; then
+    migration_cmd+=(--env "$WRANGLER_ENV")
+  fi
+  "${migration_cmd[@]}" >/dev/null
 done
 
-exec "$ROOT_DIR/scripts/wrangler.sh" dev cloudflare/worker.js --config wrangler.toml "${WRANGLER_ENV_ARGS[@]}" --port "$WORKER_PORT" --local --persist-to "$PERSIST_DIR"
+dev_cmd=(
+  "$ROOT_DIR/scripts/wrangler.sh"
+  dev cloudflare/worker.js
+  --config wrangler.toml
+  --port "$WORKER_PORT"
+  --local
+  --persist-to "$PERSIST_DIR"
+)
+if [[ -n "$WRANGLER_ENV" ]]; then
+  dev_cmd+=(--env "$WRANGLER_ENV")
+fi
+
+exec "${dev_cmd[@]}"

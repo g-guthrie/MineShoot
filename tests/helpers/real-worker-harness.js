@@ -381,6 +381,12 @@ function buildClientApi(client) {
         weaponId: String(weaponId || '')
       });
     },
+    async sendReload(weaponId) {
+      await this.send({
+        t: 'reload',
+        weaponId: String(weaponId || '')
+      });
+    },
     async close() {
       await closeClient(client);
     }
