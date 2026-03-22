@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 async function login(page, username, pin = '1234') {
   await page.locator('#account-toggle-btn').click();

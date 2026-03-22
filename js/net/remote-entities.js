@@ -142,7 +142,7 @@
             8,
             Math.round(Number(interpolationTuning.historySize || MAX_SNAPSHOT_HISTORY)) + lossHistoryBonus
         );
-        var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory.slice() : [];
+        var history = Array.isArray(render.snapshotHistory) ? render.snapshotHistory : [];
         var previous = history.length > 0 ? history[history.length - 1] : null;
         var dx = previous ? (Number(previous.x || 0) - sample.x) : 0;
         var dy = previous ? (Number(previous.footY || 0) - sample.footY) : 0;

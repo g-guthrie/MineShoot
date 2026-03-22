@@ -9,7 +9,6 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var renderCallbacks = [];
     var uiState = {
-        loadoutExpanded: true,
         initialized: false
     };
 
@@ -154,14 +153,8 @@
     function sectionChrome() {
         return {
             root: document.getElementById('menu-loadout-band'),
-            expandedShell: document.getElementById('loadout-expanded-shell'),
-            collapsedRow: document.getElementById('loadout-collapsed-row'),
-            collapseBtn: document.getElementById('loadout-collapse-btn'),
-            weaponsSummary: document.getElementById('weapon-slot-summary'),
             weaponsPanel: document.getElementById('weapon-slot-panel'),
-            throwableSummary: document.getElementById('throwable-slot-summary'),
             throwablePanel: document.getElementById('throwable-slot-panel'),
-            abilitySummary: document.getElementById('ability-slot-summary'),
             abilityPanel: document.getElementById('ability-slot-panel')
         };
     }
@@ -183,81 +176,10 @@
         if (abilityTitle) abilityTitle.textContent = 'Abilities';
     }
 
-    function renderSummaries() {
-        var chrome = sectionChrome();
-        var names = weaponNameLookup();
-        var committed = committedLoadout();
-        var weaponCopy = [
-            committed.weaponSlots && committed.weaponSlots[0] ? String(names[committed.weaponSlots[0]] || committed.weaponSlots[0]) : 'Empty',
-            committed.weaponSlots && committed.weaponSlots[1] ? String(names[committed.weaponSlots[1]] || committed.weaponSlots[1]) : 'Empty'
-        ].join(' / ');
-        var throwableCopy = throwableName(committed.selectedThrowableId) || 'Empty';
-        var abilityCopy = abilityName(committed.selectedAbilityId) || 'Empty';
-
-        if (chrome.weaponsSummary) chrome.weaponsSummary.textContent = 'Weapons: ' + weaponCopy;
-        if (chrome.throwableSummary) chrome.throwableSummary.textContent = 'Throwable: ' + throwableCopy;
-        if (chrome.abilitySummary) chrome.abilitySummary.textContent = 'Abilities: ' + abilityCopy;
-    }
-
-    function renderSectionChrome() {
-        var chrome = sectionChrome();
-        if (chrome.root) chrome.root.setAttribute('data-state', uiState.loadoutExpanded ? 'expanded' : 'collapsed');
-        if (chrome.expandedShell) chrome.expandedShell.hidden = !uiState.loadoutExpanded;
-        if (chrome.collapsedRow) chrome.collapsedRow.hidden = uiState.loadoutExpanded;
-        if (chrome.collapseBtn) {
-            chrome.collapseBtn.textContent = uiState.loadoutExpanded ? 'Collapse' : 'open loadout';
-            chrome.collapseBtn.setAttribute('aria-expanded', uiState.loadoutExpanded ? 'true' : 'false');
-        }
-        if (chrome.weaponsSummary) chrome.weaponsSummary.setAttribute('aria-expanded', uiState.loadoutExpanded ? 'true' : 'false');
-        if (chrome.throwableSummary) chrome.throwableSummary.setAttribute('aria-expanded', uiState.loadoutExpanded ? 'true' : 'false');
-        if (chrome.abilitySummary) chrome.abilitySummary.setAttribute('aria-expanded', uiState.loadoutExpanded ? 'true' : 'false');
-        if (chrome.weaponsPanel) chrome.weaponsPanel.hidden = false;
-        if (chrome.throwablePanel) chrome.throwablePanel.hidden = false;
-        if (chrome.abilityPanel) chrome.abilityPanel.hidden = false;
-    }
-
     function runRenderCallbacks() {
         for (var i = 0; i < renderCallbacks.length; i++) {
             renderCallbacks[i]();
         }
-        renderSummaries();
-        renderSectionChrome();
-    }
-
-    function setLoadoutExpanded(expanded) {
-        var next = !!expanded;
-        if (uiState.loadoutExpanded === next) return false;
-        uiState.loadoutExpanded = next;
-        renderSummaries();
-        renderSectionChrome();
-        return true;
-    }
-
-    function setExpandedSection(sectionId) {
-        if (String(sectionId || '').trim()) {
-            setLoadoutExpanded(true);
-            return;
-        }
-        setLoadoutExpanded(false);
-    }
-
-    function bindSectionChrome() {
-        var chrome = sectionChrome();
-        if (!chrome.root || chrome.root.__loadoutSummaryBound) return;
-        chrome.root.__loadoutSummaryBound = true;
-
-        function expandAll() {
-            setLoadoutExpanded(true);
-        }
-
-        if (chrome.collapseBtn) {
-            chrome.collapseBtn.addEventListener('click', function () {
-                setLoadoutExpanded(!uiState.loadoutExpanded);
-            });
-        }
-        if (chrome.weaponsSummary) chrome.weaponsSummary.addEventListener('click', expandAll);
-        if (chrome.throwableSummary) chrome.throwableSummary.addEventListener('click', expandAll);
-        if (chrome.abilitySummary) chrome.abilitySummary.addEventListener('click', expandAll);
     }
 
     function bindWeaponUi() {
@@ -392,7 +314,6 @@
             loadoutState.init();
         }
         uiState.initialized = true;
-        bindSectionChrome();
         bindWeaponUi();
         bindThrowableUi();
         bindAbilityUi();
@@ -439,13 +360,8 @@
             : { ok: false, message: 'Loadout state unavailable.' };
     };
 
-    GameMenuLoadout.setExpandedSection = function (sectionId) {
-        setExpandedSection(sectionId);
-    };
-
-    GameMenuLoadout.getExpandedSection = function () {
-        return uiState.loadoutExpanded ? 'all' : '';
-    };
+    GameMenuLoadout.setExpandedSection = function () {};
+    GameMenuLoadout.getExpandedSection = function () { return 'all'; };
 
     GameMenuLoadout.syncToRuntime = function (multiplayerMode) {
         var committed = applyCommittedToRuntime(!!multiplayerMode);

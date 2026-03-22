@@ -22,33 +22,18 @@
                 runtime.GameUI.updateTrackingReticle(false, false);
             }
 
-            var currentAimTargetId = '';
-            var centerTarget = runtime.GameHitscan.peekCenterTarget(camera);
-            var areaTarget = (currentWeapon && currentWeapon.autoLock && runtime.GameHitscan.peekAutoLockTarget)
-                ? runtime.GameHitscan.peekAutoLockTarget(camera)
+            var reticlePreview = (runtime.GameHitscan && runtime.GameHitscan.getReticleTargetPreview)
+                ? runtime.GameHitscan.getReticleTargetPreview(camera)
                 : null;
-            if (currentWeapon && currentWeapon.autoLock) {
-                if (areaTarget && areaTarget.targetId) currentAimTargetId = areaTarget.targetId;
-            } else if (centerTarget && centerTarget.targetId) {
-                currentAimTargetId = centerTarget.targetId;
-            }
+            var currentAimTargetId = reticlePreview && reticlePreview.currentAimTargetId
+                ? reticlePreview.currentAimTargetId
+                : '';
 
-            if (runtime.GameUI && runtime.GameUI.setHitscanTargetState) {
-                runtime.GameUI.setHitscanTargetState(!!(
-                    currentWeapon &&
-                    currentWeapon.id !== 'shotgun' &&
-                    !currentWeapon.autoLock &&
-                    !currentWeapon.singleHitFromPellets &&
-                    centerTarget &&
-                    centerTarget.hitbox
-                ));
-            }
-            if (runtime.GameUI && runtime.GameUI.setShotgunTargetState) {
-                runtime.GameUI.setShotgunTargetState(!!(
-                    currentWeapon &&
-                    (((currentWeapon.id === 'shotgun' || currentWeapon.singleHitFromPellets) && centerTarget && centerTarget.hitbox) ||
-                        (currentWeapon.autoLock && areaTarget && areaTarget.hitbox))
-                ));
+            if (runtime.GameUI && runtime.GameUI.setReticleTargetState) {
+                runtime.GameUI.setReticleTargetState(
+                    reticlePreview && reticlePreview.reticleTarget ? reticlePreview.reticleTarget.group : 'crosshair',
+                    !!(reticlePreview && reticlePreview.reticleTarget && reticlePreview.reticleTarget.active)
+                );
             }
 
             runtime.GameOverhead.update(camera, frame.playerPos, currentAimTargetId);

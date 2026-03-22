@@ -627,7 +627,7 @@
         function removeProjectile(index) {
             var p = projectiles[index];
             if (!p) return;
-            if (p.mesh && p.mesh.parent) p.mesh.parent.remove(p.mesh);
+            detachSceneObject(p.mesh);
             var lastIndex = projectiles.length - 1;
             if (index !== lastIndex) {
                 projectiles[index] = projectiles[lastIndex];
@@ -669,7 +669,7 @@
         function removeNetProjectileById(id) {
             var entry = netProjectileMap[id];
             if (!entry) return;
-            if (entry.mesh && entry.mesh.parent) entry.mesh.parent.remove(entry.mesh);
+            detachSceneObject(entry.mesh);
             delete netProjectileMap[id];
         }
 
@@ -679,6 +679,19 @@
             if (!netProjectileMap[id]) return false;
             removeNetProjectileById(id);
             return true;
+        }
+
+        function detachSceneObject(object3d) {
+            if (object3d && object3d.parent && typeof object3d.parent.remove === 'function') {
+                object3d.parent.remove(object3d);
+            }
+        }
+
+        function removeFlashAt(index) {
+            var flash = impactFlashes[index];
+            if (!flash) return;
+            detachSceneObject(flash.mesh);
+            impactFlashes.splice(index, 1);
         }
 
         function resolveNetStickyTargetPosition(targetId, outVec3) {
@@ -980,8 +993,7 @@
                 flash.life -= dt;
 
                 if (flash.life <= 0) {
-                    if (flash.mesh && flash.mesh.parent) flash.mesh.parent.remove(flash.mesh);
-                    impactFlashes.splice(i, 1);
+                    removeFlashAt(i);
                     continue;
                 }
 
@@ -1100,19 +1112,14 @@
         function reset() {
             for (var i = projectiles.length - 1; i >= 0; i--) {
                 var projectile = projectiles[i];
-                if (projectile && projectile.mesh && projectile.mesh.parent) {
-                    projectile.mesh.parent.remove(projectile.mesh);
-                }
+                detachSceneObject(projectile && projectile.mesh);
             }
             for (var key in netProjectileMap) {
                 if (!Object.prototype.hasOwnProperty.call(netProjectileMap, key)) continue;
                 removeNetProjectileById(key);
             }
             for (var f = impactFlashes.length - 1; f >= 0; f--) {
-                var flash = impactFlashes[f];
-                if (flash && flash.mesh && flash.mesh.parent) {
-                    flash.mesh.parent.remove(flash.mesh);
-                }
+                removeFlashAt(f);
             }
             projectiles = [];
             impactFlashes = [];

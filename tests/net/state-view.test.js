@@ -68,6 +68,36 @@ test('network state view reuses lock target arrays and wrappers across calls', a
   );
 });
 
+test('network state view reuses entity state arrays and wrappers across calls', async () => {
+  const render = {
+    id: 'usr_remote',
+    kind: 'player',
+    username: 'REMOTE',
+    classId: 'abilities',
+    hp: 90,
+    hpMax: 100,
+    armor: 20,
+    armorMax: 40,
+    alive: true,
+    healState: null,
+    group: {
+      position: new THREE.Vector3(1, 2, 3)
+    }
+  };
+  const renderMap = new Map([['usr_remote', render]]);
+  const view = await loadStateView(renderMap);
+
+  const first = view.getEntityStateList();
+  render.group.position.set(5, 6, 7);
+  render.hp = 75;
+  const second = view.getEntityStateList();
+
+  assert.equal(first, second);
+  assert.equal(first[0], second[0]);
+  assert.equal(second[0].hp, 75);
+  assert.equal(second[0].worldPos, render.group.position);
+});
+
 test('network state view uses shared interpolation clock helpers and entity constants defaults', async () => {
   const [interpCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/net/interpolation.js', import.meta.url), 'utf8'),

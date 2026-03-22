@@ -222,6 +222,33 @@ test('remote entities keep sprint movement gaps in history when the speed-aware 
   assert.equal(render.group.position.x, 0);
 });
 
+test('remote entities reuse the same snapshot history array between updates', async () => {
+  const { entitiesApi } = await loadRemoteEntities();
+  const entityId = 'usr_history_reuse';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 0,
+    z: 0
+  }), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  const firstHistory = render.snapshotHistory;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 2,
+    z: 0
+  }), {
+    serverTime: 1050,
+    receivedAt: 1050
+  });
+
+  assert.equal(render.snapshotHistory, firstHistory);
+  assert.equal(render.snapshotHistory.length, 2);
+});
+
 test('remote entities clamp extreme interval spikes before smoothing cadence', async () => {
   const { entitiesApi } = await loadRemoteEntities();
   const entityId = 'usr_outlier_interval';

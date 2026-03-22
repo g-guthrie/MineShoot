@@ -2,9 +2,9 @@ const GAME_MODE_DEFS = {
   ffa: {
     id: 'ffa',
     label: 'Free For All',
-    menuButtonLabel: 'FREE FOR ALL',
-    primaryButtonLabel: 'QUICK MATCH (FFA)',
-    shortLabel: 'FFA',
+    menuButtonLabel: 'Free For All',
+    primaryButtonLabel: 'Play Free For All',
+    shortLabel: 'Free For All',
     showInMainMenu: true,
     supportsPrivateRoom: true,
     primaryQuickPlay: true,
@@ -12,10 +12,10 @@ const GAME_MODE_DEFS = {
   },
   tdm: {
     id: 'tdm',
-    label: 'Team Deathmatch',
-    menuButtonLabel: 'TEAM DEATHMATCH',
-    primaryButtonLabel: 'QUICK MATCH (TDM)',
-    shortLabel: 'TDM',
+    label: 'Team Death Match',
+    menuButtonLabel: 'Team Death Match',
+    primaryButtonLabel: 'Play Team Death Match',
+    shortLabel: 'Team Death Match',
     showInMainMenu: true,
     supportsPrivateRoom: true,
     primaryQuickPlay: false,
@@ -71,6 +71,13 @@ export function normalizeGameMode(modeId) {
   return getDefaultGameMode();
 }
 
+export function getGameModeLabel(modeId, fallback = '') {
+  const normalized = normalizeGameMode(modeId);
+  const mode = GAME_MODE_DEFS[normalized];
+  if (mode && mode.label) return String(mode.label);
+  return String(fallback || '');
+}
+
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.getGameModeCatalog = getGameModeCatalog;
@@ -78,3 +85,4 @@ runtime.GameShared.getGameMode = getGameMode;
 runtime.GameShared.getQuickPlayGameModes = getQuickPlayGameModes;
 runtime.GameShared.getDefaultGameMode = getDefaultGameMode;
 runtime.GameShared.normalizeGameMode = normalizeGameMode;
+runtime.GameShared.getGameModeLabel = getGameModeLabel;

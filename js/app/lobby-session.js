@@ -6,6 +6,14 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+
+    function gameModeLabel(modeId) {
+        var shared = runtime.GameShared || {};
+        if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, 'Free For All');
+        var normalized = String(modeId || '').trim().toLowerCase();
+        if (normalized === 'tdm') return 'Team Death Match';
+        return 'Free For All';
+    }
     var GameLobbySession = {};
     var POLL_OWNER_KEY = 'mayhem.menuPollOwner';
     var POLL_OWNER_LEASE_MS = 8000;
@@ -15,6 +23,7 @@
     var PRIVATE_ROOM_POLL_INTERVAL_MS = 3000;
     var PRIVATE_ROOM_POLL_FALLBACK_MS = 30000;
     var LOBBY_WS_RECONNECT_MS = 3000;
+    var LOBBY_REQUEST_TIMEOUT_MS = 8000;
 
     function noop() {}
 
@@ -50,6 +59,12 @@
         var lobbyWsReconnectHandle = 0;
         var lobbyWsConnected = false;
         var lobbyWsRoomId = '';
+        var requestGeneration = 1;
+        var trackedRequests = {
+            party: { id: 0, controller: null },
+            friends: { id: 0, controller: null },
+            privateRoom: { id: 0, controller: null }
+        };
 
         function setPartyStatus(text, isErr) {
             if (ctx.setPartyStatus) ctx.setPartyStatus(text, isErr);
@@ -163,6 +178,77 @@
             } catch (_err) {
                 // no-op
             }
+        }
+
+        function createAbortController() {
+            return (typeof AbortController === 'function') ? new AbortController() : null;
+        }
+
+        function trackedRequestState(channel) {
+            if (!trackedRequests[channel]) {
+                trackedRequests[channel] = { id: 0, controller: null };
+            }
+            return trackedRequests[channel];
+        }
+
+        function clearTrackedRequestController(channel) {
+            var state = trackedRequestState(channel);
+            if (!state.controller || typeof state.controller.abort !== 'function') {
+                state.controller = null;
+                return;
+            }
+            try {
+                state.controller.abort();
+            } catch (_err) {
+                // no-op
+            }
+            state.controller = null;
+        }
+
+        function invalidateTrackedRequest(channel) {
+            var state = trackedRequestState(channel);
+            state.id += 1;
+            clearTrackedRequestController(channel);
+        }
+
+        function invalidateTrackedRequests() {
+            requestGeneration += 1;
+            invalidateTrackedRequest('party');
+            invalidateTrackedRequest('friends');
+            invalidateTrackedRequest('privateRoom');
+        }
+
+        function beginTrackedRequest(channel) {
+            var state = trackedRequestState(channel);
+            clearTrackedRequestController(channel);
+            state.id += 1;
+            var controller = createAbortController();
+            state.controller = controller;
+            return {
+                channel: channel,
+                id: state.id,
+                generation: requestGeneration,
+                signal: controller ? controller.signal : null,
+                timeoutMs: LOBBY_REQUEST_TIMEOUT_MS
+            };
+        }
+
+        function finishTrackedRequest(token) {
+            if (!token || !token.channel) return;
+            var state = trackedRequestState(token.channel);
+            if (state.id === token.id && requestGeneration === token.generation) {
+                state.controller = null;
+            }
+        }
+
+        function isTrackedRequestCurrent(token) {
+            if (!token || !token.channel) return true;
+            var state = trackedRequestState(token.channel);
+            return state.id === token.id && requestGeneration === token.generation;
+        }
+
+        function isTrackedAbortError(err) {
+            return !!(err && err.aborted);
         }
 
         function hasPollingLease() {
@@ -426,6 +512,7 @@
             );
             if (nextPresenceState === lastObservedPartyPresenceState) return;
             lastObservedPartyPresenceState = nextPresenceState;
+            invalidateTrackedRequests();
             // Disconnect lobby WS when transitioning to gameplay
             if (nextPresenceState === 'in_match' && lobbyWsConnected) {
                 disconnectLobbyWs();
@@ -433,7 +520,7 @@
             refreshPartyStateInternal(true, true, nextPresenceState);
         }
 
-        function partyRequest(method, payload, presenceStateOverride) {
+        function partyRequest(method, payload, presenceStateOverride, requestToken) {
             var identity = currentPartyIdentity();
             var activityState = presenceStateOverride != null
                 ? normalizePartyPresenceState(presenceStateOverride)
@@ -446,7 +533,11 @@
                 partyUrl.searchParams.set('actorId', String(identity.id));
                 partyUrl.searchParams.set('displayName', String(identity.username || identity.id));
                 partyUrl.searchParams.set('activityState', activityState);
-                return lobbyApi.requestJson(partyUrl.toString(), { method: 'GET' }).then(function (body) {
+                return lobbyApi.requestJson(partyUrl.toString(), {
+                    method: 'GET',
+                    signal: requestToken && requestToken.signal ? requestToken.signal : undefined,
+                    timeoutMs: requestToken && Number(requestToken.timeoutMs || 0) > 0 ? requestToken.timeoutMs : undefined
+                }).then(function (body) {
                     return body.state || null;
                 });
             }
@@ -463,7 +554,7 @@
             });
         }
 
-        function fetchPrivateRoomState() {
+        function fetchPrivateRoomState(requestToken) {
             var assigned = currentAssignedPrivateRoom();
             if (!assigned) {
                 return Promise.resolve(null);
@@ -472,7 +563,11 @@
             var identity = currentPartyIdentity();
             url.searchParams.set('actorId', String(identity && identity.id || ''));
             url.searchParams.set('displayName', String(identity && identity.username || identity && identity.id || ''));
-            return lobbyApi.requestJson(url.toString(), { method: 'GET' }).then(function (body) {
+            return lobbyApi.requestJson(url.toString(), {
+                method: 'GET',
+                signal: requestToken && requestToken.signal ? requestToken.signal : undefined,
+                timeoutMs: requestToken && Number(requestToken.timeoutMs || 0) > 0 ? requestToken.timeoutMs : undefined
+            }).then(function (body) {
                 return body.state || null;
             });
         }
@@ -482,8 +577,11 @@
             var swallowError = options.swallowError !== false;
             var shouldRefreshPrivateRoom = options.refreshPrivateRoom !== false;
             var shouldAutoJoin = options.autoJoin !== false;
-            return partyRequest('GET', null, options.partyPresenceState)
+            var requestToken = beginTrackedRequest('party');
+            return partyRequest('GET', null, options.partyPresenceState, requestToken)
                 .then(function (state) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken)) return partyState;
                     var nextState = state || fallbackState || null;
                     applyPartyState(nextState);
                     onPartyIdentityChange();
@@ -492,6 +590,8 @@
                     return nextState;
                 })
                 .catch(function (err) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken) || isTrackedAbortError(err)) return partyState;
                     if (!swallowError) throw err;
                     var nextState = fallbackState || partyState || null;
                     if (fallbackState) {
@@ -507,13 +607,18 @@
         }
 
         function reconcilePrivateRoomState(fallbackState) {
-            return fetchPrivateRoomState()
+            var requestToken = beginTrackedRequest('privateRoom');
+            return fetchPrivateRoomState(requestToken)
                 .then(function (state) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken)) return privateRoomState;
                     var nextState = state || fallbackState || null;
                     applyPrivateRoomState(nextState);
                     return nextState;
                 })
                 .catch(function (err) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken) || isTrackedAbortError(err)) return privateRoomState;
                     var nextState = fallbackState || privateRoomState || null;
                     if (fallbackState) {
                         applyPrivateRoomState(fallbackState);
@@ -536,6 +641,7 @@
         function refreshPartyStateInternal(silent, refreshPrivateRoom, partyPresenceState) {
             var identity = currentPartyIdentity();
             if (!identity || !identity.id || !lobbyApi || !lobbyApi.requestJson) {
+                invalidateTrackedRequest('party');
                 applyPartyState(null);
                 setPartyStatus('', false);
                 return Promise.resolve(null);
@@ -660,38 +766,68 @@
             applyPrivateRoomState(state);
         }
 
+        function detachLobbyWsListeners(socket) {
+            if (!socket) return;
+            var listeners = socket.__mayhemLobbySessionListeners || null;
+            socket.__mayhemLobbySessionListeners = null;
+            if (!listeners || typeof socket.removeEventListener !== 'function') return;
+            if (listeners.open) socket.removeEventListener('open', listeners.open);
+            if (listeners.message) socket.removeEventListener('message', listeners.message);
+            if (listeners.close) socket.removeEventListener('close', listeners.close);
+            if (listeners.error) socket.removeEventListener('error', listeners.error);
+        }
+
+        function scheduleLobbyWsReconnect() {
+            if (lobbyWsReconnectHandle) clearTimeout(lobbyWsReconnectHandle);
+            lobbyWsReconnectHandle = setTimeout(function () {
+                lobbyWsReconnectHandle = 0;
+                if (!lifecycleStarted) return;
+                var assigned = currentAssignedPrivateRoom();
+                if (assigned && assigned.roomId) {
+                    connectLobbyWs(assigned.roomId);
+                }
+            }, LOBBY_WS_RECONNECT_MS);
+        }
+
         function connectLobbyWs(roomId) {
             if (lobbyWsConnected && lobbyWsRoomId === roomId && lobbyWs) return;
             disconnectLobbyWs();
             var url = buildLobbyWsUrl(roomId);
             if (!url) return;
+            var socket = null;
             try {
-                lobbyWs = new WebSocket(url);
+                socket = new WebSocket(url);
             } catch (_err) {
                 return;
             }
+            lobbyWs = socket;
             lobbyWsRoomId = roomId;
-            lobbyWs.addEventListener('open', function () {
-                lobbyWsConnected = true;
-            });
-            lobbyWs.addEventListener('message', handleLobbyWsMessage);
-            lobbyWs.addEventListener('close', function () {
-                lobbyWs = null;
-                lobbyWsConnected = false;
-                // Schedule reconnect if still in a private room
-                if (lobbyWsReconnectHandle) clearTimeout(lobbyWsReconnectHandle);
-                lobbyWsReconnectHandle = setTimeout(function () {
-                    lobbyWsReconnectHandle = 0;
-                    if (!lifecycleStarted) return;
-                    var assigned = currentAssignedPrivateRoom();
-                    if (assigned && assigned.roomId) {
-                        connectLobbyWs(assigned.roomId);
-                    }
-                }, LOBBY_WS_RECONNECT_MS);
-            });
-            lobbyWs.addEventListener('error', function () {
-                // Error triggers close, which handles reconnect
-            });
+            var listeners = {
+                open: function () {
+                    if (lobbyWs !== socket) return;
+                    lobbyWsConnected = true;
+                },
+                message: function (event) {
+                    if (lobbyWs !== socket) return;
+                    handleLobbyWsMessage(event);
+                },
+                close: function () {
+                    if (lobbyWs !== socket) return;
+                    lobbyWs = null;
+                    lobbyWsConnected = false;
+                    lobbyWsRoomId = '';
+                    scheduleLobbyWsReconnect();
+                },
+                error: function () {
+                    if (lobbyWs !== socket) return;
+                    // Error triggers close, which handles reconnect
+                }
+            };
+            socket.__mayhemLobbySessionListeners = listeners;
+            socket.addEventListener('open', listeners.open);
+            socket.addEventListener('message', listeners.message);
+            socket.addEventListener('close', listeners.close);
+            socket.addEventListener('error', listeners.error);
         }
 
         function disconnectLobbyWs() {
@@ -699,17 +835,20 @@
                 clearTimeout(lobbyWsReconnectHandle);
                 lobbyWsReconnectHandle = 0;
             }
+            var socket = lobbyWs;
+            lobbyWs = null;
             lobbyWsConnected = false;
             lobbyWsRoomId = '';
-            if (lobbyWs) {
-                try { lobbyWs.close(); } catch (_err) {}
-                lobbyWs = null;
+            if (socket) {
+                detachLobbyWsListeners(socket);
+                try { socket.close(); } catch (_err) {}
             }
         }
 
         function refreshPrivateRoomState(silent) {
             var assigned = currentAssignedPrivateRoom();
             if (!assigned) {
+                invalidateTrackedRequest('privateRoom');
                 applyPrivateRoomState(null);
                 disconnectLobbyWs();
                 setPrivateRoomStatus('', false);
@@ -744,19 +883,29 @@
 
         function refreshFriendsState(silent) {
             if (!isLoggedIn() || !lobbyApi || !lobbyApi.requestJson || !lobbyApi.friendsPath) {
+                invalidateTrackedRequest('friends');
                 applyFriendsState(null);
                 setFriendsStatus('', false);
                 onSocialUpdate();
                 return Promise.resolve(null);
             }
-            return lobbyApi.requestJson(lobbyApi.friendsPath(), { method: 'GET' })
+            var requestToken = beginTrackedRequest('friends');
+            return lobbyApi.requestJson(lobbyApi.friendsPath(), {
+                method: 'GET',
+                signal: requestToken.signal || undefined,
+                timeoutMs: requestToken.timeoutMs
+            })
                 .then(function (body) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken)) return friendsState;
                     applyFriendsState(body && body.friends ? body.friends : null);
                     setFriendsStatus('', false);
                     onSocialUpdate();
                     return friendsState;
                 })
                 .catch(function (err) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken) || isTrackedAbortError(err)) return friendsState;
                     setFriendsUnavailable(err, { scope: silent ? 'friends' : 'friends-refresh', silent: !!silent });
                     onSocialUpdate();
                     return friendsState;
@@ -860,11 +1009,12 @@
         }
 
         function setPrivateRoomMode(roomMode) {
+            var label = gameModeLabel(roomMode);
             return runPrivateRoomHostAction(
                 'set_mode',
                 { roomMode: roomMode },
-                'Switching room to ' + String(roomMode || 'ffa').toUpperCase() + '...',
-                'Room mode set to ' + String(roomMode || 'ffa').toUpperCase() + '.',
+                'Switching room to ' + label + '...',
+                'Room mode set to ' + label + '.',
                 'Mode change failed.',
                 'canEditPrivateRoom'
             );
@@ -1028,6 +1178,7 @@
 
         function visibilityListener() {
             if (!isDocumentVisible()) {
+                invalidateTrackedRequests();
                 releasePollOwnerLease();
                 return;
             }
@@ -1035,11 +1186,13 @@
         }
 
         function authChangedListener() {
+            invalidateTrackedRequests();
             refreshAll(true);
             onSocialUpdate();
         }
 
         function pagehideListener() {
+            invalidateTrackedRequests();
             releasePollOwnerLease();
             var identity = currentPartyIdentity();
             if (!identity || identity.kind !== 'guest' || !navigator.sendBeacon) return;
@@ -1089,6 +1242,7 @@
         function stop() {
             if (!lifecycleStarted) return;
             lifecycleStarted = false;
+            invalidateTrackedRequests();
 
             if (partyPollHandle) {
                 window.clearInterval(partyPollHandle);

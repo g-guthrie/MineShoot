@@ -13,6 +13,7 @@
     function create(opts) {
         opts = opts || {};
         var lockTargetsScratch = [];
+        var entityStatesScratch = [];
 
         function sharedApi() {
             return opts.getSharedApi ? (opts.getSharedApi() || {}) : (globalThis.__MAYHEM_RUNTIME.GameShared || {});
@@ -230,9 +231,9 @@
         }
 
         function getEntityStateList() {
-            var out = [];
+            entityStatesScratch.length = 0;
             readMap('getRenderMap').forEach(function (r) {
-                out.push({
+                var desc = r.entityStateDescriptor || (r.entityStateDescriptor = {
                     id: r.id,
                     kind: r.kind,
                     username: r.username,
@@ -246,8 +247,21 @@
                     targetId: 'net:' + r.id,
                     healState: r.healState || null
                 });
+                desc.id = r.id;
+                desc.kind = r.kind;
+                desc.username = r.username;
+                desc.classId = r.classId;
+                desc.hp = r.hp;
+                desc.hpMax = r.hpMax;
+                desc.armor = r.armor;
+                desc.armorMax = r.armorMax;
+                desc.alive = r.alive;
+                desc.worldPos = r.group.position;
+                desc.targetId = 'net:' + r.id;
+                desc.healState = r.healState || null;
+                entityStatesScratch.push(desc);
             });
-            return out;
+            return entityStatesScratch;
         }
 
         function getSelfState() {

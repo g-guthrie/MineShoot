@@ -826,7 +826,7 @@
         var opts = options || {};
         var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
         if (ackSeq > 0) lastReplayAckSeq = ackSeq;
-        var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs.slice() : [], {
+        var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs : [], {
             stepMovement: helper.stepAuthoritativeMovement,
             bounds: world.getWorldBounds(),
             collisionBoxes: world.getCollisionBoxes(),

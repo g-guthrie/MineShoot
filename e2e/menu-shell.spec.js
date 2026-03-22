@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from '@playwright/test';
 
 async function openAuth(page) {
   await page.locator('#account-toggle-btn').click();
@@ -101,7 +101,7 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
       detail: {
         ready: true,
         banner: null,
-        modePill: { label: 'MODE', value: 'TDM' },
+        modePill: { label: 'MODE', value: 'Team Death Match' },
         contextPill: { label: 'LEAD', value: '7' },
         primaryPill: { label: 'KILLS', value: '12' },
         secondaryPill: { label: 'DEATHS', value: '3' }
@@ -111,7 +111,6 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
 
   const metrics = await page.evaluate(() => {
     const overlay = document.getElementById('overlay');
-    const header = document.getElementById('menu-header');
     const menuSurface = document.getElementById('menu-surface');
     const mainHeroes = document.getElementById('menu-main-heroes');
     const homeHero = document.getElementById('menu-home-hero');
@@ -125,9 +124,6 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
     const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
     const headerFeedback = document.getElementById('active-match-header-feedback');
     const activeBanner = document.getElementById('active-match-primary-banner');
-    const friendInput = document.getElementById('active-match-friend-id-input');
-    const inviteFriend = document.getElementById('active-match-invite-friend-btn');
-    const joinFriend = document.getElementById('active-match-join-friend-btn');
     const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
     const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
 
@@ -145,7 +141,6 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
       return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
     }
 
-    const headerRect = header ? header.getBoundingClientRect() : { left: 0, right: 0 };
     const sessionRect = sessionActions ? sessionActions.getBoundingClientRect() : { left: 0, right: 0 };
     const shellRect = document.documentElement.getBoundingClientRect();
 
@@ -155,7 +150,6 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
       socialHeroHidden: !!(socialHero && socialHero.hidden),
       partyHeroHidden: !!(partyHero && partyHero.hidden),
       sessionActionsVisible: !!(sessionActions && !sessionActions.hidden),
-      headerContainsFriendControls: withinRect(friendInput, headerRect) && withinRect(inviteFriend, headerRect) && withinRect(joinFriend, headerRect),
       sessionPillsContained: withinRect(sessionStats, sessionRect) && withinRect(sessionStatus, sessionRect) && withinRect(sessionContext, sessionRect) && withinRect(sessionKd, sessionRect) && withinRect(sessionMeta, sessionRect),
       hiddenHeaderFeedback: headerFeedback ? getComputedStyle(headerFeedback).display === 'none' : false,
       hiddenBanner: activeBanner ? getComputedStyle(activeBanner).display === 'none' : false,
@@ -165,7 +159,7 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
       surfaceIsGlassy: alphaOf(menuSurface ? getComputedStyle(menuSurface).backgroundColor : '') < 0.9,
       structuredPillsApplied: !!(
         sessionStatus &&
-        sessionStatus.textContent.trim() === 'TDM' &&
+        sessionStatus.textContent.trim() === 'Team Death Match' &&
         sessionContext &&
         sessionContext.textContent.trim() === '7' &&
         sessionKd &&
@@ -182,7 +176,6 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
   expect(metrics.socialHeroHidden).toBe(true);
   expect(metrics.partyHeroHidden).toBe(true);
   expect(metrics.sessionActionsVisible).toBe(true);
-  expect(metrics.headerContainsFriendControls).toBe(true);
   expect(metrics.sessionPillsContained).toBe(true);
   expect(metrics.hiddenHeaderFeedback).toBe(true);
   expect(metrics.hiddenBanner).toBe(true);
@@ -213,7 +206,7 @@ test('active-match shell keeps the full four-pill layout on one row at wide widt
       detail: {
         ready: true,
         banner: null,
-        modePill: { label: 'MODE', value: 'TDM' },
+        modePill: { label: 'MODE', value: 'Team Death Match' },
         contextPill: { label: 'LEAD', value: '7' },
         primaryPill: { label: 'KILLS', value: '12' },
         secondaryPill: { label: 'DEATHS', value: '3' }
@@ -372,7 +365,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
   expect(metrics.statsRadius).toBe(metrics.loadoutRadius);
   expect(metrics.visiblePillCount).toBe(3);
   expect(metrics.rowCount).toBe(1);
-  expect(metrics.modeText).toBe('FFA');
+  expect(metrics.modeText).toBe('Free For All');
   expect(metrics.contextText).toBe('PAUSED');
   expect(metrics.primaryText).toBe('Change loadout or return to the match.');
   expect(metrics.statsHeight).toBeGreaterThan(0);

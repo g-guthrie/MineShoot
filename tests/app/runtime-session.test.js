@@ -105,7 +105,7 @@ class FakeWindow {
   }
 }
 
-async function loadRuntimeSessionHarness() {
+async function loadRuntimeSessionHarness(overrides = {}) {
   const [domUtilsCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/runtime-session.js', import.meta.url), 'utf8')
@@ -213,7 +213,7 @@ async function loadRuntimeSessionHarness() {
   vm.runInContext(domUtilsCode, context);
   vm.runInContext(code, context);
 
-  const session = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeSession.create({
+  const baseOptions = {
     isRuntimeReady() {
       return true;
     },
@@ -253,7 +253,7 @@ async function loadRuntimeSessionHarness() {
       return false;
     },
     modeDisplayName() {
-      return 'FFA';
+      return 'FREE FOR ALL';
     },
     objectiveSummary() {
       return 'GOAL 0';
@@ -264,6 +264,11 @@ async function loadRuntimeSessionHarness() {
     formatSecondsRemaining() {
       return '0.0s';
     }
+  };
+
+  const session = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeSession.create({
+    ...baseOptions,
+    ...overrides
   });
 
   session.bindRuntimeControls();
@@ -514,6 +519,64 @@ test('networked runtime session resumes from the pause rail button', async () =>
   assert.equal(harness.backBtn.style.display, 'none');
 });
 
+test('private room postgame completion emits a room-lobby session state instead of returning to main menu', async () => {
+  let returnToMenuCalls = 0;
+  const harness = await loadRuntimeSessionHarness({
+    getActivityState() {
+      return 'private_room_lobby';
+    },
+    isPrivateRoomSession() {
+      return true;
+    },
+    returnToMenu() {
+      returnToMenuCalls++;
+    }
+  });
+  harness.advanceClock(500);
+
+  await harness.session.enterGameplay({
+    button: 0,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.session.syncMatchState({
+    matchState: {
+      ended: true,
+      endedAt: 1000,
+      resetAt: 4000
+    },
+    selfState: {
+      kills: 5,
+      deaths: 2
+    },
+    privateRoomPhase: 'lobby'
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Enter',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  harness.document.dispatch('keydown', {
+    key: 'Enter',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  const sessionStates = harness.window.events
+    .filter((event) => event && event.type === 'mayhem-session-state')
+    .map((event) => event.detail);
+
+  assert.equal(returnToMenuCalls, 0);
+  assert.equal(harness.session.isPlaying(), false);
+  assert.equal(sessionStates.at(-1).activityState, 'private_room_lobby');
+  assert.equal(sessionStates.at(-1).inMatch, false);
+  assert.equal(sessionStates.at(-1).canResume, true);
+});
+
 test('networked runtime session routes joined-ready handoff through the session strip instead of the launch overlay', async () => {
   const harness = await loadRuntimeSessionHarness();
 
@@ -525,7 +588,7 @@ test('networked runtime session routes joined-ready handoff through the session 
   assert.equal(harness.launchFlow.hidden, true);
   assert.equal(harness.menuStage.hidden, false);
   assert.equal(harness.launchTitle.textContent, 'ENTER MATCH');
-  assert.equal(harness.launchStatus.textContent, 'FFA READY.');
+  assert.equal(harness.launchStatus.textContent, 'FREE FOR ALL READY.');
   assert.equal(harness.launchNote.textContent, 'Click ENTER MATCH to capture the mouse and drop into the arena.');
   assert.equal(harness.launchRoomLabel.hidden, true);
   assert.equal(harness.launchRoomLabel.textContent, 'ROOM FFA-01');

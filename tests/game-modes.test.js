@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   getGameModeCatalog,
+  getGameModeLabel,
   getQuickPlayGameModes,
   getDefaultGameMode,
   normalizeGameMode
@@ -24,4 +25,6 @@ test('game mode normalization preserves supported ids and falls back safely', ()
   assert.equal(getDefaultGameMode(), 'ffa');
   assert.equal(normalizeGameMode('tdm'), 'tdm');
   assert.equal(normalizeGameMode('unknown'), 'ffa');
+  assert.equal(getGameModeLabel('ffa'), 'Free For All');
+  assert.equal(getGameModeLabel('tdm'), 'Team Death Match');
 });

@@ -464,7 +464,6 @@
         getInputSendInterval: netState.getInputSendInterval,
         getLastSentInputSample: netState.getLastSentInputSample,
         setLastSentInputSample: netState.setLastSentInputSample,
-        getPingSendTimer: function () { return pingSendTimer; },
         getPingSendTimer: connectionTiming.getPingSendTimer,
         setPingSendTimer: connectionTiming.setPingSendTimer,
         getPingCadenceSeconds: connectionTiming.getPingCadenceSeconds,

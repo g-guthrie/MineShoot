@@ -234,10 +234,6 @@
             removeAllChildren(ctx.privateRoomRosterGrid);
             ctx.privateRoomRosterGrid.appendChild(buildSkeletonLane('alpha'));
             ctx.privateRoomRosterGrid.appendChild(buildSkeletonLane('bravo'));
-            if (ctx.privateRoomSummaryEl) {
-                ctx.privateRoomSummaryEl.textContent = '';
-                ctx.privateRoomSummaryEl.appendChild(createSkeletonBar('skeleton-bar-summary'));
-            }
         }
 
         function createSkeletonBar(className) {
@@ -573,10 +569,13 @@
 
             pill.appendChild(top);
 
-            var meta = document.createElement('div');
-            meta.className = 'private-room-member-meta';
-            meta.textContent = memberId.toUpperCase();
-            pill.appendChild(meta);
+            var displayName = String(member && member.displayName || '');
+            if (displayName && displayName !== memberId) {
+                var meta = document.createElement('div');
+                meta.className = 'private-room-member-meta';
+                meta.textContent = memberId.toUpperCase();
+                pill.appendChild(meta);
+            }
 
             if (canEditRoom && selectedMemberId === memberId) {
                 pill.appendChild(buildMoveRail(memberId, currentTeamId, teamIds));
@@ -625,24 +624,16 @@
             var header = document.createElement('div');
             header.className = 'private-room-team-header';
 
-            var copy = document.createElement('div');
-            copy.className = 'private-room-team-copy';
-
             var title = document.createElement('div');
             title.className = 'private-room-team-name';
             title.textContent = teamLabel(teamId);
-            copy.appendChild(title);
+            header.appendChild(title);
 
             var subtitle = document.createElement('div');
             subtitle.className = 'private-room-team-subtitle';
-            subtitle.textContent = String(members.length || 0) + ' ' + (members.length === 1 ? 'player ready' : 'players ready');
-            copy.appendChild(subtitle);
-            header.appendChild(copy);
+            subtitle.textContent = String(members.length || 0) + ' ' + (members.length === 1 ? 'player' : 'players');
+            header.appendChild(subtitle);
 
-            var count = document.createElement('div');
-            count.className = 'private-room-team-count';
-            count.textContent = String(members.length || 0);
-            header.appendChild(count);
             lane.appendChild(header);
 
             var tray = document.createElement('div');
@@ -663,18 +654,23 @@
                 return member && teamIds.indexOf(String(member.teamId || '')) < 0;
             });
 
+            // Only show when there are actual unassigned players
             if (ctx.privateRoomUnassignedWrap) {
-                ctx.privateRoomUnassignedWrap.hidden = !canEditRoom && unassigned.length === 0;
+                ctx.privateRoomUnassignedWrap.hidden = unassigned.length === 0;
             }
 
-            renderMemberTray(
-                ctx.privateRoomUnassigned,
-                unassigned,
-                canEditRoom,
-                '',
-                teamIds,
-                canEditRoom ? 'Fresh players land here until they are slotted.' : 'Everyone is assigned.'
-            );
+            if (unassigned.length > 0) {
+                renderMemberTray(
+                    ctx.privateRoomUnassigned,
+                    unassigned,
+                    canEditRoom,
+                    '',
+                    teamIds,
+                    ''
+                );
+            } else {
+                removeAllChildren(ctx.privateRoomUnassigned);
+            }
         }
 
         function renderTeamBoard(room, canEditRoom) {
@@ -701,7 +697,6 @@
                     renderSkeleton();
                     return;
                 }
-                if (ctx.privateRoomSummaryEl) ctx.privateRoomSummaryEl.textContent = '';
                 removeAllChildren(ctx.privateRoomUnassigned);
                 removeAllChildren(ctx.privateRoomRosterGrid);
                 lastSnapshotKey = '';
@@ -719,14 +714,6 @@
 
             var canEditRoom = allowEditing(room);
             syncSelection(room);
-
-            if (ctx.privateRoomSummaryEl) {
-                ctx.privateRoomSummaryEl.textContent =
-                    String(room.roomCode || '').toUpperCase() +
-                    ' \u2022 ' + (String(room.roomPhase || '') === 'active' ? 'LIVE' : 'LOBBY') +
-                    ' \u2022 ' + String(room.memberCount || 0) + '/16' +
-                    ' \u2022 ' + String(room.teamCount || 2) + ' TEAMS';
-            }
 
             if (ctx.privateRoomRandomizeBtn) {
                 ctx.privateRoomRandomizeBtn.textContent = String(room.roomMode || '') === 'tdm'
@@ -747,8 +734,9 @@
             consecutiveFailures++;
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                 setStatus('Connection lost. Retrying\u2026', true);
-            } else if (ctx.privateRoomSummaryEl && ctx.getPartyState() && ctx.getPartyState().self && ctx.getPartyState().self.privateRoom) {
-                ctx.privateRoomSummaryEl.textContent = String(message || 'Private room service unavailable. Retrying...').toUpperCase();
+            } else if (ctx.getPartyState && ctx.getPartyState() &&
+                ctx.getPartyState().self && ctx.getPartyState().self.privateRoom) {
+                setStatus(String(message || 'Private room service unavailable. Retrying...'), true);
             }
         }
 

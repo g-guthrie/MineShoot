@@ -8,6 +8,15 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameRuntimeModeUi = {};
 
+    function gameModeLabel(modeId, fallback) {
+        var shared = runtime.GameShared || {};
+        if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, fallback || '');
+        var normalized = String(modeId || '').trim().toLowerCase();
+        if (normalized === 'ffa') return 'Free For All';
+        if (normalized === 'tdm') return 'Team Death Match';
+        return String(fallback || '');
+    }
+
     function roomCodeFromRoomId(roomId) {
         var shared = runtime.GameShared || {};
         var helper = shared.privateRoomCodes;
@@ -23,7 +32,7 @@
 
     function runtimeRoomLabel(mode) {
         if (!mode || !mode.roomId) return '';
-        var prefix = mode.gameMode ? String(mode.gameMode).toUpperCase() + ' ' : '';
+        var prefix = mode.gameMode ? gameModeLabel(mode.gameMode, String(mode.gameMode || '')) + ' ' : '';
         if (mode.id === 'single_cloudflare' && isShareCodeRoomId(mode.roomId)) {
             return prefix + 'CODE ' + roomCodeFromRoomId(mode.roomId);
         }
@@ -60,7 +69,7 @@
         if (mode.id === 'cloud_multiplayer') {
             if (mode.roomId === 'global') return 'Connecting to Public Lobby: ' + mode.roomId + '...';
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
-                return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
+                return 'Connecting to Team Death Match: ' + mode.roomId + '...';
             }
             return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
@@ -70,7 +79,7 @@
         if (mode.id === 'single_dev_server') {
             return 'Connecting to Local Multiplayer: ' + mode.roomId + '...';
         }
-        return 'Starting Offline Sandbox: FFA...';
+        return 'Starting Offline Sandbox: Free For All...';
     }
 
     function startupNoticeForMode(mode) {
@@ -80,7 +89,7 @@
                 return 'Public Lobby: shared room ' + mode.roomId + '.';
             }
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
-                return 'Team Deathmatch joined room ' + mode.roomId + '.';
+                return 'Team Death Match joined room ' + mode.roomId + '.';
             }
             return 'Free For All joined room ' + mode.roomId + '.';
         }
@@ -93,7 +102,7 @@
         if (mode.id === 'single_dev_server') {
             return 'Local Multiplayer: shared local-worker room ' + mode.roomId + '.';
         }
-        return 'Offline Sandbox FFA: local simulated players.';
+        return 'Offline Sandbox Free For All: local simulated players.';
     }
 
     GameRuntimeModeUi.roomCodeFromRoomId = roomCodeFromRoomId;

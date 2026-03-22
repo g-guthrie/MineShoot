@@ -7,6 +7,15 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
 
+    function gameModeLabel(modeId, fallback) {
+        var shared = runtime.GameShared || {};
+        if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, fallback || '');
+        var normalized = String(modeId || '').trim().toLowerCase();
+        if (normalized === 'ffa') return 'Free For All';
+        if (normalized === 'tdm') return 'Team Death Match';
+        return String(fallback || '');
+    }
+
     function create(opts) {
         opts = opts || {};
 
@@ -85,9 +94,7 @@
         }
 
         function modeDisplayName(matchState) {
-            var mode = String(matchState && matchState.gameMode || '').toUpperCase();
-            if (mode === 'TDM') return 'TEAM DEATHMATCH';
-            return mode || 'FREE FOR ALL';
+            return gameModeLabel(matchState && matchState.gameMode, 'Free For All').toUpperCase();
         }
 
         function objectiveSummary(matchState, selfState) {
@@ -156,7 +163,7 @@
                         title: pauseState.reason === 'idle' ? 'IDLE TIMEOUT' : 'MATCH DISCONNECTED',
                         detail: 'Connection closed to limit Cloudflare traffic.'
                     },
-                    modePill: { label: 'MODE', value: String(matchState && matchState.gameMode || 'match').toUpperCase() || 'MATCH' },
+                    modePill: { label: 'MODE', value: gameModeLabel(matchState && matchState.gameMode, 'Match') || 'Match' },
                     contextPill: { label: 'STATE', value: pauseState.reason === 'idle' ? 'DISCONNECTED' : 'PAUSED' },
                     primaryPill: { label: 'STATUS', value: 'DISCONNECTED' },
                     secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }
@@ -170,7 +177,7 @@
             var kills = Math.max(0, Number(selfState && selfState.kills || 0));
             var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
             var modeId = String(matchState && matchState.gameMode || '').toLowerCase();
-            var modeValue = modeId ? modeId.toUpperCase() : 'MATCH';
+            var modeValue = modeId ? gameModeLabel(modeId, 'Match') : 'Match';
             var primaryLabel = 'KILLS';
             var primaryValue = String(kills);
             var secondaryLabel = 'DEATHS';

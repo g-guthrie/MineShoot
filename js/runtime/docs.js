@@ -565,7 +565,7 @@
         var api = sharedApi();
         var modes = api.getGameModeCatalog ? api.getGameModeCatalog() : [
             { id: 'ffa', label: 'Free For All' },
-            { id: 'tdm', label: 'Team Deathmatch' }
+            { id: 'tdm', label: 'Team Death Match' }
         ];
         var matchRules = api.matchRules || {};
         var out = [];

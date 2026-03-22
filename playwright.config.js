@@ -1,16 +1,19 @@
-const { defineConfig } = require('@playwright/test');
+import { defineConfig } from '@playwright/test';
 
 const frontendPort = Number(process.env.FRONTEND_PORT || process.env.E2E_FRONTEND_PORT || 4173);
 const workerPort = Number(process.env.WORKER_PORT || process.env.E2E_WORKER_PORT || 8791);
 const reuseExistingServer = /^(1|true|yes)$/i.test(String(process.env.E2E_REUSE_SERVERS || process.env.REUSE_EXISTING_SERVER || ''));
 const persistDir = process.env.WRANGLER_PERSIST_DIR || '.wrangler/e2e-state';
 
-module.exports = defineConfig({
+export default defineConfig({
   testDir: './e2e',
   timeout: 45_000,
   workers: 1,
   use: {
-    baseURL: `http://127.0.0.1:${frontendPort}`
+    baseURL: `http://127.0.0.1:${frontendPort}`,
+    launchOptions: {
+      args: ['--use-angle=swiftshader', '--use-gl=angle']
+    }
   },
   webServer: [
     {

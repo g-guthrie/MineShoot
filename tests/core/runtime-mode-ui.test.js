@@ -47,7 +47,7 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
   );
   assert.equal(
     harness.ui.runtimeRoomLabel({ id: 'single_cloudflare', roomId: 'private-room1', gameMode: 'tdm' }),
-    'TDM CODE ROOM1'
+    'Team Death Match CODE ROOM1'
   );
   assert.equal(
     harness.ui.startupSubtitleForMode({ id: 'single_dev_server', roomId: 'local-shared', gameMode: 'ffa' }),
@@ -55,7 +55,7 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
   );
   assert.equal(
     harness.ui.startupSubtitleForMode({ id: 'single_full_sandbox', roomId: '', gameMode: 'ffa' }),
-    'Starting Offline Sandbox: FFA...'
+    'Starting Offline Sandbox: Free For All...'
   );
 });
 
@@ -72,7 +72,7 @@ test('runtime mode ui renders indicator text from one shared formatter', async (
 
   assert.equal(
     harness.indicator.textContent,
-    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: TDM CODE ROOM1'
+    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: Team Death Match CODE ROOM1'
   );
   assert.equal(harness.indicator.hidden, true);
 });

@@ -113,10 +113,9 @@ test('room socket message forwards reload commands when live gameplay is allowed
     msgS2c: { PONG: 'pong' }
   });
 
-  assert.deepEqual(reloads, [{
-    player: { id: 'u1' },
-    msg: { t: 'reload', weaponId: 'rifle' }
-  }]);
+  assert.equal(reloads.length, 1);
+  assert.equal(reloads[0].player.id, 'u1');
+  assert.deepEqual(reloads[0].msg, { t: 'reload', weaponId: 'rifle' });
 });
 
 test('room socket message blocks reload commands while a private room is still in lobby', () => {
@@ -179,6 +178,43 @@ test('room socket message answers ping and ignores stale sockets', () => {
   });
 
   assert.deepEqual(sent, [{ target: activeWs, payload: { t: 'pong', clientTime: 55, serverTime: 777 } }]);
+});
+
+test('room socket silently throttles abusive combat message spam per player', () => {
+  const ws = createSocket();
+  let fireCount = 0;
+  let reloadCount = 0;
+  let throwCount = 0;
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleFire() { fireCount += 1; },
+    handleReload() { reloadCount += 1; },
+    handleThrow() { throwCount += 1; }
+  };
+  const deps = {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 1000,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { FIRE: 'fire', RELOAD: 'reload', THROW: 'throw', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  };
+
+  for (let i = 0; i < 45; i++) {
+    handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'fire', weaponId: 'rifle' }), deps);
+  }
+  for (let i = 0; i < 12; i++) {
+    handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'reload', weaponId: 'rifle' }), deps);
+    handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'throw', throwableId: 'frag' }), deps);
+  }
+
+  assert.equal(fireCount, 40);
+  assert.equal(reloadCount, 8);
+  assert.equal(throwCount, 8);
 });
 
 test('room socket close promotes a replacement socket or marks the player disconnected', () => {

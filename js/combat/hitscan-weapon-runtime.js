@@ -651,19 +651,25 @@
             };
         }
 
+        function buildReticleSpec(weapon) {
+            if (!weapon) return null;
+            var autoLock = !!getAutoLockConfig(weapon);
+            var circleReticle = autoLock || weapon.id === 'shotgun' || (weapon.singleHitFromPellets && weapon.id !== 'pistol');
+            return {
+                type: circleReticle ? 'circle' : 'crosshair',
+                size: circleReticle
+                    ? (autoLock ? getAutoLockReticleSizePx(weapon) : (getSpreadRadiusPx(weapon) * 2))
+                    : 0,
+                adsActive: isAdsActiveForWeapon(weapon.id),
+                targetGroup: circleReticle ? 'circle' : 'crosshair',
+                targetSource: autoLock ? 'lock' : 'center'
+            };
+        }
+
         function getReticleSpec(weaponId) {
             refreshWeaponCatalogIfNeeded();
             var id = weaponId || activeWeaponId();
-            var weapon = weapons[id];
-            if (!weapon) return null;
-            if (getAutoLockConfig(weapon) || id === 'shotgun' || (weapon.singleHitFromPellets && id !== 'pistol')) {
-                return {
-                    type: 'circle',
-                    size: getAutoLockConfig(weapon) ? getAutoLockReticleSizePx(weapon) : (getSpreadRadiusPx(weapon) * 2),
-                    adsActive: isAdsActiveForWeapon(id)
-                };
-            }
-            return null;
+            return buildReticleSpec(weapons[id]);
         }
 
         function setWeapon(weaponId, timing) {

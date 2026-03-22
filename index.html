@@ -52,7 +52,7 @@
                     </div>
                     <div class="postgame-stat-card">
                         <span class="postgame-stat-label">Mode</span>
-                        <span id="postgame-results-mode" class="postgame-stat-value">FFA</span>
+                        <span id="postgame-results-mode" class="postgame-stat-value">Free For All</span>
                     </div>
                     <div class="postgame-stat-card">
                         <span class="postgame-stat-label">Your Line</span>
@@ -93,17 +93,13 @@
                                     <span id="menu-party-id-label">Player ID</span>
                                     <span id="menu-party-id-value">------</span>
                                 </button>
-                                <div id="active-match-friend-bar" hidden>
-                                    <input id="active-match-friend-id-input" type="text" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Friend ID">
-                                    <button id="active-match-invite-friend-btn" type="button">Invite Friend</button>
-                                </div>
                             </div>
                             <div id="menu-header-actions">
                                 <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Settings</button>
                             </div>
                         </div>
                         <div id="active-match-header-feedback" class="status" hidden></div>
-                        <div id="active-match-primary-banner" class="banner" hidden>
+                        <div id="active-match-primary-banner" class="banner" data-rounded-role="container" hidden>
                             <div id="active-match-primary-banner-copy"></div>
                             <div id="active-match-primary-banner-actions" class="flow">
                                 <button id="active-match-primary-banner-accept-btn" class="btn btn-confirm btn-sm" type="button">Accept Invite</button>
@@ -152,12 +148,12 @@
                                     <h1 id="mode-screen-title">MAYHEM</h1>
                                     <div id="play-mode-group" class="stack">
                                         <div id="play-mode-toolbar" class="grid" style="--cols: 2">
-                                            <button id="primary-launch-btn" class="btn btn-primary btn-lg" type="button">Play FFA</button>
+                                            <button id="primary-launch-btn" class="btn btn-primary btn-lg" type="button">Play Free For All</button>
                                             <button id="game-modes-toggle-btn" class="btn btn-lg" type="button" aria-expanded="false" aria-controls="play-mode-options">Game Modes</button>
                                         </div>
                                         <div id="play-mode-options" class="flow" role="group" aria-label="Select game mode" hidden>
                                             <button id="play-mode-ffa-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Free For All</button>
-                                            <button id="play-mode-tdm-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Team Deathmatch</button>
+                                            <button id="play-mode-tdm-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Team Death Match</button>
                                             <button id="sandbox-mode-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Offline Sandbox</button>
                                         </div>
                                     </div>
@@ -222,36 +218,31 @@
 
                                 <!-- Header card: room identity + code + status -->
                                 <section id="party-room-section" class="card stack">
-                                    <div class="kicker">Room</div>
                                     <h2 class="title">Private Room</h2>
                                     <div id="room-share-panel" class="room-share-row" hidden>
                                         <div id="room-share-code" class="room-code-display">------</div>
                                         <button id="copy-room-code-btn" class="btn btn-sm" type="button" aria-label="Copy room code"><span id="copy-room-code-label">Copy</span></button>
                                     </div>
                                     <div id="private-room-status" class="status" aria-live="polite" hidden></div>
-                                    <div id="room-social-feedback" class="status" aria-live="polite" hidden></div>
                                 </section>
 
                                 <!-- Roster section: settings + team grid -->
                                 <div id="private-room-view" class="stack" hidden>
-                                    <div id="private-room-summary"></div>
                                     <div id="private-room-settings-row" class="flow">
                                         <div id="private-room-mode-actions" role="radiogroup" aria-label="Game mode">
-                                            <button id="private-room-mode-ffa-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">FFA</button>
-                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">TDM</button>
+                                            <button id="private-room-mode-ffa-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">Free For All</button>
+                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">Team Death Match</button>
                                         </div>
-                                        <div id="private-room-team-count-actions" role="radiogroup" aria-label="Team count">
-                                            <button id="private-room-teams-2-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">2 Teams</button>
-                                            <button id="private-room-teams-3-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">3 Teams</button>
-                                            <button id="private-room-teams-4-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">4 Teams</button>
+                                        <div id="private-room-team-count-actions" role="radiogroup" aria-label="Team count" hidden>
+                                            <button id="private-room-teams-2-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">2</button>
+                                            <button id="private-room-teams-3-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">3</button>
+                                            <button id="private-room-teams-4-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">4</button>
                                         </div>
                                     </div>
-                                    <div id="private-room-unassigned-wrap">
-                                        <div class="kicker">Unassigned</div>
+                                    <div id="private-room-unassigned-wrap" hidden>
                                         <div id="private-room-unassigned"></div>
                                     </div>
                                     <div id="private-room-roster-grid"></div>
-                                    <div id="private-room-roster-note" class="kicker">Tap a team to join it.</div>
 
                                     <!-- Action footer card -->
                                     <div id="private-room-footer" class="card stack">
@@ -260,11 +251,11 @@
                                             <button id="private-room-invite-lock-btn" class="btn btn-sm" type="button" aria-label="Toggle room invite lock">Room Invites Locked</button>
                                         </div>
                                         <div id="private-room-action-row" role="toolbar" aria-label="Room actions">
-                                            <button id="private-room-leave-btn" class="btn btn-danger" type="button">Leave Room</button>
+                                            <button id="private-room-leave-btn" class="btn btn-sm btn-danger" type="button">Leave</button>
                                             <div class="private-room-action-spacer"></div>
-                                            <button id="private-room-randomize-btn" class="btn btn-primary" type="button">Balance Teams</button>
-                                            <button id="private-room-start-btn" class="btn btn-primary btn-lg" type="button">Start Match</button>
-                                            <button id="private-room-enter-btn" class="btn btn-primary btn-lg" type="button" hidden>Enter Match</button>
+                                            <button id="private-room-randomize-btn" class="btn btn-sm" type="button">Balance Teams</button>
+                                            <button id="private-room-start-btn" class="btn btn-primary" type="button">Start Match</button>
+                                            <button id="private-room-enter-btn" class="btn btn-primary" type="button" hidden>Enter Match</button>
                                         </div>
                                     </div>
                                 </div>
@@ -272,46 +263,27 @@
                         </section>
                     </div>
 
-                    <div id="menu-loadout-band" data-state="expanded">
-                        <div id="loadout-band-actions">
-                            <button id="loadout-collapse-btn" type="button" aria-expanded="true">Collapse</button>
-                        </div>
-                        <div id="loadout-expanded-shell">
-                            <div id="loadout-row">
-                                <section class="loadout-section" data-loadout-section="weapons">
-                                    <div id="weapon-slot-panel" class="card stack">
-                                        <div id="weapon-slot-title">Weapons <span id="weapon-pick-flag" class="hidden">— Select second weapon</span></div>
-                                        <div id="weapon-choice-grid"></div>
-                                    </div>
-                                </section>
-
-                                <section class="loadout-section" data-loadout-section="throwable">
-                                    <div id="throwable-slot-panel" class="card stack">
-                                        <div id="throwable-slot-title">Throwables</div>
-                                        <div id="throwable-choice-grid"></div>
-                                    </div>
-                                </section>
-
-                                <section class="loadout-section" data-loadout-section="abilities">
-                                    <div id="ability-slot-panel" class="card stack">
-                                        <div id="ability-slot-title">Abilities</div>
-                                        <div id="ability-choice-grid" class="ability-choice-grid"></div>
-                                    </div>
-                                </section>
-                            </div>
-                        </div>
-
-                        <div id="loadout-collapsed-row" hidden>
+                    <div id="menu-loadout-band">
+                        <div id="loadout-row">
                             <section class="loadout-section" data-loadout-section="weapons">
-                                <button id="weapon-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Weapons</button>
+                                <div id="weapon-slot-panel" class="card stack">
+                                    <div id="weapon-slot-title">Weapons <span id="weapon-pick-flag" class="hidden">— Select second weapon</span></div>
+                                    <div id="weapon-choice-grid"></div>
+                                </div>
                             </section>
 
                             <section class="loadout-section" data-loadout-section="throwable">
-                                <button id="throwable-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Throwable</button>
+                                <div id="throwable-slot-panel" class="card stack">
+                                    <div id="throwable-slot-title">Throwables</div>
+                                    <div id="throwable-choice-grid"></div>
+                                </div>
                             </section>
 
                             <section class="loadout-section" data-loadout-section="abilities">
-                                <button id="ability-slot-summary" class="loadout-summary-btn" type="button" aria-expanded="false">Abilities</button>
+                                <div id="ability-slot-panel" class="card stack">
+                                    <div id="ability-slot-title">Abilities</div>
+                                    <div id="ability-choice-grid" class="ability-choice-grid"></div>
+                                </div>
                             </section>
                         </div>
                     </div>

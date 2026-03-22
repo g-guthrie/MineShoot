@@ -895,6 +895,39 @@
             };
         }
 
+        function getReticleTargetPreview(camera) {
+            var weapon = weaponRuntime.getCurrentWeaponData();
+            if (!weapon || !camera) {
+                return {
+                    currentAimTargetId: '',
+                    reticleTarget: {
+                        group: 'crosshair',
+                        active: false
+                    }
+                };
+            }
+
+            var reticleSpec = weaponRuntime.getReticleSpec(weapon.id) || {
+                targetGroup: 'crosshair',
+                targetSource: 'center'
+            };
+            var centerTarget = peekCenterTarget(camera);
+            var areaTarget = reticleSpec.targetSource === 'lock'
+                ? peekAutoLockTarget(camera)
+                : null;
+            var activeTarget = reticleSpec.targetSource === 'lock'
+                ? areaTarget
+                : centerTarget;
+
+            return {
+                currentAimTargetId: activeTarget && activeTarget.targetId ? activeTarget.targetId : '',
+                reticleTarget: {
+                    group: reticleSpec.targetGroup || 'crosshair',
+                    active: !!(activeTarget && activeTarget.hitbox)
+                }
+            };
+        }
+
         function buildNetworkFireIntent(shotToken) {
             var player = playerApi();
             var camera = player && player.getCamera ? player.getCamera() : null;
@@ -916,6 +949,7 @@
             canFire: canFire,
             peekCenterTarget: peekCenterTarget,
             peekAutoLockTarget: peekAutoLockTarget,
+            getReticleTargetPreview: getReticleTargetPreview,
             selectLockTargetByBox: function (camera, maxRange, boxSizePx, options) {
                 if (!camera) return null;
                 var weapon = weaponRuntime.getCurrentWeaponData();

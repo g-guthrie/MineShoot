@@ -1247,6 +1247,14 @@ canvas {
     z-index: 9;
     pointer-events: none;
     display: none;
+    transition: border-color 0.08s ease-out, box-shadow 0.08s ease-out;
+}
+
+#pistol-reticle.reticle-target-in-range {
+    border-color: #ff6b6b;
+    box-shadow:
+        0 0 14px rgba(255, 70, 70, 0.3),
+        0 0 0 1px rgba(0, 0, 0, 0.34) inset;
 }
 
 #spread-reticle {

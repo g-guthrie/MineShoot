@@ -365,7 +365,9 @@
 
         function showLaunchHandoff(context) {
             var els = ensureLaunchHandoffEls();
-            var modeLabel = String(context && context.gameMode || '').toUpperCase();
+            var modeLabel = opts.modeDisplayName
+                ? opts.modeDisplayName({ gameMode: context && context.gameMode })
+                : String(context && context.gameMode || '').toUpperCase();
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
@@ -435,6 +437,7 @@
                 isPlaying = false;
                 clearIdleMonitor();
                 setResumeButtonsVisible(canResumeGameplay());
+                emitSessionState();
                 return;
             }
             if (opts.returnToMenu) opts.returnToMenu();

@@ -184,13 +184,13 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
     const teamId = String(selfState && selfState.teamId || '');
     const teamProgress = Number(match.teamProgress && match.teamProgress[teamId] || 0);
     const opposing = getLeadingOpposingTeam(match, teamId);
-    return 'TDM TEAM ' + formatMatchProgress(teamProgress) +
+    return 'TEAM DEATH MATCH TEAM ' + formatMatchProgress(teamProgress) +
       ' / ' + formatMatchProgress(match.targetProgress) +
       ' | OPP ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
   }
 
   const kills = Math.max(0, Number(selfState && selfState.kills || 0));
-  return 'FFA ' + kills +
+  return 'FREE FOR ALL ' + kills +
     ' / ' + formatMatchProgress(match.targetProgress, 0) +
     ' | LEAD ' + formatMatchProgress(match.leaderProgress, 0);
 }

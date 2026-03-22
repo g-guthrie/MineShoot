@@ -66,6 +66,10 @@
             return opts.launchPillLabel ? opts.launchPillLabel(modeId) : String(modeId || '');
         }
 
+        function modeLabel(modeId) {
+            return opts.modeLabel ? opts.modeLabel(modeId) : String(modeId || '');
+        }
+
         function normalizeMode(modeId) {
             return opts.normalizeMode ? opts.normalizeMode(modeId) : String(modeId || '');
         }
@@ -330,13 +334,6 @@
             if (elements.leaveRoomConfirmOverlay) {
                 elements.leaveRoomConfirmOverlay.hidden = !state.leaveRoomConfirmOpen;
             }
-            if (elements.privateRoomRosterNote) {
-                elements.privateRoomRosterNote.hidden = !hasRoom;
-                elements.privateRoomRosterNote.textContent = caps.canEditPrivateRoom
-                    ? 'Tap a player pill then pick a team, or drag players between lanes.'
-                    : 'Tap a team lane to switch teams.';
-            }
-
             var privateRoomController = privateRoomViewController();
             if (privateRoomController && privateRoomController.applyState) {
                 privateRoomController.applyState(privateRoomState);
@@ -480,7 +477,7 @@
             return {
                 primaryBanner: primaryBanner,
                 headerFeedback: buildSocialActionFeedback(state),
-                modePill: { label: 'MODE', value: String(selectedMode || 'ffa').toUpperCase() },
+                modePill: { label: 'MODE', value: modeLabel(selectedMode || 'ffa') || 'Match' },
                 contextPill: { label: 'STATE', value: state.launch && state.launch.phase === 'retryable' ? 'READY' : (state.launch && state.launch.phase === 'paused' ? 'PAUSED' : 'LIVE') },
                 primaryPill: { label: state.launch && state.launch.phase === 'retryable' ? 'DETAIL' : 'LOADOUT', value: state.launch && state.launch.phase === 'retryable' ? String(state.launch.message || 'Ready to enter.') : 'Change loadout or return to the match.' },
                 secondaryPill: null
@@ -643,7 +640,6 @@
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
             if (elements.loadoutStartBtn) elements.loadoutStartBtn.hidden = true;
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
-            if (elements.activeFriendBar) elements.activeFriendBar.hidden = !activeMatchShell;
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
             if (elements.leaveConfirmOverlay) elements.leaveConfirmOverlay.hidden = !state.confirmLeaveOpen;
 
@@ -663,9 +659,7 @@
             renderPartyMembers(state);
             renderFriends(state);
             renderPrivateRoom(state);
-            setFriendTargetValue(elements.activePartyIdInput && elements.activePartyIdInput.value
-                ? elements.activePartyIdInput.value
-                : (elements.partyIdInput ? elements.partyIdInput.value : ''));
+            setFriendTargetValue(elements.partyIdInput ? elements.partyIdInput.value : '');
 
             if (elements.primaryLaunchBtn) {
                 elements.primaryLaunchBtn.textContent = launchPillLabel(selectedMode || 'ffa');
@@ -703,9 +697,6 @@
             if (elements.partyIdInput) elements.partyIdInput.disabled = isBusy;
             if (elements.inviteFriendBtn) elements.inviteFriendBtn.disabled = isBusy;
             if (elements.joinFriendBtn) elements.joinFriendBtn.disabled = isBusy;
-            if (elements.activePartyIdInput) elements.activePartyIdInput.disabled = isBusy;
-            if (elements.activeInviteFriendBtn) elements.activeInviteFriendBtn.disabled = isBusy;
-            if (elements.activeJoinFriendBtn) elements.activeJoinFriendBtn.disabled = isBusy;
             if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
             if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {

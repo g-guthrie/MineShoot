@@ -134,7 +134,7 @@ test('runtime match view emits a structured paused match model for the menu shel
       title: 'IDLE TIMEOUT',
       detail: 'Connection closed to limit Cloudflare traffic.'
     },
-    modePill: { label: 'MODE', value: 'FFA' },
+    modePill: { label: 'MODE', value: 'Free For All' },
     contextPill: { label: 'STATE', value: 'DISCONNECTED' },
     primaryPill: { label: 'STATUS', value: 'DISCONNECTED' },
     secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }

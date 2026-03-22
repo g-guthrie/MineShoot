@@ -75,7 +75,7 @@ flowchart TD
 | Main surface | `play-mode-tdm-btn` | Sets selected mode to `tdm` and closes mode list | No navigation change. |
 | Main surface | `sandbox-mode-btn` | Sets selected mode to `sandbox` and closes mode list | No navigation change until launch. |
 | Main surface | `loadout-start-btn` | Bound to the same launch path as `primary-launch-btn` | Current render in `lobby-controller.js` forces it hidden, so it is effectively unreachable in the present shell. Some e2e specs still expect the older visible behavior. |
-| Party surface | `create-private-room-btn` | Calls `session.createPrivateRoom()` and stays on the party surface | Optionally seeds TDM from the selected quick-match mode. |
+| Party surface | `create-private-room-btn` | Calls `session.createPrivateRoom()` and stays on the party surface | Optionally seeds Team Death Match from the selected quick-match mode. |
 | Party surface | `join-private-room-btn` | Calls `session.joinPrivateRoom(roomCode)` and stays on the party surface | Enter on `#private-room-input` triggers the same path. |
 | Party surface | `copy-room-code-btn` | Copies the room code from `#room-share-code` | No navigation change. |
 | Party surface | `private-room-mode-ffa-btn` | Calls `session.setPrivateRoomMode('ffa')` | Host-only. |

@@ -261,10 +261,6 @@ async function loadHarness({
     ['button', 'menu-party-id-btn'],
     ['span', 'menu-party-id-label'],
     ['span', 'menu-party-id-value'],
-    ['div', 'active-match-friend-bar'],
-    ['input', 'active-match-friend-id-input'],
-    ['button', 'active-match-invite-friend-btn'],
-    ['button', 'active-match-join-friend-btn'],
     ['div', 'active-match-header-feedback'],
     ['div', 'active-match-primary-banner'],
     ['div', 'active-match-primary-banner-copy'],
@@ -380,7 +376,6 @@ async function loadHarness({
   documentObj.elements['menu-return-btn'].hidden = true;
   documentObj.elements['party-back-btn'].hidden = true;
   documentObj.elements['menu-party-hero'].hidden = true;
-  documentObj.elements['active-match-friend-bar'].hidden = true;
   documentObj.elements['active-match-header-feedback'].hidden = true;
   documentObj.elements['active-match-primary-banner'].hidden = true;
   documentObj.elements['active-match-primary-banner-actions'].hidden = true;
@@ -866,7 +861,7 @@ async function loadHarness({
   };
 }
 
-test('menu boots on the main screen with play ffa as the default launch action', async () => {
+test('menu boots on the main screen with play free for all as the default launch action', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
@@ -875,14 +870,13 @@ test('menu boots on the main screen with play ffa as the default launch action',
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['loadout-start-btn'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play FFA');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Free For All');
   assert.equal(elements['play-mode-options'].hidden, true);
   assert.equal(elements['room-access-status'].hidden, true);
   assert.equal(elements['menu-feedback'].hidden, true);
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
   assert.equal(elements['account-toggle-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, false);
-  assert.equal(elements['active-match-friend-bar'].hidden, true);
   assert.equal(elements['invite-friend-btn'].hidden, false);
   assert.equal(elements['join-friend-btn'].hidden, false);
   assert.equal(elements['menu-social-friends-pane'].hidden, false);
@@ -1137,7 +1131,7 @@ test('game modes reveal below the launch row and the primary launch pill starts 
 
   elements['play-mode-tdm-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1150,7 +1144,7 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(elements['menu-feedback'].hidden, true);
   assert.equal(elements['menu-body'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
-  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
   assert.equal(elements['active-match-context-pill'].textContent, 'READY');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
   assert.equal(elements['menu-screen-mode'].hidden, true);
@@ -1158,7 +1152,6 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(elements['menu-social-hero'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, true);
-  assert.equal(elements['active-match-friend-bar'].hidden, false);
   assert.equal(elements['room-access-status'].hidden, true);
 });
 
@@ -1171,7 +1164,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
 
   elements['sandbox-mode-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Sandbox');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1180,7 +1173,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
   assert.equal(launchCalls.length, 1);
   assert.equal(launchCalls[0].modeId, 'single_full_sandbox');
   assert.equal(launchCalls[0].options.gameMode, 'ffa');
-  assert.equal(elements['active-match-mode-pill'].textContent, 'SANDBOX');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Offline Sandbox');
   assert.equal(elements['active-match-context-pill'].textContent, 'READY');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
 });
@@ -1527,12 +1520,11 @@ test('resumable runtime uses the session rail as the only return path', async ()
   assert.equal(elements['menu-social-hero'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
-  assert.equal(elements['active-match-mode-pill'].textContent, 'FFA');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
   assert.equal(elements['active-match-context-pill'].textContent, 'LIVE');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Change loadout or return to the match.');
   assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, true);
-  assert.equal(elements['active-match-friend-bar'].hidden, false);
 });
 
 test('paused runtime hides the duplicate header return, shows the session rail, and keeps party back behavior', async () => {
@@ -1556,13 +1548,12 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['menu-social-hero'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
-  assert.equal(elements['active-match-mode-pill'].textContent, 'FFA');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
   assert.equal(elements['active-match-context-pill'].textContent, 'PAUSED');
   assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['party-back-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, true);
-  assert.equal(elements['active-match-friend-bar'].hidden, false);
 });
 
 test('clicking the dimmed paused background resumes gameplay but clicking the menu surface does not', async () => {
@@ -1586,7 +1577,7 @@ test('clicking the dimmed paused background resumes gameplay but clicking the me
   assert.equal(resumeGameplayCalls[0].source, 'resume');
 });
 
-test('active-match header friend controls mirror the home friend id and reuse the same party actions', async () => {
+test('active-match header surfaces incoming invite actions', async () => {
   const harness = await loadHarness();
   const { elements, runPartyActionCalls } = harness;
 
@@ -1598,35 +1589,6 @@ test('active-match header friend controls mirror the home friend id and reuse th
     activityState: 'paused',
     launchContext: {}
   });
-
-  elements['active-match-friend-id-input'].value = 'usr_delta';
-  elements['active-match-friend-id-input'].input();
-  elements['active-match-invite-friend-btn'].click();
-  elements['active-match-join-friend-btn'].click();
-
-  assert.equal(elements['party-id-input'].value, 'usr_delta');
-  assert.equal(runPartyActionCalls[0].action, 'invite');
-  assert.equal(runPartyActionCalls[0].payload.targetId, 'usr_delta');
-  assert.equal(runPartyActionCalls[1].action, 'join');
-  assert.equal(runPartyActionCalls[1].payload.targetId, 'usr_delta');
-});
-
-test('active-match header surfaces visible friend errors and incoming invite actions', async () => {
-  const harness = await loadHarness();
-  const { elements, runPartyActionCalls } = harness;
-
-  harness.emitSessionState({
-    runtimeReady: true,
-    inMatch: false,
-    awaitingInputCapture: false,
-    canResume: true,
-    activityState: 'paused',
-    launchContext: {}
-  });
-
-  elements['active-match-invite-friend-btn'].click();
-  assert.equal(elements['active-match-header-feedback'].hidden, false);
-  assert.equal(elements['active-match-header-feedback'].textContent, 'Enter a friend ID.');
 
   harness.emitPartyState({
     self: { id: 'usr_alpha', username: 'ALPHA' },
@@ -1663,14 +1625,14 @@ test('structured active-match model fills the menu with live mode-aware pills', 
   harness.emitMatchMenuModel({
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'TDM' },
+    modePill: { label: 'MODE', value: 'Team Death Match' },
     contextPill: { label: 'LEAD', value: '7' },
     primaryPill: { label: 'KILLS', value: '12' },
     secondaryPill: { label: 'DEATHS', value: '3' }
   });
 
   assert.equal(elements['active-match-mode-pill'].attributes['data-session-label'], 'MODE');
-  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
   assert.equal(elements['active-match-context-pill'].attributes['data-session-label'], 'LEAD');
   assert.equal(elements['active-match-context-pill'].textContent, '7');
   assert.equal(elements['active-match-primary-stat-pill'].attributes['data-session-label'], 'KILLS');
@@ -1686,7 +1648,7 @@ test('hidden menu caches structured match model and applies it when the active s
   harness.emitMatchMenuModel({
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'TDM' },
+    modePill: { label: 'MODE', value: 'Team Death Match' },
     contextPill: { label: 'STATE', value: 'WAITING' },
     primaryPill: { label: 'KILLS', value: '2' },
     secondaryPill: { label: 'DEATHS', value: '1' }
@@ -1703,7 +1665,7 @@ test('hidden menu caches structured match model and applies it when the active s
     launchContext: {}
   });
 
-  assert.equal(elements['active-match-mode-pill'].textContent, 'TDM');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
   assert.equal(elements['active-match-context-pill'].textContent, 'WAITING');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, '2');
   assert.equal(elements['active-match-secondary-stat-pill'].textContent, '1');
@@ -1814,7 +1776,7 @@ test('session-state updates preserve the selected launch mode', async () => {
 
   elements['game-modes-toggle-btn'].click();
   elements['play-mode-tdm-btn'].click();
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 
   harness.emitSessionState({
     runtimeReady: true,
@@ -1833,7 +1795,7 @@ test('session-state updates preserve the selected launch mode', async () => {
     launchContext: {}
   });
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 });
 
 test('room screen outside pause reduces the left header to back and id', async () => {

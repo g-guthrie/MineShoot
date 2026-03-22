@@ -46,22 +46,65 @@ class FakeDocument {
   }
 }
 
+class FakeWebSocket {
+  constructor(url) {
+    this.url = String(url || '');
+    this.listeners = new Map();
+    this.closed = false;
+  }
+
+  addEventListener(type, handler) {
+    const key = String(type || '');
+    const next = this.listeners.get(key) || [];
+    next.push(handler);
+    this.listeners.set(key, next);
+  }
+
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const next = this.listeners.get(key) || [];
+    this.listeners.set(key, next.filter((entry) => entry !== handler));
+  }
+
+  close() {
+    this.closed = true;
+  }
+
+  dispatch(type, init = {}) {
+    const key = String(type || '');
+    const handlers = this.listeners.get(key) || [];
+    const event = Object.assign({ type, target: this, currentTarget: this }, init);
+    for (let i = 0; i < handlers.length; i++) {
+      handlers[i](event);
+    }
+  }
+}
+
 async function loadLobbySessionHarness(options = {}) {
   const code = await fs.readFile(new URL('../../js/app/lobby-session.js', import.meta.url), 'utf8');
 
   let activityState = 'paused';
   let nextIntervalId = 1;
+  let nextTimeoutId = 10_000;
   const intervalCallbacks = new Map();
   const intervalDelays = new Map();
+  const timeoutCallbacks = new Map();
   const requestCalls = [];
   const partyStatuses = [];
   const friendsStatuses = [];
   const privateRoomStatuses = [];
   const launchAssignedMatches = [];
   const warnCalls = [];
+  const sockets = [];
   const document = new FakeDocument();
   const storage = options.storage || createStorage();
   const windowListeners = new Map();
+  const WebSocketCtor = options.WebSocket || class extends FakeWebSocket {
+    constructor(url) {
+      super(url);
+      sockets.push(this);
+    }
+  };
 
   const window = {
     location: {
@@ -77,6 +120,14 @@ async function loadLobbySessionHarness(options = {}) {
     clearInterval(id) {
       intervalCallbacks.delete(id);
       intervalDelays.delete(id);
+    },
+    setTimeout(handler) {
+      const id = nextTimeoutId++;
+      timeoutCallbacks.set(id, handler);
+      return id;
+    },
+    clearTimeout(id) {
+      timeoutCallbacks.delete(id);
     },
     addEventListener(type, handler) {
       const key = String(type || '');
@@ -100,8 +151,10 @@ async function loadLobbySessionHarness(options = {}) {
   };
 
   const sandbox = {
+    AbortController,
     Blob,
     URL,
+    WebSocket: WebSocketCtor,
     console: {
       warn(...args) {
         warnCalls.push(args);
@@ -113,6 +166,8 @@ async function loadLobbySessionHarness(options = {}) {
         return true;
       }
     },
+    setTimeout: window.setTimeout,
+    clearTimeout: window.clearTimeout,
     window,
     globalThis: {
       __MAYHEM_RUNTIME: {}
@@ -123,6 +178,9 @@ async function loadLobbySessionHarness(options = {}) {
   sandbox.globalThis.URL = URL;
   sandbox.globalThis.Blob = Blob;
   sandbox.globalThis.document = document;
+  sandbox.globalThis.WebSocket = WebSocketCtor;
+  sandbox.globalThis.setTimeout = window.setTimeout;
+  sandbox.globalThis.clearTimeout = window.clearTimeout;
 
   vm.runInContext(code, vm.createContext(sandbox));
 
@@ -140,6 +198,9 @@ async function loadLobbySessionHarness(options = {}) {
       partyPath() {
         return '/api/party';
       },
+      wsLobbyPath() {
+        return '/api/ws/lobby';
+      },
       privateRoomPath() {
         return '/api/private-room';
       },
@@ -147,6 +208,9 @@ async function loadLobbySessionHarness(options = {}) {
         return '/api/friends';
       },
       resolveApiUrl(path) {
+        return path;
+      },
+      resolveWsUrl(path) {
         return path;
       },
       requestJson(path, requestOptions) {
@@ -236,6 +300,14 @@ async function loadLobbySessionHarness(options = {}) {
       for (const callback of intervalCallbacks.values()) {
         callback();
       }
+    },
+    getSockets() {
+      return sockets.slice();
+    },
+    runTimeout(id) {
+      const callback = timeoutCallbacks.get(id);
+      timeoutCallbacks.delete(id);
+      if (typeof callback === 'function') callback();
     }
   };
 }
@@ -437,4 +509,132 @@ test('lobby session triggers auto-launch callback when party state receives a pu
 
   assert.equal(harness.launchAssignedMatches.length, 1);
   assert.equal(harness.launchAssignedMatches[0].self.publicMatch.roomId, 'tdm-01');
+});
+
+test('lobby session aborts tracked background requests on stop', async () => {
+  const pendingSignals = [];
+  const harness = await loadLobbySessionHarness({
+    requestJson(_path, requestOptions) {
+      if (requestOptions && requestOptions.signal) pendingSignals.push(requestOptions.signal);
+      return new Promise(() => {});
+    }
+  });
+  harness.setActivityState('menu');
+  harness.session.start();
+
+  const refreshPromise = harness.session.refreshPartyState(true);
+  void refreshPromise;
+  harness.session.stop();
+
+  assert.equal(pendingSignals.length, 1);
+  assert.equal(pendingSignals[0].aborted, true);
+});
+
+test('lobby session ignores stale background responses after the session generation advances', async () => {
+  var firstResolve;
+  var secondResolve;
+  var requestCount = 0;
+  const harness = await loadLobbySessionHarness({
+    requestJson() {
+      requestCount += 1;
+      return new Promise((resolve) => {
+        if (requestCount === 1) firstResolve = resolve;
+        else secondResolve = resolve;
+      });
+    }
+  });
+  harness.setActivityState('menu');
+  harness.session.start();
+
+  const firstRequest = harness.session.refreshPartyState(true);
+  harness.dispatchSessionState({ activityState: 'in_match' });
+  await harness.flush();
+
+  firstResolve({
+    state: {
+      self: { id: 'amber-otter-314', username: 'STALE', publicMatch: null, privateRoom: null },
+      directInvite: { incoming: null, outgoing: null },
+      roomInvite: { incoming: null, outgoing: null },
+      party: { id: 'stale', leaderId: 'amber-otter-314', joinLocked: true, isLeader: true, memberCount: 1, members: [] }
+    }
+  });
+  secondResolve({
+    state: {
+      self: { id: 'amber-otter-314', username: 'FRESH', publicMatch: null, privateRoom: null },
+      directInvite: { incoming: null, outgoing: null },
+      roomInvite: { incoming: null, outgoing: null },
+      party: { id: 'fresh', leaderId: 'amber-otter-314', joinLocked: false, isLeader: true, memberCount: 1, members: [] }
+    }
+  });
+
+  await firstRequest;
+  await harness.flush();
+
+  assert.equal(harness.session.getPartyState().party.id, 'fresh');
+});
+
+test('lobby session ignores late close events from replaced lobby sockets', async () => {
+  const harness = await loadLobbySessionHarness({
+    requestJson(path) {
+      const url = new URL(String(path || ''), 'https://mayhem.test');
+      if (url.pathname === '/api/party') {
+        return Promise.resolve({
+          state: {
+            self: {
+              id: 'amber-otter-314',
+              username: 'AMBER-OTTER-314',
+              publicMatch: null,
+              privateRoom: {
+                roomId: 'private-01',
+                roomCode: 'ABCD'
+              }
+            },
+            directInvite: { incoming: null, outgoing: null },
+            roomInvite: { incoming: null, outgoing: null },
+            party: {
+              id: 'pty_01',
+              leaderId: 'amber-otter-314',
+              joinLocked: false,
+              isLeader: true,
+              memberCount: 1,
+              members: [{ id: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isLeader: true }]
+            }
+          }
+        });
+      }
+      if (url.pathname === '/api/private-room') {
+        return Promise.resolve({
+          state: {
+            self: {
+              actorId: 'amber-otter-314',
+              displayName: 'AMBER-OTTER-314',
+              isHost: true
+            },
+            room: {
+              roomId: 'private-01',
+              roomCode: 'ABCD',
+              members: [{ id: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isHost: true }]
+            }
+          }
+        });
+      }
+      return Promise.resolve({ state: null });
+    }
+  });
+  harness.setActivityState('menu');
+
+  await harness.session.refreshPartyState(true);
+  assert.equal(harness.getSockets().length, 1);
+  const firstSocket = harness.getSockets()[0];
+
+  await harness.session.refreshPrivateRoomState(true);
+  assert.equal(harness.getSockets().length, 2);
+  const secondSocket = harness.getSockets()[1];
+
+  secondSocket.dispatch('open');
+  firstSocket.dispatch('close');
+
+  await harness.session.refreshPrivateRoomState(true);
+
+  assert.equal(harness.getSockets().length, 2);
 });

@@ -65,6 +65,11 @@
         return weaponRuntime.getReticleSpec(weaponId);
     };
 
+    GameHitscan.getReticleTargetPreview = function (camera) {
+        ensureRuntime();
+        return shotRuntime.getReticleTargetPreview(camera);
+    };
+
     GameHitscan.getWeaponOrder = function () {
         ensureRuntime();
         return weaponRuntime.getWeaponOrder();

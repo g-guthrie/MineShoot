@@ -102,23 +102,30 @@
         return '';
     }
 
+    function sharedGameMode(modeId) {
+        var shared = runtime.GameShared || {};
+        if (shared.getGameMode) return shared.getGameMode(modeId);
+        var normalized = normalizeMode(modeId);
+        if (normalized === 'ffa') return { label: 'Free For All' };
+        if (normalized === 'tdm') return { label: 'Team Death Match' };
+        return null;
+    }
+
     function modeLabel(modeId) {
         var mode = normalizeMode(modeId);
-        if (mode === 'tdm') return 'Team Deathmatch';
+        var gameMode = sharedGameMode(mode);
+        if (gameMode && gameMode.label) return String(gameMode.label || '');
         if (mode === 'sandbox') return 'Offline Sandbox';
-        if (mode === 'ffa') return 'Free For All';
         return '';
     }
 
     function modePillLabel(modeId) {
-        var mode = normalizeMode(modeId);
-        if (mode === 'tdm') return 'TDM';
-        if (mode === 'sandbox') return 'Sandbox';
-        return 'FFA';
+        return modeLabel(modeId);
     }
 
     function launchPillLabel(modeId) {
-        return 'Play ' + modePillLabel(modeId);
+        var label = modePillLabel(modeId);
+        return label ? ('Play ' + label) : 'Play';
     }
 
     function isRoomSeedMode(modeId) {
@@ -280,10 +287,6 @@
             menuPartyIdBtn: document.getElementById('menu-party-id-btn'),
             menuPartyIdLabel: document.getElementById('menu-party-id-label'),
             menuPartyIdValue: document.getElementById('menu-party-id-value'),
-            activeFriendBar: document.getElementById('active-match-friend-bar'),
-            activePartyIdInput: document.getElementById('active-match-friend-id-input'),
-            activeInviteFriendBtn: document.getElementById('active-match-invite-friend-btn'),
-            activeJoinFriendBtn: document.getElementById('active-match-join-friend-btn'),
             activeHeaderStatus: document.getElementById('active-match-header-feedback'),
             activeInviteBanner: document.getElementById('active-match-primary-banner'),
             activeInviteCopy: document.getElementById('active-match-primary-banner-copy'),
@@ -349,7 +352,7 @@
             partyRoomSection: document.getElementById('party-room-section'),
             partyHeroLeaveBtn: document.getElementById('party-hero-leave-btn'),
             privateRoomStatus: document.getElementById('private-room-status'),
-            roomSocialFeedback: document.getElementById('room-social-feedback'),
+            roomSocialFeedback: document.getElementById('private-room-status'),
             roomSocialInviteBanner: document.getElementById('room-social-invite-banner'),
             roomSocialInviteCopy: document.getElementById('room-social-invite-copy'),
             roomSocialInviteActions: document.getElementById('room-social-invite-actions'),
@@ -359,7 +362,6 @@
             roomShareCode: document.getElementById('room-share-code'),
             copyRoomCodeBtn: document.getElementById('copy-room-code-btn'),
             privateRoomView: document.getElementById('private-room-view'),
-            privateRoomSummary: document.getElementById('private-room-summary'),
             privateRoomModeFfaBtn: document.getElementById('private-room-mode-ffa-btn'),
             privateRoomModeTdmBtn: document.getElementById('private-room-mode-tdm-btn'),
             privateRoomTeamCountActions: document.getElementById('private-room-team-count-actions'),
@@ -375,7 +377,6 @@
             privateRoomUnassigned: document.getElementById('private-room-unassigned'),
             privateRoomRosterGrid: document.getElementById('private-room-roster-grid'),
             privateRoomLeaveBtn: document.getElementById('private-room-leave-btn'),
-            privateRoomRosterNote: document.getElementById('private-room-roster-note'),
             copyRoomCodeLabel: document.getElementById('copy-room-code-label'),
             leaveRoomConfirmOverlay: document.getElementById('leave-room-confirm-overlay'),
             leaveRoomConfirmCancelBtn: document.getElementById('leave-room-confirm-cancel-btn'),
@@ -404,6 +405,7 @@
             roomCodeFromRoomId: roomCodeFromRoomId,
             currentPartyIdentity: currentPartyIdentity,
             launchPillLabel: launchPillLabel,
+            modeLabel: modeLabel,
             normalizeMode: normalizeMode,
             normalizeMatchMenuModel: normalizeMatchMenuModel,
             getPrivateRoomViewController: function () { return privateRoomViewController; }
@@ -611,14 +613,9 @@
             if (elements.partyIdInput && elements.partyIdInput !== sourceEl && elements.partyIdInput.value !== normalized) {
                 elements.partyIdInput.value = normalized;
             }
-            if (elements.activePartyIdInput && elements.activePartyIdInput !== sourceEl && elements.activePartyIdInput.value !== normalized) {
-                elements.activePartyIdInput.value = normalized;
-            }
         }
 
         function currentFriendTargetId() {
-            var activeValue = elements.activePartyIdInput ? String(elements.activePartyIdInput.value || '').trim() : '';
-            if (activeValue) return activeValue;
             return elements.partyIdInput ? String(elements.partyIdInput.value || '').trim() : '';
         }
 
@@ -770,7 +767,6 @@
                     return getState().party;
                 },
                 privateRoomStatusEl: elements.privateRoomStatus,
-                privateRoomSummaryEl: elements.privateRoomSummary,
                 privateRoomUnassignedWrap: elements.privateRoomUnassignedWrap,
                 privateRoomUnassigned: elements.privateRoomUnassigned,
                 privateRoomRosterGrid: elements.privateRoomRosterGrid,
@@ -873,21 +869,10 @@
                 setFriendTargetValue(String(this.value || ''), this);
             });
         }
-        if (elements.activePartyIdInput) {
-            elements.activePartyIdInput.addEventListener('input', function () {
-                setFriendTargetValue(String(this.value || ''), this);
-            });
-        }
-
         bindClick(elements.inviteFriendBtn, handleInviteFriendAction);
         bindClick(elements.joinFriendBtn, handleJoinFriendAction);
-        bindClick(elements.activeInviteFriendBtn, handleInviteFriendAction);
-        bindClick(elements.activeJoinFriendBtn, handleJoinFriendAction);
         bindEnter(elements.partyIdInput, function () {
             if (elements.joinFriendBtn) elements.joinFriendBtn.click();
-        });
-        bindEnter(elements.activePartyIdInput, function () {
-            if (elements.activeInviteFriendBtn) elements.activeInviteFriendBtn.click();
         });
         bindClick(elements.joinRoomBtn, function () {
             if (actionApi && actionApi.joinPrivateRoomByCode) {

@@ -12,10 +12,28 @@ class FakeElement {
     this.textContent = '';
     this.className = '';
     this.innerHTML = '';
+    this._classes = new Set();
     this.classList = {
-      add() {},
-      remove() {},
-      toggle() {}
+      add: (...tokens) => {
+        for (const token of tokens) this._classes.add(token);
+      },
+      remove: (...tokens) => {
+        for (const token of tokens) this._classes.delete(token);
+      },
+      toggle: (token, force) => {
+        if (force === undefined) {
+          if (this._classes.has(token)) {
+            this._classes.delete(token);
+            return false;
+          }
+          this._classes.add(token);
+          return true;
+        }
+        if (force) this._classes.add(token);
+        else this._classes.delete(token);
+        return !!force;
+      },
+      contains: (token) => this._classes.has(token)
     };
   }
 
@@ -136,7 +154,7 @@ test('reticle update owns sniper ADS overlay without a separate scope pass', asy
 
   harness.GameUI.updateReticle(
     { id: 'rifle' },
-    null,
+    { type: 'crosshair', targetGroup: 'crosshair', targetSource: 'center' },
     { active: true, blend: 0.4, sniper: false }
   );
 
@@ -177,7 +195,7 @@ test('reticle update shows pistol as a crosshair with a faint main-screen spread
   harness.GameUI.setDebugVisuals(true);
   harness.GameUI.updateReticle(
     { id: 'pistol', pellets: 12 },
-    null,
+    { type: 'crosshair', targetGroup: 'crosshair', targetSource: 'center' },
     { active: true, blend: 0, sniper: false }
   );
 
@@ -194,6 +212,23 @@ test('reticle update shows pistol as a crosshair with a faint main-screen spread
       scoped: false
     }
   });
+});
+
+test('reticle target state switches between reticle groups cleanly', async () => {
+  const harness = await loadUiHarness();
+
+  harness.GameUI.setReticleTargetState('crosshair', true);
+  assert.equal(harness.getElement('crosshair').classList.contains('reticle-target-in-range'), true);
+  assert.equal(harness.getElement('pistol-reticle').classList.contains('reticle-target-in-range'), true);
+  assert.equal(harness.getElement('shotgun-reticle').classList.contains('reticle-target-in-range'), false);
+
+  harness.GameUI.setReticleTargetState('circle', true);
+  assert.equal(harness.getElement('crosshair').classList.contains('reticle-target-in-range'), false);
+  assert.equal(harness.getElement('pistol-reticle').classList.contains('reticle-target-in-range'), false);
+  assert.equal(harness.getElement('shotgun-reticle').classList.contains('reticle-target-in-range'), true);
+
+  harness.GameUI.setReticleTargetState('circle', false);
+  assert.equal(harness.getElement('shotgun-reticle').classList.contains('reticle-target-in-range'), false);
 });
 
 test('sprint effects stay peripheral and hide while scoped or stationary', async () => {

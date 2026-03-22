@@ -764,6 +764,86 @@ test('spawnProjectile uses the full aim vector so trajectory changes with pitch'
   assert.equal(projectile.vz, -18);
 });
 
+test('spawnProjectile clamps extreme throwable tuning values to safe server ranges', () => {
+  const room = {
+    projectiles: new Map(),
+    nextProjectileSeq: 1,
+    validateThrowIntent() {
+      return {
+        origin: { x: 0, y: 1.6, z: 0 },
+        direction: { x: 1, y: 1, z: -1 }
+      };
+    }
+  };
+
+  const projectile = spawnProjectile(room, { id: 'p1' }, 'frag', 'c1', null, null, {
+    throwableStats: {
+      frag: {
+        speed: 500,
+        upward: 50,
+        hitRadius: 1000,
+        catchRadius: 99,
+        trackDuration: 99,
+        trackLerp: 99,
+        fuse: 99,
+        maxLife: 99
+      }
+    },
+    nowMs: () => 100
+  });
+
+  assert.equal(projectile.hitRadius, 2);
+  assert.equal(projectile.catchRadius, 3);
+  assert.equal(projectile.trackDurationSec, 5);
+  assert.equal(projectile.trackLerp, 20);
+  assert.equal(projectile.fuseSec, 10);
+  assert.equal(projectile.lifeSec, 0);
+  assert.equal(projectile.vx > 0, true);
+  assert.equal(projectile.vy <= 80, true);
+});
+
+test('combat runtime rejects invalid throwable ids without consuming charges', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    throwables: {
+      frag: { charges: 2, maxCharges: 2 }
+    }
+  };
+  const sent = [];
+  const room = {
+    canEntityUseThrowable() { return true; },
+    consumeThrowCharge() {
+      throw new Error('should not consume charges');
+    },
+    spawnProjectile() {
+      throw new Error('should not spawn projectile');
+    },
+    send(_ws, payload) {
+      sent.push(payload);
+    }
+  };
+
+  handleThrow(room, player, { throwableId: 'exploit', clientThrowId: 'bad1', throwIntent: null }, {}, {
+    normalizeThrowPayload(throwableId, clientThrowId, throwIntent) {
+      return { throwableId, clientThrowId, throwIntent };
+    },
+    throwableStats: { frag: { regen: 5, speed: 10, upward: 2, hitRadius: 1.2, life: 1 } },
+    nowMs: () => 100,
+    msgThrowReject: 'throw_reject',
+    msgThrowSpawn: 'throw_spawn',
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(sent, [{
+    t: 'throw_reject',
+    throwableId: 'exploit',
+    clientThrowId: 'bad1',
+    reason: 'invalid_throwable'
+  }]);
+  assert.equal(player.throwables.frag.charges, 2);
+});
+
 test('deadeyeCandidates prefers the target closest to the player aim line over raw distance', () => {
   const centered = { id: 'center', alive: true, x: 0, y: 1.7, z: -10 };
   const offCenterNear = { id: 'near', alive: true, x: 3, y: 1.7, z: -5 };

@@ -548,73 +548,123 @@
         abilityInfoEl.textContent = ability + extra;
     };
 
+    function setElementDisplay(el, visible) {
+        if (!el) return;
+        el.style.display = visible ? 'block' : 'none';
+    }
+
+    function reticleTargetSets() {
+        return {
+            crosshair: [crosshairEl, pistolReticleEl],
+            circle: [shotgunReticleEl]
+        };
+    }
+
+    function setReticleSetTargetClass(group, active) {
+        var sets = reticleTargetSets();
+        var activeGroup = sets[group] ? group : 'crosshair';
+        for (var setId in sets) {
+            if (!Object.prototype.hasOwnProperty.call(sets, setId)) continue;
+            var elements = sets[setId];
+            var enabled = setId === activeGroup && !!active;
+            for (var i = 0; i < elements.length; i++) {
+                if (elements[i]) elements[i].classList.toggle('reticle-target-in-range', enabled);
+            }
+        }
+    }
+
+    function updateSniperScope(scoped, blend) {
+        if (!sniperScopeEl) return;
+        sniperScopeEl.style.display = scoped ? 'block' : 'none';
+        sniperScopeEl.style.opacity = scoped ? blend.toFixed(3) : '0';
+    }
+
+    function hideSpreadReticle() {
+        if (spreadReticle && spreadReticle.hide) spreadReticle.hide();
+        else setElementDisplay(spreadReticleEl, false);
+    }
+
+    function hidePrimaryReticles() {
+        setElementDisplay(crosshairEl, false);
+        setElementDisplay(pistolReticleEl, false);
+        setElementDisplay(shotgunReticleEl, false);
+        hideSpreadReticle();
+    }
+
+    function updatePistolReticle(weapon, hitscan) {
+        if (!pistolReticleEl) return;
+        var spreadMetrics = weapon.id === 'pistol' && hitscan && hitscan.getSpreadMetrics
+            ? hitscan.getSpreadMetrics(weapon.id)
+            : null;
+        var pistolDiameterX = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusXpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
+        var pistolDiameterY = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusYpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
+        var visible = weapon.id === 'pistol' && pistolDiameterX > 2 && pistolDiameterY > 2;
+        setElementDisplay(pistolReticleEl, visible);
+        if (!visible) return;
+        pistolReticleEl.style.width = Math.round(pistolDiameterX) + 'px';
+        pistolReticleEl.style.height = Math.round(pistolDiameterY) + 'px';
+    }
+
+    function updateCrosshairReticle(weapon, adsState, scoped, hitscan) {
+        setElementDisplay(crosshairEl, true);
+        setElementDisplay(shotgunReticleEl, false);
+        updatePistolReticle(weapon, hitscan);
+        if (spreadReticle && spreadReticle.updateForWeapon) {
+            spreadReticle.updateForWeapon(weapon, {
+                adsActive: !!(adsState && adsState.active),
+                scoped: scoped
+            });
+            return;
+        }
+        setElementDisplay(spreadReticleEl, false);
+    }
+
+    function updateCircleReticle(spec) {
+        setElementDisplay(crosshairEl, false);
+        setElementDisplay(pistolReticleEl, false);
+        hideSpreadReticle();
+        setElementDisplay(shotgunReticleEl, true);
+
+        var size = (spec && spec.size) ? spec.size : 300;
+        shotgunReticleEl.style.width = size + 'px';
+        shotgunReticleEl.style.height = size + 'px';
+    }
+
+    function normalizedReticleSpec(spec) {
+        if (spec && typeof spec === 'object') return spec;
+        return {
+            type: 'crosshair',
+            targetGroup: 'crosshair',
+            targetSource: 'center'
+        };
+    }
+
     GameUI.updateReticle = function (weapon, spec, adsState) {
         if (!crosshairEl || !spreadReticleEl || !shotgunReticleEl || !weapon) return;
 
+        spec = normalizedReticleSpec(spec);
         var isSniper = !!(adsState && adsState.sniper);
         var blend = Math.max(0, Math.min(1, Number(adsState && adsState.blend) || 0));
         var scoped = isSniper && blend > 0.02;
         var hitscan = globalThis.__MAYHEM_RUNTIME.GameHitscan || null;
 
-        if (sniperScopeEl) {
-            sniperScopeEl.style.display = scoped ? 'block' : 'none';
-            sniperScopeEl.style.opacity = scoped ? blend.toFixed(3) : '0';
-        }
+        updateSniperScope(scoped, blend);
 
         if (scoped) {
-            crosshairEl.style.display = 'none';
-            if (pistolReticleEl) pistolReticleEl.style.display = 'none';
-            if (spreadReticle && spreadReticle.hide) spreadReticle.hide();
-            else spreadReticleEl.style.display = 'none';
-            shotgunReticleEl.style.display = 'none';
+            hidePrimaryReticles();
             return;
         }
 
-        if (!(spec && spec.type === 'circle')) {
-            crosshairEl.style.display = 'block';
-            shotgunReticleEl.style.display = 'none';
-            if (pistolReticleEl) {
-                var spreadMetrics = weapon.id === 'pistol' && hitscan && hitscan.getSpreadMetrics
-                    ? hitscan.getSpreadMetrics(weapon.id)
-                    : null;
-                var pistolDiameterX = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusXpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
-                var pistolDiameterY = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusYpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
-                if (weapon.id === 'pistol' && pistolDiameterX > 2 && pistolDiameterY > 2) {
-                    pistolReticleEl.style.display = 'block';
-                    pistolReticleEl.style.width = Math.round(pistolDiameterX) + 'px';
-                    pistolReticleEl.style.height = Math.round(pistolDiameterY) + 'px';
-                } else {
-                    pistolReticleEl.style.display = 'none';
-                }
-            }
-            if (spreadReticle && spreadReticle.updateForWeapon) {
-                spreadReticle.updateForWeapon(weapon, {
-                    adsActive: !!(adsState && adsState.active),
-                    scoped: scoped
-                });
-            } else {
-                spreadReticleEl.style.display = 'none';
-            }
+        if (spec.type !== 'circle') {
+            updateCrosshairReticle(weapon, adsState, scoped, hitscan);
             return;
         }
 
-        crosshairEl.style.display = 'none';
-        if (pistolReticleEl) pistolReticleEl.style.display = 'none';
-        if (spreadReticle && spreadReticle.hide) spreadReticle.hide();
-        else spreadReticleEl.style.display = 'none';
-        shotgunReticleEl.style.display = 'block';
-
-        var size = (spec && spec.size) ? spec.size : 300;
-        shotgunReticleEl.style.width = size + 'px';
-        shotgunReticleEl.style.height = size + 'px';
+        updateCircleReticle(spec);
     };
 
-    GameUI.setHitscanTargetState = function (active) {
-        if (crosshairEl) crosshairEl.classList.toggle('reticle-target-in-range', !!active);
-    };
-
-    GameUI.setShotgunTargetState = function (active) {
-        if (shotgunReticleEl) shotgunReticleEl.classList.toggle('reticle-target-in-range', !!active);
+    GameUI.setReticleTargetState = function (group, active) {
+        setReticleSetTargetClass(group, active);
     };
 
     GameUI.updateThrowableInfo = function (state) {

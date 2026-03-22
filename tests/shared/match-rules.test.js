@@ -73,7 +73,7 @@ test('shared match rules format tdm progress as team progress, not raw kills', (
   );
   assert.equal(
     formatMenuMatchStatus(matchState, selfState),
-    'TDM TEAM 4.5 / 10 | OPP BRAVO 3'
+    'TEAM DEATH MATCH TEAM 4.5 / 10 | OPP BRAVO 3'
   );
 });
 
@@ -104,6 +104,6 @@ test('shared match rules use the leading opposing team in multi-team tdm summari
   );
   assert.equal(
     formatMenuMatchStatus(matchState, selfState),
-    'TDM TEAM 2 / 10 | OPP CHARLIE 5'
+    'TEAM DEATH MATCH TEAM 2 / 10 | OPP CHARLIE 5'
   );
 });

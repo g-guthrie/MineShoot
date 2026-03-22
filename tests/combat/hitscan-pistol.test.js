@@ -216,7 +216,44 @@ test('pistol local fire still succeeds with the shared pellet weapon config', as
 test('pistol reticle spec uses the shared crosshair path instead of the shotgun circle', async () => {
   const harness = await loadHitscanHarness();
 
-  assert.equal(harness.GameHitscan.getReticleSpec('pistol'), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GameHitscan.getReticleSpec('pistol'))), {
+    type: 'crosshair',
+    size: 0,
+    adsActive: false,
+    targetGroup: 'crosshair',
+    targetSource: 'center'
+  });
+});
+
+test('reticle target preview reports the active reticle group for each weapon family', async () => {
+  const bodyHitbox = createHitbox('body', { x: 0, y: 1.5, z: -10 }, { x: 1.2, y: 1.2, z: 0.8 }, 'enemy:preview');
+  const headHitbox = createHitbox('head', { x: 0, y: 2.15, z: -10 }, { x: 0.45, y: 0.35, z: 0.35 }, 'enemy:preview');
+  const harness = await loadHitscanHarness({}, [{
+    targetId: 'enemy:preview',
+    ownerType: 'enemy',
+    worldPos: new THREE.Vector3(0, 1.5, -10),
+    hitbox: bodyHitbox,
+    bodyHitbox,
+    headHitbox,
+    alive: true
+  }]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GameHitscan.getReticleTargetPreview(harness.camera))), {
+    currentAimTargetId: 'enemy:preview',
+    reticleTarget: {
+      group: 'crosshair',
+      active: true
+    }
+  });
+
+  harness.GameHitscan.setWeapon('shotgun');
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GameHitscan.getReticleTargetPreview(harness.camera))), {
+    currentAimTargetId: 'enemy:preview',
+    reticleTarget: {
+      group: 'circle',
+      active: true
+    }
+  });
 });
 
 test('spread metrics track the true hitscan area instead of bloom scale multipliers', async () => {
