@@ -46,7 +46,6 @@
             note: document.getElementById('launch-note'),
             roomLabel: document.getElementById('launch-room-label'),
             enterBtn: document.getElementById('launch-enter-btn'),
-            cancelBtn: document.getElementById('launch-cancel-btn'),
             menuStage: document.getElementById('menu-stage')
         };
     }
@@ -77,6 +76,7 @@
         var isPlaying = false;
         var pendingInputCapture = false;
         var escapeResumeReady = false;
+        var suppressNextEscapeArm = false;
         var launchContext = cloneLaunchContext(null);
         var lastHandledMatchEndAt = 0;
         var listenersBound = false;
@@ -152,6 +152,7 @@
             pauseState.reason = '';
             pauseState.triggeredAt = 0;
             escapeResumeReady = false;
+            suppressNextEscapeArm = false;
         }
 
         function focusElement(target) {
@@ -309,6 +310,10 @@
 
         function shouldArmEscapeResume(event) {
             if (!event || event.key !== 'Escape' || event.type !== 'keyup') return false;
+            if (suppressNextEscapeArm) {
+                suppressNextEscapeArm = false;
+                return false;
+            }
             if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(event.target)) return false;
             if (document.pointerLockElement) return false;
             if (pendingInputCapture) return false;
@@ -354,7 +359,6 @@
             var els = ensureLaunchHandoffEls();
             if (els.flow) els.flow.hidden = true;
             if (els.enterBtn) els.enterBtn.hidden = true;
-            if (els.cancelBtn) els.cancelBtn.hidden = true;
             if (els.roomLabel) els.roomLabel.hidden = true;
             if (!postGameState.active && els.menuStage) els.menuStage.hidden = false;
         }
@@ -383,7 +387,6 @@
                 els.roomLabel.textContent = roomLabel ? ('ROOM ' + roomLabel) : 'ROOM ----';
             }
             if (els.enterBtn) els.enterBtn.hidden = true;
-            if (els.cancelBtn) els.cancelBtn.hidden = true;
             setResumeButtonsVisible(true);
             focusResumeControl(true);
             emitSessionState();
@@ -681,8 +684,6 @@
 
                 if (playBtn) {
                     playBtn.addEventListener('click', triggerResumeGameplay);
-                    playBtn.addEventListener('pointerup', triggerResumeGameplay);
-                    playBtn.addEventListener('mousedown', triggerResumeGameplay);
                     playBtn.addEventListener('touchend', triggerResumeGameplay, { passive: false });
                 }
 
@@ -720,15 +721,13 @@
                     });
                 }
 
-                if (handoffEls.cancelBtn) {
-                    handoffEls.cancelBtn.addEventListener('click', function (event) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        api.returnToMenu();
-                    });
-                }
-
                 document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && !event.repeat) {
+                        suppressNextEscapeArm = escapeModalOpen();
+                        if (suppressNextEscapeArm) {
+                            escapeResumeReady = false;
+                        }
+                    }
                     if (!postGameState.active) {
                         if (shouldPauseFromEscape(event)) {
                             pendingPauseReason = '';
@@ -894,6 +893,8 @@
             returnToMenu: function () {
                 clearPauseState();
                 clearIdleMonitor();
+                clearPostGameTimer();
+                hidePostGameFlow();
                 if (opts.returnToMenu) opts.returnToMenu();
             },
             getActivityState: currentActivityState,

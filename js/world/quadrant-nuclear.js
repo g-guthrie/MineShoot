@@ -229,269 +229,189 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         };
     }
 
-    function buildBroadStair(building, place, mats) {
-        var stepCount = 5;
-        var stairTargetY = Math.min(building.roofY * 0.62, 4.0);
-        var rise = stairTargetY / stepCount;
-        var stepWidth = 1.08;
-        var stepDepth = 0.96;
-        var startX = building.westFaceX - 0.9;
-        var startZ = building.southZ + 0.8;
-        var stepDx = 0.28;
-        var stepDz = -0.78;
-        var landingX = building.westFaceX + 0.46;
-        var landingZ = building.centerZ + (building.depth * 0.16);
+    function buildBroadStair(building, bridgeY, ductX, place, mats) {
+        /* Fire escape on the west face of the north building.
+           Thin metal treads, open underneath, two side stringers. */
+        var targetY = bridgeY;
+        var stepCount = 8;
+        var rise = targetY / stepCount;
+        var treadDepth = 1.8;   /* extends west from wall */
+        var treadWidth = 1.2;   /* along Z */
+        var treadThick = 0.12;  /* thin metal tread */
+
+        var stairX = building.westFaceX - (treadDepth * 0.5);
+        var startZ = building.southZ - 0.5;
+
         for (var i = 0; i < stepCount; i++) {
+            var treadY = (i + 1) * rise;
+            var stepZ = startZ - (i * treadWidth);
             addTaggedBlock(
                 place,
                 'reactor-stair-step',
                 { reactorId: building.id, stepIndex: i },
-                startX + (i * stepDx),
-                (i + 0.5) * rise,
-                startZ + (i * stepDz),
-                stepWidth,
-                rise,
-                stepDepth,
-                i < stepCount - 1 ? mats.buildingMid : mats.buildingLight,
+                stairX,
+                treadY,
+                stepZ,
+                treadDepth,
+                treadThick,
+                treadWidth,
+                i === stepCount - 1 ? mats.buildingLight : mats.buildingMid,
                 true
             );
         }
+
+        /* Two side stringers (angled beams) */
+        var topStepZ = startZ - ((stepCount - 1) * treadWidth);
+        var totalRun = (stepCount - 1) * treadWidth;
+        var stringerLen = Math.sqrt(totalRun * totalRun + targetY * targetY);
+        var stringerAngle = Math.atan2(targetY, totalRun);
+        var midZ = (startZ + topStepZ) * 0.5;
+        var midY = targetY * 0.5;
+        var stringerThick = 0.14;
+        var stringerHeight = 0.28;
+        var sideOffset = (treadDepth * 0.5) - (stringerThick * 0.5);
+
+        for (var s = -1; s <= 1; s += 2) {
+            addTaggedRamp(
+                place,
+                'reactor-stair-stringer',
+                { reactorId: building.id },
+                stairX + (s * sideOffset),
+                midY,
+                midZ,
+                stringerThick,
+                stringerHeight,
+                stringerLen,
+                mats.ductDark,
+                0,
+                stringerAngle,
+                false
+            );
+        }
+
+        /* Small landing at top */
         addTaggedBlock(
             place,
             'reactor-stair-landing',
             { reactorId: building.id },
-            landingX,
-            stairTargetY + 0.08,
-            landingZ,
-            1.28,
-            0.2,
-            1.28,
+            stairX,
+            targetY,
+            topStepZ,
+            treadDepth + 0.3,
+            treadThick,
+            treadWidth + 0.3,
             mats.trim,
             true
-        );
-        addTaggedBlock(
-            place,
-            'reactor-service-platform',
-            { reactorId: building.id },
-            landingX + 0.72,
-            stairTargetY + 0.22,
-            landingZ,
-            1.1,
-            0.12,
-            1.64,
-            mats.trim,
-            true
-        );
-        addTaggedBlock(
-            place,
-            'reactor-stair-support',
-            { reactorId: building.id },
-            startX + 0.8,
-            stairTargetY * 0.52,
-            startZ - 0.7,
-            0.2,
-            stairTargetY * 1.04,
-            0.2,
-            mats.trim,
-            false
-        );
-        addTaggedBlock(
-            place,
-            'reactor-stair-support',
-            { reactorId: building.id },
-            startX + 1.66,
-            stairTargetY * 0.66,
-            startZ - 2.42,
-            0.2,
-            stairTargetY * 1.32,
-            0.2,
-            mats.trim,
-            false
         );
 
         return {
             stepCount: stepCount,
-            stairWidth: stepWidth,
-            topY: stairTargetY
+            stairWidth: treadWidth,
+            topY: targetY,
+            landingX: stairX,
+            landingZ: topStepZ
         };
     }
 
-    function buildInterBuildingDuct(northBuilding, southBuilding, place, mats) {
-        var landingWidth = 2.2;
-        var landingDepth = 1.1;
-        var bridgeThickness = 0.56;
-        var wallOverlap = 0.18;
-        var trimWidth = 0.14;
-        var trimHeight = 0.18;
-        var trimLift = 0.18;
-        var supportWidth = 0.28;
-        var northAttach = {
-            x: northBuilding.eastFaceX - 1.2,
-            y: northBuilding.roofY - 1.25,
-            z: northBuilding.southZ
-        };
-        var southAttach = {
-            x: southBuilding.eastFaceX - 1.6,
-            y: southBuilding.roofY - 1.25,
-            z: southBuilding.northZ
-        };
-        var dx = southAttach.x - northAttach.x;
-        var dz = southAttach.z - northAttach.z;
-        var horizontalLength = Math.sqrt((dx * dx) + (dz * dz));
-        if (horizontalLength < 0.001) {
-            return {
-                length: 0,
-                rotY: 0
-            };
-        }
+    function buildInterBuildingDuct(northBuilding, southBuilding, bridgeY, place, mats) {
+        /* Narrow industrial duct spanning the gap between buildings.
+           Extends 0.5 units into each building wall so it looks like
+           it penetrates the structure. */
+        var ductWidth = 1.4;
+        var ductThickness = 0.24;
+        var railWidth = 0.08;
+        var railHeight = 0.5;
+        var wallPenetration = 0.5;
+        var supportWidth = 0.24;
 
-        var dirX = dx / horizontalLength;
-        var dirZ = dz / horizontalLength;
-        var sideX = dirZ;
-        var sideZ = -dirX;
-        var rotY = Math.atan2(dx, dz);
-        var landingCenterOffset = (landingDepth * 0.5) - wallOverlap;
-        var railOffset = (landingWidth * 0.5) - (trimWidth * 0.5);
-        var northLanding = {
-            x: northAttach.x + (dirX * landingCenterOffset),
-            y: northAttach.y,
-            z: northAttach.z + (dirZ * landingCenterOffset)
-        };
-        var southLanding = {
-            x: southAttach.x - (dirX * landingCenterOffset),
-            y: southAttach.y,
-            z: southAttach.z - (dirZ * landingCenterOffset)
-        };
-        var spanStart = {
-            x: northLanding.x + (dirX * landingDepth * 0.5),
-            y: northLanding.y,
-            z: northLanding.z + (dirZ * landingDepth * 0.5)
-        };
-        var spanEnd = {
-            x: southLanding.x - (dirX * landingDepth * 0.5),
-            y: southLanding.y,
-            z: southLanding.z - (dirZ * landingDepth * 0.5)
-        };
-        var spanDx = spanEnd.x - spanStart.x;
-        var spanDz = spanEnd.z - spanStart.z;
-        var spanDy = spanEnd.y - spanStart.y;
-        var spanHorizontal = Math.sqrt((spanDx * spanDx) + (spanDz * spanDz));
-        var spanLength = Math.sqrt((spanHorizontal * spanHorizontal) + (spanDy * spanDy));
-        var tiltRatio = spanLength > 0.001 ? Math.max(-1, Math.min(1, spanDy / spanLength)) : 0;
-        var tiltX = spanLength > 0.001 ? -Math.asin(tiltRatio) : 0;
-        var spanMidX = (spanStart.x + spanEnd.x) * 0.5;
-        var spanMidY = (spanStart.y + spanEnd.y) * 0.5;
-        var spanMidZ = (spanStart.z + spanEnd.z) * 0.5;
-        var undersideOffset = (bridgeThickness * 0.5) * Math.cos(tiltX || 0);
+        /* X center within the overlap of both buildings' widths */
+        var overlapMinX = Math.max(northBuilding.westFaceX, southBuilding.westFaceX);
+        var overlapMaxX = Math.min(northBuilding.eastFaceX, southBuilding.eastFaceX);
+        var ductX = (overlapMinX + overlapMaxX) * 0.5;
 
-        function addBridgeRails(centerX, centerY, centerZ, depth, tilt, partPrefix) {
-            addTaggedRamp(
-                place,
-                'reactor-duct',
-                { part: partPrefix + '-left-rail' },
-                centerX + (sideX * railOffset),
-                centerY + trimLift,
-                centerZ + (sideZ * railOffset),
-                trimWidth,
-                trimHeight,
-                depth,
-                mats.ductDark,
-                rotY,
-                tilt,
-                false
-            );
-            addTaggedRamp(
-                place,
-                'reactor-duct',
-                { part: partPrefix + '-right-rail' },
-                centerX - (sideX * railOffset),
-                centerY + trimLift,
-                centerZ - (sideZ * railOffset),
-                trimWidth,
-                trimHeight,
-                depth,
-                mats.ductDark,
-                rotY,
-                tilt,
-                false
-            );
-        }
+        /* Z span: penetrate slightly into each building */
+        var northZ = northBuilding.southZ - wallPenetration;
+        var southZ = southBuilding.northZ + wallPenetration;
+        var totalLength = southZ - northZ;
+        var ductMidZ = (northZ + southZ) * 0.5;
+        var deckY = bridgeY;
 
-        addTaggedRamp(
-            place,
-            'reactor-duct',
-            { part: 'north-landing' },
-            northLanding.x,
-            northLanding.y,
-            northLanding.z,
-            landingWidth,
-            bridgeThickness,
-            landingDepth,
-            mats.duct,
-            rotY,
-            0,
-            true
-        );
-        addBridgeRails(northLanding.x, northLanding.y, northLanding.z, landingDepth * 0.96, 0, 'north-landing');
-
-        addTaggedRamp(
+        /* Main duct deck — thin walkway */
+        addTaggedBlock(
             place,
             'reactor-duct',
             { part: 'body' },
-            spanMidX,
-            spanMidY,
-            spanMidZ,
-            landingWidth,
-            bridgeThickness,
-            spanLength,
+            ductX,
+            deckY,
+            ductMidZ,
+            ductWidth,
+            ductThickness,
+            totalLength,
             mats.duct,
-            rotY,
-            tiltX,
             true
         );
-        addBridgeRails(spanMidX, spanMidY, spanMidZ, Math.max(0.3, spanLength - 0.12), tiltX, 'body');
 
-        addTaggedRamp(
-            place,
-            'reactor-duct',
-            { part: 'south-landing' },
-            southLanding.x,
-            southLanding.y,
-            southLanding.z,
-            landingWidth,
-            bridgeThickness,
-            landingDepth,
-            mats.duct,
-            rotY,
-            0,
-            true
-        );
-        addBridgeRails(southLanding.x, southLanding.y, southLanding.z, landingDepth * 0.96, 0, 'south-landing');
+        /* Rails along both sides */
+        var railOffset = (ductWidth * 0.5) - (railWidth * 0.5);
+        var railY = deckY + (ductThickness * 0.5) + (railHeight * 0.5);
+        for (var side = -1; side <= 1; side += 2) {
+            addTaggedBlock(
+                place,
+                'reactor-duct',
+                { part: side < 0 ? 'left-rail' : 'right-rail' },
+                ductX + (side * railOffset),
+                railY,
+                ductMidZ,
+                railWidth,
+                railHeight,
+                totalLength,
+                mats.ductDark,
+                false
+            );
+        }
 
-        for (var i = 0; i < 2; i++) {
-            var supportT = i === 0 ? 0.25 : 0.75;
-            var supportX = spanStart.x + (spanDx * supportT);
-            var supportZ = spanStart.z + (spanDz * supportT);
-            var supportCenterlineY = spanStart.y + (spanDy * supportT);
-            var supportTopY = Math.max(0.3, supportCenterlineY - undersideOffset);
+        /* Two thin support pillars at 30% and 70% along the open gap */
+        var gapNorthZ = northBuilding.southZ;
+        var gapSouthZ = southBuilding.northZ;
+        var gapLength = gapSouthZ - gapNorthZ;
+        var pillarTopY = deckY - (ductThickness * 0.5);
+        for (var p = 0; p < 2; p++) {
+            var t = p === 0 ? 0.3 : 0.7;
             addTaggedBlock(
                 place,
                 'reactor-duct-support',
-                { supportIndex: i },
-                supportX,
-                supportTopY * 0.5,
-                supportZ,
+                { supportIndex: p },
+                ductX,
+                pillarTopY * 0.5,
+                gapNorthZ + (gapLength * t),
                 supportWidth,
-                supportTopY,
+                pillarTopY,
                 supportWidth,
                 mats.ductDark,
                 false
             );
         }
 
+        /* Small landing ledge on south building wall at duct height */
+        addTaggedBlock(
+            place,
+            'reactor-duct-platform',
+            { part: 'south-landing' },
+            ductX,
+            deckY,
+            southBuilding.northZ + 0.4,
+            ductWidth + 0.4,
+            ductThickness,
+            0.8,
+            mats.trim,
+            true
+        );
+
         return {
-            length: spanLength,
-            rotY: rotY
+            length: gapLength,
+            ductX: ductX,
+            deckY: deckY,
+            ductWidth: ductWidth
         };
     }
 
@@ -564,8 +484,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             ctx.addExclusion(southBuilding.centerX, southBuilding.centerZ, 8.2);
         }
 
-        var stairInfo = buildBroadStair(northBuilding, place, mats);
-        var ductInfo = buildInterBuildingDuct(northBuilding, southBuilding, place, mats);
+        var bridgeY = northBuilding.roofY;
+        var stairInfo = buildBroadStair(northBuilding, bridgeY, 0, place, mats);
         var glowInfo = buildGlowStrip(southBuilding, place, mats, ctx);
 
         addTaggedBlock(
@@ -615,7 +535,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             glowPulseAmplitude: 0.08,
             steamRise: Math.max(towerNorth.steamRise, towerSouth.steamRise),
             steamTileCount: towerNorth.steamTileCount + towerSouth.steamTileCount,
-            ductLength: ductInfo.length
+            ductLength: 0
         };
     }
 

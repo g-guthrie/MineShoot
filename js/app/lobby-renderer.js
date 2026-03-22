@@ -112,7 +112,7 @@
 
                 var btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'menu-member-pill' + (member.isLeader ? ' leader' : '') + (state.expandedPartyMemberId === actorId ? ' active' : '');
+                btn.className = 'btn' + (member.isLeader ? ' leader' : '') + (state.expandedPartyMemberId === actorId ? ' active' : '');
                 btn.textContent = String(member.displayName || member.id || 'Player');
                 btn.disabled = member.isLeader && actorId === String(partyState.self && partyState.self.id || '');
                 btn.addEventListener('click', (function (targetId, isSelf) {
@@ -126,9 +126,9 @@
 
                 if (state.expandedPartyMemberId === actorId && actorId !== String(partyState.self && partyState.self.id || '')) {
                     var actions = document.createElement('div');
-                    actions.className = 'menu-member-subpills';
+                    actions.className = 'flow';
                     if (state.utilities.isLoggedIn && member.isAccount && member.accountUserId && !memberIds.has(String(member.accountUserId || ''))) {
-                        appendFriendAction(actions, 'Add Friend', 'friend-preview-btn secondary', busy(), (function (targetUserId) {
+                        appendFriendAction(actions, 'Add Friend', 'btn btn-sm btn-danger', busy(), (function (targetUserId) {
                             return function () {
                                 var session = getSession();
                                 if (!session || !session.performFriendAction) return;
@@ -137,7 +137,7 @@
                         })(String(member.accountUserId || '')));
                     }
                     if (partyState.party.isLeader) {
-                        appendFriendAction(actions, 'Kick from Party', 'friend-preview-btn secondary', busy(), (function (targetId) {
+                        appendFriendAction(actions, 'Kick from Party', 'btn btn-sm btn-danger', busy(), (function (targetId) {
                             return function () {
                                 var session = getSession();
                                 if (!session || !session.runPartyAction) return;
@@ -182,7 +182,7 @@
                 wrapper.className = 'menu-friend-card';
                 var pill = document.createElement('button');
                 pill.type = 'button';
-                pill.className = 'menu-friend-pill' + (getState().expandedFriendId === friendId ? ' active' : '');
+                pill.className = 'btn' + (getState().expandedFriendId === friendId ? ' active' : '');
                 pill.addEventListener('click', (function (targetId) {
                     return function () {
                         patchState({ expandedFriendId: getState().expandedFriendId === targetId ? '' : targetId });
@@ -205,8 +205,8 @@
 
                 if (getState().expandedFriendId === friendId) {
                     var actions = document.createElement('div');
-                    actions.className = 'menu-member-subpills';
-                    appendFriendAction(actions, 'Remove Friend', 'friend-preview-btn secondary', busy(), (function (targetUserId) {
+                    actions.className = 'flow';
+                    appendFriendAction(actions, 'Remove Friend', 'btn btn-sm btn-danger', busy(), (function (targetUserId) {
                         return function () {
                             var session = getSession();
                             if (!session || !session.performFriendAction) return;
@@ -216,7 +216,7 @@
                         };
                     })(friendId));
                     if (friend.canJoin) {
-                        appendFriendAction(actions, 'Join Friend', 'friend-preview-btn join', busy(), (function (targetUserId) {
+                        appendFriendAction(actions, 'Join Friend', 'btn btn-sm btn-confirm', busy(), (function (targetUserId) {
                             return function () {
                                 var session = getSession();
                                 if (!session || !session.performFriendAction) return;
@@ -225,7 +225,7 @@
                         })(friendId));
                     }
                     if (friend.canInvite && !friend.sameParty) {
-                        appendFriendAction(actions, friend.outgoingInvite ? 'Invited' : 'Invite Friend', 'friend-preview-btn secondary', busy() || !!friend.outgoingInvite, (function (targetUserId) {
+                        appendFriendAction(actions, friend.outgoingInvite ? 'Invited' : 'Invite Friend', 'btn btn-sm btn-danger', busy() || !!friend.outgoingInvite, (function (targetUserId) {
                             return function () {
                                 var session = getSession();
                                 if (!session || !session.performFriendAction) return;
@@ -290,6 +290,19 @@
                 elements.privateRoomInviteLockBtn.classList.toggle('locked', !!caps.privateRoomInviteLocked);
             }
             if (elements.privateRoomRandomizeBtn) elements.privateRoomRandomizeBtn.disabled = busy() || !caps.canRandomizeTeams;
+            if (elements.privateRoomLeaveBtn) {
+                elements.privateRoomLeaveBtn.hidden = !hasRoom;
+                elements.privateRoomLeaveBtn.disabled = busy();
+            }
+            if (elements.leaveRoomConfirmOverlay) {
+                elements.leaveRoomConfirmOverlay.hidden = !state.leaveRoomConfirmOpen;
+            }
+            if (elements.privateRoomRosterNote) {
+                elements.privateRoomRosterNote.hidden = !hasRoom;
+                elements.privateRoomRosterNote.textContent = caps.canEditPrivateRoom
+                    ? 'Drag players or tap pills to assign teams.'
+                    : 'Tap a team lane to switch teams.';
+            }
 
             var privateRoomController = privateRoomViewController();
             if (privateRoomController && privateRoomController.applyState) {
@@ -578,7 +591,8 @@
             var paused = !!state.paused;
             var showSessionStrip = paused || launch.phase === 'retryable';
             var activeMatchShell = showSessionStrip;
-            var hasRoom = !!(state.privateRoom && state.privateRoom.room);
+            var room = state.privateRoom && state.privateRoom.room ? state.privateRoom.room : null;
+            var hasRoom = !!room;
             var caps = capabilities();
             var isBusy = busy();
             var selectedMode = normalizeMode(launch.selectedMode);
@@ -591,10 +605,9 @@
             if (elements.overlay) elements.overlay.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
             if (elements.menuSurface) elements.menuSurface.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
 
-            if (elements.menuReturnBtn) elements.menuReturnBtn.hidden = headerVariant !== 'pause' || showSessionStrip;
             if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room' || activeMatchShell;
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;
-            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = false;
+            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
             if (elements.activeFriendBar) elements.activeFriendBar.hidden = !activeMatchShell;
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
@@ -646,13 +659,9 @@
                 elements.sandboxModeBtn.setAttribute('aria-pressed', selectedMode === 'sandbox' ? 'true' : 'false');
             }
 
-            if (elements.loadoutStartBtn) {
-                elements.loadoutStartBtn.hidden = true;
-                elements.loadoutStartBtn.disabled = isBusy;
-            }
             if (elements.roomActionBtn) {
                 elements.roomActionBtn.textContent = hasRoom
-                    ? ('ROOM #' + String(state.privateRoom.room.roomCode || roomCodeFromRoomId(state.privateRoom.room.roomId)).toUpperCase())
+                    ? ('ROOM #' + String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase())
                     : 'Create Room';
                 elements.roomActionBtn.classList.toggle('active', hasRoom);
                 elements.roomActionBtn.disabled = isBusy || showSessionStrip;
@@ -662,7 +671,6 @@
             if (elements.joinFriendBtn) elements.joinFriendBtn.disabled = isBusy;
             if (elements.activePartyIdInput) elements.activePartyIdInput.disabled = isBusy;
             if (elements.activeInviteFriendBtn) elements.activeInviteFriendBtn.disabled = isBusy;
-            if (elements.activeJoinFriendBtn) elements.activeJoinFriendBtn.disabled = isBusy;
             if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
             if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {
@@ -728,7 +736,12 @@
                 }
             }
 
-            setStatusEl(elements.privateRoomStatus, state.roomStatus, '#2f6fed', '#d14f45');
+            if (elements.privateRoomStatus) {
+                var roomStatusText = state.roomStatus && state.roomStatus.text ? String(state.roomStatus.text) : '';
+                elements.privateRoomStatus.textContent = roomStatusText;
+                elements.privateRoomStatus.hidden = !roomStatusText;
+                elements.privateRoomStatus.classList.toggle('error', !!(state.roomStatus && state.roomStatus.error));
+            }
             if (elements.partyHeroLeaveBtn) elements.partyHeroLeaveBtn.disabled = isBusy || !caps.canLeaveParty;
         }
 

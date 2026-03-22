@@ -264,14 +264,10 @@ export const gameplayTuning = {
   },
   defaultWeaponLoadout: ['machinegun', 'shotgun'],
   selectableWeaponIds: ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'],
-  throwableCategories: {
-    grenade: { label: 'Grenades', items: ['frag', 'plasma', 'molotov'], previewType: 'trajectory' },
-    blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
-  },
   throwables: {
     order: ['frag', 'plasma', 'molotov', 'knife'],
     frag: {
-      id: 'frag', category: 'grenade', label: 'Frag', speed: 22.5, upward: 5.0, gravity: 19, fuse: 2.0, radius: 6.2, damage: 110, minBlastDamage: 10, regen: 10, bounce: true,
+      id: 'frag', label: 'Frag', previewType: 'trajectory', speed: 22.5, upward: 5.0, gravity: 19, fuse: 2.0, radius: 6.2, damage: 110, minBlastDamage: 10, regen: 10, bounce: true,
       bounceVelocityDamping: 0.4,
       bounceVerticalDamping: 0.42,
       bounceMaxCount: 2,
@@ -279,7 +275,7 @@ export const gameplayTuning = {
       armorBufferMode: 'heavy'
     },
     plasma: {
-      id: 'plasma', category: 'grenade', label: 'Plasma Grenade', speed: 19, upward: 3.0, gravity: 18, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
+      id: 'plasma', label: 'Plasma Grenade', previewType: 'trajectory', speed: 19, upward: 3.0, gravity: 18, fuse: 2.0, maxLife: 6.0, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
       catchRadius: 1.3, trackDuration: 0.15, trackLerp: 8, acquireRange: 16, acquireHalfAngleDeg: 28, stickExplodeDelay: 1.8,
       armorBufferMode: 'heavy'
     },
@@ -289,13 +285,13 @@ export const gameplayTuning = {
       armorBufferMode: 'heavy'
     },
     molotov: {
-      id: 'molotov', category: 'grenade', label: 'Molotov', speed: 16.5, upward: 4.6, gravity: 21, fuse: 2.8, fireRadius: 4.0,
+      id: 'molotov', label: 'Molotov', previewType: 'trajectory', speed: 16.5, upward: 4.6, gravity: 21, fuse: 2.8, fireRadius: 4.0,
       fireDuration: 6.0, fireTickDamage: 14, fireTickRate: 0.4, fireInnerRadius: 2.2, fireOuterDamageScale: 0.45,
       fireLingerDuration: 1.2, fireLingerTickDamage: 5, fireLingerTickRate: 0.5, fireMaxHeightDelta: 1.5, regen: 10,
       armorBufferMode: 'normal'
     },
     knife: {
-      id: 'knife', category: 'blade', label: 'Knife', speed: 28, upward: 1.2, gravity: 7, life: 1.6, hitRadius: 0.5, bodyDamage: 90, headDamage: 180, regen: 8,
+      id: 'knife', label: 'Knife', previewType: 'none', speed: 28, upward: 1.2, gravity: 7, life: 1.6, hitRadius: 0.5, bodyDamage: 90, headDamage: 180, regen: 8,
       armorBufferMode: 'normal'
     }
   },

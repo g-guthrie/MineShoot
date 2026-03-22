@@ -37,15 +37,9 @@
         throwIntentOriginMaxOffset: 1.2,
         throwIntentDirectionMinDot: -0.2
     };
-    var fallbackThrowableCategories = {
-        grenade: { label: 'Grenades', items: ['frag', 'plasma', 'molotov'], previewType: 'trajectory' },
-        blade:   { label: 'Blades & Objects', items: ['knife'], previewType: 'none' }
-    };
-
     var throwableDistanceTuning = fallbackThrowableDistanceTuning;
     var throwableMechanicsTuning = fallbackThrowableMechanicsTuning;
     var throwableOrder = ['frag', 'plasma', 'molotov', 'knife'];
-    var throwableCategories = fallbackThrowableCategories;
     var defs = {};
     var configSnapshot = {
         sharedTuning: null,
@@ -112,7 +106,6 @@
             : fallbackThrowableMechanicsTuning;
         var sharedThrowables = (sharedTuning && sharedTuning.throwables) || {};
         throwableOrder = (sharedThrowables.order && sharedThrowables.order.slice()) || ['frag', 'plasma', 'molotov', 'knife'];
-        throwableCategories = (sharedTuning && sharedTuning.throwableCategories) || fallbackThrowableCategories;
         defs = buildDefsFromShared(sharedThrowables, throwableDistanceTuning);
         if (!defs[selectedThrowableId]) {
             selectedThrowableId = throwableOrder[0] || 'frag';
@@ -644,41 +637,17 @@
 
     GameThrowables.setSelectedThrowable = function (id) {
         refreshThrowableConfig();
-        if (defs[id] && defs[id].category && throwableOrder.indexOf(id) !== -1) {
+        if (defs[id] && throwableOrder.indexOf(id) !== -1) {
             selectedThrowableId = id;
             return true;
         }
         return false;
     };
 
-    GameThrowables.getCategories = function () {
-        refreshThrowableConfig();
-        var out = {};
-        for (var catId in throwableCategories) {
-            if (!Object.prototype.hasOwnProperty.call(throwableCategories, catId)) continue;
-            var cat = throwableCategories[catId];
-            var items = [];
-            for (var i = 0; i < cat.items.length; i++) {
-                var def = defs[cat.items[i]];
-                if (def) items.push({ id: def.id, label: def.label });
-            }
-            out[catId] = { label: cat.label, previewType: cat.previewType, items: items };
-        }
-        return out;
-    };
-
-    GameThrowables.getCategoryForType = function (type) {
-        refreshThrowableConfig();
-        var def = defs[type];
-        return (def && def.category) ? def.category : '';
-    };
-
     GameThrowables.getPreviewType = function (type) {
         refreshThrowableConfig();
         var def = defs[type];
-        if (!def || !def.category) return 'none';
-        var cat = throwableCategories[def.category];
-        return cat ? cat.previewType : 'none';
+        return (def && def.previewType) ? def.previewType : 'none';
     };
 
     GameThrowables.getThrowableDef = function (type) {

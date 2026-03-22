@@ -38,15 +38,40 @@
         return out;
     }
 
+    function freeze(value) {
+        if (!value || typeof value !== 'object') return value;
+        Object.freeze(value);
+        var keys = Object.keys(value);
+        for (var i = 0; i < keys.length; i++) {
+            var child = value[keys[i]];
+            if (child && typeof child === 'object' && !Object.isFrozen(child)) {
+                freeze(child);
+            }
+        }
+        return value;
+    }
+
     function createStore(initialState) {
         var state = clone(initialState || {});
+        var cachedSnapshot = null;
         var listeners = [];
 
+        function snapshot() {
+            if (!cachedSnapshot) {
+                cachedSnapshot = freeze(clone(state));
+            }
+            return cachedSnapshot;
+        }
+
+        function invalidate() {
+            cachedSnapshot = null;
+        }
+
         function notify() {
-            var snapshot = clone(state);
+            var snap = snapshot();
             for (var i = 0; i < listeners.length; i++) {
                 try {
-                    listeners[i](snapshot);
+                    listeners[i](snap);
                 } catch (_err) {
                     // no-op
                 }
@@ -55,21 +80,24 @@
 
         function setState(nextState) {
             state = clone(nextState || {});
+            invalidate();
             notify();
-            return clone(state);
+            return snapshot();
         }
 
         function patchState(patch) {
             state = merge(state, patch || {});
+            invalidate();
             notify();
-            return clone(state);
+            return snapshot();
         }
 
         function updateState(updater) {
-            if (typeof updater !== 'function') return clone(state);
+            if (typeof updater !== 'function') return snapshot();
             state = clone(updater(clone(state)) || state);
+            invalidate();
             notify();
-            return clone(state);
+            return snapshot();
         }
 
         function subscribe(listener) {
@@ -84,7 +112,7 @@
 
         return {
             getState: function () {
-                return clone(state);
+                return snapshot();
             },
             setState: setState,
             patchState: patchState,

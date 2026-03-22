@@ -96,3 +96,47 @@ test('modal manager registers, opens, and closes a dialog with aria/hidden seman
   });
   assert.equal(modalManager.isOpen('test'), false);
 });
+
+test('modal manager resolves string element references before opening', async () => {
+  const [domUtilsCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/core/dom-utils.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/app/modal-manager.js', import.meta.url), 'utf8')
+  ]);
+  const overlay = new FakeElement('overlay');
+  const trigger = new FakeElement('trigger');
+  const documentObj = {
+    activeElement: trigger,
+    getElementById(id) {
+      if (id === 'overlay') return overlay;
+      if (id === 'trigger') return trigger;
+      return null;
+    }
+  };
+  const windowObj = {
+    addEventListener() {}
+  };
+  const sandbox = {
+    globalThis: { __MAYHEM_RUNTIME: {} },
+    document: documentObj,
+    window: windowObj
+  };
+
+  const context = vm.createContext(sandbox);
+  vm.runInContext(domUtilsCode, context);
+  vm.runInContext(code, context);
+  const modalManager = sandbox.globalThis.__MAYHEM_RUNTIME.GameModalManager;
+
+  modalManager.register('test', {
+    element: 'overlay',
+    initialFocus: 'overlay',
+    restoreFocus: 'trigger'
+  });
+
+  assert.equal(modalManager.open('test', trigger), true);
+  assert.equal(overlay.hidden, false);
+  assert.equal(overlay.attributes['aria-hidden'], 'false');
+
+  assert.equal(modalManager.close('test'), true);
+  assert.equal(overlay.hidden, true);
+  assert.equal(overlay.attributes['aria-hidden'], 'true');
+});

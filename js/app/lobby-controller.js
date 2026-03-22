@@ -139,6 +139,7 @@
             paused: false,
             utilityOpen: false,
             confirmLeaveOpen: false,
+            leaveRoomConfirmOpen: false,
             modeListOpen: false,
             expandedPartyMemberId: '',
             expandedFriendId: '',
@@ -263,14 +264,12 @@
             menuSurface: document.getElementById('menu-surface'),
             inlineToast: document.getElementById('menu-inline-toast'),
             menuFeedback: document.getElementById('menu-feedback'),
-            menuReturnBtn: document.getElementById('menu-return-btn'),
             menuPartyIdBtn: document.getElementById('menu-party-id-btn'),
             menuPartyIdLabel: document.getElementById('menu-party-id-label'),
             menuPartyIdValue: document.getElementById('menu-party-id-value'),
             activeFriendBar: document.getElementById('active-match-friend-bar'),
             activePartyIdInput: document.getElementById('active-match-friend-id-input'),
             activeInviteFriendBtn: document.getElementById('active-match-invite-friend-btn'),
-            activeJoinFriendBtn: document.getElementById('active-match-join-friend-btn'),
             activeHeaderStatus: document.getElementById('active-match-header-feedback'),
             activeInviteBanner: document.getElementById('active-match-primary-banner'),
             activeInviteCopy: document.getElementById('active-match-primary-banner-copy'),
@@ -319,7 +318,6 @@
             playModeTdmBtn: document.getElementById('play-mode-tdm-btn'),
             sandboxModeBtn: document.getElementById('sandbox-mode-btn'),
             roomAccessStatus: document.getElementById('room-access-status'),
-            loadoutStartBtn: document.getElementById('loadout-start-btn'),
             roomActionBtn: document.getElementById('continue-loadout-btn'),
             menuSessionActions: document.getElementById('active-match-shell'),
             menuSessionStats: document.getElementById('active-match-pill-grid'),
@@ -359,7 +357,13 @@
             privateRoomInviteLockBtn: document.getElementById('private-room-invite-lock-btn'),
             privateRoomUnassignedWrap: document.getElementById('private-room-unassigned-wrap'),
             privateRoomUnassigned: document.getElementById('private-room-unassigned'),
-            privateRoomRosterGrid: document.getElementById('private-room-roster-grid')
+            privateRoomRosterGrid: document.getElementById('private-room-roster-grid'),
+            privateRoomLeaveBtn: document.getElementById('private-room-leave-btn'),
+            privateRoomRosterNote: document.getElementById('private-room-roster-note'),
+            copyRoomCodeLabel: document.getElementById('copy-room-code-label'),
+            leaveRoomConfirmOverlay: document.getElementById('leave-room-confirm-overlay'),
+            leaveRoomConfirmCancelBtn: document.getElementById('leave-room-confirm-cancel-btn'),
+            leaveRoomConfirmAcceptBtn: document.getElementById('leave-room-confirm-accept-btn')
         };
 
         if (!rendererFactory || !rendererFactory.create) {
@@ -483,7 +487,9 @@
         }
 
         function setLaunchState(patch) {
-            patchState({ launch: patch || {} });
+            patchState({
+                launch: Object.assign({}, getState().launch || {}, patch || {})
+            });
         }
 
         function setModeListOpen(open) {
@@ -544,6 +550,10 @@
 
         function closeLeaveConfirm() {
             patchState({ confirmLeaveOpen: false });
+        }
+
+        function modalIsOpen() {
+            return !!(modalManager && modalManager.isOpen && modalManager.isOpen());
         }
 
         function launchGame(modeId) {
@@ -751,6 +761,13 @@
                 moveMember: function (memberId, nextTeamId) {
                     if (!session || !session.movePrivateRoomMember) return Promise.resolve(null);
                     return session.movePrivateRoomMember(memberId, nextTeamId);
+                },
+                selfPickTeam: function (teamId) {
+                    if (!session || !session.selfPickTeam) return Promise.resolve(null);
+                    return session.selfPickTeam(teamId);
+                },
+                getCapabilities: function () {
+                    return capabilities();
                 }
             });
         }
@@ -836,12 +853,11 @@
         bindClick(elements.inviteFriendBtn, handleInviteFriendAction);
         bindClick(elements.joinFriendBtn, handleJoinFriendAction);
         bindClick(elements.activeInviteFriendBtn, handleInviteFriendAction);
-        bindClick(elements.activeJoinFriendBtn, handleJoinFriendAction);
         bindEnter(elements.partyIdInput, function () {
             if (elements.joinFriendBtn) elements.joinFriendBtn.click();
         });
         bindEnter(elements.activePartyIdInput, function () {
-            if (elements.activeJoinFriendBtn) elements.activeJoinFriendBtn.click();
+            if (elements.activeInviteFriendBtn) elements.activeInviteFriendBtn.click();
         });
         bindClick(elements.joinRoomBtn, function () {
             if (actionApi && actionApi.joinPrivateRoomByCode) {
@@ -889,9 +905,6 @@
                 actionApi.resumeGameplay(event);
             }
         }
-        bindClick(elements.menuReturnBtn, function (event) {
-            resumeGameplay(event);
-        });
         bindClick(elements.settingsAccountBtn, function () {
             closeUtility();
             render();
@@ -917,10 +930,6 @@
         bindClick(elements.playModeTdmBtn, function () { selectMode('tdm'); });
         bindClick(elements.sandboxModeBtn, function () { selectMode('sandbox'); });
 
-        bindClick(elements.loadoutStartBtn, function () {
-            launchGame(getState().launch.selectedMode);
-        });
-
         bindClick(elements.roomActionBtn, function () {
             if (actionApi && actionApi.handleRoomAction) {
                 actionApi.handleRoomAction();
@@ -939,7 +948,14 @@
             var value = elements.roomShareCode ? elements.roomShareCode.textContent : '';
             copyText(
                 value,
-                function () { showInlineToast(elements.copyRoomCodeBtn, 'Room copied'); },
+                function () {
+                    if (elements.copyRoomCodeLabel) {
+                        elements.copyRoomCodeLabel.textContent = 'Copied!';
+                        setTimeout(function () {
+                            if (elements.copyRoomCodeLabel) elements.copyRoomCodeLabel.textContent = 'Copy';
+                        }, 2000);
+                    }
+                },
                 function () { setRoomStatus('Copy failed.', true); render(); },
                 function () { setRoomStatus('Copy unavailable.', false); render(); }
             );
@@ -976,6 +992,19 @@
                 actionApi.enterPrivateRoom();
             }
         });
+        bindClick(elements.privateRoomLeaveBtn, function () {
+            patchState({ leaveRoomConfirmOpen: true });
+            render();
+        });
+        bindClick(elements.leaveRoomConfirmCancelBtn, function () {
+            patchState({ leaveRoomConfirmOpen: false });
+            render();
+        });
+        bindClick(elements.leaveRoomConfirmAcceptBtn, function () {
+            patchState({ leaveRoomConfirmOpen: false });
+            if (actionApi && actionApi.leavePrivateRoom) actionApi.leavePrivateRoom();
+            render();
+        });
 
         bindClick(elements.leaveConfirmCancelBtn, function () {
             closeLeaveConfirm();
@@ -1005,23 +1034,40 @@
         }
         document.addEventListener('keydown', function (event) {
             if (event.key !== 'Escape') return;
+            if (getState().leaveRoomConfirmOpen) {
+                event.preventDefault();
+                event.stopPropagation();
+                patchState({ leaveRoomConfirmOpen: false });
+                render();
+                return;
+            }
             if (getState().confirmLeaveOpen) {
                 event.preventDefault();
+                event.stopPropagation();
                 closeLeaveConfirm();
                 render();
                 return;
             }
             if (getState().utilityOpen) {
+                event.preventDefault();
+                event.stopPropagation();
                 closeUtility();
                 render();
                 return;
             }
             if (getState().paused) {
+                if (modalIsOpen()) return;
                 event.preventDefault();
-                event.stopPropagation();
-                if (elements.playBtn && typeof elements.playBtn.focus === 'function') {
+                event.stopImmediatePropagation();
+                // Browsers block requestPointerLock() from Escape keydown events,
+                // so we can't call resumeGameplay (which tries to lock). Instead,
+                // programmatically click the resume button — this fires as a
+                // trusted click gesture that the browser will accept for pointer lock.
+                if (elements.playBtn) {
                     elements.playBtn.focus();
+                    elements.playBtn.click();
                 }
+                return;
             }
         });
 

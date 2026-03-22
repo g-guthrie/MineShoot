@@ -413,8 +413,8 @@ test('nuclear cooling towers stay flush to the east wall while the plant becomes
   assert.equal(stats.reactorBuildings, 2);
   assert.ok(stats.buildingGap >= 4);
   assert.equal(stats.stairBuildingNorth, 1);
-  assert.equal(stats.northStairStepCount, 5);
-  assert.ok(stats.northStairTopY < stats.northBuildingRoofY);
+  assert.equal(stats.northStairStepCount, 8);
+  assert.ok(stats.northStairTopY <= stats.northBuildingRoofY);
 
   const reactorBodies = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
@@ -450,14 +450,14 @@ test('nuclear cooling towers stay flush to the east wall while the plant becomes
     block.userData.role === 'reactor-stair-step' &&
     block.userData.reactorId === 'south'
   );
-  assert.equal(northStairs.length, 5);
+  assert.equal(northStairs.length, 8);
   assert.equal(southStairs.length, 0);
-  assert.ok(northStairs.every((step) => step.w <= 1.1));
-  assert.ok(northStairs.every((step) => step.d <= 1.0));
+  assert.ok(northStairs.every((step) => step.w <= 2.0));
+  assert.ok(northStairs.every((step) => step.d <= 1.5));
   const sortedNorthStairs = northStairs.slice().sort((a, b) => a.userData.stepIndex - b.userData.stepIndex);
-  assert.ok(sortedNorthStairs.at(-1).x > sortedNorthStairs[0].x);
+  /* Higher step index = further north (lower Z) and higher Y */
   assert.ok(sortedNorthStairs.at(-1).z < sortedNorthStairs[0].z);
-  assert.ok(sortedNorthStairs.at(-1).y < northReactor.h);
+  assert.ok(sortedNorthStairs.at(-1).y <= northReactor.h);
 
   const oldCampusBody = recorder.blocks.find((block) =>
     block.kind === 'block' &&

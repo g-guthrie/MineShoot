@@ -29,7 +29,8 @@
         function setStatus(text, isErr) {
             if (!ctx.privateRoomStatusEl) return;
             ctx.privateRoomStatusEl.textContent = text || '';
-            ctx.privateRoomStatusEl.style.color = isErr ? '#ffb3a6' : '#ffd7af';
+            ctx.privateRoomStatusEl.hidden = !text;
+            ctx.privateRoomStatusEl.classList.toggle('error', !!isErr);
         }
 
         function teamLabel(teamId) {
@@ -44,6 +45,11 @@
 
         function allowEditing(room) {
             return currentRoomHost() && String(room && room.roomPhase || '') === 'lobby';
+        }
+
+        function canSelfPick(room) {
+            var caps = ctx.getCapabilities ? ctx.getCapabilities() : {};
+            return !!caps.canSelfPickTeam && !!ctx.selfPickTeam;
         }
 
         function findMemberIds(room) {
@@ -65,10 +71,16 @@
         function walkNodeTree(root, visitor) {
             if (!root) return;
             visitor(root);
-            var children = Array.isArray(root.childNodes) ? root.childNodes : [];
+            var children = root.childNodes;
+            if (!children || !children.length) return;
             for (var i = 0; i < children.length; i++) {
                 walkNodeTree(children[i], visitor);
             }
+        }
+
+        function removeAllChildren(el) {
+            if (!el) return;
+            while (el.firstChild) el.removeChild(el.firstChild);
         }
 
         function clearDropHighlights() {
@@ -105,10 +117,17 @@
         }
 
         function bindDropTarget(targetEl, teamId, enabled) {
-            if (!targetEl || targetEl.__dropBound) return;
+            if (!targetEl) return;
+            if (targetEl.__dropBound) {
+                targetEl.__dropEnabled = enabled;
+                targetEl.__dropTeamId = teamId;
+                return;
+            }
             targetEl.__dropBound = true;
+            targetEl.__dropEnabled = enabled;
+            targetEl.__dropTeamId = teamId;
             targetEl.addEventListener('dragover', function (event) {
-                if (!enabled || movePending || !ctx.moveMember) return;
+                if (!targetEl.__dropEnabled || movePending || !ctx.moveMember) return;
                 event.preventDefault();
                 targetEl.classList.add('drag-over');
             });
@@ -116,12 +135,12 @@
                 targetEl.classList.remove('drag-over');
             });
             targetEl.addEventListener('drop', function (event) {
-                if (!enabled || movePending || !ctx.moveMember) return;
+                if (!targetEl.__dropEnabled || movePending || !ctx.moveMember) return;
                 event.preventDefault();
                 targetEl.classList.remove('drag-over');
                 var memberId = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
                 if (!memberId) return;
-                moveMember(memberId, teamId);
+                moveMember(memberId, targetEl.__dropTeamId);
             });
         }
 
@@ -216,7 +235,7 @@
 
         function renderMemberTray(targetEl, members, canEditRoom, currentTeamId, teamIds, emptyCopy) {
             if (!targetEl) return;
-            targetEl.innerHTML = '';
+            removeAllChildren(targetEl);
             bindDropTarget(targetEl, currentTeamId, canEditRoom && !!currentTeamId);
             if (!members || members.length === 0) {
                 var empty = document.createElement('div');
@@ -230,10 +249,25 @@
             }
         }
 
-        function buildTeamLane(teamId, members, canEditRoom, teamIds) {
+        function buildTeamLane(teamId, members, canEditRoom, teamIds, selfPickEnabled) {
             var lane = document.createElement('section');
             lane.className = 'private-room-team-lane';
             lane.setAttribute('data-team-id', teamId);
+
+            if (selfPickEnabled && !movePending) {
+                lane.setAttribute('role', 'button');
+                lane.tabIndex = 0;
+                lane.addEventListener('click', function () {
+                    if (movePending) return;
+                    ctx.selfPickTeam(teamId);
+                });
+                lane.addEventListener('keydown', function (event) {
+                    if (movePending) return;
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    ctx.selfPickTeam(teamId);
+                });
+            }
 
             var header = document.createElement('div');
             header.className = 'private-room-team-header';
@@ -292,12 +326,13 @@
 
         function renderTeamBoard(room, canEditRoom) {
             if (!ctx.privateRoomRosterGrid) return;
-            ctx.privateRoomRosterGrid.innerHTML = '';
+            removeAllChildren(ctx.privateRoomRosterGrid);
             var teamIds = activeTeamIds(room);
+            var selfPick = canSelfPick(room);
             for (var i = 0; i < teamIds.length; i++) {
                 var teamId = String(teamIds[i] || '');
                 var members = room.teams && room.teams[teamId] ? room.teams[teamId] : [];
-                ctx.privateRoomRosterGrid.appendChild(buildTeamLane(teamId, members, canEditRoom, teamIds));
+                ctx.privateRoomRosterGrid.appendChild(buildTeamLane(teamId, members, canEditRoom, teamIds, selfPick));
             }
         }
 
@@ -307,8 +342,8 @@
 
             if (!privateRoomState || !privateRoomState.room) {
                 if (ctx.privateRoomSummaryEl) ctx.privateRoomSummaryEl.textContent = '';
-                if (ctx.privateRoomUnassigned) ctx.privateRoomUnassigned.innerHTML = '';
-                if (ctx.privateRoomRosterGrid) ctx.privateRoomRosterGrid.innerHTML = '';
+                removeAllChildren(ctx.privateRoomUnassigned);
+                removeAllChildren(ctx.privateRoomRosterGrid);
                 return;
             }
 

@@ -94,12 +94,19 @@ function classTokens(element) {
   return element && element._classSet ? Array.from(element._classSet) : [];
 }
 
-async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoInit = true } = {}) {
+async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoInit = true, sharedOverride = null } = {}) {
   const [inputLabelsCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/app/menu-loadout.js', import.meta.url), 'utf8')
   ]);
   const store = storageMap || new Map();
+  const weaponOrderCalls = [];
+  const playerLoadoutCalls = [];
+  const netWeaponLoadoutCalls = [];
+  const throwableSelectionCalls = [];
+  const abilityLoadoutCalls = [];
+  const netAbilityLoadoutCalls = [];
+  const abilityHudCalls = [];
 
   const documentObj = {
     activeElement: null,
@@ -129,7 +136,6 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     ['button', 'throwable-slot-summary'],
     ['div', 'throwable-slot-panel'],
     ['div', 'throwable-slot-title'],
-    ['div', 'throwable-category-tabs'],
     ['div', 'throwable-choice-grid'],
     ['button', 'ability-slot-summary'],
     ['div', 'ability-slot-panel'],
@@ -163,19 +169,17 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     }
   };
 
-  const shared = {
+  const shared = sharedOverride || {
     gameplayTuning: {
       weaponStats: {
         machinegun: { name: 'Machinegun' },
         shotgun: { name: 'Shotgun' },
         rifle: { name: 'Rifle' }
       },
-      throwableCategories: {
-        grenade: { label: 'Grenades', items: ['frag', 'plasma'] }
-      },
       throwables: {
-        frag: { label: 'Frag' },
-        plasma: { label: 'Plasma' }
+        order: ['frag', 'plasma'],
+        frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' },
+        plasma: { id: 'plasma', label: 'Plasma', previewType: 'trajectory' }
       },
       abilityCatalog: {
         choke: { id: 'choke', name: 'Choke' },
@@ -205,17 +209,43 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     document: documentObj,
     __MAYHEM_RUNTIME: {
       GameShared: deferShared ? null : shared,
+      GameHitscan: {
+        setWeaponOrder(slots) {
+          weaponOrderCalls.push(Array.from(slots || []));
+        }
+      },
+      GamePlayer: {
+        setLoadout(loadout) {
+          playerLoadoutCalls.push(JSON.parse(JSON.stringify(loadout || null)));
+        }
+      },
+      GameNet: {
+        commands: {
+          sendWeaponLoadout(primaryId, secondaryId) {
+            netWeaponLoadoutCalls.push([String(primaryId || ''), String(secondaryId || '')]);
+          },
+          sendAbilityLoadout(abilityId) {
+            netAbilityLoadoutCalls.push(String(abilityId || ''));
+          }
+        }
+      },
       GameThrowables: {
-        setSelectedThrowable() {}
+        setSelectedThrowable(throwableId) {
+          throwableSelectionCalls.push(String(throwableId || ''));
+        }
       },
       GameAbilities: {
-        setLoadoutSlot() {},
+        setLoadout(abilityId) {
+          abilityLoadoutCalls.push(String(abilityId || ''));
+        },
         getHudState() {
           return {};
         }
       },
       GameUI: {
-        updateAbilityInfo() {}
+        updateAbilityInfo(payload) {
+          abilityHudCalls.push(payload || null);
+        }
       }
     },
     globalThis: null
@@ -233,7 +263,14 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     runtime: sandbox.__MAYHEM_RUNTIME,
     shared,
     elements: documentObj.elements,
-    storage: store
+    storage: store,
+    weaponOrderCalls,
+    playerLoadoutCalls,
+    netWeaponLoadoutCalls,
+    throwableSelectionCalls,
+    abilityLoadoutCalls,
+    netAbilityLoadoutCalls,
+    abilityHudCalls
   };
 }
 
@@ -245,7 +282,7 @@ test('loadout starts expanded, collapses to summaries, and reopens on reload', a
   assert.equal(elements['loadout-expanded-shell'].hidden, false);
   assert.equal(elements['loadout-collapsed-row'].hidden, true);
   assert.equal(elements['weapon-slot-title'].textContent, 'Weapon Slots');
-  assert.equal(elements['throwable-slot-title'].textContent, 'Throwables [Q]');
+  assert.equal(elements['throwable-slot-title'].textContent, 'Throwables');
   assert.equal(elements['ability-slot-title'].textContent, 'Abilities');
   assert.equal(elements['loadout-collapse-btn'].textContent, 'Collapse');
   assert.equal(elements['loadout-collapse-btn'].attributes['aria-expanded'], 'true');
@@ -331,9 +368,9 @@ test('weapons swap ownership and use slot-specific classes in the shared grid', 
   const shotgunAfter = findByDataset(elements['weapon-choice-grid'], 'weaponId', 'shotgun');
 
   assert.deepEqual(Array.from(snapshot.weaponSlots), ['shotgun', 'machinegun']);
-  assert.ok(classTokens(machinegunAfter).includes('slot-2'));
+  assert.ok(classTokens(machinegunAfter).includes('slot-1'));
   assert.ok(classTokens(machinegunAfter).includes('active'));
-  assert.ok(classTokens(shotgunAfter).includes('slot-1'));
+  assert.ok(classTokens(shotgunAfter).includes('slot-2'));
   assert.ok(!classTokens(machinegunAfter).includes('owned-other'));
 });
 
@@ -372,4 +409,80 @@ test('menu loadout resolves shared defaults after GameShared arrives post-load',
     JSON.parse(JSON.stringify(harness.runtime.GameMenuLoadout.getAbilityLoadout())),
     { abilityId: 'deadeye' }
   );
+});
+
+test('menu loadout replaces invalid default weapons with valid selectable fallbacks', async () => {
+  const harness = await loadMenuLoadoutHarness({
+    sharedOverride: {
+      gameplayTuning: {
+        weaponStats: {
+          machinegun: { name: 'Machinegun' },
+          rifle: { name: 'Rifle' }
+        },
+        throwables: {
+          order: ['frag'],
+          frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' }
+        },
+        abilityCatalog: {
+          deadeye: { id: 'deadeye', name: 'Deadeye' }
+        },
+        defaultAbilityId: 'deadeye'
+      },
+      getSelectableWeaponIds() {
+        return ['machinegun', 'rifle'];
+      },
+      getDefaultWeaponLoadout() {
+        return ['machinegun', 'shotgun'];
+      },
+      getDefaultAbilityId() {
+        return 'deadeye';
+      },
+      normalizeAbilityId(abilityId) {
+        return String(abilityId || 'deadeye');
+      }
+    }
+  });
+
+  assert.deepEqual(Array.from(harness.runtime.GameMenuLoadout.getWeaponSlots()), ['machinegun', 'rifle']);
+  assert.deepEqual(harness.weaponOrderCalls, [['machinegun', 'rifle']]);
+  assert.deepEqual(harness.playerLoadoutCalls, [{ slots: ['machinegun', 'rifle'] }]);
+});
+
+test('menu loadout skips weapon runtime sync when the selectable set cannot fill both slots', async () => {
+  const harness = await loadMenuLoadoutHarness({
+    sharedOverride: {
+      gameplayTuning: {
+        weaponStats: {
+          machinegun: { name: 'Machinegun' }
+        },
+        throwables: {
+          order: ['frag'],
+          frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' }
+        },
+        abilityCatalog: {
+          deadeye: { id: 'deadeye', name: 'Deadeye' }
+        },
+        defaultAbilityId: 'deadeye'
+      },
+      getSelectableWeaponIds() {
+        return ['machinegun'];
+      },
+      getDefaultWeaponLoadout() {
+        return ['machinegun', 'shotgun'];
+      },
+      getDefaultAbilityId() {
+        return 'deadeye';
+      },
+      normalizeAbilityId(abilityId) {
+        return String(abilityId || 'deadeye');
+      }
+    }
+  });
+
+  assert.deepEqual(Array.from(harness.runtime.GameMenuLoadout.getWeaponSlots()), ['machinegun', '']);
+  assert.deepEqual(harness.weaponOrderCalls, []);
+  assert.deepEqual(harness.playerLoadoutCalls, []);
+  assert.deepEqual(harness.netWeaponLoadoutCalls, []);
+  assert.equal(harness.throwableSelectionCalls.at(-1), 'frag');
+  assert.equal(harness.abilityLoadoutCalls.at(-1), 'deadeye');
 });

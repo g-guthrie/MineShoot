@@ -32,6 +32,36 @@
         return Array.isArray(defaults) && defaults.length ? defaults : ['machinegun', 'shotgun'];
     }
 
+    function resolvedDefaultWeaponLoadout() {
+        var defaults = Array.isArray(defaultWeaponLoadout()) ? defaultWeaponLoadout() : [];
+        var selectableIds = selectableWeaponIds();
+        var allowed = {};
+        var next = [];
+
+        function pushWeapon(weaponId) {
+            var normalized = String(weaponId || '');
+            if (!normalized || !allowed[normalized]) return;
+            if (next.indexOf(normalized) !== -1) return;
+            next.push(normalized);
+        }
+
+        for (var i = 0; i < selectableIds.length; i++) {
+            var selectableId = String(selectableIds[i] || '');
+            if (!selectableId) continue;
+            allowed[selectableId] = true;
+        }
+        for (var n = 0; n < defaults.length; n++) {
+            pushWeapon(defaults[n]);
+        }
+        for (var x = 0; x < selectableIds.length; x++) {
+            pushWeapon(selectableIds[x]);
+        }
+        while (next.length < 2) {
+            next.push('');
+        }
+        return next.slice(0, 2);
+    }
+
     function defaultAbilityId() {
         var shared = sharedApi();
         var tuning = tuningApi();
@@ -43,12 +73,13 @@
         return String(defaultId || tuning.defaultAbilityId || 'deadeye');
     }
 
-    function throwableCategories() {
-        return tuningApi().throwableCategories || {};
-    }
-
     function throwableDefs() {
         return tuningApi().throwables || {};
+    }
+
+    function selectableThrowableIds() {
+        var defs = throwableDefs();
+        return Array.isArray(defs.order) ? defs.order : Object.keys(defs).filter(function (k) { return k !== 'order'; });
     }
 
     function abilityCatalog() {
@@ -66,32 +97,30 @@
         activeWeaponSlot: 0,
         selectedAbilityId: 'deadeye',
         selectedThrowableId: 'frag',
-        activeThrowableCategory: 'grenade',
         loadoutExpanded: true,
         initialized: false
     };
     var subscribers = [];
 
     function applySharedDefaults() {
-        var weaponDefaults = defaultWeaponLoadout();
+        var weaponDefaults = resolvedDefaultWeaponLoadout();
         var abilityDefault = defaultAbilityId();
-        if (!Array.isArray(state.weaponSlots) || !state.weaponSlots.length) {
-            state.weaponSlots = weaponDefaults.slice(0, 2);
+        if (!Array.isArray(state.weaponSlots)) {
+            state.weaponSlots = [];
+        }
+        compactWeaponSlots();
+        if (!state.weaponSlots.length) {
+            state.weaponSlots = ['', ''];
         }
         if (!state.weaponSlots[0] && weaponDefaults[0]) state.weaponSlots[0] = String(weaponDefaults[0] || '');
-        if (!state.weaponSlots[1] && weaponDefaults[1]) state.weaponSlots[1] = String(weaponDefaults[1] || '');
+        if (!state.weaponSlots[1] && weaponDefaults[1] && weaponDefaults[1] !== state.weaponSlots[0]) {
+            state.weaponSlots[1] = String(weaponDefaults[1] || '');
+        }
+        compactWeaponSlots();
         if (!state.selectedAbilityId) state.selectedAbilityId = String(abilityDefault || '');
-        var categories = throwableCategories();
-        var categoryIds = Object.keys(categories);
-        var currentThrowableCategory = findThrowableCategory(state.selectedThrowableId);
-        if (categoryIds.length && !currentThrowableCategory) {
-            state.activeThrowableCategory = state.activeThrowableCategory || categoryIds[0];
-            var items = Array.isArray(categories[state.activeThrowableCategory] && categories[state.activeThrowableCategory].items)
-                ? categories[state.activeThrowableCategory].items
-                : [];
-            state.selectedThrowableId = String(items[0] || '');
-        } else if (currentThrowableCategory) {
-            state.activeThrowableCategory = currentThrowableCategory;
+        var throwableIds = selectableThrowableIds();
+        if (!state.selectedThrowableId || throwableIds.indexOf(state.selectedThrowableId) === -1) {
+            state.selectedThrowableId = throwableIds.length ? String(throwableIds[0]) : 'frag';
         }
     }
 
@@ -114,7 +143,7 @@
             : 'Q';
 
         if (weaponTitle) weaponTitle.textContent = 'Weapon Slots';
-        if (throwableTitle) throwableTitle.textContent = 'Throwables [' + throwableKey + ']';
+        if (throwableTitle) throwableTitle.textContent = 'Throwables';
         if (abilityTitle) abilityTitle.textContent = 'Abilities';
     }
 
@@ -128,27 +157,6 @@
         return out;
     }
 
-    function throwableCatalogByCategory() {
-        var categories = throwableCategories();
-        var defs = throwableDefs();
-        var out = {};
-        for (var catId in categories) {
-            if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
-            var cat = categories[catId];
-            out[catId] = {
-                label: String(cat.label || catId),
-                items: (cat.items || []).map(function (id) {
-                    var def = defs[id] || {};
-                    return {
-                        id: String(id || ''),
-                        label: String(def.label || id || '')
-                    };
-                })
-            };
-        }
-        return out;
-    }
-
     function throwableName(throwableId) {
         var def = throwableDefs()[String(throwableId || '')] || {};
         return String(def.label || throwableId || '');
@@ -157,20 +165,6 @@
     function abilityName(abilityId) {
         var def = abilityCatalog()[String(abilityId || '')] || {};
         return String(def.name || abilityId || '');
-    }
-
-    function findThrowableCategory(throwableId) {
-        var targetId = String(throwableId || '');
-        var categories = throwableCategories();
-        for (var catId in categories) {
-            if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
-            var cat = categories[catId];
-            var items = Array.isArray(cat.items) ? cat.items : [];
-            for (var i = 0; i < items.length; i++) {
-                if (String(items[i] || '') === targetId) return catId;
-            }
-        }
-        return '';
     }
 
     function abilityList() {
@@ -189,6 +183,7 @@
 
     function compactWeaponSlots() {
         var allowed = {};
+        var used = {};
         var weaponIds = selectableWeaponIds();
         for (var i = 0; i < weaponIds.length; i++) {
             allowed[String(weaponIds[i] || '')] = true;
@@ -196,7 +191,12 @@
         var next = ['', ''];
         for (var n = 0; n < 2; n++) {
             var id = String(state.weaponSlots[n] || '');
-            next[n] = allowed[id] ? id : '';
+            if (allowed[id] && !used[id]) {
+                next[n] = id;
+                used[id] = true;
+            } else {
+                next[n] = '';
+            }
         }
         state.weaponSlots = next;
         if (state.activeWeaponSlot < 0 || state.activeWeaponSlot > 1) state.activeWeaponSlot = 0;
@@ -257,13 +257,14 @@
         var net = runtime.GameNet || null;
         var netCommands = net && net.commands ? net.commands : net;
         var weaponSlots = state.weaponSlots.slice(0, 2).filter(Boolean);
-        if (runtime.GameHitscan && runtime.GameHitscan.setWeaponOrder && weaponSlots.length) {
+        var hasCompleteWeaponLoadout = !!(state.weaponSlots[0] && state.weaponSlots[1]);
+        if (runtime.GameHitscan && runtime.GameHitscan.setWeaponOrder && hasCompleteWeaponLoadout) {
             runtime.GameHitscan.setWeaponOrder(weaponSlots);
         }
-        if (runtime.GamePlayer && runtime.GamePlayer.setLoadout && weaponSlots.length) {
+        if (runtime.GamePlayer && runtime.GamePlayer.setLoadout && hasCompleteWeaponLoadout) {
             runtime.GamePlayer.setLoadout({ slots: weaponSlots });
         }
-        if (netCommands && netCommands.sendWeaponLoadout && multiplayerMode) {
+        if (netCommands && netCommands.sendWeaponLoadout && multiplayerMode && hasCompleteWeaponLoadout) {
             netCommands.sendWeaponLoadout(state.weaponSlots[0] || '', state.weaponSlots[1] || '');
         }
         if (runtime.GameThrowables && runtime.GameThrowables.setSelectedThrowable && state.selectedThrowableId) {
@@ -324,8 +325,6 @@
             }
             if (parsed.selectedThrowableId) {
                 state.selectedThrowableId = String(parsed.selectedThrowableId || '');
-                var categoryId = findThrowableCategory(state.selectedThrowableId);
-                if (categoryId) state.activeThrowableCategory = categoryId;
             }
             compactWeaponSlots();
             normalizeAbilityState();
@@ -465,7 +464,8 @@
             for (var i = 0; i < slotBtns.length; i++) {
                 var btn = slotBtns[i];
                 var slotId = slots[i] || '';
-                btn.classList.add(slotClassName(i));
+                btn.classList.remove('slot-1', 'slot-2');
+                btn.classList.add(i === 0 ? 'slot-1' : 'slot-2');
                 btn.textContent = 'SLOT ' + (i + 1) + ' :: ' + (slotId ? String(names[slotId] || slotId).toUpperCase() : 'UNEQUIPPED');
                 btn.classList.toggle('active', i === state.activeWeaponSlot);
             }
@@ -476,17 +476,18 @@
                 var weaponId = weaponIds[n];
                 var choice = document.createElement('button');
                 choice.type = 'button';
-                choice.classList.add('weapon-choice-btn');
+                choice.classList.add('btn');
                 choice.dataset.weaponId = weaponId;
                 choice.textContent = String(names[weaponId] || weaponId).toUpperCase();
                 var ownerIndex = pairOwnerIndex(slots, weaponId);
-                if (ownerIndex !== -1) {
-                    choice.classList.add(slotClassName(ownerIndex));
+                if (ownerIndex !== -1 && ownerIndex !== state.activeWeaponSlot) {
+                    continue; // hide weapons taken by the other slot
                 }
                 if (ownerIndex === state.activeWeaponSlot) {
-                    choice.classList.add('active');
+                    choice.classList.add('slot-1', 'active');
                 }
-                choice.addEventListener('click', function () {
+                choice.addEventListener('click', function (e) {
+                    e.stopPropagation();
                     var selectedId = String(this.dataset.weaponId || '');
                     if (!assignWeaponToSlot(state.activeWeaponSlot, selectedId)) return;
                     applyToGameplayRuntime(true);
@@ -514,57 +515,29 @@
     }
 
     function bindThrowableUi() {
-        var catTabs = document.getElementById('throwable-category-tabs');
         var choiceGrid = document.getElementById('throwable-choice-grid');
-        if (!catTabs || !choiceGrid) return;
+        if (!choiceGrid) return;
         if (choiceGrid.__throwableMenuBound) return;
         choiceGrid.__throwableMenuBound = true;
 
-        var categories = throwableCatalogByCategory();
-        if (!categories[state.activeThrowableCategory]) {
-            var keys = Object.keys(categories);
-            state.activeThrowableCategory = keys.length ? keys[0] : '';
-        }
-
         function render() {
-            catTabs.innerHTML = '';
-            for (var catId in categories) {
-                if (!Object.prototype.hasOwnProperty.call(categories, catId)) continue;
-                var cat = categories[catId];
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'throwable-cat-btn';
-                btn.dataset.catId = catId;
-                btn.textContent = String(cat.label || catId).toUpperCase();
-                if (catId === state.activeThrowableCategory) btn.classList.add('active');
-                btn.addEventListener('click', function () {
-                    state.activeThrowableCategory = this.dataset.catId;
-                    render();
-                    saveState();
-                    notifySubscribers();
-                });
-                catTabs.appendChild(btn);
-            }
-
             choiceGrid.innerHTML = '';
-            var activeCat = categories[state.activeThrowableCategory];
-            if (state.activeThrowableCategory) {
-                choiceGrid.setAttribute('data-category-id', state.activeThrowableCategory);
-            } else {
-                choiceGrid.removeAttribute('data-category-id');
-            }
-            if (!activeCat) return;
-            for (var i = 0; i < activeCat.items.length; i++) {
-                var item = activeCat.items[i];
+            var throwableIds = selectableThrowableIds();
+            var defs = throwableDefs();
+            for (var i = 0; i < throwableIds.length; i++) {
+                var throwableId = throwableIds[i];
+                var def = defs[throwableId] || {};
                 var choice = document.createElement('button');
                 choice.type = 'button';
-                choice.className = 'throwable-choice-btn';
-                choice.dataset.throwableId = item.id;
-                choice.dataset.categoryId = state.activeThrowableCategory;
-                choice.textContent = String(item.label || item.id || '').toUpperCase();
-                if (state.selectedThrowableId === item.id) choice.classList.add('active');
-                choice.addEventListener('click', function () {
-                    state.selectedThrowableId = String(this.dataset.throwableId || '');
+                choice.className = 'btn throwable-choice-btn';
+                choice.dataset.throwableId = throwableId;
+                choice.textContent = String(def.label || throwableId || '').toUpperCase();
+                if (state.selectedThrowableId === throwableId) choice.classList.add('active');
+                choice.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var id = String(this.dataset.throwableId || '');
+                    if (state.selectedThrowableId === id) return;
+                    state.selectedThrowableId = id;
                     applyToGameplayRuntime(true);
                     render();
                     saveState();
@@ -594,11 +567,13 @@
                 if (!def || !def.id) continue;
                 var btn = document.createElement('button');
                 btn.type = 'button';
-                btn.classList.add('ability-choice-btn');
+                btn.classList.add('btn');
                 btn.dataset.abilityId = def.id;
                 btn.textContent = String(def.name || def.id).toUpperCase();
+                btn.classList.add('ability-choice-btn');
                 if (selectedAbilityId === def.id) btn.classList.add('active');
-                btn.addEventListener('click', function () {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
                     var id = String(this.dataset.abilityId || '');
                     normalizeAbilityState();
                     if (!id || state.selectedAbilityId === id) return;

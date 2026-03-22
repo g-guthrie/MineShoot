@@ -59,9 +59,11 @@ function normalizeTeamId(value, teamCount = 2) {
 }
 
 function randomCode(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
   let out = '';
-  while (out.length < length) out += Math.random().toString(36).slice(2);
-  return out.slice(0, length).toUpperCase();
+  for (let i = 0; i < length; i++) out += chars[bytes[i] % chars.length];
+  return out;
 }
 
 async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_update') {
@@ -245,6 +247,9 @@ async function joinPrivateRoomSolo(env, actor, rawRoomCode) {
   if (!room || !roomState) {
     return { ok: false, status: 404, error: 'Private room code not found.' };
   }
+  if (!!Number(roomState.invite_locked || 0)) {
+    return { ok: false, status: 403, error: 'That private room has locked invites. Ask the host for an invite.' };
+  }
   const actorIds = [String(actor.id || '')];
   const canFit = await ensureRoomCapacity(env, roomId, actorIds);
   if (!canFit) {
@@ -320,9 +325,21 @@ async function normalizeMemberTeams(env, roomId, teamCount) {
   }
 }
 
+function shuffleArray(arr) {
+  const bytes = crypto.getRandomValues(new Uint8Array(arr.length));
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = bytes[i] % (i + 1);
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
 async function randomizeTeams(env, roomId, teamCount) {
   const members = await getPrivateRoomMembers(env, roomId);
   const allowed = activeTeamIds(teamCount);
+  shuffleArray(members);
   const counts = {};
   for (let i = 0; i < allowed.length; i++) counts[allowed[i]] = 0;
   for (let i = 0; i < members.length; i++) {
@@ -416,14 +433,9 @@ export async function handlePrivateRoomLobby(env, request) {
 
   if (action === 'set_team_count') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can change team count.' }, 403);
-    const previousTeamCount = normalizeTeamCount(currentState.team_count || 2);
     const teamCount = normalizeTeamCount(body.teamCount || 2);
     await setPrivateRoomState(env, currentRoomId, { teamCount });
-    if (teamCount < previousTeamCount) {
-      await randomizeTeams(env, currentRoomId, teamCount);
-    } else {
-      await normalizeMemberTeams(env, currentRoomId, teamCount);
-    }
+    await normalizeMemberTeams(env, currentRoomId, teamCount);
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
@@ -467,8 +479,42 @@ export async function handlePrivateRoomLobby(env, request) {
     return json({ ok: true, state });
   }
 
+  if (action === 'self_pick_team') {
+    const teamCount = Number(currentState.team_count || 2);
+    const allowed = activeTeamIds(teamCount);
+    const requestedTeam = String(body.teamId || '').trim().toLowerCase();
+    if (allowed.indexOf(requestedTeam) < 0) {
+      return json({ ok: false, error: 'Invalid team.' }, 400);
+    }
+    const selfMember = await getPrivateRoomMember(env, actor.id);
+    if (!selfMember || String(selfMember.room_id || '') !== currentRoomId) {
+      return json({ ok: false, error: 'You are not in this room.' }, 404);
+    }
+    await moveActorToPrivateRoomTeam(env, actor.id, requestedTeam);
+    await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
+    const state = await buildLobbyState(env, actor, currentRoomId);
+    return json({ ok: true, state });
+  }
+
   if (action === 'start') {
     if (!isHost) return json({ ok: false, error: 'Only the room host can start the match.' }, 403);
+    const startMembers = await getPrivateRoomMembers(env, currentRoomId);
+    if (startMembers.length < 2) {
+      return json({ ok: false, error: 'Need at least 2 players to start.' }, 400);
+    }
+    const startMode = normalizeRoomMode(currentState.room_mode);
+    if (startMode === ROOM_MODE_TDM) {
+      const teamCount = Number(currentState.team_count || 2);
+      const allowed = activeTeamIds(teamCount);
+      const teamCounts = countMembersPerTeam(startMembers, allowed);
+      let teamsWithPlayers = 0;
+      for (let i = 0; i < allowed.length; i++) {
+        if (teamCounts[allowed[i]] > 0) teamsWithPlayers += 1;
+      }
+      if (teamsWithPlayers < 2) {
+        return json({ ok: false, error: 'TDM requires at least 1 player on 2 or more teams.' }, 400);
+      }
+    }
     await setPrivateRoomState(env, currentRoomId, { roomPhase: ROOM_PHASE_ACTIVE });
     await syncPrivateRoomDurableObject(env, currentRoomId, 'lobby_update');
     const state = await buildLobbyState(env, actor, currentRoomId);

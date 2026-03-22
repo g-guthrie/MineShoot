@@ -205,7 +205,8 @@ async function loadHarness({
   localEnvironment = false,
   loggedIn = true,
   loadoutValidation = { ok: true, message: '' },
-  lobbyApiOverride = null
+  lobbyApiOverride = null,
+  modalOpen = false
 } = {}) {
   const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
   const rendererCode = await fs.readFile(new URL('../../js/app/lobby-renderer.js', import.meta.url), 'utf8');
@@ -395,6 +396,7 @@ async function loadHarness({
   const launchCalls = [];
   const matchmakingCalls = [];
   const resumeGameplayCalls = [];
+  const modalState = { open: !!modalOpen };
   const sessionCallbacks = {};
   const partyState = {
     self: { id: 'usr_alpha', username: 'ALPHA' },
@@ -753,6 +755,22 @@ async function loadHarness({
         return String(roomId || '').toUpperCase();
       }
     },
+    GameModalManager: {
+      isOpen() {
+        return !!modalState.open;
+      },
+      register() {
+        return true;
+      },
+      close() {
+        modalState.open = false;
+        return true;
+      },
+      open() {
+        modalState.open = true;
+        return true;
+      }
+    },
     GameSession: {
       prepareLaunch() {},
       startGameplayFromMenu(event) {
@@ -826,6 +844,9 @@ async function loadHarness({
     launchCalls,
     matchmakingCalls,
     resumeGameplayCalls,
+    setModalOpen(value) {
+      modalState.open = !!value;
+    },
     flush,
     emitPartyUnavailable(message) {
       sessionCallbacks.onPartyUnavailable(message);
@@ -867,24 +888,21 @@ test('menu boots on the main screen with play ffa as the default launch action',
   assert.equal(elements['menu-social-friends-pane'].hidden, false);
 });
 
-test('main screen markup keeps create room in the header and uses inline social actions', async () => {
+test('main screen markup keeps create room with the inline social actions', async () => {
   const html = await fs.readFile(new URL('../../index.html', import.meta.url), 'utf8');
 
-  const headerStart = html.indexOf('<div id="menu-header-leading">');
-  const headerEnd = html.indexOf('<div id="menu-header-actions">', headerStart);
-  const socialStart = html.indexOf('<div id="menu-social-hero" class="menu-panel-shell menu-panel-hero">');
+  const socialStart = html.indexOf('id="menu-social-hero"');
   const partyHeroStart = html.indexOf('<div id="menu-party-hero"', socialStart);
   const modeActionsStart = html.indexOf('<div id="mode-screen-actions">', socialStart);
 
-  assert.notEqual(html.indexOf('<div id="menu-main-heroes" class="menu-panel-grid" data-columns="2">'), -1);
+  assert.notEqual(html.indexOf('id="menu-main-heroes"'), -1);
   assert.notEqual(socialStart, -1);
-  assert.equal(html.slice(headerStart, headerEnd).includes('id="continue-loadout-btn"'), true);
-  assert.equal(html.slice(headerStart, headerEnd).includes('ROOM #'), false);
   assert.equal(html.indexOf('id="party-id-input"', socialStart) < modeActionsStart, true);
   assert.equal(html.indexOf('id="invite-friend-btn"', socialStart) < modeActionsStart, true);
   assert.equal(html.indexOf('id="join-friend-btn"', socialStart) < modeActionsStart, true);
   assert.equal(html.indexOf('id="room-code-input"', socialStart) < modeActionsStart, true);
   assert.equal(html.indexOf('id="join-room-btn"', socialStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="continue-loadout-btn"', socialStart) < modeActionsStart, true);
   assert.equal(html.indexOf('id="social-add-friend-btn"', socialStart), -1);
   assert.equal(partyHeroStart > socialStart, true);
   assert.equal(html.indexOf('id="party-hero-members"', partyHeroStart) < modeActionsStart, true);
@@ -1763,6 +1781,59 @@ test('paused escape keeps focus on the pause rail instead of trying to resume di
 
   assert.equal(doc.activeElement, elements['play-btn']);
   assert.equal(elements['active-match-shell'].hidden, false);
+});
+
+test('paused escape defers to the active modal instead of refocusing the pause rail', async () => {
+  const harness = await loadHarness({ modalOpen: true });
+  const { elements } = harness;
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+
+  const doc = elements['play-btn'].ownerDocument;
+  doc.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(doc.activeElement, null);
+  assert.equal(elements['active-match-shell'].hidden, false);
+});
+
+test('session-state updates preserve the selected launch mode', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  elements['game-modes-toggle-btn'].click();
+  elements['play-mode-tdm-btn'].click();
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+  harness.emitSessionState({
+    runtimeReady: false,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: false,
+    activityState: 'menu',
+    launchContext: {}
+  });
+
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play TDM');
 });
 
 test('room screen outside pause reduces the left header to back and id', async () => {

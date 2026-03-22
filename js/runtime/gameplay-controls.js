@@ -290,19 +290,17 @@
         function bindDocsControls() {
             listen(document, 'keydown', function (e) {
                 if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
-                var loader = docsLoaderApi();
-                if (matchesBinding('open_manual', e, 'KeyI')) {
-                    e.preventDefault();
-                    if (loader && loader.toggleDocs) {
-                        loader.toggleDocs();
-                    }
-                    return;
-                }
 
                 var loadedDocsApi = docsApi();
                 if (e.code === 'Escape' && loadedDocsApi && loadedDocsApi.isOpen && loadedDocsApi.isOpen()) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     loadedDocsApi.close();
+                    return;
                 }
+
+                // Docs toggle via keybind is handled by menu-shell.js global listener;
+                // skip here to avoid double-toggle.
             });
         }
 

@@ -296,7 +296,9 @@
                 canInvitePartyToPrivateRoom: canInvitePartyToPrivateRoom,
                 canEditPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost),
                 canRandomizeTeams: !!(hasPrivateRoom && isPrivateRoomHost),
-                canStartPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomPhase === 'lobby')
+                canStartPrivateRoom: !!(hasPrivateRoom && isPrivateRoomHost && privateRoomPhase === 'lobby'),
+                canLeavePrivateRoom: !!(hasPrivateRoom),
+                canSelfPickTeam: !!(hasPrivateRoom && !isPrivateRoomHost && privateRoomPhase === 'lobby')
             };
         }
 
@@ -811,6 +813,40 @@
                 });
         }
 
+        function leavePrivateRoom() {
+            if (busy) return Promise.resolve(null);
+            setBusy(true, 'Leaving room...');
+            setPrivateRoomStatus('Leaving room...', false);
+            return privateRoomRequest('leave', {}, 'Leaving room...')
+                .then(function () {
+                    applyPrivateRoomState(null);
+                    setPrivateRoomStatus('', false);
+                    setBusy(false, '');
+                    return true;
+                })
+                .catch(function (err) {
+                    setPrivateRoomStatus((err && err.message) || 'Leave failed.', true);
+                    setBusy(false, '');
+                    return null;
+                });
+        }
+
+        function selfPickTeam(teamId) {
+            if (busy) return Promise.resolve(null);
+            setBusy(true, 'Switching team...');
+            return privateRoomRequest('self_pick_team', { teamId: teamId }, 'Switching team...')
+                .then(function (result) {
+                    setPrivateRoomStatus('Team updated.', false);
+                    setBusy(false, '');
+                    return result;
+                })
+                .catch(function (err) {
+                    setPrivateRoomStatus((err && err.message) || 'Team switch failed.', true);
+                    setBusy(false, '');
+                    return null;
+                });
+        }
+
         function setPrivateRoomInviteLock(locked) {
             return runPrivateRoomHostAction(
                 'set_invite_lock',
@@ -974,6 +1010,8 @@
             invitePartyToPrivateRoom: invitePartyToPrivateRoom,
             createPrivateRoom: createPrivateRoom,
             joinPrivateRoom: joinPrivateRoom,
+            leavePrivateRoom: leavePrivateRoom,
+            selfPickTeam: selfPickTeam,
             start: start,
             stop: stop,
             focusListener: focusListener,

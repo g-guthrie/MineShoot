@@ -118,6 +118,7 @@ async function loadRuntimeSessionHarness() {
   const suspendReasons = [];
   const idleWarnings = [];
   const debugNotices = [];
+  const modalState = { open: false };
   const document = new FakeDocument();
   const window = new FakeWindow();
   const overlay = new FakeElement('overlay', document);
@@ -195,7 +196,13 @@ async function loadRuntimeSessionHarness() {
     },
     window,
     globalThis: {
-      __MAYHEM_RUNTIME: {}
+      __MAYHEM_RUNTIME: {
+        GameModalManager: {
+          isOpen() {
+            return !!modalState.open;
+          }
+        }
+      }
     }
   };
   sandbox.globalThis.window = window;
@@ -278,6 +285,9 @@ async function loadRuntimeSessionHarness() {
     suspendReasons,
     idleWarnings,
     debugNotices,
+    setModalOpen(value) {
+      modalState.open = !!value;
+    },
     advanceClock(nextNowMs) {
       nowMs = nextNowMs;
       perfNowMs = nextNowMs;
@@ -415,6 +425,67 @@ test('networked runtime session requires a fresh Escape press before resuming', 
   assert.equal(harness.document.pointerLockElement, null);
   assert.equal(harness.playBtn.style.display, 'inline-block');
   assert.equal(harness.backBtn.style.display, 'inline-block');
+});
+
+test('closing a modal with Escape does not arm gameplay resume', async () => {
+  const harness = await loadRuntimeSessionHarness();
+  harness.advanceClock(500);
+
+  await harness.session.enterGameplay({
+    button: 0,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.setModalOpen(true);
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  harness.setModalOpen(false);
+  harness.document.dispatch('keyup', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  await Promise.resolve();
+
+  assert.equal(harness.session.isPlaying(), false);
+  assert.equal(harness.document.pointerLockElement, null);
+
+  harness.document.dispatch('keyup', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  harness.document.dispatch('keydown', {
+    key: 'Escape',
+    target: { tagName: 'DIV', isContentEditable: false },
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  await Promise.resolve();
+
+  assert.equal(harness.session.isPlaying(), true);
+  assert.equal(harness.document.pointerLockElement !== null, true);
 });
 
 test('networked runtime session resumes from the pause rail button', async () => {

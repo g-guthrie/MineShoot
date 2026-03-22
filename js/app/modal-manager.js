@@ -56,6 +56,12 @@
         return activeId ? registry[activeId] || null : null;
     }
 
+    function resolveEntryElement(entry) {
+        if (!entry) return null;
+        entry.element = resolveElement(entry.element);
+        return entry.element;
+    }
+
     function bindGlobalListeners() {
         if (listenersBound) return;
         listenersBound = true;
@@ -70,7 +76,7 @@
 
     GameModalManager.register = function (id, options) {
         var entry = normalizeEntry(id, options);
-        if (!entry.id || !entry.element) return null;
+        if (!entry.id || !resolveEntryElement(entry)) return null;
         registry[entry.id] = entry;
         setHidden(entry.element, !entry.isOpen);
         bindGlobalListeners();
@@ -86,7 +92,7 @@
 
     GameModalManager.open = function (id, triggerEl) {
         var entry = registry[String(id || '')];
-        if (!entry || !entry.element) return false;
+        if (!entry || !resolveEntryElement(entry)) return false;
         if (activeId && activeId !== entry.id) {
             GameModalManager.close(activeId);
         }
@@ -107,7 +113,7 @@
         var targetId = String(id || activeId || '');
         if (!targetId) return false;
         var entry = registry[targetId];
-        if (!entry || !entry.element) return false;
+        if (!entry || !resolveEntryElement(entry)) return false;
         entry.isOpen = false;
         setHidden(entry.element, true);
         if (entry.onClose) entry.onClose(entry);

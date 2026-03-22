@@ -449,6 +449,33 @@
             if (session && session.startPrivateRoomMatch) session.startPrivateRoomMatch();
         }
 
+        function leavePrivateRoom() {
+            var session = getSession();
+            if (!session || !session.leavePrivateRoom || busy()) return Promise.resolve(false);
+            setBusy(true);
+            setRoomStatus('Leaving room...', false);
+            render();
+            return session.leavePrivateRoom()
+                .then(function () {
+                    setBusy(false);
+                    setActiveSurface('main');
+                    render();
+                    return true;
+                })
+                .catch(function () {
+                    setBusy(false);
+                    setRoomStatus('Leave failed.', true);
+                    render();
+                    return false;
+                });
+        }
+
+        function selfPickTeam(teamId) {
+            var session = getSession();
+            if (!session || !session.selfPickTeam) return;
+            session.selfPickTeam(teamId);
+        }
+
         function enterPrivateRoom() {
             var state = getState();
             var room = state.privateRoom && state.privateRoom.room;
@@ -516,6 +543,8 @@
             randomizePrivateRoomTeams: randomizePrivateRoomTeams,
             startPrivateRoomMatch: startPrivateRoomMatch,
             enterPrivateRoom: enterPrivateRoom,
+            leavePrivateRoom: leavePrivateRoom,
+            selfPickTeam: selfPickTeam,
             launchDevMode: launchDevMode,
             returnToMenu: returnToMenu,
             handleLeaveGameRequest: handleLeaveGameRequest

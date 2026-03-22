@@ -241,15 +241,11 @@ export async function deletePrivateRoom(env, roomId) {
   if (!isPrivateRoomId(roomId)) return false;
   await ensurePrivateRoomTable(env);
   const normalizedRoomId = sanitizeRoomId(roomId);
-  await env.DB.prepare(
-    'DELETE FROM private_room_members WHERE room_id = ?1'
-  ).bind(normalizedRoomId).run();
-  await env.DB.prepare(
-    'DELETE FROM private_room_state WHERE room_id = ?1'
-  ).bind(normalizedRoomId).run();
-  await env.DB.prepare(
-    'DELETE FROM private_rooms WHERE room_id = ?1'
-  ).bind(normalizedRoomId).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM private_room_members WHERE room_id = ?1').bind(normalizedRoomId),
+    env.DB.prepare('DELETE FROM private_room_state WHERE room_id = ?1').bind(normalizedRoomId),
+    env.DB.prepare('DELETE FROM private_rooms WHERE room_id = ?1').bind(normalizedRoomId)
+  ]);
   return true;
 }
 
