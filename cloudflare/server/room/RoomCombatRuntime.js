@@ -32,6 +32,31 @@ export function consumeThrowCharge(entity, throwableId, deps) {
   return true;
 }
 
+function clampNumber(value, min, max, fallback = 0) {
+  let parsed = Number(value);
+  if (!Number.isFinite(parsed)) parsed = Number(fallback || 0);
+  if (!Number.isFinite(parsed)) parsed = 0;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function sanitizeThrowableSpawnDef(rawDef, throwableId = '') {
+  if (!rawDef || typeof rawDef !== 'object') return null;
+  return {
+    id: String(rawDef.id || throwableId || ''),
+    speed: clampNumber(rawDef.speed, 0, 60, 0),
+    upward: clampNumber(rawDef.upward, -10, 20, 0),
+    gravity: clampNumber(rawDef.gravity, 0, 40, 0),
+    fuse: clampNumber(rawDef.fuse, 0, 10, 0),
+    life: clampNumber(rawDef.life, 0, 10, 0),
+    maxLife: clampNumber(rawDef.maxLife, 0, 10, 0),
+    hitRadius: clampNumber(rawDef.hitRadius, 0, 2, 1.2),
+    stickyDelaySec: clampNumber(rawDef.stickExplodeDelay, 0, 10, 0),
+    catchRadius: clampNumber(rawDef.catchRadius, 0, 3, 0),
+    trackDurationSec: clampNumber(rawDef.trackDuration, 0, 5, 0),
+    trackLerp: clampNumber(rawDef.trackLerp, 0, 20, 0)
+  };
+}
+
 export function entityCorePosition(entity, deps) {
   deps = deps || {};
   return {
@@ -107,7 +132,10 @@ export function spawnProjectile(room, player, throwableId, clientThrowId, throwI
   deps = deps || {};
   const throwableStats = deps.throwableStats || {};
   const nowMs = deps.nowMs;
-  const def = throwableStats[throwableId];
+  const def = sanitizeThrowableSpawnDef(
+    options && options.throwableDef ? options.throwableDef : throwableStats[throwableId],
+    throwableId
+  );
   if (!def) return null;
   const intent = room.validateThrowIntent(player, throwIntent);
   const forward = intent.direction;
@@ -144,11 +172,11 @@ export function spawnProjectile(room, player, throwableId, clientThrowId, throwI
     launchDirX: forward.x,
     launchDirY: forward.y,
     launchDirZ: forward.z,
-    hitRadius: Number(def.hitRadius || 1.2),
-    stickyDelaySec: (typeof def.stickExplodeDelay === 'number' ? def.stickExplodeDelay : 0),
-    catchRadius: Number(def.catchRadius || 0),
-    trackDurationSec: Number(def.trackDuration || 0),
-    trackLerp: Number(def.trackLerp || 0),
+    hitRadius: def.hitRadius,
+    stickyDelaySec: def.stickyDelaySec,
+    catchRadius: def.catchRadius,
+    trackDurationSec: def.trackDurationSec,
+    trackLerp: def.trackLerp,
     trackingTargetId: '',
     trackingUntil: 0,
     stickyUntil: 0,
@@ -636,16 +664,23 @@ export function handleThrow(room, player, msg, ws, deps) {
   const nowMs = deps.nowMs;
   if (!player || !player.alive) return;
   if (!room.canEntityUseThrowable(player)) return;
-  const throwableId = String(msg.throwableId || '');
-  const throwPayload = normalizeThrowPayload(throwableId, msg.clientThrowId || '', msg.throwIntent || null);
+  const throwPayload = normalizeThrowPayload(String(msg.throwableId || ''), msg.clientThrowId || '', msg.throwIntent || null);
+  const throwableId = String(throwPayload.throwableId || '');
   const clientThrowId = throwPayload.clientThrowId;
-  const def = throwableStats[throwableId];
-  if (!def) return;
+  const def = sanitizeThrowableSpawnDef(throwableStats[throwableId], throwableId);
+  if (!def) {
+    if (ws && room.send) {
+      room.send(ws, { t: deps.msgThrowReject, throwableId, clientThrowId, reason: 'invalid_throwable' });
+    }
+    return;
+  }
   if (!room.consumeThrowCharge(player, throwableId)) {
     room.send(ws, { t: deps.msgThrowReject, throwableId, clientThrowId, reason: 'cooldown_or_empty' });
     return;
   }
-  const projectile = room.spawnProjectile(player, throwableId, clientThrowId, throwPayload.throwIntent || null);
+  const projectile = room.spawnProjectile(player, throwableId, clientThrowId, throwPayload.throwIntent || null, {
+    throwableDef: def
+  });
   if (!projectile) {
     const inv = player.throwables && player.throwables[throwableId];
     if (inv) inv.charges = Math.min(inv.maxCharges, inv.charges + 1);

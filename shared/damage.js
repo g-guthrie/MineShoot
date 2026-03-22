@@ -11,19 +11,23 @@ import {
 } from './survivability.js';
 
 export function applyFalloff(baseDamage, distance, bands) {
-  if (!Array.isArray(bands) || bands.length === 0) return Math.max(1, Math.round(baseDamage));
+  var normalizedBaseDamage = sanitizeDamageAmount(baseDamage);
+  if (normalizedBaseDamage <= 0) return 0;
+  var normalizedDistance = Number(distance);
+  if (!isFinite(normalizedDistance) || normalizedDistance < 0) normalizedDistance = 0;
+  if (!Array.isArray(bands) || bands.length === 0) return Math.max(1, Math.round(normalizedBaseDamage));
   for (var i = 0; i < bands.length; i++) {
     var band = bands[i] || {};
     var maxDistance = Number(band.maxDistance);
     var scale = Number(band.scale);
     if (!isFinite(maxDistance) || maxDistance <= 0 || !isFinite(scale)) continue;
-    if (distance <= maxDistance) {
-      return Math.max(1, Math.round(baseDamage * Math.max(0, scale)));
+    if (normalizedDistance <= maxDistance) {
+      return Math.max(1, Math.round(normalizedBaseDamage * Math.max(0, scale)));
     }
   }
   var tail = bands[bands.length - 1] || {};
   var tailScale = isFinite(Number(tail.scale)) ? Math.max(0, Number(tail.scale)) : 1;
-  return Math.max(1, Math.round(baseDamage * tailScale));
+  return Math.max(1, Math.round(normalizedBaseDamage * tailScale));
 }
 
 var SURVIVABILITY = gameplayTuning.survivability || {};
@@ -32,6 +36,13 @@ var DEFAULT_ARMOR_REGEN_PER_SEC = DEFAULT_SHARED_ARMOR_REGEN_PER_SEC;
 export var ARMOR_BUFFER_MODE_NORMAL = 'normal';
 export var ARMOR_BUFFER_MODE_HEAVY = 'heavy';
 
+export function sanitizeDamageAmount(rawDamage) {
+  var parsed = Number(rawDamage);
+  if (!isFinite(parsed) || parsed < 0) return 0;
+  if (parsed === 0) return 0;
+  return Math.max(1, Math.round(parsed));
+}
+
 /**
  * Apply damage to a target with armor-first absorption.
  * `heavy` hits are fully consumed by any remaining armor, even if they would break it.
@@ -39,9 +50,21 @@ export var ARMOR_BUFFER_MODE_HEAVY = 'heavy';
  */
 export function applyDamage(target, rawDamage, options) {
   options = options || {};
-  var damage = Math.max(1, Math.round(rawDamage));
+  var damage = sanitizeDamageAmount(rawDamage);
   var absorbed = 0;
   var armorBufferMode = String(options.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL);
+
+  if (damage <= 0) {
+    var targetHp = Number(target && target.hp || 0);
+    var targetArmor = Number(target && target.armor || 0);
+    return {
+      absorbed: 0,
+      hpLost: 0,
+      killed: targetHp <= 0,
+      hp: targetHp,
+      armor: targetArmor
+    };
+  }
 
   target.armorRegenDelay = DEFAULT_ARMOR_REGEN_DELAY;
 
@@ -93,6 +116,7 @@ runtime.__MAYHEM_RUNTIME.GameShared = runtime.__MAYHEM_RUNTIME.GameShared || {};
 runtime.__MAYHEM_RUNTIME.GameShared.damage = {
   applyFalloff: applyFalloff,
   applyDamage: applyDamage,
+  sanitizeDamageAmount: sanitizeDamageAmount,
   tickArmorRegen: tickArmorRegen,
   ARMOR_BUFFER_MODE_NORMAL: ARMOR_BUFFER_MODE_NORMAL,
   ARMOR_BUFFER_MODE_HEAVY: ARMOR_BUFFER_MODE_HEAVY

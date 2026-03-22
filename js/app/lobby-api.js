@@ -71,16 +71,76 @@
         }
     }
 
+    function createRequestSignal(options) {
+        options = options || {};
+        var externalSignal = options.signal || null;
+        var timeoutMs = Number(options.timeoutMs);
+        var scheduleTimeout = (typeof setTimeout === 'function')
+            ? setTimeout
+            : ((typeof window !== 'undefined' && window && typeof window.setTimeout === 'function') ? window.setTimeout.bind(window) : null);
+        var cancelTimeout = (typeof clearTimeout === 'function')
+            ? clearTimeout
+            : ((typeof window !== 'undefined' && window && typeof window.clearTimeout === 'function') ? window.clearTimeout.bind(window) : null);
+        var supportsAbortController = typeof AbortController === 'function';
+        var controller = supportsAbortController ? new AbortController() : null;
+        var timerHandle = 0;
+        var timedOut = false;
+        var onExternalAbort = null;
+
+        if (controller && externalSignal && typeof externalSignal.aborted === 'boolean') {
+            if (externalSignal.aborted) {
+                try { controller.abort(); } catch (_err) {}
+            } else if (typeof externalSignal.addEventListener === 'function') {
+                onExternalAbort = function () {
+                    try { controller.abort(); } catch (_err) {}
+                };
+                externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+            }
+        }
+
+        if (controller && scheduleTimeout && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+            timerHandle = scheduleTimeout(function () {
+                timedOut = true;
+                try { controller.abort(); } catch (_err) {}
+            }, timeoutMs);
+        }
+
+        return {
+            signal: controller
+                ? controller.signal
+                : (externalSignal || null),
+            didTimeout: function () {
+                return timedOut;
+            },
+            cleanup: function () {
+                if (timerHandle && cancelTimeout) {
+                    cancelTimeout(timerHandle);
+                    timerHandle = 0;
+                }
+                if (externalSignal && onExternalAbort && typeof externalSignal.removeEventListener === 'function') {
+                    externalSignal.removeEventListener('abort', onExternalAbort);
+                    onExternalAbort = null;
+                }
+            }
+        };
+    }
+
     function requestJson(path, options) {
         options = options || {};
         var requestUrl = resolveApiUrl(path);
+        var requestControl = createRequestSignal({
+            signal: options.signal || null,
+            timeoutMs: Number.isFinite(Number(options.timeoutMs)) ? Number(options.timeoutMs) : 8000
+        });
         return fetch(requestUrl, {
             method: options.method || 'GET',
             headers: options.headers || {},
             credentials: 'include',
-            body: options.body
+            body: options.body,
+            signal: requestControl.signal || undefined
         }).then(function (response) {
             return response.json().catch(function () { return null; }).then(function (body) {
+                requestControl.cleanup();
                 if (!response.ok || !body || !body.ok) {
                     throw buildRequestError(
                         (body && body.error) || ('HTTP ' + String(response.status) + ' at ' + readableUrl(response.url || requestUrl)),
@@ -92,7 +152,26 @@
                 return body;
             });
         }).catch(function (err) {
+            requestControl.cleanup();
             if (err && err.isMenuRequestError) throw err;
+            var aborted = !!(
+                err && (
+                    err.name === 'AbortError' ||
+                    err.code === 20 ||
+                    err.aborted === true
+                )
+            );
+            if (aborted) {
+                var abortErr = buildRequestError(
+                    requestControl.didTimeout() ? 'Request timed out.' : 'Request aborted.',
+                    0,
+                    requestUrl,
+                    null
+                );
+                abortErr.aborted = true;
+                abortErr.timedOut = requestControl.didTimeout();
+                throw abortErr;
+            }
             throw buildRequestError(
                 (err && err.message) ? err.message : 'Network request failed.',
                 err && err.status ? err.status : 0,

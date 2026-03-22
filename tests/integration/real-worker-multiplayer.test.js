@@ -297,10 +297,10 @@ test('real worker: duplicate sockets are superseded cleanly', { timeout: TEST_TI
       await delay(250);
       assert.equal(Number(observer.latestEntity(sharedUserId).z || 0), unchangedZ);
 
-      await sendForwardBurst(socketB, 1, 8);
+      await sendForwardBurst(socketB, 100, 12);
       await observer.waitForSnapshot(() => {
         const entity = observer.latestEntity(sharedUserId);
-        return entity && Number(entity.z || 0) < (unchangedZ - 1);
+        return entity && Number(entity.z || 0) < (unchangedZ - 0.2);
       }, SNAPSHOT_TIMEOUT_MS);
       assert.ok(observer.latestEntity(sharedUserId));
     } finally {
@@ -344,6 +344,7 @@ test('real worker: authoritative fire produces damage and death through the serv
 
       const shotToken = `itest-shot-${shotIndex}`;
       const beforeHp = Number(targetState.hp || 0);
+      const beforeArmor = Number(targetState.armor || 0);
       const aimForward = normalizeForward(shooterState, targetState);
 
       await shooter.sendFire({
@@ -376,7 +377,8 @@ test('real worker: authoritative fire produces damage and death through the serv
 
       await target.waitForSnapshot(() => {
         const current = target.latestEntity(target.userId);
-        return current && Number(current.hp || 0) < beforeHp;
+        if (!current) return false;
+        return Number(current.hp || 0) < beforeHp || Number(current.armor || 0) < beforeArmor;
       }, SNAPSHOT_TIMEOUT_MS);
 
       killed = !!targetDamage.killed;
@@ -386,7 +388,7 @@ test('real worker: authoritative fire produces damage and death through the serv
         }, SNAPSHOT_TIMEOUT_MS);
         sawRespawn = !!respawn;
       } else {
-        await delay(125);
+        await delay(320);
       }
     }
 

@@ -5,12 +5,32 @@ import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { protocol } from '../../../shared/protocol.js';
 import {
   applyDamage as applySharedDamage,
+  sanitizeDamageAmount,
   ARMOR_BUFFER_MODE_NORMAL
 } from '../../../shared/damage.js';
 
 const WEAPON_FALLOFF = gameplayTuning.weaponFalloff || {};
 
 const MSG_S2C = protocol.msg.s2c;
+
+function clampNumber(value, min, max, fallback = 0) {
+  let parsed = Number(value);
+  if (!Number.isFinite(parsed)) parsed = Number(fallback || 0);
+  if (!Number.isFinite(parsed)) parsed = 0;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function sanitizeThrowableRadius(value) {
+  return clampNumber(value, 0, 10, 0);
+}
+
+function sanitizeThrowableDamage(value) {
+  return clampNumber(value, 0, 500, 0);
+}
+
+function sanitizeThrowableDuration(value) {
+  return clampNumber(value, 0, 10, 0);
+}
 
 export function applyWeaponFalloff(weaponId, baseDamage, distance) {
   const id = String(weaponId || '');
@@ -21,6 +41,8 @@ export function applyWeaponFalloff(weaponId, baseDamage, distance) {
 
 export function applyDamage(target, damage, options = {}) {
   if (!target || !target.alive) return null;
+  const sanitizedDamage = sanitizeDamageAmount(damage);
+  if (sanitizedDamage <= 0) return null;
 
   const now = nowMs();
   if ((target.spawnShieldUntil || 0) > now) return null;
@@ -28,7 +50,7 @@ export function applyDamage(target, damage, options = {}) {
 
   const hpBefore = target.hp;
   const armorBefore = target.armor;
-  applySharedDamage(target, damage, {
+  applySharedDamage(target, sanitizedDamage, {
     armorBufferMode: String(options.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
   });
 
@@ -53,7 +75,8 @@ export function applyDamage(target, damage, options = {}) {
 export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   if (!target || !target.alive) return null;
   const armorBufferMode = String(opts.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL);
-  const damage = Math.max(1, Math.round(baseDamage));
+  const damage = sanitizeDamageAmount(baseDamage);
+  if (damage <= 0) return null;
 
   return applyDamage(target, damage, { armorBufferMode });
 }
@@ -132,9 +155,12 @@ export function projectileDamageHit(room, projectile, target, hitType) {
   const def = THROWABLE_STATS[projectile.type];
   if (!def || !target) return;
   const owner = room.getEntityById(projectile.ownerId);
-  const damage = hitType === 'head'
-    ? (def.headDamage || def.damage || 1)
-    : (def.bodyDamage || def.damage || 1);
+  const damage = sanitizeThrowableDamage(
+    hitType === 'head'
+      ? (def.headDamage || def.damage || 0)
+      : (def.bodyDamage || def.damage || 0)
+  );
+  if (damage <= 0) return;
   const out = applyDamageFromSource(owner, target, damage, {
     hitType,
     weaponId: projectile.type || 'knife',
@@ -154,6 +180,8 @@ export function explodeProjectile(room, projectile, x, y, z) {
   const def = THROWABLE_STATS[projectile.type];
   if (!def) return;
   if (projectile.type === 'molotov') {
+    const fireRadius = sanitizeThrowableRadius(def.fireRadius);
+    const fireDuration = sanitizeThrowableDuration(def.fireDuration);
     const zoneId = `zone_${room.nextFireZoneSeq++}`;
     room.fireZones.set(zoneId, {
       id: zoneId,
@@ -161,15 +189,16 @@ export function explodeProjectile(room, projectile, x, y, z) {
       x,
       y,
       z,
-      radius: def.fireRadius,
-      life: def.fireDuration,
+      radius: fireRadius,
+      life: fireDuration,
       tickTimer: 0
     });
     room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: projectile.id, impactType: 'molotov', projectileType: projectile.type, x, y, z });
     return;
   }
-  const radius = def.radius || 0;
-  const damage = def.damage || 0;
+  const radius = sanitizeThrowableRadius(def.radius || 0);
+  const damage = sanitizeThrowableDamage(def.damage || 0);
+  const minBlastDamage = sanitizeThrowableDamage(def.minBlastDamage || 0);
   const owner = room.getEntityById(projectile.ownerId);
   const entities = room.getAliveEntities();
   for (let i = 0; i < entities.length; i++) {
@@ -178,7 +207,7 @@ export function explodeProjectile(room, projectile, x, y, z) {
     const dist = canApplyExplosionDamage(room, projectile, e, { x, y, z }, radius);
     if (dist === false) continue;
     const falloff = 1 - (dist / Math.max(0.001, radius));
-    const blastDamage = Math.max(Number(def.minBlastDamage || 0), Math.round(damage * falloff));
+    const blastDamage = Math.max(minBlastDamage, Math.round(damage * falloff));
     const out = applyDamageFromSource(owner, e, blastDamage, {
       hitType: 'body',
       weaponId: projectile.type || 'frag',

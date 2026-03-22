@@ -1,3 +1,36 @@
+const COMBAT_RATE_LIMITS = {
+  fire: { ratePerSec: 20, burst: 40 },
+  reload: { ratePerSec: 4, burst: 8 },
+  throw: { ratePerSec: 4, burst: 8 }
+};
+
+function consumeCombatRateLimit(player, key, now) {
+  if (!player || !key) return true;
+  const limit = COMBAT_RATE_LIMITS[key];
+  if (!limit) return true;
+  if (!player.messageRateLimits || typeof player.messageRateLimits !== 'object') {
+    player.messageRateLimits = {};
+  }
+  const state = player.messageRateLimits[key] || {
+    tokens: Number(limit.burst || 0),
+    updatedAt: Number(now || 0)
+  };
+  const elapsedMs = Math.max(0, Number(now || 0) - Number(state.updatedAt || 0));
+  const refill = (elapsedMs / 1000) * Math.max(0, Number(limit.ratePerSec || 0));
+  state.tokens = Math.min(
+    Math.max(0, Number(limit.burst || 0)),
+    Math.max(0, Number(state.tokens || 0)) + refill
+  );
+  state.updatedAt = Number(now || 0);
+  if (state.tokens < 1) {
+    player.messageRateLimits[key] = state;
+    return false;
+  }
+  state.tokens -= 1;
+  player.messageRateLimits[key] = state;
+  return true;
+}
+
 export function handleRoomSocketMessage(room, ws, message, deps) {
   deps = deps || {};
   const safeJsonParse = deps.safeJsonParse;
@@ -29,6 +62,7 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
 
   const player = room.players.get(meta.userId);
   if (!player) return;
+  const now = nowMs ? nowMs() : Date.now();
 
   const type = String(msg.t || '');
   const privateLobbyLocked = isPrivateMatchRoom && isPrivateMatchRoom(room.roomName) &&
@@ -41,11 +75,13 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   }
   if (type === msgC2s.FIRE) {
     if (privateLobbyLocked) return;
+    if (!consumeCombatRateLimit(player, 'fire', now)) return;
     room.handleFire(player, msg);
     return;
   }
   if (type === msgC2s.RELOAD) {
     if (privateLobbyLocked) return;
+    if (!consumeCombatRateLimit(player, 'reload', now)) return;
     room.handleReload(player, msg);
     return;
   }
@@ -59,6 +95,7 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   }
   if (type === msgC2s.THROW) {
     if (privateLobbyLocked) return;
+    if (!consumeCombatRateLimit(player, 'throw', now)) return;
     room.handleThrow(player, msg, ws);
     return;
   }
@@ -72,7 +109,7 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     return;
   }
   if (type === msgC2s.PING) {
-    room.send(ws, { t: msgS2c.PONG, clientTime: msg.clientTime || 0, serverTime: nowMs ? nowMs() : 0 });
+    room.send(ws, { t: msgS2c.PONG, clientTime: msg.clientTime || 0, serverTime: now });
   }
 }
 
