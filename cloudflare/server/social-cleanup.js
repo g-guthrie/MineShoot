@@ -12,6 +12,7 @@ import {
   clearPrivateRoomInvitesByRoom,
   clearPublicMatchAssignment
 } from './party-match-state.js';
+import { notifyPrivateRoomLobbyHub } from './private-room-lobby-hub-sync.js';
 
 let ensurePartySocialSchemaPromise = null;
 const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
@@ -96,6 +97,7 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       }))
     })
   }).catch(() => null);
+  await notifyPrivateRoomLobbyHub(env, roomId);
 
   return roomState;
 }
@@ -137,6 +139,7 @@ async function cleanupActorPrivateRoom(env, actorId) {
   if (!remaining.length) {
     await clearPrivateRoomInvitesByRoom(env, roomId);
     await deletePrivateRoom(env, roomId);
+    await notifyPrivateRoomLobbyHub(env, roomId);
     return roomId;
   }
 

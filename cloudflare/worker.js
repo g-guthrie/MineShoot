@@ -1,4 +1,4 @@
-import { handleLogin, handleLogout, handleMe } from './server/auth.js';
+import { handleLogin, handleLogout, handleMe, handleAuthConfig } from './server/auth.js';
 import { handleMatchmaking } from './server/matchmaking.js';
 import { handleParty } from './server/party.js';
 import { handlePrivateRoomLobby } from './server/private-room-lobby.js';
@@ -8,6 +8,7 @@ import { handleWsUpgrade } from './server/ws-upgrade.js';
 import { handleWsLobbyUpgrade } from './server/ws-lobby-upgrade.js';
 import { handleTestRoomFixture } from './server/test-room-fixture.js';
 import { GlobalArenaRoom } from './server/room/GlobalArenaRoom.js';
+import { PrivateRoomLobbyHub } from './server/private-room-lobby-hub.js';
 import { gameplayTuning } from '../shared/gameplay-tuning.js';
 import { protocol } from '../shared/protocol.js';
 
@@ -25,7 +26,7 @@ const TEST_ROOM_FIXTURE_PATH = '/api/test/room-fixture';
 
 const CLASS_PRESETS = GAMEPLAY_TUNING_WU.classPresets;
 
-export { GlobalArenaRoom };
+export { GlobalArenaRoom, PrivateRoomLobbyHub };
 
 export default {
   async fetch(request, env) {
@@ -33,6 +34,10 @@ export default {
 
     if (request.method === 'POST' && url.pathname === (AUTH_PATH.login || '/api/auth/login')) {
       return handleLogin(env, request);
+    }
+
+    if (request.method === 'GET' && url.pathname === (AUTH_PATH.config || '/api/auth/config')) {
+      return handleAuthConfig(env);
     }
 
     if (request.method === 'POST' && url.pathname === (AUTH_PATH.logout || '/api/auth/logout')) {

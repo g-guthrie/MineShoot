@@ -161,9 +161,36 @@
             if (matrixDirty) tracerInstancedMesh.instanceMatrix.needsUpdate = true;
         }
 
+        function dispose() {
+            if (tracerInstancedMesh && tracerInstancedMesh.parent) {
+                tracerInstancedMesh.parent.remove(tracerInstancedMesh);
+            }
+            if (tracerInstancedMesh) {
+                if (tracerInstancedMesh.geometry && typeof tracerInstancedMesh.geometry.dispose === 'function') {
+                    tracerInstancedMesh.geometry.dispose();
+                }
+                var material = tracerInstancedMesh.material;
+                if (Array.isArray(material)) {
+                    for (var i = 0; i < material.length; i++) {
+                        if (material[i] && typeof material[i].dispose === 'function') {
+                            material[i].dispose();
+                        }
+                    }
+                } else if (material && typeof material.dispose === 'function') {
+                    material.dispose();
+                }
+            }
+            tracerPool = [];
+            tracerCursor = 0;
+            tracerScene = null;
+            tracerInstancedMesh = null;
+            tracerPoolReady = false;
+        }
+
         return {
             spawnTracer: spawnTracer,
-            updateTracers: updateTracers
+            updateTracers: updateTracers,
+            dispose: dispose
         };
     }
 

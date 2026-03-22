@@ -906,6 +906,27 @@
         });
     };
 
+    GameAudio.stopAll = function () {
+        pendingPlaybacks.length = 0;
+        unlockInFlight = false;
+        stopChokeLoop('caster');
+        stopChokeLoop('victim');
+        sampleWarmupStarted = false;
+        noiseBuffer = null;
+        var currentCtx = ctx;
+        ctx = null;
+        if (currentCtx && typeof currentCtx.close === 'function') {
+            try {
+                var maybePromise = currentCtx.close();
+                if (maybePromise && typeof maybePromise.catch === 'function') {
+                    maybePromise.catch(function () {});
+                }
+            } catch (_err) {
+                // noop
+            }
+        }
+    };
+
     loadMutedPreference();
 
     globalThis.__MAYHEM_RUNTIME.GameAudio = GameAudio;

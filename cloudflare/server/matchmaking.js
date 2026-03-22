@@ -1,4 +1,5 @@
 import { json, sanitizeRoomId } from './transport.js';
+import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
 import { loadCurrentPartyContext, loadEligiblePartyMembers, resolveActor } from './party.js';
 import { handlePrivateRoomLobby } from './private-room-lobby.js';
 import {
@@ -19,6 +20,9 @@ import {
 import {
   privateRoomCodeFromId
 } from '../../shared/private-room-codes.js';
+
+const MATCHMAKING_RATE_WINDOW_MS = 60_000;
+const MATCHMAKING_RATE_LIMIT = 30;
 
 function clampInt(value, min, max, fallback) {
   const next = Math.round(Number(value));
@@ -272,6 +276,15 @@ async function delegatePrivateRoomAction(env, request, body, action) {
 export async function handleMatchmaking(env, request) {
   if (request.method !== 'POST') {
     return json({ ok: false, error: 'Method not allowed.' }, 405, { Allow: 'POST' });
+  }
+
+  const requestIp = getClientIp(request);
+  const requestLimit = consumeRateLimit(env, `matchmaking:${requestIp}`, {
+    limit: MATCHMAKING_RATE_LIMIT,
+    windowMs: MATCHMAKING_RATE_WINDOW_MS
+  });
+  if (!requestLimit.ok) {
+    return rateLimitedJson(requestLimit.retryAfterSec);
   }
 
   const body = await request.json().catch(() => null);

@@ -437,6 +437,20 @@
         resetInventory();
     };
 
+    GameThrowables.shutdown = function () {
+        trajectoryApi.reset();
+        projectileApi.reset();
+        fireZoneApi.reset();
+        sceneRef = null;
+        netFireZoneMap = {};
+        debugTelemetry.lastIntent = null;
+        debugTelemetry.lastAckClientThrowId = '';
+        debugTelemetry.lastRejectClientThrowId = '';
+        debugTelemetry.lastReconcileClientThrowId = '';
+        debugTelemetry.predictedCount = 0;
+        resetInventory();
+    };
+
     GameThrowables.getTypes = function () {
         refreshThrowableConfig();
         return throwableOrder.slice();

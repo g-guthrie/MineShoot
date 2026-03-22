@@ -18,12 +18,13 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         if (MATS) return MATS;
         var lib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
         MATS = {
-            ivory: lib.getLambert({ color: 0xe9e4d8 }),
-            marble: lib.getLambert({ color: 0xf8f4ec }),
-            shadow: lib.getLambert({ color: 0xc9bfb0 }),
+            ivory: lib.getLambert({ color: 0xf1ede4 }),
+            marble: lib.getLambert({ color: 0xfffdfa }),
+            peakWhite: lib.getLambert({ color: 0xffffff }),
+            shadow: lib.getLambert({ color: 0xd5ccbf }),
             warmShadow: lib.getLambert({ color: 0xb3a792 }),
             trim: lib.getLambert({ color: 0xcda555 }),
-            trimSoft: lib.getLambert({ color: 0xe3c98e }),
+            trimSoft: lib.getLambert({ color: 0xf6f0e0 }),
             steam: lib.getLambert({ color: 0xf6fbff, transparent: true, opacity: 0.09 }),
             flameOuter: new THREE.MeshStandardMaterial({
                 color: 0xffc76a,
@@ -92,14 +93,14 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         var courtW = (bounds.maxX - bounds.minX) - 3.6;
         var courtD = (bounds.maxZ - bounds.minZ) - 3.6;
         addCenteredBlock(center, 0.16, courtW, 0.28, courtD, mats.marble, true, place);
-        addCenteredBlock(center, 0.34, 15.2, 0.12, courtD - 4.8, mats.ivory, true, place);
-        addCenteredBlock(center, 0.34, courtW - 4.8, 0.12, 15.2, mats.ivory, true, place);
+        addCenteredBlock(center, 0.34, 15.2, 0.12, courtD - 4.8, mats.peakWhite, true, place);
+        addCenteredBlock(center, 0.34, courtW - 4.8, 0.12, 15.2, mats.peakWhite, true, place);
 
         addCornerBlocks(center, [
             { x: -18.0, z: -18.0 }, { x: 18.0, z: -18.0 }, { x: -18.0, z: 18.0 }, { x: 18.0, z: 18.0 }
         ], 0.62, 4.8, 0.76, 4.8, mats.warmShadow, true, place);
 
-        addCenteredBlock(center, 0.46, 10.6, 0.12, 10.6, mats.trimSoft, false, place);
+        addCenteredBlock(center, 0.46, 10.6, 0.12, 10.6, mats.peakWhite, false, place);
     }
 
     function buildGrandApproach(center, dir, place, mats) {
@@ -165,11 +166,11 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         ];
         for (var i = 0; i < steps.length; i++) {
             var step = steps[i];
-            addFaceBlock(center, dir, step.distance, 0, step.y, 3.8, step.h, step.depth, mats.marble, true, place);
+            addFaceBlock(center, dir, step.distance, 0, step.y, 3.8, step.h, step.depth, mats.peakWhite, true, place);
         }
 
-        addFaceBlock(center, dir, 1.55, 0, 16.22, 4.8, 0.28, 0.9, mats.trim, true, place);
-        addFaceBlock(center, dir, 1.18, 0, 17.00, 3.6, 0.68, 0.7, mats.marble, true, place);
+        addFaceBlock(center, dir, 1.55, 0, 16.22, 4.8, 0.28, 0.9, mats.peakWhite, true, place);
+        addFaceBlock(center, dir, 1.18, 0, 17.00, 3.6, 0.68, 0.7, mats.peakWhite, true, place);
     }
 
     function buildMountainBands(center, place, mats) {
@@ -195,28 +196,28 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         ];
 
         addCornerBlocks(center, lower, 4.62, 7.2, 3.64, 9.2, mats.shadow, true, place);
-        addCornerBlocks(center, lower, 6.84, 6.0, 0.6, 8.0, mats.marble, true, place);
+        addCornerBlocks(center, lower, 6.84, 6.0, 0.6, 8.0, mats.peakWhite, true, place);
 
         addCornerBlocks(center, upper, 8.14, 4.8, 3.88, 6.8, mats.ivory, true, place);
-        addCornerBlocks(center, tower, 9.08, 2.0, 5.76, 2.0, mats.marble, true, place);
+        addCornerBlocks(center, tower, 9.08, 2.0, 5.76, 2.0, mats.peakWhite, true, place);
     }
 
     function buildSanctumWings(center, place, mats) {
         addCenteredBlock({ x: center.x - 10.6, z: center.z }, 7.78, 5.8, 4.36, 12.4, mats.shadow, true, place);
         addCenteredBlock({ x: center.x + 10.6, z: center.z }, 7.78, 5.8, 4.36, 12.4, mats.shadow, true, place);
-        addCenteredBlock({ x: center.x - 10.6, z: center.z }, 10.16, 4.8, 0.4, 10.6, mats.trim, true, place);
-        addCenteredBlock({ x: center.x + 10.6, z: center.z }, 10.16, 4.8, 0.4, 10.6, mats.trim, true, place);
+        addCenteredBlock({ x: center.x - 10.6, z: center.z }, 10.16, 4.8, 0.4, 10.6, mats.peakWhite, true, place);
+        addCenteredBlock({ x: center.x + 10.6, z: center.z }, 10.16, 4.8, 0.4, 10.6, mats.peakWhite, true, place);
 
         addPerimeterRing(center, 11.76, 15.8, 15.8, 0.84, 0.38, mats.trim, true, place);
 
-        addCenteredBlock(center, 13.5, 10.2, 4.2, 10.2, mats.marble, true, place);
+        addCenteredBlock(center, 13.5, 10.2, 4.2, 10.2, mats.peakWhite, true, place);
         addPerimeterRing(center, 15.92, 11.8, 11.8, 0.72, 0.32, mats.trim, true, place);
 
-        addCenteredBlock(center, 17.72, 8.8, 0.84, 8.8, mats.marble, true, place);
+        addCenteredBlock(center, 17.72, 8.8, 0.84, 8.8, mats.peakWhite, true, place);
         addCornerBlocks(center, [
             { x: -3.2, z: -3.2 }, { x: 3.2, z: -3.2 }, { x: -3.2, z: 3.2 }, { x: 3.2, z: 3.2 }
-        ], 18.88, 1.1, 2.0, 1.1, mats.ivory, true, place);
-        addCenteredBlock(center, 20.04, 10.2, 0.48, 10.2, mats.trim, true, place);
+        ], 18.88, 1.1, 2.0, 1.1, mats.peakWhite, true, place);
+        addCenteredBlock(center, 20.04, 10.2, 0.48, 10.2, mats.peakWhite, true, place);
     }
 
     function buildTorchAndSteam(center, place, mats, ctx) {
@@ -340,7 +341,7 @@ import { pointInBounds as pt, cloneMaterial } from './biome-utils.js';
         buildMountainPavilions(center, place, mats);
 
         addCenteredBlock(center, 0.8, 40.0, 1.6, 40.0, mats.shadow, true, place);
-        addCenteredBlock(center, 2.2, 32.0, 1.2, 32.0, mats.ivory, true, place);
+        addCenteredBlock(center, 2.2, 32.0, 1.2, 32.0, mats.peakWhite, true, place);
         addCenteredBlock(center, 3.6, 24.0, 1.6, 24.0, mats.ivory, true, place);
         addCenteredBlock(center, 5.2, 18.0, 1.2, 18.0, mats.marble, true, place);
 

@@ -8,6 +8,7 @@ PAGES_PROJECT="${CF_PAGES_PROJECT:-mayhem}"
 PAGES_BRANCH="${CF_PAGES_BRANCH:-main}"
 PAGES_DIR="${CF_PAGES_DIR:-dist}"
 DEPLOY_MESSAGE="${DEPLOY_MESSAGE:-}"
+DIRECT_API_ROUTE_MODE="${CF_DIRECT_API_ROUTE_MODE:-warn}"
 SKIP_BUILD=0
 
 usage() {
@@ -26,6 +27,10 @@ Environment overrides:
   CF_PAGES_BRANCH      Pages branch target. Default: main
   CF_PAGES_DIR         Built Pages asset directory. Default: dist
   DEPLOY_MESSAGE       Default deploy message when --message is not provided.
+  CF_DIRECT_API_ROUTE_MODE
+                       `warn` (default) prints a reminder that production should
+                       route /api/* and /api/ws* directly to the Worker.
+                       `require` fails the deploy until direct routing is confirmed.
 EOF
 }
 
@@ -58,6 +63,18 @@ done
 if [[ -z "$DEPLOY_MESSAGE" ]]; then
   DEPLOY_MESSAGE="Manual workspace deploy"
 fi
+
+case "$DIRECT_API_ROUTE_MODE" in
+  require)
+    echo "[FAIL] Direct Worker routing for /api/* and /api/ws* must be confirmed before production deploys."
+    echo "[FAIL] Re-run with CF_DIRECT_API_ROUTE_MODE=warn if you intentionally want a reminder-only deploy."
+    exit 1
+    ;;
+  warn|*)
+    echo "[WARN] Production should route /api/* and /api/ws* directly to the Worker."
+    echo "[WARN] If traffic still lands in Pages Functions first, you are paying a proxy double-hop."
+    ;;
+esac
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
   echo "[INFO] Building frontend..."

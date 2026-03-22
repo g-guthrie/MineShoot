@@ -11,5 +11,10 @@
         return requestAnimationFrame(cb);
     };
 
+    GameLoop.cancelFrame = function (handle) {
+        if (!handle) return;
+        cancelAnimationFrame(handle);
+    };
+
     globalThis.__MAYHEM_RUNTIME.GameLoop = GameLoop;
 })();

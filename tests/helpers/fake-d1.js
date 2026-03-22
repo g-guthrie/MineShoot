@@ -396,12 +396,13 @@ export function createFakeEnv() {
       const user = state.users.get(String(session.user_id));
       if (!user) return null;
       const profile = state.profiles.get(String(session.user_id)) || {};
-      return {
-        session_id: session.id,
-        user_id: session.user_id,
-        expires_at: session.expires_at,
-        username: user.username,
-        class_id: profile.class_id || 'abilities',
+        return {
+          session_id: session.id,
+          user_id: session.user_id,
+          expires_at: session.expires_at,
+          last_seen_at: session.last_seen_at || 0,
+          username: user.username,
+          class_id: profile.class_id || 'abilities',
         display_name: profile.display_name || null,
         profile_enabled: profile.profile_enabled || 0,
         kills: profile.kills || 0,
@@ -657,5 +658,18 @@ export function createFakeEnv() {
     }
   };
 
-  return { DB, GLOBAL_ARENA, __state: state };
+  const PRIVATE_ROOM_LOBBY_HUB = {
+    idFromName(name) {
+      return String(name || '');
+    },
+    get() {
+      return {
+        async fetch() {
+          return new Response(null, { status: 204 });
+        }
+      };
+    }
+  };
+
+  return { DB, GLOBAL_ARENA, PRIVATE_ROOM_LOBBY_HUB, __state: state };
 }

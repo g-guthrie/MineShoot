@@ -207,5 +207,14 @@
         return shotRuntime.buildNetworkFireIntent(shotToken);
     };
 
+    GameHitscan.reset = function () {
+        if (tracerRuntime && tracerRuntime.dispose) {
+            tracerRuntime.dispose();
+        }
+        weaponRuntime = null;
+        tracerRuntime = null;
+        shotRuntime = null;
+    };
+
     runtime.GameHitscan = GameHitscan;
 })();

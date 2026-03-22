@@ -10,6 +10,10 @@
     function create(opts) {
         opts = opts || {};
         var bound = false;
+        var authConfig = { turnstile: { enabled: false, siteKey: '' } };
+        var authConfigPromise = null;
+        var turnstileToken = '';
+        var turnstileWidgetId = null;
 
         function authOverlay() {
             return document.getElementById('auth-overlay');
@@ -28,6 +32,79 @@
             if (!el) return;
             el.textContent = msg || '';
             el.style.color = isErr ? '#ff9a9a' : '#d4ffd4';
+        }
+
+        function turnstileWrap() {
+            return document.getElementById('auth-turnstile-wrap');
+        }
+
+        function turnstileEl() {
+            return document.getElementById('auth-turnstile');
+        }
+
+        function turnstileApi() {
+            return window.turnstile || null;
+        }
+
+        function clearTurnstileToken() {
+            turnstileToken = '';
+        }
+
+        function loadAuthConfig(forceRefresh) {
+            if (!opts.loadAuthConfig) {
+                authConfig = { turnstile: { enabled: false, siteKey: '' } };
+                return Promise.resolve(authConfig);
+            }
+            if (!forceRefresh && authConfigPromise) return authConfigPromise;
+            authConfigPromise = Promise.resolve(opts.loadAuthConfig(!!forceRefresh))
+                .then(function (nextConfig) {
+                    authConfig = nextConfig && nextConfig.turnstile
+                        ? nextConfig
+                        : { turnstile: { enabled: false, siteKey: '' } };
+                    return authConfig;
+                })
+                .catch(function () {
+                    authConfig = { turnstile: { enabled: false, siteKey: '' } };
+                    return authConfig;
+                })
+                .finally(function () {
+                    authConfigPromise = null;
+                });
+            return authConfigPromise;
+        }
+
+        function renderTurnstileWidget() {
+            var wrap = turnstileWrap();
+            var target = turnstileEl();
+            var turnstile = turnstileApi();
+            var enabled = !!(authConfig && authConfig.turnstile && authConfig.turnstile.enabled && authConfig.turnstile.siteKey);
+            if (wrap) wrap.hidden = !enabled;
+            if (!enabled || !target) {
+                clearTurnstileToken();
+                return;
+            }
+            if (!turnstile || typeof turnstile.render !== 'function') return;
+            if (turnstileWidgetId !== null) return;
+            turnstileWidgetId = turnstile.render(target, {
+                sitekey: String(authConfig.turnstile.siteKey || ''),
+                callback: function (token) {
+                    turnstileToken = String(token || '');
+                },
+                'expired-callback': function () {
+                    clearTurnstileToken();
+                },
+                'error-callback': function () {
+                    clearTurnstileToken();
+                }
+            });
+        }
+
+        function resetTurnstileWidget() {
+            clearTurnstileToken();
+            var turnstile = turnstileApi();
+            if (turnstile && turnstileWidgetId !== null && typeof turnstile.reset === 'function') {
+                turnstile.reset(turnstileWidgetId);
+            }
         }
 
         function setVisible(visible) {
@@ -105,6 +182,10 @@
             }
             if (loggedIn) {
                 renderProfileSummary();
+            } else {
+                loadAuthConfig(false).then(function () {
+                    renderTurnstileWidget();
+                });
             }
         }
 
@@ -159,10 +240,14 @@
                         setStatus('PIN must be exactly 4 digits.', true);
                         return;
                     }
+                    if (authConfig && authConfig.turnstile && authConfig.turnstile.enabled && !turnstileToken) {
+                        setStatus('Complete the security check.', true);
+                        return;
+                    }
 
                     lockForm(true);
                     setStatus('Signing in...', false);
-                    Promise.resolve(opts.login ? opts.login(username, pin) : null)
+                    Promise.resolve(opts.login ? opts.login(username, pin, turnstileToken) : null)
                         .then(function () {
                             setStatus('Welcome, ' + String((opts.getUser && opts.getUser() && opts.getUser().username) || username) + '!', false);
                             return opts.loadProfile ? opts.loadProfile() : null;
@@ -170,10 +255,12 @@
                         .then(function () {
                             render();
                             lockForm(false);
+                            resetTurnstileWidget();
                             setVisible(false);
                         })
                         .catch(function (err) {
                             lockForm(false);
+                            resetTurnstileWidget();
                             setStatus((err && err.message) ? err.message : 'Login failed.', true);
                         });
                 });
@@ -184,6 +271,11 @@
                     var nextVisible = !!(authOverlay() && authOverlay().hidden);
                     render();
                     setVisible(nextVisible);
+                    if (nextVisible) {
+                        loadAuthConfig(false).then(function () {
+                            renderTurnstileWidget();
+                        });
+                    }
                     if (nextVisible && usernameInput && !(opts.getUser && opts.getUser())) {
                         usernameInput.focus();
                     }

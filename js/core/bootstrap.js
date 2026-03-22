@@ -60,11 +60,15 @@
     };
 
     GameBootstrap.installResizeHandler = function (renderer) {
-        window.addEventListener('resize', function () {
+        function handleResize() {
             if (!renderer) return;
             renderer.setPixelRatio(cappedPixelRatio());
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        }
+        window.addEventListener('resize', handleResize);
+        return function removeResizeHandler() {
+            window.removeEventListener('resize', handleResize);
+        };
     };
 
     globalThis.__MAYHEM_RUNTIME.GameBootstrap = GameBootstrap;

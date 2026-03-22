@@ -557,22 +557,28 @@
             if (!debugPreviewVolumesEnabled) clearTrajectoryPreview();
         }
 
+        function disposePreviewNode(node) {
+            if (!node) return;
+            if (node.parent) node.parent.remove(node);
+            if (node.geometry && typeof node.geometry.dispose === 'function') {
+                node.geometry.dispose();
+            }
+            var materials = node.material
+                ? (Array.isArray(node.material) ? node.material : [node.material])
+                : [];
+            for (var i = 0; i < materials.length; i++) {
+                if (materials[i] && typeof materials[i].dispose === 'function') {
+                    materials[i].dispose();
+                }
+            }
+        }
+
         function reset() {
-            if (trajectoryPreview.dotsNear && trajectoryPreview.dotsNear.parent) {
-                trajectoryPreview.dotsNear.parent.remove(trajectoryPreview.dotsNear);
-            }
-            if (trajectoryPreview.dotsFar && trajectoryPreview.dotsFar.parent) {
-                trajectoryPreview.dotsFar.parent.remove(trajectoryPreview.dotsFar);
-            }
-            if (trajectoryPreview.impact && trajectoryPreview.impact.parent) {
-                trajectoryPreview.impact.parent.remove(trajectoryPreview.impact);
-            }
-            if (trajectoryPreview.areaSphere && trajectoryPreview.areaSphere.parent) {
-                trajectoryPreview.areaSphere.parent.remove(trajectoryPreview.areaSphere);
-            }
-            if (trajectoryPreview.areaDisk && trajectoryPreview.areaDisk.parent) {
-                trajectoryPreview.areaDisk.parent.remove(trajectoryPreview.areaDisk);
-            }
+            disposePreviewNode(trajectoryPreview.dotsNear);
+            disposePreviewNode(trajectoryPreview.dotsFar);
+            disposePreviewNode(trajectoryPreview.impact);
+            disposePreviewNode(trajectoryPreview.areaSphere);
+            disposePreviewNode(trajectoryPreview.areaDisk);
             trajectoryPreview.dotsNear = null;
             trajectoryPreview.dotsFar = null;
             trajectoryPreview.impact = null;

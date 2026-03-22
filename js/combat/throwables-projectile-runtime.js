@@ -627,7 +627,7 @@
         function removeProjectile(index) {
             var p = projectiles[index];
             if (!p) return;
-            detachSceneObject(p.mesh);
+            disposeSceneObject(p.mesh);
             var lastIndex = projectiles.length - 1;
             if (index !== lastIndex) {
                 projectiles[index] = projectiles[lastIndex];
@@ -669,7 +669,7 @@
         function removeNetProjectileById(id) {
             var entry = netProjectileMap[id];
             if (!entry) return;
-            detachSceneObject(entry.mesh);
+            disposeSceneObject(entry.mesh);
             delete netProjectileMap[id];
         }
 
@@ -687,10 +687,42 @@
             }
         }
 
+        function disposeSceneObject(object3d) {
+            if (!object3d) return;
+            detachSceneObject(object3d);
+            if (typeof object3d.traverse === 'function') {
+                object3d.traverse(function (node) {
+                    if (node && node.geometry && typeof node.geometry.dispose === 'function') {
+                        node.geometry.dispose();
+                    }
+                    var materials = node && node.material
+                        ? (Array.isArray(node.material) ? node.material : [node.material])
+                        : [];
+                    for (var i = 0; i < materials.length; i++) {
+                        if (materials[i] && typeof materials[i].dispose === 'function') {
+                            materials[i].dispose();
+                        }
+                    }
+                });
+                return;
+            }
+            if (object3d.geometry && typeof object3d.geometry.dispose === 'function') {
+                object3d.geometry.dispose();
+            }
+            var materials = object3d.material
+                ? (Array.isArray(object3d.material) ? object3d.material : [object3d.material])
+                : [];
+            for (var mi = 0; mi < materials.length; mi++) {
+                if (materials[mi] && typeof materials[mi].dispose === 'function') {
+                    materials[mi].dispose();
+                }
+            }
+        }
+
         function removeFlashAt(index) {
             var flash = impactFlashes[index];
             if (!flash) return;
-            detachSceneObject(flash.mesh);
+            disposeSceneObject(flash.mesh);
             impactFlashes.splice(index, 1);
         }
 
@@ -1112,7 +1144,7 @@
         function reset() {
             for (var i = projectiles.length - 1; i >= 0; i--) {
                 var projectile = projectiles[i];
-                detachSceneObject(projectile && projectile.mesh);
+                disposeSceneObject(projectile && projectile.mesh);
             }
             for (var key in netProjectileMap) {
                 if (!Object.prototype.hasOwnProperty.call(netProjectileMap, key)) continue;

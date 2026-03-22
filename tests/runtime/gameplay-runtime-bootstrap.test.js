@@ -9,8 +9,19 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     enemyInit: [],
     localMatchInit: [],
     netInit: 0,
+    netShutdown: 0,
     throwableInfo: [],
-    docsInit: 0
+    docsInit: 0,
+    removeResizeHandler: 0,
+    worldDispose: 0,
+    playerDestroy: 0,
+    enemyDispose: 0,
+    throwablesShutdown: 0,
+    hookVisualsDispose: 0,
+    overheadReset: 0,
+    uiReset: 0,
+    hitscanReset: 0,
+    audioStopAll: 0
   };
   const runtime = {
     GameBootstrap: {
@@ -21,14 +32,24 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
           clock: { label: 'clock' }
         };
       },
-      installResizeHandler() {}
+      installResizeHandler() {
+        return function removeResizeHandler() {
+          calls.removeResizeHandler += 1;
+        };
+      }
     },
     GameWorld: {
       create() {},
+      dispose() {
+        calls.worldDispose += 1;
+      },
       getRecommendedEnemyCount() { return 6; }
     },
     GameUI: {
       init() {},
+      resetGameplayHud() {
+        calls.uiReset += 1;
+      },
       updateThrowableInfo(state) {
         calls.throwableInfo.push(state);
       },
@@ -40,15 +61,24 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
       }
     },
     GameOverhead: {
-      init() {}
+      init() {},
+      reset() {
+        calls.overheadReset += 1;
+      }
     },
     GamePlayer: {
       init() {
         return { label: 'camera' };
+      },
+      destroy() {
+        calls.playerDestroy += 1;
       }
     },
     GameThrowables: {
       init() {},
+      shutdown() {
+        calls.throwablesShutdown += 1;
+      },
       getState() {
         return { throwable: 'frag' };
       }
@@ -56,11 +86,21 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     GameNet: {
       init() {
         calls.netInit += 1;
+      },
+      shutdown() {
+        calls.netShutdown += 1;
       }
     },
     GameAbilities: {
       init() {},
+      clearTransientState() {},
       getHudState() { return {}; }
+    },
+    GameHookVisuals: {
+      init() {},
+      dispose() {
+        calls.hookVisualsDispose += 1;
+      }
     },
     GameGameplayHudSync: {
       syncSelfCombatHud() {}
@@ -72,7 +112,10 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     },
     GameHitscan: {
       setWeapon(id) { return { id, name: String(id || '').toUpperCase() }; },
-      getCurrentWeapon() { return { id: 'rifle', name: 'RIFLE' }; }
+      getCurrentWeapon() { return { id: 'rifle', name: 'RIFLE' }; },
+      reset() {
+        calls.hitscanReset += 1;
+      }
     },
     GameGameplayControls: {
       create() {
@@ -84,11 +127,22 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     GameLocalMatch: {
       init(options) {
         calls.localMatchInit.push(options);
+      },
+      shutdown() {
+        calls.localMatchInit.push({ shutdown: true });
       }
     },
     GameEnemy: {
       init(scene, count) {
         calls.enemyInit.push({ scene, count });
+      },
+      dispose() {
+        calls.enemyDispose += 1;
+      }
+    },
+    GameAudio: {
+      stopAll() {
+        calls.audioStopAll += 1;
       }
     },
     ...runtimeOverrides
@@ -146,6 +200,7 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
   });
 
   assert.equal(result.multiplayerMode, false);
+  assert.equal(typeof result.disposeRuntime, 'function');
   assert.deepEqual(
     JSON.parse(JSON.stringify(harness.calls.localMatchInit)),
     [{ gameMode: 'ffa' }]
@@ -155,6 +210,18 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
   assert.deepEqual(harness.calls.throwableInfo, [{ throwable: 'frag' }]);
   assert.equal(harness.calls.netInit, 0);
   assert.equal(harness.calls.docsInit, 1);
+
+  result.disposeRuntime();
+  assert.equal(harness.calls.removeResizeHandler, 1);
+  assert.equal(harness.calls.worldDispose, 1);
+  assert.equal(harness.calls.playerDestroy, 1);
+  assert.equal(harness.calls.enemyDispose, 1);
+  assert.equal(harness.calls.throwablesShutdown, 1);
+  assert.equal(harness.calls.hookVisualsDispose, 1);
+  assert.equal(harness.calls.overheadReset, 1);
+  assert.equal(harness.calls.uiReset, 1);
+  assert.equal(harness.calls.hitscanReset, 1);
+  assert.equal(harness.calls.audioStopAll, 1);
 });
 
 test('gameplay runtime bootstrap does not double-init multiplayer networking when net runtime lacks isActive', async () => {
@@ -162,6 +229,9 @@ test('gameplay runtime bootstrap does not double-init multiplayer networking whe
     GameNet: {
       init() {
         harnessCalls.netInit += 1;
+      },
+      shutdown() {
+        harnessCalls.netShutdown += 1;
       },
       getWorldMeta() {
         return {
@@ -193,6 +263,9 @@ test('gameplay runtime bootstrap does not double-init multiplayer networking whe
 
   assert.equal(result.multiplayerMode, true);
   assert.equal(harness.calls.netInit, 1);
+  result.disposeRuntime();
+  assert.equal(harness.calls.netShutdown, 1);
+  assert.equal(harness.calls.removeResizeHandler, 1);
 });
 
 test('gameplay runtime bootstrap prefers the loaded docs runtime over the legacy global docs reference', async () => {

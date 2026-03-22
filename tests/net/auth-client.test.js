@@ -158,6 +158,30 @@ test('auth client resolves protocol paths at request time instead of freezing th
   assert.equal(requests[0].url, '/api/auth/late-login');
 });
 
+test('auth client includes the optional turnstile token on login requests', async () => {
+  const requests = [];
+  const auth = await loadAuthClient(async function (url, init) {
+    requests.push({ url, init });
+    return new Response(JSON.stringify({
+      ok: true,
+      user: { id: 'user-1', username: 'ALPHA' }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
+
+  await auth.login('AlphaAuth', '1234', 'turnstile-demo-token');
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, '/api/auth/login');
+  assert.deepEqual(JSON.parse(String(requests[0].init.body || '{}')), {
+    username: 'AlphaAuth',
+    pin: '1234',
+    turnstileToken: 'turnstile-demo-token'
+  });
+});
+
 test('auth client refuses to send cookie-backed auth requests to an unexpected origin', async () => {
   const requests = [];
   const code = await fs.readFile(new URL('../../js/net/auth.js', import.meta.url), 'utf8');

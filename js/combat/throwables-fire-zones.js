@@ -216,6 +216,25 @@
             }
         }
 
+        function disposeZoneMesh(mesh) {
+            if (!mesh) return;
+            if (mesh.parent) mesh.parent.remove(mesh);
+            if (typeof mesh.traverse !== 'function') return;
+            mesh.traverse(function (node) {
+                if (node && node.geometry && typeof node.geometry.dispose === 'function') {
+                    node.geometry.dispose();
+                }
+                var materials = node && node.material
+                    ? (Array.isArray(node.material) ? node.material : [node.material])
+                    : [];
+                for (var i = 0; i < materials.length; i++) {
+                    if (materials[i] && typeof materials[i].dispose === 'function') {
+                        materials[i].dispose();
+                    }
+                }
+            });
+        }
+
         function updateFireZoneVisual(zone, now, lifeRatio) {
             if (!zone || !zone.mesh || !zone.mesh.userData || !zone.mesh.userData.zoneParts) return;
             var parts = zone.mesh.userData.zoneParts;
@@ -377,7 +396,7 @@
                 }
 
                 if (z.life <= 0) {
-                    if (z.mesh && z.mesh.parent) z.mesh.parent.remove(z.mesh);
+                    disposeZoneMesh(z.mesh);
                     fireZones.splice(i, 1);
                 }
             }
@@ -398,7 +417,7 @@
         function reset() {
             for (var i = fireZones.length - 1; i >= 0; i--) {
                 var zone = fireZones[i];
-                if (zone && zone.mesh && zone.mesh.parent) zone.mesh.parent.remove(zone.mesh);
+                disposeZoneMesh(zone && zone.mesh);
             }
             fireZones = [];
             burningEnemyStates = new Map();

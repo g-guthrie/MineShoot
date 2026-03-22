@@ -6,8 +6,12 @@ import { handleRoomSocketMessage, handleRoomSocketClose } from '../../../cloudfl
 function createSocket() {
   return {
     attachment: null,
+    closeCalls: [],
     deserializeAttachment() {
       return this.attachment;
+    },
+    close(code, reason) {
+      this.closeCalls.push({ code, reason });
     }
   };
 }
@@ -215,6 +219,65 @@ test('room socket silently throttles abusive combat message spam per player', ()
   assert.equal(fireCount, 40);
   assert.equal(reloadCount, 8);
   assert.equal(throwCount, 8);
+});
+
+test('room socket throttles abusive input and eventually closes the socket', () => {
+  const ws = createSocket();
+  let inputCount = 0;
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleInput() {
+      inputCount += 1;
+    }
+  };
+  const deps = {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 1000,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { INPUT: 'input', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  };
+
+  for (let i = 0; i < 120; i++) {
+    handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'input', seq: i }), deps);
+  }
+
+  assert.equal(inputCount, 90);
+  assert.equal(ws.closeCalls.length > 0, true);
+  assert.equal(ws.closeCalls[0].code, 1008);
+});
+
+test('room socket rejects oversized gameplay messages before parsing', () => {
+  const ws = createSocket();
+  let parsed = 0;
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]])
+  };
+
+  handleRoomSocketMessage(room, ws, 'x'.repeat(9000), {
+    safeJsonParse() {
+      parsed += 1;
+      return null;
+    },
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(parsed, 0);
+  assert.equal(ws.closeCalls.length, 1);
+  assert.equal(ws.closeCalls[0].code, 1009);
 });
 
 test('room socket close promotes a replacement socket or marks the player disconnected', () => {

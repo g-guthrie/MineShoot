@@ -239,10 +239,10 @@ async function loadLobbySessionHarness(options = {}) {
         return { id: 'amber-otter-314', username: 'AMBER-OTTER-314', label: 'Player ID', kind: 'guest' };
       },
       isLoggedIn() {
-        return false;
+        return !!options.loggedIn;
       },
       getUser() {
-        return null;
+        return options.loggedIn ? { id: 'usr_alpha', username: 'ALPHA', displayName: 'ALPHA' } : null;
       }
     },
     getActivityState() {
@@ -286,6 +286,9 @@ async function loadLobbySessionHarness(options = {}) {
     getPartyRequestCalls() {
       return requestCalls.filter((call) => call && call.pathname === '/api/party');
     },
+    getPrivateRoomRequestCalls() {
+      return requestCalls.filter((call) => call && call.pathname === '/api/private-room');
+    },
     resetRequestCalls() {
       requestCalls.length = 0;
     },
@@ -295,11 +298,6 @@ async function loadLobbySessionHarness(options = {}) {
     },
     getIntervalDelays() {
       return Array.from(intervalDelays.values());
-    },
-    runIntervalPass() {
-      for (const callback of intervalCallbacks.values()) {
-        callback();
-      }
     },
     getSockets() {
       return sockets.slice();
@@ -312,53 +310,36 @@ async function loadLobbySessionHarness(options = {}) {
   };
 }
 
-test('lobby session skips background polling while gameplay is active or paused', async () => {
+test('lobby session does not start repeating polling intervals', async () => {
   const harness = await loadLobbySessionHarness();
   harness.session.start();
 
-  harness.runIntervalPass();
-  assert.equal(harness.requestCalls.length, 0);
+  assert.deepEqual(harness.getIntervalDelays(), []);
+});
 
+test('lobby session performs a one-shot refresh on start when already on a menu surface', async () => {
+  const harness = await loadLobbySessionHarness();
   harness.setActivityState('menu');
-  harness.runIntervalPass();
+  harness.session.start();
+  await harness.flush();
+
   assert.equal(harness.requestCalls.length > 0, true);
 });
 
-test('lobby session does not poll from hidden menu tabs and resumes when visible again', async () => {
+test('lobby session does not refresh while hidden and issues a one-shot refresh when visible again', async () => {
   const harness = await loadLobbySessionHarness();
   harness.setActivityState('menu');
   harness.setHidden(true);
   harness.session.start();
+  await harness.flush();
 
-  harness.runIntervalPass();
   assert.equal(harness.requestCalls.length, 0);
 
   harness.setHidden(false);
   harness.dispatchVisibilityChange();
+  await harness.flush();
+
   assert.equal(harness.requestCalls.length > 0, true);
-});
-
-test('lobby session allows only one visible tab to own background polling at a time', async () => {
-  const sharedStorage = createStorage();
-  const primary = await loadLobbySessionHarness({ storage: sharedStorage });
-  const secondary = await loadLobbySessionHarness({ storage: sharedStorage });
-
-  primary.setActivityState('menu');
-  secondary.setActivityState('menu');
-  primary.session.start();
-  secondary.session.start();
-
-  primary.runIntervalPass();
-  secondary.runIntervalPass();
-
-  assert.equal(primary.requestCalls.length > 0, true);
-  assert.equal(secondary.requestCalls.length, 0);
-
-  primary.setHidden(true);
-  primary.dispatchVisibilityChange();
-  secondary.runIntervalPass();
-
-  assert.equal(secondary.requestCalls.length > 0, true);
 });
 
 test('lobby session refreshBackgroundState is a no-op outside menu and private room lobby states', async () => {
@@ -372,14 +353,129 @@ test('lobby session refreshBackgroundState is a no-op outside menu and private r
   assert.equal(harness.requestCalls.length > 0, true);
 });
 
-test('lobby session registers responsive visible-menu polling cadences', async () => {
-  const harness = await loadLobbySessionHarness();
-  harness.session.start();
+test('lobby session shared refresh performs grouped one-shot refreshes', async () => {
+  const harness = await loadLobbySessionHarness({
+    loggedIn: true,
+    requestJson(path) {
+      const url = new URL(String(path || ''), 'https://mayhem.test');
+      if (url.pathname === '/api/party') {
+        return Promise.resolve({
+          state: {
+            self: {
+              id: 'amber-otter-314',
+              username: 'AMBER-OTTER-314',
+              publicMatch: null,
+              privateRoom: {
+                roomId: 'private-01',
+                roomCode: 'ABCD'
+              }
+            },
+            directInvite: { incoming: null, outgoing: null },
+            roomInvite: { incoming: null, outgoing: null },
+            party: {
+              id: 'pty_01',
+              leaderId: 'amber-otter-314',
+              joinLocked: false,
+              isLeader: true,
+              memberCount: 1,
+              members: [{ id: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isLeader: true }]
+            }
+          }
+        });
+      }
+      if (url.pathname === '/api/private-room') {
+        return Promise.resolve({
+          state: {
+            self: { actorId: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isHost: true },
+            room: { roomId: 'private-01', roomCode: 'ABCD', members: [] }
+          }
+        });
+      }
+      if (url.pathname === '/api/friends') {
+        return Promise.resolve({ friends: [] });
+      }
+      return Promise.resolve({ state: null });
+    }
+  });
+  harness.setActivityState('menu');
 
-  assert.deepEqual(
-    harness.getIntervalDelays().sort((a, b) => a - b),
-    [3000, 3000, 15000]
-  );
+  await harness.session.refreshAll(false, { force: true, forceRoomHttp: true });
+
+  assert.equal(harness.getPartyRequestCalls().length, 1);
+  assert.equal(harness.getPrivateRoomRequestCalls().length, 1);
+  assert.equal(harness.requestCalls.filter((call) => call.pathname === '/api/friends').length, 1);
+});
+
+test('lobby session refreshPrivateRoomState skips redundant HTTP refresh while the lobby socket is connected', async () => {
+  const harness = await loadLobbySessionHarness({
+    requestJson(path) {
+      const url = new URL(String(path || ''), 'https://mayhem.test');
+      if (url.pathname === '/api/party') {
+        return Promise.resolve({
+          state: {
+            self: {
+              id: 'amber-otter-314',
+              username: 'AMBER-OTTER-314',
+              publicMatch: null,
+              privateRoom: {
+                roomId: 'private-01',
+                roomCode: 'ABCD'
+              }
+            },
+            directInvite: { incoming: null, outgoing: null },
+            roomInvite: { incoming: null, outgoing: null },
+            party: {
+              id: 'pty_01',
+              leaderId: 'amber-otter-314',
+              joinLocked: false,
+              isLeader: true,
+              memberCount: 1,
+              members: [{ id: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isLeader: true }]
+            }
+          }
+        });
+      }
+      if (url.pathname === '/api/private-room') {
+        return Promise.resolve({
+          state: {
+            self: { actorId: 'amber-otter-314', displayName: 'AMBER-OTTER-314', isHost: true },
+            room: { roomId: 'private-01', roomCode: 'ABCD', members: [] }
+          }
+        });
+      }
+      return Promise.resolve({ state: null });
+    }
+  });
+  harness.setActivityState('private_room_lobby');
+
+  await harness.session.refreshPartyState(true);
+  const firstSocket = harness.getSockets().at(-1);
+  firstSocket.dispatch('open');
+  await harness.flush();
+
+  harness.resetRequestCalls();
+  await harness.session.refreshPrivateRoomState(true);
+
+  assert.equal(harness.getPrivateRoomRequestCalls().length, 0);
+});
+
+test('lobby session focus and auth change trigger one-shot refreshes on menu surfaces', async () => {
+  const harness = await loadLobbySessionHarness({ loggedIn: true });
+  harness.setActivityState('menu');
+  harness.session.start();
+  harness.resetRequestCalls();
+
+  harness.session.focusListener();
+  await harness.flush();
+  const focusCalls = harness.requestCalls.length;
+
+  harness.resetRequestCalls();
+  harness.session.authChangedListener();
+  await harness.flush();
+  const authCalls = harness.requestCalls.length;
+
+  assert.equal(focusCalls > 0, true);
+  assert.equal(authCalls > 0, true);
 });
 
 test('lobby session keeps silent background party failures off the visible UI and console', async () => {
@@ -415,6 +511,8 @@ test('lobby session sends one silent in-match party sync when gameplay starts', 
   const harness = await loadLobbySessionHarness();
   harness.setActivityState('menu');
   harness.session.start();
+  await harness.flush();
+  harness.resetRequestCalls();
 
   harness.dispatchSessionState({ activityState: 'in_match' });
   await harness.flush();
@@ -429,6 +527,8 @@ test('lobby session normalizes paused and awaiting-input-capture transitions to 
   const harness = await loadLobbySessionHarness();
   harness.setActivityState('menu');
   harness.session.start();
+  await harness.flush();
+  harness.resetRequestCalls();
 
   harness.dispatchSessionState({ activityState: 'paused' });
   await harness.flush();
@@ -516,15 +616,22 @@ test('lobby session aborts tracked background requests on stop', async () => {
   const harness = await loadLobbySessionHarness({
     requestJson(_path, requestOptions) {
       if (requestOptions && requestOptions.signal) pendingSignals.push(requestOptions.signal);
-      return new Promise(() => {});
+      return new Promise((_resolve, reject) => {
+        if (requestOptions && requestOptions.signal && typeof requestOptions.signal.addEventListener === 'function') {
+          requestOptions.signal.addEventListener('abort', function () {
+            reject({ aborted: true });
+          }, { once: true });
+        }
+      });
     }
   });
-  harness.setActivityState('menu');
+  harness.setActivityState('paused');
   harness.session.start();
 
+  harness.setActivityState('menu');
   const refreshPromise = harness.session.refreshPartyState(true);
-  void refreshPromise;
   harness.session.stop();
+  await refreshPromise;
 
   assert.equal(pendingSignals.length, 1);
   assert.equal(pendingSignals[0].aborted, true);
@@ -543,11 +650,12 @@ test('lobby session ignores stale background responses after the session generat
       });
     }
   });
-  harness.setActivityState('menu');
+  harness.setActivityState('paused');
   harness.session.start();
 
+  harness.setActivityState('menu');
   const firstRequest = harness.session.refreshPartyState(true);
-  harness.dispatchSessionState({ activityState: 'in_match' });
+  harness.dispatchSessionState({ activityState: 'menu' });
   await harness.flush();
 
   firstResolve({

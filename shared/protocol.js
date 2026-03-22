@@ -8,7 +8,8 @@ export const FRIENDS_PATH = '/api/friends';
 export const AUTH_PATH = {
   me: '/api/me',
   login: '/api/auth/login',
-  logout: '/api/auth/logout'
+  logout: '/api/auth/logout',
+  config: '/api/auth/config'
 };
 export const PROFILE_PATH = {
   me: '/api/profile/me',

@@ -8,6 +8,15 @@ import {
   parseCookies
 } from './transport.js';
 import { cleanupAccountSocialState } from './social-cleanup.js';
+import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
+import { authConfigJson, verifyTurnstile } from './turnstile.js';
+
+const SESSION_TOUCH_INTERVAL_SEC = 300;
+const SESSION_NEAR_EXPIRY_SEC = 3600;
+const LOGIN_IP_WINDOW_MS = 60_000;
+const LOGIN_IP_LIMIT = 12;
+const LOGIN_USER_WINDOW_MS = 10 * 60_000;
+const LOGIN_USER_LIMIT = 6;
 
 function forwardedProto(request) {
   if (!request || !request.headers) return '';
@@ -76,7 +85,7 @@ export async function getSessionFromRequest(env, request) {
 
   const now = Math.floor(nowMs() / 1000);
   const row = await env.DB.prepare(
-    `SELECT s.id as session_id, s.user_id, s.expires_at,
+    `SELECT s.id as session_id, s.user_id, s.expires_at, s.last_seen_at,
             u.username, p.class_id, p.display_name, p.profile_enabled,
             p.kills, p.deaths, p.damage_done, p.damage_taken
      FROM sessions s
@@ -91,7 +100,12 @@ export async function getSessionFromRequest(env, request) {
     return null;
   }
 
-  await env.DB.prepare('UPDATE sessions SET last_seen_at = ?2 WHERE id = ?1').bind(sid, now).run();
+  const shouldTouchSession =
+    Math.max(0, Number(row.last_seen_at || 0)) <= (now - SESSION_TOUCH_INTERVAL_SEC) ||
+    (Number(row.expires_at || 0) - now) <= SESSION_NEAR_EXPIRY_SEC;
+  if (shouldTouchSession) {
+    await env.DB.prepare('UPDATE sessions SET last_seen_at = ?2 WHERE id = ?1').bind(sid, now).run();
+  }
 
   return {
     sessionId: row.session_id,
@@ -115,6 +129,10 @@ export async function ensureProfileRow(env, userId, classId) {
   ).bind(userId, classId || 'abilities').run();
 }
 
+export async function handleAuthConfig(env) {
+  return authConfigJson(env);
+}
+
 export async function handleLogin(env, request) {
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== 'object') {
@@ -130,6 +148,27 @@ export async function handleLogin(env, request) {
   }
   if (!validPin(pin)) {
     return json({ ok: false, error: 'PIN must be exactly 4 digits.' }, 400);
+  }
+
+  const clientIp = getClientIp(request);
+  const ipLimit = consumeRateLimit(env, `auth:login:ip:${clientIp}`, {
+    limit: LOGIN_IP_LIMIT,
+    windowMs: LOGIN_IP_WINDOW_MS
+  });
+  if (!ipLimit.ok) {
+    return rateLimitedJson(ipLimit.retryAfterSec);
+  }
+  const userLimit = consumeRateLimit(env, `auth:login:user:${clientIp}:${usernameNorm}`, {
+    limit: LOGIN_USER_LIMIT,
+    windowMs: LOGIN_USER_WINDOW_MS
+  });
+  if (!userLimit.ok) {
+    return rateLimitedJson(userLimit.retryAfterSec);
+  }
+
+  const turnstileCheck = await verifyTurnstile(env, request, body.turnstileToken || '');
+  if (!turnstileCheck.ok) {
+    return json({ ok: false, error: turnstileCheck.error || 'Security check failed.' }, 400);
   }
 
   const now = Math.floor(nowMs() / 1000);

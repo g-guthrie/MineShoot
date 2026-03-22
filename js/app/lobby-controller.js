@@ -264,6 +264,7 @@
         runtime.GameMenuStore = store;
 
         var controllerBusy = false;
+        var menuRefreshPending = false;
         var session = null;
         var privateRoomViewController = null;
         var actionFactory = deps.actionFactory || runtime.GameLobbyActions || null;
@@ -308,6 +309,7 @@
             joinRoomBtn: document.getElementById('join-room-btn'),
             partyBackBtn: document.getElementById('party-back-btn'),
             accountToggleBtn: document.getElementById('account-toggle-btn'),
+            refreshBtn: document.getElementById('menu-refresh-btn'),
             utilityToggleBtn: document.getElementById('utility-toggle-btn'),
             utilityOverlay: document.getElementById('utility-overlay'),
             utilityCloseBtn: document.getElementById('utility-close-btn'),
@@ -408,6 +410,7 @@
             modeLabel: modeLabel,
             normalizeMode: normalizeMode,
             normalizeMatchMenuModel: normalizeMatchMenuModel,
+            isMenuRefreshPending: function () { return menuRefreshPending; },
             getPrivateRoomViewController: function () { return privateRoomViewController; }
         });
         actionApi = actionFactory.create({
@@ -900,6 +903,30 @@
         bindClick(elements.socialDirectInviteDismissBtn, dismissIncomingInvite);
         bindClick(elements.activeInviteDismissBtn, dismissIncomingInvite);
         bindClick(elements.roomSocialInviteDismissBtn, dismissIncomingInvite);
+
+        function refreshMenuData() {
+            if (menuRefreshPending || controllerBusy || !session || !session.refreshAll) {
+                return Promise.resolve(null);
+            }
+            menuRefreshPending = true;
+            setPartyStatus('Refreshing...', false);
+            setFriendsStatus('Refreshing...', false);
+            if ((getState().activeSurface === 'room') || (getState().privateRoom && getState().privateRoom.room)) {
+                setRoomStatus('Refreshing...', false);
+            }
+            render();
+            return Promise.resolve(session.refreshAll(false, {
+                force: true,
+                forceRoomHttp: true
+            })).finally(function () {
+                menuRefreshPending = false;
+                render();
+            });
+        }
+
+        bindClick(elements.refreshBtn, function () {
+            refreshMenuData();
+        });
 
         bindClick(elements.utilityToggleBtn, function () {
             if (getState().utilityOpen) closeUtility();

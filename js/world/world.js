@@ -83,7 +83,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     GROUND_COLORS[BIOME_DESERT] = 0xd6bf7f;
     GROUND_COLORS[BIOME_JUNGLE] = 0x3b7c3f;
     GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
-    GROUND_COLORS[BIOME_CITADEL] = 0xeee9df;
+    GROUND_COLORS[BIOME_CITADEL] = 0xf6f2ea;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
     GROUND_COLORS[BIOME_WALL_STREET] = 0x6a6258;
     GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
@@ -530,9 +530,9 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
                 nuclearBase: matLib.getLambert({ color: 0x737a80 }),
                 nuclearAccent: matLib.getLambert({ color: 0xcaa43c }),
                 nuclearDetail: matLib.getLambert({ color: 0x50575d }),
-                citadelBase: matLib.getLambert({ color: 0xe8e2d6 }),
-                citadelAccent: matLib.getLambert({ color: 0xf7f3eb }),
-                citadelDetail: matLib.getLambert({ color: 0xc6bbac }),
+                citadelBase: matLib.getLambert({ color: 0xf0ebe2 }),
+                citadelAccent: matLib.getLambert({ color: 0xffffff }),
+                citadelDetail: matLib.getLambert({ color: 0xd5cabd }),
                 quarryBase: matLib.getLambert({ color: 0x866f61 }),
                 quarryAccent: matLib.getLambert({ color: 0xb39984 }),
                 quarryDetail: matLib.getLambert({ color: 0x5e4c40 }),
@@ -800,6 +800,22 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     // ---------------------------------------------------------------
     // Public API (unchanged contract)
     // ---------------------------------------------------------------
+
+    GameWorld.dispose = function () {
+        clearWorldScene();
+        terrainSampler = null;
+        collidables = [];
+        spawnExclusionZones = [];
+        animatedWaterfallSheets = [];
+        animatedMistCards = [];
+        animatedLeaves = [];
+        animatedIceShimmers = [];
+        animatedFlickers = [];
+        animatedSteamColumns = [];
+        animatedClouds = [];
+        animClock = 0;
+        generationStats = {};
+    };
 
     GameWorld.getCollidables = function () { return collidables; };
 

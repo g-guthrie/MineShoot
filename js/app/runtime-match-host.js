@@ -21,6 +21,10 @@
         var gameSession = null;
         var gameplayRuntimeLoop = null;
         var presentationRuntimeLoop = null;
+        var bootstrapDisposeRuntime = null;
+        var animationFrameHandle = 0;
+        var animationRunning = false;
+        var runtimeRunToken = 0;
 
         function gameAudioApi() {
             return opts.getGameAudioApi ? opts.getGameAudioApi() : null;
@@ -51,7 +55,53 @@
             return !!renderer && document.pointerLockElement === renderer.domElement;
         }
 
+        function loopApi() {
+            return opts.getLoopApi ? opts.getLoopApi() : null;
+        }
+
+        function requestFrame(cb) {
+            var api = loopApi();
+            if (api && api.requestFrame) {
+                return api.requestFrame(cb);
+            }
+            return requestAnimationFrame(cb);
+        }
+
+        function cancelFrame(handle) {
+            if (!handle) return;
+            var api = loopApi();
+            if (api && api.cancelFrame) {
+                api.cancelFrame(handle);
+                return;
+            }
+            cancelAnimationFrame(handle);
+        }
+
+        function detachCanvas(node) {
+            if (!node || !node.parentNode || typeof node.parentNode.removeChild !== 'function') return;
+            node.parentNode.removeChild(node);
+        }
+
+        function disposeRenderer(rendererRef) {
+            if (!rendererRef) return;
+            if (rendererRef.dispose) rendererRef.dispose();
+            if (rendererRef.forceContextLoss) rendererRef.forceContextLoss();
+            if (rendererRef.domElement) detachCanvas(rendererRef.domElement);
+        }
+
+        function disposeBootstrapResult(result) {
+            if (!result) return;
+            if (result.controlsApi && result.controlsApi.unbind) {
+                result.controlsApi.unbind();
+            }
+            if (result.disposeRuntime) {
+                result.disposeRuntime();
+            }
+            disposeRenderer(result.renderer);
+        }
+
         function setupGameplaySession() {
+            if (gameSession) return gameSession;
             var sessionFactory = opts.getRuntimeSessionFactory ? opts.getRuntimeSessionFactory() : null;
             var currentMatchView = opts.getMatchViewApi ? opts.getMatchViewApi() : null;
             var actionsApi = opts.getActionsApi ? opts.getActionsApi() : null;
@@ -114,6 +164,9 @@
                         controlsApi.releaseTransientInput();
                     }
                 },
+                teardownRuntime: function (reason) {
+                    teardownRuntime(reason || 'session_exit');
+                },
                 returnToMenu: function () {
                     var profileApi = runtimeProfileApi();
                     if (profileApi && profileApi.clearSelectedMode) {
@@ -132,16 +185,50 @@
                 formatSecondsRemaining: currentMatchView.formatSecondsRemaining
             });
             gameSession.bindRuntimeControls();
+            return gameSession;
         }
 
-        function animate() {
-            var loopApi = opts.getLoopApi ? opts.getLoopApi() : null;
-            if (loopApi && loopApi.requestFrame) {
-                loopApi.requestFrame(animate);
-            } else {
-                requestAnimationFrame(animate);
+        function teardownRuntime(reason) {
+            runtimeRunToken += 1;
+            animationRunning = false;
+            if (animationFrameHandle) {
+                cancelFrame(animationFrameHandle);
+                animationFrameHandle = 0;
             }
+            if (controlsApi && controlsApi.releaseTransientInput) {
+                controlsApi.releaseTransientInput();
+            }
+            if (renderer && document.pointerLockElement === renderer.domElement && document.exitPointerLock) {
+                document.exitPointerLock();
+            }
+            if (controlsApi && controlsApi.unbind) {
+                controlsApi.unbind();
+            }
+            if (bootstrapDisposeRuntime) {
+                bootstrapDisposeRuntime();
+            }
+            disposeRenderer(renderer);
+            renderer = null;
+            scene = null;
+            clock = null;
+            camera = null;
+            multiplayerMode = false;
+            runtimeInitialized = false;
+            controlsApi = null;
+            gameplayRuntimeLoop = null;
+            presentationRuntimeLoop = null;
+            bootstrapDisposeRuntime = null;
+            return reason || '';
+        }
 
+        function animate(runToken) {
+            if (!animationRunning || runToken !== runtimeRunToken || !clock || !gameplayRuntimeLoop || !presentationRuntimeLoop) {
+                animationFrameHandle = 0;
+                return;
+            }
+            animationFrameHandle = requestFrame(function () {
+                animate(runToken);
+            });
             var dt = clock.getDelta();
             if (dt > 0.1) dt = 0.1;
             var frameState = gameplayRuntimeLoop.step(dt);
@@ -159,6 +246,10 @@
             if (!bootstrapApi || !bootstrapApi.start) {
                 return Promise.reject(new Error('GameGameplayRuntimeBootstrap is required before gameplay starts.'));
             }
+
+            teardownRuntime('restart');
+            var runToken = runtimeRunToken + 1;
+            runtimeRunToken = runToken;
 
             return bootstrapApi.start({
                 activeRuntimeMode: params.activeRuntimeMode || null,
@@ -180,14 +271,16 @@
                 tryPlayerFire: actionsApi.tryPlayerFire,
                 runtimeDeps: opts.buildBootstrapRuntimeDeps ? opts.buildBootstrapRuntimeDeps() : {}
             }).then(function (result) {
+                if (runToken !== runtimeRunToken) {
+                    disposeBootstrapResult(result);
+                    return;
+                }
                 renderer = result.renderer;
                 scene = result.scene;
                 clock = result.clock;
                 camera = result.camera;
-                if (controlsApi && controlsApi !== result.controlsApi && controlsApi.unbind) {
-                    controlsApi.unbind();
-                }
                 controlsApi = result.controlsApi || null;
+                bootstrapDisposeRuntime = result.disposeRuntime || null;
                 multiplayerMode = !!result.multiplayerMode;
                 runtimeInitialized = true;
                 setupGameplaySession();
@@ -217,7 +310,8 @@
                 if (controlsApi && controlsApi.bind) {
                     controlsApi.bind();
                 }
-                animate();
+                animationRunning = true;
+                animate(runToken);
                 if (gameSession && gameSession.emitSessionState) {
                     gameSession.emitSessionState();
                 }
@@ -226,6 +320,7 @@
 
         return {
             startRuntime: startRuntime,
+            teardownRuntime: teardownRuntime,
             isRuntimeReady: function () { return !!runtimeInitialized; },
             isMultiplayerMode: function () { return !!multiplayerMode; },
             hasInputCapture: hasInputCapture,

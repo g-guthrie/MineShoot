@@ -322,6 +322,11 @@
         sceneRef = scene || null;
     };
 
+    GameHookVisuals.dispose = function () {
+        clearAllVisuals();
+        sceneRef = null;
+    };
+
     GameHookVisuals.render = function (multiplayerMode) {
         if (!sceneRef) return;
         renderSelf(!!multiplayerMode);

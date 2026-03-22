@@ -31,8 +31,6 @@
             resultsMode: document.getElementById('postgame-results-mode'),
             resultsLine: document.getElementById('postgame-results-line'),
             resultsObjective: document.getElementById('postgame-results-objective'),
-            resultsState: document.getElementById('postgame-results-state'),
-            resultsSummary: document.getElementById('postgame-results-summary'),
             continueBtn: document.getElementById('postgame-continue-btn'),
             menuStage: document.getElementById('menu-stage')
         };
@@ -97,16 +95,26 @@
             snapshot: null,
             timer: null
         };
+        var activityStateOverride = '';
 
         function baseActivityState() {
             return opts.getActivityState ? String(opts.getActivityState() || 'menu') : 'menu';
         }
 
         function currentActivityState() {
+            if (activityStateOverride) return activityStateOverride;
             if (!opts.isRuntimeReady || !opts.isRuntimeReady()) return 'menu';
             if (pauseState.active) return 'paused';
             if (pendingInputCapture && !isPlaying) return 'awaiting_input_capture';
             return baseActivityState();
+        }
+
+        function clearActivityStateOverride() {
+            activityStateOverride = '';
+        }
+
+        function setActivityStateOverride(nextState) {
+            activityStateOverride = String(nextState || '');
         }
 
         function isNetworkedRuntime() {
@@ -369,6 +377,7 @@
                 ? opts.modeDisplayName({ gameMode: context && context.gameMode })
                 : String(context && context.gameMode || '').toUpperCase();
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
+            clearActivityStateOverride();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = true;
@@ -395,6 +404,7 @@
         }
 
         function showGameplayPrompt() {
+            clearActivityStateOverride();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
@@ -406,6 +416,7 @@
         }
 
         function restoreResumablePauseState() {
+            clearActivityStateOverride();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
@@ -433,13 +444,16 @@
             var snapshot = postGameState.snapshot;
             hidePostGameFlow();
             if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) {
+                if (opts.teardownRuntime) opts.teardownRuntime('postgame_private_room');
+                setActivityStateOverride('private_room_lobby');
                 if (overlayEl) overlayEl.style.display = 'flex';
                 isPlaying = false;
                 clearIdleMonitor();
-                setResumeButtonsVisible(canResumeGameplay());
+                setResumeButtonsVisible(false);
                 emitSessionState();
                 return;
             }
+            if (opts.teardownRuntime) opts.teardownRuntime('postgame_menu');
             if (opts.returnToMenu) opts.returnToMenu();
         }
 
@@ -463,14 +477,6 @@
             if (els.resultsLine) els.resultsLine.textContent = kills + ' / ' + deaths;
             if (els.resultsObjective) {
                 els.resultsObjective.textContent = opts.objectiveSummary ? opts.objectiveSummary(matchState, selfState) : 'GOAL 0';
-            }
-            if (els.resultsState) {
-                els.resultsState.textContent = matchState && matchState.ended
-                    ? ('RESET ' + (opts.formatSecondsRemaining ? opts.formatSecondsRemaining(Number(matchState.resetAt || 0) - Date.now()) : '0.0s'))
-                    : 'ROUND COMPLETE';
-            }
-            if (els.resultsSummary) {
-                els.resultsSummary.textContent = opts.resultsSummary ? opts.resultsSummary(matchState, selfState) : 'Summary unavailable.';
             }
             if (els.continueBtn) {
                 els.continueBtn.textContent = (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) ? 'RETURN TO ROOM' : 'MAIN MENU';
@@ -560,6 +566,7 @@
             }
 
             if (opts.beforeGameplayEntry) opts.beforeGameplayEntry();
+            clearActivityStateOverride();
             clearPauseState();
             clearIdleWarning();
 
@@ -839,6 +846,7 @@
                 launchContext = cloneLaunchContext(context);
                 var handoffEls = ensureLaunchHandoffEls();
                 var roomLabel = String(launchContext.roomCode || launchContext.roomId || '').toUpperCase();
+                clearActivityStateOverride();
                 clearPauseState();
                 clearIdleMonitor();
                 pendingInputCapture = false;
@@ -894,10 +902,22 @@
                 return api.enterGameplay(event, launchContext);
             },
             returnToMenu: function () {
+                clearActivityStateOverride();
                 clearPauseState();
                 clearIdleMonitor();
                 clearPostGameTimer();
                 hidePostGameFlow();
+                // Private room: stay on page and return to room lobby gracefully
+                if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(null)) {
+                    if (opts.teardownRuntime) opts.teardownRuntime('return_to_room_lobby');
+                    setActivityStateOverride('private_room_lobby');
+                    if (overlayEl) overlayEl.style.display = 'flex';
+                    isPlaying = false;
+                    setResumeButtonsVisible(false);
+                    emitSessionState();
+                    return;
+                }
+                if (opts.teardownRuntime) opts.teardownRuntime('return_to_menu');
                 if (opts.returnToMenu) opts.returnToMenu();
             },
             getActivityState: currentActivityState,

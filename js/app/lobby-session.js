@@ -15,13 +15,6 @@
         return 'Free For All';
     }
     var GameLobbySession = {};
-    var POLL_OWNER_KEY = 'mayhem.menuPollOwner';
-    var POLL_OWNER_LEASE_MS = 8000;
-    // Keep cross-client social and room changes visible within a few seconds.
-    var PARTY_POLL_INTERVAL_MS = 3000;
-    var FRIENDS_POLL_INTERVAL_MS = 15000;
-    var PRIVATE_ROOM_POLL_INTERVAL_MS = 3000;
-    var PRIVATE_ROOM_POLL_FALLBACK_MS = 30000;
     var LOBBY_WS_RECONNECT_MS = 3000;
     var LOBBY_REQUEST_TIMEOUT_MS = 8000;
 
@@ -29,14 +22,6 @@
 
     function runtimeUtils() {
         return runtime.GameRuntimeUtils || null;
-    }
-
-    function randomToken(prefix) {
-        var utils = runtimeUtils();
-        if (utils && utils.randomToken) {
-            return utils.randomToken(prefix);
-        }
-        return String(prefix || '') + Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
 
     GameLobbySession.create = function (ctx) {
@@ -49,11 +34,7 @@
         var privateRoomState = null;
         var partyStateAvailability = 'idle';
         var busy = false;
-        var partyPollHandle = 0;
-        var friendsPollHandle = 0;
-        var privateRoomPollHandle = 0;
         var lifecycleStarted = false;
-        var pollOwnerToken = randomToken('menu_');
         var lastObservedPartyPresenceState = '';
         var lobbyWs = null;
         var lobbyWsReconnectHandle = 0;
@@ -118,18 +99,6 @@
             return null;
         }
 
-        function localStore() {
-            try {
-                return window.localStorage || null;
-            } catch (_err) {
-                return null;
-            }
-        }
-
-        function currentTimeMs() {
-            return Date.now();
-        }
-
         function isDocumentVisible() {
             if (typeof document === 'undefined' || !document) return true;
             if (typeof document.hidden === 'boolean') return !document.hidden;
@@ -137,48 +106,6 @@
             return true;
         }
 
-        function readPollOwnerLease() {
-            var store = localStore();
-            if (!store || typeof store.getItem !== 'function') return null;
-            try {
-                var raw = String(store.getItem(POLL_OWNER_KEY) || '').trim();
-                if (!raw) return null;
-                var parsed = JSON.parse(raw);
-                if (!parsed || typeof parsed !== 'object') return null;
-                return {
-                    token: String(parsed.token || ''),
-                    expiresAt: Math.max(0, Number(parsed.expiresAt || 0))
-                };
-            } catch (_err) {
-                return null;
-            }
-        }
-
-        function writePollOwnerLease(expiresAt) {
-            var store = localStore();
-            if (!store || typeof store.setItem !== 'function') return true;
-            try {
-                store.setItem(POLL_OWNER_KEY, JSON.stringify({
-                    token: pollOwnerToken,
-                    expiresAt: Math.max(0, Number(expiresAt || 0))
-                }));
-                return true;
-            } catch (_err) {
-                return false;
-            }
-        }
-
-        function releasePollOwnerLease() {
-            var store = localStore();
-            if (!store || typeof store.removeItem !== 'function') return;
-            var currentLease = readPollOwnerLease();
-            if (!currentLease || currentLease.token !== pollOwnerToken) return;
-            try {
-                store.removeItem(POLL_OWNER_KEY);
-            } catch (_err) {
-                // no-op
-            }
-        }
 
         function createAbortController() {
             return (typeof AbortController === 'function') ? new AbortController() : null;
@@ -251,33 +178,9 @@
             return !!(err && err.aborted);
         }
 
-        function hasPollingLease() {
-            var store = localStore();
-            if (!store) return true;
-            var now = currentTimeMs();
-            var currentLease = readPollOwnerLease();
-            if (!currentLease || !currentLease.token || currentLease.expiresAt <= now) {
-                writePollOwnerLease(now + POLL_OWNER_LEASE_MS);
-                return true;
-            }
-            if (currentLease.token !== pollOwnerToken) return false;
-            if ((currentLease.expiresAt - now) <= Math.round(POLL_OWNER_LEASE_MS * 0.5)) {
-                writePollOwnerLease(now + POLL_OWNER_LEASE_MS);
-            }
-            return true;
-        }
-
-        function shouldRunBackgroundSync() {
+        function isOnMenuSurface() {
             var activityState = String(currentPartyActivityState() || 'menu');
-            if (!(activityState === 'menu' || activityState === 'private_room_lobby')) {
-                releasePollOwnerLease();
-                return false;
-            }
-            if (!isDocumentVisible()) {
-                releasePollOwnerLease();
-                return false;
-            }
-            return hasPollingLease();
+            return activityState === 'menu' || activityState === 'private_room_lobby';
         }
 
         function isLoggedIn() {
@@ -517,7 +420,15 @@
             if (nextPresenceState === 'in_match' && lobbyWsConnected) {
                 disconnectLobbyWs();
             }
-            refreshPartyStateInternal(true, true, nextPresenceState);
+            if (nextPresenceState === 'in_match') {
+                refreshPartyStateInternal(true, false, nextPresenceState);
+                return;
+            }
+            refreshAll(true, {
+                force: true,
+                partyPresenceState: nextPresenceState,
+                forceRoomHttp: false
+            });
         }
 
         function partyRequest(method, payload, presenceStateOverride, requestToken) {
@@ -585,7 +496,7 @@
                     var nextState = state || fallbackState || null;
                     applyPartyState(nextState);
                     onPartyIdentityChange();
-                    if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true);
+                    if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true, { forceHttp: false });
                     if (shouldAutoJoin) maybeAutoJoinAssignedMatch(nextState);
                     return nextState;
                 })
@@ -600,7 +511,7 @@
                         setPartyUnavailable(err, { scope: 'party-reconcile', silent: !!options.silent });
                     }
                     onPartyIdentityChange();
-                    if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true);
+                    if (shouldRefreshPrivateRoom) refreshPrivateRoomState(true, { forceHttp: false });
                     if (shouldAutoJoin) maybeAutoJoinAssignedMatch(nextState);
                     return nextState;
                 });
@@ -665,8 +576,9 @@
                 });
         }
 
-        function refreshPartyState(silent) {
-            return refreshPartyStateInternal(silent, true);
+        function refreshPartyState(silent, options) {
+            options = options || {};
+            return refreshPartyStateInternal(silent, true, options.partyPresenceState);
         }
 
         function currentRoomActorPayload(extra) {
@@ -806,6 +718,7 @@
                 open: function () {
                     if (lobbyWs !== socket) return;
                     lobbyWsConnected = true;
+                    refreshPrivateRoomState(true, { forceHttp: true });
                 },
                 message: function (event) {
                     if (lobbyWs !== socket) return;
@@ -845,7 +758,8 @@
             }
         }
 
-        function refreshPrivateRoomState(silent) {
+        function refreshPrivateRoomState(silent, options) {
+            options = options || {};
             var assigned = currentAssignedPrivateRoom();
             if (!assigned) {
                 invalidateTrackedRequest('privateRoom');
@@ -854,17 +768,27 @@
                 setPrivateRoomStatus('', false);
                 return Promise.resolve(null);
             }
+            var forceHttp = !!options.forceHttp;
             // Attempt to connect lobby WebSocket if not already connected
             if (!lobbyWsConnected && assigned.roomId) {
                 connectLobbyWs(assigned.roomId);
             }
-            return fetchPrivateRoomState()
+            if (lobbyWsConnected && !forceHttp) {
+                setPrivateRoomStatus('', false);
+                return Promise.resolve(privateRoomState);
+            }
+            var requestToken = beginTrackedRequest('privateRoom');
+            return fetchPrivateRoomState(requestToken)
                 .then(function (state) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken)) return privateRoomState;
                     applyPrivateRoomState(state);
                     setPrivateRoomStatus('', false);
                     return state;
                 })
                 .catch(function (err) {
+                    finishTrackedRequest(requestToken);
+                    if (!isTrackedRequestCurrent(requestToken) || isTrackedAbortError(err)) return privateRoomState;
                     setPrivateRoomUnavailable(err, { scope: silent ? 'private-room' : 'private-room-refresh', silent: !!silent });
                     return privateRoomState;
                 });
@@ -913,12 +837,14 @@
         }
 
         function refreshBackgroundState(includePrivateRoom) {
-            if (!shouldRunBackgroundSync()) return;
-            refreshPartyState(true);
-            refreshFriendsState(true);
-            if (includePrivateRoom !== false) {
-                refreshPrivateRoomState(true);
-            }
+            if (!isOnMenuSurface() || !isDocumentVisible()) return Promise.resolve(null);
+            return refreshPartyStateInternal(true, false).then(function () {
+                var tasks = [refreshFriendsState(true)];
+                if (includePrivateRoom !== false) {
+                    tasks.push(refreshPrivateRoomState(true, { forceHttp: false }));
+                }
+                return Promise.all(tasks);
+            });
         }
 
         function runPartyAction(action, payload, pendingText) {
@@ -1165,35 +1091,42 @@
             return lobbyApi.resolveApiUrl(lobbyApi.privateRoomPath());
         }
 
-        function refreshAll(silent) {
-            if (!shouldRunBackgroundSync()) return;
-            refreshPartyStateInternal(silent, false);
-            refreshFriendsState(silent);
-            refreshPrivateRoomState(silent);
+        function refreshAll(silent, options) {
+            options = options || {};
+            if (!options.force && (!isOnMenuSurface() || !isDocumentVisible())) {
+                return Promise.resolve(null);
+            }
+            return refreshPartyStateInternal(!!silent, false, options.partyPresenceState)
+                .then(function () {
+                    return Promise.all([
+                        refreshFriendsState(!!silent),
+                        refreshPrivateRoomState(!!silent, { forceHttp: !!options.forceRoomHttp })
+                    ]);
+                });
         }
 
         function focusListener() {
+            if (!isOnMenuSurface()) return;
             refreshAll(true);
         }
 
         function visibilityListener() {
             if (!isDocumentVisible()) {
                 invalidateTrackedRequests();
-                releasePollOwnerLease();
                 return;
             }
+            if (!isOnMenuSurface()) return;
             refreshAll(true);
         }
 
         function authChangedListener() {
             invalidateTrackedRequests();
-            refreshAll(true);
+            refreshAll(true, { forceRoomHttp: false });
             onSocialUpdate();
         }
 
         function pagehideListener() {
             invalidateTrackedRequests();
-            releasePollOwnerLease();
             var identity = currentPartyIdentity();
             if (!identity || identity.kind !== 'guest' || !navigator.sendBeacon) return;
             try {
@@ -1210,25 +1143,8 @@
             lifecycleStarted = true;
             lastObservedPartyPresenceState = currentPartyPresenceState();
 
-            if (partyPollHandle) window.clearInterval(partyPollHandle);
-            partyPollHandle = window.setInterval(function () {
-                if (!shouldRunBackgroundSync()) return;
-                refreshPartyState(true);
-            }, PARTY_POLL_INTERVAL_MS);
-
-            if (friendsPollHandle) window.clearInterval(friendsPollHandle);
-            friendsPollHandle = window.setInterval(function () {
-                if (!shouldRunBackgroundSync()) return;
-                refreshFriendsState(true);
-            }, FRIENDS_POLL_INTERVAL_MS);
-
-            if (privateRoomPollHandle) window.clearInterval(privateRoomPollHandle);
-            privateRoomPollHandle = window.setInterval(function () {
-                if (!shouldRunBackgroundSync()) return;
-                // Skip HTTP poll when lobby WebSocket is active (fallback only)
-                if (lobbyWsConnected) return;
-                refreshPrivateRoomState(true);
-            }, PRIVATE_ROOM_POLL_INTERVAL_MS);
+            // One-shot initial refresh on start
+            refreshAll(true, { forceRoomHttp: false });
 
             window.addEventListener('focus', focusListener);
             if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
@@ -1244,19 +1160,6 @@
             lifecycleStarted = false;
             invalidateTrackedRequests();
 
-            if (partyPollHandle) {
-                window.clearInterval(partyPollHandle);
-                partyPollHandle = 0;
-            }
-            if (friendsPollHandle) {
-                window.clearInterval(friendsPollHandle);
-                friendsPollHandle = 0;
-            }
-            if (privateRoomPollHandle) {
-                window.clearInterval(privateRoomPollHandle);
-                privateRoomPollHandle = 0;
-            }
-
             disconnectLobbyWs();
 
             if (typeof window.removeEventListener === 'function') {
@@ -1269,7 +1172,6 @@
                 document.removeEventListener('visibilitychange', visibilityListener);
             }
             lastObservedPartyPresenceState = '';
-            releasePollOwnerLease();
         }
 
         return {
@@ -1285,6 +1187,7 @@
             refreshPartyState: refreshPartyState,
             refreshFriendsState: refreshFriendsState,
             refreshPrivateRoomState: refreshPrivateRoomState,
+            refreshAll: refreshAll,
             refreshBackgroundState: refreshBackgroundState,
             runPartyAction: runPartyAction,
             performFriendAction: performFriendAction,

@@ -28,8 +28,7 @@
 
     function installResizeHandler(renderer, bootstrapApi) {
         if (bootstrapApi && bootstrapApi.installResizeHandler) {
-            bootstrapApi.installResizeHandler(renderer);
-            return;
+            return bootstrapApi.installResizeHandler(renderer);
         }
         window.addEventListener('resize', function () {
             renderer.setPixelRatio(cappedPixelRatio());
@@ -61,6 +60,7 @@
         var netRuntime = net && net.runtime ? net.runtime : net;
         var netView = net && net.view ? net.view : net;
         var netRuntimeInitStarted = false;
+        var removeResizeHandler = null;
 
         function ensureNetRuntimeInit() {
             if (!netRuntime || !netRuntime.init || netRuntimeInitStarted) return;
@@ -90,6 +90,7 @@
             var gameplayHudSync = depGet('GameGameplayHudSync');
             var gameHitscan = depGet('GameHitscan');
             var gameplayControls = depGet('GameGameplayControls');
+            var gameAudio = depGet('GameAudio');
             var worldOptions = (worldMeta && worldMeta.worldSeed) ? { worldMeta: worldMeta } : undefined;
             gameWorld.create(scene, worldOptions);
 
@@ -173,7 +174,51 @@
                 })
                 : null;
 
-            installResizeHandler(renderer, depGet('GameBootstrap'));
+            removeResizeHandler = installResizeHandler(renderer, depGet('GameBootstrap')) || null;
+
+            function disposeRuntime() {
+                if (removeResizeHandler) {
+                    removeResizeHandler();
+                    removeResizeHandler = null;
+                }
+                if (gameAbilities && gameAbilities.clearTransientState) {
+                    gameAbilities.clearTransientState();
+                }
+                if (gameAudio && gameAudio.stopAll) {
+                    gameAudio.stopAll();
+                }
+                if (gameHookVisuals && gameHookVisuals.dispose) {
+                    gameHookVisuals.dispose();
+                }
+                if (multiplayerMode) {
+                    if (netRuntime && netRuntime.shutdown) {
+                        netRuntime.shutdown();
+                    }
+                } else if (gameLocalMatch && gameLocalMatch.shutdown) {
+                    gameLocalMatch.shutdown();
+                }
+                if (gameThrowables && gameThrowables.shutdown) {
+                    gameThrowables.shutdown();
+                }
+                if (gameEnemy && gameEnemy.dispose) {
+                    gameEnemy.dispose();
+                }
+                if (gamePlayer && gamePlayer.destroy) {
+                    gamePlayer.destroy();
+                }
+                if (gameOverhead && gameOverhead.reset) {
+                    gameOverhead.reset();
+                }
+                if (gameUi && gameUi.resetGameplayHud) {
+                    gameUi.resetGameplayHud();
+                }
+                if (gameHitscan && gameHitscan.reset) {
+                    gameHitscan.reset();
+                }
+                if (gameWorld && gameWorld.dispose) {
+                    gameWorld.dispose();
+                }
+            }
 
             return {
                 renderer: renderer,
@@ -182,7 +227,8 @@
                 camera: camera,
                 controlsApi: controlsApi,
                 multiplayerMode: multiplayerMode,
-                startupDebugNotice: ''
+                startupDebugNotice: '',
+                disposeRuntime: disposeRuntime
             };
         }
 

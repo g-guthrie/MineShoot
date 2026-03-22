@@ -24,6 +24,8 @@
     var arenaIdentityReadyPromise = null;
     var identityChannel = null;
     var authUi = null;
+    var authConfigCache = null;
+    var authConfigPromise = null;
     var GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
     var GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
 
@@ -194,6 +196,10 @@
         return authPathConfig().logout || '/api/auth/logout';
     }
 
+    function sessionAuthConfigUrl() {
+        return authPathConfig().config || '/api/auth/config';
+    }
+
     function profileMeUrl() {
         return profilePathConfig().me || '/api/profile/me';
     }
@@ -262,6 +268,18 @@
         }
 
         return fallback;
+    }
+
+    function normalizeAuthConfig(body) {
+        var turnstile = body && body.turnstile && typeof body.turnstile === 'object'
+            ? body.turnstile
+            : {};
+        return {
+            turnstile: {
+                enabled: !!turnstile.enabled,
+                siteKey: String(turnstile.siteKey || '')
+            }
+        };
     }
 
     function makeSocketPlayerId() {
@@ -441,7 +459,7 @@
             getUser: function () { return user; },
             isGuest: function () { return guestMode; },
             getOwnProfile: function () { return ownProfile; },
-            login: function (username, pin) { return GameNetAuth.login(username, pin); },
+            login: function (username, pin, turnstileToken) { return GameNetAuth.login(username, pin, turnstileToken); },
             logout: function () { return GameNetAuth.logout(); },
             localMode: function () {
                 guestMode = true;
@@ -449,7 +467,8 @@
                 ownProfile = null;
                 emitAuthChanged();
             },
-            loadProfile: function () { return loadOwnProfile(); }
+            loadProfile: function () { return loadOwnProfile(); },
+            loadAuthConfig: function (forceRefresh) { return GameNetAuth.fetchAuthConfig(forceRefresh); }
         });
         return authUi;
     }
@@ -534,12 +553,16 @@
 
     // --- Public API ---
 
-    GameNetAuth.login = function (username, pin) {
+    GameNetAuth.login = function (username, pin, turnstileToken) {
         return new Promise(function (resolve, reject) {
             apiFetch(sessionLoginUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, pin: pin })
+                body: JSON.stringify({
+                    username: username,
+                    pin: pin,
+                    turnstileToken: String(turnstileToken || '')
+                })
             })
                 .then(readApiResponse)
                 .then(function (res) {
@@ -552,6 +575,32 @@
                 })
                 .catch(reject);
         });
+    };
+
+    GameNetAuth.fetchAuthConfig = function (forceRefresh) {
+        if (!forceRefresh && authConfigCache) {
+            return Promise.resolve(authConfigCache);
+        }
+        if (!forceRefresh && authConfigPromise) {
+            return authConfigPromise;
+        }
+        authConfigPromise = apiFetch(sessionAuthConfigUrl(), { method: 'GET' })
+            .then(readApiResponse)
+            .then(function (res) {
+                if (!res.body || !res.body.ok) {
+                    throw new Error(apiErrorMessage(res, 'Auth config failed.'));
+                }
+                authConfigCache = normalizeAuthConfig(res.body);
+                return authConfigCache;
+            })
+            .catch(function () {
+                authConfigCache = normalizeAuthConfig(null);
+                return authConfigCache;
+            })
+            .finally(function () {
+                authConfigPromise = null;
+            });
+        return authConfigPromise;
     };
 
     GameNetAuth.logout = function () {

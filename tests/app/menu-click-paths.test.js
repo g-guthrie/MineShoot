@@ -258,6 +258,7 @@ async function loadHarness({
     ['div', 'menu-inline-toast'],
     ['div', 'menu-feedback'],
     ['button', 'menu-return-btn'],
+    ['button', 'menu-refresh-btn'],
     ['button', 'menu-party-id-btn'],
     ['span', 'menu-party-id-label'],
     ['span', 'menu-party-id-value'],
@@ -391,6 +392,7 @@ async function loadHarness({
   const launchCalls = [];
   const matchmakingCalls = [];
   const resumeGameplayCalls = [];
+  const refreshAllCalls = [];
   const modalState = { open: !!modalOpen };
   const sessionCallbacks = {};
   const partyState = {
@@ -692,6 +694,17 @@ async function loadHarness({
             callbacks.onFriendsStateChanged(friendsState);
             return Promise.resolve(friendsState);
           },
+          refreshAll(silent, options) {
+            refreshAllCalls.push({ silent: !!silent, options: options || {} });
+            callbacks.onPartyStateChanged(partyState);
+            callbacks.onFriendsStateChanged(friendsState);
+            callbacks.onPrivateRoomStateChanged(privateRoomState);
+            return Promise.resolve({
+              party: partyState,
+              friends: friendsState,
+              privateRoom: privateRoomState
+            });
+          },
           createPrivateRoom() {
             callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
@@ -836,6 +849,7 @@ async function loadHarness({
     storageMap,
     runPartyActionCalls,
     friendActionCalls,
+    refreshAllCalls,
     launchCalls,
     matchmakingCalls,
     resumeGameplayCalls,
@@ -1796,6 +1810,49 @@ test('session-state updates preserve the selected launch mode', async () => {
   });
 
   assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+});
+
+test('menu refresh button appears on menu surfaces and hides in the active match shell', async () => {
+  const harness = await loadHarness();
+  const { elements } = harness;
+
+  assert.equal(elements['menu-refresh-btn'].hidden, false);
+
+  harness.emitPrivateRoomState();
+  await harness.flush();
+  elements['continue-loadout-btn'].click();
+  assert.equal(elements['menu-refresh-btn'].hidden, false);
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: true,
+    activityState: 'paused',
+    launchContext: {}
+  });
+  assert.equal(elements['menu-refresh-btn'].hidden, true);
+});
+
+test('menu refresh button triggers grouped refresh and disables while pending', async () => {
+  const harness = await loadHarness();
+  const { elements, refreshAllCalls } = harness;
+
+  elements['menu-refresh-btn'].click();
+
+  assert.equal(refreshAllCalls.length, 1);
+  assert.equal(refreshAllCalls[0].silent, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(refreshAllCalls[0].options)), {
+    force: true,
+    forceRoomHttp: true
+  });
+  assert.equal(elements['menu-refresh-btn'].disabled, true);
+  assert.equal(elements['menu-refresh-btn'].textContent, 'Refreshing...');
+
+  await harness.flush();
+
+  assert.equal(elements['menu-refresh-btn'].disabled, false);
+  assert.equal(elements['menu-refresh-btn'].textContent, 'Refresh');
 });
 
 test('room screen outside pause reduces the left header to back and id', async () => {

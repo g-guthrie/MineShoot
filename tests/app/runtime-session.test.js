@@ -113,9 +113,11 @@ async function loadRuntimeSessionHarness(overrides = {}) {
 
   let nowMs = 0;
   let perfNowMs = 0;
+  let runtimeReady = true;
   let nextTimerId = 1;
   const intervalCallbacks = new Map();
   const suspendReasons = [];
+  const teardownReasons = [];
   const idleWarnings = [];
   const debugNotices = [];
   const modalState = { open: false };
@@ -215,7 +217,7 @@ async function loadRuntimeSessionHarness(overrides = {}) {
 
   const baseOptions = {
     isRuntimeReady() {
-      return true;
+      return runtimeReady;
     },
     canResumeGameplay() {
       return true;
@@ -241,6 +243,10 @@ async function loadRuntimeSessionHarness(overrides = {}) {
     },
     setTransientDebug(text) {
       debugNotices.push(String(text || ''));
+    },
+    teardownRuntime(reason) {
+      runtimeReady = false;
+      teardownReasons.push(String(reason || ''));
     },
     returnToMenu() {},
     isPrivateRoomSession() {
@@ -288,6 +294,7 @@ async function loadRuntimeSessionHarness(overrides = {}) {
     target,
     window,
     suspendReasons,
+    teardownReasons,
     idleWarnings,
     debugNotices,
     setModalOpen(value) {
@@ -399,6 +406,7 @@ test('networked runtime session toggles out of and back into gameplay with Escap
   assert.equal(harness.document.pointerLockElement !== null, true);
   assert.equal(harness.playBtn.style.display, 'none');
   assert.equal(harness.backBtn.style.display, 'none');
+  assert.deepEqual(harness.teardownReasons, []);
 });
 
 test('networked runtime session requires a fresh Escape press before resuming', async () => {
@@ -571,10 +579,39 @@ test('private room postgame completion emits a room-lobby session state instead 
     .map((event) => event.detail);
 
   assert.equal(returnToMenuCalls, 0);
+  assert.deepEqual(harness.teardownReasons, ['postgame_private_room']);
   assert.equal(harness.session.isPlaying(), false);
   assert.equal(sessionStates.at(-1).activityState, 'private_room_lobby');
   assert.equal(sessionStates.at(-1).inMatch, false);
-  assert.equal(sessionStates.at(-1).canResume, true);
+  assert.equal(sessionStates.at(-1).runtimeReady, false);
+  assert.equal(sessionStates.at(-1).canResume, false);
+});
+
+test('private room returnToMenu tears down the runtime and stays in the room lobby', async () => {
+  let returnToMenuCalls = 0;
+  const harness = await loadRuntimeSessionHarness({
+    getActivityState() {
+      return 'private_room_lobby';
+    },
+    isPrivateRoomSession() {
+      return true;
+    },
+    returnToMenu() {
+      returnToMenuCalls++;
+    }
+  });
+
+  harness.session.returnToMenu();
+
+  const sessionStates = harness.window.events
+    .filter((event) => event && event.type === 'mayhem-session-state')
+    .map((event) => event.detail);
+
+  assert.equal(returnToMenuCalls, 0);
+  assert.deepEqual(harness.teardownReasons, ['return_to_room_lobby']);
+  assert.equal(sessionStates.at(-1).activityState, 'private_room_lobby');
+  assert.equal(sessionStates.at(-1).runtimeReady, false);
+  assert.equal(sessionStates.at(-1).canResume, false);
 });
 
 test('networked runtime session routes joined-ready handoff through the session strip instead of the launch overlay', async () => {

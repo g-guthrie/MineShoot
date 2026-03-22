@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 
-import { handleLogin, handleLogout, handleMe } from '../../cloudflare/server/auth.js';
+import { handleAuthConfig, handleLogin, handleLogout, handleMe } from '../../cloudflare/server/auth.js';
 import { handleFriends } from '../../cloudflare/server/friends.js';
 import { handleParty } from '../../cloudflare/server/party.js';
 import { handlePrivateRoomLobby } from '../../cloudflare/server/private-room-lobby.js';
@@ -129,6 +129,92 @@ test('login marks the session cookie Secure for https requests and proxy-forward
   }));
 
   assert.match(String(proxiedResponse.headers.get('Set-Cookie') || ''), /;\s*Secure(?:;|$)/i);
+});
+
+test('auth config exposes Turnstile only when configured', async () => {
+  const disabledEnv = createFakeEnv();
+  const disabledResponse = await handleAuthConfig(disabledEnv);
+  const disabledBody = await disabledResponse.json();
+
+  assert.equal(disabledResponse.status, 200);
+  assert.deepEqual(disabledBody.turnstile, {
+    enabled: false,
+    siteKey: ''
+  });
+
+  const enabledEnv = createFakeEnv();
+  enabledEnv.TURNSTILE_SITE_KEY = 'site-key-demo';
+  enabledEnv.TURNSTILE_SECRET_KEY = 'secret-demo';
+  const enabledResponse = await handleAuthConfig(enabledEnv);
+  const enabledBody = await enabledResponse.json();
+
+  assert.equal(enabledResponse.status, 200);
+  assert.deepEqual(enabledBody.turnstile, {
+    enabled: true,
+    siteKey: 'site-key-demo'
+  });
+});
+
+test('login rate limits repeated attempts from the same IP and username', async () => {
+  const env = createFakeEnv();
+  const baseHeaders = { 'cf-connecting-ip': '198.51.100.7' };
+
+  const first = await handleLogin(env, jsonRequest('https://mayhem.example/api/auth/login', {
+    username: 'RateLimited',
+    pin: '1234'
+  }, baseHeaders));
+  assert.equal(first.status, 200);
+
+  for (let i = 0; i < 5; i++) {
+    const retry = await handleLogin(env, jsonRequest('https://mayhem.example/api/auth/login', {
+      username: 'RateLimited',
+      pin: '0000'
+    }, baseHeaders));
+    assert.equal(retry.status, 401);
+  }
+
+  const blocked = await handleLogin(env, jsonRequest('https://mayhem.example/api/auth/login', {
+    username: 'RateLimited',
+    pin: '0000'
+  }, baseHeaders));
+  const blockedBody = await blocked.json();
+
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get('Retry-After') !== null, true);
+  assert.equal(blockedBody.ok, false);
+  assert.equal(typeof blockedBody.retryAfterSec, 'number');
+});
+
+test('login enforces Turnstile when configured and accepts verified tokens', async () => {
+  const originalFetch = globalThis.fetch;
+  const env = createFakeEnv();
+  env.TURNSTILE_SITE_KEY = 'site-key-demo';
+  env.TURNSTILE_SECRET_KEY = 'secret-demo';
+
+  try {
+    const missing = await handleLogin(env, jsonRequest('https://mayhem.example/api/auth/login', {
+      username: 'TurnstileUser',
+      pin: '1234'
+    }));
+    assert.equal(missing.status, 400);
+
+    globalThis.fetch = async function mockFetch() {
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+
+    const verified = await handleLogin(env, jsonRequest('https://mayhem.example/api/auth/login', {
+      username: 'TurnstileUser',
+      pin: '1234',
+      turnstileToken: 'challenge-token'
+    }));
+
+    assert.equal(verified.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('logout removes solo party and private-room membership before revoking session', async () => {

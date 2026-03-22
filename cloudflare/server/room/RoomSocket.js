@@ -1,12 +1,21 @@
-const COMBAT_RATE_LIMITS = {
+const MESSAGE_RATE_LIMITS = {
+  input: { ratePerSec: 45, burst: 90 },
   fire: { ratePerSec: 20, burst: 40 },
   reload: { ratePerSec: 4, burst: 8 },
-  throw: { ratePerSec: 4, burst: 8 }
+  throw: { ratePerSec: 4, burst: 8 },
+  class_cast: { ratePerSec: 3, burst: 6 },
+  equip_weapon: { ratePerSec: 8, burst: 16 },
+  weapon_loadout: { ratePerSec: 2, burst: 4 },
+  ping: { ratePerSec: 2, burst: 6 },
+  lobby_ping: { ratePerSec: 2, burst: 6 }
 };
+const MAX_GAMEPLAY_MESSAGE_BYTES = 8192;
+const MAX_LOBBY_MESSAGE_BYTES = 1024;
+const RATE_LIMIT_CLOSE_AFTER = 3;
 
 function consumeCombatRateLimit(player, key, now) {
   if (!player || !key) return true;
-  const limit = COMBAT_RATE_LIMITS[key];
+  const limit = MESSAGE_RATE_LIMITS[key];
   if (!limit) return true;
   if (!player.messageRateLimits || typeof player.messageRateLimits !== 'object') {
     player.messageRateLimits = {};
@@ -31,6 +40,40 @@ function consumeCombatRateLimit(player, key, now) {
   return true;
 }
 
+function decodeMessageText(message) {
+  return typeof message === 'string' ? message : new TextDecoder().decode(message);
+}
+
+function messageByteLength(message) {
+  if (typeof message === 'string') return new TextEncoder().encode(message).length;
+  if (message && typeof message.byteLength === 'number') return Number(message.byteLength || 0);
+  return 0;
+}
+
+function registerRateLimitViolation(target, now) {
+  if (!target || typeof target !== 'object') return 0;
+  const state = target.rateLimitViolationState || {
+    count: 0,
+    updatedAt: Number(now || 0)
+  };
+  if ((Number(now || 0) - Number(state.updatedAt || 0)) > 10000) {
+    state.count = 0;
+  }
+  state.updatedAt = Number(now || 0);
+  state.count += 1;
+  target.rateLimitViolationState = state;
+  return state.count;
+}
+
+function closeSocket(ws, code, reason) {
+  if (!ws || typeof ws.close !== 'function') return;
+  try {
+    ws.close(code, reason);
+  } catch (_err) {
+    // no-op
+  }
+}
+
 export function handleRoomSocketMessage(room, ws, message, deps) {
   deps = deps || {};
   const safeJsonParse = deps.safeJsonParse;
@@ -41,17 +84,31 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   const msgC2s = deps.msgC2s || {};
   const msgS2c = deps.msgS2c || {};
 
-  const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+  const meta = room.clients.get(ws) || ws.deserializeAttachment();
+  const rawSize = messageByteLength(message);
+  const maxBytes = meta && meta.isLobbyObserver ? MAX_LOBBY_MESSAGE_BYTES : MAX_GAMEPLAY_MESSAGE_BYTES;
+  if (rawSize > maxBytes) {
+    closeSocket(ws, 1009, meta && meta.isLobbyObserver ? 'Lobby message too large' : 'Message too large');
+    if (meta && meta.isLobbyObserver && room.lobbyObservers) room.lobbyObservers.delete(ws);
+    return;
+  }
+  const text = decodeMessageText(message);
   const msg = safeJsonParse ? safeJsonParse(text) : null;
   if (!msg || typeof msg !== 'object') return;
-
-  const meta = room.clients.get(ws) || ws.deserializeAttachment();
 
   // Lobby observers only handle keepalive pings
   if (meta && meta.isLobbyObserver) {
     if (room.restoreLobbyObserver) room.restoreLobbyObserver(ws, meta);
-    const parsed = safeJsonParse ? safeJsonParse(typeof message === 'string' ? message : new TextDecoder().decode(message)) : null;
+    const parsed = msg;
     if (parsed && String(parsed.t || '') === (msgC2s.LOBBY_PING || 'lobby_ping')) {
+      if (!consumeCombatRateLimit(meta, 'lobby_ping', nowMs ? nowMs() : Date.now())) {
+        const violations = registerRateLimitViolation(meta, nowMs ? nowMs() : Date.now());
+        if (violations >= RATE_LIMIT_CLOSE_AFTER) {
+          closeSocket(ws, 1008, 'Lobby rate limited');
+          if (room.lobbyObservers) room.lobbyObservers.delete(ws);
+        }
+        return;
+      }
       room.send(ws, { t: msgS2c.PONG || 'pong', serverTime: nowMs ? nowMs() : 0 });
     }
     return;
@@ -68,34 +125,47 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   const privateLobbyLocked = isPrivateMatchRoom && isPrivateMatchRoom(room.roomName) &&
     String((room.privateRoomConfig && room.privateRoomConfig.roomPhase) || roomPhaseActive) !== roomPhaseActive;
 
+  function consumeOrClose(key) {
+    if (consumeCombatRateLimit(player, key, now)) return true;
+    const violations = registerRateLimitViolation(meta, now);
+    room.clients.set(ws, meta);
+    if (violations >= RATE_LIMIT_CLOSE_AFTER) {
+      closeSocket(ws, 1008, 'Rate limited');
+    }
+    return false;
+  }
+
   if (type === msgC2s.INPUT) {
     if (privateLobbyLocked) return;
+    if (!consumeOrClose('input')) return;
     room.handleInput(player, msg);
     return;
   }
   if (type === msgC2s.FIRE) {
     if (privateLobbyLocked) return;
-    if (!consumeCombatRateLimit(player, 'fire', now)) return;
+    if (!consumeOrClose('fire')) return;
     room.handleFire(player, msg);
     return;
   }
   if (type === msgC2s.RELOAD) {
     if (privateLobbyLocked) return;
-    if (!consumeCombatRateLimit(player, 'reload', now)) return;
+    if (!consumeOrClose('reload')) return;
     room.handleReload(player, msg);
     return;
   }
   if (type === msgC2s.EQUIP_WEAPON) {
+    if (!consumeOrClose('equip_weapon')) return;
     room.handleEquipWeapon(player, msg);
     return;
   }
   if (type === msgC2s.WEAPON_LOADOUT) {
+    if (!consumeOrClose('weapon_loadout')) return;
     room.handleWeaponLoadout(player, msg);
     return;
   }
   if (type === msgC2s.THROW) {
     if (privateLobbyLocked) return;
-    if (!consumeCombatRateLimit(player, 'throw', now)) return;
+    if (!consumeOrClose('throw')) return;
     room.handleThrow(player, msg, ws);
     return;
   }
@@ -105,10 +175,12 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   }
   if (type === msgC2s.CLASS_CAST) {
     if (privateLobbyLocked) return;
+    if (!consumeOrClose('class_cast')) return;
     if (handleClassCast) handleClassCast(room, player, msg, ws);
     return;
   }
   if (type === msgC2s.PING) {
+    if (!consumeOrClose('ping')) return;
     room.send(ws, { t: msgS2c.PONG, clientTime: msg.clientTime || 0, serverTime: now });
   }
 }

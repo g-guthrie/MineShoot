@@ -1,12 +1,25 @@
 import { getSessionFromRequest } from './auth.js';
 import { normalizeOpaqueId, sanitizeRoomId } from './transport.js';
+import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
 import {
   getPrivateRoomById,
   getPrivateRoomMember,
   isRegisteredPrivateRoomId
 } from './private-rooms.js';
 
+const WS_LOBBY_RATE_WINDOW_MS = 60_000;
+const WS_LOBBY_RATE_LIMIT = 30;
+
 export async function handleWsLobbyUpgrade(env, request) {
+  const requestIp = getClientIp(request);
+  const requestLimit = consumeRateLimit(env, `ws-lobby:${requestIp}`, {
+    limit: WS_LOBBY_RATE_LIMIT,
+    windowMs: WS_LOBBY_RATE_WINDOW_MS
+  });
+  if (!requestLimit.ok) {
+    return rateLimitedJson(requestLimit.retryAfterSec);
+  }
+
   const url = new URL(request.url);
   const roomId = sanitizeRoomId(url.searchParams.get('room') || '');
 
@@ -36,12 +49,16 @@ export async function handleWsLobbyUpgrade(env, request) {
   }
 
   // Forward WebSocket upgrade to the Durable Object
-  const id = env.GLOBAL_ARENA.idFromName(roomId);
-  const stub = env.GLOBAL_ARENA.get(id);
+  const lobbyBinding = env.PRIVATE_ROOM_LOBBY_HUB || env.GLOBAL_ARENA;
+  const id = lobbyBinding.idFromName(roomId);
+  const stub = lobbyBinding.get(id);
 
-  const doUrl = new URL('https://room/lobby-connect');
+  const doUrl = new URL('https://private-room-lobby/connect');
   doUrl.searchParams.set('roomId', roomId);
   doUrl.searchParams.set('actorId', actorId);
+  if (session && (session.displayName || session.username)) {
+    doUrl.searchParams.set('actorName', String(session.displayName || session.username));
+  }
 
   const headers = new Headers(request.headers);
   headers.set('X-Actor-Id', actorId);

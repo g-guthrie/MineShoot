@@ -17,10 +17,12 @@ import {
 import { clearPrivateRoomInvitesByRoom, clearPublicMatchAssignment, upsertPrivateRoomInvite } from './party-match-state.js';
 import {
   privateRoomIdFromCode,
-  privateRoomCodeFromId,
   normalizePrivateRoomId
 } from '../../shared/private-room-codes.js';
 import { PRIVATE_ROOM_CODE_LENGTH } from '../../shared/matchmaking-config.js';
+import { buildPrivateRoomLobbyStateForActor } from './private-room-lobby-state.js';
+import { notifyPrivateRoomLobbyHub } from './private-room-lobby-hub-sync.js';
+import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
 
 const ROOM_MODE_FFA = 'ffa';
 const ROOM_MODE_TDM = 'tdm';
@@ -40,6 +42,8 @@ const JOIN_RATE_CACHE_MAX = 5000;
 const JOIN_RATE_WINDOW_MS = 60_000;
 const JOIN_RATE_MAX = 10;
 const joinAttempts = new Map();
+const PRIVATE_ROOM_HTTP_RATE_WINDOW_MS = 60_000;
+const PRIVATE_ROOM_HTTP_RATE_LIMIT = 60;
 
 function checkJoinRateLimit(ip) {
   const now = Date.now();
@@ -118,59 +122,12 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = SYNC_MODE_LO
       }))
     })
   }).catch(() => null);
+  await notifyPrivateRoomLobbyHub(env, roomId);
   return roomState;
 }
 
 async function buildLobbyState(env, actor, roomId) {
-  const room = await getPrivateRoomById(env, roomId);
-  const roomState = await getPrivateRoomState(env, roomId);
-  if (!room || !roomState) return null;
-  const members = await getPrivateRoomMembers(env, roomId);
-  const hostId = String(roomState.host_actor_id || '');
-  const teamCount = normalizeTeamCount(roomState.team_count);
-  const teams = {
-    alpha: [],
-    bravo: [],
-    charlie: [],
-    delta: []
-  };
-  for (let i = 0; i < members.length; i++) {
-    const member = members[i];
-    const entry = {
-      id: String(member.actor_id || ''),
-      displayName: String(member.display_name || member.actor_id || 'PLAYER'),
-      teamId: normalizeTeamId(member.team_id, teamCount),
-      isHost: String(member.actor_id || '') === hostId
-    };
-    teams[entry.teamId].push(entry);
-  }
-  return {
-    self: {
-      actorId: String(actor.id || ''),
-      displayName: String(actor.displayName || actor.id || 'PLAYER'),
-      isHost: String(actor.id || '') === hostId
-    },
-    room: {
-      roomId: String(room.room_id || roomId || ''),
-      roomCode: privateRoomCodeFromId(room.room_id || roomId || ''),
-      roomMode: normalizeRoomMode(roomState.room_mode),
-      roomPhase: String(roomState.room_phase || ROOM_PHASE_LOBBY) === ROOM_PHASE_ACTIVE ? ROOM_PHASE_ACTIVE : ROOM_PHASE_LOBBY,
-      teamCount,
-      teamIds: activeTeamIds(teamCount),
-      inviteLocked: !!Number(roomState.invite_locked || 0),
-      hostActorId: hostId,
-      canToggleInviteLock: String(actor.id || '') === hostId,
-      canInviteParty: String(actor.id || '') === hostId || !Number(roomState.invite_locked || 0),
-      memberCount: members.length,
-      teams: teams,
-      members: members.map((member) => ({
-        id: String(member.actor_id || ''),
-        displayName: String(member.display_name || member.actor_id || 'PLAYER'),
-        teamId: normalizeTeamId(member.team_id, teamCount),
-        isHost: String(member.actor_id || '') === hostId
-      }))
-    }
-  };
+  return buildPrivateRoomLobbyStateForActor(env, actor, roomId);
 }
 
 async function ensureRoomCapacity(env, roomId, nextActorIds) {
@@ -193,6 +150,7 @@ async function detachActorFromPrivateRoom(env, actorId) {
       clearPrivateRoomInvitesByRoom(env, roomId),
       deletePrivateRoom(env, roomId)
     ]);
+    await notifyPrivateRoomLobbyHub(env, roomId);
     return roomId;
   }
   const roomState = await getPrivateRoomState(env, roomId);
@@ -394,6 +352,15 @@ export async function handlePrivateRoomLobby(env, request) {
     return json({ ok: false, error: 'Method not allowed.' }, 405, { Allow: 'GET, POST' });
   }
 
+  const requestIp = getClientIp(request);
+  const requestLimit = consumeRateLimit(env, `private-room:http:${requestIp}`, {
+    limit: PRIVATE_ROOM_HTTP_RATE_LIMIT,
+    windowMs: PRIVATE_ROOM_HTTP_RATE_WINDOW_MS
+  });
+  if (!requestLimit.ok) {
+    return rateLimitedJson(requestLimit.retryAfterSec);
+  }
+
   if (request.method === 'GET') {
     const actor = await resolveActor(env, request, null);
     if (!actor) return json({ ok: false, error: 'Missing actor identity.' }, 400);
@@ -477,6 +444,7 @@ export async function handlePrivateRoomLobby(env, request) {
     await setPrivateRoomState(env, currentRoomId, {
       inviteLocked: !!body.locked
     });
+    await notifyPrivateRoomLobbyHub(env, currentRoomId);
     const state = await buildLobbyState(env, actor, currentRoomId);
     return json({ ok: true, state });
   }

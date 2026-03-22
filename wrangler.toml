@@ -14,9 +14,17 @@ PUBLIC_OVERFLOW_ROOM_COUNT = "8"
 name = "GLOBAL_ARENA"
 class_name = "GlobalArenaRoom"
 
+[[durable_objects.bindings]]
+name = "PRIVATE_ROOM_LOBBY_HUB"
+class_name = "PrivateRoomLobbyHub"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GlobalArenaRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PrivateRoomLobbyHub"]
 
 [[d1_databases]]
 binding = "DB"
@@ -34,6 +42,10 @@ ENABLE_TEST_FIXTURES = "1"
 [[env.e2e.durable_objects.bindings]]
 name = "GLOBAL_ARENA"
 class_name = "GlobalArenaRoom"
+
+[[env.e2e.durable_objects.bindings]]
+name = "PRIVATE_ROOM_LOBBY_HUB"
+class_name = "PrivateRoomLobbyHub"
 
 [[env.e2e.d1_databases]]
 binding = "DB"

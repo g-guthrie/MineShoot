@@ -34,6 +34,10 @@
             return opts.getCapabilities ? opts.getCapabilities() : {};
         }
 
+        function menuRefreshPending() {
+            return !!(opts.isMenuRefreshPending && opts.isMenuRefreshPending());
+        }
+
         function getState() {
             return opts.getState ? opts.getState() : {};
         }
@@ -638,6 +642,11 @@
             if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room' || activeMatchShell;
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
+            if (elements.refreshBtn) {
+                elements.refreshBtn.hidden = activeMatchShell || !(state.activeSurface === 'main' || state.activeSurface === 'room');
+                elements.refreshBtn.disabled = isBusy || menuRefreshPending();
+                elements.refreshBtn.textContent = menuRefreshPending() ? 'Refreshing...' : 'Refresh';
+            }
             if (elements.loadoutStartBtn) elements.loadoutStartBtn.hidden = true;
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
             if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;

@@ -1,5 +1,6 @@
 import { getSessionFromRequest } from './auth.js';
 import { normalizeOpaqueId, sanitizeRoomId, validUsername } from './transport.js';
+import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
 import {
   getPrivateRoomById,
   getPrivateRoomMember,
@@ -11,6 +12,8 @@ import { consumePublicMatchAssignment } from './party-match-state.js';
 const FRIENDLY_GUEST_ID_RE = /^[a-z]+-[a-z]+-\d{3}$/i;
 const GUEST_ADJECTIVES = ['amber', 'brisk', 'calm', 'clever', 'crisp', 'daring', 'eager', 'ember', 'frozen', 'gentle', 'golden', 'grand', 'happy', 'icy', 'jolly', 'lucky', 'mellow', 'misty', 'nimble', 'nova', 'quiet', 'rapid', 'royal', 'sharp', 'silver', 'solar', 'steady', 'stormy', 'swift', 'tidy', 'vivid', 'wild'];
 const GUEST_NOUNS = ['badger', 'bear', 'crow', 'drake', 'eagle', 'falcon', 'fox', 'gecko', 'harbor', 'hawk', 'jaguar', 'lynx', 'maple', 'meadow', 'moose', 'otter', 'owl', 'panda', 'pepper', 'pine', 'raven', 'river', 'rook', 'spruce', 'stone', 'tiger', 'valley', 'wave', 'willow', 'wolf', 'wren', 'yak'];
+const WS_RATE_WINDOW_MS = 60_000;
+const WS_RATE_LIMIT = 45;
 
 function guestWord(list) {
   return String(list[Math.floor(Math.random() * list.length)] || list[0] || 'guest');
@@ -25,6 +28,15 @@ function guestDisplayName(id) {
 }
 
 export async function handleWsUpgrade(env, request, classPresets) {
+  const requestIp = getClientIp(request);
+  const requestLimit = consumeRateLimit(env, `ws:${requestIp}`, {
+    limit: WS_RATE_LIMIT,
+    windowMs: WS_RATE_WINDOW_MS
+  });
+  if (!requestLimit.ok) {
+    return rateLimitedJson(requestLimit.retryAfterSec);
+  }
+
   const url = new URL(request.url);
   const roomId = sanitizeRoomId(url.searchParams.get('room') || env.ROOM_NAME || 'global');
   const requestedPlayerId = String(url.searchParams.get('pid') || '').trim();

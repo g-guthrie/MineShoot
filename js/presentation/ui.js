@@ -35,6 +35,7 @@
     var HITMARKER_FADE_SEC = 0.09;
     var lastAbilityInfoState = null;
     var lastThrowableInfoState = null;
+    var inputBindingsUnsubscribe = null;
 
     function sharedMatchRules() {
         return runtime &&
@@ -137,6 +138,10 @@
     }
 
     GameUI.init = function () {
+        if (inputBindingsUnsubscribe) {
+            inputBindingsUnsubscribe();
+            inputBindingsUnsubscribe = null;
+        }
         crosshairEl = document.getElementById('crosshair');
         pistolReticleEl = document.getElementById('pistol-reticle');
         spreadReticleEl = document.getElementById('spread-reticle');
@@ -184,7 +189,7 @@
         damageFlashLevel = 0;
         GameUI.setIdleWarning('');
         if (runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
-            runtime.GameInputBindings.subscribe(function () {
+            inputBindingsUnsubscribe = runtime.GameInputBindings.subscribe(function () {
                 if (lastAbilityInfoState) GameUI.updateAbilityInfo(lastAbilityInfoState);
                 if (lastThrowableInfoState) GameUI.updateThrowableInfo(lastThrowableInfoState);
             });
@@ -250,6 +255,81 @@
                 sprintSpeedLineEls.push(line);
             }
         }
+    };
+
+    GameUI.resetGameplayHud = function () {
+        if (hitmarkerTimer) {
+            clearTimeout(hitmarkerTimer);
+            hitmarkerTimer = null;
+        }
+        killCount = 0;
+        lastAbilityInfoState = null;
+        lastThrowableInfoState = null;
+        damageFlashLevel = 0;
+        debugVisualsOn = false;
+
+        hidePrimaryReticles();
+        updateSniperScope(false, 0);
+        setReticleSetTargetClass('crosshair', false);
+        if (plasmaReticleEl) plasmaReticleEl.style.display = 'none';
+        if (trackingReticleEl) trackingReticleEl.style.display = 'none';
+        if (trackingReticleLabelEl) trackingReticleLabelEl.style.display = 'none';
+        if (combatRadarEl) combatRadarEl.style.display = 'none';
+        if (combatRadarSlicesEl) combatRadarSlicesEl.style.background = '';
+        if (combatRadarCoreEl) {
+            combatRadarCoreEl.style.background = '';
+            combatRadarCoreEl.style.boxShadow = '';
+        }
+        for (var i = 0; i < combatBeaconEls.length; i++) {
+            if (combatBeaconEls[i]) combatBeaconEls[i].style.display = 'none';
+        }
+        if (weaponInfoEl) clearChildren(weaponInfoEl);
+        if (throwableInfoEl) throwableInfoEl.textContent = '';
+        if (abilityInfoEl) abilityInfoEl.textContent = '';
+        if (cooldownBarEl) {
+            cooldownBarEl.style.width = '0%';
+            cooldownBarEl.style.background = '';
+        }
+        if (cooldownStatusEl) {
+            cooldownStatusEl.textContent = '';
+            cooldownStatusEl.style.color = '';
+        }
+        if (sprintSpeedLinesEl) {
+            sprintSpeedLinesEl.style.display = 'none';
+            sprintSpeedLinesEl.style.opacity = '0';
+        }
+        if (hitmarkerEl) {
+            hitmarkerEl.style.transition = 'none';
+            hitmarkerEl.style.opacity = '0';
+            hitmarkerEl.style.color = '#ff0000';
+            hitmarkerEl.style.fontSize = '28px';
+        }
+        if (killCounterEl) killCounterEl.textContent = 'Kills: 0';
+        if (damageNumbersEl) clearChildren(damageNumbersEl);
+        if (debugInfoEl) debugInfoEl.textContent = '';
+        GameUI.setIdleWarning('');
+        if (chokeReticleEl) chokeReticleEl.style.display = 'none';
+        if (hookReticleEl) hookReticleEl.style.display = 'none';
+        if (deadeyeDebugRectEl) deadeyeDebugRectEl.style.display = 'none';
+        if (abilityDebugPanelEl) {
+            abilityDebugPanelEl.style.display = 'none';
+            abilityDebugPanelEl.textContent = '';
+            abilityDebugPanelEl.innerHTML = '';
+        }
+        hideDeadeyeReticles();
+        if (healthBarEl) {
+            healthBarEl.style.width = '100%';
+            healthBarEl.style.background = '#4CAF50';
+        }
+        if (healthTextEl) healthTextEl.textContent = 'HP: 0';
+        if (armorBarEl) armorBarEl.style.width = '0%';
+        if (damageVignetteEl) damageVignetteEl.style.opacity = '0';
+        if (damageIndicatorEl) {
+            for (var tickIndex = 0; tickIndex < damageTickTimers.length; tickIndex++) {
+                damageTickTimers[tickIndex] = 0;
+            }
+        }
+        GameUI.updateDamageEffects(0);
     };
 
     GameUI.showHitMarker = function () {

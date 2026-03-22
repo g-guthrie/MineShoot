@@ -19,6 +19,7 @@ import {
   loadOutgoingPrivateRoomInviteSummary,
   loadPublicMatchAssignment
 } from './party-match-state.js';
+import { notifyPrivateRoomLobbyHub } from './private-room-lobby-hub-sync.js';
 
 const PARTY_MAX_MEMBERS = 16;
 const ACTOR_ID_RE = /^[a-zA-Z0-9_-]{3,64}$/;
@@ -26,6 +27,7 @@ const ACTIVITY_MENU = 'menu';
 const ACTIVITY_PRIVATE_ROOM_LOBBY = 'private_room_lobby';
 const ACTIVITY_IN_MATCH = 'in_match';
 const ACTIVITY_STALE_WINDOW_SEC = 15;
+const PRESENCE_TOUCH_INTERVAL_SEC = 30;
 const ROOM_TEAM_IDS = ['alpha', 'bravo', 'charlie', 'delta'];
 
 let ensurePresencePromise = null;
@@ -161,6 +163,19 @@ export async function touchPartyPresence(env, actor, activityState = ACTIVITY_ME
   if (!actor || !actor.id) return;
   await ensurePartyPresenceTable(env);
   const now = nowSec();
+  const normalizedActivityState = normalizeActivityState(activityState);
+  const actorId = String(actor.id || '');
+  const displayName = String(actor.displayName || actor.username || actor.id || 'PLAYER');
+  const existing = await env.DB.prepare(
+    `SELECT actor_id, display_name, activity_state, last_seen_at
+     FROM party_presence
+     WHERE actor_id = ?1`
+  ).bind(actorId).first();
+  const shouldWrite = !existing ||
+    String(existing.display_name || '') !== displayName ||
+    String(existing.activity_state || ACTIVITY_MENU) !== normalizedActivityState ||
+    (now - Math.max(0, Number(existing.last_seen_at || 0))) >= PRESENCE_TOUCH_INTERVAL_SEC;
+  if (!shouldWrite) return;
   await env.DB.prepare(
     `INSERT INTO party_presence (actor_id, display_name, last_menu_seen_at, activity_state, last_seen_at)
      VALUES (?1, ?2, ?3, ?4, ?5)
@@ -170,10 +185,10 @@ export async function touchPartyPresence(env, actor, activityState = ACTIVITY_ME
        activity_state = excluded.activity_state,
        last_seen_at = excluded.last_seen_at`
   ).bind(
-    String(actor.id || ''),
-    String(actor.displayName || actor.username || actor.id || 'PLAYER'),
+    actorId,
+    displayName,
     activityState === ACTIVITY_MENU ? now : 0,
-    normalizeActivityState(activityState),
+    normalizedActivityState,
     now
   ).run();
 }
@@ -497,6 +512,7 @@ async function syncPrivateRoomDurableObject(env, roomId, syncMode = 'lobby_updat
       }))
     })
   }).catch(() => null);
+  await notifyPrivateRoomLobbyHub(env, roomId);
   return roomState;
 }
 
@@ -509,6 +525,7 @@ async function detachActorFromPrivateRoom(env, actorId) {
   if (!remaining.length) {
     await clearPrivateRoomInvitesByRoom(env, roomId);
     await deletePrivateRoom(env, roomId);
+    await notifyPrivateRoomLobbyHub(env, roomId);
     return roomId;
   }
   const roomState = await getPrivateRoomState(env, roomId);

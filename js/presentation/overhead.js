@@ -234,6 +234,15 @@
         ensureContainer();
     };
 
+    GameOverhead.reset = function () {
+        if (container && container.parentNode) {
+            container.parentNode.removeChild(container);
+        }
+        container = null;
+        entries = new Map();
+        revealUntilByTargetId = new Map();
+    };
+
     GameOverhead.revealTarget = function (targetId, durationMs) {
         var id = String(targetId || '');
         if (!id) return false;

@@ -6,6 +6,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=optional" rel="stylesheet">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <title>Mayhem</title>
     <link rel="stylesheet" href="/css/main.css">
     <link rel="stylesheet" href="/css/menu-shell-v4.css">
@@ -39,36 +40,14 @@
                 <div id="postgame-celebration-note">THE CROWD LOVES A HORRIBLE LITTLE GHOST.</div>
             </section>
             <section id="postgame-results" class="postgame-screen" hidden>
-                <div class="postgame-kicker">POST ACTION REPORT</div>
-                <div id="postgame-results-title">ROUND RESULTS</div>
+                <div id="postgame-results-outcome" class="postgame-hero-outcome">VICTORY</div>
+                <div id="postgame-results-winner" class="postgame-hero-winner"></div>
                 <div id="postgame-results-grid">
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Outcome</span>
-                        <span id="postgame-results-outcome" class="postgame-stat-value">VICTORY</span>
-                    </div>
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Winner</span>
-                        <span id="postgame-results-winner" class="postgame-stat-value">YOU</span>
-                    </div>
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Mode</span>
-                        <span id="postgame-results-mode" class="postgame-stat-value">Free For All</span>
-                    </div>
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Your Line</span>
-                        <span id="postgame-results-line" class="postgame-stat-value">0 / 0</span>
-                    </div>
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Objective</span>
-                        <span id="postgame-results-objective" class="postgame-stat-value">GOAL 0</span>
-                    </div>
-                    <div class="postgame-stat-card">
-                        <span class="postgame-stat-label">Round State</span>
-                        <span id="postgame-results-state" class="postgame-stat-value">RESET 0.0S</span>
-                    </div>
+                    <div id="postgame-results-mode" class="match-stat-pill" data-session-label="Mode">Free For All</div>
+                    <div id="postgame-results-line" class="match-stat-pill" data-session-label="Your Line">0 / 0</div>
+                    <div id="postgame-results-objective" class="match-stat-pill" data-session-label="Objective">GOAL 0</div>
                 </div>
-                <div id="postgame-results-summary">Summary unavailable.</div>
-                <button id="postgame-continue-btn" type="button">CONTINUE</button>
+                <button id="postgame-continue-btn" class="btn btn-primary btn-lg" type="button">CONTINUE</button>
             </section>
         </div>
         <div id="launch-flow" hidden>
@@ -95,6 +74,7 @@
                                 </button>
                             </div>
                             <div id="menu-header-actions">
+                                <button id="menu-refresh-btn" class="btn btn-sm" type="button" aria-label="Refresh menu data" hidden>Refresh</button>
                                 <button id="utility-toggle-btn" type="button" aria-expanded="false" aria-controls="utility-overlay">Settings</button>
                             </div>
                         </div>
@@ -343,6 +323,9 @@
                 <form id="auth-form" novalidate>
                     <input id="auth-username" type="text" maxlength="64" autocomplete="username" placeholder="Username (anything unique)" required>
                     <input id="auth-pin" type="password" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="current-password" placeholder="4-digit PIN" required>
+                    <div id="auth-turnstile-wrap" hidden>
+                        <div id="auth-turnstile"></div>
+                    </div>
                     <button id="auth-play-btn" type="submit">LOGIN / CREATE PROFILE</button>
                 </form>
                 <div id="auth-status"></div>
