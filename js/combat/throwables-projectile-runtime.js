@@ -402,6 +402,8 @@
                 stickyUntil: 0,
                 stuckEnemy: null,
                 stuckOffset: new THREE.Vector3(),
+                seekingEnemy: null,
+                seekingUntil: 0,
                 predicted: !!options.predicted,
                 clientThrowId: options.clientThrowId || '',
                 projectileId: options.projectileId || '',
@@ -577,18 +579,23 @@
 
         function stickPlasmaProjectile(projectile, point, enemy, def) {
             if (!projectile || !point) return;
-            projectile.mesh.position.copy(point);
             projectile.velocity.set(0, 0, 0);
             projectile.stickyUntil = projectile.age + plasmaFuseDelay(def);
             projectile.stuckEnemy = enemy || null;
+            projectile.seekingEnemy = null;
+            projectile.seekingUntil = 0;
             projectile.trackingEnemy = null;
             projectile.trackingHitbox = null;
             projectile.trackingUntil = 0;
             projectile.stuckOffset.set(0, 0, 0);
             if (projectile.stuckEnemy && projectile.stuckEnemy.group && projectile.stuckEnemy.group.position) {
-                projectile.stuckOffset.copy(point).sub(projectile.stuckEnemy.group.position);
+                var stickH = Number(def.stickHeight || 0.9);
+                projectile.stuckOffset.set(0, stickH, 0);
+                projectile.mesh.position.copy(projectile.stuckEnemy.group.position).add(projectile.stuckOffset);
+            } else {
+                projectile.mesh.position.copy(point);
             }
-            spawnFlash(point, 0xffb347, 0.08, 0.08);
+            spawnFlash(projectile.mesh.position, 0xffb347, 0.08, 0.08);
         }
 
         function explodeAt(position, radius, maxDamage, source, onEnemyHit) {
@@ -810,6 +817,41 @@
                 return;
             }
 
+            /* Plasma seek phase — after catch, steer toward enemy chest before sticking */
+            if (p.type === 'plasma' && p.seekingEnemy) {
+                var seekEnemy = p.seekingEnemy;
+                if (!seekEnemy.alive || !seekEnemy.group || !seekEnemy.group.position) {
+                    stickPlasmaProjectile(p, p.mesh.position, null, def);
+                    return;
+                }
+                var stickH = Number(def.stickHeight || 0.9);
+                tmpTarget.copy(seekEnemy.group.position);
+                tmpTarget.y += stickH;
+                tmpDir.copy(tmpTarget).sub(p.mesh.position);
+                var seekDist = tmpDir.length();
+                if (seekDist <= 0.3 || p.age >= p.seekingUntil) {
+                    p.seekingEnemy = null;
+                    p.seekingUntil = 0;
+                    var stickPoint = tmpTarget.clone();
+                    stickPlasmaProjectile(p, stickPoint, seekEnemy, def);
+                    return;
+                }
+                var seekSpd = Number(def.seekSpeed || 32);
+                var seekLrp = Number(def.seekLerp || 8);
+                tmpDir.normalize().multiplyScalar(seekSpd);
+                p.velocity.lerp(tmpDir, Math.min(1, dt * seekLrp));
+                tmpStart.copy(p.mesh.position);
+                tmpEnd.copy(p.mesh.position).addScaledVector(p.velocity, dt);
+                var seekWallHit = segmentCollision(tmpStart, tmpEnd);
+                if (seekWallHit) {
+                    stickPlasmaProjectile(p, seekWallHit.point, null, def);
+                    return;
+                }
+                p.mesh.position.copy(tmpEnd);
+                orientProjectileVisual(p.mesh, p.velocity, p.age);
+                return;
+            }
+
             /* Plasma no longer tracks — pure arc throw, Halo-style sticky */
 
             var isTrackingProjectile = (p.type === 'missile' || p.type === 'plasma_stream');
@@ -887,7 +929,9 @@
             if (p.type === 'plasma') {
                 var catchHit = findPlasmaCatchCandidate(tmpStart, tmpEnd, hit ? hit.distance : Infinity, def.catchRadius, null);
                 if (catchHit && (!hit || catchHit.distance <= hit.distance)) {
-                    stickPlasmaProjectile(p, catchHit.point, catchHit.enemy, def);
+                    p.seekingEnemy = catchHit.enemy;
+                    p.seekingUntil = p.age + 0.3;
+                    p.mesh.position.copy(catchHit.point);
                     return;
                 }
             }

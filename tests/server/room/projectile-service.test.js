@@ -98,7 +98,7 @@ test('tickProjectiles reflects frag grenades off authoritative world colliders i
   assert.equal(projectile.bounces, 1);
 });
 
-test('tickProjectiles lets plasma stick immediately once a target enters the catch radius', () => {
+test('tickProjectiles lets plasma seek then stick once a target enters the catch radius', () => {
   const target = {
     id: 'usr_target',
     alive: true,
@@ -141,7 +141,14 @@ test('tickProjectiles lets plasma stick immediately once a target enters the cat
   room.projectiles.set(projectile.id, projectile);
   room.players.set(target.id, target);
 
-  for (let i = 0; i < 3 && projectile.stickyUntil <= 0; i++) {
+  // First ticks: catch triggers seeking phase
+  for (let i = 0; i < 3 && !projectile.seekingTargetId; i++) {
+    tickProjectiles(room, 0.05);
+  }
+  assert.equal(projectile.seekingTargetId, target.id);
+
+  // Continue ticking until seeking resolves to stuck (seek timeout at 0.3s)
+  for (let i = 0; i < 20 && projectile.stickyUntil <= 0; i++) {
     tickProjectiles(room, 0.05);
   }
 

@@ -1299,6 +1299,10 @@ export class GlobalArenaRoom extends DurableObject {
     this.lastTickAt = now;
 
     this.cleanupDisconnectedPlayers(now);
+    if (this.clients.size === 0) {
+      this.stopTickIfEmpty();
+      return;
+    }
     this.maybeResetPublicMatch();
     this.syncRoomFixtures();
     this.startPublicMatchIfReady();

@@ -292,8 +292,9 @@ export const gameplayTuning = {
       armorBufferMode: 'normal'
     },
     plasma: {
-      id: 'plasma', label: 'Plasma Grenade', previewType: 'none', speed: 30, upward: 0.0, gravity: 6.0, fuse: 2.0, maxLife: 3.2, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
-      catchRadius: 1.0, trackDuration: 0, trackLerp: 0, acquireRange: 0, acquireHalfAngleDeg: 0, stickExplodeDelay: 1.8,
+      id: 'plasma', label: 'Plasma Grenade', previewType: 'none', speed: 30, upward: 3.0, gravity: 6.0, fuse: 2.0, maxLife: 3.2, radius: 4.5, damage: 95, minBlastDamage: 10, regen: 10,
+      catchRadius: 2.5, trackDuration: 0, trackLerp: 0, acquireRange: 0, acquireHalfAngleDeg: 0, stickExplodeDelay: 1.8,
+      seekLerp: 8.0, seekSpeed: 32, stickHeight: 0.9,
       armorBufferMode: 'normal'
     },
     missile: {

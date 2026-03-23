@@ -281,16 +281,23 @@ export function tickProjectiles(room, dtSec) {
     proj.vx = 0;
     proj.vy = 0;
     proj.vz = 0;
-    proj.x = Number(x || proj.x);
-    proj.y = Number(y || proj.y);
-    proj.z = Number(z || proj.z);
+    proj.seekingTargetId = '';
+    proj.seekingUntil = 0;
     proj.stickyUntil = now + Math.round(delaySec * 1000);
     proj.stuckToTargetId = targetEntity ? targetEntity.id : '';
     if (targetEntity) {
-      proj.stuckOffsetX = proj.x - targetEntity.x;
-      proj.stuckOffsetY = proj.y - ((targetEntity.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0);
-      proj.stuckOffsetZ = proj.z - targetEntity.z;
+      const stickH = Number((THROWABLE_STATS[proj.type] || {}).stickHeight || 0.9);
+      const entityFootY = feetY(targetEntity);
+      proj.x = targetEntity.x;
+      proj.y = entityFootY + stickH;
+      proj.z = targetEntity.z;
+      proj.stuckOffsetX = 0;
+      proj.stuckOffsetY = stickH;
+      proj.stuckOffsetZ = 0;
     } else {
+      proj.x = Number(x || proj.x);
+      proj.y = Number(y || proj.y);
+      proj.z = Number(z || proj.z);
       proj.stuckOffsetX = 0;
       proj.stuckOffsetY = 0;
       proj.stuckOffsetZ = 0;
@@ -311,13 +318,74 @@ export function tickProjectiles(room, dtSec) {
         const stuckTarget = room.getEntityById(p.stuckToTargetId);
         if (stuckTarget && stuckTarget.alive) {
           p.x = stuckTarget.x + (p.stuckOffsetX || 0);
-          p.y = ((stuckTarget.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU + 1.0) + (p.stuckOffsetY || 0);
+          p.y = feetY(stuckTarget) + (p.stuckOffsetY || 0);
           p.z = stuckTarget.z + (p.stuckOffsetZ || 0);
         }
       }
       if (now >= p.stickyUntil) {
         explodeProjectile(room, p, p.x, p.y, p.z);
         toRemove.push(p.id);
+      }
+      return;
+    }
+
+    if (p.type === 'plasma' && p.seekingTargetId) {
+      const seekTarget = room.getEntityById(p.seekingTargetId);
+      if (!seekTarget || !seekTarget.alive || p.age >= (p.seekingUntil || 0)) {
+        if (seekTarget && seekTarget.alive) {
+          const stickH = Number(def.stickHeight || 0.9);
+          const sFootY = feetY(seekTarget);
+          if (stickProjectile(p, seekTarget, seekTarget.x, sFootY + stickH, seekTarget.z)) {
+            room.broadcast({
+              t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type,
+              impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: seekTarget.id
+            });
+          }
+        } else {
+          stickProjectile(p, null, p.x, p.y, p.z);
+          room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: p.y, z: p.z });
+        }
+        return;
+      }
+      const stickH = Number(def.stickHeight || 0.9);
+      const tFootY = feetY(seekTarget);
+      const tx = seekTarget.x;
+      const ty = tFootY + stickH;
+      const tz = seekTarget.z;
+      const sdx = tx - p.x;
+      const sdy = ty - p.y;
+      const sdz = tz - p.z;
+      const sDist = Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz);
+      if (sDist <= 0.3) {
+        if (stickProjectile(p, seekTarget, tx, ty, tz)) {
+          room.broadcast({
+            t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type,
+            impactType: 'enemy', x: p.x, y: p.y, z: p.z, targetId: seekTarget.id
+          });
+        }
+        return;
+      }
+      const seekSpd = Number(def.seekSpeed || 32);
+      const seekLrp = Number(def.seekLerp || 8);
+      const nextVel = steerHomingVelocity({
+        projectilePos: { x: p.x, y: p.y, z: p.z },
+        targetPos: { x: tx, y: ty, z: tz },
+        velocity: { x: p.vx, y: p.vy, z: p.vz },
+        speed: seekSpd,
+        boost: 0,
+        lerp: seekLrp,
+        dt: dtSec
+      });
+      p.vx = Number(nextVel.x || 0);
+      p.vy = Number(nextVel.y || 0);
+      p.vz = Number(nextVel.z || 0);
+      p.gravity = 0;
+      const prevSeekPos = { x: p.x, y: p.y, z: p.z };
+      integrateProjectileMotion(p, dtSec, false);
+      const seekWallHit = worldProjectileHit(room, prevSeekPos, { x: p.x, y: p.y, z: p.z });
+      if (seekWallHit) {
+        stickProjectile(p, null, seekWallHit.point.x, seekWallHit.point.y, seekWallHit.point.z);
+        room.broadcast({ t: MSG_S2C.THROW_IMPACT, projectileId: p.id, projectileType: p.type, impactType: 'world', x: p.x, y: p.y, z: p.z });
       }
       return;
     }
@@ -477,40 +545,22 @@ export function tickProjectiles(room, dtSec) {
     if (p.type === 'plasma') {
       const contactHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, 0);
       if (contactHit) {
-        if (stickProjectile(p, contactHit.entity, contactHit.point.x, contactHit.point.y, contactHit.point.z)) {
-          p.trackingTargetId = '';
-          p.trackingUntil = 0;
-          room.broadcast({
-            t: MSG_S2C.THROW_IMPACT,
-            projectileId: p.id,
-            projectileType: p.type,
-            impactType: 'enemy',
-            x: p.x,
-            y: p.y,
-            z: p.z,
-            targetId: contactHit.entity.id
-          });
-          return;
-        }
+        p.seekingTargetId = contactHit.entity.id;
+        p.seekingUntil = p.age + 0.3;
+        p.x = contactHit.point.x;
+        p.y = contactHit.point.y;
+        p.z = contactHit.point.z;
+        return;
       }
 
       const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0));
       if (catchHit) {
-        if (stickProjectile(p, catchHit.entity, catchHit.point.x, catchHit.point.y, catchHit.point.z)) {
-          p.trackingTargetId = '';
-          p.trackingUntil = 0;
-          room.broadcast({
-            t: MSG_S2C.THROW_IMPACT,
-            projectileId: p.id,
-            projectileType: p.type,
-            impactType: 'enemy',
-            x: p.x,
-            y: p.y,
-            z: p.z,
-            targetId: catchHit.entity.id
-          });
-          return;
-        }
+        p.seekingTargetId = catchHit.entity.id;
+        p.seekingUntil = p.age + 0.3;
+        p.x = catchHit.point.x;
+        p.y = catchHit.point.y;
+        p.z = catchHit.point.z;
+        return;
       }
     }
 

@@ -59,6 +59,7 @@ export class PrivateRoomLobbyHub extends DurableObject {
     this.env = env;
     this.roomId = '';
     this.observers = new Map();
+    this.pendingSyncTimer = null;
   }
 
   async sendState(ws, meta) {
@@ -113,7 +114,11 @@ export class PrivateRoomLobbyHub extends DurableObject {
     }
 
     if (request.method === 'POST' && url.pathname === '/sync') {
-      await this.broadcastState();
+      if (this.pendingSyncTimer) clearTimeout(this.pendingSyncTimer);
+      this.pendingSyncTimer = setTimeout(() => {
+        this.pendingSyncTimer = null;
+        this.broadcastState();
+      }, 100);
       return new Response(null, { status: 204 });
     }
 

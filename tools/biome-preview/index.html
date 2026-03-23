@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Biome Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: monospace; overflow: hidden; }
+  canvas { display: block; }
+  #hud {
+    position: fixed; top: 10px; left: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 10px 14px; border-radius: 6px;
+    font-size: 12px; line-height: 1.6; pointer-events: none;
+  }
+  #hud b { color: #7df; }
+  #controls {
+    position: fixed; top: 10px; right: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 10px 14px; border-radius: 6px;
+    font-size: 12px; pointer-events: auto;
+  }
+  #controls button {
+    background: #335; color: #adf; border: 1px solid #557; padding: 4px 10px;
+    margin: 2px; border-radius: 4px; cursor: pointer; font-family: monospace;
+  }
+  #controls button:hover { background: #447; }
+  #controls button.active { background: #558; border-color: #7af; }
+  #mesh-count {
+    position: fixed; bottom: 10px; left: 10px; z-index: 10;
+    background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 6px;
+    font-size: 11px;
+  }
+  #grid-tooltip {
+    position: fixed; z-index: 20; pointer-events: none;
+    background: rgba(0,0,0,0.85); color: #7df; padding: 4px 10px;
+    border-radius: 4px; font-size: 13px; font-weight: bold;
+    display: none; white-space: nowrap;
+  }
+  #grid-click-info {
+    position: fixed; bottom: 10px; right: 10px; z-index: 10;
+    background: rgba(0,0,0,0.8); color: #ffa; padding: 6px 12px;
+    border-radius: 6px; font-size: 12px; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <b>Biome Preview</b><br>
+  Orbit: left-drag | Pan: right-drag | Zoom: scroll<br>
+  <span id="camera-info"></span>
+</div>
+<div id="controls">
+  <button id="btn-top" title="Top-down view">Top</button>
+  <button id="btn-iso" title="Isometric view">Iso</button>
+  <button id="btn-walk" title="Eye-level view">Walk</button>
+  <button id="btn-grid" title="Toggle grid">Grid</button>
+  <button id="btn-axes" title="Toggle axes">Axes</button>
+  <button id="btn-wireframe" title="Toggle wireframe">Wire</button>
+</div>
+<div id="mesh-count"></div>
+<div id="grid-tooltip"></div>
+<div id="grid-click-info"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ── Expose THREE globally (biome scripts expect it) ── */
+window.THREE = THREE;
+
+/* ── Scene setup ── */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.FogExp2(0x1a1a2e, 0.004);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(-50, 40, 50);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 3, 0);
+
+/* ── Lighting ── */
+const ambientLight = new THREE.AmbientLight(0x8899bb, 0.6);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+dirLight.position.set(30, 50, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -30;
+dirLight.shadow.camera.right = 30;
+dirLight.shadow.camera.top = 30;
+dirLight.shadow.camera.bottom = -30;
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0x6688aa, 0.3);
+fillLight.position.set(-20, 20, -30);
+scene.add(fillLight);
+
+/* ── Ground plane ── */
+const groundGeo = new THREE.PlaneGeometry(54, 54);
+groundGeo.rotateX(-Math.PI / 2);
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x4a8c3f });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.position.y = -0.05;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* ── Grid helper ── */
+const gridHelper = new THREE.GridHelper(54, 54, 0x444466, 0x333355);
+gridHelper.position.y = 0.01;
+scene.add(gridHelper);
+
+/* ── Axes helper ── */
+const axesHelper = new THREE.AxesHelper(15);
+axesHelper.position.y = 0.02;
+scene.add(axesHelper);
+
+/* ── Chess-style grid labels (A-Z columns on X, 1-54 rows on Z) ── */
+const gridLabelsGroup = new THREE.Group();
+gridLabelsGroup.name = 'gridLabels';
+scene.add(gridLabelsGroup);
+
+function makeTextSprite(text, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.fillStyle = color || '#aaddff';
+    ctx2d.font = 'bold 40px monospace';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(text, 32, 32);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.2, 1.2, 1);
+    return sprite;
+}
+
+// Column labels: A-Z along X axis (every 2 units for readability)
+const gridHalf = 27;
+for (var gi = 0; gi < 27; gi++) {
+    var letter = String.fromCharCode(65 + gi); // A, B, C...
+    var xPos = -gridHalf + gi * 2 + 1;
+    // Label on north edge (negative Z)
+    var sprN = makeTextSprite(letter, '#88bbff');
+    sprN.position.set(xPos, 0.1, -gridHalf - 1.2);
+    gridLabelsGroup.add(sprN);
+    // Label on south edge
+    var sprS = makeTextSprite(letter, '#88bbff');
+    sprS.position.set(xPos, 0.1, gridHalf + 1.2);
+    gridLabelsGroup.add(sprS);
+}
+
+// Row labels: 1-27 along Z axis (every 2 units)
+for (var gj = 0; gj < 27; gj++) {
+    var num = String(gj + 1);
+    var zPos = -gridHalf + gj * 2 + 1;
+    // Label on west edge (negative X)
+    var sprW = makeTextSprite(num, '#ffcc66');
+    sprW.position.set(-gridHalf - 1.2, 0.1, zPos);
+    gridLabelsGroup.add(sprW);
+    // Label on east edge
+    var sprE = makeTextSprite(num, '#ffcc66');
+    sprE.position.set(gridHalf + 1.2, 0.1, zPos);
+    gridLabelsGroup.add(sprE);
+}
+
+/* ── Grid coordinate mapping ── */
+// gridToWorld("N20") → { x: worldX, z: worldZ }
+// worldToGrid(x, z) → "N20"
+window.gridToWorld = function(ref) {
+    ref = ref.toUpperCase().trim();
+    var match = ref.match(/^([A-Z])(\d+)$/);
+    if (!match) return null;
+    var col = match[1].charCodeAt(0) - 65; // A=0, B=1, ...
+    var row = parseInt(match[2]) - 1;       // 1-based to 0-based
+    return {
+        x: -gridHalf + col * 2 + 1,
+        z: -gridHalf + row * 2 + 1
+    };
+};
+window.worldToGrid = function(x, z) {
+    var col = Math.round((x - 1 + gridHalf) / 2);
+    var row = Math.round((z - 1 + gridHalf) / 2);
+    col = Math.max(0, Math.min(26, col));
+    row = Math.max(0, Math.min(26, row));
+    return String.fromCharCode(65 + col) + (row + 1);
+};
+// Log a quick reference
+console.log('Grid mapping: gridToWorld("N14") =', JSON.stringify(window.gridToWorld('N14')));
+console.log('Grid mapping: worldToGrid(0, 0) =', window.worldToGrid(0, 0));
+
+/* ── Material library shim ── */
+const materialCache = {};
+const GameMaterialLibrary = {
+  getLambert(opts) {
+    var key = JSON.stringify(opts);
+    if (materialCache[key]) return materialCache[key];
+    var mat = new THREE.MeshLambertMaterial(opts);
+    materialCache[key] = mat;
+    return mat;
+  }
+};
+
+/* ── cloneMaterial shim ── */
+function cloneMaterial(mat) {
+  if (!mat) return new THREE.MeshLambertMaterial();
+  return mat.clone();
+}
+
+/* ── Runtime shim ── */
+globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary = GameMaterialLibrary;
+globalThis.__MAYHEM_RUNTIME.WorldQuadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {};
+
+/* ── Place API (mimics the real one) ── */
+let meshCount = 0;
+const biomeGroup = new THREE.Group();
+scene.add(biomeGroup);
+
+const place = {
+  addBlock(x, y, z, w, h, d, material, isSolid) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = material || new THREE.MeshLambertMaterial({ color: 0xff00ff });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = {};
+    biomeGroup.add(mesh);
+    meshCount++;
+    return mesh;
+  },
+  addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = material || new THREE.MeshLambertMaterial({ color: 0xff00ff });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, z);
+    if (rotY) mesh.rotation.y = rotY;
+    if (tiltX) mesh.rotation.x = tiltX;
+    mesh.castShadow = true;
+    mesh.userData = {};
+    biomeGroup.add(mesh);
+    meshCount++;
+    return mesh;
+  },
+  addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
+    const mat = material || new THREE.MeshLambertMaterial({ color: 0xff00ff });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.set(x, y, z);
+    if (rotY) mesh.rotation.y = rotY;
+    if (rotX) mesh.rotation.x = rotX;
+    if (rotZ) mesh.rotation.z = rotZ;
+    mesh.userData = {};
+    biomeGroup.add(mesh);
+    meshCount++;
+    return mesh;
+  }
+};
+
+/* ── pointInBounds shim ── */
+function pointInBounds(bounds, u, v) {
+  return {
+    x: bounds.minX + (bounds.maxX - bounds.minX) * u,
+    z: bounds.minZ + (bounds.maxZ - bounds.minZ) * v
+  };
+}
+
+/* ── biome-utils shim for imports ── */
+window.__biomeUtilsShim = { cloneMaterial, pointInBounds };
+
+/* ── Build context shim ── */
+const ctx = {
+  rawBounds: { minX: -25, maxX: 25, minZ: -25, maxZ: 25 },
+  addExclusion() {},
+  addFlicker() {},
+  addSteamColumn() {},
+  addMistCard() {},
+  addLeafSway() {},
+  addIceShimmer() {}
+};
+const bounds = ctx.rawBounds;
+
+/* ── Dynamic biome loading ── */
+async function loadBiome(url) {
+  // Clear existing
+  while (biomeGroup.children.length > 0) {
+    const child = biomeGroup.children[0];
+    biomeGroup.remove(child);
+    if (child.geometry) child.geometry.dispose();
+  }
+  meshCount = 0;
+
+  // Fetch the biome source and eval it
+  const resp = await fetch(url);
+  let src = await resp.text();
+
+  // Replace the ES import with our shims
+  src = src.replace(/import\s*\{[^}]*\}\s*from\s*['"][^'"]*biome-utils[^'"]*['"];?/g, `
+    var cloneMaterial = window.__biomeUtilsShim.cloneMaterial;
+    var pointInBounds = window.__biomeUtilsShim.pointInBounds;
+    var pt = pointInBounds;
+  `);
+
+  // Execute
+  try {
+    new Function(src)();
+  } catch (e) {
+    console.error('Biome load error:', e);
+    return;
+  }
+
+  // Find and call the builder
+  const quads = globalThis.__MAYHEM_RUNTIME.WorldQuadrants;
+  const keys = Object.keys(quads);
+  const lastKey = keys[keys.length - 1];
+  if (lastKey && typeof quads[lastKey] === 'function') {
+    const stats = quads[lastKey](bounds, place, ctx);
+    console.log('Biome built:', lastKey, stats);
+  }
+
+  updateMeshCount();
+}
+
+function updateMeshCount() {
+  document.getElementById('mesh-count').textContent = `Meshes: ${meshCount}`;
+}
+
+/* ── Load the simpsons biome by default ── */
+loadBiome('../../js/world/quadrant-nuclear-simpsons.js');
+
+/* ── Camera presets ── */
+document.getElementById('btn-top').addEventListener('click', () => {
+  camera.position.set(0, 80, 0.1);
+  controls.target.set(0, 0, 0);
+});
+document.getElementById('btn-iso').addEventListener('click', () => {
+  camera.position.set(40, 40, 40);
+  controls.target.set(0, 3, 0);
+});
+document.getElementById('btn-walk').addEventListener('click', () => {
+  camera.position.set(-30, 3, 0);
+  controls.target.set(0, 3, 0);
+});
+
+let gridOn = true;
+document.getElementById('btn-grid').addEventListener('click', () => {
+  gridOn = !gridOn;
+  gridHelper.visible = gridOn;
+  gridLabelsGroup.visible = gridOn;
+});
+
+let axesOn = true;
+document.getElementById('btn-axes').addEventListener('click', () => {
+  axesOn = !axesOn;
+  axesHelper.visible = axesOn;
+});
+
+let wireOn = false;
+document.getElementById('btn-wireframe').addEventListener('click', () => {
+  wireOn = !wireOn;
+  biomeGroup.traverse((child) => {
+    if (child.isMesh && child.material) {
+      child.material.wireframe = wireOn;
+    }
+  });
+});
+
+/* ── Resize ── */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ── Grid hover highlight & click-to-identify ── */
+const gridHighlight = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 0.08, 2),
+    new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.35, depthTest: false })
+);
+gridHighlight.renderOrder = 999;
+gridHighlight.visible = false;
+scene.add(gridHighlight);
+
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const intersectPt = new THREE.Vector3();
+const gridTooltip = document.getElementById('grid-tooltip');
+const gridClickInfo = document.getElementById('grid-click-info');
+
+function getGridCell(clientX, clientY) {
+    mouse.x = (clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    if (raycaster.ray.intersectPlane(groundPlane, intersectPt)) {
+        var col = Math.round((intersectPt.x - 1 + gridHalf) / 2);
+        var row = Math.round((intersectPt.z - 1 + gridHalf) / 2);
+        if (col >= 0 && col < 27 && row >= 0 && row < 27) {
+            var cellX = -gridHalf + col * 2 + 1;
+            var cellZ = -gridHalf + row * 2 + 1;
+            var label = String.fromCharCode(65 + col) + (row + 1);
+            return { cellX: cellX, cellZ: cellZ, label: label, worldX: intersectPt.x, worldZ: intersectPt.z };
+        }
+    }
+    return null;
+}
+
+renderer.domElement.addEventListener('mousemove', function(e) {
+    var cell = getGridCell(e.clientX, e.clientY);
+    if (cell) {
+        gridHighlight.position.set(cell.cellX, 0.06, cell.cellZ);
+        gridHighlight.visible = true;
+        gridTooltip.style.display = 'block';
+        gridTooltip.style.left = (e.clientX + 14) + 'px';
+        gridTooltip.style.top = (e.clientY - 10) + 'px';
+        gridTooltip.textContent = cell.label;
+    } else {
+        gridHighlight.visible = false;
+        gridTooltip.style.display = 'none';
+    }
+});
+
+renderer.domElement.addEventListener('click', function(e) {
+    var cell = getGridCell(e.clientX, e.clientY);
+    if (cell) {
+        gridClickInfo.style.display = 'block';
+        gridClickInfo.textContent = cell.label + '  \u2192  world(' + cell.cellX.toFixed(1) + ', ' + cell.cellZ.toFixed(1) + ')';
+    }
+});
+
+renderer.domElement.addEventListener('mouseleave', function() {
+    gridHighlight.visible = false;
+    gridTooltip.style.display = 'none';
+});
+
+/* ── Render loop ── */
+const cameraInfo = document.getElementById('camera-info');
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  const p = camera.position;
+  cameraInfo.textContent = `Cam: ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`;
+}
+animate();
+
+/* ── Expose for console ── */
+window._preview = { scene, camera, controls, biomeGroup, place, ctx, bounds, loadBiome };
+</script>
+</body>
+</html>

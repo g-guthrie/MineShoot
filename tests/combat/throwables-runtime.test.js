@@ -358,12 +358,15 @@ test('plasma grenade stays ballistic instead of steering toward nearby enemies a
   assert.ok(mesh.position.z < -3);
 });
 
-test('plasma grenade stops early and stays stuck when a target enters the catch radius', async () => {
+test('plasma grenade seeks then sticks at chest height when a target enters the catch radius', async () => {
   const plasmaTrackingTuning = JSON.parse(JSON.stringify(gameplayTuning));
   plasmaTrackingTuning.throwables.plasma.catchRadius = 1.5;
   plasmaTrackingTuning.throwables.plasma.acquireRange = 18;
   plasmaTrackingTuning.throwables.plasma.acquireHalfAngleDeg = 35;
   plasmaTrackingTuning.throwables.plasma.stickExplodeDelay = 2.2;
+  plasmaTrackingTuning.throwables.plasma.stickHeight = 0.9;
+  plasmaTrackingTuning.throwables.plasma.seekLerp = 8;
+  plasmaTrackingTuning.throwables.plasma.seekSpeed = 32;
   const bodyHitbox = new THREE.Mesh(
     new THREE.BoxGeometry(0.8, 1.2, 0.8),
     new THREE.MeshBasicMaterial()
@@ -388,23 +391,26 @@ test('plasma grenade stops early and stays stuck when a target enters the catch 
   });
   assert.equal(predicted, true);
 
-  GameThrowables.update(0.05, function () {});
+  // Tick until the grenade catches and finishes seeking (max 0.3s seek + arrival)
+  for (let i = 0; i < 20; i++) {
+    GameThrowables.update(0.05, function () {});
+  }
   const mesh = scene.children.find((node) => node && node.userData && node.userData.projectileType === 'plasma');
   assert.ok(mesh);
-  assert.ok(Math.abs(mesh.position.x) < 0.05);
-  assert.ok(mesh.position.z > -1.2);
 
-  const afterStickX = mesh.position.x;
-  const afterStickY = mesh.position.y;
-  const afterStickZ = mesh.position.z;
+  // After seek resolves, grenade should be at the enemy chest (group.y + stickHeight)
+  const stuckX = mesh.position.x;
+  const stuckY = mesh.position.y;
+  const stuckZ = mesh.position.z;
+  assert.ok(Math.abs(stuckY - 0.9) < 0.1, 'grenade should be near chest height (0.9)');
 
+  // Position should not change once stuck
   for (let i = 0; i < 4; i++) {
     GameThrowables.update(0.05, function () {});
   }
-
-  assert.equal(mesh.position.x, afterStickX);
-  assert.equal(mesh.position.y, afterStickY);
-  assert.equal(mesh.position.z, afterStickZ);
+  assert.equal(mesh.position.x, stuckX);
+  assert.equal(mesh.position.y, stuckY);
+  assert.equal(mesh.position.z, stuckZ);
 });
 
 test('ability missile launch aims from the muzzle toward the crosshair hit point', async () => {

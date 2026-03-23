@@ -15,7 +15,8 @@ import {
   PUBLIC_ROOM_START_THRESHOLD,
   publicRoomStartThresholdForMode,
   PUBLIC_ROOM_SOFT_TARGET,
-  DEFAULT_PUBLIC_ROOM_CAPACITY
+  DEFAULT_PUBLIC_ROOM_CAPACITY,
+  PUBLIC_ROOM_HARD_CAP
 } from '../../shared/matchmaking-config.js';
 import {
   privateRoomCodeFromId
@@ -23,6 +24,9 @@ import {
 
 const MATCHMAKING_RATE_WINDOW_MS = 60_000;
 const MATCHMAKING_RATE_LIMIT = 30;
+const ROOM_STATE_CACHE_TTL_MS = 2000;
+const ROOM_STATE_CACHE_MAX = 100;
+const roomStateCache = new Map();
 
 function clampInt(value, min, max, fallback) {
   const next = Math.round(Number(value));
@@ -125,7 +129,22 @@ async function loadAssignedRoomForParty(env, memberIds) {
   return out;
 }
 
+export function clearRoomStateCache() {
+  roomStateCache.clear();
+}
+
+function sweepRoomStateCache(now) {
+  if (roomStateCache.size <= ROOM_STATE_CACHE_MAX) return;
+  for (const [key, entry] of roomStateCache) {
+    if (now >= entry.expiresAt) roomStateCache.delete(key);
+  }
+}
+
 async function fetchRoomState(env, roomId) {
+  const now = Date.now();
+  const cached = roomStateCache.get(roomId);
+  if (cached && now < cached.expiresAt) return cached.state;
+
   const id = env.GLOBAL_ARENA.idFromName(roomId);
   const stub = env.GLOBAL_ARENA.get(id);
   const url = new URL('https://room/state');
@@ -134,7 +153,10 @@ async function fetchRoomState(env, roomId) {
   try {
     const response = await stub.fetch(url.toString());
     if (!response.ok) return null;
-    return await response.json();
+    const state = await response.json();
+    sweepRoomStateCache(now);
+    roomStateCache.set(roomId, { state, expiresAt: now + ROOM_STATE_CACHE_TTL_MS });
+    return state;
   } catch (_err) {
     return null;
   }
@@ -203,7 +225,8 @@ async function allocateQuickMatch(env, requestedGameMode, groupSize = 1) {
 
   const selected =
     selectQuickMatchRoom(stateEntries, gameMode, startThreshold, roomCapacity, groupSize) ||
-    selectQuickMatchRoom(overflowStateEntries, gameMode, startThreshold, roomCapacity, groupSize);
+    selectQuickMatchRoom(overflowStateEntries, gameMode, startThreshold, roomCapacity, groupSize) ||
+    chooseBestRoom([...stateEntries, ...overflowStateEntries], (entry) => (entry.connectedPlayers + groupSize) <= PUBLIC_ROOM_HARD_CAP);
 
   if (selected) {
     return buildRoomPayload(selected.roomId, 'public', {

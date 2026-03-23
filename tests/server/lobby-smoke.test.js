@@ -7,7 +7,7 @@ import { createFakeEnv } from '../helpers/fake-d1.js';
 import { handleFriends } from '../../cloudflare/server/friends.js';
 import { handleParty } from '../../cloudflare/server/party.js';
 import { handlePrivateRoomLobby } from '../../cloudflare/server/private-room-lobby.js';
-import { handleMatchmaking } from '../../cloudflare/server/matchmaking.js';
+import { handleMatchmaking, clearRoomStateCache } from '../../cloudflare/server/matchmaking.js';
 import { handleWsUpgrade } from '../../cloudflare/server/ws-upgrade.js';
 import { assignActorToPrivateRoom } from '../../cloudflare/server/private-rooms.js';
 
@@ -684,6 +684,7 @@ test('empty private rooms are deleted when the last member leaves', async () => 
 });
 
 test('quick matchmaking reuses deterministic overflow shards before minting emergency room ids', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
   env.PUBLIC_ROOM_COUNT = '2';
   env.PUBLIC_OVERFLOW_ROOM_COUNT = '2';
@@ -706,6 +707,7 @@ test('quick matchmaking reuses deterministic overflow shards before minting emer
 });
 
 test('quick matchmaking falls back to an emergency unique room after stable public shards fill up', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
   env.PUBLIC_ROOM_COUNT = '2';
   env.PUBLIC_OVERFLOW_ROOM_COUNT = '2';
@@ -728,6 +730,7 @@ test('quick matchmaking falls back to an emergency unique room after stable publ
 });
 
 test('public quick matchmaking assigns one room to the whole ready party when the leader queues', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_A&displayName=LEAD&activityState=menu', 'GET'));
@@ -759,6 +762,7 @@ test('public quick matchmaking assigns one room to the whole ready party when th
 });
 
 test('public quick matchmaking blocks overlapping requests for the same party and reuses the assigned room', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_R1&displayName=LEAD&activityState=menu', 'GET'));
@@ -851,6 +855,7 @@ test('public quick matchmaking blocks overlapping requests for the same party an
 });
 
 test('public quick matchmaking repairs missing party assignments when reusing an existing room', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_M1&displayName=LEAD&activityState=menu', 'GET'));
@@ -886,6 +891,7 @@ test('public quick matchmaking repairs missing party assignments when reusing an
 });
 
 test('public quick matchmaking keeps valid assignments when room state is temporarily unavailable', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_S1&displayName=LEAD&activityState=menu', 'GET'));
@@ -940,6 +946,7 @@ test('public quick matchmaking keeps valid assignments when room state is tempor
 });
 
 test('public quick matchmaking rejects non-leader party queue attempts', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_C&displayName=LEAD&activityState=menu', 'GET'));
@@ -965,6 +972,7 @@ test('public quick matchmaking rejects non-leader party queue attempts', async (
 });
 
 test('public quick matchmaking blocks until the full party is menu-ready', async () => {
+  clearRoomStateCache();
   const env = createFakeEnv();
 
   await handleParty(env, request('/api/party?actorId=QUEUE_E&displayName=LEAD&activityState=menu', 'GET'));
