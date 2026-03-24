@@ -30,7 +30,7 @@ For correction problems, check:
 - giant teleport step size
 - respawn scheduling after clock alignment
 
-## 4. Ignore stale side paths
+## 4. Ignore stale references
 
-- Do not use `cloudflare/server/room/runtime/*.mjs` as the source of truth for live room behavior.
-- If live code and an isolated runtime path disagree, the live room path wins.
+- The old alternate room-runtime path has been removed.
+- If you find older notes or historical discussion that mention it, use the canonical live room files listed above instead.
