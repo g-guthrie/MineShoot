@@ -1537,13 +1537,81 @@ canvas {
 /* Kill counter */
 #kill-counter {
     position: fixed;
-    top: 20px; right: 20px;
-    color: #fff;
-    font-size: 24px;
-    z-index: 10;
+    top: 58px;
+    right: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: min(340px, calc(100vw - 36px));
+    z-index: 12;
     pointer-events: none;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
     user-select: none;
+}
+
+.match-pill-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    width: 100%;
+}
+
+.match-pill {
+    min-width: 110px;
+    border: 1px solid rgba(168, 214, 255, 0.58);
+    border-radius: 999px;
+    background: rgba(8, 18, 26, 0.78);
+    box-shadow: 0 0 10px rgba(70, 145, 210, 0.16);
+    padding: 8px 12px;
+    color: #e7f6ff;
+}
+
+.match-pill-label {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 1.3px;
+    color: #9dc6e2;
+    text-transform: uppercase;
+}
+
+.match-pill-value {
+    display: block;
+    margin-top: 2px;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: 16px;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(85, 180, 255, 0.16);
+}
+
+.match-pill-progress {
+    width: min(320px, calc(100vw - 36px));
+}
+
+.match-pill-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.match-pill-track {
+    margin-top: 8px;
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(0, 8, 14, 0.74);
+    border: 1px solid rgba(84, 125, 155, 0.56);
+    overflow: hidden;
+}
+
+.match-pill-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e3f5ff, #97d8ff 48%, #5db8ff 100%);
+    box-shadow: 0 0 10px rgba(105, 192, 255, 0.32);
+    transition: width 0.16s ease-out;
 }
 
 /* Health bar */
@@ -1868,17 +1936,21 @@ canvas {
 
 #debug-info {
     position: fixed;
-    top: 20px; left: 20px;
-    color: #aaa;
-    font-size: 14px;
-    z-index: 10;
+    right: 20px;
+    bottom: 138px;
+    max-width: min(34vw, 260px);
+    color: #ffd2a4;
+    font-size: 12px;
+    text-align: right;
+    z-index: 12;
     pointer-events: none;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
     user-select: none;
 }
 
 #room-code-badge {
     position: fixed;
-    top: 60px;
+    top: 152px;
     right: 18px;
     z-index: 12;
     display: flex;
@@ -2155,10 +2227,35 @@ canvas {
 }
 
 @media (max-width: 900px), (max-height: 720px) {
+    #kill-counter {
+        top: 52px;
+        right: 14px;
+        max-width: min(48vw, calc(100vw - 28px));
+    }
+
+    .match-pill {
+        min-width: 92px;
+        padding: 7px 10px;
+    }
+
+    .match-pill-value {
+        font-size: 14px;
+    }
+
+    .match-pill-progress {
+        width: min(260px, calc(100vw - 28px));
+    }
+
     #hud-bottom-right {
         right: 14px;
         bottom: 10px;
         gap: 1px;
+    }
+
+    #debug-info {
+        right: 14px;
+        bottom: 132px;
+        max-width: min(42vw, 220px);
     }
 
     #weapon-info {

@@ -28,7 +28,6 @@
         opts = opts || {};
 
         var hookState = null;
-        var healState = null;
         var chokeCasterState = null;
         var deadeyeState = null;
         var losRaycaster = new THREE.Raycaster();
@@ -81,11 +80,6 @@
             syncActionRestrictions();
         }
 
-        function clearHealState() {
-            healState = null;
-            syncActionRestrictions();
-        }
-
         function clearChokeCasterState() {
             chokeCasterState = null;
         }
@@ -93,7 +87,6 @@
         function clearTransientState() {
             deadeyeState = null;
             clearHookState();
-            clearHealState();
             clearChokeCasterState();
             syncActionRestrictions();
         }
@@ -106,10 +99,6 @@
             if (hookState && hookState.active) {
                 weaponUntil = Math.max(weaponUntil, Number(hookState.lockEndsAt || hookState.endsAt || 0));
                 throwableUntil = Math.max(throwableUntil, Number(hookState.lockEndsAt || hookState.endsAt || 0));
-            }
-            if (healState && healState.active) {
-                weaponUntil = Math.max(weaponUntil, Number(healState.lockEndsAt || healState.endsAt || 0));
-                throwableUntil = Math.max(throwableUntil, Number(healState.lockEndsAt || healState.endsAt || 0));
             }
             if (deadeyeState && deadeyeState.active) {
                 weaponUntil = Math.max(weaponUntil, Number(deadeyeState.lockEndsAt || deadeyeState.endsAt || 0));
@@ -500,27 +489,6 @@
             return { ok: true, kind: 'deadeye_start', targetCount: candidates.length };
         }
 
-        function castHeal(notifier) {
-            var now = nowMs();
-            var cfg = getConfig();
-            if (!cfg) return { ok: false, message: 'Heal not configured.' };
-            if (!isDebugMode() && now < cooldownUntil()) {
-                return { ok: false, message: 'Heal is cooling down.' };
-            }
-            healState = {
-                active: true,
-                startedAt: now,
-                endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
-                healAmount: Number(cfg.healAmount || 150),
-                applied: false,
-                lockEndsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000)
-            };
-            syncActionRestrictions();
-            setCooldownUntil(isDebugMode() ? 0 : now + Math.max(0, cfg.cooldownMs || 0));
-            if (notifier) notifier('Healing...', 450);
-            return { ok: true, kind: 'heal_start' };
-        }
-
         function castMissile(camera, notifier) {
             var RT = runtime();
             var now = nowMs();
@@ -550,7 +518,6 @@
             if (abilityId === 'choke') return castChoke(camera, onEnemyHit, notifier);
             if (abilityId === 'hook') return castHook(camera, playerPos, rotation, notifier);
             if (abilityId === 'missile') return castMissile(camera, notifier);
-            if (abilityId === 'heal') return castHeal(notifier);
             if (abilityId === 'deadeye') return castDeadeye(camera, onEnemyHit, notifier);
             return { ok: false, message: 'Unknown ability: ' + abilityId };
         }
@@ -623,13 +590,6 @@
                     clearHookState();
                 }
             }
-            if (healState && healState.active && now >= (healState.endsAt || 0)) {
-                if (!healState.applied && RT.GamePlayerCombat && RT.GamePlayerCombat.heal) {
-                    RT.GamePlayerCombat.heal(healState.healAmount || 150);
-                    healState.applied = true;
-                }
-                clearHealState();
-            }
             if (chokeCasterState && now >= (chokeCasterState.endsAt || 0)) {
                 clearChokeCasterState();
             }
@@ -671,14 +631,6 @@
             } : null;
         }
 
-        function getHealState() {
-            return healState && healState.active ? {
-                startedAt: healState.startedAt,
-                endsAt: healState.endsAt,
-                healAmount: healState.healAmount || 100
-            } : null;
-        }
-
         function getChokeState() {
             return chokeCasterState ? {
                 startedAt: chokeCasterState.startedAt || 0,
@@ -691,7 +643,6 @@
                 deadeyeActive: !!(deadeyeState && deadeyeState.active),
                 deadeyeState: deadeyeState,
                 chokeState: getChokeState(),
-                healState: getHealState(),
                 hookState: getHookState()
             };
         }

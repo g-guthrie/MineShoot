@@ -7,14 +7,14 @@ export var EYE_HEIGHT = 1.6;
 export var PLAYER_RADIUS = 0.35;
 export var PLAYER_HEIGHT = 1.7;
 
-export var DEFAULT_HP = 360;
-export var DEFAULT_HP_MAX = 360;
-export var DEFAULT_ARMOR = 90;
-export var DEFAULT_ARMOR_MAX = 90;
-export var ENEMY_HP = 360;
-export var ENEMY_HP_MAX = 360;
-export var ENEMY_ARMOR = 90;
-export var ENEMY_ARMOR_MAX = 90;
+export var DEFAULT_HP = 400;
+export var DEFAULT_HP_MAX = 400;
+export var DEFAULT_ARMOR = 100;
+export var DEFAULT_ARMOR_MAX = 100;
+export var ENEMY_HP = 400;
+export var ENEMY_HP_MAX = 400;
+export var ENEMY_ARMOR = 100;
+export var ENEMY_ARMOR_MAX = 100;
 
 // Shared avatar part definitions. Update these once and both the rig geometry
 // and combat hitboxes follow the same authored dimensions.

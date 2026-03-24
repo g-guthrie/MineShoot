@@ -119,13 +119,17 @@
 
         function getWeaponFalloffProfile(shared, weaponId) {
             var id = String(weaponId || '');
-            if (!id) return [];
+            if (!id) return null;
             if (shared && shared.getWeaponFalloffProfile) {
                 return shared.getWeaponFalloffProfile(id);
             }
             var tuning = shared && shared.gameplayTuning ? shared.gameplayTuning : {};
             var profile = tuning.weaponFalloff && tuning.weaponFalloff[id];
-            return Array.isArray(profile) ? profile.slice() : [];
+            return profile && typeof profile === 'object' ? {
+                start: Number(profile.start),
+                end: Number(profile.end),
+                minScalar: Number(profile.minScalar)
+            } : null;
         }
 
         function selectableWeaponIdsFromShared(shared) {
@@ -436,19 +440,9 @@
             refreshWeaponCatalogIfNeeded();
             if (!weapon || !weapon.id) return damage;
             var sharedDamage = sharedApi().damage || null;
-            var bands = weaponFalloffTuning[weapon.id];
-            if (sharedDamage && sharedDamage.applyFalloff) return sharedDamage.applyFalloff(damage, distance, bands);
-            if (!Array.isArray(bands) || bands.length === 0) return damage;
-            for (var i = 0; i < bands.length; i++) {
-                var band = bands[i];
-                if (!band || typeof band.maxDistance !== 'number' || typeof band.scale !== 'number') continue;
-                if (distance <= band.maxDistance) {
-                    return Math.max(1, Math.round(damage * Math.max(0, band.scale)));
-                }
-            }
-            var tail = bands[bands.length - 1];
-            var tailScale = (tail && typeof tail.scale === 'number') ? Math.max(0, tail.scale) : 1;
-            return Math.max(1, Math.round(damage * tailScale));
+            var profile = weaponFalloffTuning[weapon.id];
+            if (sharedDamage && sharedDamage.applyFalloff) return sharedDamage.applyFalloff(damage, distance, profile);
+            return damage;
         }
 
         function getActiveAimSpread(weapon) {
@@ -932,7 +926,7 @@
             pistolCylinderRadiusWu: pistolCylinderRadiusWu,
             getWeaponFalloffBands: function (weaponId) {
                 refreshWeaponCatalogIfNeeded();
-                return weaponFalloffTuning[String(weaponId || '')] || [];
+                return weaponFalloffTuning[String(weaponId || '')] || null;
             },
             refreshWeaponCatalogIfNeeded: refreshWeaponCatalogIfNeeded
         };

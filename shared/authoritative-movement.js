@@ -107,15 +107,17 @@ export function findCeilingY(x, z, currentHeadY, nextHeadY, boxes, options = {})
 export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   if (!entity) return entity;
 
+  const moveSpeedMultiplier = Math.max(0.1, Number(options.moveSpeedMultiplier || 1));
+  const adsMoveMultiplier = Math.max(0.1, Number(options.adsMoveMultiplier || DEFAULT_TUNING.adsMoveMult || 0.4));
   const tuning = {
-    jogSpeed: Number(options.jogSpeed || DEFAULT_TUNING.jogSpeed || 8),
-    runSpeed: Number(options.runSpeed || DEFAULT_TUNING.runSpeed || 14),
+    jogSpeed: Number(options.jogSpeed || DEFAULT_TUNING.jogSpeed || 8) * moveSpeedMultiplier,
+    runSpeed: Number(options.runSpeed || DEFAULT_TUNING.runSpeed || 14) * moveSpeedMultiplier,
     jumpVelocity: Number(options.jumpVelocity || DEFAULT_TUNING.jumpVelocity || 8.8),
     jumpHoldAccel: Number(options.jumpHoldAccel || DEFAULT_TUNING.jumpHoldAccel || 16),
     maxJumpHold: Number(options.maxJumpHold || DEFAULT_TUNING.maxJumpHold || 0.2),
     jumpReleaseMult: Number(options.jumpReleaseMult || DEFAULT_TUNING.jumpReleaseMult || 0.42),
     gravity: Number(options.gravity || DEFAULT_TUNING.gravity || 18),
-    adsMoveMult: Number(options.adsMoveMult || DEFAULT_TUNING.adsMoveMult || 0.4)
+    adsMoveMult: adsMoveMultiplier
   };
   const dtSec = Math.max(0, Number(options.dtSec || 0));
   const bounds = defaultBounds(options.bounds);

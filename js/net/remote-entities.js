@@ -421,8 +421,7 @@
                 hookedStartedAt: 0,
                 hookedUntil: 0,
                 hookState: null,
-                chokeState: null,
-                healState: null
+                chokeState: null
             };
 
         var render = {
@@ -483,8 +482,7 @@
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
             hookState: snapshotAbilityState.hookState,
-            chokeState: snapshotAbilityState.chokeState,
-            healState: snapshotAbilityState.healState
+            chokeState: snapshotAbilityState.chokeState
         };
         appendSnapshotHistory(render, entity, snapshotMeta);
         return render;
@@ -561,15 +559,13 @@
                 hookedStartedAt: 0,
                 hookedUntil: 0,
                 hookState: null,
-                chokeState: null,
-                healState: null
+                chokeState: null
             };
         r.chokeState = snapshotAbilityState.chokeState;
         r.chokeVictimState = snapshotAbilityState.chokeVictimState;
         r.hookedStartedAt = snapshotAbilityState.hookedStartedAt;
         r.hookedUntil = snapshotAbilityState.hookedUntil;
         r.hookState = snapshotAbilityState.hookState;
-        r.healState = snapshotAbilityState.healState;
         r.abilityId = entity.abilityId || '';
 
         r.group.visible = !!entity.alive;

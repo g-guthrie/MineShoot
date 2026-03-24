@@ -10,24 +10,27 @@ import {
   ARMOR_REGEN_PER_SEC as DEFAULT_SHARED_ARMOR_REGEN_PER_SEC
 } from './survivability.js';
 
-export function applyFalloff(baseDamage, distance, bands) {
+export function applyFalloff(baseDamage, distance, profile) {
   var normalizedBaseDamage = sanitizeDamageAmount(baseDamage);
   if (normalizedBaseDamage <= 0) return 0;
   var normalizedDistance = Number(distance);
   if (!isFinite(normalizedDistance) || normalizedDistance < 0) normalizedDistance = 0;
-  if (!Array.isArray(bands) || bands.length === 0) return Math.max(1, Math.round(normalizedBaseDamage));
-  for (var i = 0; i < bands.length; i++) {
-    var band = bands[i] || {};
-    var maxDistance = Number(band.maxDistance);
-    var scale = Number(band.scale);
-    if (!isFinite(maxDistance) || maxDistance <= 0 || !isFinite(scale)) continue;
-    if (normalizedDistance <= maxDistance) {
-      return Math.max(1, Math.round(normalizedBaseDamage * Math.max(0, scale)));
-    }
-  }
-  var tail = bands[bands.length - 1] || {};
-  var tailScale = isFinite(Number(tail.scale)) ? Math.max(0, Number(tail.scale)) : 1;
-  return Math.max(1, Math.round(normalizedBaseDamage * tailScale));
+  if (!profile || typeof profile !== 'object') return Math.max(1, Math.round(normalizedBaseDamage));
+  var start = Number(profile.start);
+  var end = Number(profile.end);
+  var minScalar = Number(profile.minScalar);
+  if (!isFinite(start)) start = 0;
+  if (!isFinite(end)) end = start;
+  if (!isFinite(minScalar)) minScalar = 1;
+  start = Math.max(0, start);
+  end = Math.max(start, end);
+  minScalar = Math.max(0, Math.min(1, minScalar));
+  if (normalizedDistance <= start) return Math.max(1, Math.round(normalizedBaseDamage));
+  if (normalizedDistance >= end) return Math.max(1, Math.round(normalizedBaseDamage * minScalar));
+  if (end <= start) return Math.max(1, Math.round(normalizedBaseDamage * minScalar));
+  var t = (normalizedDistance - start) / Math.max(0.0001, end - start);
+  var scalar = 1 - (t * (1 - minScalar));
+  return Math.max(1, Math.round(normalizedBaseDamage * scalar));
 }
 
 var SURVIVABILITY = gameplayTuning.survivability || {};

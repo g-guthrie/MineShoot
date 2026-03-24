@@ -137,6 +137,51 @@ test('GameNetSelfMotionSync ignores pure ack-seq churn when authoritative motion
   assert.equal(harness.reconcileCalls.length, 1);
 });
 
+test('GameNetSelfMotionSync replays when ack advances with pending inputs even if the pose is unchanged', async () => {
+  const harness = await loadSelfMotionSyncHarness();
+  const reconcileState = {
+    authoritativeState: {
+      id: 'usr_test',
+      seq: 10,
+      x: 4,
+      y: 1.6,
+      z: 8,
+      yaw: 0.25,
+      pitch: 0.05,
+      velocityY: 0,
+      isGrounded: true,
+      jumpHoldTimer: 0,
+      jumpHeldLast: false,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      weaponId: 'rifle',
+      alive: true,
+      abilityFx: null
+    },
+    pendingInputCount: 1,
+    hasUnsentInputTail: false,
+    lastSentSeq: 11,
+    lastAckedSeq: 10,
+    pendingInputs: [{ seq: 11, dtMs: 16, yaw: 0.25, pitch: 0.05, inputState: { forward: true } }]
+  };
+
+  harness.syncPlayerMotion(reconcileState, 0.016);
+  harness.syncPlayerMotion({
+    ...reconcileState,
+    authoritativeState: {
+      ...reconcileState.authoritativeState,
+      seq: 11
+    },
+    acceptedSelfSeq: 11,
+    lastSentSeq: 12,
+    lastAckedSeq: 11
+  }, 0.016);
+
+  assert.equal(harness.reconcileCalls.length, 2);
+  assert.equal(harness.reconcileCalls[1].options.ackAdvanced, true);
+  assert.equal(harness.reconcileCalls[1].options.acceptedSelfSeq, 11);
+});
+
 test('GameNetSelfMotionSync prefers the explicit reconciliation contract payload', async () => {
   const harness = await loadSelfMotionSyncHarness({
     GameNet: {

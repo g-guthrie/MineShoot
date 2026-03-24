@@ -349,18 +349,6 @@
         };
     }
 
-    function currentHealState(multiplayerMode) {
-        var netApi = netView();
-        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
-            var netSelfAbility = netApi.getSelfAbilityState();
-            return netSelfAbility ? netSelfAbility.healState : null;
-        }
-        if (runtime.GameAbilities && runtime.GameAbilities.getHealState) {
-            return runtime.GameAbilities.getHealState();
-        }
-        return null;
-    }
-
     function currentChokeCasterState(multiplayerMode) {
         var netApi = netView();
         if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
@@ -461,11 +449,6 @@
         }
         if (runtime.GameUI && runtime.GameUI.updateThrowableInfo && runtime.GameThrowables && runtime.GameThrowables.getState) {
             runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
-        }
-
-        if (runtime.GamePlayer && runtime.GamePlayer.setHealFlash) {
-            var selfHealState = currentHealState(multiplayerMode);
-            runtime.GamePlayer.setHealFlash(!!(selfHealState && selfHealState.endsAt > abilityStamp));
         }
 
         if (runtime.GameAudio && runtime.GameAudio.setChokeAudioState) {

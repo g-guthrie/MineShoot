@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { castChoke, castDeadeye, castHeal, castHook, fireDeadeyeLocks, tickClassAbilityState } from '../../../cloudflare/server/room/AbilityService.js';
+import { castChoke, castDeadeye, castHook, fireDeadeyeLocks, tickClassAbilityState } from '../../../cloudflare/server/room/AbilityService.js';
 import { pullEntityToward } from '../../../cloudflare/server/room/RoomCombatRuntime.js';
 
 test('castChoke leaves the caster action timers alone and applies lift to the victim', () => {
@@ -205,43 +205,6 @@ test('castHook applies self weapon and throwable locks and stores a separate pul
   assert.equal(player.hookState.pullSpeed, 20);
   assert.equal(player.weaponLockUntil, player.hookState.hitAt);
   assert.equal(player.throwableLockUntil, player.hookState.hitAt);
-});
-
-test('castHeal applies self weapon and throwable locks for the windup and clears them on resolve', () => {
-  const realNow = Date.now;
-  const timeState = { now: 1000 };
-  Date.now = function () {
-    return timeState.now;
-  };
-
-  try {
-    const player = {
-      id: 'usr_heal',
-      alive: true,
-      hp: 100,
-      hpMax: 200,
-      weaponLockUntil: 0,
-      throwableLockUntil: 0
-    };
-
-    const result = castHeal(null, player, {
-      duration: 1.0,
-      healAmount: 90
-    }, null, timeState.now);
-
-    assert.equal(result.ok, true);
-    assert.equal(player.weaponLockUntil, 2000);
-    assert.equal(player.throwableLockUntil, 2000);
-
-    timeState.now = 2000;
-    tickClassAbilityState({}, player);
-    assert.equal(player.hp, 190);
-    assert.equal(player.healState, null);
-    assert.equal(player.weaponLockUntil, 0);
-    assert.equal(player.throwableLockUntil, 0);
-  } finally {
-    Date.now = realNow;
-  }
 });
 
 test('castDeadeye applies weapon and throwable locks, keeps ability recast usable, and release clears the locks', () => {

@@ -58,18 +58,35 @@ export function applyDamage(target, damage, options = {}) {
   if (target.hp <= 0 && target.alive) {
     killed = true;
     target.alive = false;
-    target.respawnAt = now + RESPAWN_DELAY_MS;
+    if (Number.isFinite(Number(target.stocksRemaining))) {
+      const currentStocks = Math.max(0, Number(target.stocksRemaining || 0));
+      const remainingStocks = Math.max(0, currentStocks - 1);
+      target.stocksRemaining = remainingStocks;
+      target.maxStocks = Math.max(remainingStocks, Number(target.maxStocks || currentStocks || 0));
+      target.eliminated = remainingStocks <= 0;
+      target.respawnAt = target.eliminated ? 0 : (now + RESPAWN_DELAY_MS);
+    } else {
+      target.respawnAt = now + RESPAWN_DELAY_MS;
+    }
   }
 
-  return {
+  const out = {
     id: target.id,
     hp: target.hp,
     armor: target.armor,
     armorDamage: Math.max(0, armorBefore - target.armor),
     healthDamage: Math.max(0, hpBefore - target.hp),
     damageApplied: Math.max(0, (armorBefore - target.armor) + (hpBefore - target.hp)),
-    killed
   };
+  out.killed = killed;
+  if (Number.isFinite(Number(target.stocksRemaining)) || Number.isFinite(Number(target.maxStocks))) {
+    out.stocksRemaining = Math.max(0, Number(target.stocksRemaining || 0));
+    out.maxStocks = Math.max(0, Number(target.maxStocks || 0));
+    out.bonusLivesEarned = Math.max(0, Number(target.bonusLivesEarned || 0));
+    out.extraLifeProgressPct = Math.max(0, Math.min(100, Number(target.extraLifeProgressPct || 0)));
+    out.eliminated = !!target.eliminated;
+  }
+  return out;
 }
 
 export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
@@ -107,8 +124,49 @@ function canApplyExplosionDamage(room, projectile, target, center, radius) {
   return dist;
 }
 
+function awardDamageLifeProgress(room, sourceId, targetId, damageApplied) {
+  if (!room || !sourceId || !targetId || sourceId === targetId) return null;
+  const source = room.getEntityById ? room.getEntityById(sourceId) : null;
+  const target = room.getEntityById ? room.getEntityById(targetId) : null;
+  if (!source || !target) return null;
+  if (!source.alive || source.eliminated) return null;
+  if (target.spawnShieldUntil && Number(target.spawnShieldUntil || 0) > nowMs()) return null;
+  const applied = Math.max(0, Number(damageApplied || 0));
+  if (!(applied > 0)) return null;
+  const currentMaxStocks = Math.max(1, Number(source.maxStocks || 5));
+  const currentStocks = Math.max(0, Number(source.stocksRemaining || 0));
+  const bonusLivesEarned = Math.max(0, Number(source.bonusLivesEarned || 0));
+  let progress = Math.max(0, Math.min(100, Number(source.extraLifeProgressPct || 0))) + (applied / 40);
+  let stocks = currentStocks;
+  let bonusLives = bonusLivesEarned;
+
+  while (progress >= 100 && bonusLives < 2 && stocks < currentMaxStocks) {
+    progress -= 100;
+    bonusLives += 1;
+    stocks = Math.min(currentMaxStocks, stocks + 1);
+  }
+  if (bonusLives >= 2) {
+    progress = Math.min(progress, 100);
+  }
+
+  source.stocksRemaining = stocks;
+  source.maxStocks = currentMaxStocks;
+  source.bonusLivesEarned = bonusLives;
+  source.extraLifeProgressPct = Math.max(0, Math.min(100, progress));
+  if (typeof room.syncPlayerResultFromEntity === 'function') {
+    room.syncPlayerResultFromEntity(source);
+  }
+  return {
+    stocksRemaining: source.stocksRemaining,
+    maxStocks: source.maxStocks,
+    bonusLivesEarned: source.bonusLivesEarned,
+    extraLifeProgressPct: source.extraLifeProgressPct
+  };
+}
+
 export function broadcastDamageEvent(room, sourceId, target, out, hitType, weaponId = '', shotToken = '', pelletIndex = null) {
   if (!target || !out) return;
+  const lifeProgress = awardDamageLifeProgress(room, sourceId, target.id, out.damageApplied || 0);
   if (out.killed && room && typeof room.recordElimination === 'function' && sourceId) {
     room.recordElimination(sourceId, target.id);
   }
@@ -130,6 +188,17 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
     damage: out.damageApplied || 0,
     killed: !!out.killed
   };
+  if (Number.isFinite(Number(out.stocksRemaining)) || Number.isFinite(Number(out.maxStocks))) {
+    payload.stocksRemaining = Math.max(0, Number(out.stocksRemaining || 0));
+    payload.maxStocks = Math.max(0, Number(out.maxStocks || 0));
+    payload.eliminated = !!out.eliminated;
+  }
+  if (lifeProgress) {
+    payload.sourceStocksRemaining = Math.max(0, Number(lifeProgress.stocksRemaining || 0));
+    payload.sourceMaxStocks = Math.max(0, Number(lifeProgress.maxStocks || 0));
+    payload.sourceBonusLivesEarned = Math.max(0, Number(lifeProgress.bonusLivesEarned || 0));
+    payload.sourceExtraLifeProgressPct = Math.max(0, Math.min(100, Number(lifeProgress.extraLifeProgressPct || 0)));
+  }
   if (pelletIndex != null && Number.isFinite(Number(pelletIndex))) {
     payload.pelletIndex = Math.max(0, Math.floor(Number(pelletIndex)));
   }
@@ -137,13 +206,18 @@ export function broadcastDamageEvent(room, sourceId, target, out, hitType, weapo
 }
 
 export function broadcastDeathRespawn(room, target) {
-  const plannedSpawn = room && typeof room.planEntityRespawn === 'function'
+  const plannedSpawn = (!target.eliminated && room && typeof room.planEntityRespawn === 'function')
     ? room.planEntityRespawn(target)
     : null;
   room.broadcast({
     t: MSG_S2C.DEATH_RESPAWN,
     entityId: target.id,
     respawnAt: target.respawnAt,
+    stocksRemaining: Math.max(0, Number(target.stocksRemaining || 0)),
+    maxStocks: Math.max(0, Number(target.maxStocks || 0)),
+    bonusLivesEarned: Math.max(0, Number(target.bonusLivesEarned || 0)),
+    extraLifeProgressPct: Math.max(0, Math.min(100, Number(target.extraLifeProgressPct || 0))),
+    eliminated: !!target.eliminated,
     classApplied: target.classId,
     x: plannedSpawn ? Number(plannedSpawn.x || 0) : undefined,
     z: plannedSpawn ? Number(plannedSpawn.z || 0) : undefined

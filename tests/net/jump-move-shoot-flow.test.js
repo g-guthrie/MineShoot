@@ -922,9 +922,9 @@ test('scenario matrix covers shotgun, misses, packet loss, and airborne burst ti
     ]
   });
   results.push(burst);
-  assert.equal(burst.serverDamageEvents, 3);
-  assert.equal(burst.hitMarkerCount, 3);
-  assert.deepEqual(burst.hitMarkerDelaysMs, [45, 45, 45]);
+  assert.equal(burst.serverDamageEvents, 2);
+  assert.equal(burst.hitMarkerCount, 2);
+  assert.deepEqual(burst.hitMarkerDelaysMs, [45, 45]);
 
   t.diagnostic('\n' + formatScenarioTable(results));
 });

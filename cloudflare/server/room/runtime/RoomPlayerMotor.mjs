@@ -113,6 +113,11 @@ export function buildPlayerEntity(options = {}) {
     kills: 0,
     deaths: 0,
     progressScore: 0,
+    stocksRemaining: 3,
+    maxStocks: 5,
+    bonusLivesEarned: 0,
+    extraLifeProgressPct: 0,
+    eliminated: false,
     teamId: '',
     disconnectedAt: 0,
     stunUntil: 0,
@@ -265,7 +270,7 @@ export function respawnIfNeeded(options = {}) {
   const terrainEyeYAt = options.terrainEyeYAt;
   const spawnShieldMs = options.spawnShieldMs;
 
-  if (!entity || entity.alive || Number(entity.respawnAt || 0) > now) return false;
+  if (!entity || entity.alive || entity.eliminated || Number(entity.respawnAt || 0) > now) return false;
 
   entity.hp = entity.hpMax;
   entity.armor = entity.armorMax;

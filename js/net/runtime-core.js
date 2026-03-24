@@ -191,7 +191,28 @@
             if (!opts.isActive()) return;
 
             var pendingRespawnInfo = opts.getPendingRespawnInfo();
-            if (pendingRespawnInfo && pendingRespawnInfo.active && Date.now() >= Number(pendingRespawnInfo.respawnAt || 0)) {
+            if (pendingRespawnInfo && pendingRespawnInfo.active && pendingRespawnInfo.needsClockTranslation && opts.getConnectionTimingState && opts.toLocalClockTime) {
+                var timingState = opts.getConnectionTimingState();
+                if (timingState && timingState.snapshot) {
+                    var translatedRespawnAt = Number(opts.toLocalClockTime(pendingRespawnInfo.serverRespawnAt || 0) || 0);
+                    var localRespawnAt = translatedRespawnAt > 0 ? Math.max(Date.now(), translatedRespawnAt) : 0;
+                    if (localRespawnAt > 0 && opts.setPendingSpawnSync && typeof pendingRespawnInfo.spawnX === 'number' && typeof pendingRespawnInfo.spawnZ === 'number') {
+                        opts.setPendingSpawnSync({
+                            x: Number(pendingRespawnInfo.spawnX || 0),
+                            z: Number(pendingRespawnInfo.spawnZ || 0),
+                            executeAt: localRespawnAt,
+                            kind: 'respawn'
+                        });
+                    }
+                    pendingRespawnInfo = Object.assign({}, pendingRespawnInfo, {
+                        localRespawnAt: localRespawnAt,
+                        respawnAt: localRespawnAt,
+                        needsClockTranslation: false
+                    });
+                    opts.setPendingRespawnInfo(pendingRespawnInfo);
+                }
+            }
+            if (pendingRespawnInfo && pendingRespawnInfo.active && Date.now() >= Number(pendingRespawnInfo.localRespawnAt || pendingRespawnInfo.respawnAt || 0)) {
                 opts.setPendingRespawnInfo(null);
             }
             opts.applyPendingSpawnSync();

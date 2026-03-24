@@ -54,7 +54,7 @@ function firstBodyPart(actorVisual) {
   return actorVisual.visual.userData.bodyParts[0];
 }
 
-test('actor visual boundary keeps heal flash and spawn shield scoped to one actor and restores state', async () => {
+test('actor visual boundary keeps damage flash and spawn shield scoped to one actor and restores state', async () => {
   const factory = await loadActorVisualFactory();
   const actorA = factory.create({ ownerType: 'player', targetId: 'self-a', weaponId: 'rifle' });
   const actorB = factory.create({ ownerType: 'player', targetId: 'self-b', weaponId: 'rifle' });
@@ -67,11 +67,11 @@ test('actor visual boundary keeps heal flash and spawn shield scoped to one acto
   const originalATransparent = bodyA.material.transparent;
   const originalBOpacity = bodyB.material.opacity;
 
-  actorA.setHealFlash(true);
-  assert.equal(bodyA.material.color.getHex(), 0x6dff9a);
+  actorA.setDamageFlash(true);
+  assert.equal(bodyA.material.color.getHex(), 0xff0000);
   assert.equal(bodyB.material.color.getHex(), originalBColor);
 
-  actorA.setHealFlash(false);
+  actorA.setDamageFlash(false);
   assert.equal(bodyA.material.color.getHex(), originalAColor);
 
   actorA.setSpawnShield(true);

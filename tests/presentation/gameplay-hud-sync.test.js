@@ -16,7 +16,6 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
     cooldown: [],
     damageEffects: [],
     abilityInfo: [],
-    healFlash: [],
     statusState: [],
     chokeReticle: [],
     hookReticle: [],
@@ -93,12 +92,10 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       getHudState() { return { abilityName: 'Vader Choke', cooldown: 3 }; },
       getLoadout() { return { abilityId: 'choke' }; },
       getChokeState() { return { endsAt: 1400 }; },
-      getHealState() { return { endsAt: 1500 }; },
       getDeadeyeState() { return { targets: [{ id: 'a' }] }; },
       getChokeRectSize() { return { width: 240, height: 180 }; }
     },
     GamePlayer: {
-      setHealFlash(value) { calls.healFlash.push(value); },
       setStatusState(value) { calls.statusState.push(value); },
       getEquippedWeaponId() { return 'shotgun'; },
       setWeaponModel(weaponId) { calls.weaponInfo.push({ syncedWeaponId: weaponId }); },
@@ -197,7 +194,6 @@ test('gameplay hud sync owns local HUD/status updates', async () => {
   assert.deepEqual(harness.calls.armor[0], { armor: 55, armorMax: 90 });
   assert.equal(harness.calls.damageEffects[0], 0.16);
   assert.deepEqual(harness.calls.abilityInfo[0], { abilityName: 'Vader Choke', cooldown: 3 });
-  assert.equal(harness.calls.healFlash[0], true);
   assert.equal(harness.calls.statusState.length, 1);
   assert.deepEqual(harness.calls.chokeReticle[0], { visible: true, width: 240, height: 180 });
   assert.deepEqual(harness.calls.hookReticle[0], { visible: false, size: 120 });

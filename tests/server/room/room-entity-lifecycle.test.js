@@ -69,7 +69,6 @@ test('createPlayerEntity centralizes default runtime state', () => {
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
   assert.equal(player.abilityCooldownUntil, 0);
   assert.equal(player.weaponLockUntil, 0);
-  assert.equal(player.healState, null);
 });
 
 test('createBotEntity keeps bot defaults aligned with shared room lifecycle state', () => {
@@ -118,7 +117,6 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   player.chokeVictimState = { sourceId: 'enemy' };
   player.justBeenHookedState = { startedAt: 5 };
   player.hookPullState = { sourceId: 'enemy' };
-  player.healState = { endsAt: 10 };
   player.velocityY = 8;
   player.isGrounded = false;
   player.jumpHoldTimer = 1;
@@ -155,7 +153,6 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   assert.equal(player.chokeVictimState, null);
   assert.equal(player.justBeenHookedState, null);
   assert.equal(player.hookPullState, null);
-  assert.equal(player.healState, null);
   assert.equal(player.yaw, 0);
   assert.equal(player.pitch, 0);
   assert.equal(player.moveSpeedNorm, 0);

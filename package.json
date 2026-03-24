@@ -20,7 +20,9 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3000",
     "test:smoke": "find tests -name '*.test.js' -print0 | xargs -0 node --test",
-    "test:networking": "node --test tests/integration/real-worker-multiplayer.test.js",
+    "test:networking": "node --test --test-name-pattern=\"^(real worker: join and snapshot flow|real worker: movement replication converges across clients|real worker: duplicate sockets are superseded cleanly|real worker: sniper fire without ads is rejected by the server|real worker: firing faster than cooldown only produces one authoritative hit|real worker: third player observer receives the same authoritative damage event|real worker: reconnecting within grace keeps one player identity alive|real worker: delayed inputs still converge without giant teleports|real worker: packet loss with delay still converges without repeated giant teleports|jump move shoot flow records hitmarker timing, server registrations, and reconciliation drift)$\" tests/integration/real-worker-multiplayer.test.js tests/net/jump-move-shoot-flow.test.js",
+    "test:networking:smoke": "npm run test:networking",
+    "test:networking:full": "node --test tests/integration/real-worker-multiplayer.test.js tests/net/jump-move-shoot-flow.test.js",
     "test:worker-integration": "node --test tests/integration/real-worker-multiplayer.test.js",
     "test:e2e": "playwright test"
   },

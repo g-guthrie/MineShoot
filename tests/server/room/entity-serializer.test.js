@@ -58,7 +58,6 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
       hitAt: 1350,
       endsAt: 1800
     },
-    healState: { startedAt: 1400, endsAt: 1900, healAmount: 150 },
     deadeye: { lockIndex: 1, maxLocks: 2, nextLockAt: 2000, lockEveryMs: 300, endsAt: 2300, queue: ['usr_enemy'] }
   });
 
@@ -67,8 +66,7 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     chokeVictim: { startedAt: 1100, endsAt: 1500, liftHeight: 1.6 },
     hookedStartedAt: 1250,
     hookedUntil: 1700,
-    hookVisual: { phase: 'travel', targetId: '', headPos: { x: 7, y: 8, z: 9 }, attachPos: null, endsAt: 1800 },
-    healUntil: 1900
+    hookVisual: { phase: 'travel', targetId: '', headPos: { x: 7, y: 8, z: 9 }, attachPos: null, endsAt: 1800 }
   });
   assert.equal(state.weaponLockUntil, 0);
   assert.equal(state.throwableLockUntil, 0);
@@ -80,7 +78,6 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.equal(state.justBeenHookedState, undefined);
   assert.equal(state.hookPullState, undefined);
   assert.equal(state.hookState, undefined);
-  assert.equal(state.healState, undefined);
 });
 
 test('toEntityState carries authoritative action lock timers', () => {
@@ -221,7 +218,7 @@ test('toEntityState resolves completed weapon reloads into a full authoritative 
       throwables: {}
     });
 
-    assert.equal(state.weaponAmmo.machinegun.ammoInMag, 50);
+  assert.equal(state.weaponAmmo.machinegun.ammoInMag, 32);
     assert.equal(state.weaponAmmo.machinegun.reloading, false);
     assert.equal(state.weaponAmmo.machinegun.reloadRemaining, 0);
   } finally {

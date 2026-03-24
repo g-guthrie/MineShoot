@@ -101,6 +101,8 @@
         if (selfState && msg.targetId === selfId) {
             if (typeof msg.health === 'number') selfState.hp = msg.health;
             if (typeof msg.armor === 'number') selfState.armor = msg.armor;
+            if (typeof msg.stocksRemaining === 'number') selfState.stocksRemaining = msg.stocksRemaining;
+            if (typeof msg.maxStocks === 'number') selfState.maxStocks = msg.maxStocks;
             if (msg.killed) selfState.alive = false;
             pushBounded(opts.incomingDamageFeedbackQueue, {
                 sourcePos: opts.damagePointForEntityId(msg.sourceId || ''),
@@ -119,6 +121,12 @@
         }
 
         if (msg.sourceId === selfId) {
+            if (selfState) {
+                if (typeof msg.sourceStocksRemaining === 'number') selfState.stocksRemaining = msg.sourceStocksRemaining;
+                if (typeof msg.sourceMaxStocks === 'number') selfState.maxStocks = msg.sourceMaxStocks;
+                if (typeof msg.sourceBonusLivesEarned === 'number') selfState.bonusLivesEarned = msg.sourceBonusLivesEarned;
+                if (typeof msg.sourceExtraLifeProgressPct === 'number') selfState.extraLifeProgressPct = msg.sourceExtraLifeProgressPct;
+            }
             pushBounded(opts.damageFeedbackQueue, {
                 targetId: msg.targetId || '',
                 damage: Math.max(0, Number(msg.damage || 0)),
@@ -134,26 +142,46 @@
 
     function handleDeathRespawn(msg, opts) {
         if (msg.entityId !== opts.getSelfId()) return;
-        var translatedRespawnAt = opts.toLocalClockTime
-            ? Number(opts.toLocalClockTime(msg.respawnAt || 0) || 0)
-            : Number(msg.respawnAt || 0);
-        var respawnAt = Math.max(Date.now(), translatedRespawnAt);
-        opts.setPendingRespawnInfo({
-            active: true,
-            respawnAt: respawnAt
-        });
-        if (typeof msg.x === 'number' && typeof msg.z === 'number') {
+        var timingState = opts.getConnectionTimingState ? opts.getConnectionTimingState() : null;
+        var canTranslateRespawnAt = !!(timingState && timingState.snapshot);
+        var serverRespawnAt = Math.max(0, Number(msg.respawnAt || 0));
+        var translatedRespawnAt = canTranslateRespawnAt && opts.toLocalClockTime
+            ? Number(opts.toLocalClockTime(serverRespawnAt) || 0)
+            : 0;
+        var respawnAt = translatedRespawnAt > 0 ? Math.max(Date.now(), translatedRespawnAt) : 0;
+        if (typeof msg.stocksRemaining === 'number' && opts.getSelfState()) opts.getSelfState().stocksRemaining = msg.stocksRemaining;
+        if (typeof msg.maxStocks === 'number' && opts.getSelfState()) opts.getSelfState().maxStocks = msg.maxStocks;
+        if (typeof msg.bonusLivesEarned === 'number' && opts.getSelfState()) opts.getSelfState().bonusLivesEarned = msg.bonusLivesEarned;
+        if (typeof msg.extraLifeProgressPct === 'number' && opts.getSelfState()) opts.getSelfState().extraLifeProgressPct = msg.extraLifeProgressPct;
+        if (msg.eliminated) {
+            opts.setPendingRespawnInfo(null);
+            opts.setPendingSpawnSync(null);
+        } else {
+            opts.setPendingRespawnInfo({
+                active: true,
+                serverRespawnAt: serverRespawnAt,
+                localRespawnAt: respawnAt,
+                respawnAt: respawnAt,
+                needsClockTranslation: !canTranslateRespawnAt,
+                spawnX: (typeof msg.x === 'number') ? Number(msg.x || 0) : null,
+                spawnZ: (typeof msg.z === 'number') ? Number(msg.z || 0) : null
+            });
+        }
+        if (!msg.eliminated && canTranslateRespawnAt && typeof msg.x === 'number' && typeof msg.z === 'number') {
             opts.setPendingSpawnSync({
                 x: Number(msg.x || 0),
                 z: Number(msg.z || 0),
                 executeAt: respawnAt,
                 kind: 'respawn'
             });
-        } else {
+        } else if (!msg.eliminated) {
             opts.setPendingSpawnSync(null);
         }
         var selfState = opts.getSelfState();
-        if (selfState) selfState.alive = false;
+        if (selfState) {
+            selfState.alive = false;
+            selfState.eliminated = !!msg.eliminated;
+        }
     }
 
     function handleClassChanged(msg, opts) {

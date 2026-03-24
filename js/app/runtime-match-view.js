@@ -119,7 +119,8 @@
             if (rules && rules.formatMatchHudCounter) {
                 return rules.formatMatchHudCounter(matchState, selfState);
             }
-            return 'Kills: ' + Math.max(0, Number(selfState && selfState.kills || 0));
+            return 'Lives: ' + Math.max(0, Number(selfState && selfState.stocksRemaining || 0)) +
+                '/' + Math.max(0, Number(selfState && selfState.maxStocks || 0));
         }
 
         function readMatchContext() {
@@ -176,16 +177,19 @@
 
             var kills = Math.max(0, Number(selfState && selfState.kills || 0));
             var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
+            var stocksRemaining = Math.max(0, Number(selfState && selfState.stocksRemaining || 0));
+            var maxStocks = Math.max(stocksRemaining, Number(selfState && selfState.maxStocks || 0));
+            var extraLifeProgressPct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
             var modeId = String(matchState && matchState.gameMode || '').toLowerCase();
             var modeValue = modeId ? gameModeLabel(modeId, 'Match') : 'Match';
-            var primaryLabel = 'KILLS';
-            var primaryValue = String(kills);
-            var secondaryLabel = 'DEATHS';
-            var secondaryValue = String(deaths);
-            var contextLabel = 'STATE';
+            var primaryLabel = 'LIVES';
+            var primaryValue = maxStocks > 0 ? (String(stocksRemaining) + '/' + String(maxStocks)) : String(kills);
+            var secondaryLabel = 'NEXT';
+            var secondaryValue = maxStocks > 0 ? (String(Math.round(extraLifeProgressPct)) + '%') : String(deaths);
+            var contextLabel = 'ALIVE';
             var contextValue = !matchState || !matchState.started
                 ? 'WAITING'
-                : (matchState.ended ? 'RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs()) : 'LIVE');
+                : (matchState.ended ? 'RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs()) : String(Math.max(0, Number(matchState.aliveCount || 0))));
 
             if (matchState && matchState.ended) {
                 var winner = winnerLabel(matchState, selfState);
@@ -198,7 +202,7 @@
                 }
                 secondaryLabel = 'RESET';
                 secondaryValue = formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs());
-            } else if (matchState && !matchState.ended && matchState.started) {
+            } else if (matchState && !matchState.ended && matchState.started && !(matchState.stockMode || maxStocks > 0)) {
                 if (Number(matchState.targetProgress || 0) > 0) {
                     contextLabel = 'TARGET';
                     contextValue = String(Number(matchState.targetProgress || 0).toFixed(0));

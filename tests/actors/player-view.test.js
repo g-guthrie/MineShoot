@@ -91,6 +91,13 @@ function baseCameraState(overrides = {}) {
   };
 }
 
+function directionAfterUpdate(view, state, dt) {
+  view.updateCamera(dt, state);
+  const out = new THREE.Vector3();
+  state.camera.getWorldDirection(out);
+  return out;
+}
+
 test('player view forwards reload state and progress into actor visuals', async () => {
   const calls = [];
   const view = await loadPlayerView(function () {
@@ -214,4 +221,96 @@ test('player view getter helpers fill provided output vectors without allocating
   assert.equal(eyeOut.y, camera.position.y);
   assert.ok(coreOut.y < eyeOut.y);
   assert.ok(throwOut.y < eyeOut.y);
+});
+
+test('player view gives scoped sniper shots a stronger camera kick than rifle shots', async () => {
+  const rifleView = await loadPlayerView(() => null);
+  const rifleState = baseCameraState({
+    currentWeaponId: 'rifle',
+    adsActive: true,
+    sniperMode: false,
+    actorVisual: {
+      setMuzzleVisible() {},
+      triggerAction() {}
+    },
+    avatarRigApi: {
+      rig: {
+        gun: {},
+        armR: { rotation: { x: 0 } },
+        armL: { rotation: { x: 0 } }
+      },
+      triggerAction() {}
+    }
+  });
+  directionAfterUpdate(rifleView, rifleState, 0.016);
+  const rifleBaselineQuat = rifleState.camera.quaternion.clone();
+  rifleView.triggerFireAction(rifleState);
+  directionAfterUpdate(rifleView, rifleState, 0.04);
+  const rifleDelta = rifleBaselineQuat.angleTo(rifleState.camera.quaternion);
+
+  const sniperView = await loadPlayerView(() => null);
+  const sniperState = baseCameraState({
+    currentWeaponId: 'sniper',
+    adsActive: true,
+    sniperMode: true,
+    adsFovForWeapon() { return 24; },
+    actorVisual: {
+      setMuzzleVisible() {},
+      triggerAction() {}
+    },
+    avatarRigApi: {
+      rig: {
+        gun: {},
+        armR: { rotation: { x: 0 } },
+        armL: { rotation: { x: 0 } }
+      },
+      triggerAction() {}
+    }
+  });
+  directionAfterUpdate(sniperView, sniperState, 0.016);
+  const sniperBaselineQuat = sniperState.camera.quaternion.clone();
+  sniperView.triggerFireAction(sniperState);
+  directionAfterUpdate(sniperView, sniperState, 0.04);
+  const sniperDelta = sniperBaselineQuat.angleTo(sniperState.camera.quaternion);
+
+  assert.ok(sniperDelta > rifleDelta);
+});
+
+test('player view keeps the scoped sniper recoil pattern stronger than an unscoped recoil fallback', async () => {
+  const view = await loadPlayerView(() => null);
+  const makeState = (adsActive) => baseCameraState({
+    currentWeaponId: 'sniper',
+    adsActive,
+    sniperMode: !!adsActive,
+    adsFovForWeapon() { return 24; },
+    actorVisual: {
+      setMuzzleVisible() {},
+      triggerAction() {}
+    },
+    avatarRigApi: {
+      rig: {
+        gun: {},
+        armR: { rotation: { x: 0 } },
+        armL: { rotation: { x: 0 } }
+      },
+      triggerAction() {}
+    }
+  });
+
+  const unscoped = makeState(false);
+  directionAfterUpdate(view, unscoped, 0.016);
+  view.triggerFireAction(unscoped);
+  const unscopedBaseline = unscoped.camera.getWorldDirection(new THREE.Vector3()).clone();
+  const unscopedAfter = directionAfterUpdate(view, unscoped, 0.04).clone();
+  const unscopedDelta = unscopedBaseline.angleTo(unscopedAfter);
+
+  const scopedView = await loadPlayerView(() => null);
+  const scoped = makeState(true);
+  directionAfterUpdate(scopedView, scoped, 0.016);
+  scopedView.triggerFireAction(scoped);
+  const scopedBaseline = scoped.camera.getWorldDirection(new THREE.Vector3()).clone();
+  const scopedAfter = directionAfterUpdate(scopedView, scoped, 0.04).clone();
+  const scopedDelta = scopedBaseline.angleTo(scopedAfter);
+
+  assert.ok(scopedDelta > unscopedDelta);
 });

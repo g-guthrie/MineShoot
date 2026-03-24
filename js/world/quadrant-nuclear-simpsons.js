@@ -6,7 +6,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
  * Two hyperboloid cooling towers (CylinderGeometry, 12-segment dodecagonal),
  * purple reactor with 3 red hemisphere domes (SphereGeometry),
  * teal control building, glass office, warehouse, octagonal orange tanks,
- * pylons, perimeter fence, gate, parking lot, trees.
+ * pylons, perimeter fence, gate, trees.
  *
  * Uses addDecor() for cylinder/sphere primitives, addBlock() for boxes.
  * All box positions are center-based. Z-fight prevention: roofs embed 0.05
@@ -51,7 +51,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             greenLight:    lib.getLambert({ color: 0x3D8B3D }),
             brownTrunk:    lib.getLambert({ color: 0x6B4226 }),
             // Steam
-            steam: lib.getLambert({ color: 0xf8faf6, transparent: true, opacity: 0.09 })
+            steam: lib.getLambert({ color: 0xf8faf6, transparent: true, opacity: 0.09 }),
+            nuclearGlow: lib.getLambert({ color: 0x44FF44, emissive: 0x22AA22 })
         };
         return MATS;
     }
@@ -82,6 +83,36 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         return mesh;
     }
 
+    function tcyl(place, role, meta, x, y, z, radiusTop, radiusBottom, height, options) {
+        return place.addCylinderCollider({
+            x: x,
+            y: y,
+            z: z,
+            radiusTop: radiusTop,
+            radiusBottom: radiusBottom,
+            height: height,
+            radialSlices: options && options.radialSlices,
+            heightSlices: options && options.heightSlices,
+            collisionGroup: options && options.collisionGroup ? options.collisionGroup : 'nuclear-round',
+            role: role,
+            meta: meta
+        });
+    }
+
+    function tdomeCollider(place, role, meta, x, baseY, z, radius, options) {
+        return place.addDomeCollider({
+            x: x,
+            baseY: baseY,
+            z: z,
+            radius: radius,
+            radialSlices: options && options.radialSlices,
+            heightSlices: options && options.heightSlices,
+            collisionGroup: options && options.collisionGroup ? options.collisionGroup : 'nuclear-round',
+            role: role,
+            meta: meta
+        });
+    }
+
     /* ══════════════════════════════════════════════════════ */
     /* ── ASSET BUILDERS                                   ── */
     /* ══════════════════════════════════════════════════════ */
@@ -89,14 +120,25 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     /* ── A: Cooling Tower (hyperboloid via stacked cylinders) ── */
 
     function buildCoolingTower(cx, cz, towerId, place, mats, ctx) {
-        // 4-tier stacked cylinders: wide base, narrow waist, flared rim, lip
+        var s = 1.25;
+
+        // Foundation disc — flat concrete pad
+        var foundGeo = new THREE.CylinderGeometry(5.5 * s, 5.5 * s, 0.4 * s, CYLINDER_SEGMENTS);
+        td(place, 'cooling-tower-foundation', { towerId: towerId },
+            cx, 0.2 * s, cz, foundGeo, mats.concrete);
+        tcyl(place, 'cooling-tower-collider', { towerId: towerId, part: 'foundation' },
+            cx, 0.2 * s, cz, 5.5 * s, 5.5 * s, 0.4 * s, { radialSlices: 7 });
+
+        // Stacked tiers: big fat bottom, narrow waist, subtle asymmetric top flare
         var tiers = [
-            { radiusTop: 3.0, radiusBot: 4.0, h: 6.0, mat: mats.towerGray },  // base
-            { radiusTop: 2.8, radiusBot: 3.0, h: 5.0, mat: mats.towerDark },  // waist
-            { radiusTop: 3.5, radiusBot: 2.8, h: 5.0, mat: mats.towerGray },  // rim
+            { radiusTop: 4.2 * s, radiusBot: 5.2 * s, h: 4.0 * s, mat: mats.towerGray },   // wide base
+            { radiusTop: 3.4 * s, radiusBot: 4.2 * s, h: 4.0 * s, mat: mats.towerGray },   // upper base
+            { radiusTop: 2.8 * s, radiusBot: 3.4 * s, h: 3.5 * s, mat: mats.towerDark },   // waist
+            { radiusTop: 3.0 * s, radiusBot: 2.8 * s, h: 3.0 * s, mat: mats.towerGray },   // mild flare
+            { radiusTop: 3.2 * s, radiusBot: 3.0 * s, h: 2.5 * s, mat: mats.towerGray },   // slight top widen
         ];
-        var currentY = 0;
-        var peakHeight = 0;
+        var currentY = 0.4 * s; // start above foundation
+        var peakHeight = currentY;
 
         for (var i = 0; i < tiers.length; i++) {
             var tier = tiers[i];
@@ -104,30 +146,35 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             var geo = new THREE.CylinderGeometry(tier.radiusTop, tier.radiusBot, tier.h, CYLINDER_SEGMENTS);
             td(place, 'cooling-tower-tier', { towerId: towerId, tierIndex: i },
                 cx, centerY, cz, geo, tier.mat);
+            tcyl(place, 'cooling-tower-collider', { towerId: towerId, tierIndex: i, part: 'tier' },
+                cx, centerY, cz, tier.radiusTop, tier.radiusBot, tier.h, { radialSlices: 7, heightSlices: 3 });
             currentY += tier.h;
             peakHeight = currentY;
         }
 
         // Lip ring at top
-        var lipGeo = new THREE.CylinderGeometry(3.6, 3.5, 0.4, CYLINDER_SEGMENTS);
+        var lipGeo = new THREE.CylinderGeometry(3.4 * s, 3.2 * s, 0.4 * s, CYLINDER_SEGMENTS);
         td(place, 'cooling-tower-lip', { towerId: towerId },
-            cx, currentY + 0.2, cz, lipGeo, mats.towerDark);
-        peakHeight += 0.4;
+            cx, currentY + 0.2 * s, cz, lipGeo, mats.towerDark);
+        tcyl(place, 'cooling-tower-collider', { towerId: towerId, part: 'lip' },
+            cx, currentY + 0.2 * s, cz, 3.4 * s, 3.2 * s, 0.4 * s, { radialSlices: 7 });
+        peakHeight += 0.4 * s;
 
-        // Radiation symbol accent on waist (west face) — flat box
+        // Radiation symbol accent on waist (west face)
+        var symbolY = (0.4 * s) + (4.0 * s) + (4.0 * s) + (3.5 * s) * 0.5; // midpoint of waist tier
         tb(place, 'cooling-tower-symbol', { towerId: towerId },
-            cx - 3.05, 8.5, cz, 0.12, 1.5, 1.5, mats.yellowWarn, false);
+            cx - 3.5 * s, symbolY, cz, 0.12, 1.5 * s, 1.5 * s, mats.yellowWarn, false);
 
-        // Steam (translucent cylinder above rim)
+        // Steam
         var steamMat = cloneMaterial(mats.steam);
         steamMat.opacity = 0.22;
         steamMat.transparent = true;
-        var steamGeo = new THREE.CylinderGeometry(2.0, 2.5, 4.0, 8);
+        var steamGeo = new THREE.CylinderGeometry(2.0 * s, 2.5 * s, 4.0 * s, 8);
         td(place, 'cooling-tower-steam', { towerId: towerId },
-            cx, peakHeight + 2.2, cz, steamGeo, steamMat);
+            cx, peakHeight + 2.2 * s, cz, steamGeo, steamMat);
 
         if (ctx && typeof ctx.addExclusion === 'function') {
-            ctx.addExclusion(cx, cz, 5.0);
+            ctx.addExclusion(cx, cz, 6.0 * s);
         }
 
         return { towerId: towerId, centerX: cx, centerZ: cz, peakHeight: peakHeight };
@@ -141,7 +188,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             cx, h * 0.5, cz, w, h, d, mats.purpleWall, true);
         // Roof slab (embedded 0.05 into wall top)
         tb(place, 'reactor-roof', { reactorId: reactorId },
-            cx, h - 0.05 + 0.15, cz, w + 0.4, 0.3, d + 0.4, mats.purpleDark, false);
+            cx, h - 0.05 + 0.15, cz, w + 0.4, 0.3, d + 0.4, mats.purpleDark, true);
 
         // Red hemisphere domes on top
         var domeRadius = Math.min(2.2, (w * 0.7) / numDomes);
@@ -154,14 +201,57 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             // Dome base ring (cylinder, sits on roof)
             var ringGeo = new THREE.CylinderGeometry(domeRadius * 1.05, domeRadius * 1.05, 0.3, CYLINDER_SEGMENTS);
             td(place, 'reactor-dome-ring', { reactorId: reactorId, domeIndex: di },
-                domeX, h + 0.15, cz, ringGeo, mats.purpleDark);
+                domeX, h + 0.15, cz, ringGeo, mats.asphalt);
+            tcyl(place, 'reactor-dome-collider', { reactorId: reactorId, domeIndex: di, part: 'ring' },
+                domeX, h + 0.15, cz, domeRadius * 1.05, domeRadius * 1.05, 0.3, { radialSlices: 5 });
 
             // Hemisphere dome (SphereGeometry, upper half only)
             // phiStart=0, phiLength=PI gives upper hemisphere
             var domeGeo = new THREE.SphereGeometry(domeRadius, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5);
             td(place, 'reactor-dome', { reactorId: reactorId, domeIndex: di },
                 domeX, h + 0.3, cz, domeGeo, mats.redDome);
+            tdomeCollider(place, 'reactor-dome-collider', { reactorId: reactorId, domeIndex: di, part: 'dome' },
+                domeX, h + 0.3, cz, domeRadius, { radialSlices: 5, heightSlices: 4 });
         }
+
+        // Glowing green window strip — west face + wraps 5 units onto north & south
+        var winH = 1.36;  // window height (narrowed again 15%)
+        var winY = h * 0.80; // vertical center of window band (15% higher)
+        var halfW = w * 0.5;
+        var halfD = d * 0.5;
+        var wrapLen = 5;   // how far it wraps around corners
+
+        var ft = 0.06; // frame bar thickness
+        var fo = 0.025; // frame offset from wall (behind glow)
+        var go = 0.035; // glow offset from wall (in front of frame)
+        var glowW = d + 0.1; // slight overlap past corners — hidden behind wrap pieces, no gap
+        var nWrapX = cx - halfW + (wrapLen * 0.5);
+        var wrapW = wrapLen + 0.04; // north/south wrap width (along X)
+
+        // ── West face ──
+        // Green glow (full width of building)
+        tb(place, 'reactor-glow-west', { reactorId: reactorId },
+            cx - halfW - go, winY, cz, 0.01, winH, glowW, mats.nuclearGlow, false);
+        // Frame: top and bottom only, NO bars at corners — clean wrap transition
+        // Trim bars to stop just inside the building corners (leave room for wrap)
+        var westBarLen = glowW - 0.1;
+        tb(place, 'reactor-frame-w-top', null, cx - halfW - fo, winY + winH * 0.5, cz, 0.01, ft, westBarLen, mats.asphalt, false);
+        tb(place, 'reactor-frame-w-bot', null, cx - halfW - fo, winY - winH * 0.5, cz, 0.01, ft, westBarLen, mats.asphalt, false);
+
+        // ── North face wrap ──
+        tb(place, 'reactor-glow-north', { reactorId: reactorId },
+            nWrapX, winY, cz - halfD - go, wrapW, winH, 0.01, mats.nuclearGlow, false);
+        // Top, bottom, and right-end bar only (no left bar — that's the corner)
+        tb(place, 'reactor-frame-n-top', null, nWrapX, winY + winH * 0.5, cz - halfD - fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-n-bot', null, nWrapX, winY - winH * 0.5, cz - halfD - fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-n-rgt', null, nWrapX + wrapW * 0.5, winY, cz - halfD - fo, ft, winH, 0.01, mats.asphalt, false);
+
+        // ── South face wrap ──
+        tb(place, 'reactor-glow-south', { reactorId: reactorId },
+            nWrapX, winY, cz + halfD + go, wrapW, winH, 0.01, mats.nuclearGlow, false);
+        tb(place, 'reactor-frame-s-top', null, nWrapX, winY + winH * 0.5, cz + halfD + fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-s-bot', null, nWrapX, winY - winH * 0.5, cz + halfD + fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-s-rgt', null, nWrapX + wrapW * 0.5, winY, cz + halfD + fo, ft, winH, 0.01, mats.asphalt, false);
 
         return {
             id: reactorId, centerX: cx, centerZ: cz,
@@ -176,14 +266,40 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var w = 6, h = 5, d = 6;
         tb(place, 'teal-body', null, cx, h * 0.5, cz, w, h, d, mats.tealWall, true);
         // Roof
-        tb(place, 'teal-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.3, 0.3, d + 0.3, mats.tealDark, false);
-        // Door (west face, facing map center)
+        tb(place, 'teal-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.3, 0.3, d + 0.3, mats.tealDark, true);
         var westFaceX = cx - (w * 0.5) - 0.06;
-        tb(place, 'teal-door', null, westFaceX, 1.1, cz, 0.15, 2.2, 1.2, mats.asphalt, false);
         // Windows (west face, 4 stacked vertically across the wall)
         for (var wi = 0; wi < 4; wi++) {
             var wz = cz - 2.0 + (wi * 1.3);
             tb(place, 'teal-window', null, westFaceX, 3.2, wz, 0.12, 0.8, 0.9, mats.glassBlue, false);
+        }
+    }
+
+    /* ── C2: Containment Domes (pair of industrial rounded structures) ── */
+
+    function buildContainmentDomes(cx, cz, place, mats) {
+        // Two domes side by side (north-south), sitting on cylindrical bases
+        var spacing = 4.5;
+        for (var di = 0; di < 2; di++) {
+            var dz = cz + (di === 0 ? -spacing * 0.5 : spacing * 0.5);
+            // Cylindrical base
+            var baseGeo = new THREE.CylinderGeometry(2.2, 2.4, 2.5, CYLINDER_SEGMENTS);
+            td(place, 'containment-base', { domeIndex: di },
+                cx, 1.25, dz, baseGeo, mats.purpleDark);
+            tcyl(place, 'containment-collider', { domeIndex: di, part: 'base' },
+                cx, 1.25, dz, 2.2, 2.4, 2.5, { radialSlices: 5, heightSlices: 3 });
+            // Half-sphere dome on top
+            var domeGeo = new THREE.SphereGeometry(2.3, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.5);
+            td(place, 'containment-dome', { domeIndex: di },
+                cx, 2.5, dz, domeGeo, mats.orangeTank);
+            tdomeCollider(place, 'containment-collider', { domeIndex: di, part: 'dome' },
+                cx, 2.5, dz, 2.3, { radialSlices: 5, heightSlices: 4 });
+            // Dark ring where dome meets base
+            var ringGeo = new THREE.CylinderGeometry(2.35, 2.35, 0.15, CYLINDER_SEGMENTS);
+            td(place, 'containment-ring', { domeIndex: di },
+                cx, 2.5, dz, ringGeo, mats.asphalt);
+            tcyl(place, 'containment-collider', { domeIndex: di, part: 'ring' },
+                cx, 2.5, dz, 2.35, 2.35, 0.15, { radialSlices: 5 });
         }
     }
 
@@ -193,7 +309,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var w = 8, h = 7, d = 6;
         tb(place, 'office-body', null, cx, h * 0.5, cz, w, h, d, mats.grayLight, true);
         // Roof
-        tb(place, 'office-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.2, 0.3, d + 0.2, mats.grayDark, false);
+        tb(place, 'office-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.2, 0.3, d + 0.2, mats.grayDark, true);
         // Window grid on WEST face (4 cols x 5 rows)
         var westFaceX = cx - (w * 0.5) - 0.06;
         for (var col = 0; col < 4; col++) {
@@ -204,11 +320,33 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
                     westFaceX, winY, winZ, 0.15, 0.9, 0.9, mats.glassBlue, false);
             }
         }
-        // Entry overhang (west face)
-        tb(place, 'office-overhang', null, westFaceX - 0.5, 3.0, cz, 1.5, 0.3, 3.0, mats.grayDark, false);
-        // Entry columns (x2)
-        tb(place, 'office-column', null, westFaceX - 1.2, 1.5, cz - 1.2, 0.3, 3.0, 0.3, mats.steel, false);
-        tb(place, 'office-column', null, westFaceX - 1.2, 1.5, cz + 1.2, 0.3, 3.0, 0.3, mats.steel, false);
+        // Twin chimneys on roof (one taller than the other)
+        var roofY = h + 0.15;
+        var chimney1H = 4.0;
+        var chimney2H = 2.8;
+        var chim1Geo = new THREE.CylinderGeometry(0.35, 0.45, chimney1H, 8);
+        td(place, 'office-chimney-tall', null, cx + 1.5, roofY + chimney1H * 0.5, cz - 1.5, chim1Geo, mats.brownTrunk);
+        tcyl(place, 'office-chimney-collider', { part: 'stack', size: 'tall' },
+            cx + 1.5, roofY + chimney1H * 0.5, cz - 1.5, 0.35, 0.45, chimney1H, { radialSlices: 5, heightSlices: 2 });
+        var cap1Geo = new THREE.CylinderGeometry(0.55, 0.4, 0.35, 8);
+        td(place, 'office-chimney-tall-cap', null, cx + 1.5, roofY + chimney1H + 0.17, cz - 1.5, cap1Geo, mats.grayDark);
+        tcyl(place, 'office-chimney-collider', { part: 'cap', size: 'tall' },
+            cx + 1.5, roofY + chimney1H + 0.17, cz - 1.5, 0.55, 0.4, 0.35, { radialSlices: 5 });
+
+        var chim2Geo = new THREE.CylinderGeometry(0.35, 0.45, chimney2H, 8);
+        td(place, 'office-chimney-short', null, cx + 1.5, roofY + chimney2H * 0.5, cz + 0.5, chim2Geo, mats.brownTrunk);
+        tcyl(place, 'office-chimney-collider', { part: 'stack', size: 'short' },
+            cx + 1.5, roofY + chimney2H * 0.5, cz + 0.5, 0.35, 0.45, chimney2H, { radialSlices: 5, heightSlices: 2 });
+        var cap2Geo = new THREE.CylinderGeometry(0.55, 0.4, 0.35, 8);
+        td(place, 'office-chimney-short-cap', null, cx + 1.5, roofY + chimney2H + 0.17, cz + 0.5, cap2Geo, mats.grayDark);
+        tcyl(place, 'office-chimney-collider', { part: 'cap', size: 'short' },
+            cx + 1.5, roofY + chimney2H + 0.17, cz + 0.5, 0.55, 0.4, 0.35, { radialSlices: 5 });
+        // Steam wisps
+        var sMat = cloneMaterial(mats.steam); sMat.opacity = 0.18; sMat.transparent = true;
+        var s1Geo = new THREE.CylinderGeometry(0.3, 0.5, 1.5, 6);
+        td(place, 'office-chimney-steam', null, cx + 1.5, roofY + chimney1H + 1.1, cz - 1.5, s1Geo, sMat);
+        var s2Geo = new THREE.CylinderGeometry(0.25, 0.4, 1.2, 6);
+        td(place, 'office-chimney-steam', null, cx + 1.5, roofY + chimney2H + 0.9, cz + 0.5, s2Geo, sMat);
     }
 
     /* ── E: Purple Warehouse ── */
@@ -216,9 +354,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     function buildWarehouse(cx, cz, place, mats) {
         var w = 8, h = 3, d = 5;
         tb(place, 'warehouse-body', null, cx, h * 0.5, cz, w, h, d, mats.purpleWall, true);
-        tb(place, 'warehouse-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.2, 0.3, d + 0.2, mats.purpleDark, false);
+        tb(place, 'warehouse-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.2, 0.3, d + 0.2, mats.purpleDark, true);
         // Roll-up door (south face)
-        tb(place, 'warehouse-door', null, cx, 1.25, cz + (d * 0.5) + 0.06, 3.0, 2.5, 0.12, mats.grayDark, false);
+        tb(place, 'warehouse-door', null, cx, 1.25, cz + (d * 0.5) + 0.06, 3.0, 2.5, 0.12, mats.grayDark, true);
     }
 
     /* ── F: Storage Tank Cluster (3 octagonal cylinders) ── */
@@ -236,44 +374,56 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             var tankGeo = new THREE.CylinderGeometry(1.0, 1.0, 3.0, TANK_SEGMENTS);
             td(place, 'tank-body', { tankIndex: i },
                 tx, 1.5, tz, tankGeo, mats.orangeTank);
+            tcyl(place, 'tank-collider', { tankIndex: i, part: 'body' },
+                tx, 1.5, tz, 1.0, 1.0, 3.0, { radialSlices: 5 });
             // Cap (slightly wider cylinder)
             var capGeo = new THREE.CylinderGeometry(1.1, 1.1, 0.2, TANK_SEGMENTS);
             td(place, 'tank-cap', { tankIndex: i },
                 tx, 3.1, tz, capGeo, mats.steel);
+            tcyl(place, 'tank-collider', { tankIndex: i, part: 'cap' },
+                tx, 3.1, tz, 1.1, 1.1, 0.2, { radialSlices: 5 });
         }
     }
 
     /* ── G: Electrical Pylon ── */
 
     function buildPylon(cx, cz, place, mats) {
-        // Two legs
-        tb(place, 'pylon-leg', null, cx - 0.5, 5.0, cz, 0.2, 10.0, 0.2, mats.steel, false);
-        tb(place, 'pylon-leg', null, cx + 0.5, 5.0, cz, 0.2, 10.0, 0.2, mats.steel, false);
-        // Cross beams
-        tb(place, 'pylon-beam', null, cx, 4.0, cz, 1.5, 0.2, 0.2, mats.steel, false);
-        tb(place, 'pylon-beam', null, cx, 7.0, cz, 1.5, 0.2, 0.2, mats.steel, false);
-        // Top arms
-        tb(place, 'pylon-arm', null, cx - 1.2, 9.5, cz, 1.8, 0.15, 0.15, mats.steel, false);
-        tb(place, 'pylon-arm', null, cx + 1.2, 9.5, cz, 1.8, 0.15, 0.15, mats.steel, false);
-        // Insulators (4 hanging)
+        // Two legs spread along Z (so arms face each other along the line)
+        tb(place, 'pylon-leg', null, cx, 5.0, cz - 0.5, 0.2, 10.0, 0.2, mats.steel, true);
+        tb(place, 'pylon-leg', null, cx, 5.0, cz + 0.5, 0.2, 10.0, 0.2, mats.steel, true);
+        // Cross beams along Z
+        tb(place, 'pylon-beam', null, cx, 4.0, cz, 0.2, 0.2, 1.5, mats.steel, true);
+        tb(place, 'pylon-beam', null, cx, 7.0, cz, 0.2, 0.2, 1.5, mats.steel, true);
+        // Top arms extend along Z
+        tb(place, 'pylon-arm', null, cx, 9.5, cz - 1.2, 0.15, 0.15, 1.8, mats.steel, true);
+        tb(place, 'pylon-arm', null, cx, 9.5, cz + 1.2, 0.15, 0.15, 1.8, mats.steel, true);
+        // Insulators (4 hanging off arm ends)
         for (var side = -1; side <= 1; side += 2) {
             tb(place, 'pylon-insulator', null,
-                cx + (side * 1.8), 9.9, cz - 0.15, 0.1, 0.5, 0.1, mats.grayLight, false);
+                cx - 0.15, 9.9, cz + (side * 1.8), 0.1, 0.5, 0.1, mats.grayLight, true);
             tb(place, 'pylon-insulator', null,
-                cx + (side * 1.8), 9.9, cz + 0.15, 0.1, 0.5, 0.1, mats.grayLight, false);
+                cx + 0.15, 9.9, cz + (side * 1.8), 0.1, 0.5, 0.1, mats.grayLight, true);
         }
     }
 
     /* ── H: Tree ── */
 
-    function buildTree(cx, cz, place, mats, sizeVariant) {
+    function buildTree(cx, cz, place, mats, sizeVariant, pointy) {
         var s = sizeVariant || 1.0;
         var trunkH = 2.5 + (s * 0.8);
         var canopyH = 2.5 + (s * 0.8);
         var canopyW = 2.2 + (s * 0.6);
-        tb(place, 'tree-trunk', null, cx, trunkH * 0.5, cz, 0.5, trunkH, 0.5, mats.brownTrunk, false);
+        tb(place, 'tree-trunk', null, cx, trunkH * 0.5, cz, 0.5, trunkH, 0.5, mats.brownTrunk, true);
         tb(place, 'tree-canopy', null, cx, trunkH + (canopyH * 0.5), cz, canopyW, canopyH, canopyW,
-            s > 0.5 ? mats.greenTree : mats.greenLight, false);
+            s > 0.5 ? mats.greenTree : mats.greenLight, true);
+        if (pointy) {
+            var coneGeo = typeof THREE.ConeGeometry === 'function'
+                ? new THREE.ConeGeometry(canopyW * 0.5, canopyH * 0.7, 6)
+                : new THREE.CylinderGeometry(0, canopyW * 0.5, canopyH * 0.7, 6);
+            td(place, 'tree-point', null, cx, trunkH + canopyH + canopyH * 0.35, cz, coneGeo, mats.greenTree);
+            tdomeCollider(place, 'tree-point-collider', null,
+                cx, trunkH + canopyH, cz, canopyW * 0.5, { radialSlices: 5, heightSlices: 3 });
+        }
     }
 
     /* ── I: Perimeter Fence (loop with gate gap) ── */
@@ -287,35 +437,35 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
         // North wall
         var nLen = maxX - minX;
-        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, minZ, nLen, fh, ft, mats.steel, false);
+        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, minZ, nLen, fh, ft, mats.steel, true);
         // South wall
-        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, maxZ, nLen, fh, ft, mats.steel, false);
+        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, maxZ, nLen, fh, ft, mats.steel, true);
         // East wall
         var eLen = maxZ - minZ;
-        tb(place, 'fence-segment', null, maxX, fh * 0.5, (minZ + maxZ) * 0.5, ft, fh, eLen, mats.steel, false);
+        tb(place, 'fence-segment', null, maxX, fh * 0.5, (minZ + maxZ) * 0.5, ft, fh, eLen, mats.steel, true);
         // West wall — split for gate gap
         var gateHalfW = gateWidth * 0.5;
         var gateMinZ = gateZ - gateHalfW;
         var gateMaxZ = gateZ + 4.4; // extend gap south to cover booth
         var topSegLen = gateMinZ - minZ;
         if (topSegLen > 1) {
-            tb(place, 'fence-segment', null, minX, fh * 0.5, minZ + (topSegLen * 0.5), ft, fh, topSegLen, mats.steel, false);
+            tb(place, 'fence-segment', null, minX, fh * 0.5, minZ + (topSegLen * 0.5), ft, fh, topSegLen, mats.steel, true);
         }
         var botSegLen = maxZ - gateMaxZ;
         if (botSegLen > 1) {
-            tb(place, 'fence-segment', null, minX, fh * 0.5, gateMaxZ + (botSegLen * 0.5), ft, fh, botSegLen, mats.steel, false);
+            tb(place, 'fence-segment', null, minX, fh * 0.5, gateMaxZ + (botSegLen * 0.5), ft, fh, botSegLen, mats.steel, true);
         }
 
         // Posts along north and south
         for (var px = minX; px <= maxX; px += postSpacing) {
-            tb(place, 'fence-post', null, px, postH * 0.5, minZ, postW, postH, postW, mats.grayDark, false);
-            tb(place, 'fence-post', null, px, postH * 0.5, maxZ, postW, postH, postW, mats.grayDark, false);
+            tb(place, 'fence-post', null, px, postH * 0.5, minZ, postW, postH, postW, mats.grayDark, true);
+            tb(place, 'fence-post', null, px, postH * 0.5, maxZ, postW, postH, postW, mats.grayDark, true);
         }
         // Posts along east and west (skip gate)
         for (var pz = minZ; pz <= maxZ; pz += postSpacing) {
-            tb(place, 'fence-post', null, maxX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, false);
+            tb(place, 'fence-post', null, maxX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, true);
             if (pz < gateMinZ - 1 || pz > gateMaxZ + 1) {
-                tb(place, 'fence-post', null, minX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, false);
+                tb(place, 'fence-post', null, minX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, true);
             }
         }
     }
@@ -327,9 +477,9 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var boothX = fenceX;
         // Arm: one end touches booth north edge, extends north across the gap
         var boothNorthEdge = gateZ + 3.2 - 1.0;
-        tb(place, 'gate-arm', null, fenceX, 2.2, boothNorthEdge - 3.4 / 2, 0.15, 0.15, 3.4, mats.yellowWarn, false);
+        tb(place, 'gate-arm', null, fenceX, 2.2, boothNorthEdge - 3.4 / 2, 0.15, 0.15, 3.4, mats.yellowWarn, true);
         tb(place, 'gate-booth', null, boothX, 1.25, gateZ + 3.2, 2.0, 2.5, 2.0, mats.grayLight, true);
-        tb(place, 'gate-booth-roof', null, boothX, 2.48, gateZ + 3.2, 2.3, 0.2, 2.3, mats.grayDark, false);
+        tb(place, 'gate-booth-roof', null, boothX, 2.48, gateZ + 3.2, 2.3, 0.2, 2.3, mats.grayDark, true);
         // Window faces west (toward approaching traffic)
         tb(place, 'gate-booth-window', null, boothX - 1.06, 1.6, gateZ + 3.2, 0.12, 0.7, 1.2, mats.glassBlue, false);
     }
@@ -337,11 +487,35 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     /* ── L: Utility Boxes & Pipes ── */
 
     function buildUtilityBox(cx, cz, place, mats) {
-        tb(place, 'utility-box', null, cx, 0.6, cz, 1.0, 1.2, 0.8, mats.steel, false);
+        tb(place, 'utility-box', null, cx, 0.6, cz, 1.0, 1.2, 0.8, mats.steel, true);
     }
 
     function buildPipeRun(cx, cz, length, place, mats) {
-        tb(place, 'pipe-run', null, cx, 0.4, cz, 0.2, 0.2, length, mats.steel, false);
+        tb(place, 'pipe-run', null, cx, 0.4, cz, 0.2, 0.2, length, mats.steel, true);
+    }
+
+    function buildReactorTankPrefabAt(cx, cz, place) {
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var prefabs = runtime.WorldPrefabs || {};
+        var builder = prefabs.reactorTank;
+        if (typeof builder !== 'function') return null;
+        return builder(place, {
+            x: cx,
+            z: cz,
+            collisionGroup: 'reactor-tank'
+        });
+    }
+
+    function buildFuelSpheresPrefabAt(cx, cz, place) {
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var prefabs = runtime.WorldPrefabs || {};
+        var builder = prefabs.fuelSpheres;
+        if (typeof builder !== 'function') return null;
+        return builder(place, {
+            x: cx,
+            z: cz,
+            collisionGroup: 'fuel-spheres'
+        });
     }
 
     /* ══════════════════════════════════════════════════════ */
@@ -367,11 +541,11 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var ox = ctr.x;
         var oz = ctr.z;
 
-        // Fence perimeter (compound ~42x44, centered in cell)
-        var fenceMinX = ox - 21;
-        var fenceMaxX = ox + 21;
-        var fenceMinZ = oz - 22;
-        var fenceMaxZ = oz + 20;
+        // Fence perimeter (expanded 3 units in all directions)
+        var fenceMinX = ox - 24;
+        var fenceMaxX = ox + 24;
+        var fenceMinZ = oz - 25;
+        var fenceMaxZ = oz + 23;
         var gateZ = oz;  // gate centered on west wall
 
         // ── 1. Fence ──────────────────────────────────────
@@ -394,49 +568,138 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             iewStartX + iewLen * 0.5, 0.05, gateZ, iewLen, 0.08, 3.0, mats.concrete, false);
         // Internal north-south road
         tb(place, 'internal-road-ns', null,
-            ox, 0.06, oz, 3.0, 0.08, 36, mats.concrete, false);
-        // Parking lot (in front of office, west side)
-        tb(place, 'parking-lot', null,
-            ox - 14, 0.04, oz + 11, 8, 0.08, 5, mats.asphalt, false);
-
+            ox, 0.06, oz - 0.5, 3.0, 0.08, 35, mats.concrete, false);
         // ── 3. Cooling Towers (pushed hard against EAST wall) ──
         var towerEastX = rawBounds.maxX;
         var northTowerZ = oz - 10;
         var southTowerZ = oz + 10;
-        var t1 = buildCoolingTower(towerEastX - 5, northTowerZ, 'north', place, mats, ctx);
-        var t2 = buildCoolingTower(towerEastX - 5, southTowerZ, 'south', place, mats, ctx);
+        var t1 = buildCoolingTower(towerEastX - 6, northTowerZ, 'north', place, mats, ctx);
+        var t2 = buildCoolingTower(towerEastX - 6, southTowerZ, 'south', place, mats, ctx);
 
         // ── 4. Reactor Building (center-east, purple + 3 red domes) ──
         var reactor = buildReactorBuilding(
             ox + 4, oz, 18, 12, 7, 3, 'main', place, mats);
 
-        // ── 5. Teal Building (northwest, Homer's workplace) ──
-        buildTealBuilding(ox - 10, oz - 10, place, mats);
+        // ── 5. Teal Building (NW corner, Homer's workplace) ──
+        buildTealBuilding(ox - 18, oz - 18, place, mats);
+
+        // ── 5b. Containment Domes (where teal building used to be) ──
+        buildContainmentDomes(ox - 10, oz - 10, place, mats);
+
+        // ── 5c. Pipe runs from domes to reactor (elbow joints, 1 unit off ground) ──
+        var pipeY = 1.0;
+        var pipeR = 0.3;
+        var reactorWestX = ox + 4 - 9; // reactor west wall
+        var domeX = ox - 10;
+        var elbowX = reactorWestX + 3; // elbow inside/behind reactor west wall
+        // North dome pipe
+        var nDomeZ = oz - 12.25;
+        var reactorConnZ = oz - 5; // connect to reactor north side
+        // East run from dome to elbow
+        var nRunLen = elbowX - domeX;
+        tb(place, 'pipe-n-east', null, domeX + nRunLen * 0.5, pipeY, nDomeZ, nRunLen, pipeR, pipeR, mats.steel, true);
+        // Elbow joint
+        tb(place, 'pipe-n-elbow', null, elbowX, pipeY, nDomeZ, 0.5, 0.5, 0.5, mats.grayDark, true);
+        // South run from elbow to reactor
+        var nSouthLen = Math.abs(reactorConnZ - nDomeZ);
+        tb(place, 'pipe-n-south', null, elbowX, pipeY, (nDomeZ + reactorConnZ) * 0.5, pipeR, pipeR, nSouthLen, mats.steel, true);
+
+        // South dome pipe
+        var sDomeZ = oz - 7.75;
+        var reactorConnZ2 = oz - 2; // connect to reactor mid-west
+        // East run from dome to elbow
+        var sRunLen = elbowX - domeX;
+        tb(place, 'pipe-s-east', null, domeX + sRunLen * 0.5, pipeY, sDomeZ, sRunLen, pipeR, pipeR, mats.steel, true);
+        // Elbow joint
+        tb(place, 'pipe-s-elbow', null, elbowX, pipeY, sDomeZ, 0.5, 0.5, 0.5, mats.grayDark, true);
+        // South run from elbow to reactor
+        var sSouthLen = Math.abs(reactorConnZ2 - sDomeZ);
+        tb(place, 'pipe-s-south', null, elbowX, pipeY, (sDomeZ + reactorConnZ2) * 0.5, pipeR, pipeR, sSouthLen, mats.steel, true);
+
+        // ── 5c2. Dual pipes from the teal building and AC unit to reactor north wall ──
+        var tealPipeY = 2.0;
+        var tealBuildingCenterX = ox - 18;
+        var tealBuildingSouthZ = oz - 18 + 3.0;
+        var tealBuildingEastFaceX = tealBuildingCenterX + 3.0;
+        var tealAcCenterX = ox - 18;
+        var tealAcWestFaceX = tealAcCenterX - 1.0;
+        var tealWallPipeZ = tealBuildingSouthZ - 0.2; // inner pipe hits the building wall
+        var tealAcPipeZ = tealBuildingSouthZ + 0.2;   // outer pipe tracks to the AC
+        var reactorNorthZ = oz - 6; // reactor north wall
+        var wallSouthLen = Math.abs(reactorNorthZ - tealWallPipeZ);
+        var acSouthLen = Math.abs(reactorNorthZ - tealAcPipeZ);
+        var wallEastLen = Math.abs(elbowX - tealBuildingEastFaceX);
+        var acEastLen = Math.abs(elbowX - tealAcWestFaceX);
+        // Pipe A is the shorter inner line and ends at the building wall.
+        tb(place, 'teal-pipe-a-south', null, elbowX, tealPipeY, (tealWallPipeZ + reactorNorthZ) * 0.5, pipeR, pipeR, wallSouthLen, mats.steel, true);
+        tb(place, 'teal-pipe-a-elbow', null, elbowX, tealPipeY, tealWallPipeZ, 0.5, 0.5, 0.5, mats.grayDark, true);
+        tb(place, 'teal-pipe-a-east', null, tealBuildingEastFaceX + (wallEastLen * 0.5), tealPipeY, tealWallPipeZ, wallEastLen, pipeR, pipeR, mats.steel, true);
+        // Pipe B is the longer outer line and continues along the building to the AC.
+        tb(place, 'teal-pipe-b-south', null, elbowX, tealPipeY, (tealAcPipeZ + reactorNorthZ) * 0.5, pipeR, pipeR, acSouthLen, mats.steel, true);
+        tb(place, 'teal-pipe-b-elbow', null, elbowX, tealPipeY, tealAcPipeZ, 0.5, 0.5, 0.5, mats.grayDark, true);
+        tb(place, 'teal-pipe-b-east', null, tealAcWestFaceX + (acEastLen * 0.5), tealPipeY, tealAcPipeZ, acEastLen, pipeR, pipeR, mats.steel, true);
+
+        // ── 5d. Chimney/Smokestack (on teal building roof) ──
+        var tealX = ox - 18, tealZ = oz - 18, tealRoofY = 5.3;
+        var chimneyH = 6;
+        var chimneyGeo = new THREE.CylinderGeometry(0.4, 0.6, chimneyH, 8);
+        td(place, 'chimney-stack', null, tealX + 1.5, tealRoofY + chimneyH * 0.5, tealZ + 1.5, chimneyGeo, mats.brownTrunk);
+        tcyl(place, 'chimney-collider', { part: 'stack' },
+            tealX + 1.5, tealRoofY + chimneyH * 0.5, tealZ + 1.5, 0.4, 0.6, chimneyH, { radialSlices: 5, heightSlices: 2 });
+        var capGeo = new THREE.CylinderGeometry(0.7, 0.5, 0.5, 8);
+        td(place, 'chimney-cap', null, tealX + 1.5, tealRoofY + chimneyH + 0.25, tealZ + 1.5, capGeo, mats.grayDark);
+        tcyl(place, 'chimney-collider', { part: 'cap' },
+            tealX + 1.5, tealRoofY + chimneyH + 0.25, tealZ + 1.5, 0.7, 0.5, 0.5, { radialSlices: 5 });
+        // Steam wisp
+        var tealSteamMat = cloneMaterial(mats.steam); tealSteamMat.opacity = 0.18; tealSteamMat.transparent = true;
+        var tealSteamGeo = new THREE.CylinderGeometry(0.4, 0.65, 2.0, 6);
+        td(place, 'chimney-steam', null, tealX + 1.5, tealRoofY + chimneyH + 1.5, tealZ + 1.5, tealSteamGeo, tealSteamMat);
 
         // ── 6. Office Building (southwest, aligned with teal building X) ──
-        buildOfficeBuilding(ox - 10, oz + 11, place, mats);
+        buildOfficeBuilding(ox - 15, oz + 17, place, mats);
 
-        // ── 7. Purple Warehouse (south of reactor) ──
-        buildWarehouse(ox + 6, oz + 12, place, mats);
+        // ── 6b. Fuel spheres (shifted 8 world units south from the reworked swap spot) ──
+        buildFuelSpheresPrefabAt(ox + 1, oz + 15, place);
+
+        // ── 7. Reactor Tank Prefab (replaces the smaller purple warehouse by the big factory) ──
+        var reactorTank = buildReactorTankPrefabAt(ox - 14, oz + 7, place);
+        if (!reactorTank) {
+            buildWarehouse(ox - 14, oz + 7, place, mats);
+        }
 
         // ── 8. Tank Cluster (NE of reactor) ──
         buildTankCluster(ox + 8, oz - 12, place, mats);
 
-        // ── 9. Pylons (4 along south edge, east of center) ──
+        // ── 9. Pylons (4 along north edge) + power lines between them ──
+        var pylonXs = [];
         for (var pi = 0; pi < 4; pi++) {
-            buildPylon(ox + 4 + (pi * 6), oz + 18, place, mats);
+            var px = ox - 8 + (pi * 6);
+            buildPylon(px, oz - 20, place, mats);
+            pylonXs.push(px);
+        }
+        // Wires between adjacent pylons (2 lines per span, at arm height on each side)
+        for (var wi = 0; wi < pylonXs.length - 1; wi++) {
+            var x1 = pylonXs[wi], x2 = pylonXs[wi + 1];
+            var midX = (x1 + x2) * 0.5;
+            var span = x2 - x1;
+            var wireZ = oz - 20;
+            // North-side wire
+            tb(place, 'power-line', null, midX, 9.5, wireZ - 1.8, span, 0.06, 0.06, mats.grayDark, false);
+            // South-side wire
+            tb(place, 'power-line', null, midX, 9.5, wireZ + 1.8, span, 0.06, 0.06, mats.grayDark, false);
+            // Center wire (slightly lower, sag effect)
+            tb(place, 'power-line', null, midX, 9.2, wireZ, span, 0.06, 0.06, mats.grayDark, false);
         }
 
         // ── 10. Utility boxes & pipes (scattered industrial filler) ──
         buildUtilityBox(ox - 4, oz - 4, place, mats);
         buildUtilityBox(ox + 10, oz + 4, place, mats);
-        buildUtilityBox(ox - 12, oz + 12, place, mats);
         buildUtilityBox(ox + 14, oz - 6, place, mats);
-        buildUtilityBox(ox - 6, oz - 16, place, mats);
-        buildUtilityBox(ox + 2, oz + 16, place, mats);
-        buildPipeRun(ox + 6, oz - 5, 10, place, mats);
-        buildPipeRun(ox - 4, oz - 8, 6, place, mats);
-        buildPipeRun(ox + 12, oz + 6, 8, place, mats);
+
+        // AC unit sits flush to the teal building south wall and acts as the visible pipe landing point.
+        tb(place, 'ac-unit', null, ox - 18, 1.25, oz - 18 + 3 + 0.75, 2.0, 2.5, 1.5, mats.steel, true);
+        // Ground power unit in NE corner behind pylons
+        tb(place, 'power-unit', null, ox + 13, 1.2, oz - 20, 3.0, 2.4, 2.0, mats.steel, true);
 
         // ── 11. Trees (ring outside fence, ~20 total) ──
         // Snap to grid cell centers (odd numbers: -25, -23, -21, ... 23, 25)
@@ -447,12 +710,17 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         for (var tn = 0; tn < 4; tn++) {
             treePositions.push({ x: snapGrid(fenceMinX + 4 + (tn * 10)), z: snapGrid(fenceMinZ - 2), s: 0.7 + (tn % 3) * 0.3 });
         }
-        // South tree line (4 trees, ~10 unit spacing)
+        // South tree line (4 trees, ~10 unit spacing, one pointy)
         for (var ts = 0; ts < 4; ts++) {
-            treePositions.push({ x: snapGrid(fenceMinX + 4 + (ts * 10)), z: snapGrid(fenceMaxZ + 2), s: 0.6 + (ts % 3) * 0.35 });
+            treePositions.push({ x: snapGrid(fenceMinX + 4 + (ts * 10)), z: snapGrid(fenceMaxZ + 2), s: 0.6 + (ts % 3) * 0.35, pointy: ts === 2 });
         }
-        // East tree line (1 tree, skip cooling tower overlap area)
-        treePositions.push({ x: snapGrid(fenceMaxX + 2), z: snapGrid(fenceMinZ + 24), s: 0.9 });
+        // East tree line (5 trees, natural wall, skip cooling tower zones)
+        // Towers at roughly oz-10 and oz+10, radius ~7 each with scale
+        var eastTreeX = snapGrid(fenceMaxX + 2);
+        var eastZs = [oz - 23, oz - 15, oz, oz + 15, oz + 23];
+        for (var te = 0; te < eastZs.length; te++) {
+            treePositions.push({ x: eastTreeX, z: snapGrid(eastZs[te]), s: 0.8 + (te % 3) * 0.2 });
+        }
         // West tree line (skip gate area)
         for (var tw = 0; tw < 4; tw++) {
             var twz = fenceMinZ + 4 + (tw * 10);
@@ -466,7 +734,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
         for (var ti = 0; ti < treePositions.length; ti++) {
             var tp = treePositions[ti];
-            buildTree(tp.x, tp.z, place, mats, tp.s);
+            buildTree(tp.x, tp.z, place, mats, tp.s, tp.pointy);
         }
 
         return {
@@ -479,7 +747,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         };
     }
 
-    /* Register as alternate biome builder (does NOT overwrite current nuclear) */
+    /* Register as the live nuclear biome and keep the alternate key for debugging. */
     var ns = (globalThis.__MAYHEM_RUNTIME.WorldQuadrants = globalThis.__MAYHEM_RUNTIME.WorldQuadrants || {});
+    ns.nuclear = buildSimpsonsNuclearQuadrant;
     ns['nuclear-simpsons'] = buildSimpsonsNuclearQuadrant;
 })();

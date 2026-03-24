@@ -446,8 +446,7 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
             targetId: '',
             headPos: { x: 1, y: 2, z: 3 },
             endsAt: 1400
-          },
-          healUntil: 1600
+          }
         },
         deadeyeState: {
           lockCount: 1,
@@ -472,7 +471,6 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
   assert.equal(abilityState.chokeState.endsAt, 1250);
   assert.equal(abilityState.hookState.phase, 'travel');
   assert.deepEqual(JSON.parse(JSON.stringify(abilityState.hookState.headPos)), { x: 1, y: 2, z: 3 });
-  assert.equal(abilityState.healState.endsAt, 1600);
   assert.equal(abilityState.deadeyeState.maxLocks, 2);
   assert.equal(chokeVictim.startedAt, 900);
   assert.equal(chokeVictim.endsAt, 1300);
@@ -706,6 +704,52 @@ test('GameNet remaps death respawn timing onto the local clock when snapshot tim
     x: 4,
     z: 8
   });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+    active: true,
+    respawnAt: 1400,
+    remainingMs: 300
+  });
+});
+
+test('GameNet delays death respawn scheduling until snapshot timing is available', async () => {
+  const harness = await loadGameNetHarness();
+  const { GameNet, timeState } = harness;
+
+  harness.handleMessage({
+    t: 'welcome',
+    selfId: 'usr_test',
+    roomId: 'global',
+    worldSeed: 'seed',
+    worldProfileVersion: 6,
+    worldFlags: { envV2: true, terrainPhysicsV2: true }
+  });
+
+  timeState.now = 1100;
+  harness.handleMessage({
+    t: 'death_respawn',
+    entityId: 'usr_test',
+    respawnAt: 1300,
+    x: 4,
+    z: 8
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+    active: true,
+    respawnAt: 0,
+    remainingMs: 0
+  });
+
+  harness.handleMessage({
+    t: 'snapshot',
+    serverTime: 1000,
+    delta: false,
+    entities: [],
+    removedEntityIds: [],
+    projectiles: [],
+    fireZones: []
+  });
+  GameNet.update(0.016, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
 
   assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
     active: true,

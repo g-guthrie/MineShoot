@@ -1,365 +1,138 @@
 # Weapon Balance And Survivability Spec
 
-Date: March 20, 2026
+Date: March 23, 2026
 
 ## Purpose
 
-This document explains the current weapon balance model and the reasoning behind the survivability stack:
+This document describes the live brawler sandbox as it now exists in code.
 
-- `360` health
-- `90` shield
-- shield-first damage handling
-- special shield behavior against sniper shots
+The game is no longer tuned like a quick kill-race shooter. The current design is a stock-based free-for-all where long fights, repeated pressure, and damage contribution matter more than fast picks.
 
-It is written as an engineering spec for the current live design, not as a wishlist. All numbers and behaviors below are based on the current shared tuning and authoritative server damage flow.
+## Current Match Model
 
-## Canonical Sources
+- default public FFA is last-man-standing
+- each player starts with `3` lives
+- each player can earn up to `2` extra lives
+- extra-life progress is earned by dealing damage
+- progress does not reset when you lose one life during the same round
+- rounds end when only one non-eliminated player remains
 
-Primary sources:
+### Extra-life meter
 
-- [shared/gameplay-tuning.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/shared/gameplay-tuning.js)
-- [shared/damage.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/shared/damage.js)
-- [cloudflare/server/room/CombatService.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/cloudflare/server/room/CombatService.js)
-- [cloudflare/server/room/RoomCombatRuntime.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/cloudflare/server/room/RoomCombatRuntime.js)
-- [cloudflare/server/room/EntityLifecycle.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/cloudflare/server/room/EntityLifecycle.js)
-- [cloudflare/server/room/GlobalArenaRoom.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/cloudflare/server/room/GlobalArenaRoom.js)
+- `1%` progress is earned per `40` points of real damage dealt
+- only real authoritative damage to enemy players counts
+- no kill bonus is applied
+- overflow past `100%` carries into the next life award
+- max earned bonus lives per round: `2`
+- max total lives per round: `5`
 
-## Design Goals
+## Core Survivability
 
-The current balance model is trying to achieve five things at once:
+- Health: `400`
+- Shield layer in code: `armor = 100`
+- Total fresh durability: `500`
+- Shield regen delay: `12.0s`
+- Shield regen rate: `25 per second`
+- Spawn invulnerability: `1000ms`
+- Respawn delay after losing a life: `2200ms`
 
-1. Keep baseline time-to-kill long enough for movement, tracking, and abilities to matter.
-2. Preserve room for precision weapons to feel rewarding without letting them dominate neutral openings.
-3. Let players recover from chip damage without making full resets happen too quickly.
-4. Make sustained weapons and close-range weapons good at finishing, not just tagging.
-5. Prevent sniper play from collapsing fights into instant, low-counterplay picks.
+### Naming note
 
-## Survivability Model
+The code still uses `armor` and `armorMax` for the recoverable top layer. Design-wise, that is the shield layer. `spawnShieldUntil` is still a separate spawn-protection timer.
 
-### Core numbers
+### Passive recovery
 
-- Health: `360`
-- Shield: `90`
-- Total pool against normal damage: `450`
-- Intended shield regen delay: `8.0s`
-- Intended shield regen rate: `10 per second`
-- Spawn shield: `1000ms` of full invulnerability after spawn
+- shield comes back after the no-damage delay
+- health does not passively regenerate
+- there is no self-reset ability in the live ability roster anymore
 
-### Why `360` health
+## Damage Model
 
-`360` health creates enough room between weak and strong weapons to support distinct roles.
+Every current live weapon and throwable uses normal spillover damage.
 
-- It is high enough that automatic weapons do not erase players instantly.
-- It is low enough that focused fire and clean close-range hits still end fights quickly.
-- It gives headshots real value without making every accurate weapon an instant-kill threat.
+That means:
 
-`360` also matters specifically for sniper balance:
-
-- sniper headshot damage is `360`
-- this means an unshielded target dies to one clean sniper headshot
-- this keeps sniper shots meaningful when the defender has already been softened or caught out
-
-### Why `90` shield
-
-`90` shield is intentionally smaller than health. It is not meant to be a second full life bar. It is a buffer layer that does three jobs:
-
-1. It absorbs opener damage so neutral fights are less likely to be decided by a single first hit.
-2. It creates recoverable attrition, since shield can come back while health usually does not.
-3. It gives design space for special interactions, especially anti-sniper handling.
-
-`90` is large enough to change important breakpoints but small enough that sustained pressure still pushes through.
-
-Examples against normal weapons:
-
-- rifle body shot `44`: shield absorbs two full body hits before health starts dropping
-- machine gun body shot `15`: shield gives meaningful extra exposure time, but not so much that tracking weapons become useless
-- pistol body shot `46`: shield blocks one strong opener, then the fight moves into health damage quickly
-
-### Shield regeneration role
-
-Shield is the pacing valve for repeated fights.
-
-- health is the hard attrition layer
-- shield is the recoverable layer
-
-The intended behavior is:
-
+- damage removes shield first
+- leftover damage spills into health on the same hit
 - taking damage resets shield regeneration
-- shield returns only after disengagement
-- shield returns slowly enough that winning space still matters
 
-This lets players recover from poke and partial trades, while still rewarding the team or player who keeps pressure on.
+The shared `heavy` armor mode still exists in the lower-level damage helper, but the current sandbox does not assign it to any live weapon or throwable.
 
-### Spawn shield is a separate system
+## Current Weapon Snapshot
 
-Spawn shield is not the same as normal shield.
+Source of truth: [shared/gameplay-tuning.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/shared/gameplay-tuning.js)
 
-- normal shield is the `90` point survivability buffer
-- spawn shield is temporary full invulnerability for `1000ms`
+| Internal id | Role | Cooldown ms | Reload ms | Mag | Body | Head | Movement |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.15x` |
+| `pistol` | Hand Cannon | `430` | `2050` | `10` | `60` | `90` | `1.10x` |
+| `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `1.00x` |
+| `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.05x` |
+| `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.82x` |
 
-Spawn shield exists to prevent immediate spawn deaths and should not be used when reasoning about normal fight balance.
+## Range and Falloff
 
-## Damage Rules
+The game now uses a simple linear falloff profile per weapon:
 
-### Standard damage rule
+- full damage until `falloff.start`
+- straight line down to `falloff.minScalar` by `falloff.end`
+- fixed minimum damage after `falloff.end`
 
-Most weapons use normal shield behavior:
+First-pass live profiles:
 
-- damage hits shield first
-- if the hit is larger than the remaining shield, the leftover damage spills into health
+- Auto Rifle: `33 -> 42`, min `50%`
+- Hand Cannon: `32 -> 40`, min `33.3%`
+- Scout Rifle: `42 -> 65`, min `50%`
+- Shotgun: `6.8 -> 9.2`, min `0%`
+- Sniper: effectively no damage falloff inside normal combat distance
 
-This is the standard rule for rifle, pistol, machine gun, shotgun, and most non-sniper damage sources.
+## Ability Roster
 
-### Heavy shield rule
+Current live abilities:
 
-Sniper uses a special shield rule named `heavy`.
+- `choke`
+- `hook`
+- `missile`
+- `deadeye`
 
-Under `heavy`:
+## Design Read
 
-- if the target has any shield left, the entire hit is consumed by shield
-- no leftover damage spills into health on that shot
-- the shot can break shield, but it cannot both break shield and chunk health at the same time
+### Auto Rifle
 
-This is the core anti-sniper mechanic.
+- most mobile gun
+- best sustained pressure
+- weakest single-shot punch
 
-## Anti-Sniper Design
+### Hand Cannon
 
-### Problem being solved
+- chunky mid-range brawler gun
+- strongest in short exposure windows
+- shorter useful range than scout
 
-Without a special rule, a high-damage sniper body shot would break shield and still take a large amount of health in one action. That creates too much opener power at long range and makes neutral peeks too punishing.
+### Scout Rifle
 
-With current numbers, a normal body-shot sniper hit of `170` against a target with `90` shield would otherwise:
-
-- remove `90` shield
-- spill `80` into health
-
-That would make the first long-range connection too decisive for too little commitment.
-
-### Current solution
-
-Sniper uses all of the following constraints together:
-
-- body damage `170`
-- head damage `360`
-- `1800ms` cooldown
-- `2400ms` reload
-- `4` round magazine
-- perfect accuracy only while aiming down sights
-- special `heavy` shield interaction
-
-This changes sniper from a pure opener weapon into a conditional pick weapon:
-
-- against full shield, the first sniper shot strips shield only
-- against broken shield, the next sniper shot can threaten a kill
-- against an already softened target, sniper still converts advantage cleanly
-
-### Resulting sniper breakpoints
-
-Against a target with full health and full shield:
-
-- body shots to kill: `4`
-- headshots to kill: `2`
-
-Against a target with full health but no shield:
-
-- body shots to kill: `3`
-- headshots to kill: `1`
-
-Important implication:
-
-- shield does not make sniper weak
-- shield delays sniper lethality by one successful shot
-- that one extra shot is the intended counterplay window
-
-This gives defenders a chance to move, break sightline, receive support, or re-engage with a closer-range weapon.
-
-### Why shield is the right anti-sniper lever
-
-Using shield for anti-sniper is better than simply lowering sniper damage because it preserves sniper identity.
-
-If we lowered sniper damage too far:
-
-- headshots would stop feeling decisive
-- sniper would lose its payoff as a precision finisher
-- the weapon would blur into rifle territory
-
-By instead making shield specifically resistant to high-alpha shots:
-
-- sniper keeps its kill threat on exposed or already-damaged targets
-- sniper loses only the most frustrating neutral opener cases
-- the rule stays readable: shield protects you from the first big sniper hit
-
-## Weapon Role Spec
-
-### Machine Gun
-
-Current profile:
-
-- automatic
-- `15` body damage
-- `20` head damage
-- `82ms` cooldown
-- `50` round magazine
-
-Role:
-
-- sustained pressure
-- finishing broken targets
-- reliable medium-range tracking
-
-Balance reason:
-
-- low per-hit damage keeps it honest in neutral
-- large magazine and fast fire rate reward long exposure and pressure
-- benefits heavily once enemy shield is already gone
+- long-lane spacing gun
+- most stable precision option
+- weaker than hand cannon in scrappy mid-range peeks
 
 ### Shotgun
 
-Current profile:
-
-- `12` pellets
-- `17` body damage per pellet
-- `22` head damage per pellet
-- `950ms` cooldown
-- `6` round magazine
-
-Role:
-
-- close-range burst
-- corner punishment
-- strongest raw finishing weapon at short range
-
-Balance reason:
-
-- spread and falloff sharply limit consistent long-range value
-- high payoff requires close distance and pellet commitment
-- shield helps prevent distant chip shotgun patterns from mattering too much
-
-### Rifle
-
-Current profile:
-
-- semi-auto precision weapon
-- `44` body damage
-- `90` head damage
-- `260ms` cooldown
-- `15` round magazine
-
-Role:
-
-- stable mid-range dueling
-- consistent accuracy reward
-- flexible general-purpose pick
-
-Balance reason:
-
-- high enough damage to matter immediately
-- low enough damage that it does not invalidate the sniper or shotgun roles
-- creates predictable breakpoints without oppressive opener lethality
-
-### Pistol
-
-Current profile:
-
-- multi-trace, single-hit winner behavior
-- `46` body damage
-- `96` head damage
-- `360ms` cooldown
-- `10` round magazine
-
-Role:
-
-- high-risk, high-payoff precision side weapon
-- close and mid-range bursty duels
-
-Balance reason:
-
-- strong per-shot numbers justify lower consistency
-- unusual trace pattern makes it less of a pure replacement for rifle
-- shield prevents the first clean pistol hit from deciding too much on its own
+- close-range swing tool
+- no designed full-health one-shot baseline
+- strongest when it cashes in already-created pressure
 
 ### Sniper
 
-Current profile:
-
-- `170` body damage
-- `360` head damage
-- `1800ms` cooldown
-- `2400ms` reload
-- `4` round magazine
-- ADS required to fire
-- `heavy` shield interaction
-
-Role:
-
-- long-range pick
-- punish exposed, slowed, or already-tagged targets
-- convert advantage, not dominate neutral by default
-
-Balance reason:
-
-- extreme damage gives it identity
-- ADS gating, low mag size, and slow cadence limit spam
-- shield interaction removes the most oppressive first-hit cases
-
-## Why The Default Loadout Avoids Sniper
-
-The default weapon loadout is:
-
-- `machinegun`
-- `shotgun`
-
-Sniper is selectable, but not default.
-
-That choice supports the broader balance strategy:
-
-- default combat emphasizes movement, pressure, and close-to-mid engagement
-- sniper remains a deliberate opt-in playstyle
-- anti-sniper rules are still important, but sniper is not the baseline match texture
-
-## Engineering Requirements
-
-The following behaviors are required for the balance model to remain correct:
-
-1. Shared tuning must remain the source of truth for health, shield, and weapon stats.
-2. Authoritative server damage must continue to own shield handling.
-3. Sniper must continue using `armorBufferMode: 'heavy'`.
-4. Normal weapons must continue using spillover damage through shield.
-5. Spawn shield must remain separate from normal shield math.
-6. Sniper must remain ADS-gated in the server fire path.
-
-## Current Implementation Gap
-
-There is one active tuning mismatch in the codebase.
-
-Shared tuning defines shield regeneration as:
-
-- `8.0s` delay
-- `10 per second`
-
-But the current room runtime regeneration path is using:
-
-- `6.0s` effective delay
-- `12 per second`
-
-Sources:
-
-- intended tuning: [shared/gameplay-tuning.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/shared/gameplay-tuning.js)
-- current room behavior: [cloudflare/server/room/GlobalArenaRoom.js](/Users/gguthrie/Desktop/code bs/minecraft-fps/cloudflare/server/room/GlobalArenaRoom.js#L1322)
-
-This should be resolved. The spec intent is the shared tuning values, because balance ownership should live in shared data, not in hardcoded room logic.
+- brawler sniper, not a full-health delete weapon
+- fresh full target survives the first headshot
+- shield-broken target dies to the headshot
 
 ## Decision Summary
 
-The current balance system uses:
+The live game is now built around:
 
-- enough health to keep fights interactive
-- a smaller recoverable shield layer to shape openers and resets
-- a special shield rule to prevent sniper from winning neutral too cheaply
-
-The most important design choice is this:
-
-- shield is not only extra durability
-- shield is also the anti-burst control layer
-
-That is why sniper is balanced primarily through shield interaction, not just by reducing sniper damage.
+- slower, more physical fights
+- stock-based elimination instead of a pure kill goal
+- damage contribution as a real round resource
+- weapon identity through role, range, and movement speed
+- no self-reset ability

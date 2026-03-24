@@ -1,3 +1,8 @@
+import {
+  compileCylinderColliderBoxes,
+  compileDomeColliderBoxes
+} from './collider-authoring.js';
+
 function createHeadlessColor(value) {
   return {
     value: value != null ? Number(value) : 0,
@@ -161,6 +166,14 @@ export function ensureHeadlessWorldRuntime() {
       this.radialSegments = radialSegments;
     };
   }
+  if (!globalThis.THREE.TorusGeometry) {
+    globalThis.THREE.TorusGeometry = function TorusGeometry(radius, tube, radialSegments, tubularSegments) {
+      this.radius = radius;
+      this.tube = tube;
+      this.radialSegments = radialSegments;
+      this.tubularSegments = tubularSegments;
+    };
+  }
   if (!globalThis.THREE.Shape) {
     globalThis.THREE.Shape = function Shape() {
       this.commands = [];
@@ -210,15 +223,53 @@ export function createHeadlessRecorder() {
   const collidables = [];
   const spawnExclusionZones = [];
 
-  function record(box, isSolid, x, y, z, material, rotY, rotX) {
+  function record(box, isSolid, x, y, z, material, rotY, rotX, userData) {
     const mesh = {
       position: { x: Number(x || 0), y: Number(y || 0), z: Number(z || 0) },
       rotation: { x: Number(rotX || 0), y: Number(rotY || 0), z: 0 },
       material: material || null,
-      userData: { collisionBox: box || null }
+      userData: Object.assign({ collisionBox: box || null }, userData && typeof userData === 'object' ? userData : {})
     };
     if (isSolid !== false && box) collidables.push(box);
     return mesh;
+  }
+
+  function buildColliderUserData(spec, primitive, sliceIndex, sliceCount) {
+    const data = {
+      collisionAuthoring: true,
+      collisionPrimitive: String(primitive || ''),
+      collisionSliceIndex: Math.max(0, Number(sliceIndex || 0)),
+      collisionSliceCount: Math.max(1, Number(sliceCount || 1))
+    };
+    if (spec && spec.role) data.role = String(spec.role);
+    if (spec && spec.collisionGroup) data.collisionGroup = String(spec.collisionGroup);
+    const meta = spec && spec.meta && typeof spec.meta === 'object' ? spec.meta : null;
+    if (meta) {
+      for (const key in meta) {
+        data[key] = meta[key];
+      }
+    }
+    return data;
+  }
+
+  function recordColliderBoxes(boxes, spec, primitive) {
+    const out = [];
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      if (!box) continue;
+      out.push(record(
+        createRotatedBoxAabb(box.x, box.y, box.z, box.w, box.h, box.d, 0, 0),
+        true,
+        box.x,
+        box.y,
+        box.z,
+        null,
+        0,
+        0,
+        buildColliderUserData(spec, primitive, i, boxes.length)
+      ));
+    }
+    return out;
   }
 
   const scene = {
@@ -256,6 +307,23 @@ export function createHeadlessRecorder() {
       },
       addDecor() {
         return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, userData: {} };
+      },
+      addBoxCollider(spec) {
+        const value = spec || {};
+        return recordColliderBoxes([{
+          x: Number(value.x || 0),
+          y: Number(value.y || 0),
+          z: Number(value.z || 0),
+          w: Number(value.w || 0),
+          h: Number(value.h || 0),
+          d: Number(value.d || 0)
+        }], value, 'box');
+      },
+      addCylinderCollider(spec) {
+        return recordColliderBoxes(compileCylinderColliderBoxes(spec || {}), spec || {}, 'cylinder');
+      },
+      addDomeCollider(spec) {
+        return recordColliderBoxes(compileDomeColliderBoxes(spec || {}), spec || {}, 'dome');
       }
     }
   };

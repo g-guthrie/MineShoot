@@ -232,6 +232,102 @@ test('explosive hits now spill excess damage into health after armor breaks', ()
   });
 });
 
+test('stock-based kills consume a stock and mark final stock deaths as eliminated', () => {
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    hp: 80,
+    armor: 0,
+    stocksRemaining: 1,
+    maxStocks: 5,
+    bonusLivesEarned: 1,
+    extraLifeProgressPct: 40,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+
+  const out = applyDamageFromSource({ id: 'usr_attacker' }, target, 120, {
+    hitType: 'body',
+    weaponId: 'rifle',
+    sourceKind: 'weapon',
+    armorBufferMode: 'normal'
+  });
+
+  assert.deepEqual(out, {
+    id: 'usr_target',
+    hp: 0,
+    armor: 0,
+    armorDamage: 0,
+    healthDamage: 80,
+    damageApplied: 80,
+    killed: true,
+    stocksRemaining: 0,
+    maxStocks: 5,
+    bonusLivesEarned: 1,
+    extraLifeProgressPct: 40,
+    eliminated: true
+  });
+  assert.equal(target.respawnAt, 0);
+});
+
+test('authoritative damage awards bonus-life progress and grants a stock at 100 percent', () => {
+  const broadcasts = [];
+  const results = [];
+  const attacker = {
+    id: 'usr_attacker',
+    alive: true,
+    eliminated: false,
+    stocksRemaining: 3,
+    maxStocks: 5,
+    bonusLivesEarned: 0,
+    extraLifeProgressPct: 99
+  };
+  const target = {
+    id: 'usr_target',
+    alive: true,
+    eliminated: false,
+    spawnShieldUntil: 0
+  };
+  const room = {
+    getEntityById(id) {
+      if (id === attacker.id) return attacker;
+      if (id === target.id) return target;
+      return null;
+    },
+    broadcast(payload) {
+      broadcasts.push(payload);
+    },
+    syncPlayerResultFromEntity(entity) {
+      results.push({
+        id: entity.id,
+        stocksRemaining: entity.stocksRemaining,
+        bonusLivesEarned: entity.bonusLivesEarned,
+        extraLifeProgressPct: entity.extraLifeProgressPct
+      });
+    },
+    markEntityEngaged() {},
+    markSnapshotBurst() {},
+    recordElimination() {}
+  };
+
+  broadcastDamageEvent(room, attacker.id, target, {
+    hp: 300,
+    armor: 40,
+    damageApplied: 40,
+    killed: false
+  }, 'body', 'rifle', 'life_meter');
+
+  assert.deepEqual(results, [{
+    id: attacker.id,
+    stocksRemaining: 4,
+    bonusLivesEarned: 1,
+    extraLifeProgressPct: 0
+  }]);
+  assert.equal(broadcasts[0].sourceStocksRemaining, 4);
+  assert.equal(broadcasts[0].sourceBonusLivesEarned, 1);
+  assert.equal(broadcasts[0].sourceExtraLifeProgressPct, 0);
+});
+
 test('explodeProjectile ignores targets that are only close on the ground plane but too far vertically', () => {
   const broadcasts = [];
   const target = { id: 'usr_target', alive: true, x: 0, y: 8, z: 0, hp: 360, armor: 0, spawnShieldUntil: 0, respawnAt: 0 };

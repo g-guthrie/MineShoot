@@ -363,18 +363,6 @@ test('local landed hook keeps the attachment point on the victim before retracti
   assert.ok(abilities.getHookState().headPos.z < 0);
 });
 
-test('clearTransientState drops local heal effects', async () => {
-  const abilities = await loadAbilitiesRuntime({});
-
-  abilities.setLoadout('heal', 'missile');
-  const result = abilities.triggerAbility(1, {}, null, null, null, null);
-
-  assert.equal(result.ok, true);
-  assert.ok(abilities.getHealState());
-  abilities.clearTransientState();
-  assert.equal(abilities.getHealState(), null);
-});
-
 test('local hook applies temporary weapon and throwable restrictions while active', async () => {
   const restrictionCalls = [];
   const camera = {
@@ -396,25 +384,6 @@ test('local hook applies temporary weapon and throwable restrictions while activ
 
   abilities.setLoadout('hook', 'missile');
   const result = abilities.triggerAbility(1, camera, { x: 0, y: 0, z: 0 }, { yaw: 0 }, null, null);
-
-  assert.equal(result.ok, true);
-  assert.ok(restrictionCalls.at(-1).weaponUntil > 0);
-  assert.ok(restrictionCalls.at(-1).throwableUntil > 0);
-  assert.equal(restrictionCalls.at(-1).abilityUntil, 0);
-});
-
-test('local heal applies temporary weapon and throwable restrictions during the windup', async () => {
-  const restrictionCalls = [];
-  const abilities = await loadAbilitiesRuntime({
-    GamePlayer: {
-      setActionRestrictions(state) {
-        restrictionCalls.push(JSON.parse(JSON.stringify(state)));
-      }
-    }
-  });
-
-  abilities.setLoadout('heal', 'missile');
-  const result = abilities.triggerAbility(1, {}, null, null, null, null);
 
   assert.equal(result.ok, true);
   assert.ok(restrictionCalls.at(-1).weaponUntil > 0);

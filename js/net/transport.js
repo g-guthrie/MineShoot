@@ -36,7 +36,11 @@
             });
 
             function scheduleReconnect() {
+                if (closedByShutdown) return;
+                if (opts.isActive && !opts.isActive()) return;
                 reconnectTimer = setTimeout(function () {
+                    if (closedByShutdown) return;
+                    if (opts.isActive && !opts.isActive()) return;
                     connect();
                 }, opts.reconnectMs || 1200);
             }
@@ -49,7 +53,11 @@
                 if (event && Number(event.code || 0) === 4001 && typeof opts.onSupersededClose === 'function') {
                     var recovery = opts.onSupersededClose(event);
                     if (recovery && typeof recovery.then === 'function') {
-                        recovery.finally(scheduleReconnect);
+                        recovery.finally(function () {
+                            if (closedByShutdown) return;
+                            if (opts.isActive && !opts.isActive()) return;
+                            scheduleReconnect();
+                        });
                         return;
                     }
                 }

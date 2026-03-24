@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
+import {
+  compileCylinderColliderBoxes,
+  compileDomeColliderBoxes
+} from '../../shared/collider-authoring.js';
 
 function createTestWorldLayout(options = {}) {
   const rows = Math.max(1, Number(options.rows) || 1);
@@ -173,6 +177,8 @@ async function loadWorldRuntime(options = {}) {
     __TEST_CHOOSE_SPAWN_POINT__: function chooseSpawnPoint() {
       return { x: 0, z: 0 };
     },
+    __TEST_COMPILE_CYLINDER_COLLIDER_BOXES__: compileCylinderColliderBoxes,
+    __TEST_COMPILE_DOME_COLLIDER_BOXES__: compileDomeColliderBoxes,
     globalThis: null
   };
   sandbox.globalThis = sandbox;
@@ -181,10 +187,15 @@ async function loadWorldRuntime(options = {}) {
   vm.runInContext(materialCode, vm.createContext(sandbox));
 
   const worldCode = await fs.readFile(new URL('../../js/world/world.js', import.meta.url), 'utf8');
-  const transformedWorldCode = worldCode.replace(
-    /^import\s+\{\s*chooseSpawnPoint\s*\}\s+from\s+['"][^'"]+['"];\s*/m,
-    'const chooseSpawnPoint = globalThis.__TEST_CHOOSE_SPAWN_POINT__;\n'
-  );
+  const transformedWorldCode = worldCode
+    .replace(
+      /^import\s+\{\s*chooseSpawnPoint\s*\}\s+from\s+['"][^'"]+['"];\s*/m,
+      'const chooseSpawnPoint = globalThis.__TEST_CHOOSE_SPAWN_POINT__;\n'
+    )
+    .replace(
+      /^import\s+\{\s*compileCylinderColliderBoxes,\s*compileDomeColliderBoxes\s*\}\s+from\s+['"][^'"]+['"];\s*/m,
+      'const compileCylinderColliderBoxes = globalThis.__TEST_COMPILE_CYLINDER_COLLIDER_BOXES__;\nconst compileDomeColliderBoxes = globalThis.__TEST_COMPILE_DOME_COLLIDER_BOXES__;\n'
+    );
   vm.runInContext(transformedWorldCode, sandbox);
 
   return {

@@ -76,3 +76,28 @@ test('transport regenerates identity before reconnecting after a superseded clos
   assert.equal(regenerated, 1);
   assert.equal(harness.sockets.length, 2);
 });
+
+test('transport does not reconnect after shutdown while superseded recovery is still resolving', async () => {
+  const harness = await loadTransportHarness();
+  let resolveRecovery;
+  const recovery = new Promise((resolve) => {
+    resolveRecovery = resolve;
+  });
+  const transport = harness.create({
+    endpoint() { return 'wss://example.test'; },
+    isActive() { return true; },
+    reconnectMs: 1,
+    onSupersededClose() {
+      return recovery;
+    }
+  });
+
+  transport.connect();
+  harness.sockets[0].emit('close', { code: 4001 });
+  transport.shutdown();
+  resolveRecovery();
+  await Promise.resolve();
+  harness.flushTimers();
+
+  assert.equal(harness.sockets.length, 1);
+});

@@ -16,6 +16,11 @@
     var respawnInvulnTimer = 0;
     var authoritativeSpawnShieldUntil = 0;
     var respawnAtMs = 0;
+    var stocksRemaining = 3;
+    var maxStocks = 5;
+    var bonusLivesEarned = 0;
+    var extraLifeProgressPct = 0;
+    var eliminated = false;
     var weaponLoadout = ['rifle'];
     var equippedWeaponId = 'rifle';
     var predictedMultiplayerWeaponId = '';
@@ -532,6 +537,11 @@
             hpMax: playerMaxHP,
             armor: playerArmor,
             armorMax: playerArmorMax,
+            stocksRemaining: stocksRemaining,
+            maxStocks: maxStocks,
+            bonusLivesEarned: bonusLivesEarned,
+            extraLifeProgressPct: extraLifeProgressPct,
+            eliminated: eliminated,
             alive: playerAlive,
             invulnerable: spawnShieldUntil > stamp,
             spawnShieldUntil: spawnShieldUntil,
@@ -561,6 +571,11 @@
         respawnInvulnTimer = 0;
         authoritativeSpawnShieldUntil = 0;
         respawnAtMs = 0;
+        stocksRemaining = 3;
+        maxStocks = 5;
+        bonusLivesEarned = 0;
+        extraLifeProgressPct = 0;
+        eliminated = false;
         weaponAmmo = {};
         lastWeaponFireAtMs = 0;
         clearPredictedMultiplayerWeapon();
@@ -687,6 +702,11 @@
         playerHP = clampNumber(selfState.hp, playerHP, 0, playerMaxHP);
         playerArmorMax = clampNumber(selfState.armorMax, playerArmorMax, 1);
         playerArmor = clampNumber(selfState.armor, playerArmor, 0, playerArmorMax);
+        stocksRemaining = Math.max(0, clampNumber(selfState.stocksRemaining, stocksRemaining, 0));
+        maxStocks = Math.max(stocksRemaining, clampNumber(selfState.maxStocks, maxStocks, 1));
+        bonusLivesEarned = Math.max(0, clampNumber(selfState.bonusLivesEarned, bonusLivesEarned, 0));
+        extraLifeProgressPct = Math.max(0, Math.min(100, clampNumber(selfState.extraLifeProgressPct, extraLifeProgressPct, 0, 100)));
+        eliminated = !!selfState.eliminated;
         setAlive(selfState.alive !== false);
         authoritativeSpawnShieldUntil = clampNumber(
             selfState.spawnShieldUntil,
@@ -719,14 +739,6 @@
         syncRespawnState(respawnState);
     }
 
-    function heal(amount) {
-        var value = Math.max(0, Math.round(Number(amount || 0)));
-        if (value <= 0) return 0;
-        var prev = playerHP;
-        playerHP = Math.min(playerMaxHP, playerHP + value);
-        return Math.max(0, playerHP - prev);
-    }
-
     function showIncomingFeedback(sourcePos, rawDamage, hitType) {
         if (RT.GameAudio && RT.GameAudio.play) {
             RT.GameAudio.play('playerHit');
@@ -751,6 +763,11 @@
         getMaxHP: function () { return playerMaxHP; },
         getArmor: function () { return playerArmor; },
         getArmorMax: function () { return playerArmorMax; },
+        getStocksRemaining: function () { return stocksRemaining; },
+        getMaxStocks: function () { return maxStocks; },
+        getBonusLivesEarned: function () { return bonusLivesEarned; },
+        getExtraLifeProgressPct: function () { return extraLifeProgressPct; },
+        isEliminated: function () { return eliminated; },
         isAlive: function () { return playerAlive; },
         setHP: function (hp) { playerHP = hp; },
         setMaxHP: function (hp) { playerMaxHP = hp; },
@@ -759,7 +776,6 @@
         consumeDamage: consumeDamage,
         respawn: respawn,
         applyArmorProfile: applyArmorProfile,
-        heal: heal,
         showIncomingFeedback: showIncomingFeedback,
         tickArmorRegen: tickArmorRegen,
         syncAuthoritativeState: syncAuthoritativeState,

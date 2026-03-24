@@ -14,7 +14,7 @@ async function loadCombatTuningHarness(sharedOverrides = {}) {
             choke: gameplayTuning.abilityCatalog.choke,
             hook: gameplayTuning.abilityCatalog.hook,
             deadeye: gameplayTuning.abilityCatalog.deadeye,
-            heal: gameplayTuning.abilityCatalog.heal
+            missile: gameplayTuning.abilityCatalog.missile
           },
           classPresets: {
             abilities: gameplayTuning.classPresets.abilities

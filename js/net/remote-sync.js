@@ -315,9 +315,6 @@
                 muzzleFlashUntil: Number(presentState.muzzleFlashUntil || 0)
             });
 
-            if (r.actorVisual && r.actorVisual.setHealFlash) {
-                r.actorVisual.setHealFlash(!!(r.healState && r.healState.endsAt > serverNowMs));
-            }
             if (r.actorVisual && r.actorVisual.setSpawnShield) {
                 r.actorVisual.setSpawnShield(!!(r.spawnShieldUntil && r.spawnShieldUntil > serverNowMs));
             }

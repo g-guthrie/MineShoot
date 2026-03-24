@@ -81,6 +81,24 @@
             return Math.max(min, Math.min(max, value));
         }
 
+        function inputSeqModulo() {
+            return 4294967296;
+        }
+
+        function normalizeInputSeq(value) {
+            var modulo = inputSeqModulo();
+            var floored = Math.max(0, Math.floor(Number(value || 0)));
+            return ((floored % modulo) + modulo) % modulo;
+        }
+
+        function forwardInputSeqDiff(nextSeq, priorSeq) {
+            var modulo = inputSeqModulo();
+            var next = normalizeInputSeq(nextSeq);
+            var prior = normalizeInputSeq(priorSeq);
+            if (next === prior) return 0;
+            return ((next - prior) % modulo + modulo) % modulo;
+        }
+
         function normalizeAngle(rad) {
             var value = Number(rad || 0);
             while (value > Math.PI) value -= Math.PI * 2;
@@ -137,7 +155,65 @@
                 : null;
         }
 
+        function sampleRemotePresentationFromRender(render, nowMs) {
+            if (!render) return null;
+            var api = interpolationApi();
+            if (!api.interpolateBufferedTransform || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) {
+                return null;
+            }
+            var sampleNowMs = Math.max(0, Number(nowMs || Date.now()));
+            var presentState = api.interpolateBufferedTransform(render, sampleNowMs);
+            if (!presentState) return null;
+            if (presentState && render.freezeBlendFrom && Number(render.freezeBlendStartAt || 0) > 0 && api.blendTransforms) {
+                var interpolationTuning = api.readInterpolationTuning ? (api.readInterpolationTuning() || {}) : {};
+                var freezeBlendDurationMs = Math.max(
+                    1,
+                    Number(render.freezeBlendDurationMs || interpolationTuning.freezeRecoveryBlendMs || 48)
+                );
+                var freezeBlendT = clamp(
+                    (sampleNowMs - Number(render.freezeBlendStartAt || 0)) / freezeBlendDurationMs,
+                    0,
+                    1
+                );
+                var easedT = api.easeOutCubic ? api.easeOutCubic(freezeBlendT) : freezeBlendT;
+                presentState = api.blendTransforms(render.freezeBlendFrom, presentState, easedT);
+            }
+            var history = render.snapshotHistory;
+            var latest = history[history.length - 1] || {};
+            var renderClock = api.buildPresentationClock
+                ? api.buildPresentationClock({
+                    latestServerTime: Number(latest.serverTime || 0),
+                    latestReceivedAt: Number(latest.receivedAt || sampleNowMs),
+                    clockOffsetMs: Number(render.serverTimeOffsetMs),
+                    cadenceMs: Number(render.snapshotIntervalMs || 0),
+                    jitterMs: Number(render.snapshotJitterMs || 0),
+                    interpolationDelayMs: Number(render.interpolationDelayMs || 0)
+                }, sampleNowMs)
+                : null;
+            return {
+                serverTime: Math.max(
+                    0,
+                    Number(renderClock && renderClock.renderServerTime || latest.serverTime || 0)
+                ),
+                x: Number(presentState.x || 0),
+                y: Number(presentState.footY || 0),
+                z: Number(presentState.z || 0),
+                yaw: Number(presentState.yaw || 0),
+                pitch: Number(presentState.pitch || 0),
+                moveSpeedNorm: Number(presentState.moveSpeedNorm || 0),
+                sprinting: !!presentState.sprinting,
+                movingForward: !!presentState.movingForward,
+                movingBackward: !!presentState.movingBackward,
+                isGrounded: presentState.isGrounded !== false,
+                velocityY: Number(presentState.velocityY || 0),
+                weaponId: String(render.weaponId || 'rifle')
+            };
+        }
+
         function sampleRemoteEntityPresentation(entityId, nowMs) {
+            var render = readMap('getRenderMap').get(String(entityId || ''));
+            var renderSample = sampleRemotePresentationFromRender(render, nowMs);
+            if (renderSample) return renderSample;
             if (!opts.getRemoteSnapshotTimeline) return null;
             var history = opts.getRemoteSnapshotTimeline(entityId);
             if (!Array.isArray(history) || history.length === 0) return null;
@@ -244,8 +320,7 @@
                     armorMax: r.armorMax,
                     alive: r.alive,
                     worldPos: r.group.position,
-                    targetId: 'net:' + r.id,
-                    healState: r.healState || null
+                    targetId: 'net:' + r.id
                 });
                 desc.id = r.id;
                 desc.kind = r.kind;
@@ -258,7 +333,6 @@
                 desc.alive = r.alive;
                 desc.worldPos = r.group.position;
                 desc.targetId = 'net:' + r.id;
-                desc.healState = r.healState || null;
                 entityStatesScratch.push(desc);
             });
             return entityStatesScratch;
@@ -281,6 +355,11 @@
                 hpMax: hpMax,
                 armor: armorMax,
                 armorMax: armorMax,
+                stocksRemaining: 3,
+                maxStocks: 5,
+                bonusLivesEarned: 0,
+                extraLifeProgressPct: 0,
+                eliminated: false,
                 classId: user.classId || 'abilities',
                 wallhackRadius: defaults.wallhackRadius,
                 throwables: null,
@@ -309,8 +388,7 @@
                 ? abilityFxView.buildSnapshotAbilityState(selfState)
                 : {
                     chokeState: null,
-                    hookState: null,
-                    healState: null
+                    hookState: null
                 };
             return {
                 cooldownRemaining: selfState.cooldownRemaining || 0,
@@ -319,7 +397,6 @@
                 abilityId: selfState.abilityId || '',
                 chokeState: snapshotAbilityState.chokeState,
                 hookState: snapshotAbilityState.hookState,
-                healState: snapshotAbilityState.healState,
                 deadeyeState: selfState.deadeyeState || null
             };
         }
@@ -331,6 +408,29 @@
 
         function getAuthoritativeSelfState() {
             return opts.getSelfState ? (opts.getSelfState() || null) : null;
+        }
+
+        function buildAuthoritativeMotionRevision(state) {
+            if (!state || typeof state !== 'object') return '';
+            function precision(value) {
+                return Math.round(Number(value || 0) * 1000);
+            }
+            return [
+                String(state.id || ''),
+                precision(state.x),
+                precision(state.y),
+                precision(state.z),
+                precision(state.yaw),
+                precision(state.pitch),
+                precision(state.velocityY),
+                precision(state.jumpHoldTimer),
+                precision(state.moveSpeedNorm),
+                state.isGrounded === false ? '0' : '1',
+                state.jumpHeldLast ? '1' : '0',
+                state.sprinting ? '1' : '0',
+                state.alive === false ? '0' : '1',
+                String(state.weaponId || '')
+            ].join('|');
         }
 
         function getInputSyncState() {
@@ -368,11 +468,12 @@
             return {
                 lastSentSeq: lastSentSeq,
                 lastAckedSeq: lastAckedSeq,
-                ackDrift: Math.max(0, Number(lastSentSeq || 0) - Number(lastAckedSeq || 0)),
+                ackDrift: forwardInputSeqDiff(lastSentSeq, lastAckedSeq),
                 pendingInputCount: inputSeqHistory.length,
                 hasUnsentInputTail: hasUnsentInputTail,
                 latestPendingAgeMs: latestPending ? Math.max(0, Date.now() - Number(latestPending.at || 0)) : 0,
                 latestAckAgeMs: lastAcceptedSelfAckAt > 0 ? Math.max(0, Date.now() - lastAcceptedSelfAckAt) : 0,
+                inputSendIntervalMs: Math.max(0, inputSendInterval * 1000),
                 estimatedRttMs: connectionTiming ? Math.max(0, Number(connectionTiming.rttMs || 0)) : 0,
                 rttJitterMs: connectionTiming ? Math.max(0, Number(connectionTiming.rttJitterMs || 0)) : 0
             };
@@ -384,6 +485,8 @@
             var inputSyncState = getInputSyncState();
             return {
                 authoritativeState: authoritativeState,
+                authoritativeMotionRevision: buildAuthoritativeMotionRevision(authoritativeState),
+                acceptedSelfSeq: Math.max(0, Number(authoritativeState.seq || 0)),
                 pendingInputs: getPendingInputSamples(),
                 pendingInputCount: Number(inputSyncState.pendingInputCount || 0),
                 hasUnsentInputTail: !!inputSyncState.hasUnsentInputTail,
@@ -392,6 +495,7 @@
                 ackDrift: Number(inputSyncState.ackDrift || 0),
                 latestPendingAgeMs: Number(inputSyncState.latestPendingAgeMs || 0),
                 latestAckAgeMs: Number(inputSyncState.latestAckAgeMs || 0),
+                inputSendIntervalMs: Number(inputSyncState.inputSendIntervalMs || 0),
                 rttMs: Number(inputSyncState.estimatedRttMs || 0),
                 rttJitterMs: Number(inputSyncState.rttJitterMs || 0)
             };
@@ -427,10 +531,13 @@
         function getRespawnState() {
             var pendingRespawnInfo = typeof opts.getPendingRespawnInfo === 'function' ? opts.getPendingRespawnInfo() : null;
             if (!pendingRespawnInfo || !pendingRespawnInfo.active) return null;
+            var localRespawnAt = Number(
+                pendingRespawnInfo.localRespawnAt || pendingRespawnInfo.respawnAt || 0
+            );
             return {
                 active: true,
-                respawnAt: Number(pendingRespawnInfo.respawnAt || 0),
-                remainingMs: Math.max(0, Number(pendingRespawnInfo.respawnAt || 0) - Date.now())
+                respawnAt: localRespawnAt,
+                remainingMs: Math.max(0, localRespawnAt - Date.now())
             };
         }
 

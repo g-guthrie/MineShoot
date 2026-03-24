@@ -4,9 +4,11 @@ import assert from 'node:assert/strict';
 import { createMovementInputState } from '../../shared/authoritative-movement.js';
 import {
   buildMotionStateFromSnapshot,
+  buildReplayStepsFromPendingInputs,
   replayMotionState,
   shouldReplayAuthoritativeCorrection
 } from '../../shared/authoritative-reconciliation.js';
+import { consumeQueuedAuthoritativeInputs } from '../../cloudflare/server/room/RoomRuntime.js';
 
 function flatGround() {
   return 0;
@@ -22,7 +24,7 @@ test('reconciliation snapshot builder falls back to ground height when y is abse
   assert.equal(state.y, 5.6);
 });
 
-test('replay motion uses recorded sample dt values', () => {
+test('replay motion defaults to the bounded pending-sample duration budget', () => {
   const input = createMovementInputState();
   input.forward = true;
 
@@ -41,7 +43,32 @@ test('replay motion uses recorded sample dt values', () => {
   );
 
   assert.equal(replayed.x, 0);
-  assert.ok(replayed.z < -0.99 && replayed.z > -1.01);
+  assert.ok(replayed.z < -1.12 && replayed.z > -1.13);
+});
+
+test('replay step building matches the live server weighting model when both use the same total dt', () => {
+  const input = createMovementInputState();
+  input.forward = true;
+  const samples = [
+    { seq: 1, dtMs: 50, yaw: 0, pitch: 0, inputState: input },
+    { seq: 2, dtMs: 100, yaw: 0, pitch: 0, inputState: input }
+  ];
+
+  const replayPlan = buildReplayStepsFromPendingInputs(samples, {
+    createMovementInputState
+  });
+  const serverPlan = consumeQueuedAuthoritativeInputs({
+    yaw: 0,
+    pitch: 0,
+    inputState: createMovementInputState(),
+    inputQueue: samples.map((sample) => ({
+      ...sample,
+      inputState: { ...sample.inputState }
+    }))
+  }, replayPlan.totalWeightSec, { createMovementInputState });
+
+  assert.deepEqual(serverPlan.steps, replayPlan.steps);
+  assert.equal(serverPlan.processedSeq, replayPlan.processedSeq);
 });
 
 test('replay motion carries jump state across pending samples', () => {

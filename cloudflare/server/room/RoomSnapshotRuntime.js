@@ -1,5 +1,10 @@
 import { toEntityState, toProjectileState, toFireZoneState } from './EntitySerializer.js';
-import { buildViewerEntitySnapshot, buildSnapshotPayload } from './RoomState.js';
+import {
+  buildViewerEntitySnapshot,
+  buildSnapshotPayload,
+  currentPrivateRoomPhase,
+  serializeMatchState
+} from './RoomState.js';
 
 export function ensureClientSnapshotState(meta) {
   if (!meta.snapshotState) {
@@ -30,12 +35,12 @@ export function collectSnapshotFrame(room, now = Date.now()) {
   for (const player of room.players.values()) {
     if (!player || room.isEntityDisconnected(player)) continue;
     room.materializeTrackedWeaponAmmo(player, now);
-    entities.push(toEntityState(player));
+    entities.push(toEntityState(player, now));
   }
   for (const bot of room.bots.values()) {
     if (!bot) continue;
     room.materializeTrackedWeaponAmmo(bot, now);
-    entities.push(toEntityState(bot));
+    entities.push(toEntityState(bot, now));
   }
 
   const serializedById = new Map();
@@ -114,12 +119,19 @@ export function sendSnapshotToClient(room, ws, meta, frame, options = {}, deps =
   const includeFireZones = options.includeFireZones !== false;
   const projectileChanged = includeProjectiles && (!!options.forceFull || meta.lastProjectilesSerialized !== frame.projectilesSerialized);
   const fireZonesChanged = includeFireZones && (!!options.forceFull || meta.lastFireZonesSerialized !== frame.fireZonesSerialized);
-  if (!options.forceFull && selection.entities.length === 0 && selection.removedEntityIds.length === 0 && !projectileChanged && !fireZonesChanged) {
+  const roomStateSignature = JSON.stringify({
+    gameMode: room.gameMode || '',
+    privateRoomPhase: currentPrivateRoomPhase(room, deps),
+    matchState: serializeMatchState(room, deps)
+  });
+  const roomStateChanged = !!options.forceFull || meta.lastSnapshotStateSignature !== roomStateSignature;
+  if (!options.forceFull && selection.entities.length === 0 && selection.removedEntityIds.length === 0 && !projectileChanged && !fireZonesChanged && !roomStateChanged) {
     return false;
   }
 
   if (projectileChanged) meta.lastProjectilesSerialized = frame.projectilesSerialized;
   if (fireZonesChanged) meta.lastFireZonesSerialized = frame.fireZonesSerialized;
+  meta.lastSnapshotStateSignature = roomStateSignature;
 
   room.send(ws, buildSnapshotPayload(room, {
     forceFull: !!options.forceFull,

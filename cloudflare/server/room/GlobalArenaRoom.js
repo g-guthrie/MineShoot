@@ -938,6 +938,8 @@ export class GlobalArenaRoom extends DurableObject {
       player.yaw = Number(step.yaw || 0);
       player.pitch = clamp(Number(step.pitch || 0), -1.55, 1.55);
       const movementLocked = !!step.movementLocked;
+      const activeWeaponId = String(player.weaponId || 'rifle');
+      const activeWeaponStats = WEAPON_STATS[activeWeaponId] || WEAPON_STATS.rifle || {};
       stepAuthoritativeMovement(player, step.inputState || createMovementInputState(), {
         dtSec: Number(step.dtSec || 0),
         bounds: {
@@ -949,6 +951,8 @@ export class GlobalArenaRoom extends DurableObject {
         collisionBoxes: this.worldCollidables(),
         getGroundHeightAt: (x, z) => this.terrainFeetYAt(x, z),
         movementLocked,
+        moveSpeedMultiplier: Number(activeWeaponStats.moveSpeedMultiplier || 1),
+        adsMoveMultiplier: Number(activeWeaponStats.adsMoveMultiplier || GAMEPLAY_TUNING_WU.movement.adsMoveMult || 0.4),
         eyeHeight: PLAYER_EYE_HEIGHT_WU,
         playerHeight: PLAYER_HEIGHT_WU,
         playerRadius: boundsPad,

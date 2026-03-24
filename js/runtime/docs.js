@@ -149,11 +149,11 @@
             ]
         },
         sniper: {
-            niche: 'Long-range one-shot threat. Must scope before firing.',
-            mechanics: 'Single-shot hitscan. ADS required to fire. High damage per hit with a long cooldown.',
+            niche: 'Long-range precision punish. Must scope before firing.',
+            mechanics: 'Single-shot hitscan. ADS required to fire. Headshots delete unarmored targets and heavily chunk fresh armored ones.',
             tips: [
                 'Hold angles and take your shot. Reposition after firing.',
-                'Body shots still force enemies into cover even without the headshot kill.'
+                'Body shots and partial armor breaks create strong follow-up windows even when the target survives.'
             ]
         }
     };
@@ -173,14 +173,6 @@
             tips: [
                 'Hook into shotgun or machinegun follow-up for a fast kill.',
                 'Punishes players who rely on keeping distance.'
-            ]
-        },
-        heal: {
-            useCase: 'Self-heal. Restores health after a short windup.',
-            mechanics: 'Activate to begin healing. Health is applied after a brief delay.',
-            tips: [
-                'Break line of sight before healing. Do not use it in the open.',
-                'Best on loadouts that play longer engagements rather than one-shot trades.'
             ]
         },
         missile: {
@@ -284,7 +276,6 @@
         pullDistance: 'How close hook leaves the pulled target.',
         castDamage: 'Immediate impact damage on cast.',
         stunDuration: 'How long the victim stays disrupted after the hit.',
-        healAmount: 'Flat health returned when heal resolves.',
         damage: 'Direct damage of the cast.',
         radius: 'Explosion or hit radius.',
         acquireRange: 'Homing seek range after launch.',
@@ -383,7 +374,7 @@
             title: 'Accuracy & Range',
             items: [
                 '<code>hipfireSpread</code> and <code>adsSpread</code> drive the actual shot cone.',
-                '<code>maxRange</code> and <code>adsMaxRange</code> cap hit checks, then falloff bands scale damage inside that range.',
+                '<code>maxRange</code> and <code>adsMaxRange</code> cap hit checks, while <code>falloff.start</code>, <code>falloff.end</code>, and <code>falloff.minScalar</code> define the damage drop curve.',
                 '<code>adsFovDeg</code> changes zoom, while bloom scales change how readable the HUD reticle feels.'
             ]
         },
@@ -513,8 +504,8 @@
             ? api.getWeaponPresentation(weaponId)
             : (stats.presentation || {});
         var falloff = api.getWeaponFalloffProfile
-            ? safeArray(api.getWeaponFalloffProfile(weaponId))
-            : safeArray(shared.weaponFalloff && shared.weaponFalloff[weaponId]);
+            ? api.getWeaponFalloffProfile(weaponId)
+            : ((shared.weaponFalloff && shared.weaponFalloff[weaponId]) || null);
         return {
             id: weaponId,
             name: String(stats.name || weaponId),
@@ -572,8 +563,8 @@
         for (var i = 0; i < modes.length; i++) {
             var mode = modes[i];
             if (!mode || !mode.id) continue;
-            var objective = 'First to ' + formatNumber(matchRules.ffaTargetProgress || 10, 0) + ' kills.';
-            var note = 'Pure frag race. Win by maintaining tempo.';
+            var objective = 'Outlast the room. Start with three lives and earn up to two more by dealing damage.';
+            var note = 'Stay active, build your next-life meter, and be the last player not eliminated.';
             if (mode.id === 'tdm') {
                 objective = 'First team to ' + formatNumber(matchRules.tdmTargetProgress || 10, 0) + ' kills.';
                 note = 'Trade space for crossfires. Individual peeks matter less than team timing.';
@@ -837,25 +828,18 @@
         return 'ADS changes the sight picture more than the spread';
     }
 
-    function falloffBandText(prevMax, band) {
-        var min = prevMax <= 0 ? '0' : formatNumber(prevMax, 0);
-        var max = band.maxDistance >= 99999 ? 'INF' : formatNumber(band.maxDistance, 0);
-        return min + '-' + max + ' wu :: ' + formatPercentScale(band.scale);
+    function falloffProfileText(profile) {
+        if (!profile || typeof profile !== 'object') return 'No explicit falloff';
+        return 'Full to ' + formatNumber(profile.start, 0) +
+            ' wu :: floor ' + formatPercentScale(profile.minScalar) +
+            ' by ' + (Number(profile.end || 0) >= 9999 ? 'INF' : formatNumber(profile.end, 0) + ' wu');
     }
 
     function weaponFalloffPills(weapon) {
-        if (!weapon || !Array.isArray(weapon.falloff) || !weapon.falloff.length) {
-            return renderPills(['No explicit falloff bands']);
+        if (!weapon || !weapon.falloff || typeof weapon.falloff !== 'object') {
+            return renderPills(['No explicit falloff profile']);
         }
-        var pills = [];
-        var prev = 0;
-        for (var i = 0; i < weapon.falloff.length; i++) {
-            var band = weapon.falloff[i];
-            if (!band) continue;
-            pills.push(falloffBandText(prev, band));
-            prev = Number(band.maxDistance || prev);
-        }
-        return renderPills(pills);
+        return renderPills([falloffProfileText(weapon.falloff)]);
     }
 
     function weaponRoleText(weapon) {
@@ -990,7 +974,6 @@
         if (ability.range != null) stats.push({ label: 'Range', value: formatRange(ability.range), note: 'Effective cast reach.' });
         if (ability.duration != null) stats.push({ label: 'Duration', value: formatSeconds(ability.duration), note: 'Active effect window.' });
         if (ability.damage != null) stats.push({ label: 'Damage', value: formatNumber(ability.damage, 0), note: 'Direct impact damage.' });
-        if (ability.healAmount != null) stats.push({ label: 'Heal', value: formatNumber(ability.healAmount, 0), note: 'Health returned on resolve.' });
         if (ability.maxTargets != null) stats.push({ label: 'Targets', value: formatNumber(ability.maxTargets, 0), note: 'Maximum stored locks.' });
         return stats;
     }

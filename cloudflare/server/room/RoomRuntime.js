@@ -1,7 +1,6 @@
+import { buildReplayStepsFromPendingInputs } from '../../../shared/authoritative-reconciliation.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 
-const MIN_INPUT_SAMPLE_DT_SEC = 1 / 240;
-const MAX_INPUT_SAMPLE_DT_SEC = 0.075;
 const MAX_INPUT_QUEUE_SIZE = 96;
 
 function cloneInputState(inputState, createMovementInputState) {
@@ -17,12 +16,6 @@ function cloneInputState(inputState, createMovementInputState) {
   base.sprint = !!source.sprint;
   base.adsActive = !!source.adsActive;
   return base;
-}
-
-function clampInputSampleDtSec(dtMs) {
-  const parsedMs = Number(dtMs || 0);
-  const dtSec = Number.isFinite(parsedMs) ? (parsedMs / 1000) : 0;
-  return Math.max(MIN_INPUT_SAMPLE_DT_SEC, Math.min(MAX_INPUT_SAMPLE_DT_SEC, dtSec || 0));
 }
 
 function normalizeInputSample(player, msg, deps) {
@@ -395,14 +388,13 @@ export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
 
   const samples = queue.slice();
   queue.length = 0;
-  let totalWeightSec = 0;
-  const weights = [];
-  for (let i = 0; i < samples.length; i++) {
-    const weightSec = clampInputSampleDtSec(samples[i] && samples[i].dtMs);
-    weights.push(weightSec);
-    totalWeightSec += weightSec;
-  }
-  if (!(totalWeightSec > 0)) {
+  const replayPlan = buildReplayStepsFromPendingInputs(samples, {
+    totalDtSec: totalDtSec,
+    createMovementInputState,
+    fallbackYaw: Number(entity.yaw || 0),
+    fallbackPitch: Number(entity.pitch || 0)
+  });
+  if (replayPlan.steps.length === 0) {
     return {
       steps: [{
         dtSec: totalDtSec,
@@ -414,27 +406,9 @@ export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
     };
   }
 
-  let remainingDtSec = totalDtSec;
-  const steps = [];
-  for (let i = 0; i < samples.length; i++) {
-    const sample = samples[i];
-    const stepDtSec = i === (samples.length - 1)
-      ? remainingDtSec
-      : Math.max(0, totalDtSec * (weights[i] / totalWeightSec));
-    remainingDtSec = Math.max(0, remainingDtSec - stepDtSec);
-    steps.push({
-      dtSec: stepDtSec,
-      yaw: Number(sample && sample.yaw || entity.yaw || 0),
-      pitch: Number(sample && sample.pitch || entity.pitch || 0),
-      inputState: cloneInputState(sample && sample.inputState, createMovementInputState),
-      seq: Math.max(0, Number(sample && sample.seq || 0)),
-      movementLocked: !!(sample && sample.movementLocked)
-    });
-  }
-
   return {
-    steps,
-    processedSeq: Math.max(0, Number(samples[samples.length - 1] && samples[samples.length - 1].seq || 0))
+    steps: replayPlan.steps,
+    processedSeq: replayPlan.processedSeq
   };
 }
 
@@ -444,7 +418,7 @@ export function respawnIfNeeded(room, entity, deps) {
   const resetEntityForRespawn = deps.resetEntityForRespawn;
   const createWeaponAmmoRuntime = deps.createWeaponAmmoRuntime;
   const createMovementInputState = deps.createMovementInputState;
-  if (entity.alive) return;
+  if (entity.alive || entity.eliminated) return;
   if ((entity.respawnAt || 0) > nowMs()) return;
 
   if (entity.plannedSpawnPoint) {

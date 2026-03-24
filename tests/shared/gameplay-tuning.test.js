@@ -90,15 +90,22 @@ test('shared weapon helpers expose the selectable loadout order and falloff prof
 
 test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs', () => {
   const rifle = getWeaponPresentation('rifle');
+  const handCannon = getWeaponPresentation('pistol');
   const sniper = getWeaponPresentation('sniper');
 
   assert.equal(rifle.tracer.speed, 280);
   assert.equal(rifle.recoil.muzzleMs, 60);
+  assert.equal(rifle.recoil.pattern, 'push');
+  assert.equal(rifle.recoil.pitchKickScale, 1.25);
   assert.equal(rifle.audioSample.url, '/assets/audio/weapons/rifle.mp3');
   assert.equal(rifle.reload.profileId, 'rifle');
   assert.equal(rifle.reload.raiseEnd, 0.16);
+  assert.equal(handCannon.recoil.pattern, 'snap');
+  assert.equal(handCannon.recoil.rollKickScale, 1.35);
   assert.equal(sniper.tracer.segmentLength, 2.6);
   assert.equal(sniper.recoil.pitch, 0.04);
+  assert.equal(sniper.recoil.pattern, 'u_shape');
+  assert.equal(sniper.recoil.patternStrength, 0.6);
   assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper.mp3');
   assert.equal(sniper.reload.profileId, 'precision');
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.resolveReloadPresentationState, 'function');
@@ -140,10 +147,11 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
   const sniper = gameplayTuning.weaponStats.sniper;
   const machinegun = gameplayTuning.weaponStats.machinegun;
 
-  assert.equal(rifle.hipfireSpread, 0.024);
+  assert.equal(rifle.hipfireSpread, 0.022);
   assert.equal(rifle.adsSpread, 0);
-  assert.equal(pistol.hipfireSpread, 0.137);
-  assert.equal(pistol.adsSpread, 0.225);
+  assert.equal(pistol.hipfireSpread, 0.1);
+  assert.equal(pistol.adsSpread, 0.16);
+  assert.equal(machinegun.adsSpread, 0.032);
   assert.equal(resolveWeaponAimProfile(rifle, false).spread, rifle.hipfireSpread);
   assert.equal(resolveWeaponAimProfile(rifle, true).spread, rifle.adsSpread);
   assert.equal(resolveWeaponAimProfile(machinegun, true).spread, machinegun.adsSpread);
@@ -157,6 +165,8 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
     const weapon = gameplayTuning.weaponStats[weaponId];
     assert.equal(typeof weapon.adsFovDeg, 'number');
     assert.equal(typeof weapon.adsSpread, 'number');
+    assert.equal(typeof weapon.moveSpeedMultiplier, 'number');
+    assert.equal(typeof weapon.adsMoveMultiplier, 'number');
   }
   assert.equal(resolveWeaponAdsFovDeg(shotgun), 56);
   assert.equal(resolveWeaponAdsFovDeg(sniper), 24);
@@ -173,25 +183,24 @@ test('survivability tuning exposes the tanky baseline and slower armor reset win
 });
 
 test('shared survivability helper owns the live armor recharge rule', () => {
-  const blocked = { alive: true, armor: 0, armorMax: 90, lastDamageAt: 1000 };
-  assert.equal(regenArmorFromLastDamage(blocked, 1, 8999), false);
+  const blocked = { alive: true, armor: 0, armorMax: 100, lastDamageAt: 1000 };
+  assert.equal(regenArmorFromLastDamage(blocked, 1, 12999), false);
   assert.equal(blocked.armor, 0);
 
-  const ready = { alive: true, armor: 0, armorMax: 90, lastDamageAt: 1000 };
-  assert.equal(regenArmorFromLastDamage(ready, 1, 9000), true);
-  assert.equal(ready.armor, 10);
+  const ready = { alive: true, armor: 0, armorMax: 100, lastDamageAt: 1000 };
+  assert.equal(regenArmorFromLastDamage(ready, 1, 13000), true);
+  assert.equal(ready.armor, 25);
 
-  const capped = { alive: true, armor: 90, armorMax: 90, lastDamageAt: 0 };
-  assert.equal(regenArmorFromLastDamage(capped, 1, 9000), false);
-  assert.equal(capped.armor, 90);
+  const capped = { alive: true, armor: 100, armorMax: 100, lastDamageAt: 0 };
+  assert.equal(regenArmorFromLastDamage(capped, 1, 13000), false);
+  assert.equal(capped.armor, 100);
 });
 
-test('ability tuning keeps the latest hook, heal, and deadeye defaults', () => {
+test('ability tuning keeps the latest choke, hook, missile, and deadeye defaults', () => {
   assert.equal(Number(gameplayTuning.abilityCatalog.choke.cooldownMs || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.choke.duration || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.hook.stunDuration || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.hook.pullSpeed || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.heal.healAmount || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.missile.cooldownMs || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.damage || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.lockBoxPx || 0) > 0, true);

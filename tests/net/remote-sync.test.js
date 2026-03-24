@@ -652,7 +652,6 @@ test('remote sync uses authoritative network time for remote ability timers', as
       hookedUntil: 1000,
       muzzleFlashUntil: 1000,
       chokeState: { endsAt: 1000 },
-      healState: { endsAt: 1000 },
       spawnShieldUntil: 1000,
       actorVisual: {
         updateAnimation(_dt, animState) {
@@ -660,9 +659,6 @@ test('remote sync uses authoritative network time for remote ability timers', as
         },
         setMuzzleVisible(visible) {
           calls.push({ kind: 'muzzle', visible });
-        },
-        setHealFlash(visible) {
-          calls.push({ kind: 'heal', visible });
         },
         setSpawnShield(visible) {
           calls.push({ kind: 'shield', visible });
@@ -688,7 +684,6 @@ test('remote sync uses authoritative network time for remote ability timers', as
 
     assert.equal(calls.some((entry) => entry.kind === 'update' && entry.animState.hooked === true), true);
     assert.equal(calls.some((entry) => entry.kind === 'muzzle' && entry.visible === true), true);
-    assert.equal(calls.some((entry) => entry.kind === 'heal' && entry.visible === true), true);
     assert.equal(calls.some((entry) => entry.kind === 'shield' && entry.visible === true), true);
     assert.equal(calls.some((entry) => entry.kind === 'trigger' && entry.action === 'choke_grip'), true);
   } finally {

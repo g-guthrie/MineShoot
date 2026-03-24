@@ -46,7 +46,8 @@
 <div id="hud">
   <b>Biome Preview</b><br>
   Orbit: left-drag | Pan: right-drag | Zoom: scroll<br>
-  <span id="camera-info"></span>
+  <span id="camera-info"></span><br>
+  <span id="reload-info">Auto-reload: starting...</span>
 </div>
 <div id="controls">
   <button id="btn-top" title="Top-down view">Top</button>
@@ -71,6 +72,10 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {
+  compileCylinderColliderBoxes,
+  compileDomeColliderBoxes
+} from '../../shared/collider-authoring.js';
 
 /* ── Expose THREE globally (biome scripts expect it) ── */
 window.THREE = THREE;
@@ -270,6 +275,49 @@ const place = {
     biomeGroup.add(mesh);
     meshCount++;
     return mesh;
+  },
+  addBoxCollider(spec) {
+    const value = spec || {};
+    const geo = new THREE.BoxGeometry(value.w || 0, value.h || 0, value.d || 0);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    mesh.position.set(value.x || 0, value.y || 0, value.z || 0);
+    mesh.visible = false;
+    mesh.userData = {};
+    biomeGroup.add(mesh);
+    meshCount++;
+    return [mesh];
+  },
+  addCylinderCollider(spec) {
+    const boxes = compileCylinderColliderBoxes(spec || {});
+    const out = [];
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      const geo = new THREE.BoxGeometry(box.w, box.h, box.d);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      mesh.position.set(box.x, box.y, box.z);
+      mesh.visible = false;
+      mesh.userData = {};
+      biomeGroup.add(mesh);
+      meshCount++;
+      out.push(mesh);
+    }
+    return out;
+  },
+  addDomeCollider(spec) {
+    const boxes = compileDomeColliderBoxes(spec || {});
+    const out = [];
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      const geo = new THREE.BoxGeometry(box.w, box.h, box.d);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      mesh.position.set(box.x, box.y, box.z);
+      mesh.visible = false;
+      mesh.userData = {};
+      biomeGroup.add(mesh);
+      meshCount++;
+      out.push(mesh);
+    }
+    return out;
   }
 };
 
@@ -286,7 +334,7 @@ window.__biomeUtilsShim = { cloneMaterial, pointInBounds };
 
 /* ── Build context shim ── */
 const ctx = {
-  rawBounds: { minX: -25, maxX: 25, minZ: -25, maxZ: 25 },
+  rawBounds: { minX: -27, maxX: 27, minZ: -27, maxZ: 27 },
   addExclusion() {},
   addFlicker() {},
   addSteamColumn() {},
@@ -296,53 +344,135 @@ const ctx = {
 };
 const bounds = ctx.rawBounds;
 
-/* ── Dynamic biome loading ── */
-async function loadBiome(url) {
-  // Clear existing
+const PREFAB_URLS = [
+  '../../js/world/prefab-reactor-tank.js',
+  '../../js/world/prefab-fuel-spheres.js'
+];
+const AUTO_RELOAD_INTERVAL_MS = 1000;
+const reloadInfo = document.getElementById('reload-info');
+let watchedBiomeUrl = '';
+let watchedBiomeSource = '';
+let watchedPrefabSource = '';
+let reloadPollTimer = 0;
+let reloadInFlight = false;
+let reloadCount = 0;
+
+function withCacheBust(url) {
+  const joiner = url.includes('?') ? '&' : '?';
+  return `${url}${joiner}previewBust=${Date.now()}`;
+}
+
+async function fetchSourceText(url) {
+  const resp = await fetch(withCacheBust(url), { cache: 'no-store' });
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch ${url} (${resp.status})`);
+  }
+  return await resp.text();
+}
+
+function normalizeBiomeSource(src) {
+  return src.replace(/import\s*\{[^}]*\}\s*from\s*['"][^'"]*biome-utils[^'"]*['"];?/g, `
+    var cloneMaterial = window.__biomeUtilsShim.cloneMaterial;
+    var pointInBounds = window.__biomeUtilsShim.pointInBounds;
+    var pt = pointInBounds;
+  `);
+}
+
+function clearBiomeMeshes() {
   while (biomeGroup.children.length > 0) {
     const child = biomeGroup.children[0];
     biomeGroup.remove(child);
     if (child.geometry) child.geometry.dispose();
   }
   meshCount = 0;
+}
 
-  // Fetch the biome source and eval it
-  const resp = await fetch(url);
-  let src = await resp.text();
+function setReloadInfo(text, isError) {
+  reloadInfo.textContent = text;
+  reloadInfo.style.color = isError ? '#ff9a9a' : '#b8ffbf';
+}
 
-  // Replace the ES import with our shims
-  src = src.replace(/import\s*\{[^}]*\}\s*from\s*['"][^'"]*biome-utils[^'"]*['"];?/g, `
-    var cloneMaterial = window.__biomeUtilsShim.cloneMaterial;
-    var pointInBounds = window.__biomeUtilsShim.pointInBounds;
-    var pt = pointInBounds;
-  `);
+function stampTime() {
+  return new Date().toLocaleTimeString();
+}
 
-  // Execute
-  try {
-    new Function(src)();
-  } catch (e) {
-    console.error('Biome load error:', e);
-    return;
+async function buildBiomeFromSources(url, biomeSrc, prefabSrc, reason) {
+  if (prefabSrc) {
+    new Function(normalizeBiomeSource(prefabSrc))();
   }
+  new Function(normalizeBiomeSource(biomeSrc))();
 
-  // Find and call the builder
+  clearBiomeMeshes();
+
   const quads = globalThis.__MAYHEM_RUNTIME.WorldQuadrants;
   const keys = Object.keys(quads);
   const lastKey = keys[keys.length - 1];
   if (lastKey && typeof quads[lastKey] === 'function') {
     const stats = quads[lastKey](bounds, place, ctx);
-    console.log('Biome built:', lastKey, stats);
+    console.log('Biome built:', lastKey, stats, { reason });
   }
 
+  watchedBiomeUrl = url;
+  watchedBiomeSource = biomeSrc;
+  watchedPrefabSource = prefabSrc;
+  if (reason === 'reload') {
+    reloadCount += 1;
+  }
   updateMeshCount();
+  setReloadInfo(`Auto-reload: on | last ${reason} ${stampTime()} | reloads ${reloadCount}`, false);
+}
+
+/* ── Dynamic biome loading ── */
+async function loadBiome(url) {
+  try {
+    const [prefabSources, biomeSrc] = await Promise.all([
+      /prefab-(reactor-tank|fuel-spheres)\.js$/i.test(String(url || '')) ? Promise.resolve([]) : Promise.all(PREFAB_URLS.map(fetchSourceText)),
+      fetchSourceText(url)
+    ]);
+    await buildBiomeFromSources(url, biomeSrc, prefabSources.join('\n'), 'load');
+  } catch (e) {
+    console.error('Biome load error:', e);
+    setReloadInfo(`Auto-reload: load failed at ${stampTime()}`, true);
+    return;
+  }
 }
 
 function updateMeshCount() {
   document.getElementById('mesh-count').textContent = `Meshes: ${meshCount}`;
 }
 
-/* ── Load the simpsons biome by default ── */
-loadBiome('../../js/world/quadrant-nuclear-simpsons.js');
+async function pollBiomeChanges() {
+  if (reloadInFlight || !watchedBiomeUrl) return;
+  reloadInFlight = true;
+  try {
+    const [prefabSources, biomeSrc] = await Promise.all([
+      /prefab-(reactor-tank|fuel-spheres)\.js$/i.test(String(watchedBiomeUrl || '')) ? Promise.resolve([]) : Promise.all(PREFAB_URLS.map(fetchSourceText)),
+      fetchSourceText(watchedBiomeUrl)
+    ]);
+    const prefabSrc = prefabSources.join('\n');
+    if (prefabSrc !== watchedPrefabSource || biomeSrc !== watchedBiomeSource) {
+      await buildBiomeFromSources(watchedBiomeUrl, biomeSrc, prefabSrc, 'reload');
+    }
+  } catch (e) {
+    console.error('Biome reload error:', e);
+    setReloadInfo(`Auto-reload: waiting for valid file ${stampTime()}`, true);
+  } finally {
+    reloadInFlight = false;
+  }
+}
+
+function startAutoReload(url) {
+  watchedBiomeUrl = url;
+  if (reloadPollTimer) {
+    clearInterval(reloadPollTimer);
+  }
+  reloadPollTimer = window.setInterval(pollBiomeChanges, AUTO_RELOAD_INTERVAL_MS);
+}
+
+/* ── Load biome from ?file= param, or simpsons by default ── */
+var biomeFile = new URLSearchParams(window.location.search).get('file') || 'quadrant-nuclear-simpsons.js';
+loadBiome('../../js/world/' + biomeFile);
+startAutoReload('../../js/world/' + biomeFile);
 
 /* ── Camera presets ── */
 document.getElementById('btn-top').addEventListener('click', () => {

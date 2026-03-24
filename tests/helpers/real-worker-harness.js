@@ -138,6 +138,13 @@ function buildDebugState(worker, roomId, clients) {
       userId: client.userId,
       roomId: client.roomId,
       closeInfo: client.closeInfo,
+      transport: {
+        delayedOutboundCount: Number(client.delayedOutboundCount || 0),
+        droppedOutboundCount: Number(client.droppedOutboundCount || 0),
+        outboundDelayMs: Number(client.outboundDelayMs || 0),
+        outboundJitterMs: Number(client.outboundJitterMs || 0),
+        outboundDropRate: Number(client.outboundDropRate || 0)
+      },
       messages: client.messages.slice(-20).map(formatMessage),
       entities: Array.from(client.snapshotMap.values()).map(summarizeEntity).filter(Boolean)
     }))
@@ -293,6 +300,10 @@ function buildClientApi(client) {
     },
     async send(payload) {
       const message = JSON.stringify(payload);
+      if (client.outboundDropRate > 0 && client.random() < client.outboundDropRate) {
+        client.droppedOutboundCount += 1;
+        return;
+      }
       const sendAfterMs = computeOutboundDelay(client);
       if (sendAfterMs <= 0) {
         if (client.ws.readyState !== WebSocket.OPEN) {
@@ -301,6 +312,7 @@ function buildClientApi(client) {
         client.ws.send(message);
         return;
       }
+      client.delayedOutboundCount += 1;
       await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           client.pendingTimers.delete(timer);
@@ -384,6 +396,15 @@ function buildClientApi(client) {
         weaponId: String(weaponId || '')
       });
     },
+    getTransportStats() {
+      return {
+        delayedOutboundCount: Number(client.delayedOutboundCount || 0),
+        droppedOutboundCount: Number(client.droppedOutboundCount || 0),
+        outboundDelayMs: Number(client.outboundDelayMs || 0),
+        outboundJitterMs: Number(client.outboundJitterMs || 0),
+        outboundDropRate: Number(client.outboundDropRate || 0)
+      };
+    },
     async close() {
       await closeClient(client);
     }
@@ -427,6 +448,7 @@ export async function createRealWorkerHarness(options = {}) {
       ...process.env,
       WORKER_PORT: String(port),
       WRANGLER_PERSIST_DIR: persistDir,
+      BOT_COUNT: String(options.botCount != null ? options.botCount : 0),
       REUSE_EXISTING_SERVER: '0',
       WRANGLER_ENV: 'e2e'
     },
@@ -472,6 +494,7 @@ export async function createRealWorkerHarness(options = {}) {
       username,
       outboundDelayMs: Math.max(0, Number(config.outboundDelayMs || 0)),
       outboundJitterMs: Math.max(0, Number(config.outboundJitterMs || 0)),
+      outboundDropRate: Math.max(0, Math.min(1, Number(config.outboundDropRate || 0))),
       random: createSeededRandom(hashSeed(config.randomSeed || `${roomId}:${userId}`)),
       snapshotMap: new Map(),
       latestSnapshot: null,
@@ -480,6 +503,8 @@ export async function createRealWorkerHarness(options = {}) {
       messageIndex: 0,
       pendingTimers: new Set(),
       closeInfo: null,
+      delayedOutboundCount: 0,
+      droppedOutboundCount: 0,
       closePromise: null,
       messageChain: Promise.resolve(),
       api: null

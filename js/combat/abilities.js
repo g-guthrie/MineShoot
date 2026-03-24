@@ -42,10 +42,6 @@
             homingBoost: 'missileHomingBoost',
             homingLerp: 'missileHomingLerp'
         },
-        heal: {
-            duration: 'healDuration',
-            healAmount: 'healAmount'
-        },
         deadeye: {
             range: 'deadeyeLockRange',
             duration: 'deadeyeDuration',
@@ -307,11 +303,6 @@
     GameAbilities.getHookState = function () {
         var snapshot = localSimSnapshot();
         return snapshot ? snapshot.hookState : null;
-    };
-
-    GameAbilities.getHealState = function () {
-        var snapshot = localSimSnapshot();
-        return snapshot ? snapshot.healState : null;
     };
 
     GameAbilities.getChokeState = function () {

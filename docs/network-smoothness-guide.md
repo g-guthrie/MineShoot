@@ -89,9 +89,9 @@ stepMovement(state, entry.inputState, {
 
 That keeps the local prediction close to the server result. If both sides follow the same rules, there is much less drift to fix later.
 
-## 4. We replay pending inputs instead of snapping the local player
+## 4. We replay pending inputs first, and we make the snap guard speed-aware
 
-When the server sends the real player position, we do not immediately yank the player to it unless the error is large. First we try to rebuild the motion from the server snapshot and replay the still-pending local inputs on top.
+When the server sends the real player position, we do not immediately yank the player to it during normal movement. First we rebuild the motion from the server snapshot and replay the still-pending local inputs on top. The replay uses the same weighted step-building rule as the live authoritative path, so the client is not inventing a different timing model during correction.
 
 ```js
 if (allowReplayCorrection && reconcile && reconcile.shouldReplayAuthoritativeCorrection && reconcile.shouldReplayAuthoritativeCorrection({
@@ -110,9 +110,15 @@ if (allowReplayCorrection && reconcile && reconcile.shouldReplayAuthoritativeCor
 }
 ```
 
-Only if the error is obviously too large do we hard-apply the server state:
+The hard-snap guard is also speed-aware. We budget how far the player could reasonably have traveled from the still-pending replay steps, add a small safety margin, and only allow a hard snap once the disagreement is larger than both the base threshold and that believable travel budget.
 
 ```js
+var believableDistance = believableReplayDistanceWu(reconcile, pendingInputs, opts, airborne);
+var hardSnapDistance = Math.max(
+    thresholds.hardSnapDistance,
+    believableDistance + (hasUnsentInputTail ? thresholds.emergencyReplayDistance : 0)
+);
+
 if (
     opts.force ||
     horizontalDistSq >= (hardSnapDistance * hardSnapDistance) ||
@@ -122,14 +128,14 @@ if (
 }
 ```
 
-That is the main reason the local player does not do the ugly online "snap back" unless something genuinely broke.
+That is the main reason sprinting and other fast movement no longer turn into an automatic online "snap back" unless something genuinely broke.
 
 ## 5. Small leftover errors are blended only when it is safe
 
-If the player is idle and the mismatch is small, we gently settle toward the server state instead of forcing a correction during active movement.
+If the player is idle, has no pending replay work, and the mismatch is small, we gently settle toward the server state instead of forcing a correction during active movement.
 
 ```js
-if (pendingInputCount > 0 || movingIntent || horizontalDistSq < (idleBlendDistance * idleBlendDistance)) {
+if (pendingInputCount > 0 || hasUnsentInputTail || movingIntent || horizontalDistSq < (idleBlendDistance * idleBlendDistance)) {
     return false;
 }
 
@@ -139,7 +145,7 @@ playerZ += dz * blend;
 posY += dy * blend;
 ```
 
-This keeps cleanup quiet. We do not fight the player while they are still moving.
+This keeps cleanup quiet. We do not fight the player while they are still moving, still replaying, or still carrying an unsent local tail.
 
 ## 6. Other players are rendered from buffered history, not from raw packet arrival
 

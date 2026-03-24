@@ -62,3 +62,40 @@ test('authenticated websocket upgrade ignores client-supplied pid overrides', as
   assert.equal(forwardedHeaders.get('X-User-Id'), userId);
   assert.equal(forwardedHeaders.get('X-Account-User-Id'), userId);
 });
+
+test('guest websocket upgrade preserves a valid client-supplied pid', async () => {
+  const env = createFakeEnv();
+  let forwardedUrl = '';
+  let forwardedHeaders = null;
+
+  env.GLOBAL_ARENA = {
+    idFromName(roomId) {
+      return 'room:' + String(roomId || '');
+    },
+    get() {
+      return {
+        fetch(request) {
+          forwardedUrl = request.url;
+          forwardedHeaders = request.headers;
+          return Promise.resolve(new Response(null, { status: 200 }));
+        }
+      };
+    }
+  };
+
+  const response = await handleWsUpgrade(env, new Request(
+    'https://example.test/api/ws?room=global&pid=usr_guest_socket_01&uid=amber-otter-314&username=ALPHA',
+    {
+      method: 'GET',
+      headers: {
+        Upgrade: 'websocket'
+      }
+    }
+  ), { abilities: {} });
+
+  assert.equal(response.status, 200);
+  assert.ok(forwardedUrl.includes('userId=' + encodeURIComponent('usr_guest_socket_01')));
+  assert.ok(forwardedUrl.includes('username=' + encodeURIComponent('ALPHA')));
+  assert.equal(forwardedHeaders.get('X-User-Id'), 'usr_guest_socket_01');
+  assert.equal(forwardedHeaders.get('X-Account-User-Id'), null);
+});

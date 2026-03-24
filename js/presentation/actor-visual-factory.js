@@ -292,14 +292,6 @@
             applyHitboxState();
         }
 
-        function setHealFlash(active) {
-            if (active) {
-                setPartFlash(0x6dff9a, 0x163d18);
-            } else {
-                restorePartColors();
-            }
-        }
-
         function setDamageFlash(active) {
             if (active) {
                 setPartFlash(0xff0000, 0x440000);
@@ -448,7 +440,6 @@
             setYaw: setYaw,
             setWorldTransform: setWorldTransform,
             setAlive: setAlive,
-            setHealFlash: setHealFlash,
             setDamageFlash: setDamageFlash,
             setSpawnShield: setSpawnShield,
             setRevealGhostState: setRevealGhostState,

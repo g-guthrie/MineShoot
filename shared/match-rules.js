@@ -87,6 +87,7 @@ export function createMatchState(gameMode, options = {}) {
     : [teamAlpha, teamBravo];
   return {
     gameMode: mode,
+    stockMode: mode === MATCH_GAME_MODE_FFA,
     started: false,
     ended: false,
     startedAt: 0,
@@ -98,6 +99,10 @@ export function createMatchState(gameMode, options = {}) {
     leaderId: '',
     winnerId: '',
     winnerTeam: '',
+    aliveCount: 0,
+    startingStocks: 3,
+    maxStocks: 5,
+    maxBonusLives: 2,
     teamIds: mode === MATCH_GAME_MODE_TDM ? teamIds.slice() : [],
     teamProgress: buildTeamStatMap(teamIds, null),
     teamBaselineSize: buildTeamStatMap(teamIds, null)
@@ -134,8 +139,13 @@ export function formatWinnerLabel(matchState, selfState, options = {}) {
 export function formatMatchHudCounter(matchState, selfState) {
   const match = matchState || null;
   const ownKills = Math.max(0, Number(selfState && selfState.kills || 0));
+  const stocksRemaining = Math.max(0, Number(selfState && selfState.stocksRemaining || 0));
+  const maxStocks = Math.max(stocksRemaining, Number(selfState && selfState.maxStocks || 0));
+  const extraLifeProgressPct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
   if (!match || !match.started) {
-    return 'Kills: ' + ownKills;
+    return maxStocks > 0
+      ? ('Lives: ' + stocksRemaining + '/' + maxStocks)
+      : ('Kills: ' + ownKills);
   }
   const mode = normalizeMatchGameMode(match.gameMode);
   if (mode === MATCH_GAME_MODE_TDM) {
@@ -145,6 +155,12 @@ export function formatMatchHudCounter(matchState, selfState) {
     return 'Kills: ' + ownKills +
       ' | Team: ' + formatMatchProgress(teamProgress) + '/' + formatMatchProgress(match.targetProgress) +
       ' | Opp: ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
+  }
+
+  if (match.stockMode || maxStocks > 0) {
+    return 'Lives: ' + stocksRemaining + '/' + maxStocks +
+      ' | Alive: ' + Math.max(0, Number(match.aliveCount || 0)) +
+      ' | Next: ' + Math.round(extraLifeProgressPct) + '%';
   }
 
   return 'Kills: ' + ownKills +
@@ -173,6 +189,13 @@ export function formatMenuMatchStatus(matchState, selfState, options = {}) {
   if (match.ended) {
     return formatWinnerLabel(match, selfState, options) +
       ' WON | RESET ' + formatSecondsRemaining(Number(match.resetAt || 0) - nowMs());
+  }
+
+  if (match.stockMode || Number(selfState && selfState.maxStocks || 0) > 0) {
+    return 'ALIVE ' + Math.max(0, Number(match.aliveCount || 0)) +
+      ' | LIVES ' + Math.max(0, Number(selfState && selfState.stocksRemaining || 0)) +
+      '/' + Math.max(0, Number(selfState && selfState.maxStocks || 0)) +
+      ' | NEXT ' + Math.round(Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)))) + '%';
   }
 
   if (respawnState && respawnState.active) {

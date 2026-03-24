@@ -40,20 +40,16 @@ function buildAbilityFx(entity) {
     ? Number(entity.hookPullState && entity.hookPullState.startedAt || 0)
     : Number(entity.justBeenHookedState && entity.justBeenHookedState.startedAt || 0);
   const chokeCasterUntil = Number(entity.chokeState && entity.chokeState.endsAt || 0);
-  const healUntil = Number(entity.healState && entity.healState.endsAt || 0);
-
   return {
     chokeCasterUntil,
     chokeVictim,
     hookedStartedAt,
     hookedUntil,
-    hookVisual,
-    healUntil
+    hookVisual
   };
 }
 
-export function toEntityState(entity) {
-  const now = nowMs();
+export function toEntityState(entity, now = nowMs()) {
   const cooldownRemaining = Math.max(0, ((entity.abilityCooldownUntil || 0) - now) / 1000);
   const weaponAmmo = {};
   if (entity.weaponAmmo && typeof entity.weaponAmmo === 'object') {
@@ -118,6 +114,11 @@ export function toEntityState(entity) {
     kills: Math.max(0, Number(entity.kills || 0)),
     deaths: Math.max(0, Number(entity.deaths || 0)),
     progressScore: Number((entity.progressScore || 0).toFixed(3)),
+    stocksRemaining: Math.max(0, Number(entity.stocksRemaining || 0)),
+    maxStocks: Math.max(0, Number(entity.maxStocks || 0)),
+    bonusLivesEarned: Math.max(0, Number(entity.bonusLivesEarned || 0)),
+    extraLifeProgressPct: Number((entity.extraLifeProgressPct || 0).toFixed(2)),
+    eliminated: !!entity.eliminated,
     teamId: entity.teamId || '',
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,

@@ -13,17 +13,36 @@ const DEFAULT_WEAPON_RELOAD_PRESENTATION = {
 };
 const DEFAULT_WEAPON_PRESENTATION = {
   tracer: { life: 0.11, speed: 280, segmentLength: 2.1 },
-  recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
+  recoil: {
+    z: -0.05,
+    x: -0.09,
+    pitch: 0.018,
+    yaw: 0.009,
+    roll: 0.006,
+    armR: 0.22,
+    armL: 0.1,
+    muzzleMs: 60,
+    pitchKickScale: 1,
+    yawKickScale: 1,
+    rollKickScale: 1,
+    gunKickScale: 1,
+    armKickScale: 1,
+    pitchRecoverScale: 1,
+    yawRecoverScale: 1,
+    rollRecoverScale: 1,
+    pattern: 'snap',
+    patternStrength: 0
+  },
   audioSample: null,
   reload: DEFAULT_WEAPON_RELOAD_PRESENTATION
 };
 
 export const gameplayTuning = {
   survivability: {
-    hpMax: 360,
-    armorMax: 90,
-    armorRegenDelaySec: 8.0,
-    armorRegenPerSec: 10
+    hpMax: 400,
+    armorMax: 100,
+    armorRegenDelaySec: 12.0,
+    armorRegenPerSec: 25
   },
   awareness: {
     segments: 8,
@@ -107,8 +126,8 @@ export const gameplayTuning = {
     }
   },
   movement: {
-    jogSpeed: 8,
-    runSpeed: 14,
+    jogSpeed: 9,
+    runSpeed: 16,
     jumpVelocity: 8.8,
     jumpHoldAccel: 16,
     maxJumpHold: 0.2,
@@ -123,36 +142,12 @@ export const gameplayTuning = {
     defaultWallhackRadius: 90
   },
   weaponFalloff: {
-    rifle: [
-      { maxDistance: 32, scale: 1.0 },
-      { maxDistance: 58, scale: 0.95 },
-      { maxDistance: 90, scale: 0.86 },
-      { maxDistance: 120, scale: 0.76 }
-    ],
-    pistol: [
-      { maxDistance: 14, scale: 1.0 },
-      { maxDistance: 22, scale: 0.88 },
-      { maxDistance: 27, scale: 0.62 },
-      { maxDistance: 28, scale: 0.45 }
-    ],
-    machinegun: [
-      { maxDistance: 16, scale: 1.0 },
-      { maxDistance: 30, scale: 0.95 },
-      { maxDistance: 48, scale: 0.84 },
-      { maxDistance: 72, scale: 0.7 }
-    ],
-    shotgun: [
-      { maxDistance: 7, scale: 1.0 },
-      { maxDistance: 12, scale: 0.8 },
-      { maxDistance: 18, scale: 0.55 },
-      { maxDistance: 26, scale: 0.28 }
-    ],
-    sniper: [
-      { maxDistance: 99999, scale: 1.0 }
-    ],
-    missile: [
-      { maxDistance: 34, scale: 1.0 }
-    ]
+    rifle: { start: 42, end: 65, minScalar: 0.5 },
+    pistol: { start: 32, end: 40, minScalar: 0.333 },
+    machinegun: { start: 33, end: 42, minScalar: 0.5 },
+    shotgun: { start: 6.8, end: 9.2, minScalar: 0.0 },
+    sniper: { start: 9999, end: 10000, minScalar: 1.0 },
+    missile: { start: 34, end: 34, minScalar: 1.0 }
   },
   throwableMechanics: {
     aimRayRange: 100,
@@ -165,19 +160,40 @@ export const gameplayTuning = {
     throwIntentDirectionMinDot: -0.2
   },
   classPresets: {
-    abilities: { armorMax: 90, wallhackRadius: 90 },
-    ffa: { armorMax: 90, wallhackRadius: 90 }
+    abilities: { armorMax: 100, wallhackRadius: 90 },
+    ffa: { armorMax: 100, wallhackRadius: 90 }
   },
   weaponStats: {
     rifle: {
-      name: 'Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 260, reloadMs: 1600, magazineSize: 15,
-      bodyDamage: 44, headDamage: 90, maxRange: 110, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 132,
+      name: 'Scout Rifle', displayName: 'Scout Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 400, reloadMs: 1850, magazineSize: 14,
+      bodyDamage: 50, headDamage: 78, maxRange: 90, pellets: 1, hipfireSpread: 0.022, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 110,
+      moveSpeedMultiplier: 1.0, adsMoveMultiplier: 0.75,
       hipfireBloomScale: 2.5, adsBloomScale: 1,
-      aimProfile: { hipfire: { spread: 0.024, maxRange: 110 }, ads: { spread: 0, maxRange: 132 } },
+      falloff: { start: 42, end: 65, minScalar: 0.5 },
+      aimProfile: { hipfire: { spread: 0.022, maxRange: 90 }, ads: { spread: 0, maxRange: 110 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 1.25 },
-        recoil: { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 },
+        recoil: {
+          z: -0.05,
+          x: -0.09,
+          pitch: 0.018,
+          yaw: 0.009,
+          roll: 0.006,
+          armR: 0.22,
+          armL: 0.1,
+          muzzleMs: 60,
+          pitchKickScale: 1.25,
+          yawKickScale: 1.05,
+          rollKickScale: 1.10,
+          gunKickScale: 1.20,
+          armKickScale: 1.15,
+          pitchRecoverScale: 0.95,
+          yawRecoverScale: 1.0,
+          rollRecoverScale: 0.95,
+          pattern: 'push',
+          patternStrength: 0.22
+        },
         audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.66, playbackRateMin: 0.97, playbackRateMax: 1.03 },
         reload: {
           profileId: 'rifle',
@@ -192,16 +208,37 @@ export const gameplayTuning = {
       }
     },
     pistol: {
-      name: 'Pistol', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 360, reloadMs: 1350, magazineSize: 10,
-      bodyDamage: 46, headDamage: 96, maxRange: 24, pellets: 12, hipfireSpread: 0.137, adsSpread: 0.225, adsFovDeg: 56, adsMaxRange: 28,
-      aimProfile: { hipfire: { spread: 0.137, maxRange: 24 }, ads: { spread: 0.225, maxRange: 28 } },
-      hipfireCylinderRadiusWu: 2.53,
-      adsCylinderRadiusWu: 3.16,
+      name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 430, reloadMs: 2050, magazineSize: 10,
+      bodyDamage: 60, headDamage: 90, maxRange: 52, pellets: 12, hipfireSpread: 0.1, adsSpread: 0.16, adsFovDeg: 56, adsMaxRange: 60,
+      moveSpeedMultiplier: 1.1, adsMoveMultiplier: 0.9,
+      falloff: { start: 32, end: 40, minScalar: 0.333 },
+      aimProfile: { hipfire: { spread: 0.1, maxRange: 52 }, ads: { spread: 0.16, maxRange: 60 } },
+      hipfireCylinderRadiusWu: 1.8,
+      adsCylinderRadiusWu: 2.2,
       singleHitFromPellets: true,
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
-        recoil: { z: -0.04, x: -0.08, pitch: 0.014, yaw: 0.007, roll: 0.005, armR: 0.2, armL: 0.08, muzzleMs: 60 },
+        recoil: {
+          z: -0.04,
+          x: -0.08,
+          pitch: 0.014,
+          yaw: 0.007,
+          roll: 0.005,
+          armR: 0.2,
+          armL: 0.08,
+          muzzleMs: 60,
+          pitchKickScale: 1.40,
+          yawKickScale: 1.15,
+          rollKickScale: 1.35,
+          gunKickScale: 1.30,
+          armKickScale: 1.25,
+          pitchRecoverScale: 1.15,
+          yawRecoverScale: 1.15,
+          rollRecoverScale: 1.15,
+          pattern: 'snap',
+          patternStrength: 0.35
+        },
         audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 },
         reload: {
           profileId: 'sidearm',
@@ -216,13 +253,34 @@ export const gameplayTuning = {
       }
     },
     machinegun: {
-      name: 'Machine Gun', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 82, reloadMs: 1450, magazineSize: 50,
-      bodyDamage: 15, headDamage: 20, maxRange: 58, pellets: 1, hipfireSpread: 0.046, adsSpread: 0.046, adsFovDeg: 56, adsMaxRange: 72,
-      aimProfile: { hipfire: { spread: 0.046, maxRange: 58 }, ads: { spread: 0.046, maxRange: 72 } },
+      name: 'Auto Rifle', displayName: 'Auto Rifle', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 133, reloadMs: 1800, magazineSize: 32,
+      bodyDamage: 18, headDamage: 27, maxRange: 70, pellets: 1, hipfireSpread: 0.042, adsSpread: 0.032, adsFovDeg: 56, adsMaxRange: 78,
+      moveSpeedMultiplier: 1.15, adsMoveMultiplier: 0.95,
+      falloff: { start: 33, end: 42, minScalar: 0.5 },
+      aimProfile: { hipfire: { spread: 0.042, maxRange: 70 }, ads: { spread: 0.032, maxRange: 78 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.075, speed: 260, segmentLength: 1.0 },
-        recoil: { z: -0.024, x: -0.045, pitch: 0.009, yaw: 0.006, roll: 0.004, armR: 0.14, armL: 0.06, muzzleMs: 55 },
+        recoil: {
+          z: -0.024,
+          x: -0.045,
+          pitch: 0.009,
+          yaw: 0.006,
+          roll: 0.004,
+          armR: 0.14,
+          armL: 0.06,
+          muzzleMs: 55,
+          pitchKickScale: 1.15,
+          yawKickScale: 1.10,
+          rollKickScale: 1.10,
+          gunKickScale: 1.15,
+          armKickScale: 1.10,
+          pitchRecoverScale: 1.10,
+          yawRecoverScale: 1.10,
+          rollRecoverScale: 1.10,
+          pattern: 'chatter',
+          patternStrength: 0.18
+        },
         audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 },
         reload: {
           profileId: 'lmg',
@@ -237,13 +295,34 @@ export const gameplayTuning = {
       }
     },
     shotgun: {
-      name: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 950, reloadMs: 1850, magazineSize: 6,
-      bodyDamage: 17, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.19, adsSpread: 0.19, adsFovDeg: 56, adsMaxRange: 24,
-      aimProfile: { hipfire: { spread: 0.19, maxRange: 24 }, ads: { spread: 0.19, maxRange: 24 } },
+      name: 'Shotgun', displayName: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 900, reloadMs: 2100, magazineSize: 5,
+      bodyDamage: 20, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.18, adsSpread: 0.18, adsFovDeg: 56, adsMaxRange: 24,
+      moveSpeedMultiplier: 1.05, adsMoveMultiplier: 0.9,
+      falloff: { start: 6.8, end: 9.2, minScalar: 0.0 },
+      aimProfile: { hipfire: { spread: 0.18, maxRange: 24 }, ads: { spread: 0.18, maxRange: 24 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.1, speed: 230, segmentLength: 1.9 },
-        recoil: { z: -0.09, x: -0.16, pitch: 0.03, yaw: 0.012, roll: 0.008, armR: 0.26, armL: 0.12, muzzleMs: 70 },
+        recoil: {
+          z: -0.09,
+          x: -0.16,
+          pitch: 0.03,
+          yaw: 0.012,
+          roll: 0.008,
+          armR: 0.26,
+          armL: 0.12,
+          muzzleMs: 70,
+          pitchKickScale: 1.45,
+          yawKickScale: 1.20,
+          rollKickScale: 1.40,
+          gunKickScale: 1.50,
+          armKickScale: 1.40,
+          pitchRecoverScale: 0.90,
+          yawRecoverScale: 0.90,
+          rollRecoverScale: 0.90,
+          pattern: 'slam',
+          patternStrength: 0.40
+        },
         audioSample: { url: '/assets/audio/weapons/shotgun.mp3', gain: 0.98, playbackRateMin: 0.97, playbackRateMax: 1.02 },
         reload: {
           profileId: 'shotgun',
@@ -258,13 +337,34 @@ export const gameplayTuning = {
       }
     },
     sniper: {
-      name: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
-      bodyDamage: 170, headDamage: 360, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
+      name: 'Sniper', displayName: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
+      bodyDamage: 180, headDamage: 420, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
+      moveSpeedMultiplier: 0.82, adsMoveMultiplier: 0.6,
+      falloff: { start: 9999, end: 10000, minScalar: 1.0 },
       aimProfile: { hipfire: { spread: 0.32, maxRange: 170 }, ads: { spread: 0, maxRange: 170 } }, infiniteRange: true,
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.12, speed: 320, segmentLength: 2.6 },
-        recoil: { z: -0.12, x: -0.2, pitch: 0.04, yaw: 0.01, roll: 0.007, armR: 0.3, armL: 0.12, muzzleMs: 90 },
+        recoil: {
+          z: -0.12,
+          x: -0.2,
+          pitch: 0.04,
+          yaw: 0.01,
+          roll: 0.007,
+          armR: 0.3,
+          armL: 0.12,
+          muzzleMs: 90,
+          pitchKickScale: 1.65,
+          yawKickScale: 1.05,
+          rollKickScale: 1.20,
+          gunKickScale: 1.60,
+          armKickScale: 1.30,
+          pitchRecoverScale: 0.85,
+          yawRecoverScale: 0.90,
+          rollRecoverScale: 0.85,
+          pattern: 'u_shape',
+          patternStrength: 0.60
+        },
         audioSample: { url: '/assets/audio/weapons/sniper.mp3', gain: 0.82, playbackRateMin: 0.96, playbackRateMax: 1.0 },
         reload: {
           profileId: 'precision',
@@ -329,13 +429,6 @@ export const gameplayTuning = {
       tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
       cooldownMs: 14000, range: 22, minDot: 0.04, pullDistance: 4.0,
       stunDuration: 0.5, castDamage: 20, lockBoxPx: 150, reticleRadiusPx: 68, catchRadius: 1.8, travelSpeed: 26, pullSpeed: 20
-    },
-    heal: {
-      id: 'heal', slot: 'either', name: 'Heal',
-      description: 'Brief self-heal with visible windup.',
-      debugSummary: 'Visible windup before the heal resolves.',
-      tunableParams: ['healAmount', 'cooldownMs'],
-      cooldownMs: 14000, duration: 1.0, healAmount: 90
     },
     missile: {
       id: 'missile', slot: 'either', name: 'Missile',
@@ -409,7 +502,17 @@ export function getWeaponPresentation(weaponId) {
       roll: Number.isFinite(Number(recoil.roll)) ? Number(recoil.roll) : DEFAULT_WEAPON_PRESENTATION.recoil.roll,
       armR: Number.isFinite(Number(recoil.armR)) ? Number(recoil.armR) : DEFAULT_WEAPON_PRESENTATION.recoil.armR,
       armL: Number.isFinite(Number(recoil.armL)) ? Number(recoil.armL) : DEFAULT_WEAPON_PRESENTATION.recoil.armL,
-      muzzleMs: Number.isFinite(Number(recoil.muzzleMs)) ? Number(recoil.muzzleMs) : DEFAULT_WEAPON_PRESENTATION.recoil.muzzleMs
+      muzzleMs: Number.isFinite(Number(recoil.muzzleMs)) ? Number(recoil.muzzleMs) : DEFAULT_WEAPON_PRESENTATION.recoil.muzzleMs,
+      pitchKickScale: Number.isFinite(Number(recoil.pitchKickScale)) ? Number(recoil.pitchKickScale) : DEFAULT_WEAPON_PRESENTATION.recoil.pitchKickScale,
+      yawKickScale: Number.isFinite(Number(recoil.yawKickScale)) ? Number(recoil.yawKickScale) : DEFAULT_WEAPON_PRESENTATION.recoil.yawKickScale,
+      rollKickScale: Number.isFinite(Number(recoil.rollKickScale)) ? Number(recoil.rollKickScale) : DEFAULT_WEAPON_PRESENTATION.recoil.rollKickScale,
+      gunKickScale: Number.isFinite(Number(recoil.gunKickScale)) ? Number(recoil.gunKickScale) : DEFAULT_WEAPON_PRESENTATION.recoil.gunKickScale,
+      armKickScale: Number.isFinite(Number(recoil.armKickScale)) ? Number(recoil.armKickScale) : DEFAULT_WEAPON_PRESENTATION.recoil.armKickScale,
+      pitchRecoverScale: Number.isFinite(Number(recoil.pitchRecoverScale)) ? Number(recoil.pitchRecoverScale) : DEFAULT_WEAPON_PRESENTATION.recoil.pitchRecoverScale,
+      yawRecoverScale: Number.isFinite(Number(recoil.yawRecoverScale)) ? Number(recoil.yawRecoverScale) : DEFAULT_WEAPON_PRESENTATION.recoil.yawRecoverScale,
+      rollRecoverScale: Number.isFinite(Number(recoil.rollRecoverScale)) ? Number(recoil.rollRecoverScale) : DEFAULT_WEAPON_PRESENTATION.recoil.rollRecoverScale,
+      pattern: String(recoil.pattern || DEFAULT_WEAPON_PRESENTATION.recoil.pattern),
+      patternStrength: Number.isFinite(Number(recoil.patternStrength)) ? Number(recoil.patternStrength) : DEFAULT_WEAPON_PRESENTATION.recoil.patternStrength
     },
     audioSample: audioSample && audioSample.url ? {
       url: String(audioSample.url),
@@ -484,15 +587,18 @@ export function resolveWeaponAdsFovDeg(weaponStats) {
 }
 
 export function getWeaponFalloffProfile(weaponId) {
-  const profile = gameplayTuning.weaponFalloff[String(weaponId || '')];
-  if (!Array.isArray(profile) || profile.length === 0) return [];
-  return profile
-    .map((band) => ({
-      maxDistance: Number(band && band.maxDistance),
-      scale: Number(band && band.scale)
-    }))
-    .filter((band) => Number.isFinite(band.maxDistance) && band.maxDistance > 0 && Number.isFinite(band.scale))
-    .sort((a, b) => a.maxDistance - b.maxDistance);
+  const weapon = gameplayTuning.weaponStats[String(weaponId || '')] || null;
+  const profile = (weapon && weapon.falloff) || gameplayTuning.weaponFalloff[String(weaponId || '')] || null;
+  if (!profile || typeof profile !== 'object') return null;
+  const start = Number(profile.start);
+  const end = Number(profile.end);
+  const minScalar = Number(profile.minScalar);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(minScalar)) return null;
+  return {
+    start: Math.max(0, start),
+    end: Math.max(Math.max(0, start), end),
+    minScalar: Math.max(0, Math.min(1, minScalar))
+  };
 }
 
 export function resolveWeaponAimProfile(weaponStats, adsActive) {

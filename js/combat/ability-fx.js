@@ -92,8 +92,7 @@
             hookedStartedAt: abilityFx ? Number(abilityFx.hookedStartedAt || 0) : 0,
             hookedUntil: abilityFx ? Number(abilityFx.hookedUntil || 0) : 0,
             hookState: abilityFx ? cloneHookVisual(abilityFx.hookVisual || null) : null,
-            chokeState: abilityFx ? timedState(abilityFx.chokeCasterUntil) : null,
-            healState: abilityFx ? timedState(abilityFx.healUntil) : null
+            chokeState: abilityFx ? timedState(abilityFx.chokeCasterUntil) : null
         };
     }
 

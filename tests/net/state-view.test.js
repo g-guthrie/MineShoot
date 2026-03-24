@@ -79,7 +79,6 @@ test('network state view reuses entity state arrays and wrappers across calls', 
     armor: 20,
     armorMax: 40,
     alive: true,
-    healState: null,
     group: {
       position: new THREE.Vector3(1, 2, 3)
     }
@@ -213,6 +212,85 @@ test('network state view follows a ballistic vertical path for airborne remote s
 
   const sample = view.sampleRemoteEntityPresentation('usr_remote', 1250);
   assert.equal(Number(sample.y.toFixed(2)), 1);
+});
+
+test('network state view can sample remote presentation directly from the live render history', async () => {
+  const render = {
+    id: 'usr_remote',
+    weaponId: 'rifle',
+    snapshotHistory: [
+      { serverTime: 1000, receivedAt: 1000, x: 0, footY: 0, z: 0, yaw: 0, pitch: 0, moveSpeedNorm: 0, sprinting: false, movingForward: false, movingBackward: false, isGrounded: true, velocityY: 0 },
+      { serverTime: 1100, receivedAt: 1100, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1, moveSpeedNorm: 0, sprinting: false, movingForward: false, movingBackward: false, isGrounded: true, velocityY: 0 }
+    ],
+    snapshotIntervalMs: 50,
+    snapshotJitterMs: 0,
+    interpolationDelayMs: 90,
+    serverTimeOffsetMs: 0
+  };
+  const view = await loadStateView(new Map([['usr_remote', render]]));
+
+  const sample = view.sampleRemoteEntityPresentation('usr_remote', 1100);
+
+  assert.equal(Number(sample.x.toFixed(2)), 1);
+  assert.equal(Number(sample.y.toFixed(2)), 0.1);
+  assert.equal(Number(sample.z.toFixed(2)), -0.2);
+  assert.equal(sample.weaponId, 'rifle');
+});
+
+test('network state view uses the same stale-gap freeze pose as the live remote renderer', async () => {
+  const render = {
+    id: 'usr_remote',
+    weaponId: 'rifle',
+    snapshotHistory: [
+      { serverTime: 900, receivedAt: 900, x: 10, footY: 1, z: -2, yaw: 0.4, pitch: 0.1, moveSpeedNorm: 0, sprinting: false, movingForward: false, movingBackward: false, isGrounded: true, velocityY: 0 },
+      { serverTime: 1000, receivedAt: 1000, x: 20, footY: 2, z: -4, yaw: 0.8, pitch: 0.2, moveSpeedNorm: 0, sprinting: false, movingForward: false, movingBackward: false, isGrounded: true, velocityY: 0 }
+    ],
+    snapshotIntervalMs: 50,
+    snapshotJitterMs: 0,
+    interpolationDelayMs: 90,
+    serverTimeOffsetMs: 0,
+    freezeGapMs: 80,
+    lastPresentedTransform: {
+      x: 18,
+      footY: 1.8,
+      z: -3.6,
+      yaw: 0.7,
+      pitch: 0.2,
+      moveSpeedNorm: 0,
+      sprinting: false,
+      movingForward: false,
+      movingBackward: false,
+      isGrounded: true,
+      velocityY: 0,
+      muzzleFlashUntil: 0
+    }
+  };
+  const view = await loadStateView(new Map([['usr_remote', render]]));
+
+  const sample = view.sampleRemoteEntityPresentation('usr_remote', 1200);
+
+  assert.equal(Number(sample.x.toFixed(2)), 18);
+  assert.equal(Number(sample.y.toFixed(2)), 1.8);
+  assert.equal(Number(sample.z.toFixed(2)), -3.6);
+});
+
+test('network state view reports wrap-safe ack drift', async () => {
+  const view = await loadStateViewWithOptions({
+    getRenderMap() {
+      return new Map();
+    },
+    getInputSeqHistory() {
+      return [];
+    },
+    getLastInputSeqSent() {
+      return 1;
+    },
+    getLastInputSeqAcked() {
+      return 4294967295;
+    }
+  });
+
+  assert.equal(view.getInputSyncState().ackDrift, 2);
 });
 
 test('network state view keeps grounded vertical interpolation linear', async () => {

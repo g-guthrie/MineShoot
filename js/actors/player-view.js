@@ -23,6 +23,17 @@
         var firePoseKick = 0;
         var sprintFovBlend = 0;
         var muzzleFlashTimer = 0;
+        var recoilPatternPitch = 0;
+        var recoilPatternYaw = 0;
+        var recoilPatternRoll = 0;
+        var activeRecoilProfile = null;
+        var recoilPatternState = {
+            type: '',
+            strength: 0,
+            elapsed: 0,
+            duration: 0,
+            side: 1
+        };
 
         var viewOrigin = new THREE.Vector3();
         var viewDesired = new THREE.Vector3();
@@ -70,6 +81,111 @@
             cameraKickYaw = 0;
             cameraKickRoll = 0;
             firePoseKick = 0;
+            recoilPatternPitch = 0;
+            recoilPatternYaw = 0;
+            recoilPatternRoll = 0;
+            activeRecoilProfile = null;
+            recoilPatternState.type = '';
+            recoilPatternState.strength = 0;
+            recoilPatternState.elapsed = 0;
+            recoilPatternState.duration = 0;
+            recoilPatternState.side = 1;
+        }
+
+        function defaultRecoilProfile() {
+            return {
+                z: -0.05,
+                x: -0.09,
+                pitch: 0.018,
+                yaw: 0.009,
+                roll: 0.006,
+                armR: 0.22,
+                armL: 0.1,
+                muzzleMs: 60,
+                pitchKickScale: 1,
+                yawKickScale: 1,
+                rollKickScale: 1,
+                gunKickScale: 1,
+                armKickScale: 1,
+                pitchRecoverScale: 1,
+                yawRecoverScale: 1,
+                rollRecoverScale: 1,
+                pattern: 'snap',
+                patternStrength: 0
+            };
+        }
+
+        function recoilProfileForWeapon(weaponId) {
+            var recoilProfile = options.getWeaponPresentation
+                ? options.getWeaponPresentation(weaponId)
+                : null;
+            var fallbackProfile = options.getWeaponPresentation
+                ? options.getWeaponPresentation('rifle')
+                : null;
+            return (recoilProfile && recoilProfile.recoil)
+                ? recoilProfile.recoil
+                : ((fallbackProfile && fallbackProfile.recoil) ? fallbackProfile.recoil : defaultRecoilProfile());
+        }
+
+        function patternDurationFor(type) {
+            if (type === 'chatter') return 0.12;
+            if (type === 'snap') return 0.16;
+            if (type === 'push') return 0.18;
+            if (type === 'slam') return 0.20;
+            if (type === 'u_shape') return 0.28;
+            return 0;
+        }
+
+        function updateRecoilPattern(dt) {
+            if (!recoilPatternState.type || recoilPatternState.duration <= 0 || recoilPatternState.strength <= 0) {
+                recoilPatternPitch = 0;
+                recoilPatternYaw = 0;
+                recoilPatternRoll = 0;
+                return;
+            }
+
+            recoilPatternState.elapsed = Math.min(
+                recoilPatternState.duration,
+                recoilPatternState.elapsed + Math.max(0, Number(dt || 0))
+            );
+            var t = Math.max(0, Math.min(1, recoilPatternState.elapsed / Math.max(0.0001, recoilPatternState.duration)));
+            var side = recoilPatternState.side || 1;
+            var strength = recoilPatternState.strength;
+            var arch = 4 * t * (1 - t);
+            var sweep = Math.sin(Math.PI * t);
+
+            if (recoilPatternState.type === 'chatter') {
+                recoilPatternPitch = Math.sin(t * Math.PI * 4) * 0.0022 * strength * (1 - t);
+                recoilPatternYaw = side * Math.sin(t * Math.PI * 3) * 0.0016 * strength * (1 - t);
+                recoilPatternRoll = -side * Math.sin(t * Math.PI * 4) * 0.0014 * strength * (1 - t);
+            } else if (recoilPatternState.type === 'snap') {
+                recoilPatternPitch = sweep * 0.0034 * strength * (1 - (t * 0.35));
+                recoilPatternYaw = side * sweep * 0.0014 * strength * (1 - t);
+                recoilPatternRoll = -side * sweep * 0.0026 * strength * (1 - (t * 0.15));
+            } else if (recoilPatternState.type === 'push') {
+                recoilPatternPitch = sweep * 0.003 * strength * (1 - (t * 0.22));
+                recoilPatternYaw = side * sweep * 0.0007 * strength * (1 - t);
+                recoilPatternRoll = -side * sweep * 0.0012 * strength * (1 - (t * 0.25));
+            } else if (recoilPatternState.type === 'slam') {
+                recoilPatternPitch = sweep * 0.0046 * strength * (1 - (t * 0.1));
+                recoilPatternYaw = side * sweep * 0.0018 * strength * (1 - (t * 0.45));
+                recoilPatternRoll = -side * sweep * 0.0036 * strength * (1 - (t * 0.18));
+            } else if (recoilPatternState.type === 'u_shape') {
+                recoilPatternPitch = arch * 0.0064 * strength;
+                recoilPatternYaw = side * sweep * 0.0022 * strength * (1 - (t * 0.2));
+                recoilPatternRoll = -side * arch * 0.0031 * strength;
+            } else {
+                recoilPatternPitch = 0;
+                recoilPatternYaw = 0;
+                recoilPatternRoll = 0;
+            }
+
+            if (t >= 1) {
+                recoilPatternState.type = '';
+                recoilPatternState.strength = 0;
+                recoilPatternState.duration = 0;
+                recoilPatternState.elapsed = 0;
+            }
         }
 
         function applyUnifiedGunOffsets(dt, avatarRigApi) {
@@ -81,17 +197,21 @@
             gunBobX += (0 - gunBobX) * bobBlend;
             gunBobY += (0 - gunBobY) * bobBlend;
 
-            var recoilBlend = Math.min(1, dt * 18);
+            var recoil = activeRecoilProfile || defaultRecoilProfile();
+            var gunRecoverScale = Math.max(0.2, (Number(recoil.pitchRecoverScale || 1) + Number(recoil.rollRecoverScale || 1)) * 0.5);
+            var palmRecoverScale = Math.max(0.2, (Number(recoil.pitchRecoverScale || 1) + Number(recoil.yawRecoverScale || 1)) * 0.5);
+            var recoilBlend = Math.min(1, dt * 18 * gunRecoverScale);
             gunRecoil += (0 - gunRecoil) * recoilBlend;
-            palmRecoil += (0 - palmRecoil) * recoilBlend;
-            firePoseKick += (0 - firePoseKick) * Math.min(1, dt * 20);
+            palmRecoil += (0 - palmRecoil) * Math.min(1, dt * 18 * palmRecoverScale);
+            firePoseKick += (0 - firePoseKick) * Math.min(1, dt * 20 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
 
-            var cameraKickPitchBlend = Math.min(1, dt * 14);
-            var cameraKickYawBlend = Math.min(1, dt * 16);
-            var cameraKickRollBlend = Math.min(1, dt * 12);
+            var cameraKickPitchBlend = Math.min(1, dt * 14 * Math.max(0.2, Number(recoil.pitchRecoverScale || 1)));
+            var cameraKickYawBlend = Math.min(1, dt * 16 * Math.max(0.2, Number(recoil.yawRecoverScale || 1)));
+            var cameraKickRollBlend = Math.min(1, dt * 12 * Math.max(0.2, Number(recoil.rollRecoverScale || 1)));
             cameraKickPitch += (0 - cameraKickPitch) * cameraKickPitchBlend;
             cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
             cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
+            updateRecoilPattern(dt);
 
             if (rig.gunBasePos) {
                 rig.gun.position.copy(rig.gunBasePos);
@@ -299,15 +419,15 @@
             state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
-            state.camera.rotation.z += cameraKickRoll + chokeRoll;
+            state.camera.rotation.z += cameraKickRoll + recoilPatternRoll + chokeRoll;
         }
 
         function updateCamera(dt, state) {
             if (!state.camera) return;
             updateMuzzleFlash(dt, state);
 
-            var renderYaw = state.yaw + cameraKickYaw;
-            var renderPitch = Math.max(-state.pitchLimit, Math.min(state.pitchLimit, state.pitch + cameraKickPitch));
+            var renderYaw = state.yaw + cameraKickYaw + recoilPatternYaw;
+            var renderPitch = Math.max(-state.pitchLimit, Math.min(state.pitchLimit, state.pitch + cameraKickPitch + recoilPatternPitch));
             var cosPitch = Math.cos(renderPitch);
             var forwardX = -Math.sin(renderYaw) * cosPitch;
             var forwardY = Math.sin(renderPitch);
@@ -327,43 +447,51 @@
         function triggerFireAction(state) {
             if (!state.avatarRigApi || !state.avatarRigApi.rig || !state.avatarRigApi.rig.gun) return;
 
-            var recoilProfile = options.getWeaponPresentation
-                ? options.getWeaponPresentation(state.currentWeaponId)
-                : null;
-            var fallbackProfile = options.getWeaponPresentation
-                ? options.getWeaponPresentation('rifle')
-                : null;
-            var recoil = recoilProfile && recoilProfile.recoil ? recoilProfile.recoil
-                : ((fallbackProfile && fallbackProfile.recoil)
-                    ? fallbackProfile.recoil
-                    : { z: -0.05, x: -0.09, pitch: 0.018, yaw: 0.009, roll: 0.006, armR: 0.22, armL: 0.1, muzzleMs: 60 });
+            var recoil = recoilProfileForWeapon(state.currentWeaponId);
             var scopeMultiplier = 1 - (scopeBlend * 0.2);
-            var yawKick = (Math.random() - 0.5) * recoil.yaw * scopeMultiplier;
-            var rollKick = -yawKick * (recoil.roll / Math.max(recoil.yaw, 0.0001));
+            var kickSide = Math.random() < 0.5 ? -1 : 1;
+            var yawKick = kickSide * (0.5 + (Math.random() * 0.5)) * recoil.yaw * scopeMultiplier * Math.max(0, Number(recoil.yawKickScale || 1));
+            var rollKick = (-yawKick * (recoil.roll / Math.max(recoil.yaw, 0.0001)) * Math.max(0, Number(recoil.rollKickScale || 1))) +
+                (kickSide * recoil.roll * 0.35 * scopeMultiplier * Math.max(0, Number(recoil.rollKickScale || 1)));
 
-            gunRecoil += recoil.z * scopeMultiplier;
-            palmRecoil += recoil.x * scopeMultiplier;
-            cameraKickPitch += recoil.pitch * scopeMultiplier;
+            gunRecoil += recoil.z * scopeMultiplier * Math.max(0, Number(recoil.gunKickScale || 1));
+            palmRecoil += recoil.x * scopeMultiplier * Math.max(0, Number(recoil.armKickScale || 1));
+            cameraKickPitch += recoil.pitch * scopeMultiplier * Math.max(0, Number(recoil.pitchKickScale || 1));
             cameraKickYaw += yawKick;
             cameraKickRoll += rollKick;
-            firePoseKick += 1 * scopeMultiplier;
+            firePoseKick += 1 * scopeMultiplier * Math.max(0, Number(recoil.armKickScale || 1));
+            activeRecoilProfile = recoil;
+
+            recoilPatternState.type = String(recoil.pattern || '');
+            recoilPatternState.strength = Math.max(0, Number(recoil.patternStrength || 0)) * scopeMultiplier;
+            if (state.currentWeaponId === 'sniper' && !state.adsActive) {
+                recoilPatternState.type = '';
+                recoilPatternState.strength = 0;
+            }
+            recoilPatternState.elapsed = 0;
+            recoilPatternState.duration = patternDurationFor(recoilPatternState.type);
+            recoilPatternState.side = kickSide;
+            recoilPatternPitch = 0;
+            recoilPatternYaw = 0;
+            recoilPatternRoll = 0;
 
             muzzleFlashTimer = Math.max(0, Number(recoil.muzzleMs || 0)) / 1000;
             setMuzzleVisible(state, muzzleFlashTimer > 0);
             if (state.actorVisual && state.actorVisual.triggerAction) {
                 state.actorVisual.triggerAction('fire', {
                     duration: recoil.muzzleMs / 1000,
-                    strength: 0.9 + (Math.abs(recoil.z) * 4)
+                    strength: 0.9 + (Math.abs(recoil.z) * 4 * Math.max(0, Number(recoil.gunKickScale || 1)))
                 });
             } else if (state.avatarRigApi && state.avatarRigApi.triggerAction) {
                 state.avatarRigApi.triggerAction('fire', {
                     duration: recoil.muzzleMs / 1000,
-                    strength: 0.9 + (Math.abs(recoil.z) * 4)
+                    strength: 0.9 + (Math.abs(recoil.z) * 4 * Math.max(0, Number(recoil.gunKickScale || 1)))
                 });
             }
             if (state.avatarRigApi && state.avatarRigApi.rig) {
-                if (state.avatarRigApi.rig.armR) state.avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR;
-                if (state.avatarRigApi.rig.armL) state.avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL;
+                var armKickScale = Math.max(0, Number(recoil.armKickScale || 1));
+                if (state.avatarRigApi.rig.armR) state.avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR * armKickScale;
+                if (state.avatarRigApi.rig.armL) state.avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL * armKickScale;
             }
         }
 

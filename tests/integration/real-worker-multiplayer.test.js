@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { buildExpectedWorldMeta } from '../../shared/protocol.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
 import { PLAYER_HEIGHT, PLAYER_RADIUS } from '../../shared/entity-constants.js';
+import { gameplayTuning } from '../../shared/gameplay-tuning.js';
 import { createRealWorkerHarness } from '../helpers/real-worker-harness.js';
 
 const SNAPSHOT_TIMEOUT_MS = 15_000;
@@ -13,6 +14,11 @@ const MOVEMENT_STEP_DT_MS = 50;
 const MOVEMENT_STEP_WAIT_MS = 15;
 const MOVEMENT_STEPS = 16;
 const COMBAT_FOV_DEG = 56;
+const RIFLE_MAGAZINE_SIZE = Number(gameplayTuning.weaponStats && gameplayTuning.weaponStats.rifle && gameplayTuning.weaponStats.rifle.magazineSize || 14);
+const RIFLE_SHOT_WAIT_MS = Math.max(
+  50,
+  Number(gameplayTuning.weaponStats && gameplayTuning.weaponStats.rifle && gameplayTuning.weaponStats.rifle.cooldownMs || 400) + 40
+);
 
 let worker = null;
 
@@ -411,7 +417,7 @@ test('real worker: authoritative fire produces damage and death through the serv
         }, SNAPSHOT_TIMEOUT_MS);
         sawRespawn = !!respawn;
       } else {
-        await delay(320);
+        await delay(RIFLE_SHOT_WAIT_MS);
       }
     }
 
@@ -547,7 +553,7 @@ test('real worker: reload blocks fire until the server finishes reloading', { ti
         estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
       });
       await target.waitForMessage('damage_event', (message) => String(message.shotToken || '') === `reload-primer-${shotIndex}`, SNAPSHOT_TIMEOUT_MS);
-      await delay(320);
+      await delay(RIFLE_SHOT_WAIT_MS);
     }
 
     await shooter.sendReload('rifle');
@@ -573,16 +579,16 @@ test('real worker: reload blocks fire until the server finishes reloading', { ti
     });
 
     await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === 'reload-blocked', 900);
-    await shooter.waitForSnapshot(() => {
-      const current = shooter.latestEntity(shooter.userId);
-      const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
-      return ammo && Number(ammo.ammoInMag || 0) === duringReloadAmmo;
-    }, SNAPSHOT_TIMEOUT_MS);
+    await delay(300);
+    const blockedFireState = shooter.latestEntity(shooter.userId);
+    assert.ok(blockedFireState && blockedFireState.weaponAmmo && blockedFireState.weaponAmmo.rifle);
+    assert.equal(Number(blockedFireState.weaponAmmo.rifle.ammoInMag || 0), duringReloadAmmo);
+    assert.equal(!!blockedFireState.weaponAmmo.rifle.reloading, true);
 
     await shooter.waitForSnapshot(() => {
       const current = shooter.latestEntity(shooter.userId);
       const ammo = current && current.weaponAmmo && current.weaponAmmo.rifle;
-      return ammo && !ammo.reloading && Number(ammo.ammoInMag || 0) >= 15;
+      return ammo && !ammo.reloading && Number(ammo.ammoInMag || 0) >= RIFLE_MAGAZINE_SIZE;
     }, SNAPSHOT_TIMEOUT_MS);
 
     const postReloadState = shooter.latestEntity(shooter.userId);
@@ -726,5 +732,55 @@ test('real worker: delayed inputs still converge without giant teleports', { tim
       maxStep = Math.max(maxStep, distanceXZ(samples[i], samples[i - 1]));
     }
     assert.ok(maxStep < 4.0, `expected no giant teleports, saw step ${maxStep.toFixed(3)}`);
+  });
+});
+
+test('real worker: packet loss with delay still converges without repeated giant teleports', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('loss');
+  const lossyMover = await worker.connectClient({
+    roomId,
+    userId: buildUserId('loss_mover'),
+    username: 'LOSS_MOVER',
+    outboundDelayMs: 60,
+    outboundJitterMs: 25,
+    outboundDropRate: 0.25,
+    randomSeed: 7
+  });
+  const observer = await worker.connectClient({ roomId, userId: buildUserId('loss_observer'), username: 'LOSS_OBSERVER' });
+
+  await withDebug(roomId, [lossyMover, observer], async () => {
+    await lossyMover.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, lossyMover, observer, [lossyMover.userId, observer.userId]);
+
+    await applyFixtureAndWait(roomId, [lossyMover, observer], [
+      { userId: lossyMover.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: observer.userId, x: openLayout.observer.x, z: openLayout.observer.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    const startIndex = observer.messages.length;
+    const startSnapshot = observer.latestSnapshot;
+    const startServerTime = Number(startSnapshot && startSnapshot.serverTime || 0);
+
+    await sendForwardBurst(lossyMover, 1, MOVEMENT_STEPS);
+    await observer.waitForSnapshot((message) => Number(message.serverTime || 0) > startServerTime, SNAPSHOT_TIMEOUT_MS);
+
+    await waitForCondition(() => {
+      const moverSelf = lossyMover.latestEntity(lossyMover.userId);
+      const moverRemote = observer.latestEntity(lossyMover.userId);
+      if (!moverSelf || !moverRemote) return false;
+      return distanceXZ(moverSelf, moverRemote) < 1.8 ? true : false;
+    }, SNAPSHOT_TIMEOUT_MS, 'lossy delayed movement convergence');
+
+    const samples = snapshotEntitySamples(observer, lossyMover.userId, startIndex);
+    assert.ok(samples.length >= 2);
+    let maxStep = 0;
+    for (let i = 1; i < samples.length; i++) {
+      maxStep = Math.max(maxStep, distanceXZ(samples[i], samples[i - 1]));
+    }
+    assert.ok(maxStep < 4.5, `expected no repeated giant teleports, saw step ${maxStep.toFixed(3)}`);
+
+    const stats = lossyMover.getTransportStats();
+    assert.ok(stats.droppedOutboundCount > 0);
   });
 });

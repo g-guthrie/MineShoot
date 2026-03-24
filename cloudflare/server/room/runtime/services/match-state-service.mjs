@@ -1,6 +1,7 @@
 export function emptyMatchState(gameMode, targetProgress) {
   return {
     gameMode: gameMode || 'ffa',
+    stockMode: String(gameMode || 'ffa') === 'ffa',
     started: false,
     ended: false,
     startedAt: 0,
@@ -11,7 +12,11 @@ export function emptyMatchState(gameMode, targetProgress) {
     leaderProgress: 0,
     leaderId: '',
     winnerId: '',
-    winnerTeam: ''
+    winnerTeam: '',
+    aliveCount: 0,
+    startingStocks: 3,
+    maxStocks: 5,
+    maxBonusLives: 2
   };
 }
 
@@ -19,6 +24,7 @@ export function serializeMatchState(matchState, gameMode, fallbackTargetProgress
   const match = matchState || emptyMatchState(gameMode, fallbackTargetProgress);
   return {
     gameMode: gameMode || 'ffa',
+    stockMode: !!match.stockMode,
     started: !!match.started,
     ended: !!match.ended,
     startedAt: match.startedAt || 0,
@@ -29,13 +35,45 @@ export function serializeMatchState(matchState, gameMode, fallbackTargetProgress
     leaderProgress: Number(match.leaderProgress || 0),
     leaderId: match.leaderId || '',
     winnerId: match.winnerId || '',
-    winnerTeam: ''
+    winnerTeam: '',
+    aliveCount: Math.max(0, Number(match.aliveCount || 0)),
+    startingStocks: Math.max(1, Number(match.startingStocks || 3)),
+    maxStocks: Math.max(1, Number(match.maxStocks || 5)),
+    maxBonusLives: Math.max(0, Number(match.maxBonusLives || 2))
   };
+}
+
+function resetPlayerForRound(runtime, player, options = {}) {
+  if (!player) return;
+  player.kills = 0;
+  player.deaths = 0;
+  player.progressScore = 0;
+  player.stocksRemaining = Math.max(1, Number(options.startingStocks || 3));
+  player.maxStocks = Math.max(player.stocksRemaining, Number(options.maxStocks || 5));
+  player.bonusLivesEarned = 0;
+  player.extraLifeProgressPct = 0;
+  player.eliminated = false;
+  player.hp = player.hpMax;
+  player.armor = player.armorMax;
+  player.alive = true;
+  player.respawnAt = 0;
+  player.lastDamageAt = 0;
+  player.plannedSpawnPoint = null;
+  if (typeof runtime.spawnEntityRandomly === 'function') {
+    runtime.spawnEntityRandomly(player);
+  }
+  if (typeof runtime.applySpawnShield === 'function') {
+    runtime.applySpawnShield(player);
+  }
+  if (typeof runtime.syncPlayerResultFromEntity === 'function') {
+    runtime.syncPlayerResultFromEntity(player);
+  }
 }
 
 export function updateLeaderProgress(runtime) {
   let leaderId = '';
   let leaderProgress = 0;
+  let aliveCount = 0;
   for (const result of runtime.playerResults.values()) {
     if (!result) continue;
     const progress = Number(result.progressScore || 0);
@@ -43,9 +81,29 @@ export function updateLeaderProgress(runtime) {
       leaderProgress = progress;
       leaderId = result.id;
     }
+    if (!result.eliminated) aliveCount += 1;
   }
   runtime.matchState.leaderId = leaderId;
   runtime.matchState.leaderProgress = Number(leaderProgress.toFixed(3));
+  runtime.matchState.aliveCount = aliveCount;
+
+  if (
+    runtime.matchState &&
+    runtime.matchState.stockMode &&
+    runtime.matchState.started &&
+    !runtime.matchState.ended &&
+    aliveCount <= 1
+  ) {
+    let winnerId = '';
+    for (const result of runtime.playerResults.values()) {
+      if (!result || result.eliminated) continue;
+      winnerId = result.id;
+      break;
+    }
+    if (winnerId) {
+      finishPublicMatch(runtime, winnerId, 5000);
+    }
+  }
 }
 
 export function startPublicMatchIfReady(runtime, connectedUserIds, options = {}) {
@@ -62,15 +120,30 @@ export function startPublicMatchIfReady(runtime, connectedUserIds, options = {})
   runtime.matchState.winnerId = '';
   runtime.matchState.leaderId = '';
   runtime.matchState.leaderProgress = 0;
+  runtime.matchState.aliveCount = connectedCount;
   runtime.matchState.matchBaselinePlayerCount = connectedCount;
   runtime.matchState.targetProgress = Number(options.targetProgress || runtime.matchState.targetProgress || 0);
+  runtime.matchState.startingStocks = 3;
+  runtime.matchState.maxStocks = 5;
+  runtime.matchState.maxBonusLives = 2;
 
   for (const player of runtime.players.values()) {
     if (!player) continue;
     const result = runtime.ensurePlayerResult(player.id, player.username);
     if (!result) continue;
-    result.progressScore = Math.max(0, Number(result.kills || 0));
+    result.kills = 0;
+    result.deaths = 0;
+    result.progressScore = 0;
+    result.stocksRemaining = 3;
+    result.maxStocks = 5;
+    result.bonusLivesEarned = 0;
+    result.extraLifeProgressPct = 0;
+    result.eliminated = false;
     runtime.applyResultToPlayer(player, result);
+    resetPlayerForRound(runtime, player, {
+      startingStocks: 3,
+      maxStocks: 5
+    });
   }
   updateLeaderProgress(runtime);
   return true;
@@ -84,10 +157,10 @@ export function maybeResetPublicMatch(runtime, connectedUserIds, options = {}) {
   runtime.playerResults.clear();
   for (const player of runtime.players.values()) {
     if (!player) continue;
-    player.progressScore = 0;
-    player.kills = 0;
-    player.deaths = 0;
-    player.plannedSpawnPoint = null;
+    resetPlayerForRound(runtime, player, {
+      startingStocks: 3,
+      maxStocks: 5
+    });
     runtime.ensurePlayerResult(player.id, player.username);
     runtime.syncPlayerResultFromEntity(player);
   }
@@ -118,11 +191,24 @@ export function recordElimination(runtime, sourceId, targetId, options = {}) {
   sourceResult.kills = Math.max(0, Number(sourceResult.kills || 0)) + 1;
   targetResult.deaths = Math.max(0, Number(targetResult.deaths || 0)) + 1;
   sourceResult.progressScore = Math.max(0, Number(sourceResult.kills || 0));
+  targetResult.stocksRemaining = Math.max(0, Number(target.stocksRemaining || 0));
+  targetResult.maxStocks = Math.max(targetResult.stocksRemaining, Number(target.maxStocks || 0));
+  targetResult.bonusLivesEarned = Math.max(0, Number(target.bonusLivesEarned || 0));
+  targetResult.extraLifeProgressPct = Math.max(0, Math.min(100, Number(target.extraLifeProgressPct || 0)));
+  targetResult.eliminated = !!target.eliminated;
+  sourceResult.stocksRemaining = Math.max(0, Number(source.stocksRemaining || 0));
+  sourceResult.maxStocks = Math.max(sourceResult.stocksRemaining, Number(source.maxStocks || 0));
+  sourceResult.bonusLivesEarned = Math.max(0, Number(source.bonusLivesEarned || 0));
+  sourceResult.extraLifeProgressPct = Math.max(0, Math.min(100, Number(source.extraLifeProgressPct || 0)));
+  sourceResult.eliminated = !!source.eliminated;
   runtime.applyResultToPlayer(source, sourceResult);
   runtime.applyResultToPlayer(target, targetResult);
   updateLeaderProgress(runtime);
 
-  if (Number(sourceResult.kills || 0) >= Number(runtime.matchState.targetProgress || options.targetProgress || 0)) {
+  if (
+    !runtime.matchState.stockMode &&
+    Number(sourceResult.kills || 0) >= Number(runtime.matchState.targetProgress || options.targetProgress || 0)
+  ) {
     finishPublicMatch(runtime, source.id, options.resetDelayMs);
   }
 }

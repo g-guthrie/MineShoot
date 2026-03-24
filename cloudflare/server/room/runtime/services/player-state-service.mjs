@@ -4,7 +4,12 @@ export function emptyPlayerResult(userId = '', username = '') {
     username: String(username || 'player'),
     kills: 0,
     deaths: 0,
-    progressScore: 0
+    progressScore: 0,
+    stocksRemaining: 3,
+    maxStocks: 5,
+    bonusLivesEarned: 0,
+    extraLifeProgressPct: 0,
+    eliminated: false
   };
 }
 
@@ -31,6 +36,11 @@ export function applyResultToPlayer(_runtime, player, result) {
   player.kills = Math.max(0, Number(result.kills || 0));
   player.deaths = Math.max(0, Number(result.deaths || 0));
   player.progressScore = Math.max(0, Number(result.progressScore || 0));
+  player.stocksRemaining = Math.max(0, Number(result.stocksRemaining != null ? result.stocksRemaining : player.stocksRemaining || 0));
+  player.maxStocks = Math.max(player.stocksRemaining, Number(result.maxStocks != null ? result.maxStocks : player.maxStocks || 0));
+  player.bonusLivesEarned = Math.max(0, Number(result.bonusLivesEarned || 0));
+  player.extraLifeProgressPct = Math.max(0, Math.min(100, Number(result.extraLifeProgressPct || 0)));
+  player.eliminated = !!result.eliminated;
 }
 
 export function syncPlayerResultFromEntity(runtime, player) {
@@ -41,6 +51,11 @@ export function syncPlayerResultFromEntity(runtime, player) {
   result.kills = Math.max(0, Number(player.kills || 0));
   result.deaths = Math.max(0, Number(player.deaths || 0));
   result.progressScore = Math.max(0, Number(player.progressScore || result.kills || 0));
+  result.stocksRemaining = Math.max(0, Number(player.stocksRemaining || 0));
+  result.maxStocks = Math.max(result.stocksRemaining, Number(player.maxStocks || 0));
+  result.bonusLivesEarned = Math.max(0, Number(player.bonusLivesEarned || 0));
+  result.extraLifeProgressPct = Math.max(0, Math.min(100, Number(player.extraLifeProgressPct || 0)));
+  result.eliminated = !!player.eliminated;
   return result;
 }
 

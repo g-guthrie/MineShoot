@@ -172,6 +172,46 @@ test('snapshot runtime sends viewer deltas and preserves snapshot bookkeeping', 
   assert.deepEqual(room.sent[0].payload.entities.map((entity) => entity.id), ['u2']);
 });
 
+test('snapshot runtime still sends when only room state changes', () => {
+  const room = makeRoom();
+  const ws = { id: 'socket-1' };
+  room.players.set('u1', baseEntity('u1'));
+  room.clients.set(ws, { userId: 'u1' });
+  room.activeSocketByUserId.set('u1', ws);
+
+  const firstFrame = collectSnapshotFrame(room, 700);
+  const meta = room.clients.get(ws);
+  assert.equal(sendSnapshotToClient(room, ws, meta, firstFrame, { forceFull: true }, snapshotDeps()), true);
+
+  room.sent.length = 0;
+  room.matchState.started = true;
+  room.matchState.startedAt = 800;
+  const nextFrame = collectSnapshotFrame(room, 800);
+  assert.equal(sendSnapshotToClient(room, ws, meta, nextFrame, {}, snapshotDeps()), true);
+  assert.equal(room.sent.length, 1);
+  assert.equal(room.sent[0].payload.matchState.started, true);
+});
+
+test('snapshot runtime serializes entity timers from the frame timestamp', () => {
+  const room = makeRoom();
+  room.players.set('u1', baseEntity('u1', {
+    abilityCooldownUntil: 550,
+    weaponAmmo: {
+      rifle: {
+        ammoInMag: 0,
+        reloadUntil: 560,
+        reloadedFlashUntil: 0
+      }
+    }
+  }));
+
+  const frame = collectSnapshotFrame(room, 500);
+  const entity = frame.entities[0];
+
+  assert.equal(Number(entity.cooldownRemaining.toFixed(2)), 0.05);
+  assert.equal(Number(entity.weaponAmmo.rifle.reloadRemaining.toFixed(2)), 0.06);
+});
+
 test('snapshot runtime tracks engagements and broadcasts to active clients only', () => {
   const room = makeRoom();
   const activeWs = { id: 'active' };

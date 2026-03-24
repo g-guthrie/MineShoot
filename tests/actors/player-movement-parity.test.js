@@ -9,6 +9,7 @@ import {
   stepAuthoritativeMovement
 } from '../../shared/authoritative-movement.js';
 import {
+  buildReplayStepsFromPendingInputs,
   replayMotionState,
   shouldReplayAuthoritativeCorrection
 } from '../../shared/authoritative-reconciliation.js';
@@ -123,6 +124,7 @@ async function loadPlayerMovementHarness(options = {}) {
         stepAuthoritativeMovement
       },
       authoritativeReconciliation: {
+        buildReplayStepsFromPendingInputs,
         replayMotionState,
         shouldReplayAuthoritativeCorrection
       },
@@ -181,7 +183,6 @@ async function loadPlayerMovementHarness(options = {}) {
           setAlive() {},
           setHitboxVisibility() {},
           syncHitboxes() {},
-          setHealFlash() {},
           setSpawnShield() {},
           setWeapon() {},
           setWorldTransform(position, nextYaw) {
@@ -618,5 +619,58 @@ test('player replay correction restores the airborne forward jump path after loc
     fallbackPitch: acknowledged.pitch
   });
 
+  assertPlayerMatchesExpected(harness.player, expectedCorrected);
+});
+
+test('player replay correction stays replay-first for a recent fast sprint window instead of hard snapping', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const acknowledged = createExpectedEntity(harness.worldState.spawn);
+  const sprintInputs = [];
+  for (let i = 0; i < 4; i++) {
+    sprintInputs.push({
+      seq: i + 2,
+      dtMs: 50,
+      yaw: acknowledged.yaw,
+      pitch: acknowledged.pitch,
+      inputState: createInputState({ forward: true, sprint: true })
+    });
+  }
+
+  const expectedCorrected = replayMotionState(acknowledged, sprintInputs, {
+    stepMovement: stepAuthoritativeMovement,
+    bounds: harness.worldState.bounds,
+    collisionBoxes: harness.worldState.collisionBoxes,
+    getGroundHeightAt: harness.worldState.getGroundHeightAt,
+    movementLocked: false,
+    eyeHeight: 1.6,
+    playerHeight: 1.7,
+    playerRadius: 0.35,
+    epsilon: 0.001,
+    fallbackYaw: acknowledged.yaw,
+    fallbackPitch: acknowledged.pitch
+  });
+
+  harness.player.applyAuthoritativeMotion({
+    ...expectedCorrected,
+    z: acknowledged.z - 5.1
+  });
+
+  const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
+    dt: 0.05,
+    allowReplayCorrection: true,
+    pendingInputCount: sprintInputs.length,
+    lastSentSeq: sprintInputs.length + 1,
+    lastAckedSeq: 1,
+    latestPendingAgeMs: 80,
+    latestAckAgeMs: 20,
+    ackDrift: sprintInputs.length,
+    hasUnsentInputTail: true,
+    inputSendIntervalMs: 50,
+    pendingInputs: sprintInputs,
+    rttMs: 60,
+    rttJitterMs: 0
+  });
+
+  assert.equal(corrected, true);
   assertPlayerMatchesExpected(harness.player, expectedCorrected);
 });

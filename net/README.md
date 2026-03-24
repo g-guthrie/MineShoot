@@ -1,15 +1,23 @@
 # net
 
-Owns client protocol, transport, prediction, reconciliation, state views, authoritative sync, and room connection behavior.
+Canonical client networking ownership:
 
-Status:
-- Rewrite landing zone created.
-- Authoritative room, self, match, world, input-history, and queue state now starts in `js/net/runtime-state.js`.
-- Net effects and helper state now start in `js/net/effects.js`.
-- The public browser networking surface now starts in `js/net/facade.js`.
-- The live browser networking surface remains `js/net/network.js`, with ownership split across `js/net/runtime-state.js`, `js/net/runtime-core.js`, `js/net/state-view.js`, `js/net/effects.js`, `js/net/facade.js`, and neighboring helpers.
+- `js/net/network.js` composes the live browser networking surface.
+- `js/net/runtime-state.js` owns authoritative net state, pending input history, and snapshot maps.
+- `js/net/runtime-core.js` owns socket lifecycle, input send cadence, and frame-time network updates.
+- `js/net/state-view.js` exposes read-only selectors and the self-reconciliation contract.
+- `js/net/effects.js` owns net-driven gameplay side effects and spawn sync.
+- `js/net/self-motion-sync.js` owns local authoritative motion correction decisions.
+- `js/net/remote-entities.js` plus `js/net/interpolation.js` own canonical remote presentation buffering and smoothing.
 
-Networking tests:
-- Run `npm run test:networking`.
-- This starts the local Wrangler backend, opens multiple headless WebSocket clients, and exercises real room join, movement, server-authoritative damage, reconnect, delayed-input, reload, cooldown, and observer-sync scenarios.
-- If you want Codex to run it later, you can simply say: `run the networking tests`.
+Rules:
+
+- The browser net lane reads from the live server room path only.
+- `state-view` should consume canonical remote presentation data, not re-implement smoothing rules.
+- Wiring files should pass data between owners, not hide movement policy.
+
+Validation:
+
+- Run `npm run test:networking` for the stable smoke pass.
+- Run `npm run test:networking:full` for the broader networking suites.
+- See [network-debugging.md](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/docs/network-debugging.md) for the canonical debugging path.

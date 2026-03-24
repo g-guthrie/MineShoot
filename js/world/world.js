@@ -1,4 +1,8 @@
 import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
+import {
+    compileCylinderColliderBoxes,
+    compileDomeColliderBoxes
+} from '../../shared/collider-authoring.js';
 
 /**
  * world.js - Static authored world layout for open-arena combat.
@@ -66,6 +70,7 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
     var activeScene = null;
     var worldSceneObjects = [];
     var boxGeometryCache = {};
+    var colliderMaterial = null;
 
     var animatedWaterfallSheets = [];
     var animatedMistCards = [];
@@ -232,6 +237,14 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
         if (!object) return object;
         targetScene.add(object);
         return trackWorldObject(object);
+    }
+
+    function getColliderMaterial() {
+        if (colliderMaterial) return colliderMaterial;
+        colliderMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        colliderMaterial.userData = colliderMaterial.userData || {};
+        colliderMaterial.userData.__mayhemSharedMaterial = true;
+        return colliderMaterial;
     }
 
     function disposeObjectGeometry(object, disposedGeometries) {
@@ -407,6 +420,44 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             collidables.push(mesh);
         }
 
+        function applyColliderUserData(mesh, spec, primitive, sliceIndex, sliceCount) {
+            if (!mesh) return mesh;
+            mesh.userData = mesh.userData || {};
+            mesh.userData.collisionAuthoring = true;
+            mesh.userData.collisionPrimitive = String(primitive || '');
+            mesh.userData.collisionSliceIndex = Math.max(0, Number(sliceIndex || 0));
+            mesh.userData.collisionSliceCount = Math.max(1, Number(sliceCount || 1));
+            if (spec && spec.role) mesh.userData.role = String(spec.role);
+            if (spec && spec.collisionGroup) mesh.userData.collisionGroup = String(spec.collisionGroup);
+            var meta = spec && spec.meta && typeof spec.meta === 'object' ? spec.meta : null;
+            if (meta) {
+                for (var key in meta) {
+                    mesh.userData[key] = meta[key];
+                }
+            }
+            return mesh;
+        }
+
+        function addColliderBoxes(boxes, spec, primitive) {
+            var out = [];
+            for (var i = 0; i < boxes.length; i++) {
+                var box = boxes[i];
+                if (!box) continue;
+                var mesh = new THREE.Mesh(
+                    getSharedBoxGeometry(box.w, box.h, box.d),
+                    getColliderMaterial()
+                );
+                mesh.position.set(box.x, box.y, box.z);
+                mesh.visible = false;
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
+                applyColliderUserData(mesh, spec, primitive, i, boxes.length);
+                markSolid(mesh);
+                out.push(mesh);
+            }
+            return out;
+        }
+
         function addBlock(x, y, z, w, h, d, material, isSolid) {
             var geo = getSharedBoxGeometry(w, h, d);
             var mesh = new THREE.Mesh(geo, material);
@@ -443,10 +494,33 @@ import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
             return mesh;
         }
 
+        function addCylinderCollider(spec) {
+            return addColliderBoxes(compileCylinderColliderBoxes(spec || {}), spec || {}, 'cylinder');
+        }
+
+        function addDomeCollider(spec) {
+            return addColliderBoxes(compileDomeColliderBoxes(spec || {}), spec || {}, 'dome');
+        }
+
+        function addBoxCollider(spec) {
+            spec = spec || {};
+            return addColliderBoxes([{
+                x: Number(spec.x || 0),
+                y: Number(spec.y || 0),
+                z: Number(spec.z || 0),
+                w: Number(spec.w || 0),
+                h: Number(spec.h || 0),
+                d: Number(spec.d || 0)
+            }], spec, 'box');
+        }
+
         var place = {
             addBlock: addBlock,
             addRamp: addRamp,
-            addDecor: addDecor
+            addDecor: addDecor,
+            addBoxCollider: addBoxCollider,
+            addCylinderCollider: addCylinderCollider,
+            addDomeCollider: addDomeCollider
         };
 
         var quadrantCtx = {

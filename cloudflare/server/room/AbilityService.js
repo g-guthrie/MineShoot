@@ -14,7 +14,6 @@ const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const MSG_S2C = protocol.msg.s2c;
 const DEAD_EYE_LOCKS = { weapon: true, throwable: true };
 const HOOK_LOCKS = { weapon: true, throwable: true };
-const HEAL_LOCKS = { weapon: true, throwable: true };
 
 function applyActionLocks(entity, until, locks) {
   if (!entity || !locks) return;
@@ -251,18 +250,6 @@ export function castHook(room, player, cfg, _msg, now) {
   return { ok: true, kind: 'ability_hook_start' };
 }
 
-export function castHeal(_room, player, cfg, _msg, now) {
-  player.healState = {
-    startedAt: now,
-    endsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000),
-    healAmount: Math.max(1, Math.round(Number(cfg.healAmount || 150))),
-    applied: false,
-    lockEndsAt: now + Math.round(Math.max(0.1, Number(cfg.duration || 0.85)) * 1000)
-  };
-  applyActionLocks(player, player.healState.lockEndsAt, HEAL_LOCKS);
-  return { ok: true, kind: 'ability_heal_start' };
-}
-
 export function castMissile(room, player, cfg, msg, _now) {
   const projectile = room.spawnProjectile(
     player,
@@ -286,7 +273,6 @@ export function castAbility(room, player, abilityId, cfg, msg, now) {
   if (abilityId === 'choke') return castChoke(room, player, cfg, msg, now);
   if (abilityId === 'hook') return castHook(room, player, cfg, msg, now);
   if (abilityId === 'missile') return castMissile(room, player, cfg, msg, now);
-  if (abilityId === 'heal') return castHeal(room, player, cfg, msg, now);
   if (abilityId === 'deadeye') return castDeadeye(room, player, cfg, msg, now);
   return { ok: false };
 }
@@ -478,18 +464,6 @@ export function tickClassAbilityState(room, entity) {
     } else if (now >= (state.endsAt || 0)) {
       clearActionLocks(entity, state.lockEndsAt || state.endsAt || 0, HOOK_LOCKS);
       entity.hookState = null;
-    }
-  }
-
-  if (entity.healState) {
-    const state = entity.healState;
-    if (now >= (state.endsAt || 0)) {
-      if (!state.applied) {
-        entity.hp = Math.min(entity.hpMax, entity.hp + Math.max(1, Math.round(Number(state.healAmount || 150))));
-        state.applied = true;
-      }
-      clearActionLocks(entity, state.lockEndsAt || state.endsAt || 0, HEAL_LOCKS);
-      entity.healState = null;
     }
   }
 

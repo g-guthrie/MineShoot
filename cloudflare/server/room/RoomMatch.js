@@ -25,6 +25,27 @@ function buildTeamStatMap(teamIds, source) {
   return out;
 }
 
+function resetPlayerForRound(room, player) {
+  if (!player || player.fixtureType === 'sim_player') return;
+  player.teamId = '';
+  player.progressScore = 0;
+  player.kills = 0;
+  player.deaths = 0;
+  player.stocksRemaining = 3;
+  player.maxStocks = 5;
+  player.bonusLivesEarned = 0;
+  player.extraLifeProgressPct = 0;
+  player.eliminated = false;
+  player.hp = player.hpMax;
+  player.armor = player.armorMax;
+  player.alive = true;
+  player.respawnAt = 0;
+  player.lastDamageAt = 0;
+  player.plannedSpawnPoint = null;
+  if (room.spawnEntityRandomly) room.spawnEntityRandomly(player);
+  if (room.applySpawnShield) room.applySpawnShield(player);
+}
+
 export function syncPrivateRoomMatchState(room, deps) {
   deps = deps || {};
   const isPrivateMatchRoom = deps.isPrivateMatchRoom;
@@ -49,6 +70,7 @@ export function syncPrivateRoomMatchState(room, deps) {
   }
   room.matchState.started = String((room.privateRoomConfig && room.privateRoomConfig.roomPhase) || '') === 'active';
   room.matchState.startedAt = room.matchState.started ? nowMs() : 0;
+  room.matchState.aliveCount = 0;
   const teams = (room.privateRoomConfig && room.privateRoomConfig.teams) || new Map();
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player') continue;
@@ -56,6 +78,10 @@ export function syncPrivateRoomMatchState(room, deps) {
       ? String(teams.get(player.actorId || player.id) || teamIds[0] || teamAlpha)
       : '';
     player.progressScore = 0;
+    if (room.gameMode === gameModeFfa) {
+      resetPlayerForRound(room, player);
+      room.matchState.aliveCount += 1;
+    }
   }
   if (room.gameMode === gameModeTdm) {
     for (let i = 0; i < teamIds.length; i++) {
@@ -85,11 +111,7 @@ export function resetPublicRoomToIdle(room, deps) {
 
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player') continue;
-    player.teamId = '';
-    player.progressScore = 0;
-    player.kills = 0;
-    player.deaths = 0;
-    player.plannedSpawnPoint = null;
+    resetPlayerForRound(room, player);
   }
   return true;
 }
@@ -168,6 +190,10 @@ export function startPublicMatchIfReady(room, deps) {
   room.matchState.resetAt = 0;
   room.matchState.winnerId = '';
   room.matchState.winnerTeam = '';
+  room.matchState.aliveCount = connectedCount;
+  room.matchState.startingStocks = 3;
+  room.matchState.maxStocks = 5;
+  room.matchState.maxBonusLives = 2;
   room.matchState.targetProgress = room.gameMode === gameModeTdm
     ? Number(deps.tdmTargetProgress || 10)
     : Number(deps.ffaTargetProgress || 10);
@@ -179,8 +205,7 @@ export function startPublicMatchIfReady(room, deps) {
   if (room.gameMode === gameModeFfa) {
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
-      player.teamId = '';
-      player.progressScore = Math.max(0, Number(player.kills || 0));
+      resetPlayerForRound(room, player);
     }
   } else if (room.gameMode === gameModeTdm) {
     for (const player of room.players.values()) {
@@ -224,11 +249,7 @@ export function maybeResetPublicMatch(room, deps) {
   }
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player') continue;
-    player.progressScore = 0;
-    player.teamId = '';
-    player.kills = 0;
-    player.deaths = 0;
-    player.plannedSpawnPoint = null;
+    resetPlayerForRound(room, player);
   }
   if (shouldAutoStartPrivate) {
     room.syncPrivateRoomMatchState();
@@ -246,6 +267,7 @@ export function updateLeaderProgress(room, deps) {
   if (room.gameMode === gameModeFfa) {
     let leaderId = '';
     let leaderProgress = 0;
+    let aliveCount = 0;
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
       const progress = Number(player.progressScore || 0);
@@ -253,9 +275,22 @@ export function updateLeaderProgress(room, deps) {
         leaderProgress = progress;
         leaderId = player.id;
       }
+      if (!player.eliminated) aliveCount += 1;
     }
     room.matchState.leaderId = leaderId;
     room.matchState.leaderProgress = Number(leaderProgress.toFixed(3));
+    room.matchState.aliveCount = aliveCount;
+    if (room.matchState.stockMode && room.matchState.started && !room.matchState.ended && aliveCount <= 1) {
+      let winnerId = '';
+      for (const player of room.players.values()) {
+        if (!player || player.fixtureType === 'sim_player' || player.eliminated) continue;
+        winnerId = player.id;
+        break;
+      }
+      if (winnerId) {
+        room.finishPublicMatch(winnerId, '');
+      }
+    }
     return;
   }
 
@@ -301,8 +336,9 @@ export function recordElimination(room, deps, sourceId, targetId) {
 
   if (room.gameMode === gameModeFfa) {
     source.progressScore = Math.max(0, Number(source.kills || 0));
+    target.progressScore = Math.max(0, Number(target.kills || 0));
     room.updateLeaderProgress();
-    if (Number(source.kills || 0) >= Number(room.matchState.targetProgress || deps.ffaTargetProgress || 10)) {
+    if (!room.matchState.stockMode && Number(source.kills || 0) >= Number(room.matchState.targetProgress || deps.ffaTargetProgress || 10)) {
       room.finishPublicMatch(source.id, '');
     }
     return;

@@ -36,22 +36,17 @@
         return out;
     }
 
-    function normalizeFalloffBands(bands) {
-        if (!Array.isArray(bands) || bands.length === 0) return [];
-        var out = [];
-        for (var i = 0; i < bands.length; i++) {
-            var band = bands[i] || {};
-            var maxDistance = Number(band.maxDistance);
-            var scale = Number(band.scale);
-            if (!isFinite(maxDistance) || maxDistance <= 0) continue;
-            if (!isFinite(scale)) continue;
-            out.push({
-                maxDistance: maxDistance,
-                scale: Math.max(0, scale)
-            });
-        }
-        out.sort(function (a, b) { return a.maxDistance - b.maxDistance; });
-        return out;
+    function normalizeFalloffProfile(profile) {
+        if (!profile || typeof profile !== 'object') return null;
+        var start = Number(profile.start);
+        var end = Number(profile.end);
+        var minScalar = Number(profile.minScalar);
+        if (!isFinite(start) || !isFinite(end) || !isFinite(minScalar)) return null;
+        return {
+            start: Math.max(0, start),
+            end: Math.max(Math.max(0, start), end),
+            minScalar: Math.max(0, Math.min(1, minScalar))
+        };
     }
 
     var cachedClassAbilityTuning = null;
@@ -65,7 +60,6 @@
         var hook = catalog.hook || {};
         var missile = catalog.missile || {};
         var deadeye = catalog.deadeye || {};
-        var heal = catalog.heal || {};
 
         return {
             awareness: {
@@ -131,8 +125,6 @@
                 missileLockHalfAngleDeg: finiteOr(missile.lockHalfAngleDeg, 0),
                 missileHomingBoost: finiteOr(missile.homingBoost, 0),
                 missileHomingLerp: finiteOr(missile.homingLerp, 0),
-                healDuration: finiteOr(heal.duration, 0),
-                healAmount: finiteOr(heal.healAmount, 0),
                 deadeyeLockBoxPx: finiteOr(deadeye.lockBoxPx, 0),
                 deadeyeLockRange: finiteOr(deadeye.range, 0),
                 deadeyeDuration: finiteOr(deadeye.duration, 0),
@@ -174,10 +166,10 @@
     GameCombatTuning.getWeaponFalloffTuning = function (weaponId) {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
         if (shared.getWeaponFalloffProfile) {
-            return normalizeFalloffBands(shared.getWeaponFalloffProfile(weaponId));
+            return normalizeFalloffProfile(shared.getWeaponFalloffProfile(weaponId));
         }
         var tuning = shared.gameplayTuning || {};
-        return normalizeFalloffBands(tuning.weaponFalloff && tuning.weaponFalloff[String(weaponId || '')]);
+        return normalizeFalloffProfile(tuning.weaponFalloff && tuning.weaponFalloff[String(weaponId || '')]);
     };
 
     GameCombatTuning.getThrowableDistanceTuning = function () {

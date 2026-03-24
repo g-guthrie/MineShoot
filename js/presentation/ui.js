@@ -304,7 +304,7 @@
             hitmarkerEl.style.color = '#ff0000';
             hitmarkerEl.style.fontSize = '28px';
         }
-        if (killCounterEl) killCounterEl.textContent = 'Kills: 0';
+        if (killCounterEl) killCounterEl.textContent = '';
         if (damageNumbersEl) clearChildren(damageNumbersEl);
         if (debugInfoEl) debugInfoEl.textContent = '';
         GameUI.setIdleWarning('');
@@ -380,6 +380,27 @@
     GameUI.updateMatchStatus = function (matchState, selfState) {
         killCount = Math.max(0, Number(selfState && selfState.kills || 0));
         if (!killCounterEl) return;
+        if (!matchState && !selfState) {
+            killCounterEl.textContent = '';
+            return;
+        }
+        var stockMode = !!(matchState && matchState.stockMode) || Number(selfState && selfState.maxStocks || 0) > 0;
+        if (stockMode) {
+            var lives = Math.max(0, Number(selfState && selfState.stocksRemaining || 0));
+            var maxLives = Math.max(lives, Number(selfState && selfState.maxStocks || 0));
+            var aliveCount = Math.max(0, Number(matchState && matchState.aliveCount || 0));
+            var nextLifePct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
+            killCounterEl.innerHTML =
+                '<div class="match-pill-row">' +
+                    '<div class="match-pill"><span class="match-pill-label">LIVES</span><span class="match-pill-value">' + lives + '/' + maxLives + '</span></div>' +
+                    '<div class="match-pill"><span class="match-pill-label">ALIVE</span><span class="match-pill-value">' + aliveCount + '</span></div>' +
+                '</div>' +
+                '<div class="match-pill match-pill-progress">' +
+                    '<div class="match-pill-progress-header"><span class="match-pill-label">NEXT LIFE</span><span class="match-pill-value">' + Math.round(nextLifePct) + '%</span></div>' +
+                    '<div class="match-pill-track"><div class="match-pill-fill" style="width:' + nextLifePct.toFixed(1) + '%"></div></div>' +
+                '</div>';
+            return;
+        }
         var matchRules = sharedMatchRules();
         if (matchRules && matchRules.formatMatchHudCounter) {
             killCounterEl.textContent = matchRules.formatMatchHudCounter(matchState, selfState);

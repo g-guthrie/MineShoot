@@ -30,7 +30,6 @@ function applyActionRuntimeDefaults(entity) {
   entity.justBeenHookedState = null;
   entity.hookState = null;
   entity.hookPullState = null;
-  entity.healState = null;
   return entity;
 }
 
@@ -98,6 +97,11 @@ export function createPlayerEntity(options = {}) {
     kills: 0,
     deaths: 0,
     progressScore: 0,
+    stocksRemaining: 3,
+    maxStocks: 5,
+    bonusLivesEarned: 0,
+    extraLifeProgressPct: 0,
+    eliminated: false,
     teamId: '',
     disconnectedAt: 0
   };
@@ -151,6 +155,12 @@ export function createBotEntity(index, options = {}) {
     aiTurnTimer: 1 + (Math.random() * 3)
   };
 
+  entity.stocksRemaining = 3;
+  entity.maxStocks = 5;
+  entity.bonusLivesEarned = 0;
+  entity.extraLifeProgressPct = 0;
+  entity.eliminated = false;
+
   applyActionRuntimeDefaults(entity);
   return entity;
 }
@@ -163,6 +173,11 @@ export function resetEntityForRespawn(entity, options = {}) {
   entity.alive = true;
   entity.respawnAt = 0;
   entity.lastDamageAt = 0;
+  entity.stocksRemaining = Math.max(1, Number(entity.stocksRemaining || 3));
+  entity.maxStocks = Math.max(entity.stocksRemaining, Number(entity.maxStocks || 5));
+  entity.bonusLivesEarned = Math.max(0, Number(entity.bonusLivesEarned || 0));
+  entity.extraLifeProgressPct = Math.max(0, Math.min(100, Number(entity.extraLifeProgressPct || 0)));
+  entity.eliminated = false;
   entity.streamHeat = 0;
   entity.streamOverheatedUntil = 0;
   entity.lastShotAt = {};

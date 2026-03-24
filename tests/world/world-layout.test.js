@@ -8,6 +8,10 @@ import {
   ensureHeadlessWorldRuntime
 } from '../../shared/headless-world-runtime.js';
 import {
+  compileCylinderColliderBoxes,
+  compileDomeColliderBoxes
+} from '../../shared/collider-authoring.js';
+import {
   BIOME_ARCTIC,
   BIOME_WALL_STREET,
   BIOME_CITADEL,
@@ -28,8 +32,6 @@ import {
 } from '../../shared/world-layout.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
 
-const NUCLEAR_REACTOR_HEIGHT_SCALE = 1.25;
-const NUCLEAR_STEAM_TILE_COUNT_PER_TOWER = 160;
 const CITADEL_STEAM_TILE_COUNT = 56;
 
 test('world layout expands to a 3x3 biome grid', () => {
@@ -106,6 +108,48 @@ function createGeometryRecorder() {
   const decors = [];
   const flickers = [];
   const steamColumns = [];
+
+  function applyColliderUserData(userData, spec, primitive, sliceIndex, sliceCount) {
+    userData.collisionAuthoring = true;
+    userData.collisionPrimitive = String(primitive || '');
+    userData.collisionSliceIndex = Math.max(0, Number(sliceIndex || 0));
+    userData.collisionSliceCount = Math.max(1, Number(sliceCount || 1));
+    if (spec && spec.role) userData.role = String(spec.role);
+    if (spec && spec.collisionGroup) userData.collisionGroup = String(spec.collisionGroup);
+    const meta = spec && spec.meta && typeof spec.meta === 'object' ? spec.meta : null;
+    if (meta) {
+      for (const key in meta) {
+        userData[key] = meta[key];
+      }
+    }
+  }
+
+  function pushColliderBoxes(boxesToAdd, spec, primitive) {
+    const out = [];
+    for (let i = 0; i < boxesToAdd.length; i++) {
+      const box = boxesToAdd[i];
+      const userData = {};
+      applyColliderUserData(userData, spec, primitive, i, boxesToAdd.length);
+      blocks.push({
+        kind: 'block',
+        x: Number(box.x || 0),
+        y: Number(box.y || 0),
+        z: Number(box.z || 0),
+        w: Number(box.w || 0),
+        h: Number(box.h || 0),
+        d: Number(box.d || 0),
+        material: null,
+        isSolid: true,
+        userData
+      });
+      out.push({
+        position: { x: Number(box.x || 0), y: Number(box.y || 0), z: Number(box.z || 0) },
+        userData
+      });
+    }
+    return out;
+  }
+
   return {
     blocks,
     decors,
@@ -175,6 +219,23 @@ function createGeometryRecorder() {
           geometry: geometry || null,
           userData
         };
+      },
+      addBoxCollider(spec) {
+        const value = spec || {};
+        return pushColliderBoxes([{
+          x: Number(value.x || 0),
+          y: Number(value.y || 0),
+          z: Number(value.z || 0),
+          w: Number(value.w || 0),
+          h: Number(value.h || 0),
+          d: Number(value.d || 0)
+        }], value, 'box');
+      },
+      addCylinderCollider(spec) {
+        return pushColliderBoxes(compileCylinderColliderBoxes(spec || {}), spec || {}, 'cylinder');
+      },
+      addDomeCollider(spec) {
+        return pushColliderBoxes(compileDomeColliderBoxes(spec || {}), spec || {}, 'dome');
       }
     },
     ctx: {
@@ -392,7 +453,7 @@ test('desert removes the broken fence clutter from the interior', () => {
   assert.equal(fenceRails.length, 0);
 });
 
-test('nuclear cooling towers stay flush to the east wall while the plant becomes two clean reactor buildings', () => {
+test('nuclear simpsons biome uses shared authored round colliders instead of biome-local hidden collision helpers', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
   assert.equal(typeof builder, 'function');
@@ -406,156 +467,105 @@ test('nuclear cooling towers stay flush to the east wall while the plant becomes
   });
 
   assert.ok(stats);
-  assert.ok(stats.towerPeakHeight >= 42.3);
-  assert.ok(stats.towerPeakHeight <= 42.7);
-  assert.ok(Math.abs(stats.towerEastFaceX - rawBounds.maxX) < 0.001);
-  assert.ok(stats.towerBaseWidth >= 15.5);
-  assert.equal(stats.reactorBuildings, 2);
-  assert.ok(stats.buildingGap >= 4);
-  assert.equal(stats.stairBuildingNorth, 1);
-  assert.equal(stats.northStairStepCount, 8);
-  assert.ok(stats.northStairTopY <= stats.northBuildingRoofY);
+  assert.equal(stats.towers, 2);
+  assert.equal(stats.reactorBuildings, 1);
+
+  const hiddenCollisionHelpers = recorder.blocks.filter((block) =>
+    block.userData &&
+    (
+      block.userData.collisionOnly === true ||
+      String(block.userData.role || '').includes('-collision')
+    )
+  );
+  assert.equal(hiddenCollisionHelpers.length, 0);
+
+  const sharedRoundColliders = recorder.blocks.filter((block) =>
+    block.userData &&
+    block.userData.collisionAuthoring === true
+  );
+  assert.ok(sharedRoundColliders.length > 0);
+  assert.ok(sharedRoundColliders.every((block) => block.isSolid === true));
+  assert.ok(sharedRoundColliders.some((block) => block.userData.collisionPrimitive === 'cylinder'));
+  assert.ok(sharedRoundColliders.some((block) => block.userData.collisionPrimitive === 'dome'));
+  assert.ok(sharedRoundColliders.some((block) => block.userData.collisionGroup === 'nuclear-round'));
+  assert.ok(sharedRoundColliders.some((block) => block.userData.collisionGroup === 'reactor-tank'));
 
   const reactorBodies = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
     block.userData &&
-    block.userData.role === 'reactor-building'
+    block.userData.role === 'reactor-body'
   );
-  assert.equal(reactorBodies.length, 2);
-
-  const northReactor = reactorBodies.find((block) => block.userData.reactorId === 'north');
-  const southReactor = reactorBodies.find((block) => block.userData.reactorId === 'south');
-  assert.ok(northReactor);
-  assert.ok(southReactor);
-  assert.ok(northReactor.z < southReactor.z);
-  assert.ok(Math.abs(northReactor.w - 11.8) < 0.0001);
-  assert.ok(Math.abs(northReactor.d - 17.6) < 0.0001);
-  assert.ok(Math.abs(northReactor.h - (6.2 * NUCLEAR_REACTOR_HEIGHT_SCALE)) < 0.0001);
-  assert.ok(Math.abs(southReactor.w - 15.4) < 0.0001);
-  assert.ok(Math.abs(southReactor.d - 22.9) < 0.0001);
-  assert.ok(Math.abs(southReactor.h - (8.3 * NUCLEAR_REACTOR_HEIGHT_SCALE)) < 0.0001);
-  assert.ok(Math.abs(stats.northBuildingRoofY - northReactor.h) < 0.0001);
-  assert.ok(Math.abs(stats.southBuildingRoofY - southReactor.h) < 0.0001);
-  assert.ok((southReactor.w / northReactor.w) >= 1.28);
-  assert.ok((southReactor.d / northReactor.d) >= 1.28);
-  assert.ok((southReactor.h / northReactor.h) >= 1.28);
-
-  const northStairs = recorder.blocks.filter((block) =>
+  const officeBodies = recorder.blocks.filter((block) =>
     block.userData &&
-    block.userData.role === 'reactor-stair-step' &&
-    block.userData.reactorId === 'north'
+    block.userData.role === 'office-body'
   );
-  const southStairs = recorder.blocks.filter((block) =>
+  const warehouseBodies = recorder.blocks.filter((block) =>
     block.userData &&
-    block.userData.role === 'reactor-stair-step' &&
-    block.userData.reactorId === 'south'
+    block.userData.role === 'warehouse-body'
   );
-  assert.equal(northStairs.length, 8);
-  assert.equal(southStairs.length, 0);
-  assert.ok(northStairs.every((step) => step.w <= 2.0));
-  assert.ok(northStairs.every((step) => step.d <= 1.5));
-  const sortedNorthStairs = northStairs.slice().sort((a, b) => a.userData.stepIndex - b.userData.stepIndex);
-  /* Higher step index = further north (lower Z) and higher Y */
-  assert.ok(sortedNorthStairs.at(-1).z < sortedNorthStairs[0].z);
-  assert.ok(sortedNorthStairs.at(-1).y <= northReactor.h);
-
-  const oldCampusBody = recorder.blocks.find((block) =>
-    block.kind === 'block' &&
-    Math.abs(block.w - 18.4) < 0.0001 &&
-    Math.abs(block.h - 7.2) < 0.0001 &&
-    Math.abs(block.d - 13.8) < 0.0001
+  const prefabMainTank = recorder.decors.filter((decor) =>
+    decor.userData &&
+    decor.userData.role === 'tank-main'
   );
-  assert.equal(oldCampusBody, undefined);
+  assert.equal(reactorBodies.length, 1);
+  assert.equal(officeBodies.length, 1);
+  assert.equal(warehouseBodies.length, 0);
+  assert.equal(prefabMainTank.length, 1);
 });
 
-test('nuclear keeps a continuous flush green window band while removing the warning sign', () => {
+test('nuclear simpsons biome blocks intended spaces while keeping the gate gap and visual dressing open', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.nuclear;
   assert.equal(typeof builder, 'function');
 
   const rawBounds = quadrantBounds('r1c2');
   const recorder = createGeometryRecorder();
-  const stats = builder(rawBounds, recorder.place, {
+  builder(rawBounds, recorder.place, {
     ...recorder.ctx,
     biomeEntry: { biome: BIOME_NUCLEAR },
     rawBounds
   });
 
-  const signParts = recorder.decors.filter((decor) =>
-    decor.userData &&
-    String(decor.userData.role || '').indexOf('warning-sign') === 0
-  );
-  assert.equal(signParts.length, 0);
-  assert.equal(stats.warningSignCount, 0);
-
-  const oldBitmapBacking = recorder.blocks.find((block) =>
-    block.kind === 'block' &&
+  const nonSolidVisuals = recorder.blocks.filter((block) =>
     block.isSolid === false &&
-    Math.abs(block.w - 7.3) < 0.0001 &&
-    Math.abs(block.h - 7.3) < 0.0001 &&
-    Math.abs(block.d - 0.08) < 0.0001
-  );
-  assert.equal(oldBitmapBacking, undefined);
-
-  const glowSegments = recorder.blocks.filter((block) =>
     block.userData &&
-    block.userData.role === 'reactor-glow-strip' &&
-    block.userData.reactorId === 'south'
+    (
+      String(block.userData.role || '').includes('window') ||
+      String(block.userData.role || '').includes('glow') ||
+      String(block.userData.role || '').includes('frame') ||
+      String(block.userData.role || '').includes('power-line')
+    )
   );
-  const glowBacking = recorder.blocks.filter((block) =>
+  assert.ok(nonSolidVisuals.length > 0);
+
+  const coolingTowerSteam = recorder.decors.filter((decor) =>
+    decor.userData &&
+    decor.userData.role === 'cooling-tower-steam'
+  );
+  assert.equal(coolingTowerSteam.length, 2);
+
+  const solidAabbs = solidGeometryAabbs(recorder.blocks);
+  const centerX = (rawBounds.minX + rawBounds.maxX) * 0.5;
+  const centerZ = (rawBounds.minZ + rawBounds.maxZ) * 0.5;
+  const officeX = centerX - 10;
+  const officeZ = centerZ + 11;
+  const westFenceX = centerX - 24;
+  const northFenceZ = centerZ - 20;
+  const towerX = rawBounds.maxX - 6;
+  const northTowerZ = centerZ - 10;
+  const reactorTankX = centerX + 6;
+  const reactorTankZ = centerZ + 12;
+
+  assert.equal(pointHitsSolid(solidAabbs, officeX, 2, officeZ), true);
+  assert.equal(pointHitsSolid(solidAabbs, westFenceX, 1, northFenceZ), true);
+  assert.equal(pointHitsSolid(solidAabbs, westFenceX, 1, centerZ), false);
+  assert.equal(pointHitsSolid(solidAabbs, towerX, 6, northTowerZ), true);
+  assert.equal(pointHitsSolid(solidAabbs, reactorTankX, 4, reactorTankZ), true);
+
+  const colliderSlices = recorder.blocks.filter((block) =>
     block.userData &&
-    block.userData.role === 'reactor-window-back' &&
-    block.userData.reactorId === 'south'
+    block.userData.collisionAuthoring === true
   );
-  assert.equal(glowBacking.length, 0);
-  assert.equal(glowSegments.length, 3);
-  assert.equal(stats.glowMainFace, 'south');
-  assert.deepEqual(
-    glowSegments.map((segment) => segment.userData.face).sort(),
-    ['east', 'south', 'west']
-  );
-  assert.deepEqual(stats.glowWrapFaces.slice().sort(), ['east', 'west']);
-  const westGlow = glowSegments.find((segment) => segment.userData.face === 'west');
-  const eastGlow = glowSegments.find((segment) => segment.userData.face === 'east');
-  const southGlow = glowSegments.find((segment) => segment.userData.face === 'south');
-  assert.ok(Math.abs(southGlow.y - stats.glowStripY) < 0.0001);
-  assert.ok(Math.abs(stats.glowStripY - ((stats.southBuildingRoofY - 0.75) - (stats.southBuildingRoofY * 0.05))) < 0.0001);
-  assert.ok(stats.glowStripY < stats.southBuildingRoofY);
-  assert.ok((stats.southBuildingRoofY - stats.glowStripY) < 1.5);
-  assert.ok(Math.abs(southGlow.w - stats.glowMainSpan) < 0.0001);
-  assert.ok(Math.abs(westGlow.d - stats.glowWrapSpan) < 0.0001);
-  assert.ok(Math.abs(eastGlow.d - stats.glowWrapSpan) < 0.0001);
-  assert.ok(southGlow.w > westGlow.d);
-  assert.ok(southGlow.w > eastGlow.d);
-  assert.ok(Math.abs(southGlow.h - stats.glowVisibleHeight) < 0.0001);
-  assert.ok(Math.abs(westGlow.h - stats.glowVisibleHeight) < 0.0001);
-  assert.ok(Math.abs(eastGlow.h - stats.glowVisibleHeight) < 0.0001);
-  assert.ok(Math.abs(southGlow.d - stats.glowBandDepth) < 0.0001);
-  assert.ok(Math.abs(westGlow.w - stats.glowBandDepth) < 0.0001);
-  assert.ok(Math.abs(eastGlow.w - stats.glowBandDepth) < 0.0001);
-  assert.ok(Math.abs(stats.glowBackingHeight - 0) < 0.0001);
-  assert.ok(Math.abs(stats.glowVisibleHeight - 0.96) < 0.0001);
-  assert.ok(stats.glowVisibleHeight > 0.8);
-  assert.ok(Math.abs(stats.glowBandDepth - 0.18) < 0.0001);
-  assert.ok(Math.abs(stats.glowStandOff - 0.01) < 0.0001);
-
-  const glowFlickers = recorder.flickers.filter((flicker) => flicker && flicker.pulseFamily === 'nuclear-window');
-  assert.equal(glowFlickers.length, 3);
-  for (const flicker of glowFlickers) {
-    assert.ok(Math.abs(Number(flicker.baseIntensity || 0) - 0.62) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.amplitude || 0) - 0.08) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.freq || 0) - 0.34) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.opacityBase || 0) - 0.88) < 0.0001);
-    assert.ok(Math.abs(Number(flicker.opacityAmplitude || 0) - 0.05) < 0.0001);
-  }
-  assert.ok(glowFlickers.every((flicker) => Math.abs(Number(flicker.phase || 0) - 0.85) < 0.0001));
-
-  assert.equal(recorder.steamColumns.length, 2);
-  assert.ok(recorder.steamColumns.every((steam) => Math.abs(Number(steam.rise || 0) - 16.8) < 0.0001));
-  assert.ok(recorder.steamColumns.every((steam) => Array.isArray(steam.tiles) && steam.tiles.length === NUCLEAR_STEAM_TILE_COUNT_PER_TOWER));
-  assert.ok(Math.abs(stats.steamTileCount - (NUCLEAR_STEAM_TILE_COUNT_PER_TOWER * 2)) < 0.0001);
-  assert.ok(Math.abs(stats.glowWrapSpan - 2.748) < 0.0001);
-  assert.ok(stats.glowMainSpan > 15);
+  assert.ok(colliderSlices.every((block) => block.kind === 'block'));
 });
 
 test('wall street keeps an open center street while shifting building mass to the biome edges', () => {

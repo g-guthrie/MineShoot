@@ -1,11 +1,12 @@
 import { getSessionFromRequest } from './auth.js';
-import { normalizeOpaqueId, sanitizeRoomId } from './transport.js';
+import { sanitizeRoomId } from './transport.js';
 import { consumeRateLimit, getClientIp, rateLimitedJson } from './rate-limit.js';
 import {
   getPrivateRoomById,
   getPrivateRoomMember,
   isRegisteredPrivateRoomId
 } from './private-rooms.js';
+import { resolveLobbyWsIdentity } from './ws-identity.js';
 
 const WS_LOBBY_RATE_WINDOW_MS = 60_000;
 const WS_LOBBY_RATE_LIMIT = 30;
@@ -27,41 +28,34 @@ export async function handleWsLobbyUpgrade(env, request) {
     return new Response('Lobby WebSocket requires a valid private room ID.', { status: 400 });
   }
 
-  // Resolve actor identity from session or query params
   const session = await getSessionFromRequest(env, request).catch(() => null);
-  const actorId = session && session.userId
-    ? normalizeOpaqueId(session.userId || '')
-    : normalizeOpaqueId(url.searchParams.get('actorId') || '');
+  const identity = resolveLobbyWsIdentity({ session, url });
 
-  if (!actorId) {
+  if (!identity.actorId) {
     return new Response('Missing actor identity.', { status: 400 });
   }
 
-  // Validate room exists and actor is a member
   const room = await getPrivateRoomById(env, roomId);
   if (!room || !room.room_id) {
     return new Response('Private room not found.', { status: 404 });
   }
 
-  const membership = await getPrivateRoomMember(env, actorId);
+  const membership = await getPrivateRoomMember(env, identity.actorId);
   if (!membership || String(membership.room_id || '') !== String(room.room_id || '')) {
     return new Response('Not a member of this private room.', { status: 403 });
   }
 
-  // Forward WebSocket upgrade to the Durable Object
   const lobbyBinding = env.PRIVATE_ROOM_LOBBY_HUB || env.GLOBAL_ARENA;
   const id = lobbyBinding.idFromName(roomId);
   const stub = lobbyBinding.get(id);
 
   const doUrl = new URL('https://private-room-lobby/connect');
   doUrl.searchParams.set('roomId', roomId);
-  doUrl.searchParams.set('actorId', actorId);
-  if (session && (session.displayName || session.username)) {
-    doUrl.searchParams.set('actorName', String(session.displayName || session.username));
-  }
+  doUrl.searchParams.set('actorId', identity.actorId);
+  if (identity.actorName) doUrl.searchParams.set('actorName', identity.actorName);
 
   const headers = new Headers(request.headers);
-  headers.set('X-Actor-Id', actorId);
+  headers.set('X-Actor-Id', identity.actorId);
 
   return stub.fetch(new Request(doUrl.toString(), {
     method: request.method,
