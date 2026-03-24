@@ -635,3 +635,39 @@ test('networked runtime session routes joined-ready handoff through the session 
   assert.equal(harness.backBtn.style.display, 'inline-block');
   assert.equal(harness.backBtn.textContent, 'RETURN TO MENU');
 });
+
+test('preparing a fresh launch clears any leftover postgame flow', async () => {
+  const harness = await loadRuntimeSessionHarness();
+  const postgameFlow = new FakeElement('postgame-flow', harness.document);
+  const postgameCelebration = new FakeElement('postgame-celebration', harness.document);
+  const postgameResults = new FakeElement('postgame-results', harness.document);
+  harness.document.elements['postgame-flow'] = postgameFlow;
+  harness.document.elements['postgame-celebration'] = postgameCelebration;
+  harness.document.elements['postgame-results'] = postgameResults;
+
+  harness.session.syncMatchState({
+    matchState: {
+      ended: true,
+      endedAt: 1000,
+      resetAt: 4000
+    },
+    selfState: {
+      id: 'usr_self',
+      kills: 1,
+      deaths: 2
+    }
+  });
+
+  assert.equal(postgameFlow.hidden, false);
+
+  harness.session.prepareLaunch({
+    launchKind: 'menu_play',
+    gameMode: 'ffa',
+    requiresNetwork: true
+  });
+
+  assert.equal(postgameFlow.hidden, true);
+  assert.equal(postgameCelebration.hidden, true);
+  assert.equal(postgameResults.hidden, true);
+  assert.equal(harness.launchFlow.hidden, true);
+});

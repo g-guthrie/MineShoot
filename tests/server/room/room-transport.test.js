@@ -374,6 +374,83 @@ test('websocket room requests are handled by the transport helper, including dup
   }
 });
 
+test('websocket room requests reset an ended public match before welcoming a fresh joiner', async () => {
+  const originalResponse = globalThis.Response;
+  const originalPair = globalThis.WebSocketPair;
+
+  class FakeResponse {
+    constructor(body, init = {}) {
+      this.body = body;
+      this.status = init.status || 200;
+      this.webSocket = init.webSocket;
+    }
+  }
+
+  function createSocket(label) {
+    return {
+      label,
+      attachment: null,
+      serializeAttachment(value) { this.attachment = value; },
+      deserializeAttachment() { return this.attachment; },
+      close() {}
+    };
+  }
+
+  globalThis.Response = FakeResponse;
+  globalThis.WebSocketPair = class {
+    constructor() {
+      this[0] = createSocket('client');
+      this[1] = createSocket('server');
+    }
+  };
+
+  try {
+    const room = {
+      env: { ROOM_NAME: 'global' },
+      roomName: 'global',
+      gameMode: 'ffa',
+      matchState: { started: true, ended: true, resetAt: Date.now() + 5000 },
+      bots: new Map(),
+      players: new Map(),
+      privateRoomConfig: { teams: new Map() },
+      clients: new Map(),
+      activeSocketByUserId: new Map(),
+      ctx: { acceptWebSocket() {} },
+      refreshWorldMeta() {},
+      syncRoomFixtures() {},
+      ensurePlayer() {},
+      resetPublicRoomToIdleCalled: 0,
+      resetPublicRoomToIdle() {
+        this.resetPublicRoomToIdleCalled += 1;
+        this.matchState = { started: false, ended: false };
+      },
+      startPublicMatchIfReadyCalled: 0,
+      startPublicMatchIfReady() { this.startPublicMatchIfReadyCalled += 1; },
+      ensureTick() {},
+      buildWelcomePayload() { return { ok: true }; },
+      send() {},
+      broadcastSnapshot() {},
+      humanPlayerCount() { return 1; },
+      connectedHumanCount() { return 0; },
+      simulatedPlayerCount() { return 0; }
+    };
+
+    const response = await handleRoomRequest(
+      room,
+      new Request('https://room/connect?roomId=global&userId=user-1&username=PLAYER&classId=sniper&actorId=actor-1', {
+        headers: { Upgrade: 'websocket' }
+      })
+    );
+
+    assert.equal(response.status, 101);
+    assert.equal(room.resetPublicRoomToIdleCalled, 1);
+    assert.equal(room.startPublicMatchIfReadyCalled, 1);
+  } finally {
+    globalThis.Response = originalResponse;
+    globalThis.WebSocketPair = originalPair;
+  }
+});
+
 test('room transport rejects websocket connections that would exceed the public room hard cap', async () => {
   const originalResponse = globalThis.Response;
   const originalPair = globalThis.WebSocketPair;

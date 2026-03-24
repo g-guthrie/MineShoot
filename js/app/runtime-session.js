@@ -431,6 +431,7 @@
             clearPostGameTimer();
             postGameState.active = false;
             postGameState.phase = '';
+            postGameState.matchEndedAt = 0;
             postGameState.snapshot = null;
             clearIdleMonitor();
             if (els.flow) els.flow.hidden = true;
@@ -846,6 +847,8 @@
                 launchContext = cloneLaunchContext(context);
                 var handoffEls = ensureLaunchHandoffEls();
                 var roomLabel = String(launchContext.roomCode || launchContext.roomId || '').toUpperCase();
+                hidePostGameFlow();
+                lastHandledMatchEndAt = 0;
                 clearActivityStateOverride();
                 clearPauseState();
                 clearIdleMonitor();

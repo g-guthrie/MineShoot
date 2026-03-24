@@ -90,6 +90,7 @@ import {
   assignPlayerToCurrentTeam as assignRoomPlayerToCurrentTeam,
   finishPublicMatch as finishRoomPublicMatch,
   maybeResetPublicMatch as maybeResetRoomPublicMatch,
+  resetPublicRoomToIdle as resetRoomPublicRoomToIdle,
   recordElimination as recordRoomElimination,
   startPublicMatchIfReady as startRoomPublicMatchIfReady,
   syncPrivateRoomMatchState as syncRoomPrivateRoomMatchState,
@@ -492,6 +493,13 @@ export class GlobalArenaRoom extends DurableObject {
       isPrivateMatchRoom,
       nowMs,
       roomPhaseActive: ROOM_PHASE_ACTIVE
+    });
+  }
+
+  resetPublicRoomToIdle() {
+    return resetRoomPublicRoomToIdle(this, {
+      emptyMatchState,
+      isPrivateMatchRoom
     });
   }
 

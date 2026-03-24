@@ -441,7 +441,14 @@ test('real worker: sniper fire without ads is rejected by the server', { timeout
       { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
     ]);
 
-    await equipLoadout(shooter, 'sniper', 'rifle', 'sniper');
+    await shooter.sendWeaponLoadout('sniper', 'rifle');
+    await shooter.sendEquipWeapon('sniper');
+    await shooter.waitForSnapshot(() => {
+      const entity = shooter.latestEntity(shooter.userId);
+      return entity &&
+        String(entity.weaponId || '') === 'sniper' &&
+        !!(entity.weaponAmmo && entity.weaponAmmo.sniper);
+    }, SNAPSHOT_TIMEOUT_MS);
 
     const shooterState = shooter.latestEntity(shooter.userId);
     const targetState = shooter.latestEntity(target.userId);
@@ -460,15 +467,14 @@ test('real worker: sniper fire without ads is rejected by the server', { timeout
     });
 
     await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === shotToken, 900);
-    await target.waitForSnapshot(() => {
-      const current = target.latestEntity(target.userId);
-      return current && Number(current.armor || 0) === beforeArmor;
-    }, SNAPSHOT_TIMEOUT_MS);
-    await shooter.waitForSnapshot(() => {
-      const current = shooter.latestEntity(shooter.userId);
-      const ammo = current && current.weaponAmmo && current.weaponAmmo.sniper;
-      return ammo && Number(ammo.ammoInMag || 0) === beforeAmmo;
-    }, SNAPSHOT_TIMEOUT_MS);
+    await delay(300);
+    const currentTarget = target.latestEntity(target.userId);
+    const currentShooter = shooter.latestEntity(shooter.userId);
+    const ammo = currentShooter && currentShooter.weaponAmmo && currentShooter.weaponAmmo.sniper;
+    assert.ok(currentTarget);
+    assert.ok(ammo);
+    assert.equal(Number(currentTarget.armor || 0), beforeArmor);
+    assert.equal(Number(ammo.ammoInMag || 0), beforeAmmo);
   });
 });
 
