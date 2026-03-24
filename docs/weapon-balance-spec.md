@@ -64,11 +64,17 @@ Source of truth: [shared/gameplay-tuning.js](/Users/gguthrie/Desktop/code bs/min
 
 | Internal id | Role | Cooldown ms | Reload ms | Mag | Body | Head | Movement |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.15x` |
+| `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.04x` |
 | `pistol` | Hand Cannon | `430` | `2050` | `10` | `60` | `90` | `1.10x` |
-| `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `1.00x` |
-| `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.05x` |
-| `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.82x` |
+| `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `0.96x` |
+| `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.00x` |
+| `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.85x` |
+
+## Movement Baseline
+
+- base normal move speed: `7`
+- base sprint speed: `11`
+- weapon multipliers now provide the spread from hand cannon fastest to sniper slowest
 
 ## Range and Falloff
 

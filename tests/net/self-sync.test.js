@@ -7,10 +7,29 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
   const statusCalls = [];
   const actionRestrictionCalls = [];
   const reconcileCalls = [];
+  const overrideNet = runtimeOverrides.GameNet || null;
+  const normalizedNet = overrideNet
+    ? {
+        ...overrideNet,
+        view: overrideNet.view || {
+          getMatchState: overrideNet.getMatchState || (() => null),
+          getInputSyncState: overrideNet.getInputSyncState || undefined,
+          getPendingInputSamples: overrideNet.getPendingInputSamples || undefined
+        },
+        timing: overrideNet.timing || {
+          getAuthoritativeNow: overrideNet.getAuthoritativeNow || (() => 0),
+          toLocalTime: overrideNet.toLocalTime || ((value) => value),
+          getConnectionTimingState: overrideNet.getConnectionTimingState || undefined
+        }
+      }
+    : {
+        view: {
+          getMatchState() { return null; }
+        },
+        timing: {}
+      };
   const runtime = {
-    GameNet: {
-      getMatchState() { return null; }
-    },
+    GameNet: normalizedNet,
     GamePlayer: {
       setAliveVisual() {},
       setStatusState(state) {
@@ -29,7 +48,8 @@ async function loadSelfSyncHarness(runtimeOverrides = {}) {
     GameHitscan: {},
     GameThrowables: {},
     GameUI: {},
-    ...runtimeOverrides
+    ...runtimeOverrides,
+    GameNet: normalizedNet
   };
   const timeState = { now: 1000 };
   const sandbox = {

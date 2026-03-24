@@ -22,7 +22,12 @@
 
     function netView() {
         var net = runtime.GameNet || null;
-        return net && net.view ? net.view : net;
+        return net && net.view ? net.view : null;
+    }
+
+    function remoteEntitiesApi() {
+        var net = runtime.GameNet || null;
+        return net && net.remoteEntities ? net.remoteEntities : null;
     }
 
     function createChainSegment(index) {
@@ -241,8 +246,9 @@
 
     function netEntityHookAttachById(targetId, out) {
         if (!targetId) return null;
-        if (runtime.GameNetEntities && runtime.GameNetEntities.getCoreWorldPosition) {
-            var core = runtime.GameNetEntities.getCoreWorldPosition(targetId, out);
+        var remoteApi = remoteEntitiesApi();
+        if (remoteApi && remoteApi.getCoreWorldPosition) {
+            var core = remoteApi.getCoreWorldPosition(targetId, out);
             if (core) return out.copy(core);
         }
         var netApi = netView();
@@ -293,13 +299,14 @@
 
     function renderRemote() {
         var activeRemote = {};
-        if (runtime.GameNetEntities && runtime.GameNetEntities.getRenderMap) {
-            var renderMap = runtime.GameNetEntities.getRenderMap();
+        var remoteApi = remoteEntitiesApi();
+        if (remoteApi && remoteApi.getRenderMap) {
+            var renderMap = remoteApi.getRenderMap();
             renderMap.forEach(function (render, entityId) {
                 var hookState = render && render.hookState ? render.hookState : null;
                 if (!hookState) return;
-                var start = runtime.GameNetEntities.getHookOriginWorldPosition
-                    ? runtime.GameNetEntities.getHookOriginWorldPosition(entityId, hookRemoteStart)
+                var start = remoteApi.getHookOriginWorldPosition
+                    ? remoteApi.getHookOriginWorldPosition(entityId, hookRemoteStart)
                     : hookRemoteStart.set(
                         Number(render.group && render.group.position && render.group.position.x || 0),
                         Number(render.group && render.group.position && render.group.position.y || 0) + 1.0,

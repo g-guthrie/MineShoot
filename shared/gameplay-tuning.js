@@ -126,8 +126,8 @@ export const gameplayTuning = {
     }
   },
   movement: {
-    jogSpeed: 9,
-    runSpeed: 16,
+    jogSpeed: 7,
+    runSpeed: 11,
     jumpVelocity: 8.8,
     jumpHoldAccel: 16,
     maxJumpHold: 0.2,
@@ -166,11 +166,11 @@ export const gameplayTuning = {
   weaponStats: {
     rifle: {
       name: 'Scout Rifle', displayName: 'Scout Rifle', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 400, reloadMs: 1850, magazineSize: 14,
-      bodyDamage: 50, headDamage: 78, maxRange: 90, pellets: 1, hipfireSpread: 0.022, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 110,
-      moveSpeedMultiplier: 1.0, adsMoveMultiplier: 0.75,
+      bodyDamage: 50, headDamage: 78, maxRange: 90, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 110,
+      moveSpeedMultiplier: 0.96, adsMoveMultiplier: 0.75,
       hipfireBloomScale: 2.5, adsBloomScale: 1,
       falloff: { start: 42, end: 65, minScalar: 0.5 },
-      aimProfile: { hipfire: { spread: 0.022, maxRange: 90 }, ads: { spread: 0, maxRange: 110 } },
+      aimProfile: { hipfire: { spread: 0.024, maxRange: 90 }, ads: { spread: 0, maxRange: 110 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 1.25 },
@@ -208,14 +208,11 @@ export const gameplayTuning = {
       }
     },
     pistol: {
-      name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 430, reloadMs: 2050, magazineSize: 10,
-      bodyDamage: 60, headDamage: 90, maxRange: 52, pellets: 12, hipfireSpread: 0.1, adsSpread: 0.16, adsFovDeg: 56, adsMaxRange: 60,
+      name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 430, reloadMs: 2050, magazineSize: 10,
+      bodyDamage: 60, headDamage: 90, maxRange: 52, pellets: 1, hipfireSpread: 0.105, adsSpread: 0.105, adsFovDeg: 56, adsMaxRange: 52,
       moveSpeedMultiplier: 1.1, adsMoveMultiplier: 0.9,
       falloff: { start: 32, end: 40, minScalar: 0.333 },
-      aimProfile: { hipfire: { spread: 0.1, maxRange: 52 }, ads: { spread: 0.16, maxRange: 60 } },
-      hipfireCylinderRadiusWu: 1.8,
-      adsCylinderRadiusWu: 2.2,
-      singleHitFromPellets: true,
+      aimProfile: { hipfire: { spread: 0.105, maxRange: 52 }, ads: { spread: 0.105, maxRange: 52 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.11, speed: 280, segmentLength: 0.25 },
@@ -254,10 +251,10 @@ export const gameplayTuning = {
     },
     machinegun: {
       name: 'Auto Rifle', displayName: 'Auto Rifle', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 133, reloadMs: 1800, magazineSize: 32,
-      bodyDamage: 18, headDamage: 27, maxRange: 70, pellets: 1, hipfireSpread: 0.042, adsSpread: 0.032, adsFovDeg: 56, adsMaxRange: 78,
-      moveSpeedMultiplier: 1.15, adsMoveMultiplier: 0.95,
+      bodyDamage: 18, headDamage: 27, maxRange: 70, pellets: 1, hipfireSpread: 0.045, adsSpread: 0.035, adsFovDeg: 56, adsMaxRange: 78,
+      moveSpeedMultiplier: 1.04, adsMoveMultiplier: 0.95,
       falloff: { start: 33, end: 42, minScalar: 0.5 },
-      aimProfile: { hipfire: { spread: 0.042, maxRange: 70 }, ads: { spread: 0.032, maxRange: 78 } },
+      aimProfile: { hipfire: { spread: 0.045, maxRange: 70 }, ads: { spread: 0.035, maxRange: 78 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.075, speed: 260, segmentLength: 1.0 },
@@ -296,10 +293,10 @@ export const gameplayTuning = {
     },
     shotgun: {
       name: 'Shotgun', displayName: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 900, reloadMs: 2100, magazineSize: 5,
-      bodyDamage: 20, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.18, adsSpread: 0.18, adsFovDeg: 56, adsMaxRange: 24,
-      moveSpeedMultiplier: 1.05, adsMoveMultiplier: 0.9,
+      bodyDamage: 20, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.185, adsSpread: 0.185, adsFovDeg: 56, adsMaxRange: 24,
+      moveSpeedMultiplier: 1.0, adsMoveMultiplier: 0.9,
       falloff: { start: 6.8, end: 9.2, minScalar: 0.0 },
-      aimProfile: { hipfire: { spread: 0.18, maxRange: 24 }, ads: { spread: 0.18, maxRange: 24 } },
+      aimProfile: { hipfire: { spread: 0.185, maxRange: 24 }, ads: { spread: 0.185, maxRange: 24 } },
       armorBufferMode: 'normal',
       presentation: {
         tracer: { life: 0.1, speed: 230, segmentLength: 1.9 },
@@ -339,7 +336,7 @@ export const gameplayTuning = {
     sniper: {
       name: 'Sniper', displayName: 'Sniper', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 1800, reloadMs: 2400, magazineSize: 4,
       bodyDamage: 180, headDamage: 420, maxRange: 170, pellets: 1, hipfireSpread: 0.32, adsSpread: 0, adsFovDeg: 24, adsMaxRange: 170,
-      moveSpeedMultiplier: 0.82, adsMoveMultiplier: 0.6,
+      moveSpeedMultiplier: 0.85, adsMoveMultiplier: 0.6,
       falloff: { start: 9999, end: 10000, minScalar: 1.0 },
       aimProfile: { hipfire: { spread: 0.32, maxRange: 170 }, ads: { spread: 0, maxRange: 170 } }, infiniteRange: true,
       armorBufferMode: 'normal',
@@ -457,12 +454,24 @@ export function getSurvivabilityTuning() {
   return gameplayTuning.survivability || {};
 }
 
+export function getAwarenessTuning() {
+  return gameplayTuning.awareness || {};
+}
+
 export function getMovementTuning() {
   return gameplayTuning.movement || {};
 }
 
 export function getNetworkTuning() {
   return gameplayTuning.network || {};
+}
+
+export function getEnemyTuning() {
+  return gameplayTuning.enemy || {};
+}
+
+export function getThrowableMechanicsTuning() {
+  return gameplayTuning.throwableMechanics || {};
 }
 
 export function getWeaponStats(weaponId) {
@@ -641,6 +650,93 @@ export function getSelectableWeaponIds() {
     : ['machinegun', 'shotgun', 'rifle', 'pistol', 'sniper'];
 }
 
+export function isSelectableWeaponId(weaponId, deps = {}) {
+  const id = String(weaponId || '');
+  const selectableWeaponIds = Array.isArray(deps.selectableWeaponIds) && deps.selectableWeaponIds.length
+    ? deps.selectableWeaponIds.map((value) => String(value || ''))
+    : getSelectableWeaponIds();
+  const weaponStats = deps.weaponStats || gameplayTuning.weaponStats || {};
+  return selectableWeaponIds.indexOf(id) >= 0 && !!weaponStats[id];
+}
+
+function enforceSniperSecondary(slots, deps = {}) {
+  const next = Array.isArray(slots) ? slots.slice(0, 2) : [];
+  if (String(next[0] || '') !== 'sniper') return next;
+  if (String(next[1] || '') && String(next[1] || '') !== 'sniper') {
+    return [String(next[1] || ''), 'sniper'];
+  }
+  const defaultWeaponLoadout = Array.isArray(deps.defaultWeaponLoadout) && deps.defaultWeaponLoadout.length
+    ? deps.defaultWeaponLoadout
+    : getDefaultWeaponLoadout();
+  const selectableWeaponIds = Array.isArray(deps.selectableWeaponIds) && deps.selectableWeaponIds.length
+    ? deps.selectableWeaponIds
+    : getSelectableWeaponIds();
+  const fallbackIds = defaultWeaponLoadout.concat(selectableWeaponIds);
+  for (let i = 0; i < fallbackIds.length; i++) {
+    const id = String(fallbackIds[i] || '');
+    if (!id || id === 'sniper' || !isSelectableWeaponId(id, deps)) continue;
+    return [id, 'sniper'];
+  }
+  return next;
+}
+
+export function normalizeWeaponLoadout(rawSlots, fallbackSlots, deps = {}) {
+  const selectableWeaponIds = Array.isArray(deps.selectableWeaponIds) && deps.selectableWeaponIds.length
+    ? deps.selectableWeaponIds.map((value) => String(value || ''))
+    : getSelectableWeaponIds();
+  const fallback = Array.isArray(fallbackSlots) && fallbackSlots.length
+    ? fallbackSlots.slice(0, 2)
+    : (Array.isArray(deps.defaultWeaponLoadout) && deps.defaultWeaponLoadout.length
+      ? deps.defaultWeaponLoadout.slice(0, 2)
+      : getDefaultWeaponLoadout());
+  const next = [];
+  const seen = {};
+  const combined = Array.isArray(rawSlots) ? rawSlots.slice(0) : [];
+  for (let i = 0; i < fallback.length; i++) combined.push(fallback[i]);
+  for (let i = 0; i < selectableWeaponIds.length; i++) combined.push(selectableWeaponIds[i]);
+  for (let i = 0; i < combined.length && next.length < 2; i++) {
+    const id = String(combined[i] || '');
+    if (!isSelectableWeaponId(id, deps) || seen[id]) continue;
+    seen[id] = true;
+    next.push(id);
+  }
+  const resolved = next.length
+    ? next
+    : (Array.isArray(deps.defaultWeaponLoadout) && deps.defaultWeaponLoadout.length
+      ? deps.defaultWeaponLoadout.slice(0, 2)
+      : getDefaultWeaponLoadout());
+  return enforceSniperSecondary(resolved, deps);
+}
+
+export function canWeaponLoadoutEquipId(loadout, weaponId, deps = {}) {
+  const id = String(weaponId || '');
+  const defaultWeaponLoadout = Array.isArray(deps.defaultWeaponLoadout) && deps.defaultWeaponLoadout.length
+    ? deps.defaultWeaponLoadout
+    : getDefaultWeaponLoadout();
+  if (!isSelectableWeaponId(id, deps)) return false;
+  return normalizeWeaponLoadout(loadout, defaultWeaponLoadout, deps).indexOf(id) >= 0;
+}
+
+export function createWeaponAmmoRuntime(loadout, deps = {}) {
+  const ammo = {};
+  const weaponStats = deps.weaponStats || gameplayTuning.weaponStats || {};
+  const defaultWeaponLoadout = Array.isArray(deps.defaultWeaponLoadout) && deps.defaultWeaponLoadout.length
+    ? deps.defaultWeaponLoadout
+    : getDefaultWeaponLoadout();
+  const ids = Array.isArray(loadout) && loadout.length ? loadout : defaultWeaponLoadout;
+  for (let i = 0; i < ids.length; i++) {
+    const weaponId = String(ids[i] || '');
+    const stats = weaponStats[weaponId] || null;
+    if (!stats || !(Number(stats.magazineSize || 0) > 0)) continue;
+    ammo[weaponId] = {
+      ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
+      reloadUntil: 0,
+      reloadedFlashUntil: 0
+    };
+  }
+  return ammo;
+}
+
 export function getAbilityDef(abilityId) {
   return (gameplayTuning.abilityCatalog && gameplayTuning.abilityCatalog[abilityId]) || null;
 }
@@ -683,8 +779,11 @@ runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.gameplayTuning = gameplayTuning;
 runtime.GameShared.getClassPreset = getClassPreset;
 runtime.GameShared.getSurvivabilityTuning = getSurvivabilityTuning;
+runtime.GameShared.getAwarenessTuning = getAwarenessTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
 runtime.GameShared.getNetworkTuning = getNetworkTuning;
+runtime.GameShared.getEnemyTuning = getEnemyTuning;
+runtime.GameShared.getThrowableMechanicsTuning = getThrowableMechanicsTuning;
 runtime.GameShared.getWeaponStats = getWeaponStats;
 runtime.GameShared.getWeaponPresentation = getWeaponPresentation;
 runtime.GameShared.resolveReloadPresentationState = resolveReloadPresentationState;
@@ -692,6 +791,12 @@ runtime.GameShared.resolveWeaponAdsFovDeg = resolveWeaponAdsFovDeg;
 runtime.GameShared.getWeaponFalloffProfile = getWeaponFalloffProfile;
 runtime.GameShared.getDefaultWeaponLoadout = getDefaultWeaponLoadout;
 runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;
+runtime.GameShared.isSelectableWeaponId = isSelectableWeaponId;
+runtime.GameShared.normalizeWeaponLoadout = normalizeWeaponLoadout;
+runtime.GameShared.canWeaponLoadoutEquipId = canWeaponLoadoutEquipId;
+runtime.GameShared.createWeaponAmmoRuntime = createWeaponAmmoRuntime;
+runtime.GameShared.getAbilityDef = getAbilityDef;
+runtime.GameShared.getAbilityCatalog = getAbilityCatalog;
 runtime.GameShared.getDefaultThrowableId = getDefaultThrowableId;
 runtime.GameShared.normalizeThrowableId = normalizeThrowableId;
 runtime.GameShared.getDefaultAbilityId = getDefaultAbilityId;

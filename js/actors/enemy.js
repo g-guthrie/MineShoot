@@ -33,9 +33,9 @@
     }
 
     function enemyTuning() {
-        var tuningApi = globalThis.__MAYHEM_RUNTIME.GameCombatTuning || null;
-        return (tuningApi && tuningApi.getEnemyTuning)
-            ? tuningApi.getEnemyTuning()
+        var shared = sharedApi();
+        return (shared && shared.getEnemyTuning)
+            ? shared.getEnemyTuning()
             : {
                 fireRange: 34,
                 headshotNearRange: 12,
@@ -91,9 +91,8 @@
 
     function getCurrentWallhackRadius() {
         var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
-        var netRuntime = net && net.runtime ? net.runtime : net;
-        var netView = net && net.view ? net.view : net;
-        if (netRuntime && netRuntime.isActive && netRuntime.isActive() && netView && netView.getAuthoritativeSelfState) {
+        var netView = net && net.view ? net.view : null;
+        if (net && net.isActive && net.isActive() && netView && netView.getAuthoritativeSelfState) {
             var selfState = netView.getAuthoritativeSelfState();
             if (selfState && typeof selfState.wallhackRadius === 'number') {
                 return selfState.wallhackRadius;

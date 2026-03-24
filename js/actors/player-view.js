@@ -251,10 +251,17 @@
                     };
                 } else {
                     var shared = runtime.GameShared || {};
+                    var weaponPresentationApi = runtime.GameWeaponPresentation || null;
                     var presentation = options.getWeaponPresentation && activeWeaponState.id
                         ? options.getWeaponPresentation(activeWeaponState.id)
                         : null;
-                    if (shared.resolveReloadPresentationState) {
+                    if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
+                        reloadPresentation = weaponPresentationApi.resolveReloadState({
+                            reloadMs: Number(activeWeaponState.reloadMs || 0),
+                            reloadRemaining: Number(activeWeaponState.reloadRemaining || 0),
+                            reloadedFlashRemaining: Number(activeWeaponState.reloadedFlashRemaining || 0)
+                        }, null);
+                    } else if (shared.resolveReloadPresentationState) {
                         reloadPresentation = shared.resolveReloadPresentationState({
                             reloadMs: Number(activeWeaponState.reloadMs || 0),
                             reloadRemaining: Number(activeWeaponState.reloadRemaining || 0),
@@ -332,13 +339,24 @@
         }
 
         function updateViewBlendState(dt, state) {
-            var targetScopeBlend = state.adsActive ? 1 : 0;
+            var scopeTargetActive = !!(state && (state.scopeTargetActive != null ? state.scopeTargetActive : state.adsActive));
+            if (!scopeTargetActive) {
+                scopeBlend = 0;
+                var sprintBlend = (!state.sniperMode && state.sprinting)
+                    ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
+                    : 0;
+                sprintFovBlend += (sprintBlend - sprintFovBlend) * Math.min(1, dt * 10);
+                if (Math.abs(sprintFovBlend) < 0.001) sprintFovBlend = 0;
+                return false;
+            }
+
+            var targetScopeBlend = 1;
             var blendSpeed = state.sniperMode ? state.sniperScopeBlendSpeed : state.adsBlendSpeed;
             scopeBlend += (targetScopeBlend - scopeBlend) * Math.min(1, dt * blendSpeed);
             if (Math.abs(scopeBlend) < 0.001) scopeBlend = 0;
             if (Math.abs(1 - scopeBlend) < 0.001) scopeBlend = 1;
 
-            var targetSprintFovBlend = (!state.adsActive && !state.sniperMode && state.sprinting)
+            var targetSprintFovBlend = (!scopeTargetActive && !state.sniperMode && state.sprinting)
                 ? Math.max(0, Math.min(1, Number(state.speedNorm || 0)))
                 : 0;
             sprintFovBlend += (targetSprintFovBlend - sprintFovBlend) * Math.min(1, dt * 10);
@@ -464,7 +482,8 @@
 
             recoilPatternState.type = String(recoil.pattern || '');
             recoilPatternState.strength = Math.max(0, Number(recoil.patternStrength || 0)) * scopeMultiplier;
-            if (state.currentWeaponId === 'sniper' && !state.adsActive) {
+            var scopeTargetActive = !!(state && (state.scopeTargetActive != null ? state.scopeTargetActive : state.adsActive));
+            if (state.currentWeaponId === 'sniper' && !scopeTargetActive) {
                 recoilPatternState.type = '';
                 recoilPatternState.strength = 0;
             }
@@ -556,13 +575,21 @@
             getThrowableOriginWorldPosition: getThrowableOriginWorldPosition,
             getScopeBlend: function () { return scopeBlend; },
             getAdsState: function (state) {
+                var scopeTargetActive = !!(state && (state.scopeTargetActive != null ? state.scopeTargetActive : state.adsActive));
+                var sniperMode = !!(state && state.sniperMode);
+                var ready = sniperMode && scopeTargetActive && scopeBlend >= 0.995;
                 return {
                     weaponId: state.currentWeaponId,
-                    active: !!state.adsActive,
+                    active: scopeTargetActive,
                     blend: scopeBlend,
-                    sniper: !!state.sniperMode,
-                    scopeActive: !!state.sniperMode && scopeBlend > 0.02
+                    sniper: sniperMode,
+                    scopeActive: sniperMode && scopeBlend > 0.02,
+                    ready: ready,
+                    phase: !sniperMode ? 'inactive' : (ready ? 'ready' : (scopeTargetActive ? 'equipping' : 'inactive'))
                 };
+            },
+            cancelScope: function () {
+                scopeBlend = 0;
             }
         };
     };

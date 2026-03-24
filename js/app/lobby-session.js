@@ -228,10 +228,18 @@
                     loaded: true
                 };
             }
+            if (partyState && partyState.privateRoomSummary && partyState.privateRoomSummary.room) {
+                return {
+                    hasPrivateRoom: true,
+                    room: partyState.privateRoomSummary.room,
+                    self: partyState.privateRoomSummary.self || null,
+                    loaded: true
+                };
+            }
             var assignedPrivateRoom = currentAssignedPrivateRoom();
             return {
                 hasPrivateRoom: !!assignedPrivateRoom,
-                room: assignedPrivateRoom,
+                room: null,
                 self: assignedPrivateRoom || null,
                 loaded: false
             };
@@ -251,8 +259,8 @@
             var hasPrivateRoom = privateRoomSummary.hasPrivateRoom;
             var privateRoom = privateRoomSummary.room;
             var privateRoomSelf = privateRoomSummary.self;
-            var privateRoomPhase = String(privateRoom && privateRoom.roomPhase || '');
-            var privateRoomMode = String(privateRoom && privateRoom.roomMode || '');
+            var privateRoomPhase = String((privateRoom && privateRoom.roomPhase) || (privateRoomSelf && privateRoomSelf.roomPhase) || '');
+            var privateRoomMode = String((privateRoom && privateRoom.roomMode) || (privateRoomSelf && privateRoomSelf.roomMode) || '');
             var isPrivateRoomHost = !!(privateRoomSelf && privateRoomSelf.isHost);
             var privateRoomInviteLocked = !!(privateRoom && privateRoom.inviteLocked);
             var canTogglePrivateRoomInviteLock = !!(privateRoom && privateRoom.canToggleInviteLock);

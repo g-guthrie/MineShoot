@@ -13,8 +13,9 @@
     }
 
     function authoritativeNow(netApi) {
-        var stamp = netApi && netApi.getAuthoritativeNow
-            ? Number(netApi.getAuthoritativeNow() || 0)
+        var timingApi = netApi && netApi.timing ? netApi.timing : null;
+        var stamp = timingApi && timingApi.getAuthoritativeNow
+            ? Number(timingApi.getAuthoritativeNow() || 0)
             : 0;
         return stamp > 0 ? stamp : Date.now();
     }
@@ -22,8 +23,9 @@
     function toLocalTime(netApi, timestamp) {
         var stamp = Number(timestamp || 0);
         if (!(stamp > 0)) return 0;
-        if (netApi && netApi.toLocalTime) {
-            var localStamp = Number(netApi.toLocalTime(stamp) || 0);
+        var timingApi = netApi && netApi.timing ? netApi.timing : null;
+        if (timingApi && timingApi.toLocalTime) {
+            var localStamp = Number(timingApi.toLocalTime(stamp) || 0);
             if (localStamp > 0) return localStamp;
         }
         return stamp;
@@ -34,9 +36,11 @@
         var opts = options || {};
         var RT = runtime();
         var netApi = RT.GameNet || null;
+        var netView = netApi && netApi.view ? netApi.view : null;
+        var timingApi = netApi && netApi.timing ? netApi.timing : null;
         var abilityFxView = RT.GameAbilityFx || null;
-        var matchState = netApi && netApi.getMatchState
-            ? netApi.getMatchState()
+        var matchState = netView && netView.getMatchState
+            ? netView.getMatchState()
             : null;
         var serverNow = authoritativeNow(netApi);
         var respawnState = opts && Object.prototype.hasOwnProperty.call(opts, 'respawnState')
@@ -115,14 +119,14 @@
                 RT.GamePlayer &&
                 RT.GamePlayer.reconcileAuthoritativeMotion
             ) {
-                var inputSyncState = netApi && netApi.getInputSyncState
-                    ? netApi.getInputSyncState()
+                var inputSyncState = netView && netView.getInputSyncState
+                    ? netView.getInputSyncState()
                     : null;
-                var connectionTimingState = netApi && netApi.getConnectionTimingState
-                    ? netApi.getConnectionTimingState()
+                var connectionTimingState = timingApi && timingApi.getConnectionTimingState
+                    ? timingApi.getConnectionTimingState()
                     : null;
-                var pendingInputs = netApi && netApi.getPendingInputSamples
-                    ? netApi.getPendingInputSamples()
+                var pendingInputs = netView && netView.getPendingInputSamples
+                    ? netView.getPendingInputSamples()
                     : [];
                 RT.GamePlayer.reconcileAuthoritativeMotion(selfState, {
                     dt: dt,

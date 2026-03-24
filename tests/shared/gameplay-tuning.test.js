@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   gameplayTuning,
+  getAwarenessTuning,
+  getEnemyTuning,
   getDefaultAbilityId,
   getDefaultThrowableId,
   getSelectableWeaponIds,
+  getThrowableMechanicsTuning,
   getWeaponFalloffProfile,
   getWeaponPresentation,
   normalizeAbilityId,
@@ -69,13 +72,15 @@ test('weapon reload tuning exposes magazine sizes and reload timing', () => {
 });
 
 test('awareness tuning expands radar coverage before targets are already visually obvious', () => {
-  assert.deepEqual(gameplayTuning.awareness, {
+  assert.deepEqual(getAwarenessTuning(), {
     segments: 8,
     radarRange: 56,
     coreRange: 10,
     beaconMinRange: 56,
     beaconMaxCount: 2
   });
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getAwarenessTuning, 'function');
+  assert.deepEqual(globalThis.__MAYHEM_RUNTIME.GameShared.getAwarenessTuning(), getAwarenessTuning());
 });
 
 test('shared weapon helpers expose the selectable loadout order and falloff profiles', () => {
@@ -147,11 +152,11 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
   const sniper = gameplayTuning.weaponStats.sniper;
   const machinegun = gameplayTuning.weaponStats.machinegun;
 
-  assert.equal(rifle.hipfireSpread, 0.022);
+  assert.equal(rifle.hipfireSpread, 0.024);
   assert.equal(rifle.adsSpread, 0);
-  assert.equal(pistol.hipfireSpread, 0.1);
-  assert.equal(pistol.adsSpread, 0.16);
-  assert.equal(machinegun.adsSpread, 0.032);
+  assert.equal(pistol.hipfireSpread, 0.105);
+  assert.equal(pistol.adsSpread, 0.105);
+  assert.equal(machinegun.adsSpread, 0.035);
   assert.equal(resolveWeaponAimProfile(rifle, false).spread, rifle.hipfireSpread);
   assert.equal(resolveWeaponAimProfile(rifle, true).spread, rifle.adsSpread);
   assert.equal(resolveWeaponAimProfile(machinegun, true).spread, machinegun.adsSpread);
@@ -197,6 +202,10 @@ test('shared survivability helper owns the live armor recharge rule', () => {
 });
 
 test('ability tuning keeps the latest choke, hook, missile, and deadeye defaults', () => {
+  assert.deepEqual(getEnemyTuning(), gameplayTuning.enemy);
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getEnemyTuning, 'function');
+  assert.deepEqual(getThrowableMechanicsTuning(), gameplayTuning.throwableMechanics);
+  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getThrowableMechanicsTuning, 'function');
   assert.equal(Number(gameplayTuning.abilityCatalog.choke.cooldownMs || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.choke.duration || 0) > 0, true);
   assert.equal(Number(gameplayTuning.abilityCatalog.hook.stunDuration || 0) > 0, true);

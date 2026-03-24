@@ -48,7 +48,7 @@
 
         function netCommands() {
             var net = runtime.GameNet || null;
-            return net && net.commands ? net.commands : net;
+            return net && net.commands ? net.commands : null;
         }
 
         function hasInputCapture() {

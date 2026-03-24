@@ -10,6 +10,7 @@ class FakeElement {
     this.hidden = false;
     this.textContent = '';
     this.style = {};
+    this.attributes = {};
     this.listeners = new Map();
   }
 
@@ -24,6 +25,18 @@ class FakeElement {
     if (this.ownerDocument) {
       this.ownerDocument.activeElement = this;
     }
+  }
+
+  setAttribute(name, value) {
+    this.attributes[String(name || '')] = String(value || '');
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[String(name || '')];
+  }
+
+  getAttribute(name) {
+    return this.attributes[String(name || '')];
   }
 
   dispatch(type, event = {}) {
@@ -128,6 +141,7 @@ async function loadRuntimeSessionHarness(overrides = {}) {
   const backBtn = new FakeElement('back-mode-btn', document);
   const modeButtons = new FakeElement('mode-buttons', document);
   const menuStage = new FakeElement('menu-stage', document);
+  const menuSurface = new FakeElement('menu-surface', document);
   const launchFlow = new FakeElement('launch-flow', document);
   const launchTitle = new FakeElement('launch-title', document);
   const launchStatus = new FakeElement('launch-status', document);
@@ -141,6 +155,7 @@ async function loadRuntimeSessionHarness(overrides = {}) {
   document.elements['back-mode-btn'] = backBtn;
   document.elements['mode-buttons'] = modeButtons;
   document.elements['menu-stage'] = menuStage;
+  document.elements['menu-surface'] = menuSurface;
   document.elements['launch-flow'] = launchFlow;
   document.elements['launch-title'] = launchTitle;
   document.elements['launch-status'] = launchStatus;
@@ -284,6 +299,7 @@ async function loadRuntimeSessionHarness(overrides = {}) {
     playBtn,
     backBtn,
     menuStage,
+    menuSurface,
     launchFlow,
     launchTitle,
     launchStatus,
@@ -670,4 +686,62 @@ test('preparing a fresh launch clears any leftover postgame flow', async () => {
   assert.equal(postgameCelebration.hidden, true);
   assert.equal(postgameResults.hidden, true);
   assert.equal(harness.launchFlow.hidden, true);
+});
+
+test('active postgame flow ignores later match updates until the player exits it', async () => {
+  const harness = await loadRuntimeSessionHarness({
+    resolveWinnerLabel(matchState) {
+      return String(matchState && matchState.winnerId || 'PLAYER');
+    },
+    didSelfWin(matchState, selfState) {
+      return String(matchState && matchState.winnerId || '') === String(selfState && selfState.id || '');
+    }
+  });
+  const postgameFlow = new FakeElement('postgame-flow', harness.document);
+  const postgameCelebration = new FakeElement('postgame-celebration', harness.document);
+  const postgameResults = new FakeElement('postgame-results', harness.document);
+  const winnerBanner = new FakeElement('postgame-winner-banner', harness.document);
+  const resultBanner = new FakeElement('postgame-result-banner', harness.document);
+  const celebrationNote = new FakeElement('postgame-celebration-note', harness.document);
+  harness.document.elements['postgame-flow'] = postgameFlow;
+  harness.document.elements['postgame-celebration'] = postgameCelebration;
+  harness.document.elements['postgame-results'] = postgameResults;
+  harness.document.elements['postgame-winner-banner'] = winnerBanner;
+  harness.document.elements['postgame-result-banner'] = resultBanner;
+  harness.document.elements['postgame-celebration-note'] = celebrationNote;
+
+  harness.session.syncMatchState({
+    matchState: {
+      ended: true,
+      endedAt: 1000,
+      resetAt: 4000,
+      winnerId: 'usr_self'
+    },
+    selfState: {
+      id: 'usr_self',
+      kills: 2,
+      deaths: 1
+    }
+  });
+
+  assert.equal(postgameFlow.hidden, false);
+  assert.equal(winnerBanner.textContent, 'usr_self');
+  assert.equal(resultBanner.textContent, 'VICTORY');
+
+  harness.session.syncMatchState({
+    matchState: {
+      ended: true,
+      endedAt: 2000,
+      resetAt: 5000,
+      winnerId: 'usr_other'
+    },
+    selfState: {
+      id: 'usr_self',
+      kills: 2,
+      deaths: 2
+    }
+  });
+
+  assert.equal(winnerBanner.textContent, 'usr_self');
+  assert.equal(resultBanner.textContent, 'VICTORY');
 });

@@ -124,10 +124,6 @@
         if (Array.isArray(ids) && ids.length) {
             return ids.map(function (id) { return String(id || ''); }).filter(Boolean);
         }
-        var tuning = shared.gameplayTuning || {};
-        if (Array.isArray(tuning.selectableWeaponIds) && tuning.selectableWeaponIds.length) {
-            return tuning.selectableWeaponIds.map(function (id) { return String(id || ''); }).filter(Boolean);
-        }
         return ['rifle'];
     }
 
@@ -135,10 +131,6 @@
         var shared = sharedWeaponApi();
         var defaults = shared.getDefaultWeaponLoadout ? shared.getDefaultWeaponLoadout() : null;
         if (Array.isArray(defaults) && defaults.length) return defaults.slice(0, 2);
-        var tuning = shared.gameplayTuning || {};
-        if (Array.isArray(tuning.defaultWeaponLoadout) && tuning.defaultWeaponLoadout.length) {
-            return tuning.defaultWeaponLoadout.slice(0, 2);
-        }
         return getAllSelectableWeaponIds().slice(0, 2);
     }
 
@@ -147,9 +139,7 @@
         if (!id) return null;
         var shared = sharedWeaponApi();
         if (shared.getWeaponStats) return shared.getWeaponStats(id);
-        var tuning = shared.gameplayTuning || {};
-        var stats = tuning.weaponStats || {};
-        return stats[id] || null;
+        return null;
     }
 
     function getWeaponPresentation(weaponId) {
@@ -165,6 +155,10 @@
     }
 
     function sanitizeWeaponLoadout(slots) {
+        var shared = sharedWeaponApi();
+        if (shared.normalizeWeaponLoadout) {
+            return shared.normalizeWeaponLoadout(slots, defaultWeaponLoadout());
+        }
         var rawSlots = Array.isArray(slots) ? slots : defaultWeaponLoadout();
         var allowedIds = getAllSelectableWeaponIds();
         var allowed = {};
@@ -274,8 +268,15 @@
         var reloadRemaining = reloadRemainingForWeapon(id, stamp);
         var reloadedFlashRemaining = Math.max(0, Number(ammoState && ammoState.reloadedFlashUntil || 0) - stamp);
         var shared = sharedWeaponApi();
+        var presentationOwner = globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameWeaponPresentation;
         var presentation = getWeaponPresentation(id);
-        var reloadPresentation = shared.resolveReloadPresentationState
+        var reloadPresentation = presentationOwner && presentationOwner.resolveReloadState
+            ? presentationOwner.resolveReloadState({
+                reloadMs: Math.max(0, Number(stats.reloadMs || 0)),
+                reloadRemaining: reloadRemaining,
+                reloadedFlashRemaining: reloadedFlashRemaining
+            }, null)
+            : (shared.resolveReloadPresentationState
             ? shared.resolveReloadPresentationState({
                 reloadMs: Math.max(0, Number(stats.reloadMs || 0)),
                 reloadRemaining: reloadRemaining,
@@ -289,7 +290,7 @@
                     : 1,
                 phase: reloadedFlashRemaining > 0 ? 'complete' : 'ready',
                 phasePct: 1
-            };
+            });
         return {
             id: id,
             name: String(stats.name || id),

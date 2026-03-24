@@ -16,6 +16,11 @@
 
     function createFallbackRenderContext() {
         var renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.shadowMap = renderer.shadowMap || {};
+        renderer.shadowMap.enabled = true;
+        if (THREE.PCFSoftShadowMap !== undefined) {
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(cappedPixelRatio());
         document.body.appendChild(renderer.domElement);
@@ -57,18 +62,17 @@
         var clock = renderCtx.clock;
         var multiplayerMode = !!(options.activeRuntimeMode && options.activeRuntimeMode.authorityMode === 'networked');
         var net = depGet('GameNet');
-        var netRuntime = net && net.runtime ? net.runtime : net;
-        var netView = net && net.view ? net.view : net;
+        var netView = net && net.view ? net.view : null;
         var netRuntimeInitStarted = false;
         var removeResizeHandler = null;
 
         function ensureNetRuntimeInit() {
-            if (!netRuntime || !netRuntime.init || netRuntimeInitStarted) return;
-            if (netRuntime.isActive && netRuntime.isActive()) {
+            if (!net || !net.init || netRuntimeInitStarted) return;
+            if (net.isActive && net.isActive()) {
                 netRuntimeInitStarted = true;
                 return;
             }
-            netRuntime.init(scene);
+            net.init(scene);
             netRuntimeInitStarted = true;
         }
 
@@ -191,8 +195,8 @@
                     gameHookVisuals.dispose();
                 }
                 if (multiplayerMode) {
-                    if (netRuntime && netRuntime.shutdown) {
-                        netRuntime.shutdown();
+                    if (net && net.shutdown) {
+                        net.shutdown();
                     }
                 } else if (gameLocalMatch && gameLocalMatch.shutdown) {
                     gameLocalMatch.shutdown();

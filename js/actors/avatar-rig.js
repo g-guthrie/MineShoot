@@ -30,15 +30,21 @@
     var AVATAR_ARM_SIZE = readVec3(entityConstants.AVATAR_ARM_SIZE, { x: 0.22, y: 0.85, z: 0.22 });
     var AVATAR_ARM_LEFT_CENTER_OFFSET = readVec3(entityConstants.AVATAR_ARM_LEFT_CENTER_OFFSET, { x: -0.52, y: 1.25, z: 0 });
     var AVATAR_ARM_RIGHT_CENTER_OFFSET = readVec3(entityConstants.AVATAR_ARM_RIGHT_CENTER_OFFSET, { x: 0.52, y: 1.25, z: 0 });
+    var AVATAR_ARM_ELBOW_GAP_Y = (typeof entityConstants.AVATAR_ARM_ELBOW_GAP_Y === 'number') ? entityConstants.AVATAR_ARM_ELBOW_GAP_Y : 0.04;
+    var AVATAR_ARM_UPPER_RATIO = (typeof entityConstants.AVATAR_ARM_UPPER_RATIO === 'number') ? entityConstants.AVATAR_ARM_UPPER_RATIO : 0.52;
     var AVATAR_LEG_SIZE = readVec3(entityConstants.AVATAR_LEG_SIZE, { x: 0.28, y: 0.9, z: 0.28 });
     var AVATAR_LEG_LEFT_CENTER_OFFSET = readVec3(entityConstants.AVATAR_LEG_LEFT_CENTER_OFFSET, { x: -0.18, y: 0.45, z: 0 });
     var AVATAR_LEG_RIGHT_CENTER_OFFSET = readVec3(entityConstants.AVATAR_LEG_RIGHT_CENTER_OFFSET, { x: 0.18, y: 0.45, z: 0 });
+    var AVATAR_LEG_KNEE_GAP_Y = (typeof entityConstants.AVATAR_LEG_KNEE_GAP_Y === 'number') ? entityConstants.AVATAR_LEG_KNEE_GAP_Y : 0.05;
+    var AVATAR_LEG_UPPER_RATIO = (typeof entityConstants.AVATAR_LEG_UPPER_RATIO === 'number') ? entityConstants.AVATAR_LEG_UPPER_RATIO : 0.5;
     var ARM_SHORT_SIDE = AVATAR_ARM_SIZE.x;
     var HALF_ARM_SHORT_SIDE = ARM_SHORT_SIDE * 0.5;
     var GUN_MOUNT_SHIFT_X = -0.08;
     var GUN_MOUNT_LIFT_Y = 0.1 + HALF_ARM_SHORT_SIDE;
     var GUN_MOUNT_SHIFT_Z = -HALF_ARM_SHORT_SIDE;
     var FOOT_PLANE_OFFSET_Y = (typeof entityConstants.AVATAR_FOOT_PLANE_OFFSET_Y === 'number') ? entityConstants.AVATAR_FOOT_PLANE_OFFSET_Y : 0.3;
+    var ARM_SEGMENTS = resolveLimbSegments(AVATAR_ARM_SIZE, AVATAR_ARM_UPPER_RATIO, AVATAR_ARM_ELBOW_GAP_Y);
+    var LEG_SEGMENTS = resolveLimbSegments(AVATAR_LEG_SIZE, AVATAR_LEG_UPPER_RATIO, AVATAR_LEG_KNEE_GAP_Y);
     var UPPER_BODY_PIVOT_OFFSET = {
         x: AVATAR_TORSO_CENTER_OFFSET.x,
         y: (AVATAR_TORSO_CENTER_OFFSET.y - FOOT_PLANE_OFFSET_Y) - (AVATAR_TORSO_SIZE.y * 0.5),
@@ -71,9 +77,38 @@
     var GUN_CARRY_BASE_PITCH = 75 * DEG_TO_RAD;
     var SUPPORT_ARM_WALK_SWAY = 0.65;
     var MELEE_ARM_SPLAY_Z = 0.18;
+    var AIRBORNE_KNEE_BEND = 0.18;
 
     function clamp01(value) {
         return Math.max(0, Math.min(1, Number(value || 0)));
+    }
+
+    function resolveLimbSegments(size, upperRatio, jointGap) {
+        var totalLength = Math.max(0.05, Number(size && size.y || 0));
+        var gap = Math.max(0, Math.min(totalLength * 0.2, Number(jointGap || 0)));
+        var chainLength = Math.max(0.04, totalLength - gap);
+        var upper = chainLength * clamp01(upperRatio);
+        var lower = chainLength - upper;
+        return {
+            total: totalLength,
+            gap: gap,
+            upper: upper,
+            lower: lower
+        };
+    }
+
+    function makeSegmentMesh(size, length, material) {
+        return new THREE.Mesh(new THREE.BoxGeometry(size.x, length, size.z), material);
+    }
+
+    function zeroGroupRotation(group) {
+        if (!group) return;
+        group.rotation.set(0, 0, 0);
+    }
+
+    function setJointPitch(group, value) {
+        if (!group) return;
+        group.rotation.x = Number(value || 0);
     }
 
     function resetSupportHandPose(rig) {
@@ -93,6 +128,14 @@
         if (rig.palmRight) {
             rig.palmRight.rotation.set(0, 0, 0);
         }
+    }
+
+    function resetJointPose(rig) {
+        if (!rig) return;
+        zeroGroupRotation(rig.elbowL);
+        zeroGroupRotation(rig.elbowR);
+        zeroGroupRotation(rig.kneeL);
+        zeroGroupRotation(rig.kneeR);
     }
 
     function resetGunMountPose(rig) {
@@ -503,10 +546,14 @@
 
     function setPart(mesh, style) {
         if (!mesh || !style) return;
-        if (style.p) mesh.position.set(style.p[0], style.p[1], style.p[2]);
-        if (style.s) mesh.scale.set(style.s[0], style.s[1], style.s[2]);
-        if (typeof style.c === 'number' && mesh.material && mesh.material.color) {
-            mesh.material.color.setHex(style.c);
+        var position = Array.isArray(style.position) ? style.position : style.p;
+        var size = Array.isArray(style.size) ? style.size : style.s;
+        var color = (typeof style.color === 'number') ? style.color : style.c;
+        if (position) mesh.position.set(position[0], position[1], position[2]);
+        if (size) mesh.scale.set(size[0], size[1], size[2]);
+        mesh.visible = style.visible !== false;
+        if (typeof color === 'number' && mesh.material && mesh.material.color) {
+            mesh.material.color.setHex(color);
         }
     }
 
@@ -533,6 +580,10 @@
         return null;
     }
 
+    function weaponPresentationApi() {
+        return globalThis.__MAYHEM_RUNTIME.GameWeaponPresentation || null;
+    }
+
     function setAnchorPosition(group, name, coords) {
         var anchor = group.getObjectByName(name);
         if (!anchor) {
@@ -544,15 +595,37 @@
         return anchor;
     }
 
+    function alignGunToHandleBack(rig, scratch) {
+        if (!rig || !rig.gun || !rig.weaponDefinition || !rig.weaponDefinition.zones) return;
+        var handleBack = rig.weaponDefinition.zones.handleBack;
+        var mount = rig.weaponDefinition.mount || {};
+        var mountPos = mount.position || [0, 0, 0];
+        if (!handleBack) return;
+        var out = scratch || new THREE.Vector3();
+        out.set(handleBack[0], handleBack[1], handleBack[2]);
+        out.applyEuler(rig.gun.rotation);
+        rig.gun.position.set(
+            Number(mountPos[0] || 0) + GUN_MOUNT_SHIFT_X - out.x,
+            Number(mountPos[1] || 0) + GUN_MOUNT_LIFT_Y - out.y,
+            Number(mountPos[2] || 0) + GUN_MOUNT_SHIFT_Z - out.z
+        );
+    }
+
     function setProceduralWeaponVisible(rig, visible) {
         if (!rig) return;
         rig.gunBody.visible = !!visible;
         rig.gunBarrel.visible = !!visible;
         rig.gunStock.visible = !!visible;
         rig.gunGrip.visible = !!visible;
-        rig.scope.visible = !!visible && !!rig.scopeEnabled;
-        rig.pump.visible = !!visible && !!rig.pumpEnabled;
-        rig.coil.visible = !!visible && !!rig.coilEnabled;
+        if (rig.gunRail) rig.gunRail.visible = !!visible && !!rig.railEnabled;
+        if (rig.scope) rig.scope.visible = !!visible && !!rig.scopeEnabled;
+        if (rig.gunMuzzleDevice) rig.gunMuzzleDevice.visible = !!visible && !!rig.muzzleDeviceEnabled;
+        if (rig.gunFeed) rig.gunFeed.visible = !!visible && !!rig.feedEnabled;
+        if (rig.gunUnderbarrel) rig.gunUnderbarrel.visible = !!visible && !!rig.underbarrelEnabled;
+        if (rig.gunAccentA) rig.gunAccentA.visible = !!visible && !!rig.accentAEnabled;
+        if (rig.gunAccentB) rig.gunAccentB.visible = !!visible && !!rig.accentBEnabled;
+        if (rig.pump) rig.pump.visible = !!visible && !!rig.underbarrelEnabled;
+        if (rig.coil) rig.coil.visible = false;
     }
 
     function disposeSceneResources(root) {
@@ -666,34 +739,59 @@
         modelRoot.add(hipRight);
 
         var gun = new THREE.Group();
-        var gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.55), gunDark);
-        gunBody.position.z = -0.04;
+        var gunBody = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunDark);
+        gunBody.position.z = -0.12;
         gun.add(gunBody);
 
-        var gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.26), gunDarker);
-        gunBarrel.position.z = -0.42;
+        var gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunDarker);
+        gunBarrel.position.z = -0.58;
         gun.add(gunBarrel);
 
-        var gunStock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.11, 0.16), gunWood);
-        gunStock.position.set(0, -0.03, 0.13);
+        var gunStock = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunWood);
+        gunStock.position.set(0, -0.01, 0.3);
         gun.add(gunStock);
 
-        var gunGrip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.08), gunWood);
-        gunGrip.position.set(0, -0.11, 0.03);
+        var gunGrip = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunWood);
+        gunGrip.position.set(0, -0.14, 0.04);
         gun.add(gunGrip);
 
-        var scope = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.08, 0.23), gunMetal);
-        scope.position.set(0, 0.09, -0.21);
+        var gunRail = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunDarker);
+        gunRail.position.set(0, 0.11, -0.1);
+        gunRail.visible = false;
+        gun.add(gunRail);
+
+        var scope = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunMetal);
+        scope.position.set(0, 0.17, -0.16);
         scope.visible = false;
         gun.add(scope);
 
-        var pump = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.12), gunWood);
-        pump.position.set(0, -0.03, -0.33);
-        pump.visible = false;
-        gun.add(pump);
+        var gunMuzzleDevice = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunDarker);
+        gunMuzzleDevice.position.set(0, 0.02, -0.92);
+        gunMuzzleDevice.visible = false;
+        gun.add(gunMuzzleDevice);
 
+        var gunFeed = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunMetal);
+        gunFeed.position.set(0, -0.12, -0.16);
+        gunFeed.visible = false;
+        gun.add(gunFeed);
+
+        var gunUnderbarrel = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunWood);
+        gunUnderbarrel.position.set(0, -0.05, -0.34);
+        gunUnderbarrel.visible = false;
+        gun.add(gunUnderbarrel);
+
+        var gunAccentA = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunMetal);
+        gunAccentA.position.set(0, -0.02, -0.26);
+        gunAccentA.visible = false;
+        gun.add(gunAccentA);
+
+        var gunAccentB = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), gunMetal);
+        gunAccentB.position.set(0, 0.06, -0.42);
+        gunAccentB.visible = false;
+        gun.add(gunAccentB);
+
+        var pump = gunUnderbarrel;
         var coil = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.11), gunMetal);
-        coil.position.set(0, -0.1, -0.1);
         coil.visible = false;
         gun.add(coil);
 
@@ -740,6 +838,9 @@
         var handleOffset = new THREE.Vector3();
         var reloadTarget = new THREE.Vector3();
         var reloadPoseScratch = createReloadPoseState();
+        var weaponPresentationVectors = {
+            supportTarget: new THREE.Vector3()
+        };
         var disposed = false;
 
         function pointArmAtTarget(armGroup, targetVec, parentGroup, extraX, extraY, extraZ) {
@@ -776,7 +877,13 @@
             gunBarrel: gunBarrel,
             gunStock: gunStock,
             gunGrip: gunGrip,
+            gunRail: gunRail,
             scope: scope,
+            gunMuzzleDevice: gunMuzzleDevice,
+            gunFeed: gunFeed,
+            gunUnderbarrel: gunUnderbarrel,
+            gunAccentA: gunAccentA,
+            gunAccentB: gunAccentB,
             pump: pump,
             coil: coil,
             muzzle: muzzle,
@@ -790,6 +897,7 @@
             palmRight: palmRight,
             weaponClass: 'gun',
             weaponId: '',
+            weaponDefinition: null,
             gaitPhase: Math.random() * Math.PI * 2,
             aimPitch: 0,
             upperBodyLeanX: 0,
@@ -797,66 +905,96 @@
             gunBaseRot: new THREE.Vector3(),
             supportBasePos: new THREE.Vector3(),
             armLBasePos: shoulderLeft.position.clone(),
+            leftPalmNeutral: {
+                x: LEFT_PALM_NEUTRAL.x,
+                y: LEFT_PALM_NEUTRAL.y,
+                z: LEFT_PALM_NEUTRAL.z
+            },
+            baseRightShoulderPitch: GUN_CARRY_BASE_PITCH,
             footPlaneOffsetY: FOOT_PLANE_OFFSET_Y,
+            railEnabled: false,
             scopeEnabled: false,
+            muzzleDeviceEnabled: false,
+            feedEnabled: false,
+            underbarrelEnabled: false,
+            accentAEnabled: false,
+            accentBEnabled: false,
             pumpEnabled: false,
             coilEnabled: false
         };
 
         function setWeapon(weaponId) {
             var resolved = resolveWeaponEntry(weaponId);
-            var visual = resolved && resolved.visual ? resolved.visual : null;
-            var mount = visual && visual.mount ? visual.mount : null;
-            var parts = visual && visual.parts ? visual.parts : {};
-            var anchors = visual && visual.anchors ? visual.anchors : {};
-            var effects = visual && visual.effects ? visual.effects : {};
-            var handlePos = anchors.handle || [0, 0, 0];
-            var barrelTipPos = anchors.barrelTip || [0, 0, -0.58];
-            var supportPos = anchors.support || [0, -0.01, -0.28];
-            var mountPos = mount && mount.position ? mount.position : [0, 0.02, 0.08];
-            var mountRot = mount && mount.rotation ? mount.rotation : [0, 0, 0];
-            var muzzlePos = effects.muzzleFlash && effects.muzzleFlash.position ? effects.muzzleFlash.position : barrelTipPos;
+            var platform = resolved && resolved.platform ? resolved.platform : null;
+            var parts = platform && platform.parts ? platform.parts : {};
+            var zones = platform && platform.zones ? platform.zones : {};
+            var mount = platform && platform.mount ? platform.mount : {};
+            var handleBack = zones.handleBack || [0, -0.12, 0.12];
+            var barrelTipPos = zones.muzzle || [0, 0, -0.58];
+            var supportPos = zones.supportZone || [0, -0.01, -0.28];
+            var reloadPos = zones.reloadZone || supportPos;
+            var mountPos = mount.position || [0, 0, 0];
+            var mountRotDeg = mount.rotationDeg || [0, 0, 0];
+            var mountRot = [
+                Number(mountRotDeg[0] || 0) * DEG_TO_RAD,
+                Number(mountRotDeg[1] || 0) * DEG_TO_RAD,
+                Number(mountRotDeg[2] || 0) * DEG_TO_RAD
+            ];
+            var muzzlePos = barrelTipPos;
 
             if (rig.weaponId === (resolved && resolved.weaponId ? resolved.weaponId : 'rifle')) {
                 return;
             }
 
             rig.weaponId = resolved && resolved.weaponId ? resolved.weaponId : 'rifle';
-            rig.weaponClass = visual && visual.classId ? visual.classId : 'gun';
+            rig.weaponClass = platform && platform.classId ? platform.classId : 'gun';
+            rig.weaponDefinition = platform;
+            rig.baseRightShoulderPitch = GUN_CARRY_BASE_PITCH;
 
-            // Keep weapon body above the hand line so grip/stock read as hand-held.
+            // The back of the handle sits directly at the end of the right arm.
             rig.gun.position.set(
-                mountPos[0] + GUN_MOUNT_SHIFT_X,
-                mountPos[1] + GUN_MOUNT_LIFT_Y,
-                mountPos[2] + GUN_MOUNT_SHIFT_Z
+                Number(mountPos[0] || 0) + GUN_MOUNT_SHIFT_X,
+                Number(mountPos[1] || 0) + GUN_MOUNT_LIFT_Y,
+                Number(mountPos[2] || 0) + GUN_MOUNT_SHIFT_Z
             );
-            // Let each weapon fine-tune its wrist pitch relative to the forearm.
             rig.gun.rotation.set(
                 DEFAULT_GUN_WRIST_PITCH + Number(mountRot[0] || 0),
                 Number(mountRot[1] || 0),
                 Number(mountRot[2] || 0)
             );
 
-            handleOffset.set(handlePos[0], handlePos[1], handlePos[2]);
-            handleOffset.applyEuler(rig.gun.rotation);
-            rig.gun.position.sub(handleOffset);
+            alignGunToHandleBack(rig, handleOffset);
 
             rig.gunBasePos.copy(rig.gun.position);
             rig.gunBaseRot.copy(rig.gun.rotation);
             rig.supportBasePos.set(supportPos[0], supportPos[1], supportPos[2]);
+            rig.reloadBasePos = reloadPos;
 
-            setPart(rig.gunBody, parts.body);
+            setPart(rig.gunBody, parts.receiver);
             setPart(rig.gunBarrel, parts.barrel);
-            setPart(rig.gunStock, parts.stock);
             setPart(rig.gunGrip, parts.grip);
+            setPart(rig.gunStock, parts.stock || { visible: false });
+            setPart(rig.gunRail, parts.opticRail || { visible: false });
+            setPart(rig.scope, parts.optic || { visible: false });
+            setPart(rig.gunMuzzleDevice, parts.muzzleDevice || { visible: false });
+            setPart(rig.gunFeed, parts.feed || { visible: false });
+            setPart(rig.gunUnderbarrel, parts.underbarrel || { visible: false });
+            setPart(rig.gunAccentA, parts.accentA || { visible: false });
+            setPart(rig.gunAccentB, parts.accentB || { visible: false });
 
-            rig.scopeEnabled = !!parts.scope;
-            rig.pumpEnabled = !!parts.pump;
-            rig.coilEnabled = !!parts.coil;
+            rig.railEnabled = !!parts.opticRail;
+            rig.scopeEnabled = !!parts.optic;
+            rig.muzzleDeviceEnabled = !!parts.muzzleDevice;
+            rig.feedEnabled = !!parts.feed;
+            rig.underbarrelEnabled = !!parts.underbarrel;
+            rig.accentAEnabled = !!parts.accentA;
+            rig.accentBEnabled = !!parts.accentB;
+            rig.pumpEnabled = !!parts.underbarrel;
+            rig.coilEnabled = false;
             setProceduralWeaponVisible(rig, true);
             rig.muzzle.position.set(muzzlePos[0], muzzlePos[1], muzzlePos[2]);
             rig.supportAnchor.position.set(rig.supportBasePos.x, rig.supportBasePos.y, rig.supportBasePos.z);
-            setAnchorPosition(rig.gun, HANDLE_ANCHOR_NAME, handlePos);
+            setAnchorPosition(rig.gun, HANDLE_ANCHOR_NAME, handleBack);
             setAnchorPosition(rig.gun, BARREL_TIP_ANCHOR_NAME, barrelTipPos);
         }
 
@@ -937,22 +1075,32 @@
                 rig.palmRight.rotation.x = 0;
                 return;
             }
+            var weaponPresentation = weaponPresentationApi();
             if (airborne) {
-                var airborneArmSweep = 0;
-                if (movingForward !== movingBackward) {
-                    airborneArmSweep = movingForward ? -AIRBORNE_ARM_SWEEP : AIRBORNE_ARM_SWEEP;
-                }
                 rig.legL.rotation.x = 0;
                 rig.legR.rotation.x = 0;
                 rig.legL.rotation.z = 0;
                 rig.legR.rotation.z = 0;
                 rig.legL.position.x = AVATAR_LEG_LEFT_CENTER_OFFSET.x;
                 rig.legR.position.x = AVATAR_LEG_RIGHT_CENTER_OFFSET.x;
-                rig.armL.rotation.x = airborneArmSweep;
-                rig.armL.rotation.y = 0;
-                rig.armL.rotation.z = AIRBORNE_ARM_SIDE_SPLAY;
-                applyFirearmAimPitch(rig, 1.05, FIREARM_AIM_PITCH_SHOULDER_FACTOR, FIREARM_AIM_PITCH_WRIST_FACTOR);
-                rig.armR.rotation.z = -0.08;
+                if (rig.weaponClass === 'melee') {
+                    var airborneArmSweep = 0;
+                    if (movingForward !== movingBackward) {
+                        airborneArmSweep = movingForward ? -AIRBORNE_ARM_SWEEP : AIRBORNE_ARM_SWEEP;
+                    }
+                    rig.armL.rotation.x = airborneArmSweep;
+                    rig.armL.rotation.y = 0;
+                    rig.armL.rotation.z = AIRBORNE_ARM_SIDE_SPLAY;
+                    applyFirearmAimPitch(rig, 1.05, FIREARM_AIM_PITCH_SHOULDER_FACTOR, FIREARM_AIM_PITCH_WRIST_FACTOR);
+                    rig.armR.rotation.z = -0.08;
+                } else if (weaponPresentation && weaponPresentation.applyBasePose) {
+                    weaponPresentation.applyBasePose(rig, animState, {
+                        locomotionSwing: 0,
+                        modelRoot: rig.upperBodyPivot,
+                        pointArmAtTarget: pointArmAtTarget,
+                        sharedVectors: weaponPresentationVectors
+                    });
+                }
             } else {
                 rig.legL.rotation.x = walkSwing;
                 rig.legR.rotation.x = -walkSwing;
@@ -968,46 +1116,21 @@
                     rig.armL.rotation.y = 0;
                     rig.armL.rotation.z = -0.04;
                     rig.palmRight.rotation.x = 0;
-                } else {
-                    var locomotionSwing = sprinting ? (walkSwing * SPRINT_SWING_MULTIPLIER) : walkSwing;
-                    var rightArmCarrySwing = -locomotionSwing * GUN_CARRY_SHOULDER_SWAY;
-                    var rightWristSwing = locomotionSwing * GUN_CARRY_WRIST_SWAY;
-                    var supportPose = getSupportPoseForWeapon(rig.weaponId, rig.aimPitch, locomotionSwing, !!(animState && animState.adsActive));
-                    applyFirearmAimPitch(rig, GUN_CARRY_BASE_PITCH, FIREARM_AIM_PITCH_SHOULDER_FACTOR, FIREARM_AIM_PITCH_WRIST_FACTOR);
-                    rig.armR.rotation.x += rightArmCarrySwing;
-                    rig.armR.rotation.z = -0.08;
-                    rig.palmRight.rotation.x += rightWristSwing;
-                    if (supportPose) {
-                        applyLeftArmPose(rig, supportPose);
-                        rig.supportAnchor.getWorldPosition(targetWorld);
-                        pointArmAtTarget(
-                            rig.armL,
-                            targetWorld,
-                            rig.upperBodyPivot,
-                            supportPose.targetX,
-                            supportPose.targetY,
-                            supportPose.targetZ
-                        );
-                    } else {
-                        rig.armL.rotation.x = locomotionSwing * SUPPORT_ARM_WALK_SWAY;
-                        rig.armL.rotation.y = 0;
-                        rig.armL.rotation.z = 0;
-                    }
+                } else if (weaponPresentation && weaponPresentation.applyBasePose) {
+                    weaponPresentation.applyBasePose(rig, animState, {
+                        locomotionSwing: sprinting ? (walkSwing * SPRINT_SWING_MULTIPLIER) : walkSwing,
+                        modelRoot: rig.upperBodyPivot,
+                        pointArmAtTarget: pointArmAtTarget,
+                        sharedVectors: weaponPresentationVectors
+                    });
                 }
             }
 
-            if (animState && animState.reloading && rig.weaponClass !== 'melee') {
-                applyReloadPose(
-                    rig,
-                    rig.weaponId,
-                    animState.reloadPct,
-                    rig.upperBodyPivot,
-                    animState.reloadPhase,
-                    animState.reloadPhasePct,
-                    reloadTarget,
-                    reloadPoseScratch,
-                    pointArmAtTarget
-                );
+            if (animState && animState.reloading && rig.weaponClass !== 'melee' && weaponPresentation && weaponPresentation.applyReloadOverlay) {
+                weaponPresentation.applyReloadOverlay(rig, animState.reloadPct);
+            }
+            if (rig.weaponClass !== 'melee') {
+                alignGunToHandleBack(rig, handleOffset);
             }
         }
         function getCoreWorldPosition(outVec3) {
@@ -1149,7 +1272,11 @@
             if (reloadPoseTimer < 0) reloadPoseTimer = 0;
             var elapsed = Math.max(0, reloadPoseDuration - reloadPoseTimer);
             var pct = reloadPoseDuration > 0 ? clamp01(elapsed / reloadPoseDuration) : 1;
-            applyReloadPose(rig, rig.weaponId, pct, rig.upperBodyPivot, null, null, reloadTarget, reloadPoseScratch, pointArmAtTarget);
+            var weaponPresentation = weaponPresentationApi();
+            if (weaponPresentation && weaponPresentation.applyReloadOverlay) {
+                weaponPresentation.applyReloadOverlay(rig, pct);
+                alignGunToHandleBack(rig, handleOffset);
+            }
             return true;
         }
 

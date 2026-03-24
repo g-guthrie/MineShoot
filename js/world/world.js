@@ -646,8 +646,52 @@ import {
 
         var dirLight = new THREE.DirectionalLight(0xfff4d8, 1.12);
         dirLight.position.set(WORLD_CENTER + (WORLD_SIZE * 0.22), WORLD_SIZE * 0.95, WORLD_CENTER - (WORLD_SIZE * 0.12));
-        dirLight.castShadow = false;
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 1;
+        dirLight.shadow.camera.far = WORLD_SIZE * 2.2;
+        dirLight.shadow.camera.left = -WORLD_SIZE * 0.75;
+        dirLight.shadow.camera.right = WORLD_SIZE * 0.75;
+        dirLight.shadow.camera.top = WORLD_SIZE * 0.75;
+        dirLight.shadow.camera.bottom = -WORLD_SIZE * 0.75;
+        dirLight.shadow.bias = -0.0002;
+        dirLight.shadow.normalBias = 0.02;
+        dirLight.target.position.set(WORLD_CENTER, 0, WORLD_CENTER);
+        addTrackedObject(scene, dirLight.target);
         addTrackedObject(scene, dirLight);
+
+        (function addVisibleSun() {
+            var sunDirection = new THREE.Vector3(
+                dirLight.position.x - WORLD_CENTER,
+                dirLight.position.y - (WORLD_SIZE * 0.15),
+                dirLight.position.z - WORLD_CENTER
+            ).normalize();
+            var sunDistance = WORLD_SIZE * 1.45;
+            var sunCenter = new THREE.Vector3(
+                WORLD_CENTER + (sunDirection.x * sunDistance),
+                Math.max(WORLD_SIZE * 0.88, (WORLD_SIZE * 0.52) + (sunDirection.y * sunDistance)),
+                WORLD_CENTER + (sunDirection.z * sunDistance)
+            );
+
+            var sunCore = new THREE.Mesh(
+                new THREE.SphereGeometry(WORLD_SIZE * 0.055, 20, 16),
+                matLib.getBasic({ color: 0xfff3c4 })
+            );
+            sunCore.position.copy(sunCenter);
+            sunCore.castShadow = false;
+            sunCore.receiveShadow = false;
+            addTrackedObject(scene, sunCore);
+
+            var sunHalo = new THREE.Mesh(
+                new THREE.SphereGeometry(WORLD_SIZE * 0.085, 20, 16),
+                matLib.getBasic({ color: 0xffd890, transparent: true, opacity: 0.22 })
+            );
+            sunHalo.position.copy(sunCenter);
+            sunHalo.castShadow = false;
+            sunHalo.receiveShadow = false;
+            addTrackedObject(scene, sunHalo);
+        })();
 
         addTrackedObject(scene, new THREE.HemisphereLight(0xd4e8ff, 0x4d6149, 0.7));
 
@@ -687,7 +731,7 @@ import {
                         (cell.y || 0) * BLOCK_H,
                         (cell.z || 0) * BLOCK_D
                     );
-                    block.castShadow = false;
+                    block.castShadow = true;
                     block.receiveShadow = false;
                     root.add(block);
                 }

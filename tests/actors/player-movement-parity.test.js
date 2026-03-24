@@ -220,12 +220,13 @@ async function loadPlayerMovementHarness(options = {}) {
           },
           updateCamera(_dt, options) {
             if (!options || !options.camera) return;
+            const scopeActive = options.scopeTargetActive != null ? !!options.scopeTargetActive : !!options.adsActive;
             options.camera.position.set(
               Number(options.playerX || 0),
               Number(options.posY || 0),
               Number(options.playerZ || 0)
             );
-            options.camera.fov = options.adsActive
+            options.camera.fov = scopeActive
               ? Number(options.adsFovForWeapon(options.currentWeaponId) || options.adsFov || 56)
               : Number(options.cameraFov || 75);
             options.camera.updateProjectionMatrix();
@@ -236,12 +237,15 @@ async function loadPlayerMovementHarness(options = {}) {
             calls.gunOffsetUpdates += 1;
           },
           getAdsState(options) {
+            const scopeActive = options.scopeTargetActive != null ? !!options.scopeTargetActive : !!options.adsActive;
             return {
               weaponId: options.currentWeaponId,
-              active: !!options.adsActive,
-              blend: options.adsActive ? 1 : 0,
+              active: scopeActive,
+              blend: scopeActive ? 1 : 0,
               sniper: !!options.sniperMode,
-              scopeActive: !!(options.adsActive && options.sniperMode)
+              scopeActive: !!(scopeActive && options.sniperMode),
+              ready: !!(scopeActive && options.sniperMode),
+              phase: scopeActive ? 'ready' : 'inactive'
             };
           },
           getScopeBlend() {
@@ -468,24 +472,25 @@ test('canceling sprint holds sprint off until the sprint key is pressed again', 
   assertPlayerMatchesExpected(harness.player, expected);
 });
 
-test('player ADS movement slowdown matches the shared authoritative step', async () => {
+test('equipped sniper enters scope movement slowdown automatically', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
 
-  harness.player.setAdsEnabled(true);
+  harness.player.setWeaponModel('sniper');
   harness.documentObj.dispatch('keydown', { code: 'KeyW' });
   stepAuthoritativeMovement(expected, createInputState({ forward: true, adsActive: true }), harness.buildStepOptions(0.1));
   harness.player.update(0.1);
 
   assertPlayerMatchesExpected(harness.player, expected);
   assert.equal(harness.player.getAdsState().active, true);
+  assert.equal(harness.player.getAdsState().sniper, true);
 });
 
-test('pressing sprint clears ADS and restores sprint movement', async () => {
+test('equipped sniper still restores sprint movement when sprint is held', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
 
-  harness.player.setAdsEnabled(true);
+  harness.player.setWeaponModel('sniper');
   harness.documentObj.dispatch('keydown', { code: 'KeyW' });
   harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
 
@@ -532,11 +537,11 @@ test('holding sprint in air no longer depends on a local sprint queue', async ()
   assert.equal(harness.player.isSprinting(), true);
 });
 
-test('jump while ADS keeps airborne movement and sampled input aligned with the shared step', async () => {
+test('jump while sniper auto-scope is active keeps airborne movement and sampled input aligned with the shared step', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
 
-  harness.player.setAdsEnabled(true);
+  harness.player.setWeaponModel('sniper');
   harness.documentObj.dispatch('keydown', { code: 'Space' });
   stepAuthoritativeMovement(expected, createInputState({ jump: true, adsActive: true }), harness.buildStepOptions(0.05));
   harness.player.update(0.05);

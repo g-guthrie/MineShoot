@@ -295,8 +295,11 @@ canvas {
     justify-content: center;
     padding: 24px;
     background:
-        radial-gradient(circle at top, rgba(210, 244, 223, 0.08), transparent 46%),
-        linear-gradient(180deg, rgba(4, 10, 6, 0.9), rgba(0, 0, 0, 0.94));
+        radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.14), transparent 30%),
+        radial-gradient(circle at 82% 84%, rgba(84, 132, 255, 0.16), transparent 34%),
+        linear-gradient(180deg, rgba(238, 243, 250, 0.18), rgba(214, 224, 238, 0.24));
+    backdrop-filter: blur(18px) saturate(125%);
+    -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 #postgame-flow[hidden] {
@@ -394,26 +397,41 @@ canvas {
 
 .postgame-screen {
     width: min(900px, 94vw);
-    border: 1px solid rgba(132, 188, 146, 0.46);
-    background: linear-gradient(180deg, rgba(9, 24, 12, 0.95), rgba(3, 9, 5, 0.96));
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
-    color: #d8ffe1;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(245, 248, 252, 0.32)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.34),
+        0 28px 90px rgba(27, 41, 67, 0.16);
+    backdrop-filter: blur(24px) saturate(155%);
+    -webkit-backdrop-filter: blur(24px) saturate(155%);
+    color: #1f2b3e;
     text-align: center;
     padding: 28px 24px 24px;
 }
 
 .postgame-kicker {
-    color: #8dc79a;
-    font-family: 'Courier New', monospace;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(244, 248, 252, 0.72));
+    box-shadow: inset 0 0 0 1px rgba(220, 227, 236, 0.92);
+    color: #6b7a90;
+    font-family: 'Rajdhani', sans-serif;
     font-size: 12px;
-    letter-spacing: 0.22em;
+    font-weight: 700;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
 }
 
 #postgame-winner-banner {
     margin-top: 16px;
-    color: #f4ffef;
-    font-family: 'Orbitron', 'Courier New', monospace;
+    color: #162133;
+    font-family: 'Orbitron', 'Rajdhani', sans-serif;
     font-size: clamp(32px, 5vw, 58px);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -421,10 +439,11 @@ canvas {
 
 #postgame-result-banner {
     margin-top: 8px;
-    color: #93ffab;
-    font-family: 'Rajdhani', 'Courier New', monospace;
+    color: #3b6eff;
+    font-family: 'Rajdhani', sans-serif;
     font-size: clamp(18px, 2.6vw, 28px);
-    letter-spacing: 0.22em;
+    font-weight: 700;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
 }
 
@@ -438,11 +457,17 @@ canvas {
 
 .postgame-ghost {
     margin: 0;
-    color: #dcffe4;
+    color: #f7fbff;
     font-family: 'Courier New', monospace;
     font-size: clamp(22px, 2.5vw, 30px);
     line-height: 0.92;
-    text-shadow: 0 0 18px rgba(146, 255, 179, 0.34);
+    padding: 18px 16px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(64, 106, 197, 0.16), rgba(255, 255, 255, 0.18));
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+        0 14px 28px rgba(39, 64, 110, 0.14);
+    text-shadow: 0 0 18px rgba(102, 163, 255, 0.35);
     animation: postgameGhostFloat 1.8s ease-in-out infinite;
 }
 
@@ -453,15 +478,17 @@ canvas {
 }
 
 #postgame-celebration-note {
-    color: #a8c9ae;
-    font-family: 'Courier New', monospace;
+    color: #607089;
+    font-family: 'Rajdhani', sans-serif;
     font-size: 14px;
-    letter-spacing: 0.06em;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .postgame-hero-outcome {
-    color: #f4ffef;
-    font-family: 'Orbitron', 'Courier New', monospace;
+    color: #162133;
+    font-family: 'Orbitron', 'Rajdhani', sans-serif;
     font-size: clamp(36px, 6vw, 64px);
     font-weight: 800;
     letter-spacing: 0.06em;
@@ -471,11 +498,11 @@ canvas {
 
 .postgame-hero-winner {
     margin-top: 8px;
-    color: #93ffab;
-    font-family: 'Rajdhani', 'Courier New', monospace;
+    color: #3b6eff;
+    font-family: 'Rajdhani', sans-serif;
     font-size: clamp(16px, 2.4vw, 24px);
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
 }
 
@@ -496,13 +523,14 @@ canvas {
     min-width: 120px;
     max-width: 220px;
     padding: 16px 20px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    color: #f0fff4;
-    font-family: 'Orbitron', 'Courier New', monospace;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(244, 248, 252, 0.72));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.72),
+        inset 0 0 0 1px rgba(218, 226, 238, 0.96),
+        0 12px 24px rgba(27, 41, 67, 0.08);
+    color: #263246;
+    font-family: 'Orbitron', 'Rajdhani', sans-serif;
     font-size: clamp(16px, 2.8vw, 21px);
     font-weight: 700;
     text-align: left;
@@ -513,7 +541,7 @@ canvas {
     content: attr(data-session-label);
     display: block;
     margin-bottom: 8px;
-    color: rgba(255, 255, 255, 0.5);
+    color: #6e7d97;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -523,6 +551,8 @@ canvas {
 
 #postgame-continue-btn {
     margin-top: 8px;
+    max-width: 320px;
+    margin-inline: auto;
 }
 
 @keyframes postgameGhostFloat {
@@ -1557,18 +1587,19 @@ canvas {
 }
 
 .match-pill {
-    min-width: 110px;
-    border: 1px solid rgba(168, 214, 255, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 999px;
-    background: rgba(8, 18, 26, 0.78);
-    box-shadow: 0 0 10px rgba(70, 145, 210, 0.16);
-    padding: 8px 12px;
+    background: rgba(14, 22, 34, 0.38);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 5px 14px;
     color: #e7f6ff;
 }
 
 .match-pill-label {
     display: block;
-    font-size: 10px;
+    font-size: 9px;
     letter-spacing: 1.3px;
     color: #9dc6e2;
     text-transform: uppercase;
@@ -1576,16 +1607,17 @@ canvas {
 
 .match-pill-value {
     display: block;
-    margin-top: 2px;
+    margin-top: 1px;
     font-family: 'Orbitron', 'Courier New', monospace;
-    font-size: 16px;
+    font-size: 14px;
     letter-spacing: 0.5px;
     color: #ffffff;
     text-shadow: 0 0 8px rgba(85, 180, 255, 0.16);
 }
 
 .match-pill-progress {
-    width: min(320px, calc(100vw - 36px));
+    width: 100%;
+    padding: 6px 14px 8px;
 }
 
 .match-pill-progress-header {
@@ -1596,12 +1628,12 @@ canvas {
 }
 
 .match-pill-track {
-    margin-top: 8px;
+    margin-top: 5px;
     width: 100%;
-    height: 10px;
+    height: 7px;
     border-radius: 999px;
-    background: rgba(0, 8, 14, 0.74);
-    border: 1px solid rgba(84, 125, 155, 0.56);
+    background: rgba(0, 6, 14, 0.46);
+    border: 1px solid rgba(255, 255, 255, 0.10);
     overflow: hidden;
 }
 
@@ -1609,8 +1641,7 @@ canvas {
     height: 100%;
     width: 0%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #e3f5ff, #97d8ff 48%, #5db8ff 100%);
-    box-shadow: 0 0 10px rgba(105, 192, 255, 0.32);
+    background: #3CB8FF;
     transition: width 0.16s ease-out;
 }
 
@@ -1621,8 +1652,13 @@ canvas {
     transform: translateX(-50%);
     width: 300px;
     height: 20px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid #555;
+    border-radius: 999px;
+    background: rgba(10, 18, 28, 0.52);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    overflow: hidden;
     z-index: 10;
     pointer-events: none;
 }
@@ -1630,8 +1666,9 @@ canvas {
 #health-bar {
     width: 100%;
     height: 100%;
-    background: #4CAF50;
-    transition: width 0.2s;
+    border-radius: 999px;
+    background: #3CB8FF;
+    transition: width 0.2s, background 0.3s;
 }
 
 #armor-bar-container {
@@ -1641,8 +1678,13 @@ canvas {
     transform: translateX(-50%);
     width: 300px;
     height: 7px;
-    background: rgba(0, 0, 0, 0.58);
-    border: 1px solid #666;
+    border-radius: 999px;
+    background: rgba(10, 18, 28, 0.52);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    overflow: hidden;
     z-index: 10;
     pointer-events: none;
 }
@@ -1650,7 +1692,8 @@ canvas {
 #armor-bar {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, #d8dde2, #aab3bc);
+    border-radius: 999px;
+    background: linear-gradient(90deg, #c8d8e8, #8eaac4);
     transition: width 0.2s;
 }
 
@@ -1658,11 +1701,14 @@ canvas {
     position: fixed;
     bottom: 55px; left: 50%;
     transform: translateX(-50%);
-    color: #fff;
-    font-size: 16px;
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #e0f0ff;
     z-index: 10;
     pointer-events: none;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    text-shadow: 0 0 8px rgba(85, 180, 255, 0.2), 1px 1px 2px rgba(0,0,0,0.8);
     user-select: none;
 }
 
@@ -1721,10 +1767,17 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
+    gap: 4px;
     z-index: 10;
     pointer-events: none;
     user-select: none;
+    border-radius: 16px;
+    background: rgba(14, 22, 34, 0.38);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 10px 14px;
 }
 
 #ability-info {
@@ -1770,6 +1823,7 @@ canvas {
 }
 
 #weapon-info .weapon-line-ammo {
+    font-family: 'Orbitron', 'Courier New', monospace;
     color: #dbeeff;
     font-size: 16px;
     letter-spacing: 0.4px;
@@ -1781,43 +1835,29 @@ canvas {
     line-height: 1.2;
 }
 
-#plasma-status {
-    color: #7edbff;
-    font-size: 11px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-}
-
-#plasma-heat-wrap {
-    width: 120px;
-    height: 8px;
-    border: 1px solid #3f7483;
-    background: rgba(0, 10, 16, 0.58);
-}
-
-#plasma-heat-bar {
-    width: 0%;
-    height: 100%;
-    background: linear-gradient(90deg, #55e9ff, #ffb347, #ff5a5a);
-    transition: width 0.05s linear;
-}
 
 #cooldown-status {
-    color: #4CAF50;
-    font-size: 12px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    color: #9dc6e2;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(85, 180, 255, 0.16), 1px 1px 2px rgba(0,0,0,0.8);
 }
 
 #cooldown-container {
     width: 120px;
     height: 6px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid #555;
+    border-radius: 999px;
+    background: rgba(0, 6, 14, 0.46);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    overflow: hidden;
 }
 
 #cooldown-bar {
     width: 100%;
     height: 100%;
-    background: #4CAF50;
+    border-radius: 999px;
+    background: #3CB8FF;
     transition: width 0.05s linear;
 }
 
@@ -2234,22 +2274,23 @@ canvas {
     }
 
     .match-pill {
-        min-width: 92px;
-        padding: 7px 10px;
+        padding: 4px 10px;
     }
 
     .match-pill-value {
-        font-size: 14px;
+        font-size: 12px;
     }
 
     .match-pill-progress {
-        width: min(260px, calc(100vw - 28px));
+        padding: 5px 10px 7px;
     }
 
     #hud-bottom-right {
         right: 14px;
         bottom: 10px;
-        gap: 1px;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 14px;
     }
 
     #debug-info {

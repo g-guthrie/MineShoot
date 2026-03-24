@@ -44,6 +44,10 @@ var GameWorld = runtime.GameWorld;
    Renderer, camera, scene
    ---------------------------------------------------------------- */
 var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+if (THREE.PCFSoftShadowMap !== undefined) {
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+}
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x87ceeb);

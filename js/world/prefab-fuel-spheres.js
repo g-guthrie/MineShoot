@@ -9,6 +9,7 @@
 
     var MATS = null;
     var CYL_SEGS = 12;
+    var PREFAB_SCALE = 0.7;
 
     function ensureMats() {
         if (MATS) return MATS;
@@ -56,9 +57,9 @@
 
     function buildOneSphere(place, mats, cx, cz, radius, colliderOpts) {
         // Base disc on ground
-        var discH = 0.4;
+        var discH = 0.4 * PREFAB_SCALE;
         var discR = radius * 1.2;
-        var discGeo = new THREE.CylinderGeometry(discR, discR + 0.2, discH, CYL_SEGS);
+        var discGeo = new THREE.CylinderGeometry(discR, discR + (0.2 * PREFAB_SCALE), discH, CYL_SEGS);
         td(place, 'fuel-base-disc', null, cx, discH * 0.5, cz, discGeo, mats.grayDark);
         tboxCollider(place, 'fuel-disc-collider', null,
             cx, discH * 0.5, cz, discR * 2, discH, discR * 2, colliderOpts);
@@ -69,7 +70,7 @@
         td(place, 'fuel-sphere', null, cx, sphereY, cz, sphereGeo, mats.sphereBody);
 
         // Equator band
-        var bandGeo = new THREE.TorusGeometry(radius * 0.98, 0.12, 6, 16);
+        var bandGeo = new THREE.TorusGeometry(radius * 0.98, 0.12 * PREFAB_SCALE, 6, 16);
         td(place, 'fuel-sphere-band', null, cx, sphereY, cz, bandGeo, mats.band, 0, Math.PI * 0.5, 0);
 
         // Box collider for sphere
@@ -90,19 +91,20 @@
         };
 
         // Left sphere (smaller)
-        var leftR = 4.2;
-        var leftCX = ox - 5;
+        var leftR = 4.2 * PREFAB_SCALE;
+        var leftCX = ox - (5 * PREFAB_SCALE);
         var left = buildOneSphere(place, mats, leftCX, oz, leftR, colliderOpts);
 
         // Right sphere (larger)
-        var rightR = 5.0;
-        var rightCX = ox + 6;
+        var rightR = 5.0 * PREFAB_SCALE;
+        var rightCX = ox + (6 * PREFAB_SCALE);
         var right = buildOneSphere(place, mats, rightCX, oz, rightR, colliderOpts);
 
         // Concrete foundation pad
         var totalW = (rightCX + rightR * 1.5) - (leftCX - leftR * 1.5);
         var totalD = leftR * 2.8;
-        tb(place, 'fuel-foundation', null, ox, 0.05, oz, totalW, 0.1, totalD, mats.concrete, true);
+        var foundationH = 0.1 * PREFAB_SCALE;
+        tb(place, 'fuel-foundation', null, ox, foundationH * 0.5, oz, totalW, foundationH, totalD, mats.concrete, true);
 
         return {
             structures: 2,

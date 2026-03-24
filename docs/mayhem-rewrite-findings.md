@@ -15,7 +15,7 @@ Several high-value extractions are already in place:
 - net transport, runtime state, runtime core, and state-view boundaries now exist under [js/net](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net)
 - server room ownership is substantially narrowed under [cloudflare/server/room](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room)
 
-The remaining rewrite pressure is mostly `js/app` surface reduction, presentation/runtime decoupling, and trimming the last compatibility shims.
+The remaining rewrite pressure is mostly `js/app` surface reduction, presentation/runtime decoupling, and keeping the cleaned ownership boundaries documented and enforced.
 
 ## 1. Runtime and Game Lifecycle Is Monolithic
 
@@ -44,7 +44,7 @@ Mayhem got right:
 Mayhem got wrong:
 - `GameNet` is still too broad even after state/core/view extraction.
 - Connection lifecycle, transport, selectors, remote entities, notices, and sync logic are spread across too many modules.
-- `runtime-access.js` is still a hidden dependency bridge and the public facade still exposes too much mixed ownership.
+- Older bridge and wrapper layers hid dependencies and exposed too much mixed ownership before the recent cleanup.
 
 Rewrite rule:
 - One transport owner.

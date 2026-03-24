@@ -153,7 +153,7 @@
 
     function syncNetworkEntries(camera, stamp, crosshairTargetId) {
         var net = globalThis.__MAYHEM_RUNTIME.GameNet || null;
-        var netView = net && net.view ? net.view : net;
+        var netView = net && net.view ? net.view : null;
         if (!netView || !netView.getEntityStateList) return [];
         var list = netView.getEntityStateList();
 

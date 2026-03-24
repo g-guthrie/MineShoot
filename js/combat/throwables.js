@@ -46,9 +46,7 @@
     var predictedChargeSpendByClientId = {};
     var configSnapshot = {
         sharedTuning: null,
-        combatTuningApi: null,
-        getDistance: null,
-        getMechanics: null
+        getThrowableMechanicsTuning: null
     };
     var selectedThrowableId = '';
 
@@ -143,28 +141,24 @@
 
     function refreshThrowableConfig(force) {
         var rt = runtime();
-        var tuningApi = rt.GameCombatTuning || null;
-        var sharedTuning = (rt.GameShared && rt.GameShared.gameplayTuning) || null;
+        var shared = rt.GameShared || null;
+        var sharedTuning = shared && shared.gameplayTuning ? shared.gameplayTuning : null;
         if (
             !force &&
             configSnapshot.sharedTuning === sharedTuning &&
-            configSnapshot.combatTuningApi === tuningApi &&
-            configSnapshot.getDistance === (tuningApi && tuningApi.getThrowableDistanceTuning) &&
-            configSnapshot.getMechanics === (tuningApi && tuningApi.getThrowableMechanicsTuning)
+            configSnapshot.getThrowableMechanicsTuning === (shared && shared.getThrowableMechanicsTuning)
         ) {
             return;
         }
         configSnapshot.sharedTuning = sharedTuning;
-        configSnapshot.combatTuningApi = tuningApi;
-        configSnapshot.getDistance = tuningApi && tuningApi.getThrowableDistanceTuning;
-        configSnapshot.getMechanics = tuningApi && tuningApi.getThrowableMechanicsTuning;
+        configSnapshot.getThrowableMechanicsTuning = shared && shared.getThrowableMechanicsTuning;
 
-        throwableDistanceTuning = (tuningApi && tuningApi.getThrowableDistanceTuning)
-            ? (tuningApi.getThrowableDistanceTuning() || sharedDistanceTuning(sharedTuning))
-            : sharedDistanceTuning(sharedTuning);
-        throwableMechanicsTuning = (tuningApi && tuningApi.getThrowableMechanicsTuning)
-            ? (tuningApi.getThrowableMechanicsTuning() || copyOwn(sharedTuning && sharedTuning.throwableMechanics))
-            : copyOwn(sharedTuning && sharedTuning.throwableMechanics);
+        throwableDistanceTuning = sharedDistanceTuning(sharedTuning);
+        throwableMechanicsTuning = copyOwn(
+            shared && shared.getThrowableMechanicsTuning
+                ? shared.getThrowableMechanicsTuning()
+                : (sharedTuning && sharedTuning.throwableMechanics)
+        );
         if (!Object.keys(throwableMechanicsTuning).length) {
             throwableMechanicsTuning = EMPTY_THROWABLE_MECHANICS_TUNING;
         }

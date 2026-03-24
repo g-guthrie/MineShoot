@@ -13,8 +13,7 @@
 
         function step(dt) {
             var net = runtime.GameNet || null;
-            var netRuntime = net && net.runtime ? net.runtime : net;
-            var netView = net && net.view ? net.view : net;
+            var netView = net && net.view ? net.view : null;
 
             if (runtime.GameWorld && runtime.GameWorld.update) {
                 runtime.GameWorld.update(dt);
@@ -75,8 +74,8 @@
                 opts.controlsApi.updateArmedThrowablePreview();
             }
 
-            if (netRuntime && netRuntime.update) {
-                netRuntime.update(dt, playerPos, playerRot);
+            if (net && net.update) {
+                net.update(dt, playerPos, playerRot);
             }
             var selfReconciliationState = netView && netView.getSelfReconciliationState
                 ? netView.getSelfReconciliationState()

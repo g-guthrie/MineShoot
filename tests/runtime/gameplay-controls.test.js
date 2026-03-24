@@ -263,9 +263,11 @@ test('gameplay controls trigger reload on the bound key and forward multiplayer 
   const harness = await loadControlsHarness({
     runtimeOverrides: {
       GameNet: {
-        sendReload(weaponId) {
-          harness.calls.reloadMessages.push(String(weaponId || ''));
-          return true;
+        commands: {
+          sendReload(weaponId) {
+            harness.calls.reloadMessages.push(String(weaponId || ''));
+            return true;
+          }
         }
       }
     },
@@ -289,9 +291,11 @@ test('gameplay controls do not start multiplayer reload prediction when reload s
   const harness = await loadControlsHarness({
     runtimeOverrides: {
       GameNet: {
-        sendReload(weaponId) {
-          harness.calls.reloadMessages.push(String(weaponId || ''));
-          return false;
+        commands: {
+          sendReload(weaponId) {
+            harness.calls.reloadMessages.push(String(weaponId || ''));
+            return false;
+          }
         }
       }
     },

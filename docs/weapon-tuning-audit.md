@@ -39,15 +39,22 @@ Notes:
 - the code still uses `armor` naming for the shield layer
 - there is no recovery ability in the live ability catalog
 
+## Live Movement Snapshot
+
+| Knob | Live value |
+| --- | ---: |
+| Base normal move speed | `7` |
+| Base sprint speed | `11` |
+
 ## Canonical Weapon Snapshot
 
 | Internal id | Display role | Cooldown ms | Reload ms | Mag | Body | Head | Move mult | ADS move mult |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.15` | `0.95` |
+| `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.04` | `0.95` |
 | `pistol` | Hand Cannon | `430` | `2050` | `10` | `60` | `90` | `1.10` | `0.90` |
-| `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `1.00` | `0.75` |
-| `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.05` | `0.90` |
-| `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.82` | `0.60` |
+| `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `0.96` | `0.75` |
+| `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.00` | `0.90` |
+| `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.85` | `0.60` |
 
 ## Falloff Ownership
 

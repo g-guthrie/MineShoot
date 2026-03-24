@@ -33,7 +33,6 @@
         var lockTargetsScratch = [];
 
         var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
-        var LOCAL_CIRCLE_SCAN_PATTERN = buildLocalCircleScanPattern(4);
 
         function runtime() {
             return globalThis.__MAYHEM_RUNTIME || {};
@@ -75,26 +74,6 @@
             for (var i = 0; i < list.length; i++) {
                 out.push(list[i]);
             }
-            return out;
-        }
-
-        function buildLocalCircleScanPattern(radiusSteps) {
-            var out = [];
-            var steps = Math.max(1, Number(radiusSteps || 1));
-            for (var gy = -steps; gy <= steps; gy++) {
-                for (var gx = -steps; gx <= steps; gx++) {
-                    var nx = gx / steps;
-                    var ny = gy / steps;
-                    var r2 = (nx * nx) + (ny * ny);
-                    if (r2 > 1.000001) continue;
-                    out.push({ x: nx, y: ny, r2: r2 });
-                }
-            }
-            out.sort(function (a, b) {
-                if (Math.abs(a.r2 - b.r2) > 1e-9) return a.r2 - b.r2;
-                if (Math.abs(a.y - b.y) > 1e-9) return a.y - b.y;
-                return a.x - b.x;
-            });
             return out;
         }
 
@@ -172,7 +151,7 @@
         function getCombatHitboxes() {
             combatHitboxesScratch.length = 0;
             var net = netApi();
-            var netRemote = net && net.remoteEntities ? net.remoteEntities : net;
+            var netRemote = net && net.remoteEntities ? net.remoteEntities : null;
             if (runtime().GameEnemy && runtime().GameEnemy.getHitboxArray) {
                 appendArrayItems(combatHitboxesScratch, runtime().GameEnemy.getHitboxArray() || []);
             }
@@ -185,7 +164,7 @@
         function getLockTargets() {
             lockTargetsScratch.length = 0;
             var net = netApi();
-            var netView = net && net.view ? net.view : net;
+            var netView = net && net.view ? net.view : null;
 
             if (runtime().GameEnemy && runtime().GameEnemy.getLockTargets) {
                 appendArrayItems(lockTargetsScratch, runtime().GameEnemy.getLockTargets() || []);
@@ -544,22 +523,6 @@
             return lock && lock.candidate ? lock.candidate.rawTarget : null;
         }
 
-        function buildParallelRayFromSample(camera, weapon, sample) {
-            if (!camera || !weapon) return null;
-            var radiusWu = weaponRuntime.pistolCylinderRadiusWu(weapon);
-            var forward = new THREE.Vector3();
-            camera.getWorldDirection(forward).normalize();
-            var worldUp = Math.abs(forward.y) > 0.98 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
-            var right = new THREE.Vector3().crossVectors(forward, worldUp).normalize();
-            var up = new THREE.Vector3().crossVectors(right, forward).normalize();
-            return {
-                origin: camera.position.clone()
-                    .addScaledVector(right, Number(sample && sample.x || 0) * radiusWu)
-                    .addScaledVector(up, Number(sample && sample.y || 0) * radiusWu),
-                direction: forward
-            };
-        }
-
         function traceSinglePellet(camera, weapon, pelletIndex, shotToken) {
             var targetsHitboxes = getCombatHitboxes();
             var world = worldApi();
@@ -659,78 +622,6 @@
                 anyHit = anyHit || hit;
             }
             if (!anyHit && onMiss) onMiss();
-            return true;
-        }
-
-        function traceCircleSample(camera, weapon, sample) {
-            var targetsHitboxes = getCombatHitboxes();
-            var world = worldApi();
-            var worldMeshes = world && world.getCollidables ? world.getCollidables() : [];
-            var allTargets = targetsHitboxes.concat(worldMeshes);
-            var effectiveRange = weaponRuntime.getEffectiveMaxRange(weapon);
-            var ray = buildParallelRayFromSample(camera, weapon, sample);
-            if (!ray) return null;
-            raycaster.set(ray.origin, ray.direction);
-            raycaster.far = effectiveRange;
-
-            var intersects = raycaster.intersectObjects(allTargets, false);
-            if (intersects.length === 0) {
-                tracerMissEnd.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, effectiveRange);
-                return {
-                    hit: false,
-                    traceEnd: tracerMissEnd.clone(),
-                    sampleRadiusSq: Number(sample && sample.r2 || 0)
-                };
-            }
-
-            var hit = intersects[0];
-            if (targetsHitboxes.indexOf(hit.object) === -1) {
-                return {
-                    hit: false,
-                    traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
-                    sampleRadiusSq: Number(sample && sample.r2 || 0)
-                };
-            }
-
-            var hitType = hit.object.userData.type || 'body';
-            var damage = weaponRuntime.getDamageForType(weapon, hitType);
-            damage = weaponRuntime.applyDistanceFalloff(weapon, damage, hit.distance);
-            return {
-                hit: true,
-                hitbox: hit.object,
-                hitPoint: hit.point.clone ? hit.point.clone() : hit.point,
-                distance: hit.distance,
-                hitType: hitType,
-                damage: damage,
-                traceEnd: hit.point.clone ? hit.point.clone() : hit.point,
-                sampleRadiusSq: Number(sample && sample.r2 || 0)
-            };
-        }
-
-        function findBestCircleScanHit(camera, weapon) {
-            var bestMiss = null;
-            for (var i = 0; i < LOCAL_CIRCLE_SCAN_PATTERN.length; i++) {
-                var traced = traceCircleSample(camera, weapon, LOCAL_CIRCLE_SCAN_PATTERN[i]);
-                if (!traced) continue;
-                if (traced.hit) return traced;
-                if (!bestMiss || traced.sampleRadiusSq < bestMiss.sampleRadiusSq) bestMiss = traced;
-            }
-            return bestMiss;
-        }
-
-        function fireCircleScanPattern(camera, weapon, onHit, onMiss) {
-            var traced = findBestCircleScanHit(camera, weapon);
-            var tracerOrigin = resolvePlasmaMuzzle(camera);
-            if (!traced) {
-                if (onMiss) onMiss();
-                return true;
-            }
-            if (traced.traceEnd) spawnTracer(camera, weapon, traced.traceEnd, tracerOrigin);
-            if (!traced.hit) {
-                if (onMiss) onMiss();
-                return true;
-            }
-            if (onHit) onHit(traced.hitbox, traced.hitPoint, traced.distance, traced.hitType, traced.damage, weapon, null);
             return true;
         }
 
@@ -840,9 +731,7 @@
             weaponRuntime.markLocalShotFired(timing);
             var fired = weaponRuntime.getAutoLockConfig(weapon)
                 ? fireAutoLockShot(camera, weapon, onHit, onMiss, shotToken)
-                : (weapon.singleHitFromPellets
-                    ? fireCircleScanPattern(camera, weapon, onHit, onMiss)
-                    : fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken));
+                : fireHitscanPattern(camera, weapon, onHit, onMiss, shotToken);
             if (fired) {
                 weaponRuntime.consumeAmmoForShot(weapon, timing);
             }
@@ -865,17 +754,6 @@
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!weapon) return null;
             var range = (typeof maxRange === 'number' && maxRange > 0) ? maxRange : weaponRuntime.getEffectiveMaxRange(weapon);
-            if (weapon && weapon.singleHitFromPellets) {
-                var traced = findBestCircleScanHit(camera, weapon);
-                if (!traced || !traced.hit) return null;
-                return {
-                    hitbox: traced.hitbox,
-                    hitType: traced.hitType || 'body',
-                    targetId: traced.hitbox && traced.hitbox.userData ? traced.hitbox.userData.targetId || '' : '',
-                    distance: traced.distance,
-                    point: traced.hitPoint
-                };
-            }
             return castCenter(camera, range);
         }
 

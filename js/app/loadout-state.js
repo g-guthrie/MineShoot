@@ -70,6 +70,10 @@
     }
 
     function normalizeWeaponSlots(rawSlots, fallbackSlots) {
+        var shared = sharedApi();
+        if (shared.normalizeWeaponLoadout) {
+            return shared.normalizeWeaponLoadout(rawSlots, fallbackSlots);
+        }
         var selectableIds = selectableWeaponIds();
         var allowed = {};
         var seen = {};

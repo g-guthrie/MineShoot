@@ -26,14 +26,11 @@ function makePistolStats(overrides = {}) {
     hipfireSpread: 0.137,
     adsFovDeg: 56,
     maxRange: 24,
-    adsMaxRange: 28,
-    pellets: 12,
-    hipfireCylinderRadiusWu: 2.53,
-    adsCylinderRadiusWu: 3.16,
-    singleHitFromPellets: true,
+    adsMaxRange: 24,
+    pellets: 1,
     aimProfile: {
       hipfire: { spread: 0.137, maxRange: 24 },
-      ads: { spread: 0.225, maxRange: 28 }
+      ads: { spread: 0.137, maxRange: 24 }
     },
     ...overrides
   });
@@ -68,12 +65,12 @@ function hitAreaAtDistance(spread, fovDeg, distance) {
   return Math.PI * radius * radius;
 }
 
-test('shared pistol tuning keeps the legacy spread values for compatibility while exposing cylinder radii', () => {
+test('shared pistol tuning now uses the normal single-ray hitscan values', () => {
   const pistol = gameplayTuning.weaponStats.pistol;
-  assert.equal(pistol.hipfireCylinderRadiusWu, 2.53);
-  assert.equal(pistol.adsCylinderRadiusWu, 3.16);
-  assert.ok(Math.abs(hitAreaAtDistance(pistol.hipfireSpread, 75, 24) - 20) < 0.05);
-  assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 25.9) < 0.1);
+  assert.equal(pistol.primitiveType, 'hitscan_single');
+  assert.equal(pistol.pellets, 1);
+  assert.ok(Math.abs(hitAreaAtDistance(pistol.hipfireSpread, 75, 24) - 11.76) < 0.1);
+  assert.ok(Math.abs(hitAreaAtDistance(pistol.adsSpread, pistol.adsFovDeg, 24) - 5.64) < 0.1);
 });
 
 test('hitscan view FOV clamps to the weapon zoom range', () => {
@@ -128,7 +125,7 @@ test('hitscan clamp honors per-weapon ADS FOV tuning', () => {
   assert.equal(overZoomedShot.point.z, zoomedShot.point.z);
 });
 
-test('pistol keeps only one winning pellet even when many pellets can hit', () => {
+test('pistol resolves through the normal hitscan path', () => {
   const shots = resolveHitscanShot({
     origin: { x: 0, y: 1.6, z: 0 },
     forward: { x: 0, y: 0, z: -1 },
@@ -136,52 +133,17 @@ test('pistol keeps only one winning pellet even when many pellets can hit', () =
       hipfireSpread: 0.12,
       aimProfile: {
         hipfire: { spread: 0.12, maxRange: 24 },
-        ads: { spread: 0.08, maxRange: 28 }
+        ads: { spread: 0.12, maxRange: 24 }
       }
     }),
-    shotToken: 'single-winner',
+    shotToken: 'normal-hitscan',
     targets: [{ id: 'big-target', x: 0, y: 1.6, z: -10 }],
     worldBoxes: []
   });
 
   assert.equal(shots.length, 1);
-  assert.equal(shots[0].mode, 'circle_scan');
-  assert.equal(shots[0].sampleIndex >= 0, true);
-});
-
-test('pistol cylinder width does not widen with distance the way a cone would', () => {
-  const near = resolveHitscanShot({
-    origin: { x: 0, y: 1.6, z: 0 },
-    forward: { x: 0, y: 0, z: -1 },
-    weaponStats: makePistolStats(),
-    shotToken: 'near-cylinder',
-    targets: [{
-      id: 'near-body',
-      bodyBox: {
-        min: { x: 0.55, y: 1.0, z: -8.4 },
-        max: { x: 0.95, y: 2.0, z: -7.6 }
-      }
-    }],
-    worldBoxes: []
-  });
-
-  const far = resolveHitscanShot({
-    origin: { x: 0, y: 1.6, z: 0 },
-    forward: { x: 0, y: 0, z: -1 },
-    weaponStats: makePistolStats(),
-    shotToken: 'far-cylinder',
-    targets: [{
-      id: 'far-body',
-      bodyBox: {
-        min: { x: 0.55, y: 1.0, z: -20.4 },
-        max: { x: 0.95, y: 2.0, z: -19.6 }
-      }
-    }],
-    worldBoxes: []
-  });
-
-  assert.equal(near.length, 1);
-  assert.equal(far.length, 1);
+  assert.equal(shots[0].mode, 'hitscan');
+  assert.equal(shots[0].pelletIndex, 0);
 });
 
 test('pistol range cap prevents pellet hits beyond max range', () => {
@@ -202,7 +164,7 @@ test('pistol range cap prevents pellet hits beyond max range', () => {
   assert.equal(shots.length, 0);
 });
 
-test('pistol can still naturally resolve a head hit from the winning pellet', () => {
+test('pistol can still naturally resolve a head hit from a normal hitscan ray', () => {
   const shots = resolveHitscanShot({
     origin: { x: 0, y: 1.6, z: 0 },
     forward: { x: 0, y: 0, z: -1 },
@@ -210,7 +172,7 @@ test('pistol can still naturally resolve a head hit from the winning pellet', ()
       hipfireSpread: 0.01,
       aimProfile: {
         hipfire: { spread: 0.01, maxRange: 24 },
-        ads: { spread: 0.005, maxRange: 28 }
+        ads: { spread: 0.01, maxRange: 24 }
       }
     }),
     shotToken: 'natural-head',
@@ -230,5 +192,5 @@ test('pistol can still naturally resolve a head hit from the winning pellet', ()
 
   assert.equal(shots.length, 1);
   assert.equal(shots[0].hitType, 'head');
-  assert.equal(shots[0].sampleIndex >= 0, true);
+  assert.equal(shots[0].pelletIndex, 0);
 });

@@ -189,20 +189,18 @@ test('reticle update keeps the circle reticle path for shotgun', async () => {
   assert.equal(harness.getElement('spread-reticle').style.display, 'none');
 });
 
-test('reticle update shows pistol as a crosshair with a faint main-screen spread ring and keeps debug spread visuals', async () => {
+test('reticle update shows pistol on the normal crosshair plus spread-reticle path', async () => {
   const harness = await loadUiHarness();
 
   harness.GameUI.setDebugVisuals(true);
   harness.GameUI.updateReticle(
-    { id: 'pistol', pellets: 12 },
+    { id: 'pistol', pellets: 1 },
     { type: 'crosshair', targetGroup: 'crosshair', targetSource: 'center' },
     { active: true, blend: 0, sniper: false }
   );
 
   assert.equal(harness.getElement('crosshair').style.display, 'block');
-  assert.equal(harness.getElement('pistol-reticle').style.display, 'block');
-  assert.equal(harness.getElement('pistol-reticle').style.width, '190px');
-  assert.equal(harness.getElement('pistol-reticle').style.height, '190px');
+  assert.equal(harness.getElement('pistol-reticle').style.display, 'none');
   assert.equal(harness.getElement('shotgun-reticle').style.display, 'none');
   assert.equal(harness.getElement('spread-reticle').style.display, 'block');
   assert.deepEqual(harness.spreadReticleState.updateCalls.at(-1), {
@@ -219,7 +217,7 @@ test('reticle target state switches between reticle groups cleanly', async () =>
 
   harness.GameUI.setReticleTargetState('crosshair', true);
   assert.equal(harness.getElement('crosshair').classList.contains('reticle-target-in-range'), true);
-  assert.equal(harness.getElement('pistol-reticle').classList.contains('reticle-target-in-range'), true);
+  assert.equal(harness.getElement('pistol-reticle').classList.contains('reticle-target-in-range'), false);
   assert.equal(harness.getElement('shotgun-reticle').classList.contains('reticle-target-in-range'), false);
 
   harness.GameUI.setReticleTargetState('circle', true);

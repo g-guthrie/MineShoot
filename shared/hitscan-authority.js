@@ -11,7 +11,6 @@ import { resolveWeaponAdsFovDeg, resolveWeaponAimProfile } from './gameplay-tuni
 const CAMERA_FOV_DEG = 75;
 const DEFAULT_ASPECT = 16 / 9;
 const EPS = 1e-6;
-const CIRCLE_SCAN_PATTERN = buildCircleScanPattern(4);
 const AUTOLOCK_SAMPLE_FACTORS = [
   { x: 0, y: 0, z: 0 },
   { x: -1, y: 0, z: 0 },
@@ -36,26 +35,6 @@ function clampNumber(value, min, max) {
 
 function clamp01(value) {
   return clampNumber(Number(value || 0), 0, 1);
-}
-
-function buildCircleScanPattern(radiusSteps) {
-  const out = [];
-  const steps = Math.max(1, Number(radiusSteps || 1));
-  for (let gy = -steps; gy <= steps; gy++) {
-    for (let gx = -steps; gx <= steps; gx++) {
-      const nx = gx / steps;
-      const ny = gy / steps;
-      const r2 = (nx * nx) + (ny * ny);
-      if (r2 > 1.000001) continue;
-      out.push({ x: nx, y: ny, r2 });
-    }
-  }
-  out.sort((a, b) => {
-    if (Math.abs(a.r2 - b.r2) > 1e-9) return a.r2 - b.r2;
-    if (Math.abs(a.y - b.y) > 1e-9) return a.y - b.y;
-    return a.x - b.x;
-  });
-  return out;
 }
 
 function normalizeVec3(v) {
@@ -197,13 +176,6 @@ export function sampleSpreadOffset(weaponStats, adsActive, pelletIndex, shotToke
   };
 }
 
-export function pistolCylinderRadiusWu(weaponStats, adsActive) {
-  const stats = weaponStats || {};
-  const key = adsActive ? 'adsCylinderRadiusWu' : 'hipfireCylinderRadiusWu';
-  const raw = Number(stats[key]);
-  return Number.isFinite(raw) && raw > 0 ? raw : 0;
-}
-
 function buildRayDirection(forward, adsActive, weaponStats, pelletIndex, shotToken, viewFovDeg) {
   const baseForward = normalizeVec3(forward);
   const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
@@ -241,22 +213,6 @@ function buildRayDirectionFromOffset(forward, weaponStats, offset, viewFovDeg) {
       scaleVec3(up, Number(offset.y || 0) * tanHalfY)
     )
   ));
-}
-
-function originBasis(forward) {
-  const baseForward = normalizeVec3(forward);
-  const worldUp = Math.abs(baseForward.y) > 0.98 ? { x: 0, y: 0, z: 1 } : { x: 0, y: 1, z: 0 };
-  const right = normalizeVec3(crossVec3(baseForward, worldUp));
-  const up = normalizeVec3(crossVec3(right, baseForward));
-  return { forward: baseForward, right, up };
-}
-
-function sampleOriginOffsetForCylinder(forward, sample, radiusWu) {
-  const basis = originBasis(forward);
-  return addVec3(
-    scaleVec3(basis.right, Number(sample && sample.x || 0) * radiusWu),
-    scaleVec3(basis.up, Number(sample && sample.y || 0) * radiusWu)
-  );
 }
 
 function intersectRayAabb(origin, dir, box, maxDistance) {
@@ -546,92 +502,7 @@ function resolveRayHits(options) {
     });
   }
 
-  if (weaponStats && weaponStats.singleHitFromPellets && out.length > 0) {
-    out.sort((a, b) => {
-      const scoreDelta = Number(a.pelletScore || 0) - Number(b.pelletScore || 0);
-      if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
-      return Number(a.distance || 0) - Number(b.distance || 0);
-    });
-    return [out[0]];
-  }
-
   return out;
-}
-
-function resolveCircleScanHits(options) {
-  const origin = readAimOrigin(options);
-  const forward = readAimForward(options);
-  const weaponStats = options && options.weaponStats ? options.weaponStats : null;
-  if (!origin || !forward || !weaponStats) return [];
-
-  const targets = Array.isArray(options.targets) ? options.targets : [];
-  const worldBoxes = Array.isArray(options.worldBoxes) ? options.worldBoxes : [];
-  const adsActive = !!(options && options.adsActive);
-  const maxDistance = effectiveRange(weaponStats, adsActive);
-  const radiusWu = pistolCylinderRadiusWu(weaponStats, adsActive);
-  const basis = originBasis(forward);
-  let best = null;
-
-  for (let sampleIndex = 0; sampleIndex < CIRCLE_SCAN_PATTERN.length; sampleIndex++) {
-    const sample = CIRCLE_SCAN_PATTERN[sampleIndex];
-    const originOffset = sampleOriginOffsetForCylinder(forward, sample, radiusWu);
-    const sampleOrigin = addVec3(origin, originOffset);
-    const dir = basis.forward;
-    let worldHitDistance = maxDistance;
-    for (let i = 0; i < worldBoxes.length; i++) {
-      const box = explicitBox(worldBoxes[i]);
-      if (!box) continue;
-      const hitDistance = intersectRayAabb(sampleOrigin, dir, box, maxDistance);
-      if (hitDistance != null && hitDistance < worldHitDistance) {
-        worldHitDistance = hitDistance;
-      }
-    }
-
-    let sampleHit = null;
-    for (let i = 0; i < targets.length; i++) {
-      const entity = targets[i];
-      if (!entity) continue;
-      const boxes = entityHitboxes(entity);
-      const headDistance = intersectRayAabb(sampleOrigin, dir, boxes.head, worldHitDistance);
-      const bodyDistance = intersectRayAabb(sampleOrigin, dir, boxes.body, worldHitDistance);
-      if (headDistance == null && bodyDistance == null) continue;
-
-      let hitType = 'body';
-      let hitDistance = bodyDistance;
-      if (headDistance != null && (bodyDistance == null || headDistance <= bodyDistance)) {
-        hitType = 'head';
-        hitDistance = headDistance;
-      }
-
-      if (!sampleHit || hitDistance < sampleHit.distance) {
-        sampleHit = {
-          target: entity,
-          hitType,
-          distance: hitDistance,
-          point: {
-            x: sampleOrigin.x + dir.x * hitDistance,
-            y: sampleOrigin.y + dir.y * hitDistance,
-            z: sampleOrigin.z + dir.z * hitDistance
-          }
-        };
-      }
-    }
-
-    if (!sampleHit) continue;
-    const rawDamage = sampleHit.hitType === 'head'
-      ? Number(weaponStats.headDamage || 0)
-      : Number(weaponStats.bodyDamage || 0);
-    best = {
-      ...sampleHit,
-      damage: applyFalloff(rawDamage, sampleHit.distance, options && options.falloffBands ? options.falloffBands : []),
-      mode: 'circle_scan',
-      sampleIndex,
-      sampleRadiusSq: sample.r2
-    };
-    break;
-  }
-
-  return best ? [best] : [];
 }
 
 function resolveAutoLockShot(options) {
@@ -685,7 +556,6 @@ export function resolveHitscanShot(options) {
   const forward = readAimForward(options);
   const weaponStats = options && options.weaponStats ? options.weaponStats : null;
   if (!origin || !forward || !weaponStats) return [];
-  if (weaponStats.singleHitFromPellets) return resolveCircleScanHits(options);
   return autoLockConfig(weaponStats) ? resolveAutoLockShot(options) : resolveRayHits(options);
 }
 

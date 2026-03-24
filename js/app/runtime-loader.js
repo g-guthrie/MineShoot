@@ -57,6 +57,14 @@ export function resolveDocsRuntimeApi(moduleNs, runtimeNs) {
                 return import('./gameplay-modules.js');
             })
             .then(function (moduleNs) {
+                if (runtime.GameBoxmanRig && runtime.GameBoxmanRig.preload) {
+                    return runtime.GameBoxmanRig.preload().then(function () {
+                        return moduleNs;
+                    });
+                }
+                return moduleNs;
+            })
+            .then(function (moduleNs) {
                 loadedGameplayRuntimeApi = resolveGameplayRuntimeApi(moduleNs, runtime);
                 return loadedGameplayRuntimeApi;
             });

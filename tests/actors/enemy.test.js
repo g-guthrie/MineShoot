@@ -9,7 +9,7 @@ async function loadEnemyHarness(options = {}) {
   const destroyCalls = [];
   const includeHitboxes = options.includeHitboxes !== false;
   const runtime = {
-    GameCombatTuning: {
+    GameShared: {
       getEnemyTuning() {
         return {
           fireRange: 34,
@@ -17,9 +17,7 @@ async function loadEnemyHarness(options = {}) {
           headshotMidRange: 22,
           defaultWallhackRadius: 90
         };
-      }
-    },
-    GameShared: {
+      },
       entityConstants: {
         ENEMY_HP: 360,
         ENEMY_ARMOR: 90

@@ -113,9 +113,9 @@
 
     function modeLabel(modeId) {
         var mode = normalizeMode(modeId);
+        if (mode === 'sandbox') return 'Offline Sandbox';
         var gameMode = sharedGameMode(mode);
         if (gameMode && gameMode.label) return String(gameMode.label || '');
-        if (mode === 'sandbox') return 'Offline Sandbox';
         return '';
     }
 
@@ -318,10 +318,6 @@
             openManualBtn: document.getElementById('open-manual-btn'),
             controlsToggle: document.getElementById('controls-toggle'),
             soundToggleBtn: document.getElementById('sound-toggle-btn'),
-            altModeToggle: document.getElementById('alt-mode-toggle'),
-            devOverlay: document.getElementById('dev-overlay'),
-            devCloseBtn: document.getElementById('dev-close-btn'),
-            devModeButtons: Array.prototype.slice.call(document.querySelectorAll('#mode-buttons .mode-btn[data-mode-id]')),
             screenMain: document.getElementById('menu-screen-mode'),
             screenRoom: document.getElementById('menu-screen-room'),
             mainHeroes: document.getElementById('menu-main-heroes'),
@@ -336,7 +332,6 @@
             playModeFfaBtn: document.getElementById('play-mode-ffa-btn'),
             playModeTdmBtn: document.getElementById('play-mode-tdm-btn'),
             sandboxModeBtn: document.getElementById('sandbox-mode-btn'),
-            loadoutStartBtn: document.getElementById('loadout-start-btn'),
             roomAccessStatus: document.getElementById('room-access-status'),
             roomActionBtn: document.getElementById('continue-loadout-btn'),
             menuSessionActions: document.getElementById('active-match-shell'),
@@ -1136,23 +1131,6 @@
                 return;
             }
         });
-
-        if (modalManager && elements.devOverlay) {
-            modalManager.register('dev', {
-                element: elements.devOverlay,
-                initialFocus: elements.devModeButtons[0] || elements.devCloseBtn || elements.devOverlay,
-                restoreFocus: elements.utilityToggleBtn || null
-            });
-        }
-        bindClick(elements.devCloseBtn, function () {
-            if (modalManager && modalManager.close) modalManager.close('dev');
-        });
-        for (var i = 0; i < elements.devModeButtons.length; i++) {
-            bindClick(elements.devModeButtons[i], function () {
-                var modeId = String(this.dataset.modeId || '');
-                if (actionApi && actionApi.launchDevMode) actionApi.launchDevMode(modeId);
-            });
-        }
 
         if (window && typeof window.addEventListener === 'function') {
             window.addEventListener('mayhem-session-state', function (event) {

@@ -51,20 +51,6 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
           updateFromSnapshot() {},
           removeRemoteVisual() {}
         },
-        GameNetRuntimeAccess: {
-          create() {
-            return {
-              buildWsEndpoint() { return 'ws://example.test'; },
-              getActiveWorldMeta() { return null; },
-              getCurrentUser() { return null; },
-              getSocketIdentity() { return null; },
-              getPlayerApi() { return null; },
-              buildFirePayload() { return null; },
-              damagePointY(y) { return y; },
-              markerPointY(y) { return y; }
-            };
-          }
-        },
         GameNetMessageRouter: {
           create() {
             return { handleMessage() {} };
@@ -89,7 +75,7 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
 
   const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
     const href = String(scriptUrl);
-    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+    return !href.endsWith('/js/net/runtime-core.js');
   });
   await loadScript('../../js/net/state-view.js', sandbox);
   for (const scriptUrl of scriptUrls) {
@@ -99,7 +85,7 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
   }
 
   assert.equal(
-    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.getMatchState(),
+    sandbox.globalThis.__MAYHEM_RUNTIME.GameNet.view.getMatchState(),
     null
   );
 });
@@ -146,20 +132,6 @@ test('GameNet forwards self reconciliation selectors through GameNetStateView wi
           updateFromSnapshot() {},
           removeRemoteVisual() {}
         },
-        GameNetRuntimeAccess: {
-          create() {
-            return {
-              buildWsEndpoint() { return 'ws://example.test'; },
-              getActiveWorldMeta() { return null; },
-              getCurrentUser() { return null; },
-              getSocketIdentity() { return null; },
-              getPlayerApi() { return null; },
-              buildFirePayload() { return null; },
-              damagePointY(y) { return y; },
-              markerPointY(y) { return y; }
-            };
-          }
-        },
         GameNetMessageRouter: {
           create() {
             return { handleMessage() {} };
@@ -184,7 +156,7 @@ test('GameNet forwards self reconciliation selectors through GameNetStateView wi
 
   const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
     const href = String(scriptUrl);
-    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+    return !href.endsWith('/js/net/runtime-core.js');
   });
   await loadScript('../../js/net/state-view.js', sandbox);
   for (const scriptUrl of scriptUrls) {
@@ -195,8 +167,8 @@ test('GameNet forwards self reconciliation selectors through GameNetStateView wi
 
   const GameNet = sandbox.globalThis.__MAYHEM_RUNTIME.GameNet;
   const selfState = { id: 'usr_test', x: 1, y: 1.6, z: 2, seq: 4 };
-  GameNet.getSelfState = function () { return selfState; };
+  GameNet.view.getSelfState = function () { return selfState; };
 
-  assert.equal(typeof GameNet.getAuthoritativeSelfState, 'function');
-  assert.equal(typeof GameNet.getSelfReconciliationState, 'function');
+  assert.equal(typeof GameNet.view.getAuthoritativeSelfState, 'function');
+  assert.equal(typeof GameNet.view.getSelfReconciliationState, 'function');
 });

@@ -85,23 +85,6 @@ async function createNetHarness() {
           cleanup() {},
           setHitboxVisibility() {}
         },
-        GameNetRuntimeAccess: {
-          create() {
-            return {
-              buildWsEndpoint() { return 'ws://example.test/api/ws'; },
-              getActiveWorldMeta() { return null; },
-              getCurrentUser() { return null; },
-              getSocketIdentity(authApi) { return authApi.getSocketIdentity(); },
-              getPlayerApi() { return null; },
-              getPlayerCombatApi() { return null; },
-              getTransportApi() { return null; },
-              getRemoteSyncApi() { return null; },
-              buildFirePayload() { return null; },
-              damagePointY(y) { return y; },
-              markerPointY(y) { return y; }
-            };
-          }
-        },
         GameNetRuntimeCore: {
           create(opts) {
             runtimeCoreOpts = opts;
@@ -124,7 +107,7 @@ async function createNetHarness() {
 
   const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
     const href = String(scriptUrl);
-    return !href.endsWith('/js/net/runtime-access.js') && !href.endsWith('/js/net/runtime-core.js');
+    return !href.endsWith('/js/net/runtime-core.js');
   });
 
   for (const scriptUrl of scriptUrls) {
@@ -184,7 +167,7 @@ test('GameNet join attempt resolves only after matching welcome and self snapsho
   const result = await joinPromise;
   assert.equal(result.roomId, 'ffa-01');
   assert.equal(result.selfId, 'user-1');
-  assert.equal(harness.net.getSelfState().id, 'user-1');
+  assert.equal(harness.net.view.getSelfState().id, 'user-1');
 });
 
 test('GameNet join attempt rejects when the websocket closes before authoritative join completes', async () => {

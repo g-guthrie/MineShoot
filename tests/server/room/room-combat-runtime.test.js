@@ -330,8 +330,7 @@ test('combat runtime applies pistol shared shot results without a special server
       pistol: {
         cooldownMs: 100,
         magazineSize: 10,
-        pellets: 12,
-        singleHitFromPellets: true
+        pellets: 1
       }
     },
     weaponFalloff: { pistol: [] },
@@ -355,7 +354,7 @@ test('combat runtime applies pistol shared shot results without a special server
 
   assert.equal(shotRequest.shotToken, 'sp1');
   assert.equal(shotRequest.weaponStats.id, 'pistol');
-  assert.equal(shotRequest.weaponStats.singleHitFromPellets, true);
+  assert.equal(shotRequest.weaponStats.pellets, 1);
   assert.deepEqual(shotRequest.aimOrigin, { x: 0.2, y: 1.8, z: -0.2 });
   assert.ok(shotRequest.aimForward.z < 0);
   assert.deepEqual(sent, [{

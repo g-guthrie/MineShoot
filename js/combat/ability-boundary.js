@@ -13,8 +13,12 @@
     }
 
     function getCatalog() {
-        var shared = runtime().GameShared && runtime().GameShared.gameplayTuning;
-        return (shared && shared.abilityCatalog) ? shared.abilityCatalog : {};
+        var shared = runtime().GameShared || null;
+        if (shared && shared.getAbilityCatalog) {
+            return shared.getAbilityCatalog() || {};
+        }
+        var tuning = shared && shared.gameplayTuning;
+        return (tuning && tuning.abilityCatalog) ? tuning.abilityCatalog : {};
     }
 
     function getAbilityDef(abilityId) {
@@ -22,31 +26,13 @@
         return catalog[abilityId] || null;
     }
 
-    function getClassAbilityTuning() {
-        var combatTuning = runtime().GameCombatTuning;
-        return combatTuning && combatTuning.getClassAbilityTuning
-            ? (combatTuning.getClassAbilityTuning() || {})
-            : null;
-    }
-
-    function applyNumericOverrides(target, source, fields) {
-        if (!target || !source || !fields) return;
-        for (var key in fields) {
-            if (!Object.prototype.hasOwnProperty.call(fields, key)) continue;
-            var sourceKey = fields[key];
-            if (source[sourceKey] == null) continue;
-            target[key] = Number(source[sourceKey]);
-        }
-    }
-
-    function getConfigForAbility(abilityId, abilityTuningFields) {
+    function getConfigForAbility(abilityId) {
         var def = getAbilityDef(abilityId);
         if (!def) return null;
         var out = {};
         for (var key in def) {
             if (Object.prototype.hasOwnProperty.call(def, key)) out[key] = def[key];
         }
-        applyNumericOverrides(out, getClassAbilityTuning(), abilityTuningFields && abilityTuningFields[abilityId]);
         return out;
     }
 

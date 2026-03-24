@@ -26,7 +26,7 @@ Owner:
 
 Consumed by:
 - server authoritative step in [cloudflare/server/room/GlobalArenaRoom.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room/GlobalArenaRoom.js)
-- client online local step in [js/player.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/player.js)
+- client online local step in [js/actors/player.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/actors/player.js)
 - replay correction in [shared/authoritative-reconciliation.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/authoritative-reconciliation.js)
 
 Must own:
@@ -34,7 +34,7 @@ Must own:
 - jump and jump hold
 - gravity
 - grounded state
-- sprint and ADS move scaling
+- sprint and scoped move scaling
 - collision stepping against authoritative boxes
 
 Must not be reimplemented elsewhere.
@@ -44,7 +44,7 @@ Must not be reimplemented elsewhere.
 Owner:
 - layout in [shared/world-layout.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/world-layout.js)
 - headless/server collision build in [shared/world-collision.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/world-collision.js)
-- rendered world assembly in [js/world.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world.js)
+- rendered world assembly in [js/world/world.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/world/world.js)
 
 Server consumers:
 - [cloudflare/server/room/GlobalArenaRoom.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room/GlobalArenaRoom.js)
@@ -52,9 +52,9 @@ Server consumers:
 - [cloudflare/server/room/RoomCombatRuntime.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room/RoomCombatRuntime.js)
 
 Client consumers:
-- [js/player-world.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/player-world.js)
-- [js/hitscan.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/hitscan.js)
-- [js/player-view.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/player-view.js)
+- [js/actors/player-world.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/actors/player-world.js)
+- [js/combat/hitscan.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/combat/hitscan.js)
+- [js/actors/player-view.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/actors/player-view.js)
 
 Must own:
 - playable bounds
@@ -90,7 +90,7 @@ Owner:
 - [js/net/self-sync.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/self-sync.js)
 
 Consumes:
-- authoritative self snapshots from [js/network.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/network.js)
+- authoritative self snapshots from [js/net/network.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/network.js)
 - pending input history from [js/net/state-view.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/state-view.js)
 - replay helper from [shared/authoritative-reconciliation.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/authoritative-reconciliation.js)
 
@@ -111,8 +111,9 @@ Owner:
 Server fire envelope:
 - [cloudflare/server/room/RoomCombatRuntime.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/cloudflare/server/room/RoomCombatRuntime.js)
 
-Client fire payload:
-- [js/net/runtime-access.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/runtime-access.js)
+Client fire payload and outbound send:
+- payload shaping in [js/net/network.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/network.js)
+- message send in [js/net/commands.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/commands.js)
 
 Client feedback:
 - [js/net/feedback-sync.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/net/feedback-sync.js)

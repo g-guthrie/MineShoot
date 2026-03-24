@@ -12,7 +12,6 @@
             { label: [bindingsApi.getDisplayLabel('move_forward'), bindingsApi.getDisplayLabel('move_left'), bindingsApi.getDisplayLabel('move_backward'), bindingsApi.getDisplayLabel('move_right')].join(' / '), title: 'Move' },
             { label: 'MOUSE', title: 'Look' },
             { label: bindingsApi.getDisplayLabel('sprint'), title: 'Sprint' },
-            { label: 'RMB / ' + bindingsApi.getDisplayLabel('ads_key'), title: 'ADS' },
             { label: bindingsApi.getDisplayLabel('jump'), title: 'Jump' },
             { label: 'LMB', title: 'Fire' },
             { label: bindingsApi.getDisplayLabel('reload'), title: 'Reload' },

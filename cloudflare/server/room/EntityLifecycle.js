@@ -192,6 +192,9 @@ export function resetEntityForRespawn(entity, options = {}) {
   if (typeof options.createWeaponAmmoRuntime === 'function') {
     entity.weaponAmmo = options.createWeaponAmmoRuntime(entity.weaponLoadout || cloneWeaponLoadout());
   }
+  if (Array.isArray(entity.weaponLoadout) && entity.weaponLoadout.length) {
+    entity.weaponId = String(entity.weaponLoadout[0] || entity.weaponId || '');
+  }
 
   if (typeof options.createMovementInputState === 'function') {
     entity.inputState = options.createMovementInputState();

@@ -17,7 +17,6 @@ flowchart TD
     Auth["Auth Overlay<br/>#auth-overlay"]
     Controls["Controls Overlay<br/>#controls-overlay"]
     Docs["Docs Panel<br/>#docs-panel"]
-    Dev["Dev Overlay<br/>#dev-overlay"]
     Handoff["Launch Handoff<br/>#launch-flow"]
     Gameplay["Gameplay Runtime"]
     Session["Session Rail<br/>#menu-session-actions"]
@@ -31,8 +30,6 @@ flowchart TD
     Main -->|"open-manual-btn<br/>hud-manual-btn"| Docs
     Utility -->|"settings-account-btn"| Auth
     Utility -->|"controls-toggle"| Controls
-    Utility -.->|"alt-mode-toggle<br/>(currently dead)"| Dev
-    Dev -->|"mode-local-multiplayer-btn"| Handoff
     Main -->|"primary-launch-btn"| Handoff
     Party -->|"private-room-enter-btn"| Handoff
     Handoff -->|"launch-enter-btn"| Gameplay
@@ -66,7 +63,6 @@ flowchart TD
 | Utility overlay | `open-manual-btn` | Toggles `#docs-panel` through lazy docs runtime loading | Does not close utility first. |
 | Utility overlay | `controls-toggle` | Opens `#controls-overlay` | Modal-managed overlay. |
 | Utility overlay | `sound-toggle-btn` | Toggles mute only after gameplay runtime has been loaded | The live handler is in `js/runtime/gameplay-controls.js`, not the menu shell. |
-| Utility overlay | `alt-mode-toggle` | No active click path in the current shell | Hidden in HTML and never bound by `lobby-controller.js`. |
 | Session rail | `play-btn` | Attempts pointer lock and re-enters gameplay | Label changes between `ENTER MATCH` and `RESUME MATCH`. |
 | Session rail | `back-mode-btn` | Opens `#leave-confirm-overlay` when the session is resumable; otherwise returns straight to menu | The real leave flow starts here, not from the hidden header return button. |
 | Main surface | `primary-launch-btn` | Launches the selected quick-match mode | `sandbox` launches Offline Sandbox locally; `ffa` and `tdm` request matchmaking first. |
@@ -74,7 +70,6 @@ flowchart TD
 | Main surface | `play-mode-ffa-btn` | Sets selected mode to `ffa` and closes mode list | No navigation change. |
 | Main surface | `play-mode-tdm-btn` | Sets selected mode to `tdm` and closes mode list | No navigation change. |
 | Main surface | `sandbox-mode-btn` | Sets selected mode to `sandbox` and closes mode list | No navigation change until launch. |
-| Main surface | `loadout-start-btn` | Bound to the same launch path as `primary-launch-btn` | Current render in `lobby-controller.js` forces it hidden, so it is effectively unreachable in the present shell. Some e2e specs still expect the older visible behavior. |
 | Party surface | `create-private-room-btn` | Calls `session.createPrivateRoom()` and stays on the party surface | Optionally seeds Team Death Match from the selected quick-match mode. |
 | Party surface | `join-private-room-btn` | Calls `session.joinPrivateRoom(roomCode)` and stays on the party surface | Enter on `#private-room-input` triggers the same path. |
 | Party surface | `copy-room-code-btn` | Copies the room code from `#room-share-code` | No navigation change. |
@@ -102,8 +97,6 @@ flowchart TD
 | Auth overlay | `auth-play-btn` | Validates username and 4-digit PIN, logs in, loads profile, and closes the overlay on success | Networked auth path. |
 | Auth overlay | `auth-local-btn` | Switches to local guest mode and closes the overlay | No network call. |
 | Auth overlay | `auth-logout-btn` | Logs out and leaves the auth overlay in logged-out state | Networked for real accounts, local-only for guest mode. |
-| Dev overlay | `dev-close-btn` | Closes `#dev-overlay` | The overlay exists but has no active open button in the current shell. |
-| Dev overlay | `mode-local-multiplayer-btn` | Launches `single_dev_server` with the current selected ruleset | Reachable only if something else opens the dev overlay. |
 | Docs panel | `docs-close-btn` | Closes `#docs-panel` | The rest of the docs navigation is generated at runtime. |
 | Controls overlay | `controls-close-btn` | Closes `#controls-overlay` | Overlay click and `Escape` also close it. |
 | Controls overlay | `controls-reset-btn` | Resets bindings to defaults | No surface change. |
@@ -131,9 +124,7 @@ These buttons are created at runtime and are part of the real click graph even t
 
 ## Dead Or Stale Paths
 
-- `alt-mode-toggle` is hidden and never bound by the current controller, so `#dev-overlay` is present but has no live entry button.
 - `menu-return-btn` is bound but effectively shadowed by the session rail.
-- `loadout-start-btn` is bound but current render keeps it hidden.
 - `party-roster-overlay` and `friends-overlay` still exist in the DOM, but there is no active open path from the current menu shell.
 
 ## Coverage Snapshot
@@ -144,4 +135,4 @@ Current automated coverage hits only part of this graph:
 - `tests/app/menu-loadout.test.js` covers the loadout band and its generated choice buttons.
 - `tests/app/input-bindings-ui.test.js` covers controls open, rebind, and reset.
 - `tests/app/runtime-session.test.js` covers session rail and handoff state, but mostly at the state-transition level.
-- `e2e/menu-shell.spec.js` and `e2e/social.spec.js` still exercise some top-level flows, but at least one expectation (`loadout-start-btn` becoming visible for the Offline Sandbox mode) now conflicts with the current controller render and appears stale.
+- `e2e/menu-shell.spec.js` and `e2e/social.spec.js` still exercise some top-level flows, but this map now excludes the deleted dev-overlay and duplicate launch-button path from the active shell.

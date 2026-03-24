@@ -36,11 +36,8 @@ function normalizeTeamId(value, teamCount = 2) {
   return allowed.indexOf(normalized) >= 0 ? normalized : TEAM_ALPHA;
 }
 
-export async function buildPrivateRoomLobbyRoom(env, roomId) {
-  const room = await getPrivateRoomById(env, roomId);
-  const roomState = await getPrivateRoomState(env, roomId);
+export function buildPrivateRoomLobbyRoomFromData(room, roomState, members, roomId) {
   if (!room || !roomState) return null;
-  const members = await getPrivateRoomMembers(env, roomId);
   const hostId = String(roomState.host_actor_id || '');
   const teamCount = normalizeTeamCount(roomState.team_count);
   const teams = {
@@ -83,8 +80,15 @@ export async function buildPrivateRoomLobbyRoom(env, roomId) {
   };
 }
 
-export async function buildPrivateRoomLobbyStateForActor(env, actor, roomId) {
-  const room = await buildPrivateRoomLobbyRoom(env, roomId);
+export async function buildPrivateRoomLobbyRoom(env, roomId) {
+  const room = await getPrivateRoomById(env, roomId);
+  const roomState = await getPrivateRoomState(env, roomId);
+  if (!room || !roomState) return null;
+  const members = await getPrivateRoomMembers(env, roomId);
+  return buildPrivateRoomLobbyRoomFromData(room, roomState, members, roomId);
+}
+
+export function buildPrivateRoomLobbyStateFromRoom(actor, room) {
   if (!room) return null;
   const actorId = String(actor && actor.id || '');
   const actorDisplayName = String(actor && (actor.displayName || actor.id) || 'PLAYER');
@@ -101,3 +105,7 @@ export async function buildPrivateRoomLobbyStateForActor(env, actor, roomId) {
   };
 }
 
+export async function buildPrivateRoomLobbyStateForActor(env, actor, roomId) {
+  const room = await buildPrivateRoomLobbyRoom(env, roomId);
+  return buildPrivateRoomLobbyStateFromRoom(actor, room);
+}

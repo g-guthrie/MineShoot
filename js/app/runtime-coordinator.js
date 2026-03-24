@@ -138,7 +138,10 @@
 
         function currentMatchViewApi() {
             var api = currentMatchRuntimeApi();
-            return api && api.view ? api.view : api;
+            if (ensureMatchHostApi().isMultiplayerMode()) {
+                return api && api.view ? api.view : null;
+            }
+            return api;
         }
 
         function currentSelfCombatApi() {
@@ -148,13 +151,13 @@
         function currentMatchCommandApi() {
             if (!ensureMatchHostApi().isMultiplayerMode()) return null;
             var api = currentMatchRuntimeApi();
-            return api && api.commands ? api.commands : api;
+            return api && api.commands ? api.commands : null;
         }
 
         function currentMatchRemoteEntitiesApi() {
             if (!ensureMatchHostApi().isMultiplayerMode()) return null;
             var api = currentMatchRuntimeApi();
-            return api && api.remoteEntities ? api.remoteEntities : api;
+            return api && api.remoteEntities ? api.remoteEntities : null;
         }
 
         function ensureMatchViewApi() {

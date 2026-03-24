@@ -19,6 +19,11 @@
 
     function createRenderer(options) {
         var renderer = new THREE.WebGLRenderer(options);
+        renderer.shadowMap = renderer.shadowMap || {};
+        renderer.shadowMap.enabled = true;
+        if (THREE.PCFSoftShadowMap !== undefined) {
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        }
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(cappedPixelRatio());
         document.body.appendChild(renderer.domElement);

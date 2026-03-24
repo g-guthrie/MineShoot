@@ -31,7 +31,7 @@ Started in this branch:
 Started in this branch:
 
 - extracted authoritative net room, self, match, world, input-history, snapshot, and event-queue state into `js/net/runtime-state.js`
-- reduced `js/network.js` so mutable authoritative state no longer lives only as a wide local-variable blob
+- reduced `js/net/network.js` so mutable authoritative state no longer lives only as a wide local-variable blob
 - kept the public `GameNet` surface intact as a compatibility facade while moving ownership downward
 
 ## Stage 3

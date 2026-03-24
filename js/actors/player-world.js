@@ -37,7 +37,7 @@
         function getSpawnThreatPoints() {
             var points = [];
             var net = runtime.GameNet || null;
-            var netView = net && net.view ? net.view : net;
+            var netView = net && net.view ? net.view : null;
             if (runtime.GameEnemy && runtime.GameEnemy.getLockTargets) {
                 var localTargets = runtime.GameEnemy.getLockTargets() || [];
                 for (var i = 0; i < localTargets.length; i++) {

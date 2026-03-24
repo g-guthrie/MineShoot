@@ -961,7 +961,143 @@ body { cursor: default; }
 
 
 /* ------------------------------------------------------------
-   18. ROOM SCREEN & PRIVATE ROOM
+   18. POSTGAME
+   ------------------------------------------------------------ */
+
+#menu-shell.menu-shell-v4 #postgame-flow {
+    position: absolute;
+    inset: 0;
+    z-index: 18;
+    display: grid;
+    align-items: center;
+    justify-items: center;
+    padding: 24px;
+    background: transparent;
+}
+
+#menu-shell.menu-shell-v4 #postgame-flow[hidden] {
+    display: none !important;
+}
+
+#menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-header,
+#menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-feedback,
+#menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #active-match-shell,
+#menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-body,
+#menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-loadout-band {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#menu-shell.menu-shell-v4 .postgame-panel {
+    width: min(960px, 100%);
+    max-width: 100%;
+    padding: 26px 24px 22px;
+    gap: 14px;
+    align-content: start;
+    box-shadow:
+        inset 0 0 0 1px var(--border-card),
+        0 18px 48px rgba(28, 44, 76, 0.08);
+}
+
+#menu-shell.menu-shell-v4 #postgame-celebration,
+#menu-shell.menu-shell-v4 #postgame-results {
+    justify-self: stretch;
+}
+
+#menu-shell.menu-shell-v4 #postgame-winner-banner,
+#menu-shell.menu-shell-v4 .postgame-hero-outcome {
+    color: var(--c-heading);
+    font-family: 'Orbitron', 'Rajdhani', sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-align: center;
+    text-wrap: balance;
+}
+
+#menu-shell.menu-shell-v4 #postgame-winner-banner {
+    font-size: clamp(32px, 5vw, 58px);
+}
+
+#menu-shell.menu-shell-v4 .postgame-hero-outcome {
+    font-size: clamp(36px, 6vw, 64px);
+}
+
+#menu-shell.menu-shell-v4 #postgame-result-banner,
+#menu-shell.menu-shell-v4 .postgame-hero-winner,
+#menu-shell.menu-shell-v4 #postgame-celebration-note {
+    color: var(--c-muted);
+    font-family: inherit;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-align: center;
+    text-wrap: balance;
+}
+
+#menu-shell.menu-shell-v4 #postgame-result-banner,
+#menu-shell.menu-shell-v4 .postgame-hero-winner {
+    color: var(--c-blue-text);
+    font-size: clamp(16px, 2.4vw, 24px);
+}
+
+#menu-shell.menu-shell-v4 #postgame-celebration-note {
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+#menu-shell.menu-shell-v4 #postgame-ghost-stage {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+    align-items: stretch;
+}
+
+#menu-shell.menu-shell-v4 .postgame-ghost {
+    margin: 0;
+    min-height: 148px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: pre;
+    color: var(--c-body);
+    font-family: 'Courier New', monospace;
+    font-size: clamp(18px, 2.2vw, 26px);
+    line-height: 0.92;
+    font-weight: 700;
+    font-variant-ligatures: none;
+    animation: postgameGhostFloat 1.8s ease-in-out infinite;
+}
+
+#menu-shell.menu-shell-v4 .postgame-ghost-mid {
+    box-shadow:
+        inset 0 0 0 1px var(--c-blue-ring),
+        0 12px 24px rgba(59, 110, 255, 0.12);
+    animation-duration: 1.25s;
+    animation-name: postgameGhostChampion;
+}
+
+#menu-shell.menu-shell-v4 #postgame-results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+    align-items: stretch;
+}
+
+#menu-shell.menu-shell-v4 #postgame-actions {
+    justify-content: center;
+}
+
+#menu-shell.menu-shell-v4 #postgame-actions > .btn {
+    max-width: 320px;
+}
+
+
+/* ------------------------------------------------------------
+   19. ROOM SCREEN & PRIVATE ROOM
    ------------------------------------------------------------ */
 
 #menu-shell.menu-shell-v4 #room-screen-grid { display: grid; gap: 10px; overflow: visible; padding-right: 0; align-content: start; }

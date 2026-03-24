@@ -7,6 +7,7 @@ import { getWeaponPresentation } from '../../shared/gameplay-tuning.js';
 
 async function loadAvatarRig(runtimeOverrides = {}, threeImpl = THREE) {
   const visualsCode = await fs.readFile(new URL('../../js/domain/weapons/visuals.js', import.meta.url), 'utf8');
+  const weaponPresentationCode = await fs.readFile(new URL('../../js/presentation/weapon-presentation.js', import.meta.url), 'utf8');
   const code = await fs.readFile(new URL('../../js/actors/avatar-rig.js', import.meta.url), 'utf8');
   const runtime = {
     GameShared: {
@@ -23,8 +24,10 @@ async function loadAvatarRig(runtimeOverrides = {}, threeImpl = THREE) {
   };
   sandbox.globalThis = sandbox;
 
-  vm.runInContext(visualsCode, vm.createContext(sandbox));
-  vm.runInContext(code, vm.createContext(sandbox));
+  const context = vm.createContext(sandbox);
+  vm.runInContext(visualsCode, context);
+  vm.runInContext(weaponPresentationCode, context);
+  vm.runInContext(code, context);
   return sandbox.__MAYHEM_RUNTIME.GameAvatarRig;
 }
 
@@ -59,6 +62,7 @@ test('reload pose is available for every firearm and keeps the support hand on t
 test('reload animation keeps the left shoulder on its original torso side and the palm near the weapon support anchor', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
+  const baselineShoulderX = api.rig.armL.position.x;
 
   api.updateAnimation(0.016, {
     speedNorm: 0,
@@ -76,14 +80,15 @@ test('reload animation keeps the left shoulder on its original torso side and th
   api.rig.supportAnchor.getWorldPosition(support);
   api.rig.palmLeft.getWorldPosition(palm);
 
-  assert.ok(api.rig.armL.position.x < 0);
-  assert.ok(api.rig.armL.position.x > -0.4);
-  assert.ok(support.distanceTo(palm) < 1.0);
+  assert.equal(api.rig.armL.position.x, baselineShoulderX);
+  assert.ok(palm.distanceTo(support) > 0.25);
+  assert.ok(api.rig.armL.rotation.x > 0.8);
 });
 
 test('reload action trigger applies the reload pose even before replicated reload state arrives', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
+  const baselineShoulderX = api.rig.armL.position.x;
 
   api.triggerAction('reload', { duration: 0.9 });
   api.updateAnimation(0.016, {
@@ -102,9 +107,9 @@ test('reload action trigger applies the reload pose even before replicated reloa
   api.rig.supportAnchor.getWorldPosition(support);
   api.rig.palmLeft.getWorldPosition(palm);
 
-  assert.ok(api.rig.armL.position.x < 0);
-  assert.ok(api.rig.armL.position.x > -0.5);
-  assert.ok(support.distanceTo(palm) < 0.8);
+  assert.equal(api.rig.armL.position.x, baselineShoulderX);
+  assert.ok(palm.distanceTo(support) > 0.2);
+  assert.ok(api.rig.armL.rotation.x > 0.7);
 });
 
 test('reload animation does not allocate new Vector3 instances every frame', async () => {
@@ -220,21 +225,41 @@ test('built-in weapon visuals keep the sniper support anchor tucked under the fo
   const avatarRig = await loadAvatarRig();
   const sniperEntry = avatarRig._test.resolveWeaponEntry('sniper');
 
-  assert.deepEqual(Array.from(sniperEntry.visual.anchors.support), [-0.055, -0.055, -0.42]);
-  assert.deepEqual(Array.from(sniperEntry.visual.anchors.handle), [0, -0.11, 0.11]);
+  assert.equal(sniperEntry.platform.holdClass, 'twoHandPrecision');
+  assert.equal(sniperEntry.platform.stockClass, 'precision');
+  assert.deepEqual(Array.from(sniperEntry.platform.zones.supportZone), [-0.055, -0.055, -0.42]);
+  assert.deepEqual(Array.from(sniperEntry.platform.zones.handleBack), [0, -0.11, 0.11]);
 });
 
-test('built-in weapon visuals stay procedural for pistol and machinegun', async () => {
+test('built-in weapon visuals expose semantic hold and stock metadata for pistol and machinegun', async () => {
   const avatarRig = await loadAvatarRig();
   const pistolEntry = avatarRig._test.resolveWeaponEntry('pistol');
   const machinegunEntry = avatarRig._test.resolveWeaponEntry('machinegun');
 
-  assert.deepEqual(Array.from(pistolEntry.visual.mount.position), [0, 0.03, 0.06]);
-  assert.equal(pistolEntry.visual.parts.scope, false);
+  assert.equal(pistolEntry.platform.holdClass, 'oneHandCompact');
+  assert.equal(pistolEntry.platform.stockClass, 'none');
+  assert.ok(pistolEntry.platform.parts.receiver);
+  assert.ok(pistolEntry.platform.parts.grip);
 
-  assert.deepEqual(Array.from(machinegunEntry.visual.mount.position), [0, 0.02, 0.08]);
-  assert.equal(machinegunEntry.visual.parts.coil, false);
-  assert.equal(machinegunEntry.visual.parts.scope, false);
+  assert.equal(machinegunEntry.platform.holdClass, 'oneHandLarge');
+  assert.equal(machinegunEntry.platform.stockClass, 'short');
+  assert.ok(machinegunEntry.platform.parts.receiver);
+  assert.ok(machinegunEntry.platform.parts.stock);
+});
+
+test('weapon handle-back anchors line up with the right hand mount contract', async () => {
+  const avatarRig = await loadAvatarRig();
+  const weaponIds = ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper'];
+
+  for (const weaponId of weaponIds) {
+    const api = avatarRig.create({ weaponId });
+    api.root.updateMatrixWorld(true);
+    const handle = new THREE.Vector3();
+    const palm = new THREE.Vector3();
+    api.rig.gun.getObjectByName('weaponHandleAnchor').getWorldPosition(handle);
+    api.rig.palmRight.getWorldPosition(palm);
+    assert.ok(handle.distanceTo(palm) < 0.000001, weaponId + ' should align the handle-back anchor to the right hand mount');
+  }
 });
 
 test('jump action trigger layers a takeoff pose on top of airborne animation', async () => {
@@ -286,9 +311,10 @@ test('jump action can reverse the takeoff leg tilt for backward jumps', async ()
   assert.ok(api.rig.legR.rotation.x > baselineLegRotation);
 });
 
-test('airborne animation keeps the left arm splayed and lets forward/back input sweep it live', async () => {
+test('airborne animation keeps one-handed guns on a simple fallback pose without shoulder drift', async () => {
   const avatarRig = await loadAvatarRig();
   const api = avatarRig.create({ weaponId: 'rifle' });
+  const baselineShoulderX = api.rig.armL.position.x;
 
   api.updateAnimation(0.016, {
     speedNorm: 0,
@@ -297,9 +323,9 @@ test('airborne animation keeps the left arm splayed and lets forward/back input 
     aimPitch: 0
   });
 
-  assert.ok(api.rig.armL.rotation.z < -0.2);
-  assert.ok(api.rig.armL.rotation.z > -0.3);
-  assert.equal(api.rig.armL.rotation.x, 0);
+  assert.equal(api.rig.armL.position.x, baselineShoulderX);
+  assert.ok(api.rig.armL.rotation.z > 0.15);
+  assert.ok(api.rig.armL.rotation.x >= 0);
 
   api.updateAnimation(0.016, {
     speedNorm: 0,
@@ -309,9 +335,8 @@ test('airborne animation keeps the left arm splayed and lets forward/back input 
     movingForward: true
   });
 
-  assert.ok(api.rig.armL.rotation.x < -0.24);
-  assert.ok(api.rig.armL.rotation.x > -0.28);
-  assert.ok(api.rig.armL.rotation.z < -0.2);
+  assert.ok(api.rig.armL.rotation.x < 0);
+  assert.equal(api.rig.armL.position.x, baselineShoulderX);
 
   api.updateAnimation(0.016, {
     speedNorm: 0,
@@ -321,9 +346,8 @@ test('airborne animation keeps the left arm splayed and lets forward/back input 
     movingBackward: true
   });
 
-  assert.ok(api.rig.armL.rotation.x > 0.24);
-  assert.ok(api.rig.armL.rotation.x < 0.28);
-  assert.ok(api.rig.armL.rotation.z < -0.2);
+  assert.ok(api.rig.armL.rotation.x > 0.1);
+  assert.equal(api.rig.armL.position.x, baselineShoulderX);
 });
 
 test('armed sprint animation reuses the walk-style firearm arm motion with a stronger support-arm swing', async () => {

@@ -23,7 +23,7 @@ const LOADOUT_DEPS = {
 test('room loadout normalization removes duplicates and invalid ids', () => {
   const normalized = normalizeWeaponLoadout(['sniper', 'sniper', 'invalid'], ['rifle', 'shotgun'], LOADOUT_DEPS);
 
-  assert.deepEqual(normalized, ['sniper', 'rifle']);
+  assert.deepEqual(normalized, ['rifle', 'sniper']);
 });
 
 test('room loadout helpers keep entity loadouts valid and expose equip checks', () => {

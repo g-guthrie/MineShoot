@@ -392,11 +392,11 @@
             var nextLifePct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
             killCounterEl.innerHTML =
                 '<div class="match-pill-row">' +
-                    '<div class="match-pill"><span class="match-pill-label">LIVES</span><span class="match-pill-value">' + lives + '/' + maxLives + '</span></div>' +
+                    '<div class="match-pill"><span class="match-pill-label">LIVES</span><span class="match-pill-value">' + lives + '</span></div>' +
                     '<div class="match-pill"><span class="match-pill-label">ALIVE</span><span class="match-pill-value">' + aliveCount + '</span></div>' +
                 '</div>' +
                 '<div class="match-pill match-pill-progress">' +
-                    '<div class="match-pill-progress-header"><span class="match-pill-label">NEXT LIFE</span><span class="match-pill-value">' + Math.round(nextLifePct) + '%</span></div>' +
+                    '<div class="match-pill-progress-header"><span class="match-pill-label">EXTRA LIFE</span><span class="match-pill-value">' + Math.round(nextLifePct) + '%</span></div>' +
                     '<div class="match-pill-track"><div class="match-pill-fill" style="width:' + nextLifePct.toFixed(1) + '%"></div></div>' +
                 '</div>';
             return;
@@ -412,14 +412,14 @@
     GameUI.updateHealth = function (hp, maxHp) {
         var pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
         healthBarEl.style.width = pct + '%';
-        healthTextEl.textContent = 'HP: ' + Math.ceil(hp);
+        healthTextEl.textContent = 'HP ' + Math.ceil(hp);
 
         if (pct > 60) {
-            healthBarEl.style.background = '#4CAF50';
+            healthBarEl.style.background = '#3CB8FF';
         } else if (pct > 30) {
-            healthBarEl.style.background = '#FFC107';
+            healthBarEl.style.background = '#FFCC00';
         } else {
-            healthBarEl.style.background = '#F44336';
+            healthBarEl.style.background = '#FF3B3B';
         }
     };
 
@@ -585,31 +585,31 @@
         var phase = String(state && state.phase || 'ready');
         cooldownBarEl.style.width = (pct * 100) + '%';
         if (status === 'reloading') {
-            if (phase === 'raise') {
-                cooldownBarEl.style.background = '#ff8b3d';
-                cooldownStatusEl.textContent = 'RELOAD :: RAISE';
-                cooldownStatusEl.style.color = '#ff8b3d';
-            } else if (phase === 'settle') {
-                cooldownBarEl.style.background = '#ffc04d';
-                cooldownStatusEl.textContent = 'RELOAD :: SETTLE';
-                cooldownStatusEl.style.color = '#ffc04d';
+            if (phase === 'present' || phase === 'raise') {
+                cooldownBarEl.style.background = '#FF9B00';
+                cooldownStatusEl.textContent = 'RELOAD :: PRESENT';
+                cooldownStatusEl.style.color = '#FF9B00';
+            } else if (phase === 'recover' || phase === 'settle') {
+                cooldownBarEl.style.background = '#FFCC00';
+                cooldownStatusEl.textContent = 'RELOAD :: RECOVER';
+                cooldownStatusEl.style.color = '#FFCC00';
             } else {
-                cooldownBarEl.style.background = '#ff5c5c';
-                cooldownStatusEl.textContent = 'RELOAD :: MANIPULATE';
-                cooldownStatusEl.style.color = '#ff5c5c';
+                cooldownBarEl.style.background = '#FF3B3B';
+                cooldownStatusEl.textContent = 'RELOAD :: ACTION';
+                cooldownStatusEl.style.color = '#FF3B3B';
             }
         } else if (status === 'reloaded') {
-            cooldownBarEl.style.background = '#4CAF50';
+            cooldownBarEl.style.background = '#3CB8FF';
             cooldownStatusEl.textContent = 'RELOAD COMPLETE';
-            cooldownStatusEl.style.color = '#4CAF50';
+            cooldownStatusEl.style.color = '#3CB8FF';
         } else if (status === 'cooldown') {
-            cooldownBarEl.style.background = '#FFC107';
+            cooldownBarEl.style.background = '#FFCC00';
             cooldownStatusEl.textContent = 'COOLDOWN';
-            cooldownStatusEl.style.color = '#FFC107';
+            cooldownStatusEl.style.color = '#FFCC00';
         } else {
-            cooldownBarEl.style.background = '#4CAF50';
+            cooldownBarEl.style.background = '#3CB8FF';
             cooldownStatusEl.textContent = 'READY';
-            cooldownStatusEl.style.color = '#4CAF50';
+            cooldownStatusEl.style.color = '#3CB8FF';
         }
     };
 
@@ -656,7 +656,7 @@
 
     function reticleTargetSets() {
         return {
-            crosshair: [crosshairEl, pistolReticleEl],
+            crosshair: [crosshairEl],
             circle: [shotgunReticleEl]
         };
     }
@@ -692,24 +692,10 @@
         hideSpreadReticle();
     }
 
-    function updatePistolReticle(weapon, hitscan) {
-        if (!pistolReticleEl) return;
-        var spreadMetrics = weapon.id === 'pistol' && hitscan && hitscan.getSpreadMetrics
-            ? hitscan.getSpreadMetrics(weapon.id)
-            : null;
-        var pistolDiameterX = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusXpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
-        var pistolDiameterY = Math.max(0, Number(spreadMetrics && spreadMetrics.radiusYpx || spreadMetrics && spreadMetrics.radiusPx || 0) * 2);
-        var visible = weapon.id === 'pistol' && pistolDiameterX > 2 && pistolDiameterY > 2;
-        setElementDisplay(pistolReticleEl, visible);
-        if (!visible) return;
-        pistolReticleEl.style.width = Math.round(pistolDiameterX) + 'px';
-        pistolReticleEl.style.height = Math.round(pistolDiameterY) + 'px';
-    }
-
     function updateCrosshairReticle(weapon, adsState, scoped, hitscan) {
         setElementDisplay(crosshairEl, true);
         setElementDisplay(shotgunReticleEl, false);
-        updatePistolReticle(weapon, hitscan);
+        setElementDisplay(pistolReticleEl, false);
         if (spreadReticle && spreadReticle.updateForWeapon) {
             spreadReticle.updateForWeapon(weapon, {
                 adsActive: !!(adsState && adsState.active),

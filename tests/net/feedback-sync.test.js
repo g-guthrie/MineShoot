@@ -8,8 +8,9 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   const audioCalls = [];
   const uiCalls = [];
   const damageCalls = [];
-  const runtime = {
-    GameNet: {
+  const overrideNet = runtimeOverrides.GameNet || null;
+  const normalizedNet = {
+    view: {
       consumeClassCastResult() { return null; },
       consumeDamageFeedback() { return null; },
       consumeAbilityEvent() { return null; },
@@ -17,9 +18,46 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       consumeThrowAck() { return null; },
       consumeThrowReject() { return null; },
       getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
-      consumeThrowableEvent() { return null; },
-      damagePointForEntityId() { return null; }
+      consumeThrowableEvent() { return null; }
     },
+    effects: {
+      damagePointForEntityId() { return null; }
+    }
+  };
+  if (overrideNet && overrideNet.view) normalizedNet.view = { ...normalizedNet.view, ...overrideNet.view };
+  if (overrideNet && overrideNet.effects) normalizedNet.effects = { ...normalizedNet.effects, ...overrideNet.effects };
+  if (overrideNet && !overrideNet.view && !overrideNet.effects) {
+    normalizedNet.view = {
+      consumeClassCastResult: overrideNet.consumeClassCastResult || normalizedNet.view.consumeClassCastResult,
+      consumeDamageFeedback: overrideNet.consumeDamageFeedback || normalizedNet.view.consumeDamageFeedback,
+      consumeAbilityEvent: overrideNet.consumeAbilityEvent || normalizedNet.view.consumeAbilityEvent,
+      consumeIncomingDamageFeedback: overrideNet.consumeIncomingDamageFeedback || normalizedNet.view.consumeIncomingDamageFeedback,
+      consumeThrowAck: overrideNet.consumeThrowAck || normalizedNet.view.consumeThrowAck,
+      consumeThrowReject: overrideNet.consumeThrowReject || normalizedNet.view.consumeThrowReject,
+      getAuthoritativeThrowableState: overrideNet.getAuthoritativeThrowableState || normalizedNet.view.getAuthoritativeThrowableState,
+      consumeThrowableEvent: overrideNet.consumeThrowableEvent || normalizedNet.view.consumeThrowableEvent
+    };
+    normalizedNet.effects = {
+      damagePointForEntityId: overrideNet.damagePointForEntityId || normalizedNet.effects.damagePointForEntityId
+    };
+  }
+  const overrideShared = runtimeOverrides.GameShared || {};
+  const normalizedShared = {
+    gameplayTuning: {
+      network: {
+        feedback: {
+          predictedHitTtlMs: 900,
+          confirmedShotTtlMs: 2000
+        }
+      }
+    },
+    getNetworkTuning() {
+      return this.gameplayTuning.network || {};
+    },
+    ...overrideShared
+  };
+  const runtime = {
+    GameNet: normalizedNet,
     GameAudio: {
       play(name) { audioCalls.push(name); }
     },
@@ -50,17 +88,10 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     GamePlayerCombat: {
       showIncomingFeedback() {}
     },
-    GameShared: {
-      gameplayTuning: {
-        network: {
-          feedback: {
-            predictedHitTtlMs: 900,
-            confirmedShotTtlMs: 2000
-          }
-        }
-      }
-    },
-    ...runtimeOverrides
+    GameShared: normalizedShared,
+    ...runtimeOverrides,
+    GameShared: normalizedShared,
+    GameNet: normalizedNet
   };
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,

@@ -15,41 +15,6 @@
     <button id="hud-manual-btn" type="button">MANUAL</button>
     <!-- Overlay -->
     <div id="overlay">
-        <div id="postgame-flow" hidden>
-            <section id="postgame-celebration" class="postgame-screen" hidden>
-                <div class="postgame-kicker">FINAL KILLCAM :: WINNER LOCKED</div>
-                <div id="postgame-winner-banner">WINNER</div>
-                <div id="postgame-result-banner">VICTORY</div>
-                <div id="postgame-ghost-stage" aria-hidden="true">
-                    <pre class="postgame-ghost">   .--.
- .(x  x).
-(___.O__)__)
- /  ..  \\
- \_.--._/</pre>
-                    <pre class="postgame-ghost postgame-ghost-mid">   .--.
- .(x  x).
-(___.O__)__)
- /  ..  \\
- \_.--._/</pre>
-                    <pre class="postgame-ghost">   .--.
- .(x  x).
-(___.O__)__)
- /  ..  \\
- \_.--._/</pre>
-                </div>
-                <div id="postgame-celebration-note">THE CROWD LOVES A HORRIBLE LITTLE GHOST.</div>
-            </section>
-            <section id="postgame-results" class="postgame-screen" hidden>
-                <div id="postgame-results-outcome" class="postgame-hero-outcome">VICTORY</div>
-                <div id="postgame-results-winner" class="postgame-hero-winner"></div>
-                <div id="postgame-results-grid">
-                    <div id="postgame-results-mode" class="match-stat-pill" data-session-label="Mode">Free For All</div>
-                    <div id="postgame-results-line" class="match-stat-pill" data-session-label="Your Line">0 / 0</div>
-                    <div id="postgame-results-objective" class="match-stat-pill" data-session-label="Objective">GOAL 0</div>
-                </div>
-                <button id="postgame-continue-btn" class="btn btn-primary btn-lg" type="button">CONTINUE</button>
-            </section>
-        </div>
         <div id="launch-flow" hidden>
             <section id="launch-card">
                 <div id="launch-kicker">ARENA LINK</div>
@@ -100,7 +65,6 @@
                                     <button id="open-manual-btn" type="button">Instructions</button>
                                     <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
                                     <button id="sound-toggle-btn" type="button">Sound: On</button>
-                                    <button id="alt-mode-toggle" type="button" aria-expanded="false" aria-controls="dev-overlay" hidden>Dev / Test</button>
                                 </div>
                             </div>
                         </div>
@@ -119,6 +83,44 @@
                             <button id="play-btn" class="btn btn-primary btn-lg" type="button">Resume Match</button>
                             <button id="back-mode-btn" class="btn btn-lg" type="button">Leave Game</button>
                         </div>
+                    </div>
+
+                    <div id="postgame-flow" hidden>
+                        <section id="postgame-celebration" class="card stack postgame-panel" hidden>
+                            <div class="kicker">FINAL KILLCAM :: WINNER LOCKED</div>
+                            <div id="postgame-winner-banner">WINNER</div>
+                            <div id="postgame-result-banner">VICTORY</div>
+                            <div id="postgame-ghost-stage" aria-hidden="true">
+                                <pre class="match-stat-pill postgame-ghost">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                                <pre class="match-stat-pill postgame-ghost postgame-ghost-mid">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                                <pre class="match-stat-pill postgame-ghost">   .--.
+ .(x  x).
+(___.O__)__)
+ /  ..  \\
+ \_.--._/</pre>
+                            </div>
+                            <div id="postgame-celebration-note">THE CROWD LOVES A HORRIBLE LITTLE GHOST.</div>
+                        </section>
+                        <section id="postgame-results" class="card stack postgame-panel" hidden>
+                            <div id="postgame-results-outcome" class="postgame-hero-outcome">VICTORY</div>
+                            <div id="postgame-results-winner" class="postgame-hero-winner"></div>
+                            <div id="postgame-results-grid">
+                                <div id="postgame-results-mode" class="match-stat-pill" data-session-label="Mode">Free For All</div>
+                                <div id="postgame-results-line" class="match-stat-pill" data-session-label="Your Line">0 / 0</div>
+                                <div id="postgame-results-objective" class="match-stat-pill" data-session-label="Objective">GOAL 0</div>
+                            </div>
+                            <div id="postgame-actions" class="flow">
+                                <button id="postgame-continue-btn" class="btn btn-primary btn-lg" type="button">CONTINUE</button>
+                            </div>
+                        </section>
                     </div>
 
                     <div id="menu-body">
@@ -354,19 +356,6 @@
                     </div>
                 </div>
                 <button id="auth-logout-btn" type="button">LOG OUT</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="dev-overlay" class="modal-overlay" hidden>
-        <div id="dev-modal" class="modal-card">
-            <div id="dev-modal-header">
-                <span id="dev-modal-title">DEV / TEST</span>
-                <button id="dev-close-btn" type="button">CLOSE</button>
-            </div>
-            <div id="dev-modal-copy">Launch the local-worker multiplayer room with the currently selected ruleset.</div>
-            <div id="mode-buttons">
-                <button id="mode-local-multiplayer-btn" class="mode-btn" type="button" data-mode-id="single_dev_server">LOCAL MULTIPLAYER</button>
             </div>
         </div>
     </div>

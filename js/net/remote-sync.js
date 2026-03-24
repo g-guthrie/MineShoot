@@ -61,8 +61,9 @@
     function authoritativeNowMs() {
         var runtime = globalThis.__MAYHEM_RUNTIME || {};
         var net = runtime.GameNet || null;
-        var stamp = net && net.getAuthoritativeNow
-            ? Number(net.getAuthoritativeNow() || 0)
+        var timingApi = net && net.timing ? net.timing : null;
+        var stamp = timingApi && timingApi.getAuthoritativeNow
+            ? Number(timingApi.getAuthoritativeNow() || 0)
             : 0;
         return stamp > 0 ? stamp : Date.now();
     }
@@ -72,8 +73,9 @@
         var net = runtime.GameNet || null;
         var stamp = Number(timestamp || 0);
         if (!(stamp > 0)) return 0;
-        if (net && net.toLocalTime) {
-            var localStamp = Number(net.toLocalTime(stamp) || 0);
+        var timingApi = net && net.timing ? net.timing : null;
+        if (timingApi && timingApi.toLocalTime) {
+            var localStamp = Number(timingApi.toLocalTime(stamp) || 0);
             if (localStamp > 0) return localStamp;
         }
         return stamp;
@@ -113,6 +115,14 @@
         var elapsedMs = snapshotServerTimeMs > 0 ? Math.max(0, serverNowMs - snapshotServerTimeMs) : 0;
         var remainingMs = Math.max(0, Number(ammoState.reloadRemainingMs || 0) - elapsedMs);
         if (!(remainingMs > 0)) return emptyState;
+        var weaponPresentationApi = runtime.GameWeaponPresentation || null;
+        if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
+            return weaponPresentationApi.resolveReloadState({
+                reloadMs: reloadMs,
+                reloadRemaining: remainingMs,
+                reloadedFlashRemaining: Math.max(0, Number(ammoState.reloadedFlashRemainingMs || 0))
+            }, null);
+        }
         if (shared.resolveReloadPresentationState) {
             var presentation = weaponPresentationFor(weaponId);
             return shared.resolveReloadPresentationState({
@@ -125,7 +135,7 @@
         return {
             reloading: true,
             reloadPct: clamp(1 - (remainingMs / reloadMs), 0, 1),
-            phase: 'manipulate',
+            phase: 'action',
             phasePct: 0.5
         };
     }

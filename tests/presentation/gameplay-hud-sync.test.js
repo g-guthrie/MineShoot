@@ -32,8 +32,12 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       gameplayTuning: {
         abilityCatalog: {
           choke: { id: 'choke', name: 'Vader Choke', debugSummary: 'Square', tunableParams: ['lockBoxPx'] },
+          hook: { id: 'hook', name: 'Hook', reticleRadiusPx: 60, debugSummary: 'Circle', tunableParams: ['reticleRadiusPx'] },
           deadeye: { id: 'deadeye', name: 'Deadeye', minDot: 0.22, debugSummary: 'Rect', tunableParams: [] }
         }
+      },
+      getAbilityCatalog() {
+        return this.gameplayTuning.abilityCatalog;
       },
       getWeaponPresentation,
       resolveReloadPresentationState
@@ -140,9 +144,6 @@ async function loadHudSyncHarness(runtimeOverrides = {}, globals = {}) {
       getWeaponHudState() {
         return { status: 'reloading', pct: 0.25 };
       }
-    },
-    GameCombatTuning: {
-      getClassAbilityTuning() { return { hookReticleRadiusPx: 60 }; }
     },
     ...runtimeOverrides
   };
@@ -306,27 +307,33 @@ test('gameplay hud sync projects the plasma catch radius when debug visuals are 
 test('gameplay hud sync uses network deadeye shaping in multiplayer', async () => {
   const harness = await loadHudSyncHarness({
     GameNet: {
-      getAuthoritativeNow() {
-        return 900;
+      timing: {
+        getAuthoritativeNow() {
+          return 900;
+        }
       },
-      getSelfAbilityState() {
-        return {
-          abilityId: 'deadeye',
-          chokeState: { endsAt: 950 },
-          deadeyeState: {
-            maxLocks: 2,
-            lockCount: 1,
-            targetIds: ['usr_remote']
-          }
-        };
+      view: {
+        getSelfAbilityState() {
+          return {
+            abilityId: 'deadeye',
+            chokeState: { endsAt: 950 },
+            deadeyeState: {
+              maxLocks: 2,
+              lockCount: 1,
+              targetIds: ['usr_remote']
+            }
+          };
+        }
       },
-      damagePointForEntityId(id) {
-        if (id === 'usr_remote') return { x: 1, y: 2, z: 3 };
-        return null;
+      effects: {
+        damagePointForEntityId(id) {
+          if (id === 'usr_remote') return { x: 1, y: 2, z: 3 };
+          return null;
+        }
+      },
+      remoteEntities: {
+        setDeadeyeHighlights(value) { harness.calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
       }
-    },
-    GameNetEntities: {
-      setDeadeyeHighlights(value) { harness.calls.deadeyeHighlights.push(JSON.parse(JSON.stringify(value))); }
     },
     GameAbilityBoundary: {
       buildNetworkDeadeyeUiState(state, resolveTargetWorldPos, now) {

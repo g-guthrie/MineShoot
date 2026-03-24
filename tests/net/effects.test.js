@@ -49,22 +49,18 @@ test('GameNetEffects uses the same point resolution rules for damage and marker 
         }
       };
     },
-    getRuntimeAccess() {
+    getPlayerApi() {
       return {
-        getPlayerApi() {
-          return {
-            getPosition(outVec3) {
-              return outVec3.set(10, 20, 30);
-            }
-          };
-        },
-        damagePointY(y) {
-          return y + 0.5;
-        },
-        markerPointY(y) {
-          return y + 1.5;
+        getPosition(outVec3) {
+          return outVec3.set(10, 20, 30);
         }
       };
+    },
+    damagePointY(y) {
+      return y + 0.5;
+    },
+    markerPointY(y) {
+      return y + 1.5;
     },
     getEntitiesApi() {
       return {
@@ -93,22 +89,18 @@ test('GameNetEffects fills provided output objects for marker and damage points'
         }
       };
     },
-    getRuntimeAccess() {
+    getPlayerApi() {
       return {
-        getPlayerApi() {
-          return {
-            getPosition(outVec3) {
-              return outVec3.set(1, 2, 3);
-            }
-          };
-        },
-        damagePointY(y) {
-          return y + 0.25;
-        },
-        markerPointY(y) {
-          return y + 1.25;
+        getPosition(outVec3) {
+          return outVec3.set(1, 2, 3);
         }
       };
+    },
+    damagePointY(y) {
+      return y + 0.25;
+    },
+    markerPointY(y) {
+      return y + 1.25;
     },
     getEntitiesApi() {
       return {

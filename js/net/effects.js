@@ -65,12 +65,28 @@
             return opts.getNetState ? opts.getNetState() : null;
         }
 
-        function runtimeAccess() {
-            return opts.getRuntimeAccess ? opts.getRuntimeAccess() : null;
-        }
-
         function connectionTiming() {
             return opts.getConnectionTiming ? opts.getConnectionTiming() : null;
+        }
+
+        function playerApi() {
+            return opts.getPlayerApi ? opts.getPlayerApi() : null;
+        }
+
+        function playerCombatApi() {
+            return opts.getPlayerCombatApi ? opts.getPlayerCombatApi() : null;
+        }
+
+        function abilityFxApi() {
+            return opts.getAbilityFxApi ? opts.getAbilityFxApi() : null;
+        }
+
+        function damagePointY(entityY) {
+            return opts.damagePointY ? opts.damagePointY(entityY) : (entityY + 1.06);
+        }
+
+        function markerPointY(entityY) {
+            return opts.markerPointY ? opts.markerPointY(entityY) : (entityY + 2.25);
         }
 
         function flushPendingWeaponLoadout() {
@@ -111,16 +127,15 @@
             var pendingSpawnSync = state && state.getPendingSpawnSync ? state.getPendingSpawnSync() : null;
             if (!pendingSpawnSync) return;
             if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return;
-            var access = runtimeAccess();
-            var playerApi = access && access.getPlayerApi ? access.getPlayerApi() : null;
-            if (!playerApi || !playerApi.respawn) return;
-            playerApi.respawn(
+            var gamePlayer = playerApi();
+            if (!gamePlayer || !gamePlayer.respawn) return;
+            gamePlayer.respawn(
                 Number(pendingSpawnSync.x || 0),
                 Number(pendingSpawnSync.z || 0)
             );
-            var playerCombatApi = access && access.getPlayerCombatApi ? access.getPlayerCombatApi() : null;
-            if (playerCombatApi && playerCombatApi.setInvulnTimer) {
-                playerCombatApi.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
+            var combatApi = playerCombatApi();
+            if (combatApi && combatApi.setInvulnTimer) {
+                combatApi.setInvulnTimer(pendingSpawnSync.kind === 'respawn' ? 1.0 : 0.6);
             }
             if (pendingSpawnSync.kind === 'initial' && state && state.setInitialSpawnApplied) {
                 state.setInitialSpawnApplied(true);
@@ -130,18 +145,14 @@
             }
         }
 
-        function pointForEntityId(entityId, yTransformKey, outPoint) {
+        function pointForEntityId(entityId, translateY, outPoint) {
             if (!entityId) return null;
             var state = netState();
-            var access = runtimeAccess();
             var entitiesApi = GameNetEntities();
-            var translateY = access && typeof access[yTransformKey] === 'function'
-                ? access[yTransformKey]
-                : null;
 
             if (state && state.getSelfId && entityId === state.getSelfId()) {
-                var playerApi = access && access.getPlayerApi ? access.getPlayerApi() : null;
-                var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition(selfPointScratch) : null;
+                var gamePlayer = playerApi();
+                var selfPos = gamePlayer && gamePlayer.getPosition ? gamePlayer.getPosition(selfPointScratch) : null;
                 if (!selfPos) return null;
                 return setPoint(outPoint, selfPos.x, translateY ? translateY(selfPos.y) : selfPos.y, selfPos.z);
             }
@@ -158,11 +169,11 @@
         }
 
         function damagePointForEntityId(entityId, outPoint) {
-            return pointForEntityId(entityId, 'damagePointY', outPoint);
+            return pointForEntityId(entityId, damagePointY, outPoint);
         }
 
         function markerPointForEntityId(entityId, outPoint) {
-            return pointForEntityId(entityId, 'markerPointY', outPoint);
+            return pointForEntityId(entityId, markerPointY, outPoint);
         }
 
         function getRenderCoreWorldPosition(render, outVec3) {
@@ -177,11 +188,10 @@
         }
 
         function getChokeVictimStateForEntity(entityId) {
-            var access = runtimeAccess();
             var timing = connectionTiming();
             var state = netState();
             var entitiesApi = GameNetEntities();
-            var abilityFxView = access && access.getAbilityFxApi ? access.getAbilityFxApi() : null;
+            var abilityFxView = abilityFxApi();
             var emptyState = abilityFxView && abilityFxView.emptyChokeVictimState
                 ? abilityFxView.emptyChokeVictimState()
                 : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };

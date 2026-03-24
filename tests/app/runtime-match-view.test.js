@@ -140,3 +140,53 @@ test('runtime match view emits a structured paused match model for the menu shel
     secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }
   });
 });
+
+test('runtime match view uses last-man-standing language for FFA stock-mode summaries', async () => {
+  const harness = await loadMatchViewHarness();
+
+  assert.equal(harness.api.objectiveSummary({
+    gameMode: 'ffa',
+    stockMode: true,
+    aliveCount: 1,
+    targetProgress: 10
+  }, {
+    stocksRemaining: 2,
+    maxStocks: 5
+  }), 'LAST STANDING | ALIVE 1 | LIVES 2');
+});
+
+test('runtime match view menu model shows raw lives remaining instead of stock cap', async () => {
+  let resumeVisible = null;
+  const harness = await loadMatchViewHarness({
+    nowMs: 1000,
+    gameSession: {
+      isPlaying() {
+        return false;
+      },
+      getPauseState() {
+        return { active: false };
+      },
+      canResumeGameplay() {
+        return true;
+      },
+      setResumeButtonsVisible(value) {
+        resumeVisible = !!value;
+      }
+    },
+    gameUiApi: {
+      updateMatchStatus() {}
+    }
+  });
+
+  harness.api.syncMatchHud({
+    matchState: { gameMode: 'ffa', started: true, ended: false, stockMode: true, aliveCount: 3 },
+    selfState: { id: 'usr_test', stocksRemaining: 3, maxStocks: 5, extraLifeProgressPct: 40, kills: 0, deaths: 0 }
+  });
+
+  assert.equal(resumeVisible, true);
+  assert.equal(harness.events.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.events[0].detail.primaryPill)), {
+    label: 'LIVES',
+    value: '3'
+  });
+});

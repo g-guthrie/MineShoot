@@ -17,6 +17,9 @@
 
     function cloneVisualForRevealGhost(visual) {
         if (!visual || !visual.clone) return null;
+        if (visual.userData && typeof visual.userData.cloneVisualForRevealGhost === 'function') {
+            return visual.userData.cloneVisualForRevealGhost();
+        }
         var originalUserData = visual.userData;
         visual.userData = {};
         try {
@@ -169,7 +172,22 @@
         var includeRevealGhost = !!opts.includeRevealGhost;
 
         var rigApi = null;
-        if (globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
+        if (
+            opts.preferBoxman &&
+            globalThis.__MAYHEM_RUNTIME.GameBoxmanRig &&
+            globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.isReady &&
+            globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.isReady() &&
+            globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.create
+        ) {
+            rigApi = globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.create({
+                bodyColor: bodyColor,
+                skinColor: skinColor,
+                legColor: legColor,
+                weaponId: weaponId,
+                tintColor: (ownerType === 'player') ? 0xffffff : bodyColor
+            });
+        }
+        if (!rigApi && globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
             rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create({
                 bodyColor: bodyColor,
                 skinColor: skinColor,

@@ -32,7 +32,13 @@ async function loadRemoteEntities(gameplayTuning = null) {
     __MAYHEM_RUNTIME: {
       GameShared: {
         entityConstants: { EYE_HEIGHT: 1.6 },
-        gameplayTuning
+        gameplayTuning,
+        getNetworkTuning() {
+          return (this.gameplayTuning && this.gameplayTuning.network) || {};
+        },
+        getMovementTuning() {
+          return (this.gameplayTuning && this.gameplayTuning.movement) || {};
+        }
       },
       GameActorVisualFactory: {
         create() {

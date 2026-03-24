@@ -133,18 +133,18 @@ async function loadHitscanHarness(pistolOverrides = {}, targets = []) {
   };
 }
 
-test('pistol local fire keeps only one winning pellet hit', async () => {
+test('pistol local fire behaves like a normal single-ray hitscan weapon', async () => {
   const bodyHitbox = createHitbox('body', { x: 0, y: 1.5, z: -10 }, { x: 1.2, y: 1.2, z: 0.8 }, 'enemy:1');
   const headHitbox = createHitbox('head', { x: 0, y: 2.15, z: -10 }, { x: 0.45, y: 0.35, z: 0.35 }, 'enemy:1');
   const harness = await loadHitscanHarness({
-    pellets: 12,
-    hipfireSpread: 0.12,
+    primitiveType: 'hitscan_single',
+    pellets: 1,
+    hipfireSpread: 0,
     maxRange: 24,
-    adsMaxRange: 28,
-    singleHitFromPellets: true,
+    adsMaxRange: 24,
     aimProfile: {
-      hipfire: { spread: 0.12, maxRange: 24 },
-      ads: { spread: 0.08, maxRange: 28 }
+      hipfire: { spread: 0, maxRange: 24 },
+      ads: { spread: 0, maxRange: 24 }
     }
   }, [{
     targetId: 'enemy:1',
@@ -178,18 +178,18 @@ test('pistol local fire keeps only one winning pellet hit', async () => {
   assert.equal(['body', 'head'].includes(hits[0].hitboxType), true);
 });
 
-test('pistol local fire still succeeds with the shared pellet weapon config', async () => {
+test('pistol local fire still succeeds with the shared single-ray weapon config', async () => {
   const bodyHitbox = createHitbox('body', { x: 0, y: 1.5, z: -10 }, { x: 1.2, y: 1.2, z: 0.8 }, 'enemy:2');
   const headHitbox = createHitbox('head', { x: 0, y: 2.15, z: -10 }, { x: 0.45, y: 0.35, z: 0.35 }, 'enemy:2');
   const harness = await loadHitscanHarness({
-    pellets: 12,
+    primitiveType: 'hitscan_single',
+    pellets: 1,
     hipfireSpread: 0.06,
     maxRange: 24,
-    adsMaxRange: 28,
-    singleHitFromPellets: true,
+    adsMaxRange: 24,
     aimProfile: {
       hipfire: { spread: 0.06, maxRange: 24 },
-      ads: { spread: 0.035, maxRange: 28 }
+      ads: { spread: 0.06, maxRange: 24 }
     }
   }, [{
     targetId: 'enemy:2',
@@ -259,26 +259,31 @@ test('reticle target preview reports the active reticle group for each weapon fa
 test('spread metrics track the true hitscan area instead of bloom scale multipliers', async () => {
   const harness = await loadHitscanHarness({
     hipfireSpread: 0.05,
-    adsSpread: 0.03,
-    hipfireCylinderRadiusWu: 0.8,
-    adsCylinderRadiusWu: 1.0,
+    adsSpread: 0.05,
     hipfireBloomScale: 4,
     adsBloomScale: 0.25,
     aimProfile: {
       hipfire: { spread: 0.05, maxRange: 24 },
-      ads: { spread: 0.03, maxRange: 28 }
+      ads: { spread: 0.05, maxRange: 24 }
     }
   });
 
   const hipfireMetrics = harness.GameHitscan.getSpreadMetrics('pistol');
-  assert.equal(Math.round(hipfireMetrics.radiusPx), 19);
-  assert.equal(Math.round(hipfireMetrics.radiusXpx), 19);
-  assert.equal(Math.round(hipfireMetrics.radiusYpx), 19);
+  assert.equal(Math.round(hipfireMetrics.radiusPx), 18);
+  assert.equal(Math.round(hipfireMetrics.radiusXpx), 18);
+  assert.equal(Math.round(hipfireMetrics.radiusYpx), 18);
 });
 
 test('pistol local fire spends the shot and misses when targets are out of range', async () => {
   const bodyHitbox = createHitbox('body', { x: 0, y: 1.5, z: -50 }, { x: 1.2, y: 1.2, z: 0.8 }, 'enemy:3');
-  const harness = await loadHitscanHarness({}, []);
+  const harness = await loadHitscanHarness({
+    maxRange: 24,
+    adsMaxRange: 24,
+    aimProfile: {
+      hipfire: { spread: 0.1, maxRange: 24 },
+      ads: { spread: 0.1, maxRange: 24 }
+    }
+  }, []);
   harness.runtime.GameEnemy.getLockTargets = function () {
     return [{
       targetId: 'enemy:3',
@@ -316,7 +321,6 @@ test('firearms auto-reload after the magazine empties and refill after reload ti
     reloadMs: 900,
     cooldownMs: 10,
     pellets: 1,
-    singleHitFromPellets: false,
     maxRange: 24,
     aimProfile: {
       hipfire: { spread: 0, maxRange: 24 },
@@ -346,7 +350,6 @@ test('manual reload starts only after the magazine has spent rounds', async () =
     reloadMs: 900,
     cooldownMs: 10,
     pellets: 1,
-    singleHitFromPellets: false,
     maxRange: 24,
     aimProfile: {
       hipfire: { spread: 0, maxRange: 24 },
@@ -370,7 +373,6 @@ test('manual reload notifies the player rig so the reload pose starts immediatel
     reloadMs: 900,
     cooldownMs: 10,
     pellets: 1,
-    singleHitFromPellets: false,
     maxRange: 24,
     aimProfile: {
       hipfire: { spread: 0, maxRange: 24 },
@@ -395,7 +397,6 @@ test('empty-mag auto reload notifies the player rig so the reload pose starts im
     reloadMs: 900,
     cooldownMs: 10,
     pellets: 1,
-    singleHitFromPellets: false,
     maxRange: 24,
     aimProfile: {
       hipfire: { spread: 0, maxRange: 24 },

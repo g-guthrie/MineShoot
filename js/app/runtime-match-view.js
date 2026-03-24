@@ -97,6 +97,10 @@
             return gameModeLabel(matchState && matchState.gameMode, 'Free For All').toUpperCase();
         }
 
+        function stockCountLabel(selfState) {
+            return String(Math.max(0, Number(selfState && selfState.stocksRemaining || 0)));
+        }
+
         function objectiveSummary(matchState, selfState) {
             var mode = String(matchState && matchState.gameMode || '');
             if (mode === 'tdm') {
@@ -111,6 +115,11 @@
                     ' | OPP ' + String(opposing.teamId || '--').toUpperCase() +
                     ' ' + Number(opposing.progress || 0);
             }
+            var stockMode = !!(matchState && matchState.stockMode) || Number(selfState && selfState.maxStocks || 0) > 0;
+            if (stockMode) {
+                var aliveCount = Math.max(0, Number(matchState && matchState.aliveCount || 0));
+                return 'LAST STANDING | ALIVE ' + aliveCount + ' | LIVES ' + stockCountLabel(selfState);
+            }
             return 'GOAL ' + Number(matchState && matchState.targetProgress || 0);
         }
 
@@ -119,8 +128,7 @@
             if (rules && rules.formatMatchHudCounter) {
                 return rules.formatMatchHudCounter(matchState, selfState);
             }
-            return 'Lives: ' + Math.max(0, Number(selfState && selfState.stocksRemaining || 0)) +
-                '/' + Math.max(0, Number(selfState && selfState.maxStocks || 0));
+            return 'Lives: ' + stockCountLabel(selfState);
         }
 
         function readMatchContext() {
@@ -183,7 +191,7 @@
             var modeId = String(matchState && matchState.gameMode || '').toLowerCase();
             var modeValue = modeId ? gameModeLabel(modeId, 'Match') : 'Match';
             var primaryLabel = 'LIVES';
-            var primaryValue = maxStocks > 0 ? (String(stocksRemaining) + '/' + String(maxStocks)) : String(kills);
+            var primaryValue = maxStocks > 0 ? stockCountLabel(selfState) : String(kills);
             var secondaryLabel = 'NEXT';
             var secondaryValue = maxStocks > 0 ? (String(Math.round(extraLifeProgressPct)) + '%') : String(deaths);
             var contextLabel = 'ALIVE';

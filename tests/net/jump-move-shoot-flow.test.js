@@ -583,7 +583,7 @@ async function runMeasuredScenario(options = {}) {
     timeState.now = Number(shot.at || 1060);
     const shotAt = timeState.now;
     const preUiCount = uiEvents.length;
-    assert.equal(GameNet.sendFire(weaponId, shot.token), true);
+    assert.equal(GameNet.commands.sendFire(weaponId, shot.token), true);
     const fireMsg = sentMessages.at(-1);
     assert.equal(fireMsg.t, 'fire');
 
@@ -663,11 +663,11 @@ async function runMeasuredScenario(options = {}) {
     }
 
     if (options.applyCorrection && !correctionApplied) {
-      GameNetSelfSync.syncPlayerState(GameNet.getSelfState(), 0.016);
+      GameNetSelfSync.syncPlayerState(GameNet.view.getSelfState(), 0.016);
       correctionApplied = true;
     }
     GameNetFeedbackSync.syncGameplayFeedback({
-      selfState: GameNet.getSelfState(),
+      selfState: GameNet.view.getSelfState(),
       camera: {},
       dt: 0.016
     });
@@ -768,7 +768,7 @@ test('jump move shoot flow records hitmarker timing, server registrations, and r
 
   timeState.now = 1060;
   const shotAt = timeState.now;
-  assert.equal(GameNet.sendFire('rifle', 'jump-shot'), true);
+  assert.equal(GameNet.commands.sendFire('rifle', 'jump-shot'), true);
   const fireMsg = sentMessages.at(-1);
   assert.equal(fireMsg.t, 'fire');
   GameNetFeedbackSync.emitPredictedLocalDamageFeedback({
@@ -835,9 +835,9 @@ test('jump move shoot flow records hitmarker timing, server registrations, and r
   });
   handleMessage(damageEvents[0]);
 
-  GameNetSelfSync.syncPlayerState(GameNet.getSelfState(), 0.016);
+  GameNetSelfSync.syncPlayerState(GameNet.view.getSelfState(), 0.016);
   GameNetFeedbackSync.syncGameplayFeedback({
-    selfState: GameNet.getSelfState(),
+    selfState: GameNet.view.getSelfState(),
     camera: {},
     dt: 0.016
   });

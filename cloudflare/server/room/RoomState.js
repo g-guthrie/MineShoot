@@ -44,12 +44,17 @@ export function serializeMatchState(room, deps) {
 
   return {
     gameMode: match.gameMode || '',
+    stockMode: !!match.stockMode,
     started: !!match.started,
     ended: !!match.ended,
     startedAt: match.startedAt || 0,
     endedAt: match.endedAt || 0,
     resetAt: match.resetAt || 0,
     matchBaselinePlayerCount: match.matchBaselinePlayerCount || 0,
+    aliveCount: Number(match.aliveCount || 0),
+    startingStocks: Number(match.startingStocks || 0),
+    maxStocks: Number(match.maxStocks || 0),
+    maxBonusLives: Number(match.maxBonusLives || 0),
     targetProgress: Number(match.targetProgress || 0),
     leaderProgress: Number(match.leaderProgress || 0),
     leaderId: match.leaderId || '',

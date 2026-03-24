@@ -12,43 +12,6 @@
     var debugMode = false;
     var hasExplicitLoadoutSelection = false;
     var localSimApi = null;
-    var abilityTuningFields = {
-        choke: {
-            range: 'chokeRange',
-            lockBoxPx: 'chokeLockBoxPx',
-            targetTolerance: 'chokeTargetTolerance',
-            castDamage: 'chokeCastDamage',
-            duration: 'chokeDuration'
-        },
-        hook: {
-            range: 'hookRange',
-            lockBoxPx: 'hookLockBoxPx',
-            reticleRadiusPx: 'hookReticleRadiusPx',
-            castDamage: 'hookCastDamage',
-            stunDuration: 'hookStunDuration',
-            pullDistance: 'hookPullDistance',
-            catchRadius: 'hookCatchRadius',
-            travelSpeed: 'hookTravelSpeed',
-            pullSpeed: 'hookPullSpeed'
-        },
-        missile: {
-            range: 'missileRange',
-            damage: 'missileDamage',
-            radius: 'missileRadius',
-            travelSpeed: 'missileTravelSpeed',
-            acquireRange: 'missileAcquireRange',
-            catchRadius: 'missileCatchRadius',
-            lockHalfAngleDeg: 'missileLockHalfAngleDeg',
-            homingBoost: 'missileHomingBoost',
-            homingLerp: 'missileHomingLerp'
-        },
-        deadeye: {
-            range: 'deadeyeLockRange',
-            duration: 'deadeyeDuration',
-            maxTargets: 'deadeyeMaxTargets',
-            damage: 'deadeyeDamage'
-        }
-    };
 
     function nowMs() {
         return Date.now();
@@ -140,7 +103,7 @@
     function getConfigForAbility(abilityId) {
         var boundary = abilityBoundary();
         return boundary && boundary.getConfigForAbility
-            ? boundary.getConfigForAbility(abilityId, abilityTuningFields)
+            ? boundary.getConfigForAbility(abilityId)
             : null;
     }
 

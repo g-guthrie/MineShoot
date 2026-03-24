@@ -13,8 +13,9 @@
     }
 
     function authoritativeNow(netApi) {
-        var stamp = netApi && netApi.getAuthoritativeNow
-            ? Number(netApi.getAuthoritativeNow() || 0)
+        var timingApi = netApi && netApi.timing ? netApi.timing : null;
+        var stamp = timingApi && timingApi.getAuthoritativeNow
+            ? Number(timingApi.getAuthoritativeNow() || 0)
             : 0;
         return stamp > 0 ? stamp : Date.now();
     }
@@ -45,12 +46,13 @@
     function fallbackReconciliationContract(authoritativeState) {
         var RT = runtime();
         var net = RT.GameNet || null;
-        var netView = net && net.view ? net.view : net;
+        var netView = net && net.view ? net.view : null;
+        var timingApi = net && net.timing ? net.timing : null;
         var inputSyncState = netView && netView.getInputSyncState
             ? netView.getInputSyncState()
             : null;
-        var connectionTimingState = netView && netView.getConnectionTimingState
-            ? netView.getConnectionTimingState()
+        var connectionTimingState = timingApi && timingApi.getConnectionTimingState
+            ? timingApi.getConnectionTimingState()
             : null;
         return {
             authoritativeState: authoritativeState || null,

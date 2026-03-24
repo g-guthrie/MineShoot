@@ -129,34 +129,18 @@ test('throwables runtime falls back to id labels when shared defs are missing', 
 
 test('throwables runtime refreshes shared tuning that arrives after module evaluation', async () => {
   const harness = await loadThrowablesHarness({}, {
-    GameShared: {},
-    GameCombatTuning: {}
+    GameShared: {}
   }, {
     skipInit: true
   });
 
   harness.runtime.GameShared = {
     gameplayTuning,
-    getDefaultThrowableId,
-    normalizeThrowableId
-  };
-  harness.runtime.GameCombatTuning = {
-    getThrowableDistanceTuning() {
-      const throwables = gameplayTuning.throwables;
-      return {
-        fragRadius: throwables.frag.radius,
-        plasmaRadius: throwables.plasma.radius,
-        plasmaCatchRadius: throwables.plasma.catchRadius,
-        missileRadius: throwables.missile.radius,
-        molotovFireRadius: throwables.molotov.fireRadius,
-        plasmaAcquireRange: throwables.plasma.acquireRange,
-        plasmaAcquireHalfAngleDeg: throwables.plasma.acquireHalfAngleDeg,
-        plasmaStickExplodeDelay: throwables.plasma.stickExplodeDelay
-      };
-    },
     getThrowableMechanicsTuning() {
       return gameplayTuning.throwableMechanics;
-    }
+    },
+    getDefaultThrowableId,
+    normalizeThrowableId
   };
 
   harness.init();
@@ -241,8 +225,10 @@ test('throwables runtime attaches remote stuck plasma to the authoritative targe
     }
   ]]);
   const harness = await loadThrowablesHarness(gameplayTuning, {
-    GameNetEntities: {
-      getRenderMap() { return renderMap; }
+    GameNet: {
+      remoteEntities: {
+        getRenderMap() { return renderMap; }
+      }
     }
   });
   const { GameThrowables, scene } = harness;
@@ -286,8 +272,10 @@ test('throwables runtime attaches stuck plasma to the local self position when t
       }
     },
     GameNet: {
-      getAuthoritativeSelfState() {
-        return { id: 'usr_self' };
+      view: {
+        getAuthoritativeSelfState() {
+          return { id: 'usr_self' };
+        }
       }
     },
     GamePlayer: {

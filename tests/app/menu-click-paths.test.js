@@ -206,7 +206,8 @@ async function loadHarness({
   loggedIn = true,
   loadoutValidation = { ok: true, message: '' },
   lobbyApiOverride = null,
-  modalOpen = false
+  modalOpen = false,
+  gameSharedOverride = null
 } = {}) {
   const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
   const rendererCode = await fs.readFile(new URL('../../js/app/lobby-renderer.js', import.meta.url), 'utf8');
@@ -225,9 +226,6 @@ async function loadHarness({
       return new FakeElement(tagName, '', this);
     },
     querySelectorAll(selector) {
-      if (selector === '#mode-buttons .mode-btn[data-mode-id]') {
-        return [this.elements['mode-local-multiplayer-btn']].filter(Boolean);
-      }
       return [];
     },
     addEventListener(type, handler) {
@@ -291,12 +289,7 @@ async function loadHarness({
     ['button', 'open-manual-btn'],
     ['button', 'controls-toggle'],
     ['button', 'sound-toggle-btn'],
-    ['button', 'alt-mode-toggle'],
-    ['div', 'dev-overlay'],
-    ['button', 'dev-close-btn'],
     ['div', 'menu-body'],
-    ['div', 'mode-buttons'],
-    ['button', 'mode-local-multiplayer-btn'],
     ['section', 'menu-screen-mode'],
     ['section', 'menu-screen-room'],
     ['div', 'menu-main-heroes'],
@@ -314,7 +307,6 @@ async function loadHarness({
     ['button', 'play-mode-tdm-btn'],
     ['button', 'sandbox-mode-btn'],
     ['div', 'room-access-status'],
-    ['button', 'loadout-start-btn'],
     ['button', 'continue-loadout-btn'],
     ['div', 'active-match-shell'],
     ['div', 'active-match-pill-grid'],
@@ -385,8 +377,6 @@ async function loadHarness({
   documentObj.elements['social-direct-invite-banner'].hidden = true;
   documentObj.elements['menu-social-friends-pane'].hidden = !loggedIn;
   documentObj.elements['menu-inline-toast'].hidden = true;
-  documentObj.elements['mode-local-multiplayer-btn'].dataset.modeId = 'single_dev_server';
-
   const runPartyActionCalls = [];
   const friendActionCalls = [];
   const launchCalls = [];
@@ -792,6 +782,7 @@ async function loadHarness({
       returnToMenu() {}
     }
   };
+  if (gameSharedOverride) runtime.GameShared = gameSharedOverride;
 
   const sandbox = {
     console,
@@ -883,7 +874,6 @@ test('menu boots on the main screen with play free for all as the default launch
   assert.equal(elements['menu-social-hero'].hidden, false);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
-  assert.equal(elements['loadout-start-btn'].hidden, true);
   assert.equal(elements['primary-launch-btn'].textContent, 'Play Free For All');
   assert.equal(elements['play-mode-options'].hidden, true);
   assert.equal(elements['room-access-status'].hidden, true);
@@ -1190,6 +1180,25 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
   assert.equal(elements['active-match-mode-pill'].textContent, 'Offline Sandbox');
   assert.equal(elements['active-match-context-pill'].textContent, 'READY');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
+});
+
+test('sandbox mode keeps the offline sandbox launch label even when shared mode lookup falls back to ffa', async () => {
+  const harness = await loadHarness({
+    gameSharedOverride: {
+      getGameMode(modeId) {
+        if (String(modeId || '').toLowerCase() === 'tdm') {
+          return { label: 'Team Death Match' };
+        }
+        return { label: 'Free For All' };
+      }
+    }
+  });
+  const { elements } = harness;
+
+  elements['game-modes-toggle-btn'].click();
+  elements['sandbox-mode-btn'].click();
+
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
 });
 
 test('main room action creates a room and opens the party surface', async () => {

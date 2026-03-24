@@ -19,6 +19,10 @@ import {
   loadOutgoingPrivateRoomInviteSummary,
   loadPublicMatchAssignment
 } from './party-match-state.js';
+import {
+  buildPrivateRoomLobbyRoomFromData,
+  buildPrivateRoomLobbyStateFromRoom
+} from './private-room-lobby-state.js';
 import { notifyPrivateRoomLobbyHub } from './private-room-lobby-hub-sync.js';
 
 const PARTY_MAX_MEMBERS = 16;
@@ -576,6 +580,14 @@ async function buildPartyState(env, actor, ensureExists = true) {
   const accountMeta = await loadAccountMetaByMemberIds(env, members.map((member) => String(member.member_id || '')));
   const roomAssignment = await getPrivateRoomMember(env, actor.id);
   const roomState = roomAssignment ? await getPrivateRoomState(env, roomAssignment.room_id) : null;
+  const roomRecord = roomAssignment ? await getPrivateRoomById(env, roomAssignment.room_id) : null;
+  const roomMembers = roomAssignment ? await getPrivateRoomMembers(env, roomAssignment.room_id) : [];
+  const privateRoomSummary = roomAssignment && roomState && roomRecord
+    ? buildPrivateRoomLobbyStateFromRoom(
+      actor,
+      buildPrivateRoomLobbyRoomFromData(roomRecord, roomState, roomMembers, roomAssignment.room_id)
+    )
+    : null;
   const publicMatchAssignment = await loadPublicMatchAssignment(env, actor.id);
   const directInviteIncoming = await loadLatestDirectInviteIncoming(env, actor.id);
   const directInviteOutgoing = await loadLatestDirectInviteOutgoing(env, actor.id);
@@ -627,6 +639,7 @@ async function buildPartyState(env, actor, ensureExists = true) {
         createdAt: Number(roomInviteOutgoingRaw.createdAt || 0)
       } : null
     },
+    privateRoomSummary: privateRoomSummary,
     party: {
       id: String(party.id || ''),
       leaderId: String(party.leader_id || ''),

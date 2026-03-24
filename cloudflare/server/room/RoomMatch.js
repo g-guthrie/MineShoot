@@ -282,12 +282,14 @@ export function updateLeaderProgress(room, deps) {
     room.matchState.aliveCount = aliveCount;
     if (room.matchState.stockMode && room.matchState.started && !room.matchState.ended && aliveCount <= 1) {
       let winnerId = '';
+      let winnerKills = 0;
       for (const player of room.players.values()) {
         if (!player || player.fixtureType === 'sim_player' || player.eliminated) continue;
         winnerId = player.id;
+        winnerKills = Math.max(0, Number(player.kills || 0));
         break;
       }
-      if (winnerId) {
+      if (winnerId && winnerKills > 0) {
         room.finishPublicMatch(winnerId, '');
       }
     }

@@ -23,6 +23,7 @@ function createHitbox(type, ownerType, options) {
 
 async function loadActorVisualFactory(runtimeOverrides = {}) {
   const visualsCode = await fs.readFile(new URL('../../js/domain/weapons/visuals.js', import.meta.url), 'utf8');
+  const weaponPresentationCode = await fs.readFile(new URL('../../js/presentation/weapon-presentation.js', import.meta.url), 'utf8');
   const rigCode = await fs.readFile(new URL('../../js/actors/avatar-rig.js', import.meta.url), 'utf8');
   const factoryCode = await fs.readFile(new URL('../../js/presentation/actor-visual-factory.js', import.meta.url), 'utf8');
   const runtime = {
@@ -45,6 +46,7 @@ async function loadActorVisualFactory(runtimeOverrides = {}) {
 
   const context = vm.createContext(sandbox);
   vm.runInContext(visualsCode, context);
+  vm.runInContext(weaponPresentationCode, context);
   vm.runInContext(rigCode, context);
   vm.runInContext(factoryCode, context);
   return sandbox.__MAYHEM_RUNTIME.GameActorVisualFactory;
@@ -223,4 +225,48 @@ test('combat hitbox visuals follow debug visibility toggles', async () => {
   actor.setHitboxVisibility(true);
   assert.equal(actor.bodyHitbox.material.opacity, 0.3);
   assert.equal(actor.headHitbox.material.opacity, 0.3);
+});
+
+test('actor visual factory only opts into Boxman when the caller explicitly requests it', async () => {
+  const boxmanMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  const boxmanRoot = new THREE.Group();
+  boxmanRoot.userData.bodyParts = [boxmanMesh];
+  boxmanRoot.userData.originalPartColors = [0xffffff];
+  boxmanRoot.add(boxmanMesh);
+
+  const calls = [];
+  const factory = await loadActorVisualFactory({
+    GameBoxmanRig: {
+      isReady() { return true; },
+      create(opts) {
+        calls.push(opts);
+        return {
+          root: boxmanRoot,
+          rig: { bodyMesh: boxmanMesh },
+          updateAnimation() {},
+          setWeapon() {},
+          triggerAction() { return true; },
+          dispose() {}
+        };
+      }
+    }
+  });
+
+  factory.create({
+    ownerType: 'player',
+    targetId: 'self-boxman',
+    weaponId: 'rifle',
+    preferBoxman: true
+  });
+  factory.create({
+    ownerType: 'enemy',
+    targetId: 'enemy-default',
+    weaponId: 'rifle'
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].tintColor, 0xffffff);
 });

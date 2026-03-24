@@ -57,7 +57,6 @@
         return [
             { key: 'Mouse', title: 'Look', note: 'Pointer lock activates on match entry. Escape releases it.' },
             { key: 'LMB', title: 'Fire', note: 'Primary fire. Hold for automatic weapons.' },
-            { key: 'RMB', title: 'ADS', note: 'Aim down sights. Tightens spread on supported weapons.' },
             { key: 'Wheel', title: 'Swap Weapon', note: 'Toggles between your two loadout weapons.' },
             { key: 'Esc', title: 'Pause / Menu', note: 'Releases pointer lock and opens the pause menu.' }
         ];
@@ -118,7 +117,7 @@
     var WEAPON_BRIEFINGS = {
         machinegun: {
             niche: 'Full-auto generalist. High fire rate, large magazine, reliable at mid range.',
-            mechanics: 'Automatic hitscan. Forgiving magazine size with moderate spread. ADS zooms but does not tighten spread.',
+            mechanics: 'Automatic hitscan. Forgiving magazine size with moderate spread in the default third-person view.',
             tips: [
                 'Lead with this to strip armor, then weapon-swap to finish.',
                 'Best at mid range. Spread widens at distance.'
@@ -134,26 +133,26 @@
         },
         rifle: {
             niche: 'Precision semi-auto. Rewards accuracy with high headshot damage.',
-            mechanics: 'Single-shot hitscan. ADS gives perfect accuracy and extends effective range.',
+            mechanics: 'Single-shot hitscan. Clean, stable precision in the standard third-person view.',
             tips: [
                 'Take deliberate shots. Spam-firing wastes the precision advantage.',
-                'Headshot multiplier is high. Always scope when you can.'
+                'Headshot multiplier is high. Use it for measured lane control and punish shots.'
             ]
         },
         pistol: {
-            niche: 'Quick-draw sidearm. Fast swap speed, forgiving hit area.',
-            mechanics: 'World-space cylinder scan weapon. Single shot with a wide hit zone, easy body shots, still rewards center aim.',
+            niche: 'Quick-draw hand cannon. Fast swap speed with chunky one-shot damage.',
+            mechanics: 'Single-shot hitscan. Uses the same spread-driven one-ray shot model as the other standard guns.',
             tips: [
                 'Swap to this after landing damage with your primary.',
-                'The reticle ring is a midrange guide. Keep targets inside it.'
+                'It hits hard, but the wide spread means you still need to respect distance.'
             ]
         },
         sniper: {
-            niche: 'Long-range precision punish. Must scope before firing.',
-            mechanics: 'Single-shot hitscan. ADS required to fire. Headshots delete unarmored targets and heavily chunk fresh armored ones.',
+            niche: 'Long-range precision punish. Auto-scopes when you equip it.',
+            mechanics: 'Single-shot hitscan. Equipping sniper starts a fast scope-in and the weapon cannot fire until that scope-in finishes.',
             tips: [
                 'Hold angles and take your shot. Reposition after firing.',
-                'Body shots and partial armor breaks create strong follow-up windows even when the target survives.'
+                'Keep sniper in slot 2 so your match start always opens on a normal third-person gun.'
             ]
         }
     };
@@ -238,13 +237,12 @@
         headDamage: 'Damage dealt on a head hit before falloff scaling.',
         pellets: 'Number of spread samples or pellets fired per trigger pull.',
         hipfireSpread: 'Hipfire spread radius feeding the shot solver.',
-        adsSpread: 'ADS spread radius after zooming. Zero means pin-point aim on normal guns; on pistol this remains a compatibility control while the real solver uses a world-space cylinder.',
+        adsSpread: 'Stored scoped spread radius. Sniper still uses this path; other guns now stay in the standard third-person view.',
         maxRange: 'Hipfire distance cap before the shot stops checking for hits.',
-        adsMaxRange: 'ADS distance cap. Often longer than hipfire on precision guns.',
-        adsFovDeg: 'Zoom level while aiming down sights.',
-        singleHitFromPellets: 'Keeps only the best single winning sample from a multi-sample weapon. This is what makes pistol a single-winner cylinder hand cannon.',
+        adsMaxRange: 'Stored scoped distance cap. Sniper still uses this path when the scope-in finishes.',
+        adsFovDeg: 'Zoom level used when a weapon enters scoped view.',
         hipfireBloomScale: 'Legacy HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
-        adsBloomScale: 'Legacy ADS HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
+        adsBloomScale: 'Legacy scoped HUD multiplier retained in tuning data. Active/dev circles now size from the true spread area.',
         'tracer.life': 'How long the visual tracer stays alive.',
         'tracer.speed': 'How quickly the tracer travels toward the hit point.',
         'tracer.segmentLength': 'Visible tracer streak length.',
@@ -329,14 +327,13 @@
             title: 'Movement & Camera',
             rows: [
                 { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
-                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Pressing sprint breaks ADS immediately, and certain ability states can still interrupt the run.' },
+                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Use sprint to break line of sight and reposition between fights.' },
                 { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
             ]
         },
         {
             title: 'Combat',
             rows: [
-                { actionId: 'ads_key', fallbackKey: 'Alt', fixedPrefix: 'RMB / ', title: 'ADS Key', note: 'Rifle tightens to zero spread in ADS. Sniper must be scoped before it can fire.' },
                 { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload.' },
                 { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots.' },
                 { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
@@ -359,7 +356,7 @@
             items: [
                 '<code>primitiveType</code> chooses the solver: one ray or a spread bundle.',
                 '<code>pellets</code> sets how many spread samples fire on each trigger pull.',
-                '<code>singleHitFromPellets</code> collapses that bundle to the best single winner, which is why pistol feels like a forgiving hand cannon instead of a true shotgun.'
+                'Pistol is back on the normal single-ray path instead of its old special-case solver.'
             ]
         },
         {
@@ -802,30 +799,20 @@
 
     function weaponFireModelLabel(weapon) {
         if (!weapon) return '--';
-        if (weapon.singleHitFromPellets) return 'Cylinder single winner';
         if (weapon.primitiveType === 'hitscan_multi') return 'Multi-pellet spread';
         return 'Single-ray hitscan';
     }
 
     function weaponReticleLabel(weapon) {
         if (!weapon) return '--';
-        if (weapon.singleHitFromPellets || weapon.id === 'shotgun') return 'Circle reticle';
+        if (weapon.id === 'shotgun') return 'Circle reticle';
         return 'Crosshair + bloom';
     }
 
     function weaponAdsSummary(weapon) {
         if (!weapon) return '--';
-        if (weapon.id === 'sniper') return 'ADS required before firing';
-        if (weapon.id === 'pistol') {
-            return 'ADS widens the cylinder and extends the reliable body-hit lane';
-        }
-        if (weapon.adsSpread < weapon.hipfireSpread) {
-            return 'ADS tightens spread from ' + formatSpread(weapon.hipfireSpread) + ' to ' + formatSpread(weapon.adsSpread);
-        }
-        if (weapon.adsSpread === weapon.hipfireSpread) {
-            return 'ADS is mostly zoom/range management on this weapon';
-        }
-        return 'ADS changes the sight picture more than the spread';
+        if (weapon.id === 'sniper') return 'Auto-scopes on equip and becomes ready when the short scope-in finishes';
+        return 'No manual ADS. This weapon stays in the standard third-person firing view';
     }
 
     function falloffProfileText(profile) {
@@ -862,7 +849,7 @@
         var rows = [
             {
                 label: 'primitiveType',
-                value: weapon.singleHitFromPellets ? (weapon.primitiveType + ' + singleHitFromPellets') : weapon.primitiveType,
+                value: weapon.primitiveType,
                 note: WEAPON_TUNABLE_HELP.primitiveType
             },
             { label: 'automatic', value: formatBool(weapon.automatic), note: WEAPON_TUNABLE_HELP.automatic },
@@ -874,21 +861,12 @@
             { label: 'pellets', value: formatNumber(weapon.pellets, 0), note: WEAPON_TUNABLE_HELP.pellets },
             { label: 'hipfireSpread', value: formatSpread(weapon.hipfireSpread), note: WEAPON_TUNABLE_HELP.hipfireSpread },
             { label: 'adsSpread', value: formatSpread(weapon.adsSpread), note: WEAPON_TUNABLE_HELP.adsSpread },
-            { label: 'hipfireCylinderRadiusWu', value: formatNumber(weapon.hipfireCylinderRadiusWu, 2), note: 'World-space hipfire cylinder radius for pistol-style single-winner weapons.' },
-            { label: 'adsCylinderRadiusWu', value: formatNumber(weapon.adsCylinderRadiusWu, 2), note: 'World-space ADS cylinder radius for pistol-style single-winner weapons.' },
             { label: 'maxRange', value: formatRange(weapon.maxRange), note: WEAPON_TUNABLE_HELP.maxRange },
             { label: 'adsMaxRange', value: formatRange(weapon.adsMaxRange), note: WEAPON_TUNABLE_HELP.adsMaxRange },
             { label: 'adsFovDeg', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: WEAPON_TUNABLE_HELP.adsFovDeg },
             { label: 'hipfireBloomScale', value: formatNumber(weapon.hipfireBloomScale, 2), note: WEAPON_TUNABLE_HELP.hipfireBloomScale },
             { label: 'adsBloomScale', value: formatNumber(weapon.adsBloomScale, 2), note: WEAPON_TUNABLE_HELP.adsBloomScale }
         ];
-        if (weapon.singleHitFromPellets) {
-            rows.splice(9, 0, {
-                label: 'singleHitFromPellets',
-                value: 'Yes',
-                note: WEAPON_TUNABLE_HELP.singleHitFromPellets
-            });
-        }
         return rows;
     }
 
@@ -1088,7 +1066,7 @@
             '<h3>Quick Start</h3>',
             renderList([
                 'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
-                'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and ADS with RMB or ' + inputLabels.getBindingLabel('ads_key', 'Alt') + '.',
+                'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and swap weapons with the wheel or your slot keys.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
                 'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('ability_1', 'E') + ' for your equipped ability.',
                 'Break line of sight during long cooldowns instead of forcing low-odds trades.'
@@ -1125,7 +1103,6 @@
             '<p>The game only really feels correct once pointer lock is active. Enter the match, capture the cursor, and keep your inputs layered instead of playing one system at a time.</p>',
             renderTagRow([
                 bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
-                'RMB / ' + inputLabels.getBindingLabel('ads_key', 'Alt') + ' ADS',
                 inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
                 inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('ability_1', 'E')
@@ -1136,10 +1113,10 @@
             '<section class="docs-section">',
             '<h3>Important Notes</h3>',
             renderList([
-                'Sniper cannot fire until you are scoped in.',
+                'Sniper auto-scopes when you equip it and cannot fire until the quick scope-in finishes.',
                 inputLabels.getBindingLabel('throwable', 'Q') + ' previews grenades on hold, but knife throws immediately on press.',
                 inputLabels.getBindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
-                inputLabels.getBindingLabel('ads_key', 'Alt') + ' and RMB both toggle ADS. Jumping no longer cancels ADS, so you stay aimed through the full jump.',
+                'Keep sniper in slot 2 so match start and respawn always open on your normal third-person primary.',
                 'The field manual is available in menu and in live gameplay on ' + inputLabels.getBindingLabel('open_manual', 'I') + '.'
             ]),
             '</section>',
@@ -1171,7 +1148,7 @@
             renderList([
                 weaponMechanicsText(weapon),
                 'Reticle style: ' + weaponReticleLabel(weapon) + '.',
-                'ADS behavior: ' + weaponAdsSummary(weapon) + '.',
+                'View behavior: ' + weaponAdsSummary(weapon) + '.',
                 'Fire cadence: ' + formatMs(weapon.cooldownMs) + ' per shot (' + formatRate(weapon.cooldownMs) + ').'
             ].concat(weaponTips(weapon))),
             '<div class="docs-divider"></div>',
@@ -1187,11 +1164,10 @@
                 { label: 'Magazine', value: formatNumber(weapon.magazineSize, 0), note: 'Rounds before you need to reload.' },
                 { label: 'Reload', value: formatMs(weapon.reloadMs), note: 'Forced downtime once a reload begins.' },
                 { label: 'Cadence', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
-                { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.singleHitFromPellets ? 'Single winning sample only.' : 'All pellets may connect.' },
-                { label: 'Spread H / A', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Hipfire versus ADS spread radius.' },
-                { label: 'Cylinder H / A', value: formatNumber(weapon.hipfireCylinderRadiusWu, 2) + ' / ' + formatNumber(weapon.adsCylinderRadiusWu, 2), note: 'World-space cylinder radius for pistol body-hit reliability.' },
-                { label: 'Range H / A', value: formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange), note: 'Range cap before hit checks stop.' },
-                { label: 'ADS FOV', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: 'Lower is more zoom.' }
+                { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.pellets > 1 ? 'All pellets may connect.' : 'One spread-driven hitscan ray per shot.' },
+                { label: 'Spread H / S', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Stored hipfire versus scoped tuning values.' },
+                { label: 'Range H / S', value: formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange), note: 'Stored hipfire versus scoped range caps.' },
+                { label: 'Scoped FOV', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: 'Lower is more zoom when a weapon enters scoped view.' }
             ]),
             '</section>',
             '<section class="docs-section">',
@@ -1287,7 +1263,7 @@
                 escapeHtml(formatMs(weapon.cooldownMs) + ' | mag ' + formatNumber(weapon.magazineSize, 0)),
                 escapeHtml(formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread)),
                 escapeHtml(formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange)),
-                escapeHtml(weapon.singleHitFromPellets ? 'single winner' : (weapon.pellets > 1 ? 'all pellets count' : 'single ray'))
+                escapeHtml(weapon.pellets > 1 ? 'all pellets count' : 'single ray')
             ]);
         }
 
@@ -1302,11 +1278,10 @@
             '<div class="docs-grid">',
             '<section class="docs-card">',
             '<h3>' + escapeHtml(TUNABLE_GROUPS[0].title) + '</h3>',
-            '<div class="docs-callout">Pistol is the signature edge case: <code>hitscan_multi</code> plus <code>singleHitFromPellets</code> makes it a single-winner world-space cylinder weapon. Shotgun uses the same base family without that gate, so every pellet can land.</div>',
+            '<div class="docs-callout">Pistol now uses the same single-ray hitscan path as the other standard guns. Shotgun remains the dedicated multi-pellet edge case.</div>',
             renderList([
-                'Single-ray weapons: rifle, machine gun, sniper.',
-                'True multi-pellet weapon: shotgun.',
-                'World-space cylinder single winner: pistol.'
+                'Single-ray weapons: rifle, machine gun, pistol, sniper.',
+                'True multi-pellet weapon: shotgun.'
             ]),
             '</section>',
             '<section class="docs-card">',
@@ -1321,8 +1296,8 @@
             '<h3>' + escapeHtml(TUNABLE_GROUPS[2].title) + '</h3>',
             renderList([
                 'Spread is solver input, not cosmetic bloom.',
-                'ADS can change spread, range, zoom, or only some of those depending on the gun.',
-                'Pistol is the edge case now: its real body-hit search volume is a world-space cylinder, not a cone.',
+                'Scoped tuning values still exist in the data, but only sniper uses a live scope transition right now.',
+                'Pistol now uses the same spread-driven ray logic as the other standard guns.',
                 'Falloff bands scale final damage by distance instead of hard dropping to zero.'
             ]),
             '</section>',
@@ -1346,11 +1321,9 @@
             '<h3>Reference</h3>',
             renderInfoTable([
                 { label: 'primitiveType', value: 'single or multi', note: WEAPON_TUNABLE_HELP.primitiveType },
-                { label: 'singleHitFromPellets', value: 'pistol only', note: WEAPON_TUNABLE_HELP.singleHitFromPellets },
                 { label: 'cooldownMs', value: 'shot cadence', note: WEAPON_TUNABLE_HELP.cooldownMs },
                 { label: 'reloadMs', value: 'downtime', note: WEAPON_TUNABLE_HELP.reloadMs },
                 { label: 'hipfireSpread / adsSpread', value: 'legacy angular compatibility', note: WEAPON_TUNABLE_HELP.hipfireSpread + ' ' + WEAPON_TUNABLE_HELP.adsSpread },
-                { label: 'hipfireCylinderRadiusWu / adsCylinderRadiusWu', value: 'pistol solver', note: 'Primary pistol body-hit reliability knobs in world units.' },
                 { label: 'maxRange / adsMaxRange', value: 'distance caps', note: WEAPON_TUNABLE_HELP.maxRange + ' ' + WEAPON_TUNABLE_HELP.adsMaxRange },
                 { label: 'tracer.* / recoil.*', value: 'feel layer', note: 'These are shared feel knobs layered on top of combat behavior.' }
             ]),

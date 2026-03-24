@@ -43,7 +43,7 @@ test('replay motion defaults to the bounded pending-sample duration budget', () 
   );
 
   assert.equal(replayed.x, 0);
-  assert.ok(replayed.z < -1.12 && replayed.z > -1.13);
+  assert.ok(replayed.z < -0.87 && replayed.z > -0.88);
 });
 
 test('replay step building matches the live server weighting model when both use the same total dt', () => {

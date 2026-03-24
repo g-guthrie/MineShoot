@@ -86,7 +86,7 @@ Why it works:
 
 - each hit matters a lot
 - shorter falloff window than scout keeps it honest
-- still uses the single-winner cylinder model, which preserves a forgiving brawler feel
+- now uses the normal single-ray hitscan path, so spread and range tune it the same way as the other standard guns
 
 Niche summary:
 
@@ -104,7 +104,7 @@ Why it works:
 
 - strongest long-range falloff profile
 - stable cadence
-- clean ADS precision
+- clean precision without needing a separate aim mode
 
 Niche summary:
 

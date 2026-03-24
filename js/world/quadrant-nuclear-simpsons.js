@@ -306,14 +306,14 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     /* ── D: Office Building (Burns' office, window grid faces west) ── */
 
     function buildOfficeBuilding(cx, cz, place, mats) {
-        var w = 8, h = 7, d = 6;
+        var w = 8, h = 3, d = 6;
         tb(place, 'office-body', null, cx, h * 0.5, cz, w, h, d, mats.grayLight, true);
         // Roof
         tb(place, 'office-roof', null, cx, h - 0.05 + 0.15, cz, w + 0.2, 0.3, d + 0.2, mats.grayDark, true);
-        // Window grid on WEST face (4 cols x 5 rows)
+        // Window grid on WEST face (4 cols x 1 row)
         var westFaceX = cx - (w * 0.5) - 0.06;
         for (var col = 0; col < 4; col++) {
-            for (var row = 0; row < 5; row++) {
+            for (var row = 0; row < 1; row++) {
                 var winZ = cz - 2.0 + (col * 1.4);
                 var winY = 1.4 + (row * 1.1);
                 tb(place, 'office-window', { col: col, row: row },
@@ -428,43 +428,91 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── I: Perimeter Fence (loop with gate gap) ── */
 
-    function buildFence(minX, maxX, minZ, maxZ, gateZ, gateWidth, place, mats) {
+    function resolveGateRange(specOrCenter, gateWidth, sideClearance) {
+        if (typeof specOrCenter === 'object' && specOrCenter) {
+            if (typeof specOrCenter.min === 'number' && typeof specOrCenter.max === 'number') {
+                return { min: specOrCenter.min, max: specOrCenter.max };
+            }
+            gateWidth = specOrCenter.width;
+            sideClearance = specOrCenter.sideClearance;
+            specOrCenter = specOrCenter.center;
+        }
+        var gateHalfW = gateWidth * 0.5;
+        return {
+            min: specOrCenter - gateHalfW - sideClearance,
+            max: specOrCenter + gateHalfW + sideClearance
+        };
+    }
+
+    function buildFence(minX, maxX, minZ, maxZ, gateSpecs, place, mats) {
         var fh = 2.0;
         var ft = 0.12;
         var postSpacing = 4.0;
         var postH = 2.3;
         var postW = 0.15;
+        var westGate = gateSpecs.west ? resolveGateRange(gateSpecs.west) : null;
+        var northGate = gateSpecs.north ? resolveGateRange(gateSpecs.north) : null;
+        var southGate = gateSpecs.south ? resolveGateRange(gateSpecs.south) : null;
 
         // North wall
-        var nLen = maxX - minX;
-        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, minZ, nLen, fh, ft, mats.steel, true);
+        if (northGate) {
+            var northLeftLen = northGate.min - minX;
+            if (northLeftLen > 1) {
+                tb(place, 'fence-segment', null, minX + (northLeftLen * 0.5), fh * 0.5, minZ, northLeftLen, fh, ft, mats.steel, true);
+            }
+            var northRightLen = maxX - northGate.max;
+            if (northRightLen > 1) {
+                tb(place, 'fence-segment', null, northGate.max + (northRightLen * 0.5), fh * 0.5, minZ, northRightLen, fh, ft, mats.steel, true);
+            }
+        } else {
+            var nLen = maxX - minX;
+            tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, minZ, nLen, fh, ft, mats.steel, true);
+        }
         // South wall
-        tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, maxZ, nLen, fh, ft, mats.steel, true);
+        if (southGate) {
+            var southLeftLen = southGate.min - minX;
+            if (southLeftLen > 1) {
+                tb(place, 'fence-segment', null, minX + (southLeftLen * 0.5), fh * 0.5, maxZ, southLeftLen, fh, ft, mats.steel, true);
+            }
+            var southRightLen = maxX - southGate.max;
+            if (southRightLen > 1) {
+                tb(place, 'fence-segment', null, southGate.max + (southRightLen * 0.5), fh * 0.5, maxZ, southRightLen, fh, ft, mats.steel, true);
+            }
+        } else {
+            var sLen = maxX - minX;
+            tb(place, 'fence-segment', null, (minX + maxX) * 0.5, fh * 0.5, maxZ, sLen, fh, ft, mats.steel, true);
+        }
         // East wall
         var eLen = maxZ - minZ;
         tb(place, 'fence-segment', null, maxX, fh * 0.5, (minZ + maxZ) * 0.5, ft, fh, eLen, mats.steel, true);
         // West wall — split for gate gap
-        var gateHalfW = gateWidth * 0.5;
-        var gateMinZ = gateZ - gateHalfW;
-        var gateMaxZ = gateZ + 4.4; // extend gap south to cover booth
-        var topSegLen = gateMinZ - minZ;
-        if (topSegLen > 1) {
-            tb(place, 'fence-segment', null, minX, fh * 0.5, minZ + (topSegLen * 0.5), ft, fh, topSegLen, mats.steel, true);
-        }
-        var botSegLen = maxZ - gateMaxZ;
-        if (botSegLen > 1) {
-            tb(place, 'fence-segment', null, minX, fh * 0.5, gateMaxZ + (botSegLen * 0.5), ft, fh, botSegLen, mats.steel, true);
+        if (westGate) {
+            var topSegLen = westGate.min - minZ;
+            if (topSegLen > 1) {
+                tb(place, 'fence-segment', null, minX, fh * 0.5, minZ + (topSegLen * 0.5), ft, fh, topSegLen, mats.steel, true);
+            }
+            var botSegLen = maxZ - westGate.max;
+            if (botSegLen > 1) {
+                tb(place, 'fence-segment', null, minX, fh * 0.5, westGate.max + (botSegLen * 0.5), ft, fh, botSegLen, mats.steel, true);
+            }
+        } else {
+            var wLen = maxZ - minZ;
+            tb(place, 'fence-segment', null, minX, fh * 0.5, (minZ + maxZ) * 0.5, ft, fh, wLen, mats.steel, true);
         }
 
         // Posts along north and south
         for (var px = minX; px <= maxX; px += postSpacing) {
-            tb(place, 'fence-post', null, px, postH * 0.5, minZ, postW, postH, postW, mats.grayDark, true);
-            tb(place, 'fence-post', null, px, postH * 0.5, maxZ, postW, postH, postW, mats.grayDark, true);
+            if (!northGate || px < northGate.min - 1 || px > northGate.max + 1) {
+                tb(place, 'fence-post', null, px, postH * 0.5, minZ, postW, postH, postW, mats.grayDark, true);
+            }
+            if (!southGate || px < southGate.min - 1 || px > southGate.max + 1) {
+                tb(place, 'fence-post', null, px, postH * 0.5, maxZ, postW, postH, postW, mats.grayDark, true);
+            }
         }
         // Posts along east and west (skip gate)
         for (var pz = minZ; pz <= maxZ; pz += postSpacing) {
             tb(place, 'fence-post', null, maxX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, true);
-            if (pz < gateMinZ - 1 || pz > gateMaxZ + 1) {
+            if (!westGate || pz < westGate.min - 1 || pz > westGate.max + 1) {
                 tb(place, 'fence-post', null, minX, postH * 0.5, pz, postW, postH, postW, mats.grayDark, true);
             }
         }
@@ -472,16 +520,34 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── J: Gate Booth (at fence line, arm inline with fence) ── */
 
-    function buildGate(fenceX, gateZ, place, mats) {
-        // Booth sits at the fence line, to one side of the road gap (south side)
-        var boothX = fenceX;
-        // Arm: one end touches booth north edge, extends north across the gap
-        var boothNorthEdge = gateZ + 3.2 - 1.0;
-        tb(place, 'gate-arm', null, fenceX, 2.2, boothNorthEdge - 3.4 / 2, 0.15, 0.15, 3.4, mats.yellowWarn, true);
-        tb(place, 'gate-booth', null, boothX, 1.25, gateZ + 3.2, 2.0, 2.5, 2.0, mats.grayLight, true);
-        tb(place, 'gate-booth-roof', null, boothX, 2.48, gateZ + 3.2, 2.3, 0.2, 2.3, mats.grayDark, true);
-        // Window faces west (toward approaching traffic)
-        tb(place, 'gate-booth-window', null, boothX - 1.06, 1.6, gateZ + 3.2, 0.12, 0.7, 1.2, mats.glassBlue, false);
+    function buildGateBooth(side, a, b, place, mats) {
+        var meta = { side: side };
+        if (side === 'west') {
+            var boothX = a;
+            var boothZ = b;
+            tb(place, 'gate-booth', meta, boothX, 1.25, boothZ, 2.0, 2.5, 2.0, mats.grayLight, true);
+            tb(place, 'gate-booth-roof', meta, boothX, 2.48, boothZ, 2.3, 0.2, 2.3, mats.grayDark, true);
+            tb(place, 'gate-booth-window', meta, boothX - 1.06, 1.6, boothZ, 0.12, 0.7, 1.2, mats.glassBlue, false);
+            return;
+        }
+        var boothCenterX = a;
+        var boothCenterZ = b;
+        tb(place, 'gate-booth', meta, boothCenterX, 1.25, boothCenterZ, 2.0, 2.5, 2.0, mats.grayLight, true);
+        tb(place, 'gate-booth-roof', meta, boothCenterX, 2.48, boothCenterZ, 2.3, 0.2, 2.3, mats.grayDark, true);
+        var windowZ = side === 'north' ? boothCenterZ - 1.06 : boothCenterZ + 1.06;
+        tb(place, 'gate-booth-window', meta, boothCenterX, 1.6, windowZ, 1.2, 0.7, 0.12, mats.glassBlue, false);
+    }
+
+    function buildGate(side, fenceCoord, gateSpec, place, mats) {
+        var gateRange = resolveGateRange(gateSpec, gateSpec.width, gateSpec.sideClearance);
+        var boothHalfDepth = 1.0;
+        if (side === 'west') {
+            buildGateBooth(side, fenceCoord, gateRange.min + boothHalfDepth, place, mats);
+            buildGateBooth(side, fenceCoord, gateRange.max - boothHalfDepth, place, mats);
+            return;
+        }
+        buildGateBooth(side, gateRange.min + boothHalfDepth, fenceCoord, place, mats);
+        buildGateBooth(side, gateRange.max - boothHalfDepth, fenceCoord, place, mats);
     }
 
     /* ── L: Utility Boxes & Pipes ── */
@@ -546,11 +612,20 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var fenceMaxX = ox + 24;
         var fenceMinZ = oz - 25;
         var fenceMaxZ = oz + 23;
-        var gateZ = oz;  // gate centered on west wall
+        var gateZ = oz;  // west gate centered on west wall
+        var fenceMidX = ox;
+        var northGateCenterX = fenceMidX - 5;
 
         // ── 1. Fence ──────────────────────────────────────
-        buildFence(fenceMinX, fenceMaxX, fenceMinZ, fenceMaxZ, gateZ, 4.0, place, mats);
-        buildGate(fenceMinX, gateZ, place, mats);
+        var gateWidth = 4.0;
+        var gateSideClearance = 8.0; // remove two fence spans north and south of the road
+        var northGateMinX = northGateCenterX - (gateWidth * 0.5) - gateSideClearance + 2;
+        var northGateMaxX = northGateCenterX + (gateWidth * 0.5) + gateSideClearance - 1;
+        var fenceGates = {
+            west: { center: gateZ, width: gateWidth, sideClearance: gateSideClearance },
+            north: { min: northGateMinX, max: northGateMaxX, width: gateWidth, sideClearance: gateSideClearance },
+            south: { center: fenceMidX, width: gateWidth, sideClearance: gateSideClearance }
+        };
 
         // ── 2. Roads ──────────────────────────────────────
         // Asphalt driveway: from biome west edge to reactor building, replacing old entry road + west concrete
@@ -559,7 +634,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var driveLen = driveEndX - biomeWestX;
         var driveCenterX = biomeWestX + driveLen * 0.5;
         tb(place, 'entry-road', null,
-            driveCenterX, 0.04, gateZ, driveLen, 0.08, 4.0, mats.asphalt, false);
+            driveCenterX, 0.04, gateZ, driveLen, 0.08, gateWidth, mats.asphalt, false);
         // Internal east-west road (reactor eastward to towers only)
         var iewStartX = driveEndX;
         var iewEndX = ox + 21;
@@ -656,7 +731,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         td(place, 'chimney-steam', null, tealX + 1.5, tealRoofY + chimneyH + 1.5, tealZ + 1.5, tealSteamGeo, tealSteamMat);
 
         // ── 6. Office Building (southwest, aligned with teal building X) ──
-        buildOfficeBuilding(ox - 15, oz + 17, place, mats);
+        buildOfficeBuilding(ox - 16, oz + 17, place, mats);
 
         // ── 6b. Fuel spheres (shifted 8 world units south from the reworked swap spot) ──
         buildFuelSpheresPrefabAt(ox + 1, oz + 15, place);
@@ -670,49 +745,34 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         // ── 8. Tank Cluster (NE of reactor) ──
         buildTankCluster(ox + 8, oz - 12, place, mats);
 
-        // ── 9. Pylons (4 along north edge) + power lines between them ──
-        var pylonXs = [];
-        for (var pi = 0; pi < 4; pi++) {
-            var px = ox - 8 + (pi * 6);
-            buildPylon(px, oz - 20, place, mats);
-            pylonXs.push(px);
-        }
-        // Wires between adjacent pylons (2 lines per span, at arm height on each side)
-        for (var wi = 0; wi < pylonXs.length - 1; wi++) {
-            var x1 = pylonXs[wi], x2 = pylonXs[wi + 1];
-            var midX = (x1 + x2) * 0.5;
-            var span = x2 - x1;
-            var wireZ = oz - 20;
-            // North-side wire
-            tb(place, 'power-line', null, midX, 9.5, wireZ - 1.8, span, 0.06, 0.06, mats.grayDark, false);
-            // South-side wire
-            tb(place, 'power-line', null, midX, 9.5, wireZ + 1.8, span, 0.06, 0.06, mats.grayDark, false);
-            // Center wire (slightly lower, sag effect)
-            tb(place, 'power-line', null, midX, 9.2, wireZ, span, 0.06, 0.06, mats.grayDark, false);
-        }
-
-        // ── 10. Utility boxes & pipes (scattered industrial filler) ──
+        // ── 9. Utility boxes & pipes (scattered industrial filler) ──
         buildUtilityBox(ox - 4, oz - 4, place, mats);
         buildUtilityBox(ox + 10, oz + 4, place, mats);
-        buildUtilityBox(ox + 14, oz - 6, place, mats);
 
         // AC unit sits flush to the teal building south wall and acts as the visible pipe landing point.
         tb(place, 'ac-unit', null, ox - 18, 1.25, oz - 18 + 3 + 0.75, 2.0, 2.5, 1.5, mats.steel, true);
-        // Ground power unit in NE corner behind pylons
-        tb(place, 'power-unit', null, ox + 13, 1.2, oz - 20, 3.0, 2.4, 2.0, mats.steel, true);
 
-        // ── 11. Trees (ring outside fence, ~20 total) ──
+        // ── 10. Trees (ring outside fence, ~20 total) ──
         // Snap to grid cell centers (odd numbers: -25, -23, -21, ... 23, 25)
         function snapGrid(v) { return Math.round((v - 1) / 2) * 2 + 1; }
 
         var treePositions = [];
         // North tree line (4 trees, ~10 unit spacing)
         for (var tn = 0; tn < 4; tn++) {
-            treePositions.push({ x: snapGrid(fenceMinX + 4 + (tn * 10)), z: snapGrid(fenceMinZ - 2), s: 0.7 + (tn % 3) * 0.3 });
+            if (tn === 0) continue;
+            var northTreeX = snapGrid(fenceMinX + 4 + (tn * 10));
+            if (tn === 1) northTreeX -= 8;
+            if (tn === 2) northTreeX += 10;
+            if (tn === 3) northTreeX += 7;
+            treePositions.push({ x: northTreeX, z: snapGrid(fenceMinZ - 2), s: 0.7 + (tn % 3) * 0.3 });
         }
         // South tree line (4 trees, ~10 unit spacing, one pointy)
         for (var ts = 0; ts < 4; ts++) {
-            treePositions.push({ x: snapGrid(fenceMinX + 4 + (ts * 10)), z: snapGrid(fenceMaxZ + 2), s: 0.6 + (ts % 3) * 0.35, pointy: ts === 2 });
+            if (ts === 2) continue;
+            var southTreeX = snapGrid(fenceMinX + 4 + (ts * 10));
+            if (ts === 1) southTreeX -= 3;
+            if (ts === 3) southTreeX += 3;
+            treePositions.push({ x: southTreeX, z: snapGrid(fenceMaxZ + 2), s: 0.6 + (ts % 3) * 0.35, pointy: false });
         }
         // East tree line (5 trees, natural wall, skip cooling tower zones)
         // Towers at roughly oz-10 and oz+10, radius ~7 each with scale
@@ -725,11 +785,17 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         for (var tw = 0; tw < 4; tw++) {
             var twz = fenceMinZ + 4 + (tw * 10);
             if (Math.abs(twz - gateZ) < 5) continue;
-            treePositions.push({ x: snapGrid(fenceMinX - 2), z: snapGrid(twz), s: 0.6 + (tw % 3) * 0.3 });
+            var westTreeX = snapGrid(fenceMinX - 2);
+            var westTreeZ = snapGrid(twz);
+            if (tw === 3) {
+                westTreeX -= 1;
+                westTreeZ += 5;
+            }
+            treePositions.push({ x: westTreeX, z: westTreeZ, s: 0.6 + (tw % 3) * 0.3 });
         }
         // Corner trees (skip NE — cooling towers)
         treePositions.push({ x: snapGrid(fenceMinX - 3), z: snapGrid(fenceMinZ - 3), s: 1.0 });
-        treePositions.push({ x: snapGrid(fenceMinX - 3), z: snapGrid(fenceMaxZ + 3), s: 0.8 });
+        treePositions.push({ x: snapGrid(fenceMinX - 3) + 2, z: snapGrid(fenceMaxZ + 3) - 4, s: 0.8 });
         treePositions.push({ x: snapGrid(fenceMaxX + 3), z: snapGrid(fenceMaxZ + 3), s: 0.9 });
 
         for (var ti = 0; ti < treePositions.length; ti++) {

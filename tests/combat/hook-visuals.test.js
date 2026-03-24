@@ -22,17 +22,17 @@ async function loadHookVisualsHarness(runtimeOverrides = {}) {
         getSelfAbilityState() {
           return null;
         }
-      }
-    },
-    GameNetEntities: {
-      getRenderMap() {
-        return renderMap;
       },
-      getHookOriginWorldPosition(_entityId, out) {
-        return out.set(1, 2, 3);
-      },
-      getCoreWorldPosition(_targetId, out) {
-        return out.set(6, 7, 8);
+      remoteEntities: {
+        getRenderMap() {
+          return renderMap;
+        },
+        getHookOriginWorldPosition(_entityId, out) {
+          return out.set(1, 2, 3);
+        },
+        getCoreWorldPosition(_targetId, out) {
+          return out.set(6, 7, 8);
+        }
       }
     },
     ...runtimeOverrides

@@ -31,8 +31,8 @@
     }
 
     function movementTuningApi() {
-        var gameplayTuning = gameplayTuningApi();
-        return gameplayTuning && gameplayTuning.movement ? gameplayTuning.movement : {};
+        var shared = sharedApi();
+        return shared.getMovementTuning ? (shared.getMovementTuning() || {}) : {};
     }
 
     function entityConstantsApi() {
@@ -108,18 +108,31 @@
         return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
     }
 
+    function normalizeSniperLoadoutOrder(slots) {
+        var next = Array.isArray(slots) ? slots.slice(0, 2) : [];
+        if (String(next[0] || '') !== 'sniper') return next;
+        if (String(next[1] || '') && String(next[1] || '') !== 'sniper') {
+            return [String(next[1] || ''), 'sniper'];
+        }
+        var candidates = defaultWeaponLoadout().concat(selectableWeaponIds());
+        for (var i = 0; i < candidates.length; i++) {
+            var id = String(candidates[i] || '');
+            if (!id || id === 'sniper') continue;
+            return [id, 'sniper'];
+        }
+        return next;
+    }
+
     function ensureLoadoutSlots() {
         if (Array.isArray(loadoutSlots) && loadoutSlots.length) return loadoutSlots;
-        loadoutSlots = selectableWeaponIds().slice();
+        loadoutSlots = normalizeSniperLoadoutOrder(selectableWeaponIds().slice());
         if (!loadoutSlots.length) loadoutSlots = ['rifle'];
         return loadoutSlots;
     }
 
     function networkTuning() {
         var shared = sharedApi();
-        return shared.gameplayTuning && shared.gameplayTuning.network
-            ? shared.gameplayTuning.network
-            : {};
+        return shared.getNetworkTuning ? (shared.getNetworkTuning() || {}) : {};
     }
 
     function matchesBinding(actionId, event, fallbackCodes) {
@@ -192,7 +205,6 @@
     var isGrounded = true;
     var jumpHoldTimer = 0;
     var jumpPressedLastFrame = false;
-    var scopeHeld = false;
 
     var keys = {
         forward: false,
@@ -389,25 +401,41 @@
         return statusApi && statusApi.activeChokeLift ? statusApi.activeChokeLift() : 0;
     }
 
-    function weaponSupportsAds() {
-        var weaponStats = weaponStatsFor(currentWeaponId);
-        return !!(weaponStats && Number(weaponStats.adsFovDeg) > 0.0001);
-    }
-
     function isSniperScopeWeapon() {
         return currentWeaponId === 'sniper';
     }
 
-    function canUseAds() {
-        var hitscan = hitscanApi();
-        if (hitscan && hitscan.isAdsBlocked && hitscan.isAdsBlocked()) {
-            return false;
-        }
-        return weaponSupportsAds() && hasInputCapture();
+    function scopeTargetActive() {
+        return isSniperScopeWeapon() && hasInputCapture() && !isSprintInputActive();
     }
 
-    function isAdsActive() {
-        return canUseAds() && scopeHeld;
+    function scopeStateSnapshot() {
+        var view = viewHelper();
+        return view && view.getAdsState
+            ? view.getAdsState({
+                currentWeaponId: currentWeaponId,
+                scopeTargetActive: scopeTargetActive(),
+                sniperMode: isSniperScopeWeapon()
+            })
+            : {
+                weaponId: currentWeaponId,
+                active: scopeTargetActive(),
+                blend: 0,
+                sniper: isSniperScopeWeapon(),
+                scopeActive: false,
+                ready: false,
+                phase: 'inactive'
+            };
+    }
+
+    function isScopeModeActive() {
+        var scopeState = scopeStateSnapshot();
+        return !!(scopeState && scopeState.active && scopeState.weaponId === currentWeaponId);
+    }
+
+    function isSniperScopeReady() {
+        var scopeState = scopeStateSnapshot();
+        return !!(scopeState && scopeState.ready && scopeState.weaponId === currentWeaponId);
     }
 
     function isSprintInputActive() {
@@ -422,18 +450,14 @@
         return true;
     }
 
-    function setAdsEnabled(enabled) {
-        scopeHeld = !!enabled && canUseAds();
-        return scopeHeld;
+    function cancelScopedView() {
+        var view = viewHelper();
+        if (view && view.cancelScope) view.cancelScope();
     }
 
-    function toggleAds() {
-        if (!canUseAds()) {
-            scopeHeld = false;
-            return false;
-        }
-        scopeHeld = !scopeHeld;
-        return scopeHeld;
+    function setAdsEnabled(enabled) {
+        if (!enabled) cancelScopedView();
+        return false;
     }
 
     function applyAvatarWeaponPose() {
@@ -477,12 +501,13 @@
             runSpeed: effectiveRunSpeedForWeapon(currentWeaponId),
             sprinting: sprinting,
             isGrounded: isGrounded,
+            yaw: yaw,
             pitch: pitch,
             hooked: isHookPulled(),
             hookPullStartedAt: statusState.hookPullStartedAt || 0,
             choked: isChoked(),
             chokeStartedAt: statusState.chokeStartedAt || 0,
-            adsActive: isAdsActive(),
+            adsActive: isScopeModeActive(),
             movingForward: !!keys.forward,
             movingBackward: !!keys.backward,
             movingLeft: !!keys.left,
@@ -493,6 +518,9 @@
     function updateCameraFromPlayer(dt, view, speedNorm) {
         var viewApi = view || viewHelper();
         if (!viewApi || !viewApi.updateCamera) return;
+        var cameraProfile = avatarRigApi && avatarRigApi.getCameraProfile
+            ? (avatarRigApi.getCameraProfile() || {})
+            : {};
         viewApi.updateCamera(dt, {
             camera: camera,
             playerX: playerX,
@@ -505,7 +533,8 @@
             avatarRigApi: avatarRigApi,
             avatarAliveVisible: avatarAliveVisible,
             sniperMode: isSniperScopeWeapon(),
-            adsActive: isAdsActive(),
+            adsActive: isSniperScopeReady(),
+            scopeTargetActive: isScopeModeActive(),
             speedNorm: typeof speedNorm === 'number' ? speedNorm : lastMoveSpeedNorm,
             choked: isChoked(),
             chokeStartedAt: statusState.chokeStartedAt || 0,
@@ -518,15 +547,15 @@
                     : [];
             },
             pitchLimit: PITCH_LIMIT,
-            cameraShoulder: CAMERA_SHOULDER,
-            cameraDist: CAMERA_DIST,
-            thirdHeight: THIRD_HEIGHT,
+            cameraShoulder: (typeof cameraProfile.cameraShoulder === 'number') ? cameraProfile.cameraShoulder : CAMERA_SHOULDER,
+            cameraDist: (typeof cameraProfile.cameraDist === 'number') ? cameraProfile.cameraDist : CAMERA_DIST,
+            thirdHeight: (typeof cameraProfile.thirdHeight === 'number') ? cameraProfile.thirdHeight : THIRD_HEIGHT,
             sniperScopeShoulder: SNIPER_SCOPE_SHOULDER,
             adsShoulder: ADS_SHOULDER,
             sniperScopeDist: SNIPER_SCOPE_DIST,
-            adsDist: ADS_DIST,
+            adsDist: (typeof cameraProfile.adsDist === 'number') ? cameraProfile.adsDist : ADS_DIST,
             sniperScopeHeight: SNIPER_SCOPE_HEIGHT,
-            adsHeight: ADS_HEIGHT,
+            adsHeight: (typeof cameraProfile.adsHeight === 'number') ? cameraProfile.adsHeight : ADS_HEIGHT,
             sniperScopeBlendSpeed: SNIPER_SCOPE_BLEND_SPEED,
             adsBlendSpeed: ADS_BLEND_SPEED,
             firstPersonSmooth: FIRST_PERSON_SMOOTH,
@@ -542,7 +571,8 @@
         if (!viewApi || !viewApi.triggerFireAction) return;
         viewApi.triggerFireAction({
             currentWeaponId: currentWeaponId,
-            adsActive: isAdsActive(),
+            adsActive: isScopeModeActive(),
+            scopeTargetActive: isScopeModeActive(),
             sniperMode: isSniperScopeWeapon(),
             actorVisual: actorVisual,
             avatarRigApi: avatarRigApi
@@ -596,7 +626,8 @@
             legColor: 0x2f2f2f,
             weaponId: currentWeaponId,
             targetId: 'self',
-            hitboxOpacity: hitboxVisible ? 0.3 : 0
+            hitboxOpacity: hitboxVisible ? 0.3 : 0,
+            preferBoxman: true
         });
         avatarGroup = actorVisual.root || actorVisual.visual;
         avatarRigApi = actorVisual.rigApi;
@@ -631,7 +662,6 @@
             document.removeEventListener('keydown', inputListeners.keydown);
             document.removeEventListener('keyup', inputListeners.keyup);
             document.removeEventListener('mousemove', inputListeners.mousemove);
-            document.removeEventListener('mousedown', inputListeners.mousedown);
             document.removeEventListener('contextmenu', inputListeners.contextmenu);
             document.removeEventListener('pointerlockchange', inputListeners.pointerlockchange);
         }
@@ -651,16 +681,7 @@
             if (matchesBinding('move_left', e, 'KeyA')) keys.left = true;
             if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = true;
             if (matchesBinding('move_right', e, 'KeyD')) keys.right = true;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
-                keys.sprint = true;
-                if (scopeHeld) setAdsEnabled(false);
-            }
-            if (matchesBinding('ads_key', e, ['AltLeft', 'AltRight'])) {
-                if (!e.repeat && hasInputCapture()) {
-                    e.preventDefault();
-                    toggleAds();
-                }
-            }
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = true;
             if (matchesBinding('jump', e, 'Space')) {
                 keys.jump = true;
                 e.preventDefault();
@@ -687,12 +708,6 @@
             pitch -= (e.movementY || 0) * sensitivity;
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
             },
-            mousedown: function (e) {
-            if (e.button !== 2) return;
-            if (!hasInputCapture()) return;
-            e.preventDefault();
-            toggleAds();
-            },
             contextmenu: function (e) {
             if (!hasInputCapture()) return;
             e.preventDefault();
@@ -704,18 +719,17 @@
             }
             },
             blur: function () {
-            scopeHeld = false;
+            cancelScopedView();
             clearMovementKeys();
         },
             pointerlockchange: function () {
-            if (!hasInputCapture()) scopeHeld = false;
+            if (!hasInputCapture()) cancelScopedView();
             }
         };
         if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
             document.addEventListener('keydown', inputListeners.keydown);
             document.addEventListener('keyup', inputListeners.keyup);
             document.addEventListener('mousemove', inputListeners.mousemove);
-            document.addEventListener('mousedown', inputListeners.mousedown);
             document.addEventListener('contextmenu', inputListeners.contextmenu);
             document.addEventListener('pointerlockchange', inputListeners.pointerlockchange);
         }
@@ -771,7 +785,7 @@
         inputStateScratch.right = !!keys.right;
         inputStateScratch.jump = !!keys.jump;
         inputStateScratch.sprint = !!isSprintInputActive();
-        inputStateScratch.adsActive = !!isAdsActive();
+        inputStateScratch.adsActive = !!isScopeModeActive();
         return inputStateScratch;
     }
 
@@ -1146,7 +1160,7 @@
     function destroyPlayerState() {
         teardownInput();
         clearMovementKeys();
-        scopeHeld = false;
+        cancelScopedView();
         sprintCanceledUntilRelease = false;
         sprinting = false;
         avatarAliveVisible = true;
@@ -1267,7 +1281,7 @@
 
     GamePlayer.setWeaponModel = function (weaponId) {
         currentWeaponId = weaponId || 'rifle';
-        scopeHeld = false;
+        if (!isSniperScopeWeapon()) cancelScopedView();
         resetRecoilState(viewHelper());
         applyAvatarWeaponPose();
         return true;
@@ -1323,15 +1337,17 @@
         return view && view.getAdsState
             ? view.getAdsState({
                 currentWeaponId: currentWeaponId,
-                adsActive: isAdsActive(),
+                scopeTargetActive: scopeTargetActive(),
                 sniperMode: isSniperScopeWeapon()
             })
             : {
                 weaponId: currentWeaponId,
-                active: isAdsActive(),
+                active: scopeTargetActive(),
                 blend: 0,
                 sniper: isSniperScopeWeapon(),
-                scopeActive: false
+                scopeActive: false,
+                ready: false,
+                phase: 'inactive'
             };
     };
 
@@ -1364,7 +1380,7 @@
             right: !!keys.right,
             jump: !!keys.jump,
             sprint: !!isSprintInputActive(),
-            adsActive: !!isAdsActive()
+            adsActive: !!isScopeModeActive()
         };
     };
 
@@ -1394,11 +1410,12 @@
             seen[id] = true;
             next.push(id);
         }
+        next = normalizeSniperLoadoutOrder(next);
         if (next.length > 0) {
             loadoutSlots = next;
             if (loadoutSlots.indexOf(currentWeaponId) === -1) {
                 currentWeaponId = loadoutSlots[0];
-                scopeHeld = false;
+                cancelScopedView();
                 resetRecoilState(viewHelper());
                 applyAvatarWeaponPose();
             }

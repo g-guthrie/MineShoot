@@ -73,9 +73,17 @@ export function normalizeThrowIntent(rawIntent) {
 }
 
 export function normalizeWeaponLoadoutPayload(slot1, slot2) {
+  const first = String(slot1 || '');
+  const second = String(slot2 || '');
+  if (first === 'sniper' && second !== 'sniper') {
+    return {
+      slot1: second,
+      slot2: first
+    };
+  }
   return {
-    slot1: String(slot1 || ''),
-    slot2: String(slot2 || '')
+    slot1: first,
+    slot2: second
   };
 }
 

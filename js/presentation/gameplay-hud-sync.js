@@ -12,13 +12,24 @@
 
     function netView() {
         var net = runtime.GameNet || null;
-        return net && net.view ? net.view : net;
+        return net && net.view ? net.view : null;
+    }
+
+    function netEffects() {
+        var net = runtime.GameNet || null;
+        return net && net.effects ? net.effects : null;
+    }
+
+    function remoteEntitiesApi() {
+        var net = runtime.GameNet || null;
+        return net && net.remoteEntities ? net.remoteEntities : null;
     }
 
     function networkAuthoritativeNow() {
-        var netApi = netView();
-        var stamp = netApi && netApi.getAuthoritativeNow
-            ? Number(netApi.getAuthoritativeNow() || 0)
+        var net = runtime.GameNet || null;
+        var timingApi = net && net.timing ? net.timing : null;
+        var stamp = timingApi && timingApi.getAuthoritativeNow
+            ? Number(timingApi.getAuthoritativeNow() || 0)
             : 0;
         return stamp > 0 ? stamp : Date.now();
     }
@@ -115,6 +126,14 @@
             };
         }
         var shared = runtime.GameShared || null;
+        var weaponPresentationApi = runtime.GameWeaponPresentation || null;
+        if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
+            return weaponPresentationApi.resolveReloadState({
+                reloadMs: Number(weaponState.reloadMs || 0),
+                reloadRemaining: Number(weaponState.reloadRemaining || 0),
+                reloadedFlashRemaining: Number(weaponState.reloadedFlashRemaining || 0)
+            }, previousState || null);
+        }
         if (shared && shared.resolveReloadPresentationState) {
             return shared.resolveReloadPresentationState({
                 reloadMs: Number(weaponState.reloadMs || 0),
@@ -130,7 +149,7 @@
             reloadPct: reloading && Number(weaponState.reloadMs || 0) > 0
                 ? Math.max(0, Math.min(1, 1 - (Number(weaponState.reloadRemaining || 0) / Math.max(1, Number(weaponState.reloadMs || 1)))))
                 : 1,
-            phase: reloading ? String(weaponState.reloadPhase || 'manipulate') : (Number(weaponState.reloadedFlashRemaining || 0) > 0 ? 'complete' : 'ready'),
+            phase: reloading ? String(weaponState.reloadPhase || 'action') : (Number(weaponState.reloadedFlashRemaining || 0) > 0 ? 'complete' : 'ready'),
             phasePct: Math.max(0, Math.min(1, Number(weaponState.reloadPhasePct != null ? weaponState.reloadPhasePct : (reloading ? 0.5 : 1)))),
             justStarted: reloading && !(previous && previous.reloading),
             justCompleted: !reloading && Number(weaponState.reloadedFlashRemaining || 0) > 0 && !!(previous && previous.reloading)
@@ -177,8 +196,8 @@
                 });
             } else if (
                 activeReloadPresentation.reloading &&
-                activeReloadPresentation.phase === 'manipulate' &&
-                (!previousActiveReloadPresentation || previousActiveReloadPresentation.phase !== 'manipulate')
+                (activeReloadPresentation.phase === 'action' || activeReloadPresentation.phase === 'manipulate') &&
+                (!previousActiveReloadPresentation || (previousActiveReloadPresentation.phase !== 'action' && previousActiveReloadPresentation.phase !== 'manipulate'))
             ) {
                 runtime.GameAudio.play('reload', {
                     weapon: activeWeaponId,
@@ -210,8 +229,12 @@
     }
 
     function currentAbilityCatalogMap() {
-        var shared = runtime.GameShared && runtime.GameShared.gameplayTuning;
-        return shared && shared.abilityCatalog ? shared.abilityCatalog : {};
+        var shared = runtime.GameShared || null;
+        if (shared && shared.getAbilityCatalog) {
+            return shared.getAbilityCatalog() || {};
+        }
+        var tuning = shared && shared.gameplayTuning;
+        return tuning && tuning.abilityCatalog ? tuning.abilityCatalog : {};
     }
 
     function currentAbilityDebugState(multiplayerMode) {
@@ -372,8 +395,9 @@
                     ? abilityBoundary.buildNetworkDeadeyeUiState(
                         abilState.deadeyeState,
                         function (targetId) {
-                            return netApi.damagePointForEntityId
-                                ? netApi.damagePointForEntityId(targetId)
+                            var effectsApi = netEffects();
+                            return effectsApi && effectsApi.damagePointForEntityId
+                                ? effectsApi.damagePointForEntityId(targetId)
                                 : (
                                     netApi.getEntityMarkerWorldPos
                                         ? netApi.getEntityMarkerWorldPos(targetId)
@@ -405,8 +429,9 @@
         }
 
         if (multiplayerMode) {
-            if (runtime.GameNetEntities && runtime.GameNetEntities.setDeadeyeHighlights) {
-                runtime.GameNetEntities.setDeadeyeHighlights(markMap);
+            var remoteApi = remoteEntitiesApi();
+            if (remoteApi && remoteApi.setDeadeyeHighlights) {
+                remoteApi.setDeadeyeHighlights(markMap);
             }
             return;
         }
@@ -473,12 +498,10 @@
         var abilityLoadoutState = currentAbilityLoadoutState(multiplayerMode);
         var abilityDebugState = currentAbilityDebugState(multiplayerMode);
         var throwableDebugState = currentThrowableDebugState(camera, debugVisualsOn);
-        var abilityTuningState = runtime.GameCombatTuning && runtime.GameCombatTuning.getClassAbilityTuning
-            ? runtime.GameCombatTuning.getClassAbilityTuning() || {}
-            : {};
         var abilityId = abilityLoadoutState ? String(abilityLoadoutState.abilityId || '') : '';
         var deadeyeUiState = currentDeadeyeUiState(multiplayerMode);
         var weaponDebugState = debugVisualsOn ? buildWeaponDebugState(weaponState) : null;
+        var hookDef = currentAbilityCatalogMap().hook || {};
 
         if (runtime.GameUI && runtime.GameUI.updateChokeReticle) {
             var chokeVisible = !!debugVisualsOn && abilityId === 'choke';
@@ -495,7 +518,7 @@
 
         if (runtime.GameUI && runtime.GameUI.updateHookReticle) {
             var hookVisible = !!debugVisualsOn && abilityId === 'hook';
-            var hookReticleSize = Number(abilityTuningState.hookReticleRadiusPx || 52) * 2;
+            var hookReticleSize = Number(hookDef.reticleRadiusPx || 52) * 2;
             runtime.GameUI.updateHookReticle(
                 hookVisible,
                 hookReticleSize,

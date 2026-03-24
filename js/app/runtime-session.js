@@ -71,6 +71,35 @@
         opts = opts || {};
 
         var overlayEl = document.getElementById('overlay');
+
+        function menuSurfaceEl() {
+            return document.getElementById('menu-surface');
+        }
+
+        function setMenuContext(contextId) {
+            var nextContext = String(contextId || 'menu');
+            if (overlayEl && overlayEl.setAttribute) {
+                overlayEl.setAttribute('data-menu-context', nextContext);
+            }
+            var surface = menuSurfaceEl();
+            if (surface && surface.setAttribute) {
+                surface.setAttribute('data-menu-context', nextContext);
+            }
+        }
+
+        function setMenuOverlayMode(modeId) {
+            var surface = menuSurfaceEl();
+            if (!surface) return;
+            var nextMode = String(modeId || '');
+            if (!nextMode) {
+                if (surface.removeAttribute) surface.removeAttribute('data-session-overlay');
+                return;
+            }
+            if (surface.setAttribute) {
+                surface.setAttribute('data-session-overlay', nextMode);
+            }
+        }
+
         var isPlaying = false;
         var pendingInputCapture = false;
         var escapeResumeReady = false;
@@ -438,12 +467,14 @@
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = true;
             if (els.menuStage) els.menuStage.hidden = false;
+            setMenuOverlayMode('');
             emitSessionState();
         }
 
         function completePostGameFlow() {
             var snapshot = postGameState.snapshot;
             hidePostGameFlow();
+            setMenuContext('menu');
             if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) {
                 if (opts.teardownRuntime) opts.teardownRuntime('postgame_private_room');
                 setActivityStateOverride('private_room_lobby');
@@ -509,12 +540,14 @@
             if (document.pointerLockElement && document.exitPointerLock) {
                 document.exitPointerLock();
             }
+            setMenuContext('active-match');
+            setMenuOverlayMode('postgame');
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
             hideLaunchHandoff();
             setResumeButtonsVisible(false);
-            if (els.menuStage) els.menuStage.hidden = true;
+            if (els.menuStage) els.menuStage.hidden = false;
             if (els.flow) els.flow.hidden = false;
             if (els.results) els.results.hidden = true;
             if (els.celebration) els.celebration.hidden = false;
@@ -848,6 +881,7 @@
                 var handoffEls = ensureLaunchHandoffEls();
                 var roomLabel = String(launchContext.roomCode || launchContext.roomId || '').toUpperCase();
                 hidePostGameFlow();
+                setMenuContext('menu');
                 lastHandledMatchEndAt = 0;
                 clearActivityStateOverride();
                 clearPauseState();
@@ -910,6 +944,7 @@
                 clearIdleMonitor();
                 clearPostGameTimer();
                 hidePostGameFlow();
+                setMenuContext('menu');
                 // Private room: stay on page and return to room lobby gracefully
                 if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(null)) {
                     if (opts.teardownRuntime) opts.teardownRuntime('return_to_room_lobby');
@@ -934,6 +969,9 @@
             showGameplayPrompt: showGameplayPrompt,
             syncMatchState: function (matchContext) {
                 var matchState = matchContext ? matchContext.matchState : null;
+                if (postGameState.active) {
+                    return;
+                }
                 if (matchState && matchState.ended && Number(matchState.endedAt || 0) > 0) {
                     if (lastHandledMatchEndAt !== Number(matchState.endedAt || 0)) {
                         lastHandledMatchEndAt = Number(matchState.endedAt || 0);

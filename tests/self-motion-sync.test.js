@@ -6,6 +6,40 @@ import vm from 'node:vm';
 async function loadSelfMotionSyncHarness(runtimeOverrides = {}) {
   const applyCalls = [];
   const reconcileCalls = [];
+  const overrideNet = runtimeOverrides.GameNet || null;
+  const normalizedNet = overrideNet
+    ? {
+        ...overrideNet,
+        view: overrideNet.view || {
+          getInputSyncState: overrideNet.getInputSyncState || (() => ({
+            pendingInputCount: 0,
+            hasUnsentInputTail: false,
+            lastSentSeq: 0,
+            lastAckedSeq: 0
+          })),
+          getPendingInputSamples: overrideNet.getPendingInputSamples || (() => [])
+        },
+        timing: overrideNet.timing || {
+          getAuthoritativeNow: overrideNet.getAuthoritativeNow || (() => 0),
+          getConnectionTimingState: overrideNet.getConnectionTimingState || undefined
+        }
+      }
+    : {
+        view: {
+          getInputSyncState() {
+            return {
+              pendingInputCount: 0,
+              hasUnsentInputTail: false,
+              lastSentSeq: 0,
+              lastAckedSeq: 0
+            };
+          },
+          getPendingInputSamples() {
+            return [];
+          }
+        },
+        timing: {}
+      };
   const runtime = {
     GamePlayer: {
       applyAuthoritativeMotion(state, options) {
@@ -21,20 +55,9 @@ async function loadSelfMotionSyncHarness(runtimeOverrides = {}) {
         });
       }
     },
-    GameNet: {
-      getInputSyncState() {
-        return {
-          pendingInputCount: 0,
-          hasUnsentInputTail: false,
-          lastSentSeq: 0,
-          lastAckedSeq: 0
-        };
-      },
-      getPendingInputSamples() {
-        return [];
-      }
-    },
-    ...runtimeOverrides
+    GameNet: normalizedNet,
+    ...runtimeOverrides,
+    GameNet: normalizedNet
   };
   const timeState = { now: 1000 };
   const sandbox = {

@@ -10,7 +10,6 @@
         var PRIMITIVE_HITSCAN_MULTI = 'hitscan_multi';
         var SHARED_SPREAD_ASPECT = 16 / 9;
         var RELOADED_FLASH_MS = 900;
-        var PISTOL_RETICLE_REFERENCE_DISTANCE_WU = 20;
 
         var currentWeaponId = 'rifle';
         var weaponOrder = [];
@@ -281,12 +280,20 @@
         function isAdsActiveForWeapon(weaponId) {
             var player = playerApi();
             var state = player && player.getAdsState ? player.getAdsState() : null;
-            return !!(state && state.active && state.weaponId === weaponId);
+            return !!(state && state.ready && state.weaponId === weaponId && weaponId === 'sniper');
         }
 
         function resolveReloadPresentationState(weaponId, reloadMs, reloadRemaining, reloadedFlashRemaining, previousState) {
             var shared = sharedApi();
+            var weaponPresentationApi = globalThis.__MAYHEM_RUNTIME && globalThis.__MAYHEM_RUNTIME.GameWeaponPresentation;
             var presentation = getWeaponPresentation(shared, weaponId);
+            if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
+                return weaponPresentationApi.resolveReloadState({
+                    reloadMs: reloadMs,
+                    reloadRemaining: reloadRemaining,
+                    reloadedFlashRemaining: reloadedFlashRemaining
+                }, previousState || null);
+            }
             if (shared.resolveReloadPresentationState) {
                 return shared.resolveReloadPresentationState({
                     reloadMs: reloadMs,
@@ -346,10 +353,6 @@
             state.ammoInMag = 0;
             state.reloadUntil = localNowMs(timing) + weapon.reloadMs;
             state.reloadedFlashUntil = 0;
-            var player = playerApi();
-            if (player && player.setAdsEnabled) {
-                player.setAdsEnabled(false);
-            }
             return true;
         }
 
@@ -389,8 +392,6 @@
             if (combat && combat.beginWeaponReload) {
                 var started = !!combat.beginWeaponReload(weapon.id, wallNowMs(timing));
                 if (started) {
-                    var player = playerApi();
-                    if (player && player.setAdsEnabled) player.setAdsEnabled(false);
                     notifyReloadStarted(weapon);
                 }
                 return started;
@@ -459,36 +460,11 @@
             return window.innerWidth / Math.max(1, window.innerHeight);
         }
 
-        function pistolCylinderRadiusWu(weapon) {
-            if (!weapon) return 0;
-            var key = isAdsActiveForWeapon(weapon.id) ? 'adsCylinderRadiusWu' : 'hipfireCylinderRadiusWu';
-            var value = Number(weapon[key] != null ? weapon[key] : 0);
-            return isFinite(value) && value > 0 ? value : 0;
-        }
-
-        function projectCylinderRadiusToScreenPx(camera, radiusWu, referenceDistance) {
-            if (!camera || !(radiusWu > 0) || !(referenceDistance > 0)) return 0;
-            var vFov = Number(camera.fov || 75) * Math.PI / 180;
-            var projected = radiusWu / Math.max(0.0001, referenceDistance * Math.tan(vFov * 0.5));
-            return Math.max(0, projected * (window.innerHeight * 0.5));
-        }
-
         function getSpreadMetrics(weaponId) {
             refreshWeaponCatalogIfNeeded();
             var weapon = typeof weaponId === 'string' ? weapons[weaponId] : weaponId;
             if (!weapon) {
                 return { radiusPx: 0, radiusXpx: 0, radiusYpx: 0, spread: 0 };
-            }
-            if (weapon.id === 'pistol' && weapon.singleHitFromPellets) {
-                var player = playerApi();
-                var camera = player && player.getCamera ? player.getCamera() : null;
-                var cylinderRadiusPx = projectCylinderRadiusToScreenPx(camera, pistolCylinderRadiusWu(weapon), PISTOL_RETICLE_REFERENCE_DISTANCE_WU);
-                return {
-                    radiusPx: cylinderRadiusPx,
-                    radiusXpx: cylinderRadiusPx,
-                    radiusYpx: cylinderRadiusPx,
-                    spread: pistolCylinderRadiusWu(weapon)
-                };
             }
 
             var spread = getActiveAimSpread(weapon);
@@ -582,16 +558,6 @@
             };
         }
 
-        function getCircleSampleNdcOffset(weapon, sample) {
-            var metrics = getSpreadMetrics(weapon);
-            var radiusXpx = Number(metrics && metrics.radiusXpx || 0);
-            var radiusYpx = Number(metrics && metrics.radiusYpx || 0);
-            return {
-                x: (Number(sample && sample.x || 0) * radiusXpx) / (window.innerWidth * 0.5),
-                y: (Number(sample && sample.y || 0) * radiusYpx) / (window.innerHeight * 0.5)
-            };
-        }
-
         function getCurrentWeaponData() {
             refreshWeaponCatalogIfNeeded();
             return weapons[activeWeaponId()] || weapons.rifle || null;
@@ -612,7 +578,7 @@
                 ? {
                     reloading: !!combatState.reloading,
                     reloadPct: Math.max(0, Math.min(1, Number(combatState.reloadPct != null ? combatState.reloadPct : 0))),
-                    phase: String(combatState.reloadPhase || (combatState.reloading ? 'manipulate' : (reloadedFlashRemaining > 0 ? 'complete' : 'ready'))),
+                    phase: String(combatState.reloadPhase || (combatState.reloading ? 'action' : (reloadedFlashRemaining > 0 ? 'complete' : 'ready'))),
                     phasePct: Math.max(0, Math.min(1, Number(combatState.reloadPhasePct != null ? combatState.reloadPhasePct : (combatState.reloading ? 0.5 : 1))))
                 }
                 : resolveReloadPresentationState(weapon.id, weapon.reloadMs, reloadRemaining, reloadedFlashRemaining, null);
@@ -648,7 +614,7 @@
         function buildReticleSpec(weapon) {
             if (!weapon) return null;
             var autoLock = !!getAutoLockConfig(weapon);
-            var circleReticle = autoLock || weapon.id === 'shotgun' || (weapon.singleHitFromPellets && weapon.id !== 'pistol');
+            var circleReticle = autoLock || weapon.id === 'shotgun';
             return {
                 type: circleReticle ? 'circle' : 'crosshair',
                 size: circleReticle
@@ -913,7 +879,6 @@
             getAutoLockConfig: getAutoLockConfig,
             getAutoLockReticleSizePx: getAutoLockReticleSizePx,
             getWeaponSpreadNdcOffset: getWeaponSpreadNdcOffset,
-            getCircleSampleNdcOffset: getCircleSampleNdcOffset,
             getEffectiveMaxRange: getEffectiveMaxRange,
             getDamageForType: getDamageForType,
             applyDistanceFalloff: applyDistanceFalloff,
@@ -923,7 +888,6 @@
             consumeAmmoForShot: consumeAmmoForShot,
             markLocalShotFired: markLocalShotFired,
             getViewFovDeg: getViewFovDeg,
-            pistolCylinderRadiusWu: pistolCylinderRadiusWu,
             getWeaponFalloffBands: function (weaponId) {
                 refreshWeaponCatalogIfNeeded();
                 return weaponFalloffTuning[String(weaponId || '')] || null;

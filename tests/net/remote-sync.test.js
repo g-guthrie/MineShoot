@@ -19,10 +19,28 @@ async function loadRemoteSync(remoteInterpolationTuning = null, runtimeOverrides
     gameplayTuning: baseGameplayTuning && overrideGameplayTuning
       ? { ...baseGameplayTuning, ...overrideGameplayTuning }
       : (overrideGameplayTuning || baseGameplayTuning),
+    getNetworkTuning() {
+      return (this.gameplayTuning && this.gameplayTuning.network) || {};
+    },
+    getMovementTuning() {
+      return (this.gameplayTuning && this.gameplayTuning.movement) || {};
+    },
     ...(runtimeOverrides.GameShared || {})
   };
+  var overrideNet = runtimeOverrides.GameNet || null;
+  var normalizedNet = overrideNet;
+  if (overrideNet && !overrideNet.timing) {
+    normalizedNet = {
+      ...overrideNet,
+      timing: {
+        getAuthoritativeNow: overrideNet.getAuthoritativeNow || (() => 0),
+        toLocalTime: overrideNet.toLocalTime || ((value) => value)
+      }
+    };
+  }
   const mergedRuntime = {
     ...runtimeOverrides,
+    GameNet: normalizedNet,
     GameShared: mergedGameShared
   };
   const sandbox = {

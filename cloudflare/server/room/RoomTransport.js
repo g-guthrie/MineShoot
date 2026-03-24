@@ -215,7 +215,7 @@ function handleWebSocketRequest(room, request, url) {
   server.serializeAttachment({ userId, username, classId, actorId, actorName });
 
   room.ensurePlayer(userId, username, classId, actorId, actorName);
-  if (!isReconnect && !isPrivate && room.matchState && room.matchState.ended && typeof room.resetPublicRoomToIdle === 'function') {
+  if (!isPrivate && room.matchState && room.matchState.ended && typeof room.resetPublicRoomToIdle === 'function') {
     room.resetPublicRoomToIdle();
   }
   room.clients.set(server, {

@@ -92,7 +92,6 @@ export function buildGameNetAssemblyDeps(runtime) {
         GameNetAuth: runtimeValue(runtime, 'GameNetAuth'),
         GameNetEntities: runtimeValue(runtime, 'GameNetEntities'),
         GameNetCommands: runtimeValue(runtime, 'GameNetCommands'),
-        GameNetRuntimeAccess: runtimeValue(runtime, 'GameNetRuntimeAccess'),
         GameNetJoinState: runtimeValue(runtime, 'GameNetJoinState'),
         GameNetConnectionTiming: runtimeValue(runtime, 'GameNetConnectionTiming'),
         GameNetRuntimeState: runtimeValue(runtime, 'GameNetRuntimeState'),
@@ -101,10 +100,8 @@ export function buildGameNetAssemblyDeps(runtime) {
         GameNetRuntimeCore: runtimeValue(runtime, 'GameNetRuntimeCore'),
         GameNetSnapshots: runtimeValue(runtime, 'GameNetSnapshots'),
         GameNetEffects: runtimeValue(runtime, 'GameNetEffects'),
-        GameNetFacade: runtimeValue(runtime, 'GameNetFacade'),
         GameAbilityFx: runtimeValue(runtime, 'GameAbilityFx'),
-        GameActorVisualFactory: runtimeValue(runtime, 'GameActorVisualFactory'),
-        GameCombatTuning: runtimeValue(runtime, 'GameCombatTuning')
+        GameActorVisualFactory: runtimeValue(runtime, 'GameActorVisualFactory')
     };
 }
 
@@ -118,7 +115,10 @@ export function buildThrowableProjectileRuntimeDeps(runtime) {
         getNetApi: function () { return runtimeValue(runtime, 'GameNet'); },
         getPlayerApi: function () { return runtimeValue(runtime, 'GamePlayer'); },
         getSharedApi: function () { return runtimeValue(runtime, 'GameShared'); },
-        getRemoteEntitiesApi: function () { return runtimeValue(runtime, 'GameNetEntities'); }
+        getRemoteEntitiesApi: function () {
+            var gameNet = runtimeValue(runtime, 'GameNet');
+            return gameNet && gameNet.remoteEntities ? gameNet.remoteEntities : null;
+        }
     };
 }
 
@@ -153,11 +153,9 @@ export const gameNetRuntimeScriptUrls = Object.freeze([
     new URL('../net/connection-timing.js', import.meta.url),
     new URL('../net/runtime-state.js', import.meta.url),
     new URL('../net/commands.js', import.meta.url),
-    new URL('../net/runtime-access.js', import.meta.url),
     new URL('../net/message-router.js', import.meta.url),
     new URL('../net/runtime-core.js', import.meta.url),
     new URL('../net/state-view.js', import.meta.url),
     new URL('../net/effects.js', import.meta.url),
-    new URL('../net/facade.js', import.meta.url),
     new URL('../net/network.js', import.meta.url)
 ]);

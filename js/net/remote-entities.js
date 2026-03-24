@@ -17,10 +17,6 @@
         return deps.getSharedApi ? (deps.getSharedApi() || {}) : ((globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared) || {});
     }
 
-    function combatTuningApi() {
-        return deps.getCombatTuningApi ? (deps.getCombatTuningApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameCombatTuning || null);
-    }
-
     function actorVisualFactory() {
         return deps.getActorVisualFactory ? (deps.getActorVisualFactory() || null) : (globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null);
     }
@@ -41,9 +37,7 @@
 
     function remoteInterpolationTuning() {
         var shared = sharedApi();
-        var network = shared.gameplayTuning && shared.gameplayTuning.network
-            ? shared.gameplayTuning.network
-            : null;
+        var network = shared.getNetworkTuning ? shared.getNetworkTuning() : null;
         return network && network.remoteInterpolation ? network.remoteInterpolation : {};
     }
 
@@ -58,8 +52,7 @@
 
     function movementTuning() {
         var shared = sharedApi();
-        var gameplayTuning = shared && shared.gameplayTuning ? shared.gameplayTuning : {};
-        return gameplayTuning && gameplayTuning.movement ? gameplayTuning.movement : {};
+        return shared && shared.getMovementTuning ? (shared.getMovementTuning() || {}) : {};
     }
 
     function snapshotFootY(entity) {
@@ -345,11 +338,9 @@
     }
 
     function classWallhackRadiusFor(classId) {
-        var tuningApi = combatTuningApi();
-        if (tuningApi && tuningApi.getClassWallhackRadius) {
-            return tuningApi.getClassWallhackRadius(classId);
-        }
-        return 90;
+        var preset = sharedClassPreset(classId);
+        var radius = Number(preset && preset.wallhackRadius || 0);
+        return radius > 0 ? radius : 90;
     }
 
     function sharedClassPreset(classId) {
@@ -364,9 +355,7 @@
             armorMax: preset && Number(preset.armorMax || 0) > 0
                 ? Number(preset.armorMax)
                 : Math.max(0, Number(entityConstants.DEFAULT_ARMOR_MAX || entityConstants.DEFAULT_ARMOR || 0)),
-            wallhackRadius: preset && Number(preset.wallhackRadius || 0) > 0
-                ? Number(preset.wallhackRadius)
-                : classWallhackRadiusFor(classId)
+            wallhackRadius: classWallhackRadiusFor(classId)
         };
     }
 

@@ -36,7 +36,6 @@ export default defineConfig({
             path.includes('/js/combat/throwables-fire-zones.js') ||
             path.includes('/js/combat/throwables.js') ||
             path.includes('/js/combat/hitscan.js') ||
-            path.includes('/js/combat/combat-tuning.js') ||
             path.includes('/js/domain/weapons/')
           ) return 'gameplay-combat';
           if (
@@ -58,7 +57,6 @@ export default defineConfig({
             path.includes('/js/core/local-match.js') ||
             path.includes('/shared/damage.js') ||
             path.includes('/shared/seek-core.js') ||
-            path.includes('/shared/seek-profiles.js') ||
             path.includes('/shared/entity-constants.js') ||
             path.includes('/shared/entity-points.js') ||
             path.includes('/shared/protocol.js') ||

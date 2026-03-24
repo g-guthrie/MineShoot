@@ -15,6 +15,7 @@ import {
 function emptyMatchState(gameMode) {
   return {
     gameMode,
+    stockMode: gameMode === 'ffa',
     started: false,
     ended: false,
     startedAt: 0,
@@ -104,17 +105,27 @@ test('public match helpers start tdm and assign the lighter team on join baselin
   assert.ok(joiner.teamId === 'alpha' || joiner.teamId === 'bravo');
 });
 
-test('public matches start immediately when the first human connects', () => {
+test('public FFA still starts with one human but does not auto-win without a kill', () => {
   const room = {
     roomName: 'ffa-01',
     gameMode: 'ffa',
     players: new Map([
-      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 0, progressScore: 0 }]
+      ['u1', { id: 'u1', fixtureType: '', teamId: '', kills: 0, progressScore: 0, eliminated: false }]
     ]),
     matchState: emptyMatchState('ffa'),
     isPublicMatchRoom() { return true; },
     connectedHumanCount() { return 1; },
-    initializeLmsMatchState() {}
+    initializeLmsMatchState() {},
+    finishPublicMatchCalled: 0,
+    finishPublicMatch(winnerId, winnerTeam) {
+      this.finishPublicMatchCalled += 1;
+      return finishPublicMatch(this, {
+        nowMs: () => 84,
+        matchResetDelayMs: 5000,
+        gameModeFfa: 'ffa',
+        gameModeTdm: 'tdm'
+      }, winnerId, winnerTeam);
+    }
   };
 
   assert.equal(startPublicMatchIfReady(room, {
@@ -131,6 +142,25 @@ test('public matches start immediately when the first human connects', () => {
   assert.equal(room.matchState.started, true);
   assert.equal(room.matchState.startedAt, 42);
   assert.equal(room.matchState.matchBaselinePlayerCount, 1);
+
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, false);
+  assert.equal(room.finishPublicMatchCalled, 0);
+
+  room.players.get('u1').kills = 1;
+  room.players.get('u1').progressScore = 1;
+  updateLeaderProgress(room, {
+    gameModeFfa: 'ffa',
+    teamAlpha: 'alpha',
+    teamBravo: 'bravo'
+  });
+  assert.equal(room.matchState.ended, true);
+  assert.equal(room.matchState.winnerId, 'u1');
+  assert.equal(room.finishPublicMatchCalled, 1);
 });
 
 test('leader, finish, elimination, and reset helpers preserve match outcomes', () => {
@@ -141,7 +171,7 @@ test('leader, finish, elimination, and reset helpers preserve match outcomes', (
       ['u1', { id: 'u1', fixtureType: '', progressScore: 2, kills: 2, deaths: 0 }],
       ['u2', { id: 'u2', fixtureType: '', progressScore: 1, kills: 1, deaths: 0 }]
     ]),
-    matchState: Object.assign(emptyMatchState('ffa'), { started: true, targetProgress: 3 }),
+    matchState: Object.assign(emptyMatchState('ffa'), { started: true, stockMode: false, targetProgress: 3 }),
     getEntityById(id) { return this.players.get(id) || null; },
     updateLeaderProgress() {
       return updateLeaderProgress(this, {

@@ -233,10 +233,12 @@ test('gameplay runtime bootstrap does not double-init multiplayer networking whe
       shutdown() {
         harnessCalls.netShutdown += 1;
       },
-      getWorldMeta() {
-        return {
-          worldSeed: 'seed-room-01'
-        };
+      view: {
+        getWorldMeta() {
+          return {
+            worldSeed: 'seed-room-01'
+          };
+        }
       }
     }
   });

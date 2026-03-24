@@ -35,17 +35,19 @@ async function loadGameplayRuntimeLoopHarness(runtimeOverrides = {}) {
     },
     GameNet: {
       update() {},
-      getSelfReconciliationState() {
-        return { authoritativeState: { id: 'usr_test', seq: 1 }, pendingInputs: [] };
-      },
-      getAuthoritativeSelfState() {
-        return { id: 'usr_test', alive: false };
-      },
-      getRespawnState() {
-        return { active: true, respawnAt: 1800, remainingMs: 800 };
-      },
-      getSelfAbilityState() { return null; },
-      consumeNotice() { return ''; }
+      view: {
+        getSelfReconciliationState() {
+          return { authoritativeState: { id: 'usr_test', seq: 1 }, pendingInputs: [] };
+        },
+        getAuthoritativeSelfState() {
+          return { id: 'usr_test', alive: false };
+        },
+        getRespawnState() {
+          return { active: true, respawnAt: 1800, remainingMs: 800 };
+        },
+        getSelfAbilityState() { return null; },
+        consumeNotice() { return ''; }
+      }
     },
     GameNetSelfSync: {
       syncPlayerState(state, dt, options) {

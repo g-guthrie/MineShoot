@@ -37,17 +37,13 @@
 
     function readInterpolationTuning() {
         var shared = (globalThis.__MAYHEM_RUNTIME || {}).GameShared || {};
-        var network = shared.gameplayTuning && shared.gameplayTuning.network
-            ? shared.gameplayTuning.network
-            : null;
+        var network = shared.getNetworkTuning ? shared.getNetworkTuning() : null;
         return network && network.remoteInterpolation ? network.remoteInterpolation : {};
     }
 
     function readMovementTuning() {
         var shared = (globalThis.__MAYHEM_RUNTIME || {}).GameShared || {};
-        return shared.gameplayTuning && shared.gameplayTuning.movement
-            ? shared.gameplayTuning.movement
-            : {};
+        return shared.getMovementTuning ? (shared.getMovementTuning() || {}) : {};
     }
 
     function readGravityWuPerSecSq() {

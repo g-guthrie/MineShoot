@@ -71,7 +71,7 @@ This is why shots feel instant without becoming messy or double-triggered.
 
 ## 3. The client and server use the same movement rules
 
-The local player does not just guess. It steps movement with the same grounded, jump, gravity, collision, sprint, and ADS movement rules used by the authoritative path.
+The local player does not just guess. It steps movement with the same grounded, jump, gravity, collision, sprint, and scoped-movement rules used by the authoritative path.
 
 ```js
 stepMovement(state, entry.inputState, {

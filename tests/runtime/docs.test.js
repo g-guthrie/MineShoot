@@ -62,33 +62,32 @@ test('briefing page teaches swapping weapons, throwables, and the equipped abili
   assert.match(html, /Pistol/i);
 });
 
-test('pistol weapon profile explains the circle-scan single-winner behavior', async () => {
+test('pistol weapon profile explains the normal single-ray hand-cannon behavior', async () => {
   const docs = await loadDocsHarness();
   const data = docs.getData();
   const pistol = data.weapons.find((weapon) => weapon.id === 'pistol');
 
   assert.ok(pistol);
-  assert.equal(docs.weaponFireModelLabel(pistol), 'Cylinder single winner');
+  assert.equal(docs.weaponFireModelLabel(pistol), 'Single-ray hitscan');
 
   const combatRows = docs.buildWeaponCombatRows(pistol);
-  const gateRow = combatRows.find((row) => row.label === 'singleHitFromPellets');
-  assert.ok(gateRow);
-  assert.equal(gateRow.value, 'Yes');
+  const primitiveRow = combatRows.find((row) => row.label === 'primitiveType');
+  assert.ok(primitiveRow);
+  assert.equal(primitiveRow.value, 'hitscan_single');
 
   docs.setState({ selectedWeaponId: 'pistol' });
   const html = docs.buildContent('weapons');
-  assert.match(html, /World-space cylinder scan weapon/i);
-  assert.match(html, /midrange guide/i);
-  assert.match(html, /singleHitFromPellets/i);
+  assert.match(html, /Single-shot hitscan/i);
+  assert.match(html, /same spread-driven one-ray shot model/i);
+  assert.doesNotMatch(html, /singleHitFromPellets/i);
 });
 
-test('tunables page calls out the pistol versus shotgun spread-model split', async () => {
+test('tunables page calls out pistol returning to the normal hitscan path', async () => {
   const docs = await loadDocsHarness();
   const html = docs.buildContent('tunables');
 
-  assert.match(html, /pistol is the signature edge case/i);
-  assert.match(html, /Shotgun uses the same base family without that gate, so every pellet can land/i);
-  assert.match(html, /world-space cylinder/i);
+  assert.match(html, /Pistol now uses the same single-ray hitscan path/i);
+  assert.match(html, /Shotgun remains the dedicated multi-pellet edge case/i);
   assert.match(html, /primitiveType/i);
 });
 
@@ -141,8 +140,7 @@ test('docs pages reflect remapped slot, throwable, and manual labels', async () 
   assert.match(homeHtml, /reload on T/i);
   assert.match(homeHtml, /Use C for the current throwable and G for your equipped ability/i);
   assert.match(controlsHtml, /I \/ J \/ K \/ L/i);
-  assert.match(controlsHtml, /RMB \/ ALT ADS/i);
   assert.match(controlsHtml, /T reload/i);
-  assert.match(controlsHtml, /Jumping no longer cancels ADS/i);
+  assert.match(controlsHtml, /Sniper auto-scopes when you equip it/i);
   assert.match(controlsHtml, /field manual.*J/i);
 });

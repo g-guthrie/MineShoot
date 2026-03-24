@@ -40,7 +40,7 @@ test('authoritative movement advances forward from intent input', () => {
   });
 
   assert.equal(entity.x, 0);
-  assert.ok(entity.z < -0.79 && entity.z > -0.81);
+  assert.ok(entity.z < -0.69 && entity.z > -0.71);
   assert.ok(entity.moveSpeedNorm > 0);
 });
 
@@ -115,5 +115,5 @@ test('authoritative movement leaves positions unconstrained when bounds are abse
   });
 
   assert.equal(entity.x, 10);
-  assert.ok(entity.z < 9.21 && entity.z > 9.19);
+  assert.ok(entity.z < 9.31 && entity.z > 9.29);
 });

@@ -234,8 +234,8 @@ test('GameNet records sent input samples with timing metadata', async () => {
   GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
 
   assert.equal(sentMessages.length, 2);
-  const syncState = GameNet.getInputSyncState();
-  const pending = GameNet.getPendingInputSamples();
+  const syncState = GameNet.view.getInputSyncState();
+  const pending = GameNet.view.getPendingInputSamples();
   assert.equal(syncState.pendingInputCount, 2);
   assert.equal(pending.length, 2);
   assert.equal(pending[0].dtMs, 17);
@@ -279,8 +279,8 @@ test('GameNet prunes acked input samples from self snapshots', async () => {
     fireZones: []
   });
 
-  const syncState = GameNet.getInputSyncState();
-  const pending = GameNet.getPendingInputSamples();
+  const syncState = GameNet.view.getInputSyncState();
+  const pending = GameNet.view.getPendingInputSamples();
   assert.equal(syncState.lastAckedSeq, 1);
   assert.equal(syncState.pendingInputCount, 1);
   assert.equal(pending[0].seq, 2);
@@ -375,11 +375,11 @@ test('GameNet exposes an unsent input tail while local intent continues past the
 
   timeState.now = 1000;
   GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
-  assert.equal(GameNet.getInputSyncState().hasUnsentInputTail, true);
+  assert.equal(GameNet.view.getInputSyncState().hasUnsentInputTail, true);
 
   timeState.now = 1005;
   GameNet.update(0.005, { x: 0.03, y: 1.6, z: -0.02 }, { yaw: 0, pitch: 0 });
-  assert.equal(GameNet.getInputSyncState().hasUnsentInputTail, true);
+  assert.equal(GameNet.view.getInputSyncState().hasUnsentInputTail, true);
 });
 
 test('GameNet preserves input send remainder after a long frame instead of resetting the cadence cleanly', async () => {
@@ -463,8 +463,8 @@ test('GameNet maps compact abilityFx snapshot state into client selectors', asyn
     fireZones: []
   });
 
-  const abilityState = GameNet.getSelfAbilityState();
-  const chokeVictim = GameNet.getChokeVictimStateForEntity('usr_test');
+  const abilityState = GameNet.view.getSelfAbilityState();
+  const chokeVictim = GameNet.view.getChokeVictimStateForEntity('usr_test');
 
   assert.equal(abilityState.cooldownRemaining, 1.25);
   assert.equal(abilityState.abilityId, 'choke');
@@ -518,7 +518,7 @@ test('GameNet updates self ability loadout immediately on class_changed before t
     abilityId: 'hook'
   });
 
-  assert.equal(GameNet.getSelfAbilityState().abilityId, 'hook');
+  assert.equal(GameNet.view.getSelfAbilityState().abilityId, 'hook');
 });
 
 test('GameNet preserves the selected weapon loadout locally until snapshots catch up', async () => {
@@ -534,11 +534,11 @@ test('GameNet preserves the selected weapon loadout locally until snapshots catc
     worldFlags: { envV2: true, terrainPhysicsV2: true }
   });
 
-  assert.equal(GameNet.sendWeaponLoadout('sniper', 'rifle'), true);
+  assert.equal(GameNet.commands.sendWeaponLoadout('sniper', 'rifle'), true);
   assert.deepEqual(sentMessages.at(-1), {
     t: 'weapon_loadout',
-    slot1: 'sniper',
-    slot2: 'rifle'
+    slot1: 'rifle',
+    slot2: 'sniper'
   });
 
   harness.handleMessage({
@@ -562,8 +562,8 @@ test('GameNet preserves the selected weapon loadout locally until snapshots catc
     fireZones: []
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfState().weaponLoadout)), ['sniper', 'rifle']);
-  assert.equal(GameNet.getSelfState().weaponId, 'sniper');
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.view.getSelfState().weaponLoadout)), ['rifle', 'sniper']);
+  assert.equal(GameNet.view.getSelfState().weaponId, 'rifle');
 
   harness.handleMessage({
     t: 'snapshot',
@@ -577,8 +577,8 @@ test('GameNet preserves the selected weapon loadout locally until snapshots catc
         yaw: 0,
         pitch: 0,
         seq: 2,
-        weaponId: 'sniper',
-        weaponLoadout: ['sniper', 'rifle']
+        weaponId: 'rifle',
+        weaponLoadout: ['rifle', 'sniper']
       }
     ],
     removedEntityIds: [],
@@ -586,8 +586,8 @@ test('GameNet preserves the selected weapon loadout locally until snapshots catc
     fireZones: []
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSelfState().weaponLoadout)), ['sniper', 'rifle']);
-  assert.equal(GameNet.getSelfState().weaponId, 'sniper');
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.view.getSelfState().weaponLoadout)), ['rifle', 'sniper']);
+  assert.equal(GameNet.view.getSelfState().weaponId, 'rifle');
 });
 
 test('GameNet stores snapshot timing and estimates current server time from snapshots', async () => {
@@ -605,15 +605,15 @@ test('GameNet stores snapshot timing and estimates current server time from snap
     fireZones: []
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getSnapshotTimingState())), {
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.timing.getSnapshotTimingState())), {
     serverTime: 940,
     receivedAt: 1000,
     serverTimeOffsetMs: 60
   });
 
   timeState.now = 1065;
-  assert.equal(GameNet.getEstimatedServerTime(), 1005);
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getConnectionTimingState())), {
+  assert.equal(GameNet.timing.getEstimatedServerTime(), 1005);
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.timing.getConnectionTimingState())), {
     snapshot: {
       serverTime: 940,
       receivedAt: 1000,
@@ -641,12 +641,12 @@ test('GameNet does not queue input samples when transport send fails', async () 
   timeState.now = 1060;
   GameNet.update(0.05, { x: 0, y: 1.6, z: 0 }, { yaw: 0.1, pitch: 0 });
 
-  const syncState = GameNet.getInputSyncState();
+  const syncState = GameNet.view.getInputSyncState();
   assert.equal(sentMessages.length, 0);
   assert.equal(syncState.lastSentSeq, 0);
   assert.equal(syncState.pendingInputCount, 0);
   assert.equal(syncState.ackDrift, 0);
-  assert.equal(GameNet.getPendingInputSamples().length, 0);
+  assert.equal(GameNet.view.getPendingInputSamples().length, 0);
 });
 
 test('GameNet clears stale snapshot timing after transport close', async () => {
@@ -665,12 +665,12 @@ test('GameNet clears stale snapshot timing after transport close', async () => {
   });
 
   timeState.now = 1065;
-  assert.equal(GameNet.getEstimatedServerTime(), 1005);
+  assert.equal(GameNet.timing.getEstimatedServerTime(), 1005);
 
   closeTransport();
   timeState.now = 6000;
-  assert.equal(GameNet.getEstimatedServerTime(), 0);
-  assert.equal(GameNet.getConnectionTimingState().snapshot, null);
+  assert.equal(GameNet.timing.getEstimatedServerTime(), 0);
+  assert.equal(GameNet.timing.getConnectionTimingState().snapshot, null);
 });
 
 test('GameNet remaps death respawn timing onto the local clock when snapshot timing is available', async () => {
@@ -705,7 +705,7 @@ test('GameNet remaps death respawn timing onto the local clock when snapshot tim
     z: 8
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.view.getRespawnState())), {
     active: true,
     respawnAt: 1400,
     remainingMs: 300
@@ -734,7 +734,7 @@ test('GameNet delays death respawn scheduling until snapshot timing is available
     z: 8
   });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.view.getRespawnState())), {
     active: true,
     respawnAt: 0,
     remainingMs: 0
@@ -751,7 +751,7 @@ test('GameNet delays death respawn scheduling until snapshot timing is available
   });
   GameNet.update(0.016, { x: 0, y: 1.6, z: 0 }, { yaw: 0, pitch: 0 });
 
-  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.getRespawnState())), {
+  assert.deepEqual(JSON.parse(JSON.stringify(GameNet.view.getRespawnState())), {
     active: true,
     respawnAt: 1400,
     remainingMs: 300
@@ -774,7 +774,7 @@ test('GameNet sendFire includes estimated server shot time when snapshot timing 
   });
 
   timeState.now = 1080;
-  assert.equal(GameNet.sendFire('rifle', 'shot_1'), true);
+  assert.equal(GameNet.commands.sendFire('rifle', 'shot_1'), true);
   assert.equal(sentMessages.length, 1);
   assert.equal(sentMessages[0].t, 'fire');
   assert.equal(sentMessages[0].weaponId, 'rifle');
@@ -787,7 +787,7 @@ test('GameNet sendFire omits estimated server shot time when snapshot timing is 
   const harness = await loadGameNetHarness();
   const { GameNet, sentMessages } = harness;
 
-  assert.equal(GameNet.sendFire('rifle', 'shot_2'), true);
+  assert.equal(GameNet.commands.sendFire('rifle', 'shot_2'), true);
   assert.equal(sentMessages.length, 1);
   assert.equal('estimatedServerShotTime' in sentMessages[0], false);
 });
@@ -829,7 +829,7 @@ test('GameNet tracks pong RTT and jitter in connection timing state', async () =
     serverTime: 1080
   });
 
-  const timing = JSON.parse(JSON.stringify(GameNet.getConnectionTimingState()));
+  const timing = JSON.parse(JSON.stringify(GameNet.timing.getConnectionTimingState()));
   assert.equal(timing.rttMs, 120);
   assert.equal(timing.responsiveRttMs, 120);
   assert.equal(timing.pessimisticRttMs, 120);
@@ -856,7 +856,7 @@ test('GameNet keeps a separate pessimistic RTT estimate for delay decisions afte
     serverTime: 1280
   });
 
-  const timing = JSON.parse(JSON.stringify(GameNet.getConnectionTimingState()));
+  const timing = JSON.parse(JSON.stringify(GameNet.timing.getConnectionTimingState()));
   assert.equal(Number(timing.responsiveRttMs.toFixed(1)), 72.5);
   assert.equal(timing.pessimisticRttMs > timing.responsiveRttMs, true);
   assert.equal(timing.pessimisticRttMs, 200);
@@ -894,10 +894,10 @@ test('GameNet rejects stale self snapshots before mutating self state', async ()
     removedEntityIds: []
   });
 
-  assert.equal(GameNet.getSelfState().seq, 3);
-  assert.equal(GameNet.getSelfState().x, 4);
-  assert.equal(GameNet.getSelfState().hp, 400);
-  assert.equal(GameNet.getInputSyncState().lastAckedSeq, 3);
+  assert.equal(GameNet.view.getSelfState().seq, 3);
+  assert.equal(GameNet.view.getSelfState().x, 4);
+  assert.equal(GameNet.view.getSelfState().hp, 400);
+  assert.equal(GameNet.view.getInputSyncState().lastAckedSeq, 3);
 });
 
 test('GameNet accepts wrapped self snapshot sequences when they are newer in modular order', async () => {
@@ -932,10 +932,10 @@ test('GameNet accepts wrapped self snapshot sequences when they are newer in mod
     removedEntityIds: []
   });
 
-  assert.equal(GameNet.getSelfState().seq, 1);
-  assert.equal(GameNet.getSelfState().x, 9);
-  assert.equal(GameNet.getSelfState().hp, 375);
-  assert.equal(GameNet.getInputSyncState().lastAckedSeq, 1);
+  assert.equal(GameNet.view.getSelfState().seq, 1);
+  assert.equal(GameNet.view.getSelfState().x, 9);
+  assert.equal(GameNet.view.getSelfState().hp, 375);
+  assert.equal(GameNet.view.getInputSyncState().lastAckedSeq, 1);
 });
 
 test('GameNet preserves authoritative projectile and fire zone state when delta snapshots omit them', async () => {
@@ -960,7 +960,7 @@ test('GameNet preserves authoritative projectile and fire zone state when delta 
     removedEntityIds: []
   });
 
-  const throwableState = GameNet.getAuthoritativeThrowableState();
+  const throwableState = GameNet.view.getAuthoritativeThrowableState();
   assert.deepEqual(JSON.parse(JSON.stringify(throwableState.projectiles)), [{ id: 'proj_1' }]);
   assert.deepEqual(JSON.parse(JSON.stringify(throwableState.fireZones)), [{ id: 'zone_1' }]);
 });

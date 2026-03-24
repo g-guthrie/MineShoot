@@ -94,7 +94,12 @@
 
         function remoteEntitiesRuntimeApi() {
             var deps = runtimeDeps();
-            return deps.getRemoteEntitiesApi ? deps.getRemoteEntitiesApi() : ((globalThis.__MAYHEM_RUNTIME || {}).GameNetEntities || null);
+            if (deps.getRemoteEntitiesApi) {
+                var explicit = deps.getRemoteEntitiesApi();
+                if (explicit) return explicit;
+            }
+            var net = (globalThis.__MAYHEM_RUNTIME || {}).GameNet || null;
+            return net && net.remoteEntities ? net.remoteEntities : null;
         }
 
         function buildThrowIntent(camera, options) {
@@ -738,7 +743,8 @@
             if (!id) return null;
             var out = outVec3 || new THREE.Vector3();
             var netApi = netRuntimeApi();
-            var selfState = netApi && netApi.getAuthoritativeSelfState ? netApi.getAuthoritativeSelfState() : null;
+            var netView = netApi && netApi.view ? netApi.view : null;
+            var selfState = netView && netView.getAuthoritativeSelfState ? netView.getAuthoritativeSelfState() : null;
             if (selfState && id === String(selfState.id || '')) {
                 var playerApi = playerRuntimeApi();
                 var selfPos = playerApi && playerApi.getPosition ? playerApi.getPosition(tmpPlayerPos) : null;
@@ -974,8 +980,7 @@
 
                     if (p.type === 'plasma_stream') {
                         var netApi = netRuntimeApi();
-                        var netRuntime = netApi && netApi.runtime ? netApi.runtime : netApi;
-                        var netActive = !!(netRuntime && netRuntime.isActive && netRuntime.isActive());
+                        var netActive = !!(netApi && netApi.isActive && netApi.isActive());
                         if (!netActive && hit.object && hit.object.userData) {
                             var streamHitType = hit.object.userData.type || 'body';
                             var streamDamage = streamHitType === 'head' ? (def.headDamage || def.damage || 15) : (def.bodyDamage || def.damage || 15);

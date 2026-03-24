@@ -5,9 +5,12 @@
     'use strict';
 
     var RT = globalThis.__MAYHEM_RUNTIME;
+    var shared = RT.GameShared || {};
 
-    var awarenessTuning = (RT.GameCombatTuning && RT.GameCombatTuning.getAwarenessTuning)
-        ? RT.GameCombatTuning.getAwarenessTuning()
+    var awarenessTuning = (shared.getAwarenessTuning)
+        ? shared.getAwarenessTuning()
+        : (shared.gameplayTuning && shared.gameplayTuning.awareness)
+            ? shared.gameplayTuning.awareness
         : {
             segments: 8,
             radarRange: 56,
@@ -47,7 +50,7 @@
     function collectTargets() {
         var seen = Object.create(null);
         var net = RT.GameNet || null;
-        var netView = net && net.view ? net.view : net;
+        var netView = net && net.view ? net.view : null;
         collectTargetsScratch.length = 0;
         if (RT.GameEnemy && RT.GameEnemy.getLockTargets) {
             appendTargets(collectTargetsScratch, seen, RT.GameEnemy.getLockTargets() || []);

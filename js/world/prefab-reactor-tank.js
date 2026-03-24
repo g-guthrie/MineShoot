@@ -204,9 +204,6 @@ import { cloneMaterial } from './biome-utils.js';
         buildDropPipe(place, mats, pipeTopY, pipeRoofY, ox, oz - tankR, 0, -1, colliderOptions);  // North
         buildDropPipe(place, mats, pipeTopY, pipeRoofY, ox, oz + tankR, 0, 1, colliderOptions);   // South
 
-        // ── Concrete foundation pad ──
-        tb(place, 'tank-foundation', null, ox, 0.05, oz, baseW + 2, 0.1, baseD + 2, mats.concrete, true);
-
         return { structures: 1, tankPeakHeight: baseH + tankH + capH + capR };
     }
 
