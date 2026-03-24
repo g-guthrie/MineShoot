@@ -167,8 +167,8 @@ test('network state view uses shared interpolation clock helpers and entity cons
       clockOffsetMs: 100,
       cadenceMs: 30,
       estimatedServerTime: 1030,
-      interpolationDelayMs: 60,
-      renderServerTime: 970
+      interpolationDelayMs: 56,
+      renderServerTime: 974
     }
   );
   assert.equal(view.getSelfState().hp, 420);

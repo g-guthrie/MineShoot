@@ -144,6 +144,31 @@ test('player view falls back to the rig api when no actor visual wrapper is pres
   assert.ok(Math.abs(calls[0].reloadPct - 0.75) < 0.000001);
 });
 
+test('player view forwards yaw and derived turn rate into actor animation updates', async () => {
+  const calls = [];
+  const view = await loadPlayerView(() => null);
+
+  view.updateAvatarAnimation(0.016, 0, baseAnimState({
+    yaw: 0,
+    actorVisual: {
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      }
+    }
+  }));
+  view.updateAvatarAnimation(0.016, 0, baseAnimState({
+    yaw: Math.PI * 0.25,
+    actorVisual: {
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      }
+    }
+  }));
+
+  assert.equal(calls[1].yaw, Math.PI * 0.25);
+  assert.ok(calls[1].turnRate > 40);
+});
+
 test('player view applies sprint FOV scaling from speedNorm', async () => {
   const fastView = await loadPlayerView(() => null);
   const fastState = baseCameraState({

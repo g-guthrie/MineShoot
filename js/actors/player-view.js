@@ -23,6 +23,7 @@
         var firePoseKick = 0;
         var sprintFovBlend = 0;
         var muzzleFlashTimer = 0;
+        var lastAnimationYaw = null;
         var recoilPatternPitch = 0;
         var recoilPatternYaw = 0;
         var recoilPatternRoll = 0;
@@ -77,6 +78,7 @@
             gunBobY = 0;
             gunRecoil = 0;
             palmRecoil = 0;
+            lastAnimationYaw = null;
             cameraKickPitch = 0;
             cameraKickYaw = 0;
             cameraKickRoll = 0;
@@ -113,6 +115,13 @@
                 pattern: 'snap',
                 patternStrength: 0
             };
+        }
+
+        function normalizeAngle(rad) {
+            var out = Number(rad || 0);
+            while (out > Math.PI) out -= Math.PI * 2;
+            while (out < -Math.PI) out += Math.PI * 2;
+            return out;
         }
 
         function recoilProfileForWeapon(weaponId) {
@@ -234,6 +243,12 @@
                 : ((state.avatarRigApi && state.avatarRigApi.updateAnimation) ? state.avatarRigApi : null);
             if (!animationApi) return;
             var speedNorm = Math.max(0, Math.min(1.4, speed / state.runSpeed));
+            var renderYaw = (typeof state.yaw === 'number') ? Number(state.yaw || 0) : 0;
+            var turnRate = 0;
+            if (Math.max(0, Number(dt || 0)) > 0 && typeof lastAnimationYaw === 'number') {
+                turnRate = normalizeAngle(renderYaw - lastAnimationYaw) / Math.max(0.0001, Number(dt || 0));
+            }
+            lastAnimationYaw = renderYaw;
             var activeWeaponState = options.getCurrentWeaponState ? options.getCurrentWeaponState() : null;
             var reloadPresentation = {
                 reloading: false,
@@ -295,6 +310,8 @@
                 reloadPhase: reloadPresentation.phase,
                 reloadPhasePct: reloadPresentation.phasePct,
                 worldSpeed: speed,
+                yaw: renderYaw,
+                turnRate: turnRate,
                 movingForward: !!state.movingForward,
                 movingBackward: !!state.movingBackward,
                 movingLeft: !!state.movingLeft,

@@ -2,6 +2,13 @@ import * as THREE_NS from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ensureThreeGlobal } from '../app/three-runtime.js';
+import {
+    applyDirectionalLocomotionPose,
+    createDirectionalLocomotionState,
+    directionalLocomotionNeedsCustomStart,
+    resolveMoveIntent,
+    updateDirectionalLocomotionState
+} from './boxman-directional-locomotion.js';
 
 /**
  * boxman-rig.js - Local-player Boxman avatar rig prototype.
@@ -150,20 +157,86 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         return map;
     }
 
-        function playAction(actions, currentState, nextName, fade) {
-            var next = actions[nextName] || null;
-            if (!next || currentState.clipName === nextName) return;
+    function clipStartFraction(clipName) {
+        var name = String(clipName || '');
+        if (name === 'jump_idle' || name === 'jump_running') return 0.24;
+        return 0;
+    }
+
+    function resolveClipPlayback(animState, clipName) {
+        var name = String(clipName || '');
+        var reverse = false;
+        if (
+            (name === 'run' || name === 'sprint') &&
+            animState &&
+            animState.movingBackward &&
+            !animState.movingForward
+        ) {
+            reverse = true;
+        }
+        return {
+            reverse: reverse,
+            timeScale: reverse ? -1 : 1,
+            startFraction: clipStartFraction(name)
+        };
+    }
+
+    function applyPlaybackSettings(action, playback, resetTime) {
+        if (!action) return;
+        var settings = playback || { timeScale: 1, reverse: false };
+        var rate = Number(settings.timeScale || 1);
+        var clip = action.getClip ? action.getClip() : null;
+        var duration = clip ? Math.max(0, Number(clip.duration || 0)) : 0;
+        action.enabled = true;
+        action.paused = false;
+        action.timeScale = rate;
+        if (!resetTime || !(duration > 0)) return;
+        var startFraction = Math.max(0, Math.min(1, Number(settings.startFraction || 0)));
+        if (rate < 0) {
+            action.time = Math.max(0.0001, (duration * (1 - startFraction)) - 0.0001);
+        } else {
+            action.time = duration * startFraction;
+        }
+    }
+
+    function keepPlaybackLooping(action, playback) {
+        if (!action) return;
+        var settings = playback || { timeScale: 1, reverse: false };
+        var rate = Number(settings.timeScale || 1);
+        var clip = action.getClip ? action.getClip() : null;
+        var duration = clip ? Math.max(0, Number(clip.duration || 0)) : 0;
+        if (!(duration > 0)) return;
+        if (rate < 0 && action.time <= 0.0001) {
+            action.time = Math.max(0.0001, duration - 0.0001);
+        } else if (rate > 0 && action.time >= (duration - 0.0001)) {
+            action.time = 0;
+        }
+    }
+
+    function playAction(actions, currentState, nextName, fade, playback) {
+        var next = actions[nextName] || null;
+        if (!next) return;
+
+        if (currentState.clipName === nextName) {
+            var nextRate = Number(playback && playback.timeScale || 1);
+            if (currentState.playbackRate !== nextRate) {
+                applyPlaybackSettings(next, playback, false);
+                currentState.playbackRate = nextRate;
+            }
+            return;
+        }
 
         if (currentState.action) {
             currentState.action.fadeOut(fade);
         }
 
-            next.reset();
-            next.enabled = true;
-            next.fadeIn(fade).play();
-            currentState.action = next;
-            currentState.clipName = nextName;
-        }
+        next.reset();
+        applyPlaybackSettings(next, playback, true);
+        next.fadeIn(fade).play();
+        currentState.action = next;
+        currentState.clipName = nextName;
+        currentState.playbackRate = Number(playback && playback.timeScale || 1);
+    }
 
     function isDirectionalMove(animState) {
         if (!animState) return false;
@@ -172,11 +245,7 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
 
     function movementStartClip(animState) {
         if (!animState) return 'start_forward';
-        if (animState.movingBackward && animState.movingLeft && !animState.movingRight) return 'start_back_left';
-        if (animState.movingBackward && animState.movingRight && !animState.movingLeft) return 'start_back_right';
-        if (animState.movingLeft && !animState.movingRight) return 'start_left';
-        if (animState.movingRight && !animState.movingLeft) return 'start_right';
-        return 'start_forward';
+        return directionalLocomotionNeedsCustomStart(animState) ? '' : 'start_forward';
     }
 
     function landingClip(motionState, animState) {
@@ -192,19 +261,16 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         return Number(action.getClip().duration || fallback || 0);
     }
 
-    function shouldUseTurnClip(animState, motionState) {
-        if (!animState || animState.airborne || isDirectionalMove(animState)) return '';
-        if (motionState.lastYaw == null || typeof animState.yaw !== 'number') return '';
-        var delta = animState.yaw - motionState.lastYaw;
-        while (delta > Math.PI) delta -= Math.PI * 2;
-        while (delta < -Math.PI) delta += Math.PI * 2;
-        if (Math.abs(delta) < 0.05) return '';
-        return delta > 0 ? 'rotate_left' : 'rotate_right';
+    function resolveIdleTurnClip(motionState) {
+        var directional = motionState && motionState.directional ? motionState.directional : null;
+        if (!directional || !directional.useTurnLoopClip) return '';
+        return directional.turnClipDirection > 0 ? 'rotate_left' : 'rotate_right';
     }
 
     function selectClip(animState, motionState, actions) {
         var moving = isDirectionalMove(animState);
         var grounded = !!(animState && !animState.airborne);
+        var directional = motionState && motionState.directional ? motionState.directional : createDirectionalLocomotionState();
 
         if (motionState.lockName && motionState.lockRemaining > 0) {
             return motionState.lockName;
@@ -224,9 +290,14 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         }
 
         if (grounded && moving && !motionState.wasMoving) {
+            if (directionalLocomotionNeedsCustomStart(animState)) {
+                return (animState && animState.sprinting && Number(animState.speedNorm || 0) > 0.4) ? 'sprint' : 'run';
+            }
             motionState.lockName = movementStartClip(animState);
-            motionState.lockRemaining = Math.max(0.12, clipDuration(actions, motionState.lockName, 0.22) * 0.65);
-            return motionState.lockName;
+            if (motionState.lockName) {
+                motionState.lockRemaining = Math.max(0.12, clipDuration(actions, motionState.lockName, 0.22) * 0.65);
+                return motionState.lockName;
+            }
         }
 
         if (grounded && !moving && motionState.wasMoving) {
@@ -240,7 +311,16 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         }
 
         if (grounded && !moving) {
-            var turnClip = shouldUseTurnClip(animState, motionState);
+            if (directional.useTurnEntryClip && motionState.turnEntryDirection !== directional.turnClipDirection) {
+                motionState.turnEntryDirection = directional.turnClipDirection;
+                motionState.lockName = directional.turnClipDirection > 0 ? 'start_left' : 'start_right';
+                motionState.lockRemaining = Math.max(0.08, clipDuration(actions, motionState.lockName, 0.18) * 0.55);
+                return motionState.lockName;
+            }
+            if (!directional.useTurnLoopClip) {
+                motionState.turnEntryDirection = 0;
+            }
+            var turnClip = resolveIdleTurnClip(motionState);
             if (turnClip) return turnClip;
         }
 
@@ -303,7 +383,8 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         var actions = createActionMap(mixer, template.animations);
         var actionState = {
             clipName: '',
-            action: null
+            action: null,
+            playbackRate: 1
         };
         var motionState = {
             wasGrounded: true,
@@ -312,7 +393,9 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
             lockName: '',
             lockRemaining: 0,
             jumpTriggered: false,
-            lastGroundedSpeed: 0
+            lastGroundedSpeed: 0,
+            directional: createDirectionalLocomotionState(),
+            turnEntryDirection: 0
         };
         var currentWeaponId = String(options.weaponId || 'rifle');
         var disposed = false;
@@ -337,7 +420,13 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         var bodyUpper = modelRoot.getObjectByName('body_upper') || modelRoot;
         var bodyLower = modelRoot.getObjectByName('body_lower') || modelRoot;
         var head = modelRoot.getObjectByName('head') || modelRoot;
+        var armUpperL = modelRoot.getObjectByName('arm_upper.L') || null;
+        var armUpperR = modelRoot.getObjectByName('arm_upper.R') || null;
         var armLowerL = modelRoot.getObjectByName('arm_lower.L') || modelRoot;
+        var legUpperL = modelRoot.getObjectByName('leg_upper.L') || null;
+        var legUpperR = modelRoot.getObjectByName('leg_upper.R') || null;
+        var legLowerL = modelRoot.getObjectByName('leg_lower.L') || null;
+        var legLowerR = modelRoot.getObjectByName('leg_lower.R') || null;
 
         var coreAnchor = createAnchor(bodyLower, 0, 0.24, 0);
         var eyeAnchor = createAnchor(head, 0, 0.16, 0.02);
@@ -346,6 +435,7 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         var rig = {
             root: root,
             modelRoot: modelRoot,
+            modelBaseYaw: Math.PI,
             bodyMesh: skinnedMesh,
             headMesh: skinnedMesh,
             armLMesh: skinnedMesh,
@@ -356,7 +446,17 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
             eyeAnchor: eyeAnchor,
             throwableOriginAnchor: throwableOriginAnchor,
             upperBodyPivot: bodyUpper,
-            activeClipName: 'idle'
+            activeClipName: 'idle',
+            bodyUpper: bodyUpper,
+            bodyLower: bodyLower,
+            headBone: head,
+            armUpperL: armUpperL,
+            armUpperR: armUpperR,
+            legUpperL: legUpperL,
+            legUpperR: legUpperR,
+            legLowerL: legLowerL,
+            legLowerR: legLowerR,
+            activePoseName: ''
         };
 
         root.userData.bodyParts = skinnedMesh ? [skinnedMesh] : [];
@@ -390,10 +490,19 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
                 }
             }
 
+            motionState.directional = updateDirectionalLocomotionState(motionState.directional, dt, animState);
             var clipName = selectClip(animState, motionState, actions);
-            playAction(actions, actionState, clipName, 0.1);
+            var playback = resolveClipPlayback(animState, clipName);
+            playAction(actions, actionState, clipName, 0.1, playback);
+            keepPlaybackLooping(actionState.action, playback);
             mixer.update(dt);
             rig.activeClipName = actionState.clipName || clipName;
+            rig.activePlaybackRate = Number(playback.timeScale || 1);
+            rig.activePoseName = '';
+
+            if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
+                rig.activePoseName = motionState.directional.poseName || '';
+            }
 
             motionState.wasGrounded = !animState.airborne;
             motionState.wasMoving = isDirectionalMove(animState);
@@ -461,7 +570,7 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
         }
 
         applyTintColor();
-        playAction(actions, actionState, 'idle', 0);
+        playAction(actions, actionState, 'idle', 0, resolveClipPlayback(null, 'idle'));
         mixer.update(0);
 
         return {
@@ -496,6 +605,14 @@ import { ensureThreeGlobal } from '../app/three-runtime.js';
     GameBoxmanRig.create = function (options) {
         if (!templateAsset) return null;
         return createRig(options || {});
+    };
+
+    GameBoxmanRig._test = {
+        resolveClipPlayback: resolveClipPlayback,
+        selectClip: selectClip,
+        movementStartClip: movementStartClip,
+        resolveMoveIntent: resolveMoveIntent,
+        clipStartFraction: clipStartFraction
     };
 
     runtime.GameBoxmanRig = GameBoxmanRig;

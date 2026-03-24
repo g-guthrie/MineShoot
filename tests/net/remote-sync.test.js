@@ -139,6 +139,8 @@ test('remote sync forwards airborne movement intent to animation', async () => {
     sprinting: false,
     movingForward: false,
     movingBackward: true,
+    movingLeft: true,
+    movingRight: false,
     isGrounded: false,
     velocityY: 0,
     hookedUntil: 0,
@@ -165,6 +167,59 @@ test('remote sync forwards airborne movement intent to animation', async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].movingForward, false);
   assert.equal(calls[0].movingBackward, true);
+  assert.equal(calls[0].movingLeft, true);
+  assert.equal(calls[0].movingRight, false);
+});
+
+test('remote sync forwards yaw and derived turn rate into remote animation updates', async () => {
+  const remoteSync = await loadRemoteSync();
+  const calls = [];
+  const render = {
+    id: 'usr_remote_turn',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote_turn', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+  render.targetYaw = Math.PI * 0.25;
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls[1].yaw, Math.PI * 0.25);
+  assert.ok(calls[1].turnRate > 40);
 });
 
 test('remote sync triggers replicated fire animation when muzzle flash starts', async () => {

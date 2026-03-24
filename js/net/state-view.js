@@ -141,6 +141,8 @@
                 sprinting: !!choosePresentationValue(!!base.sprinting, !!head.sprinting, sampleT),
                 movingForward: !!choosePresentationValue(!!base.movingForward, !!head.movingForward, sampleT),
                 movingBackward: !!choosePresentationValue(!!base.movingBackward, !!head.movingBackward, sampleT),
+                movingLeft: !!choosePresentationValue(!!base.movingLeft, !!head.movingLeft, sampleT),
+                movingRight: !!choosePresentationValue(!!base.movingRight, !!head.movingRight, sampleT),
                 isGrounded: choosePresentationValue(base.isGrounded !== false, head.isGrounded !== false, sampleT) !== false,
                 velocityY: lerpNumber(base.velocityY, head.velocityY, sampleT),
                 weaponId: String(choosePresentationValue(base.weaponId || 'rifle', head.weaponId || 'rifle', sampleT) || 'rifle')
@@ -204,6 +206,8 @@
                 sprinting: !!presentState.sprinting,
                 movingForward: !!presentState.movingForward,
                 movingBackward: !!presentState.movingBackward,
+                movingLeft: !!presentState.movingLeft,
+                movingRight: !!presentState.movingRight,
                 isGrounded: presentState.isGrounded !== false,
                 velocityY: Number(presentState.velocityY || 0),
                 weaponId: String(render.weaponId || 'rifle')

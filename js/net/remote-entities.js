@@ -98,6 +98,8 @@
             sprinting: !!state.sprinting,
             movingForward: !!state.movingForward,
             movingBackward: !!state.movingBackward,
+            movingLeft: !!state.movingLeft,
+            movingRight: !!state.movingRight,
             isGrounded: state.isGrounded !== false,
             velocityY: Number(state.velocityY || 0),
             muzzleFlashUntil: Number(state.muzzleFlashUntil || 0)
@@ -122,6 +124,8 @@
             sprinting: !!entity.sprinting,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
+            movingLeft: !!entity.movingLeft,
+            movingRight: !!entity.movingRight,
             isGrounded: entity.isGrounded !== false,
             velocityY: Number(entity.velocityY || 0),
             muzzleFlashUntil: Number(entity.muzzleFlashUntil || 0)
@@ -317,6 +321,8 @@
             sprinting: !!entity.sprinting,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
+            movingLeft: !!entity.movingLeft,
+            movingRight: !!entity.movingRight,
             isGrounded: entity.isGrounded !== false,
             velocityY: Number(entity.velocityY || 0),
             muzzleFlashUntil: Number(entity.muzzleFlashUntil || 0)
@@ -456,6 +462,8 @@
             sprinting: !!entity.sprinting,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
+            movingLeft: !!entity.movingLeft,
+            movingRight: !!entity.movingRight,
             isGrounded: entity.isGrounded !== false,
             velocityY: Number(entity.velocityY || 0),
             _prevIsGrounded: entity.isGrounded !== false,

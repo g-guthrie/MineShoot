@@ -18,7 +18,7 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     weaponId: 'rifle',
     moveSpeedNorm: 0.5,
     sprinting: false,
-    inputState: { forward: true, backward: false },
+    inputState: { forward: true, backward: false, left: true, right: false },
     velocityY: 0,
     isGrounded: true,
     jumpHoldTimer: 0,
@@ -73,6 +73,8 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.equal(state.abilityLockUntil, 0);
   assert.equal(state.movingForward, true);
   assert.equal(state.movingBackward, false);
+  assert.equal(state.movingLeft, true);
+  assert.equal(state.movingRight, false);
   assert.equal(state.chokeState, undefined);
   assert.equal(state.chokeVictimState, undefined);
   assert.equal(state.justBeenHookedState, undefined);

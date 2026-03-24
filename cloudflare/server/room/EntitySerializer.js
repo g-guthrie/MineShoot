@@ -103,6 +103,8 @@ export function toEntityState(entity, now = nowMs()) {
     sprinting: !!entity.sprinting,
     movingForward: !!(entity.inputState && entity.inputState.forward),
     movingBackward: !!(entity.inputState && entity.inputState.backward),
+    movingLeft: !!(entity.inputState && entity.inputState.left),
+    movingRight: !!(entity.inputState && entity.inputState.right),
     velocityY: Number((entity.velocityY || 0).toFixed(4)),
     isGrounded: !!entity.isGrounded,
     jumpHoldTimer: Number((entity.jumpHoldTimer || 0).toFixed(4)),

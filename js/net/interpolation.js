@@ -247,6 +247,8 @@
             sprinting: !!entry.sprinting,
             movingForward: !!entry.movingForward,
             movingBackward: !!entry.movingBackward,
+            movingLeft: !!entry.movingLeft,
+            movingRight: !!entry.movingRight,
             isGrounded: entry.isGrounded !== false,
             velocityY: Number(entry.velocityY || 0),
             muzzleFlashUntil: Number(entry.muzzleFlashUntil || 0)
@@ -272,6 +274,8 @@
             sprinting: alpha >= 0.5 ? !!to.sprinting : !!from.sprinting,
             movingForward: alpha >= 0.5 ? !!to.movingForward : !!from.movingForward,
             movingBackward: alpha >= 0.5 ? !!to.movingBackward : !!from.movingBackward,
+            movingLeft: alpha >= 0.5 ? !!to.movingLeft : !!from.movingLeft,
+            movingRight: alpha >= 0.5 ? !!to.movingRight : !!from.movingRight,
             isGrounded: alpha >= 0.5 ? to.isGrounded !== false : from.isGrounded !== false,
             velocityY: lerpNumber(from.velocityY, to.velocityY, alpha),
             muzzleFlashUntil: Math.max(
@@ -368,6 +372,8 @@
             sprinting: !!last.sprinting,
             movingForward: !!last.movingForward,
             movingBackward: !!last.movingBackward,
+            movingLeft: !!last.movingLeft,
+            movingRight: !!last.movingRight,
             isGrounded: last.isGrounded !== false,
             velocityY: Number(last.velocityY || 0),
             muzzleFlashUntil: Number(last.muzzleFlashUntil || 0)
@@ -390,6 +396,8 @@
             sprinting: !!choosePresentationValue(!!older.sprinting, !!newer.sprinting, t),
             movingForward: !!choosePresentationValue(!!older.movingForward, !!newer.movingForward, t),
             movingBackward: !!choosePresentationValue(!!older.movingBackward, !!newer.movingBackward, t),
+            movingLeft: !!choosePresentationValue(!!older.movingLeft, !!newer.movingLeft, t),
+            movingRight: !!choosePresentationValue(!!older.movingRight, !!newer.movingRight, t),
             isGrounded: choosePresentationValue(older.isGrounded !== false, newer.isGrounded !== false, t) !== false,
             velocityY: lerpNumber(older.velocityY, newer.velocityY, t),
             muzzleFlashUntil: Number(choosePresentationValue(Number(older.muzzleFlashUntil || 0), Number(newer.muzzleFlashUntil || 0), t) || 0)

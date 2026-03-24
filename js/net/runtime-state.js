@@ -191,6 +191,8 @@
                 sprinting: !!entity.sprinting,
                 movingForward: !!entity.movingForward,
                 movingBackward: !!entity.movingBackward,
+                movingLeft: !!entity.movingLeft,
+                movingRight: !!entity.movingRight,
                 isGrounded: entity.isGrounded !== false,
                 velocityY: normalizeRemoteSnapshotNumber(entity.velocityY, 0),
                 weaponId: String(entity.weaponId || 'rifle')

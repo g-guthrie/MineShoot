@@ -215,6 +215,23 @@
                 !!presentState.movingBackward,
                 animationAlpha
             );
+            var presentedMovingLeft = smoothPresentationFlag(
+                r,
+                '_presentedMovingLeftBlend',
+                !!presentState.movingLeft,
+                animationAlpha
+            );
+            var presentedMovingRight = smoothPresentationFlag(
+                r,
+                '_presentedMovingRightBlend',
+                !!presentState.movingRight,
+                animationAlpha
+            );
+            var remoteTurnRate = 0;
+            if (dt > 0 && typeof r._prevAnimationYaw === 'number') {
+                remoteTurnRate = normalizeAngle(renderYaw - Number(r._prevAnimationYaw || 0)) / Math.max(0.0001, Number(dt || 0));
+            }
+            r._prevAnimationYaw = renderYaw;
 
             if (r.actorVisual && r.actorVisual.setWorldTransform) {
                 r.actorVisual.setWorldTransform({ x: nextX, y: nextY, z: nextZ }, nextYaw);
@@ -257,8 +274,12 @@
                         reloadPhase: remoteReloadState.phase,
                         reloadPhasePct: remoteReloadState.phasePct,
                         worldSpeed: presentedSpeedNorm * 14,
+                        yaw: renderYaw,
+                        turnRate: remoteTurnRate,
                         movingForward: presentedMovingForward,
-                        movingBackward: presentedMovingBackward
+                        movingBackward: presentedMovingBackward,
+                        movingLeft: presentedMovingLeft,
+                        movingRight: presentedMovingRight
                     });
                 }
                 var triggerApi = (r.actorVisual && r.actorVisual.triggerAction) ? r.actorVisual : r.rigApi;
@@ -320,6 +341,8 @@
                 sprinting: !!presentState.sprinting,
                 movingForward: !!presentState.movingForward,
                 movingBackward: !!presentState.movingBackward,
+                movingLeft: !!presentState.movingLeft,
+                movingRight: !!presentState.movingRight,
                 isGrounded: presentState.isGrounded !== false,
                 velocityY: Number(presentState.velocityY || 0),
                 muzzleFlashUntil: Number(presentState.muzzleFlashUntil || 0)
