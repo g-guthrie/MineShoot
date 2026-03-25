@@ -29,6 +29,29 @@ export function createMovementInputState() {
   };
 }
 
+function applyStrafeBias(input, move) {
+  if (!input) return move;
+  const forwardHeld = !!input.forward;
+  const backwardHeld = !!input.backward;
+  const leftHeld = !!input.left;
+  const rightHeld = !!input.right;
+  if (leftHeld === rightHeld) return move;
+  if (forwardHeld || backwardHeld) {
+    return {
+      forward: move.forward,
+      right: leftHeld
+        ? Math.tan(45 * (Math.PI / 180)) * (move.right < 0 ? -1 : 1)
+        : Math.tan(30 * (Math.PI / 180)) * (move.right < 0 ? -1 : 1)
+    };
+  }
+  return {
+    forward: leftHeld
+      ? 0
+      : (1 / Math.tan(65 * (Math.PI / 180))),
+    right: move.right
+  };
+}
+
 export function hasIntentInputMessage(msg) {
   if (!msg || typeof msg !== 'object') return false;
   return (
@@ -151,14 +174,23 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   const rightX = Math.cos(yaw);
   const rightZ = -Math.sin(yaw);
 
-  let moveX = 0;
-  let moveZ = 0;
+  let moveForward = 0;
+  let moveRight = 0;
   if (!movementLocked) {
-    if (input.forward) { moveX += forwardX; moveZ += forwardZ; }
-    if (input.backward) { moveX -= forwardX; moveZ -= forwardZ; }
-    if (input.left) { moveX -= rightX; moveZ -= rightZ; }
-    if (input.right) { moveX += rightX; moveZ += rightZ; }
+    if (input.forward) moveForward += 1;
+    if (input.backward) moveForward -= 1;
+    if (input.left) moveRight -= 1;
+    if (input.right) moveRight += 1;
+    const biased = applyStrafeBias(input, {
+      forward: moveForward,
+      right: moveRight
+    });
+    moveForward = Number(biased.forward || 0);
+    moveRight = Number(biased.right || 0);
   }
+
+  let moveX = (moveForward * forwardX) + (moveRight * rightX);
+  let moveZ = (moveForward * forwardZ) + (moveRight * rightZ);
 
   const moveLength = Math.sqrt((moveX * moveX) + (moveZ * moveZ));
   if (moveLength > 0) {

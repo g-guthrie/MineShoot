@@ -73,8 +73,8 @@ test('directional locomotion hits the planned movement-facing targets for strafe
   });
 
   assert.ok(Math.abs(strafeState.targetFacingYaw - (90 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(forwardDiagonalState.targetFacingYaw + (45 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(retreatDiagonalState.targetFacingYaw + (30 * (Math.PI / 180))) < 0.000001);
+  assert.ok(Math.abs(forwardDiagonalState.targetFacingYaw + (30 * (Math.PI / 180))) < 0.000001);
+  assert.ok(Math.abs(retreatDiagonalState.targetFacingYaw - (40 * (Math.PI / 180))) < 0.000001);
 });
 
 test('directional locomotion uses a subtle idle pose for small standing turns', () => {
@@ -212,10 +212,10 @@ test('directional locomotion turns the whole model toward travel and twists tors
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.modelRoot.rotation.y - (Math.PI * 0.5)) < 0.000001);
-  assert.ok(rig.bodyLower.rotation.y > 0.25);
-  assert.ok(rig.bodyUpper.rotation.y > 0.35);
-  assert.ok(rig.headBone.rotation.y > 0.5);
+  assert.ok(Math.abs(rig.modelRoot.rotation.y - (Math.PI - (55 * (Math.PI / 180)))) < 0.000001);
+  assert.ok(rig.bodyLower.rotation.y > 0.18);
+  assert.ok(rig.bodyUpper.rotation.y > 0.23);
+  assert.ok(rig.headBone.rotation.y > 0.33);
 });
 
 test('directional locomotion keeps pure backward centered and retreat-biased', () => {
@@ -232,7 +232,29 @@ test('directional locomotion keeps pure backward centered and retreat-biased', (
     sprinting: false
   });
 
-  assert.ok(Math.abs(rig.modelRoot.rotation.y - Math.PI) < 0.000001);
+  assert.ok(Math.abs(rig.modelRoot.rotation.y - (Math.PI - (10 * (Math.PI / 180)))) < 0.000001);
   assert.ok(rig.bodyLower.rotation.x > 0);
   assert.ok(rig.bodyUpper.rotation.x > 0);
+});
+
+test('directional locomotion swaps backward diagonal visual facing so back-left faces right', () => {
+  const leftRetreat = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(leftRetreat, 0.016, {
+    movingBackward: true,
+    movingLeft: true,
+    speedNorm: 0.7,
+    sprinting: false
+  });
+  const rightRetreat = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(rightRetreat, 0.016, {
+    movingBackward: true,
+    movingRight: true,
+    speedNorm: 0.7,
+    sprinting: false
+  });
+
+  assert.ok(Math.abs(leftRetreat.targetFacingYaw + (75 * (Math.PI / 180))) < 0.000001);
+  assert.equal(leftRetreat.poseName, 'back_right');
+  assert.ok(Math.abs(rightRetreat.targetFacingYaw - (40 * (Math.PI / 180))) < 0.000001);
+  assert.equal(rightRetreat.poseName, 'back_left');
 });

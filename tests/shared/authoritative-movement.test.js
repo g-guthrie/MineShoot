@@ -119,6 +119,55 @@ test('authoritative movement leaves positions unconstrained when bounds are abse
   assert.ok(entity.z < 9.31 && entity.z > 9.29);
 });
 
+test('authoritative movement biases pure strafe into diagonal travel to match the lower-body cap', () => {
+  const entity = createEntity();
+  const input = createMovementInputState();
+  input.right = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.1,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.ok(entity.x > 0.63 && entity.x < 0.65);
+  assert.ok(entity.z < -0.29 && entity.z > -0.31);
+  assert.ok(entity.moveSpeedNorm > 0);
+});
+
+test('authoritative movement uses asymmetric diagonal bias for left and right input', () => {
+  const leftEntity = createEntity();
+  const leftInput = createMovementInputState();
+  leftInput.forward = true;
+  leftInput.left = true;
+  stepAuthoritativeMovement(leftEntity, leftInput, {
+    dtSec: 0.1,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  const rightEntity = createEntity();
+  const rightInput = createMovementInputState();
+  rightInput.forward = true;
+  rightInput.right = true;
+  stepAuthoritativeMovement(rightEntity, rightInput, {
+    dtSec: 0.1,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.ok(leftEntity.x < -0.49 && leftEntity.x > -0.51);
+  assert.ok(leftEntity.z < -0.49 && leftEntity.z > -0.51);
+  assert.ok(rightEntity.x > 0.34 && rightEntity.x < 0.36);
+  assert.ok(rightEntity.z < -0.60 && rightEntity.z > -0.62);
+});
+
 test('authoritative movement carries sprint through takeoff but does not allow starting sprint midair', () => {
   const entity = createEntity();
   const jumpInput = createMovementInputState();

@@ -110,15 +110,18 @@ test('boxman idle aim pose tracks vertical look on the right arm only', () => {
     currentPitch: boxmanRig._test.idleAimTargetPitch({
       aimPitch: 0.5,
       airborne: false
+    }),
+    currentYaw: boxmanRig._test.idleAimTargetYaw({
+      facingYaw: Math.PI * 0.25
     })
   });
 
   assert.equal(applied, true);
   assert.ok(rig.armUpperR.rotation.x < -1.35);
   assert.ok(rig.armLowerR.rotation.x < -0.45);
-  assert.equal(rig.armUpperR.rotation.y, 1);
+  assert.ok(rig.armUpperR.rotation.y > 1);
   assert.equal(rig.armUpperR.rotation.z, 2);
-  assert.equal(rig.armLowerR.rotation.y, 3);
+  assert.ok(rig.armLowerR.rotation.y > 3);
   assert.equal(rig.armLowerR.rotation.z, 4);
 });
 
@@ -166,6 +169,62 @@ test('boxman overrides the run clip right arm with the idle base pose', () => {
   assert.equal(rig.armLowerR.rotation.z, 0);
 });
 
+test('boxman suppresses right-arm run swing while fire recoil is active', () => {
+  const rig = {
+    armUpperR: { rotation: { x: 0, y: 0, z: 0 } },
+    armLowerR: { rotation: { x: 0, y: 0, z: 0 } },
+    fireRecoilState: {
+      shoulderPitch: -0.1,
+      lowerArmPitch: -0.2,
+      weaponKick: -0.05
+    }
+  };
+
+  const applied = boxmanRig._test.applyRunRightArmIdleBasePose(rig, 'run', {
+    time: 0.25,
+    getClip() {
+      return { duration: 1 };
+    }
+  });
+
+  assert.equal(applied, true);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+});
+
+test('boxman no longer uses fake shoulder carry translation or yaw compensation', () => {
+  const rig = {
+    armUpperR: {
+      rotation: { x: 0, y: 0.1, z: 0 },
+      position: {
+        x: 1,
+        y: 2,
+        z: 0,
+        copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+      }
+    },
+    armUpperRBasePos: {
+      x: 1,
+      y: 2,
+      z: 0,
+      copy() { return this; },
+      applyAxisAngle() { return { x: 0.955336489125606, y: 2, z: 0.29552020666133955 }; }
+    },
+    armLowerR: { rotation: { x: 0, y: 0.2, z: 0 } }
+  };
+
+  const applied = boxmanRig._test.applyTorsoCarryPose(rig, {
+    bodyUpperAimYaw: 0.3,
+    bodyLowerAimYaw: 0.2
+  });
+
+  assert.equal(applied, true);
+  assert.equal(rig.armUpperR.rotation.y, 0.1);
+  assert.equal(rig.armLowerR.rotation.y, 0.2);
+  assert.equal(rig.armUpperR.position.x, 1);
+  assert.equal(rig.armUpperR.position.z, 0);
+});
+
 test('boxman idle aim layer stays enabled for normal clips but disables for sprint and roll', () => {
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'idle'), true);
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'run'), true);
@@ -190,16 +249,67 @@ test('boxman idle aim target preserves the arm-out baseline and softens live res
   assert.ok(lookDown < neutral);
 });
 
+test('boxman idle aim target yaw counter-rotates against facing yaw and clamps', () => {
+  const mild = boxmanRig._test.idleAimTargetYaw({ facingYaw: 10 * (Math.PI / 180) }, 'idle');
+  const hard = boxmanRig._test.idleAimTargetYaw({ facingYaw: Math.PI }, 'idle');
+  const runYaw = boxmanRig._test.idleAimTargetYaw({ facingYaw: Math.PI * 0.5 }, 'run');
+
+  assert.ok(mild > 0);
+  assert.ok(Math.abs(hard) <= (90 * (Math.PI / 180)));
+  assert.ok(Math.abs(hard) > Math.abs(mild));
+  assert.ok(Math.abs(runYaw - (Math.PI * 0.5)) < 0.000001);
+});
+
+test('boxman counter-rotates the gun only on the outward-opening side', () => {
+  const rig = {
+    weaponRoot: {
+      rotation: {
+        x: 0,
+        y: 0,
+        z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      }
+    },
+    weaponRootBaseRot: { x: 0.08, y: 0.22, z: 0 }
+  };
+
+  const outward = boxmanRig._test.applyWeaponOrientationCompensation(rig, { currentYaw: 0.5 });
+  assert.equal(outward, true);
+  assert.ok(rig.weaponRoot.rotation.y < 0.22);
+
+  const inward = boxmanRig._test.applyWeaponOrientationCompensation(rig, { currentYaw: -0.5 });
+  assert.equal(inward, false);
+  assert.equal(rig.weaponRoot.rotation.y, 0.22);
+});
+
 test('boxman defines a tiny floating weapon cube mount off the right lower arm', () => {
   const mount = boxmanRig._test.weaponMount();
 
-  assert.ok(mount.rootPos.x > 0);
+  assert.ok(mount.rootPos.x < 0);
   assert.ok(mount.rootPos.y > 0.5);
-  assert.ok(mount.rootPos.z < -0.12);
+  assert.equal(mount.rootPos.z, -0.06);
+  assert.ok(mount.rootRot.y > 0.2);
   assert.equal(mount.cubeSize.x, 0.28);
   assert.equal(mount.cubeSize.y, 0.28);
   assert.equal(mount.cubeSize.z, 0.5);
+  assert.equal(mount.barrelPos.z, -0.28);
+  assert.equal(mount.barrelSize.y, 0.24);
   assert.ok(mount.muzzlePos.z < 0);
+});
+
+test('boxman reveal clone helper detaches circular root userData during clone work', () => {
+  const root = { userData: { rig: null } };
+  root.userData.rig = { root };
+  let sawDetachedUserData = false;
+
+  const clone = boxmanRig._test.cloneWithDetachedRootUserData(root, function (target) {
+    sawDetachedUserData = JSON.stringify(target.userData) === '{}';
+    return { ok: true };
+  });
+
+  assert.equal(sawDetachedUserData, true);
+  assert.equal(clone.ok, true);
+  assert.equal(root.userData.rig.root, root);
 });
 
 test('boxman resolves live skeleton bones before falling back to wrapper node names', () => {
@@ -276,7 +386,7 @@ test('boxman only uses the landing roll after a real drop, not from a flat sprin
 
 test('boxman requires meaningful landing horizontal speed for rolls, including diagonals', () => {
   assert.equal(boxmanRig._test.landingClip({
-    lastLandingHorizontalSpeed: 7.4,
+    lastLandingHorizontalSpeed: 1.9,
     lastLandingDropDistance: 3.5
   }, {
     movingForward: true,
@@ -284,7 +394,7 @@ test('boxman requires meaningful landing horizontal speed for rolls, including d
   }), 'drop_running');
 
   assert.equal(boxmanRig._test.landingClip({
-    lastLandingHorizontalSpeed: 8.1,
+    lastLandingHorizontalSpeed: 2.1,
     lastLandingDropDistance: 3.5
   }, {
     movingForward: true,
@@ -321,7 +431,75 @@ test('boxman manual backward roll targets the backpedal origin instead of snappi
   assert.ok(Math.abs(boxmanRig._test.resolveManualRollFacingYaw({
     movingBackward: true,
     movingRight: true
-  })) < 1e-9);
+  }, Math.PI * 0.5) - (Math.PI * 0.5)) < 1e-9);
   assert.equal(boxmanRig._test.needsBackwardRollAlign(Math.PI * 0.5), true);
   assert.equal(boxmanRig._test.needsBackwardRollAlign(5 * (Math.PI / 180)), false);
+});
+
+test('boxman fire recoil layers on top of clip output and stacks across rapid shots', () => {
+  const weaponRootBasePos = { x: 0.08, y: 0.65, z: -0.16 };
+  const rig = {
+    weaponRootBasePos,
+    weaponRoot: {
+      position: {
+        x: weaponRootBasePos.x,
+        y: weaponRootBasePos.y,
+        z: weaponRootBasePos.z,
+        copy(source) {
+          this.x = source.x;
+          this.y = source.y;
+          this.z = source.z;
+          return this;
+        }
+      }
+    },
+    armUpperR: { rotation: { x: 0, y: 0, z: 0 } },
+    armLowerR: { rotation: { x: 0, y: 0, z: 0 } }
+  };
+  const recoilState = boxmanRig._test.createFireRecoilState();
+
+  boxmanRig._test.triggerFireRecoil(recoilState, {
+    weaponKick: -0.03,
+    shoulderPitch: 0.02,
+    shoulderYaw: 0.01,
+    shoulderRoll: 0.004,
+    lowerArmPitch: 0.05,
+    side: 1
+  });
+  boxmanRig._test.applyFireRecoilPose(rig, recoilState);
+
+  const firstWeaponKick = rig.weaponRoot.position.z;
+
+  assert.ok(firstWeaponKick < weaponRootBasePos.z);
+  assert.equal(rig.armUpperR.rotation.x, 0);
+  assert.equal(rig.armUpperR.rotation.y, 0);
+  assert.equal(rig.armLowerR.rotation.x, 0);
+  assert.ok(recoilState.shoulderPitch > 0);
+  assert.ok(recoilState.shoulderYaw > 0);
+  assert.ok(recoilState.lowerArmPitch > 0);
+
+  boxmanRig._test.triggerFireRecoil(recoilState, {
+    weaponKick: -0.03,
+    shoulderPitch: 0.02,
+    shoulderYaw: 0.01,
+    shoulderRoll: 0.004,
+    lowerArmPitch: 0.05,
+    side: 1
+  });
+  rig.armUpperR.rotation.x = 0;
+  rig.armUpperR.rotation.y = 0;
+  rig.armUpperR.rotation.z = 0;
+  rig.armLowerR.rotation.x = 0;
+  boxmanRig._test.applyFireRecoilPose(rig, recoilState);
+
+  assert.ok(rig.weaponRoot.position.z < firstWeaponKick);
+  assert.equal(rig.armUpperR.rotation.x, 0);
+  assert.equal(rig.armUpperR.rotation.y, 0);
+  assert.equal(rig.armLowerR.rotation.x, 0);
+  assert.ok(recoilState.shoulderPitch > 0.03);
+  assert.ok(recoilState.shoulderYaw > 0.015);
+  assert.ok(recoilState.lowerArmPitch > 0.08);
+
+  boxmanRig._test.decayFireRecoilState(recoilState, 0.2);
+  assert.ok(recoilState.lowerArmPitch < 0.1);
 });

@@ -16,6 +16,10 @@ const TURN_LOOP_HEAD_TARGET_MIN_YAW = 3.5 * DEG_TO_RAD;
 const TURN_LOOP_HEAD_TARGET_MAX_YAW = 9 * DEG_TO_RAD;
 const TURN_LOOP_HEAD_STABILIZE_MIN_BLEND = 0.62;
 const TURN_LOOP_HEAD_STABILIZE_MAX_BLEND = 0.82;
+const LEFT_SIDE_EXTRA_OPENING = 45 * DEG_TO_RAD;
+const RIGHT_SIDE_EXTRA_OPENING = 10 * DEG_TO_RAD;
+const LEFT_DIAGONAL_FACING = 45 * DEG_TO_RAD;
+const RIGHT_DIAGONAL_FACING = 30 * DEG_TO_RAD;
 const MOVEMENT_FACING_ANCHORS = [
   {
     angle: 0,
@@ -31,7 +35,7 @@ const MOVEMENT_FACING_ANCHORS = [
   },
   {
     angle: 90 * DEG_TO_RAD,
-    facingYaw: 90 * DEG_TO_RAD,
+    facingYaw: 45 * DEG_TO_RAD,
     retreatLean: 0,
     label: 'strafe'
   },
@@ -185,8 +189,16 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
   const profile = interpolateProfile(movementIntent.absAngle);
   next.intent = movementIntent;
   next.profile = profile;
-  const locomotionYawSign = movementIntent.sideSign === 0 ? 0 : -movementIntent.sideSign;
-  next.targetFacingYaw = locomotionYawSign * profile.facingYaw;
+  const locomotionYawSign = movementIntent.sideSign === 0
+    ? 0
+    : (movementIntent.diagonal && movementIntent.forwardAxis < 0)
+      ? movementIntent.sideSign
+      : -movementIntent.sideSign;
+  let facingYawMagnitude = profile.facingYaw + (movementIntent.sideSign < 0 ? LEFT_SIDE_EXTRA_OPENING : RIGHT_SIDE_EXTRA_OPENING);
+  if (movementIntent.diagonal && movementIntent.forwardAxis > 0) {
+    facingYawMagnitude = movementIntent.sideSign < 0 ? LEFT_DIAGONAL_FACING : RIGHT_DIAGONAL_FACING;
+  }
+  next.targetFacingYaw = locomotionYawSign * facingYawMagnitude;
   const facingBlend = movementIntent.moving ? Math.min(1, delta * 12) : Math.min(1, delta * 10);
   next.facingYaw += (next.targetFacingYaw - Number(next.facingYaw || 0)) * facingBlend;
   if (Math.abs(next.targetFacingYaw - next.facingYaw) < 0.0001) {
@@ -256,7 +268,7 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
     } else if (movementIntent.diagonal && movementIntent.forwardAxis > 0) {
       next.poseName = movementIntent.sideSign < 0 ? 'forward_left' : 'forward_right';
     } else if (movementIntent.diagonal && movementIntent.forwardAxis < 0) {
-      next.poseName = movementIntent.sideSign < 0 ? 'back_left' : 'back_right';
+      next.poseName = movementIntent.sideSign < 0 ? 'back_right' : 'back_left';
     } else {
       next.poseName = 'forward';
     }

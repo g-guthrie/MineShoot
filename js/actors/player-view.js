@@ -199,8 +199,6 @@
 
         function applyUnifiedGunOffsets(dt, avatarRigApi) {
             if (!avatarRigApi || !avatarRigApi.rig) return;
-            var rig = avatarRigApi.rig;
-            if (!rig.gun) return;
 
             var bobBlend = Math.min(1, dt * 12);
             gunBobX += (0 - gunBobX) * bobBlend;
@@ -221,20 +219,6 @@
             cameraKickYaw += (0 - cameraKickYaw) * cameraKickYawBlend;
             cameraKickRoll += (0 - cameraKickRoll) * cameraKickRollBlend;
             updateRecoilPattern(dt);
-
-            if (rig.gunBasePos) {
-                rig.gun.position.copy(rig.gunBasePos);
-            }
-            rig.gun.position.x += gunBobX;
-            rig.gun.position.y += gunBobY;
-            rig.gun.position.z += gunRecoil;
-            if (rig.palmRight) {
-                rig.palmRight.rotation.x += palmRecoil;
-            } else if (rig.palmLeft) {
-                rig.palmLeft.rotation.x += palmRecoil;
-            }
-            if (rig.armR) rig.armR.rotation.x += firePoseKick * 0.05;
-            if (rig.armL) rig.armL.rotation.x += firePoseKick * 0.035;
         }
 
         function updateAvatarAnimation(dt, speed, state) {
@@ -482,21 +466,20 @@
         }
 
         function triggerFireAction(state) {
-            if (!state.avatarRigApi || !state.avatarRigApi.rig || !state.avatarRigApi.rig.gun) return;
-
             var recoil = recoilProfileForWeapon(state.currentWeaponId);
             var scopeMultiplier = 1 - (scopeBlend * 0.2);
             var kickSide = Math.random() < 0.5 ? -1 : 1;
+            var armKickScale = Math.max(0, Number(recoil.armKickScale || 1));
             var yawKick = kickSide * (0.5 + (Math.random() * 0.5)) * recoil.yaw * scopeMultiplier * Math.max(0, Number(recoil.yawKickScale || 1));
             var rollKick = (-yawKick * (recoil.roll / Math.max(recoil.yaw, 0.0001)) * Math.max(0, Number(recoil.rollKickScale || 1))) +
                 (kickSide * recoil.roll * 0.35 * scopeMultiplier * Math.max(0, Number(recoil.rollKickScale || 1)));
 
             gunRecoil += recoil.z * scopeMultiplier * Math.max(0, Number(recoil.gunKickScale || 1));
-            palmRecoil += recoil.x * scopeMultiplier * Math.max(0, Number(recoil.armKickScale || 1));
+            palmRecoil += recoil.x * scopeMultiplier * armKickScale;
             cameraKickPitch += recoil.pitch * scopeMultiplier * Math.max(0, Number(recoil.pitchKickScale || 1));
             cameraKickYaw += yawKick;
             cameraKickRoll += rollKick;
-            firePoseKick += 1 * scopeMultiplier * Math.max(0, Number(recoil.armKickScale || 1));
+            firePoseKick += 1 * scopeMultiplier * armKickScale;
             activeRecoilProfile = recoil;
 
             recoilPatternState.type = String(recoil.pattern || '');
@@ -515,21 +498,23 @@
 
             muzzleFlashTimer = Math.max(0, Number(recoil.muzzleMs || 0)) / 1000;
             setMuzzleVisible(state, muzzleFlashTimer > 0);
+            var fireActionOptions = {
+                duration: recoil.muzzleMs / 1000,
+                strength: 0.9 + (Math.abs(recoil.z) * 4 * Math.max(0, Number(recoil.gunKickScale || 1))),
+                weaponKick: recoil.z * scopeMultiplier * Math.max(0, Number(recoil.gunKickScale || 1)) * 1.5625,
+                shoulderPitch: 0,
+                shoulderYaw: 0,
+                shoulderRoll: 0,
+                lowerArmPitch: Math.max(0.04, Number(recoil.armR || 0.18) * 0.585) * scopeMultiplier * armKickScale * 6,
+                side: kickSide,
+                recoverPitchScale: Math.max(0.2, Number(recoil.pitchRecoverScale || 1)),
+                recoverYawScale: Math.max(0.2, Number(recoil.yawRecoverScale || 1)),
+                recoverRollScale: Math.max(0.2, Number(recoil.rollRecoverScale || 1))
+            };
             if (state.actorVisual && state.actorVisual.triggerAction) {
-                state.actorVisual.triggerAction('fire', {
-                    duration: recoil.muzzleMs / 1000,
-                    strength: 0.9 + (Math.abs(recoil.z) * 4 * Math.max(0, Number(recoil.gunKickScale || 1)))
-                });
+                state.actorVisual.triggerAction('fire', fireActionOptions);
             } else if (state.avatarRigApi && state.avatarRigApi.triggerAction) {
-                state.avatarRigApi.triggerAction('fire', {
-                    duration: recoil.muzzleMs / 1000,
-                    strength: 0.9 + (Math.abs(recoil.z) * 4 * Math.max(0, Number(recoil.gunKickScale || 1)))
-                });
-            }
-            if (state.avatarRigApi && state.avatarRigApi.rig) {
-                var armKickScale = Math.max(0, Number(recoil.armKickScale || 1));
-                if (state.avatarRigApi.rig.armR) state.avatarRigApi.rig.armR.rotation.x += recoil.x * recoil.armR * armKickScale;
-                if (state.avatarRigApi.rig.armL) state.avatarRigApi.rig.armL.rotation.x += recoil.x * recoil.armL * armKickScale;
+                state.avatarRigApi.triggerAction('fire', fireActionOptions);
             }
         }
 

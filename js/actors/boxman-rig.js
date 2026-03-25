@@ -27,15 +27,22 @@ import {
     var BACKWARD_ROLL_ALIGN_DURATION = 0.12;
     var BACKWARD_ROLL_ALIGN_EPSILON = 10 * (Math.PI / 180);
     var ROLL_LANDING_MIN_DROP_WU = 2.0;
-    var ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU = 7.5;
+    var ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.0;
     var RUN_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.8;
     var IDLE_AIM_PITCH_LIMIT = 45 * (Math.PI / 180);
     var IDLE_AIM_NEUTRAL_PITCH = 28 * (Math.PI / 180);
     var IDLE_AIM_RESPONSE_SCALE = 0.5;
+    var IDLE_AIM_YAW_LIMIT = 90 * (Math.PI / 180);
+    var IDLE_AIM_YAW_RESPONSE_SCALE = 1;
+    var RUN_AIM_YAW_RESPONSE_WEIGHT = 1;
     var IDLE_AIM_UPPER_PITCH_SCALE = -2.2;
     var IDLE_AIM_LOWER_PITCH_SCALE = -0.8;
+    var IDLE_AIM_UPPER_YAW_SCALE = 1;
+    var IDLE_AIM_LOWER_YAW_SCALE = 0.35;
     var IDLE_AIM_BLEND_IN_SPEED = 12;
     var IDLE_AIM_BLEND_OUT_SPEED = 10;
+    var OUTWARD_GUN_YAW_COMPENSATION_SCALE = -0.4;
+    var torsoCarryPositionScratch = new THREE.Vector3();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
     var IDLE_RIGHT_ARM_UPPER_BASE = {
@@ -123,12 +130,31 @@ import {
         });
     }
 
+    function cloneWithDetachedRootUserData(root, cloneFn) {
+        if (!root || typeof cloneFn !== 'function') return null;
+        var originalUserData = root.userData;
+        root.userData = {};
+        try {
+            return cloneFn(root);
+        } finally {
+            root.userData = originalUserData;
+        }
+    }
+
     function buildRevealCloneFactory(root) {
         return function cloneVisualForRevealGhost() {
-            var clone = cloneSkeleton(root);
+            if (!root) return null;
+            var clone = cloneWithDetachedRootUserData(root, function (target) {
+                return cloneSkeleton(target);
+            });
+            if (!clone) return null;
             clone.userData = {};
             clone.traverse(function (node) {
-                if (!node || !node.isMesh) return;
+                if (!node) return;
+                if (node !== clone && node.userData) {
+                    node.userData = {};
+                }
+                if (!node.isMesh) return;
                 if (node.geometry && node.geometry.clone) {
                     node.geometry = node.geometry.clone();
                 }
@@ -205,6 +231,89 @@ import {
 
     function lerpAngle(start, target, t) {
         return normalizeAngle(Number(start || 0) + (normalizeAngle(Number(target || 0) - Number(start || 0)) * clamp01(t)));
+    }
+
+    function createFireRecoilState() {
+        return {
+            weaponKick: 0,
+            shoulderPitch: 0,
+            shoulderYaw: 0,
+            shoulderRoll: 0,
+            lowerArmPitch: 0,
+            side: 1,
+            recoverPitchScale: 1,
+            recoverYawScale: 1,
+            recoverRollScale: 1
+        };
+    }
+
+    function applyFireRecoilPose(rig, recoilState) {
+        if (!rig || !recoilState) return false;
+        var weaponNode = rig.weaponRoot || rig.gun || rig.weaponCube || null;
+        var weaponBasePos = rig.weaponRootBasePos || rig.gunBasePos || null;
+        if (weaponNode && weaponBasePos && weaponNode.position && weaponNode.position.copy) {
+            weaponNode.position.copy(weaponBasePos);
+            weaponNode.position.x += Number(recoilState.side || 0) * Math.abs(Number(recoilState.weaponKick || 0)) * 0.18;
+            weaponNode.position.z += Number(recoilState.weaponKick || 0);
+        }
+        return true;
+    }
+
+    function decayFireRecoilState(recoilState, dt) {
+        if (!recoilState) return false;
+        var step = Math.max(0, Number(dt || 0));
+        var pitchBlend = Math.min(1, step * 24 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
+        var yawBlend = Math.min(1, step * 28 * Math.max(0.2, Number(recoilState.recoverYawScale || 1)));
+        var rollBlend = Math.min(1, step * 26 * Math.max(0.2, Number(recoilState.recoverRollScale || 1)));
+        var lowerArmBlend = Math.min(1, step * 30 * Math.max(0.2, Number(recoilState.recoverPitchScale || 1)));
+        var weaponBlend = Math.min(
+            1,
+            step * 18 * Math.max(0.2, (Number(recoilState.recoverPitchScale || 1) + Number(recoilState.recoverRollScale || 1)) * 0.5)
+        );
+        recoilState.weaponKick += (0 - recoilState.weaponKick) * weaponBlend;
+        recoilState.shoulderPitch += (0 - recoilState.shoulderPitch) * pitchBlend;
+        recoilState.shoulderYaw += (0 - recoilState.shoulderYaw) * yawBlend;
+        recoilState.shoulderRoll += (0 - recoilState.shoulderRoll) * rollBlend;
+        recoilState.lowerArmPitch += (0 - recoilState.lowerArmPitch) * lowerArmBlend;
+        return true;
+    }
+
+    function triggerFireRecoil(recoilState, options) {
+        if (!recoilState) return false;
+        var opts = options || {};
+        var strength = Math.max(0, Number(opts.strength == null ? 1 : opts.strength));
+        var side = Number(opts.side);
+        if (!isFinite(side) || side === 0) {
+            recoilState.side = recoilState.side > 0 ? -1 : 1;
+            side = recoilState.side;
+        } else {
+            side = side > 0 ? 1 : -1;
+            recoilState.side = side;
+        }
+        var shoulderPitch = Number.isFinite(Number(opts.shoulderPitch))
+            ? Number(opts.shoulderPitch)
+            : (0.024 * strength);
+        var shoulderYaw = Number.isFinite(Number(opts.shoulderYaw))
+            ? Number(opts.shoulderYaw)
+            : (0.012 * strength);
+        var shoulderRoll = Number.isFinite(Number(opts.shoulderRoll))
+            ? Number(opts.shoulderRoll)
+            : (side * 0.008 * strength);
+        var lowerArmPitch = Number.isFinite(Number(opts.lowerArmPitch))
+            ? Number(opts.lowerArmPitch)
+            : (0.11 * strength);
+        var weaponKick = Number.isFinite(Number(opts.weaponKick))
+            ? Number(opts.weaponKick)
+            : (-0.04 * strength);
+        recoilState.weaponKick = Math.max(-0.22, Math.min(0.05, Number(recoilState.weaponKick || 0) + weaponKick));
+        recoilState.shoulderPitch = Math.max(-0.5, Math.min(0.24, Number(recoilState.shoulderPitch || 0) + shoulderPitch));
+        recoilState.shoulderYaw = Math.max(-0.18, Math.min(0.18, Number(recoilState.shoulderYaw || 0) + shoulderYaw));
+        recoilState.shoulderRoll = Math.max(-0.12, Math.min(0.12, Number(recoilState.shoulderRoll || 0) + shoulderRoll));
+        recoilState.lowerArmPitch = Math.max(-0.8, Math.min(2.5, Number(recoilState.lowerArmPitch || 0) + lowerArmPitch));
+        recoilState.recoverPitchScale = Math.max(0.2, Number(opts.recoverPitchScale || recoilState.recoverPitchScale || 1));
+        recoilState.recoverYawScale = Math.max(0.2, Number(opts.recoverYawScale || recoilState.recoverYawScale || 1));
+        recoilState.recoverRollScale = Math.max(0.2, Number(opts.recoverRollScale || recoilState.recoverRollScale || 1));
+        return true;
     }
 
     function resolveClipPlayback(animState, clipName) {
@@ -328,6 +437,18 @@ import {
         return Math.max(-IDLE_AIM_PITCH_LIMIT, Math.min(IDLE_AIM_PITCH_LIMIT, effectiveAimPitch));
     }
 
+    function idleAimYawResponseWeight(activeClipName) {
+        if (activeClipName === 'run') return RUN_AIM_YAW_RESPONSE_WEIGHT;
+        return 1;
+    }
+
+    function idleAimTargetYaw(directionalState, activeClipName) {
+        var facingYaw = Number(directionalState && directionalState.facingYaw || 0);
+        if (!isFinite(facingYaw)) return 0;
+        var effectiveAimYaw = facingYaw * IDLE_AIM_YAW_RESPONSE_SCALE * idleAimYawResponseWeight(activeClipName);
+        return Math.max(-IDLE_AIM_YAW_LIMIT, Math.min(IDLE_AIM_YAW_LIMIT, effectiveAimYaw));
+    }
+
     function idleAimPoseWeight(activeClipName) {
         return 1;
     }
@@ -335,16 +456,39 @@ import {
     function applyIdleAimPose(rig, aimPoseState) {
         if (!rig || !aimPoseState) return false;
         var clampedAimPitch = Number(aimPoseState.currentPitch || 0);
-        if (Math.abs(clampedAimPitch) < 0.0001) return false;
+        var clampedAimYaw = Number(aimPoseState.currentYaw || 0);
+        if (Math.abs(clampedAimPitch) < 0.0001 && Math.abs(clampedAimYaw) < 0.0001) return false;
         var poseWeight = Math.max(0, Math.min(1, Number(aimPoseState.weight == null ? 1 : aimPoseState.weight)));
         if (!(poseWeight > 0)) return false;
         if (rig.armUpperR && rig.armUpperR.rotation) {
             rig.armUpperR.rotation.x += clampedAimPitch * IDLE_AIM_UPPER_PITCH_SCALE * poseWeight;
+            rig.armUpperR.rotation.y += clampedAimYaw * IDLE_AIM_UPPER_YAW_SCALE * poseWeight;
         }
         if (rig.armLowerR && rig.armLowerR.rotation) {
             rig.armLowerR.rotation.x += clampedAimPitch * IDLE_AIM_LOWER_PITCH_SCALE * poseWeight;
+            rig.armLowerR.rotation.y += clampedAimYaw * IDLE_AIM_LOWER_YAW_SCALE * poseWeight;
         }
         return true;
+    }
+
+    function applyWeaponOrientationCompensation(rig, aimPoseState) {
+        if (!rig || !rig.weaponRoot || !rig.weaponRootBaseRot || !rig.weaponRoot.rotation) return false;
+        var currentYaw = Number(aimPoseState && aimPoseState.currentYaw || 0);
+        rig.weaponRoot.rotation.set(
+            rig.weaponRootBaseRot.x,
+            rig.weaponRootBaseRot.y,
+            rig.weaponRootBaseRot.z
+        );
+        if (!(currentYaw > 0.0001)) return false;
+        rig.weaponRoot.rotation.y += currentYaw * OUTWARD_GUN_YAW_COMPENSATION_SCALE;
+        return true;
+    }
+
+    function applyTorsoCarryPose(rig, directionalState) {
+        if (!rig || !directionalState) return false;
+        var upperYaw = Number(directionalState.bodyUpperAimYaw || 0);
+        void rig;
+        return Math.abs(upperYaw) >= 0.0001;
     }
 
     function applyRunRightArmIdleBasePose(rig, activeClipName, activeAction) {
@@ -355,8 +499,13 @@ import {
             var duration = clip ? Math.max(0.0001, Number(clip.duration || 0)) : 0.0001;
             phase = ((Number(activeAction.time || 0) / duration) % 1) * Math.PI * 2;
         }
-        var upperSwing = Math.sin(phase) * RUN_RIGHT_ARM_SWING_UPPER;
-        var lowerSwing = Math.sin(phase + 0.35) * RUN_RIGHT_ARM_SWING_LOWER;
+        var suppressRunSwing = !!(rig.fireRecoilState && (
+            Math.abs(Number(rig.fireRecoilState.shoulderPitch || 0)) > 0.0001 ||
+            Math.abs(Number(rig.fireRecoilState.lowerArmPitch || 0)) > 0.0001 ||
+            Math.abs(Number(rig.fireRecoilState.weaponKick || 0)) > 0.0001
+        ));
+        var upperSwing = suppressRunSwing ? 0 : (Math.sin(phase) * RUN_RIGHT_ARM_SWING_UPPER);
+        var lowerSwing = suppressRunSwing ? 0 : (Math.sin(phase + 0.35) * RUN_RIGHT_ARM_SWING_LOWER);
         if (rig.armUpperR && rig.armUpperR.rotation) {
             rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X + upperSwing;
             rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
@@ -414,8 +563,10 @@ import {
         return !!(animState && animState.movingBackward && !animState.movingForward);
     }
 
-    function resolveManualRollFacingYaw(animState) {
-        return isBackwardRollIntent(animState) ? 0 : resolveRollFacingYaw(animState);
+    function resolveManualRollFacingYaw(animState, currentFacingYaw) {
+        return isBackwardRollIntent(animState)
+            ? normalizeAngle(Number(currentFacingYaw || 0))
+            : resolveRollFacingYaw(animState);
     }
 
     function needsBackwardRollAlign(currentFacingYaw) {
@@ -561,8 +712,8 @@ import {
         return {
             stickerPos: { x: 0, y: 0.18, z: 0 },
             stickerRot: { x: -Math.PI * 0.5, y: 0, z: 0 },
-            rootPos: { x: 0.08, y: 0.65, z: -0.16 },
-            rootRot: { x: 0.08, y: 0.04, z: 0 },
+            rootPos: { x: -0.04, y: 0.65, z: -0.06 },
+            rootRot: { x: 0.08, y: 0.22, z: 0 },
             muzzlePos: { x: 0, y: 0, z: -0.09 }
         };
     }
@@ -714,6 +865,7 @@ import {
             directional: createDirectionalLocomotionState(),
             turnEntryDirection: 0,
             idleAimCurrentPitch: 0,
+            idleAimCurrentYaw: 0,
             manualRollActive: false,
             manualRollReverse: false,
             manualRollFacingYaw: 0,
@@ -723,6 +875,7 @@ import {
             manualRollAlignStartYaw: 0,
             manualRollAlignTargetYaw: 0
         };
+        var fireRecoilState = createFireRecoilState();
         var currentWeaponId = String(options.weaponId || 'rifle');
         var disposed = false;
 
@@ -761,6 +914,7 @@ import {
         var pistolConfig = pistolMountConfig();
         var weaponRoot = new THREE.Group();
         weaponRoot.position.set(pistolConfig.rootPos.x, pistolConfig.rootPos.y, pistolConfig.rootPos.z);
+        weaponRoot.rotation.set(pistolConfig.rootRot.x, pistolConfig.rootRot.y, pistolConfig.rootRot.z);
         armLowerR.add(weaponRoot);
         var weaponCube = new THREE.Mesh(
             new THREE.BoxGeometry(0.28, 0.28, 0.5),
@@ -771,6 +925,16 @@ import {
             })
         );
         weaponRoot.add(weaponCube);
+        var weaponBarrel = new THREE.Mesh(
+            new THREE.BoxGeometry(0.07, 0.24, 0.07),
+            new THREE.MeshStandardMaterial({
+                color: 0x151515,
+                roughness: 0.72,
+                metalness: 0.12
+            })
+        );
+        weaponBarrel.position.set(0, 0.18, -0.28);
+        weaponRoot.add(weaponBarrel);
         var muzzleAnchor = createAnchor(weaponRoot, pistolConfig.muzzlePos.x, pistolConfig.muzzlePos.y, pistolConfig.muzzlePos.z);
 
         var rig = {
@@ -788,7 +952,9 @@ import {
             throwableOriginAnchor: throwableOriginAnchor,
             weaponRoot: weaponRoot,
             weaponCube: weaponCube,
+            weaponBarrel: weaponBarrel,
             muzzleAnchor: muzzleAnchor,
+            weaponRootBaseRot: weaponRoot.rotation.clone(),
             upperBodyPivot: bodyUpper,
             activeClipName: 'idle',
             bodyUpper: bodyUpper,
@@ -796,11 +962,19 @@ import {
             headBone: head,
             armUpperL: armUpperL,
             armUpperR: armUpperR,
+            armUpperRBasePos: armUpperR && armUpperR.position && armUpperR.position.clone ? armUpperR.position.clone() : null,
+            armLowerL: armLowerL,
             armLowerR: armLowerR,
+            armL: armUpperL,
+            armR: armUpperR,
             legUpperL: legUpperL,
             legUpperR: legUpperR,
             legLowerL: legLowerL,
             legLowerR: legLowerR,
+            gun: weaponRoot,
+            gunBasePos: weaponRoot.position.clone(),
+            weaponRootBasePos: weaponRoot.position.clone(),
+            fireRecoilState: fireRecoilState,
             activePoseName: ''
         };
 
@@ -919,12 +1093,18 @@ import {
             rig.activePoseName = '';
 
             var idleAimActive = idleAimAllowed(animState, rig.activeClipName);
-            var idleAimTarget = idleAimActive ? idleAimTargetPitch(animState, rig.activeClipName) : 0;
+            var pitchRecoilTarget = Number(fireRecoilState.shoulderPitch || 0) + (Number(fireRecoilState.lowerArmPitch || 0) * 0.35);
+            var idleAimTarget = idleAimActive ? (idleAimTargetPitch(animState, rig.activeClipName) + pitchRecoilTarget) : 0;
+            var idleAimTargetYawValue = idleAimActive ? idleAimTargetYaw(motionState.directional, rig.activeClipName) : 0;
             var idleAimBlendSpeed = idleAimActive ? IDLE_AIM_BLEND_IN_SPEED : IDLE_AIM_BLEND_OUT_SPEED;
             var idleAimBlend = Math.min(1, dt * idleAimBlendSpeed);
             motionState.idleAimCurrentPitch += (idleAimTarget - Number(motionState.idleAimCurrentPitch || 0)) * idleAimBlend;
             if (Math.abs(idleAimTarget - motionState.idleAimCurrentPitch) < 0.0001) {
                 motionState.idleAimCurrentPitch = idleAimTarget;
+            }
+            motionState.idleAimCurrentYaw += (idleAimTargetYawValue - Number(motionState.idleAimCurrentYaw || 0)) * idleAimBlend;
+            if (Math.abs(idleAimTargetYawValue - motionState.idleAimCurrentYaw) < 0.0001) {
+                motionState.idleAimCurrentYaw = idleAimTargetYawValue;
             }
 
             if (motionState.manualRollPending || (motionState.manualRollActive && rig.activeClipName === MANUAL_ROLL_CLIP)) {
@@ -943,10 +1123,17 @@ import {
                 rig.activePoseName = motionState.directional.poseName || '';
             }
             applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
+            applyTorsoCarryPose(rig, motionState.directional);
             applyIdleAimPose(rig, {
                 currentPitch: motionState.idleAimCurrentPitch,
+                currentYaw: motionState.idleAimCurrentYaw,
                 weight: idleAimPoseWeight(rig.activeClipName)
             });
+            applyWeaponOrientationCompensation(rig, {
+                currentYaw: motionState.idleAimCurrentYaw
+            });
+            applyFireRecoilPose(rig, fireRecoilState);
+            decayFireRecoilState(fireRecoilState, dt);
 
             motionState.wasGrounded = !animState.airborne;
             motionState.wasMoving = isDirectionalMove(animState);
@@ -958,6 +1145,9 @@ import {
 
         function triggerAction(action, options) {
             var kind = String(action || '').toLowerCase();
+            if (kind === 'fire') {
+                return triggerFireRecoil(fireRecoilState, options);
+            }
             if (kind === 'jump') {
                 motionState.jumpTriggered = true;
                 return true;
@@ -971,18 +1161,19 @@ import {
                 ) {
                     return false;
                 }
-                var targetFacingYaw = resolveManualRollFacingYaw(options);
+                var currentFacingYaw = normalizeAngle(
+                    motionState.directional && typeof motionState.directional.facingYaw === 'number'
+                        ? motionState.directional.facingYaw
+                        : 0
+                );
+                var targetFacingYaw = resolveManualRollFacingYaw(options, currentFacingYaw);
                 if (isBackwardRollIntent(options) && needsBackwardRollAlign(motionState.directional && motionState.directional.facingYaw)) {
                     motionState.manualRollPending = true;
                     motionState.manualRollActive = false;
                     motionState.manualRollReverse = true;
                     motionState.manualRollAlignElapsed = 0;
                     motionState.manualRollAlignDuration = BACKWARD_ROLL_ALIGN_DURATION;
-                    motionState.manualRollAlignStartYaw = normalizeAngle(
-                        motionState.directional && typeof motionState.directional.facingYaw === 'number'
-                            ? motionState.directional.facingYaw
-                            : 0
-                    );
+                    motionState.manualRollAlignStartYaw = currentFacingYaw;
                     motionState.manualRollAlignTargetYaw = targetFacingYaw;
                     motionState.manualRollFacingYaw = motionState.manualRollAlignStartYaw;
                     return true;
@@ -1096,17 +1287,29 @@ import {
         resolveHorizontalSpeed: resolveHorizontalSpeed,
         resolveDistalFaceCenter: resolveDistalFaceCenter,
         resolveAnimatedBone: resolveAnimatedBone,
+        createFireRecoilState: createFireRecoilState,
+        applyFireRecoilPose: applyFireRecoilPose,
+        decayFireRecoilState: decayFireRecoilState,
+        triggerFireRecoil: triggerFireRecoil,
         idleAimAllowed: idleAimAllowed,
         idleAimNeutralWeight: idleAimNeutralWeight,
         idleAimResponseWeight: idleAimResponseWeight,
+        idleAimYawResponseWeight: idleAimYawResponseWeight,
         idleAimTargetPitch: idleAimTargetPitch,
+        idleAimTargetYaw: idleAimTargetYaw,
         idleAimPoseWeight: idleAimPoseWeight,
         applyRunRightArmIdleBasePose: applyRunRightArmIdleBasePose,
+        applyTorsoCarryPose: applyTorsoCarryPose,
         applyIdleAimPose: applyIdleAimPose,
+        applyWeaponOrientationCompensation: applyWeaponOrientationCompensation,
+        cloneWithDetachedRootUserData: cloneWithDetachedRootUserData,
         weaponMount: function () {
             return {
-                rootPos: { x: 0.08, y: 0.65, z: -0.16 },
+                rootPos: { x: -0.04, y: 0.65, z: -0.06 },
+                rootRot: { x: 0.08, y: 0.22, z: 0 },
                 cubeSize: { x: 0.28, y: 0.28, z: 0.5 },
+                barrelPos: { x: 0, y: 0.18, z: -0.28 },
+                barrelSize: { x: 0.07, y: 0.24, z: 0.07 },
                 muzzlePos: { x: 0, y: 0, z: -0.09 }
             };
         }
