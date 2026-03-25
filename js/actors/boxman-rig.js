@@ -36,6 +36,8 @@ import {
     var IDLE_AIM_LOWER_PITCH_SCALE = -0.8;
     var IDLE_AIM_BLEND_IN_SPEED = 12;
     var IDLE_AIM_BLEND_OUT_SPEED = 10;
+    var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
+    var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
     var IDLE_RIGHT_ARM_UPPER_BASE = {
         x: 21.02 * (Math.PI / 180),
         y: -7.92 * (Math.PI / 180),
@@ -345,15 +347,23 @@ import {
         return true;
     }
 
-    function applyRunRightArmIdleBasePose(rig, activeClipName) {
+    function applyRunRightArmIdleBasePose(rig, activeClipName, activeAction) {
         if (!rig || activeClipName !== 'run') return false;
+        var phase = 0;
+        if (activeAction && activeAction.getClip) {
+            var clip = activeAction.getClip();
+            var duration = clip ? Math.max(0.0001, Number(clip.duration || 0)) : 0.0001;
+            phase = ((Number(activeAction.time || 0) / duration) % 1) * Math.PI * 2;
+        }
+        var upperSwing = Math.sin(phase) * RUN_RIGHT_ARM_SWING_UPPER;
+        var lowerSwing = Math.sin(phase + 0.35) * RUN_RIGHT_ARM_SWING_LOWER;
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X;
+            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X + upperSwing;
             rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
             rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
         }
         if (rig.armLowerR && rig.armLowerR.rotation) {
-            rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X;
+            rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X + lowerSwing;
             rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y;
             rig.armLowerR.rotation.z = IDLE_RIGHT_ARM_LOWER_BASE.z;
         }
@@ -932,7 +942,7 @@ import {
             } else if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
                 rig.activePoseName = motionState.directional.poseName || '';
             }
-            applyRunRightArmIdleBasePose(rig, rig.activeClipName);
+            applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
             applyIdleAimPose(rig, {
                 currentPitch: motionState.idleAimCurrentPitch,
                 weight: idleAimPoseWeight(rig.activeClipName)

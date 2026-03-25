@@ -150,13 +150,18 @@ test('boxman overrides the run clip right arm with the idle base pose', () => {
     armLowerR: { rotation: { x: 6, y: 5, z: 4 } }
   };
 
-  const applied = boxmanRig._test.applyRunRightArmIdleBasePose(rig, 'run');
+  const applied = boxmanRig._test.applyRunRightArmIdleBasePose(rig, 'run', {
+    time: 0.25,
+    getClip() {
+      return { duration: 1 };
+    }
+  });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2)) + (6 * (Math.PI / 180)))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8)) + (Math.sin((Math.PI * 0.5) + 0.35) * (2.4 * (Math.PI / 180))))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
   assert.equal(rig.armLowerR.rotation.z, 0);
 });
