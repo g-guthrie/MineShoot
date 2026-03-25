@@ -7,6 +7,8 @@ import {
     createDirectionalLocomotionState,
     directionalLocomotionNeedsCustomStart,
     resolveMoveIntent,
+    TURN_SOFT_FULL_RATE,
+    TURN_SOFT_START_RATE,
     updateDirectionalLocomotionState
 } from './boxman-directional-locomotion.js';
 
@@ -21,6 +23,31 @@ import {
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameBoxmanRig = {};
     var MODEL_URL = '/assets/models/boxman.glb';
+    var MANUAL_ROLL_CLIP = 'drop_running_roll';
+    var BACKWARD_ROLL_ALIGN_DURATION = 0.12;
+    var BACKWARD_ROLL_ALIGN_EPSILON = 10 * (Math.PI / 180);
+    var ROLL_LANDING_MIN_DROP_WU = 2.0;
+    var ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU = 7.5;
+    var RUN_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.8;
+    var IDLE_AIM_PITCH_LIMIT = 45 * (Math.PI / 180);
+    var IDLE_AIM_NEUTRAL_PITCH = 28 * (Math.PI / 180);
+    var IDLE_AIM_RESPONSE_SCALE = 0.5;
+    var IDLE_AIM_UPPER_PITCH_SCALE = -2.2;
+    var IDLE_AIM_LOWER_PITCH_SCALE = -0.8;
+    var IDLE_AIM_BLEND_IN_SPEED = 12;
+    var IDLE_AIM_BLEND_OUT_SPEED = 10;
+    var IDLE_RIGHT_ARM_UPPER_BASE = {
+        x: 21.02 * (Math.PI / 180),
+        y: -7.92 * (Math.PI / 180),
+        z: 11.86 * (Math.PI / 180)
+    };
+    var IDLE_RIGHT_ARM_LOWER_BASE = {
+        x: -33.6 * (Math.PI / 180),
+        y: 0,
+        z: 0
+    };
+    var IDLE_RIGHT_ARM_OUT_UPPER_X = IDLE_RIGHT_ARM_UPPER_BASE.x + (IDLE_AIM_NEUTRAL_PITCH * IDLE_AIM_UPPER_PITCH_SCALE);
+    var IDLE_RIGHT_ARM_OUT_LOWER_X = IDLE_RIGHT_ARM_LOWER_BASE.x + (IDLE_AIM_NEUTRAL_PITCH * IDLE_AIM_LOWER_PITCH_SCALE);
 
     var templateAsset = null;
     var templatePromise = null;
@@ -163,9 +190,25 @@ import {
         return 0;
     }
 
+    function clamp01(value) {
+        return Math.max(0, Math.min(1, Number(value || 0)));
+    }
+
+    function normalizeAngle(angle) {
+        var out = Number(angle || 0);
+        while (out > Math.PI) out -= Math.PI * 2;
+        while (out < -Math.PI) out += Math.PI * 2;
+        return out;
+    }
+
+    function lerpAngle(start, target, t) {
+        return normalizeAngle(Number(start || 0) + (normalizeAngle(Number(target || 0) - Number(start || 0)) * clamp01(t)));
+    }
+
     function resolveClipPlayback(animState, clipName) {
         var name = String(clipName || '');
         var reverse = false;
+        var timeScale = 1;
         if (
             (name === 'run' || name === 'sprint') &&
             animState &&
@@ -174,9 +217,17 @@ import {
         ) {
             reverse = true;
         }
+        if (name === MANUAL_ROLL_CLIP && animState && animState.manualRollReverse) {
+            reverse = true;
+        }
+        if (name === 'rotate_left' || name === 'rotate_right') {
+            var turnAbs = Math.abs(Number(animState && animState.turnRate || 0));
+            var turnBlend = clamp01((turnAbs - TURN_SOFT_START_RATE) / Math.max(0.0001, (TURN_SOFT_FULL_RATE - TURN_SOFT_START_RATE)));
+            timeScale = 0.8 + (turnBlend * 0.5);
+        }
         return {
             reverse: reverse,
-            timeScale: reverse ? -1 : 1,
+            timeScale: reverse ? -timeScale : timeScale,
             startFraction: clipStartFraction(name)
         };
     }
@@ -248,10 +299,92 @@ import {
         return directionalLocomotionNeedsCustomStart(animState) ? '' : 'start_forward';
     }
 
+    function idleAimAllowed(animState, activeClipName) {
+        if (!animState) return false;
+        if (animState.sprinting) return false;
+        if (activeClipName === 'sprint' || activeClipName === MANUAL_ROLL_CLIP) return false;
+        return true;
+    }
+
+    function idleAimNeutralWeight(activeClipName) {
+        return 1;
+    }
+
+    function idleAimResponseWeight(activeClipName) {
+        return 1;
+    }
+
+    function idleAimTargetPitch(animState, activeClipName) {
+        if (!animState) return 0;
+        var aimPitch = Number(animState.aimPitch || 0);
+        if (!isFinite(aimPitch)) return 0;
+        var effectiveAimPitch = (
+            IDLE_AIM_NEUTRAL_PITCH * idleAimNeutralWeight(activeClipName)
+        ) + (
+            aimPitch * IDLE_AIM_RESPONSE_SCALE * idleAimResponseWeight(activeClipName)
+        );
+        return Math.max(-IDLE_AIM_PITCH_LIMIT, Math.min(IDLE_AIM_PITCH_LIMIT, effectiveAimPitch));
+    }
+
+    function idleAimPoseWeight(activeClipName) {
+        return 1;
+    }
+
+    function applyIdleAimPose(rig, aimPoseState) {
+        if (!rig || !aimPoseState) return false;
+        var clampedAimPitch = Number(aimPoseState.currentPitch || 0);
+        if (Math.abs(clampedAimPitch) < 0.0001) return false;
+        var poseWeight = Math.max(0, Math.min(1, Number(aimPoseState.weight == null ? 1 : aimPoseState.weight)));
+        if (!(poseWeight > 0)) return false;
+        if (rig.armUpperR && rig.armUpperR.rotation) {
+            rig.armUpperR.rotation.x += clampedAimPitch * IDLE_AIM_UPPER_PITCH_SCALE * poseWeight;
+        }
+        if (rig.armLowerR && rig.armLowerR.rotation) {
+            rig.armLowerR.rotation.x += clampedAimPitch * IDLE_AIM_LOWER_PITCH_SCALE * poseWeight;
+        }
+        return true;
+    }
+
+    function applyRunRightArmIdleBasePose(rig, activeClipName) {
+        if (!rig || activeClipName !== 'run') return false;
+        if (rig.armUpperR && rig.armUpperR.rotation) {
+            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X;
+            rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
+            rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
+        }
+        if (rig.armLowerR && rig.armLowerR.rotation) {
+            rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X;
+            rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y;
+            rig.armLowerR.rotation.z = IDLE_RIGHT_ARM_LOWER_BASE.z;
+        }
+        return true;
+    }
+
+    function resolveHorizontalSpeed(animState) {
+        if (!animState) return 0;
+        if (typeof animState.horizontalSpeed === 'number' && isFinite(animState.horizontalSpeed)) {
+            return Math.max(0, Number(animState.horizontalSpeed));
+        }
+        if (typeof animState.worldSpeed === 'number' && isFinite(animState.worldSpeed)) {
+            return Math.max(0, Number(animState.worldSpeed));
+        }
+        return 0;
+    }
+
     function landingClip(motionState, animState) {
         if (!animState) return 'drop_idle';
-        if (motionState.lastGroundedSpeed > 0.95) return 'drop_running_roll';
-        if (motionState.lastGroundedSpeed > 0.2 || isDirectionalMove(animState)) return 'drop_running';
+        if (
+            Number(motionState.lastLandingHorizontalSpeed || 0) >= ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU &&
+            Number(motionState.lastLandingDropDistance || 0) >= ROLL_LANDING_MIN_DROP_WU
+        ) {
+            return 'drop_running_roll';
+        }
+        if (
+            Number(motionState.lastLandingHorizontalSpeed || 0) >= RUN_LANDING_MIN_HORIZONTAL_SPEED_WU ||
+            isDirectionalMove(animState)
+        ) {
+            return 'drop_running';
+        }
         return 'drop_idle';
     }
 
@@ -259,6 +392,24 @@ import {
         var action = actions[clipName] || null;
         if (!action || !action.getClip) return Number(fallback || 0);
         return Number(action.getClip().duration || fallback || 0);
+    }
+
+    function resolveRollFacingYaw(animState) {
+        var intent = resolveMoveIntent(animState);
+        if (!intent.moving) return 0;
+        return -Number(intent.angle || 0);
+    }
+
+    function isBackwardRollIntent(animState) {
+        return !!(animState && animState.movingBackward && !animState.movingForward);
+    }
+
+    function resolveManualRollFacingYaw(animState) {
+        return isBackwardRollIntent(animState) ? 0 : resolveRollFacingYaw(animState);
+    }
+
+    function needsBackwardRollAlign(currentFacingYaw) {
+        return Math.abs(normalizeAngle(currentFacingYaw)) > BACKWARD_ROLL_ALIGN_EPSILON;
     }
 
     function resolveIdleTurnClip(motionState) {
@@ -375,6 +526,159 @@ import {
         return anchor;
     }
 
+    function resolveAnimatedBone(modelRoot, skinnedMesh, preferredNames, fallback) {
+        var names = Array.isArray(preferredNames) ? preferredNames : [preferredNames];
+        var skeleton = skinnedMesh && skinnedMesh.skeleton ? skinnedMesh.skeleton : null;
+        var bones = skeleton && Array.isArray(skeleton.bones) ? skeleton.bones : [];
+        for (var i = 0; i < names.length; i++) {
+            var targetName = String(names[i] || '');
+            if (!targetName) continue;
+            for (var j = 0; j < bones.length; j++) {
+                var bone = bones[j];
+                if (bone && bone.name === targetName) return bone;
+            }
+        }
+        for (var n = 0; n < names.length; n++) {
+            var nodeName = String(names[n] || '');
+            if (!nodeName || !modelRoot || !modelRoot.getObjectByName) continue;
+            var found = modelRoot.getObjectByName(nodeName);
+            if (found) return found;
+        }
+        return fallback || modelRoot || null;
+    }
+
+    function pistolMountConfig() {
+        return {
+            stickerPos: { x: 0, y: 0.18, z: 0 },
+            stickerRot: { x: -Math.PI * 0.5, y: 0, z: 0 },
+            rootPos: { x: 0.08, y: 0.65, z: -0.16 },
+            rootRot: { x: 0.08, y: 0.04, z: 0 },
+            muzzlePos: { x: 0, y: 0, z: -0.09 }
+        };
+    }
+
+    function createPistolPiece(size, color) {
+        return new THREE.Mesh(
+            new THREE.BoxGeometry(size.x, size.y, size.z),
+            new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.72,
+                metalness: 0.14
+            })
+        );
+    }
+
+    function computeBoneDominantAxis(points) {
+        if (!points || !points.length) return 'y';
+        var minX = Infinity, minY = Infinity, minZ = Infinity;
+        var maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i];
+            if (!p) continue;
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.z < minZ) minZ = p.z;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+            if (p.z > maxZ) maxZ = p.z;
+        }
+        var spanX = maxX - minX;
+        var spanY = maxY - minY;
+        var spanZ = maxZ - minZ;
+        if (spanX >= spanY && spanX >= spanZ) return 'x';
+        if (spanZ >= spanX && spanZ >= spanY) return 'z';
+        return 'y';
+    }
+
+    function resolveDistalFaceCenter(points, extension) {
+        if (!points || !points.length) return {
+            center: new THREE.Vector3(0, 0.18, 0),
+            axis: 'y',
+            sign: 1
+        };
+        var axis = computeBoneDominantAxis(points);
+        var maxAbs = 0;
+        var sign = 1;
+        for (var i = 0; i < points.length; i++) {
+            var value = Number(points[i][axis] || 0);
+            var abs = Math.abs(value);
+            if (abs > maxAbs) {
+                maxAbs = abs;
+                sign = value >= 0 ? 1 : -1;
+            }
+        }
+        var threshold = maxAbs - Math.max(0.001, maxAbs * 0.18);
+        var center = new THREE.Vector3();
+        var count = 0;
+        for (var n = 0; n < points.length; n++) {
+            var point = points[n];
+            var coord = Number(point[axis] || 0);
+            if ((coord * sign) < threshold) continue;
+            center.add(point);
+            count += 1;
+        }
+        if (count > 0) {
+            center.divideScalar(count);
+        } else {
+            center.copy(points[0]);
+        }
+        center[axis] += sign * Math.max(0, Number(extension || 0));
+        return {
+            center: center,
+            axis: axis,
+            sign: sign
+        };
+    }
+
+    function resolveBoneStickerLocal(skinnedMesh, bone) {
+        var fallback = {
+            center: new THREE.Vector3(0, 0.18, 0),
+            axis: 'y',
+            sign: 1
+        };
+        if (!skinnedMesh || !bone || !skinnedMesh.geometry || !skinnedMesh.skeleton) return fallback;
+        var skeleton = skinnedMesh.skeleton;
+        var boneIndex = skeleton.bones ? skeleton.bones.indexOf(bone) : -1;
+        if (boneIndex < 0) return fallback;
+        var geometry = skinnedMesh.geometry;
+        var positionAttr = geometry.getAttribute ? geometry.getAttribute('position') : null;
+        var skinIndexAttr = geometry.getAttribute ? geometry.getAttribute('skinIndex') : null;
+        var skinWeightAttr = geometry.getAttribute ? geometry.getAttribute('skinWeight') : null;
+        if (!positionAttr || !skinIndexAttr || !skinWeightAttr) return fallback;
+
+        var candidates = [];
+        var localVertex = new THREE.Vector3();
+        var worldVertex = new THREE.Vector3();
+        var boneLocal = new THREE.Vector3();
+        for (var i = 0; i < positionAttr.count; i++) {
+            var strongestBone = -1;
+            var strongestWeight = -1;
+            for (var j = 0; j < 4; j++) {
+                var weight = Number(skinWeightAttr.getX && j === 0 ? skinWeightAttr.getX(i)
+                    : skinWeightAttr.getY && j === 1 ? skinWeightAttr.getY(i)
+                    : skinWeightAttr.getZ && j === 2 ? skinWeightAttr.getZ(i)
+                    : skinWeightAttr.getW ? skinWeightAttr.getW(i) : 0);
+                var skinIndex = Number(skinIndexAttr.getX && j === 0 ? skinIndexAttr.getX(i)
+                    : skinIndexAttr.getY && j === 1 ? skinIndexAttr.getY(i)
+                    : skinIndexAttr.getZ && j === 2 ? skinIndexAttr.getZ(i)
+                    : skinIndexAttr.getW ? skinIndexAttr.getW(i) : -1);
+                if (weight > strongestWeight) {
+                    strongestWeight = weight;
+                    strongestBone = skinIndex;
+                }
+            }
+            if (strongestBone !== boneIndex || strongestWeight < 0.35) continue;
+            localVertex.fromBufferAttribute(positionAttr, i);
+            worldVertex.copy(localVertex);
+            skinnedMesh.localToWorld(worldVertex);
+            boneLocal.copy(worldVertex);
+            bone.worldToLocal(boneLocal);
+            candidates.push(boneLocal.clone());
+        }
+        if (!candidates.length) return fallback;
+        return resolveDistalFaceCenter(candidates, 0.015);
+    }
+
     function createRig(options) {
         var template = loadReadyTemplate();
         var root = new THREE.Group();
@@ -394,8 +698,20 @@ import {
             lockRemaining: 0,
             jumpTriggered: false,
             lastGroundedSpeed: 0,
+            airborneStartFootY: null,
+            lastLandingDropDistance: 0,
+            lastLandingHorizontalSpeed: 0,
             directional: createDirectionalLocomotionState(),
-            turnEntryDirection: 0
+            turnEntryDirection: 0,
+            idleAimCurrentPitch: 0,
+            manualRollActive: false,
+            manualRollReverse: false,
+            manualRollFacingYaw: 0,
+            manualRollPending: false,
+            manualRollAlignElapsed: 0,
+            manualRollAlignDuration: 0,
+            manualRollAlignStartYaw: 0,
+            manualRollAlignTargetYaw: 0
         };
         var currentWeaponId = String(options.weaponId || 'rifle');
         var disposed = false;
@@ -417,20 +733,35 @@ import {
             if (!skinnedMesh && node && node.isSkinnedMesh) skinnedMesh = node;
         });
 
-        var bodyUpper = modelRoot.getObjectByName('body_upper') || modelRoot;
-        var bodyLower = modelRoot.getObjectByName('body_lower') || modelRoot;
-        var head = modelRoot.getObjectByName('head') || modelRoot;
-        var armUpperL = modelRoot.getObjectByName('arm_upper.L') || null;
-        var armUpperR = modelRoot.getObjectByName('arm_upper.R') || null;
-        var armLowerL = modelRoot.getObjectByName('arm_lower.L') || modelRoot;
-        var legUpperL = modelRoot.getObjectByName('leg_upper.L') || null;
-        var legUpperR = modelRoot.getObjectByName('leg_upper.R') || null;
-        var legLowerL = modelRoot.getObjectByName('leg_lower.L') || null;
-        var legLowerR = modelRoot.getObjectByName('leg_lower.R') || null;
+        var bodyUpper = resolveAnimatedBone(modelRoot, skinnedMesh, ['body_upper'], modelRoot);
+        var bodyLower = resolveAnimatedBone(modelRoot, skinnedMesh, ['body_lower'], modelRoot);
+        var head = resolveAnimatedBone(modelRoot, skinnedMesh, ['head'], modelRoot);
+        var armUpperL = resolveAnimatedBone(modelRoot, skinnedMesh, ['arm_upperL', 'arm_upper.L'], null);
+        var armUpperR = resolveAnimatedBone(modelRoot, skinnedMesh, ['arm_upperR', 'arm_upper.R'], null);
+        var armLowerL = resolveAnimatedBone(modelRoot, skinnedMesh, ['arm_lowerL', 'arm_lower.L'], modelRoot);
+        var armLowerR = resolveAnimatedBone(modelRoot, skinnedMesh, ['arm_lowerR', 'arm_lower.R'], modelRoot);
+        var legUpperL = resolveAnimatedBone(modelRoot, skinnedMesh, ['leg_upperL', 'leg_upper.L'], null);
+        var legUpperR = resolveAnimatedBone(modelRoot, skinnedMesh, ['leg_upperR', 'leg_upper.R'], null);
+        var legLowerL = resolveAnimatedBone(modelRoot, skinnedMesh, ['leg_lowerL', 'leg_lower.L'], null);
+        var legLowerR = resolveAnimatedBone(modelRoot, skinnedMesh, ['leg_lowerR', 'leg_lower.R'], null);
 
         var coreAnchor = createAnchor(bodyLower, 0, 0.24, 0);
         var eyeAnchor = createAnchor(head, 0, 0.16, 0.02);
         var throwableOriginAnchor = createAnchor(armLowerL, 0.02, 0.32, -0.02);
+        var pistolConfig = pistolMountConfig();
+        var weaponRoot = new THREE.Group();
+        weaponRoot.position.set(pistolConfig.rootPos.x, pistolConfig.rootPos.y, pistolConfig.rootPos.z);
+        armLowerR.add(weaponRoot);
+        var weaponCube = new THREE.Mesh(
+            new THREE.BoxGeometry(0.28, 0.28, 0.5),
+            new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                roughness: 0.78,
+                metalness: 0.08
+            })
+        );
+        weaponRoot.add(weaponCube);
+        var muzzleAnchor = createAnchor(weaponRoot, pistolConfig.muzzlePos.x, pistolConfig.muzzlePos.y, pistolConfig.muzzlePos.z);
 
         var rig = {
             root: root,
@@ -445,6 +776,9 @@ import {
             coreAnchor: coreAnchor,
             eyeAnchor: eyeAnchor,
             throwableOriginAnchor: throwableOriginAnchor,
+            weaponRoot: weaponRoot,
+            weaponCube: weaponCube,
+            muzzleAnchor: muzzleAnchor,
             upperBodyPivot: bodyUpper,
             activeClipName: 'idle',
             bodyUpper: bodyUpper,
@@ -452,6 +786,7 @@ import {
             headBone: head,
             armUpperL: armUpperL,
             armUpperR: armUpperR,
+            armLowerR: armLowerR,
             legUpperL: legUpperL,
             legUpperR: legUpperR,
             legLowerL: legLowerL,
@@ -465,6 +800,44 @@ import {
             : [];
         root.userData.rig = rig;
         root.userData.cloneVisualForRevealGhost = buildRevealCloneFactory(root);
+
+        function clearManualRollState() {
+            motionState.manualRollActive = false;
+            motionState.manualRollReverse = false;
+            motionState.manualRollFacingYaw = 0;
+            motionState.manualRollPending = false;
+            motionState.manualRollAlignElapsed = 0;
+            motionState.manualRollAlignDuration = 0;
+            motionState.manualRollAlignStartYaw = 0;
+            motionState.manualRollAlignTargetYaw = 0;
+        }
+
+        function startManualRoll(targetFacingYaw, reverse) {
+            motionState.manualRollPending = false;
+            motionState.manualRollActive = true;
+            motionState.manualRollReverse = !!reverse;
+            motionState.manualRollFacingYaw = normalizeAngle(targetFacingYaw);
+            motionState.lockName = MANUAL_ROLL_CLIP;
+            motionState.lockRemaining = Math.max(0.2, clipDuration(actions, MANUAL_ROLL_CLIP, 0.36) * 0.92);
+        }
+
+        function updatePendingBackwardRoll(dt) {
+            if (!motionState.manualRollPending) return;
+            motionState.manualRollAlignElapsed += Math.max(0, Number(dt || 0));
+            var duration = Math.max(0.0001, Number(motionState.manualRollAlignDuration || BACKWARD_ROLL_ALIGN_DURATION));
+            var progress = clamp01(motionState.manualRollAlignElapsed / duration);
+            motionState.manualRollFacingYaw = lerpAngle(
+                motionState.manualRollAlignStartYaw,
+                motionState.manualRollAlignTargetYaw,
+                progress
+            );
+            if (
+                progress >= 1 ||
+                !needsBackwardRollAlign(normalizeAngle(motionState.manualRollFacingYaw - motionState.manualRollAlignTargetYaw))
+            ) {
+                startManualRoll(motionState.manualRollAlignTargetYaw, true);
+            }
+        }
 
         function applyTintColor() {
             var tint = chooseTintColor(options);
@@ -482,27 +855,88 @@ import {
         function updateAnimation(dt, animState) {
             dt = Math.max(0, Number(dt || 0));
             animState = animState || {};
+            var grounded = !!(animState && !animState.airborne);
+            var footY = (typeof animState.footY === 'number' && isFinite(animState.footY))
+                ? Number(animState.footY)
+                : null;
+
+            if (!grounded) {
+                if (motionState.wasGrounded && footY != null) {
+                    motionState.airborneStartFootY = footY;
+                } else if (motionState.airborneStartFootY == null && footY != null) {
+                    motionState.airborneStartFootY = footY;
+                }
+            } else if (!motionState.wasGrounded) {
+                motionState.lastLandingDropDistance = (
+                    footY != null &&
+                    motionState.airborneStartFootY != null &&
+                    isFinite(motionState.airborneStartFootY)
+                )
+                    ? Math.max(0, Number(motionState.airborneStartFootY) - footY)
+                    : 0;
+                motionState.lastLandingHorizontalSpeed = resolveHorizontalSpeed(animState);
+                motionState.airborneStartFootY = null;
+            }
 
             if (motionState.lockRemaining > 0) {
                 motionState.lockRemaining = Math.max(0, motionState.lockRemaining - dt);
                 if (motionState.lockRemaining === 0) {
                     motionState.lockName = '';
+                    if (motionState.manualRollActive) {
+                        clearManualRollState();
+                    }
                 }
             }
 
             motionState.directional = updateDirectionalLocomotionState(motionState.directional, dt, animState);
+            updatePendingBackwardRoll(dt);
             var clipName = selectClip(animState, motionState, actions);
-            var playback = resolveClipPlayback(animState, clipName);
+            var playbackState = animState;
+            if (motionState.manualRollActive && clipName === MANUAL_ROLL_CLIP) {
+                playbackState = Object.assign({}, animState, {
+                    manualRollReverse: !!motionState.manualRollReverse
+                });
+            }
+            var playback = resolveClipPlayback(playbackState, clipName);
             playAction(actions, actionState, clipName, 0.1, playback);
             keepPlaybackLooping(actionState.action, playback);
             mixer.update(dt);
+            if (rig.modelRoot) {
+                rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0);
+            }
             rig.activeClipName = actionState.clipName || clipName;
             rig.activePlaybackRate = Number(playback.timeScale || 1);
             rig.activePoseName = '';
 
-            if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
+            var idleAimActive = idleAimAllowed(animState, rig.activeClipName);
+            var idleAimTarget = idleAimActive ? idleAimTargetPitch(animState, rig.activeClipName) : 0;
+            var idleAimBlendSpeed = idleAimActive ? IDLE_AIM_BLEND_IN_SPEED : IDLE_AIM_BLEND_OUT_SPEED;
+            var idleAimBlend = Math.min(1, dt * idleAimBlendSpeed);
+            motionState.idleAimCurrentPitch += (idleAimTarget - Number(motionState.idleAimCurrentPitch || 0)) * idleAimBlend;
+            if (Math.abs(idleAimTarget - motionState.idleAimCurrentPitch) < 0.0001) {
+                motionState.idleAimCurrentPitch = idleAimTarget;
+            }
+
+            if (motionState.manualRollPending || (motionState.manualRollActive && rig.activeClipName === MANUAL_ROLL_CLIP)) {
+                if (rig.modelRoot) {
+                    rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + Number(motionState.manualRollFacingYaw || 0);
+                }
+                rig.activePoseName = motionState.manualRollPending
+                    ? 'roll_align'
+                    : (motionState.manualRollReverse ? 'roll_back' : 'roll');
+            } else if (rig.activeClipName === MANUAL_ROLL_CLIP && isDirectionalMove(animState)) {
+                if (rig.modelRoot) {
+                    rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + resolveRollFacingYaw(animState);
+                }
+                rig.activePoseName = 'roll';
+            } else if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
                 rig.activePoseName = motionState.directional.poseName || '';
             }
+            applyRunRightArmIdleBasePose(rig, rig.activeClipName);
+            applyIdleAimPose(rig, {
+                currentPitch: motionState.idleAimCurrentPitch,
+                weight: idleAimPoseWeight(rig.activeClipName)
+            });
 
             motionState.wasGrounded = !animState.airborne;
             motionState.wasMoving = isDirectionalMove(animState);
@@ -512,9 +946,38 @@ import {
                 : motionState.lastGroundedSpeed;
         }
 
-        function triggerAction(action) {
-            if (String(action || '').toLowerCase() === 'jump') {
+        function triggerAction(action, options) {
+            var kind = String(action || '').toLowerCase();
+            if (kind === 'jump') {
                 motionState.jumpTriggered = true;
+                return true;
+            }
+            if (kind === 'roll') {
+                if (!isDirectionalMove(options)) return false;
+                if (
+                    motionState.manualRollPending ||
+                    motionState.manualRollActive ||
+                    (motionState.lockName === MANUAL_ROLL_CLIP && motionState.lockRemaining > 0.05)
+                ) {
+                    return false;
+                }
+                var targetFacingYaw = resolveManualRollFacingYaw(options);
+                if (isBackwardRollIntent(options) && needsBackwardRollAlign(motionState.directional && motionState.directional.facingYaw)) {
+                    motionState.manualRollPending = true;
+                    motionState.manualRollActive = false;
+                    motionState.manualRollReverse = true;
+                    motionState.manualRollAlignElapsed = 0;
+                    motionState.manualRollAlignDuration = BACKWARD_ROLL_ALIGN_DURATION;
+                    motionState.manualRollAlignStartYaw = normalizeAngle(
+                        motionState.directional && typeof motionState.directional.facingYaw === 'number'
+                            ? motionState.directional.facingYaw
+                            : 0
+                    );
+                    motionState.manualRollAlignTargetYaw = targetFacingYaw;
+                    motionState.manualRollFacingYaw = motionState.manualRollAlignStartYaw;
+                    return true;
+                }
+                startManualRoll(targetFacingYaw, isBackwardRollIntent(options));
                 return true;
             }
             return true;
@@ -539,7 +1002,9 @@ import {
         }
 
         function getMuzzleWorldPosition(outVec3) {
-            return getEyeWorldPosition(outVec3);
+            var out = outVec3 || new THREE.Vector3();
+            muzzleAnchor.getWorldPosition(out);
+            return out;
         }
 
         function setWeapon() {
@@ -612,7 +1077,29 @@ import {
         selectClip: selectClip,
         movementStartClip: movementStartClip,
         resolveMoveIntent: resolveMoveIntent,
-        clipStartFraction: clipStartFraction
+        resolveRollFacingYaw: resolveRollFacingYaw,
+        resolveManualRollFacingYaw: resolveManualRollFacingYaw,
+        isBackwardRollIntent: isBackwardRollIntent,
+        needsBackwardRollAlign: needsBackwardRollAlign,
+        clipStartFraction: clipStartFraction,
+        landingClip: landingClip,
+        resolveHorizontalSpeed: resolveHorizontalSpeed,
+        resolveDistalFaceCenter: resolveDistalFaceCenter,
+        resolveAnimatedBone: resolveAnimatedBone,
+        idleAimAllowed: idleAimAllowed,
+        idleAimNeutralWeight: idleAimNeutralWeight,
+        idleAimResponseWeight: idleAimResponseWeight,
+        idleAimTargetPitch: idleAimTargetPitch,
+        idleAimPoseWeight: idleAimPoseWeight,
+        applyRunRightArmIdleBasePose: applyRunRightArmIdleBasePose,
+        applyIdleAimPose: applyIdleAimPose,
+        weaponMount: function () {
+            return {
+                rootPos: { x: 0.08, y: 0.65, z: -0.16 },
+                cubeSize: { x: 0.28, y: 0.28, z: 0.5 },
+                muzzlePos: { x: 0, y: 0, z: -0.09 }
+            };
+        }
     };
 
     runtime.GameBoxmanRig = GameBoxmanRig;

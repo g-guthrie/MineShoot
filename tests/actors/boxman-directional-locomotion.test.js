@@ -5,6 +5,10 @@ import {
   applyDirectionalLocomotionPose,
   createDirectionalLocomotionState,
   resolveMoveIntent,
+  TURN_ENTRY_RATE,
+  TURN_ENTRY_SNAP_ANGLE,
+  TURN_IDLE_POSE_START_RATE,
+  TURN_SOFT_START_RATE,
   updateDirectionalLocomotionState
 } from '../../js/actors/boxman-directional-locomotion.js';
 
@@ -73,11 +77,117 @@ test('directional locomotion hits the planned movement-facing targets for strafe
   assert.ok(Math.abs(retreatDiagonalState.targetFacingYaw + (30 * (Math.PI / 180))) < 0.000001);
 });
 
+test('directional locomotion uses a subtle idle pose for small standing turns', () => {
+  const state = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(state, 1, {
+    yaw: 0,
+    turnRate: TURN_IDLE_POSE_START_RATE + ((TURN_SOFT_START_RATE - TURN_IDLE_POSE_START_RATE) * 0.5),
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false
+  });
+
+  assert.equal(state.useTurnLoopClip, false);
+  assert.equal(state.useTurnEntryClip, false);
+  assert.equal(state.poseName, 'idle_turn_left');
+  assert.ok(state.idleTurnPoseWeight > 0.45);
+
+  const rig = makeRig();
+  const applied = applyDirectionalLocomotionPose(rig, state, {
+    speedNorm: 0,
+    sprinting: false
+  });
+
+  assert.equal(applied, true);
+  assert.ok(Math.abs(rig.modelRoot.rotation.y - Math.PI) < 0.000001);
+  assert.ok(rig.bodyLower.rotation.y > 0);
+  assert.ok(rig.bodyUpper.rotation.y > rig.bodyLower.rotation.y);
+  assert.ok(rig.headBone.rotation.y > rig.bodyUpper.rotation.y);
+});
+
+test('directional locomotion uses the rotate loop before the full standing turn entry', () => {
+  const state = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(state, 0.016, {
+    yaw: 0,
+    turnRate: 220 * (Math.PI / 180),
+    turnAmount: 35 * (Math.PI / 180),
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false
+  });
+
+  assert.equal(state.useTurnLoopClip, true);
+  assert.equal(state.useTurnEntryClip, false);
+  assert.equal(state.turnClipDirection, 1);
+
+  const rig = makeRig();
+  rig.headBone.rotation.y = 0.3;
+  const applied = applyDirectionalLocomotionPose(rig, state, {
+    speedNorm: 0,
+    sprinting: false
+  });
+
+  assert.equal(applied, true);
+  assert.ok(rig.headBone.rotation.y < 0);
+  assert.ok(rig.headBone.rotation.y > -0.25);
+});
+
+test('directional locomotion scales medium standing turn head guidance with turn magnitude', () => {
+  const lighterTurn = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(lighterTurn, 0.016, {
+    yaw: 0,
+    turnRate: 45 * (Math.PI / 180),
+    turnAmount: 10 * (Math.PI / 180),
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false
+  });
+  const heavierTurn = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(heavierTurn, 0.016, {
+    yaw: 0,
+    turnRate: 220 * (Math.PI / 180),
+    turnAmount: 40 * (Math.PI / 180),
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false
+  });
+
+  assert.ok(heavierTurn.turnLoopPoseWeight > lighterTurn.turnLoopPoseWeight);
+  assert.ok(heavierTurn.turnLoopPoseWeight > 0.6);
+  assert.ok(lighterTurn.turnLoopPoseWeight < 0.25);
+
+  const lightRig = makeRig();
+  lightRig.headBone.rotation.y = 0.3;
+  applyDirectionalLocomotionPose(lightRig, lighterTurn, {
+    speedNorm: 0,
+    sprinting: false
+  });
+
+  const heavyRig = makeRig();
+  heavyRig.headBone.rotation.y = 0.3;
+  applyDirectionalLocomotionPose(heavyRig, heavierTurn, {
+    speedNorm: 0,
+    sprinting: false
+  });
+
+  assert.ok(lightRig.headBone.rotation.y < 0.1);
+  assert.ok(heavyRig.headBone.rotation.y < 0);
+});
+
 test('directional locomotion uses soft idle turn entry when yaw rate is high and movement is near zero', () => {
   const state = createDirectionalLocomotionState();
   updateDirectionalLocomotionState(state, 0.016, {
     yaw: 0,
-    turnRate: 100 * (Math.PI / 180),
+    turnRate: 220 * (Math.PI / 180),
+    turnAmount: (TURN_ENTRY_SNAP_ANGLE * 0.55),
+    speedNorm: 0,
+    sprinting: false,
+    airborne: false
+  });
+  updateDirectionalLocomotionState(state, 0.016, {
+    yaw: 0,
+    turnRate: TURN_ENTRY_RATE,
+    turnAmount: (TURN_ENTRY_SNAP_ANGLE * 0.55),
     speedNorm: 0,
     sprinting: false,
     airborne: false

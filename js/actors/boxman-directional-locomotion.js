@@ -2,10 +2,20 @@ const DEG_TO_RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
 
 export const DIRECTIONAL_START_BLEND_DURATION = 0.16;
+export const TURN_IDLE_POSE_START_RATE = 6 * DEG_TO_RAD;
 export const TURN_SOFT_START_RATE = 20 * DEG_TO_RAD;
 export const TURN_SOFT_FULL_RATE = 90 * DEG_TO_RAD;
-export const TURN_ENTRY_RATE = 90 * DEG_TO_RAD;
+export const TURN_ENTRY_RATE = 330 * DEG_TO_RAD;
+export const TURN_ENTRY_SNAP_ANGLE = 53 * DEG_TO_RAD;
 export const TURN_ENTRY_SPEED_NORM_MAX = 0.15;
+const IDLE_TURN_BODY_MAX_YAW = 4.5 * DEG_TO_RAD;
+const IDLE_TURN_UPPER_MAX_YAW = 8 * DEG_TO_RAD;
+const IDLE_TURN_HEAD_MAX_YAW = 12 * DEG_TO_RAD;
+const IDLE_TURN_UPPER_ROLL_MAX = 2.5 * DEG_TO_RAD;
+const TURN_LOOP_HEAD_TARGET_MIN_YAW = 3.5 * DEG_TO_RAD;
+const TURN_LOOP_HEAD_TARGET_MAX_YAW = 9 * DEG_TO_RAD;
+const TURN_LOOP_HEAD_STABILIZE_MIN_BLEND = 0.62;
+const TURN_LOOP_HEAD_STABILIZE_MAX_BLEND = 0.82;
 const MOVEMENT_FACING_ANCHORS = [
   {
     angle: 0,
@@ -130,11 +140,17 @@ export function createDirectionalLocomotionState() {
     moveAngle: 0,
     lastYaw: null,
     turnRate: 0,
+    turnAmount: 0,
+    turnWipeAmount: 0,
+    turnWipeDirection: 0,
     facingYaw: 0,
     targetFacingYaw: 0,
     bodyLowerAimYaw: 0,
     bodyUpperAimYaw: 0,
     headAimYaw: 0,
+    idleTurnPoseWeight: 0,
+    idleTurnDirection: 0,
+    turnLoopPoseWeight: 0,
     useTurnEntryClip: false,
     useTurnLoopClip: false,
     turnClipDirection: 0,
@@ -181,22 +197,56 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
   next.headAimYaw = -(next.facingYaw * 0.35);
 
   let resolvedTurnRate = 0;
+  let resolvedTurnAmount = 0;
   if (animState && Number.isFinite(Number(animState.turnRate))) {
     resolvedTurnRate = Number(animState.turnRate || 0);
   } else if (delta > 0 && animState && typeof animState.yaw === 'number' && typeof next.lastYaw === 'number') {
     resolvedTurnRate = normalizeAngle(Number(animState.yaw || 0) - Number(next.lastYaw || 0)) / delta;
   }
+  if (animState && Number.isFinite(Number(animState.turnAmount))) {
+    resolvedTurnAmount = Math.abs(Number(animState.turnAmount || 0));
+  } else if (animState && typeof animState.yaw === 'number' && typeof next.lastYaw === 'number') {
+    resolvedTurnAmount = Math.abs(normalizeAngle(Number(animState.yaw || 0) - Number(next.lastYaw || 0)));
+  } else {
+    resolvedTurnAmount = Math.abs(resolvedTurnRate) * delta;
+  }
   next.turnRate = resolvedTurnRate;
+  next.turnAmount = resolvedTurnAmount;
   next.lastYaw = (animState && typeof animState.yaw === 'number') ? Number(animState.yaw || 0) : next.lastYaw;
 
   const turnAbs = Math.abs(resolvedTurnRate);
-  const turnBlend = clamp01((turnAbs - TURN_SOFT_START_RATE) / Math.max(0.0001, (TURN_SOFT_FULL_RATE - TURN_SOFT_START_RATE)));
   const turnDirection = sign(resolvedTurnRate);
   const canIdleTurnClip = !movementIntent.moving && !(animState && animState.airborne) && speedNorm < TURN_ENTRY_SPEED_NORM_MAX;
-  next.useTurnEntryClip = canIdleTurnClip && turnAbs >= TURN_ENTRY_RATE;
+  if (canIdleTurnClip && turnDirection !== 0 && resolvedTurnAmount > 0.0001) {
+    if (next.turnWipeDirection === turnDirection || next.turnWipeDirection === 0) {
+      next.turnWipeAmount += resolvedTurnAmount;
+    } else {
+      next.turnWipeAmount = resolvedTurnAmount;
+    }
+    next.turnWipeDirection = turnDirection;
+  } else {
+    next.turnWipeAmount = 0;
+    next.turnWipeDirection = 0;
+  }
+  const idleTurnPoseTarget = canIdleTurnClip && turnAbs < TURN_SOFT_START_RATE
+    ? clamp01((turnAbs - TURN_IDLE_POSE_START_RATE) / Math.max(0.0001, (TURN_SOFT_START_RATE - TURN_IDLE_POSE_START_RATE)))
+    : 0;
+  const idleTurnPoseBlend = Math.min(1, delta * (idleTurnPoseTarget > Number(next.idleTurnPoseWeight || 0) ? 18 : 12));
+  next.idleTurnPoseWeight += (idleTurnPoseTarget - Number(next.idleTurnPoseWeight || 0)) * idleTurnPoseBlend;
+  if (Math.abs(idleTurnPoseTarget - next.idleTurnPoseWeight) < 0.0001) {
+    next.idleTurnPoseWeight = idleTurnPoseTarget;
+  }
+  if (idleTurnPoseTarget > 0.0001 && turnDirection !== 0) {
+    next.idleTurnDirection = turnDirection;
+  } else if (next.idleTurnPoseWeight < 0.0001) {
+    next.idleTurnDirection = 0;
+  }
+  next.useTurnEntryClip = canIdleTurnClip && next.turnWipeAmount >= TURN_ENTRY_SNAP_ANGLE;
   next.useTurnLoopClip = canIdleTurnClip && turnAbs >= TURN_SOFT_START_RATE;
+  next.turnLoopPoseWeight = next.useTurnLoopClip
+    ? clamp01(next.turnWipeAmount / Math.max(0.0001, TURN_ENTRY_SNAP_ANGLE))
+    : 0;
   next.turnClipDirection = (next.useTurnEntryClip || next.useTurnLoopClip) ? turnDirection : 0;
-  void turnBlend;
 
   if (movementIntent.moving) {
     if (movementIntent.pureBackpedal) {
@@ -212,6 +262,8 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
     }
   } else if (next.useTurnLoopClip || next.useTurnEntryClip) {
     next.poseName = next.turnClipDirection < 0 ? 'turn_right' : 'turn_left';
+  } else if (next.idleTurnPoseWeight > 0.0001) {
+    next.poseName = next.idleTurnDirection < 0 ? 'idle_turn_right' : 'idle_turn_left';
   } else {
     next.poseName = '';
   }
@@ -226,7 +278,11 @@ export function applyDirectionalLocomotionPose(rig, state, animState) {
   const profile = state.profile || interpolateProfile(intent.absAngle);
   const speedNorm = clamp01(animState && animState.speedNorm);
   const baseWeight = lerp(0.35, 1, speedNorm);
-  const hasDirectionalPose = intent.moving || Math.abs(Number(state.facingYaw || 0)) > 0.0001;
+  const idleTurnPoseWeight = Math.max(0, Number(state.idleTurnPoseWeight || 0));
+  const idleTurnDirection = Number(state.idleTurnDirection || 0);
+  const hasIdleTurnPose = !intent.moving && idleTurnPoseWeight > 0.0001;
+  const hasTurnClipPose = !intent.moving && (!!state.useTurnLoopClip || !!state.useTurnEntryClip);
+  const hasDirectionalPose = intent.moving || Math.abs(Number(state.facingYaw || 0)) > 0.0001 || hasIdleTurnPose || hasTurnClipPose;
   if (!hasDirectionalPose) return false;
 
   const startProgress = 1 - (Math.max(0, Number(state.startRemaining || 0)) / DIRECTIONAL_START_BLEND_DURATION);
@@ -246,6 +302,27 @@ export function applyDirectionalLocomotionPose(rig, state, animState) {
   }
   if (rig.headBone) {
     rig.headBone.rotation.y += Number(state.headAimYaw || 0);
+  }
+  if (!intent.moving && state.useTurnLoopClip && rig.headBone) {
+    const turnLoopPoseWeight = smoothstep(Number(state.turnLoopPoseWeight || 0));
+    const turnLoopHeadTargetMag = lerp(TURN_LOOP_HEAD_TARGET_MIN_YAW, TURN_LOOP_HEAD_TARGET_MAX_YAW, turnLoopPoseWeight);
+    const turnLoopHeadBlend = lerp(TURN_LOOP_HEAD_STABILIZE_MIN_BLEND, TURN_LOOP_HEAD_STABILIZE_MAX_BLEND, turnLoopPoseWeight);
+    const turnLoopHeadTarget = -Number(state.turnClipDirection || 0) * turnLoopHeadTargetMag;
+    rig.headBone.rotation.y = lerp(rig.headBone.rotation.y, turnLoopHeadTarget, turnLoopHeadBlend);
+  }
+  if (hasIdleTurnPose) {
+    const idleTurnWeight = smoothstep(idleTurnPoseWeight);
+    const idleTurnYaw = idleTurnDirection * idleTurnWeight;
+    if (rig.bodyLower) {
+      rig.bodyLower.rotation.y += idleTurnYaw * IDLE_TURN_BODY_MAX_YAW;
+    }
+    if (rig.bodyUpper) {
+      rig.bodyUpper.rotation.y += idleTurnYaw * IDLE_TURN_UPPER_MAX_YAW;
+      rig.bodyUpper.rotation.z += -idleTurnYaw * IDLE_TURN_UPPER_ROLL_MAX;
+    }
+    if (rig.headBone) {
+      rig.headBone.rotation.y += idleTurnYaw * IDLE_TURN_HEAD_MAX_YAW;
+    }
   }
 
   return true;
