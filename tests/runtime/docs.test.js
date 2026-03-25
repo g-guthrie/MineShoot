@@ -57,7 +57,7 @@ test('briefing page teaches swapping weapons, throwables, and the equipped abili
   const html = docs.buildContent('home');
 
   assert.match(html, /reload on R, and swap weapons on 1 \/ 2 or the mouse wheel/i);
-  assert.match(html, /Use Q for the current throwable and E for your equipped ability/i);
+  assert.match(html, /Use Q for the current throwable, E to roll in your movement direction, and G for your equipped ability/i);
   assert.match(html, /Machine Gun/i);
   assert.match(html, /Pistol/i);
 });
@@ -115,6 +115,7 @@ test('docs pages reflect remapped slot, throwable, and manual labels', async () 
           weapon_slot_2: 'X',
           reload: 'T',
           throwable: 'C',
+          roll: 'V',
           ability_1: 'G',
           sprint: 'LEFT',
           jump: 'SPACE',
@@ -138,8 +139,10 @@ test('docs pages reflect remapped slot, throwable, and manual labels', async () 
 
   assert.match(homeHtml, /swap with key Z/i);
   assert.match(homeHtml, /reload on T/i);
-  assert.match(homeHtml, /Use C for the current throwable and G for your equipped ability/i);
+  assert.match(homeHtml, /Use C for the current throwable, V to roll in your movement direction, and G for your equipped ability/i);
   assert.match(controlsHtml, /I \/ J \/ K \/ L/i);
+  assert.match(controlsHtml, /docs-kbd">V<\/span>/i);
+  assert.match(controlsHtml, /docs-control-title">Roll<\/span>/i);
   assert.match(controlsHtml, /T reload/i);
   assert.match(controlsHtml, /Sniper auto-scopes when you equip it/i);
   assert.match(controlsHtml, /field manual.*J/i);

@@ -785,17 +785,14 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         for (var tw = 0; tw < 4; tw++) {
             var twz = fenceMinZ + 4 + (tw * 10);
             if (Math.abs(twz - gateZ) < 5) continue;
+            if (tw === 3) continue;
+            if (tw === 1) continue;
+            if (tw === 0) continue;
             var westTreeX = snapGrid(fenceMinX - 2);
             var westTreeZ = snapGrid(twz);
-            if (tw === 3) {
-                westTreeX -= 1;
-                westTreeZ += 5;
-            }
             treePositions.push({ x: westTreeX, z: westTreeZ, s: 0.6 + (tw % 3) * 0.3 });
         }
         // Corner trees (skip NE — cooling towers)
-        treePositions.push({ x: snapGrid(fenceMinX - 3), z: snapGrid(fenceMinZ - 3), s: 1.0 });
-        treePositions.push({ x: snapGrid(fenceMinX - 3) + 2, z: snapGrid(fenceMaxZ + 3) - 4, s: 0.8 });
         treePositions.push({ x: snapGrid(fenceMaxX + 3), z: snapGrid(fenceMaxZ + 3), s: 0.9 });
 
         for (var ti = 0; ti < treePositions.length; ti++) {

@@ -94,6 +94,19 @@ test('replay motion carries jump state across pending samples', () => {
   assert.ok(replayed.velocityY > 0);
 });
 
+test('replay snapshot builder restores airborne sprint carry from airborne sprinting snapshots', () => {
+  const state = buildMotionStateFromSnapshot({
+    x: 0,
+    y: 2.4,
+    z: 0,
+    yaw: 0,
+    isGrounded: false,
+    sprinting: true
+  });
+
+  assert.equal(state.airborneSprintCarry, true);
+});
+
 test('replay correction runs for meaningful drift even when ack sequence does not advance', () => {
   assert.equal(
     shouldReplayAuthoritativeCorrection({

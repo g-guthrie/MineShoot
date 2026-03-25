@@ -13,6 +13,7 @@
             { label: 'MOUSE', title: 'Look' },
             { label: bindingsApi.getDisplayLabel('sprint'), title: 'Sprint' },
             { label: bindingsApi.getDisplayLabel('jump'), title: 'Jump' },
+            { label: bindingsApi.getDisplayLabel('roll'), title: 'Roll' },
             { label: 'LMB', title: 'Fire' },
             { label: bindingsApi.getDisplayLabel('reload'), title: 'Reload' },
             { label: bindingsApi.getDisplayLabel('weapon_slot_1') + ' / ' + bindingsApi.getDisplayLabel('weapon_slot_2'), title: 'Weapon Slots' },

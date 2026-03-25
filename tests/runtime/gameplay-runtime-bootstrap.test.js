@@ -176,7 +176,7 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
   };
 }
 
-test('gameplay runtime bootstrap restores offline sandbox bots and local match startup', async () => {
+test('gameplay runtime bootstrap starts offline sandbox without bots', async () => {
   const harness = await loadBootstrapHarness();
 
   const result = await harness.bootstrap.start({
@@ -205,9 +205,8 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
     JSON.parse(JSON.stringify(harness.calls.localMatchInit)),
     [{ gameMode: 'ffa' }]
   );
-  assert.equal(harness.calls.enemyInit.length, 1);
-  assert.equal(harness.calls.enemyInit[0].count, 6);
-  assert.deepEqual(harness.calls.throwableInfo, [{ throwable: 'frag' }]);
+  assert.equal(harness.calls.enemyInit.length, 0);
+  assert.deepEqual(harness.calls.throwableInfo, []);
   assert.equal(harness.calls.netInit, 0);
   assert.equal(harness.calls.docsInit, 1);
 
@@ -215,9 +214,9 @@ test('gameplay runtime bootstrap restores offline sandbox bots and local match s
   assert.equal(harness.calls.removeResizeHandler, 1);
   assert.equal(harness.calls.worldDispose, 1);
   assert.equal(harness.calls.playerDestroy, 1);
-  assert.equal(harness.calls.enemyDispose, 1);
-  assert.equal(harness.calls.throwablesShutdown, 1);
-  assert.equal(harness.calls.hookVisualsDispose, 1);
+  assert.equal(harness.calls.enemyDispose, 0);
+  assert.equal(harness.calls.throwablesShutdown, 0);
+  assert.equal(harness.calls.hookVisualsDispose, 0);
   assert.equal(harness.calls.overheadReset, 1);
   assert.equal(harness.calls.uiReset, 1);
   assert.equal(harness.calls.hitscanReset, 1);

@@ -519,7 +519,7 @@ test('backward jump keeps movement parity and only flips the presentation tilt',
   }]);
 });
 
-test('holding sprint in air no longer depends on a local sprint queue', async () => {
+test('pressing sprint for the first time in air does not start sprint until landing', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
 
@@ -529,6 +529,43 @@ test('holding sprint in air no longer depends on a local sprint queue', async ()
 
   harness.documentObj.dispatch('keyup', { code: 'Space' });
   harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.05));
+  harness.player.update(0.05);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.player.isSprinting(), false);
+});
+
+test('sprinting jump carries sprint in air and can resume sprint on landing when still held', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  harness.documentObj.dispatch('keydown', { code: 'Space' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true, jump: true }), harness.buildStepOptions(0.05));
+  harness.player.update(0.05);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.player.isSprinting(), true);
+
+  harness.documentObj.dispatch('keyup', { code: 'Space' });
+  harness.documentObj.dispatch('keyup', { code: 'ShiftLeft' });
+  stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: false }), harness.buildStepOptions(0.05));
+  harness.player.update(0.05);
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.player.isSprinting(), false);
+
+  expected.y = 1.62;
+  expected.velocityY = -8;
+  expected.isGrounded = false;
+  expected.sprinting = false;
+  expected.airborneSprintCarry = false;
+  harness.player.applyAuthoritativeMotion({
+    ...expected
+  });
+
   harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
   stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.05));
   harness.player.update(0.05);
@@ -678,4 +715,43 @@ test('player replay correction stays replay-first for a recent fast sprint windo
 
   assert.equal(corrected, true);
   assertPlayerMatchesExpected(harness.player, expectedCorrected);
+});
+
+test('player roll only triggers while there is movement input', async () => {
+  const harness = await loadPlayerMovementHarness();
+
+  assert.equal(harness.player.tryRoll(), false);
+  assert.equal(harness.player.isRolling(), false);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+
+  assert.equal(harness.player.tryRoll(), true);
+  assert.equal(harness.player.isRolling(), true);
+  assert.deepEqual(harness.calls.triggerActions.at(-1), {
+    action: 'roll',
+    payload: {
+      movingForward: true,
+      movingBackward: false,
+      movingLeft: false,
+      movingRight: false
+    }
+  });
+});
+
+test('player roll forwards the current movement direction to the avatar action', async () => {
+  const harness = await loadPlayerMovementHarness();
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyS' });
+  harness.documentObj.dispatch('keydown', { code: 'KeyD' });
+
+  assert.equal(harness.player.tryRoll(), true);
+  assert.deepEqual(harness.calls.triggerActions.at(-1), {
+    action: 'roll',
+    payload: {
+      movingForward: false,
+      movingBackward: true,
+      movingLeft: false,
+      movingRight: true
+    }
+  });
 });

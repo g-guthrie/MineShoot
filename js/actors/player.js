@@ -197,6 +197,8 @@
     var SNIPER_SCOPE_HEIGHT = 0.12;
     var SNIPER_SCOPE_BLEND_SPEED = 18;
     var SNIPER_SCOPE_SENSITIVITY_MULT = 0.42;
+    var FORWARD_ROLL_ACTION_DURATION_MS = 360;
+    var BACKWARD_ROLL_ACTION_DURATION_MS = 520;
 
     var playerX = 25;
     var playerZ = 45;
@@ -229,6 +231,7 @@
 
     var bobTimer = 0;
     var sprinting = false;
+    var airborneSprintCarry = false;
     var lastMoveSpeedNorm = 0;
     var loadoutSlots = [];
     var motionStateScratch = {
@@ -241,6 +244,7 @@
         isGrounded: true,
         jumpHoldTimer: 0,
         jumpHeldLast: false,
+        airborneSprintCarry: false,
         moveSpeedNorm: 0,
         sprinting: false
     };
@@ -283,6 +287,7 @@
         throwableUntil: 0,
         abilityUntil: 0
     };
+    var rollUntil = 0;
 
     function hasInputCapture() {
         return !!document.pointerLockElement;
@@ -383,6 +388,10 @@
 
     function canUseAbility(now) {
         return statusApi ? statusApi.canUseAbility(now) : true;
+    }
+
+    function isRolling(now) {
+        return Number(rollUntil || 0) > Number(now || nowMs());
     }
 
     function clearExpiredStatusState(now) {
@@ -501,6 +510,7 @@
             runSpeed: effectiveRunSpeedForWeapon(currentWeaponId),
             sprinting: sprinting,
             isGrounded: isGrounded,
+            footY: posY - eyeHeight(),
             yaw: yaw,
             pitch: pitch,
             hooked: isHookPulled(),
@@ -746,6 +756,7 @@
         isGrounded = true;
         jumpHoldTimer = 0;
         jumpPressedLastFrame = false;
+        airborneSprintCarry = false;
         lastMoveSpeedNorm = 0;
         sprinting = false;
     }
@@ -773,6 +784,7 @@
         motionStateScratch.isGrounded = isGrounded;
         motionStateScratch.jumpHoldTimer = jumpHoldTimer;
         motionStateScratch.jumpHeldLast = !!jumpPressedLastFrame;
+        motionStateScratch.airborneSprintCarry = !!airborneSprintCarry;
         motionStateScratch.moveSpeedNorm = lastMoveSpeedNorm;
         motionStateScratch.sprinting = !!sprinting;
         return motionStateScratch;
@@ -787,6 +799,27 @@
         inputStateScratch.sprint = !!isSprintInputActive();
         inputStateScratch.adsActive = !!isScopeModeActive();
         return inputStateScratch;
+    }
+
+    function buildRollActionOptions() {
+        var movingForward = !!keys.forward;
+        var movingBackward = !!keys.backward;
+        var movingLeft = !!keys.left;
+        var movingRight = !!keys.right;
+        if (!movingForward && !movingBackward && !movingLeft && !movingRight) return null;
+        return {
+            movingForward: movingForward,
+            movingBackward: movingBackward,
+            movingLeft: movingLeft,
+            movingRight: movingRight
+        };
+    }
+
+    function rollActionDurationMs(rollOptions) {
+        if (rollOptions && rollOptions.movingBackward && !rollOptions.movingForward) {
+            return BACKWARD_ROLL_ACTION_DURATION_MS;
+        }
+        return FORWARD_ROLL_ACTION_DURATION_MS;
     }
 
     function copyMotionStateFields(state, options) {
@@ -809,6 +842,9 @@
         isGrounded = state.isGrounded !== undefined ? !!state.isGrounded : true;
         jumpHoldTimer = Number(state.jumpHoldTimer || 0);
         jumpPressedLastFrame = !!state.jumpHeldLast;
+        airborneSprintCarry = state && Object.prototype.hasOwnProperty.call(state, 'airborneSprintCarry')
+            ? !!state.airborneSprintCarry
+            : (!!state.sprinting && !isGrounded);
         lastMoveSpeedNorm = Number(state.moveSpeedNorm || 0);
         sprinting = !!state.sprinting;
         return true;
@@ -1163,6 +1199,7 @@
         cancelScopedView();
         sprintCanceledUntilRelease = false;
         sprinting = false;
+        rollUntil = 0;
         avatarAliveVisible = true;
         lastMoveSpeedNorm = 0;
         lastReplayAckSeq = 0;
@@ -1457,17 +1494,32 @@
         setAliveVisual(active);
     };
 
-    GamePlayer.triggerAction = function (action, options) {
+    function triggerAvatarAction(action, options) {
         var kind = String(action || '').toLowerCase();
         if (kind === 'fire') {
             triggerFireAction(viewHelper());
             return true;
         }
         if (actorVisual && actorVisual.triggerAction) {
-            return actorVisual.triggerAction(kind, options || null);
+            return actorVisual.triggerAction(kind, options || null) !== false;
         }
         if (!avatarRigApi || !avatarRigApi.triggerAction) return false;
-        return !!avatarRigApi.triggerAction(kind, options || null);
+        return avatarRigApi.triggerAction(kind, options || null) !== false;
+    }
+
+    GamePlayer.triggerAction = function (action, options) {
+        return triggerAvatarAction(action, options);
+    };
+
+    GamePlayer.tryRoll = function () {
+        if (!hasInputCapture()) return false;
+        if (!isGrounded || isMovementLocked()) return false;
+        if (isRolling()) return false;
+        var rollOptions = buildRollActionOptions();
+        if (!rollOptions) return false;
+        if (!triggerAvatarAction('roll', rollOptions)) return false;
+        rollUntil = nowMs() + rollActionDurationMs(rollOptions);
+        return true;
     };
 
     GamePlayer.setSpawnShield = function (active) {
@@ -1490,6 +1542,10 @@
 
     GamePlayer.isHookPulled = function () {
         return isHookPulled();
+    };
+
+    GamePlayer.isRolling = function () {
+        return isRolling();
     };
 
     GamePlayer.isChoked = function () {

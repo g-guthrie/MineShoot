@@ -112,6 +112,9 @@ export function buildMotionStateFromSnapshot(state, options = {}) {
     isGrounded: !!(state && state.isGrounded),
     jumpHoldTimer: Number(state && state.jumpHoldTimer || 0),
     jumpHeldLast: !!(state && state.jumpHeldLast),
+    airborneSprintCarry: state && Object.prototype.hasOwnProperty.call(state, 'airborneSprintCarry')
+      ? !!state.airborneSprintCarry
+      : (!!(state && state.sprinting) && !(state && state.isGrounded)),
     moveSpeedNorm: Number(state && state.moveSpeedNorm || 0),
     sprinting: !!(state && state.sprinting)
   };

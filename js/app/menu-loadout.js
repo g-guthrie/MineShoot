@@ -58,16 +58,6 @@
         return Array.isArray(defs.order) ? defs.order : Object.keys(defs).filter(function (key) { return key !== 'order'; });
     }
 
-    function defaultAbilityId() {
-        var shared = sharedApi();
-        var tuning = tuningApi();
-        return String(
-            (shared.getDefaultAbilityId ? shared.getDefaultAbilityId() : '')
-            || tuning.defaultAbilityId
-            || ''
-        );
-    }
-
     function defaultThrowableId() {
         var shared = sharedApi();
         if (shared.getDefaultThrowableId) {
@@ -75,10 +65,6 @@
         }
         var ids = selectableThrowableIds();
         return ids[0] ? String(ids[0]) : '';
-    }
-
-    function abilityCatalog() {
-        return tuningApi().abilityCatalog || {};
     }
 
     function committedLoadout() {
@@ -89,7 +75,6 @@
         var defaultWeapons = defaultWeaponLoadout();
         return {
             weaponSlots: [defaultWeapons[0] || '', defaultWeapons[1] || ''],
-            selectedAbilityId: defaultAbilityId(),
             selectedThrowableId: defaultThrowableId()
         };
     }
@@ -103,15 +88,6 @@
             weaponSlots: ['', ''],
             awaitingSecondPick: false
         };
-    }
-
-    function normalizeAbilityState() {
-        var loadoutState = loadoutStateApi();
-        var committed = committedLoadout();
-        if (loadoutState && loadoutState.setSelectedAbility && committed.selectedAbilityId) {
-            loadoutState.setSelectedAbility(committed.selectedAbilityId);
-        }
-        return String(committed.selectedAbilityId || '');
     }
 
     function applyCommittedToRuntime(multiplayerMode) {
@@ -137,11 +113,6 @@
         return String(def.label || throwableId || '');
     }
 
-    function abilityName(abilityId) {
-        var def = abilityCatalog()[String(abilityId || '')] || {};
-        return String(def.name || abilityId || '');
-    }
-
     function pairOwnerIndex(pair, selectedId) {
         var target = String(selectedId || '');
         if (!target) return -1;
@@ -154,15 +125,13 @@
         return {
             root: document.getElementById('menu-loadout-band'),
             weaponsPanel: document.getElementById('weapon-slot-panel'),
-            throwablePanel: document.getElementById('throwable-slot-panel'),
-            abilityPanel: document.getElementById('ability-slot-panel')
+            throwablePanel: document.getElementById('throwable-slot-panel')
         };
     }
 
     function refreshBindingCopy() {
         var weaponTitle = document.getElementById('weapon-slot-title');
         var throwableTitle = document.getElementById('throwable-slot-title');
-        var abilityTitle = document.getElementById('ability-slot-title');
 
         if (weaponTitle) {
             var flag = document.getElementById('weapon-pick-flag');
@@ -173,7 +142,6 @@
             }
         }
         if (throwableTitle) throwableTitle.textContent = 'Throwables';
-        if (abilityTitle) abilityTitle.textContent = 'Abilities';
     }
 
     function runRenderCallbacks() {
@@ -274,39 +242,6 @@
         renderCallbacks.push(render);
     }
 
-    function bindAbilityUi() {
-        var choiceGrid = document.getElementById('ability-choice-grid');
-        if (!choiceGrid || choiceGrid.__abilityMenuBound) return;
-        choiceGrid.__abilityMenuBound = true;
-
-        function render() {
-            var committed = committedLoadout();
-            var catalog = abilityCatalog();
-            choiceGrid.innerHTML = '';
-            for (var abilityId in catalog) {
-                if (!Object.prototype.hasOwnProperty.call(catalog, abilityId)) continue;
-                var def = catalog[abilityId];
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.classList.add('btn', 'ability-choice-btn');
-                btn.dataset.abilityId = String(def.id || abilityId);
-                btn.textContent = String(def.name || abilityId).toUpperCase();
-                if (committed.selectedAbilityId === String(def.id || abilityId)) btn.classList.add('active');
-                btn.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var id = String(this.dataset.abilityId || '');
-                    var loadoutState = loadoutStateApi();
-                    if (!loadoutState) return;
-                    loadoutState.setSelectedAbility(id);
-                    applyCommittedToRuntime(true);
-                });
-                choiceGrid.appendChild(btn);
-            }
-        }
-
-        renderCallbacks.push(render);
-    }
-
     GameMenuLoadout.init = function () {
         if (uiState.initialized) return;
         var loadoutState = loadoutStateApi();
@@ -316,7 +251,6 @@
         uiState.initialized = true;
         bindWeaponUi();
         bindThrowableUi();
-        bindAbilityUi();
         refreshBindingCopy();
         if (runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
             runtime.GameInputBindings.subscribe(refreshBindingCopy);
@@ -372,7 +306,6 @@
         var committed = committedLoadout();
         return {
             weaponSlots: committed.weaponSlots.slice(0, 2),
-            selectedAbilityId: String(committed.selectedAbilityId || ''),
             selectedThrowableId: String(committed.selectedThrowableId || '')
         };
     };

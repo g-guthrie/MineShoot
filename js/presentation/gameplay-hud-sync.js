@@ -313,7 +313,7 @@
                 }
                 sections.push({
                     tone: toneForAbility(),
-                    title: inputLabels.getBindingLabel('ability_1', 'E') + ' ' + String((def && def.name) || abilityId).toUpperCase() + ' :: ' + (Number(abilityDebug && abilityDebug.cooldown || 0) > 0 ? Number(abilityDebug.cooldown || 0).toFixed(1) + 's' : 'READY'),
+                    title: inputLabels.getBindingLabel('ability_1', 'G') + ' ' + String((def && def.name) || abilityId).toUpperCase() + ' :: ' + (Number(abilityDebug && abilityDebug.cooldown || 0) > 0 ? Number(abilityDebug.cooldown || 0).toFixed(1) + 's' : 'READY'),
                     body: body.join('\n')
                 });
             }

@@ -301,6 +301,7 @@
         function tryPlayerFire() {
             if (!canUseLocalAction('weapon')) return;
             var player = gamePlayerApi();
+            if (player && player.isRolling && player.isRolling()) return;
             var netView = currentMatchViewApi();
             var netCommands = currentMatchCommandApi();
             var selfCombat = currentSelfCombatApi();

@@ -1228,16 +1228,13 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 .loadout-section { min-width: 0; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-panel,
-#menu-shell.menu-shell-v4 #throwable-slot-panel,
-#menu-shell.menu-shell-v4 #ability-slot-panel { display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px; }
+#menu-shell.menu-shell-v4 #throwable-slot-panel { display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-title,
-#menu-shell.menu-shell-v4 #throwable-slot-title,
-#menu-shell.menu-shell-v4 #ability-slot-title { font-size: 15px; font-weight: 700; color: #20304a; margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+#menu-shell.menu-shell-v4 #throwable-slot-title { font-size: 15px; font-weight: 700; color: #20304a; margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
 
 
 #menu-shell.menu-shell-v4 #throwable-choice-grid,
-#menu-shell.menu-shell-v4 .ability-choice-grid,
 #menu-shell.menu-shell-v4 #weapon-choice-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; justify-content: center; }
 
 
@@ -1246,8 +1243,7 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 #menu-shell.menu-shell-v4 .weapon-choice-btn,
-#menu-shell.menu-shell-v4 .throwable-choice-btn,
-#menu-shell.menu-shell-v4 .ability-choice-btn { border: none; background: var(--fill-pill); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
+#menu-shell.menu-shell-v4 .throwable-choice-btn { border: none; background: var(--fill-pill); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
 
 
 /* ------------------------------------------------------------
@@ -1263,9 +1259,6 @@ body { cursor: default; }
 /* Pick flag (inline with title) — pinkish red */
 #weapon-pick-flag { font-size: 12px; color: #d94a5c; font-weight: 500; letter-spacing: 0.02em; }
 #weapon-pick-flag.hidden { display: none; }
-
-/* Ability (purple — single select, no slot system) */
-#menu-shell.menu-shell-v4 .ability-choice-btn.active { background: #8b3dff; color: #fff; box-shadow: inset 0 0 0 1px rgba(92, 28, 190, 0.96), 0 10px 22px rgba(139, 61, 255, 0.28); }
 
 /* Throwable (vibrant orange — single flat list) */
 #menu-shell.menu-shell-v4 .throwable-choice-btn.active { background: #f08c00; color: #fff; box-shadow: inset 0 0 0 1px rgba(180, 95, 0, 0.96), 0 10px 22px rgba(240, 140, 0, 0.28); }

@@ -77,6 +77,7 @@ async function loadControlsHarness(options = {}) {
     tryPlayerFire: 0,
     docsToggle: 0,
     docsClose: 0,
+    rolls: 0,
     abilityCasts: [],
     debugToggles: 0,
     reloads: 0,
@@ -124,7 +125,11 @@ async function loadControlsHarness(options = {}) {
     },
     GamePlayer: {
       getPosition() { return { x: 0, y: 0, z: 0 }; },
-      getRotation() { return { yaw: 0, pitch: 0 }; }
+      getRotation() { return { yaw: 0, pitch: 0 }; },
+      tryRoll() {
+        calls.rolls += 1;
+        return true;
+      }
     },
     GameAbilities: {
       getHudState() { return {}; },
@@ -539,13 +544,31 @@ test('gameplay controls keep keyboard weapon slot switching intact', async () =>
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'shotgun' }]);
 });
 
-test('gameplay controls honor remapped throwable, ability, debug, and manual keys', async () => {
+test('gameplay controls trigger roll on E and ability on G by default', async () => {
+  const harness = await loadControlsHarness();
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyE',
+    repeat: false,
+    preventDefault() {}
+  });
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyG',
+    repeat: false
+  });
+
+  assert.equal(harness.calls.rolls, 1);
+  assert.deepEqual(harness.calls.abilityCasts, [1]);
+});
+
+test('gameplay controls honor remapped throwable, roll, ability, debug, and manual keys', async () => {
   const harness = await loadControlsHarness({
     runtimeOverrides: {
       GameInputBindings: {
         matches(actionId, event) {
           return (
             (actionId === 'throwable' && event.code === 'KeyC') ||
+            (actionId === 'roll' && event.code === 'KeyV') ||
             (actionId === 'ability_1' && event.code === 'KeyG') ||
             (actionId === 'toggle_debug' && event.code === 'KeyB') ||
             (actionId === 'open_manual' && event.code === 'KeyJ')
@@ -568,6 +591,11 @@ test('gameplay controls honor remapped throwable, ability, debug, and manual key
   assert.equal(harness.controls.hasArmedThrowablePreview(), true);
 
   harness.documentObj.dispatch('keydown', {
+    code: 'KeyV',
+    repeat: false,
+    preventDefault() {}
+  });
+  harness.documentObj.dispatch('keydown', {
     code: 'KeyG',
     repeat: false
   });
@@ -583,6 +611,7 @@ test('gameplay controls honor remapped throwable, ability, debug, and manual key
     stopPropagation() {}
   });
 
+  assert.equal(harness.calls.rolls, 1);
   assert.deepEqual(harness.calls.abilityCasts, [1]);
   assert.equal(harness.calls.debugToggles, 1);
   // Docs toggle is handled by menu-shell.js, not gameplay-controls

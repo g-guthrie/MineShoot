@@ -173,7 +173,6 @@
 
         var rigApi = null;
         if (
-            opts.preferBoxman &&
             globalThis.__MAYHEM_RUNTIME.GameBoxmanRig &&
             globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.isReady &&
             globalThis.__MAYHEM_RUNTIME.GameBoxmanRig.isReady() &&
@@ -187,16 +186,8 @@
                 tintColor: (ownerType === 'player') ? 0xffffff : bodyColor
             });
         }
-        if (!rigApi && globalThis.__MAYHEM_RUNTIME.GameAvatarRig && globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create) {
-            rigApi = globalThis.__MAYHEM_RUNTIME.GameAvatarRig.create({
-                bodyColor: bodyColor,
-                skinColor: skinColor,
-                legColor: legColor,
-                weaponId: weaponId
-            });
-        }
         if (!rigApi || !rigApi.root) {
-            throw new Error('GameActorVisualFactory.create requires GameAvatarRig.create to return a rig root.');
+            throw new Error('GameActorVisualFactory.create requires GameBoxmanRig.create to return a rig root.');
         }
         var visual = rigApi.root;
         var root = new THREE.Group();

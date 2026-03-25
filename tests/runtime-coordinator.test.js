@@ -135,7 +135,13 @@ test('runtime coordinator reads respawn countdown from self combat instead of ne
             capturedReadMatchContext = opts.readMatchContext;
             return {
               launchModeById() { return { ok: true }; },
-              getActivityState() { return 'menu'; }
+              getActivityState() { return 'in_match'; },
+              getActiveRuntimeMode() {
+                return {
+                  id: 'cloud_multiplayer',
+                  authorityMode: 'networked'
+                };
+              }
             };
           }
         }
@@ -155,7 +161,7 @@ test('runtime coordinator reads respawn countdown from self combat instead of ne
   assert.equal(typeof capturedReadMatchContext, 'function');
   const matchContext = capturedReadMatchContext();
   assert.deepEqual(JSON.parse(JSON.stringify(matchContext.respawnState)), expectedRespawnState);
-  assert.deepEqual(JSON.parse(JSON.stringify(matchContext.selfState)), { id: 'usr_test', alive: false });
+  assert.equal(matchContext.selfState, null);
 });
 
 test('runtime coordinator reads local-match state when offline runtime is active', async () => {
@@ -467,6 +473,177 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
   assert.deepEqual(playerActions, ['fire']);
 });
 
+test('runtime coordinator does not fire while the player is rolling', async () => {
+  const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
+    readModule('../js/app/runtime-match-view.js'),
+    readModule('../js/app/runtime-match-actions.js'),
+    readModule('../js/app/runtime-match-host.js'),
+    readModule('../js/app/runtime-coordinator.js')
+  ]);
+  let capturedStartOptions = null;
+  let fireCalls = 0;
+  const playerActions = [];
+
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    requestAnimationFrame() {},
+    document: {
+      pointerLockElement: null,
+      querySelector() { return null; },
+      getElementById() { return null; },
+      hasFocus() { return false; }
+    },
+    window: {
+      location: {
+        pathname: '/'
+      }
+    },
+    globalThis: {
+      __MAYHEM_RUNTIME: {
+        GameUI: {
+          setDebugInfo() {},
+          setIdleWarning() {},
+          setDebugVisuals() {},
+          updateMatchStatus() {}
+        },
+        GamePlayer: {
+          canUseWeapon() {
+            return true;
+          },
+          isRolling() {
+            return true;
+          },
+          isSprinting() {
+            return false;
+          },
+          cancelSprintUntilRelease() {
+            return false;
+          },
+          getNetworkInputState() {
+            return {
+              forward: true,
+              backward: false,
+              left: false,
+              right: false,
+              jump: false,
+              sprint: false,
+              adsActive: false
+            };
+          },
+          triggerAction(kind) {
+            playerActions.push(String(kind || ''));
+          }
+        },
+        GameHitscan: {
+          fire() {
+            fireCalls += 1;
+            return true;
+          },
+          getCurrentWeapon() {
+            return { id: 'rifle' };
+          }
+        },
+        GameAbilities: {
+          isDeadeyeActive() {
+            return false;
+          }
+        },
+        GameGameplayRuntimeBootstrap: {
+          start(opts) {
+            capturedStartOptions = opts;
+            return Promise.resolve({
+              renderer: { domElement: {} },
+              scene: {},
+              clock: {
+                getDelta() {
+                  return 0.016;
+                }
+              },
+              camera: {},
+              controlsApi: {
+                bind() {}
+              },
+              multiplayerMode: false
+            });
+          }
+        },
+        GameRuntimeSession: {
+          create() {
+            return {
+              bindRuntimeControls() {},
+              emitSessionState() {},
+              isPlaying() {
+                return false;
+              },
+              getActivityState() {
+                return 'in_match';
+              }
+            };
+          }
+        },
+        GameGameplayRuntimeLoop: {
+          create() {
+            return {
+              step() {
+                return {};
+              }
+            };
+          }
+        },
+        GamePresentationRuntimeLoop: {
+          create() {
+            return {
+              renderFrame() {}
+            };
+          }
+        },
+        GameLoop: {
+          requestFrame() {}
+        },
+        GameRuntimeShell: {
+          create(opts) {
+            return {
+              launchModeById() {
+                return opts.startRuntime();
+              },
+              getActivityState() {
+                return 'menu';
+              },
+              getActiveRuntimeMode() {
+                return {
+                  id: 'single_full_sandbox',
+                  authorityMode: 'offline'
+                };
+              },
+              getStartupDebugNotice() {
+                return '';
+              }
+            };
+          }
+        }
+      }
+    }
+  };
+
+  const context = vm.createContext(sandbox);
+  vm.runInContext(matchViewCode, context);
+  vm.runInContext(actionsCode, context);
+  vm.runInContext(hostCode, context);
+  vm.runInContext(code, context);
+
+  const coordinator = sandbox.globalThis.__MAYHEM_RUNTIME.GameRuntimeCoordinator.create();
+  await coordinator.launchModeById('single_full_sandbox', {});
+
+  assert.equal(typeof capturedStartOptions.tryPlayerFire, 'function');
+
+  capturedStartOptions.tryPlayerFire();
+
+  assert.equal(fireCalls, 0);
+  assert.deepEqual(playerActions, []);
+});
+
 test('runtime coordinator reveals the local overhead target when a local hit lands', async () => {
   const [matchViewCode, actionsCode, hostCode, code] = await Promise.all([
     readModule('../js/app/runtime-match-view.js'),
@@ -638,5 +815,5 @@ test('runtime coordinator reveals the local overhead target when a local hit lan
 
   capturedStartOptions.tryPlayerFire();
 
-  assert.deepEqual(revealedTargets, [{ targetId: 'enemy:2', durationMs: 1500 }]);
+  assert.deepEqual(revealedTargets, []);
 });

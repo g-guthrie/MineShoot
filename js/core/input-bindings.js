@@ -12,12 +12,13 @@
         { id: 'move_right', title: 'Move Right', group: 'Movement', defaultToken: 'KeyD', note: 'Right strafe and shoulder change.' },
         { id: 'sprint', title: 'Sprint', group: 'Movement', defaultToken: 'Shift', note: 'Burst movement until ADS or movement lock interrupts it.' },
         { id: 'jump', title: 'Jump', group: 'Movement', defaultToken: 'Space', note: 'Variable jump height based on hold length.' },
+        { id: 'roll', title: 'Roll', group: 'Movement', defaultToken: 'KeyE', note: 'Trigger a movement roll in your current travel direction.' },
         { id: 'ads_key', title: 'ADS Key', group: 'Combat', defaultToken: 'Alt', note: 'Keyboard ADS toggle. RMB ADS stays fixed.' },
         { id: 'reload', title: 'Reload', group: 'Combat', defaultToken: 'KeyR', note: 'Manual reload. Empty magazines still auto-reload.' },
         { id: 'weapon_slot_1', title: 'Weapon Slot 1', group: 'Combat', defaultToken: 'Digit1', note: 'Select your first loadout weapon.' },
         { id: 'weapon_slot_2', title: 'Weapon Slot 2', group: 'Combat', defaultToken: 'Digit2', note: 'Select your second loadout weapon.' },
         { id: 'throwable', title: 'Throwable', group: 'Combat', defaultToken: 'KeyQ', note: 'Throw or preview the selected throwable.' },
-        { id: 'ability_1', title: 'Ability', group: 'Combat', defaultToken: 'KeyE', note: 'Trigger your equipped ability.' },
+        { id: 'ability_1', title: 'Ability', group: 'Combat', defaultToken: 'KeyG', note: 'Trigger your equipped ability.' },
         { id: 'open_manual', title: 'Open Field Manual', group: 'Session', defaultToken: 'KeyI', note: 'Open or close the field manual.' },
         { id: 'toggle_debug', title: 'Toggle Debug Visuals', group: 'Session', defaultToken: 'KeyH', note: 'Toggle extra combat debug helpers.' }
     ];
@@ -168,6 +169,35 @@
         }
     }
 
+    function migrateLegacyBindings(parsed) {
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        if (Object.prototype.hasOwnProperty.call(parsed, 'roll')) return parsed;
+
+        var next = buildDefaultBindings();
+        var seenTokens = {};
+        for (var i = 0; i < ACTION_DEFS.length; i++) {
+            var actionId = ACTION_DEFS[i].id;
+            var token = normalizeToken(next[actionId]);
+            if (actionId !== 'roll' && Object.prototype.hasOwnProperty.call(parsed, actionId)) {
+                var legacyToken = normalizeToken(parsed[actionId]);
+                if (!isSupportedToken(legacyToken)) return null;
+                if (!(actionId === 'ability_1' && legacyToken === 'KeyE')) {
+                    token = legacyToken;
+                }
+            }
+            if (!isSupportedToken(token) || seenTokens[token]) return null;
+            next[actionId] = token;
+            seenTokens[token] = true;
+        }
+
+        for (var key in parsed) {
+            if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+            if (!actionDefById[key]) return null;
+        }
+
+        return next;
+    }
+
     function loadStoredBindings() {
         var store = localStore();
         if (!store || typeof store.getItem !== 'function') return buildDefaultBindings();
@@ -176,6 +206,7 @@
             if (!raw) return buildDefaultBindings();
             var parsed = JSON.parse(raw);
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return buildDefaultBindings();
+            parsed = migrateLegacyBindings(parsed) || parsed;
             var next = {};
             var seenTokens = {};
             for (var i = 0; i < ACTION_DEFS.length; i++) {

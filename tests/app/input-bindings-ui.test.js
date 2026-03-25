@@ -203,6 +203,7 @@ test('input bindings UI opens the modal, swaps conflicting keys, and resets defa
 
   const legendText = elements['controls-menu-grid'].children.map((child) => child.textContent);
   assert.equal(legendText.includes('W / A / S / D Move'), true);
+  assert.equal(legendText.includes('E Roll'), true);
 
   elements['controls-toggle'].click();
   assert.equal(elements['controls-overlay'].hidden, false);

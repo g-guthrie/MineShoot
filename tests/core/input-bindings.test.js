@@ -52,12 +52,13 @@ function defaultBindings() {
     move_right: 'KeyD',
     sprint: 'Shift',
     jump: 'Space',
+    roll: 'KeyE',
     ads_key: 'Alt',
     reload: 'KeyR',
     weapon_slot_1: 'Digit1',
     weapon_slot_2: 'Digit2',
     throwable: 'KeyQ',
-    ability_1: 'KeyE',
+    ability_1: 'KeyG',
     open_manual: 'KeyI',
     toggle_debug: 'KeyH'
   };
@@ -114,6 +115,32 @@ test('input bindings load a valid stored map', async () => {
 
   assert.deepEqual(JSON.parse(JSON.stringify(api.getBindings())), custom);
   assert.equal(api.getDisplayLabel('open_manual'), 'J');
+});
+
+test('input bindings migrate the old ability-on-E map to the new roll slot', async () => {
+  const legacy = {
+    move_forward: 'KeyW',
+    move_left: 'KeyA',
+    move_backward: 'KeyS',
+    move_right: 'KeyD',
+    sprint: 'Shift',
+    jump: 'Space',
+    ads_key: 'Alt',
+    reload: 'KeyR',
+    weapon_slot_1: 'Digit1',
+    weapon_slot_2: 'Digit2',
+    throwable: 'KeyQ',
+    ability_1: 'KeyE',
+    open_manual: 'KeyI',
+    toggle_debug: 'KeyH'
+  };
+  const { api } = await loadBindingsHarness({
+    'mayhem.inputBindings.v1': JSON.stringify(legacy)
+  });
+
+  assert.equal(api.getBinding('roll'), 'KeyE');
+  assert.equal(api.getBinding('ability_1'), 'KeyG');
+  assert.equal(api.getBinding('move_forward'), 'KeyW');
 });
 
 test('input bindings fall back to defaults when stored data is malformed', async () => {

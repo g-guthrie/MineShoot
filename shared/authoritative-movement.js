@@ -131,8 +131,13 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
 
   const input = inputState || createMovementInputState();
   const adsActive = !!input.adsActive;
-  const sprintRequested = !!input.sprint && !adsActive && !movementLocked;
-  const speedCap = adsActive ? (tuning.jogSpeed * tuning.adsMoveMult) : (sprintRequested ? tuning.runSpeed : tuning.jogSpeed);
+  const sprintInputHeld = !!input.sprint && !adsActive && !movementLocked;
+  const groundedAtFrameStart = !!entity.isGrounded;
+  const sprintCarryActive = !!entity.airborneSprintCarry;
+  const effectiveSprintRequested = groundedAtFrameStart
+    ? sprintInputHeld
+    : (sprintCarryActive && sprintInputHeld);
+  const speedCap = adsActive ? (tuning.jogSpeed * tuning.adsMoveMult) : (effectiveSprintRequested ? tuning.runSpeed : tuning.jogSpeed);
 
   const currentFeetY = Number(entity.y || eyeHeight) - eyeHeight;
   const minBoundX = Number(bounds.minX) + playerRadius;
@@ -180,7 +185,7 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   const movedZ = Number(entity.z || 0) - startZ;
   const horizontalSpeed = Math.sqrt((movedX * movedX) + (movedZ * movedZ)) / Math.max(dtSec, 0.0001);
   entity.moveSpeedNorm = clamp(horizontalSpeed / Math.max(tuning.runSpeed, 0.0001), 0, 1.4);
-  entity.sprinting = sprintRequested && horizontalSpeed > 0.06;
+  entity.sprinting = effectiveSprintRequested && horizontalSpeed > 0.06;
 
   const jumpHeld = !!input.jump && !movementLocked;
   const jumpJustPressed = jumpHeld && !entity.jumpHeldLast;
@@ -239,6 +244,22 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
     entity.velocityY = 0;
     entity.isGrounded = true;
     entity.jumpHoldTimer = 0;
+  }
+
+  if (groundedAtFrameStart && !entity.isGrounded) {
+    entity.airborneSprintCarry = !!effectiveSprintRequested;
+  } else if (!groundedAtFrameStart && entity.isGrounded) {
+    entity.airborneSprintCarry = false;
+  } else if (!entity.isGrounded && !sprintInputHeld) {
+    entity.airborneSprintCarry = false;
+  } else if (entity.isGrounded) {
+    entity.airborneSprintCarry = false;
+  }
+
+  if (entity.isGrounded) {
+    entity.sprinting = sprintInputHeld && horizontalSpeed > 0.06;
+  } else {
+    entity.sprinting = !!entity.airborneSprintCarry && sprintInputHeld && horizontalSpeed > 0.06;
   }
 
   entity.y = nextFeetY + eyeHeight;

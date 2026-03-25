@@ -15,7 +15,6 @@
         initialized: false,
         committed: {
             weaponSlots: ['', ''],
-            selectedAbilityId: '',
             selectedThrowableId: ''
         },
         draft: {
@@ -44,7 +43,6 @@
     function cloneCommittedLoadout() {
         return {
             weaponSlots: state.committed.weaponSlots.slice(0, 2),
-            selectedAbilityId: String(state.committed.selectedAbilityId || ''),
             selectedThrowableId: String(state.committed.selectedThrowableId || '')
         };
     }
@@ -104,25 +102,6 @@
         return next.slice(0, 2);
     }
 
-    function defaultAbilityId() {
-        var shared = sharedApi();
-        var tuning = tuningApi();
-        var defaultId = shared.getDefaultAbilityId ? shared.getDefaultAbilityId() : '';
-        return String(defaultId || tuning.defaultAbilityId || '');
-    }
-
-    function normalizeAbilityId(abilityId) {
-        var shared = sharedApi();
-        if (shared.normalizeAbilityId) {
-            return String(shared.normalizeAbilityId(abilityId || '') || defaultAbilityId());
-        }
-        if (shared.normalizeAbilityLoadout) {
-            var normalized = shared.normalizeAbilityLoadout(abilityId || '', '');
-            return String(normalized && normalized.slot1 || defaultAbilityId());
-        }
-        return String(abilityId || defaultAbilityId());
-    }
-
     function selectableThrowableIds() {
         var defs = tuningApi().throwables || {};
         return Array.isArray(defs.order) ? defs.order.slice() : Object.keys(defs).filter(function (key) { return key !== 'order'; });
@@ -157,7 +136,6 @@
             state.committed.weaponSlots,
             defaultWeaponLoadout()
         );
-        state.committed.selectedAbilityId = normalizeAbilityId(state.committed.selectedAbilityId || defaultAbilityId());
         state.committed.selectedThrowableId = normalizeThrowableId(state.committed.selectedThrowableId);
     }
 
@@ -207,13 +185,6 @@
                         return String(weaponId || '');
                     });
                 }
-                if (parsed.selectedAbilityId) {
-                    state.committed.selectedAbilityId = String(parsed.selectedAbilityId || '');
-                } else if (parsed.abilityId) {
-                    state.committed.selectedAbilityId = String(parsed.abilityId || '');
-                } else if (parsed.abilityLoadout && typeof parsed.abilityLoadout === 'object') {
-                    state.committed.selectedAbilityId = String(parsed.abilityLoadout.slot1 || '');
-                }
                 if (parsed.selectedThrowableId) {
                     state.committed.selectedThrowableId = String(parsed.selectedThrowableId || '');
                 }
@@ -238,14 +209,10 @@
 
     function validateSelections() {
         ensureInitialized();
-        var inputLabels = runtime.GameInputLabels || null;
         var missing = [];
         var committed = state.committed;
         if (!committed.weaponSlots[0]) missing.push('weapon slot 1');
         if (!committed.weaponSlots[1]) missing.push('weapon slot 2');
-        if (!committed.selectedAbilityId) {
-            missing.push('ability ' + (inputLabels && inputLabels.getBindingLabel ? inputLabels.getBindingLabel('ability_1', 'E') : 'E'));
-        }
         return missing.length
             ? { ok: false, message: 'Missing ' + missing.join(' and ') }
             : { ok: true, message: '' };
@@ -298,16 +265,6 @@
         resetDraft();
         notifySubscribers();
         return true;
-    };
-
-    GameLoadoutState.setSelectedAbility = function (abilityId) {
-        ensureInitialized();
-        var next = normalizeAbilityId(abilityId || '');
-        if (state.committed.selectedAbilityId === next) return cloneCommittedLoadout();
-        state.committed.selectedAbilityId = next;
-        saveCommittedState();
-        notifySubscribers();
-        return cloneCommittedLoadout();
     };
 
     GameLoadoutState.setSelectedThrowable = function (throwableId) {

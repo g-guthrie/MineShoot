@@ -38,10 +38,6 @@
             return depGet('GamePlayer') || null;
         }
 
-        function gameEnemyApi() {
-            return depGet('GameEnemy') || null;
-        }
-
         function gameHitscanApi() {
             return depGet('GameHitscan') || null;
         }
@@ -63,14 +59,6 @@
             return depGet('GameDocs') || null;
         }
 
-        function gameAbilitiesApi() {
-            return depGet('GameAbilities') || null;
-        }
-
-        function gameThrowablesApi() {
-            return depGet('GameThrowables') || null;
-        }
-
         function gameOverheadApi() {
             return depGet('GameOverhead') || null;
         }
@@ -85,10 +73,6 @@
 
         function gameNetFeedbackSyncApi() {
             return depGet('GameNetFeedbackSync') || null;
-        }
-
-        function gameHookVisualsApi() {
-            return depGet('GameHookVisuals') || null;
         }
 
         function sessionStore() {
@@ -209,12 +193,9 @@
             matchActionsApi = actionFactory.create({
                 getGameUiApi: gameUiApi,
                 getGamePlayerApi: gamePlayerApi,
-                getGameEnemyApi: gameEnemyApi,
                 getGameHitscanApi: gameHitscanApi,
                 getGameAudioApi: gameAudioApi,
                 getGameDocsApi: gameDocsApi,
-                getGameAbilitiesApi: gameAbilitiesApi,
-                getGameThrowablesApi: gameThrowablesApi,
                 getGameOverheadApi: gameOverheadApi,
                 getGameNetApi: gameNetApi,
                 getGameNetFeedbackSyncApi: gameNetFeedbackSyncApi,
@@ -267,17 +248,13 @@
                         GameDocs: gameDocsApi(),
                         GameOverhead: gameOverheadApi(),
                         GamePlayer: gamePlayerApi(),
-                        GameThrowables: gameThrowablesApi(),
                         GameNet: gameNetApi(),
-                        GameAbilities: gameAbilitiesApi(),
-                        GameHookVisuals: gameHookVisualsApi(),
                         GamePlayerCombat: currentSelfCombatApi(),
                         GameGameplayHudSync: depGet('GameGameplayHudSync'),
                         GameHitscan: gameHitscanApi(),
                         GameGameplayControls: depGet('GameGameplayControls'),
                         GameRuntimeLoader: gameRuntimeLoaderApi(),
-                        GameLocalMatch: gameLocalMatchApi(),
-                        GameEnemy: gameEnemyApi()
+                        GameLocalMatch: gameLocalMatchApi()
                     };
                 }
             });

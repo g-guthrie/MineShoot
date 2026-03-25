@@ -85,11 +85,7 @@
                 : depGet('GameDocs');
             var gameOverhead = depGet('GameOverhead');
             var gamePlayer = depGet('GamePlayer');
-            var gameThrowables = depGet('GameThrowables');
             var gameLocalMatch = depGet('GameLocalMatch');
-            var gameEnemy = depGet('GameEnemy');
-            var gameAbilities = depGet('GameAbilities');
-            var gameHookVisuals = depGet('GameHookVisuals');
             var gamePlayerCombat = depGet('GamePlayerCombat');
             var gameplayHudSync = depGet('GameGameplayHudSync');
             var gameHitscan = depGet('GameHitscan');
@@ -109,14 +105,10 @@
             }
 
             var camera = gamePlayer.init(scene);
-            gameThrowables.init(scene);
 
             if (multiplayerMode) {
                 ensureNetRuntimeInit();
             } else {
-                var enemyCount = gameWorld.getRecommendedEnemyCount
-                    ? gameWorld.getRecommendedEnemyCount()
-                    : 5;
                 if (gameLocalMatch && gameLocalMatch.init) {
                     gameLocalMatch.init({
                         gameMode: (options.activeRuntimeMode && options.activeRuntimeMode.gameMode)
@@ -124,31 +116,15 @@
                             : 'ffa'
                     });
                 }
-                if (gameEnemy && gameEnemy.init) {
-                    gameEnemy.init(scene, enemyCount);
-                }
-                if (gameUi && gameUi.updateThrowableInfo && gameThrowables.getState) {
-                    gameUi.updateThrowableInfo(gameThrowables.getState());
-                }
             }
-
-            gameAbilities.init(scene);
-            if (gameHookVisuals && gameHookVisuals.init) {
-                gameHookVisuals.init(scene);
-            }
-
-            options.applyAbilityProfile('abilities');
 
             gamePlayerCombat.init({
                 isPlaying: options.isPlaying,
                 isMultiplayer: function () { return multiplayerMode; }
             });
-            var initArmor = gameAbilities.getArmorMax ? gameAbilities.getArmorMax() : 90;
-            gamePlayerCombat.applyArmorProfile(initArmor);
             if (gameplayHudSync && gameplayHudSync.syncSelfCombatHud) {
                 gameplayHudSync.syncSelfCombatHud();
             }
-            gameUi.updateAbilityInfo(gameAbilities.getHudState());
 
             options.applyDebugVisuals(false);
 
@@ -185,14 +161,8 @@
                     removeResizeHandler();
                     removeResizeHandler = null;
                 }
-                if (gameAbilities && gameAbilities.clearTransientState) {
-                    gameAbilities.clearTransientState();
-                }
                 if (gameAudio && gameAudio.stopAll) {
                     gameAudio.stopAll();
-                }
-                if (gameHookVisuals && gameHookVisuals.dispose) {
-                    gameHookVisuals.dispose();
                 }
                 if (multiplayerMode) {
                     if (net && net.shutdown) {
@@ -200,12 +170,6 @@
                     }
                 } else if (gameLocalMatch && gameLocalMatch.shutdown) {
                     gameLocalMatch.shutdown();
-                }
-                if (gameThrowables && gameThrowables.shutdown) {
-                    gameThrowables.shutdown();
-                }
-                if (gameEnemy && gameEnemy.dispose) {
-                    gameEnemy.dispose();
                 }
                 if (gamePlayer && gamePlayer.destroy) {
                     gamePlayer.destroy();

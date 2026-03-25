@@ -259,6 +259,13 @@
             }
         }
 
+        function triggerRoll() {
+            if (!hasInputCapture()) return false;
+            var playerApi = runtime.GamePlayer || null;
+            if (!playerApi || !playerApi.tryRoll) return false;
+            return !!playerApi.tryRoll();
+        }
+
         function triggerReload() {
             if (!hasInputCapture()) return false;
             if (!canUseLocalAction('weapon')) return false;
@@ -439,10 +446,20 @@
             });
         }
 
+        function bindRollControls() {
+            listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (!matchesBinding('roll', e, 'KeyE')) return;
+                if (!hasInputCapture()) return;
+                e.preventDefault();
+                triggerRoll();
+            });
+        }
+
         function bindAbilityControls() {
             listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
-                if (matchesBinding('ability_1', e, 'KeyE')) {
+                if (matchesBinding('ability_1', e, 'KeyG')) {
                     triggerAbility();
                 }
             });
@@ -466,6 +483,7 @@
                 bindReloadControls();
                 bindSoundToggleControl();
                 bindThrowableControls();
+                bindRollControls();
                 bindAbilityControls();
                 bindDebugKeys();
             },

@@ -644,7 +644,7 @@
             return seconds.toFixed(1) + 's';
         }
 
-        var ability = inputLabels.getBindingLabel('ability_1', 'E') + ' ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.cooldown);
+        var ability = inputLabels.getBindingLabel('ability_1', 'G') + ' ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.cooldown);
         var extra = state.extra ? (' | ' + state.extra) : '';
         abilityInfoEl.textContent = ability + extra;
     };

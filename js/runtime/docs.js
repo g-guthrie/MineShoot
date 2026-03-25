@@ -328,7 +328,8 @@
             rows: [
                 { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
                 { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Use sprint to break line of sight and reposition between fights.' },
-                { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' }
+                { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' },
+                { actionId: 'roll', fallbackKey: 'E', title: 'Roll', note: 'Triggers the running roll in your current movement direction.' }
             ]
         },
         {
@@ -337,7 +338,7 @@
                 { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload.' },
                 { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots.' },
                 { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
-                { actionId: 'ability_1', fallbackKey: 'E', title: 'Ability', note: 'Fires your equipped ability from the loadout menu.' }
+                { actionId: 'ability_1', fallbackKey: 'G', title: 'Ability', note: 'Fires your equipped ability from the loadout menu.' }
             ]
         },
         {
@@ -1068,7 +1069,7 @@
                 'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
                 'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and swap weapons with the wheel or your slot keys.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
-                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('ability_1', 'E') + ' for your equipped ability.',
+                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable, ' + inputLabels.getBindingLabel('roll', 'E') + ' to roll in your movement direction, and ' + inputLabels.getBindingLabel('ability_1', 'G') + ' for your equipped ability.',
                 'Break line of sight during long cooldowns instead of forcing low-odds trades.'
             ]),
             '</section>',
@@ -1078,7 +1079,7 @@
                 { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_1', '1') + '.' },
                 { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_2', '2') + '.' },
                 { label: inputLabels.getBindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for preview if supported.' },
-                { label: inputLabels.getBindingLabel('ability_1', 'E') + ' Ability', value: loadout.ability || 'Unassigned', note: 'Your equipped ability.' }
+                { label: inputLabels.getBindingLabel('ability_1', 'G') + ' Ability', value: loadout.ability || 'Unassigned', note: 'Your equipped ability.' }
             ]),
             '</section>',
             '</div>',
@@ -1105,7 +1106,7 @@
                 bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
                 inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
-                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('ability_1', 'E')
+                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('roll', 'E') + ' / ' + inputLabels.getBindingLabel('ability_1', 'G')
             ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
@@ -1201,7 +1202,7 @@
             '<h3>Mechanics</h3>',
             renderList([
                 briefing.mechanics || ability.description || 'No mechanics note.',
-                'Menu binding: fire this ability on ' + inputLabels.getBindingLabel('ability_1', 'E') + '.',
+                'Menu binding: fire this ability on ' + inputLabels.getBindingLabel('ability_1', 'G') + '.',
                 ability.debugSummary || 'No extra debug summary.'
             ].concat(briefing.tips || [])),
             '</section>',

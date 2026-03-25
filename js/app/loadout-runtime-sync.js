@@ -23,7 +23,6 @@
             ? loadoutState.getCommittedLoadout()
             : {
                 weaponSlots: ['', ''],
-                selectedAbilityId: '',
                 selectedThrowableId: ''
             };
     }
@@ -46,17 +45,8 @@
         if (runtime.GameThrowables && runtime.GameThrowables.setSelectedThrowable && committed.selectedThrowableId) {
             runtime.GameThrowables.setSelectedThrowable(committed.selectedThrowableId);
         }
-        if (runtime.GameAbilities && runtime.GameAbilities.setLoadout) {
-            runtime.GameAbilities.setLoadout(committed.selectedAbilityId || '');
-            if (runtime.GameUI && runtime.GameUI.updateAbilityInfo && runtime.GameAbilities.getHudState) {
-                runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
-            }
-        }
         if (multiplayerMode && commands && commands.sendWeaponLoadout && hasCompleteWeaponLoadout) {
             commands.sendWeaponLoadout(weaponSlots[0] || '', weaponSlots[1] || '');
-        }
-        if (multiplayerMode && commands && commands.sendAbilityLoadout) {
-            commands.sendAbilityLoadout(committed.selectedAbilityId || '');
         }
 
         return committed;
