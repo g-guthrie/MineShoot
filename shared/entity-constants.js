@@ -71,10 +71,11 @@ var HEAD_BOTTOM_Y = minExtent(AVATAR_HEAD_CENTER_OFFSET, AVATAR_HEAD_SIZE, 'y');
 export var BODY_HITBOX_HEIGHT_SCALE = 1.1;
 
 // Tunable combat padding values. Body keeps a fixed vertical span from leg bottom
-// to torso top, while x/z stay square. Head keeps its bottom locked to the head
-// primitive, with separate square padding and top padding before a final linear
-// scale is applied.
+// to torso top, while z can be tuned independently from x. Head keeps its bottom
+// locked to the head primitive, with separate square padding and top padding
+// before a final linear scale is applied.
 export var BODY_HITBOX_SQUARE_PADDING = 1.2252062288671335;
+export var BODY_HITBOX_DEPTH_SCALE = 0.7;
 export var HEAD_HITBOX_SQUARE_PADDING = 0.8262512027010309;
 export var HEAD_HITBOX_TOP_PADDING = 0.29350880165547055;
 export var HEAD_HITBOX_HEIGHT_SCALE = 1.15;
@@ -88,7 +89,7 @@ export var HEAD_HITBOX_SIZE = {
 export var BODY_HITBOX_SIZE = {
   x: BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING,
   y: (BODY_MAX_Y - BODY_MIN_Y) * BODY_HITBOX_HEIGHT_SCALE,
-  z: BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING
+  z: (BODY_BASE_SQUARE_SIZE + BODY_HITBOX_SQUARE_PADDING) * BODY_HITBOX_DEPTH_SCALE
 };
 export var BODY_HITBOX_CENTER_OFFSET_Y = BODY_MIN_Y + (BODY_HITBOX_SIZE.y * 0.5);
 export var HEAD_HITBOX_CENTER_OFFSET_Y = BODY_MIN_Y + BODY_HITBOX_SIZE.y + (HEAD_HITBOX_SIZE.y * 0.5);
@@ -120,6 +121,7 @@ runtime.__MAYHEM_RUNTIME.GameShared.entityConstants = {
   AVATAR_LEG_KNEE_GAP_Y: AVATAR_LEG_KNEE_GAP_Y,
   AVATAR_LEG_UPPER_RATIO: AVATAR_LEG_UPPER_RATIO,
   BODY_HITBOX_SQUARE_PADDING: BODY_HITBOX_SQUARE_PADDING,
+  BODY_HITBOX_DEPTH_SCALE: BODY_HITBOX_DEPTH_SCALE,
   BODY_HITBOX_HEIGHT_SCALE: BODY_HITBOX_HEIGHT_SCALE,
   HEAD_HITBOX_SQUARE_PADDING: HEAD_HITBOX_SQUARE_PADDING,
   HEAD_HITBOX_TOP_PADDING: HEAD_HITBOX_TOP_PADDING,

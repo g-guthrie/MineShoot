@@ -13,6 +13,7 @@ import {
   AVATAR_TORSO_CENTER_OFFSET,
   AVATAR_TORSO_SIZE,
   BODY_HITBOX_CENTER_OFFSET_Y,
+  BODY_HITBOX_DEPTH_SCALE,
   BODY_HITBOX_HEIGHT_SCALE,
   BODY_HITBOX_SQUARE_PADDING,
   BODY_HITBOX_SIZE,
@@ -85,7 +86,7 @@ test('combat hitbox vertical split is derived from avatar torso and head primiti
   assert.ok(Math.abs(bodyBottomY - legBottomY) < 1e-9);
   assert.equal(BODY_HITBOX_SIZE.x, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
   assert.ok(Math.abs(BODY_HITBOX_SIZE.y - (bodyBaseHeight * BODY_HITBOX_HEIGHT_SCALE)) < 1e-9);
-  assert.equal(BODY_HITBOX_SIZE.z, bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING);
+  assert.equal(BODY_HITBOX_SIZE.z, (bodyBaseSquareSize + BODY_HITBOX_SQUARE_PADDING) * BODY_HITBOX_DEPTH_SCALE);
   assert.equal(HEAD_HITBOX_SIZE.x, (headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE);
   assert.equal(HEAD_HITBOX_SIZE.z, (headBaseSquareSize + HEAD_HITBOX_SQUARE_PADDING) * HEAD_HITBOX_LINEAR_SCALE);
   assert.ok(
