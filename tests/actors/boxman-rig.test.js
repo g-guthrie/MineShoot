@@ -888,7 +888,22 @@ test('boxman idle aim target yaw counter-rotates against facing yaw and clamps',
   assert.ok(mild > 0);
   assert.ok(Math.abs(hard) <= (90 * (Math.PI / 180)));
   assert.ok(Math.abs(hard) > Math.abs(mild));
-  assert.ok(Math.abs(runYaw - ((Math.PI * 0.5) * (45 / 55))) < 0.000001);
+  assert.ok(Math.abs(runYaw - ((Math.PI * 0.5) * 0.88)) < 0.000001);
+});
+
+test('boxman keeps idle aim yaw tied to the visible stop-settle turn while recentering', () => {
+  const liveYaw = boxmanRig._test.resolveIdleAimYawState({
+    directional: { facingYaw: 0.25 },
+    stopDirectionalSnapshot: { facingYaw: -0.9 }
+  }, 0);
+  const settleYaw = boxmanRig._test.resolveIdleAimYawState({
+    directional: { facingYaw: 0.25 },
+    stopDirectionalSnapshot: { facingYaw: -0.9 }
+  }, 0.5);
+
+  assert.ok(Math.abs(liveYaw.facingYaw - 0.25) < 0.000001);
+  assert.ok(Math.abs(settleYaw.facingYaw - (-0.45)) < 0.000001);
+  assert.ok(Math.abs(boxmanRig._test.idleAimTargetYaw(settleYaw, 'idle') - settleYaw.facingYaw) < 0.000001);
 });
 
 test('boxman counter-rotates the gun only on the outward-opening side', () => {
