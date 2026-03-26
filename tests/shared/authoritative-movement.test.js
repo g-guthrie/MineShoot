@@ -168,6 +168,26 @@ test('authoritative movement uses asymmetric diagonal bias for left and right in
   assert.ok(rightEntity.z < -0.60 && rightEntity.z > -0.62);
 });
 
+test('authoritative movement gives backward sprint a smaller speed boost without setting sprint presentation', () => {
+  const entity = createEntity();
+  const input = createMovementInputState();
+  input.backward = true;
+  input.sprint = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.1,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(entity.sprinting, false);
+  assert.equal(entity.fastBackpedal, true);
+  assert.ok(entity.z > 0.86 && entity.z < 0.89);
+  assert.ok(entity.moveSpeedNorm > 0.79 && entity.moveSpeedNorm < 0.81);
+});
+
 test('authoritative movement carries sprint through takeoff but does not allow starting sprint midair', () => {
   const entity = createEntity();
   const jumpInput = createMovementInputState();

@@ -8,6 +8,7 @@ export const TURN_SOFT_FULL_RATE = 90 * DEG_TO_RAD;
 export const TURN_ENTRY_RATE = 330 * DEG_TO_RAD;
 export const TURN_ENTRY_SNAP_ANGLE = 53 * DEG_TO_RAD;
 export const TURN_ENTRY_SPEED_NORM_MAX = 0.15;
+export const STOP_DIRECTIONAL_SETTLE_DURATION = 0.18;
 const IDLE_TURN_BODY_MAX_YAW = 4.5 * DEG_TO_RAD;
 const IDLE_TURN_UPPER_MAX_YAW = 8 * DEG_TO_RAD;
 const IDLE_TURN_HEAD_MAX_YAW = 12 * DEG_TO_RAD;
@@ -167,7 +168,7 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
   const delta = Math.max(0, Number(dt || 0));
   const movementIntent = resolveMoveIntent(animState);
   const speedNorm = clamp01(animState && animState.speedNorm);
-  const sprinting = !!(animState && animState.sprinting);
+  const sprinting = !!(animState && (animState.sprinting || animState.fastBackpedal));
   const angleDelta = movementIntent.moving && next.wasMoving
     ? Math.abs(normalizeAngle(movementIntent.angle - Number(next.moveAngle || 0)))
     : 0;
@@ -199,10 +200,13 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
     facingYawMagnitude = movementIntent.sideSign < 0 ? LEFT_DIAGONAL_FACING : RIGHT_DIAGONAL_FACING;
   }
   next.targetFacingYaw = locomotionYawSign * facingYawMagnitude;
-  const facingBlend = movementIntent.moving ? Math.min(1, delta * 12) : Math.min(1, delta * 10);
+  const facingBlend = movementIntent.moving ? Math.min(1, delta * 12) : Math.min(1, delta * 18);
   next.facingYaw += (next.targetFacingYaw - Number(next.facingYaw || 0)) * facingBlend;
   if (Math.abs(next.targetFacingYaw - next.facingYaw) < 0.0001) {
     next.facingYaw = next.targetFacingYaw;
+  }
+  if (!movementIntent.moving && Math.abs(next.facingYaw) < 0.01) {
+    next.facingYaw = 0;
   }
   next.bodyLowerAimYaw = -(next.facingYaw * 0.2);
   next.bodyUpperAimYaw = -(next.facingYaw * 0.25);
@@ -286,11 +290,13 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
 
 export function applyDirectionalLocomotionPose(rig, state, animState) {
   if (!rig || !state) return false;
+  const poseWeight = clamp01(arguments.length > 3 ? arguments[3] : 1);
+  if (poseWeight <= 0.0001) return false;
   const intent = state.intent || resolveMoveIntent(animState);
   const profile = state.profile || interpolateProfile(intent.absAngle);
   const speedNorm = clamp01(animState && animState.speedNorm);
-  const baseWeight = lerp(0.35, 1, speedNorm);
-  const idleTurnPoseWeight = Math.max(0, Number(state.idleTurnPoseWeight || 0));
+  const baseWeight = lerp(0.35, 1, speedNorm) * poseWeight;
+  const idleTurnPoseWeight = Math.max(0, Number(state.idleTurnPoseWeight || 0)) * poseWeight;
   const idleTurnDirection = Number(state.idleTurnDirection || 0);
   const hasIdleTurnPose = !intent.moving && idleTurnPoseWeight > 0.0001;
   const hasTurnClipPose = !intent.moving && (!!state.useTurnLoopClip || !!state.useTurnEntryClip);
@@ -299,21 +305,21 @@ export function applyDirectionalLocomotionPose(rig, state, animState) {
 
   const startProgress = 1 - (Math.max(0, Number(state.startRemaining || 0)) / DIRECTIONAL_START_BLEND_DURATION);
   const startBlend = smoothstep(startProgress);
-  const startArc = Math.sin(startBlend * Math.PI);
+  const startArc = Math.sin(startBlend * Math.PI) * poseWeight;
   if (rig.modelRoot) {
-    rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + Number(state.facingYaw || 0);
+    rig.modelRoot.rotation.y = Number(rig.modelBaseYaw || 0) + (Number(state.facingYaw || 0) * poseWeight);
   }
 
   if (rig.bodyLower) {
-    rig.bodyLower.rotation.y += Number(state.bodyLowerAimYaw || 0);
+    rig.bodyLower.rotation.y += Number(state.bodyLowerAimYaw || 0) * poseWeight;
     rig.bodyLower.rotation.x += profile.retreatLean * 0.5 * baseWeight;
   }
   if (rig.bodyUpper) {
-    rig.bodyUpper.rotation.y += Number(state.bodyUpperAimYaw || 0);
+    rig.bodyUpper.rotation.y += Number(state.bodyUpperAimYaw || 0) * poseWeight;
     rig.bodyUpper.rotation.x += (profile.retreatLean * 0.25 * baseWeight) + (profile.retreatLean * 0.4 * startArc);
   }
   if (rig.headBone) {
-    rig.headBone.rotation.y += Number(state.headAimYaw || 0);
+    rig.headBone.rotation.y += Number(state.headAimYaw || 0) * poseWeight;
   }
   if (!intent.moving && state.useTurnLoopClip && rig.headBone) {
     const turnLoopPoseWeight = smoothstep(Number(state.turnLoopPoseWeight || 0));

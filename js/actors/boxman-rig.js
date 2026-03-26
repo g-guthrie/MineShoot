@@ -2,11 +2,13 @@ import * as THREE_NS from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ensureThreeGlobal } from '../app/three-runtime.js';
+import '../domain/weapons/visuals.js';
 import {
     applyDirectionalLocomotionPose,
     createDirectionalLocomotionState,
     directionalLocomotionNeedsCustomStart,
     resolveMoveIntent,
+    STOP_DIRECTIONAL_SETTLE_DURATION,
     TURN_SOFT_FULL_RATE,
     TURN_SOFT_START_RATE,
     updateDirectionalLocomotionState
@@ -29,6 +31,11 @@ import {
     var ROLL_LANDING_MIN_DROP_WU = 2.0;
     var ROLL_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.0;
     var RUN_LANDING_MIN_HORIZONTAL_SPEED_WU = 2.8;
+    var STOP_ANIM_MIN_SPEED_NORM = 0.75;
+    var STOP_FORWARD_WEIGHT_MIN = 0.35;
+    var STOP_RECENT_GRACE_SEC = 0.16;
+    var STOP_STRAFE_INTERRUPT_PROGRESS = 0.45;
+    var FAST_BACKPEDAL_PLAYBACK_SCALE = 1.25;
     var IDLE_AIM_PITCH_LIMIT = 45 * (Math.PI / 180);
     var IDLE_AIM_NEUTRAL_PITCH = 28 * (Math.PI / 180);
     var IDLE_AIM_RESPONSE_SCALE = 0.5;
@@ -42,6 +49,9 @@ import {
     var IDLE_AIM_BLEND_IN_SPEED = 12;
     var IDLE_AIM_BLEND_OUT_SPEED = 10;
     var OUTWARD_GUN_YAW_COMPENSATION_SCALE = -0.4;
+    var WEAPON_MODEL_ROTATE_X = (Math.PI * 0.5) - (10 * (Math.PI / 180));
+    var WEAPON_MODEL_ROTATE_Y = 0;
+    var WEAPON_MODEL_ROTATE_Z = Math.PI;
     var torsoCarryPositionScratch = new THREE.Vector3();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
@@ -328,6 +338,9 @@ import {
         ) {
             reverse = true;
         }
+        if (name === 'run' && animState && animState.fastBackpedal) {
+            timeScale = FAST_BACKPEDAL_PLAYBACK_SCALE;
+        }
         if (name === MANUAL_ROLL_CLIP && animState && animState.manualRollReverse) {
             reverse = true;
         }
@@ -412,6 +425,7 @@ import {
 
     function idleAimAllowed(animState, activeClipName) {
         if (!animState) return false;
+        if (clipUsesLockedRightArmAimBasePose(activeClipName)) return true;
         if (animState.sprinting) return false;
         if (activeClipName === 'sprint' || activeClipName === MANUAL_ROLL_CLIP) return false;
         return true;
@@ -491,8 +505,38 @@ import {
         return Math.abs(upperYaw) >= 0.0001;
     }
 
+    function applyLockedRightArmAimBasePose(rig) {
+        if (!rig) return false;
+        if (rig.armUpperR && rig.armUpperR.rotation) {
+            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X;
+            rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
+            rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
+        }
+        if (rig.armLowerR && rig.armLowerR.rotation) {
+            rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X;
+            rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y;
+            rig.armLowerR.rotation.z = IDLE_RIGHT_ARM_LOWER_BASE.z;
+        }
+        return !!(
+            (rig.armUpperR && rig.armUpperR.rotation) ||
+            (rig.armLowerR && rig.armLowerR.rotation)
+        );
+    }
+
+    function clipUsesLockedRightArmAimBasePose(activeClipName) {
+        var clipName = String(activeClipName || '');
+        return (
+            clipName === 'jump_idle' ||
+            clipName === 'jump_running' ||
+            clipName === 'falling' ||
+            clipName === 'drop_idle' ||
+            clipName === 'drop_running'
+        );
+    }
+
     function applyRunRightArmIdleBasePose(rig, activeClipName, activeAction) {
         if (!rig || activeClipName !== 'run') return false;
+        if (!applyLockedRightArmAimBasePose(rig)) return false;
         var phase = 0;
         if (activeAction && activeAction.getClip) {
             var clip = activeAction.getClip();
@@ -507,14 +551,10 @@ import {
         var upperSwing = suppressRunSwing ? 0 : (Math.sin(phase) * RUN_RIGHT_ARM_SWING_UPPER);
         var lowerSwing = suppressRunSwing ? 0 : (Math.sin(phase + 0.35) * RUN_RIGHT_ARM_SWING_LOWER);
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X + upperSwing;
-            rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
-            rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
+            rig.armUpperR.rotation.x += upperSwing;
         }
         if (rig.armLowerR && rig.armLowerR.rotation) {
-            rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X + lowerSwing;
-            rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y;
-            rig.armLowerR.rotation.z = IDLE_RIGHT_ARM_LOWER_BASE.z;
+            rig.armLowerR.rotation.x += lowerSwing;
         }
         return true;
     }
@@ -579,10 +619,114 @@ import {
         return directional.turnClipDirection > 0 ? 'rotate_left' : 'rotate_right';
     }
 
+    function cloneDirectionalSnapshot(state) {
+        if (!state) return null;
+        return {
+            intent: state.intent ? {
+                moving: !!state.intent.moving,
+                forwardAxis: Number(state.intent.forwardAxis || 0),
+                rightAxis: Number(state.intent.rightAxis || 0),
+                magnitude: Number(state.intent.magnitude || 0),
+                angle: Number(state.intent.angle || 0),
+                absAngle: Number(state.intent.absAngle || 0),
+                sideSign: Number(state.intent.sideSign || 0),
+                pureForward: !!state.intent.pureForward,
+                pureBackpedal: !!state.intent.pureBackpedal,
+                pureStrafe: !!state.intent.pureStrafe,
+                diagonal: !!state.intent.diagonal
+            } : resolveMoveIntent(null),
+            profile: state.profile ? {
+                facingYaw: Number(state.profile.facingYaw || 0),
+                retreatLean: Number(state.profile.retreatLean || 0),
+                fromLabel: String(state.profile.fromLabel || ''),
+                toLabel: String(state.profile.toLabel || ''),
+                blend: Number(state.profile.blend || 0),
+                label: String(state.profile.label || '')
+            } : null,
+            startRemaining: Number(state.startRemaining || 0),
+            facingYaw: Number(state.facingYaw || 0),
+            bodyLowerAimYaw: Number(state.bodyLowerAimYaw || 0),
+            bodyUpperAimYaw: Number(state.bodyUpperAimYaw || 0),
+            headAimYaw: Number(state.headAimYaw || 0),
+            idleTurnPoseWeight: 0,
+            idleTurnDirection: 0,
+            useTurnEntryClip: false,
+            useTurnLoopClip: false,
+            turnLoopPoseWeight: 0,
+            turnClipDirection: 0,
+            poseName: String(state.poseName || '')
+        };
+    }
+
+    function resolveForwardStopWeight(intent) {
+        if (!intent || !intent.moving) return 0;
+        var magnitude = Math.max(0.0001, Number(intent.magnitude || 0));
+        return Math.max(0, Number(intent.forwardAxis || 0)) / magnitude;
+    }
+
+    function refreshRecentForwardStopWindow(motionState, animState, directional, delta) {
+        motionState.recentForwardStopRemaining = Math.max(0, Number(motionState.recentForwardStopRemaining || 0) - delta);
+        if (!(animState && !animState.airborne && directional && directional.intent && directional.intent.moving)) return;
+        var forwardStopWeight = resolveForwardStopWeight(directional.intent);
+        if (
+            Number(animState.speedNorm || 0) >= STOP_ANIM_MIN_SPEED_NORM &&
+            forwardStopWeight >= STOP_FORWARD_WEIGHT_MIN
+        ) {
+            motionState.recentForwardStopRemaining = STOP_RECENT_GRACE_SEC;
+            motionState.recentForwardStopWeight = forwardStopWeight;
+        }
+    }
+
+    function beginStopDirectionalSettle(motionState, durationSec) {
+        motionState.stopSettleDuration = Math.max(0.08, Number(durationSec || STOP_DIRECTIONAL_SETTLE_DURATION));
+        motionState.stopSettleRemaining = motionState.stopSettleDuration;
+        motionState.stopDirectionalSnapshot = motionState.lastMoveDirectionalSnapshot
+            ? cloneDirectionalSnapshot(motionState.lastMoveDirectionalSnapshot)
+            : null;
+    }
+
+    function stopDirectionalSettleWeight(motionState) {
+        if (!(motionState && Number(motionState.stopSettleRemaining || 0) > 0 && Number(motionState.stopSettleDuration || 0) > 0)) {
+            return 0;
+        }
+        var ratio = clamp01(Number(motionState.stopSettleRemaining || 0) / Math.max(0.0001, Number(motionState.stopSettleDuration || 0)));
+        return ratio * ratio * (3 - (2 * ratio));
+    }
+
+    function stopInterruptCategory(intent) {
+        if (!intent || !intent.moving) return '';
+        var forwardAxis = Number(intent.forwardAxis || 0);
+        if (forwardAxis > 0.15) return 'forward';
+        if (forwardAxis < -0.15) return 'backward';
+        return 'strafe';
+    }
+
+    function canInterruptStopLock(motionState, intent) {
+        var category = stopInterruptCategory(intent);
+        if (category === 'forward') return true;
+        if (category === 'backward') return false;
+        if (category !== 'strafe') return false;
+        var duration = Math.max(0.0001, Number(motionState && motionState.stopLockDuration || 0));
+        var remaining = Math.max(0, Number(motionState && motionState.lockRemaining || 0));
+        var progress = 1 - (remaining / duration);
+        return progress >= STOP_STRAFE_INTERRUPT_PROGRESS;
+    }
+
     function selectClip(animState, motionState, actions) {
         var moving = isDirectionalMove(animState);
         var grounded = !!(animState && !animState.airborne);
         var directional = motionState && motionState.directional ? motionState.directional : createDirectionalLocomotionState();
+
+        if (motionState.lockName === 'stop' && motionState.lockRemaining > 0 && moving) {
+            if (canInterruptStopLock(motionState, directional && directional.intent)) {
+                motionState.lockName = '';
+                motionState.lockRemaining = 0;
+                motionState.stopSettleRemaining = 0;
+                motionState.stopLockDuration = 0;
+            } else {
+                return motionState.lockName;
+            }
+        }
 
         if (motionState.lockName && motionState.lockRemaining > 0) {
             return motionState.lockName;
@@ -613,8 +757,25 @@ import {
         }
 
         if (grounded && !moving && motionState.wasMoving) {
+            var lastIntent = motionState.lastMoveIntent || resolveMoveIntent(null);
+            var forwardStopWeight = resolveForwardStopWeight(lastIntent);
+            var currentForwardStopEligible = (
+                Number(motionState.lastGroundedSpeed || 0) >= STOP_ANIM_MIN_SPEED_NORM &&
+                forwardStopWeight >= STOP_FORWARD_WEIGHT_MIN
+            );
+            var recentForwardStopEligible = (
+                Number(motionState.recentForwardStopRemaining || 0) > 0 &&
+                Number(motionState.recentForwardStopWeight || 0) >= STOP_FORWARD_WEIGHT_MIN
+            );
+            beginStopDirectionalSettle(motionState, STOP_DIRECTIONAL_SETTLE_DURATION);
+            if (!(currentForwardStopEligible || recentForwardStopEligible)) {
+                motionState.lockName = '';
+                motionState.lockRemaining = 0;
+                return 'idle';
+            }
             motionState.lockName = 'stop';
             motionState.lockRemaining = Math.max(0.1, clipDuration(actions, 'stop', 0.18) * 0.7);
+            motionState.stopLockDuration = motionState.lockRemaining;
             return motionState.lockName;
         }
 
@@ -718,15 +879,108 @@ import {
         };
     }
 
-    function createPistolPiece(size, color) {
+    function resolveWeaponVisualEntry(weaponId) {
+        var visuals = runtime.GameWeaponVisuals || null;
+        if (!visuals || !visuals.get) return null;
+        return visuals.get(weaponId);
+    }
+
+    function defaultWeaponMaterialTuning(partName) {
+        var name = String(partName || '');
+        if (name === 'grip' || name === 'stock' || name === 'underbarrel') {
+            return { roughness: 0.84, metalness: 0.04 };
+        }
+        if (name === 'optic' || name === 'opticRail' || name === 'feed' || name === 'muzzleDevice') {
+            return { roughness: 0.68, metalness: 0.22 };
+        }
+        return { roughness: 0.72, metalness: 0.14 };
+    }
+
+    function createWeaponPartMesh(partName) {
+        var tuning = defaultWeaponMaterialTuning(partName);
         return new THREE.Mesh(
-            new THREE.BoxGeometry(size.x, size.y, size.z),
+            new THREE.BoxGeometry(1, 1, 1),
             new THREE.MeshStandardMaterial({
-                color: color,
-                roughness: 0.72,
-                metalness: 0.14
+                color: 0x111111,
+                roughness: tuning.roughness,
+                metalness: tuning.metalness
             })
         );
+    }
+
+    function applyWeaponPartMesh(mesh, part, partName) {
+        if (!mesh) return false;
+        var visible = !!(part && part.visible !== false);
+        mesh.visible = visible;
+        if (!visible) return false;
+        var position = Array.isArray(part.position) ? part.position : [0, 0, 0];
+        var size = Array.isArray(part.size) ? part.size : [0.01, 0.01, 0.01];
+        var tuning = defaultWeaponMaterialTuning(partName);
+        mesh.position.set(
+            Number(position[0] || 0),
+            Number(position[1] || 0),
+            Number(position[2] || 0)
+        );
+        mesh.scale.set(
+            Math.max(0.001, Number(size[0] || 0.01)),
+            Math.max(0.001, Number(size[1] || 0.01)),
+            Math.max(0.001, Number(size[2] || 0.01))
+        );
+        if (mesh.material) {
+            if (mesh.material.color && typeof part.color === 'number') {
+                mesh.material.color.setHex(part.color);
+            }
+            if (typeof mesh.material.roughness === 'number') {
+                mesh.material.roughness = tuning.roughness;
+            }
+            if (typeof mesh.material.metalness === 'number') {
+                mesh.material.metalness = tuning.metalness;
+            }
+        }
+        return true;
+    }
+
+    function applyWeaponVisualState(rig, weaponId) {
+        if (!rig || !rig.weaponRoot || !rig.weaponModel) return false;
+        var resolvedEntry = resolveWeaponVisualEntry(weaponId) || resolveWeaponVisualEntry('rifle');
+        var platform = resolvedEntry && resolvedEntry.platform ? resolvedEntry.platform : null;
+        var mount = platform && platform.mount ? platform.mount : {};
+        var zones = platform && platform.zones ? platform.zones : {};
+        var parts = platform && platform.parts ? platform.parts : {};
+        var handleBack = Array.isArray(zones.handleBack) ? zones.handleBack : [0, -0.12, 0.12];
+        var mountPos = Array.isArray(mount.position) ? mount.position : [0, 0, 0];
+        var mountRotDeg = Array.isArray(mount.rotationDeg) ? mount.rotationDeg : [0, 0, 0];
+        var muzzlePos = Array.isArray(zones.muzzle) ? zones.muzzle : [0, 0.02, -0.56];
+
+        rig.weaponModel.position.set(
+            Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
+            Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
+            Number(mountPos[2] || 0) - Number(handleBack[2] || 0)
+        );
+        rig.weaponModel.rotation.set(
+            (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
+            (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
+            (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
+        );
+        rig.muzzleAnchor.position.set(
+            Number(muzzlePos[0] || 0),
+            Number(muzzlePos[1] || 0),
+            Number(muzzlePos[2] || 0)
+        );
+        applyWeaponPartMesh(rig.weaponBody, parts.receiver, 'receiver');
+        applyWeaponPartMesh(rig.weaponGrip, parts.grip, 'grip');
+        applyWeaponPartMesh(rig.weaponBarrel, parts.barrel, 'barrel');
+        applyWeaponPartMesh(rig.weaponStock, parts.stock, 'stock');
+        applyWeaponPartMesh(rig.weaponOpticRail, parts.opticRail, 'opticRail');
+        applyWeaponPartMesh(rig.weaponOptic, parts.optic, 'optic');
+        applyWeaponPartMesh(rig.weaponMuzzleDevice, parts.muzzleDevice, 'muzzleDevice');
+        applyWeaponPartMesh(rig.weaponFeed, parts.feed, 'feed');
+        applyWeaponPartMesh(rig.weaponUnderbarrel, parts.underbarrel, 'underbarrel');
+        applyWeaponPartMesh(rig.weaponAccentA, parts.accentA, 'accentA');
+        applyWeaponPartMesh(rig.weaponAccentB, parts.accentB, 'accentB');
+        rig.weaponId = resolvedEntry && resolvedEntry.weaponId ? resolvedEntry.weaponId : String(weaponId || 'rifle');
+        rig.weaponDefinition = platform;
+        return true;
     }
 
     function computeBoneDominantAxis(points) {
@@ -854,6 +1108,19 @@ import {
         var motionState = {
             wasGrounded: true,
             wasMoving: false,
+            lastSprinting: false,
+            lastMoveForward: false,
+            lastMoveBackward: false,
+            lastMoveLeft: false,
+            lastMoveRight: false,
+            lastMoveIntent: resolveMoveIntent(null),
+            lastMoveDirectionalSnapshot: null,
+            recentForwardStopRemaining: 0,
+            recentForwardStopWeight: 0,
+            stopSettleRemaining: 0,
+            stopSettleDuration: STOP_DIRECTIONAL_SETTLE_DURATION,
+            stopDirectionalSnapshot: null,
+            stopLockDuration: 0,
             lastYaw: null,
             lockName: '',
             lockRemaining: 0,
@@ -916,26 +1183,31 @@ import {
         weaponRoot.position.set(pistolConfig.rootPos.x, pistolConfig.rootPos.y, pistolConfig.rootPos.z);
         weaponRoot.rotation.set(pistolConfig.rootRot.x, pistolConfig.rootRot.y, pistolConfig.rootRot.z);
         armLowerR.add(weaponRoot);
-        var weaponCube = new THREE.Mesh(
-            new THREE.BoxGeometry(0.28, 0.28, 0.5),
-            new THREE.MeshStandardMaterial({
-                color: 0x111111,
-                roughness: 0.78,
-                metalness: 0.08
-            })
-        );
-        weaponRoot.add(weaponCube);
-        var weaponBarrel = new THREE.Mesh(
-            new THREE.BoxGeometry(0.07, 0.24, 0.07),
-            new THREE.MeshStandardMaterial({
-                color: 0x151515,
-                roughness: 0.72,
-                metalness: 0.12
-            })
-        );
-        weaponBarrel.position.set(0, 0.18, -0.28);
-        weaponRoot.add(weaponBarrel);
-        var muzzleAnchor = createAnchor(weaponRoot, pistolConfig.muzzlePos.x, pistolConfig.muzzlePos.y, pistolConfig.muzzlePos.z);
+        var weaponModel = new THREE.Group();
+        weaponRoot.add(weaponModel);
+        var weaponBody = createWeaponPartMesh('receiver');
+        var weaponGrip = createWeaponPartMesh('grip');
+        var weaponBarrel = createWeaponPartMesh('barrel');
+        var weaponStock = createWeaponPartMesh('stock');
+        var weaponOpticRail = createWeaponPartMesh('opticRail');
+        var weaponOptic = createWeaponPartMesh('optic');
+        var weaponMuzzleDevice = createWeaponPartMesh('muzzleDevice');
+        var weaponFeed = createWeaponPartMesh('feed');
+        var weaponUnderbarrel = createWeaponPartMesh('underbarrel');
+        var weaponAccentA = createWeaponPartMesh('accentA');
+        var weaponAccentB = createWeaponPartMesh('accentB');
+        weaponModel.add(weaponBody);
+        weaponModel.add(weaponGrip);
+        weaponModel.add(weaponBarrel);
+        weaponModel.add(weaponStock);
+        weaponModel.add(weaponOpticRail);
+        weaponModel.add(weaponOptic);
+        weaponModel.add(weaponMuzzleDevice);
+        weaponModel.add(weaponFeed);
+        weaponModel.add(weaponUnderbarrel);
+        weaponModel.add(weaponAccentA);
+        weaponModel.add(weaponAccentB);
+        var muzzleAnchor = createAnchor(weaponModel, pistolConfig.muzzlePos.x, pistolConfig.muzzlePos.y, pistolConfig.muzzlePos.z);
 
         var rig = {
             root: root,
@@ -951,8 +1223,19 @@ import {
             eyeAnchor: eyeAnchor,
             throwableOriginAnchor: throwableOriginAnchor,
             weaponRoot: weaponRoot,
-            weaponCube: weaponCube,
+            weaponModel: weaponModel,
+            weaponCube: weaponBody,
+            weaponBody: weaponBody,
+            weaponGrip: weaponGrip,
             weaponBarrel: weaponBarrel,
+            weaponStock: weaponStock,
+            weaponOpticRail: weaponOpticRail,
+            weaponOptic: weaponOptic,
+            weaponMuzzleDevice: weaponMuzzleDevice,
+            weaponFeed: weaponFeed,
+            weaponUnderbarrel: weaponUnderbarrel,
+            weaponAccentA: weaponAccentA,
+            weaponAccentB: weaponAccentB,
             muzzleAnchor: muzzleAnchor,
             weaponRootBaseRot: weaponRoot.rotation.clone(),
             upperBodyPivot: bodyUpper,
@@ -971,9 +1254,11 @@ import {
             legUpperR: legUpperR,
             legLowerL: legLowerL,
             legLowerR: legLowerR,
-            gun: weaponRoot,
+            gun: weaponModel,
             gunBasePos: weaponRoot.position.clone(),
             weaponRootBasePos: weaponRoot.position.clone(),
+            weaponId: currentWeaponId,
+            weaponDefinition: null,
             fireRecoilState: fireRecoilState,
             activePoseName: ''
         };
@@ -984,6 +1269,7 @@ import {
             : [];
         root.userData.rig = rig;
         root.userData.cloneVisualForRevealGhost = buildRevealCloneFactory(root);
+        applyWeaponVisualState(rig, currentWeaponId);
 
         function clearManualRollState() {
             motionState.manualRollActive = false;
@@ -1066,13 +1352,21 @@ import {
                 motionState.lockRemaining = Math.max(0, motionState.lockRemaining - dt);
                 if (motionState.lockRemaining === 0) {
                     motionState.lockName = '';
+                    motionState.stopLockDuration = 0;
                     if (motionState.manualRollActive) {
                         clearManualRollState();
                     }
                 }
             }
+            if (motionState.stopSettleRemaining > 0) {
+                motionState.stopSettleRemaining = Math.max(0, motionState.stopSettleRemaining - dt);
+                if (motionState.stopSettleRemaining === 0) {
+                    motionState.stopDirectionalSnapshot = null;
+                }
+            }
 
             motionState.directional = updateDirectionalLocomotionState(motionState.directional, dt, animState);
+            refreshRecentForwardStopWindow(motionState, animState, motionState.directional, dt);
             updatePendingBackwardRoll(dt);
             var clipName = selectClip(animState, motionState, actions);
             var playbackState = animState;
@@ -1122,7 +1416,18 @@ import {
             } else if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
                 rig.activePoseName = motionState.directional.poseName || '';
             }
-            applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
+            var stopSettleWeight = stopDirectionalSettleWeight(motionState);
+            if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
+                applyDirectionalLocomotionPose(rig, motionState.stopDirectionalSnapshot, animState, stopSettleWeight);
+                if (!rig.activePoseName && motionState.stopDirectionalSnapshot.poseName) {
+                    rig.activePoseName = motionState.stopDirectionalSnapshot.poseName;
+                }
+            }
+            if (rig.activeClipName === 'run') {
+                applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
+            } else if (clipUsesLockedRightArmAimBasePose(rig.activeClipName)) {
+                applyLockedRightArmAimBasePose(rig);
+            }
             applyTorsoCarryPose(rig, motionState.directional);
             applyIdleAimPose(rig, {
                 currentPitch: motionState.idleAimCurrentPitch,
@@ -1137,6 +1442,27 @@ import {
 
             motionState.wasGrounded = !animState.airborne;
             motionState.wasMoving = isDirectionalMove(animState);
+            motionState.lastSprinting = !!animState.sprinting;
+            motionState.lastMoveForward = !!animState.movingForward;
+            motionState.lastMoveBackward = !!animState.movingBackward;
+            motionState.lastMoveLeft = !!animState.movingLeft;
+            motionState.lastMoveRight = !!animState.movingRight;
+            if (motionState.directional && motionState.directional.intent && motionState.directional.intent.moving) {
+                motionState.lastMoveIntent = {
+                    moving: !!motionState.directional.intent.moving,
+                    forwardAxis: Number(motionState.directional.intent.forwardAxis || 0),
+                    rightAxis: Number(motionState.directional.intent.rightAxis || 0),
+                    magnitude: Number(motionState.directional.intent.magnitude || 0),
+                    angle: Number(motionState.directional.intent.angle || 0),
+                    absAngle: Number(motionState.directional.intent.absAngle || 0),
+                    sideSign: Number(motionState.directional.intent.sideSign || 0),
+                    pureForward: !!motionState.directional.intent.pureForward,
+                    pureBackpedal: !!motionState.directional.intent.pureBackpedal,
+                    pureStrafe: !!motionState.directional.intent.pureStrafe,
+                    diagonal: !!motionState.directional.intent.diagonal
+                };
+                motionState.lastMoveDirectionalSnapshot = cloneDirectionalSnapshot(motionState.directional);
+            }
             motionState.lastYaw = (typeof animState.yaw === 'number') ? animState.yaw : motionState.lastYaw;
             motionState.lastGroundedSpeed = (!animState.airborne)
                 ? Math.max(0, Number(animState.speedNorm || 0))
@@ -1210,7 +1536,7 @@ import {
 
         function setWeapon() {
             currentWeaponId = String(arguments[0] || currentWeaponId || 'rifle');
-            return true;
+            return applyWeaponVisualState(rig, currentWeaponId);
         }
 
         function setMuzzleVisible() {
@@ -1227,6 +1553,10 @@ import {
                 cameraShoulder: 2.35,
                 adsHeight: 0.72
             };
+        }
+
+        function isMovementAnimationLocked() {
+            return motionState.lockName === 'stop' && motionState.lockRemaining > 0;
         }
 
         function dispose() {
@@ -1252,6 +1582,7 @@ import {
             setMuzzleVisible: setMuzzleVisible,
             getWeaponId: getWeaponId,
             getCameraProfile: getCameraProfile,
+            isMovementAnimationLocked: isMovementAnimationLocked,
             dispose: dispose
         };
     }
@@ -1298,6 +1629,11 @@ import {
         idleAimTargetPitch: idleAimTargetPitch,
         idleAimTargetYaw: idleAimTargetYaw,
         idleAimPoseWeight: idleAimPoseWeight,
+        resolveWeaponVisualEntry: resolveWeaponVisualEntry,
+        applyWeaponPartMesh: applyWeaponPartMesh,
+        applyWeaponVisualState: applyWeaponVisualState,
+        applyLockedRightArmAimBasePose: applyLockedRightArmAimBasePose,
+        clipUsesLockedRightArmAimBasePose: clipUsesLockedRightArmAimBasePose,
         applyRunRightArmIdleBasePose: applyRunRightArmIdleBasePose,
         applyTorsoCarryPose: applyTorsoCarryPose,
         applyIdleAimPose: applyIdleAimPose,
@@ -1307,9 +1643,10 @@ import {
             return {
                 rootPos: { x: -0.04, y: 0.65, z: -0.06 },
                 rootRot: { x: 0.08, y: 0.22, z: 0 },
-                cubeSize: { x: 0.28, y: 0.28, z: 0.5 },
-                barrelPos: { x: 0, y: 0.18, z: -0.28 },
-                barrelSize: { x: 0.07, y: 0.24, z: 0.07 },
+                handleBack: { x: 0, y: -0.1, z: 0.08 },
+                receiverSize: { x: 0.14, y: 0.1, z: 0.55 },
+                barrelPos: { x: 0, y: 0.02, z: -0.36 },
+                barrelSize: { x: 0.08, y: 0.08, z: 0.26 },
                 muzzlePos: { x: 0, y: 0, z: -0.09 }
             };
         }

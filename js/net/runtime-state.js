@@ -189,6 +189,7 @@
                 pitch: normalizeRemoteSnapshotNumber(entity.pitch, 0),
                 moveSpeedNorm: normalizeRemoteSnapshotNumber(entity.moveSpeedNorm, 0),
                 sprinting: !!entity.sprinting,
+                fastBackpedal: !!entity.fastBackpedal,
                 movingForward: !!entity.movingForward,
                 movingBackward: !!entity.movingBackward,
                 movingLeft: !!entity.movingLeft,

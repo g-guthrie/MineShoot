@@ -96,3 +96,35 @@ test('gameplay runtime loop passes reconciliation state through self-state sync'
     }
   });
 });
+
+test('gameplay runtime loop shows sprint effects during fast backpedal without forward sprint state', async () => {
+  const sprintCalls = [];
+  const harness = await loadGameplayRuntimeLoopHarness({
+    GamePlayer: {
+      update() {},
+      getPosition() { return { x: 0, y: 1.6, z: 0 }; },
+      getRotation() { return { yaw: 0, pitch: 0 }; },
+      getAdsState() { return null; },
+      getAnimNetState() { return { moveSpeedNorm: 0.8, sprinting: false, fastBackpedal: true }; },
+      isSprinting() { return false; },
+      isFastBackpedal() { return true; },
+      flushDeferredViewSync() {}
+    },
+    GameUI: {
+      updateWeaponInfo() {},
+      updateSprintEffects(state) { sprintCalls.push(state); },
+      updateAbilityInfo() {}
+    }
+  });
+  const loop = harness.createLoop({
+    readMatchContext() {
+      return { selfState: { id: 'usr_test', alive: true } };
+    },
+    getCamera() { return null; }
+  });
+
+  loop.step(0.016);
+
+  assert.equal(sprintCalls.length, 1);
+  assert.equal(sprintCalls[0].intensity, 0.8);
+});

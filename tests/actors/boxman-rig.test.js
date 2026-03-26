@@ -8,7 +8,8 @@ const boxmanRig = globalThis.__MAYHEM_RUNTIME.GameBoxmanRig;
 test('boxman reverses locomotion playback for backward run and sprint clips', () => {
   const runPlayback = boxmanRig._test.resolveClipPlayback({
     movingForward: false,
-    movingBackward: true
+    movingBackward: true,
+    movingRight: true
   }, 'run');
   const sprintPlayback = boxmanRig._test.resolveClipPlayback({
     movingForward: false,
@@ -19,6 +20,19 @@ test('boxman reverses locomotion playback for backward run and sprint clips', ()
   assert.equal(runPlayback.timeScale, -1);
   assert.equal(sprintPlayback.reverse, true);
   assert.equal(sprintPlayback.timeScale, -1);
+});
+
+test('boxman keeps plain reversed playback without the fastBackpedal flag', () => {
+  const playback = boxmanRig._test.resolveClipPlayback({
+    movingForward: false,
+    movingBackward: true,
+    movingLeft: false,
+    movingRight: false,
+    sprinting: true
+  }, 'run');
+
+  assert.equal(playback.reverse, true);
+  assert.equal(playback.timeScale, -1);
 });
 
 test('boxman keeps forward playback for non-backpedal states', () => {
@@ -42,6 +56,17 @@ test('boxman keeps forward playback for non-backpedal states', () => {
   assert.equal(strafeRun.timeScale, 1);
   assert.equal(jumpClip.reverse, false);
   assert.equal(jumpClip.timeScale, 1);
+});
+
+test('boxman speeds up reversed run playback during fast backpedal', () => {
+  const playback = boxmanRig._test.resolveClipPlayback({
+    movingForward: false,
+    movingBackward: true,
+    fastBackpedal: true
+  }, 'run');
+
+  assert.equal(playback.reverse, true);
+  assert.equal(playback.timeScale, -1.25);
 });
 
 test('boxman slows the standing turn loop for gentler turns and speeds it up for stronger turns', () => {
@@ -100,6 +125,525 @@ test('boxman uses normal idle while standing still without idle_shoot clip routi
   assert.equal(clip, 'idle');
 });
 
+test('boxman uses stop only after fast forward movement and skips it otherwise', () => {
+  const fastForwardStop = boxmanRig._test.selectClip({
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    airborne: false
+  }, {
+    wasGrounded: true,
+    wasMoving: true,
+    lastMoveForward: true,
+    lastMoveBackward: false,
+    lastMoveLeft: false,
+    lastMoveRight: false,
+    lastMoveIntent: {
+      moving: true,
+      forwardAxis: 1,
+      rightAxis: 0,
+      magnitude: 1,
+      angle: 0,
+      absAngle: 0,
+      sideSign: 0,
+      pureForward: true,
+      pureBackpedal: false,
+      pureStrafe: false,
+      diagonal: false
+    },
+    lastMoveDirectionalSnapshot: {
+      intent: {
+        moving: true,
+        forwardAxis: 1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: 0,
+        absAngle: 0,
+        sideSign: 0,
+        pureForward: true,
+        pureBackpedal: false,
+        pureStrafe: false,
+        diagonal: false
+      },
+      profile: {
+        facingYaw: 0,
+        retreatLean: 0,
+        fromLabel: 'forward',
+        toLabel: 'forward',
+        blend: 0,
+        label: 'forward'
+      },
+      startRemaining: 0,
+      facingYaw: 0,
+      bodyLowerAimYaw: 0,
+      bodyUpperAimYaw: 0,
+      headAimYaw: 0,
+      poseName: 'forward'
+    },
+    recentForwardStopRemaining: 0,
+    recentForwardStopWeight: 0,
+    stopSettleRemaining: 0,
+    stopSettleDuration: 0.18,
+    stopDirectionalSnapshot: null,
+    lastGroundedSpeed: 0.95,
+    lockName: '',
+    lockRemaining: 0,
+    jumpTriggered: false,
+    directional: {
+      useTurnEntryClip: false,
+      useTurnLoopClip: false,
+      turnClipDirection: 0
+    },
+    turnEntryDirection: 0
+  }, {});
+  const backwardStop = boxmanRig._test.selectClip({
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    airborne: false
+  }, {
+    wasGrounded: true,
+    wasMoving: true,
+    lastMoveForward: false,
+    lastMoveBackward: true,
+    lastMoveLeft: false,
+    lastMoveRight: false,
+    lastMoveIntent: {
+      moving: true,
+      forwardAxis: -1,
+      rightAxis: 0,
+      magnitude: 1,
+      angle: Math.PI,
+      absAngle: Math.PI,
+      sideSign: 1,
+      pureForward: false,
+      pureBackpedal: true,
+      pureStrafe: false,
+      diagonal: false
+    },
+    lastMoveDirectionalSnapshot: {
+      intent: {
+        moving: true,
+        forwardAxis: -1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: Math.PI,
+        absAngle: Math.PI,
+        sideSign: 1,
+        pureForward: false,
+        pureBackpedal: true,
+        pureStrafe: false,
+        diagonal: false
+      },
+      profile: {
+        facingYaw: 0,
+        retreatLean: 0.09,
+        fromLabel: 'backpedal',
+        toLabel: 'backpedal',
+        blend: 1,
+        label: 'backpedal'
+      },
+      startRemaining: 0,
+      facingYaw: 0,
+      bodyLowerAimYaw: 0,
+      bodyUpperAimYaw: 0,
+      headAimYaw: 0,
+      poseName: 'backpedal'
+    },
+    recentForwardStopRemaining: 0,
+    recentForwardStopWeight: 0,
+    stopSettleRemaining: 0,
+    stopSettleDuration: 0.18,
+    stopDirectionalSnapshot: null,
+    lastGroundedSpeed: 0.95,
+    lockName: '',
+    lockRemaining: 0,
+    jumpTriggered: false,
+    directional: {
+      useTurnEntryClip: false,
+      useTurnLoopClip: false,
+      turnClipDirection: 0
+    },
+    turnEntryDirection: 0
+  }, {});
+
+  const slowForwardStop = boxmanRig._test.selectClip({
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    airborne: false
+  }, {
+    wasGrounded: true,
+    wasMoving: true,
+    lastMoveForward: true,
+    lastMoveBackward: false,
+    lastMoveLeft: false,
+    lastMoveRight: false,
+    lastMoveIntent: {
+      moving: true,
+      forwardAxis: 1,
+      rightAxis: 0,
+      magnitude: 1,
+      angle: 0,
+      absAngle: 0,
+      sideSign: 0,
+      pureForward: true,
+      pureBackpedal: false,
+      pureStrafe: false,
+      diagonal: false
+    },
+    lastMoveDirectionalSnapshot: {
+      intent: {
+        moving: true,
+        forwardAxis: 1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: 0,
+        absAngle: 0,
+        sideSign: 0,
+        pureForward: true,
+        pureBackpedal: false,
+        pureStrafe: false,
+        diagonal: false
+      },
+      profile: {
+        facingYaw: 0,
+        retreatLean: 0,
+        fromLabel: 'forward',
+        toLabel: 'forward',
+        blend: 0,
+        label: 'forward'
+      },
+      startRemaining: 0,
+      facingYaw: 0,
+      bodyLowerAimYaw: 0,
+      bodyUpperAimYaw: 0,
+      headAimYaw: 0,
+      poseName: 'forward'
+    },
+    recentForwardStopRemaining: 0,
+    recentForwardStopWeight: 0,
+    stopSettleRemaining: 0,
+    stopSettleDuration: 0.18,
+    stopDirectionalSnapshot: null,
+    lastGroundedSpeed: 0.55,
+    lockName: '',
+    lockRemaining: 0,
+    jumpTriggered: false,
+    directional: {
+      useTurnEntryClip: false,
+      useTurnLoopClip: false,
+      turnClipDirection: 0
+    },
+    turnEntryDirection: 0
+  }, {});
+
+  assert.equal(fastForwardStop, 'stop');
+  assert.equal(backwardStop, 'idle');
+  assert.equal(slowForwardStop, 'idle');
+});
+
+test('boxman still triggers stop shortly after a fast forward run even if speed dipped before release', () => {
+  const motionState = {
+    wasGrounded: true,
+    wasMoving: true,
+    lastMoveForward: true,
+    lastMoveBackward: false,
+    lastMoveLeft: false,
+    lastMoveRight: false,
+    lastMoveIntent: {
+      moving: true,
+      forwardAxis: 1,
+      rightAxis: 0,
+      magnitude: 1,
+      angle: 0,
+      absAngle: 0,
+      sideSign: 0,
+      pureForward: true,
+      pureBackpedal: false,
+      pureStrafe: false,
+      diagonal: false
+    },
+    lastMoveDirectionalSnapshot: {
+      intent: {
+        moving: true,
+        forwardAxis: 1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: 0,
+        absAngle: 0,
+        sideSign: 0,
+        pureForward: true,
+        pureBackpedal: false,
+        pureStrafe: false,
+        diagonal: false
+      },
+      profile: {
+        facingYaw: 0,
+        retreatLean: 0,
+        fromLabel: 'forward',
+        toLabel: 'forward',
+        blend: 0,
+        label: 'forward'
+      },
+      startRemaining: 0,
+      facingYaw: 0,
+      bodyLowerAimYaw: 0,
+      bodyUpperAimYaw: 0,
+      headAimYaw: 0,
+      poseName: 'forward'
+    },
+    recentForwardStopRemaining: 0.08,
+    recentForwardStopWeight: 1,
+    stopSettleRemaining: 0,
+    stopSettleDuration: 0.18,
+    stopDirectionalSnapshot: null,
+    lastGroundedSpeed: 0.55,
+    lockName: '',
+    lockRemaining: 0,
+    jumpTriggered: false,
+    directional: {
+      useTurnEntryClip: false,
+      useTurnLoopClip: false,
+      turnClipDirection: 0
+    },
+    turnEntryDirection: 0
+  };
+
+  const clip = boxmanRig._test.selectClip({
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    airborne: false
+  }, motionState, {
+    stop: { getClip() { return { duration: 0.18 }; } }
+  });
+
+  assert.equal(clip, 'stop');
+  assert.ok(motionState.lockRemaining > 0);
+  assert.ok(motionState.stopSettleRemaining > 0);
+});
+
+test('boxman gives pure strafe stops a short directional settle instead of snapping cold to idle', () => {
+  const motionState = {
+    wasGrounded: true,
+    wasMoving: true,
+    lastMoveForward: false,
+    lastMoveBackward: false,
+    lastMoveLeft: true,
+    lastMoveRight: false,
+    lastMoveIntent: {
+      moving: true,
+      forwardAxis: 0,
+      rightAxis: -1,
+      magnitude: 1,
+      angle: -Math.PI * 0.5,
+      absAngle: Math.PI * 0.5,
+      sideSign: -1,
+      pureForward: false,
+      pureBackpedal: false,
+      pureStrafe: true,
+      diagonal: false
+    },
+    lastMoveDirectionalSnapshot: {
+      intent: {
+        moving: true,
+        forwardAxis: 0,
+        rightAxis: -1,
+        magnitude: 1,
+        angle: -Math.PI * 0.5,
+        absAngle: Math.PI * 0.5,
+        sideSign: -1,
+        pureForward: false,
+        pureBackpedal: false,
+        pureStrafe: true,
+        diagonal: false
+      },
+      profile: {
+        facingYaw: Math.PI * 0.5,
+        retreatLean: 0,
+        fromLabel: 'strafe',
+        toLabel: 'strafe',
+        blend: 0,
+        label: 'strafe'
+      },
+      startRemaining: 0,
+      facingYaw: Math.PI * 0.5,
+      bodyLowerAimYaw: -0.2,
+      bodyUpperAimYaw: -0.25,
+      headAimYaw: -0.35,
+      poseName: 'strafe_left'
+    },
+    recentForwardStopRemaining: 0,
+    recentForwardStopWeight: 0,
+    stopSettleRemaining: 0,
+    stopSettleDuration: 0.18,
+    stopDirectionalSnapshot: null,
+    lastGroundedSpeed: 0.95,
+    lockName: '',
+    lockRemaining: 0,
+    jumpTriggered: false,
+    directional: {
+      useTurnEntryClip: false,
+      useTurnLoopClip: false,
+      turnClipDirection: 0
+    },
+    turnEntryDirection: 0
+  };
+
+  const clip = boxmanRig._test.selectClip({
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    airborne: false
+  }, motionState, {});
+
+  assert.equal(clip, 'idle');
+  assert.ok(motionState.stopSettleRemaining > 0);
+  assert.equal(motionState.stopDirectionalSnapshot.poseName, 'strafe_left');
+});
+
+test('boxman lets forward input cut the stop immediately', () => {
+  const motionState = {
+    wasGrounded: true,
+    wasMoving: false,
+    lockName: 'stop',
+    lockRemaining: 0.18,
+    stopLockDuration: 0.18,
+    stopSettleRemaining: 0.18,
+    directional: {
+      intent: {
+        moving: true,
+        forwardAxis: 1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: 0,
+        absAngle: 0,
+        sideSign: 0,
+        pureForward: true,
+        pureBackpedal: false,
+        pureStrafe: false,
+        diagonal: false
+      }
+    }
+  };
+
+  const clip = boxmanRig._test.selectClip({
+    movingForward: true,
+    airborne: false,
+    speedNorm: 0.8
+  }, motionState, {});
+
+  assert.equal(clip, 'start_forward');
+  assert.equal(motionState.lockName, 'start_forward');
+  assert.ok(motionState.lockRemaining > 0);
+});
+
+test('boxman holds the stop against backward input until the stop finishes', () => {
+  const motionState = {
+    wasGrounded: true,
+    wasMoving: false,
+    lockName: 'stop',
+    lockRemaining: 0.18,
+    stopLockDuration: 0.18,
+    stopSettleRemaining: 0.18,
+    directional: {
+      intent: {
+        moving: true,
+        forwardAxis: -1,
+        rightAxis: 0,
+        magnitude: 1,
+        angle: Math.PI,
+        absAngle: Math.PI,
+        sideSign: 1,
+        pureForward: false,
+        pureBackpedal: true,
+        pureStrafe: false,
+        diagonal: false
+      }
+    }
+  };
+
+  const clip = boxmanRig._test.selectClip({
+    movingBackward: true,
+    airborne: false,
+    speedNorm: 0.8
+  }, motionState, {});
+
+  assert.equal(clip, 'stop');
+  assert.equal(motionState.lockName, 'stop');
+  assert.ok(motionState.lockRemaining > 0);
+});
+
+test('boxman holds the stop against pure strafe until enough of the stop has played', () => {
+  const earlyMotionState = {
+    wasGrounded: true,
+    wasMoving: false,
+    lockName: 'stop',
+    lockRemaining: 0.15,
+    stopLockDuration: 0.18,
+    stopSettleRemaining: 0.18,
+    directional: {
+      intent: {
+        moving: true,
+        forwardAxis: 0,
+        rightAxis: -1,
+        magnitude: 1,
+        angle: -Math.PI * 0.5,
+        absAngle: Math.PI * 0.5,
+        sideSign: -1,
+        pureForward: false,
+        pureBackpedal: false,
+        pureStrafe: true,
+        diagonal: false
+      }
+    }
+  };
+  const lateMotionState = {
+    wasGrounded: true,
+    wasMoving: false,
+    lockName: 'stop',
+    lockRemaining: 0.08,
+    stopLockDuration: 0.18,
+    stopSettleRemaining: 0.18,
+    directional: {
+      intent: {
+        moving: true,
+        forwardAxis: 0,
+        rightAxis: -1,
+        magnitude: 1,
+        angle: -Math.PI * 0.5,
+        absAngle: Math.PI * 0.5,
+        sideSign: -1,
+        pureForward: false,
+        pureBackpedal: false,
+        pureStrafe: true,
+        diagonal: false
+      }
+    }
+  };
+
+  const earlyClip = boxmanRig._test.selectClip({
+    movingLeft: true,
+    airborne: false,
+    speedNorm: 0.8
+  }, earlyMotionState, {});
+  const lateClip = boxmanRig._test.selectClip({
+    movingLeft: true,
+    airborne: false,
+    speedNorm: 0.8
+  }, lateMotionState, {});
+
+  assert.equal(earlyClip, 'stop');
+  assert.equal(lateClip, 'run');
+  assert.equal(lateMotionState.lockName, '');
+});
+
 test('boxman idle aim pose tracks vertical look on the right arm only', () => {
   const rig = {
     armUpperR: { rotation: { x: 0, y: 1, z: 2 } },
@@ -147,6 +691,23 @@ test('boxman keeps the same right-arm aim target in run as in idle', () => {
   assert.ok(Math.abs(runResponse - idleResponse) < 0.000001);
 });
 
+test('boxman shared locked aim base pose matches the run arm baseline before swing', () => {
+  const rig = {
+    armUpperR: { rotation: { x: 9, y: 8, z: 7 } },
+    armLowerR: { rotation: { x: 6, y: 5, z: 4 } }
+  };
+
+  const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
+
+  assert.equal(applied, true);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+  assert.equal(rig.armLowerR.rotation.y, 0);
+  assert.equal(rig.armLowerR.rotation.z, 0);
+});
+
 test('boxman overrides the run clip right arm with the idle base pose', () => {
   const rig = {
     armUpperR: { rotation: { x: 9, y: 8, z: 7 } },
@@ -192,6 +753,35 @@ test('boxman suppresses right-arm run swing while fire recoil is active', () => 
   assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
 });
 
+test('boxman locks the right arm to the aimed base pose for jump, fall, and landing clips', () => {
+  const clipNames = ['jump_idle', 'jump_running', 'falling', 'drop_idle', 'drop_running'];
+  for (const clipName of clipNames) {
+    assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose(clipName), true);
+    const rig = {
+      armUpperR: { rotation: { x: 9, y: 8, z: 7 } },
+      armLowerR: { rotation: { x: 6, y: 5, z: 4 } },
+      fireRecoilState: {
+        shoulderPitch: -0.1,
+        lowerArmPitch: -0.2,
+        weaponKick: -0.05
+      }
+    };
+
+    const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
+
+    assert.equal(applied, true);
+    assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
+    assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+  }
+});
+
+test('boxman does not use the locked airborne right-arm base pose for ground locomotion and roll clips', () => {
+  assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('idle'), false);
+  assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('run'), false);
+  assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('sprint'), false);
+  assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('drop_running_roll'), false);
+});
+
 test('boxman no longer uses fake shoulder carry translation or yaw compensation', () => {
   const rig = {
     armUpperR: {
@@ -230,6 +820,9 @@ test('boxman idle aim layer stays enabled for normal clips but disables for spri
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'run'), true);
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'rotate_left'), true);
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'start_right'), true);
+  assert.equal(boxmanRig._test.idleAimAllowed({ airborne: true, sprinting: true }, 'jump_running'), true);
+  assert.equal(boxmanRig._test.idleAimAllowed({ airborne: true, sprinting: true }, 'falling'), true);
+  assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: true }, 'drop_running'), true);
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: true }, 'sprint'), false);
   assert.equal(boxmanRig._test.idleAimAllowed({ airborne: false, sprinting: false }, 'drop_running_roll'), false);
 });
@@ -247,6 +840,28 @@ test('boxman idle aim target preserves the arm-out baseline and softens live res
   assert.ok(neutral > 0.45);
   assert.ok(lookDown > 0);
   assert.ok(lookDown < neutral);
+});
+
+test('boxman locked airborne aim base still accepts the normal vertical look layer', () => {
+  const rig = {
+    armUpperR: { rotation: { x: 0, y: 0, z: 0 } },
+    armLowerR: { rotation: { x: 0, y: 0, z: 0 } }
+  };
+
+  boxmanRig._test.applyLockedRightArmAimBasePose(rig);
+  const beforeUpper = rig.armUpperR.rotation.x;
+  const beforeLower = rig.armLowerR.rotation.x;
+  const applied = boxmanRig._test.applyIdleAimPose(rig, {
+    currentPitch: boxmanRig._test.idleAimTargetPitch({
+      aimPitch: 0.5,
+      airborne: true
+    }, 'jump_running'),
+    currentYaw: 0
+  });
+
+  assert.equal(applied, true);
+  assert.ok(rig.armUpperR.rotation.x < beforeUpper);
+  assert.ok(rig.armLowerR.rotation.x < beforeLower);
 });
 
 test('boxman idle aim target yaw counter-rotates against facing yaw and clamps', () => {
@@ -282,19 +897,109 @@ test('boxman counter-rotates the gun only on the outward-opening side', () => {
   assert.equal(rig.weaponRoot.rotation.y, 0.22);
 });
 
-test('boxman defines a tiny floating weapon cube mount off the right lower arm', () => {
+test('boxman keeps the weapon mount anchored off the right lower arm with the same forward baseline', () => {
   const mount = boxmanRig._test.weaponMount();
 
   assert.ok(mount.rootPos.x < 0);
   assert.ok(mount.rootPos.y > 0.5);
   assert.equal(mount.rootPos.z, -0.06);
   assert.ok(mount.rootRot.y > 0.2);
-  assert.equal(mount.cubeSize.x, 0.28);
-  assert.equal(mount.cubeSize.y, 0.28);
-  assert.equal(mount.cubeSize.z, 0.5);
-  assert.equal(mount.barrelPos.z, -0.28);
-  assert.equal(mount.barrelSize.y, 0.24);
+  assert.equal(mount.handleBack.z, 0.08);
+  assert.equal(mount.receiverSize.x, 0.14);
+  assert.equal(mount.receiverSize.y, 0.1);
+  assert.equal(mount.receiverSize.z, 0.55);
+  assert.equal(mount.barrelPos.z, -0.36);
+  assert.equal(mount.barrelSize.z, 0.26);
   assert.ok(mount.muzzlePos.z < 0);
+});
+
+test('boxman can resolve the stored multi-part weapon visuals for rifle and pistol', () => {
+  const rifle = boxmanRig._test.resolveWeaponVisualEntry('rifle');
+  const pistol = boxmanRig._test.resolveWeaponVisualEntry('pistol');
+
+  assert.equal(rifle.weaponId, 'rifle');
+  assert.ok(rifle.platform.parts.receiver.size[2] > 0.5);
+  assert.equal(pistol.weaponId, 'pistol');
+  assert.ok(pistol.platform.parts.grip.size[1] > 0.15);
+});
+
+test('boxman applies procedural weapon parts using the current hand-forward mount baseline', () => {
+  function createMeshStub() {
+    return {
+      visible: false,
+      position: {
+        x: 0, y: 0, z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      },
+      scale: {
+        x: 0, y: 0, z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      },
+      material: {
+        roughness: 0,
+        metalness: 0,
+        color: {
+          hex: 0,
+          setHex(value) { this.hex = value; }
+        }
+      }
+    };
+  }
+
+  const rig = {
+    weaponRoot: {},
+    weaponModel: {
+      position: {
+        x: 0, y: 0, z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      },
+      rotation: {
+        x: 0, y: 0, z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      }
+    },
+    muzzleAnchor: {
+      position: {
+        x: 0, y: 0, z: 0,
+        set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+      }
+    },
+    weaponBody: createMeshStub(),
+    weaponGrip: createMeshStub(),
+    weaponBarrel: createMeshStub(),
+    weaponStock: createMeshStub(),
+    weaponOpticRail: createMeshStub(),
+    weaponOptic: createMeshStub(),
+    weaponMuzzleDevice: createMeshStub(),
+    weaponFeed: createMeshStub(),
+    weaponUnderbarrel: createMeshStub(),
+    weaponAccentA: createMeshStub(),
+    weaponAccentB: createMeshStub()
+  };
+
+  const applied = boxmanRig._test.applyWeaponVisualState(rig, 'rifle');
+
+  assert.equal(applied, true);
+  assert.equal(rig.weaponId, 'rifle');
+  assert.equal(rig.weaponBody.visible, true);
+  assert.equal(rig.weaponGrip.visible, true);
+  assert.equal(rig.weaponBarrel.visible, true);
+  assert.equal(rig.weaponStock.visible, true);
+  assert.ok(rig.weaponModel.position.y > 0);
+  assert.ok(Math.abs(rig.weaponModel.position.z) < 0.000001);
+  assert.ok(rig.weaponModel.rotation.x > ((Math.PI * 0.5) - (10 * (Math.PI / 180)) - 0.01));
+  assert.ok(rig.weaponModel.rotation.x < ((Math.PI * 0.5) - (10 * (Math.PI / 180)) + 0.1));
+  assert.ok(rig.weaponModel.rotation.y > 0);
+  assert.ok(rig.weaponModel.rotation.y < 0.1);
+  assert.ok(rig.weaponModel.rotation.z > (Math.PI - 0.05));
+  assert.ok(rig.weaponModel.rotation.z < (Math.PI + 0.05));
+  assert.ok(rig.weaponBody.scale.z > 0.5);
+  assert.ok(rig.weaponBarrel.position.z < rig.weaponBody.position.z);
+  assert.ok(rig.muzzleAnchor.position.z < rig.weaponBarrel.position.z);
+
+  boxmanRig._test.applyWeaponVisualState(rig, 'sniper');
+  assert.equal(rig.weaponOptic.visible, true);
+  assert.ok(rig.muzzleAnchor.position.z < -1);
 });
 
 test('boxman reveal clone helper detaches circular root userData during clone work', () => {

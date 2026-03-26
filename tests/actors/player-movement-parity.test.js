@@ -84,7 +84,8 @@ function createExpectedEntity(spawn) {
     jumpHoldTimer: 0,
     jumpHeldLast: false,
     moveSpeedNorm: 0,
-    sprinting: false
+    sprinting: false,
+    fastBackpedal: false
   };
 }
 
@@ -211,6 +212,7 @@ async function loadPlayerMovementHarness(options = {}) {
               speed: Number(speed || 0),
               options: options ? JSON.parse(JSON.stringify({
                 sprinting: !!options.sprinting,
+                fastBackpedal: !!options.fastBackpedal,
                 isGrounded: !!options.isGrounded,
                 adsActive: !!options.adsActive,
                 movingForward: !!options.movingForward,
@@ -345,6 +347,8 @@ function assertPlayerMatchesExpected(player, expected) {
   assertClose(rot.pitch, expected.pitch);
   assertClose(anim.moveSpeedNorm, expected.moveSpeedNorm);
   assert.equal(player.isSprinting(), !!expected.sprinting);
+  assert.equal(player.isFastBackpedal(), !!expected.fastBackpedal);
+  assert.equal(anim.fastBackpedal, !!expected.fastBackpedal);
 }
 
 test('player live forward movement matches the shared authoritative step', async () => {
@@ -436,6 +440,29 @@ test('player ground sprinting matches the shared authoritative step', async () =
   harness.player.update(0.1);
 
   assertPlayerMatchesExpected(harness.player, expected);
+});
+
+test('player backward sprint matches the shared authoritative step and forwards fastBackpedal to animation', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyS' });
+  harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  stepAuthoritativeMovement(expected, createInputState({ backward: true, sprint: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(expected.sprinting, false);
+  assert.equal(expected.fastBackpedal, true);
+  assert.equal(harness.calls.animationUpdates.length > 0, true);
+  assert.deepEqual(harness.calls.animationUpdates[harness.calls.animationUpdates.length - 1].options, {
+    sprinting: false,
+    fastBackpedal: true,
+    isGrounded: true,
+    adsActive: false,
+    movingForward: false,
+    movingBackward: true
+  });
 });
 
 test('canceling sprint holds sprint off until the sprint key is pressed again', async () => {

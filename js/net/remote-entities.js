@@ -96,6 +96,7 @@
             pitch: Number(state.pitch || 0),
             moveSpeedNorm: Number(state.moveSpeedNorm || 0),
             sprinting: !!state.sprinting,
+            fastBackpedal: !!state.fastBackpedal,
             movingForward: !!state.movingForward,
             movingBackward: !!state.movingBackward,
             movingLeft: !!state.movingLeft,
@@ -122,6 +123,7 @@
             alive: entity.alive !== false,
             moveSpeedNorm: Number(entity.moveSpeedNorm || 0),
             sprinting: !!entity.sprinting,
+            fastBackpedal: !!entity.fastBackpedal,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
             movingLeft: !!entity.movingLeft,
@@ -319,6 +321,7 @@
             pitch: nextPitch,
             moveSpeedNorm: Number(entity.moveSpeedNorm || 0),
             sprinting: !!entity.sprinting,
+            fastBackpedal: !!entity.fastBackpedal,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
             movingLeft: !!entity.movingLeft,
@@ -460,6 +463,7 @@
             wallhackRadius: entity.wallhackRadius || classStats(entity.classId).wallhackRadius,
             moveSpeedNorm: entity.moveSpeedNorm || 0,
             sprinting: !!entity.sprinting,
+            fastBackpedal: !!entity.fastBackpedal,
             movingForward: !!entity.movingForward,
             movingBackward: !!entity.movingBackward,
             movingLeft: !!entity.movingLeft,
@@ -538,6 +542,7 @@
         r.wallhackRadius = entity.wallhackRadius || classStats(entity.classId).wallhackRadius;
         r.moveSpeedNorm = entity.moveSpeedNorm || 0;
         r.sprinting = !!entity.sprinting;
+        r.fastBackpedal = !!entity.fastBackpedal;
         r.movingForward = !!entity.movingForward;
         r.movingBackward = !!entity.movingBackward;
         r.isGrounded = entity.isGrounded !== false;

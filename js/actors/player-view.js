@@ -282,6 +282,7 @@
             animationApi.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: state.sprinting,
+                fastBackpedal: !!state.fastBackpedal,
                 airborne: !state.isGrounded,
                 footY: typeof state.footY === 'number' ? Number(state.footY) : null,
                 aimPitch: state.pitch + (cameraKickPitch * 0.35),

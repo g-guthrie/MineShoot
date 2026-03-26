@@ -101,6 +101,7 @@ export function toEntityState(entity, now = nowMs()) {
     weaponId: entity.weaponId || 'rifle',
     moveSpeedNorm: Number((entity.moveSpeedNorm || 0).toFixed(3)),
     sprinting: !!entity.sprinting,
+    fastBackpedal: !!entity.fastBackpedal,
     movingForward: !!(entity.inputState && entity.inputState.forward),
     movingBackward: !!(entity.inputState && entity.inputState.backward),
     movingLeft: !!(entity.inputState && entity.inputState.left),

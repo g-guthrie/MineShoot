@@ -203,6 +203,12 @@
                 !!presentState.sprinting,
                 animationAlpha
             );
+            var presentedFastBackpedal = smoothPresentationFlag(
+                r,
+                '_presentedFastBackpedalBlend',
+                !!presentState.fastBackpedal,
+                animationAlpha
+            );
             var presentedMovingForward = smoothPresentationFlag(
                 r,
                 '_presentedMovingForwardBlend',
@@ -263,6 +269,7 @@
                     animationApi.updateAnimation(dt, {
                         speedNorm: presentedSpeedNorm,
                         sprinting: presentedSprinting,
+                        fastBackpedal: presentedFastBackpedal,
                         airborne: presentState.isGrounded === false,
                         footY: nextY,
                         aimPitch: renderPitch,

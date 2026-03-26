@@ -258,3 +258,27 @@ test('directional locomotion swaps backward diagonal visual facing so back-left 
   assert.ok(Math.abs(rightRetreat.targetFacingYaw - (40 * (Math.PI / 180))) < 0.000001);
   assert.equal(rightRetreat.poseName, 'back_left');
 });
+
+test('directional locomotion recenters quickly after pure lateral movement is released', () => {
+  const state = createDirectionalLocomotionState();
+  updateDirectionalLocomotionState(state, 1, {
+    movingLeft: true,
+    speedNorm: 0.7,
+    sprinting: false
+  });
+  assert.ok(Math.abs(state.facingYaw) > 0.5);
+
+  updateDirectionalLocomotionState(state, 1, {
+    movingLeft: false,
+    movingRight: false,
+    movingForward: false,
+    movingBackward: false,
+    speedNorm: 0,
+    sprinting: false
+  });
+
+  assert.ok(Math.abs(state.facingYaw) < 0.000001);
+  assert.ok(Math.abs(state.bodyLowerAimYaw) < 0.000001);
+  assert.ok(Math.abs(state.bodyUpperAimYaw) < 0.000001);
+  assert.ok(Math.abs(state.headAimYaw) < 0.000001);
+});

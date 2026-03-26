@@ -116,7 +116,8 @@ export function buildMotionStateFromSnapshot(state, options = {}) {
       ? !!state.airborneSprintCarry
       : (!!(state && state.sprinting) && !(state && state.isGrounded)),
     moveSpeedNorm: Number(state && state.moveSpeedNorm || 0),
-    sprinting: !!(state && state.sprinting)
+    sprinting: !!(state && state.sprinting),
+    fastBackpedal: !!(state && state.fastBackpedal)
   };
 }
 

@@ -3,6 +3,7 @@ import { getMovementTuning } from './gameplay-tuning.js';
 
 const DEFAULT_TUNING = getMovementTuning();
 const DEFAULT_EPSILON = 0.001;
+const BACKWARD_SPRINT_SPEED_MULT = 1.25;
 
 function defaultBounds(bounds) {
   return {
@@ -155,12 +156,19 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   const input = inputState || createMovementInputState();
   const adsActive = !!input.adsActive;
   const sprintInputHeld = !!input.sprint && !adsActive && !movementLocked;
+  const backwardSprintRequested = sprintInputHeld && !!input.backward && !input.forward;
+  const forwardSprintRequested = sprintInputHeld && !backwardSprintRequested;
   const groundedAtFrameStart = !!entity.isGrounded;
   const sprintCarryActive = !!entity.airborneSprintCarry;
   const effectiveSprintRequested = groundedAtFrameStart
-    ? sprintInputHeld
-    : (sprintCarryActive && sprintInputHeld);
-  const speedCap = adsActive ? (tuning.jogSpeed * tuning.adsMoveMult) : (effectiveSprintRequested ? tuning.runSpeed : tuning.jogSpeed);
+    ? forwardSprintRequested
+    : (sprintCarryActive && forwardSprintRequested);
+  const backwardSprintSpeed = tuning.jogSpeed * BACKWARD_SPRINT_SPEED_MULT;
+  const speedCap = adsActive
+    ? (tuning.jogSpeed * tuning.adsMoveMult)
+    : backwardSprintRequested
+      ? backwardSprintSpeed
+      : (effectiveSprintRequested ? tuning.runSpeed : tuning.jogSpeed);
 
   const currentFeetY = Number(entity.y || eyeHeight) - eyeHeight;
   const minBoundX = Number(bounds.minX) + playerRadius;
@@ -218,6 +226,7 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   const horizontalSpeed = Math.sqrt((movedX * movedX) + (movedZ * movedZ)) / Math.max(dtSec, 0.0001);
   entity.moveSpeedNorm = clamp(horizontalSpeed / Math.max(tuning.runSpeed, 0.0001), 0, 1.4);
   entity.sprinting = effectiveSprintRequested && horizontalSpeed > 0.06;
+  entity.fastBackpedal = backwardSprintRequested && horizontalSpeed > 0.06;
 
   const jumpHeld = !!input.jump && !movementLocked;
   const jumpJustPressed = jumpHeld && !entity.jumpHeldLast;
@@ -289,9 +298,11 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   }
 
   if (entity.isGrounded) {
-    entity.sprinting = sprintInputHeld && horizontalSpeed > 0.06;
+    entity.sprinting = forwardSprintRequested && horizontalSpeed > 0.06;
+    entity.fastBackpedal = backwardSprintRequested && horizontalSpeed > 0.06;
   } else {
-    entity.sprinting = !!entity.airborneSprintCarry && sprintInputHeld && horizontalSpeed > 0.06;
+    entity.sprinting = !!entity.airborneSprintCarry && forwardSprintRequested && horizontalSpeed > 0.06;
+    entity.fastBackpedal = false;
   }
 
   entity.y = nextFeetY + eyeHeight;

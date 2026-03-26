@@ -102,58 +102,59 @@ In [js/actors/boxman-rig.js](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/js/
 3. supports exported-name aliases like `arm_lowerR` and `arm_lower.R`
 4. parents the attachment object to the resolved live bone
 
-For the current placeholder weapon cube, the working mount is:
+For the current Boxman weapon mount, the working attachment is:
 
 - bone: right lower arm (`arm_lowerR`)
 - local offset: `x: -0.04`, `y: 0.65`, `z: -0.06`
 - local rotation: `x: 0.08`, `y: 0.22`, `z: 0`
-- cube size: `0.28 x 0.28 x 0.5`
+- the forearm mount lives on the bone, then the actual weapon model is positioned inside that mount
+- the weapon model is lined up by `mount.position - handleBack`, so the back of the handle is the main hand reference, not the center of the receiver
 
-Those values are not special beyond this asset. They are just the offsets that made the cube visibly sit farther down the forearm instead of disappearing into the elbow area.
+Those values are not magical. They are just the offsets that make the gun sit in a believable place on the forearm without collapsing into the elbow area.
 
-### Use The Current Cube As The Handle Reference
+### Use The Current Handle-Back Reference
 
-The current placeholder cube should be treated as the reference handle orientation for future guns.
+The current runtime should be treated as if the back of the weapon handle is the alignment target for future guns.
 
 In plain terms:
 
-- the current cube position is where the grip/handle should live relative to the forearm mount
-- the current cube rotation is the orientation a held weapon should generally inherit
-- if you built the cube outward along its local `+Y` axis, that would be the barrel direction
+- the forearm mount decides where the weapon lives relative to the arm
+- inside that mount, the weapon's `handleBack` point is what gets lined up to the hand reference
+- the receiver, barrel, stock, and other parts extend outward from that handle reference
+- the muzzle anchor is driven by the weapon's `zones.muzzle` point and is also the normal local muzzle/tracer origin
 
 That makes the mount a practical authoring guide for future weapon meshes:
 
-- build the weapon handle around the current cube
-- build the barrel forward along the cube's local `+Y`
+- build the weapon so the back of the grip/handle is the thing you align to the hand
+- build the barrel so it extends away from that handle reference toward the muzzle point
 - keep the weapon parented to the same runtime forearm mount unless a later rig/socket replaces it
 
-### What The Current Local Axes Mean
+### What The Current Working Orientation Means
 
-For this mount:
+Right now the runtime applies these extra weapon-model rotations after the per-weapon stored mount rotation:
 
-- `+Y` is the gun-forward / barrel direction
-- `-Z` lifts the weapon up out of the hand
-- `+Z` pushes the handle deeper down into the hand
-- `+X` moves the weapon inward toward the body
-- `-X` moves the weapon outward toward the silhouette
+- extra `+90` degrees on `X`
+- extra `0` degrees on `Y`
+- extra `180` degrees on `Z`
 
-This is based on the current mount and the observed test adjustments:
+So when authoring or debugging a weapon mesh for the current runtime:
 
-- flipping `X` negative moved the weapon farther outward, away from the body
-- changing `Z` moved the weapon up/down relative to how the hand grips it
-- the local yaw rotation corrected the natural inward arm twist so the weapon sits more like a real held gun
+- treat the handle-back point as the hand anchor
+- treat the muzzle point as the barrel/shot origin reference
+- expect the runtime to do the final `X/Z` turning needed to make the weapon sit correctly in hand
+- do not assume the raw mesh forward axis in Blender is the final in-game forward axis without checking the runtime rotations above
 
 ### Practical Build Rule For Future Weapons
 
 When building a new weapon mesh in Blender:
 
-1. Treat the current cube as the grip block.
-2. Put the handle where the cube is.
-3. Extend the barrel along local `+Y`.
-4. If the weapon sits too far into the body, move it toward `-X`.
-5. If the handle floats too high or too low in the hand, adjust `Z`.
+1. Put a clear handle-back reference at the back of the grip.
+2. Put the muzzle reference at the real barrel exit point.
+3. Keep the whole weapon authored around that handle-to-muzzle relationship.
+4. Let the runtime forearm mount place the weapon in the hand.
+5. If the weapon sits wrong in game, first check the runtime extra rotations and the `handleBack` / `muzzle` points before changing the forearm bone mount.
 
-That should keep future weapon handles aligned with the current working runtime mount instead of re-discovering the same orientation by trial and error.
+That should keep future weapons aligned with the current working runtime mount instead of re-discovering the same handle and muzzle alignment rules by trial and error.
 
 ### How to verify an attachment is correct
 

@@ -38,6 +38,7 @@
             selfState.isGrounded ? '1' : '0',
             selfState.jumpHeldLast ? '1' : '0',
             selfState.sprinting ? '1' : '0',
+            selfState.fastBackpedal ? '1' : '0',
             selfState.alive === false ? '0' : '1',
             String(selfState.weaponId || '')
         ].join('|');

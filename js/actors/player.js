@@ -175,6 +175,7 @@
         return Number(entityConstantsApi().PLAYER_HEIGHT || 1.7);
     }
 
+    var BACKWARD_SPRINT_SPEED_MULT = 1.25;
     var MOUSE_SENSITIVITY = 0.002;
     var PITCH_LIMIT = 89 * (Math.PI / 180);
     var EPSILON = 0.001;
@@ -231,6 +232,7 @@
 
     var bobTimer = 0;
     var sprinting = false;
+    var fastBackpedal = false;
     var airborneSprintCarry = false;
     var lastMoveSpeedNorm = 0;
     var loadoutSlots = [];
@@ -246,7 +248,8 @@
         jumpHeldLast: false,
         airborneSprintCarry: false,
         moveSpeedNorm: 0,
-        sprinting: false
+        sprinting: false,
+        fastBackpedal: false
     };
     var inputStateScratch = {
         forward: false,
@@ -370,8 +373,16 @@
         return statusApi ? statusApi.isActionRestricted(actionType, now) : false;
     }
 
+    function isMovementAnimationLocked() {
+        return !!(avatarRigApi && avatarRigApi.isMovementAnimationLocked && avatarRigApi.isMovementAnimationLocked());
+    }
+
     function isMovementLocked(now) {
         return statusApi ? statusApi.isMovementLocked(now) : false;
+    }
+
+    function movementInputBlocked() {
+        return isMovementLocked() || isMovementAnimationLocked();
     }
 
     function isActionLocked(now) {
@@ -509,6 +520,7 @@
             avatarRigApi: avatarRigApi,
             runSpeed: effectiveRunSpeedForWeapon(currentWeaponId),
             sprinting: sprinting,
+            fastBackpedal: fastBackpedal,
             isGrounded: isGrounded,
             footY: posY - eyeHeight(),
             yaw: yaw,
@@ -759,6 +771,7 @@
         airborneSprintCarry = false;
         lastMoveSpeedNorm = 0;
         sprinting = false;
+        fastBackpedal = false;
     }
 
     function setSpawnPosition(x, z, feetY) {
@@ -787,21 +800,24 @@
         motionStateScratch.airborneSprintCarry = !!airborneSprintCarry;
         motionStateScratch.moveSpeedNorm = lastMoveSpeedNorm;
         motionStateScratch.sprinting = !!sprinting;
+        motionStateScratch.fastBackpedal = !!fastBackpedal;
         return motionStateScratch;
     }
 
     function buildCurrentInputState() {
-        inputStateScratch.forward = !!keys.forward;
-        inputStateScratch.backward = !!keys.backward;
-        inputStateScratch.left = !!keys.left;
-        inputStateScratch.right = !!keys.right;
-        inputStateScratch.jump = !!keys.jump;
-        inputStateScratch.sprint = !!isSprintInputActive();
+        var blocked = movementInputBlocked();
+        inputStateScratch.forward = !blocked && !!keys.forward;
+        inputStateScratch.backward = !blocked && !!keys.backward;
+        inputStateScratch.left = !blocked && !!keys.left;
+        inputStateScratch.right = !blocked && !!keys.right;
+        inputStateScratch.jump = !blocked && !!keys.jump;
+        inputStateScratch.sprint = !blocked && !!isSprintInputActive();
         inputStateScratch.adsActive = !!isScopeModeActive();
         return inputStateScratch;
     }
 
     function buildRollActionOptions() {
+        if (movementInputBlocked()) return null;
         var movingForward = !!keys.forward;
         var movingBackward = !!keys.backward;
         var movingLeft = !!keys.left;
@@ -847,6 +863,7 @@
             : (!!state.sprinting && !isGrounded);
         lastMoveSpeedNorm = Number(state.moveSpeedNorm || 0);
         sprinting = !!state.sprinting;
+        fastBackpedal = !!(state && state.fastBackpedal);
         return true;
     }
 
@@ -926,12 +943,14 @@
             state.isGrounded === false ? '0' : '1',
             state.jumpHeldLast ? '1' : '0',
             state.sprinting ? '1' : '0',
+            state.fastBackpedal ? '1' : '0',
             state.alive === false ? '0' : '1',
             String(state.weaponId || '')
         ].join('|');
     }
 
     function hasMovementIntentInput() {
+        if (movementInputBlocked()) return false;
         return !!(keys.forward || keys.backward || keys.left || keys.right || keys.jump || isSprintInputActive());
     }
 
@@ -942,6 +961,9 @@
         var baseRun = runSpeed() * moveMultiplier;
         var adsSpeed = baseJog * weaponAdsMoveMultiplier(weapon);
         if (inputState && inputState.adsActive) return adsSpeed;
+        if (inputState && inputState.sprint && inputState.backward && !inputState.forward) {
+            return baseJog * BACKWARD_SPRINT_SPEED_MULT;
+        }
         if (inputState && inputState.sprint) return baseRun;
         if (airborne) return Math.max(baseJog, baseRun);
         return baseJog;
@@ -1400,23 +1422,29 @@
         return !!sprinting;
     };
 
+    GamePlayer.isFastBackpedal = function () {
+        return !!fastBackpedal;
+    };
+
     GamePlayer.getAnimNetState = function () {
         return {
             moveSpeedNorm: lastMoveSpeedNorm,
             sprinting: !!sprinting,
+            fastBackpedal: !!fastBackpedal,
             aimPitch: pitch,
             equippedWeaponId: currentWeaponId
         };
     };
 
     GamePlayer.getNetworkInputState = function () {
+        var blocked = movementInputBlocked();
         return {
-            forward: !!keys.forward,
-            backward: !!keys.backward,
-            left: !!keys.left,
-            right: !!keys.right,
-            jump: !!keys.jump,
-            sprint: !!isSprintInputActive(),
+            forward: !blocked && !!keys.forward,
+            backward: !blocked && !!keys.backward,
+            left: !blocked && !!keys.left,
+            right: !blocked && !!keys.right,
+            jump: !blocked && !!keys.jump,
+            sprint: !blocked && !!isSprintInputActive(),
             adsActive: !!isScopeModeActive()
         };
     };

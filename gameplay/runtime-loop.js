@@ -37,7 +37,10 @@
                     ? runtime.GamePlayer.getAnimNetState()
                     : null;
                 runtime.GameUI.updateSprintEffects({
-                    intensity: runtime.GamePlayer && runtime.GamePlayer.isSprinting && runtime.GamePlayer.isSprinting()
+                    intensity: runtime.GamePlayer && (
+                        (runtime.GamePlayer.isSprinting && runtime.GamePlayer.isSprinting()) ||
+                        (runtime.GamePlayer.isFastBackpedal && runtime.GamePlayer.isFastBackpedal())
+                    )
                         ? Number(sprintAnimState && sprintAnimState.moveSpeedNorm || 0)
                         : 0,
                     adsActive: !!(sprintAdsState && sprintAdsState.active),
