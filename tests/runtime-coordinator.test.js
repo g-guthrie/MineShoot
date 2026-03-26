@@ -309,6 +309,7 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
   let sprinting = true;
   let sprintRequested = true;
   let cancelSprintCalls = 0;
+  let tempCancelCalls = 0;
   let fireCalls = 0;
   const playerActions = [];
 
@@ -342,6 +343,15 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
           },
           isSprinting() {
             return sprinting;
+          },
+          isSprintKeyHeld() {
+            return sprintRequested;
+          },
+          cancelSprintTemporarily() {
+            tempCancelCalls += 1;
+            sprinting = false;
+            sprintRequested = false;
+            return true;
           },
           cancelSprintUntilRelease() {
             cancelSprintCalls += 1;
@@ -468,7 +478,8 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
 
   capturedStartOptions.tryPlayerFire();
 
-  assert.equal(cancelSprintCalls, 1);
+  assert.equal(tempCancelCalls, 1);
+  assert.equal(cancelSprintCalls, 0);
   assert.equal(fireCalls, 1);
   assert.deepEqual(playerActions, ['fire']);
 });

@@ -218,7 +218,7 @@ test('world runtime rebuild removes old world objects while reusing shared block
   const firstGroundMeshes = scene.children.filter((object) => object.userData && object.userData.isBiomeGround);
   const firstCollidables = GameWorld.getCollidables();
   assert.equal(firstGroundMeshes.length, 1);
-  assert.equal(firstCollidables.length, 2);
+  assert.equal(firstCollidables.length, 3);
   assert.equal(firstCollidables[0].geometry, firstCollidables[1].geometry);
   const firstSharedGeometry = firstCollidables[0].geometry;
   const firstGroundMesh = firstGroundMeshes[0];

@@ -499,6 +499,43 @@ test('canceling sprint holds sprint off until the sprint key is pressed again', 
   assertPlayerMatchesExpected(harness.player, expected);
 });
 
+test('temporary sprint cancel from firing resumes automatically while sprint is still held', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+
+  try {
+    harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+    harness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+    stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
+    harness.player.update(0.1);
+    assertPlayerMatchesExpected(harness.player, expected);
+
+    assert.equal(harness.player.cancelSprintTemporarily(280), true);
+    assert.equal(harness.player.getNetworkInputState().sprint, false);
+    stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: false }), harness.buildStepOptions(0.1));
+    harness.player.update(0.1);
+    assertPlayerMatchesExpected(harness.player, expected);
+    assert.equal(harness.player.isSprinting(), false);
+
+    now += 150;
+    stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: false }), harness.buildStepOptions(0.1));
+    harness.player.update(0.1);
+    assertPlayerMatchesExpected(harness.player, expected);
+    assert.equal(harness.player.isSprinting(), false);
+
+    now += 150;
+    stepAuthoritativeMovement(expected, createInputState({ forward: true, sprint: true }), harness.buildStepOptions(0.1));
+    harness.player.update(0.1);
+    assertPlayerMatchesExpected(harness.player, expected);
+    assert.equal(harness.player.isSprinting(), true);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('equipped sniper enters scope movement slowdown automatically', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);

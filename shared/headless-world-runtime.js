@@ -121,6 +121,48 @@ export function createRotatedBoxAabb(x, y, z, w, h, d, rotY, rotX) {
   };
 }
 
+function headlessGeometryBounds(geometry) {
+  if (!geometry) return null;
+  if (
+    typeof geometry.width === 'number' &&
+    typeof geometry.height === 'number' &&
+    typeof geometry.depth === 'number'
+  ) {
+    return {
+      w: Math.max(0.001, Number(geometry.width || 0)),
+      h: Math.max(0.001, Number(geometry.height || 0)),
+      d: Math.max(0.001, Number(geometry.depth || 0))
+    };
+  }
+  if (typeof geometry.radius === 'number') {
+    const radius = Math.max(0.001, Number(geometry.radius || 0));
+    const diameter = radius * 2;
+    return { w: diameter, h: diameter, d: diameter };
+  }
+  if (typeof geometry.radiusTop === 'number' || typeof geometry.radiusBottom === 'number') {
+    const radius = Math.max(
+      Math.max(0.001, Number(geometry.radiusTop || 0)),
+      Math.max(0.001, Number(geometry.radiusBottom || 0))
+    );
+    return {
+      w: radius * 2,
+      h: Math.max(0.001, Number(geometry.height || (radius * 2))),
+      d: radius * 2
+    };
+  }
+  if (typeof geometry.tube === 'number' || typeof geometry.radius === 'number') {
+    const major = Math.max(0.001, Number(geometry.radius || 0));
+    const tube = Math.max(0.001, Number(geometry.tube || 0));
+    const diameter = (major + tube) * 2;
+    return {
+      w: diameter,
+      h: tube * 2,
+      d: diameter
+    };
+  }
+  return null;
+}
+
 function createHeadlessMaterialLibrary() {
   return {
     getLambert(spec) { return createHeadlessMaterial(spec); },
@@ -300,13 +342,28 @@ export function createHeadlessRecorder() {
     ctx,
     place: {
       addBlock(x, y, z, w, h, d, material, isSolid) {
-        return record(createRotatedBoxAabb(x, y, z, w, h, d, 0, 0), isSolid, x, y, z, material, 0, 0);
+        void isSolid;
+        return record(createRotatedBoxAabb(x, y, z, w, h, d, 0, 0), true, x, y, z, material, 0, 0);
       },
       addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
-        return record(createRotatedBoxAabb(x, y, z, w, h, d, rotY || 0, tiltX || 0), isSolid, x, y, z, material, rotY || 0, tiltX || 0);
+        void isSolid;
+        return record(createRotatedBoxAabb(x, y, z, w, h, d, rotY || 0, tiltX || 0), true, x, y, z, material, rotY || 0, tiltX || 0);
       },
-      addDecor() {
-        return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, userData: {} };
+      addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
+        const bounds = headlessGeometryBounds(geometry);
+        const mesh = record(
+          bounds ? createRotatedBoxAabb(x, y, z, bounds.w, bounds.h, bounds.d, rotY || 0, rotX || 0) : null,
+          !!bounds,
+          x,
+          y,
+          z,
+          material,
+          rotY || 0,
+          rotX || 0,
+          {}
+        );
+        mesh.rotation.z = Number(rotZ || 0);
+        return mesh;
       },
       addBoxCollider(spec) {
         const value = spec || {};

@@ -312,6 +312,11 @@
             var enemyApi = gameEnemyApi();
             var audioApi = gameAudioApi();
             var currentCamera = camera();
+            var currentWeapon = hitscanApi && hitscanApi.getCurrentWeapon ? hitscanApi.getCurrentWeapon() : null;
+            var fireSprintCancelMs = Math.max(
+                220,
+                Math.min(420, Number(currentWeapon && currentWeapon.cooldownMs || 0) * 0.85 || 320)
+            );
             if (multiplayerMode()) {
                 if (selfCombat && selfCombat.canUseGameplayActions && !selfCombat.canUseGameplayActions()) return;
                 if (!selfCombat && netView) {
@@ -321,8 +326,12 @@
                 }
             }
             var sprintRequested = !!(player && player.getNetworkInputState && player.getNetworkInputState().sprint);
-            if ((sprintRequested || (player && player.isSprinting && player.isSprinting())) &&
-                (!player || !player.cancelSprintUntilRelease || !player.cancelSprintUntilRelease())) {
+            var sprintKeyHeld = !!(player && player.isSprintKeyHeld && player.isSprintKeyHeld());
+            if ((sprintRequested || sprintKeyHeld || (player && player.isSprinting && player.isSprinting())) &&
+                (!player || !(
+                    (player.cancelSprintTemporarily && player.cancelSprintTemporarily(fireSprintCancelMs)) ||
+                    (player.cancelSprintUntilRelease && player.cancelSprintUntilRelease())
+                ))) {
                 return;
             }
             if (abilitiesApi && abilitiesApi.isDeadeyeActive && abilitiesApi.isDeadeyeActive()) return;

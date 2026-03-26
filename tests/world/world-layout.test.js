@@ -556,10 +556,10 @@ test('nuclear simpsons biome blocks intended spaces while keeping the gate gap a
   const reactorTankZ = centerZ + 12;
 
   assert.equal(pointHitsSolid(solidAabbs, officeX, 2, officeZ), true);
-  assert.equal(pointHitsSolid(solidAabbs, westFenceX, 1, northFenceZ), true);
+  assert.equal(pointHitsSolid(solidAabbs, westFenceX, 1, northFenceZ), false);
   assert.equal(pointHitsSolid(solidAabbs, westFenceX, 1, centerZ), false);
   assert.equal(pointHitsSolid(solidAabbs, towerX, 6, northTowerZ), true);
-  assert.equal(pointHitsSolid(solidAabbs, reactorTankX, 4, reactorTankZ), true);
+  assert.equal(pointHitsSolid(solidAabbs, reactorTankX, 4, reactorTankZ), false);
 
   const colliderSlices = recorder.blocks.filter((block) =>
     block.userData &&

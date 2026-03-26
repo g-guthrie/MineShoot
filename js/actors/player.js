@@ -235,6 +235,8 @@
     var fastBackpedal = false;
     var airborneSprintCarry = false;
     var lastMoveSpeedNorm = 0;
+    var sprintTemporarilyCanceledUntil = 0;
+    var sprintTemporaryResumeTimer = 0;
     var loadoutSlots = [];
     var motionStateScratch = {
         x: 0,
@@ -459,14 +461,43 @@
     }
 
     function isSprintInputActive() {
-        return !!keys.sprint && !sprintCanceledUntilRelease;
+        return !!keys.sprint &&
+            !sprintCanceledUntilRelease &&
+            Number(sprintTemporarilyCanceledUntil || 0) <= nowMs();
+    }
+
+    function clearSprintTemporaryResumeTimer() {
+        if (sprintTemporaryResumeTimer && typeof clearTimeout === 'function') {
+            clearTimeout(sprintTemporaryResumeTimer);
+        }
+        sprintTemporaryResumeTimer = 0;
     }
 
     function cancelSprintUntilRelease() {
         var hadSprint = !!keys.sprint || !!sprinting || sprintCanceledUntilRelease;
         if (!hadSprint) return false;
         if (keys.sprint) sprintCanceledUntilRelease = true;
+        clearSprintTemporaryResumeTimer();
+        sprintTemporarilyCanceledUntil = 0;
         sprinting = false;
+        return true;
+    }
+
+    function cancelSprintTemporarily(durationMs) {
+        var duration = Math.max(0, Number(durationMs || 0));
+        var hadSprint = !!keys.sprint || !!sprinting || Number(sprintTemporarilyCanceledUntil || 0) > nowMs();
+        if (!hadSprint || duration <= 0) return false;
+        sprintCanceledUntilRelease = false;
+        sprintTemporarilyCanceledUntil = nowMs() + duration;
+        sprinting = false;
+        clearSprintTemporaryResumeTimer();
+        if (typeof setTimeout === 'function') {
+            sprintTemporaryResumeTimer = setTimeout(function () {
+                sprintTemporaryResumeTimer = 0;
+                if (!keys.sprint || sprintCanceledUntilRelease) return;
+                sprintTemporarilyCanceledUntil = 0;
+            }, duration);
+        }
         return true;
     }
 
@@ -717,6 +748,8 @@
             if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
                 keys.sprint = false;
                 sprintCanceledUntilRelease = false;
+                clearSprintTemporaryResumeTimer();
+                sprintTemporarilyCanceledUntil = 0;
             }
             if (matchesBinding('jump', e, 'Space')) keys.jump = false;
             },
@@ -772,6 +805,8 @@
         lastMoveSpeedNorm = 0;
         sprinting = false;
         fastBackpedal = false;
+        clearSprintTemporaryResumeTimer();
+        sprintTemporarilyCanceledUntil = 0;
     }
 
     function setSpawnPosition(x, z, feetY) {
@@ -1416,6 +1451,14 @@
 
     GamePlayer.cancelSprintUntilRelease = function () {
         return cancelSprintUntilRelease();
+    };
+
+    GamePlayer.cancelSprintTemporarily = function (durationMs) {
+        return cancelSprintTemporarily(durationMs);
+    };
+
+    GamePlayer.isSprintKeyHeld = function () {
+        return !!keys.sprint;
     };
 
     GamePlayer.isSprinting = function () {

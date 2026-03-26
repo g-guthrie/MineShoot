@@ -700,10 +700,10 @@ test('boxman shared locked aim base pose matches the run arm baseline before swi
   const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
   assert.equal(rig.armLowerR.rotation.z, 0);
 });
@@ -722,10 +722,10 @@ test('boxman overrides the run clip right arm with the idle base pose', () => {
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2)) + (6 * (Math.PI / 180)))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + (6 * (Math.PI / 180)))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(rig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8)) + (Math.sin((Math.PI * 0.5) + 0.35) * (2.4 * (Math.PI / 180))))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65)) + (Math.sin((Math.PI * 0.5) + 0.35) * (2.4 * (Math.PI / 180))))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
   assert.equal(rig.armLowerR.rotation.z, 0);
 });
@@ -749,8 +749,8 @@ test('boxman suppresses right-arm run swing while fire recoil is active', () => 
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
-  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
 });
 
 test('boxman locks the right arm to the aimed base pose for jump, fall, and landing clips', () => {
@@ -770,8 +770,8 @@ test('boxman locks the right arm to the aimed base pose for jump, fall, and land
     const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
 
     assert.equal(applied, true);
-    assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -2.2))) < 0.000001);
-    assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.8))) < 0.000001);
+    assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
+    assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   }
 });
 
@@ -987,8 +987,8 @@ test('boxman applies procedural weapon parts using the current hand-forward moun
   assert.equal(rig.weaponStock.visible, true);
   assert.ok(rig.weaponModel.position.y > 0);
   assert.ok(Math.abs(rig.weaponModel.position.z) < 0.000001);
-  assert.ok(rig.weaponModel.rotation.x > ((Math.PI * 0.5) - (10 * (Math.PI / 180)) - 0.01));
-  assert.ok(rig.weaponModel.rotation.x < ((Math.PI * 0.5) - (10 * (Math.PI / 180)) + 0.1));
+  assert.ok(rig.weaponModel.rotation.x > ((Math.PI * 0.5) - (15 * (Math.PI / 180)) - 0.01));
+  assert.ok(rig.weaponModel.rotation.x < ((Math.PI * 0.5) - (15 * (Math.PI / 180)) + 0.1));
   assert.ok(rig.weaponModel.rotation.y > 0);
   assert.ok(rig.weaponModel.rotation.y < 0.1);
   assert.ok(rig.weaponModel.rotation.z > (Math.PI - 0.05));

@@ -247,6 +247,44 @@ import {
         return colliderMaterial;
     }
 
+    function geometryLocalBounds(geometry) {
+        if (!geometry) return null;
+        if (!geometry.boundingBox) {
+            if (typeof geometry.computeBoundingBox === 'function') {
+                geometry.computeBoundingBox();
+            } else if (
+                typeof geometry.width === 'number' &&
+                typeof geometry.height === 'number' &&
+                typeof geometry.depth === 'number'
+            ) {
+                geometry.boundingBox = new THREE.Box3(
+                    new THREE.Vector3(-geometry.width * 0.5, -geometry.height * 0.5, -geometry.depth * 0.5),
+                    new THREE.Vector3(geometry.width * 0.5, geometry.height * 0.5, geometry.depth * 0.5)
+                );
+            } else if (typeof geometry.radius === 'number') {
+                var radius = Math.max(0.001, Number(geometry.radius || 0));
+                geometry.boundingBox = new THREE.Box3(
+                    new THREE.Vector3(-radius, -radius, -radius),
+                    new THREE.Vector3(radius, radius, radius)
+                );
+            }
+        }
+        return geometry.boundingBox || null;
+    }
+
+    function markDecorSolid(mesh) {
+        if (!mesh || !mesh.geometry) return false;
+        var localBounds = geometryLocalBounds(mesh.geometry);
+        if (!localBounds) return false;
+        mesh.updateMatrixWorld(true);
+        var worldBounds = localBounds.clone();
+        worldBounds.applyMatrix4(mesh.matrixWorld);
+        mesh.userData = mesh.userData || {};
+        mesh.userData.collisionBox = worldBounds;
+        collidables.push(mesh);
+        return true;
+    }
+
     function disposeObjectGeometry(object, disposedGeometries) {
         if (!object || !object.geometry || typeof object.geometry.dispose !== 'function') return;
         if (object.geometry.userData && object.geometry.userData.__mayhemSharedGeometry) return;
@@ -465,7 +503,8 @@ import {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             addTrackedObject(scene, mesh);
-            if (isSolid !== false) markSolid(mesh);
+            void isSolid;
+            markSolid(mesh);
             return mesh;
         }
 
@@ -478,7 +517,8 @@ import {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             addTrackedObject(scene, mesh);
-            if (isSolid !== false) markSolid(mesh);
+            void isSolid;
+            markSolid(mesh);
             return mesh;
         }
 
@@ -491,6 +531,7 @@ import {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             addTrackedObject(scene, mesh);
+            markDecorSolid(mesh);
             return mesh;
         }
 
