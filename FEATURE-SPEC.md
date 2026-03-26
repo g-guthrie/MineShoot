@@ -1,4 +1,4 @@
-# Feature Spec: MAYHEM Web FPS (Menu + Environment V2)
+# Feature Spec: PvP Web FPS (Menu + Environment V2)
 
 ## Product Goal
 Fast browser shooter with one-click session entry:

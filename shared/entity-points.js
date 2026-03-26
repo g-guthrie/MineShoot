@@ -10,7 +10,7 @@ export const ENTITY_AIM_TARGET_OFFSET_Y = 1.0;
 export const DAMAGE_POINT_OFFSET_Y = 1.06;
 export const MARKER_POINT_OFFSET_Y = 2.25;
 export const HITSCAN_ORIGIN_FORWARD_OFFSET = 0.35;
-export const ROLL_BODY_HITBOX_VOLUME_SCALE = 0.1875;
+export const ROLL_BODY_HITBOX_VOLUME_SCALE = 0.0853125;
 export const ROLL_BODY_HITBOX_LINEAR_SCALE = Math.cbrt(ROLL_BODY_HITBOX_VOLUME_SCALE);
 
 export function entityFeetY(entityY) {

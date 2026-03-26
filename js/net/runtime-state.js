@@ -1,5 +1,5 @@
 /**
- * runtime-state.js - Mutable authoritative runtime state for the Mayhem net lane.
+ * runtime-state.js - Mutable authoritative runtime state for the PvP net lane.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameNetRuntimeState
  */
 (function () {

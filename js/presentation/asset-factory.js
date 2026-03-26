@@ -1,5 +1,5 @@
 /**
- * asset-factory.js - Procedural asset builders for the HYTOPIA example list, adapted to Mayhem.
+ * asset-factory.js - Procedural asset builders for the HYTOPIA example list, adapted to PvP.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameAssetFactory
  */
 (function () {
@@ -829,7 +829,7 @@
         if (typeof document === 'undefined') return null;
         options = options || {};
         var el = document.createElement('span');
-        el.textContent = String(options.text || 'MAYHEM FONT SAMPLE');
+        el.textContent = String(options.text || 'PvP FONT SAMPLE');
         el.style.fontFamily = "'Orbitron', 'Courier New', monospace";
         el.style.fontSize = options.fontSize || '20px';
         el.style.letterSpacing = '0.16em';

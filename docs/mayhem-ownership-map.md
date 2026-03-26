@@ -1,12 +1,12 @@
-# Mayhem Ownership Map
+# PvP Ownership Map
 
-This document defines the single-owner boundaries for Mayhem's live runtime.
+This document defines the single-owner boundaries for PvP's live runtime.
 
 If two systems appear to own the same behavior, treat that as a bug until proven otherwise.
 
 ## Core Rule
 
-Mayhem must have one owner for each of these:
+PvP must have one owner for each of these:
 
 - authoritative movement
 - authoritative world bounds and collision

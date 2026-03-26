@@ -54,17 +54,11 @@ import {
     var WEAPON_MODEL_ROTATE_Y = 0;
     var WEAPON_MODEL_ROTATE_Z = Math.PI;
     var torsoCarryPositionScratch = new THREE.Vector3();
-    var rightArmParentWorldQuatScratch = new THREE.Quaternion();
-    var modelRootWorldQuatScratch = new THREE.Quaternion();
-    var rightArmRelativeQuatScratch = new THREE.Quaternion();
-    var rightArmRelativeEulerScratch = new THREE.Euler();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
-    var IDLE_RIGHT_ARM_UPPER_BASE_LEFT_X = 20 * (Math.PI / 180);
-    var IDLE_RIGHT_ARM_UPPER_BASE_RIGHT_X = -15 * (Math.PI / 180);
     var IDLE_RIGHT_ARM_UPPER_BASE = {
-        x: IDLE_RIGHT_ARM_UPPER_BASE_RIGHT_X,
-        y: 0,
+        x: 21.02 * (Math.PI / 180),
+        y: -7.92 * (Math.PI / 180),
         z: 11.86 * (Math.PI / 180)
     };
     var IDLE_RIGHT_ARM_LOWER_BASE = {
@@ -72,6 +66,7 @@ import {
         y: 0,
         z: 0
     };
+    var IDLE_RIGHT_ARM_OUT_UPPER_X = IDLE_RIGHT_ARM_UPPER_BASE.x + (IDLE_AIM_NEUTRAL_PITCH * IDLE_AIM_UPPER_PITCH_SCALE);
     var IDLE_RIGHT_ARM_OUT_LOWER_X = IDLE_RIGHT_ARM_LOWER_BASE.x + (IDLE_AIM_NEUTRAL_PITCH * IDLE_AIM_LOWER_PITCH_SCALE);
 
     var templateAsset = null;
@@ -320,7 +315,7 @@ import {
             : (side * 0.008 * strength);
         var lowerArmPitch = Number.isFinite(Number(opts.lowerArmPitch))
             ? Number(opts.lowerArmPitch)
-            : (0.11 * strength);
+            : (0.165 * strength);
         var weaponKick = Number.isFinite(Number(opts.weaponKick))
             ? Number(opts.weaponKick)
             : (-0.04 * strength);
@@ -527,38 +522,16 @@ import {
         return Math.abs(upperYaw) >= 0.0001;
     }
 
-    function resolveLockedRightArmParentYawCompensation(rig) {
-        if (!rig || !rig.armUpperR || !rig.armUpperR.parent || !rig.modelRoot) return 0;
-        if (!rig.armUpperR.parent.getWorldQuaternion || !rig.modelRoot.getWorldQuaternion) return 0;
-        rig.armUpperR.parent.getWorldQuaternion(rightArmParentWorldQuatScratch);
-        rig.modelRoot.getWorldQuaternion(modelRootWorldQuatScratch);
-        rightArmRelativeQuatScratch.copy(modelRootWorldQuatScratch).invert().multiply(rightArmParentWorldQuatScratch);
-        rightArmRelativeEulerScratch.setFromQuaternion(rightArmRelativeQuatScratch, 'YXZ');
-        return -normalizeAngle(Number(rightArmRelativeEulerScratch.y || 0));
-    }
-
-    function resolveLockedRightArmUpperBaseX(referenceYaw) {
-        return Number(referenceYaw || 0) < -0.0001
-            ? IDLE_RIGHT_ARM_UPPER_BASE_LEFT_X
-            : IDLE_RIGHT_ARM_UPPER_BASE_RIGHT_X;
-    }
-
-    function resolveLockedRightArmOutUpperX(referenceYaw) {
-        return resolveLockedRightArmUpperBaseX(referenceYaw) + (IDLE_AIM_NEUTRAL_PITCH * IDLE_AIM_UPPER_PITCH_SCALE);
-    }
-
     function applyLockedRightArmAimBasePose(rig) {
         if (!rig) return false;
-        var parentYawCompensation = resolveLockedRightArmParentYawCompensation(rig);
-        var upperOutX = resolveLockedRightArmOutUpperX(parentYawCompensation);
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x = upperOutX;
-            rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y + (parentYawCompensation * IDLE_AIM_UPPER_YAW_SCALE);
+            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X;
+            rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
             rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
         }
         if (rig.armLowerR && rig.armLowerR.rotation) {
             rig.armLowerR.rotation.x = IDLE_RIGHT_ARM_OUT_LOWER_X;
-            rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y + (parentYawCompensation * IDLE_AIM_LOWER_YAW_SCALE);
+            rig.armLowerR.rotation.y = IDLE_RIGHT_ARM_LOWER_BASE.y;
             rig.armLowerR.rotation.z = IDLE_RIGHT_ARM_LOWER_BASE.z;
         }
         return !!(
@@ -586,9 +559,8 @@ import {
         if (!rig) return false;
         var weight = clamp01(stopSettleWeight) * STOP_SETTLE_RIGHT_ARM_RECOVERY_SCALE;
         if (!(weight > 0)) return false;
-        var settleUpperOutX = resolveLockedRightArmOutUpperX(rig.armUpperR && rig.armUpperR.rotation ? rig.armUpperR.rotation.y : 0);
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x += (settleUpperOutX - Number(rig.armUpperR.rotation.x || 0)) * weight;
+            rig.armUpperR.rotation.x += (IDLE_RIGHT_ARM_OUT_UPPER_X - Number(rig.armUpperR.rotation.x || 0)) * weight;
             rig.armUpperR.rotation.y += (IDLE_RIGHT_ARM_UPPER_BASE.y - Number(rig.armUpperR.rotation.y || 0)) * weight;
             rig.armUpperR.rotation.z += (IDLE_RIGHT_ARM_UPPER_BASE.z - Number(rig.armUpperR.rotation.z || 0)) * weight;
         }
@@ -1742,9 +1714,7 @@ import {
         resolveWeaponVisualEntry: resolveWeaponVisualEntry,
         applyWeaponPartMesh: applyWeaponPartMesh,
         applyWeaponVisualState: applyWeaponVisualState,
-        resolveLockedRightArmOutUpperX: resolveLockedRightArmOutUpperX,
         applyLockedRightArmAimBasePose: applyLockedRightArmAimBasePose,
-        resolveLockedRightArmParentYawCompensation: resolveLockedRightArmParentYawCompensation,
         applyStopSettleRightArmRecoveryPose: applyStopSettleRightArmRecoveryPose,
         clipUsesLockedRightArmAimBasePose: clipUsesLockedRightArmAimBasePose,
         applyRunRightArmIdleBasePose: applyRunRightArmIdleBasePose,

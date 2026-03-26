@@ -145,7 +145,7 @@ test('actor visual factory hides the head hitbox and shrinks the body hitbox dur
 
   visual.syncHitboxes({ x: 10, y: 2, z: -4 }, { rolling: true });
 
-  const expectedScale = Math.cbrt(0.1875);
+  const expectedScale = Math.cbrt(0.0853125);
   assert.equal(visual.headHitbox.visible, false);
   assert.ok(Math.abs(visual.bodyHitbox.scale.x - expectedScale) < 1e-9);
   assert.ok(Math.abs(visual.bodyHitbox.scale.y - expectedScale) < 1e-9);

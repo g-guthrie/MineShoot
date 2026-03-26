@@ -309,7 +309,7 @@
             rootPosition = rootPosition || root.position;
             if (!rootPosition) return;
             if (bodyHitbox) {
-                var rollBodyLinearScale = Math.max(0.01, Number(entityPoints.ROLL_BODY_HITBOX_LINEAR_SCALE || Math.cbrt(0.1875)));
+                var rollBodyLinearScale = Math.max(0.01, Number(entityPoints.ROLL_BODY_HITBOX_LINEAR_SCALE || Math.cbrt(0.0853125)));
                 var bodyBaseCenterY = entityPoints.entityBodyHitboxYFromFeet
                     ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y)
                     : (rootPosition.y + 0.7625);

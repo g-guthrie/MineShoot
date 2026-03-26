@@ -1,5 +1,5 @@
 /**
- * runtime-loop.js - Presentation-owned frame rendering for Mayhem.
+ * runtime-loop.js - Presentation-owned frame rendering for PvP.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GamePresentationRuntimeLoop
  */
 (function () {

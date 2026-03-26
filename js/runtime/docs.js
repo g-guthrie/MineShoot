@@ -1453,7 +1453,7 @@
         renderSubnav(data);
         renderHint();
         if (titleEl) {
-            titleEl.textContent = 'MAYHEM :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
+            titleEl.textContent = 'PvP :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
         }
         contentEl.innerHTML = buildContent(state.activePage, data);
     }

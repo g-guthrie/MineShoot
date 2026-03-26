@@ -43,10 +43,14 @@
     }
 
     function applyBrandingOverrides() {
-        document.title = 'Mayhem';
+        document.title = 'PvP';
+        var modeTitle = document.getElementById('mode-screen-title');
+        if (modeTitle) {
+            modeTitle.textContent = 'PvP';
+        }
         var docsTitle = document.getElementById('docs-title');
-        if (docsTitle && /minecraft fps/i.test(docsTitle.textContent || '')) {
-            docsTitle.textContent = String(docsTitle.textContent).replace(/minecraft fps/ig, 'MAYHEM');
+        if (docsTitle) {
+            docsTitle.textContent = String(docsTitle.textContent || '').replace(/minecraft fps|mayhem/ig, 'PvP');
         }
     }
 

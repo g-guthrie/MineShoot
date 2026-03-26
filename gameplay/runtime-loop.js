@@ -1,5 +1,5 @@
 /**
- * runtime-loop.js - Gameplay-owned frame step for Mayhem.
+ * runtime-loop.js - Gameplay-owned frame step for PvP.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameGameplayRuntimeLoop
  */
 (function () {

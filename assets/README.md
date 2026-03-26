@@ -1,6 +1,6 @@
 # assets
 
-Owns Mayhem-specific audio, art, UI treatment, world art packs, branding, and content manifests.
+Owns PvP-specific audio, art, UI treatment, world art packs, branding, and content manifests.
 
 Status:
 - Rewrite landing zone created.

@@ -1,8 +1,8 @@
-# Mayhem Rewrite Plan
+# PvP Rewrite Plan
 
 Historical note: this file started as a branch-stage log. Current live terminology uses **Offline Sandbox** as the canonical offline mode name.
 
-This branch starts the clean Mayhem rewrite around one rule:
+This branch starts the clean PvP rewrite around one rule:
 
 - the server is authoritative for networked play
 - the client may predict, but prediction is disposable
@@ -14,7 +14,7 @@ Completed in this branch:
 
 - removed the older duplicate offline sandbox runtime path
 - removed older sandbox-specific menu/UI wiring that duplicated the live shell
-- removed the local-match bootstrap path from the main Mayhem runtime
+- removed the local-match bootstrap path from the main PvP runtime
 - removed outdated sandbox-specific tests and old offline launch expectations
 - removed all Demonic code, docs, tests, and alternate entry paths
 - created the target top-level ownership folders
@@ -59,8 +59,8 @@ The validated architecture findings that justify this rewrite live here:
 
 That document is the source of truth for:
 
-- what Mayhem got right and must preserve
-- what Mayhem got wrong structurally
+- what PvP got right and must preserve
+- what PvP got wrong structurally
 - the rewrite rules that replace the old architecture
 - the implementation priorities for the next passes
 
@@ -89,5 +89,5 @@ The first rewrite slice must satisfy this:
 - no gameplay ownership in `app`
 - no presentation ownership in `gameplay`
 - no client-only rules forks
-- no duplicate offline-only ownership forks in Mayhem
+- no duplicate offline-only ownership forks in PvP
 - all multiplayer bug fixes should land on the owning module, not on adapter glue

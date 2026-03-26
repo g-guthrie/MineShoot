@@ -1,8 +1,8 @@
-# Mayhem Rewrite Findings
+# PvP Rewrite Findings
 
 Current terminology: **Offline Sandbox** is the canonical offline mode name.
 
-This document captures the major issues that justified the clean Mayhem rewrite, what the current game got right, and what the rewrite must preserve while fixing the internals.
+This document captures the major issues that justified the clean PvP rewrite, what the current game got right, and what the rewrite must preserve while fixing the internals.
 
 These are architecture findings, not optional ideas.
 
@@ -19,12 +19,12 @@ The remaining rewrite pressure is mostly `js/app` surface reduction, presentatio
 
 ## 1. Runtime and Game Lifecycle Is Monolithic
 
-Mayhem got right:
+PvP got right:
 - It launches into a playable game.
 - Menu, launch, gameplay, and return-to-menu all exist.
 - The product behavior is real.
 
-Mayhem got wrong:
+PvP got wrong:
 - The worst lifecycle knot has been reduced, but the app coordinator still owns a broad gameplay/runtime surface.
 - Launch flow, session contracts, runtime boot, HUD/session sync, and frame orchestration are app-owned now, but they still need more shrink-and-isolate work inside `js/app`.
 - Lifecycle ownership is clearer, but some compatibility and global wiring still make isolated testing harder than it should be.
@@ -36,12 +36,12 @@ Rewrite rule:
 
 ## 2. Networking Ownership Is Too Diffuse
 
-Mayhem got right:
+PvP got right:
 - It has a real authoritative multiplayer lane.
 - It sends sequenced input, ingests snapshots, and reconciles state.
 - It proves the browser multiplayer model works.
 
-Mayhem got wrong:
+PvP got wrong:
 - `GameNet` is still too broad even after state/core/view extraction.
 - Connection lifecycle, transport, selectors, remote entities, notices, and sync logic are spread across too many modules.
 - Older bridge and wrapper layers hid dependencies and exposed too much mixed ownership before the recent cleanup.
@@ -55,12 +55,12 @@ Rewrite rule:
 
 ## 3. Local Prediction vs Authoritative Truth Is Not Explicit Enough
 
-Mayhem got right:
+PvP got right:
 - It understands server authority.
 - It tracks acked and pending input.
 - It attempts proper reconciliation.
 
-Mayhem got wrong:
+PvP got wrong:
 - The line between local predicted state and authoritative state is not explicit enough.
 - Too much gameplay code can indirectly affect what should be server-owned truth.
 
@@ -71,11 +71,11 @@ Rewrite rule:
 
 ## 4. Movement and Reconciliation Path Is Hard To Reason About
 
-Mayhem got right:
+PvP got right:
 - Shared authoritative movement and replay logic are the right idea.
 - Replaying pending inputs from authoritative snapshots is the correct multiplayer model.
 
-Mayhem got wrong:
+PvP got wrong:
 - Motion sync is entangled with self-sync, combat state, and broader runtime glue.
 - The exact correction path is hard to isolate.
 
@@ -87,11 +87,11 @@ Rewrite rule:
 
 ## 5. Self Combat State Is Mixed With Old UI and Global Runtime Assumptions
 
-Mayhem got right:
+PvP got right:
 - One place owns HP, armor, invulnerability, and respawn.
 - Multiplayer sync of self survivability state exists.
 
-Mayhem got wrong:
+PvP got wrong:
 - Local and multiplayer concerns are mixed.
 - The survivability contract is tied to the old global UI/runtime model.
 
@@ -102,12 +102,12 @@ Rewrite rule:
 
 ## 6. Weapon, Ammo, and Reload State Is Not Cleanly Owned
 
-Mayhem got right:
+PvP got right:
 - Server already owns weapon and ammo truth.
 - Equip is explicit.
 - Reload comes back via authoritative self snapshot.
 
-Mayhem got wrong:
+PvP got wrong:
 - Send logic, server handling, local weapon presentation, and ammo sync are spread across too many layers.
 
 Rewrite rule:
@@ -118,12 +118,12 @@ Rewrite rule:
 
 ## 7. Fire and Hit Confirmation Path Is Structurally Messy
 
-Mayhem got right:
+PvP got right:
 - Local fire feel is immediate.
 - Server owns real damage and death.
 - Shared hitscan authority already exists.
 
-Mayhem got wrong:
+PvP got wrong:
 - Fire payload construction, client feel, server truth, and incoming hit feedback are structurally scattered.
 
 Rewrite rule:
@@ -133,12 +133,12 @@ Rewrite rule:
 
 ## 8. Ability Networking Is Scattered
 
-Mayhem got right:
+PvP got right:
 - Server decides whether a cast succeeds.
 - Protocol already supports request, ok/reject, event, and loadout changes.
 - Predicted local commit exists.
 
-Mayhem got wrong:
+PvP got wrong:
 - Input prep, send, local commit, result handling, and feedback sync are structurally scattered.
 
 Rewrite rule:
@@ -148,12 +148,12 @@ Rewrite rule:
 
 ## 9. Throwable Networking Is a Giant Mixed System
 
-Mayhem got right:
+PvP got right:
 - Throws are server-authoritative.
 - Predicted throws exist for feel.
 - There is a full protocol for throw ack/reject/projectiles/fire-zones/events.
 
-Mayhem got wrong:
+PvP got wrong:
 - Inventory state, prediction, reconciliation, projectile rendering, and network event effects are mixed into one huge owner plus glue.
 
 Rewrite rule:
@@ -164,12 +164,12 @@ Rewrite rule:
 
 ## 10. Remote Entity Rendering Is Too Coupled To Old Runtime Globals
 
-Mayhem got right:
+PvP got right:
 - Remote players and bots are real scene objects.
 - Server snapshot schema already has the right data.
 - Remote presence works.
 
-Mayhem got wrong:
+PvP got wrong:
 - Remote rendering is tightly coupled to old actor factories and global runtime systems.
 - Networking and presentation are too entangled.
 
@@ -180,11 +180,11 @@ Rewrite rule:
 
 ## 11. Menu Shell and Gameplay Surface Are Too Intertwined
 
-Mayhem got right:
+PvP got right:
 - The menu gets the player into the game.
 - The product handoff is real.
 
-Mayhem got wrong:
+PvP got wrong:
 - Menu, runtime, and postgame state are too intertwined.
 - UI ownership by phase is hard to identify.
 
@@ -197,12 +197,12 @@ Rewrite rule:
 
 ## 12. Gameplay Focus and Pointer Lock Are Buried In A Giant Blob
 
-Mayhem got right:
+PvP got right:
 - Pointer lock is part of live gameplay entry.
 - Third-person camera still uses locked mouse-look correctly.
 - The app distinguishes menu presence from gameplay input capture.
 
-Mayhem got wrong:
+PvP got wrong:
 - Launch flow, input capture, postgame, and resume behavior are tangled together.
 
 Rewrite rule:
@@ -213,12 +213,12 @@ Rewrite rule:
 
 ## 13. Enter-Match Handoff Is Buried Instead Of Owned
 
-Mayhem got right:
+PvP got right:
 - There is a clear enter-match gesture.
 - Pointer lock is requested from a real user action.
 - The game distinguishes runtime existence from player entry.
 
-Mayhem got wrong:
+PvP got wrong:
 - The handoff is buried inside the main orchestration path.
 
 Rewrite rule:
@@ -228,11 +228,11 @@ Rewrite rule:
 
 ## 14. In-Match Presentation Still Carries Harness and Debug Feel
 
-Mayhem got right:
+PvP got right:
 - Once in a match, the match is the primary visual surface.
 - Debug state does not dominate the visual hierarchy.
 
-Mayhem got wrong:
+PvP got wrong:
 - It achieves that through entanglement instead of clean shell/runtime ownership.
 
 Rewrite rule:
@@ -242,10 +242,10 @@ Rewrite rule:
 
 ## 15. Boot Order and Initialization Are Fragile
 
-Mayhem got right:
+PvP got right:
 - The app still boots into something usable.
 
-Mayhem got wrong:
+PvP got wrong:
 - Initialization depends on globals and ordering assumptions.
 - Menu and runtime systems are sensitive to boot sequence.
 
@@ -256,11 +256,11 @@ Rewrite rule:
 
 ## 16. Shared Code Boundaries Were Not Strict Enough
 
-Mayhem got right:
+PvP got right:
 - Shared contracts do exist and are useful:
   protocol, tuning, movement math, reconciliation, and mode registry.
 
-Mayhem got wrong:
+PvP got wrong:
 - Shared boundaries drifted into secret reuse of old runtime ownership.
 
 Rewrite rule:
@@ -270,12 +270,12 @@ Rewrite rule:
 
 ## 17. The Biggest Strategic Issue
 
-Mayhem got right:
+PvP got right:
 - The feel is good.
 - The game loop is compelling.
 - The browser multiplayer concept is already proven enough to preserve.
 
-Mayhem got wrong:
+PvP got wrong:
 - Every iteration risks breaking the live game.
 - Ownership confusion makes networking and gameplay debugging expensive.
 - The code is hard to evolve safely.
