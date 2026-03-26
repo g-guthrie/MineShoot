@@ -82,6 +82,7 @@ async function loadControlsHarness(options = {}) {
     debugToggles: 0,
     reloads: 0,
     reloadMessages: [],
+    rollMessages: [],
     transientDebug: [],
     toggleWeaponCalls: [],
     appliedWeapons: []
@@ -126,6 +127,14 @@ async function loadControlsHarness(options = {}) {
     GamePlayer: {
       getPosition() { return { x: 0, y: 0, z: 0 }; },
       getRotation() { return { yaw: 0, pitch: 0 }; },
+      peekRollActionOptions() {
+        return {
+          movingForward: true,
+          movingBackward: false,
+          movingLeft: false,
+          movingRight: false
+        };
+      },
       tryRoll() {
         calls.rolls += 1;
         return true;
@@ -616,6 +625,39 @@ test('gameplay controls honor remapped throwable, roll, ability, debug, and manu
   assert.equal(harness.calls.debugToggles, 1);
   // Docs toggle is handled by menu-shell.js, not gameplay-controls
   assert.equal(harness.calls.docsToggle, 0);
+});
+
+test('gameplay controls send roll direction to the network in multiplayer', async () => {
+  const rollMessages = [];
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameNet: {
+        commands: {
+          sendRoll(payload) {
+            rollMessages.push(payload);
+            return true;
+          }
+        }
+      }
+    },
+    createOverrides: {
+      getMultiplayerMode() { return true; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyE',
+    repeat: false,
+    preventDefault() {}
+  });
+
+  assert.equal(harness.calls.rolls, 1);
+  assert.deepEqual(rollMessages, [{
+    movingForward: true,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false
+  }]);
 });
 
 test('gameplay controls close the loaded docs runtime on escape', async () => {

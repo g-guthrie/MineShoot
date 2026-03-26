@@ -5,11 +5,10 @@ import { protocol } from '../../../shared/protocol.js';
 import { steerHomingVelocity } from '../../../shared/seek-core.js';
 import {
   EYE_HEIGHT,
-  BODY_HITBOX_SIZE,
-  HEAD_HITBOX_SIZE,
-  BODY_HITBOX_CENTER_OFFSET_Y,
-  HEAD_HITBOX_CENTER_OFFSET_Y
 } from '../../../shared/entity-constants.js';
+import {
+  buildCombatHitboxesFromEntityPosition
+} from '../../../shared/entity-points.js';
 import {
   applyDamageFromSource,
   broadcastDamageEvent,
@@ -29,25 +28,13 @@ function feetY(entity) {
   return Number(entity && entity.y || PLAYER_EYE_HEIGHT_WU) - PLAYER_EYE_HEIGHT_WU;
 }
 
-function hitboxesForEntity(entity) {
+function hitboxesForEntity(entity, now = Date.now()) {
   if (!entity) return [];
-  const fx = Number(entity.x || 0);
-  const fy = feetY(entity);
-  const fz = Number(entity.z || 0);
-  const bodyCenterY = fy + BODY_HITBOX_CENTER_OFFSET_Y;
-  const headCenterY = fy + HEAD_HITBOX_CENTER_OFFSET_Y;
-  return [
-    {
-      type: 'body',
-      min: { x: fx - (BODY_HITBOX_SIZE.x * 0.5), y: bodyCenterY - (BODY_HITBOX_SIZE.y * 0.5), z: fz - (BODY_HITBOX_SIZE.z * 0.5) },
-      max: { x: fx + (BODY_HITBOX_SIZE.x * 0.5), y: bodyCenterY + (BODY_HITBOX_SIZE.y * 0.5), z: fz + (BODY_HITBOX_SIZE.z * 0.5) }
-    },
-    {
-      type: 'head',
-      min: { x: fx - (HEAD_HITBOX_SIZE.x * 0.5), y: headCenterY - (HEAD_HITBOX_SIZE.y * 0.5), z: fz - (HEAD_HITBOX_SIZE.z * 0.5) },
-      max: { x: fx + (HEAD_HITBOX_SIZE.x * 0.5), y: headCenterY + (HEAD_HITBOX_SIZE.y * 0.5), z: fz + (HEAD_HITBOX_SIZE.z * 0.5) }
-    }
-  ];
+  const hitboxes = buildCombatHitboxesFromEntityPosition(entity, { nowMs: now });
+  const out = [];
+  if (hitboxes.bodyBox) out.push({ type: 'body', ...hitboxes.bodyBox });
+  if (hitboxes.headBox) out.push({ type: 'head', ...hitboxes.headBox });
+  return out;
 }
 
 function expandBox(box, radius) {
@@ -138,7 +125,7 @@ function refreshMolotovBurn(entity, ownerId, now, def) {
   entity.burnSourceId = String(ownerId || entity.burnSourceId || '');
 }
 
-function firstEntityHit(room, projectile, origin, end, expandRadius, trackedOnlyId = '') {
+function firstEntityHit(room, projectile, origin, end, expandRadius, trackedOnlyId = '', now = Date.now()) {
   if (!projectile || !origin || !end) return null;
   const dx = Number(end.x || 0) - Number(origin.x || 0);
   const dy = Number(end.y || 0) - Number(origin.y || 0);
@@ -157,7 +144,7 @@ function firstEntityHit(room, projectile, origin, end, expandRadius, trackedOnly
     const entity = entities[i];
     if (!room.canTargetEntity(entity, projectile.ownerId)) continue;
     if (trackedOnlyId && entity.id !== trackedOnlyId) continue;
-    const boxes = hitboxesForEntity(entity);
+    const boxes = hitboxesForEntity(entity, now);
     for (let b = 0; b < boxes.length; b++) {
       const box = radius > 0 ? expandBox(boxes[b], radius) : boxes[b];
       const hit = intersectProjectileRayAabb(origin, dir, box, distance);
@@ -543,7 +530,7 @@ export function tickProjectiles(room, dtSec) {
     }
 
     if (p.type === 'plasma') {
-      const contactHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, 0);
+      const contactHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, 0, '', now);
       if (contactHit) {
         p.seekingTargetId = contactHit.entity.id;
         p.seekingUntil = p.age + 0.3;
@@ -553,7 +540,7 @@ export function tickProjectiles(room, dtSec) {
         return;
       }
 
-      const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0));
+      const catchHit = firstEntityHit(room, p, prevPos, { x: p.x, y: p.y, z: p.z }, Number(def.catchRadius || 0), '', now);
       if (catchHit) {
         p.seekingTargetId = catchHit.entity.id;
         p.seekingUntil = p.age + 0.3;

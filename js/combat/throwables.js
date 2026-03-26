@@ -227,8 +227,11 @@
     }
 
     function getWorldTargets() {
-        var worldMeshes = globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables ? globalThis.__MAYHEM_RUNTIME.GameWorld.getCollidables() : [];
-        var hitboxes = globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getHitboxArray() : [];
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var worldApi = runtime.GameWorld || null;
+        var enemyApi = runtime.GameEnemy || null;
+        var worldMeshes = worldApi && worldApi.getCollidables ? worldApi.getCollidables() : [];
+        var hitboxes = enemyApi && enemyApi.getHitboxArray ? enemyApi.getHitboxArray() : [];
         return {
             worldMeshes: worldMeshes || [],
             hitboxes: hitboxes || []
@@ -774,8 +777,10 @@
 
     GameThrowables.checkPlasmaLockInCone = function (camera) {
         refreshThrowableConfig();
-        if (!camera || !globalThis.__MAYHEM_RUNTIME.GameEnemy || !globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies) return false;
-        var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies();
+        var runtime = globalThis.__MAYHEM_RUNTIME || {};
+        var enemyApi = runtime.GameEnemy || null;
+        if (!camera || !enemyApi || !enemyApi.getEnemies) return false;
+        var enemies = enemyApi.getEnemies();
         if (!enemies || !enemies.length) return false;
 
         var origin = camera.position;

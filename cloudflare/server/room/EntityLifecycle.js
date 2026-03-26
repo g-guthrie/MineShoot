@@ -30,6 +30,9 @@ function applyActionRuntimeDefaults(entity) {
   entity.justBeenHookedState = null;
   entity.hookState = null;
   entity.hookPullState = null;
+  entity.rollStartedAt = 0;
+  entity.rollUntil = 0;
+  entity.rollInputState = null;
   return entity;
 }
 

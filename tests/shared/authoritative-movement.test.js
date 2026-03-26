@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   createMovementInputState,
+  isBlockedAt,
   stepAuthoritativeMovement
 } from '../../shared/authoritative-movement.js';
+import { PLAYER_HEIGHT, PLAYER_RADIUS } from '../../shared/entity-constants.js';
 
 function createEntity(overrides = {}) {
   return {
@@ -64,6 +66,26 @@ test('authoritative movement respects blocking collision boxes', () => {
 
   assert.equal(entity.z, 0);
   assert.equal(entity.moveSpeedNorm, 0);
+});
+
+test('authoritative movement blocks slightly low overhangs with the default player height', () => {
+  const blocked = isBlockedAt(0, 0, 0, [{
+    min: { x: -1, y: 1.74, z: -1 },
+    max: { x: 1, y: 3, z: 1 }
+  }]);
+
+  assert.equal(blocked, true);
+  assert.ok(PLAYER_HEIGHT > 1.74);
+});
+
+test('authoritative movement uses the widened default radius for near-side contact', () => {
+  const blocked = isBlockedAt(0, 0, 0, [{
+    min: { x: 0.39, y: 0, z: -0.5 },
+    max: { x: 1, y: 3, z: 0.5 }
+  }]);
+
+  assert.equal(blocked, true);
+  assert.ok(PLAYER_RADIUS >= 0.4);
 });
 
 test('authoritative movement applies jump intent and vertical motion', () => {

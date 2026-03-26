@@ -168,11 +168,11 @@
     }
 
     function playerRadius() {
-        return Number(entityConstantsApi().PLAYER_RADIUS || 0.35);
+        return Number(entityConstantsApi().PLAYER_RADIUS || 0.5);
     }
 
     function playerHeight() {
-        return Number(entityConstantsApi().PLAYER_HEIGHT || 1.7);
+        return Number(entityConstantsApi().PLAYER_HEIGHT || 2.8);
     }
 
     var BACKWARD_SPRINT_SPEED_MULT = 1.25;
@@ -635,11 +635,12 @@
     function updateAvatarPose() {
         if (!avatarGroup) return;
         var feetY = posY - eyeHeight() + activeChokeLift();
+        var rollingHitboxState = { rolling: isRolling() };
         if (actorVisual && actorVisual.setWorldTransform) {
             avatarTransformScratch.x = playerX;
             avatarTransformScratch.y = feetY;
             avatarTransformScratch.z = playerZ;
-            actorVisual.setWorldTransform(avatarTransformScratch, yaw);
+            actorVisual.setWorldTransform(avatarTransformScratch, yaw, rollingHitboxState);
             return;
         }
         avatarGroup.position.set(playerX, feetY, playerZ);
@@ -653,7 +654,7 @@
             avatarTransformScratch.x = playerX;
             avatarTransformScratch.y = feetY;
             avatarTransformScratch.z = playerZ;
-            actorVisual.syncHitboxes(avatarTransformScratch);
+            actorVisual.syncHitboxes(avatarTransformScratch, { rolling: isRolling() });
         }
     }
 
@@ -680,6 +681,7 @@
             weaponId: currentWeaponId,
             targetId: 'self',
             hitboxOpacity: hitboxVisible ? 0.3 : 0,
+            includeCollisionDebug: true,
             preferBoxman: true
         });
         avatarGroup = actorVisual.root || actorVisual.visual;
@@ -688,6 +690,7 @@
         sceneRef.add(avatarGroup);
         if (actorVisual.bodyHitbox) sceneRef.add(actorVisual.bodyHitbox);
         if (actorVisual.headHitbox) sceneRef.add(actorVisual.headHitbox);
+        if (actorVisual.movementCollider) sceneRef.add(actorVisual.movementCollider);
         if (actorVisual.setAlive) actorVisual.setAlive(avatarAliveVisible);
         if (actorVisual.setHitboxVisibility) actorVisual.setHitboxVisibility(hitboxVisible);
         syncHitboxPositions();
@@ -871,6 +874,14 @@
             return BACKWARD_ROLL_ACTION_DURATION_MS;
         }
         return FORWARD_ROLL_ACTION_DURATION_MS;
+    }
+
+    function setRollUntil(nextRollUntil) {
+        rollUntil = Math.max(0, Number(nextRollUntil || 0));
+        if (actorVisual && avatarGroup) {
+            updateAvatarPose();
+        }
+        return rollUntil;
     }
 
     function copyMotionStateFields(state, options) {
@@ -1589,8 +1600,19 @@
         var rollOptions = buildRollActionOptions();
         if (!rollOptions) return false;
         if (!triggerAvatarAction('roll', rollOptions)) return false;
-        rollUntil = nowMs() + rollActionDurationMs(rollOptions);
+        setRollUntil(nowMs() + rollActionDurationMs(rollOptions));
         return true;
+    };
+
+    GamePlayer.peekRollActionOptions = function () {
+        var rollOptions = buildRollActionOptions();
+        if (!rollOptions) return null;
+        return {
+            movingForward: !!rollOptions.movingForward,
+            movingBackward: !!rollOptions.movingBackward,
+            movingLeft: !!rollOptions.movingLeft,
+            movingRight: !!rollOptions.movingRight
+        };
     };
 
     GamePlayer.setSpawnShield = function (active) {
@@ -1617,6 +1639,10 @@
 
     GamePlayer.isRolling = function () {
         return isRolling();
+    };
+
+    GamePlayer.setRollState = function (state) {
+        return setRollUntil(state && state.rollUntil ? Number(state.rollUntil || 0) : 0);
     };
 
     GamePlayer.isChoked = function () {

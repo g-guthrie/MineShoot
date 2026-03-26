@@ -15,6 +15,10 @@
         return sharedApi().entityPoints || {};
     }
 
+    function entityConstantsApi() {
+        return sharedApi().entityConstants || {};
+    }
+
     function cloneVisualForRevealGhost(visual) {
         if (!visual || !visual.clone) return null;
         if (visual.userData && typeof visual.userData.cloneVisualForRevealGhost === 'function') {
@@ -159,6 +163,35 @@
         disposeMaterials(materials);
     }
 
+    function createMovementCollider(ownerType, opacity) {
+        var constants = entityConstantsApi();
+        var radius = Math.max(0.05, Number(constants.PLAYER_RADIUS || 0.5));
+        var height = Math.max(radius, Number(constants.PLAYER_HEIGHT || 2.8));
+        var geometry = new THREE.EdgesGeometry(new THREE.CylinderGeometry(radius, radius, height, 16, 1, false));
+        var material = new THREE.LineBasicMaterial({
+            color: 0x33ff66,
+            transparent: true,
+            opacity: (typeof opacity === 'number') ? opacity : 0.3,
+            depthTest: false
+        });
+        var collider = new THREE.LineSegments(geometry, material);
+        collider.renderOrder = 2;
+        collider.userData = {
+            type: 'movement_collider',
+            ownerType: ownerType,
+            radius: radius,
+            height: height
+        };
+        return collider;
+    }
+
+    function normalizeCombatHitboxState(state) {
+        var source = state && typeof state === 'object' ? state : {};
+        return {
+            rolling: !!source.rolling
+        };
+    }
+
     GameActorVisualFactory.create = function (opts) {
         opts = opts || {};
         var ownerType = String(opts.ownerType || 'net');
@@ -199,12 +232,14 @@
             materials: [],
             baseOpacity: 0.26
         };
+        var combatHitboxState = normalizeCombatHitboxState(opts.combatHitboxState);
         var alive = true;
         var hitboxesEnabled = hitboxOpacity > 0;
         var destroyed = false;
 
         var bodyHitbox = null;
         var headHitbox = null;
+        var movementCollider = !!opts.includeCollisionDebug ? createMovementCollider(ownerType, hitboxOpacity) : null;
         var hitboxFactory = globalThis.__MAYHEM_RUNTIME.GameHitboxFactory || null;
         if (hitboxFactory && hitboxFactory.createCombatHitbox) {
             bodyHitbox = hitboxFactory.createCombatHitbox('body', ownerType, {
@@ -255,27 +290,76 @@
                 if (bodyHitbox.material) bodyHitbox.material.opacity = opacity;
             }
             if (headHitbox) {
-                headHitbox.visible = alive;
+                headHitbox.visible = alive && !combatHitboxState.rolling;
                 if (headHitbox.material) headHitbox.material.opacity = opacity;
+            }
+            if (movementCollider) {
+                movementCollider.visible = alive;
+                if (movementCollider.material) movementCollider.material.opacity = opacity;
             }
         }
 
-        function syncHitboxes(rootPosition) {
+        function syncHitboxes(rootPosition, state) {
             var entityPoints = entityPointsApi();
+            var entityConstants = entityConstantsApi();
+            if (state !== undefined) {
+                combatHitboxState = normalizeCombatHitboxState(state);
+                applyHitboxState();
+            }
             rootPosition = rootPosition || root.position;
             if (!rootPosition) return;
-            if (bodyHitbox) bodyHitbox.position.set(rootPosition.x, entityPoints.entityBodyHitboxYFromFeet ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 0.7625), rootPosition.z);
-            if (headHitbox) headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxYFromFeet ? entityPoints.entityHeadHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
+            if (bodyHitbox) {
+                var rollBodyLinearScale = Math.max(0.01, Number(entityPoints.ROLL_BODY_HITBOX_LINEAR_SCALE || Math.cbrt(0.1875)));
+                var bodyBaseCenterY = entityPoints.entityBodyHitboxYFromFeet
+                    ? entityPoints.entityBodyHitboxYFromFeet(rootPosition.y)
+                    : (rootPosition.y + 0.7625);
+                var bodyBaseHalfY = bodyHitbox.geometry && bodyHitbox.geometry.parameters
+                    ? Number(bodyHitbox.geometry.parameters.height || 0) * 0.5
+                    : Number(entityConstants.BODY_HITBOX_SIZE && entityConstants.BODY_HITBOX_SIZE.y || 0) * 0.5;
+                var bodyUniformScale = combatHitboxState.rolling ? rollBodyLinearScale : 1;
+                var bodyBaseMinY = bodyBaseCenterY - bodyBaseHalfY;
+                bodyHitbox.scale.set(bodyUniformScale, bodyUniformScale, bodyUniformScale);
+                bodyHitbox.position.set(
+                    rootPosition.x,
+                    bodyBaseMinY + (bodyBaseHalfY * bodyUniformScale),
+                    rootPosition.z
+                );
+            }
+            if (headHitbox) {
+                headHitbox.scale.set(1, 1, 1);
+                var eyeWorld = rigApi && rigApi.getEyeWorldPosition ? rigApi.getEyeWorldPosition(new THREE.Vector3()) : null;
+                if (eyeWorld) {
+                    var rootRef = root && root.position ? root.position : rootPosition;
+                    var bodyHalfY = bodyHitbox && bodyHitbox.geometry && bodyHitbox.geometry.parameters
+                        ? Number(bodyHitbox.geometry.parameters.height || 0) * Number(bodyHitbox.scale && bodyHitbox.scale.y || 1) * 0.5
+                        : Number(entityConstants.BODY_HITBOX_SIZE && entityConstants.BODY_HITBOX_SIZE.y || 0) * 0.5;
+                    var headHalfY = headHitbox.geometry && headHitbox.geometry.parameters
+                        ? Number(headHitbox.geometry.parameters.height || 0) * Number(headHitbox.scale && headHitbox.scale.y || 1) * 0.5
+                        : Number(entityConstants.HEAD_HITBOX_SIZE && entityConstants.HEAD_HITBOX_SIZE.y || 0) * 0.5;
+                    var bodyTopY = Number(bodyHitbox && bodyHitbox.position ? bodyHitbox.position.y || 0 : 0) + bodyHalfY;
+                    headHitbox.position.set(
+                        eyeWorld.x + (Number(rootPosition.x || 0) - Number(rootRef.x || 0)),
+                        bodyTopY + headHalfY,
+                        eyeWorld.z + (Number(rootPosition.z || 0) - Number(rootRef.z || 0))
+                    );
+                } else {
+                    headHitbox.position.set(rootPosition.x, entityPoints.entityHeadHitboxYFromFeet ? entityPoints.entityHeadHitboxYFromFeet(rootPosition.y) : (rootPosition.y + 2.0), rootPosition.z);
+                }
+            }
+            if (movementCollider) {
+                var colliderHeight = Math.max(0.05, Number(entityConstants.PLAYER_HEIGHT || movementCollider.userData.height || 2.8));
+                movementCollider.position.set(rootPosition.x, rootPosition.y + (colliderHeight * 0.5), rootPosition.z);
+            }
         }
 
-        function setPosition(rootPosition) {
+        function setPosition(rootPosition, state) {
             if (!rootPosition) return;
             root.position.set(
                 (typeof rootPosition.x === 'number') ? rootPosition.x : root.position.x,
                 (typeof rootPosition.y === 'number') ? rootPosition.y : root.position.y,
                 (typeof rootPosition.z === 'number') ? rootPosition.z : root.position.z
             );
-            syncHitboxes(root.position);
+            syncHitboxes(root.position, state);
         }
 
         function setYaw(yaw) {
@@ -283,9 +367,15 @@
             root.rotation.y = yaw;
         }
 
-        function setWorldTransform(rootPosition, yaw) {
-            setPosition(rootPosition);
+        function setWorldTransform(rootPosition, yaw, state) {
+            setPosition(rootPosition, state);
             setYaw(yaw);
+        }
+
+        function setCombatHitboxState(state) {
+            combatHitboxState = normalizeCombatHitboxState(state);
+            applyHitboxState();
+            syncHitboxes(root.position);
         }
 
         function setHitboxVisibility(visible) {
@@ -380,11 +470,13 @@
             if (root && root.parent) root.parent.remove(root);
             if (bodyHitbox && bodyHitbox.parent) bodyHitbox.parent.remove(bodyHitbox);
             if (headHitbox && headHitbox.parent) headHitbox.parent.remove(headHitbox);
+            if (movementCollider && movementCollider.parent) movementCollider.parent.remove(movementCollider);
             if (rigApi && rigApi.dispose) rigApi.dispose();
             disposeMaterials(revealState.materials);
             disposeObjectResources(chokeFx);
             disposeObjectResources(bodyHitbox);
             disposeObjectResources(headHitbox);
+            disposeObjectResources(movementCollider);
         }
 
         function getCoreWorldPosition(outVec3) {
@@ -442,12 +534,14 @@
             rigApi: rigApi,
             bodyHitbox: bodyHitbox,
             headHitbox: headHitbox,
+            movementCollider: movementCollider,
             revealGhost: revealGhost,
             chokeFx: chokeFx,
             syncHitboxes: syncHitboxes,
             setPosition: setPosition,
             setYaw: setYaw,
             setWorldTransform: setWorldTransform,
+            setCombatHitboxState: setCombatHitboxState,
             setAlive: setAlive,
             setDamageFlash: setDamageFlash,
             setSpawnShield: setSpawnShield,

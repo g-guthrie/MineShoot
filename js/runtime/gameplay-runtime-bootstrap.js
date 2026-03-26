@@ -87,6 +87,7 @@
             var gamePlayer = depGet('GamePlayer');
             var gameLocalMatch = depGet('GameLocalMatch');
             var gamePlayerCombat = depGet('GamePlayerCombat');
+            var gameThrowables = depGet('GameThrowables');
             var gameplayHudSync = depGet('GameGameplayHudSync');
             var gameHitscan = depGet('GameHitscan');
             var gameplayControls = depGet('GameGameplayControls');
@@ -122,6 +123,9 @@
                 isPlaying: options.isPlaying,
                 isMultiplayer: function () { return multiplayerMode; }
             });
+            if (gameThrowables && gameThrowables.init) {
+                gameThrowables.init(scene);
+            }
             if (gameplayHudSync && gameplayHudSync.syncSelfCombatHud) {
                 gameplayHudSync.syncSelfCombatHud();
             }
@@ -182,6 +186,9 @@
                 }
                 if (gameHitscan && gameHitscan.reset) {
                     gameHitscan.reset();
+                }
+                if (gameThrowables && gameThrowables.shutdown) {
+                    gameThrowables.shutdown();
                 }
                 if (gameWorld && gameWorld.dispose) {
                     gameWorld.dispose();

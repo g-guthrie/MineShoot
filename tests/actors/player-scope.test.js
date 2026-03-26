@@ -82,8 +82,14 @@ async function loadPlayerHarness(runtimeOverrides = {}, options = {}) {
     GameWorld: defaultWorld,
     GameActorVisualFactory: {
       create() {
+        const movementCollider = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.CylinderGeometry(0.5, 0.5, 2.8, 8)),
+          new THREE.LineBasicMaterial({ color: 0x33ff66, transparent: true, opacity: 0.3 })
+        );
+        movementCollider.userData = { type: 'movement_collider' };
         return {
           root: new THREE.Group(),
+          movementCollider,
           rigApi: null,
           rig: null,
           setAlive() {},
@@ -237,6 +243,16 @@ test('player getters fill provided vectors and equipSlot changes the equipped we
   );
   assert.ok(coreOut.y < eyeOut.y);
   assert.ok(throwOut.y < eyeOut.y);
+});
+
+test('player init adds the movement collider debug mesh to the scene with the avatar helpers', async () => {
+  const player = await loadPlayerHarness();
+  const scene = new THREE.Scene();
+
+  player.init(scene);
+
+  const movementCollider = scene.children.find((node) => node && node.userData && node.userData.type === 'movement_collider');
+  assert.ok(movementCollider);
 });
 
 test('player resolves shared tuning lazily when GameShared arrives after script load', async () => {

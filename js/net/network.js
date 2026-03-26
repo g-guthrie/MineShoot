@@ -651,6 +651,7 @@
         wsSend: wsSend,
         buildFirePayload: buildFirePayload,
         fireMessageType: MSG_C2S.FIRE,
+        rollMessageType: MSG_C2S.ROLL,
         reloadMessageType: MSG_C2S.RELOAD,
         equipWeaponMessageType: MSG_C2S.EQUIP_WEAPON,
         normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,

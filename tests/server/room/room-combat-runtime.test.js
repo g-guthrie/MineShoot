@@ -9,7 +9,9 @@ import {
   handleFire,
   handleEquipWeapon,
   handleReload,
+  handleRoll,
   handleThrow,
+  isEntityRolling,
   reloadRemainingForWeapon,
   resolveLockedHostile,
   spawnProjectile,
@@ -120,6 +122,59 @@ test('combat runtime keeps per-weapon reload progress alive when the player equi
   const after = room.syncWeaponAmmoState(player, 'rifle', 1300);
   assert.equal(after.ammoInMag, 30);
   assert.equal(after.reloadUntil, 0);
+});
+
+test('combat runtime starts an authoritative roll window from the reported movement direction', () => {
+  const room = {
+    isEntityMovementLocked() {
+      return false;
+    }
+  };
+  const player = {
+    alive: true,
+    isGrounded: true,
+    rollStartedAt: 0,
+    rollUntil: 0,
+    rollInputState: null
+  };
+
+  assert.equal(handleRoll(room, player, {
+    movingForward: false,
+    movingBackward: true,
+    movingLeft: false,
+    movingRight: true
+  }, {
+    nowMs: () => 1000
+  }), true);
+  assert.equal(player.rollStartedAt, 1000);
+  assert.equal(player.rollUntil, 1520);
+  assert.deepEqual(player.rollInputState, {
+    movingForward: false,
+    movingBackward: true,
+    movingLeft: false,
+    movingRight: true
+  });
+  assert.equal(isEntityRolling(player, 1200), true);
+  assert.equal(isEntityRolling(player, 1600), false);
+});
+
+test('combat runtime refuses to start an authoritative roll without movement intent', () => {
+  const room = {
+    isEntityMovementLocked() {
+      return false;
+    }
+  };
+  const player = {
+    alive: true,
+    isGrounded: true,
+    rollStartedAt: 0,
+    rollUntil: 0
+  };
+
+  assert.equal(handleRoll(room, player, {}, {
+    nowMs: () => 1000
+  }), false);
+  assert.equal(player.rollUntil, 0);
 });
 
 test('combat runtime handleReload validates the weapon and forwards to the room reload helper', () => {

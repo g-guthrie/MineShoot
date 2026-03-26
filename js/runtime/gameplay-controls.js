@@ -263,7 +263,16 @@
             if (!hasInputCapture()) return false;
             var playerApi = runtime.GamePlayer || null;
             if (!playerApi || !playerApi.tryRoll) return false;
-            return !!playerApi.tryRoll();
+            var rollOptions = playerApi.peekRollActionOptions ? playerApi.peekRollActionOptions() : null;
+            var triggered = !!playerApi.tryRoll();
+            if (!triggered) return false;
+            if (multiplayerMode()) {
+                var commandsApi = netCommands();
+                if (commandsApi && commandsApi.sendRoll && rollOptions) {
+                    commandsApi.sendRoll(rollOptions);
+                }
+            }
+            return true;
         }
 
         function triggerReload() {

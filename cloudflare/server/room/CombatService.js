@@ -58,6 +58,9 @@ export function applyDamage(target, damage, options = {}) {
   if (target.hp <= 0 && target.alive) {
     killed = true;
     target.alive = false;
+    target.rollStartedAt = 0;
+    target.rollUntil = 0;
+    target.rollInputState = null;
     if (Number.isFinite(Number(target.stocksRemaining))) {
       const currentStocks = Math.max(0, Number(target.stocksRemaining || 0));
       const remainingStocks = Math.max(0, currentStocks - 1);

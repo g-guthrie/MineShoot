@@ -139,6 +139,16 @@ export function toEntityState(entity, now = nowMs()) {
     weaponLockUntil: Number(entity.weaponLockUntil || 0),
     throwableLockUntil: Number(entity.throwableLockUntil || 0),
     abilityLockUntil: Number(entity.abilityLockUntil || 0),
+    rollStartedAt: Number(entity.rollStartedAt || 0),
+    rollUntil: Number(entity.rollUntil || 0),
+    rollInputState: entity.rollInputState && typeof entity.rollInputState === 'object'
+      ? {
+          movingForward: !!entity.rollInputState.movingForward,
+          movingBackward: !!entity.rollInputState.movingBackward,
+          movingLeft: !!entity.rollInputState.movingLeft,
+          movingRight: !!entity.rollInputState.movingRight
+        }
+      : null,
     abilityFx: buildAbilityFx(entity),
     stunUntil: entity.stunUntil || 0,
     slowUntil: entity.slowUntil || 0,

@@ -11,8 +11,8 @@
     GamePlayerWorld.create = function (options) {
         options = options || {};
 
-        var playerRadius = Math.max(0, Number(options.playerRadius || 0.35));
-        var playerHeight = Math.max(playerRadius, Number(options.playerHeight || 1.7));
+        var playerRadius = Math.max(0, Number(options.playerRadius || 0.5));
+        var playerHeight = Math.max(playerRadius, Number(options.playerHeight || 2.8));
         var epsilon = Math.max(0.000001, Number(options.epsilon || 0.001));
         var collisionBoxesScratch = [];
 

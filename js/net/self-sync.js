@@ -82,6 +82,12 @@
             RT.GamePlayer.setAliveVisual(selfState.alive !== false);
         }
 
+        if (RT.GamePlayer && RT.GamePlayer.setRollState) {
+            RT.GamePlayer.setRollState({
+                rollUntil: toLocalTime(netApi, selfState.rollUntil)
+            });
+        }
+
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
             var selfChokeVictimState = abilityFxView && abilityFxView.toChokeVictimVisualState
                 ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, serverNow)

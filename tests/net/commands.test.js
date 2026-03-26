@@ -154,3 +154,29 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
     }
   ]);
 });
+
+test('GameNetCommands emits a roll command with the current movement direction', async () => {
+  const GameNetCommands = await loadCommandsApi();
+  const sentMessages = [];
+  const commands = GameNetCommands.create({
+    wsSend(msg) {
+      sentMessages.push(JSON.parse(JSON.stringify(msg)));
+      return true;
+    },
+    rollMessageType: 'roll'
+  });
+
+  assert.equal(commands.sendRoll({
+    movingForward: false,
+    movingBackward: true,
+    movingLeft: false,
+    movingRight: true
+  }), true);
+  assert.deepEqual(sentMessages, [{
+    t: 'roll',
+    movingForward: false,
+    movingBackward: true,
+    movingLeft: false,
+    movingRight: true
+  }]);
+});

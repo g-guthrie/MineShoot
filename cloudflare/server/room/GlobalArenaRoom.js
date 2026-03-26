@@ -154,6 +154,7 @@ import {
   handleEquipWeapon as handleCombatEquipWeapon,
   handleFire as handleCombatFire,
   handleReload as handleCombatReload,
+  handleRoll as handleCombatRoll,
   handleThrow as handleCombatThrow,
   handleWeaponLoadout as handleCombatWeaponLoadout,
   hasWorldLineOfSight as combatHasWorldLineOfSight,
@@ -164,6 +165,7 @@ import {
   isEntityChoked as isCombatEntityChoked,
   isEntityJustBeenHooked as isCombatEntityJustBeenHooked,
   isEntityMovementLocked as isCombatEntityMovementLocked,
+  isEntityRolling as isCombatEntityRolling,
   isEntitySpawnShielded as isCombatEntitySpawnShielded,
   nearestTargetForProjectile as nearestCombatTargetForProjectile,
   pullEntityToward as pullCombatEntityToward,
@@ -1064,6 +1066,10 @@ export class GlobalArenaRoom extends DurableObject {
     return isCombatEntityMovementLocked(this, entity, now);
   }
 
+  isEntityRolling(entity, now = nowMs()) {
+    return isCombatEntityRolling(entity, now);
+  }
+
   isEntityActionLocked(entity, now = nowMs()) {
     return isCombatEntityActionLocked(this, entity, now);
   }
@@ -1143,6 +1149,10 @@ export class GlobalArenaRoom extends DurableObject {
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU,
       remoteMuzzleFlashHoldMs: REMOTE_MUZZLE_FLASH_HOLD_MS
     });
+  }
+
+  handleRoll(player, msg) {
+    return handleCombatRoll(this, player, msg, { nowMs });
   }
 
   handleWeaponLoadout(player, msg) {

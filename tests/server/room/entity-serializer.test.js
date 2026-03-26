@@ -42,6 +42,9 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
     weaponAmmo: {},
     abilityId: 'choke',
     throwables: {},
+    rollStartedAt: 1400,
+    rollUntil: 1760,
+    rollInputState: { movingForward: false, movingBackward: true, movingLeft: false, movingRight: true },
     stunUntil: 0,
     slowUntil: 0,
     chokeState: { targetId: 'usr_enemy', startedAt: 1000, endsAt: 1400, liftHeight: 1.4 },
@@ -72,6 +75,9 @@ test('toEntityState exposes compact abilityFx instead of raw room runtime intern
   assert.equal(state.weaponLockUntil, 0);
   assert.equal(state.throwableLockUntil, 0);
   assert.equal(state.abilityLockUntil, 0);
+  assert.equal(state.rollStartedAt, 1400);
+  assert.equal(state.rollUntil, 1760);
+  assert.deepEqual(state.rollInputState, { movingForward: false, movingBackward: true, movingLeft: false, movingRight: true });
   assert.equal(state.fastBackpedal, true);
   assert.equal(state.movingForward, true);
   assert.equal(state.movingBackward, false);

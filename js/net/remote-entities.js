@@ -289,19 +289,20 @@
         return teleported;
     }
 
-    function applyImmediateRemoteTransform(render, entity) {
+    function applyImmediateRemoteTransform(render, entity, snapshotMeta) {
         if (!render || !entity || !render.group) return;
         var nextX = Number(entity.x || 0);
         var nextFootY = snapshotFootY(entity);
         var nextZ = Number(entity.z || 0);
         var nextYaw = Number(entity.yaw || 0);
         var nextPitch = Number(entity.pitch || 0);
+        var rollingNow = Number(entity.rollUntil || 0) > snapshotServerTimeMs(snapshotMeta);
         if (render.actorVisual && render.actorVisual.setWorldTransform) {
             render.actorVisual.setWorldTransform({
                 x: nextX,
                 y: nextFootY,
                 z: nextZ
-            }, nextYaw);
+            }, nextYaw, { rolling: rollingNow });
         } else {
             render.group.position.x = nextX;
             render.group.position.y = nextFootY;
@@ -335,7 +336,7 @@
                 x: nextX,
                 y: nextFootY,
                 z: nextZ
-            });
+            }, { rolling: rollingNow });
         } else {
             if (render.bodyHitbox && render.bodyHitbox.position && render.bodyHitbox.position.set) {
                 render.bodyHitbox.position.set(nextX, nextFootY + 0.7625, nextZ);
@@ -398,7 +399,9 @@
                 x: entity.x,
                 y: snapshotFootY(entity),
                 z: entity.z
-            }, (entity.yaw || 0));
+            }, (entity.yaw || 0), {
+                rolling: Number(entity.rollUntil || 0) > snapshotServerTimeMs(snapshotMeta)
+            });
         } else {
             group.position.set(
                 entity.x,
@@ -476,6 +479,16 @@
             weaponAmmoServerTimeMs: snapshotServerTimeMs(snapshotMeta),
             _appliedWeaponId: entity.weaponId || 'rifle',
             muzzleFlashUntil: entity.muzzleFlashUntil || 0,
+            rollStartedAt: Number(entity.rollStartedAt || 0),
+            rollUntil: Number(entity.rollUntil || 0),
+            rollInputState: entity.rollInputState && typeof entity.rollInputState === 'object'
+                ? {
+                    movingForward: !!entity.rollInputState.movingForward,
+                    movingBackward: !!entity.rollInputState.movingBackward,
+                    movingLeft: !!entity.rollInputState.movingLeft,
+                    movingRight: !!entity.rollInputState.movingRight
+                }
+                : null,
             chokeVictimState: snapshotAbilityState.chokeVictimState,
             deadeyeMark: null,
             hookedStartedAt: snapshotAbilityState.hookedStartedAt,
@@ -553,6 +566,16 @@
         r.streamHeat = entity.streamHeat || 0;
         r.streamOverheatedUntil = entity.streamOverheatedUntil || 0;
         r.muzzleFlashUntil = entity.muzzleFlashUntil || 0;
+        r.rollStartedAt = Number(entity.rollStartedAt || 0);
+        r.rollUntil = Number(entity.rollUntil || 0);
+        r.rollInputState = entity.rollInputState && typeof entity.rollInputState === 'object'
+            ? {
+                movingForward: !!entity.rollInputState.movingForward,
+                movingBackward: !!entity.rollInputState.movingBackward,
+                movingLeft: !!entity.rollInputState.movingLeft,
+                movingRight: !!entity.rollInputState.movingRight
+            }
+            : null;
         var abilityFxView = abilityFxApi();
         var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
             ? abilityFxView.buildSnapshotAbilityState(entity)
@@ -576,7 +599,7 @@
             r.actorVisual.setHitboxVisibility(hitboxVisible);
         }
         if (teleported) {
-            applyImmediateRemoteTransform(r, entity);
+            applyImmediateRemoteTransform(r, entity, snapshotMeta);
         }
     };
 

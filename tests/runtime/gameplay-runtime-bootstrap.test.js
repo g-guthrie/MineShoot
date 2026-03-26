@@ -11,6 +11,7 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
     netInit: 0,
     netShutdown: 0,
     throwableInfo: [],
+    throwablesInit: 0,
     docsInit: 0,
     removeResizeHandler: 0,
     worldDispose: 0,
@@ -75,7 +76,9 @@ async function loadBootstrapHarness(runtimeOverrides = {}) {
       }
     },
     GameThrowables: {
-      init() {},
+      init() {
+        calls.throwablesInit += 1;
+      },
       shutdown() {
         calls.throwablesShutdown += 1;
       },
@@ -209,13 +212,14 @@ test('gameplay runtime bootstrap starts offline sandbox without bots', async () 
   assert.deepEqual(harness.calls.throwableInfo, []);
   assert.equal(harness.calls.netInit, 0);
   assert.equal(harness.calls.docsInit, 1);
+  assert.equal(harness.calls.throwablesInit, 1);
 
   result.disposeRuntime();
   assert.equal(harness.calls.removeResizeHandler, 1);
   assert.equal(harness.calls.worldDispose, 1);
   assert.equal(harness.calls.playerDestroy, 1);
   assert.equal(harness.calls.enemyDispose, 0);
-  assert.equal(harness.calls.throwablesShutdown, 0);
+  assert.equal(harness.calls.throwablesShutdown, 1);
   assert.equal(harness.calls.hookVisualsDispose, 0);
   assert.equal(harness.calls.overheadReset, 1);
   assert.equal(harness.calls.uiReset, 1);

@@ -240,7 +240,11 @@
             r._prevAnimationYaw = renderYaw;
 
             if (r.actorVisual && r.actorVisual.setWorldTransform) {
-                r.actorVisual.setWorldTransform({ x: nextX, y: nextY, z: nextZ }, nextYaw);
+                r.actorVisual.setWorldTransform(
+                    { x: nextX, y: nextY, z: nextZ },
+                    nextYaw,
+                    { rolling: Number(r.rollUntil || 0) > serverNowMs }
+                );
             } else {
                 r.group.position.x = nextX;
                 r.group.position.y = nextY;
@@ -298,6 +302,12 @@
                         triggerApi.triggerAction('jump', {
                             reverseLegTilt: !!presentState.movingBackward && !presentState.movingForward
                         });
+                    }
+                    var rollStartedAt = Number(r.rollStartedAt || 0);
+                    var rollActive = rollStartedAt > 0 && Number(r.rollUntil || 0) > serverNowMs;
+                    if (rollActive && rollStartedAt > Number(r._lastTriggeredRollStartedAt || 0)) {
+                        triggerApi.triggerAction('roll', r.rollInputState || null);
+                        r._lastTriggeredRollStartedAt = rollStartedAt;
                     }
                 }
                 var presentationServerNowMs = Math.max(
@@ -403,7 +413,9 @@
                 if (finalChokeVictimState.lift > 0) {
                     hitboxPosition.y += finalChokeVictimState.lift;
                 }
-                r.actorVisual.syncHitboxes(hitboxPosition);
+                r.actorVisual.syncHitboxes(hitboxPosition, {
+                    rolling: Number(r.rollUntil || 0) > serverNowMs
+                });
             }
         });
     }

@@ -1,12 +1,6 @@
-import {
-  HEAD_HITBOX_SIZE,
-  BODY_HITBOX_SIZE,
-  EYE_HEIGHT,
-  BODY_HITBOX_CENTER_OFFSET_Y,
-  HEAD_HITBOX_CENTER_OFFSET_Y
-} from './entity-constants.js';
 import { applyFalloff } from './damage.js';
 import { resolveWeaponAdsFovDeg, resolveWeaponAimProfile } from './gameplay-tuning.js';
+import { buildCombatHitboxesFromEntityPosition } from './entity-points.js';
 
 const CAMERA_FOV_DEG = 75;
 const DEFAULT_ASPECT = 16 / 9;
@@ -255,28 +249,10 @@ function entityHitboxes(entity) {
       head: explicitHead
     };
   }
-  const feetY = Number((entity.y || EYE_HEIGHT) - EYE_HEIGHT);
-  const bodyCenterY = feetY + BODY_HITBOX_CENTER_OFFSET_Y;
-  const headCenterY = feetY + HEAD_HITBOX_CENTER_OFFSET_Y;
-  const halfBody = {
-    x: BODY_HITBOX_SIZE.x * 0.5,
-    y: BODY_HITBOX_SIZE.y * 0.5,
-    z: BODY_HITBOX_SIZE.z * 0.5
-  };
-  const halfHead = {
-    x: HEAD_HITBOX_SIZE.x * 0.5,
-    y: HEAD_HITBOX_SIZE.y * 0.5,
-    z: HEAD_HITBOX_SIZE.z * 0.5
-  };
+  const generated = buildCombatHitboxesFromEntityPosition(entity || {});
   return {
-    body: {
-      min: { x: entity.x - halfBody.x, y: bodyCenterY - halfBody.y, z: entity.z - halfBody.z },
-      max: { x: entity.x + halfBody.x, y: bodyCenterY + halfBody.y, z: entity.z + halfBody.z }
-    },
-    head: {
-      min: { x: entity.x - halfHead.x, y: headCenterY - halfHead.y, z: entity.z - halfHead.z },
-      max: { x: entity.x + halfHead.x, y: headCenterY + halfHead.y, z: entity.z + halfHead.z }
-    }
+    body: explicitBox(generated.bodyBox),
+    head: explicitBox(generated.headBox)
   };
 }
 

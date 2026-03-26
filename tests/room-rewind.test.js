@@ -93,3 +93,18 @@ test('room rewind builds explicit hitboxes from a rewound target pose', () => {
   assert.deepEqual(target.bodyBox, hitboxes.bodyBox);
   assert.deepEqual(target.headBox, hitboxes.headBox);
 });
+
+test('room rewind builds the rolled combat hitbox shape when the pose is inside the roll window', () => {
+  const hitboxes = buildHitboxesFromPose({
+    x: 5,
+    y: 1.6,
+    z: -3,
+    serverTime: 1200,
+    rollStartedAt: 1100,
+    rollUntil: 1400
+  });
+
+  assert.ok(hitboxes.bodyBox);
+  assert.equal(hitboxes.headBox, null);
+  assert.ok((hitboxes.bodyBox.max.y - hitboxes.bodyBox.min.y) < 2.8);
+});

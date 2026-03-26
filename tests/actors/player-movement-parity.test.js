@@ -13,6 +13,11 @@ import {
   replayMotionState,
   shouldReplayAuthoritativeCorrection
 } from '../../shared/authoritative-reconciliation.js';
+import {
+  EYE_HEIGHT,
+  PLAYER_HEIGHT,
+  PLAYER_RADIUS
+} from '../../shared/entity-constants.js';
 
 class FakeDocument {
   constructor() {
@@ -75,7 +80,7 @@ function assertClose(actual, expected, epsilon = 1e-6) {
 function createExpectedEntity(spawn) {
   return {
     x: Number(spawn.x || 0),
-    y: 1.6,
+    y: EYE_HEIGHT,
     z: Number(spawn.z || 0),
     yaw: 0,
     pitch: 0,
@@ -319,9 +324,9 @@ async function loadPlayerMovementHarness(options = {}) {
       collisionBoxes: worldState.collisionBoxes,
       getGroundHeightAt: worldState.getGroundHeightAt,
       movementLocked: false,
-      eyeHeight: 1.6,
-      playerHeight: 1.7,
-      playerRadius: 0.35,
+      eyeHeight: EYE_HEIGHT,
+      playerHeight: PLAYER_HEIGHT,
+      playerRadius: PLAYER_RADIUS,
       epsilon: 0.001
     };
   }
@@ -717,9 +722,9 @@ test('player replay correction restores the airborne forward jump path after loc
     collisionBoxes: harness.worldState.collisionBoxes,
     getGroundHeightAt: harness.worldState.getGroundHeightAt,
     movementLocked: false,
-    eyeHeight: 1.6,
-    playerHeight: 1.7,
-    playerRadius: 0.35,
+    eyeHeight: EYE_HEIGHT,
+    playerHeight: PLAYER_HEIGHT,
+    playerRadius: PLAYER_RADIUS,
     epsilon: 0.001,
     fallbackYaw: acknowledged.yaw,
     fallbackPitch: acknowledged.pitch
@@ -748,9 +753,9 @@ test('player replay correction stays replay-first for a recent fast sprint windo
     collisionBoxes: harness.worldState.collisionBoxes,
     getGroundHeightAt: harness.worldState.getGroundHeightAt,
     movementLocked: false,
-    eyeHeight: 1.6,
-    playerHeight: 1.7,
-    playerRadius: 0.35,
+    eyeHeight: EYE_HEIGHT,
+    playerHeight: PLAYER_HEIGHT,
+    playerRadius: PLAYER_RADIUS,
     epsilon: 0.001,
     fallbackYaw: acknowledged.yaw,
     fallbackPitch: acknowledged.pitch

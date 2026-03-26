@@ -1,10 +1,11 @@
 import {
-  EYE_HEIGHT,
-  BODY_HITBOX_SIZE,
-  HEAD_HITBOX_SIZE,
-  BODY_HITBOX_CENTER_OFFSET_Y,
-  HEAD_HITBOX_CENTER_OFFSET_Y
+  EYE_HEIGHT
 } from '../../../shared/entity-constants.js';
+import {
+  buildCombatHitboxesFromFeetPosition,
+  entityFeetY,
+  isRollStateActive
+} from '../../../shared/entity-points.js';
 
 export const DEFAULT_REWIND_HISTORY_MS = 300;
 export const DEFAULT_MAX_REWIND_MS = 250;
@@ -38,8 +39,24 @@ export function readCurrentPose(entity, serverTime = 0) {
     yaw: Number(entity.yaw || 0),
     pitch: Number(entity.pitch || 0),
     velocityY: Number(entity.velocityY || 0),
-    isGrounded: entity.isGrounded !== false
+    isGrounded: entity.isGrounded !== false,
+    rollStartedAt: Number(entity.rollStartedAt || 0),
+    rollUntil: Number(entity.rollUntil || 0),
+    rollInputState: entity.rollInputState && typeof entity.rollInputState === 'object'
+      ? {
+          movingForward: !!entity.rollInputState.movingForward,
+          movingBackward: !!entity.rollInputState.movingBackward,
+          movingLeft: !!entity.rollInputState.movingLeft,
+          movingRight: !!entity.rollInputState.movingRight
+        }
+      : null
   };
+}
+
+function selectRollPoseSource(older, newer, shotTime, blendT) {
+  if (isRollStateActive(newer, shotTime)) return newer;
+  if (isRollStateActive(older, shotTime)) return older;
+  return blendT >= 0.5 ? newer : older;
 }
 
 export function seedEntityPoseHistory(entity, serverTime = 0, options = {}) {
@@ -103,6 +120,7 @@ export function rewindEntityPose(entity, requestedShotTime, now = 0, options = {
     const span = Math.max(1, newerTime - olderTime);
     const t = clamp((clampedShotTime - olderTime) / span, 0, 1);
     return {
+      ...selectRollPoseSource(older, newer, clampedShotTime, t),
       serverTime: clampedShotTime,
       x: lerp(older.x, newer.x, t),
       y: lerp(older.y, newer.y, t),
@@ -119,29 +137,12 @@ export function rewindEntityPose(entity, requestedShotTime, now = 0, options = {
 
 export function buildHitboxesFromPose(pose) {
   if (!pose) return { bodyBox: null, headBox: null };
-  const feetY = Number((pose.y || EYE_HEIGHT) - EYE_HEIGHT);
-  const bodyCenterY = feetY + BODY_HITBOX_CENTER_OFFSET_Y;
-  const headCenterY = feetY + HEAD_HITBOX_CENTER_OFFSET_Y;
-  const halfBody = {
-    x: BODY_HITBOX_SIZE.x * 0.5,
-    y: BODY_HITBOX_SIZE.y * 0.5,
-    z: BODY_HITBOX_SIZE.z * 0.5
-  };
-  const halfHead = {
-    x: HEAD_HITBOX_SIZE.x * 0.5,
-    y: HEAD_HITBOX_SIZE.y * 0.5,
-    z: HEAD_HITBOX_SIZE.z * 0.5
-  };
-  return {
-    bodyBox: {
-      min: { x: Number(pose.x || 0) - halfBody.x, y: bodyCenterY - halfBody.y, z: Number(pose.z || 0) - halfBody.z },
-      max: { x: Number(pose.x || 0) + halfBody.x, y: bodyCenterY + halfBody.y, z: Number(pose.z || 0) + halfBody.z }
-    },
-    headBox: {
-      min: { x: Number(pose.x || 0) - halfHead.x, y: headCenterY - halfHead.y, z: Number(pose.z || 0) - halfHead.z },
-      max: { x: Number(pose.x || 0) + halfHead.x, y: headCenterY + halfHead.y, z: Number(pose.z || 0) + halfHead.z }
-    }
-  };
+  return buildCombatHitboxesFromFeetPosition(
+    Number(pose.x || 0),
+    entityFeetY(Number(pose.y || EYE_HEIGHT)),
+    Number(pose.z || 0),
+    { rolling: isRollStateActive(pose, Number(pose.serverTime || 0)) }
+  );
 }
 
 export function buildRewoundTargetEntity(entity, requestedShotTime, now = 0, options = {}) {
@@ -158,6 +159,9 @@ export function buildRewoundTargetEntity(entity, requestedShotTime, now = 0, opt
     pitch: pose.pitch,
     velocityY: pose.velocityY,
     isGrounded: pose.isGrounded,
+    rollStartedAt: Number(pose.rollStartedAt || 0),
+    rollUntil: Number(pose.rollUntil || 0),
+    rollInputState: pose.rollInputState ? { ...pose.rollInputState } : null,
     bodyBox: hitboxes.bodyBox,
     headBox: hitboxes.headBox
   };

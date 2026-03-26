@@ -702,8 +702,8 @@ test('boxman shared locked aim base pose matches the run arm baseline before swi
   const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((-15 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001));
-  assert.ok(Math.abs(rig.armUpperR.rotation.y - 0) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
@@ -724,8 +724,8 @@ test('boxman overrides the run clip right arm with the idle base pose', () => {
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((((-15 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) + (6 * (Math.PI / 180)))) < 0.000001);
-  assert.ok(Math.abs(rig.armUpperR.rotation.y - 0) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + (6 * (Math.PI / 180)))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65)) + (Math.sin((Math.PI * 0.5) + 0.35) * (2.4 * (Math.PI / 180))))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
@@ -751,7 +751,7 @@ test('boxman suppresses right-arm run swing while fire recoil is active', () => 
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((-15 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001));
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
   assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
 });
 
@@ -772,47 +772,46 @@ test('boxman locks the right arm to the aimed base pose for turn, jump, fall, an
     const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
 
     assert.equal(applied, true);
-    assert.ok(Math.abs(rig.armUpperR.rotation.x - (((-15 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001));
+    assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
     assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   }
 });
 
-test('boxman cancels parent torso yaw on the locked right arm so turn clips cannot drag it off target', () => {
-  const torsoQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.3, 0, 'YXZ'));
-  const modelQuat = new THREE.Quaternion();
+test('boxman fully overrides the locked right arm against parent turn motion', () => {
+  const parentQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.3, 0, 'XYZ'));
+  const neutralParentQuat = new THREE.Quaternion();
+  const armUpperQuat = new THREE.Quaternion();
+  const armLowerQuat = new THREE.Quaternion();
   const rig = {
-    modelRoot: {
-      getWorldQuaternion(out) {
-        return out.copy(modelQuat);
-      }
-    },
+    armUpperRParentNeutralWorldQuat: neutralParentQuat.clone(),
     armUpperR: {
       parent: {
         getWorldQuaternion(out) {
-          return out.copy(torsoQuat);
+          return out.copy(parentQuat);
         }
       },
+      quaternion: armUpperQuat,
       rotation: { x: 9, y: 8, z: 7 }
     },
-    armLowerR: { rotation: { x: 6, y: 5, z: 4 } }
+    armLowerR: {
+      quaternion: armLowerQuat,
+      rotation: { x: 6, y: 5, z: 4 }
+    }
   };
 
-  const compensation = boxmanRig._test.resolveLockedRightArmParentYawCompensation(rig);
   const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
+  const upperWorld = parentQuat.clone().multiply(armUpperQuat.clone());
+  const neutralWorld = neutralParentQuat.clone().multiply(
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(
+      ((21.02 - (28 * 1.9)) * (Math.PI / 180)),
+      -7.92 * (Math.PI / 180),
+      11.86 * (Math.PI / 180),
+      'XYZ'
+    ))
+  );
 
   assert.equal(applied, true);
-  assert.ok(compensation < -0.29 && compensation > -0.31);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((20 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
-  assert.ok(rig.armUpperR.rotation.y < 0);
-  assert.ok(rig.armLowerR.rotation.y < 0);
-});
-
-test('boxman uses different upper-arm pitch targets for left and right locked aim', () => {
-  const left = boxmanRig._test.resolveLockedRightArmOutUpperX(-0.2);
-  const right = boxmanRig._test.resolveLockedRightArmOutUpperX(0.2);
-
-  assert.ok(Math.abs(left - (((20 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)))) < 0.000001);
-  assert.ok(Math.abs(right - (((-15 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)))) < 0.000001);
+  assert.ok(upperWorld.angleTo(neutralWorld) < 0.000001);
 });
 
 test('boxman does not use the locked airborne right-arm base pose for ground locomotion and roll clips', () => {

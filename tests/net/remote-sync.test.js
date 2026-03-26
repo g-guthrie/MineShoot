@@ -221,6 +221,72 @@ test('remote sync forwards fastBackpedal into animation updates', async () => {
   assert.equal(calls[0].movingBackward, true);
 });
 
+test('remote sync applies authoritative rolling state to remote hitboxes', async () => {
+  const remoteSync = await loadRemoteSync(null, {
+    GameNet: {
+      getAuthoritativeNow() {
+        return 1000;
+      }
+    }
+  });
+  const hitboxStates = [];
+  const transformStates = [];
+  const render = {
+    id: 'usr_remote_roll',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 0.2,
+    sprinting: false,
+    movingForward: true,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    rollStartedAt: 900,
+    rollUntil: 1300,
+    rollInputState: {
+      movingForward: true,
+      movingBackward: false,
+      movingLeft: false,
+      movingRight: false
+    },
+    actorVisual: {
+      setWorldTransform(_position, _yaw, hitboxState) {
+        transformStates.push(hitboxState);
+      },
+      syncHitboxes(_position, hitboxState) {
+        hitboxStates.push(hitboxState);
+      },
+      updateAnimation() {},
+      triggerAction() {},
+      setMuzzleVisible() {},
+      setWeapon() {}
+    },
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: null
+  };
+  const renderMap = new Map([['usr_remote_roll', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(transformStates.pop().rolling, true);
+  assert.equal(hitboxStates.pop().rolling, true);
+});
+
 test('remote sync forwards yaw and derived turn rate into remote animation updates', async () => {
   const remoteSync = await loadRemoteSync();
   const calls = [];

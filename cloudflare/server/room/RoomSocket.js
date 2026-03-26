@@ -1,5 +1,6 @@
 const MESSAGE_RATE_LIMITS = {
   input: { ratePerSec: 45, burst: 90 },
+  roll: { ratePerSec: 8, burst: 16 },
   fire: { ratePerSec: 20, burst: 40 },
   reload: { ratePerSec: 4, burst: 8 },
   throw: { ratePerSec: 4, burst: 8 },
@@ -139,6 +140,12 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     if (privateLobbyLocked) return;
     if (!consumeOrClose('input')) return;
     room.handleInput(player, msg);
+    return;
+  }
+  if (type === msgC2s.ROLL) {
+    if (privateLobbyLocked) return;
+    if (!consumeOrClose('roll')) return;
+    room.handleRoll(player, msg);
     return;
   }
   if (type === msgC2s.FIRE) {

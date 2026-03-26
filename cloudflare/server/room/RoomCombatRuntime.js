@@ -39,6 +39,19 @@ function clampNumber(value, min, max, fallback = 0) {
   return Math.max(min, Math.min(max, parsed));
 }
 
+const FORWARD_ROLL_ACTION_DURATION_MS = 360;
+const BACKWARD_ROLL_ACTION_DURATION_MS = 520;
+
+function normalizeRollInputState(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  return {
+    movingForward: !!source.movingForward,
+    movingBackward: !!source.movingBackward,
+    movingLeft: !!source.movingLeft,
+    movingRight: !!source.movingRight
+  };
+}
+
 function sanitizeThrowableSpawnDef(rawDef, throwableId = '') {
   if (!rawDef || typeof rawDef !== 'object') return null;
   return {
@@ -333,6 +346,38 @@ export function isEntityMovementLocked(room, entity, now) {
     room.isEntityJustBeenHooked(entity, now);
 }
 
+export function isEntityRolling(entity, now = Date.now()) {
+  if (!entity || !entity.alive) return false;
+  const stamp = Math.max(0, Number(now || 0));
+  const startedAt = Math.max(0, Number(entity.rollStartedAt || 0));
+  const until = Math.max(0, Number(entity.rollUntil || 0));
+  if (!(until > stamp)) return false;
+  if (startedAt > 0 && stamp < startedAt) return false;
+  return true;
+}
+
+export function rollActionDurationMs(rollInputState) {
+  const state = normalizeRollInputState(rollInputState);
+  if (state.movingBackward && !state.movingForward) {
+    return BACKWARD_ROLL_ACTION_DURATION_MS;
+  }
+  return FORWARD_ROLL_ACTION_DURATION_MS;
+}
+
+export function beginEntityRoll(room, entity, rollInputState, now = Date.now()) {
+  if (!entity || !entity.alive) return false;
+  const state = normalizeRollInputState(rollInputState);
+  if (!state.movingForward && !state.movingBackward && !state.movingLeft && !state.movingRight) return false;
+  if (entity.isGrounded === false) return false;
+  if (room && room.isEntityMovementLocked && room.isEntityMovementLocked(entity, now)) return false;
+  if (isEntityRolling(entity, now)) return false;
+
+  entity.rollStartedAt = Math.max(0, Number(now || 0));
+  entity.rollUntil = entity.rollStartedAt + rollActionDurationMs(state);
+  entity.rollInputState = state;
+  return true;
+}
+
 export function canEntityUseWeapon(room, entity, now) {
   return !!(entity && entity.alive) && !room.isEntityMovementLocked(entity, now) && !room.isEntityActionRestricted(entity, 'weapon', now);
 }
@@ -613,6 +658,13 @@ export function handleWeaponLoadout(room, player, msg, deps) {
   if (!canEquipWeaponId(player, player.weaponId)) {
     player.weaponId = nextLoadout[0];
   }
+}
+
+export function handleRoll(room, player, msg, deps) {
+  deps = deps || {};
+  const nowMs = deps.nowMs || Date.now;
+  if (!player || !player.alive) return false;
+  return beginEntityRoll(room, player, msg, nowMs());
 }
 
 export function handleEquipWeapon(room, player, msg, deps) {

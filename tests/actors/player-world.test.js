@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
+import { PLAYER_HEIGHT, PLAYER_RADIUS } from '../../shared/entity-constants.js';
 
 async function loadPlayerWorldApi(collidables) {
   const code = await fs.readFile(new URL('../../js/actors/player-world.js', import.meta.url), 'utf8');
@@ -34,8 +35,8 @@ async function loadPlayerWorldApi(collidables) {
 
   vm.runInContext(code, vm.createContext(sandbox));
   return sandbox.__MAYHEM_RUNTIME.GamePlayerWorld.create({
-    playerRadius: 0.35,
-    playerHeight: 1.7,
+    playerRadius: PLAYER_RADIUS,
+    playerHeight: PLAYER_HEIGHT,
     epsilon: 0.001
   });
 }

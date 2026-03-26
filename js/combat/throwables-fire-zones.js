@@ -331,7 +331,9 @@
                 state.nextTickAt = now + lingerRateMs;
                 var hitbox = enemy.bodyHitbox || null;
                 if (!hitbox) return;
-                var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(hitbox, lingerDamage);
+                var runtime = globalThis.__MAYHEM_RUNTIME || {};
+                var enemyApi = runtime.GameEnemy || null;
+                var result = enemyApi && enemyApi.damage ? enemyApi.damage(hitbox, lingerDamage) : null;
                 reportHit(
                     onEnemyHit,
                     hitbox.position,
@@ -347,7 +349,9 @@
         function update(dt, onEnemyHit) {
             var now = Date.now();
             var def = defs().molotov || {};
-            var enemies = globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies ? globalThis.__MAYHEM_RUNTIME.GameEnemy.getEnemies() : [];
+            var runtime = globalThis.__MAYHEM_RUNTIME || {};
+            var enemyApi = runtime.GameEnemy || null;
+            var enemies = enemyApi && enemyApi.getEnemies ? enemyApi.getEnemies() : [];
             var heatedEnemies = new Set();
 
             for (var i = fireZones.length - 1; i >= 0; i--) {
@@ -382,7 +386,7 @@
                         if (verticalDelta > molotovMaxHeightDelta(def)) continue;
 
                         var dmg = Math.max(2, Math.round(Number(def.fireTickDamage || 18) * molotovDamageScale(def, d, z.radius)));
-                        var result = globalThis.__MAYHEM_RUNTIME.GameEnemy.damage(enemy.bodyHitbox, dmg);
+                        var result = enemyApi && enemyApi.damage ? enemyApi.damage(enemy.bodyHitbox, dmg) : null;
                         reportHit(
                             onEnemyHit,
                             enemy.bodyHitbox.position,

@@ -128,6 +128,7 @@ export function normalizeClassCastPayload(slotOrCastData, maybeCastData) {
 
 export const MSG_C2S = {
   INPUT: 'input',
+  ROLL: 'roll',
   FIRE: 'fire',
   RELOAD: 'reload',
   EQUIP_WEAPON: 'equip_weapon',

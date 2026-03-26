@@ -46,6 +46,10 @@
             return depGet('GameAudio') || null;
         }
 
+        function gameThrowablesApi() {
+            return depGet('GameThrowables') || null;
+        }
+
         function gameRuntimeLoaderApi() {
             return depGet('GameRuntimeLoader') || runtime.GameRuntimeLoader || null;
         }
@@ -195,6 +199,7 @@
                 getGamePlayerApi: gamePlayerApi,
                 getGameHitscanApi: gameHitscanApi,
                 getGameAudioApi: gameAudioApi,
+                getGameThrowablesApi: gameThrowablesApi,
                 getGameDocsApi: gameDocsApi,
                 getGameOverheadApi: gameOverheadApi,
                 getGameNetApi: gameNetApi,

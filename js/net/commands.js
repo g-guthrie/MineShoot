@@ -23,6 +23,17 @@
                 if (!payload) return false;
                 return wsSend(payload);
             },
+            sendRoll: function (rollOptions) {
+                var state = rollOptions && typeof rollOptions === 'object' ? rollOptions : null;
+                if (!state) return false;
+                return wsSend({
+                    t: opts.rollMessageType || 'roll',
+                    movingForward: !!state.movingForward,
+                    movingBackward: !!state.movingBackward,
+                    movingLeft: !!state.movingLeft,
+                    movingRight: !!state.movingRight
+                });
+            },
             sendReload: function (weaponId) {
                 if (!weaponId) return false;
                 return wsSend(opts.normalizeReloadPayload
