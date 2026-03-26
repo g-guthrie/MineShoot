@@ -68,19 +68,6 @@
         return stamp > 0 ? stamp : Date.now();
     }
 
-    function toLocalTime(timestamp) {
-        var runtime = globalThis.__MAYHEM_RUNTIME || {};
-        var net = runtime.GameNet || null;
-        var stamp = Number(timestamp || 0);
-        if (!(stamp > 0)) return 0;
-        var timingApi = net && net.timing ? net.timing : null;
-        if (timingApi && timingApi.toLocalTime) {
-            var localStamp = Number(timingApi.toLocalTime(stamp) || 0);
-            if (localStamp > 0) return localStamp;
-        }
-        return stamp;
-    }
-
     function sharedWeaponStatsFor(weaponId) {
         var runtime = globalThis.__MAYHEM_RUNTIME || {};
         var shared = runtime.GameShared || {};
@@ -93,51 +80,21 @@
         return weaponStats[String(weaponId || '')] || null;
     }
 
-    function weaponPresentationFor(weaponId) {
+    function sharedMovementTuning() {
         var runtime = globalThis.__MAYHEM_RUNTIME || {};
         var shared = runtime.GameShared || {};
-        return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+        if (shared.getMovementTuning) {
+            return shared.getMovementTuning() || {};
+        }
+        return (shared.gameplayTuning && shared.gameplayTuning.movement) || {};
     }
 
-    function resolveRemoteReloadState(render, serverNowMs) {
-        var runtime = globalThis.__MAYHEM_RUNTIME || {};
-        var shared = runtime.GameShared || {};
-        var emptyState = { reloading: false, reloadPct: 1, phase: 'ready', phasePct: 1 };
-        if (!render || !render.weaponAmmo || typeof render.weaponAmmo !== 'object') return emptyState;
-        var weaponId = String(render.weaponId || '');
-        if (!weaponId) return emptyState;
-        var ammoState = render.weaponAmmo[weaponId];
-        if (!ammoState || !ammoState.reloading) return emptyState;
+    function effectiveRunSpeedForWeapon(weaponId) {
+        var movement = sharedMovementTuning();
         var weaponStats = sharedWeaponStatsFor(weaponId);
-        var reloadMs = Math.max(0, Number(weaponStats && weaponStats.reloadMs || 0));
-        if (!(reloadMs > 0)) return emptyState;
-        var snapshotServerTimeMs = Number(render.weaponAmmoServerTimeMs || 0);
-        var elapsedMs = snapshotServerTimeMs > 0 ? Math.max(0, serverNowMs - snapshotServerTimeMs) : 0;
-        var remainingMs = Math.max(0, Number(ammoState.reloadRemainingMs || 0) - elapsedMs);
-        if (!(remainingMs > 0)) return emptyState;
-        var weaponPresentationApi = runtime.GameWeaponPresentation || null;
-        if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
-            return weaponPresentationApi.resolveReloadState({
-                reloadMs: reloadMs,
-                reloadRemaining: remainingMs,
-                reloadedFlashRemaining: Math.max(0, Number(ammoState.reloadedFlashRemainingMs || 0))
-            }, null);
-        }
-        if (shared.resolveReloadPresentationState) {
-            var presentation = weaponPresentationFor(weaponId);
-            return shared.resolveReloadPresentationState({
-                reloadMs: reloadMs,
-                reloadRemaining: remainingMs,
-                reloadedFlashRemaining: Math.max(0, Number(ammoState.reloadedFlashRemainingMs || 0)),
-                reload: presentation ? presentation.reload : null
-            }, null);
-        }
-        return {
-            reloading: true,
-            reloadPct: clamp(1 - (remainingMs / reloadMs), 0, 1),
-            phase: 'action',
-            phasePct: 0.5
-        };
+        var baseRunSpeed = Number(movement.runSpeed || 11);
+        var moveSpeedMultiplier = Math.max(0.1, Number(weaponStats && weaponStats.moveSpeedMultiplier || 1));
+        return baseRunSpeed * moveSpeedMultiplier;
     }
 
     function interpolateBufferedTransform(render, nowMs, options) {
@@ -263,13 +220,9 @@
                     r._appliedWeaponId = nextWeaponId;
                 }
                 var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
-                var hookedNow = Number(r.hookedUntil || 0) > serverNowMs;
-                var remoteReloadState = resolveRemoteReloadState(
-                    r,
-                    Math.max(0, serverNowMs - Math.max(0, Number(r.interpolationDelayMs || 0)))
-                );
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
+                    var presentedHorizontalSpeed = presentedSpeedNorm * effectiveRunSpeedForWeapon(r.weaponId || 'rifle');
                     animationApi.updateAnimation(dt, {
                         speedNorm: presentedSpeedNorm,
                         sprinting: presentedSprinting,
@@ -277,16 +230,10 @@
                         airborne: presentState.isGrounded === false,
                         footY: nextY,
                         aimPitch: renderPitch,
-                        hooked: hookedNow,
-                        hookStartedAt: toLocalTime(r.hookedStartedAt),
                         choked: chokeVictimState.lift > 0,
                         startedAt: chokeVictimState.startedAt || 0,
-                        reloading: remoteReloadState.reloading,
-                        reloadPct: remoteReloadState.reloadPct,
-                        reloadPhase: remoteReloadState.phase,
-                        reloadPhasePct: remoteReloadState.phasePct,
-                        horizontalSpeed: presentedSpeedNorm * 14,
-                        worldSpeed: presentedSpeedNorm * 14,
+                        horizontalSpeed: presentedHorizontalSpeed,
+                        worldSpeed: presentedHorizontalSpeed,
                         yaw: renderYaw,
                         turnRate: remoteTurnRate,
                         movingForward: presentedMovingForward,

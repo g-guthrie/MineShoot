@@ -233,52 +233,6 @@
                 turnRate = normalizeAngle(renderYaw - lastAnimationYaw) / Math.max(0.0001, Number(dt || 0));
             }
             lastAnimationYaw = renderYaw;
-            var activeWeaponState = options.getCurrentWeaponState ? options.getCurrentWeaponState() : null;
-            var reloadPresentation = {
-                reloading: false,
-                reloadPct: 1,
-                phase: 'ready',
-                phasePct: 1
-            };
-            if (activeWeaponState) {
-                if (typeof activeWeaponState.reloadPct === 'number' && typeof activeWeaponState.reloadPhase === 'string') {
-                    reloadPresentation = {
-                        reloading: !!activeWeaponState.reloading,
-                        reloadPct: Math.max(0, Math.min(1, Number(activeWeaponState.reloadPct || 0))),
-                        phase: String(activeWeaponState.reloadPhase || 'ready'),
-                        phasePct: Math.max(0, Math.min(1, Number(activeWeaponState.reloadPhasePct != null ? activeWeaponState.reloadPhasePct : 1)))
-                    };
-                } else {
-                    var shared = runtime.GameShared || {};
-                    var weaponPresentationApi = runtime.GameWeaponPresentation || null;
-                    var presentation = options.getWeaponPresentation && activeWeaponState.id
-                        ? options.getWeaponPresentation(activeWeaponState.id)
-                        : null;
-                    if (weaponPresentationApi && weaponPresentationApi.resolveReloadState) {
-                        reloadPresentation = weaponPresentationApi.resolveReloadState({
-                            reloadMs: Number(activeWeaponState.reloadMs || 0),
-                            reloadRemaining: Number(activeWeaponState.reloadRemaining || 0),
-                            reloadedFlashRemaining: Number(activeWeaponState.reloadedFlashRemaining || 0)
-                        }, null);
-                    } else if (shared.resolveReloadPresentationState) {
-                        reloadPresentation = shared.resolveReloadPresentationState({
-                            reloadMs: Number(activeWeaponState.reloadMs || 0),
-                            reloadRemaining: Number(activeWeaponState.reloadRemaining || 0),
-                            reloadedFlashRemaining: Number(activeWeaponState.reloadedFlashRemaining || 0),
-                            reload: presentation && presentation.reload ? presentation.reload : null
-                        }, null);
-                    } else {
-                        reloadPresentation = {
-                            reloading: !!activeWeaponState.reloading,
-                            reloadPct: Number(activeWeaponState.reloadRemaining || 0) > 0
-                                ? Math.max(0, Math.min(1, 1 - (Math.max(0, Number(activeWeaponState.reloadRemaining || 0)) / Math.max(1, Number(activeWeaponState.reloadMs || 1)))))
-                                : 1,
-                            phase: Number(activeWeaponState.reloadedFlashRemaining || 0) > 0 ? 'complete' : 'ready',
-                            phasePct: 1
-                        };
-                    }
-                }
-            }
             animationApi.updateAnimation(dt, {
                 speedNorm: speedNorm,
                 sprinting: state.sprinting,
@@ -286,15 +240,8 @@
                 airborne: !state.isGrounded,
                 footY: typeof state.footY === 'number' ? Number(state.footY) : null,
                 aimPitch: state.pitch + (cameraKickPitch * 0.35),
-                hooked: !!state.hooked,
-                hookStartedAt: state.hookPullStartedAt || 0,
                 choked: !!state.choked,
                 startedAt: state.chokeStartedAt || 0,
-                adsActive: !!state.adsActive,
-                reloading: !!reloadPresentation.reloading,
-                reloadPct: reloadPresentation.reloadPct,
-                reloadPhase: reloadPresentation.phase,
-                reloadPhasePct: reloadPresentation.phasePct,
                 horizontalSpeed: speed,
                 worldSpeed: speed,
                 yaw: renderYaw,

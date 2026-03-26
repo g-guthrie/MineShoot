@@ -98,7 +98,7 @@ function directionAfterUpdate(view, state, dt) {
   return out;
 }
 
-test('player view forwards reload state and progress into actor visuals', async () => {
+test('player view keeps reload bookkeeping out of character animation payloads', async () => {
   const calls = [];
   const view = await loadPlayerView(function () {
     return {
@@ -117,11 +117,11 @@ test('player view forwards reload state and progress into actor visuals', async 
   }));
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].reloading, true);
-  assert.ok(Math.abs(calls[0].reloadPct - 0.75) < 0.000001);
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0], 'reloading'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0], 'reloadPct'), false);
 });
 
-test('player view falls back to the rig api when no actor visual wrapper is present', async () => {
+test('player view strips reload bookkeeping when falling back to the rig api', async () => {
   const calls = [];
   const view = await loadPlayerView(function () {
     return {
@@ -140,8 +140,8 @@ test('player view falls back to the rig api when no actor visual wrapper is pres
   }));
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].reloading, true);
-  assert.ok(Math.abs(calls[0].reloadPct - 0.75) < 0.000001);
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0], 'reloading'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0], 'reloadPct'), false);
 });
 
 test('player view forwards yaw and derived turn rate into actor animation updates', async () => {

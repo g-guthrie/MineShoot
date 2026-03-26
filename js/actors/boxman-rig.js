@@ -208,8 +208,6 @@ import {
                 clip.name === 'start_forward' ||
                 clip.name === 'start_left' ||
                 clip.name === 'start_right' ||
-                clip.name === 'start_back_left' ||
-                clip.name === 'start_back_right' ||
                 clip.name === 'drop_idle' ||
                 clip.name === 'drop_running' ||
                 clip.name === 'drop_running_roll'

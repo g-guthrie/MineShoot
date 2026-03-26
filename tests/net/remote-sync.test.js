@@ -221,6 +221,68 @@ test('remote sync forwards fastBackpedal into animation updates', async () => {
   assert.equal(calls[0].movingBackward, true);
 });
 
+test('remote sync uses weapon-adjusted run speed for horizontal animation speed', async () => {
+  const remoteSync = await loadRemoteSync(null, {
+    GameShared: {
+      gameplayTuning: {
+        movement: {
+          runSpeed: 11
+        },
+        weaponStats: {
+          sniper: {
+            moveSpeedMultiplier: 0.85
+          }
+        }
+      }
+    }
+  });
+  const calls = [];
+  const render = {
+    id: 'usr_remote_speed',
+    group: {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { y: 0 }
+    },
+    targetX: 0,
+    targetFootY: 0,
+    targetZ: 0,
+    targetYaw: 0,
+    targetPitch: 0,
+    moveSpeedNorm: 1,
+    sprinting: false,
+    movingForward: true,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    isGrounded: true,
+    velocityY: 0,
+    hookedUntil: 0,
+    muzzleFlashUntil: 0,
+    chokeState: null,
+    weaponId: 'sniper',
+    actorVisual: null,
+    bodyHitbox: null,
+    headHitbox: null,
+    rigApi: {
+      setWeapon() {},
+      updateAnimation(_dt, animState) {
+        calls.push(animState);
+      },
+      triggerAction() {},
+      setMuzzleVisible() {}
+    }
+  };
+  const renderMap = new Map([['usr_remote_speed', render]]);
+
+  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
+    return { lift: 0, startedAt: 0 };
+  });
+
+  assert.equal(calls.length, 1);
+  assert.ok(Math.abs(calls[0].horizontalSpeed - 9.35) < 0.000001);
+  assert.equal(calls[0].worldSpeed, calls[0].horizontalSpeed);
+});
+
 test('remote sync applies authoritative rolling state to remote hitboxes', async () => {
   const remoteSync = await loadRemoteSync(null, {
     GameNet: {
@@ -566,7 +628,7 @@ test('remote sync smooths animation-facing sprint and movement changes over a sh
   assert.equal(latestAnimState.speedNorm > 0 && latestAnimState.speedNorm < 1, true);
 });
 
-test('remote sync forwards replicated reload progress to remote animation', async () => {
+test('remote sync keeps replicated reload bookkeeping out of remote animation payloads', async () => {
   const remoteSync = await loadRemoteSync(null, {
     GameShared: {
       entityPoints: {},
@@ -632,79 +694,9 @@ test('remote sync forwards replicated reload progress to remote animation', asyn
   });
 
   assert.equal(!!latestAnimState, true);
-  assert.equal(latestAnimState.reloading, true);
-  assert.ok(Math.abs(latestAnimState.reloadPct - 0.4) < 0.000001);
-});
-
-test('remote sync evaluates reload progress against the delayed presentation clock', async () => {
-  const remoteSync = await loadRemoteSync(null, {
-    GameShared: {
-      entityPoints: {},
-      gameplayTuning: {
-        weaponStats: {
-          rifle: { reloadMs: 1500 }
-        }
-      }
-    },
-    GameNet: {
-      getAuthoritativeNow() {
-        return 1000;
-      }
-    }
-  });
-  let latestAnimState = null;
-  const render = {
-    id: 'usr_remote',
-    group: {
-      position: { x: 0, y: 0, z: 0 },
-      rotation: { y: 0 }
-    },
-    targetX: 0,
-    targetFootY: 0,
-    targetZ: 0,
-    targetYaw: 0,
-    targetPitch: 0,
-    moveSpeedNorm: 0,
-    sprinting: false,
-    movingForward: false,
-    movingBackward: false,
-    isGrounded: true,
-    velocityY: 0,
-    hookedUntil: 0,
-    muzzleFlashUntil: 0,
-    chokeState: null,
-    weaponId: 'rifle',
-    weaponAmmo: {
-      rifle: {
-        ammoInMag: 0,
-        reloading: true,
-        reloadRemainingMs: 1000,
-        reloadedFlashRemainingMs: 0
-      }
-    },
-    weaponAmmoServerTimeMs: 900,
-    interpolationDelayMs: 100,
-    actorVisual: null,
-    bodyHitbox: null,
-    headHitbox: null,
-    rigApi: {
-      setWeapon() {},
-      updateAnimation(_dt, animState) {
-        latestAnimState = animState;
-      },
-      triggerAction() {},
-      setMuzzleVisible() {}
-    }
-  };
-  const renderMap = new Map([['usr_remote', render]]);
-
-  remoteSync.updateRemoteEntities(0.016, renderMap, function () {
-    return { lift: 0, startedAt: 0 };
-  });
-
-  assert.equal(!!latestAnimState, true);
-  assert.equal(latestAnimState.reloading, true);
-  assert.ok(Math.abs(latestAnimState.reloadPct - (1 / 3)) < 0.000001);
+  assert.equal(Object.prototype.hasOwnProperty.call(latestAnimState, 'reloading'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(latestAnimState, 'reloadPct'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(latestAnimState, 'reloadPhase'), false);
 });
 
 test('remote sync flips jump leg tilt when backward input starts the jump', async () => {
@@ -871,7 +863,7 @@ test('remote sync uses authoritative network time for remote ability timers', as
       return { lift: 0, startedAt: 0 };
     });
 
-    assert.equal(calls.some((entry) => entry.kind === 'update' && entry.animState.hooked === true), true);
+    assert.equal(calls.some((entry) => entry.kind === 'update' && Object.prototype.hasOwnProperty.call(entry.animState, 'hooked')), false);
     assert.equal(calls.some((entry) => entry.kind === 'muzzle' && entry.visible === true), true);
     assert.equal(calls.some((entry) => entry.kind === 'shield' && entry.visible === true), true);
     assert.equal(calls.some((entry) => entry.kind === 'trigger' && entry.action === 'choke_grip'), true);
