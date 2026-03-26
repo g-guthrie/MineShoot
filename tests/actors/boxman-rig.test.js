@@ -505,6 +505,7 @@ test('boxman gives pure strafe stops a short directional settle instead of snapp
 
   assert.equal(clip, 'idle');
   assert.ok(motionState.stopSettleRemaining > 0);
+  assert.ok(motionState.stopSettleDuration < 0.12);
   assert.equal(motionState.stopDirectionalSnapshot.poseName, 'strafe_left');
 });
 
@@ -753,8 +754,8 @@ test('boxman suppresses right-arm run swing while fire recoil is active', () => 
   assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
 });
 
-test('boxman locks the right arm to the aimed base pose for jump, fall, and landing clips', () => {
-  const clipNames = ['jump_idle', 'jump_running', 'falling', 'drop_idle', 'drop_running'];
+test('boxman locks the right arm to the aimed base pose for turn, jump, fall, and landing clips', () => {
+  const clipNames = ['rotate_left', 'rotate_right', 'start_left', 'start_right', 'jump_idle', 'jump_running', 'falling', 'drop_idle', 'drop_running'];
   for (const clipName of clipNames) {
     assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose(clipName), true);
     const rig = {
@@ -780,6 +781,21 @@ test('boxman does not use the locked airborne right-arm base pose for ground loc
   assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('run'), false);
   assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('sprint'), false);
   assert.equal(boxmanRig._test.clipUsesLockedRightArmAimBasePose('drop_running_roll'), false);
+});
+
+test('boxman blends the right arm toward the aimed run base during stop settle instead of popping up to idle', () => {
+  const rig = {
+    armUpperR: { rotation: { x: 0.9, y: 0.4, z: -0.2 } },
+    armLowerR: { rotation: { x: 0.6, y: 0.2, z: 0.1 } }
+  };
+
+  const applied = boxmanRig._test.applyStopSettleRightArmRecoveryPose(rig, 0.5);
+
+  assert.equal(applied, true);
+  assert.ok(rig.armUpperR.rotation.x < 0.9);
+  assert.ok(rig.armLowerR.rotation.x < 0.6);
+  assert.ok(rig.armUpperR.rotation.y < 0.4);
+  assert.ok(rig.armLowerR.rotation.y < 0.2);
 });
 
 test('boxman no longer uses fake shoulder carry translation or yaw compensation', () => {
@@ -872,7 +888,7 @@ test('boxman idle aim target yaw counter-rotates against facing yaw and clamps',
   assert.ok(mild > 0);
   assert.ok(Math.abs(hard) <= (90 * (Math.PI / 180)));
   assert.ok(Math.abs(hard) > Math.abs(mild));
-  assert.ok(Math.abs(runYaw - (Math.PI * 0.5)) < 0.000001);
+  assert.ok(Math.abs(runYaw - ((Math.PI * 0.5) * (45 / 55))) < 0.000001);
 });
 
 test('boxman counter-rotates the gun only on the outward-opening side', () => {
@@ -1178,7 +1194,7 @@ test('boxman fire recoil layers on top of clip output and stacks across rapid sh
   assert.ok(firstWeaponKick < weaponRootBasePos.z);
   assert.equal(rig.armUpperR.rotation.x, 0);
   assert.equal(rig.armUpperR.rotation.y, 0);
-  assert.equal(rig.armLowerR.rotation.x, 0);
+  assert.ok(rig.armLowerR.rotation.x > 0);
   assert.ok(recoilState.shoulderPitch > 0);
   assert.ok(recoilState.shoulderYaw > 0);
   assert.ok(recoilState.lowerArmPitch > 0);
@@ -1200,7 +1216,7 @@ test('boxman fire recoil layers on top of clip output and stacks across rapid sh
   assert.ok(rig.weaponRoot.position.z < firstWeaponKick);
   assert.equal(rig.armUpperR.rotation.x, 0);
   assert.equal(rig.armUpperR.rotation.y, 0);
-  assert.equal(rig.armLowerR.rotation.x, 0);
+  assert.ok(rig.armLowerR.rotation.x > 0.01);
   assert.ok(recoilState.shoulderPitch > 0.03);
   assert.ok(recoilState.shoulderYaw > 0.015);
   assert.ok(recoilState.lowerArmPitch > 0.08);

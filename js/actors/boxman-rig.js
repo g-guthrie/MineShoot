@@ -41,7 +41,7 @@ import {
     var IDLE_AIM_RESPONSE_SCALE = 0.5;
     var IDLE_AIM_YAW_LIMIT = 90 * (Math.PI / 180);
     var IDLE_AIM_YAW_RESPONSE_SCALE = 1;
-    var RUN_AIM_YAW_RESPONSE_WEIGHT = 1;
+    var RUN_AIM_YAW_RESPONSE_WEIGHT = 45 / 55;
     var IDLE_AIM_UPPER_PITCH_SCALE = -1.9;
     var IDLE_AIM_LOWER_PITCH_SCALE = -0.65;
     var IDLE_AIM_UPPER_YAW_SCALE = 1;
@@ -265,6 +265,9 @@ import {
             weaponNode.position.copy(weaponBasePos);
             weaponNode.position.x += Number(recoilState.side || 0) * Math.abs(Number(recoilState.weaponKick || 0)) * 0.18;
             weaponNode.position.z += Number(recoilState.weaponKick || 0);
+        }
+        if (rig.armLowerR && rig.armLowerR.rotation) {
+            rig.armLowerR.rotation.x += Number(recoilState.lowerArmPitch || 0) * 0.2;
         }
         return true;
     }
@@ -523,9 +526,30 @@ import {
         );
     }
 
+    function applyStopSettleRightArmRecoveryPose(rig, stopSettleWeight) {
+        if (!rig) return false;
+        var weight = clamp01(stopSettleWeight);
+        if (!(weight > 0)) return false;
+        if (rig.armUpperR && rig.armUpperR.rotation) {
+            rig.armUpperR.rotation.x += (IDLE_RIGHT_ARM_OUT_UPPER_X - Number(rig.armUpperR.rotation.x || 0)) * weight;
+            rig.armUpperR.rotation.y += (IDLE_RIGHT_ARM_UPPER_BASE.y - Number(rig.armUpperR.rotation.y || 0)) * weight;
+            rig.armUpperR.rotation.z += (IDLE_RIGHT_ARM_UPPER_BASE.z - Number(rig.armUpperR.rotation.z || 0)) * weight;
+        }
+        if (rig.armLowerR && rig.armLowerR.rotation) {
+            rig.armLowerR.rotation.x += (IDLE_RIGHT_ARM_OUT_LOWER_X - Number(rig.armLowerR.rotation.x || 0)) * weight;
+            rig.armLowerR.rotation.y += (IDLE_RIGHT_ARM_LOWER_BASE.y - Number(rig.armLowerR.rotation.y || 0)) * weight;
+            rig.armLowerR.rotation.z += (IDLE_RIGHT_ARM_LOWER_BASE.z - Number(rig.armLowerR.rotation.z || 0)) * weight;
+        }
+        return true;
+    }
+
     function clipUsesLockedRightArmAimBasePose(activeClipName) {
         var clipName = String(activeClipName || '');
         return (
+            clipName === 'rotate_left' ||
+            clipName === 'rotate_right' ||
+            clipName === 'start_left' ||
+            clipName === 'start_right' ||
             clipName === 'jump_idle' ||
             clipName === 'jump_running' ||
             clipName === 'falling' ||
@@ -678,11 +702,20 @@ import {
     }
 
     function beginStopDirectionalSettle(motionState, durationSec) {
-        motionState.stopSettleDuration = Math.max(0.08, Number(durationSec || STOP_DIRECTIONAL_SETTLE_DURATION));
-        motionState.stopSettleRemaining = motionState.stopSettleDuration;
         motionState.stopDirectionalSnapshot = motionState.lastMoveDirectionalSnapshot
             ? cloneDirectionalSnapshot(motionState.lastMoveDirectionalSnapshot)
             : null;
+        var requestedDuration = Math.max(0.08, Number(durationSec || STOP_DIRECTIONAL_SETTLE_DURATION));
+        var poseName = String(
+            motionState.stopDirectionalSnapshot && motionState.stopDirectionalSnapshot.poseName || ''
+        );
+        if (poseName === 'strafe_left' || poseName === 'strafe_right') {
+            requestedDuration *= 0.55;
+        } else if (poseName === 'forward_left' || poseName === 'forward_right') {
+            requestedDuration *= 0.75;
+        }
+        motionState.stopSettleDuration = requestedDuration;
+        motionState.stopSettleRemaining = motionState.stopSettleDuration;
     }
 
     function stopDirectionalSettleWeight(motionState) {
@@ -874,7 +907,7 @@ import {
             stickerPos: { x: 0, y: 0.18, z: 0 },
             stickerRot: { x: -Math.PI * 0.5, y: 0, z: 0 },
             rootPos: { x: -0.04, y: 0.65, z: -0.06 },
-            rootRot: { x: 0.08, y: 0.22, z: 0 },
+            rootRot: { x: 0.08 - (10 * (Math.PI / 180)), y: 0.22, z: 0 },
             muzzlePos: { x: 0, y: 0, z: -0.09 }
         };
     }
@@ -1386,17 +1419,19 @@ import {
             rig.activePlaybackRate = Number(playback.timeScale || 1);
             rig.activePoseName = '';
 
+            var stopSettleWeight = stopDirectionalSettleWeight(motionState);
             var idleAimActive = idleAimAllowed(animState, rig.activeClipName);
             var pitchRecoilTarget = Number(fireRecoilState.shoulderPitch || 0) + (Number(fireRecoilState.lowerArmPitch || 0) * 0.35);
             var idleAimTarget = idleAimActive ? (idleAimTargetPitch(animState, rig.activeClipName) + pitchRecoilTarget) : 0;
             var idleAimTargetYawValue = idleAimActive ? idleAimTargetYaw(motionState.directional, rig.activeClipName) : 0;
             var idleAimBlendSpeed = idleAimActive ? IDLE_AIM_BLEND_IN_SPEED : IDLE_AIM_BLEND_OUT_SPEED;
             var idleAimBlend = Math.min(1, dt * idleAimBlendSpeed);
+            var idleAimYawBlend = Number(stopSettleWeight || 0) > 0 ? 1 : idleAimBlend;
             motionState.idleAimCurrentPitch += (idleAimTarget - Number(motionState.idleAimCurrentPitch || 0)) * idleAimBlend;
             if (Math.abs(idleAimTarget - motionState.idleAimCurrentPitch) < 0.0001) {
                 motionState.idleAimCurrentPitch = idleAimTarget;
             }
-            motionState.idleAimCurrentYaw += (idleAimTargetYawValue - Number(motionState.idleAimCurrentYaw || 0)) * idleAimBlend;
+            motionState.idleAimCurrentYaw += (idleAimTargetYawValue - Number(motionState.idleAimCurrentYaw || 0)) * idleAimYawBlend;
             if (Math.abs(idleAimTargetYawValue - motionState.idleAimCurrentYaw) < 0.0001) {
                 motionState.idleAimCurrentYaw = idleAimTargetYawValue;
             }
@@ -1416,7 +1451,6 @@ import {
             } else if (applyDirectionalLocomotionPose(rig, motionState.directional, animState)) {
                 rig.activePoseName = motionState.directional.poseName || '';
             }
-            var stopSettleWeight = stopDirectionalSettleWeight(motionState);
             if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
                 applyDirectionalLocomotionPose(rig, motionState.stopDirectionalSnapshot, animState, stopSettleWeight);
                 if (!rig.activePoseName && motionState.stopDirectionalSnapshot.poseName) {
@@ -1427,6 +1461,8 @@ import {
                 applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
             } else if (clipUsesLockedRightArmAimBasePose(rig.activeClipName)) {
                 applyLockedRightArmAimBasePose(rig);
+            } else if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
+                applyStopSettleRightArmRecoveryPose(rig, stopSettleWeight);
             }
             applyTorsoCarryPose(rig, motionState.directional);
             applyIdleAimPose(rig, {
@@ -1616,6 +1652,7 @@ import {
         clipStartFraction: clipStartFraction,
         landingClip: landingClip,
         resolveHorizontalSpeed: resolveHorizontalSpeed,
+        stopDirectionalSettleWeight: stopDirectionalSettleWeight,
         resolveDistalFaceCenter: resolveDistalFaceCenter,
         resolveAnimatedBone: resolveAnimatedBone,
         createFireRecoilState: createFireRecoilState,
@@ -1633,6 +1670,7 @@ import {
         applyWeaponPartMesh: applyWeaponPartMesh,
         applyWeaponVisualState: applyWeaponVisualState,
         applyLockedRightArmAimBasePose: applyLockedRightArmAimBasePose,
+        applyStopSettleRightArmRecoveryPose: applyStopSettleRightArmRecoveryPose,
         clipUsesLockedRightArmAimBasePose: clipUsesLockedRightArmAimBasePose,
         applyRunRightArmIdleBasePose: applyRunRightArmIdleBasePose,
         applyTorsoCarryPose: applyTorsoCarryPose,
@@ -1642,7 +1680,7 @@ import {
         weaponMount: function () {
             return {
                 rootPos: { x: -0.04, y: 0.65, z: -0.06 },
-                rootRot: { x: 0.08, y: 0.22, z: 0 },
+                rootRot: { x: 0.08 - (10 * (Math.PI / 180)), y: 0.22, z: 0 },
                 handleBack: { x: 0, y: -0.1, z: 0.08 },
                 receiverSize: { x: 0.14, y: 0.1, z: 0.55 },
                 barrelPos: { x: 0, y: 0.02, z: -0.36 },
