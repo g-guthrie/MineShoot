@@ -91,7 +91,9 @@ import {
     GROUND_COLORS[BIOME_CITADEL] = 0xf6f2ea;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
     GROUND_COLORS[BIOME_WALL_STREET] = 0x6a6258;
-    GROUND_COLORS[BIOME_RADAR] = 0x97a19a;
+    GROUND_COLORS[BIOME_RADAR] = 0x1a6b8a;
+    GROUND_COLORS['volcano'] = 0x2a2a2a;
+    GROUND_COLORS['whoville'] = 0xf0f5ff;
 
     function groundColorForBiome(biomeId) {
         if (Object.prototype.hasOwnProperty.call(GROUND_COLORS, biomeId)) {

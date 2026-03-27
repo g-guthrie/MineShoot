@@ -17,18 +17,19 @@ export const BIOME_CITADEL = 'citadel';
 export const BIOME_QUARRY = 'quarry';
 export const BIOME_WALL_STREET = 'wall-street';
 export const BIOME_RADAR = 'radar';
+export const BIOME_VOLCANO = 'volcano';
 export const BIOME_GRID_COLS = 3;
 export const BIOME_GRID_ROWS = 3;
 export const DEFAULT_BIOME_CELL_LABELS = [
   BIOME_ARCTIC,
-  BIOME_RADAR,
+  BIOME_VOLCANO,
   BIOME_DESERT,
   BIOME_JUNGLE,
-  BIOME_CITADEL,
+  'pirate-cove',
   BIOME_NUCLEAR,
   BIOME_QUARRY,
   BIOME_WALL_STREET,
-  BIOME_URBAN
+  'whoville'
 ];
 
 const CELL_WIDTH = WORLD_PLAYABLE_SPAN / BIOME_GRID_COLS;

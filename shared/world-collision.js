@@ -14,7 +14,8 @@ import '../js/world/prefab-fuel-spheres.js';
 import '../js/world/prefab-reactor-tank.js';
 import '../js/world/quadrant-nuclear-simpsons.js';
 import '../js/world/quadrant-quarry.js';
-import '../js/world/quadrant-radar.js';
+import '../js/world/quadrant-pirate-cove.js';
+import '../js/world/quadrant-volcano.js';
 import '../js/world/quadrant-urban.js';
 import {
   WORLD_MIN,
