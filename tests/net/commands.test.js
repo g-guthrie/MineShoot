@@ -71,6 +71,23 @@ test('GameNetCommands forwards fire payloads unchanged when estimated server tim
   assert.equal('estimatedServerShotTime' in sentMessages[0], false);
 });
 
+test('GameNetCommands emits an enter-match command through the websocket sender', async () => {
+  const GameNetCommands = await loadCommandsApi();
+  const sentMessages = [];
+  const commands = GameNetCommands.create({
+    wsSend(msg) {
+      sentMessages.push(JSON.parse(JSON.stringify(msg)));
+      return true;
+    },
+    enterMatchMessageType: 'enter_match'
+  });
+
+  assert.equal(commands.sendEnterMatch(), true);
+  assert.deepEqual(sentMessages, [{
+    t: 'enter_match'
+  }]);
+});
+
 test('GameNetCommands preserves pending weapon loadout state until the flush owner resolves it', async () => {
   const GameNetCommands = await loadCommandsApi();
   var pendingLoadout = null;
@@ -93,7 +110,7 @@ test('GameNetCommands preserves pending weapon loadout state until the flush own
   assert.deepEqual(flushSeenPending, { slot1: 'rifle', slot2: 'shotgun' });
 });
 
-test('GameNetCommands delegates throw and ability payload shaping through the provided normalizers', async () => {
+test('GameNetCommands delegates throw and reload payload shaping through the provided normalizers', async () => {
   const GameNetCommands = await loadCommandsApi();
   const sentMessages = [];
   const commands = GameNetCommands.create({
@@ -114,25 +131,11 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
         t: 'reload',
         weaponId
       };
-    },
-    normalizeAbilityLoadoutPayload(abilityId) {
-      return {
-        t: 'ability_loadout',
-        abilityId
-      };
-    },
-    normalizeClassCastPayload(castData) {
-      return {
-        t: 'class_cast',
-        castData
-      };
     }
   });
 
   assert.equal(commands.sendThrow('frag', 'throw_1', { power: 0.5 }), true);
   assert.equal(commands.sendReload('rifle'), true);
-  assert.equal(commands.sendAbilityLoadout('choke'), true);
-  assert.equal(commands.sendAbilityCast({ targetId: 'usr_remote' }), true);
   assert.deepEqual(sentMessages, [
     {
       t: 'throw',
@@ -143,14 +146,6 @@ test('GameNetCommands delegates throw and ability payload shaping through the pr
     {
       t: 'reload',
       weaponId: 'rifle'
-    },
-    {
-      t: 'ability_loadout',
-      abilityId: 'choke'
-    },
-    {
-      t: 'class_cast',
-      castData: { targetId: 'usr_remote' }
     }
   ]);
 });

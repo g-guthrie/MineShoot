@@ -1,6 +1,6 @@
 # gameplay
 
-Owns player movement, combat, abilities, throwables, HUD, camera, awareness, input, local simulation helpers, and runtime coordination.
+Owns player movement, combat, throwables, HUD, camera, awareness, input, local simulation helpers, and runtime coordination.
 
 Status:
 - Rewrite landing zone created.

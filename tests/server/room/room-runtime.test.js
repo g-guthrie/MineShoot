@@ -2,18 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  activateEntityMatchEntry,
   applyPendingInputAck,
   applyEntitySpawnPoint,
   applySpawnShield,
+  beginEntityMatchEntry,
   buildPlayerEntity,
   chooseEntitySpawnPoint,
   consumeQueuedAuthoritativeInputs,
   ensurePlayer,
+  isEntityMatchEntryPending,
   queueAuthoritativeInput,
   respawnIfNeeded,
   syncRoomFixtures,
   terrainFeetYAt,
-  terrainEyeYAt
+  terrainEyeYAt,
+  tickEntityMatchEntries
 } from '../../../cloudflare/server/room/RoomRuntime.js';
 
 function makeRoom() {
@@ -114,6 +118,64 @@ test('room runtime terrain and spawn helpers keep player positions grounded', ()
   assert.equal(player.z, 5);
   assert.equal(player.y, 10.7);
   assert.equal(player.isGrounded, true);
+});
+
+test('room runtime stages fresh entrants until they manually enter or the timer expires', () => {
+  const room = makeRoom();
+  const player = room.buildPlayerEntity('u1', 'ALPHA', 'ffa', {
+    actorId: 'actor-a',
+    actorName: 'ALPHA'
+  });
+
+  beginEntityMatchEntry(room, player, {
+    nowMs: () => 500,
+    matchEntryWindowMs: 20000,
+    playerSpawnShieldMs: 1000
+  });
+
+  assert.equal(isEntityMatchEntryPending(player, 600), true);
+  assert.equal(player.matchEntryStartedAt, 500);
+  assert.equal(player.matchEntryUntil, 20500);
+  assert.equal(player.spawnShieldUntil, 21500);
+
+  activateEntityMatchEntry(room, player, {
+    nowMs: () => 2500,
+    playerSpawnShieldMs: 1000
+  });
+
+  assert.equal(isEntityMatchEntryPending(player, 2500), false);
+  assert.equal(player.matchEntryPending, false);
+  assert.equal(player.matchEntryUntil, 0);
+  assert.equal(player.spawnShieldUntil, 3500);
+});
+
+test('room runtime auto-activates staged entrants once the entry timer expires', () => {
+  const room = makeRoom();
+  const player = room.buildPlayerEntity('u1', 'ALPHA', 'ffa', {
+    actorId: 'actor-a',
+    actorName: 'ALPHA'
+  });
+  room.players.set('u1', player);
+
+  beginEntityMatchEntry(room, player, {
+    nowMs: () => 500,
+    matchEntryWindowMs: 20000,
+    playerSpawnShieldMs: 1000
+  });
+
+  assert.equal(tickEntityMatchEntries(room, {
+    nowMs: () => 12000,
+    playerSpawnShieldMs: 1000
+  }), false);
+  assert.equal(player.matchEntryPending, true);
+
+  assert.equal(tickEntityMatchEntries(room, {
+    nowMs: () => 20500,
+    playerSpawnShieldMs: 1000
+  }), true);
+  assert.equal(player.matchEntryPending, false);
+  assert.equal(player.matchEntryUntil, 0);
+  assert.equal(player.spawnShieldUntil, 21500);
 });
 
 test('room runtime keeps latest intent and applies the ack after authoritative movement', () => {
@@ -275,7 +337,7 @@ test('room runtime ack only advances to the last processed input seq', () => {
 
 test('room runtime ensures players and simulated fixtures through one boundary', () => {
   const room = makeRoom();
-  const player = ensurePlayer(room, 'u1', 'ALPHA', 'abilities', 'actor-a', 'ALPHA', {
+  const player = ensurePlayer(room, 'u1', 'ALPHA', 'ffa', 'actor-a', 'ALPHA', {
     isPrivateMatchRoom: () => true,
     teamAlpha: 'alpha',
     gameModeTdm: 'tdm'

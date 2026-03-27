@@ -17,6 +17,11 @@
         }
 
         return {
+            sendEnterMatch: function () {
+                return wsSend({
+                    t: opts.enterMatchMessageType || 'enter_match'
+                });
+            },
             sendFire: function (weaponId, shotToken) {
                 if (!buildFirePayload) return false;
                 var payload = buildFirePayload(opts.fireMessageType || 'fire', weaponId, shotToken);
@@ -59,17 +64,6 @@
             sendThrow: function (throwableId, clientThrowId, throwIntent) {
                 return wsSend(opts.normalizeThrowPayload
                     ? opts.normalizeThrowPayload(throwableId, clientThrowId, throwIntent)
-                    : null);
-            },
-            sendAbilityLoadout: function (abilityId) {
-                return wsSend(opts.normalizeAbilityLoadoutPayload
-                    ? opts.normalizeAbilityLoadoutPayload(abilityId)
-                    : null);
-            },
-            sendAbilityCast: function (castDataOrSlot, maybeCastData) {
-                var castData = maybeCastData !== undefined ? maybeCastData : castDataOrSlot;
-                return wsSend(opts.normalizeClassCastPayload
-                    ? opts.normalizeClassCastPayload(castData)
                     : null);
             }
         };

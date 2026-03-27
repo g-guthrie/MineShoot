@@ -691,7 +691,7 @@ test('boxman keeps the same right-arm aim target in run as in idle', () => {
   assert.ok(Math.abs(runResponse - idleResponse) < 0.000001);
 });
 
-test('boxman shared locked aim base pose matches the run arm baseline before swing', () => {
+test('boxman shared locked aim base pose matches the aimed carry baseline', () => {
   const rig = {
     armUpperR: { rotation: { x: 9, y: 8, z: 7 } },
     armLowerR: { rotation: { x: 6, y: 5, z: 4 } }
@@ -722,10 +722,10 @@ test('boxman overrides the run clip right arm with the idle base pose', () => {
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + (6 * (Math.PI / 180)))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + (-25 * (Math.PI / 180)))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.y - (-7.92 * (Math.PI / 180))) < 0.000001);
   assert.ok(Math.abs(rig.armUpperR.rotation.z - (11.86 * (Math.PI / 180))) < 0.000001);
-  assert.ok(Math.abs(rig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65)) + (Math.sin((Math.PI * 0.5) + 0.35) * (2.4 * (Math.PI / 180))))) < 0.000001);
+  assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   assert.equal(rig.armLowerR.rotation.y, 0);
   assert.equal(rig.armLowerR.rotation.z, 0);
 });
@@ -749,7 +749,7 @@ test('boxman suppresses right-arm run swing while fire recoil is active', () => 
   });
 
   assert.equal(applied, true);
-  assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
+  assert.ok(Math.abs(rig.armUpperR.rotation.x - (((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + (-25 * (Math.PI / 180)))) < 0.000001);
   assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
 });
 
@@ -767,12 +767,21 @@ test('boxman locks the right arm to the aimed base pose for turn, jump, fall, an
       }
     };
 
-    const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig);
+    const applied = boxmanRig._test.applyLockedRightArmAimBasePose(rig, clipName);
+    const expectedUpperPitch = ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) +
+      boxmanRig._test.lockedRightArmUpperPitchOffset(clipName);
 
     assert.equal(applied, true);
-    assert.ok(Math.abs(rig.armUpperR.rotation.x - ((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9))) < 0.000001);
+    assert.ok(Math.abs(rig.armUpperR.rotation.x - expectedUpperPitch) < 0.000001);
     assert.ok(Math.abs(rig.armLowerR.rotation.x - ((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
   }
+});
+
+test('boxman gives jump clips an extra five degrees of right-arm lift without changing other locked clips', () => {
+  assert.ok(Math.abs(boxmanRig._test.lockedRightArmUpperPitchOffset('jump_idle') - (-5 * (Math.PI / 180))) < 0.000001);
+  assert.ok(Math.abs(boxmanRig._test.lockedRightArmUpperPitchOffset('jump_running') - (-5 * (Math.PI / 180))) < 0.000001);
+  assert.equal(boxmanRig._test.lockedRightArmUpperPitchOffset('falling'), 0);
+  assert.equal(boxmanRig._test.lockedRightArmUpperPitchOffset('rotate_left'), 0);
 });
 
 test('boxman cancels parent torso yaw on the locked right arm so turn clips cannot drag it off target', () => {
@@ -791,7 +800,31 @@ test('boxman cancels parent torso yaw on the locked right arm so turn clips cann
   assert.equal(rig.armLowerR.rotation.y, 0);
 });
 
-test('boxman uses different upper-arm pitch targets for left and right locked aim', () => {
+test('boxman run keeps the opening carry baseline instead of adding later arm swing', () => {
+  const runRig = {
+    armUpperR: { rotation: { x: 0, y: 0, z: 0 } },
+    armLowerR: { rotation: { x: 0, y: 0, z: 0 } }
+  };
+
+  boxmanRig._test.applyRunRightArmIdleBasePose(runRig, 'run', {
+    time: 0,
+    getClip() {
+      return { duration: 1 };
+    }
+  });
+  boxmanRig._test.applyIdleAimPose(runRig, {
+    currentPitch: boxmanRig._test.idleAimTargetPitch({
+      aimPitch: 0,
+      airborne: false
+    }, 'run'),
+    currentYaw: 0
+  });
+
+  assert.ok(Math.abs(runRig.armUpperR.rotation.x - ((((21.02 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -1.9)) + ((28 * (Math.PI / 180)) * -1.9)) + (-25 * (Math.PI / 180)))) < 0.000001);
+  assert.ok(Math.abs(runRig.armLowerR.rotation.x - (((-33.6 * (Math.PI / 180)) + ((28 * (Math.PI / 180)) * -0.65)) + ((28 * (Math.PI / 180)) * -0.65))) < 0.000001);
+});
+
+test('boxman aimed carry base is deterministic across repeated applications', () => {
   const first = { x: 0, y: 0, z: 0 };
   const second = { x: 0, y: 0, z: 0 };
 

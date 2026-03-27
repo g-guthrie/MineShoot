@@ -153,6 +153,10 @@
             var matchState = matchContext ? matchContext.matchState : null;
             var selfState = matchContext ? matchContext.selfState : null;
             var playing = !!(currentSession && currentSession.isPlaying && currentSession.isPlaying());
+            var matchEntryPending = !!(selfState && selfState.matchEntryPending);
+            var matchEntryRemainingMs = matchEntryPending
+                ? Math.max(0, Number(selfState && selfState.matchEntryUntil || 0) - nowMs())
+                : 0;
 
             if (!(opts.isRuntimeInitialized && opts.isRuntimeInitialized())) {
                 emitMenuMatchModel(null);
@@ -198,6 +202,21 @@
             var contextValue = !matchState || !matchState.started
                 ? 'WAITING'
                 : (matchState.ended ? 'RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs()) : String(Math.max(0, Number(matchState.aliveCount || 0))));
+
+            if (matchEntryPending) {
+                emitMenuMatchModel({
+                    ready: true,
+                    banner: null,
+                    modePill: { label: 'MODE', value: modeValue },
+                    contextPill: { label: 'STATE', value: 'STAGING' },
+                    primaryPill: { label: primaryLabel, value: primaryValue },
+                    secondaryPill: { label: 'AUTO ENTER', value: formatSecondsRemaining(matchEntryRemainingMs) }
+                });
+                if (currentSession && currentSession.setResumeButtonsVisible) {
+                    currentSession.setResumeButtonsVisible(true);
+                }
+                return;
+            }
 
             if (matchState && matchState.ended) {
                 var winner = winnerLabel(matchState, selfState);

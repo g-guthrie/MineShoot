@@ -5,13 +5,11 @@ import {
   gameplayTuning,
   getAwarenessTuning,
   getEnemyTuning,
-  getDefaultAbilityId,
   getDefaultThrowableId,
   getSelectableWeaponIds,
   getThrowableMechanicsTuning,
   getWeaponFalloffProfile,
   getWeaponPresentation,
-  normalizeAbilityId,
   normalizeThrowableId,
   resolveReloadPresentationState,
   resolveWeaponAdsFovDeg,
@@ -180,7 +178,6 @@ test('ADS aim profiles can tighten spread independently from hipfire', () => {
 test('survivability tuning exposes the tanky baseline and slower armor reset window', () => {
   assert.equal(gameplayTuning.survivability.hpMax, DEFAULT_HP_MAX);
   assert.equal(gameplayTuning.survivability.armorMax, DEFAULT_ARMOR_MAX);
-  assert.equal(gameplayTuning.classPresets.abilities.armorMax, gameplayTuning.survivability.armorMax);
   assert.equal(gameplayTuning.classPresets.ffa.armorMax, gameplayTuning.survivability.armorMax);
   assert.equal(ARMOR_REGEN_DELAY_SEC, gameplayTuning.survivability.armorRegenDelaySec);
   assert.equal(ARMOR_REGEN_DELAY_MS, gameplayTuning.survivability.armorRegenDelaySec * 1000);
@@ -201,31 +198,18 @@ test('shared survivability helper owns the live armor recharge rule', () => {
   assert.equal(capped.armor, 100);
 });
 
-test('ability tuning keeps the latest choke, hook, missile, and deadeye defaults', () => {
+test('throwable and combat tuning stay available after the system purge', () => {
   assert.deepEqual(getEnemyTuning(), gameplayTuning.enemy);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getEnemyTuning, 'function');
   assert.deepEqual(getThrowableMechanicsTuning(), gameplayTuning.throwableMechanics);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getThrowableMechanicsTuning, 'function');
-  assert.equal(Number(gameplayTuning.abilityCatalog.choke.cooldownMs || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.choke.duration || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.hook.stunDuration || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.hook.pullSpeed || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.missile.cooldownMs || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.damage || 0) > 0, true);
-  assert.equal(Number(gameplayTuning.abilityCatalog.deadeye.lockBoxPx || 0) > 0, true);
-  assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning.abilityCatalog.deadeye, 'slot'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning, 'abilityCatalog'), false);
   assert.equal(gameplayTuning.weaponStats.sniper.armorBufferMode, 'normal');
   assert.equal(Number(gameplayTuning.throwables.frag.minBlastDamage || 0) > 0, true);
   assert.equal(gameplayTuning.throwables.frag.armorBufferMode, 'normal');
   assert.equal(gameplayTuning.throwables.plasma.armorBufferMode, 'normal');
   assert.equal(gameplayTuning.throwables.missile.armorBufferMode, 'normal');
   assert.equal(gameplayTuning.throwables.molotov.armorBufferMode, 'normal');
-});
-
-test('ability defaults and normalization resolve to a single equipped ability', () => {
-  assert.equal(getDefaultAbilityId(), 'deadeye');
-  assert.equal(normalizeAbilityId('missile'), 'missile');
-  assert.equal(normalizeAbilityId('not-real'), 'deadeye');
 });
 
 test('throwable defaults and normalization resolve to a single equipped throwable', () => {

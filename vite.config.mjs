@@ -30,7 +30,6 @@ export default defineConfig({
           if (
             path.includes('/js/actors/player.js') ||
             path.includes('/js/combat/player-combat.js') ||
-            path.includes('/js/combat/abilities.js') ||
             path.includes('/js/combat/throwables-projectile-runtime.js') ||
             path.includes('/js/combat/throwables-trajectory.js') ||
             path.includes('/js/combat/throwables-fire-zones.js') ||

@@ -28,7 +28,7 @@ function seedSession(env, suffix, username, displayName = null) {
     profile_enabled: 0,
     headline: null,
     bio: null,
-    class_id: 'abilities',
+    class_id: 'ffa',
     kills: 0,
     deaths: 0,
     damage_done: 0,

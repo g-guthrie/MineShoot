@@ -168,7 +168,7 @@
         if (RT.GamePlayer) {
             if (RT.GamePlayer.setAliveVisual) RT.GamePlayer.setAliveVisual(true);
             if (RT.GamePlayer.setStatusState) RT.GamePlayer.setStatusState({ stunUntil: 0, spawnShieldUntil: nowMs() + 1000 });
-            if (RT.GamePlayer.setActionRestrictions) RT.GamePlayer.setActionRestrictions({ weaponUntil: 0, throwableUntil: 0, abilityUntil: 0 });
+            if (RT.GamePlayer.setActionRestrictions) RT.GamePlayer.setActionRestrictions({ weaponUntil: 0, throwableUntil: 0 });
         }
         if (RT.GamePlayerCombat && RT.GamePlayerCombat.respawn) {
             RT.GamePlayerCombat.respawn();
@@ -344,7 +344,7 @@
             selfState.alive = true;
             if (RT.GamePlayer && RT.GamePlayer.setAliveVisual) RT.GamePlayer.setAliveVisual(true);
             if (RT.GamePlayer && RT.GamePlayer.setStatusState) RT.GamePlayer.setStatusState({ stunUntil: 0, spawnShieldUntil: nowMs() + 1000 });
-            if (RT.GamePlayer && RT.GamePlayer.setActionRestrictions) RT.GamePlayer.setActionRestrictions({ weaponUntil: 0, throwableUntil: 0, abilityUntil: 0 });
+            if (RT.GamePlayer && RT.GamePlayer.setActionRestrictions) RT.GamePlayer.setActionRestrictions({ weaponUntil: 0, throwableUntil: 0 });
             if (RT.GamePlayerCombat && RT.GamePlayerCombat.respawn) RT.GamePlayerCombat.respawn();
         }
     };

@@ -58,7 +58,6 @@
     GameEvents.ENEMY_KILLED       = 'enemy.killed';
     GameEvents.THROWABLE_THROWN   = 'throwable.thrown';
     GameEvents.THROWABLE_EXPLODED = 'throwable.exploded';
-    GameEvents.ABILITY_CAST       = 'ability.cast';
     GameEvents.WEAPON_SWITCHED    = 'weapon.switched';
     GameEvents.MATCH_STARTED      = 'match.started';
     GameEvents.MATCH_ENDED        = 'match.ended';

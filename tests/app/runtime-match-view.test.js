@@ -190,3 +190,46 @@ test('runtime match view menu model shows raw lives remaining instead of stock c
     value: '3'
   });
 });
+
+test('runtime match view surfaces staged entry countdown while the player is still pending match entry', async () => {
+  let resumeVisible = null;
+  const harness = await loadMatchViewHarness({
+    nowMs: 1000,
+    gameSession: {
+      isPlaying() {
+        return false;
+      },
+      getPauseState() {
+        return { active: false };
+      },
+      setResumeButtonsVisible(value) {
+        resumeVisible = !!value;
+      }
+    },
+    gameUiApi: {
+      updateMatchStatus() {}
+    }
+  });
+
+  harness.api.syncMatchHud({
+    matchState: { gameMode: 'ffa', started: true, ended: false, aliveCount: 4 },
+    selfState: {
+      id: 'usr_test',
+      kills: 2,
+      deaths: 1,
+      matchEntryPending: true,
+      matchEntryUntil: 16000
+    }
+  });
+
+  assert.equal(resumeVisible, true);
+  assert.equal(harness.events.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.events[0].detail)), {
+    ready: true,
+    banner: null,
+    modePill: { label: 'MODE', value: 'Free For All' },
+    contextPill: { label: 'STATE', value: 'STAGING' },
+    primaryPill: { label: 'LIVES', value: '2' },
+    secondaryPill: { label: 'AUTO ENTER', value: '15.0s' }
+  });
+});

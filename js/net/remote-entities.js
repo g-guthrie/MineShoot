@@ -21,10 +21,6 @@
         return deps.getActorVisualFactory ? (deps.getActorVisualFactory() || null) : (globalThis.__MAYHEM_RUNTIME.GameActorVisualFactory || null);
     }
 
-    function abilityFxApi() {
-        return deps.getAbilityFxApi ? (deps.getAbilityFxApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null);
-    }
-
     var entityConstants = sharedApi().entityConstants || {};
     var REMOTE_EYE_HEIGHT = Number(entityConstants.EYE_HEIGHT || 1.6);
     var DEFAULT_SNAPSHOT_INTERVAL_MS = 1000 / 60;
@@ -356,7 +352,7 @@
     function sharedClassPreset(classId) {
         var shared = sharedApi().gameplayTuning || {};
         var presets = shared.classPresets || {};
-        return presets[classId] || presets.abilities || null;
+        return presets[classId] || presets.ffa || null;
     }
 
     function classStats(classId) {
@@ -414,17 +410,6 @@
         sceneRef.add(group);
         if (bodyHitbox) hitboxArray.push(bodyHitbox);
         if (headHitbox) hitboxArray.push(headHitbox);
-        var abilityFxView = abilityFxApi();
-        var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
-            ? abilityFxView.buildSnapshotAbilityState(entity)
-            : {
-                chokeVictimState: null,
-                hookedStartedAt: 0,
-                hookedUntil: 0,
-                hookState: null,
-                chokeState: null
-            };
-
         var render = {
             id: entity.id,
             kind: entity.kind,
@@ -489,14 +474,8 @@
                     movingRight: !!entity.rollInputState.movingRight
                 }
                 : null,
-            chokeVictimState: snapshotAbilityState.chokeVictimState,
-            deadeyeMark: null,
-            hookedStartedAt: snapshotAbilityState.hookedStartedAt,
-            hookedUntil: snapshotAbilityState.hookedUntil,
             streamHeat: entity.streamHeat || 0,
             streamOverheatedUntil: entity.streamOverheatedUntil || 0,
-            hookState: snapshotAbilityState.hookState,
-            chokeState: snapshotAbilityState.chokeState
         };
         appendSnapshotHistory(render, entity, snapshotMeta);
         return render;
@@ -576,22 +555,6 @@
                 movingRight: !!entity.rollInputState.movingRight
             }
             : null;
-        var abilityFxView = abilityFxApi();
-        var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
-            ? abilityFxView.buildSnapshotAbilityState(entity)
-            : {
-                chokeVictimState: null,
-                hookedStartedAt: 0,
-                hookedUntil: 0,
-                hookState: null,
-                chokeState: null
-            };
-        r.chokeState = snapshotAbilityState.chokeState;
-        r.chokeVictimState = snapshotAbilityState.chokeVictimState;
-        r.hookedStartedAt = snapshotAbilityState.hookedStartedAt;
-        r.hookedUntil = snapshotAbilityState.hookedUntil;
-        r.hookState = snapshotAbilityState.hookState;
-        r.abilityId = entity.abilityId || '';
 
         r.group.visible = !!entity.alive;
         if (r.actorVisual && r.actorVisual.setAlive) {
@@ -635,27 +598,6 @@
         var render = renderMap.get(entityId);
         if (!render || !render.actorVisual || !render.actorVisual.getCoreWorldPosition) return null;
         return render.actorVisual.getCoreWorldPosition(outVec3);
-    };
-
-    GameNetEntities.getHookOriginWorldPosition = function (entityId, outVec3) {
-        var render = renderMap.get(entityId);
-        if (!render || !render.actorVisual) return null;
-        if (render.actorVisual.getThrowableOriginWorldPosition) {
-            var throwableOrigin = render.actorVisual.getThrowableOriginWorldPosition(outVec3);
-            if (throwableOrigin) return throwableOrigin;
-        }
-        if (render.actorVisual.getCoreWorldPosition) {
-            return render.actorVisual.getCoreWorldPosition(outVec3);
-        }
-        return null;
-    };
-
-    GameNetEntities.setDeadeyeHighlights = function (markMap) {
-        var marks = markMap || {};
-        renderMap.forEach(function (render, entityId) {
-            if (!render) return;
-            render.deadeyeMark = marks[entityId] || null;
-        });
     };
 
     GameNetEntities.classStats = classStats;

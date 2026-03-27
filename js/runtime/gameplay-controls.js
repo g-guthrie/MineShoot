@@ -21,17 +21,6 @@
         var throwableHeldType = '';
         var bound = false;
         var listenerRemovers = [];
-        var localAbilityPos = {
-            x: 0,
-            y: 0,
-            z: 0,
-            set: function (x, y, z) {
-                this.x = x;
-                this.y = y;
-                this.z = z;
-                return this;
-            }
-        };
 
         function matchesBinding(actionId, event, fallbackCodes) {
             var labelsApi = inputLabelsApi();
@@ -214,49 +203,6 @@
                 setTransientDebug(type + ' is recharging.', 600);
             }
             return outcome;
-        }
-
-        function triggerAbility() {
-            if (!hasInputCapture()) return;
-            if (!canUseLocalAction('ability')) return;
-
-            var camera = getCamera();
-            var commandsApi = netCommands();
-            if (multiplayerMode() && commandsApi && commandsApi.sendAbilityCast) {
-                var preparedCast = runtime.GameAbilities.prepareNetCast
-                    ? runtime.GameAbilities.prepareNetCast(camera)
-                    : { ok: true, castData: null, commit: null };
-                if (!preparedCast || preparedCast.ok === false) {
-                    if (preparedCast && preparedCast.message) {
-                        setTransientDebug(preparedCast.message, 700);
-                    }
-                    return;
-                }
-                commandsApi.sendAbilityCast(preparedCast.castData);
-                if (preparedCast.commit) {
-                    preparedCast.commit();
-                }
-                return;
-            }
-
-            var playerPos = runtime.GamePlayer.getPosition(localAbilityPos);
-            var rot = runtime.GamePlayer.getRotation();
-            var outcome = runtime.GameAbilities.triggerAbility(
-                camera,
-                playerPos,
-                rot,
-                function (hitData) {
-                    if (!hitData || !hitData.result) return;
-                    if (opts.handleEnemyHit) {
-                        opts.handleEnemyHit(hitData.hitPoint, hitData.damage, hitData.hitType, hitData.result, hitData.targetId || '');
-                    }
-                },
-                setTransientDebug
-            );
-            runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
-            if (outcome && !outcome.ok && outcome.message) {
-                setTransientDebug(outcome.message, 700);
-            }
         }
 
         function triggerRoll() {
@@ -465,15 +411,6 @@
             });
         }
 
-        function bindAbilityControls() {
-            listen(document, 'keydown', function (e) {
-                if (e.repeat) return;
-                if (matchesBinding('ability_1', e, 'KeyG')) {
-                    triggerAbility();
-                }
-            });
-        }
-
         function bindDebugKeys() {
             listen(document, 'keydown', function (e) {
                 if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
@@ -493,7 +430,6 @@
                 bindSoundToggleControl();
                 bindThrowableControls();
                 bindRollControls();
-                bindAbilityControls();
                 bindDebugKeys();
             },
             unbind: function () {

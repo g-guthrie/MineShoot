@@ -383,11 +383,6 @@ test('runtime coordinator breaks sprint and still fires on the same click', asyn
             return { id: 'rifle' };
           }
         },
-        GameAbilities: {
-          isDeadeyeActive() {
-            return false;
-          }
-        },
         GameGameplayRuntimeBootstrap: {
           start(opts) {
             capturedStartOptions = opts;
@@ -554,11 +549,6 @@ test('runtime coordinator does not fire while the player is rolling', async () =
           },
           getCurrentWeapon() {
             return { id: 'rifle' };
-          }
-        },
-        GameAbilities: {
-          isDeadeyeActive() {
-            return false;
           }
         },
         GameGameplayRuntimeBootstrap: {
@@ -743,11 +733,6 @@ test('runtime coordinator reveals the local overhead target when a local hit lan
         GameEnemy: {
           damage() {
             return { enemy: { index: 2 }, killed: false };
-          }
-        },
-        GameAbilities: {
-          isDeadeyeActive() {
-            return false;
           }
         },
         GameGameplayRuntimeBootstrap: {

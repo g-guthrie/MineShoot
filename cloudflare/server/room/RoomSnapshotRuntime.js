@@ -100,11 +100,22 @@ export function sendSnapshotToClient(room, ws, meta, frame, options = {}, deps =
   if (!meta || !meta.userId) return false;
   if (room.activeSocketByUserId.get(meta.userId) !== ws) return false;
   const viewer = room.players.get(meta.userId) || null;
+  const visibleEntities = [];
+  const visibleSerializedById = new Map();
+  for (let i = 0; i < frame.entities.length; i++) {
+    const entity = frame.entities[i];
+    if (!entity || !entity.id) continue;
+    if (room.canViewerReceiveEntity && !room.canViewerReceiveEntity(viewer, entity)) continue;
+    visibleEntities.push(entity);
+    if (frame.serializedById.has(entity.id)) {
+      visibleSerializedById.set(entity.id, frame.serializedById.get(entity.id));
+    }
+  }
   ensureClientSnapshotState(meta);
-  const selection = buildViewerEntitySnapshot(frame.entities, viewer, meta.snapshotState, {
+  const selection = buildViewerEntitySnapshot(visibleEntities, viewer, meta.snapshotState, {
     forceFull: !!options.forceFull,
     nowMs: frame.now,
-    serializedById: frame.serializedById,
+    serializedById: visibleSerializedById,
     distanceBetween: deps.distanceBetween,
     isEngaged: (_viewer, entity, stamp) => deps.isEntityEngagedForViewer
       ? deps.isEntityEngagedForViewer(viewer, entity && entity.id ? entity.id : '', stamp)
@@ -135,7 +146,7 @@ export function sendSnapshotToClient(room, ws, meta, frame, options = {}, deps =
 
   room.send(ws, buildSnapshotPayload(room, {
     forceFull: !!options.forceFull,
-    entities: frame.entities,
+    entities: visibleEntities,
     changedEntities: selection.entities,
     removedEntityIds: selection.removedEntityIds,
     projectiles: projectileChanged ? frame.projectiles : undefined,

@@ -8,6 +8,7 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   const audioCalls = [];
   const uiCalls = [];
   const damageCalls = [];
+  const tracerCalls = [];
   const overrideNet = runtimeOverrides.GameNet || null;
   const normalizedNet = {
     view: {
@@ -18,12 +19,19 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       consumeThrowAck() { return null; },
       consumeThrowReject() { return null; },
       getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
-      consumeThrowableEvent() { return null; }
+      consumeThrowableEvent() { return null; },
+      consumeShotEffect() { return null; }
     },
     effects: {
       damagePointForEntityId() { return null; }
     }
   };
+  if (overrideNet && typeof overrideNet === 'object') {
+    for (const key of Object.keys(overrideNet)) {
+      if (key === 'view' || key === 'effects') continue;
+      normalizedNet[key] = overrideNet[key];
+    }
+  }
   if (overrideNet && overrideNet.view) normalizedNet.view = { ...normalizedNet.view, ...overrideNet.view };
   if (overrideNet && overrideNet.effects) normalizedNet.effects = { ...normalizedNet.effects, ...overrideNet.effects };
   if (overrideNet && !overrideNet.view && !overrideNet.effects) {
@@ -35,7 +43,8 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       consumeThrowAck: overrideNet.consumeThrowAck || normalizedNet.view.consumeThrowAck,
       consumeThrowReject: overrideNet.consumeThrowReject || normalizedNet.view.consumeThrowReject,
       getAuthoritativeThrowableState: overrideNet.getAuthoritativeThrowableState || normalizedNet.view.getAuthoritativeThrowableState,
-      consumeThrowableEvent: overrideNet.consumeThrowableEvent || normalizedNet.view.consumeThrowableEvent
+      consumeThrowableEvent: overrideNet.consumeThrowableEvent || normalizedNet.view.consumeThrowableEvent,
+      consumeShotEffect: overrideNet.consumeShotEffect || normalizedNet.view.consumeShotEffect
     };
     normalizedNet.effects = {
       damagePointForEntityId: overrideNet.damagePointForEntityId || normalizedNet.effects.damagePointForEntityId
@@ -63,6 +72,14 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     },
     GamePlayer: {
       getPosition() { return { x: 0, y: 1.6, z: 0 }; }
+    },
+    GameWorldTracerFx: {
+      spawnTracer(_camera, _weapon, endPoint, originPoint) {
+        tracerCalls.push({
+          origin: { x: originPoint.x, y: originPoint.y, z: originPoint.z },
+          end: { x: endPoint.x, y: endPoint.y, z: endPoint.z }
+        });
+      }
     },
     GameThrowables: {
       syncAuthoritativeState() {},
@@ -117,62 +134,10 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     emitPredictedLocalHitFeedback: sandbox.__MAYHEM_RUNTIME.GameNetFeedbackSync.emitPredictedLocalHitFeedback,
     audioCalls,
     uiCalls,
-    damageCalls
+    damageCalls,
+    tracerCalls
   };
 }
-
-test('feedback sync plays choke cast for the victim and nearby bystanders', async () => {
-  const queue = [];
-  const harness = await loadFeedbackSyncHarness({
-    GameNet: {
-      consumeClassCastResult() { return null; },
-      consumeDamageFeedback() { return null; },
-      consumeIncomingDamageFeedback() { return null; },
-      consumeThrowAck() { return null; },
-      consumeThrowReject() { return null; },
-      getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
-      consumeThrowableEvent() { return null; },
-      consumeAbilityEvent() {
-        return queue.shift() || null;
-      },
-      damagePointForEntityId() {
-        return { x: 3, y: 1.6, z: 0 };
-      }
-    }
-  });
-
-  queue.push({ abilityId: 'choke', sourceId: 'usr_other', targetId: 'usr_self' });
-  harness.syncGameplayFeedback({ selfState: { id: 'usr_self' }, dt: 0.016 });
-  queue.push({ abilityId: 'choke', sourceId: 'usr_other', targetId: 'usr_target' });
-  harness.syncGameplayFeedback({ selfState: { id: 'usr_self' }, dt: 0.016 });
-
-  assert.deepEqual(harness.audioCalls, ['chokeCast', 'chokeCast']);
-});
-
-test('feedback sync ignores distant choke casts for unrelated bystanders', async () => {
-  const queue = [{ abilityId: 'choke', sourceId: 'usr_far', targetId: 'usr_target' }];
-  const harness = await loadFeedbackSyncHarness({
-    GameNet: {
-      consumeClassCastResult() { return null; },
-      consumeDamageFeedback() { return null; },
-      consumeIncomingDamageFeedback() { return null; },
-      consumeThrowAck() { return null; },
-      consumeThrowReject() { return null; },
-      getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
-      consumeThrowableEvent() { return null; },
-      consumeAbilityEvent() {
-        return queue.shift() || null;
-      },
-      damagePointForEntityId() {
-        return { x: 80, y: 1.6, z: 0 };
-      }
-    }
-  });
-
-  harness.syncGameplayFeedback({ selfState: { id: 'usr_self' }, dt: 0.016 });
-
-  assert.deepEqual(harness.audioCalls, []);
-});
 
 test('feedback sync can emit predicted local hit feedback immediately and register the shot token', async () => {
   const queue = [{
@@ -701,4 +666,39 @@ test('feedback sync still shows authoritative kill feedback even after a predict
   } finally {
     Date.now = originalDateNow;
   }
+});
+
+test('feedback sync spawns a remote world tracer from replicated shot effects', async () => {
+  const queue = [{
+    sourceId: 'usr_remote',
+    weaponId: 'rifle',
+    shotToken: 'remote-shot',
+    origin: { x: 8, y: 9, z: 10 },
+    traces: [{ x: 11, y: 12, z: 13, pelletIndex: 0, hitType: 'body' }]
+  }];
+  const harness = await loadFeedbackSyncHarness({
+    GameNet: {
+      view: {
+        consumeShotEffect() { return queue.shift() || null; }
+      },
+      remoteEntities: {
+        getRenderMap() {
+          return new Map([['usr_remote', {
+            actorVisual: {
+              getMuzzleWorldPosition() {
+                return { x: 1, y: 2, z: 3 };
+              }
+            }
+          }]]);
+        }
+      }
+    }
+  });
+
+  harness.syncGameplayFeedback({ camera: {}, selfState: { id: 'usr_self' } });
+
+  assert.deepEqual(harness.tracerCalls, [{
+    origin: { x: 1, y: 2, z: 3 },
+    end: { x: 11, y: 12, z: 13 }
+  }]);
 });

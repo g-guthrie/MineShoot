@@ -232,37 +232,16 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
 
   const turnAbs = Math.abs(resolvedTurnRate);
   const turnDirection = sign(resolvedTurnRate);
-  const canIdleTurnClip = !movementIntent.moving && !(animState && animState.airborne) && speedNorm < TURN_ENTRY_SPEED_NORM_MAX;
-  if (canIdleTurnClip && turnDirection !== 0 && resolvedTurnAmount > 0.0001) {
-    if (next.turnWipeDirection === turnDirection || next.turnWipeDirection === 0) {
-      next.turnWipeAmount += resolvedTurnAmount;
-    } else {
-      next.turnWipeAmount = resolvedTurnAmount;
-    }
-    next.turnWipeDirection = turnDirection;
-  } else {
-    next.turnWipeAmount = 0;
-    next.turnWipeDirection = 0;
-  }
-  const idleTurnPoseTarget = canIdleTurnClip && turnAbs < TURN_SOFT_START_RATE
-    ? clamp01((turnAbs - TURN_IDLE_POSE_START_RATE) / Math.max(0.0001, (TURN_SOFT_START_RATE - TURN_IDLE_POSE_START_RATE)))
-    : 0;
-  const idleTurnPoseBlend = Math.min(1, delta * (idleTurnPoseTarget > Number(next.idleTurnPoseWeight || 0) ? 18 : 12));
-  next.idleTurnPoseWeight += (idleTurnPoseTarget - Number(next.idleTurnPoseWeight || 0)) * idleTurnPoseBlend;
-  if (Math.abs(idleTurnPoseTarget - next.idleTurnPoseWeight) < 0.0001) {
-    next.idleTurnPoseWeight = idleTurnPoseTarget;
-  }
-  if (idleTurnPoseTarget > 0.0001 && turnDirection !== 0) {
-    next.idleTurnDirection = turnDirection;
-  } else if (next.idleTurnPoseWeight < 0.0001) {
-    next.idleTurnDirection = 0;
-  }
-  next.useTurnEntryClip = canIdleTurnClip && next.turnWipeAmount >= TURN_ENTRY_SNAP_ANGLE;
-  next.useTurnLoopClip = canIdleTurnClip && turnAbs >= TURN_SOFT_START_RATE;
-  next.turnLoopPoseWeight = next.useTurnLoopClip
-    ? clamp01(next.turnWipeAmount / Math.max(0.0001, TURN_ENTRY_SNAP_ANGLE))
-    : 0;
-  next.turnClipDirection = (next.useTurnEntryClip || next.useTurnLoopClip) ? turnDirection : 0;
+  void turnAbs;
+  void turnDirection;
+  next.turnWipeAmount = 0;
+  next.turnWipeDirection = 0;
+  next.idleTurnPoseWeight = 0;
+  next.idleTurnDirection = 0;
+  next.useTurnEntryClip = false;
+  next.useTurnLoopClip = false;
+  next.turnLoopPoseWeight = 0;
+  next.turnClipDirection = 0;
 
   if (movementIntent.moving) {
     if (movementIntent.pureBackpedal) {
@@ -276,10 +255,6 @@ export function updateDirectionalLocomotionState(state, dt, animState) {
     } else {
       next.poseName = 'forward';
     }
-  } else if (next.useTurnLoopClip || next.useTurnEntryClip) {
-    next.poseName = next.turnClipDirection < 0 ? 'turn_right' : 'turn_left';
-  } else if (next.idleTurnPoseWeight > 0.0001) {
-    next.poseName = next.idleTurnDirection < 0 ? 'idle_turn_right' : 'idle_turn_left';
   } else {
     next.poseName = '';
   }

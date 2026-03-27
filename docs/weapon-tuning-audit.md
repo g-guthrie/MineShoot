@@ -37,7 +37,7 @@ The current sandbox is built around one shared gameplay source of truth:
 Notes:
 
 - the code still uses `armor` naming for the shield layer
-- there is no recovery ability in the live ability catalog
+- recovery is intentionally limited in the live sandbox
 
 ## Live Movement Snapshot
 
@@ -67,15 +67,6 @@ The live game now uses one simple profile per weapon:
 - `falloff.minScalar`
 
 That profile is consumed by both the local hitscan path and the authoritative damage path.
-
-## Ability Snapshot
-
-Current live ability list:
-
-- `choke`
-- `hook`
-- `missile`
-- `deadeye`
 
 ## Remaining Findings
 

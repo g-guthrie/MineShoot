@@ -58,7 +58,6 @@ function defaultBindings() {
     weapon_slot_1: 'Digit1',
     weapon_slot_2: 'Digit2',
     throwable: 'KeyQ',
-    ability_1: 'KeyG',
     open_manual: 'KeyI',
     toggle_debug: 'KeyH'
   };
@@ -117,7 +116,7 @@ test('input bindings load a valid stored map', async () => {
   assert.equal(api.getDisplayLabel('open_manual'), 'J');
 });
 
-test('input bindings migrate the old ability-on-E map to the new roll slot', async () => {
+test('input bindings migrate the old E mapping to the new roll slot and drop the removed bind', async () => {
   const legacy = {
     move_forward: 'KeyW',
     move_left: 'KeyA',
@@ -139,7 +138,7 @@ test('input bindings migrate the old ability-on-E map to the new roll slot', asy
   });
 
   assert.equal(api.getBinding('roll'), 'KeyE');
-  assert.equal(api.getBinding('ability_1'), 'KeyG');
+  assert.equal(api.getBinding('ability_1'), '');
   assert.equal(api.getBinding('move_forward'), 'KeyW');
 });
 

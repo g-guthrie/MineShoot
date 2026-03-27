@@ -100,15 +100,6 @@
             var matchContext = opts.readMatchContext ? opts.readMatchContext() : null;
             selfState = matchContext ? matchContext.selfState : selfState;
 
-            if (netView && netView.getSelfAbilityState) {
-                var abilityState = netView.getSelfAbilityState();
-                if (abilityState && runtime.GameAbilities && runtime.GameAbilities.getNetworkHudState) {
-                    runtime.GameUI.updateAbilityInfo(
-                        runtime.GameAbilities.getNetworkHudState(abilityState)
-                    );
-                }
-            }
-
             if (opts.gameSession && opts.gameSession.syncMatchState) {
                 opts.gameSession.syncMatchState(matchContext);
             }

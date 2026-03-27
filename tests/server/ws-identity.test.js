@@ -16,10 +16,10 @@ test('gameplay websocket identity keeps authenticated player ids server-owned', 
       userId: 'usr_alpha',
       username: 'ALPHA',
       displayName: 'Alpha Prime',
-      classId: 'abilities'
+      classId: 'ffa'
     },
     url: buildUrl('/api/ws?pid=ply_override_1&username=REQUESTED&classId=sniper&actorId=guest-actor&actorName=REQUEST_ACTOR'),
-    classPresets: { abilities: {}, sniper: {} }
+    classPresets: { ffa: {}, sniper: {} }
   });
 
   assert.equal(identity.isAuthenticated, true);
@@ -33,14 +33,14 @@ test('gameplay websocket identity keeps authenticated player ids server-owned', 
 test('gameplay websocket identity preserves valid guest pid values', () => {
   const identity = resolveGameplayWsIdentity({
     session: null,
-    url: buildUrl('/api/ws?pid=usr_join_alpha_hitafc&uid=amber-otter-314&username=JOIN_ALPHA&classId=abilities&actorId=actor-1&actorName=JOIN_ALPHA'),
-    classPresets: { abilities: {} }
+    url: buildUrl('/api/ws?pid=usr_join_alpha_hitafc&uid=amber-otter-314&username=JOIN_ALPHA&classId=ffa&actorId=actor-1&actorName=JOIN_ALPHA'),
+    classPresets: { ffa: {} }
   });
 
   assert.equal(identity.isAuthenticated, false);
   assert.equal(identity.playerId, 'usr_join_alpha_hitafc');
   assert.equal(identity.playerName, 'JOIN_ALPHA');
-  assert.equal(identity.playerClassId, 'abilities');
+  assert.equal(identity.playerClassId, 'ffa');
   assert.equal(identity.actorId, 'actor-1');
   assert.equal(identity.actorName, 'JOIN_ALPHA');
 });

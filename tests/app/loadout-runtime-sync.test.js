@@ -12,10 +12,7 @@ async function loadHarness(sharedOverride = null) {
   const weaponOrderCalls = [];
   const playerLoadoutCalls = [];
   const throwableSelectionCalls = [];
-  const abilityLoadoutCalls = [];
   const netWeaponLoadoutCalls = [];
-  const netAbilityLoadoutCalls = [];
-  const abilityHudCalls = [];
   const storage = new Map();
 
   const shared = sharedOverride || {
@@ -24,24 +21,13 @@ async function loadHarness(sharedOverride = null) {
         order: ['frag', 'plasma'],
         frag: { id: 'frag', label: 'Frag' },
         plasma: { id: 'plasma', label: 'Plasma' }
-      },
-      abilityCatalog: {
-        deadeye: { id: 'deadeye', name: 'Deadeye' },
-        hook: { id: 'hook', name: 'Hook' }
-      },
-      defaultAbilityId: 'deadeye'
+      }
     },
     getSelectableWeaponIds() {
       return ['machinegun', 'shotgun', 'rifle'];
     },
     getDefaultWeaponLoadout() {
       return ['rifle', 'shotgun'];
-    },
-    getDefaultAbilityId() {
-      return 'deadeye';
-    },
-    normalizeAbilityId(abilityId) {
-      return String(abilityId || 'deadeye');
     },
     getDefaultThrowableId() {
       return 'frag';
@@ -79,26 +65,10 @@ async function loadHarness(sharedOverride = null) {
           throwableSelectionCalls.push(String(id || ''));
         }
       },
-      GameAbilities: {
-        setLoadout(id) {
-          abilityLoadoutCalls.push(String(id || ''));
-        },
-        getHudState() {
-          return { abilityName: 'Deadeye', cooldown: 0 };
-        }
-      },
-      GameUI: {
-        updateAbilityInfo(payload) {
-          abilityHudCalls.push(payload || null);
-        }
-      },
       GameNet: {
         commands: {
           sendWeaponLoadout(slot1, slot2) {
             netWeaponLoadoutCalls.push([String(slot1 || ''), String(slot2 || '')]);
-          },
-          sendAbilityLoadout(id) {
-            netAbilityLoadoutCalls.push(String(id || ''));
           }
         }
       }
@@ -118,10 +88,7 @@ async function loadHarness(sharedOverride = null) {
     weaponOrderCalls,
     playerLoadoutCalls,
     throwableSelectionCalls,
-    abilityLoadoutCalls,
     netWeaponLoadoutCalls,
-    netAbilityLoadoutCalls,
-    abilityHudCalls,
     storage
   };
 }
@@ -134,7 +101,6 @@ test('loadout runtime sync applies committed state to gameplay and net while ign
   loadoutState.init();
   loadoutState.beginWeaponDraft('machinegun');
   loadoutState.setSelectedThrowable('plasma');
-  loadoutState.setSelectedAbility('hook');
 
   const committedBefore = loadoutState.getCommittedLoadout();
   assert.deepEqual(JSON.parse(JSON.stringify(committedBefore.weaponSlots)), ['rifle', 'shotgun']);
@@ -145,9 +111,6 @@ test('loadout runtime sync applies committed state to gameplay and net while ign
   assert.deepEqual(harness.playerLoadoutCalls, [{ slots: ['rifle', 'shotgun'] }]);
   assert.deepEqual(harness.netWeaponLoadoutCalls, [['rifle', 'shotgun']]);
   assert.equal(harness.throwableSelectionCalls.at(-1), 'plasma');
-  assert.equal(harness.abilityLoadoutCalls.at(-1), 'hook');
-  assert.equal(harness.netAbilityLoadoutCalls.at(-1), 'hook');
-
   loadoutState.commitWeaponDraft('rifle');
   const syncedAfter = loadoutRuntime.applyCommittedLoadout(true);
   assert.deepEqual(JSON.parse(JSON.stringify(syncedAfter.weaponSlots)), ['machinegun', 'rifle']);

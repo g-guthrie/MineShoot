@@ -124,8 +124,7 @@
     }
 
     function launchPillLabel(modeId) {
-        var label = modePillLabel(modeId);
-        return label ? ('Play ' + label) : 'Play';
+        return 'Play';
     }
 
     function isRoomSeedMode(modeId) {
@@ -161,6 +160,7 @@
             confirmLeaveOpen: false,
             leaveRoomConfirmOpen: false,
             modeListOpen: false,
+            socialToolsOpen: false,
             expandedPartyMemberId: '',
             expandedFriendId: '',
             launch: {
@@ -311,6 +311,7 @@
             accountToggleBtn: document.getElementById('account-toggle-btn'),
             refreshBtn: document.getElementById('menu-refresh-btn'),
             utilityToggleBtn: document.getElementById('utility-toggle-btn'),
+            utilityRefreshBtn: document.getElementById('utility-refresh-btn'),
             utilityOverlay: document.getElementById('utility-overlay'),
             utilityCloseBtn: document.getElementById('utility-close-btn'),
             utilityModal: document.getElementById('utility-modal'),
@@ -329,6 +330,7 @@
             primaryLaunchBtn: document.getElementById('primary-launch-btn'),
             gameModesToggleBtn: document.getElementById('game-modes-toggle-btn'),
             playModeOptions: document.getElementById('play-mode-options'),
+            socialToolsToggleBtn: document.getElementById('social-tools-toggle-btn'),
             playModeFfaBtn: document.getElementById('play-mode-ffa-btn'),
             playModeTdmBtn: document.getElementById('play-mode-tdm-btn'),
             sandboxModeBtn: document.getElementById('sandbox-mode-btn'),
@@ -343,6 +345,7 @@
             playBtn: document.getElementById('play-btn'),
             backBtn: document.getElementById('back-mode-btn'),
             menuBody: document.getElementById('menu-body'),
+            menuLoadoutBand: document.getElementById('menu-loadout-band'),
             leaveConfirmOverlay: document.getElementById('leave-confirm-overlay'),
             leaveConfirmCancelBtn: document.getElementById('leave-confirm-cancel-btn'),
             leaveConfirmAcceptBtn: document.getElementById('leave-confirm-accept-btn'),
@@ -510,6 +513,10 @@
 
         function setModeListOpen(open) {
             patchState({ modeListOpen: !!open });
+        }
+
+        function setSocialToolsOpen(open) {
+            patchState({ socialToolsOpen: !!open });
         }
 
         function syncAccountState() {
@@ -922,6 +929,9 @@
         bindClick(elements.refreshBtn, function () {
             refreshMenuData();
         });
+        bindClick(elements.utilityRefreshBtn, function () {
+            refreshMenuData();
+        });
 
         bindClick(elements.utilityToggleBtn, function () {
             if (getState().utilityOpen) closeUtility();
@@ -961,7 +971,15 @@
             launchGame(getState().launch.selectedMode || 'ffa');
         });
         bindClick(elements.gameModesToggleBtn, function () {
-            setModeListOpen(!getState().modeListOpen);
+            var nextOpen = !getState().modeListOpen;
+            setModeListOpen(nextOpen);
+            if (nextOpen) setSocialToolsOpen(false);
+            render();
+        });
+        bindClick(elements.socialToolsToggleBtn, function () {
+            var nextOpen = !getState().socialToolsOpen;
+            setSocialToolsOpen(nextOpen);
+            if (nextOpen) setModeListOpen(false);
             render();
         });
         bindClick(elements.playModeFfaBtn, function () { selectMode('ffa'); });

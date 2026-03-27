@@ -136,11 +136,15 @@
                 beforeGameplayEntry: function () {
                     var audioApi = gameAudioApi();
                     var docsApi = gameDocsApi();
+                    var netApi = currentMatchRuntimeApi();
                     if (audioApi && audioApi.unlock) {
                         audioApi.unlock();
                     }
                     if (docsApi && docsApi.isOpen && docsApi.isOpen()) {
                         docsApi.close();
+                    }
+                    if (multiplayerMode && netApi && netApi.commands && netApi.commands.sendEnterMatch) {
+                        netApi.commands.sendEnterMatch();
                     }
                 },
                 setTransientDebug: function (text, ms) {
@@ -253,7 +257,6 @@
 
             return bootstrapApi.start({
                 activeRuntimeMode: params.activeRuntimeMode || null,
-                applyAbilityProfile: actionsApi.applyAbilityProfile,
                 applyDebugVisuals: actionsApi.applyDebugVisuals,
                 applyWeapon: actionsApi.applyWeapon,
                 canUseLocalAction: actionsApi.canUseLocalAction,

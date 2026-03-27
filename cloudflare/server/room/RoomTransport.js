@@ -186,7 +186,7 @@ function handleWebSocketRequest(room, request, url) {
 
   const userId = url.searchParams.get('userId');
   const username = url.searchParams.get('username') || 'player';
-  const classId = String(url.searchParams.get('classId') || request.headers.get('X-Class-Id') || 'abilities').trim() || 'abilities';
+  const classId = String(url.searchParams.get('classId') || request.headers.get('X-Class-Id') || 'ffa').trim() || 'ffa';
   const actorId = String(url.searchParams.get('actorId') || request.headers.get('X-Actor-Id') || userId || '').trim();
   const actorName = String(url.searchParams.get('actorName') || request.headers.get('X-Actor-Name') || username || '').trim();
 

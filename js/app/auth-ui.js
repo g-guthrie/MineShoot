@@ -133,7 +133,7 @@
         }
 
         function formatClassName(classId) {
-            return String(classId || 'abilities').replace(/[_-]+/g, ' ').toUpperCase();
+            return String(classId || 'ffa').replace(/[_-]+/g, ' ').toUpperCase();
         }
 
         function renderProfileSummary() {
@@ -154,7 +154,7 @@
                     ? 'Profile is live. Later this slot can hold personalized home screen data.'
                     : 'Signed in and ready. For now this mainly reserves your username.';
             }
-            if (profileClass) profileClass.textContent = formatClassName(profile.classId || user.classId || 'abilities');
+            if (profileClass) profileClass.textContent = formatClassName(profile.classId || user.classId || 'ffa');
             if (profileKills) profileKills.textContent = String(Number(profile.kills != null ? profile.kills : user.kills) || 0);
             if (profileDeaths) profileDeaths.textContent = String(Number(profile.deaths != null ? profile.deaths : user.deaths) || 0);
             if (profileDamage) {

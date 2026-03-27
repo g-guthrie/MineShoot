@@ -91,7 +91,7 @@ test('guest websocket upgrade preserves a valid client-supplied pid', async () =
         Upgrade: 'websocket'
       }
     }
-  ), { abilities: {} });
+  ), { ffa: {} });
 
   assert.equal(response.status, 200);
   assert.ok(forwardedUrl.includes('userId=' + encodeURIComponent('usr_guest_socket_01')));

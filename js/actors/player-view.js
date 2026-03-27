@@ -49,11 +49,6 @@
         var fallbackEyeWorld = new THREE.Vector3();
         var fallbackThrowableWorld = new THREE.Vector3();
         var viewRay = new THREE.Raycaster();
-        var chokeCameraState = {
-            offsetX: 0,
-            offsetZ: 0,
-            roll: 0
-        };
 
         function syncAvatarVisibility(state) {
             if (!state.avatarGroup) return;
@@ -240,8 +235,6 @@
                 airborne: !state.isGrounded,
                 footY: typeof state.footY === 'number' ? Number(state.footY) : null,
                 aimPitch: state.pitch + (cameraKickPitch * 0.35),
-                choked: !!state.choked,
-                startedAt: state.chokeStartedAt || 0,
                 horizontalSpeed: speed,
                 worldSpeed: speed,
                 yaw: renderYaw,
@@ -273,22 +266,6 @@
             setMuzzleVisible(state, false);
         }
 
-        function resolveChokeCameraState(state) {
-            chokeCameraState.offsetX = 0;
-            chokeCameraState.offsetZ = 0;
-            chokeCameraState.roll = 0;
-            if (!state.choked) return chokeCameraState;
-
-            var chokeStamp = Date.now();
-            var chokePhase = state.chokeStartedAt
-                ? ((chokeStamp - state.chokeStartedAt) * 0.012)
-                : (chokeStamp * 0.012);
-            chokeCameraState.offsetX = Math.sin(chokePhase) * 0.08;
-            chokeCameraState.offsetZ = Math.cos(chokePhase * 0.8) * 0.04;
-            chokeCameraState.roll = Math.sin(chokePhase * 0.9) * 0.028;
-            return chokeCameraState;
-        }
-
         function updateViewBlendState(dt, state) {
             var scopeTargetActive = !!(state && (state.scopeTargetActive != null ? state.scopeTargetActive : state.adsActive));
             if (!scopeTargetActive) {
@@ -316,11 +293,8 @@
             return !!(state.sniperMode && scopeBlend > 0.55);
         }
 
-        function resolveViewTargetPosition(state, forwardX, forwardY, forwardZ, rightX, rightZ, chokeState) {
+        function resolveViewTargetPosition(state, forwardX, forwardY, forwardZ) {
             viewTarget.set(state.playerX + forwardX * 20, state.posY + forwardY * 20, state.playerZ + forwardZ * 20);
-            viewTarget.y += state.chokeLift;
-            viewTarget.x += rightX * chokeState.offsetX;
-            viewTarget.z += rightZ * chokeState.offsetX;
         }
 
         function applyCameraCollision(state) {
@@ -341,40 +315,34 @@
             viewDesired.copy(viewOrigin).addScaledVector(viewDir, safeDist);
         }
 
-        function resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ, chokeState) {
+        function resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ) {
             if (scopedEyeMode) {
                 if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
                     state.avatarRigApi.getEyeWorldPosition(eyeWorld);
                     viewOrigin.copy(eyeWorld);
                 } else {
-                    viewOrigin.set(state.playerX, state.posY + state.chokeLift, state.playerZ);
+                    viewOrigin.set(state.playerX, state.posY, state.playerZ);
                 }
                 viewDesired.copy(viewOrigin);
-                viewDesired.x += rightX * chokeState.offsetX;
-                viewDesired.z += rightZ * chokeState.offsetX;
                 return;
             }
 
-            viewOrigin.set(state.playerX, state.posY + 0.3 + state.chokeLift, state.playerZ);
+            viewOrigin.set(state.playerX, state.posY + 0.3, state.playerZ);
             viewDesired.set(
                 state.playerX + (rightX * state.cameraShoulder) - (forwardX * state.cameraDist),
-                state.posY + state.thirdHeight + state.chokeLift,
+                state.posY + state.thirdHeight,
                 state.playerZ + (rightZ * state.cameraShoulder) - (forwardZ * state.cameraDist)
             );
-            viewDesired.x += rightX * chokeState.offsetX;
-            viewDesired.z += rightZ * chokeState.offsetX + chokeState.offsetZ;
             adsDesired.set(
                 state.playerX + (rightX * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardX * (state.sniperMode ? state.sniperScopeDist : state.adsDist)),
-                state.posY + (state.sniperMode ? state.sniperScopeHeight : state.adsHeight) + state.chokeLift,
+                state.posY + (state.sniperMode ? state.sniperScopeHeight : state.adsHeight),
                 state.playerZ + (rightZ * (state.sniperMode ? state.sniperScopeShoulder : state.adsShoulder)) - (forwardZ * (state.sniperMode ? state.sniperScopeDist : state.adsDist))
             );
-            adsDesired.x += rightX * chokeState.offsetX;
-            adsDesired.z += rightZ * chokeState.offsetX + chokeState.offsetZ;
             viewDesired.lerp(adsDesired, scopeBlend);
             applyCameraCollision(state);
         }
 
-        function applyCameraPose(state, dt, scopedEyeMode, chokeRoll) {
+        function applyCameraPose(state, dt, scopedEyeMode) {
             if (!thirdCameraInitialized) {
                 state.camera.position.copy(viewDesired);
                 thirdCameraInitialized = true;
@@ -388,7 +356,7 @@
             state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
             state.camera.updateProjectionMatrix();
             state.camera.lookAt(viewTarget);
-            state.camera.rotation.z += cameraKickRoll + recoilPatternRoll + chokeRoll;
+            state.camera.rotation.z += cameraKickRoll + recoilPatternRoll;
         }
 
         function updateCamera(dt, state) {
@@ -403,14 +371,13 @@
             var forwardZ = -Math.cos(renderYaw) * cosPitch;
             var rightX = Math.cos(renderYaw);
             var rightZ = -Math.sin(renderYaw);
-            var chokeState = resolveChokeCameraState(state);
             var scopedEyeMode = updateViewBlendState(dt, state);
             syncAvatarVisibility(state);
             if (state.updateAvatarPose) state.updateAvatarPose();
 
-            resolveViewTargetPosition(state, forwardX, forwardY, forwardZ, rightX, rightZ, chokeState);
-            resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ, chokeState);
-            applyCameraPose(state, dt, scopedEyeMode, chokeState.roll);
+            resolveViewTargetPosition(state, forwardX, forwardY, forwardZ);
+            resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ);
+            applyCameraPose(state, dt, scopedEyeMode);
         }
 
         function triggerFireAction(state) {

@@ -330,6 +330,11 @@ function buildClientApi(client) {
         client.pendingTimers.add(timer);
       });
     },
+    async sendEnterMatch() {
+      await this.send({
+        t: 'enter_match'
+      });
+    },
     async sendInput(sample) {
       const input = sample || {};
       await this.send({
@@ -473,7 +478,7 @@ export async function createRealWorkerHarness(options = {}) {
     const roomId = String(config.roomId || 'global');
     const userId = String(config.userId || `usr_${Date.now()}`);
     const username = String(config.username || userId);
-    const classId = String(config.classId || 'abilities');
+    const classId = String(config.classId || 'ffa');
     const url = encodeQuery({
       baseUrl: worker.baseWsUrl,
       path: '/api/ws',
@@ -542,6 +547,9 @@ export async function createRealWorkerHarness(options = {}) {
     });
 
     await Promise.race([openPromise, errorPromise]);
+    if (config.autoEnter !== false) {
+      await client.api.sendEnterMatch();
+    }
     return client.api;
   }
 

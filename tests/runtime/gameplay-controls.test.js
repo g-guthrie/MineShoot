@@ -553,7 +553,7 @@ test('gameplay controls keep keyboard weapon slot switching intact', async () =>
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'shotgun' }]);
 });
 
-test('gameplay controls trigger roll on E and ability on G by default', async () => {
+test('gameplay controls trigger roll on E and ignore the removed G binding', async () => {
   const harness = await loadControlsHarness();
 
   harness.documentObj.dispatch('keydown', {
@@ -567,10 +567,10 @@ test('gameplay controls trigger roll on E and ability on G by default', async ()
   });
 
   assert.equal(harness.calls.rolls, 1);
-  assert.deepEqual(harness.calls.abilityCasts, [1]);
+  assert.deepEqual(harness.calls.abilityCasts, []);
 });
 
-test('gameplay controls honor remapped throwable, roll, ability, debug, and manual keys', async () => {
+test('gameplay controls honor remapped throwable, roll, debug, and manual keys while ignoring removed binds', async () => {
   const harness = await loadControlsHarness({
     runtimeOverrides: {
       GameInputBindings: {
@@ -578,7 +578,6 @@ test('gameplay controls honor remapped throwable, roll, ability, debug, and manu
           return (
             (actionId === 'throwable' && event.code === 'KeyC') ||
             (actionId === 'roll' && event.code === 'KeyV') ||
-            (actionId === 'ability_1' && event.code === 'KeyG') ||
             (actionId === 'toggle_debug' && event.code === 'KeyB') ||
             (actionId === 'open_manual' && event.code === 'KeyJ')
           );
@@ -621,7 +620,7 @@ test('gameplay controls honor remapped throwable, roll, ability, debug, and manu
   });
 
   assert.equal(harness.calls.rolls, 1);
-  assert.deepEqual(harness.calls.abilityCasts, [1]);
+  assert.deepEqual(harness.calls.abilityCasts, []);
   assert.equal(harness.calls.debugToggles, 1);
   // Docs toggle is handled by menu-shell.js, not gameplay-controls
   assert.equal(harness.calls.docsToggle, 0);

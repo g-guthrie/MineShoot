@@ -187,6 +187,73 @@ export function applySpawnShield(entity, deps) {
   entity.spawnShieldUntil = Number(deps.nowMs ? deps.nowMs() : 0) + Number(deps.playerSpawnShieldMs || 0);
 }
 
+export function isEntityMatchEntryPending(entity, now = Date.now()) {
+  if (!entity || entity.fixtureType === 'sim_player') return false;
+  if (!entity.matchEntryPending) return false;
+  return Number(entity.matchEntryUntil || 0) > Math.max(0, Number(now || 0));
+}
+
+function clearEntityInputState(entity) {
+  if (!entity || !entity.inputState || typeof entity.inputState !== 'object') return;
+  entity.inputState.forward = false;
+  entity.inputState.backward = false;
+  entity.inputState.left = false;
+  entity.inputState.right = false;
+  entity.inputState.jump = false;
+  entity.inputState.sprint = false;
+  entity.inputState.adsActive = false;
+}
+
+export function beginEntityMatchEntry(room, entity, deps) {
+  deps = deps || {};
+  const now = Number(deps.nowMs ? deps.nowMs() : Date.now());
+  const entryWindowMs = Math.max(0, Number(deps.matchEntryWindowMs || 0));
+  const shieldMs = Math.max(0, Number(deps.playerSpawnShieldMs || 0));
+  if (!entity || entity.fixtureType === 'sim_player') return false;
+
+  entity.matchEntryPending = entryWindowMs > 0;
+  entity.matchEntryStartedAt = entity.matchEntryPending ? now : 0;
+  entity.matchEntryUntil = entity.matchEntryPending ? (now + entryWindowMs) : 0;
+  entity.velocityY = 0;
+  entity.isGrounded = true;
+  entity.jumpHoldTimer = 0;
+  entity.jumpHeldLast = false;
+  if (Array.isArray(entity.inputQueue)) entity.inputQueue.length = 0;
+  clearEntityInputState(entity);
+
+  if (entity.matchEntryPending) {
+    entity.spawnShieldUntil = entity.matchEntryUntil + shieldMs;
+  } else if (shieldMs > 0) {
+    entity.spawnShieldUntil = now + shieldMs;
+  }
+  return true;
+}
+
+export function activateEntityMatchEntry(room, entity, deps) {
+  deps = deps || {};
+  if (!entity || entity.fixtureType === 'sim_player') return false;
+  if (!entity.matchEntryPending && !(Number(entity.matchEntryUntil || 0) > 0)) return false;
+  entity.matchEntryPending = false;
+  entity.matchEntryStartedAt = 0;
+  entity.matchEntryUntil = 0;
+  if (Number(deps.playerSpawnShieldMs || 0) > 0) {
+    applySpawnShield(entity, deps);
+  }
+  return true;
+}
+
+export function tickEntityMatchEntries(room, deps) {
+  deps = deps || {};
+  const now = Number(deps.nowMs ? deps.nowMs() : Date.now());
+  let changed = false;
+  for (const player of room.players.values()) {
+    if (!player || player.fixtureType === 'sim_player' || !player.matchEntryPending) continue;
+    if (now < Number(player.matchEntryUntil || 0)) continue;
+    if (activateEntityMatchEntry(room, player, deps)) changed = true;
+  }
+  return changed;
+}
+
 export function planEntityRespawn(room, entity, deps) {
   if (!entity) return null;
   const spawn = chooseEntitySpawnPoint(room, entity, deps);
@@ -259,14 +326,14 @@ export function syncSimulatedPlayers(room, deps) {
     const id = simPlayerIds[i];
     const username = simPlayerNames[i];
     if (!room.players.has(id)) {
-      room.players.set(id, room.buildPlayerEntity(id, username, 'abilities', { fixtureType: 'sim_player' }));
+      room.players.set(id, room.buildPlayerEntity(id, username, 'ffa', { fixtureType: 'sim_player' }));
       continue;
     }
     const player = room.players.get(id);
     player.fixtureType = 'sim_player';
     player.kind = 'player';
     player.username = username;
-    player.classId = 'abilities';
+    player.classId = 'ffa';
     player.moveSpeedNorm = 0;
     player.sprinting = false;
     player.yaw = 0;
@@ -302,6 +369,7 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
     player.actorId = String(actorId || player.actorId || player.id || '');
     player.actorName = String(actorName || player.actorName || username || player.username || player.id || 'player');
     player.disconnectedAt = 0;
+    beginEntityMatchEntry(room, player, deps);
     room.enforceEntityTerrainFloor(player);
     if (isPrivateMatchRoom && isPrivateMatchRoom(room.roomName) && room.privateRoomConfig && room.privateRoomConfig.teams) {
       player.teamId = String(room.privateRoomConfig.teams.get(player.actorId || player.id) || teamAlpha);
@@ -317,6 +385,7 @@ export function ensurePlayer(room, userId, username, classId, actorId, actorName
     actorName
   });
   player.disconnectedAt = 0;
+  beginEntityMatchEntry(room, player, deps);
   if (isPrivateMatchRoom && isPrivateMatchRoom(room.roomName) && room.privateRoomConfig && room.privateRoomConfig.teams) {
     player.teamId = String(room.privateRoomConfig.teams.get(player.actorId || player.id) || teamAlpha);
   }

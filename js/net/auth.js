@@ -66,7 +66,7 @@
             id: normalizedId,
             username: String(source.username || source.displayName || guestDisplayNameFromId(normalizedId)),
             displayName: String(source.displayName || source.username || guestDisplayNameFromId(normalizedId)),
-            classId: String(source.classId || 'abilities')
+            classId: String(source.classId || 'ffa')
         };
     }
 
@@ -76,7 +76,7 @@
             id: String(source.id || ''),
             username: String(source.username || source.displayName || 'PLAYER'),
             displayName: String(source.displayName || source.username || 'PLAYER'),
-            classId: String(source.classId || 'abilities'),
+            classId: String(source.classId || 'ffa'),
             label: 'PLAYER ID',
             kind: 'account'
         };
@@ -88,7 +88,7 @@
             id: String(guest.id || ''),
             username: String(guest.username || guest.displayName || 'PLAYER'),
             displayName: String(guest.displayName || guest.username || 'PLAYER'),
-            classId: String(guest.classId || 'abilities'),
+            classId: String(guest.classId || 'ffa'),
             label: String(label || 'PLAYER ID'),
             kind: 'guest'
         };
@@ -313,7 +313,7 @@
     function makeGuestUser() {
         return normalizeGuestIdentity({
             id: getSocketPlayerId(),
-            classId: 'abilities'
+            classId: 'ffa'
         });
     }
 
@@ -657,7 +657,7 @@
             id: String(identity.id || ''),
             username: String(identity.username || identity.id || 'PLAYER'),
             displayName: String(identity.displayName || identity.username || identity.id || 'PLAYER'),
-            classId: String(identity.classId || 'abilities')
+            classId: String(identity.classId || 'ffa')
         };
     };
 

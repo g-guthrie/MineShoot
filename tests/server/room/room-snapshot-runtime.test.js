@@ -61,7 +61,7 @@ function baseEntity(id, overrides = {}) {
     id,
     kind: 'player',
     username: id.toUpperCase(),
-    classId: 'abilities',
+    classId: 'ffa',
     x: 0,
     y: 1.6,
     z: 0,
@@ -92,7 +92,6 @@ function baseEntity(id, overrides = {}) {
     muzzleFlashUntil: 0,
     weaponLoadout: ['rifle', 'shotgun'],
     weaponAmmo: {},
-    abilityId: 'choke',
     throwables: {},
     ...overrides
   };
@@ -192,10 +191,37 @@ test('snapshot runtime still sends when only room state changes', () => {
   assert.equal(room.sent[0].payload.matchState.started, true);
 });
 
-test('snapshot runtime serializes entity timers from the frame timestamp', () => {
+test('snapshot runtime hides staged entrants from other viewers while keeping them in their own snapshot', () => {
+  const room = makeRoom();
+  const selfWs = { id: 'self-socket' };
+  const otherWs = { id: 'other-socket' };
+  room.players.set('u1', baseEntity('u1', {
+    matchEntryPending: true,
+    matchEntryUntil: 5000
+  }));
+  room.players.set('u2', baseEntity('u2', { x: 10 }));
+  room.clients.set(selfWs, { userId: 'u1' });
+  room.clients.set(otherWs, { userId: 'u2' });
+  room.activeSocketByUserId.set('u1', selfWs);
+  room.activeSocketByUserId.set('u2', otherWs);
+  room.canViewerReceiveEntity = function (viewer, entity) {
+    if (viewer && entity && viewer.id === entity.id) return true;
+    return !entity.matchEntryPending;
+  };
+
+  const frame = collectSnapshotFrame(room, 700);
+  assert.equal(sendSnapshotToClient(room, selfWs, room.clients.get(selfWs), frame, { forceFull: true }, snapshotDeps()), true);
+  assert.equal(sendSnapshotToClient(room, otherWs, room.clients.get(otherWs), frame, { forceFull: true }, snapshotDeps()), true);
+
+  const selfPayload = room.sent.find((entry) => entry.ws === selfWs).payload;
+  const otherPayload = room.sent.find((entry) => entry.ws === otherWs).payload;
+  assert.deepEqual(selfPayload.entities.map((entity) => entity.id), ['u1', 'u2']);
+  assert.deepEqual(otherPayload.entities.map((entity) => entity.id), ['u2']);
+});
+
+test('snapshot runtime serializes the remaining weapon timers from the frame timestamp', () => {
   const room = makeRoom();
   room.players.set('u1', baseEntity('u1', {
-    abilityCooldownUntil: 550,
     weaponAmmo: {
       rifle: {
         ammoInMag: 0,
@@ -208,7 +234,6 @@ test('snapshot runtime serializes entity timers from the frame timestamp', () =>
   const frame = collectSnapshotFrame(room, 500);
   const entity = frame.entities[0];
 
-  assert.equal(Number(entity.cooldownRemaining.toFixed(2)), 0.05);
   assert.equal(Number(entity.weaponAmmo.rifle.reloadRemaining.toFixed(2)), 0.06);
 });
 

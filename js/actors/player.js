@@ -48,11 +48,6 @@
         return deps.getPlayerStatusFactory ? deps.getPlayerStatusFactory() : (runtimeRoot().GamePlayerStatus || null);
     }
 
-    function abilityFxApi() {
-        var deps = playerDeps();
-        return deps.getAbilityFxApi ? deps.getAbilityFxApi() : (runtimeRoot().GameAbilityFx || null);
-    }
-
     function playerWorldFactory() {
         var deps = playerDeps();
         return deps.getPlayerWorldFactory ? deps.getPlayerWorldFactory() : (runtimeRoot().GamePlayerWorld || null);
@@ -175,6 +170,16 @@
         return Number(entityConstantsApi().PLAYER_HEIGHT || 2.8);
     }
 
+    function rollContactCylinderHeightScale() {
+        return Math.max(0.05, Number(entityConstantsApi().ROLL_CONTACT_CYLINDER_HEIGHT_SCALE || 0.3));
+    }
+
+    function effectivePlayerCollisionHeight() {
+        var baseHeight = playerHeight();
+        if (!isRolling()) return baseHeight;
+        return Math.max(playerRadius(), baseHeight * rollContactCylinderHeightScale());
+    }
+
     var BACKWARD_SPRINT_SPEED_MULT = 1.25;
     var MOUSE_SENSITIVITY = 0.002;
     var PITCH_LIMIT = 89 * (Math.PI / 180);
@@ -217,6 +222,15 @@
         jump: false,
         sprint: false
     };
+    var rollInputSuppressedUntilRelease = {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        jump: false,
+        sprint: false
+    };
+    var activeRollInputState = null;
     var sprintCanceledUntilRelease = false;
     var inputBound = false;
     var inputListeners = null;
@@ -274,7 +288,6 @@
     var statusApi = (playerStatusFactory() && playerStatusFactory().create)
         ? playerStatusFactory().create({
             nowMs: nowMs,
-            getAbilityFxApi: function () { return abilityFxApi(); },
             onStatusVisualChange: function (snapshot) {
                 setSpawnShieldVisual(!!(snapshot && snapshot.spawnShielded));
             }
@@ -282,15 +295,9 @@
         : null;
     var statusState = statusApi && statusApi.getState ? statusApi.getState() : {
         stunUntil: 0,
-        hookPullStartedAt: 0,
-        hookPullUntil: 0,
-        chokeStartedAt: 0,
-        chokeUntil: 0,
-        chokeLift: 0,
         spawnShieldUntil: 0,
         weaponUntil: 0,
-        throwableUntil: 0,
-        abilityUntil: 0
+        throwableUntil: 0
     };
     var rollUntil = 0;
 
@@ -305,6 +312,13 @@
         keys.right = false;
         keys.jump = false;
         keys.sprint = false;
+        rollInputSuppressedUntilRelease.forward = false;
+        rollInputSuppressedUntilRelease.backward = false;
+        rollInputSuppressedUntilRelease.left = false;
+        rollInputSuppressedUntilRelease.right = false;
+        rollInputSuppressedUntilRelease.jump = false;
+        rollInputSuppressedUntilRelease.sprint = false;
+        activeRollInputState = null;
     }
 
     function movementHelper() {
@@ -359,14 +373,6 @@
         return statusApi ? statusApi.isStunned(now) : false;
     }
 
-    function isHookPulled(now) {
-        return statusApi ? statusApi.isHookPulled(now) : false;
-    }
-
-    function isChoked(now) {
-        return statusApi ? statusApi.isChoked(now) : false;
-    }
-
     function isSpawnShielded(now) {
         return statusApi ? statusApi.isSpawnShielded(now) : false;
     }
@@ -399,10 +405,6 @@
         return statusApi ? statusApi.canUseThrowable(now) : true;
     }
 
-    function canUseAbility(now) {
-        return statusApi ? statusApi.canUseAbility(now) : true;
-    }
-
     function isRolling(now) {
         return Number(rollUntil || 0) > Number(now || nowMs());
     }
@@ -417,10 +419,6 @@
         if (statusApi && statusApi.applyStatusState) {
             statusApi.applyStatusState(patch);
         }
-    }
-
-    function activeChokeLift() {
-        return statusApi && statusApi.activeChokeLift ? statusApi.activeChokeLift() : 0;
     }
 
     function isSniperScopeWeapon() {
@@ -556,10 +554,6 @@
             footY: posY - eyeHeight(),
             yaw: yaw,
             pitch: pitch,
-            hooked: isHookPulled(),
-            hookPullStartedAt: statusState.hookPullStartedAt || 0,
-            choked: isChoked(),
-            chokeStartedAt: statusState.chokeStartedAt || 0,
             adsActive: isScopeModeActive(),
             movingForward: !!keys.forward,
             movingBackward: !!keys.backward,
@@ -589,9 +583,6 @@
             adsActive: isSniperScopeReady(),
             scopeTargetActive: isScopeModeActive(),
             speedNorm: typeof speedNorm === 'number' ? speedNorm : lastMoveSpeedNorm,
-            choked: isChoked(),
-            chokeStartedAt: statusState.chokeStartedAt || 0,
-            chokeLift: activeChokeLift(),
             updateAvatarPose: updateAvatarPose,
             getWorldCollidables: function () {
                 var world = worldApi();
@@ -634,7 +625,7 @@
 
     function updateAvatarPose() {
         if (!avatarGroup) return;
-        var feetY = posY - eyeHeight() + activeChokeLift();
+        var feetY = posY - eyeHeight();
         var rollingHitboxState = { rolling: isRolling() };
         if (actorVisual && actorVisual.setWorldTransform) {
             avatarTransformScratch.x = playerX;
@@ -649,7 +640,7 @@
     }
 
     function syncHitboxPositions() {
-        var feetY = posY - eyeHeight() + activeChokeLift();
+        var feetY = posY - eyeHeight();
         if (actorVisual && actorVisual.syncHitboxes) {
             avatarTransformScratch.x = playerX;
             avatarTransformScratch.y = feetY;
@@ -731,30 +722,55 @@
 
     function setupInput() {
         if (inputBound) return;
+        function gateRollingMovementInput(actionKey, event) {
+            if (!actionKey) return false;
+            if (rollInputSuppressedUntilRelease[actionKey]) return true;
+            if (!isRolling() || (event && event.repeat)) return false;
+            rollInputSuppressedUntilRelease[actionKey] = true;
+            return true;
+        }
         inputListeners = {
             keydown: function (e) {
-            if (matchesBinding('move_forward', e, 'KeyW')) keys.forward = true;
-            if (matchesBinding('move_left', e, 'KeyA')) keys.left = true;
-            if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = true;
-            if (matchesBinding('move_right', e, 'KeyD')) keys.right = true;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) keys.sprint = true;
+            if (matchesBinding('move_forward', e, 'KeyW') && !gateRollingMovementInput('forward', e)) keys.forward = true;
+            if (matchesBinding('move_left', e, 'KeyA') && !gateRollingMovementInput('left', e)) keys.left = true;
+            if (matchesBinding('move_backward', e, 'KeyS') && !gateRollingMovementInput('backward', e)) keys.backward = true;
+            if (matchesBinding('move_right', e, 'KeyD') && !gateRollingMovementInput('right', e)) keys.right = true;
+            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight']) && !gateRollingMovementInput('sprint', e)) keys.sprint = true;
             if (matchesBinding('jump', e, 'Space')) {
-                keys.jump = true;
+                if (!gateRollingMovementInput('jump', e)) {
+                    keys.jump = true;
+                }
                 e.preventDefault();
             }
             },
             keyup: function (e) {
-            if (matchesBinding('move_forward', e, 'KeyW')) keys.forward = false;
-            if (matchesBinding('move_left', e, 'KeyA')) keys.left = false;
-            if (matchesBinding('move_backward', e, 'KeyS')) keys.backward = false;
-            if (matchesBinding('move_right', e, 'KeyD')) keys.right = false;
+            if (matchesBinding('move_forward', e, 'KeyW')) {
+                keys.forward = false;
+                rollInputSuppressedUntilRelease.forward = false;
+            }
+            if (matchesBinding('move_left', e, 'KeyA')) {
+                keys.left = false;
+                rollInputSuppressedUntilRelease.left = false;
+            }
+            if (matchesBinding('move_backward', e, 'KeyS')) {
+                keys.backward = false;
+                rollInputSuppressedUntilRelease.backward = false;
+            }
+            if (matchesBinding('move_right', e, 'KeyD')) {
+                keys.right = false;
+                rollInputSuppressedUntilRelease.right = false;
+            }
             if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
                 keys.sprint = false;
+                rollInputSuppressedUntilRelease.sprint = false;
                 sprintCanceledUntilRelease = false;
                 clearSprintTemporaryResumeTimer();
                 sprintTemporarilyCanceledUntil = 0;
             }
-            if (matchesBinding('jump', e, 'Space')) keys.jump = false;
+            if (matchesBinding('jump', e, 'Space')) {
+                keys.jump = false;
+                rollInputSuppressedUntilRelease.jump = false;
+            }
             },
             mousemove: function (e) {
             if (!hasInputCapture()) return;
@@ -844,12 +860,14 @@
 
     function buildCurrentInputState() {
         var blocked = movementInputBlocked();
-        inputStateScratch.forward = !blocked && !!keys.forward;
-        inputStateScratch.backward = !blocked && !!keys.backward;
-        inputStateScratch.left = !blocked && !!keys.left;
-        inputStateScratch.right = !blocked && !!keys.right;
-        inputStateScratch.jump = !blocked && !!keys.jump;
-        inputStateScratch.sprint = !blocked && !!isSprintInputActive();
+        var rolling = isRolling();
+        var frozenRollInput = rolling && activeRollInputState ? activeRollInputState : null;
+        inputStateScratch.forward = !blocked && (frozenRollInput ? !!frozenRollInput.movingForward : !!keys.forward);
+        inputStateScratch.backward = !blocked && (frozenRollInput ? !!frozenRollInput.movingBackward : !!keys.backward);
+        inputStateScratch.left = !blocked && (frozenRollInput ? !!frozenRollInput.movingLeft : !!keys.left);
+        inputStateScratch.right = !blocked && (frozenRollInput ? !!frozenRollInput.movingRight : !!keys.right);
+        inputStateScratch.jump = !blocked && !rolling && !!keys.jump;
+        inputStateScratch.sprint = !blocked && !rolling && !!isSprintInputActive();
         inputStateScratch.adsActive = !!isScopeModeActive();
         return inputStateScratch;
     }
@@ -878,6 +896,9 @@
 
     function setRollUntil(nextRollUntil) {
         rollUntil = Math.max(0, Number(nextRollUntil || 0));
+        if (!isRolling()) {
+            activeRollInputState = null;
+        }
         if (actorVisual && avatarGroup) {
             updateAvatarPose();
         }
@@ -963,7 +984,7 @@
             getGroundHeightAt: world.getGroundHeightAt,
             movementLocked: function () { return isMovementLocked(); },
             eyeHeight: eyeHeight(),
-            playerHeight: playerHeight(),
+            playerHeight: effectivePlayerCollisionHeight(),
             playerRadius: playerRadius(),
             epsilon: EPSILON,
             fallbackYaw: yaw,
@@ -1249,15 +1270,9 @@
     function resetStatusState() {
         applyStatusState({
             stunUntil: 0,
-            hookPullStartedAt: 0,
-            hookPullUntil: 0,
-            chokeStartedAt: 0,
-            chokeUntil: 0,
-            chokeLift: 0,
             spawnShieldUntil: 0,
             weaponUntil: 0,
-            throwableUntil: 0,
-            abilityUntil: 0
+            throwableUntil: 0
         });
     }
 
@@ -1351,7 +1366,7 @@
             moveSpeedMultiplier: weaponMoveSpeedMultiplier(currentWeaponId),
             adsMoveMultiplier: weaponAdsMoveMultiplier(currentWeaponId),
             eyeHeight: eyeHeight(),
-            playerHeight: playerHeight(),
+            playerHeight: effectivePlayerCollisionHeight(),
             playerRadius: playerRadius(),
             epsilon: EPSILON
         });
@@ -1491,15 +1506,15 @@
     };
 
     GamePlayer.getNetworkInputState = function () {
-        var blocked = movementInputBlocked();
+        var inputState = buildCurrentInputState();
         return {
-            forward: !blocked && !!keys.forward,
-            backward: !blocked && !!keys.backward,
-            left: !blocked && !!keys.left,
-            right: !blocked && !!keys.right,
-            jump: !blocked && !!keys.jump,
-            sprint: !blocked && !!isSprintInputActive(),
-            adsActive: !!isScopeModeActive()
+            forward: !!inputState.forward,
+            backward: !!inputState.backward,
+            left: !!inputState.left,
+            right: !!inputState.right,
+            jump: !!inputState.jump,
+            sprint: !!inputState.sprint,
+            adsActive: !!inputState.adsActive
         };
     };
 
@@ -1555,20 +1570,7 @@
     GamePlayer.setStatusState = function (state) {
         applyStatusState({
             stunUntil: state && state.stunUntil ? Number(state.stunUntil || 0) : 0,
-            hookPullStartedAt: state && state.hookPullStartedAt ? Number(state.hookPullStartedAt || 0) : 0,
-            hookPullUntil: state && state.hookPullUntil ? Number(state.hookPullUntil || 0) : 0,
-            chokeStartedAt: state && state.chokeStartedAt ? Number(state.chokeStartedAt || 0) : 0,
-            chokeUntil: state && state.chokeUntil ? Number(state.chokeUntil || 0) : 0,
-            chokeLift: state && state.chokeLift ? Number(state.chokeLift || 0) : 0,
             spawnShieldUntil: state && state.spawnShieldUntil ? Number(state.spawnShieldUntil || 0) : 0
-        });
-    };
-
-    GamePlayer.setChokeVictimState = function (state) {
-        applyStatusState({
-            chokeStartedAt: state && state.startedAt ? Number(state.startedAt || 0) : 0,
-            chokeUntil: state && state.endsAt ? Number(state.endsAt || 0) : 0,
-            chokeLift: state && state.lift ? Number(state.lift || 0) : 0
         });
     };
 
@@ -1600,6 +1602,12 @@
         var rollOptions = buildRollActionOptions();
         if (!rollOptions) return false;
         if (!triggerAvatarAction('roll', rollOptions)) return false;
+        activeRollInputState = {
+            movingForward: !!rollOptions.movingForward,
+            movingBackward: !!rollOptions.movingBackward,
+            movingLeft: !!rollOptions.movingLeft,
+            movingRight: !!rollOptions.movingRight
+        };
         setRollUntil(nowMs() + rollActionDurationMs(rollOptions));
         return true;
     };
@@ -1624,8 +1632,7 @@
     GamePlayer.setActionRestrictions = function (state) {
         applyStatusState({
             weaponUntil: state && state.weaponUntil ? Number(state.weaponUntil || 0) : 0,
-            throwableUntil: state && state.throwableUntil ? Number(state.throwableUntil || 0) : 0,
-            abilityUntil: state && state.abilityUntil ? Number(state.abilityUntil || 0) : 0
+            throwableUntil: state && state.throwableUntil ? Number(state.throwableUntil || 0) : 0
         });
     };
 
@@ -1633,20 +1640,20 @@
         return isStunned();
     };
 
-    GamePlayer.isHookPulled = function () {
-        return isHookPulled();
-    };
-
     GamePlayer.isRolling = function () {
         return isRolling();
     };
 
     GamePlayer.setRollState = function (state) {
+        activeRollInputState = state && state.rollInputState && typeof state.rollInputState === 'object'
+            ? {
+                movingForward: !!state.rollInputState.movingForward,
+                movingBackward: !!state.rollInputState.movingBackward,
+                movingLeft: !!state.rollInputState.movingLeft,
+                movingRight: !!state.rollInputState.movingRight
+            }
+            : activeRollInputState;
         return setRollUntil(state && state.rollUntil ? Number(state.rollUntil || 0) : 0);
-    };
-
-    GamePlayer.isChoked = function () {
-        return isChoked();
     };
 
     GamePlayer.isSpawnShielded = function () {
@@ -1667,10 +1674,6 @@
 
     GamePlayer.canUseThrowable = function () {
         return canUseThrowable();
-    };
-
-    GamePlayer.canUseAbility = function () {
-        return canUseAbility();
     };
 
     GamePlayer.equipSlot = function (slotIndex) {

@@ -257,8 +257,7 @@
             if (remoteSyncApi && remoteSyncApi.updateRemoteEntities) {
                 remoteSyncApi.updateRemoteEntities(
                     dt,
-                    opts.getRenderMap(),
-                    opts.getChokeVictimStateForEntity
+                    opts.getRenderMap()
                 );
             }
         }

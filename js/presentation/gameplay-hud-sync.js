@@ -6,7 +6,6 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
-    var inputLabels = runtime.GameInputLabels || null;
     var GameGameplayHudSync = {};
     var lastReloadPresentationByWeaponId = {};
 
@@ -216,68 +215,12 @@
         lastReloadPresentationByWeaponId = nextReloadPresentationByWeaponId;
     }
 
-    function currentAbilityLoadoutState(multiplayerMode) {
-        var netApi = netView();
-        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
-            var netState = netApi.getSelfAbilityState();
-            return netState && netState.abilityId ? { abilityId: netState.abilityId } : null;
-        }
-        if (runtime.GameAbilities && runtime.GameAbilities.getLoadout) {
-            return runtime.GameAbilities.getLoadout();
-        }
-        return null;
-    }
-
-    function currentAbilityCatalogMap() {
-        var shared = runtime.GameShared || null;
-        if (shared && shared.getAbilityCatalog) {
-            return shared.getAbilityCatalog() || {};
-        }
-        var tuning = shared && shared.gameplayTuning;
-        return tuning && tuning.abilityCatalog ? tuning.abilityCatalog : {};
-    }
-
-    function currentAbilityDebugState(multiplayerMode) {
-        var netApi = netView();
-        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
-            var netState = netApi.getSelfAbilityState() || null;
-            return netState ? {
-                abilityId: netState.abilityId || '',
-                cooldown: Number(netState.cooldownRemaining || netState.abilityCooldownRemaining || 0),
-                deadeye: netState.deadeyeState ? {
-                    lockCount: Number(netState.deadeyeState.lockCount || 0),
-                    targetCount: Array.isArray(netState.deadeyeState.targetIds) ? netState.deadeyeState.targetIds.length : 0
-                } : null
-            } : null;
-        }
-        return runtime.GameAbilities && runtime.GameAbilities.debugDump
-            ? runtime.GameAbilities.debugDump()
-            : null;
-    }
-
     function currentThrowableDebugState(camera, debugVisualsOn) {
         if (!debugVisualsOn) return null;
         if (runtime.GameThrowables && runtime.GameThrowables.getDebugState) {
             return runtime.GameThrowables.getDebugState(camera);
         }
         return null;
-    }
-
-    function deadeyeDebugRectSizePx(camera, minDot) {
-        if (!camera || !isFinite(minDot)) return null;
-        var clampedDot = Math.max(-1, Math.min(1, Number(minDot)));
-        var halfAngleRad = Math.acos(clampedDot);
-        var vFovRad = Number(camera.fov || 60) * Math.PI / 180;
-        var tanHalf = Math.tan(halfAngleRad);
-        var tanV = Math.tan(vFovRad * 0.5);
-        if (!isFinite(tanHalf) || !isFinite(tanV) || tanV <= 0.000001) return null;
-        var aspect = Math.max(0.0001, Number(camera.aspect || (window.innerWidth / Math.max(1, window.innerHeight))));
-        var xNdc = tanHalf / (tanV * aspect);
-        var yNdc = tanHalf / tanV;
-        return {
-            width: Math.max(60, Math.min(window.innerWidth * 0.86, xNdc * window.innerWidth)),
-            height: Math.max(60, Math.min(window.innerHeight * 0.86, yNdc * window.innerHeight))
-        };
     }
 
     function screenDiameterForWorldRadius(camera, worldRadius, worldDistance) {
@@ -289,71 +232,6 @@
         var tanV = Math.tan(vFovRad * 0.5);
         if (!isFinite(tanV) || tanV <= 0.000001) return 0;
         return Math.max(0, (radius * window.innerHeight) / (distance * tanV));
-    }
-
-    function toneForAbility() {
-        return 'ability1';
-    }
-
-    function buildDebugPanelSections(options) {
-        options = options || {};
-        if (!options.debugVisualsOn) return [];
-        var catalog = currentAbilityCatalogMap();
-        var sections = [];
-
-        if (options.abilityLoadoutState) {
-            var abilityDebug = options.abilityDebugState || null;
-            var abilityId = String(options.abilityLoadoutState.abilityId || '');
-            if (abilityId) {
-                var def = catalog[abilityId] || null;
-                var body = [];
-                body.push(String((def && def.debugSummary) || 'No dev overlay summary.'));
-                if (def && Array.isArray(def.tunableParams) && def.tunableParams.length) {
-                    body.push('tune: ' + def.tunableParams.join(', '));
-                }
-                sections.push({
-                    tone: toneForAbility(),
-                    title: inputLabels.getBindingLabel('ability_1', 'G') + ' ' + String((def && def.name) || abilityId).toUpperCase() + ' :: ' + (Number(abilityDebug && abilityDebug.cooldown || 0) > 0 ? Number(abilityDebug.cooldown || 0).toFixed(1) + 's' : 'READY'),
-                    body: body.join('\n')
-                });
-            }
-        }
-
-        if (options.weaponDebugState) {
-            var weaponLines = [];
-            if (options.weaponDebugState.spreadRadiusPx > 0) {
-                weaponLines.push('hit area: ' + Math.round(options.weaponDebugState.spreadRadiusPx) + 'px');
-            } else {
-                weaponLines.push('hit area: off');
-            }
-            sections.unshift({
-                tone: 'weapon',
-                title: 'WEAPON ' + String(options.weaponDebugState.label || '--').toUpperCase(),
-                body: weaponLines.join('\n')
-            });
-        }
-
-        if (options.throwableDebugState) {
-            var throwable = options.throwableDebugState;
-            var throwableLines = [];
-            throwableLines.push('preview: ' + String(throwable.previewType || 'none'));
-            if (throwable.telemetry) {
-                throwableLines.push('predicted: ' + Number(throwable.telemetry.predictedCount || 0));
-            }
-            if (throwable.plasma) {
-                throwableLines.push('catch: ' + Number(throwable.plasma.catchRadius || 0).toFixed(2) + 'm | stick: ' + Number(throwable.plasma.stickDelaySec || 0).toFixed(1) + 's');
-                throwableLines.push('blast: ' + Number(throwable.plasma.blastRadius || 0).toFixed(2) + 'm | life: ' + Number(throwable.plasma.maxLifeSec || 0).toFixed(1) + 's');
-            }
-            sections.push({
-                tone: 'throwable',
-                title: inputLabels.getBindingLabel('throwable', 'Q') + ' ' + String(throwable.label || throwable.selectedThrowableId || '--').toUpperCase() +
-                    ' :: ' + Number(throwable.charges || 0) +
-                    (throwable.cooldownRemaining > 0 && !throwable.charges ? ' (' + throwable.cooldownRemaining.toFixed(1) + 's)' : ''),
-                body: throwableLines.join('\n')
-            });
-        }
-
-        return sections;
     }
 
     function buildWeaponDebugState(weaponState) {
@@ -372,75 +250,6 @@
         };
     }
 
-    function currentChokeCasterState(multiplayerMode) {
-        var netApi = netView();
-        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
-            var netAbility = netApi.getSelfAbilityState();
-            return netAbility ? netAbility.chokeState : null;
-        }
-        if (runtime.GameAbilities && runtime.GameAbilities.getChokeState) {
-            return runtime.GameAbilities.getChokeState();
-        }
-        return null;
-    }
-
-    function currentDeadeyeUiState(multiplayerMode) {
-        var abilityBoundary = runtime.GameAbilityBoundary || null;
-        var netApi = netView();
-        if (multiplayerMode && netApi && netApi.getSelfAbilityState) {
-            var abilState = netApi.getSelfAbilityState();
-            var abilityNow = networkAuthoritativeNow();
-            if (abilState && abilState.deadeyeState && abilState.deadeyeState.maxLocks > 0) {
-                return abilityBoundary && abilityBoundary.buildNetworkDeadeyeUiState
-                    ? abilityBoundary.buildNetworkDeadeyeUiState(
-                        abilState.deadeyeState,
-                        function (targetId) {
-                            var effectsApi = netEffects();
-                            return effectsApi && effectsApi.damagePointForEntityId
-                                ? effectsApi.damagePointForEntityId(targetId)
-                                : (
-                                    netApi.getEntityMarkerWorldPos
-                                        ? netApi.getEntityMarkerWorldPos(targetId)
-                                        : null
-                                );
-                        },
-                        abilityNow
-                    )
-                    : null;
-            }
-            return null;
-        }
-        return runtime.GameAbilities && runtime.GameAbilities.getDeadeyeState
-            ? runtime.GameAbilities.getDeadeyeState()
-            : null;
-    }
-
-    function syncDeadeyeHighlights(multiplayerMode, deadeyeState) {
-        var markMap = {};
-        if (deadeyeState && Array.isArray(deadeyeState.targets)) {
-            for (var i = 0; i < deadeyeState.targets.length; i++) {
-                var target = deadeyeState.targets[i];
-                if (!target || !target.targetId) continue;
-                markMap[String(target.targetId)] = {
-                    locked: !!target.locked,
-                    progress: Number(target.progress || 0)
-                };
-            }
-        }
-
-        if (multiplayerMode) {
-            var remoteApi = remoteEntitiesApi();
-            if (remoteApi && remoteApi.setDeadeyeHighlights) {
-                remoteApi.setDeadeyeHighlights(markMap);
-            }
-            return;
-        }
-
-        if (runtime.GameEnemy && runtime.GameEnemy.setDeadeyeHighlights) {
-            runtime.GameEnemy.setDeadeyeHighlights(markMap);
-        }
-    }
-
     GameGameplayHudSync.update = function (options) {
         options = options || {};
 
@@ -449,7 +258,6 @@
         var multiplayerMode = !!options.multiplayerMode;
         var debugVisualsOn = !!options.debugVisualsOn;
         var stamp = Date.now();
-        var abilityStamp = multiplayerMode ? networkAuthoritativeNow() : stamp;
         var selfCombatState = syncSelfCombatHud(stamp);
         var weaponState = currentWeaponState(stamp);
         var weaponHudState = currentWeaponHudState(stamp);
@@ -469,87 +277,17 @@
         if (runtime.GameUI && runtime.GameUI.updateDamageEffects) {
             runtime.GameUI.updateDamageEffects(dt);
         }
-        if (!multiplayerMode && runtime.GameUI && runtime.GameUI.updateAbilityInfo && runtime.GameAbilities && runtime.GameAbilities.getHudState) {
-            runtime.GameUI.updateAbilityInfo(runtime.GameAbilities.getHudState());
-        }
         if (runtime.GameUI && runtime.GameUI.updateThrowableInfo && runtime.GameThrowables && runtime.GameThrowables.getState) {
             runtime.GameUI.updateThrowableInfo(runtime.GameThrowables.getState());
         }
 
-        if (runtime.GameAudio && runtime.GameAudio.setChokeAudioState) {
-            var selfChokeCasterState = currentChokeCasterState(multiplayerMode);
-            runtime.GameAudio.setChokeAudioState({
-                casterActive: !!(selfChokeCasterState && selfChokeCasterState.endsAt > abilityStamp),
-                victimActive: !!(runtime.GamePlayer && runtime.GamePlayer.isChoked && runtime.GamePlayer.isChoked())
-            });
-        }
-
         if (!multiplayerMode && runtime.GamePlayer && runtime.GamePlayer.setStatusState) {
             runtime.GamePlayer.setStatusState({
-                stunUntil: 0,
-                hookPullUntil: 0,
-                chokeStartedAt: 0,
-                chokeUntil: 0,
-                chokeLift: 0,
                 spawnShieldUntil: Number(selfCombatState && selfCombatState.spawnShieldUntil || 0)
             });
         }
 
-        var abilityLoadoutState = currentAbilityLoadoutState(multiplayerMode);
-        var abilityDebugState = currentAbilityDebugState(multiplayerMode);
         var throwableDebugState = currentThrowableDebugState(camera, debugVisualsOn);
-        var abilityId = abilityLoadoutState ? String(abilityLoadoutState.abilityId || '') : '';
-        var deadeyeUiState = currentDeadeyeUiState(multiplayerMode);
-        var weaponDebugState = debugVisualsOn ? buildWeaponDebugState(weaponState) : null;
-        var hookDef = currentAbilityCatalogMap().hook || {};
-
-        if (runtime.GameUI && runtime.GameUI.updateChokeReticle) {
-            var chokeVisible = !!debugVisualsOn && abilityId === 'choke';
-            var chokeRectSize = runtime.GameAbilities && runtime.GameAbilities.getChokeRectSize
-                ? runtime.GameAbilities.getChokeRectSize(camera)
-                : { width: 216, height: 180 };
-            runtime.GameUI.updateChokeReticle(
-                chokeVisible,
-                chokeRectSize.width,
-                chokeRectSize.height,
-                toneForAbility()
-            );
-        }
-
-        if (runtime.GameUI && runtime.GameUI.updateHookReticle) {
-            var hookVisible = !!debugVisualsOn && abilityId === 'hook';
-            var hookReticleSize = Number(hookDef.reticleRadiusPx || 52) * 2;
-            runtime.GameUI.updateHookReticle(
-                hookVisible,
-                hookReticleSize,
-                toneForAbility()
-            );
-        }
-
-        if (runtime.GameUI && runtime.GameUI.updateDeadeyeDebugRect) {
-            var deadeyeVisible = !!debugVisualsOn && abilityId === 'deadeye';
-            var deadeyeMinDot = Number(((currentAbilityCatalogMap().deadeye || {}).minDot) || 0.18);
-            var deadeyeRect = deadeyeDebugRectSizePx(camera, deadeyeMinDot);
-            runtime.GameUI.updateDeadeyeDebugRect(
-                deadeyeVisible,
-                deadeyeRect ? deadeyeRect.width : 220,
-                deadeyeRect ? deadeyeRect.height : 160,
-                toneForAbility()
-            );
-        }
-
-        if (runtime.GameUI && runtime.GameUI.updateAbilityDebugPanel) {
-            runtime.GameUI.updateAbilityDebugPanel(
-                !!debugVisualsOn && (!!abilityLoadoutState || !!throwableDebugState),
-                buildDebugPanelSections({
-                    debugVisualsOn: debugVisualsOn,
-                    weaponDebugState: weaponDebugState,
-                    abilityLoadoutState: abilityLoadoutState,
-                    abilityDebugState: abilityDebugState,
-                    throwableDebugState: throwableDebugState
-                })
-            );
-        }
 
         if (runtime.GameUI && runtime.GameUI.updatePlasmaState) {
             var plasmaDebugState = debugVisualsOn && throwableDebugState
@@ -566,11 +304,6 @@
                 stickDelaySec: plasmaDebugState ? plasmaDebugState.stickDelaySec : 0,
                 tone: 'throwable'
             });
-        }
-
-        syncDeadeyeHighlights(multiplayerMode, deadeyeUiState);
-        if (runtime.GameUI && runtime.GameUI.updateDeadeyeReticle) {
-            runtime.GameUI.updateDeadeyeReticle(camera, deadeyeUiState);
         }
     };
 

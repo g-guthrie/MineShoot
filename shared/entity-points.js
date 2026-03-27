@@ -10,6 +10,7 @@ export const ENTITY_AIM_TARGET_OFFSET_Y = 1.0;
 export const DAMAGE_POINT_OFFSET_Y = 1.06;
 export const MARKER_POINT_OFFSET_Y = 2.25;
 export const HITSCAN_ORIGIN_FORWARD_OFFSET = 0.35;
+export const MUZZLE_ORIGIN_FORWARD_OFFSET = 0.77;
 export const ROLL_BODY_HITBOX_VOLUME_SCALE = 0.0853125;
 export const ROLL_BODY_HITBOX_LINEAR_SCALE = Math.cbrt(ROLL_BODY_HITBOX_VOLUME_SCALE);
 
@@ -112,6 +113,15 @@ export function logicalHitscanOriginFromEye(eyePos, forward) {
   };
 }
 
+export function logicalMuzzleOriginFromEye(eyePos, forward) {
+  if (!eyePos || !forward) return null;
+  return {
+    x: Number(eyePos.x || 0) + (Number(forward.x || 0) * MUZZLE_ORIGIN_FORWARD_OFFSET),
+    y: Number(eyePos.y || 0) + (Number(forward.y || 0) * MUZZLE_ORIGIN_FORWARD_OFFSET),
+    z: Number(eyePos.z || 0) + (Number(forward.z || 0) * MUZZLE_ORIGIN_FORWARD_OFFSET)
+  };
+}
+
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.entityPoints = {
@@ -119,6 +129,7 @@ runtime.GameShared.entityPoints = {
   DAMAGE_POINT_OFFSET_Y,
   MARKER_POINT_OFFSET_Y,
   HITSCAN_ORIGIN_FORWARD_OFFSET,
+  MUZZLE_ORIGIN_FORWARD_OFFSET,
   ROLL_BODY_HITBOX_VOLUME_SCALE,
   ROLL_BODY_HITBOX_LINEAR_SCALE,
   entityFeetY,
@@ -133,5 +144,6 @@ runtime.GameShared.entityPoints = {
   isRollStateActive,
   buildCombatHitboxesFromFeetPosition,
   buildCombatHitboxesFromEntityPosition,
-  logicalHitscanOriginFromEye
+  logicalHitscanOriginFromEye,
+  logicalMuzzleOriginFromEye
 };

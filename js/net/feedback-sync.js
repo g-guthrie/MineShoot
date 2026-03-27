@@ -35,8 +35,21 @@
         return net && net.effects ? net.effects : null;
     }
 
+    function netRemoteEntities() {
+        var net = runtime().GameNet || null;
+        return net && net.remoteEntities ? net.remoteEntities : null;
+    }
+
+    function sharedApi() {
+        return runtime().GameShared || {};
+    }
+
+    function worldTracerFx() {
+        return runtime().GameWorldTracerFx || null;
+    }
+
     function feedbackTuning() {
-        var shared = runtime().GameShared || {};
+        var shared = sharedApi();
         var network = shared.getNetworkTuning ? shared.getNetworkTuning() : null;
         var feedback = network && network.feedback ? network.feedback : {};
         return {
@@ -186,6 +199,63 @@
             : undefined;
     }
 
+    function tracerWeaponConfig(weaponId) {
+        var shared = sharedApi();
+        var presentation = shared && shared.getWeaponPresentation
+            ? shared.getWeaponPresentation(String(weaponId || ''))
+            : null;
+        var tracer = presentation && presentation.tracer ? presentation.tracer : {};
+        return {
+            tracerLife: Number(tracer.life || 0),
+            tracerSpeed: Number(tracer.speed || 0),
+            tracerSegmentLength: Number(tracer.segmentLength || 0)
+        };
+    }
+
+    function resolveShotEffectOrigin(sourceId, fallbackOrigin) {
+        var remoteEntitiesApi = netRemoteEntities();
+        var renderMap = remoteEntitiesApi && remoteEntitiesApi.getRenderMap ? remoteEntitiesApi.getRenderMap() : null;
+        var render = renderMap && renderMap.get ? renderMap.get(String(sourceId || '')) : null;
+        if (render && render.actorVisual && render.actorVisual.getMuzzleWorldPosition && typeof THREE !== 'undefined' && THREE && THREE.Vector3) {
+            var muzzleWorld = render.actorVisual.getMuzzleWorldPosition(new THREE.Vector3());
+            if (muzzleWorld && typeof muzzleWorld.x === 'number') return muzzleWorld;
+        }
+        if (!fallbackOrigin || typeof THREE === 'undefined' || !THREE || !THREE.Vector3) return null;
+        return new THREE.Vector3(
+            Number(fallbackOrigin.x || 0),
+            Number(fallbackOrigin.y || 0),
+            Number(fallbackOrigin.z || 0)
+        );
+    }
+
+    function handleShotEffect(event, camera, selfState) {
+        if (!event || !camera) return;
+        var tracerFx = worldTracerFx();
+        if (!tracerFx || !tracerFx.spawnTracer) return;
+        var selfId = String(selfState && selfState.id || '');
+        var sourceId = String(event.sourceId || '');
+        if (sourceId && selfId && sourceId === selfId) return;
+        var traces = Array.isArray(event.traces) ? event.traces : [];
+        if (!traces.length) return;
+        var origin = resolveShotEffectOrigin(sourceId, event.origin);
+        if (!origin) return;
+        var weapon = tracerWeaponConfig(event.weaponId || '');
+        for (var i = 0; i < traces.length; i++) {
+            var trace = traces[i];
+            if (!trace) continue;
+            tracerFx.spawnTracer(
+                camera,
+                weapon,
+                new THREE.Vector3(
+                    Number(trace.x || 0),
+                    Number(trace.y || 0),
+                    Number(trace.z || 0)
+                ),
+                origin
+            );
+        }
+    }
+
     function showDamageNumber(feedback, camera) {
         var RT = runtime();
         if (!RT.GameUI || !RT.GameUI.showDamageNumber) return false;
@@ -251,34 +321,6 @@
         }
     }
 
-    function handleAbilityEvent(event, selfState) {
-        if (!event || event.abilityId !== 'choke') return;
-        var RT = runtime();
-        var effectsApi = netEffects();
-        if (!RT.GameAudio || !RT.GameAudio.play) return;
-
-        var selfId = selfState && selfState.id ? String(selfState.id) : '';
-        var sourceId = String(event.sourceId || '');
-        var targetId = String(event.targetId || '');
-        var shouldHear = sourceId && selfId && sourceId === selfId;
-        if (!shouldHear && targetId && selfId && targetId === selfId) {
-            shouldHear = true;
-        }
-        if (!shouldHear && RT.GamePlayer && RT.GamePlayer.getPosition && effectsApi && effectsApi.damagePointForEntityId) {
-            var selfPos = RT.GamePlayer.getPosition(feedbackSelfPos);
-            var sourcePos = effectsApi.damagePointForEntityId(sourceId);
-            if (selfPos && sourcePos) {
-                var dx = Number(selfPos.x || 0) - Number(sourcePos.x || 0);
-                var dy = Number(selfPos.y || 0) - Number(sourcePos.y || 0);
-                var dz = Number(selfPos.z || 0) - Number(sourcePos.z || 0);
-                shouldHear = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz)) <= 26;
-            }
-        }
-        if (shouldHear) {
-            RT.GameAudio.play('chokeCast');
-        }
-    }
-
     function syncGameplayFeedback(options) {
         var opts = options || {};
         var RT = runtime();
@@ -288,20 +330,6 @@
         var dt = Number(opts.dt || 0);
         var setTransientDebug = typeof opts.setTransientDebug === 'function' ? opts.setTransientDebug : function () {};
 
-        if (viewApi && viewApi.consumeClassCastResult) {
-            var castResult = null;
-            do {
-                castResult = viewApi.consumeClassCastResult();
-                if (castResult) {
-                    if (castResult.t === 'class_cast_ok') {
-                        setTransientDebug((castResult.kind || 'Ability') + ' cast!', 800);
-                    } else if (castResult.t === 'class_cast_reject') {
-                        setTransientDebug('Ability failed: ' + (castResult.reason || 'rejected'), 700);
-                    }
-                }
-            } while (castResult);
-        }
-
         if (viewApi && viewApi.consumeDamageFeedback) {
             var damageFeedback = null;
             do {
@@ -310,12 +338,12 @@
             } while (damageFeedback);
         }
 
-        if (viewApi && viewApi.consumeAbilityEvent) {
-            var abilityEvent = null;
+        if (viewApi && viewApi.consumeShotEffect) {
+            var shotEffect = null;
             do {
-                abilityEvent = viewApi.consumeAbilityEvent();
-                if (abilityEvent) handleAbilityEvent(abilityEvent, selfState);
-            } while (abilityEvent);
+                shotEffect = viewApi.consumeShotEffect();
+                if (shotEffect) handleShotEffect(shotEffect, camera, selfState);
+            } while (shotEffect);
         }
 
         if (viewApi && viewApi.consumeIncomingDamageFeedback && RT.GamePlayerCombat && RT.GamePlayerCombat.showIncomingFeedback) {

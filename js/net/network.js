@@ -95,10 +95,6 @@
         return runtime.GamePlayerCombat || null;
     }
 
-    function abilityFxApi() {
-        return runtime.GameAbilityFx || null;
-    }
-
     function transportApi() {
         return runtime.GameNetTransport || null;
     }
@@ -155,7 +151,7 @@
         if (user && user.id) {
             params.set('uid', String(user.id));
             params.set('username', String(user.username || user.id));
-            params.set('classId', String(user.classId || 'abilities'));
+            params.set('classId', String(user.classId || 'ffa'));
         }
         return endpoint + '?' + params.toString();
     }
@@ -233,8 +229,8 @@
                     z: Number(fireOrigin.z || 0)
                 };
                 var sharedPoints = sharedApi.entityPoints || {};
-                payload.aimOrigin = sharedPoints.logicalHitscanOriginFromEye && payload.aimForward
-                    ? sharedPoints.logicalHitscanOriginFromEye(eyeOrigin, payload.aimForward)
+                payload.aimOrigin = sharedPoints.logicalMuzzleOriginFromEye && payload.aimForward
+                    ? sharedPoints.logicalMuzzleOriginFromEye(eyeOrigin, payload.aimForward)
                     : eyeOrigin;
             }
         }
@@ -249,8 +245,7 @@
     if (GameNetEntities && GameNetEntities.configure) {
         GameNetEntities.configure({
             getSharedApi: function () { return sharedApi; },
-            getActorVisualFactory: function () { return runtime.GameActorVisualFactory || null; },
-            getAbilityFxApi: abilityFxApi
+            getActorVisualFactory: function () { return runtime.GameActorVisualFactory || null; }
         });
     }
 
@@ -335,6 +330,15 @@
         return netState.consumeNotice();
     }
 
+    function translateSelfEntryState(entity) {
+        if (!entity || entity.id !== netState.getSelfId()) return entity;
+        var entryUntil = Number(entity.matchEntryUntil || 0);
+        if (!(entryUntil > 0)) return entity;
+        var nextEntity = Object.assign({}, entity);
+        nextEntity.matchEntryUntil = Number(connectionTiming.toLocalClockTime(entryUntil) || entryUntil);
+        return nextEntity;
+    }
+
     function wsEndpoint() {
         return buildWsEndpoint();
     }
@@ -354,6 +358,7 @@
     function updateRemoteFromSnapshot(entity, snapshotMeta) {
         if (!sceneRef) return;
         entity = pendingSelfWeaponLoadout(entity);
+        entity = translateSelfEntryState(entity);
         if (entity.id === netState.getSelfId()) {
             if (!connectionTiming.shouldAcceptSelfSnapshot(entity, snapshotMeta)) return;
             netState.setSelfState(entity);
@@ -462,7 +467,6 @@
         getConnectionTiming: function () { return connectionTiming; },
         getPlayerApi: playerApi,
         getPlayerCombatApi: playerCombatApi,
-        getAbilityFxApi: abilityFxApi,
         damagePointY: damagePointY,
         markerPointY: markerPointY,
         wsSend: wsSend,
@@ -511,8 +515,7 @@
         throwAckQueue: queues.throwAckQueue,
         throwRejectQueue: queues.throwRejectQueue,
         throwableEventQueue: queues.throwableEventQueue,
-        abilityEventQueue: queues.abilityEventQueue,
-        classCastResultQueue: queues.classCastResultQueue,
+        shotEffectQueue: queues.shotEffectQueue,
         damageFeedbackQueue: queues.damageFeedbackQueue,
         incomingDamageFeedbackQueue: queues.incomingDamageFeedbackQueue
     });
@@ -562,15 +565,12 @@
         getCurrentUser: currentUser,
         getRenderCoreWorldPosition: effects.getRenderCoreWorldPosition,
         markerPointForEntityId: effects.markerPointForEntityId,
-        getChokeVictimStateForEntity: effects.getChokeVictimStateForEntity,
         getSharedApi: function () { return sharedApi; },
-        getAbilityFxApi: abilityFxApi,
         consumeNotice: consumeNotice,
         throwAckQueue: queues.throwAckQueue,
         throwRejectQueue: queues.throwRejectQueue,
         throwableEventQueue: queues.throwableEventQueue,
-        abilityEventQueue: queues.abilityEventQueue,
-        classCastResultQueue: queues.classCastResultQueue,
+        shotEffectQueue: queues.shotEffectQueue,
         damageFeedbackQueue: queues.damageFeedbackQueue,
         incomingDamageFeedbackQueue: queues.incomingDamageFeedbackQueue
     });
@@ -631,8 +631,7 @@
         setLastInputSeqSent: netState.setLastInputSeqSent,
         getInputMessageType: function () { return MSG_C2S.INPUT; },
         getRemoteSyncApi: remoteSyncApi,
-        getRenderMap: function () { return GameNetEntities.getRenderMap(); },
-        getChokeVictimStateForEntity: effects.getChokeVictimStateForEntity
+        getRenderMap: function () { return GameNetEntities.getRenderMap(); }
     });
 
     function clearReconnectTimer() {
@@ -649,6 +648,7 @@
 
     var commandsApi = commandFactory.create({
         wsSend: wsSend,
+        enterMatchMessageType: MSG_C2S.ENTER_MATCH,
         buildFirePayload: buildFirePayload,
         fireMessageType: MSG_C2S.FIRE,
         rollMessageType: MSG_C2S.ROLL,
@@ -657,8 +657,6 @@
         normalizeWeaponLoadoutPayload: PROTOCOL.normalizeWeaponLoadoutPayload,
         normalizeThrowPayload: PROTOCOL.normalizeThrowPayload,
         normalizeReloadPayload: PROTOCOL.normalizeReloadPayload,
-        normalizeAbilityLoadoutPayload: PROTOCOL.normalizeAbilityLoadoutPayload,
-        normalizeClassCastPayload: PROTOCOL.normalizeClassCastPayload,
         setPendingWeaponLoadout: netState.setPendingWeaponLoadout,
         flushPendingWeaponLoadout: effects.flushPendingWeaponLoadout
     });
@@ -716,7 +714,22 @@
         commands: commandsApi,
         timing: timingApi,
         effects: effects,
-        remoteEntities: GameNetEntities
+        remoteEntities: GameNetEntities,
+        getHitboxArray: function () {
+            return GameNetEntities && GameNetEntities.getHitboxArray
+                ? GameNetEntities.getHitboxArray()
+                : [];
+        },
+        getRenderMap: function () {
+            return GameNetEntities && GameNetEntities.getRenderMap
+                ? GameNetEntities.getRenderMap()
+                : new Map();
+        },
+        getLockTargets: function () {
+            return stateView && stateView.getLockTargets
+                ? stateView.getLockTargets()
+                : [];
+        }
     };
 
     runtime.GameNet = GameNet;

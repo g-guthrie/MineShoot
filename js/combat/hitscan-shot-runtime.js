@@ -155,6 +155,10 @@
             if (runtime().GameEnemy && runtime().GameEnemy.getHitboxArray) {
                 appendArrayItems(combatHitboxesScratch, runtime().GameEnemy.getHitboxArray() || []);
             }
+            if (isNetCombatReady() && net && net.getHitboxArray) {
+                appendArrayItems(combatHitboxesScratch, net.getHitboxArray() || []);
+                return combatHitboxesScratch;
+            }
             if (isNetCombatReady() && netRemote && netRemote.getHitboxArray) {
                 appendArrayItems(combatHitboxesScratch, netRemote.getHitboxArray() || []);
             }
@@ -168,6 +172,10 @@
 
             if (runtime().GameEnemy && runtime().GameEnemy.getLockTargets) {
                 appendArrayItems(lockTargetsScratch, runtime().GameEnemy.getLockTargets() || []);
+            }
+            if (isNetCombatReady() && net && net.getLockTargets) {
+                appendArrayItems(lockTargetsScratch, net.getLockTargets() || []);
+                if (lockTargetsScratch.length > 0) return lockTargetsScratch;
             }
             if (isNetCombatReady() && netView && netView.getLockTargets) {
                 appendArrayItems(lockTargetsScratch, netView.getLockTargets() || []);
@@ -271,13 +279,13 @@
             if (!camera || !camera.getWorldDirection) return eyeOrigin;
             var cameraForward = new THREE.Vector3();
             camera.getWorldDirection(cameraForward);
-            if (sharedPoints.logicalHitscanOriginFromEye) {
-                return sharedPoints.logicalHitscanOriginFromEye(eyeOrigin, cameraForward);
+            if (sharedPoints.logicalMuzzleOriginFromEye) {
+                return sharedPoints.logicalMuzzleOriginFromEye(eyeOrigin, cameraForward);
             }
             return {
-                x: eyeOrigin.x + (cameraForward.x * 0.35),
-                y: eyeOrigin.y + (cameraForward.y * 0.35),
-                z: eyeOrigin.z + (cameraForward.z * 0.35)
+                x: eyeOrigin.x + (cameraForward.x * 0.77),
+                y: eyeOrigin.y + (cameraForward.y * 0.77),
+                z: eyeOrigin.z + (cameraForward.z * 0.77)
             };
         }
 
@@ -360,7 +368,11 @@
                 if (plain) targets.push(plain);
             }
             var tracerOrigin = resolvePlasmaMuzzle(camera);
-            var aimOrigin = localAimOrigin(camera);
+            var aimOrigin = tracerOrigin ? {
+                x: Number(tracerOrigin.x || 0),
+                y: Number(tracerOrigin.y || 0),
+                z: Number(tracerOrigin.z || 0)
+            } : localAimOrigin(camera);
             if (!aimOrigin) return null;
             var aimForward = localAimForward(camera, aimOrigin, weaponRuntime.getEffectiveMaxRange(weapon));
             if (!aimForward) {

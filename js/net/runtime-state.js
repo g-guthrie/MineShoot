@@ -15,8 +15,7 @@
         var throwAckQueue = [];
         var throwRejectQueue = [];
         var throwableEventQueue = [];
-        var abilityEventQueue = [];
-        var classCastResultQueue = [];
+        var shotEffectQueue = [];
         var damageFeedbackQueue = [];
         var incomingDamageFeedbackQueue = [];
         var notices = [];
@@ -80,8 +79,7 @@
             throwAckQueue.length = 0;
             throwRejectQueue.length = 0;
             throwableEventQueue.length = 0;
-            abilityEventQueue.length = 0;
-            classCastResultQueue.length = 0;
+            shotEffectQueue.length = 0;
             damageFeedbackQueue.length = 0;
             incomingDamageFeedbackQueue.length = 0;
             notices.length = 0;
@@ -250,8 +248,7 @@
                 throwAckQueue: throwAckQueue,
                 throwRejectQueue: throwRejectQueue,
                 throwableEventQueue: throwableEventQueue,
-                abilityEventQueue: abilityEventQueue,
-                classCastResultQueue: classCastResultQueue,
+                shotEffectQueue: shotEffectQueue,
                 damageFeedbackQueue: damageFeedbackQueue,
                 incomingDamageFeedbackQueue: incomingDamageFeedbackQueue
             };
@@ -335,8 +332,7 @@
             getThrowAckQueue: function () { return throwAckQueue; },
             getThrowRejectQueue: function () { return throwRejectQueue; },
             getThrowableEventQueue: function () { return throwableEventQueue; },
-            getAbilityEventQueue: function () { return abilityEventQueue; },
-            getClassCastResultQueue: function () { return classCastResultQueue; },
+            getShotEffectQueue: function () { return shotEffectQueue; },
             getDamageFeedbackQueue: function () { return damageFeedbackQueue; },
             getIncomingDamageFeedbackQueue: function () { return incomingDamageFeedbackQueue; }
         };

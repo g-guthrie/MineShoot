@@ -77,7 +77,7 @@ test('directional locomotion hits the planned movement-facing targets for strafe
   assert.ok(Math.abs(retreatDiagonalState.targetFacingYaw - (40 * (Math.PI / 180))) < 0.000001);
 });
 
-test('directional locomotion uses a subtle idle pose for small standing turns', () => {
+test('directional locomotion does not produce a special idle pose for small standing mouse turns', () => {
   const state = createDirectionalLocomotionState();
   updateDirectionalLocomotionState(state, 1, {
     yaw: 0,
@@ -89,8 +89,8 @@ test('directional locomotion uses a subtle idle pose for small standing turns', 
 
   assert.equal(state.useTurnLoopClip, false);
   assert.equal(state.useTurnEntryClip, false);
-  assert.equal(state.poseName, 'idle_turn_left');
-  assert.ok(state.idleTurnPoseWeight > 0.45);
+  assert.equal(state.poseName, '');
+  assert.equal(state.idleTurnPoseWeight, 0);
 
   const rig = makeRig();
   const applied = applyDirectionalLocomotionPose(rig, state, {
@@ -98,14 +98,14 @@ test('directional locomotion uses a subtle idle pose for small standing turns', 
     sprinting: false
   });
 
-  assert.equal(applied, true);
+  assert.equal(applied, false);
   assert.ok(Math.abs(rig.modelRoot.rotation.y - Math.PI) < 0.000001);
-  assert.ok(rig.bodyLower.rotation.y > 0);
-  assert.ok(rig.bodyUpper.rotation.y > rig.bodyLower.rotation.y);
-  assert.ok(rig.headBone.rotation.y > rig.bodyUpper.rotation.y);
+  assert.equal(rig.bodyLower.rotation.y, 0);
+  assert.equal(rig.bodyUpper.rotation.y, 0);
+  assert.equal(rig.headBone.rotation.y, 0);
 });
 
-test('directional locomotion uses the rotate loop before the full standing turn entry', () => {
+test('directional locomotion does not produce a rotate loop while standing and mousing', () => {
   const state = createDirectionalLocomotionState();
   updateDirectionalLocomotionState(state, 0.016, {
     yaw: 0,
@@ -116,9 +116,9 @@ test('directional locomotion uses the rotate loop before the full standing turn 
     airborne: false
   });
 
-  assert.equal(state.useTurnLoopClip, true);
+  assert.equal(state.useTurnLoopClip, false);
   assert.equal(state.useTurnEntryClip, false);
-  assert.equal(state.turnClipDirection, 1);
+  assert.equal(state.turnClipDirection, 0);
 
   const rig = makeRig();
   rig.headBone.rotation.y = 0.3;
@@ -127,12 +127,11 @@ test('directional locomotion uses the rotate loop before the full standing turn 
     sprinting: false
   });
 
-  assert.equal(applied, true);
-  assert.ok(rig.headBone.rotation.y < 0);
-  assert.ok(rig.headBone.rotation.y > -0.25);
+  assert.equal(applied, false);
+  assert.equal(rig.headBone.rotation.y, 0.3);
 });
 
-test('directional locomotion scales medium standing turn head guidance with turn magnitude', () => {
+test('directional locomotion no longer scales standing turn head guidance because idle mouse turns have no pose reaction', () => {
   const lighterTurn = createDirectionalLocomotionState();
   updateDirectionalLocomotionState(lighterTurn, 0.016, {
     yaw: 0,
@@ -152,9 +151,8 @@ test('directional locomotion scales medium standing turn head guidance with turn
     airborne: false
   });
 
-  assert.ok(heavierTurn.turnLoopPoseWeight > lighterTurn.turnLoopPoseWeight);
-  assert.ok(heavierTurn.turnLoopPoseWeight > 0.6);
-  assert.ok(lighterTurn.turnLoopPoseWeight < 0.25);
+  assert.equal(lighterTurn.turnLoopPoseWeight, 0);
+  assert.equal(heavierTurn.turnLoopPoseWeight, 0);
 
   const lightRig = makeRig();
   lightRig.headBone.rotation.y = 0.3;
@@ -170,11 +168,11 @@ test('directional locomotion scales medium standing turn head guidance with turn
     sprinting: false
   });
 
-  assert.ok(lightRig.headBone.rotation.y < 0.1);
-  assert.ok(heavyRig.headBone.rotation.y < 0);
+  assert.equal(lightRig.headBone.rotation.y, 0.3);
+  assert.equal(heavyRig.headBone.rotation.y, 0.3);
 });
 
-test('directional locomotion uses soft idle turn entry when yaw rate is high and movement is near zero', () => {
+test('directional locomotion does not produce a standing turn entry while mousing in place', () => {
   const state = createDirectionalLocomotionState();
   updateDirectionalLocomotionState(state, 0.016, {
     yaw: 0,
@@ -193,8 +191,8 @@ test('directional locomotion uses soft idle turn entry when yaw rate is high and
     airborne: false
   });
 
-  assert.equal(state.useTurnEntryClip, true);
-  assert.equal(state.turnClipDirection, 1);
+  assert.equal(state.useTurnEntryClip, false);
+  assert.equal(state.turnClipDirection, 0);
 });
 
 test('directional locomotion turns the whole model toward travel and twists torso/head back toward aim', () => {

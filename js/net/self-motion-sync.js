@@ -101,29 +101,12 @@
 
         var RT = runtime();
         var netApi = RT.GameNet || null;
-        var abilityFxView = RT.GameAbilityFx || null;
-        var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
-            ? abilityFxView.readAbilityFx(authoritativeState)
-            : ((authoritativeState.abilityFx && typeof authoritativeState.abilityFx === 'object')
-                ? authoritativeState.abilityFx
-                : null);
         var motionSyncKey = String(normalizedState.authoritativeMotionRevision || buildMotionSyncKey(authoritativeState));
         var motionChanged = motionSyncKey !== lastMotionSyncKey;
         var acceptedSelfSeq = Math.max(0, Number(normalizedState.acceptedSelfSeq || 0));
         var ackAdvanced = acceptedSelfSeq > 0 && acceptedSelfSeq !== lastAcceptedSelfSeq;
         var replayStateActive = Number(normalizedState.pendingInputCount || 0) > 0 || !!normalizedState.hasUnsentInputTail;
         var serverNow = authoritativeNow(netApi);
-
-        if (
-            selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > serverNow &&
-            RT.GamePlayer &&
-            RT.GamePlayer.applyAuthoritativeMotion
-        ) {
-            RT.GamePlayer.applyAuthoritativeMotion(authoritativeState, { deferViewSync: true });
-            lastMotionSyncKey = motionSyncKey;
-            lastAcceptedSelfSeq = acceptedSelfSeq;
-            return;
-        }
 
         if (
             (motionChanged || (ackAdvanced && replayStateActive)) &&

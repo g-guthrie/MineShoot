@@ -90,7 +90,7 @@ async function loadPlayerCombatHarness(runtimeOverrides = {}) {
   };
 }
 
-test('player combat clears transient ability effects when death forces a respawn', async () => {
+test('player combat clears transient state when death forces a respawn', async () => {
   const harness = await loadPlayerCombatHarness();
   harness.GamePlayerCombat.init({
     isPlaying() { return true; },

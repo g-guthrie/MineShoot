@@ -50,7 +50,7 @@ function seedAccount(env, suffix, username) {
     profile_enabled: 1,
     headline: null,
     bio: null,
-    class_id: 'abilities',
+    class_id: 'ffa',
     kills: 0,
     deaths: 0,
     damage_done: 0,
@@ -1175,8 +1175,8 @@ test('websocket upgrade enforces private-room membership and forwards actor iden
 
   const allowed = await handleWsUpgrade(
     env,
-    request(`/api/ws?room=${roomId}&pid=ply_allow_1&uid=pub_allow_1&username=ALPHA&classId=abilities&actorId=ACTOR_WS1&actorName=ALPHA`, 'GET'),
-    { abilities: {} }
+    request(`/api/ws?room=${roomId}&pid=ply_allow_1&uid=pub_allow_1&username=ALPHA&classId=ffa&actorId=ACTOR_WS1&actorName=ALPHA`, 'GET'),
+    { ffa: {} }
   );
   assert.equal(allowed.status, 200);
   assert.equal(forwarded.length, 1);
@@ -1186,8 +1186,8 @@ test('websocket upgrade enforces private-room membership and forwards actor iden
 
   const denied = await handleWsUpgrade(
     env,
-    request(`/api/ws?room=${roomId}&pid=ply_deny_1&uid=pub_deny_1&username=BRAVO&classId=abilities&actorId=INTRUDER&actorName=BRAVO`, 'GET'),
-    { abilities: {} }
+    request(`/api/ws?room=${roomId}&pid=ply_deny_1&uid=pub_deny_1&username=BRAVO&classId=ffa&actorId=INTRUDER&actorName=BRAVO`, 'GET'),
+    { ffa: {} }
   );
   assert.equal(denied.status, 403);
   assert.equal(forwarded.length, 1);
@@ -1221,8 +1221,8 @@ test('websocket upgrade accepts uppercase copied guest actor ids for private-roo
 
   const allowed = await handleWsUpgrade(
     env,
-    request(`/api/ws?room=${roomId}&pid=ply_casews_1&uid=pub_casews_1&username=CASEWS&classId=abilities&actorId=GST_CASEWS1&actorName=CASEWS`, 'GET'),
-    { abilities: {} }
+    request(`/api/ws?room=${roomId}&pid=ply_casews_1&uid=pub_casews_1&username=CASEWS&classId=ffa&actorId=GST_CASEWS1&actorName=CASEWS`, 'GET'),
+    { ffa: {} }
   );
   assert.equal(allowed.status, 200);
   assert.equal(forwarded.length, 1);
@@ -1281,7 +1281,7 @@ test('websocket upgrade accepts separator-free readable guest actor ids for priv
 
   const allowed = await handleWsUpgrade(
     env,
-    request(`/api/ws?room=${roomId}&pid=ply_read_1&uid=pub_read_1&username=AMBEROTTER314&classId=abilities&actorId=AMBEROTTER314&actorName=AMBEROTTER314`, 'GET'),
+    request(`/api/ws?room=${roomId}&pid=ply_read_1&uid=pub_read_1&username=AMBEROTTER314&classId=ffa&actorId=AMBEROTTER314&actorName=AMBEROTTER314`, 'GET'),
     {}
   );
 

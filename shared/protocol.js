@@ -87,13 +87,6 @@ export function normalizeWeaponLoadoutPayload(slot1, slot2) {
   };
 }
 
-export function normalizeAbilityLoadoutPayload(abilityId) {
-  return {
-    t: MSG_C2S.CLASS_QUEUE,
-    abilityId: String(abilityId || '')
-  };
-}
-
 export function normalizeThrowPayload(throwableId, clientThrowId, throwIntent) {
   const payload = {
     t: MSG_C2S.THROW,
@@ -112,21 +105,8 @@ export function normalizeReloadPayload(weaponId) {
   };
 }
 
-export function normalizeClassCastPayload(slotOrCastData, maybeCastData) {
-  const castData = maybeCastData !== undefined ? maybeCastData : slotOrCastData;
-  const payload = {
-    t: MSG_C2S.CLASS_CAST
-  };
-  const aimPoint = normalizeVec3(castData && castData.aimPoint);
-  const projectileIntent = normalizeThrowIntent(castData && castData.projectileIntent);
-  const lockTargetId = String(castData && castData.lockTargetId || '').trim();
-  if (aimPoint) payload.aimPoint = aimPoint;
-  if (projectileIntent) payload.projectileIntent = projectileIntent;
-  if (lockTargetId) payload.lockTargetId = lockTargetId;
-  return payload;
-}
-
 export const MSG_C2S = {
+  ENTER_MATCH: 'enter_match',
   INPUT: 'input',
   ROLL: 'roll',
   FIRE: 'fire',
@@ -134,8 +114,6 @@ export const MSG_C2S = {
   EQUIP_WEAPON: 'equip_weapon',
   WEAPON_LOADOUT: 'weapon_loadout',
   THROW: 'throw',
-  CLASS_QUEUE: 'class_queue',
-  CLASS_CAST: 'class_cast',
   PING: 'ping',
   LOBBY_PING: 'lobby_ping'
 };
@@ -143,6 +121,7 @@ export const MSG_C2S = {
 export const MSG_S2C = {
   WELCOME: 'welcome',
   SNAPSHOT: 'snapshot',
+  SHOT_EFFECT: 'shot_effect',
   THROW_SPAWN: 'throw_spawn',
   THROW_REJECT: 'throw_reject',
   THROW_IMPACT: 'throw_impact',
@@ -150,10 +129,6 @@ export const MSG_S2C = {
   AOE_END: 'aoe_end',
   DAMAGE_EVENT: 'damage_event',
   DEATH_RESPAWN: 'death_respawn',
-  ABILITY_EVENT: 'ability_event',
-  CLASS_CAST_OK: 'class_cast_ok',
-  CLASS_CAST_REJECT: 'class_cast_reject',
-  CLASS_CHANGED: 'class_changed',
   ERROR: 'error',
   PONG: 'pong',
   LOBBY_STATE: 'lobby_state'
@@ -182,10 +157,8 @@ export const protocol = {
   normalizeVec3,
   normalizeThrowIntent,
   normalizeWeaponLoadoutPayload,
-  normalizeAbilityLoadoutPayload,
   normalizeThrowPayload,
-  normalizeReloadPayload,
-  normalizeClassCastPayload
+  normalizeReloadPayload
 };
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});

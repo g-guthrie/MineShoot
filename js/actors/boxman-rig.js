@@ -56,6 +56,7 @@ import {
     var torsoCarryPositionScratch = new THREE.Vector3();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
+    var JUMP_RIGHT_ARM_UPPER_PITCH_OFFSET = -5 * (Math.PI / 180);
     var IDLE_RIGHT_ARM_UPPER_BASE = {
         x: 21.02 * (Math.PI / 180),
         y: -7.92 * (Math.PI / 180),
@@ -520,10 +521,19 @@ import {
         return Math.abs(upperYaw) >= 0.0001;
     }
 
-    function applyLockedRightArmAimBasePose(rig) {
+    function lockedRightArmUpperPitchOffset(activeClipName) {
+        var clipName = String(activeClipName || '');
+        if (clipName === 'jump_idle' || clipName === 'jump_running') {
+            return JUMP_RIGHT_ARM_UPPER_PITCH_OFFSET;
+        }
+        return 0;
+    }
+
+    function applyLockedRightArmAimBasePose(rig, activeClipName) {
         if (!rig) return false;
+        var upperPitchOffset = lockedRightArmUpperPitchOffset(activeClipName);
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X;
+            rig.armUpperR.rotation.x = IDLE_RIGHT_ARM_OUT_UPPER_X + upperPitchOffset;
             rig.armUpperR.rotation.y = IDLE_RIGHT_ARM_UPPER_BASE.y;
             rig.armUpperR.rotation.z = IDLE_RIGHT_ARM_UPPER_BASE.z;
         }
@@ -573,6 +583,7 @@ import {
     function applyRunRightArmIdleBasePose(rig, activeClipName, activeAction) {
         if (!rig || activeClipName !== 'run') return false;
         if (!applyLockedRightArmAimBasePose(rig)) return false;
+        var runRightArmPitchOffset = -25 * (Math.PI / 180);
         var phase = 0;
         if (activeAction && activeAction.getClip) {
             var clip = activeAction.getClip();
@@ -584,10 +595,10 @@ import {
             Math.abs(Number(rig.fireRecoilState.lowerArmPitch || 0)) > 0.0001 ||
             Math.abs(Number(rig.fireRecoilState.weaponKick || 0)) > 0.0001
         ));
-        var upperSwing = suppressRunSwing ? 0 : (Math.sin(phase) * RUN_RIGHT_ARM_SWING_UPPER);
-        var lowerSwing = suppressRunSwing ? 0 : (Math.sin(phase + 0.35) * RUN_RIGHT_ARM_SWING_LOWER);
+        var upperSwing = 0;
+        var lowerSwing = 0;
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x += upperSwing;
+            rig.armUpperR.rotation.x += runRightArmPitchOffset + upperSwing;
         }
         if (rig.armLowerR && rig.armLowerR.rotation) {
             rig.armLowerR.rotation.x += lowerSwing;
@@ -1502,7 +1513,7 @@ import {
             if (rig.activeClipName === 'run') {
                 applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
             } else if (clipUsesLockedRightArmAimBasePose(rig.activeClipName)) {
-                applyLockedRightArmAimBasePose(rig);
+                applyLockedRightArmAimBasePose(rig, rig.activeClipName);
             } else if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
                 applyStopSettleRightArmRecoveryPose(rig, stopSettleWeight);
             }
@@ -1712,6 +1723,7 @@ import {
         resolveWeaponVisualEntry: resolveWeaponVisualEntry,
         applyWeaponPartMesh: applyWeaponPartMesh,
         applyWeaponVisualState: applyWeaponVisualState,
+        lockedRightArmUpperPitchOffset: lockedRightArmUpperPitchOffset,
         applyLockedRightArmAimBasePose: applyLockedRightArmAimBasePose,
         applyStopSettleRightArmRecoveryPose: applyStopSettleRightArmRecoveryPose,
         clipUsesLockedRightArmAimBasePose: clipUsesLockedRightArmAimBasePose,

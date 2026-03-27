@@ -134,8 +134,8 @@ export function resolveGameplayWsIdentity({ session, url, classPresets, randomFn
   const playerClassId = classPresets && classPresets[requestedClassId]
     ? requestedClassId
     : actor.isAuthenticated
-      ? String(session.classId || 'abilities')
-      : 'abilities';
+      ? String(session.classId || 'ffa')
+      : 'ffa';
 
   return {
     ...actor,

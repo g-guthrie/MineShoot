@@ -238,6 +238,9 @@ export function canTargetEntity(room, entity, sourceId, deps) {
   } else if (Number(entity.disconnectedAt || 0) > 0) {
     return false;
   }
+  if (room && typeof room.isEntityMatchEntryPending === 'function' && room.isEntityMatchEntryPending(entity)) {
+    return false;
+  }
   if (sourceId && entity.id === sourceId) return false;
   return !room.isEntitySpawnShielded(entity);
 }
@@ -322,28 +325,19 @@ export function clampWorldAimPoint(room, origin, desiredPoint, maxRange, deps) {
   };
 }
 
-export function isEntityChoked(entity, now) {
-  return !!(entity && entity.alive && entity.chokeVictimState && (entity.chokeVictimState.endsAt || 0) > now);
-}
-
-export function isEntityJustBeenHooked(entity, now) {
-  return !!(entity && entity.alive && entity.justBeenHookedState && (entity.justBeenHookedState.endsAt || 0) > now);
-}
-
 export function isEntityActionRestricted(entity, actionType, now) {
   if (!entity || !entity.alive) return false;
   if (actionType === 'weapon') return Number(entity.weaponLockUntil || 0) > now;
   if (actionType === 'throwable') return Number(entity.throwableLockUntil || 0) > now;
-  if (actionType === 'ability') return Number(entity.abilityLockUntil || 0) > now;
   return false;
 }
 
 export function isEntityMovementLocked(room, entity, now) {
   if (!entity || !entity.alive) return false;
-  return ((entity.stunUntil || 0) > now) ||
-    !!entity.hookPullState ||
-    room.isEntityChoked(entity, now) ||
-    room.isEntityJustBeenHooked(entity, now);
+  if (room && typeof room.isEntityMatchEntryPending === 'function' && room.isEntityMatchEntryPending(entity, now)) {
+    return true;
+  }
+  return ((entity.stunUntil || 0) > now);
 }
 
 export function isEntityRolling(entity, now = Date.now()) {
@@ -386,16 +380,11 @@ export function canEntityUseThrowable(room, entity, now) {
   return !!(entity && entity.alive) && !room.isEntityMovementLocked(entity, now) && !room.isEntityActionRestricted(entity, 'throwable', now);
 }
 
-export function canEntityUseAbility(room, entity, now) {
-  return !!(entity && entity.alive) && !room.isEntityMovementLocked(entity, now) && !room.isEntityActionRestricted(entity, 'ability', now);
-}
-
 export function isEntityActionLocked(room, entity, now) {
   if (!entity || !entity.alive) return false;
   return room.isEntityMovementLocked(entity, now) ||
     room.isEntityActionRestricted(entity, 'weapon', now) ||
-    room.isEntityActionRestricted(entity, 'throwable', now) ||
-    room.isEntityActionRestricted(entity, 'ability', now);
+    room.isEntityActionRestricted(entity, 'throwable', now);
 }
 
 export function entityAimTargetPosition(entity, deps) {
@@ -465,39 +454,6 @@ export function applyTimedSlow(target, durationSec, multiplier, deps) {
   target.slowMultiplier = Math.max(0.1, Math.min(1, Number(multiplier || 1)));
 }
 
-export function applyJustBeenHooked(target, durationSec, deps) {
-  deps = deps || {};
-  const nowMs = deps.nowMs;
-  if (!target || !target.alive) return;
-  const startedAt = nowMs();
-  const endsAt = startedAt + Math.max(0, Math.round(Number(durationSec || 0) * 1000));
-  target.justBeenHookedState = { startedAt, endsAt };
-  target.stunUntil = Math.max(target.stunUntil || 0, endsAt);
-}
-
-export function pullEntityToward(player, target, pullDistance, pullSpeed, stunDuration, deps) {
-  deps = deps || {};
-  const nowMs = deps.nowMs;
-  if (!player || !target || !player.alive || !target.alive) return false;
-  const dx = player.x - target.x;
-  const dz = player.z - target.z;
-  const currentDist = Math.sqrt((dx * dx) + (dz * dz));
-  const desiredDist = Math.max(1.5, Number(pullDistance || 3.2));
-  const travelDist = Math.max(0, currentDist - desiredDist);
-  const speed = Math.max(8, Number(pullSpeed || 26));
-  const durationMs = Math.max(120, Math.round((travelDist / speed) * 1000));
-  target.hookPullState = {
-    sourceId: player.id,
-    pullDistance: desiredDist,
-    pullSpeed: speed,
-    postHookStunDuration: Math.max(0, Number(stunDuration || 0)),
-    startedAt: nowMs(),
-    endsAt: nowMs() + durationMs,
-    facingYaw: Math.atan2(player.x - target.x, player.z - target.z) + Math.PI
-  };
-  return true;
-}
-
 export function closestHostileInRange(room, player, range, minDot, deps) {
   const hits = room.hostilesInCone(player, range, minDot);
   return hits.length > 0 ? hits[0].entity : null;
@@ -529,43 +485,6 @@ export function resolveLockedHostile(room, player, lockTargetId, range, minDot, 
     if (distance3(targetPos, aimPoint) > Number(opts.targetTolerance || 0)) return null;
   }
   return target;
-}
-
-export function deadeyeCandidates(room, player, range, minDot, maxTargets) {
-  const hits = room.hostilesInCone(player, range, minDot);
-  const origin = room.entityAimTargetPosition(player);
-  const forward = room.entityForward(player);
-  const out = [];
-  for (let i = 0; i < hits.length; i++) {
-    const hit = hits[i];
-    const targetPos = room.entityAimTargetPosition(hit.entity);
-    if (!room.hasWorldLineOfSight(origin, targetPos, range)) continue;
-    const dx = targetPos.x - origin.x;
-    const dy = targetPos.y - origin.y;
-    const dz = targetPos.z - origin.z;
-    const dist = Math.sqrt((dx * dx) + (dy * dy) + (dz * dz)) || 1;
-    out.push({
-      id: hit.entity.id,
-      dist: hit.dist,
-      dot: ((forward.x * dx) + (forward.y * dy) + (forward.z * dz)) / dist
-    });
-  }
-  out.sort((a, b) => {
-    if (Math.abs((b.dot || 0) - (a.dot || 0)) > 0.0001) return (b.dot || 0) - (a.dot || 0);
-    return a.dist - b.dist;
-  });
-  return out.slice(0, Math.max(1, maxTargets || 1));
-}
-
-export function resolveClassAimPoint(room, player, msg, maxRange, deps) {
-  deps = deps || {};
-  const addScaled3 = deps.addScaled3;
-  const range = Math.max(1, Number(maxRange || 24));
-  const forward = room.entityForward(player);
-  const eye = room.entityAimTargetPosition(player);
-  const fallback = addScaled3(eye, forward, range);
-  const point = room.readClassAimPoint(player, msg && msg.aimPoint, range);
-  return point || fallback;
 }
 
 export function syncWeaponAmmoState(room, entity, weaponId, now, deps) {
@@ -696,19 +615,6 @@ export function handleReload(room, player, msg, deps) {
   return !!room.beginWeaponReload(player, weaponId, nowMs());
 }
 
-export function handleClassQueue(room, player, msg, ws, deps) {
-  deps = deps || {};
-  const normalizeAbilityId = deps.normalizeAbilityId;
-  if (!player) return;
-  player.abilityId = normalizeAbilityId(msg && msg.abilityId);
-  room.send(ws, {
-    t: deps.msgClassChanged,
-    classId: 'abilities',
-    weaponId: player.weaponId || 'rifle',
-    abilityId: player.abilityId || deps.defaultAbilityId
-  });
-}
-
 export function handleThrow(room, player, msg, ws, deps) {
   deps = deps || {};
   const normalizeThrowPayload = deps.normalizeThrowPayload;
@@ -755,8 +661,10 @@ export function handleFire(room, player, msg, deps) {
   const nowMs = deps.nowMs;
   const weaponStats = deps.weaponStats || {};
   const weaponFalloff = deps.weaponFalloff || {};
+  const resolveHitscanTrace = deps.resolveHitscanTrace;
   const resolveHitscanShot = deps.resolveHitscanShot;
   const applyDamageFromSource = deps.applyDamageFromSource;
+  const broadcastShotEffect = deps.broadcastShotEffect;
   const broadcastDamageEvent = deps.broadcastDamageEvent;
   const broadcastDeathRespawn = deps.broadcastDeathRespawn;
   const canEquipWeaponId = deps.canEquipWeaponId;
@@ -854,7 +762,7 @@ export function handleFire(room, player, msg, deps) {
       return entity;
     })
     .filter(Boolean);
-  const shots = resolveHitscanShot({
+  const shotContext = {
     aimOrigin,
     aimForward,
     weaponStats: { ...stats, id: weaponId },
@@ -864,7 +772,42 @@ export function handleFire(room, player, msg, deps) {
     shotToken,
     targets,
     worldBoxes: room.worldCollidables()
-  });
+  };
+  const shots = resolveHitscanShot(shotContext);
+  if (typeof broadcastShotEffect === 'function') {
+    const traces = typeof resolveHitscanTrace === 'function'
+      ? resolveHitscanTrace({ ...shotContext, includeMisses: true })
+      : shots;
+    if (Array.isArray(traces) && traces.length > 0) {
+      const maxVisualTraces = weaponId === 'shotgun' ? 8 : 1;
+      const visualTraces = [];
+      for (let i = 0; i < traces.length; i++) {
+        const trace = traces[i];
+        if (!trace || !trace.point) continue;
+        visualTraces.push({
+          x: Number(trace.point.x || 0),
+          y: Number(trace.point.y || 0),
+          z: Number(trace.point.z || 0),
+          pelletIndex: Number.isFinite(Number(trace.pelletIndex)) ? Number(trace.pelletIndex) : 0,
+          hitType: trace.hitType === 'head' ? 'head' : (trace.hitType === 'body' ? 'body' : 'miss')
+        });
+        if (visualTraces.length >= maxVisualTraces) break;
+      }
+      if (visualTraces.length > 0) {
+        broadcastShotEffect(room, {
+          sourceId: player.id,
+          weaponId,
+          shotToken,
+          origin: {
+            x: Number(aimOrigin.x || 0),
+            y: Number(aimOrigin.y || 0),
+            z: Number(aimOrigin.z || 0)
+          },
+          traces: visualTraces
+        });
+      }
+    }
+  }
   for (let i = 0; i < shots.length; i++) {
     const shot = shots[i];
     const resolvedShotTarget = shot ? shot.target : null;

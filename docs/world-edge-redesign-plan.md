@@ -94,7 +94,7 @@ Blockout pieces should be broken into reusable sub-builders instead of one monol
 Check:
 
 - spawn exclusions
-- choke width
+- corridor width
 - climb exploits
 - sniper dominance from perimeter ledges
 - whether the hidden hard wall is still visible from jump peaks
@@ -353,7 +353,7 @@ Reference blend:
 - Footprint: `8-12w x 10-16d`
 - Height: `12-18`
 - Style: brokerage / annex building that visually reinforces the exchange frontage
-- Features: tall windows, sign plinth, side stairs, alley choke, optional mini pediment or ticker board
+- Features: tall windows, sign plinth, side stairs, alley squeeze, optional mini pediment or ticker board
 - Playability: similar to west block
 
 #### W8. Alley Kit

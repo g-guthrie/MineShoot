@@ -9,6 +9,7 @@
         return {
             WELCOME: 'welcome',
             SNAPSHOT: 'snapshot',
+            SHOT_EFFECT: 'shot_effect',
             THROW_SPAWN: 'throw_spawn',
             THROW_REJECT: 'throw_reject',
             THROW_IMPACT: 'throw_impact',
@@ -16,10 +17,6 @@
             AOE_END: 'aoe_end',
             DAMAGE_EVENT: 'damage_event',
             DEATH_RESPAWN: 'death_respawn',
-            ABILITY_EVENT: 'ability_event',
-            CLASS_CAST_OK: 'class_cast_ok',
-            CLASS_CAST_REJECT: 'class_cast_reject',
-            CLASS_CHANGED: 'class_changed',
             ERROR: 'error',
             PONG: 'pong'
         };
@@ -184,22 +181,6 @@
         }
     }
 
-    function handleClassChanged(msg, opts) {
-        opts.pushNotice('Ability loadout synced.');
-        var selfState = opts.getSelfState();
-        if (selfState) {
-            selfState.classId = msg.classId || selfState.classId;
-            if (msg.abilityId) {
-                selfState.abilityId = String(msg.abilityId || '');
-            }
-            selfState.cooldownRemaining = 0;
-            selfState.abilityCooldownRemaining = 0;
-        }
-        if (msg.abilityId && opts.runtime && opts.runtime.GameAbilities && opts.runtime.GameAbilities.setLoadout) {
-            opts.runtime.GameAbilities.setLoadout(msg.abilityId);
-        }
-    }
-
     function create(opts) {
         opts = opts || {};
         var msgTypes = defaultMsgTypes();
@@ -261,6 +242,13 @@
             }
 
             if (
+                msg.t === msgTypes.SHOT_EFFECT
+            ) {
+                pushBounded(opts.shotEffectQueue, msg, 64);
+                return;
+            }
+
+            if (
                 msg.t === msgTypes.THROW_IMPACT ||
                 msg.t === msgTypes.THROW_EXPLODE ||
                 msg.t === msgTypes.AOE_END
@@ -276,24 +264,6 @@
 
             if (msg.t === msgTypes.DEATH_RESPAWN) {
                 handleDeathRespawn(msg, opts);
-                return;
-            }
-
-            if (msg.t === msgTypes.ABILITY_EVENT) {
-                pushBounded(opts.abilityEventQueue, msg, 32);
-                return;
-            }
-
-            if (
-                msg.t === msgTypes.CLASS_CAST_OK ||
-                msg.t === msgTypes.CLASS_CAST_REJECT
-            ) {
-                pushBounded(opts.classCastResultQueue, msg, 16);
-                return;
-            }
-
-            if (msg.t === msgTypes.CLASS_CHANGED) {
-                handleClassChanged(msg, opts);
                 return;
             }
 

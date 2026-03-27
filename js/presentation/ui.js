@@ -9,14 +9,13 @@
     var inputLabels = runtime.GameInputLabels || null;
     var GameUI = {};
 
-    var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, sniperScopeEl, chokeReticleEl, hookReticleEl, deadeyeDebugRectEl, deadeyeReticlesEl, hitmarkerEl, killCounterEl;
+    var crosshairEl, pistolReticleEl, spreadReticleEl, shotgunReticleEl, plasmaReticleEl, sniperScopeEl, hitmarkerEl, killCounterEl;
     var plasmaReticleRings = [];
-    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, idleWarningEl, abilityDebugPanelEl;
+    var healthBarEl, healthTextEl, armorBarEl, damageNumbersEl, debugInfoEl, idleWarningEl;
     var trackingReticleEl, trackingReticleLabelEl;
     var combatRadarEl, combatRadarSlicesEl, combatRadarCoreEl, combatBeaconsEl;
     var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
-    var abilityInfoEl;
     var cooldownBarEl, cooldownStatusEl;
     var sprintSpeedLinesEl;
     var sprintSpeedLineEls = [];
@@ -24,8 +23,6 @@
     var damageTicks = [];
     var damageTickTimers = [];
     var damageFlashLevel = 0;
-    var deadeyeReticlePool = [];
-    var deadeyeProjectVec = new THREE.Vector3();
     var debugVisualsOn = false;
     var spreadReticle = null;
     var killCount = 0;
@@ -33,7 +30,6 @@
     var hitmarkerTimer = null;
     var HITMARKER_HOLD_MS = 45;
     var HITMARKER_FADE_SEC = 0.09;
-    var lastAbilityInfoState = null;
     var lastThrowableInfoState = null;
     var inputBindingsUnsubscribe = null;
 
@@ -59,24 +55,6 @@
 
     function debugToneSpec(tone) {
         var id = String(tone || '');
-        if (id === 'ability1') {
-            return {
-                border: 'rgba(126, 215, 255, 0.85)',
-                glow: 'rgba(100, 180, 255, 0.35)',
-                fill: 'rgba(100, 180, 255, 0.08)',
-                text: '#b9ddff',
-                surface: 'rgba(4, 12, 18, 0.9)'
-            };
-        }
-        if (id === 'ability2') {
-            return {
-                border: 'rgba(118, 230, 142, 0.88)',
-                glow: 'rgba(94, 212, 118, 0.34)',
-                fill: 'rgba(82, 188, 104, 0.08)',
-                text: '#c6ffd3',
-                surface: 'rgba(4, 16, 8, 0.9)'
-            };
-        }
         if (id === 'throwable') {
             return {
                 border: 'rgba(255, 166, 94, 0.9)',
@@ -153,10 +131,6 @@
         plasmaReticleRings = [];
         ensurePlasmaReticleRings();
         sniperScopeEl = document.getElementById('sniper-scope');
-        chokeReticleEl = document.getElementById('choke-reticle');
-        hookReticleEl = document.getElementById('hook-reticle');
-        deadeyeDebugRectEl = document.getElementById('deadeye-debug-rect');
-        deadeyeReticlesEl = document.getElementById('deadeye-reticles');
         hitmarkerEl = document.getElementById('hitmarker');
         killCounterEl = document.getElementById('kill-counter');
         healthBarEl = document.getElementById('health-bar');
@@ -165,7 +139,6 @@
         damageNumbersEl = document.getElementById('damage-numbers');
         debugInfoEl = document.getElementById('debug-info');
         idleWarningEl = document.getElementById('idle-warning');
-        abilityDebugPanelEl = document.getElementById('ability-debug-panel');
         trackingReticleEl = document.getElementById('tracking-reticle');
         trackingReticleLabelEl = document.getElementById('tracking-reticle-label');
         combatRadarEl = document.getElementById('combat-radar');
@@ -175,7 +148,6 @@
         combatBeaconEls = [];
         weaponInfoEl = document.getElementById('weapon-info');
         throwableInfoEl = document.getElementById('throwable-info');
-        abilityInfoEl = document.getElementById('ability-info');
         cooldownBarEl = document.getElementById('cooldown-bar');
         cooldownStatusEl = document.getElementById('cooldown-status');
         sprintSpeedLinesEl = document.getElementById('sprint-speed-lines');
@@ -190,7 +162,6 @@
         GameUI.setIdleWarning('');
         if (runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {
             inputBindingsUnsubscribe = runtime.GameInputBindings.subscribe(function () {
-                if (lastAbilityInfoState) GameUI.updateAbilityInfo(lastAbilityInfoState);
                 if (lastThrowableInfoState) GameUI.updateThrowableInfo(lastThrowableInfoState);
             });
         }
@@ -230,7 +201,6 @@
             }
         }
 
-        deadeyeReticlePool = [];
         sprintSpeedLineEls = [];
         if (sprintSpeedLinesEl) {
             sprintSpeedLinesEl.innerHTML = '';
@@ -263,7 +233,6 @@
             hitmarkerTimer = null;
         }
         killCount = 0;
-        lastAbilityInfoState = null;
         lastThrowableInfoState = null;
         damageFlashLevel = 0;
         debugVisualsOn = false;
@@ -285,7 +254,6 @@
         }
         if (weaponInfoEl) clearChildren(weaponInfoEl);
         if (throwableInfoEl) throwableInfoEl.textContent = '';
-        if (abilityInfoEl) abilityInfoEl.textContent = '';
         if (cooldownBarEl) {
             cooldownBarEl.style.width = '0%';
             cooldownBarEl.style.background = '';
@@ -308,15 +276,6 @@
         if (damageNumbersEl) clearChildren(damageNumbersEl);
         if (debugInfoEl) debugInfoEl.textContent = '';
         GameUI.setIdleWarning('');
-        if (chokeReticleEl) chokeReticleEl.style.display = 'none';
-        if (hookReticleEl) hookReticleEl.style.display = 'none';
-        if (deadeyeDebugRectEl) deadeyeDebugRectEl.style.display = 'none';
-        if (abilityDebugPanelEl) {
-            abilityDebugPanelEl.style.display = 'none';
-            abilityDebugPanelEl.textContent = '';
-            abilityDebugPanelEl.innerHTML = '';
-        }
-        hideDeadeyeReticles();
         if (healthBarEl) {
             healthBarEl.style.width = '100%';
             healthBarEl.style.background = '#4CAF50';
@@ -480,13 +439,6 @@
         }
         if (!debugVisualsOn) {
             if (plasmaReticleEl) plasmaReticleEl.style.display = 'none';
-            if (chokeReticleEl) chokeReticleEl.style.display = 'none';
-            if (hookReticleEl) hookReticleEl.style.display = 'none';
-            if (deadeyeDebugRectEl) deadeyeDebugRectEl.style.display = 'none';
-            if (abilityDebugPanelEl) {
-                abilityDebugPanelEl.style.display = 'none';
-                abilityDebugPanelEl.textContent = '';
-            }
         }
     };
 
@@ -627,26 +579,6 @@
         appendWeaponInfoLine(weapon.name, 'weapon-line weapon-line-name');
         appendWeaponInfoLine(ammoText, 'weapon-line weapon-line-ammo');
         appendWeaponInfoLine(mode + ' | ' + weapon.bodyDamage + '/' + weapon.headDamage + ' DMG', 'weapon-line weapon-line-meta');
-    };
-
-    GameUI.updateAbilityInfo = function (state) {
-        if (!abilityInfoEl || !state) return;
-        lastAbilityInfoState = state;
-
-        if (typeof state === 'string') {
-            abilityInfoEl.textContent = state;
-            return;
-        }
-
-        function fmtCd(seconds) {
-            if (!seconds || seconds <= 0) return 'READY';
-            if (seconds >= 10) return Math.ceil(seconds) + 's';
-            return seconds.toFixed(1) + 's';
-        }
-
-        var ability = inputLabels.getBindingLabel('ability_1', 'G') + ' ' + (state.abilityName || 'Ability') + ': ' + fmtCd(state.cooldown);
-        var extra = state.extra ? (' | ' + state.extra) : '';
-        abilityInfoEl.textContent = ability + extra;
     };
 
     function setElementDisplay(el, visible) {
@@ -873,153 +805,6 @@
             var weight = 0.55 + (((i % 4) / 4) * 0.45);
             line.style.opacity = (0.12 + (intensity * weight * 0.78)).toFixed(3);
             line.style.width = Math.round(140 + (intensity * (110 + ((i % 3) * 24)))) + 'px';
-        }
-    };
-
-    GameUI.updateChokeReticle = function (visible, widthPx, heightPx) {
-        if (!chokeReticleEl) return;
-        if (!visible) {
-            chokeReticleEl.style.display = 'none';
-            return;
-        }
-        chokeReticleEl.style.width = Math.round(widthPx || 60) + 'px';
-        chokeReticleEl.style.height = Math.round(heightPx || 180) + 'px';
-        applyOverlayTone(chokeReticleEl, arguments[3], { useBackground: false });
-        chokeReticleEl.style.display = 'block';
-    };
-
-    GameUI.updateHookReticle = function (visible, diameterPx) {
-        if (!hookReticleEl) return;
-        if (!visible) {
-            hookReticleEl.style.display = 'none';
-            return;
-        }
-        var size = diameterPx || 104;
-        hookReticleEl.style.width = size + 'px';
-        hookReticleEl.style.height = size + 'px';
-        applyOverlayTone(hookReticleEl, arguments[2], { useBackground: false });
-        hookReticleEl.style.display = 'block';
-    };
-
-    GameUI.updateDeadeyeDebugRect = function (visible, widthPx, heightPx) {
-        if (!deadeyeDebugRectEl) return;
-        if (!visible) {
-            deadeyeDebugRectEl.style.display = 'none';
-            return;
-        }
-        deadeyeDebugRectEl.style.width = Math.round(widthPx || 220) + 'px';
-        deadeyeDebugRectEl.style.height = Math.round(heightPx || 160) + 'px';
-        applyOverlayTone(deadeyeDebugRectEl, arguments[3], { useBackground: true });
-        deadeyeDebugRectEl.style.display = 'block';
-    };
-
-    GameUI.updateAbilityDebugPanel = function (visible, payload) {
-        if (!abilityDebugPanelEl) return;
-        if (!visible || !payload || (Array.isArray(payload) && payload.length === 0)) {
-            abilityDebugPanelEl.style.display = 'none';
-            abilityDebugPanelEl.textContent = '';
-            abilityDebugPanelEl.innerHTML = '';
-            return;
-        }
-        if (typeof payload === 'string') {
-            abilityDebugPanelEl.textContent = payload;
-            abilityDebugPanelEl.style.display = 'block';
-            return;
-        }
-        if (abilityDebugPanelEl.replaceChildren) {
-            abilityDebugPanelEl.replaceChildren();
-        } else {
-            abilityDebugPanelEl.innerHTML = '';
-            if (Array.isArray(abilityDebugPanelEl.children)) abilityDebugPanelEl.children.length = 0;
-        }
-        for (var i = 0; i < payload.length; i++) {
-            var section = payload[i];
-            if (!section) continue;
-            var tone = debugToneSpec(section.tone);
-            var node = document.createElement('div');
-            node.className = 'ability-debug-section tone-' + String(section.tone || 'weapon');
-            node.style.borderColor = tone.border;
-            node.style.background = tone.surface;
-            node.style.color = tone.text;
-
-            var title = document.createElement('div');
-            title.className = 'ability-debug-title';
-            title.textContent = String(section.title || '');
-            node.appendChild(title);
-
-            if (section.body) {
-                var body = document.createElement('div');
-                body.className = 'ability-debug-body';
-                body.textContent = String(section.body || '');
-                node.appendChild(body);
-            }
-            abilityDebugPanelEl.appendChild(node);
-        }
-        abilityDebugPanelEl.style.display = 'block';
-    };
-
-    function ensureDeadeyeReticles(count) {
-        if (!deadeyeReticlesEl) return;
-        while (deadeyeReticlePool.length < count) {
-            var node = document.createElement('div');
-            node.className = 'deadeye-target-reticle';
-            var core = document.createElement('div');
-            core.className = 'deadeye-target-core';
-            node.appendChild(core);
-            deadeyeReticlesEl.appendChild(node);
-            deadeyeReticlePool.push(node);
-        }
-    }
-
-    function hideDeadeyeReticles() {
-        if (!deadeyeReticlesEl) return;
-        deadeyeReticlesEl.style.display = 'none';
-        for (var i = 0; i < deadeyeReticlePool.length; i++) {
-            deadeyeReticlePool[i].style.display = 'none';
-        }
-    }
-
-    GameUI.updateDeadeyeReticle = function (camera, deadeyeState) {
-        if (!deadeyeReticlesEl) return;
-        if (!deadeyeState || !Array.isArray(deadeyeState.targets) || deadeyeState.targets.length === 0) {
-            hideDeadeyeReticles();
-            return;
-        }
-
-        ensureDeadeyeReticles(deadeyeState.targets.length);
-        deadeyeReticlesEl.style.display = 'block';
-
-        for (var i = 0; i < deadeyeReticlePool.length; i++) {
-            deadeyeReticlePool[i].style.display = 'none';
-        }
-
-        for (var t = 0; t < deadeyeState.targets.length; t++) {
-            var target = deadeyeState.targets[t];
-            var el = deadeyeReticlePool[t];
-            if (!target || !el) continue;
-
-            var screenX = window.innerWidth * 0.5;
-            var screenY = window.innerHeight * 0.5;
-            if (!target.screenCenter) {
-                if (!camera || !target.worldPos) continue;
-                deadeyeProjectVec.set(target.worldPos.x, target.worldPos.y, target.worldPos.z).project(camera);
-                if (deadeyeProjectVec.z < -1 || deadeyeProjectVec.z > 1) continue;
-                screenX = (deadeyeProjectVec.x * 0.5 + 0.5) * window.innerWidth;
-                screenY = (-deadeyeProjectVec.y * 0.5 + 0.5) * window.innerHeight;
-            }
-
-            var progress = Math.max(0, Math.min(1, target.progress || 0));
-            var size = target.locked ? 22 : Math.round(220 - (progress * 160));
-            if (size < 22) size = 22;
-            if (size > 220) size = 220;
-
-            el.style.left = screenX.toFixed(1) + 'px';
-            el.style.top = screenY.toFixed(1) + 'px';
-            el.style.width = size + 'px';
-            el.style.height = size + 'px';
-            el.style.display = 'block';
-            if (target.locked) el.classList.add('locked');
-            else el.classList.remove('locked');
         }
     };
 

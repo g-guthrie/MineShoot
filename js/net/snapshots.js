@@ -7,8 +7,8 @@
 
     var GameNetSnapshots = {};
 
-    GameNetSnapshots.create = function (hooks) {
-        hooks = hooks || {};
+    GameNetSnapshots.create = function (callbacks) {
+        callbacks = callbacks || {};
         var snapshotMap = new Map();
 
         function applySnapshot(entities, projectiles, fireZones, opts) {
@@ -26,19 +26,19 @@
             for (var i = 0; i < entities.length; i++) {
                 var e = entities[i];
                 snapshotMap.set(e.id, e);
-                if (hooks.onEntity) hooks.onEntity(e, snapshotMeta);
+                if (callbacks.onEntity) callbacks.onEntity(e, snapshotMeta);
             }
             var removedIds = Array.isArray(opts.removedEntityIds) ? opts.removedEntityIds : [];
             for (var r = 0; r < removedIds.length; r++) {
                 snapshotMap.delete(removedIds[r]);
             }
 
-            if (hooks.onPrune) hooks.onPrune(snapshotMap);
-            if (hooks.onProjectiles && projectiles !== undefined) {
-                hooks.onProjectiles(Array.isArray(projectiles) ? projectiles.slice() : []);
+            if (callbacks.onPrune) callbacks.onPrune(snapshotMap);
+            if (callbacks.onProjectiles && projectiles !== undefined) {
+                callbacks.onProjectiles(Array.isArray(projectiles) ? projectiles.slice() : []);
             }
-            if (hooks.onFireZones && fireZones !== undefined) {
-                hooks.onFireZones(Array.isArray(fireZones) ? fireZones.slice() : []);
+            if (callbacks.onFireZones && fireZones !== undefined) {
+                callbacks.onFireZones(Array.isArray(fireZones) ? fireZones.slice() : []);
             }
         }
 

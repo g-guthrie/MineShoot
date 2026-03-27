@@ -88,6 +88,24 @@ test('authoritative movement uses the widened default radius for near-side conta
   assert.ok(PLAYER_RADIUS >= 0.4);
 });
 
+test('authoritative movement allows a rolling contact cylinder under lower overhangs when height is reduced', () => {
+  const blockedStanding = isBlockedAt(0, 0, 0, [{
+    min: { x: -1, y: 1.1, z: -1 },
+    max: { x: 1, y: 3, z: 1 }
+  }], {
+    playerHeight: PLAYER_HEIGHT
+  });
+  const blockedRolling = isBlockedAt(0, 0, 0, [{
+    min: { x: -1, y: 1.1, z: -1 },
+    max: { x: 1, y: 3, z: 1 }
+  }], {
+    playerHeight: PLAYER_HEIGHT * 0.3
+  });
+
+  assert.equal(blockedStanding, true);
+  assert.equal(blockedRolling, false);
+});
+
 test('authoritative movement applies jump intent and vertical motion', () => {
   const entity = createEntity();
   const input = createMovementInputState();

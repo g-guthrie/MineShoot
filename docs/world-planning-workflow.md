@@ -77,7 +77,7 @@ Use ASCII for:
 
 - primary routes
 - secondary routes
-- choke points
+- narrow points
 - cover clusters
 - stairs / ramps
 - alleys / shelf routes
@@ -238,7 +238,7 @@ Must be true:
 Must be true:
 
 - all major routes are visible in ASCII
-- choke points are intentional
+- narrow points are intentional
 - cover clusters are placed intentionally
 - there is no obvious dead unusable quadrant
 

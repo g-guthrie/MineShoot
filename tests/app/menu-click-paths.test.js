@@ -282,6 +282,7 @@ async function loadHarness({
     ['button', 'party-back-btn'],
     ['button', 'account-toggle-btn'],
     ['button', 'utility-toggle-btn'],
+    ['button', 'utility-refresh-btn'],
     ['div', 'utility-overlay'],
     ['button', 'utility-close-btn'],
     ['div', 'utility-modal'],
@@ -303,6 +304,7 @@ async function loadHarness({
     ['button', 'primary-launch-btn'],
     ['button', 'game-modes-toggle-btn'],
     ['div', 'play-mode-options'],
+    ['button', 'social-tools-toggle-btn'],
     ['button', 'play-mode-ffa-btn'],
     ['button', 'play-mode-tdm-btn'],
     ['button', 'sandbox-mode-btn'],
@@ -314,6 +316,7 @@ async function loadHarness({
     ['div', 'active-match-context-pill'],
     ['div', 'active-match-primary-stat-pill'],
     ['div', 'active-match-secondary-stat-pill'],
+    ['div', 'menu-loadout-band'],
     ['button', 'play-btn'],
     ['button', 'back-mode-btn'],
     ['div', 'leave-confirm-overlay'],
@@ -366,6 +369,7 @@ async function loadHarness({
   documentObj.elements['private-room-view'].hidden = true;
   documentObj.elements['private-room-enter-btn'].hidden = true;
   documentObj.elements['active-match-shell'].hidden = true;
+  documentObj.elements['menu-loadout-band'].hidden = true;
   documentObj.elements['menu-return-btn'].hidden = true;
   documentObj.elements['party-back-btn'].hidden = true;
   documentObj.elements['menu-party-hero'].hidden = true;
@@ -586,7 +590,6 @@ async function loadHarness({
       getRuntimeSnapshot() {
         return {
           weaponSlots: ['machinegun', 'shotgun'],
-          selectedAbilityId: 'choke',
           selectedThrowableId: 'frag'
         };
       },
@@ -771,6 +774,7 @@ async function loadHarness({
     },
     GameSession: {
       prepareLaunch() {},
+      showLaunchOverlay() {},
       startGameplayFromMenu(event) {
         resumeGameplayCalls.push({ source: 'start', event });
         return Promise.resolve({ ok: true, entered: false, error: 'Pointer lock denied.' });
@@ -866,24 +870,27 @@ async function loadHarness({
   };
 }
 
-test('menu boots on the main screen with play free for all as the default launch action', async () => {
+test('menu boots on the main screen with play as the default launch action', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
   assert.equal(elements['menu-screen-mode'].hidden, false);
-  assert.equal(elements['menu-social-hero'].hidden, false);
+  assert.equal(elements['menu-social-hero'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Free For All');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['social-tools-toggle-btn'].textContent, 'Friends & Rooms');
   assert.equal(elements['play-mode-options'].hidden, true);
   assert.equal(elements['room-access-status'].hidden, true);
   assert.equal(elements['menu-feedback'].hidden, true);
   assert.equal(elements['menu-party-id-value'].textContent.includes('USR_'), true);
   assert.equal(elements['account-toggle-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, false);
+  assert.equal(elements['menu-loadout-band'].hidden, true);
   assert.equal(elements['invite-friend-btn'].hidden, false);
   assert.equal(elements['join-friend-btn'].hidden, false);
-  assert.equal(elements['menu-social-friends-pane'].hidden, false);
+  assert.equal(elements['menu-social-friends-pane'].hidden, true);
+  assert.equal(elements['menu-refresh-btn'].hidden, true);
 });
 
 test('main screen markup keeps create room with the inline social actions', async () => {
@@ -891,19 +898,19 @@ test('main screen markup keeps create room with the inline social actions', asyn
 
   const socialStart = html.indexOf('id="menu-social-hero"');
   const partyHeroStart = html.indexOf('<div id="menu-party-hero"', socialStart);
-  const modeActionsStart = html.indexOf('<div id="mode-screen-actions">', socialStart);
 
   assert.notEqual(html.indexOf('id="menu-main-heroes"'), -1);
   assert.notEqual(socialStart, -1);
-  assert.equal(html.indexOf('id="party-id-input"', socialStart) < modeActionsStart, true);
-  assert.equal(html.indexOf('id="invite-friend-btn"', socialStart) < modeActionsStart, true);
-  assert.equal(html.indexOf('id="join-friend-btn"', socialStart) < modeActionsStart, true);
-  assert.equal(html.indexOf('id="room-code-input"', socialStart) < modeActionsStart, true);
-  assert.equal(html.indexOf('id="join-room-btn"', socialStart) < modeActionsStart, true);
-  assert.equal(html.indexOf('id="continue-loadout-btn"', socialStart) < modeActionsStart, true);
+  assert.notEqual(html.indexOf('id="mode-screen-actions"'), -1);
+  assert.equal(html.indexOf('id="party-id-input"', socialStart) > socialStart, true);
+  assert.equal(html.indexOf('id="invite-friend-btn"', socialStart) > socialStart, true);
+  assert.equal(html.indexOf('id="join-friend-btn"', socialStart) > socialStart, true);
+  assert.equal(html.indexOf('id="room-code-input"', socialStart) > socialStart, true);
+  assert.equal(html.indexOf('id="join-room-btn"', socialStart) > socialStart, true);
+  assert.equal(html.indexOf('id="continue-loadout-btn"', socialStart) > socialStart, true);
   assert.equal(html.indexOf('id="social-add-friend-btn"', socialStart), -1);
   assert.equal(partyHeroStart > socialStart, true);
-  assert.equal(html.indexOf('id="party-hero-members"', partyHeroStart) < modeActionsStart, true);
+  assert.equal(html.indexOf('id="party-hero-members"', partyHeroStart) > partyHeroStart, true);
 });
 
 test('logged-out home header shows login and guest id together', async () => {
@@ -932,6 +939,9 @@ test('logged-in home shows the split social hero with a friends pane', async () 
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
+
+  assert.equal(elements['menu-social-hero'].hidden, false);
   assert.equal(elements['menu-social-friends-pane'].hidden, false);
   assert.equal(elements['social-friends-list'].children.length > 0, true);
 });
@@ -940,6 +950,7 @@ test('join friend uses the shared social input and joins in place', async () => 
   const harness = await loadHarness();
   const { elements, runPartyActionCalls } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'usr_bravo';
   elements['join-friend-btn'].click();
 
@@ -954,6 +965,7 @@ test('invite friend uses the shared social input and shows the outgoing status',
   const harness = await loadHarness();
   const { elements, runPartyActionCalls } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'friend-123';
   elements['invite-friend-btn'].click();
 
@@ -967,6 +979,7 @@ test('home with party hero still shows visible validation feedback for empty fri
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'usr_bravo';
   elements['join-friend-btn'].click();
   elements['party-id-input'].value = '';
@@ -1091,6 +1104,7 @@ test('room surface shows the room invite banner and hides the home invite slot',
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   harness.emitPrivateRoomState();
   await harness.flush();
   elements['continue-loadout-btn'].click();
@@ -1135,7 +1149,7 @@ test('game modes reveal below the launch row and the primary launch pill starts 
 
   elements['play-mode-tdm-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1148,9 +1162,10 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(elements['menu-feedback'].hidden, true);
   assert.equal(elements['menu-body'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['menu-loadout-band'].hidden, false);
   assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
   assert.equal(elements['active-match-context-pill'].textContent, 'READY');
-  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Match ready.');
   assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-home-hero'].hidden, true);
   assert.equal(elements['menu-social-hero'].hidden, true);
@@ -1168,7 +1183,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
 
   elements['sandbox-mode-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1179,10 +1194,11 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
   assert.equal(launchCalls[0].options.gameMode, 'ffa');
   assert.equal(elements['active-match-mode-pill'].textContent, 'Offline Sandbox');
   assert.equal(elements['active-match-context-pill'].textContent, 'READY');
-  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Pointer lock denied.');
+  assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Offline Sandbox ready.');
+  assert.equal(elements['menu-loadout-band'].hidden, false);
 });
 
-test('sandbox mode keeps the offline sandbox launch label even when shared mode lookup falls back to ffa', async () => {
+test('sandbox mode keeps the simple play launch label even when shared mode lookup falls back to ffa', async () => {
   const harness = await loadHarness({
     gameSharedOverride: {
       getGameMode(modeId) {
@@ -1198,13 +1214,14 @@ test('sandbox mode keeps the offline sandbox launch label even when shared mode 
   elements['game-modes-toggle-btn'].click();
   elements['sandbox-mode-btn'].click();
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
 });
 
 test('main room action creates a room and opens the party surface', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['game-modes-toggle-btn'].click();
   elements['play-mode-tdm-btn'].click();
   elements['continue-loadout-btn'].click();
@@ -1220,6 +1237,7 @@ test('existing private room changes the room action label to open room', async (
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   harness.emitPrivateRoomState();
   await harness.flush();
 
@@ -1230,6 +1248,7 @@ test('private room team board grows and shrinks lanes as team count changes', as
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   harness.emitPrivateRoomState();
   await harness.flush();
   elements['continue-loadout-btn'].click();
@@ -1428,6 +1447,7 @@ test('party hero appears only after the party grows beyond one member', async ()
 
   assert.equal(elements['menu-party-hero'].hidden, true);
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'usr_bravo';
   elements['join-friend-btn'].click();
 
@@ -1457,12 +1477,12 @@ test('party hero stays hidden when memberCount is stale but the roster only has 
 
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['party-hero-members'].children.length, 0);
-  assert.equal(elements['menu-main-heroes'].attributes['data-columns'], '2');
+  assert.equal(elements['menu-main-heroes'].attributes['data-columns'], '1');
 });
 
 test('launch validation failure stays promise-compatible and shows the validation message', async () => {
   const harness = await loadHarness({
-    loadoutValidation: { ok: false, message: 'Choose an ability first.' }
+    loadoutValidation: { ok: false, message: 'Choose a valid loadout first.' }
   });
   const { elements, matchmakingCalls } = harness;
 
@@ -1471,7 +1491,7 @@ test('launch validation failure stays promise-compatible and shows the validatio
 
   assert.equal(matchmakingCalls.length, 0);
   assert.equal(elements['room-access-status'].hidden, false);
-  assert.equal(elements['room-access-status'].textContent, 'Choose an ability first.');
+  assert.equal(elements['room-access-status'].textContent, 'Choose a valid loadout first.');
 });
 
 test('missing matchmaking api surfaces a controlled launch error instead of crashing', async () => {
@@ -1526,6 +1546,7 @@ test('resumable runtime uses the session rail as the only return path', async ()
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'usr_bravo';
   elements['join-friend-btn'].click();
   harness.emitSessionState({
@@ -1546,6 +1567,7 @@ test('resumable runtime uses the session rail as the only return path', async ()
   assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
   assert.equal(elements['active-match-context-pill'].textContent, 'LIVE');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Change loadout or return to the match.');
+  assert.equal(elements['menu-loadout-band'].hidden, false);
   assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['continue-loadout-btn'].hidden, true);
 });
@@ -1554,6 +1576,7 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   elements['party-id-input'].value = 'friend-123';
   elements['join-friend-btn'].click();
   harness.emitSessionState({
@@ -1573,6 +1596,7 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   assert.equal(elements['active-match-shell'].hidden, false);
   assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
   assert.equal(elements['active-match-context-pill'].textContent, 'PAUSED');
+  assert.equal(elements['menu-loadout-band'].hidden, false);
   assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['party-back-btn'].hidden, true);
@@ -1799,7 +1823,7 @@ test('session-state updates preserve the selected launch mode', async () => {
 
   elements['game-modes-toggle-btn'].click();
   elements['play-mode-tdm-btn'].click();
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
 
   harness.emitSessionState({
     runtimeReady: true,
@@ -1818,19 +1842,19 @@ test('session-state updates preserve the selected launch mode', async () => {
     launchContext: {}
   });
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
 });
 
 test('menu refresh button appears on menu surfaces and hides in the active match shell', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
-  assert.equal(elements['menu-refresh-btn'].hidden, false);
+  assert.equal(elements['menu-refresh-btn'].hidden, true);
 
   harness.emitPrivateRoomState();
   await harness.flush();
   elements['continue-loadout-btn'].click();
-  assert.equal(elements['menu-refresh-btn'].hidden, false);
+  assert.equal(elements['menu-refresh-btn'].hidden, true);
 
   harness.emitSessionState({
     runtimeReady: true,
@@ -1843,11 +1867,12 @@ test('menu refresh button appears on menu surfaces and hides in the active match
   assert.equal(elements['menu-refresh-btn'].hidden, true);
 });
 
-test('menu refresh button triggers grouped refresh and disables while pending', async () => {
+test('utility refresh triggers grouped refresh and disables while pending', async () => {
   const harness = await loadHarness();
   const { elements, refreshAllCalls } = harness;
 
-  elements['menu-refresh-btn'].click();
+  elements['utility-toggle-btn'].click();
+  elements['utility-refresh-btn'].click();
 
   assert.equal(refreshAllCalls.length, 1);
   assert.equal(refreshAllCalls[0].silent, false);
@@ -1855,19 +1880,20 @@ test('menu refresh button triggers grouped refresh and disables while pending', 
     force: true,
     forceRoomHttp: true
   });
-  assert.equal(elements['menu-refresh-btn'].disabled, true);
-  assert.equal(elements['menu-refresh-btn'].textContent, 'Refreshing...');
+  assert.equal(elements['utility-refresh-btn'].disabled, true);
+  assert.equal(elements['utility-refresh-btn'].textContent, 'Refreshing...');
 
   await harness.flush();
 
-  assert.equal(elements['menu-refresh-btn'].disabled, false);
-  assert.equal(elements['menu-refresh-btn'].textContent, 'Refresh');
+  assert.equal(elements['utility-refresh-btn'].disabled, false);
+  assert.equal(elements['utility-refresh-btn'].textContent, 'Refresh');
 });
 
 test('room screen outside pause reduces the left header to back and id', async () => {
   const harness = await loadHarness();
   const { elements } = harness;
 
+  elements['social-tools-toggle-btn'].click();
   harness.emitPrivateRoomState();
   await harness.flush();
   elements['continue-loadout-btn'].click();

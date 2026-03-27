@@ -1,7 +1,6 @@
 import { gameplayTuning } from '../../../shared/gameplay-tuning.js';
 import { isBlockedAt } from '../../../shared/authoritative-movement.js';
 import { nowMs, clamp } from '../transport.js';
-import { tickClassAbilityState } from './AbilityService.js';
 import { createBotEntity } from './EntityLifecycle.js';
 
 const THROWABLE_STATS = gameplayTuning.throwables;
@@ -109,7 +108,6 @@ export function tickBots(room, dtSec) {
     room.regenArmor(bot, dtSec);
     room.tickStreamState(bot, dtSec);
     room.tickThrowableRegen(bot, dtSec);
-    tickClassAbilityState(room, bot);
 
     if ((nowMs() - (bot.lastThrowAt || 0)) > (THROWABLE_BOT_THROW_COOLDOWN_S * 1000) && players.length > 0 && Math.random() < 0.02) {
       const throwableId = THROWABLE_STATS.order[Math.floor(Math.random() * THROWABLE_STATS.order.length)];

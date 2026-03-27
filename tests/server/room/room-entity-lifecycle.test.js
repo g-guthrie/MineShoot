@@ -60,14 +60,14 @@ test('createPlayerEntity centralizes default runtime state', () => {
   assert.equal(player.username, 'ALPHA');
   assert.equal(player.actorId, 'act_1');
   assert.equal(player.actorName, 'ALPHA_ACTOR');
-  assert.equal(player.classId, 'abilities');
+  assert.equal(player.classId, 'ffa');
   assert.equal(player.weaponId, 'machinegun');
-  assert.equal(player.abilityId, 'deadeye');
+  assert.equal(player.abilityId, undefined);
   assert.deepEqual(player.weaponLoadout, ['machinegun', 'shotgun']);
   assert.deepEqual(player.throwables, createThrowableRuntime());
   assert.deepEqual(player.inputState, createMovementInputState());
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
-  assert.equal(player.abilityCooldownUntil, 0);
+  assert.equal(player.abilityCooldownUntil, undefined);
   assert.equal(player.weaponLockUntil, 0);
 });
 
@@ -79,13 +79,11 @@ test('createBotEntity keeps bot defaults aligned with shared room lifecycle stat
 
   assert.equal(bot.id, 'bot-2');
   assert.equal(bot.username, 'BOT_2');
-  assert.equal(bot.classId, 'abilities');
-  assert.equal(bot.abilityId, 'deadeye');
+  assert.equal(bot.classId, 'ffa');
+  assert.equal(bot.abilityId, undefined);
   assert.deepEqual(bot.weaponLoadout, ['machinegun', 'shotgun']);
   assert.deepEqual(bot.throwables, createThrowableRuntime());
-  assert.equal(bot.abilityCooldownUntil, 0);
-  assert.equal(bot.chokeVictimState, null);
-  assert.equal(bot.hookPullState, null);
+  assert.equal(bot.abilityCooldownUntil, undefined);
 });
 
 test('resetEntityForRespawn restores transient combat and movement state', () => {
@@ -110,13 +108,8 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   player.muzzleFlashUntil = 200;
   player.throwables.frag.charges = 0;
   player.lastThrowAt = 22;
-  player.abilityCooldownUntil = 100;
   player.weaponLockUntil = 100;
   player.stunUntil = 100;
-  player.deadeye = { lockIndex: 2 };
-  player.chokeVictimState = { sourceId: 'enemy' };
-  player.justBeenHookedState = { startedAt: 5 };
-  player.hookPullState = { sourceId: 'enemy' };
   player.velocityY = 8;
   player.isGrounded = false;
   player.jumpHoldTimer = 1;
@@ -146,13 +139,8 @@ test('resetEntityForRespawn restores transient combat and movement state', () =>
   assert.equal(player.lastThrowAt, 0);
   assert.notEqual(player.inputState, previousInput);
   assert.deepEqual(player.inputState, createMovementInputState());
-  assert.equal(player.abilityCooldownUntil, 0);
   assert.equal(player.weaponLockUntil, 0);
   assert.equal(player.stunUntil, 0);
-  assert.equal(player.deadeye, null);
-  assert.equal(player.chokeVictimState, null);
-  assert.equal(player.justBeenHookedState, null);
-  assert.equal(player.hookPullState, null);
   assert.equal(player.yaw, 0);
   assert.equal(player.pitch, 0);
   assert.equal(player.moveSpeedNorm, 0);

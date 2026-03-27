@@ -55,7 +55,7 @@ function seedAccount(env, suffix, username) {
     profile_enabled: 1,
     headline: null,
     bio: null,
-    class_id: 'abilities',
+    class_id: 'ffa',
     kills: 0,
     deaths: 0,
     damage_done: 0,

@@ -66,3 +66,25 @@ test('GameNetMessageRouter warns when it receives an unknown message type', asyn
     }
   }]);
 });
+
+test('GameNetMessageRouter queues replicated shot effects', async () => {
+  const GameNetMessageRouter = await loadMessageRouterFactory();
+  const shotEffectQueue = [];
+  const router = GameNetMessageRouter.create({
+    shotEffectQueue
+  });
+
+  router.handleMessage(JSON.stringify({
+    t: 'shot_effect',
+    sourceId: 'usr_remote',
+    weaponId: 'rifle',
+    traces: [{ x: 1, y: 2, z: 3 }]
+  }));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(shotEffectQueue)), [{
+    t: 'shot_effect',
+    sourceId: 'usr_remote',
+    weaponId: 'rifle',
+    traces: [{ x: 1, y: 2, z: 3 }]
+  }]);
+});

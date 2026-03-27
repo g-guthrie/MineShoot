@@ -38,10 +38,6 @@
             return opts.getGameDocsApi ? opts.getGameDocsApi() : null;
         }
 
-        function gameAbilitiesApi() {
-            return opts.getGameAbilitiesApi ? opts.getGameAbilitiesApi() : null;
-        }
-
         function gameThrowablesApi() {
             return opts.getGameThrowablesApi ? opts.getGameThrowablesApi() : null;
         }
@@ -112,7 +108,6 @@
             if (!player) return !isLocalActionLocked();
             if (actionType === 'weapon' && player.canUseWeapon) return !!player.canUseWeapon();
             if (actionType === 'throwable' && player.canUseThrowable) return !!player.canUseThrowable();
-            if (actionType === 'ability' && player.canUseAbility) return !!player.canUseAbility();
             return !isLocalActionLocked();
         }
 
@@ -144,11 +139,6 @@
             var playerApi = gamePlayerApi();
             if (playerApi && playerApi.setHitboxVisibility) {
                 playerApi.setHitboxVisibility(!!visible);
-            }
-
-            var abilitiesApi = gameAbilitiesApi();
-            if (abilitiesApi && abilitiesApi.setDebugMode) {
-                abilitiesApi.setDebugMode(!!visible);
             }
 
             var throwablesApi = gameThrowablesApi();
@@ -201,13 +191,6 @@
             setTransientDebug('Weapon: ' + weapon.name, 950);
         }
 
-        function committedLoadout() {
-            var loadoutState = loadoutStateApi();
-            return loadoutState && loadoutState.getCommittedLoadout
-                ? loadoutState.getCommittedLoadout()
-                : null;
-        }
-
         function syncCommittedLoadoutToRuntime() {
             var loadoutRuntime = loadoutRuntimeApi();
             if (loadoutRuntime && loadoutRuntime.applyCommittedLoadout) {
@@ -224,42 +207,6 @@
             return loadoutState && loadoutState.validateSelections
                 ? loadoutState.validateSelections()
                 : { ok: false, message: 'Loadout state unavailable.' };
-        }
-
-        function applyAbilityProfile(profileId) {
-            var abilitiesApi = gameAbilitiesApi();
-            var hitscanApi = gameHitscanApi();
-            var playerCombatApi = currentSelfCombatApi();
-            var uiApi = gameUiApi();
-            var docsApi = gameDocsApi();
-            if (!abilitiesApi) return null;
-            var selected = abilitiesApi.setClass(profileId);
-            if (!selected) return null;
-
-            var currentCommittedLoadout = committedLoadout();
-            var currentMenuWeapons = currentCommittedLoadout && Array.isArray(currentCommittedLoadout.weaponSlots)
-                ? currentCommittedLoadout.weaponSlots
-                : [];
-            if (selected.loadoutWeapon || (currentMenuWeapons && currentMenuWeapons.length > 0)) {
-                var preferredWeapon = (currentMenuWeapons && currentMenuWeapons.length > 0)
-                    ? currentMenuWeapons[0]
-                    : selected.loadoutWeapon;
-                if (hitscanApi && hitscanApi.setWeapon) {
-                    applyWeapon(hitscanApi.setWeapon(preferredWeapon));
-                }
-            }
-
-            if (playerCombatApi && playerCombatApi.applyArmorProfile) {
-                playerCombatApi.applyArmorProfile(selected.armorMax || (playerCombatApi.getArmorMax ? playerCombatApi.getArmorMax() : 0));
-            }
-            if (uiApi && uiApi.updateAbilityInfo && abilitiesApi.getHudState) {
-                uiApi.updateAbilityInfo(abilitiesApi.getHudState());
-            }
-            if (docsApi && docsApi.refresh) {
-                docsApi.refresh();
-            }
-
-            return selected;
         }
 
         function handleEnemyHit(hitPoint, damage, hitType, result, targetId) {
@@ -305,7 +252,6 @@
             var netView = currentMatchViewApi();
             var netCommands = currentMatchCommandApi();
             var selfCombat = currentSelfCombatApi();
-            var abilitiesApi = gameAbilitiesApi();
             var hitscanApi = gameHitscanApi();
             var netApi = gameNetApi();
             var feedbackApi = gameNetFeedbackSyncApi();
@@ -334,7 +280,6 @@
                 ))) {
                 return;
             }
-            if (abilitiesApi && abilitiesApi.isDeadeyeActive && abilitiesApi.isDeadeyeActive()) return;
             netShotCounter = (netShotCounter + 1) % 1000000;
             var shotToken = 's' + Date.now().toString(36) + '-' + netShotCounter.toString(36);
             if (!hitscanApi || !hitscanApi.fire) return;
@@ -403,7 +348,6 @@
             applyWeapon: applyWeapon,
             syncCommittedLoadoutToRuntime: syncCommittedLoadoutToRuntime,
             validateLoadoutSelections: validateLoadoutSelections,
-            applyAbilityProfile: applyAbilityProfile,
             handleEnemyHit: handleEnemyHit,
             tryPlayerFire: tryPlayerFire
         };

@@ -105,7 +105,7 @@
         return null;
     }
 
-    function updateRemoteEntities(dt, renderMap, getChokeVictimStateForEntity) {
+    function updateRemoteEntities(dt, renderMap) {
         if (!renderMap || !renderMap.forEach) return;
         var nowMs = Date.now();
         var serverNowMs = authoritativeNowMs();
@@ -219,7 +219,6 @@
                     }
                     r._appliedWeaponId = nextWeaponId;
                 }
-                var chokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0, startedAt: 0 };
                 var animationApi = (r.actorVisual && r.actorVisual.updateAnimation) ? r.actorVisual : r.rigApi;
                 if (animationApi && animationApi.updateAnimation) {
                     var presentedHorizontalSpeed = presentedSpeedNorm * effectiveRunSpeedForWeapon(r.weaponId || 'rifle');
@@ -230,8 +229,6 @@
                         airborne: presentState.isGrounded === false,
                         footY: nextY,
                         aimPitch: renderPitch,
-                        choked: chokeVictimState.lift > 0,
-                        startedAt: chokeVictimState.startedAt || 0,
                         horizontalSpeed: presentedHorizontalSpeed,
                         worldSpeed: presentedHorizontalSpeed,
                         yaw: renderYaw,
@@ -281,18 +278,6 @@
                         triggerApi.triggerAction('fire', { duration: 0.09, strength: 1 });
                     }
                 }
-                if (triggerApi && triggerApi.triggerAction) {
-                    if (r.chokeState && r.chokeState.endsAt > serverNowMs) {
-                        if (!r._chokeGripTriggered) {
-                            r._chokeGripTriggered = true;
-                            triggerApi.triggerAction('choke_grip', {
-                                duration: (r.chokeState.endsAt - serverNowMs) / 1000
-                            });
-                        }
-                    } else {
-                        r._chokeGripTriggered = false;
-                    }
-                }
                 r._muzzleVisible = muzzleVisible;
                 r._prevIsGrounded = presentState.isGrounded !== false;
             }
@@ -318,24 +303,6 @@
                 r.actorVisual.setSpawnShield(!!(r.spawnShieldUntil && r.spawnShieldUntil > serverNowMs));
             }
 
-            var finalChokeVictimState = getChokeVictimStateForEntity ? getChokeVictimStateForEntity(r.id) : { lift: 0 };
-            if (r.actorVisual && r.actorVisual.setRevealGhostState) {
-                if (finalChokeVictimState.lift > 0) {
-                    r.actorVisual.setRevealGhostState(false);
-                } else if (r.deadeyeMark) {
-                    var deadeyePulse = 0.05 * Math.sin((Date.now() * 0.016) + String(r.id || '').length);
-                    var deadeyeOpacity = r.deadeyeMark.locked
-                        ? 0.44
-                        : (0.22 + (Math.max(0, Math.min(1, Number(r.deadeyeMark.progress || 0))) * 0.18));
-                    r.actorVisual.setRevealGhostState(true, deadeyeOpacity + deadeyePulse, 0xffc46d);
-                } else {
-                    r.actorVisual.setRevealGhostState(false);
-                }
-            }
-            if (finalChokeVictimState.lift > 0) {
-                r.group.position.y += finalChokeVictimState.lift;
-            }
-
             if (r.actorVisual && r.actorVisual.syncHitboxes) {
                 var hitboxLeadMs = Math.max(0, Number(interpolationTuning.hitboxLeadMs || 0));
                 var hitboxTransform = bufferedTransform;
@@ -357,9 +324,6 @@
                         y: Number(r.group.position.y || 0),
                         z: Number(r.group.position.z || 0)
                     };
-                if (finalChokeVictimState.lift > 0) {
-                    hitboxPosition.y += finalChokeVictimState.lift;
-                }
                 r.actorVisual.syncHitboxes(hitboxPosition, {
                     rolling: Number(r.rollUntil || 0) > serverNowMs
                 });

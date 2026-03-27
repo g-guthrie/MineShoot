@@ -55,10 +55,6 @@
                     debugVisualsOn: !!frame.debugVisualsOn
                 });
             }
-            if (runtime.GameHookVisuals && runtime.GameHookVisuals.render) {
-                runtime.GameHookVisuals.render(!!frame.multiplayerMode);
-            }
-
             camera.layers.set(0);
             if (opts.getRenderer && opts.getScene) {
                 opts.getRenderer().render(opts.getScene(), camera);

@@ -1,35 +1,22 @@
-import { getClassPreset, getDefaultAbilityId, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { getClassPreset, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { DEFAULT_HP_MAX } from '../../../shared/entity-constants.js';
 
-const DEFAULT_CLASS_ID = 'abilities';
-const DEFAULT_ABILITY_ID = getDefaultAbilityId();
+const DEFAULT_CLASS_ID = 'ffa';
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
-
-function defaultAbilityId() {
-  return DEFAULT_ABILITY_ID;
-}
 
 function cloneWeaponLoadout() {
   return DEFAULT_WEAPON_LOADOUT.slice();
 }
 
 function applyActionRuntimeDefaults(entity) {
-  entity.abilityCooldownUntil = 0;
   entity.weaponLockUntil = 0;
   entity.throwableLockUntil = 0;
-  entity.abilityLockUntil = 0;
   entity.stunUntil = 0;
   entity.slowUntil = 0;
   entity.slowMultiplier = 1;
   entity.burnUntil = 0;
   entity.burnTickAt = 0;
   entity.burnSourceId = '';
-  entity.deadeye = null;
-  entity.chokeState = null;
-  entity.chokeVictimState = null;
-  entity.justBeenHookedState = null;
-  entity.hookState = null;
-  entity.hookPullState = null;
   entity.rollStartedAt = 0;
   entity.rollUntil = 0;
   entity.rollInputState = null;
@@ -51,7 +38,6 @@ export function createPlayerEntity(options = {}) {
     username,
     classId,
     fixtureType: String(options.fixtureType || ''),
-    abilityId: defaultAbilityId(),
     weaponLoadout,
     x: 0,
     y: Number(options.eyeHeight || 0),
@@ -67,6 +53,9 @@ export function createPlayerEntity(options = {}) {
     respawnAt: 0,
     plannedSpawnPoint: null,
     spawnShieldUntil: 0,
+    matchEntryPending: false,
+    matchEntryStartedAt: 0,
+    matchEntryUntil: 0,
     lastDamageAt: 0,
     seq: 0,
     pendingInputSeq: 0,
@@ -124,7 +113,6 @@ export function createBotEntity(index, options = {}) {
     kind: 'bot',
     username: `BOT_${botIndex + 1}`,
     classId,
-    abilityId: defaultAbilityId(),
     weaponLoadout,
     x: 10 + (Math.random() * 90),
     y: Number(options.eyeHeight || 0),
@@ -176,6 +164,9 @@ export function resetEntityForRespawn(entity, options = {}) {
   entity.alive = true;
   entity.respawnAt = 0;
   entity.lastDamageAt = 0;
+  entity.matchEntryPending = false;
+  entity.matchEntryStartedAt = 0;
+  entity.matchEntryUntil = 0;
   entity.stocksRemaining = Math.max(1, Number(entity.stocksRemaining || 3));
   entity.maxStocks = Math.max(entity.stocksRemaining, Number(entity.maxStocks || 5));
   entity.bonusLivesEarned = Math.max(0, Number(entity.bonusLivesEarned || 0));

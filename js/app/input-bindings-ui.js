@@ -19,7 +19,6 @@
             { label: bindingsApi.getDisplayLabel('weapon_slot_1') + ' / ' + bindingsApi.getDisplayLabel('weapon_slot_2'), title: 'Weapon Slots' },
             { label: 'WHEEL', title: 'Toggle Weapon' },
             { label: bindingsApi.getDisplayLabel('throwable'), title: 'Throwable' },
-            { label: bindingsApi.getDisplayLabel('ability_1'), title: 'Ability' },
             { label: bindingsApi.getDisplayLabel('toggle_debug'), title: 'Debug Visuals' },
             { label: bindingsApi.getDisplayLabel('open_manual'), title: 'Field Manual' },
             { label: 'ESC', title: 'Release / Close' }

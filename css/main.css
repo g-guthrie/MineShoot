@@ -46,7 +46,7 @@ canvas {
 
 #menu-stage {
     position: relative;
-    width: min(1040px, 96vw);
+    width: min(780px, 72vw);
     display: flex;
     justify-content: center;
     align-items: flex-start;

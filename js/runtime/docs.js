@@ -23,7 +23,6 @@
 
     var state = {
         activePage: 'home',
-        selectedAbilityId: '',
         selectedWeaponId: '',
         selectedThrowableId: ''
     };
@@ -66,7 +65,6 @@
         { id: 'home', label: 'BRIEFING' },
         { id: 'controls', label: 'CONTROLS' },
         { id: 'weapons', label: 'WEAPONS' },
-        { id: 'abilities', label: 'ABILITIES' },
         { id: 'throwables', label: 'THROWABLES' },
         { id: 'tunables', label: 'TUNABLES' }
     ];
@@ -116,113 +114,78 @@
 
     var WEAPON_BRIEFINGS = {
         machinegun: {
-            niche: 'Full-auto generalist. High fire rate, large magazine, reliable at mid range.',
-            mechanics: 'Automatic hitscan. Forgiving magazine size with moderate spread in the default third-person view.',
+            niche: 'Your most forgiving all-round gun. Best when you stay in motion and keep steady pressure on mid-range lanes.',
+            mechanics: 'Fully automatic single-ray hitscan. Big 32-round magazine, moderate spread, and the best sustained pressure of the standard guns.',
             tips: [
-                'Lead with this to strip armor, then weapon-swap to finish.',
-                'Best at mid range. Spread widens at distance.'
+                'Open fights with it to strip armor, then weapon-swap to finish.',
+                'It keeps more move speed than the other long guns, so strafe and re-peek with it.'
             ]
         },
         shotgun: {
-            niche: 'Close-range burst. Devastating up close, drops off fast with distance.',
-            mechanics: 'Fires multiple pellets per shot. All pellets can connect, so positioning is everything.',
+            niche: 'Hard close-range cash-out. Weak from neutral, brutal once you are already in someone’s face.',
+            mechanics: 'One trigger pull fires 12 hitscan pellets. Each pellet deals damage separately, and the gun falls off to zero very quickly once you leave true brawl range.',
             tips: [
-                'Close the gap before firing. Use movement abilities or corners to get in range.',
-                'Strong for punishing pushes and finishing cracked targets.'
+                'Treat the circle reticle as your commit zone. If the target is outside it, close first.',
+                'Rolls, corners, and already-cracked armor are what make this gun shine.'
             ]
         },
         rifle: {
-            niche: 'Precision semi-auto. Rewards accuracy with high headshot damage.',
-            mechanics: 'Single-shot hitscan. Clean, stable precision in the standard third-person view.',
+            niche: 'Lane control and measured punish shots.',
+            mechanics: 'Semi-auto single-ray hitscan with the tightest standard spread and strong headshot payoff.',
             tips: [
-                'Take deliberate shots. Spam-firing wastes the precision advantage.',
-                'Headshot multiplier is high. Use it for measured lane control and punish shots.'
+                'Peek, shoot, reset. It wins by consistency, not spam.',
+                'Body shots soften people up; headshots end fights much faster.'
             ]
         },
         pistol: {
-            niche: 'Quick-draw hand cannon. Fast swap speed with chunky one-shot damage.',
-            mechanics: 'Single-shot hitscan. Uses the same spread-driven one-ray shot model as the other standard guns.',
+            niche: 'Fast-moving finisher and close-mid punish gun.',
+            mechanics: 'Semi-auto single-ray hitscan with heavy per-shot damage, very wide spread, and a short falloff window.',
             tips: [
-                'Swap to this after landing damage with your primary.',
-                'It hits hard, but the wide spread means you still need to respect distance.'
+                'Swap to it after armor is already stripped.',
+                'At longer range the spread and falloff get ugly fast, so do not overtrust it.'
             ]
         },
         sniper: {
-            niche: 'Long-range precision punish. Auto-scopes when you equip it.',
-            mechanics: 'Single-shot hitscan. Equipping sniper starts a fast scope-in and the weapon cannot fire until that scope-in finishes.',
+            niche: 'Long-lane punish gun for specific sightlines.',
+            mechanics: 'Single-ray hitscan. It auto-scopes on equip, only fires once the quick scope-in is ready, and keeps full damage at all practical ranges.',
             tips: [
-                'Hold angles and take your shot. Reposition after firing.',
-                'Keep sniper in slot 2 so your match start always opens on a normal third-person gun.'
-            ]
-        }
-    };
-
-    var ABILITY_BRIEFINGS = {
-        choke: {
-            useCase: 'Locks down a single target. Lifts and stuns them in place.',
-            mechanics: 'Targets an enemy on screen, then suspends them mid-air. They cannot move or shoot while held.',
-            tips: [
-                'Use on enemies committed to a push or holding a doorway.',
-                'Follow up with a shotgun or rifle for a free kill while they are stunned.'
-            ]
-        },
-        hook: {
-            useCase: 'Pulls an enemy to close range on demand.',
-            mechanics: 'Fires a hook at your crosshair. If it connects, the target is yanked to point-blank distance.',
-            tips: [
-                'Hook into shotgun or machinegun follow-up for a fast kill.',
-                'Punishes players who rely on keeping distance.'
-            ]
-        },
-        missile: {
-            useCase: 'Tracking rocket. Curves toward nearby enemies.',
-            mechanics: 'Fires a small guided projectile that bends toward hostile targets.',
-            tips: [
-                'Fire when the target is already moving or low health for the best tracking value.',
-                'Short cooldown. Use it as part of your regular damage rotation.'
-            ]
-        },
-        deadeye: {
-            useCase: 'Multi-target burst. Locks onto visible enemies and deals damage to all of them.',
-            mechanics: 'Scans a wide area, stores target locks, then cashes them out as burst damage.',
-            tips: [
-                'Position to see multiple targets before activating.',
-                'Save it for multi-locks. Single target locks waste the ability.'
+                'Keep it in slot 2 and pull it out for a specific angle, not for general roaming.',
+                'If you miss, break sight and reset instead of standing still for the follow-up.'
             ]
         }
     };
 
     var THROWABLE_BRIEFINGS = {
         frag: {
-            useCase: 'Standard frag grenade. Area damage with bounce physics.',
-            mechanics: 'Hold to preview the trajectory arc, release to throw. Bounces off surfaces before detonating.',
+            useCase: 'Standard explosive for corners and stacked enemies.',
+            mechanics: 'Hold to preview the arc, release to throw. It can bounce before detonating, and the blast is large enough to force movement even on partial damage.',
             tips: [
-                'Aim where the enemy will be, not where they are.',
-                'Bounce off walls to reach targets behind cover.'
+                'Bank it around cover and into landings.',
+                'Use it to force movement before you swing with a gun.'
             ]
         },
         plasma: {
-            useCase: 'Tracking grenade. Locks onto nearby targets and sticks before detonating.',
-            mechanics: 'Hold to aim, release to throw. Acquires enemies in a cone and sticks on contact.',
+            useCase: 'Sticky explosive that punishes near-misses.',
+            mechanics: 'No arc preview. Throw it fast; if the projectile passes close enough to an enemy it snaps the last short distance, sticks, and explodes shortly after.',
             tips: [
-                'Effective against enemies holding a single piece of cover.',
-                'Slower travel speed. Throw early and let the tracking work.'
+                'Throw it into tight cover or during a chase when the target has limited escape paths.',
+                'It is not a long-range homing rocket, so do not lob it from too far away.'
             ]
         },
         molotov: {
             useCase: 'Area denial. Creates a damage zone on the ground.',
-            mechanics: 'Lands and creates a burning area. Enemies inside take damage over time.',
+            mechanics: 'On impact it creates a fire patch that deals damage over time, and targets keep a short burn after leaving the flames.',
             tips: [
-                'Block doorways, chokepoints, and retreat paths.',
-                'Forces enemies to reposition or take sustained damage.'
+                'Seal doors, retreat lanes, and the ground under trapped targets.',
+                'Even a partial touch matters because the burn keeps ticking after they step out.'
             ]
         },
         knife: {
-            useCase: 'Instant throw. No arc preview, fast travel, headshot refill.',
-            mechanics: 'Fires instantly on press. Direct damage on hit. Headshot kills refill throwable charges.',
+            useCase: 'Fast direct-hit finisher.',
+            mechanics: 'Instant press throw with no preview. It flies fast, hits hard on direct contact, and disappears on world impact.',
             tips: [
-                'Use as a fast finisher on low-health targets.',
-                'Headshot refill rewards accuracy and keeps your throwables cycling.'
+                'Use it when somebody is one tap from dead and you do not want to reload or swap back.',
+                'It rewards confident aim, but you only get one charge and the recharge is longer than a missed gunshot.'
             ]
         }
     };
@@ -256,32 +219,6 @@
         'recoil.muzzleMs': 'How long muzzle flash feedback stays visible.',
         'audioSample.gain': 'Playback volume multiplier for the shot sample.',
         'audioSample.playbackRate': 'Playback rate range used to keep repeated shots from sounding identical.'
-    };
-
-    var ABILITY_TUNABLE_HELP = {
-        range: 'Maximum reach in world units.',
-        cooldownMs: 'Cooldown before the same slot can be fired again.',
-        duration: 'How long the effect or lock window lasts.',
-        lockBoxPx: 'On-screen lock box width used for box-based acquisition.',
-        targetTolerance: 'Target leniency during choke validation.',
-        liftHeight: 'Vertical lift applied during choke.',
-        tickRate: 'DOT or repeated effect cadence.',
-        dotPerTick: 'Damage per DOT tick when present.',
-        reticleRadiusPx: 'On-screen radius used by the hook targeting helper.',
-        catchRadius: 'World-space radius used to catch or latch a target.',
-        travelSpeed: 'Travel speed for the hook or projectile-like effect.',
-        pullSpeed: 'How quickly a hooked target is reeled toward the user.',
-        pullDistance: 'How close hook leaves the pulled target.',
-        castDamage: 'Immediate impact damage on cast.',
-        stunDuration: 'How long the victim stays disrupted after the hit.',
-        damage: 'Direct damage of the cast.',
-        radius: 'Explosion or hit radius.',
-        acquireRange: 'Homing seek range after launch.',
-        lockHalfAngleDeg: 'Half-angle of the seek cone in degrees.',
-        homingBoost: 'How aggressively the projectile gains steering force.',
-        homingLerp: 'How quickly the projectile direction bends toward the lock.',
-        minDot: 'Forward alignment requirement for lock-based abilities.',
-        maxTargets: 'Maximum simultaneous deadeye locks.'
     };
 
     var THROWABLE_TUNABLE_HELP = {
@@ -326,26 +263,25 @@
         {
             title: 'Movement & Camera',
             rows: [
-                { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Strafe constantly. Standing still is how every weapon starts feeling overpowered.' },
-                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Use sprint to break line of sight and reposition between fights.' },
-                { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold for the full jump arc.' },
-                { actionId: 'roll', fallbackKey: 'E', title: 'Roll', note: 'Triggers the running roll in your current movement direction.' }
+                { actionIds: ['move_forward', 'move_left', 'move_backward', 'move_right'], fallbackKeys: ['W', 'A', 'S', 'D'], title: 'Move', note: 'Constant strafing matters. Standing still is how every gun starts feeling too strong.' },
+                { actionId: 'sprint', fallbackKey: 'Shift', title: 'Sprint', note: 'Use it to break sight, rotate, and widen the distance before your next peek.' },
+                { actionId: 'jump', fallbackKey: 'Space', title: 'Variable Jump', note: 'Tap for a short hop, hold briefly for the full jump.' },
+                { actionId: 'roll', fallbackKey: 'E', title: 'Roll', note: 'Rolls only start while grounded and moving. Your opening direction is locked in for the whole action.' }
             ]
         },
         {
             title: 'Combat',
             rows: [
-                { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload.' },
-                { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots.' },
-                { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Grenades preview on hold and throw on release. Knife fires immediately.' },
-                { actionId: 'ability_1', fallbackKey: 'G', title: 'Ability', note: 'Fires your equipped ability from the loadout menu.' }
+                { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload if you forget.' },
+                { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots. The wheel is a straight toggle between them.' },
+                { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Frag and molotov preview on hold; plasma and knife throw on press/release with no arc preview.' }
             ]
         },
         {
             title: 'Session',
             rows: [
-                { key: 'Menu', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to start aiming again.' },
-                { actionId: 'open_manual', fallbackKey: 'I', title: 'Field Manual', note: 'Opens and closes this manual from both menu and gameplay.' },
+                { key: 'Menu', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to lock the mouse again.' },
+                { actionId: 'open_manual', fallbackKey: 'I', title: 'Field Manual', note: 'Open or close this manual from both menu and live gameplay.' },
                 { actionId: 'toggle_debug', fallbackKey: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' }
             ]
         }
@@ -530,16 +466,6 @@
         };
     }
 
-    function buildAbilityData(abilityId, shared) {
-        var def = shared.abilityCatalog && shared.abilityCatalog[abilityId];
-        if (!def) return null;
-        var out = { id: abilityId };
-        for (var key in def) {
-            if (hasOwn(def, key)) out[key] = def[key];
-        }
-        return out;
-    }
-
     function buildThrowableData(throwableId, shared) {
         var def = shared.throwables && shared.throwables[throwableId];
         if (!def) return null;
@@ -561,11 +487,11 @@
         for (var i = 0; i < modes.length; i++) {
             var mode = modes[i];
             if (!mode || !mode.id) continue;
-            var objective = 'Outlast the room. Start with three lives and earn up to two more by dealing damage.';
-            var note = 'Stay active, build your next-life meter, and be the last player not eliminated.';
+            var objective = 'Be the last player still holding lives.';
+            var note = 'Free For All starts with 3 lives, can grow to 5, and only ends when one player remains.';
             if (mode.id === 'tdm') {
-                objective = 'First team to ' + formatNumber(matchRules.tdmTargetProgress || 10, 0) + ' kills.';
-                note = 'Trade space for crossfires. Individual peeks matter less than team timing.';
+                objective = 'First team to ' + formatNumber(matchRules.tdmTargetProgress || 10, 0) + ' team score.';
+                note = 'Team score is normalized by starting team size, so bigger teams need more raw kills. Trade space for crossfires.';
             }
             out.push({
                 id: String(mode.id),
@@ -581,7 +507,6 @@
         var summary = {
             slot1Weapon: '',
             slot2Weapon: '',
-            ability: '',
             throwable: ''
         };
         var menuLoadout = runtime.GameMenuLoadout && runtime.GameMenuLoadout.getRuntimeSnapshot
@@ -592,11 +517,6 @@
             : (runtime.GameHitscan && runtime.GameHitscan.getWeaponOrder
                 ? runtime.GameHitscan.getWeaponOrder().slice(0, 2)
                 : []);
-        var abilityLoadout = menuLoadout && menuLoadout.selectedAbilityId
-            ? { abilityId: menuLoadout.selectedAbilityId }
-            : (runtime.GameAbilities && runtime.GameAbilities.getLoadout
-                ? runtime.GameAbilities.getLoadout()
-                : {});
         var throwableId = menuLoadout && menuLoadout.selectedThrowableId
             ? menuLoadout.selectedThrowableId
             : (runtime.GameThrowables && runtime.GameThrowables.getSelectedThrowable
@@ -604,13 +524,117 @@
                 : '');
         var weapon1 = findById(data.weapons, String(weaponSlots[0] || ''));
         var weapon2 = findById(data.weapons, String(weaponSlots[1] || ''));
-        var ability = findById(data.abilities, String(abilityLoadout && abilityLoadout.abilityId || ''));
         var throwable = findById(data.throwables, String(throwableId || ''));
         summary.slot1Weapon = weapon1 ? weapon1.name : 'Unassigned';
         summary.slot2Weapon = weapon2 ? weapon2.name : 'Unassigned';
-        summary.ability = ability ? ability.name : 'Unassigned';
         summary.throwable = throwable ? (throwable.label || throwable.name || throwable.id) : 'Unassigned';
         return summary;
+    }
+
+    function systemsSnapshot() {
+        var shared = sharedDataCatalog();
+        var api = sharedApi();
+        return {
+            survivability: api.getSurvivabilityTuning
+                ? (api.getSurvivabilityTuning() || {})
+                : (shared.survivability || {}),
+            movement: api.getMovementTuning
+                ? (api.getMovementTuning() || {})
+                : (shared.movement || {}),
+            combatTimings: api.getCombatTimings
+                ? (api.getCombatTimings() || {})
+                : (api.combatTimings || shared.combatTimings || {
+                    PLAYER_SPAWN_SHIELD_MS: 1000,
+                    RESPAWN_DELAY_MS: 2200
+                }),
+            matchRules: api.matchRules || {}
+        };
+    }
+
+    function totalDurabilityValue(snapshot) {
+        var survivability = snapshot && snapshot.survivability ? snapshot.survivability : {};
+        return Math.max(0, Number(survivability.hpMax || 0)) + Math.max(0, Number(survivability.armorMax || 0));
+    }
+
+    function formatWuPerSecond(value) {
+        return formatNumber(value, 2) + ' wu/s';
+    }
+
+    function weaponDamagePerTrigger(weapon, hitType) {
+        if (!weapon) return 0;
+        var perProjectile = hitType === 'head'
+            ? Number(weapon.headDamage || 0)
+            : Number(weapon.bodyDamage || 0);
+        var pellets = Math.max(1, Number(weapon.pellets || 1));
+        return Math.max(0, perProjectile * pellets);
+    }
+
+    function weaponFreshDownShots(weapon, totalDurability, hitType) {
+        var damagePerTrigger = weaponDamagePerTrigger(weapon, hitType);
+        if (!weapon || !(damagePerTrigger > 0) || !(totalDurability > 0)) return null;
+        return Math.ceil(totalDurability / damagePerTrigger);
+    }
+
+    function weaponDamageValue(weapon) {
+        if (!weapon) return '--';
+        if (Number(weapon.pellets || 1) > 1) {
+            return formatNumber(weapon.bodyDamage, 0) + ' x ' + formatNumber(weapon.pellets, 0) +
+                ' / ' + formatNumber(weapon.headDamage, 0) + ' x ' + formatNumber(weapon.pellets, 0);
+        }
+        return formatNumber(weapon.bodyDamage, 0) + ' / ' + formatNumber(weapon.headDamage, 0);
+    }
+
+    function weaponDamageNote(weapon) {
+        if (!weapon) return '';
+        if (Number(weapon.pellets || 1) > 1) {
+            return 'Per pellet. Perfect burst = ' +
+                formatNumber(weaponDamagePerTrigger(weapon, 'body'), 0) + ' / ' +
+                formatNumber(weaponDamagePerTrigger(weapon, 'head'), 0) + '.';
+        }
+        return 'Base body / head damage before falloff.';
+    }
+
+    function weaponFreshDownValue(weapon, totalDurability) {
+        if (!weapon) return '--';
+        return formatNumber(weaponFreshDownShots(weapon, totalDurability, 'body'), 0) +
+            ' / ' + formatNumber(weaponFreshDownShots(weapon, totalDurability, 'head'), 0);
+    }
+
+    function weaponBestRangeLabel(weapon) {
+        if (!weapon) return '--';
+        if (weapon.id === 'shotgun') return 'Close only';
+        if (weapon.id === 'pistol') return 'Close to mid';
+        if (weapon.id === 'machinegun') return 'Mid';
+        if (weapon.id === 'rifle') return 'Mid to long';
+        if (weapon.id === 'sniper') return 'Long sightlines';
+        return 'General purpose';
+    }
+
+    function weaponViewLabel(weapon) {
+        if (!weapon) return '--';
+        return weapon.id === 'sniper'
+            ? 'Auto-scope on equip'
+            : 'Over-shoulder crosshair view';
+    }
+
+    function weaponQuickStats(weapon, totalDurability) {
+        if (!weapon) return [];
+        return [
+            { label: 'Damage', value: weaponDamageValue(weapon), note: weaponDamageNote(weapon) },
+            { label: 'Fresh Down', value: weaponFreshDownValue(weapon, totalDurability), note: 'Approx point-blank trigger pulls on a fresh ' + formatNumber(totalDurability, 0) + '-durability target.' },
+            { label: 'Fire Rate', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
+            { label: 'Magazine / Reload', value: formatNumber(weapon.magazineSize, 0) + ' / ' + formatSecondsFromMs(weapon.reloadMs), note: 'How long you can stay committed before downtime.' },
+            { label: 'Spread', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Hipfire / stored scoped spread. Only sniper uses a live scoped view.' },
+            { label: 'Falloff', value: falloffProfileText(weapon.falloff), note: 'Damage stays full to the first number, then drops toward the floor.' },
+            { label: 'Move Speed', value: formatPercentScale(weaponStatsMoveSpeedMultiplier(weapon)), note: 'Relative to the base jog and sprint.' },
+            { label: 'View', value: weaponViewLabel(weapon), note: 'How the gun behaves on screen.' }
+        ];
+    }
+
+    function weaponStatsMoveSpeedMultiplier(weapon) {
+        return weapon && Number.isFinite(Number(weapon.moveSpeedMultiplier))
+            ? Number(weapon.moveSpeedMultiplier)
+            : Number((sharedDataCatalog().weaponStats && sharedDataCatalog().weaponStats[weapon.id] && sharedDataCatalog().weaponStats[weapon.id].moveSpeedMultiplier) || 1);
     }
 
     function getData() {
@@ -625,14 +649,6 @@
             if (weapon) weapons.push(weapon);
         }
 
-        var abilities = [];
-        var abilityCatalog = shared.abilityCatalog || {};
-        for (var abilityId in abilityCatalog) {
-            if (!hasOwn(abilityCatalog, abilityId)) continue;
-            var ability = buildAbilityData(abilityId, shared);
-            if (ability) abilities.push(ability);
-        }
-
         var throwables = [];
         var throwableOrder = safeArray(shared.throwables && shared.throwables.order);
         for (var t = 0; t < throwableOrder.length; t++) {
@@ -642,7 +658,6 @@
 
         var data = {
             weapons: weapons,
-            abilities: abilities,
             throwables: throwables,
             modes: buildModeSummaries()
         };
@@ -651,9 +666,6 @@
     }
 
     function ensureSelections(data) {
-        if (!findById(data.abilities, state.selectedAbilityId)) {
-            state.selectedAbilityId = data.abilities.length ? data.abilities[0].id : '';
-        }
         if (!findById(data.weapons, state.selectedWeaponId)) {
             state.selectedWeaponId = data.weapons.length ? data.weapons[0].id : '';
         }
@@ -800,7 +812,7 @@
 
     function weaponFireModelLabel(weapon) {
         if (!weapon) return '--';
-        if (weapon.primitiveType === 'hitscan_multi') return 'Multi-pellet spread';
+        if (weapon.primitiveType === 'hitscan_multi') return formatNumber(weapon.pellets, 0) + '-pellet hitscan burst';
         return 'Single-ray hitscan';
     }
 
@@ -812,14 +824,14 @@
 
     function weaponAdsSummary(weapon) {
         if (!weapon) return '--';
-        if (weapon.id === 'sniper') return 'Auto-scopes on equip and becomes ready when the short scope-in finishes';
-        return 'No manual ADS. This weapon stays in the standard third-person firing view';
+        if (weapon.id === 'sniper') return 'Auto-scopes on equip and only fires once the short scope-in finishes';
+        return 'Stored scoped numbers still exist in tuning, but live combat stays in the standard over-shoulder view';
     }
 
     function falloffProfileText(profile) {
         if (!profile || typeof profile !== 'object') return 'No explicit falloff';
-        return 'Full to ' + formatNumber(profile.start, 0) +
-            ' wu :: floor ' + formatPercentScale(profile.minScalar) +
+        return 'Full damage to ' + formatNumber(profile.start, 0) +
+            ' wu, then ' + formatPercentScale(profile.minScalar) +
             ' by ' + (Number(profile.end || 0) >= 9999 ? 'INF' : formatNumber(profile.end, 0) + ' wu');
     }
 
@@ -904,62 +916,11 @@
         return rows;
     }
 
-    function abilityRoleLabel(ability) {
-        if (!ability) return '--';
-        if (ability.slot === 'ability') return 'Pressure tool';
-        return 'Flex tool';
-    }
-
-    function formatAbilityValue(key, ability) {
-        if (!ability) return '--';
-        var value = ability[key];
-        if (key === 'cooldownMs') return formatMs(value);
-        if (key === 'duration' || key === 'tickRate') return formatSeconds(value);
-        if (key === 'range' || key === 'pullDistance' || key === 'radius' || key === 'acquireRange' || key === 'catchRadius' || key === 'liftHeight') {
-            return formatRange(value);
-        }
-        if (key === 'lockHalfAngleDeg') return formatNumber(value, 0) + ' deg';
-        return formatNumber(value, 2);
-    }
-
-    function buildAbilityRows(ability) {
-        if (!ability) return [];
-        var params = Array.isArray(ability.tunableParams) ? ability.tunableParams : [];
-        var rows = [];
-        for (var i = 0; i < params.length; i++) {
-            var key = String(params[i] || '');
-            rows.push({
-                label: key,
-                value: formatAbilityValue(key, ability),
-                note: ABILITY_TUNABLE_HELP[key] || 'Ability-specific tuning value.'
-            });
-        }
-        if (!params.length && ability.cooldownMs != null) {
-            rows.push({
-                label: 'cooldownMs',
-                value: formatMs(ability.cooldownMs),
-                note: ABILITY_TUNABLE_HELP.cooldownMs
-            });
-        }
-        return rows;
-    }
-
-    function abilityStats(ability) {
-        if (!ability) return [];
-        var stats = [
-            { label: 'Role', value: abilityRoleLabel(ability), note: 'Design intent, not a hard menu lock.' },
-            { label: 'Cooldown', value: formatMs(ability.cooldownMs), note: 'Per equipped slot.' }
-        ];
-        if (ability.range != null) stats.push({ label: 'Range', value: formatRange(ability.range), note: 'Effective cast reach.' });
-        if (ability.duration != null) stats.push({ label: 'Duration', value: formatSeconds(ability.duration), note: 'Active effect window.' });
-        if (ability.damage != null) stats.push({ label: 'Damage', value: formatNumber(ability.damage, 0), note: 'Direct impact damage.' });
-        if (ability.maxTargets != null) stats.push({ label: 'Targets', value: formatNumber(ability.maxTargets, 0), note: 'Maximum stored locks.' });
-        return stats;
-    }
-
     function throwablePreviewLabel(throwable) {
         if (!throwable) return '--';
+        if (throwable.previewType === 'trajectory') return 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for arc preview';
         if (throwable.id === 'knife') return 'Instant throw';
+        if (throwable.previewType === 'none') return 'Press and release to throw';
         return 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for trajectory preview';
     }
 
@@ -1048,45 +1009,66 @@
     }
 
     function buildHomePage(data) {
+        var systems = systemsSnapshot();
+        var survivability = systems.survivability || {};
+        var combatTimings = systems.combatTimings || {};
+        var totalDurability = totalDurabilityValue(systems);
         var loadout = data.loadout || {};
         return [
             '<div class="docs-page">',
             '<section class="docs-hero">',
             '<div class="docs-eyebrow">Open Field Manual</div>',
-            '<h2>Get Into The Match Fast</h2>',
-            '<p>Pick a two-weapon kit, lock the cursor, stay moving, and treat abilities and throwables as extensions of your gunfight instead of separate mini-games.</p>',
+            '<h2>How The Current Build Actually Plays</h2>',
+            '<p>This build is built around movement, weapon swaps, throwables, and picking the right distance before you commit. Standard guns stay in the over-shoulder view, sniper auto-scopes, and most kills come from good positioning and clean follow-up timing.</p>',
             renderTagRow([
-                data.weapons.length + ' weapons',
-                data.abilities.length + ' abilities',
-                data.throwables.length + ' throwables',
-                inputLabels.getBindingLabel('reload', 'R') + ' reload'
+                formatNumber(totalDurability, 0) + ' total durability',
+                formatSecondsFromMs(combatTimings.PLAYER_SPAWN_SHIELD_MS || 0) + ' spawn shield',
+                formatSecondsFromMs(combatTimings.RESPAWN_DELAY_MS || 0) + ' respawn',
+                data.weapons.length + ' weapons'
             ]),
             '</section>',
             '<div class="docs-grid">',
             '<section class="docs-card">',
             '<h3>Quick Start</h3>',
             renderList([
-                'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture pointer lock.',
+                'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture the mouse.',
                 'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and swap weapons with the wheel or your slot keys.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
-                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable, ' + inputLabels.getBindingLabel('roll', 'E') + ' to roll in your movement direction, and ' + inputLabels.getBindingLabel('ability_1', 'G') + ' for your equipped ability.',
-                'Break line of sight during long cooldowns instead of forcing low-odds trades.'
+                'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('roll', 'E') + ' to roll in your movement direction.',
+                'Standard guns do not manually scope in the current build. Sniper auto-scopes when you equip it, and empty magazines auto-reload if you let them.'
             ]),
             '</section>',
+            '<section class="docs-card">',
+            '<h3>Core Match Rules</h3>',
+            renderStatGrid([
+                { label: 'Health / Armor', value: formatNumber(survivability.hpMax, 0) + ' / ' + formatNumber(survivability.armorMax, 0), note: 'Fresh fighters start at ' + formatNumber(totalDurability, 0) + ' combined durability.' },
+                { label: 'Armor Regen', value: formatSeconds(survivability.armorRegenDelaySec) + ' delay', note: formatNumber(survivability.armorRegenPerSec, 0) + ' armor per second once the timer expires.' },
+                { label: 'FFA Lives', value: '3 start / 5 max', note: 'You can earn up to 2 bonus lives by dealing damage.' },
+                { label: 'Bonus Life Meter', value: '400 damage = 1 life', note: 'Every 40 damage gives 1% of the next extra life.' },
+                { label: 'Spawn Shield', value: formatSecondsFromMs(combatTimings.PLAYER_SPAWN_SHIELD_MS || 0), note: 'Fresh spawns ignore damage during this window.' },
+                { label: 'Respawn', value: formatSecondsFromMs(combatTimings.RESPAWN_DELAY_MS || 0), note: 'You come back only if you still have lives left.' }
+            ]),
+            '</section>',
+            '</div>',
+            '<div class="docs-grid">',
             '<section class="docs-card">',
             '<h3>Current Kit</h3>',
             renderStatGrid([
                 { label: 'Slot 1', value: loadout.slot1Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_1', '1') + '.' },
                 { label: 'Slot 2', value: loadout.slot2Weapon || 'Unassigned', note: 'Swap with key ' + inputLabels.getBindingLabel('weapon_slot_2', '2') + '.' },
-                { label: inputLabels.getBindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for preview if supported.' },
-                { label: inputLabels.getBindingLabel('ability_1', 'G') + ' Ability', value: loadout.ability || 'Unassigned', note: 'Your equipped ability.' }
+                { label: inputLabels.getBindingLabel('throwable', 'Q') + ' Throwable', value: loadout.throwable || 'Unassigned', note: 'Hold ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for preview if supported.' }
+            ]),
+            '</section>',
+            '<section class="docs-card">',
+            '<h3>Fight Flow</h3>',
+            renderList([
+                'Open with the gun that owns the current distance. Machine gun and rifle usually start the conversation; shotgun and pistol usually finish it.',
+                'Rolls are strongest for breaking a peek, dodging a punish, or stealing the last few steps into shotgun range.',
+                'Throwables are at their best when they force movement or cash in on damage you already landed.',
+                'Break line of sight during long cooldowns instead of taking low-odds re-peeks.'
             ]),
             '</section>',
             '</div>',
-            '<section class="docs-section">',
-            '<h3>How Fights Actually Work</h3>',
-            '<div class="docs-callout">Open with a weapon that owns the current distance, then chain your utility into the follow-up. Machine gun or rifle starts, shotgun or pistol confirms, missile or choke seals the mistake.</div>',
-            '</section>',
             '<section class="docs-section">',
             '<h3>Mode Objectives</h3>',
             renderModeCards(data.modes),
@@ -1096,28 +1078,45 @@
     }
 
     function buildControlsPage() {
+        var systems = systemsSnapshot();
+        var movement = systems.movement || {};
+        var survivability = systems.survivability || {};
+        var combatTimings = systems.combatTimings || {};
         return [
             '<div class="docs-page">',
             '<section class="docs-hero">',
             '<div class="docs-eyebrow">Controls</div>',
-            '<h2>Movement, Weapons, Abilities, Session Flow</h2>',
-            '<p>The game only really feels correct once pointer lock is active. Enter the match, capture the cursor, and keep your inputs layered instead of playing one system at a time.</p>',
+            '<h2>Movement, Weapons, Throwables, Session Flow</h2>',
+            '<p>This page is about what your buttons really do in the current build. The game expects pointer lock, layered inputs, and fast transitions between moving, shooting, and repositioning instead of one system at a time.</p>',
             renderTagRow([
                 bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
                 inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
-                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('roll', 'E') + ' / ' + inputLabels.getBindingLabel('ability_1', 'G')
+                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('roll', 'E')
             ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
             renderControls([{ title: 'Fixed Controls', rows: fixedControlRows() }]),
             '<section class="docs-section">',
+            '<h3>Movement Rules</h3>',
+            renderStatGrid([
+                { label: 'Jog / Sprint', value: formatWuPerSecond(movement.jogSpeed) + ' / ' + formatWuPerSecond(movement.runSpeed), note: 'Base speed before weapon modifiers.' },
+                { label: 'Jump Hold', value: formatSeconds(movement.maxJumpHold), note: 'Tap for a short hop, hold up to this long for full height.' },
+                { label: 'Roll Timing', value: '0.36 s / 0.52 s', note: 'Forward or side roll / backward-only roll.' },
+                { label: 'Roll Profile', value: 'Lower + smaller', note: 'The head hitbox disappears and the body/collision profile shrinks during the roll.' },
+                { label: 'Armor Reset', value: formatSeconds(survivability.armorRegenDelaySec), note: 'After this delay, armor comes back at ' + formatNumber(survivability.armorRegenPerSec, 0) + ' per second.' },
+                { label: 'Spawn Shield', value: formatSecondsFromMs(combatTimings.PLAYER_SPAWN_SHIELD_MS || 0), note: 'Fresh spawns are protected for this long.' }
+            ]),
+            '</section>',
+            '<section class="docs-section">',
             '<h3>Important Notes</h3>',
             renderList([
-                'Sniper auto-scopes when you equip it and cannot fire until the quick scope-in finishes.',
-                inputLabels.getBindingLabel('throwable', 'Q') + ' previews grenades on hold, but knife throws immediately on press.',
+                'Roll only starts when you are grounded and already holding a direction. No standing roll, no air roll.',
+                'The roll keeps its opening direction until it ends, ignores new movement and jump presses until you release them, and you do not fire during it.',
+                'Sniper auto-scopes when you equip it, cannot fire until the quick scope-in finishes, and is forced into slot 2 by the loadout rules.',
+                'The bindings menu still shows ADS inputs, but in the current build only sniper uses a live scoped view.',
+                inputLabels.getBindingLabel('throwable', 'Q') + ' previews frag and molotov on hold, while plasma and knife are immediate no-preview throws.',
                 inputLabels.getBindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
-                'Keep sniper in slot 2 so match start and respawn always open on your normal third-person primary.',
                 'The field manual is available in menu and in live gameplay on ' + inputLabels.getBindingLabel('open_manual', 'I') + '.'
             ]),
             '</section>',
@@ -1126,6 +1125,7 @@
     }
 
     function buildWeaponPage(data) {
+        var totalDurability = totalDurabilityValue(systemsSnapshot());
         var weapon = findById(data.weapons, state.selectedWeaponId);
         if (!weapon) {
             return '<div class="docs-page"><section class="docs-hero"><h2>Weapon data unavailable</h2></section></div>';
@@ -1139,15 +1139,16 @@
             renderTagRow([
                 weaponFireModelLabel(weapon),
                 weapon.automatic ? 'automatic' : 'semi-auto',
-                weaponReticleLabel(weapon),
-                formatRate(weapon.cooldownMs)
+                weaponBestRangeLabel(weapon),
+                formatPercentScale(weaponStatsMoveSpeedMultiplier(weapon)) + ' move speed'
             ]),
             '</section>',
             '<div class="docs-weapon-layout">',
             '<section class="docs-section">',
-            '<h3>How It Works</h3>',
+            '<h3>How To Use It</h3>',
             renderList([
                 weaponMechanicsText(weapon),
+                'Best range: ' + weaponBestRangeLabel(weapon) + '.',
                 'Reticle style: ' + weaponReticleLabel(weapon) + '.',
                 'View behavior: ' + weaponAdsSummary(weapon) + '.',
                 'Fire cadence: ' + formatMs(weapon.cooldownMs) + ' per shot (' + formatRate(weapon.cooldownMs) + ').'
@@ -1159,61 +1160,12 @@
             '<pre class="docs-weapon-art">' + escapeHtml(WEAPON_ART[weapon.id] || '[No ASCII profile]') + '</pre>',
             '</div>',
             '<section class="docs-section">',
-            '<h3>Live Combat Values</h3>',
-            renderStatGrid([
-                { label: 'Body / Head', value: formatNumber(weapon.bodyDamage, 0) + ' / ' + formatNumber(weapon.headDamage, 0), note: 'Base damage before falloff.' },
-                { label: 'Magazine', value: formatNumber(weapon.magazineSize, 0), note: 'Rounds before you need to reload.' },
-                { label: 'Reload', value: formatMs(weapon.reloadMs), note: 'Forced downtime once a reload begins.' },
-                { label: 'Cadence', value: formatRate(weapon.cooldownMs), note: formatMs(weapon.cooldownMs) + ' between shots.' },
-                { label: 'Pellets', value: formatNumber(weapon.pellets, 0), note: weapon.pellets > 1 ? 'All pellets may connect.' : 'One spread-driven hitscan ray per shot.' },
-                { label: 'Spread H / S', value: formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread), note: 'Stored hipfire versus scoped tuning values.' },
-                { label: 'Range H / S', value: formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange), note: 'Stored hipfire versus scoped range caps.' },
-                { label: 'Scoped FOV', value: formatNumber(weapon.adsFovDeg, 0) + ' deg', note: 'Lower is more zoom when a weapon enters scoped view.' }
-            ]),
+            '<h3>Live Quick Stats</h3>',
+            renderStatGrid(weaponQuickStats(weapon, totalDurability)),
             '</section>',
             '<section class="docs-section">',
-            '<h3>Combat Tunables</h3>',
+            '<h3>Raw Numbers</h3>',
             renderInfoTable(buildWeaponCombatRows(weapon)),
-            '</section>',
-            '<section class="docs-section">',
-            '<h3>Feel Tunables</h3>',
-            renderInfoTable(buildWeaponFeelRows(weapon)),
-            '</section>',
-            '</div>'
-        ].join('');
-    }
-
-    function buildAbilityPage(data) {
-        var ability = findById(data.abilities, state.selectedAbilityId);
-        if (!ability) {
-            return '<div class="docs-page"><section class="docs-hero"><h2>Ability data unavailable</h2></section></div>';
-        }
-        var briefing = ABILITY_BRIEFINGS[ability.id] || { useCase: '', mechanics: '', tips: [] };
-        return [
-            '<div class="docs-page">',
-            '<section class="docs-hero">',
-            '<div class="docs-eyebrow">Ability Profile</div>',
-            '<h2>' + escapeHtml(ability.name || ability.id) + '</h2>',
-            '<p>' + escapeHtml(briefing.useCase || ability.description || 'Ability profile.') + '</p>',
-            renderTagRow([abilityRoleLabel(ability), formatMs(ability.cooldownMs), ability.slot || 'flex']),
-            '</section>',
-            '<div class="docs-grid">',
-            '<section class="docs-card">',
-            '<h3>Mechanics</h3>',
-            renderList([
-                briefing.mechanics || ability.description || 'No mechanics note.',
-                'Menu binding: fire this ability on ' + inputLabels.getBindingLabel('ability_1', 'G') + '.',
-                ability.debugSummary || 'No extra debug summary.'
-            ].concat(briefing.tips || [])),
-            '</section>',
-            '<section class="docs-card">',
-            '<h3>Live Ability Values</h3>',
-            renderStatGrid(abilityStats(ability)),
-            '</section>',
-            '</div>',
-            '<section class="docs-section">',
-            '<h3>Tunables</h3>',
-            renderInfoTable(buildAbilityRows(ability)),
             '</section>',
             '</div>'
         ].join('');
@@ -1231,11 +1183,15 @@
             '<div class="docs-eyebrow">Throwable Profile</div>',
             '<h2>' + escapeHtml(throwable.label || throwable.id) + '</h2>',
             '<p>' + escapeHtml(briefing.useCase || 'Throwable profile.') + '</p>',
-            renderTagRow([throwable.category || 'utility', throwablePreviewLabel(throwable)]),
+            renderTagRow([
+                throwable.category || 'utility',
+                throwablePreviewLabel(throwable),
+                throwable.regen != null ? ('recharge ' + formatSeconds(throwable.regen)) : ''
+            ]),
             '</section>',
             '<div class="docs-grid">',
             '<section class="docs-card">',
-            '<h3>Mechanics</h3>',
+            '<h3>How It Works</h3>',
             renderList([
                 briefing.mechanics || 'Throwable profile.',
                 'Throw input is on ' + inputLabels.getBindingLabel('throwable', 'Q') + '. Preview behavior depends on the selected item.'
@@ -1255,78 +1211,67 @@
     }
 
     function buildTunablesPage(data) {
+        var systems = systemsSnapshot();
+        var totalDurability = totalDurabilityValue(systems);
         var summaryRows = [];
         for (var i = 0; i < data.weapons.length; i++) {
             var weapon = data.weapons[i];
             summaryRows.push([
                 '<strong>' + escapeHtml(weapon.name) + '</strong>',
-                escapeHtml(weaponFireModelLabel(weapon)),
-                escapeHtml(formatMs(weapon.cooldownMs) + ' | mag ' + formatNumber(weapon.magazineSize, 0)),
+                escapeHtml(weaponRoleText(weapon)),
+                escapeHtml(weaponDamageValue(weapon)),
+                escapeHtml(weaponFreshDownValue(weapon, totalDurability)),
+                escapeHtml(formatRate(weapon.cooldownMs) + ' | ' + formatNumber(weapon.magazineSize, 0) + ' / ' + formatSecondsFromMs(weapon.reloadMs)),
                 escapeHtml(formatSpread(weapon.hipfireSpread) + ' / ' + formatSpread(weapon.adsSpread)),
-                escapeHtml(formatRange(weapon.maxRange) + ' / ' + formatRange(weapon.adsMaxRange)),
-                escapeHtml(weapon.pellets > 1 ? 'all pellets count' : 'single ray')
+                escapeHtml(falloffProfileText(weapon.falloff))
             ]);
         }
 
         return [
             '<div class="docs-page">',
             '<section class="docs-hero">',
-            '<div class="docs-eyebrow">Tunables</div>',
-            '<h2>What The Weapon Numbers Actually Mean</h2>',
-            '<p>The important split is combat tuning versus feel tuning. Combat tuning decides damage, reach, spread, cadence, and solver behavior. Feel tuning decides how readable the weapon is to your hands and eyes.</p>',
-            renderTagRow(['combat tuning', 'feel tuning', 'shared gameplay source']),
+            '<div class="docs-eyebrow">Combat Math</div>',
+            '<h2>Damage, Spread, Range, Survivability</h2>',
+            '<p>This page compares the live numbers side by side. Treat them as current-build reference, not as promises of perfect time-to-kill in a real fight.</p>',
+            renderTagRow(['live tuning', formatNumber(totalDurability, 0) + ' durability baseline', 'current build reference']),
             '</section>',
             '<div class="docs-grid">',
             '<section class="docs-card">',
-            '<h3>' + escapeHtml(TUNABLE_GROUPS[0].title) + '</h3>',
-            '<div class="docs-callout">Pistol now uses the same single-ray hitscan path as the other standard guns. Shotgun remains the dedicated multi-pellet edge case.</div>',
+            '<h3>How To Read The Numbers</h3>',
             renderList([
-                'Single-ray weapons: rifle, machine gun, pistol, sniper.',
-                'True multi-pellet weapon: shotgun.'
+                'Damage numbers are base values before distance falloff.',
+                'Fresh Down counts assume a fresh ' + formatNumber(totalDurability, 0) + '-durability target and good point-blank hits.',
+                'Spread is the real shot cone, not just cosmetic bloom.',
+                'Only sniper uses a live scoped view right now. Other guns keep their over-shoulder crosshair even though scoped numbers still exist in tuning.',
+                'World units (wu) are the game’s distance scale. The falloff line tells you where damage starts dropping and where it bottoms out.'
             ]),
             '</section>',
             '<section class="docs-card">',
-            '<h3>' + escapeHtml(TUNABLE_GROUPS[1].title) + '</h3>',
-            renderList([
-                'Higher fire rate is lower `cooldownMs`.',
-                'Magazine and reload decide how greedy you can be before a forced disengage.',
-                'Automatic reload on empty means low mag weapons feel sharper than the raw damage numbers suggest.'
-            ]),
-            '</section>',
-            '<section class="docs-card">',
-            '<h3>' + escapeHtml(TUNABLE_GROUPS[2].title) + '</h3>',
-            renderList([
-                'Spread is solver input, not cosmetic bloom.',
-                'Scoped tuning values still exist in the data, but only sniper uses a live scope transition right now.',
-                'Pistol now uses the same spread-driven ray logic as the other standard guns.',
-                'Falloff bands scale final damage by distance instead of hard dropping to zero.'
-            ]),
-            '</section>',
-            '<section class="docs-card">',
-            '<h3>' + escapeHtml(TUNABLE_GROUPS[3].title) + '</h3>',
-            renderList([
-                'Tracer and recoil values shape feedback and readability.',
-                'These do not directly change damage output, but they absolutely change how controllable a gun feels.',
-                'Audio playback variation keeps repeated fire from sounding flat and repetitive.'
+            '<h3>Baseline Systems</h3>',
+            renderStatGrid([
+                { label: 'Durability', value: formatNumber(totalDurability, 0), note: '400 health + 100 armor on a fresh spawn.' },
+                { label: 'Armor Regen', value: formatSeconds(systems.survivability.armorRegenDelaySec) + ' delay', note: formatNumber(systems.survivability.armorRegenPerSec, 0) + ' armor per second after the delay.' },
+                { label: 'FFA Lives', value: '3 start / 5 max', note: 'Up to 2 bonus lives from damage dealt.' },
+                { label: 'Spawn Shield', value: formatSecondsFromMs(systems.combatTimings.PLAYER_SPAWN_SHIELD_MS || 0), note: 'New spawns ignore damage during this window.' }
             ]),
             '</section>',
             '</div>',
             '<section class="docs-section">',
             '<h3>Live Cross-Weapon Snapshot</h3>',
             renderSummaryTable(
-                ['Weapon', 'Fire Model', 'Cadence / Mag', 'Spread H / A', 'Range H / A', 'Special'],
+                ['Weapon', 'Role', 'Damage', 'Fresh Down', 'Rate | Mag / Reload', 'Spread H / S', 'Falloff'],
                 summaryRows
             ),
             '</section>',
             '<section class="docs-section">',
-            '<h3>Reference</h3>',
+            '<h3>Plain-English Reference</h3>',
             renderInfoTable([
-                { label: 'primitiveType', value: 'single or multi', note: WEAPON_TUNABLE_HELP.primitiveType },
-                { label: 'cooldownMs', value: 'shot cadence', note: WEAPON_TUNABLE_HELP.cooldownMs },
-                { label: 'reloadMs', value: 'downtime', note: WEAPON_TUNABLE_HELP.reloadMs },
-                { label: 'hipfireSpread / adsSpread', value: 'legacy angular compatibility', note: WEAPON_TUNABLE_HELP.hipfireSpread + ' ' + WEAPON_TUNABLE_HELP.adsSpread },
-                { label: 'maxRange / adsMaxRange', value: 'distance caps', note: WEAPON_TUNABLE_HELP.maxRange + ' ' + WEAPON_TUNABLE_HELP.adsMaxRange },
-                { label: 'tracer.* / recoil.*', value: 'feel layer', note: 'These are shared feel knobs layered on top of combat behavior.' }
+                { label: 'Damage', value: 'base hit value', note: 'The number before falloff starts lowering it.' },
+                { label: 'Fresh Down', value: 'approx trigger pulls', note: 'Point-blank estimate against a fresh ' + formatNumber(totalDurability, 0) + '-durability target.' },
+                { label: 'Spread', value: 'shot cone width', note: 'Lower numbers are tighter and more reliable at range.' },
+                { label: 'Falloff', value: 'damage band', note: 'Full damage to the first distance, then reduced damage by the second.' },
+                { label: 'Magazine / Reload', value: 'commit window', note: 'How much damage you can push before a forced disengage.' },
+                { label: 'Move Speed', value: 'weapon mobility', note: 'Relative speed modifier applied to the base jog and sprint.' }
             ]),
             '</section>',
             '</div>'
@@ -1339,8 +1284,6 @@
                 return buildControlsPage();
             case 'weapons':
                 return buildWeaponPage(data);
-            case 'abilities':
-                return buildAbilityPage(data);
             case 'throwables':
                 return buildThrowablesPage(data);
             case 'tunables':
@@ -1354,7 +1297,6 @@
         var out = [];
         var list = [];
         if (pageId === 'weapons') list = data.weapons;
-        else if (pageId === 'abilities') list = data.abilities;
         else if (pageId === 'throwables') list = data.throwables;
         for (var i = 0; i < list.length; i++) {
             if (!list[i] || !list[i].id) continue;
@@ -1367,15 +1309,13 @@
     }
 
     function getSelectedSubId(pageId) {
-        if (pageId === 'abilities') return state.selectedAbilityId;
         if (pageId === 'weapons') return state.selectedWeaponId;
         if (pageId === 'throwables') return state.selectedThrowableId;
         return '';
     }
 
     function setSelectedSubId(pageId, id) {
-        if (pageId === 'abilities') state.selectedAbilityId = id;
-        else if (pageId === 'weapons') state.selectedWeaponId = id;
+        if (pageId === 'weapons') state.selectedWeaponId = id;
         else if (pageId === 'throwables') state.selectedThrowableId = id;
     }
 
@@ -1434,12 +1374,12 @@
 
     function renderHint() {
         if (!hintEl) return;
-        if (state.activePage === 'weapons' || state.activePage === 'abilities' || state.activePage === 'throwables') {
-            hintEl.textContent = 'Left rail picks a profile. Values and descriptions are pulled from current shared tuning.';
+        if (state.activePage === 'weapons' || state.activePage === 'throwables') {
+            hintEl.textContent = 'Left rail picks a profile. Descriptions and values are pulled from the current live build data.';
             return;
         }
         if (state.activePage === 'tunables') {
-            hintEl.textContent = 'Use this page as the glossary, then drill into a specific weapon profile for live values and role notes.';
+            hintEl.textContent = 'Use this page to compare the current live numbers side by side, then drill into a specific profile.';
             return;
         }
         hintEl.textContent = 'Press ' + inputLabels.getBindingLabel('open_manual', 'I') + ' to open or close the field manual at any time.';
@@ -1563,7 +1503,6 @@
             patch = patch || {};
             if (patch.activePage) state.activePage = String(patch.activePage);
             if (patch.selectedWeaponId) state.selectedWeaponId = String(patch.selectedWeaponId);
-            if (patch.selectedAbilityId) state.selectedAbilityId = String(patch.selectedAbilityId);
             if (patch.selectedThrowableId) state.selectedThrowableId = String(patch.selectedThrowableId);
         },
         buildContent: function (pageId) {

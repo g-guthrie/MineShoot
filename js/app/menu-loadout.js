@@ -273,16 +273,6 @@
             : committedLoadout().weaponSlots.slice(0, 2);
     };
 
-    GameMenuLoadout.getSelectedAbilityId = function () {
-        return String(normalizeAbilityState() || '');
-    };
-
-    GameMenuLoadout.getAbilityLoadout = function () {
-        return {
-            abilityId: GameMenuLoadout.getSelectedAbilityId()
-        };
-    };
-
     GameMenuLoadout.getSelectedThrowable = function () {
         return String(committedLoadout().selectedThrowableId || '');
     };

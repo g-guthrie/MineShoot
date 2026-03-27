@@ -151,25 +151,20 @@
             });
             render();
 
-            if (!sessionApi || !sessionApi.startGameplayFromMenu) {
+            if (!sessionApi || !sessionApi.showLaunchOverlay) {
                 setLaunchState({ phase: 'retryable', message: fallbackMessage || 'Ready.', error: false });
                 render();
                 return false;
             }
 
-            return Promise.resolve(sessionApi.startGameplayFromMenu()).then(function (entryResult) {
-                if (entryResult && entryResult.entered) {
-                    setLaunchState({ phase: 'in_match', message: 'Match live.', error: false });
-                } else {
-                    setLaunchState({
-                        phase: 'retryable',
-                        message: (entryResult && entryResult.error) ? entryResult.error : (fallbackMessage || 'Enter match.'),
-                        error: false
-                    });
-                }
-                render();
-                return !!(entryResult && entryResult.entered);
+            sessionApi.showLaunchOverlay('joined_ready', mode || {});
+            setLaunchState({
+                phase: 'retryable',
+                message: fallbackMessage || 'Enter match when ready.',
+                error: false
             });
+            render();
+            return Promise.resolve(false);
         }
 
         function isLaunchBlocked() {

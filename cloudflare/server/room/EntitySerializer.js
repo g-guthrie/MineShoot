@@ -1,56 +1,12 @@
-import { gameplayTuning, getDefaultAbilityId, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
+import { gameplayTuning, getDefaultWeaponLoadout } from '../../../shared/gameplay-tuning.js';
 import { EYE_HEIGHT } from '../../../shared/entity-constants.js';
 import { nowMs } from '../transport.js';
 
 const THROWABLE_STATS = gameplayTuning.throwables;
 const WEAPON_STATS = gameplayTuning.weaponStats || {};
-const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 
-function cloneVec3(value) {
-  if (!value || typeof value !== 'object') return null;
-  const x = Number(value.x);
-  const y = Number(value.y);
-  const z = Number(value.z);
-  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
-  return { x, y, z };
-}
-
-function buildAbilityFx(entity) {
-  const hookPullEndsAt = Number(entity.hookPullState && entity.hookPullState.endsAt || 0);
-  const justBeenHookedEndsAt = Number(entity.justBeenHookedState && entity.justBeenHookedState.endsAt || 0);
-  const chokeVictim = entity.chokeVictimState
-    ? {
-        startedAt: Number(entity.chokeVictimState.startedAt || 0),
-        endsAt: Number(entity.chokeVictimState.endsAt || 0),
-        liftHeight: Number(entity.chokeVictimState.liftHeight || 1.0)
-      }
-    : null;
-  const hookVisual = entity.hookState
-    ? {
-        phase: entity.hookState.phase || 'travel',
-        targetId: entity.hookState.targetId || '',
-        headPos: cloneVec3(entity.hookState.headPos || null),
-        attachPos: cloneVec3(entity.hookState.attachPos || null),
-        endsAt: Number(entity.hookState.endsAt || 0)
-      }
-    : null;
-  const hookedUntil = Math.max(hookPullEndsAt, justBeenHookedEndsAt);
-  const hookedStartedAt = hookPullEndsAt >= justBeenHookedEndsAt
-    ? Number(entity.hookPullState && entity.hookPullState.startedAt || 0)
-    : Number(entity.justBeenHookedState && entity.justBeenHookedState.startedAt || 0);
-  const chokeCasterUntil = Number(entity.chokeState && entity.chokeState.endsAt || 0);
-  return {
-    chokeCasterUntil,
-    chokeVictim,
-    hookedStartedAt,
-    hookedUntil,
-    hookVisual
-  };
-}
-
 export function toEntityState(entity, now = nowMs()) {
-  const cooldownRemaining = Math.max(0, ((entity.abilityCooldownUntil || 0) - now) / 1000);
   const weaponAmmo = {};
   if (entity.weaponAmmo && typeof entity.weaponAmmo === 'object') {
     for (const weaponId in entity.weaponAmmo) {
@@ -126,6 +82,8 @@ export function toEntityState(entity, now = nowMs()) {
     wallhackRadius: entity.wallhackRadius,
     alive: !!entity.alive,
     spawnShieldUntil: entity.spawnShieldUntil || 0,
+    matchEntryPending: !!entity.matchEntryPending,
+    matchEntryUntil: Number(entity.matchEntryUntil || 0),
     streamHeat: Number((entity.streamHeat || 0).toFixed(3)),
     streamOverheatedUntil: entity.streamOverheatedUntil || 0,
     muzzleFlashUntil: entity.muzzleFlashUntil || 0,
@@ -133,12 +91,8 @@ export function toEntityState(entity, now = nowMs()) {
       ? entity.weaponLoadout.slice(0, 2)
       : DEFAULT_WEAPON_LOADOUT.slice(),
     weaponAmmo,
-    abilityId: entity.abilityId || DEFAULT_ABILITY_ID,
-    cooldownRemaining,
-    abilityCooldownRemaining: cooldownRemaining,
     weaponLockUntil: Number(entity.weaponLockUntil || 0),
     throwableLockUntil: Number(entity.throwableLockUntil || 0),
-    abilityLockUntil: Number(entity.abilityLockUntil || 0),
     rollStartedAt: Number(entity.rollStartedAt || 0),
     rollUntil: Number(entity.rollUntil || 0),
     rollInputState: entity.rollInputState && typeof entity.rollInputState === 'object'
@@ -149,17 +103,8 @@ export function toEntityState(entity, now = nowMs()) {
           movingRight: !!entity.rollInputState.movingRight
         }
       : null,
-    abilityFx: buildAbilityFx(entity),
     stunUntil: entity.stunUntil || 0,
     slowUntil: entity.slowUntil || 0,
-    deadeyeState: entity.deadeye ? {
-      lockCount: entity.deadeye.lockIndex || 0,
-      maxLocks: entity.deadeye.maxLocks || (entity.deadeye.queue ? entity.deadeye.queue.length : 0),
-      nextLockAt: entity.deadeye.nextLockAt || 0,
-      lockEveryMs: entity.deadeye.lockEveryMs || 0,
-      endsAt: entity.deadeye.endsAt || 0,
-      targetIds: entity.deadeye.queue ? entity.deadeye.queue.slice(0) : []
-    } : null,
     throwables,
     visibleWallhack: true
   };

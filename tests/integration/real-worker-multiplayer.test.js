@@ -657,6 +657,56 @@ test('real worker: third player observer receives the same authoritative damage 
   });
 });
 
+test('real worker: third player observer receives authoritative shot effects for tracers', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('observer-shotfx');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('shotfx_shooter'), username: 'SHOTFX_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('shotfx_target'), username: 'SHOTFX_TARGET' });
+  const observer = await worker.connectClient({ roomId, userId: buildUserId('shotfx_observer'), username: 'SHOTFX_OBSERVER' });
+
+  await withDebug(roomId, [shooter, target, observer], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+    await observer.waitForSnapshot(() => {
+      return observer.latestEntity(shooter.userId) &&
+        observer.latestEntity(target.userId) &&
+        observer.latestEntity(observer.userId);
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    await applyFixtureAndWait(roomId, [shooter, target, observer], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: observer.userId, x: openLayout.observer.x, z: openLayout.observer.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await equipLoadout(shooter, 'rifle', 'shotgun', 'rifle');
+    const shooterState = shooter.latestEntity(shooter.userId);
+    const targetState = shooter.latestEntity(target.userId);
+    const shotToken = 'observer-shotfx';
+
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken,
+      adsActive: true,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: { x: shooterState.x, y: shooterState.y, z: shooterState.z },
+      aimForward: normalizeForward(shooterState, targetState),
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    const shotEffect = await observer.waitForMessage('shot_effect', (message) => {
+      return String(message.shotToken || '') === shotToken &&
+        String(message.sourceId || '') === shooter.userId &&
+        String(message.weaponId || '') === 'rifle';
+    }, SNAPSHOT_TIMEOUT_MS);
+
+    assert.equal(Array.isArray(shotEffect.traces), true);
+    assert.ok(shotEffect.traces.length > 0);
+    assert.equal(typeof shotEffect.origin, 'object');
+  });
+});
+
 test('real worker: reconnecting within grace keeps one player identity alive', { timeout: TEST_TIMEOUT_MS }, async () => {
   const roomId = buildRoomId('rejoin');
   const reconnectUserId = buildUserId('rejoin');

@@ -11,7 +11,6 @@ This is a live read of the current brawler sandbox.
 - round structure: `3` starting lives, up to `+2` earned lives
 - extra-life meter: `1%` per `40` damage dealt
 - guns: `machinegun`, `shotgun`, `rifle`, `pistol`, `sniper`
-- abilities: `choke`, `hook`, `missile`, `deadeye`
 
 ## Sandbox Read
 
@@ -43,9 +42,9 @@ That is why sustained pressure is much more valuable in this sandbox than it was
 
 That means chip damage sticks for a long time during a crowded round, which supports the brawler feel and makes the extra-life race meaningful.
 
-### There is no self-reset button anymore
+### There is no quick reset button anymore
 
-The roster no longer has a recovery ability.
+The roster no longer has a fast recovery tool.
 
 That means:
 
@@ -115,7 +114,7 @@ Niche summary:
 Current read:
 
 - strongest close-range momentum swing
-- best punish on hook setups, corner commits, and cracked players
+- best punish on corner commits and cracked players
 - not designed as a default fresh-target one-shot
 
 Why it works:
@@ -174,5 +173,5 @@ The key differences from the old version are:
 - slower kill pace
 - stock-based survival
 - damage as a resource
-- no recovery ability
+- limited recovery
 - weapon identity through movement, range, and pressure style

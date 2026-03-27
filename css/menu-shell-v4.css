@@ -360,7 +360,7 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 #overlay {
-    background: url('/images/mayhem_final_pic.png') center center / cover no-repeat;
+    background: url('/images/menu_backdrop_6036.jpg') center center / cover no-repeat;
 }
 
 #overlay[data-menu-context="active-match"] {
@@ -375,17 +375,18 @@ body { cursor: default; }
     pointer-events: none;
     background:
         linear-gradient(180deg, rgba(244, 247, 252, 0.2), rgba(227, 233, 243, 0.28)),
-        url('/images/mayhem_final_pic.png') center center / cover no-repeat;
+        url('/images/menu_backdrop_6036.jpg') center center / cover no-repeat;
     filter: none;
     transform: none;
     opacity: 0;
 }
 
 #menu-stage {
-    width: min(1120px, calc(100vw - 48px));
+    width: min(840px, calc((100vw - 48px) * 0.75));
     max-height: calc(100vh - 48px);
     position: relative;
     z-index: 1;
+    transform: translateY(-5vh);
 }
 
 
@@ -529,6 +530,7 @@ body { cursor: default; }
 /* Header pills */
 #menu-shell.menu-shell-v4 #menu-party-id-btn,
 #menu-shell.menu-shell-v4 #account-toggle-btn,
+#menu-shell.menu-shell-v4 #social-tools-toggle-btn,
 #menu-shell.menu-shell-v4 #utility-toggle-btn,
 #menu-shell.menu-shell-v4 #party-back-btn {
     border: none;
@@ -542,6 +544,7 @@ body { cursor: default; }
     cursor: pointer;
 }
 
+#menu-shell.menu-shell-v4 #social-tools-toggle-btn.active,
 #menu-shell.menu-shell-v4 #utility-toggle-btn.active {
     background: var(--c-blue-wash);
     color: var(--c-blue-text);
@@ -594,6 +597,56 @@ body { cursor: default; }
     background: var(--c-blue-wash);
     color: var(--c-blue-text);
     box-shadow: inset 0 0 0 1px var(--c-blue-ring);
+}
+
+#menu-shell.menu-shell-v4 #play-mode-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 12px;
+    width: 100%;
+}
+
+#menu-shell.menu-shell-v4 #primary-launch-btn {
+    min-height: clamp(92px, 11vw, 124px);
+    padding: clamp(16px, 2.8vw, 24px) clamp(18px, 3.2vw, 28px);
+    font-size: clamp(30px, 7cqw, 52px);
+    font-weight: 800;
+    letter-spacing: -0.055em;
+    line-height: 0.92;
+    box-shadow:
+        inset 0 0 0 1px var(--border-pill),
+        0 20px 36px rgba(86, 126, 255, 0.3);
+}
+
+#menu-shell.menu-shell-v4 #game-modes-toggle-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 0;
+    border-radius: 999px;
+    align-self: start;
+}
+
+#menu-shell.menu-shell-v4 #game-modes-toggle-btn .chevron-glyph {
+    width: 18px;
+    height: 18px;
+    display: block;
+    transition: transform 120ms ease;
+}
+
+#menu-shell.menu-shell-v4 #game-modes-toggle-btn.active .chevron-glyph {
+    transform: rotate(180deg);
+}
+
+#menu-shell.menu-shell-v4 #game-modes-toggle-btn .chevron-glyph path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 /* Mode pills */
@@ -863,11 +916,11 @@ body { cursor: default; }
 
 #menu-shell.menu-shell-v4 #menu-main-heroes { display: grid; align-items: stretch; gap: 10px; }
 #menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="1"] { grid-template-columns: minmax(0, 1fr); }
-#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 2fr); }
-#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] #menu-home-hero { padding: 12px 12px 10px; }
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="2"] { grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr); }
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] { grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr) minmax(0, 0.92fr); }
+#menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] #menu-home-hero { padding: 18px 18px 16px; }
 
-#menu-shell.menu-shell-v4 #menu-home-hero  { display: flex; flex-direction: column; gap: 8px; }
+#menu-shell.menu-shell-v4 #menu-home-hero  { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-height: clamp(190px, 22vw, 250px); }
 #menu-shell.menu-shell-v4 #menu-social-hero { display: grid; gap: 8px; align-content: start; }
 #menu-shell.menu-shell-v4 #menu-party-hero  { display: grid; gap: var(--gap-panel); align-content: start; grid-template-rows: auto minmax(0, 1fr) auto; }
 
@@ -876,11 +929,28 @@ body { cursor: default; }
    15. SOCIAL LAYOUT
    ------------------------------------------------------------ */
 
-#menu-shell.menu-shell-v4 #menu-social-layout { display: grid; gap: 14px; width: 100%; grid-template-columns: minmax(0, 1fr); }
+#menu-shell.menu-shell-v4 #menu-social-layout { display: grid; gap: 10px; width: 100%; grid-template-columns: minmax(0, 1fr); }
 #menu-shell.menu-shell-v4 #menu-social-layout[data-layout="split"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #menu-shell.menu-shell-v4 #menu-social-actions-pane,
 #menu-shell.menu-shell-v4 #menu-social-friends-pane { display: grid; gap: var(--gap-panel); align-content: start; }
-#menu-shell.menu-shell-v4 .social-connect-row { display: grid; gap: 10px; }
+#menu-shell.menu-shell-v4 #menu-social-actions-pane { justify-items: start; }
+#menu-shell.menu-shell-v4 .social-connect-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: min(100%, 420px);
+}
+#menu-shell.menu-shell-v4 #social-friend-card,
+#menu-shell.menu-shell-v4 #social-room-card {
+    width: 100%;
+    padding: 12px 12px 10px;
+}
+#menu-shell.menu-shell-v4 #social-friend-card .flow,
+#menu-shell.menu-shell-v4 #social-room-card .flow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
 #menu-shell.menu-shell-v4 #social-direct-invite-actions { display: grid; gap: 10px; }
 #menu-shell.menu-shell-v4 #social-direct-invite-dismiss-btn { color: var(--c-rose-text); background: var(--c-rose-bg); box-shadow: inset 0 0 0 1px var(--border-card); }
 #menu-shell.menu-shell-v4 #social-direct-invite-dismiss-btn:hover { background: var(--c-rose-bg-hover); color: var(--c-rose-hover); }
@@ -893,9 +963,11 @@ body { cursor: default; }
    16. MODE SCREEN
    ------------------------------------------------------------ */
 
-#menu-shell.menu-shell-v4 #mode-screen-title { margin: 12px 0 10px; font-size: clamp(26px, 18cqw, 58px); line-height: 0.98; font-weight: 800; letter-spacing: -0.04em; color: #151e30; white-space: nowrap; }
-#menu-shell.menu-shell-v4 #play-mode-group { gap: var(--gap-panel); }
-#menu-shell.menu-shell-v4 #mode-screen-actions { display: flex; align-items: center; gap: 12px; padding: 12px 4px 0; }
+#menu-shell.menu-shell-v4 #mode-screen-title { margin: 4px 0 6px; font-size: clamp(26px, 18cqw, 58px); line-height: 0.98; font-weight: 800; letter-spacing: -0.04em; color: #151e30; white-space: nowrap; }
+#menu-shell.menu-shell-v4 #play-mode-group { gap: 8px; }
+#menu-shell.menu-shell-v4 #play-mode-options { width: min(100%, 460px); }
+#menu-shell.menu-shell-v4 #mode-screen-actions { display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 0; }
+#menu-shell.menu-shell-v4 #mode-screen-actions:empty { display: none; }
 #menu-shell.menu-shell-v4 #active-match-primary-banner { display: grid; gap: 12px; width: 100%; margin-top: 12px; padding: 14px; }
 #menu-shell.menu-shell-v4 #active-match-primary-banner.critical { background: rgba(255, 247, 245, 0.82); }
 #menu-shell.menu-shell-v4 #active-match-primary-banner-copy { color: #1d2737; font-size: 14px; font-weight: 700; line-height: 1.35; text-wrap: balance; }
@@ -1109,9 +1181,18 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #private-room-settings-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
 #menu-shell.menu-shell-v4 #party-id-input,
-#menu-shell.menu-shell-v4 #room-code-input { border: none; justify-content: flex-start; background: var(--fill-pill); color: var(--c-ink); margin: 0; padding: clamp(12px, 4.8cqw, 16px) clamp(14px, 5.5cqw, 18px); font-size: clamp(15px, 5.5cqw, 16px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
+#menu-shell.menu-shell-v4 #room-code-input { border: none; justify-content: flex-start; background: var(--fill-pill); color: var(--c-ink); margin: 0; padding: 10px 12px; font-size: 14px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
 #menu-shell.menu-shell-v4 #party-id-input::placeholder,
 #menu-shell.menu-shell-v4 #room-code-input::placeholder { color: var(--c-placeholder); }
+
+#menu-shell.menu-shell-v4 #invite-friend-btn,
+#menu-shell.menu-shell-v4 #join-friend-btn,
+#menu-shell.menu-shell-v4 #join-room-btn,
+#menu-shell.menu-shell-v4 #continue-loadout-btn {
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 700;
+}
 
 #menu-shell.menu-shell-v4 #private-room-mode-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; padding: 6px; background: var(--fill-card); border-radius: var(--r-pill); margin: 12px 0; box-shadow: inset 0 0 0 1px var(--border-card); backdrop-filter: var(--glass-blur-pill); }
 #menu-shell.menu-shell-v4 #private-room-mode-actions button { border: none; background: var(--fill-pill); color: var(--c-body); padding: var(--pill-py-md) var(--pill-px-md); border-radius: var(--r-pill); font-weight: 650; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); cursor: pointer; }
@@ -1277,7 +1358,7 @@ body { cursor: default; }
 
 #utility-modal button { border: none; background: var(--fill-card); color: #34507f; border-radius: var(--r-pill); padding: 12px; cursor: pointer; }
 
-#party-id-input { width: 100%; margin-bottom: 10px; }
+#party-id-input { width: 100%; margin-bottom: 8px; }
 
 
 /* ------------------------------------------------------------
@@ -1307,7 +1388,7 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 @media (max-width: 900px) {
-    #menu-stage { width: min(100vw, calc(100vw - 20px)); max-height: calc(100vh - 20px); }
+    #menu-stage { width: min(100vw, calc(100vw - 20px)); max-height: calc(100vh - 20px); transform: translateY(-5vh); }
     #menu-shell.menu-shell-v4 #menu-surface { max-height: calc(100vh - 20px); border-radius: var(--r-shell); --pad-inline: 16px; --gap-header: 10px; --gap-body-top: 8px; --gap-body-bottom: 16px; --gap-loadout: 12px; }
     #menu-shell.menu-shell-v4 #menu-header-main { grid-template-columns: 1fr auto; }
     #menu-shell.menu-shell-v4 #menu-header-leading { flex-wrap: wrap; }
@@ -1324,10 +1405,11 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #loadout-row { grid-template-columns: 1fr; }
     #menu-shell.menu-shell-v4 #active-match-shell { grid-template-columns: minmax(0, 1fr); }
     #menu-shell.menu-shell-v4 #active-match-pill-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #menu-shell.menu-shell-v4 .social-connect-row { width: 100%; max-width: none; }
 }
 
 @media (max-width: 640px) {
-    #menu-stage { width: 100vw; max-height: 100vh; }
+    #menu-stage { width: 100vw; max-height: 100vh; transform: translateY(-5vh); }
     #menu-shell.menu-shell-v4 #menu-surface { max-height: 100vh; border-radius: var(--r-card) var(--r-card) 0 0; --pad-inline: 12px; --gap-header: 8px; --gap-body-top: 6px; --gap-body-bottom: 12px; --gap-loadout: 10px; }
     #menu-shell.menu-shell-v4 #menu-header-main { grid-template-columns: 1fr; gap: 10px; }
     #menu-shell.menu-shell-v4 #menu-header-actions { justify-content: flex-start; }
@@ -1341,6 +1423,9 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #private-room-action-row .btn-primary { width: 100%; }
     #menu-shell.menu-shell-v4 #private-room-action-row .btn-sm { width: auto; align-self: flex-start; }
     #menu-shell.menu-shell-v4 #mode-screen-title { margin: 10px 0 8px; font-size: clamp(32px, 10vw, 42px); }
+    #menu-shell.menu-shell-v4 #primary-launch-btn { min-height: 82px; font-size: clamp(26px, 11vw, 44px); }
+    #menu-shell.menu-shell-v4 #game-modes-toggle-btn { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
+    #menu-shell.menu-shell-v4 .social-connect-row { grid-template-columns: 1fr; }
     #utility-overlay { left: 16px; right: 16px; width: auto; }
 }
 

@@ -26,6 +26,7 @@ import {
 } from '../../shared/entity-constants.js';
 import {
   HITSCAN_ORIGIN_FORWARD_OFFSET,
+  MUZZLE_ORIGIN_FORWARD_OFFSET,
   ROLL_BODY_HITBOX_LINEAR_SCALE,
   buildCombatHitboxesFromFeetPosition,
   entityBodyHitboxY,
@@ -34,7 +35,8 @@ import {
   entityHeadHitboxY,
   entityHeadHitboxYFromFeet,
   entityMarkerPointYFromFeet,
-  logicalHitscanOriginFromEye
+  logicalHitscanOriginFromEye,
+  logicalMuzzleOriginFromEye
 } from '../../shared/entity-points.js';
 
 test('feet-based hitbox helpers preserve the shared center offsets', () => {
@@ -102,6 +104,13 @@ test('logical hitscan origin pushes forward from the eye by the shared muzzle of
   assert.deepEqual(
     logicalHitscanOriginFromEye({ x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: -1 }),
     { x: 1, y: 2, z: 3 - HITSCAN_ORIGIN_FORWARD_OFFSET }
+  );
+});
+
+test('logical muzzle origin pushes farther forward from the eye than the old hitscan origin', () => {
+  assert.deepEqual(
+    logicalMuzzleOriginFromEye({ x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: -1 }),
+    { x: 1, y: 2, z: 3 - MUZZLE_ORIGIN_FORWARD_OFFSET }
   );
 });
 

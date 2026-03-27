@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS profiles (
   user_id TEXT PRIMARY KEY,
   display_name TEXT,
-  class_id TEXT NOT NULL DEFAULT 'abilities',
+  class_id TEXT NOT NULL DEFAULT 'ffa',
   kills INTEGER NOT NULL DEFAULT 0,
   deaths INTEGER NOT NULL DEFAULT 0,
   damage_done INTEGER NOT NULL DEFAULT 0,

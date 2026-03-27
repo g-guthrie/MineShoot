@@ -185,7 +185,13 @@
                 );
             });
 
-            var showPane = loggedIn && friends.length > 0;
+            var socialVisible = !!state.socialToolsOpen;
+            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
+            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
+            if ((incomingRoomInvite && incomingRoomInvite.roomId) || (incomingInvite && incomingInvite.actorId)) {
+                socialVisible = true;
+            }
+            var showPane = socialVisible && loggedIn && friends.length > 0;
             elements.socialFriendsPane.hidden = !showPane;
             elements.socialLayout.setAttribute('data-layout', showPane ? 'split' : 'stack');
             if (!showPane) return;
@@ -634,6 +640,13 @@
             var loggedIn = !!state.utilities.isLoggedIn;
             var headerVariant = paused ? 'pause' : (state.activeSurface === 'room' ? 'room' : 'home');
             var activeMatchModel = activeMatchShell ? buildActiveMatchViewModel(state) : null;
+            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
+            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
+            var socialMustShow = !!(
+                (incomingRoomInvite && incomingRoomInvite.roomId) ||
+                (incomingInvite && incomingInvite.actorId)
+            );
+            var showSocialTools = !!state.socialToolsOpen || socialMustShow || hasRoom;
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
             if (elements.overlay) elements.overlay.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
@@ -643,9 +656,13 @@
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;
             if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
             if (elements.refreshBtn) {
-                elements.refreshBtn.hidden = activeMatchShell || !(state.activeSurface === 'main' || state.activeSurface === 'room');
+                elements.refreshBtn.hidden = true;
                 elements.refreshBtn.disabled = isBusy || menuRefreshPending();
                 elements.refreshBtn.textContent = menuRefreshPending() ? 'Refreshing...' : 'Refresh';
+            }
+            if (elements.utilityRefreshBtn) {
+                elements.utilityRefreshBtn.disabled = isBusy || menuRefreshPending();
+                elements.utilityRefreshBtn.textContent = menuRefreshPending() ? 'Refreshing...' : 'Refresh';
             }
             if (elements.loadoutStartBtn) elements.loadoutStartBtn.hidden = true;
             if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
@@ -679,6 +696,14 @@
                 elements.gameModesToggleBtn.setAttribute('aria-expanded', state.modeListOpen ? 'true' : 'false');
                 elements.gameModesToggleBtn.disabled = showSessionStrip;
             }
+            if (elements.socialToolsToggleBtn) {
+                var socialToggleOptional = state.activeSurface === 'main' && !showSessionStrip && !hasRoom && !socialMustShow;
+                elements.socialToolsToggleBtn.hidden = !socialToggleOptional;
+                elements.socialToolsToggleBtn.classList.toggle('active', !!state.socialToolsOpen);
+                elements.socialToolsToggleBtn.setAttribute('aria-expanded', state.socialToolsOpen ? 'true' : 'false');
+                elements.socialToolsToggleBtn.textContent = 'Friends & Rooms';
+                elements.socialToolsToggleBtn.disabled = showSessionStrip;
+            }
             if (elements.playModeOptions) {
                 elements.playModeOptions.hidden = !state.modeListOpen || state.activeSurface !== 'main' || showSessionStrip;
             }
@@ -699,7 +724,7 @@
             if (elements.roomActionBtn) {
                 elements.roomActionBtn.textContent = hasRoom
                     ? ('ROOM #' + String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase())
-                    : 'Create Room';
+                    : 'Create';
                 elements.roomActionBtn.classList.toggle('active', hasRoom);
                 elements.roomActionBtn.disabled = isBusy || showSessionStrip;
             }
@@ -719,20 +744,22 @@
             var partyMembers = state.party && state.party.party && Array.isArray(state.party.party.members)
                 ? state.party.party.members
                 : [];
+            var showSocialHero = showMainHeroes && showSocialTools;
             var showPartyHero = showMainHeroes && partyMembers.length > 1;
             var heroCount = 0;
             if (showHomeHero) heroCount += 1;
-            if (showMainHeroes) heroCount += 1;
+            if (showSocialHero) heroCount += 1;
             if (showPartyHero) heroCount += 1;
 
             if (elements.menuBody) elements.menuBody.hidden = activeMatchShell;
+            if (elements.menuLoadoutBand) elements.menuLoadoutBand.hidden = !activeMatchShell;
             if (elements.screenMain) elements.screenMain.hidden = !showMainHeroes;
             if (elements.mainHeroes) {
                 elements.mainHeroes.hidden = !showMainHeroes;
                 elements.mainHeroes.setAttribute('data-columns', String(Math.max(1, heroCount || 1)));
             }
             if (elements.homeHero) elements.homeHero.hidden = !showHomeHero;
-            if (elements.socialHero) elements.socialHero.hidden = !showMainHeroes;
+            if (elements.socialHero) elements.socialHero.hidden = !showSocialHero;
             if (elements.partyHero) elements.partyHero.hidden = !showPartyHero;
             if (elements.screenRoom) elements.screenRoom.hidden = state.activeSurface !== 'room' || activeMatchShell;
 

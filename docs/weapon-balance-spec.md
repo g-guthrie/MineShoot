@@ -44,7 +44,7 @@ The code still uses `armor` and `armorMax` for the recoverable top layer. Design
 
 - shield comes back after the no-damage delay
 - health does not passively regenerate
-- there is no self-reset ability in the live ability roster anymore
+- there is no fast self-reset in the live roster anymore
 
 ## Damage Model
 
@@ -92,15 +92,6 @@ First-pass live profiles:
 - Shotgun: `6.8 -> 9.2`, min `0%`
 - Sniper: effectively no damage falloff inside normal combat distance
 
-## Ability Roster
-
-Current live abilities:
-
-- `choke`
-- `hook`
-- `missile`
-- `deadeye`
-
 ## Design Read
 
 ### Auto Rifle
@@ -141,4 +132,4 @@ The live game is now built around:
 - stock-based elimination instead of a pure kill goal
 - damage contribution as a real round resource
 - weapon identity through role, range, and movement speed
-- no self-reset ability
+- no self-reset mechanic

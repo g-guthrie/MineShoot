@@ -88,7 +88,6 @@ flowchart TD
 | Loadout band | `loadout-collapse-btn` | Collapses the expanded loadout band into the summary row | Pure local UI state. |
 | Loadout band | `weapon-slot-summary` | Re-expands the loadout band | Pure local UI state. |
 | Loadout band | `throwable-slot-summary` | Re-expands the loadout band | Pure local UI state. |
-| Loadout band | `ability-slot-summary` | Re-expands the loadout band | Pure local UI state. |
 | Loadout band | `weapon-slot-primary` | Selects weapon slot 1 as the active assignment target | No surface change. |
 | Loadout band | `weapon-slot-secondary` | Selects weapon slot 2 as the active assignment target | No surface change. |
 | Leave confirm | `leave-confirm-cancel-btn` | Closes the leave-confirm overlay and keeps the current session state | Returns to the paused/session rail state. |
@@ -116,10 +115,9 @@ These buttons are created at runtime and are part of the real click graph even t
 | `weapon-choice-btn` | `menu-loadout.js` | Assigns the chosen weapon to the currently active slot and persists the loadout. |
 | `throwable-cat-btn` | `menu-loadout.js` | Switches the active throwable category. |
 | `throwable-choice-btn` | `menu-loadout.js` | Selects the throwable and persists the loadout. |
-| `ability-choice-btn` | `menu-loadout.js` | Assigns the clicked ability to slot 1 or slot 2 and persists the loadout. |
 | `controls-bind-btn` | `input-bindings-ui.js` | Enters capture mode for a specific action and writes the new local keyboard binding. |
-| `docs-tab` | `runtime/docs.js` | Switches the docs page between `briefing`, `controls`, `weapons`, `abilities`, `throwables`, and `tunables`. |
-| `docs-subitem` | `runtime/docs.js` | Switches the selected weapon, ability, or throwable profile inside the docs panel. |
+| `docs-tab` | `runtime/docs.js` | Switches the docs page between `briefing`, `controls`, `weapons`, `throwables`, and `tunables`. |
+| `docs-subitem` | `runtime/docs.js` | Switches the selected weapon or throwable profile inside the docs panel. |
 | `private-room-member-move` | `lobby-private-room-view.js` | Moves a private-room member between teams. |
 
 ## Dead Or Stale Paths

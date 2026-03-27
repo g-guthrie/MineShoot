@@ -122,6 +122,34 @@ test('room socket message forwards reload commands when live gameplay is allowed
   assert.deepEqual(reloads[0].msg, { t: 'reload', weaponId: 'rifle' });
 });
 
+test('room socket message forwards enter-match commands to the room runtime', () => {
+  const ws = createSocket();
+  const entered = [];
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleEnterMatch(player, msg) {
+      entered.push({ player, msg });
+    }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'enter_match' }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { ENTER_MATCH: 'enter_match', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(entered.length, 1);
+  assert.equal(entered[0].player.id, 'u1');
+  assert.deepEqual(entered[0].msg, { t: 'enter_match' });
+});
+
 test('room socket message blocks reload commands while a private room is still in lobby', () => {
   const ws = createSocket();
   let reloadCount = 0;

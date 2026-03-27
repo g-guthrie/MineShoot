@@ -462,20 +462,41 @@ function resolveRayHits(options) {
       }
     }
 
-    if (!best) continue;
-    const rawDamage = best.hitType === 'head'
-      ? Number(weaponStats.headDamage || 0)
-      : Number(weaponStats.bodyDamage || 0);
-    out.push({
-      target: best.target,
-      hitType: best.hitType,
-      distance: best.distance,
-      point: best.point,
-      damage: applyFalloff(rawDamage, best.distance, options && options.falloffBands ? options.falloffBands : []),
-      mode: options && options.mode ? options.mode : 'hitscan',
-      pelletIndex,
-      pelletScore: (pelletOffset.x * pelletOffset.x) + (pelletOffset.y * pelletOffset.y)
-    });
+    if (best) {
+      const rawDamage = best.hitType === 'head'
+        ? Number(weaponStats.headDamage || 0)
+        : Number(weaponStats.bodyDamage || 0);
+      out.push({
+        target: best.target,
+        hit: true,
+        hitType: best.hitType,
+        distance: best.distance,
+        point: best.point,
+        damage: applyFalloff(rawDamage, best.distance, options && options.falloffBands ? options.falloffBands : []),
+        mode: options && options.mode ? options.mode : 'hitscan',
+        pelletIndex,
+        pelletScore: (pelletOffset.x * pelletOffset.x) + (pelletOffset.y * pelletOffset.y)
+      });
+      continue;
+    }
+
+    if (options && options.includeMisses) {
+      out.push({
+        target: null,
+        hit: false,
+        hitType: 'miss',
+        distance: worldHitDistance,
+        point: {
+          x: origin.x + dir.x * worldHitDistance,
+          y: origin.y + dir.y * worldHitDistance,
+          z: origin.z + dir.z * worldHitDistance
+        },
+        damage: 0,
+        mode: options && options.mode ? options.mode : 'hitscan',
+        pelletIndex,
+        pelletScore: (pelletOffset.x * pelletOffset.x) + (pelletOffset.y * pelletOffset.y)
+      });
+    }
   }
 
   return out;
@@ -515,6 +536,7 @@ function resolveAutoLockShot(options) {
       : Number(weaponStats.bodyDamage || 0);
     return [{
       target: preview.target,
+      hit: true,
       hitType,
       distance,
       point,
@@ -527,7 +549,7 @@ function resolveAutoLockShot(options) {
   return [];
 }
 
-export function resolveHitscanShot(options) {
+export function resolveHitscanTrace(options) {
   const origin = readAimOrigin(options);
   const forward = readAimForward(options);
   const weaponStats = options && options.weaponStats ? options.weaponStats : null;
@@ -535,9 +557,21 @@ export function resolveHitscanShot(options) {
   return autoLockConfig(weaponStats) ? resolveAutoLockShot(options) : resolveRayHits(options);
 }
 
+export function resolveHitscanShot(options) {
+  const traces = resolveHitscanTrace(options);
+  const out = [];
+  for (let i = 0; i < traces.length; i++) {
+    const trace = traces[i];
+    if (!trace || trace.hit === false) continue;
+    out.push(trace);
+  }
+  return out;
+}
+
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.hitscanAuthority = {
+  resolveHitscanTrace,
   resolveHitscanShot,
   resolveAutoLockPreview,
   sampleSpreadOffset

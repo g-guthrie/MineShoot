@@ -12,7 +12,8 @@ async function loadFactory(options = {}) {
       GameShared: {
         entityConstants: {
           PLAYER_RADIUS: 0.5,
-          PLAYER_HEIGHT: 2.8
+          PLAYER_HEIGHT: 2.8,
+          ROLL_CONTACT_CYLINDER_HEIGHT_SCALE: 0.3
         },
         entityPoints: {
           entityBodyHitboxYFromFeet(feetY) {
@@ -159,4 +160,23 @@ test('actor visual factory hides the head hitbox and shrinks the body hitbox dur
   assert.equal(visual.bodyHitbox.scale.y, 1);
   assert.equal(visual.bodyHitbox.scale.z, 1);
   assert.equal(visual.bodyHitbox.position.y, 2.7625);
+});
+
+test('actor visual factory shrinks the movement collider height to the roll contact scale', async () => {
+  const factory = await loadFactory();
+  const visual = factory.create({
+    ownerType: 'player',
+    hitboxOpacity: 0.3,
+    includeCollisionDebug: true
+  });
+
+  visual.syncHitboxes({ x: 10, y: 2, z: -4 }, { rolling: true });
+
+  assert.ok(Math.abs(visual.movementCollider.scale.y - 0.3) < 1e-9);
+  assert.ok(Math.abs(visual.movementCollider.position.y - (2 + ((2.8 * 0.3) * 0.5))) < 1e-9);
+
+  visual.syncHitboxes({ x: 10, y: 2, z: -4 }, { rolling: false });
+
+  assert.equal(visual.movementCollider.scale.y, 1);
+  assert.ok(Math.abs(visual.movementCollider.position.y - (2 + (2.8 * 0.5))) < 1e-9);
 });

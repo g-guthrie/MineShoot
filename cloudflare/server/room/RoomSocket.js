@@ -1,10 +1,10 @@
 const MESSAGE_RATE_LIMITS = {
+  enter_match: { ratePerSec: 1, burst: 3 },
   input: { ratePerSec: 45, burst: 90 },
   roll: { ratePerSec: 8, burst: 16 },
   fire: { ratePerSec: 20, burst: 40 },
   reload: { ratePerSec: 4, burst: 8 },
   throw: { ratePerSec: 4, burst: 8 },
-  class_cast: { ratePerSec: 3, burst: 6 },
   equip_weapon: { ratePerSec: 8, burst: 16 },
   weapon_loadout: { ratePerSec: 2, burst: 4 },
   ping: { ratePerSec: 2, burst: 6 },
@@ -79,7 +79,6 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   deps = deps || {};
   const safeJsonParse = deps.safeJsonParse;
   const nowMs = deps.nowMs;
-  const handleClassCast = deps.handleClassCast;
   const isPrivateMatchRoom = deps.isPrivateMatchRoom;
   const roomPhaseActive = String(deps.roomPhaseActive || 'active');
   const msgC2s = deps.msgC2s || {};
@@ -142,6 +141,11 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     room.handleInput(player, msg);
     return;
   }
+  if (type === msgC2s.ENTER_MATCH) {
+    if (!consumeOrClose('enter_match')) return;
+    room.handleEnterMatch(player, msg);
+    return;
+  }
   if (type === msgC2s.ROLL) {
     if (privateLobbyLocked) return;
     if (!consumeOrClose('roll')) return;
@@ -174,16 +178,6 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     if (privateLobbyLocked) return;
     if (!consumeOrClose('throw')) return;
     room.handleThrow(player, msg, ws);
-    return;
-  }
-  if (type === msgC2s.CLASS_QUEUE) {
-    room.handleClassQueue(player, msg, ws);
-    return;
-  }
-  if (type === msgC2s.CLASS_CAST) {
-    if (privateLobbyLocked) return;
-    if (!consumeOrClose('class_cast')) return;
-    if (handleClassCast) handleClassCast(room, player, msg, ws);
     return;
   }
   if (type === msgC2s.PING) {

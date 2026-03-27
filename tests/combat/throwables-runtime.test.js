@@ -401,7 +401,7 @@ test('plasma grenade seeks then sticks at chest height when a target enters the 
   assert.equal(mesh.position.z, stuckZ);
 });
 
-test('ability missile launch aims from the muzzle toward the crosshair hit point', async () => {
+test('missile launch aims from the muzzle toward the crosshair hit point', async () => {
   const aimBlock = new THREE.Mesh(
     new THREE.BoxGeometry(4, 4, 0.5),
     new THREE.MeshBasicMaterial()

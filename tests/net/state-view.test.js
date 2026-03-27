@@ -73,7 +73,7 @@ test('network state view reuses entity state arrays and wrappers across calls', 
     id: 'usr_remote',
     kind: 'player',
     username: 'REMOTE',
-    classId: 'abilities',
+    classId: 'ffa',
     hp: 90,
     hpMax: 100,
     armor: 20,
@@ -140,7 +140,7 @@ test('network state view uses shared interpolation clock helpers and entity cons
       return new Map();
     },
     getCurrentUser() {
-      return { id: 'usr_self', classId: 'abilities' };
+      return { id: 'usr_self', classId: 'ffa' };
     },
     getSelfState() {
       return null;

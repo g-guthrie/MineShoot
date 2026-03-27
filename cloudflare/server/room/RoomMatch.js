@@ -26,6 +26,9 @@ function buildTeamStatMap(teamIds, source) {
 }
 
 function resetPlayerForRound(room, player) {
+  const preservedMatchEntryShieldUntil = isPendingEntry(room, player)
+    ? Math.max(0, Number(player.spawnShieldUntil || 0))
+    : 0;
   if (!player || player.fixtureType === 'sim_player') return;
   player.teamId = '';
   player.progressScore = 0;
@@ -44,6 +47,18 @@ function resetPlayerForRound(room, player) {
   player.plannedSpawnPoint = null;
   if (room.spawnEntityRandomly) room.spawnEntityRandomly(player);
   if (room.applySpawnShield) room.applySpawnShield(player);
+  if (preservedMatchEntryShieldUntil > 0) {
+    player.spawnShieldUntil = Math.max(Number(player.spawnShieldUntil || 0), preservedMatchEntryShieldUntil);
+  }
+}
+
+function isPendingEntry(room, player) {
+  return !!(
+    room &&
+    player &&
+    typeof room.isEntityMatchEntryPending === 'function' &&
+    room.isEntityMatchEntryPending(player)
+  );
 }
 
 export function syncPrivateRoomMatchState(room, deps) {
@@ -80,7 +95,9 @@ export function syncPrivateRoomMatchState(room, deps) {
     player.progressScore = 0;
     if (room.gameMode === gameModeFfa) {
       resetPlayerForRound(room, player);
-      room.matchState.aliveCount += 1;
+      if (!isPendingEntry(room, player)) {
+        room.matchState.aliveCount += 1;
+      }
     }
   }
   if (room.gameMode === gameModeTdm) {
@@ -178,6 +195,11 @@ export function startPublicMatchIfReady(room, deps) {
   if (!room.matchState) room.matchState = emptyMatchState ? emptyMatchState(room.gameMode) : {};
   if (room.matchState.started || room.matchState.ended) return false;
   const connectedCount = room.connectedHumanCount();
+  let activeCount = 0;
+  for (const player of room.players.values()) {
+    if (!player || player.fixtureType === 'sim_player' || isPendingEntry(room, player)) continue;
+    activeCount += 1;
+  }
   const startThreshold = publicRoomStartThresholdForMode
     ? Number(publicRoomStartThresholdForMode(room.gameMode))
     : Number(deps.publicRoomStartThreshold || 2);
@@ -190,7 +212,7 @@ export function startPublicMatchIfReady(room, deps) {
   room.matchState.resetAt = 0;
   room.matchState.winnerId = '';
   room.matchState.winnerTeam = '';
-  room.matchState.aliveCount = connectedCount;
+  room.matchState.aliveCount = activeCount;
   room.matchState.startingStocks = 3;
   room.matchState.maxStocks = 5;
   room.matchState.maxBonusLives = 2;
@@ -270,6 +292,7 @@ export function updateLeaderProgress(room, deps) {
     let aliveCount = 0;
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
+      if (isPendingEntry(room, player)) continue;
       const progress = Number(player.progressScore || 0);
       if (progress >= leaderProgress) {
         leaderProgress = progress;

@@ -492,7 +492,7 @@ test('lobby session keeps silent background party failures off the visible UI an
   assert.equal(harness.warnCalls.length, 0);
 });
 
-test('lobby session still surfaces manual party failures through status and warning hooks', async () => {
+test('lobby session still surfaces manual party failures through status and warning callbacks', async () => {
   const harness = await loadLobbySessionHarness({
     requestJson() {
       return Promise.reject({ message: 'HTTP 500 at /api/party', status: 500, url: '/api/party' });

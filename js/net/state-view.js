@@ -19,10 +19,6 @@
             return opts.getSharedApi ? (opts.getSharedApi() || {}) : (globalThis.__MAYHEM_RUNTIME.GameShared || {});
         }
 
-        function abilityFxApi() {
-            return opts.getAbilityFxApi ? (opts.getAbilityFxApi() || null) : (globalThis.__MAYHEM_RUNTIME.GameAbilityFx || null);
-        }
-
         function interpolationApi() {
             return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || {};
         }
@@ -350,7 +346,7 @@
             if (selfState) return selfState;
             var user = opts.getCurrentUser();
             if (!user) return null;
-            var defaults = opts.classStats(user.classId || 'abilities');
+            var defaults = opts.classStats(user.classId || 'ffa');
             var shared = sharedApi();
             var survivability = shared.getSurvivabilityTuning ? (shared.getSurvivabilityTuning() || {}) : ((shared.gameplayTuning && shared.gameplayTuning.survivability) || {});
             var entityConstants = shared.entityConstants || {};
@@ -367,7 +363,7 @@
                 bonusLivesEarned: 0,
                 extraLifeProgressPct: 0,
                 eliminated: false,
-                classId: user.classId || 'abilities',
+                classId: user.classId || 'ffa',
                 wallhackRadius: defaults.wallhackRadius,
                 throwables: null,
                 kills: 0,
@@ -384,27 +380,6 @@
                 projectiles: readArray('getRemoteProjectileState').slice(),
                 fireZones: readArray('getRemoteFireZoneState').slice(),
                 selfThrowables: (selfState && selfState.throwables) ? selfState.throwables : null
-            };
-        }
-
-        function getSelfAbilityState() {
-            var selfState = typeof opts.getSelfState === 'function' ? opts.getSelfState() : null;
-            if (!selfState) return null;
-            var abilityFxView = abilityFxApi();
-            var snapshotAbilityState = abilityFxView && abilityFxView.buildSnapshotAbilityState
-                ? abilityFxView.buildSnapshotAbilityState(selfState)
-                : {
-                    chokeState: null,
-                    hookState: null
-                };
-            return {
-                cooldownRemaining: selfState.cooldownRemaining || 0,
-                abilityCooldownRemaining: selfState.abilityCooldownRemaining || 0,
-                weaponLoadout: selfState.weaponLoadout || null,
-                abilityId: selfState.abilityId || '',
-                chokeState: snapshotAbilityState.chokeState,
-                hookState: snapshotAbilityState.hookState,
-                deadeyeState: selfState.deadeyeState || null
             };
         }
 
@@ -598,7 +573,6 @@
             getSelfState: getSelfState,
             getSelfReconciliationState: getSelfReconciliationState,
             getAuthoritativeThrowableState: getAuthoritativeThrowableState,
-            getSelfAbilityState: getSelfAbilityState,
             getMatchState: getMatchState,
             getInputSyncState: getInputSyncState,
             getPendingInputSamples: getPendingInputSamples,
@@ -613,13 +587,11 @@
                 return opts.damagePointForEntityId ? opts.damagePointForEntityId(entityId) : null;
             },
             getEntityMarkerWorldPos: function (entityId) { return opts.markerPointForEntityId ? opts.markerPointForEntityId(entityId) : null; },
-            getChokeVictimStateForEntity: function (entityId) { return opts.getChokeVictimStateForEntity ? opts.getChokeVictimStateForEntity(entityId) : null; },
             consumeNotice: function () { return opts.consumeNotice ? opts.consumeNotice() : ''; },
             consumeThrowAck: function () { return shiftQueue(opts.throwAckQueue); },
             consumeThrowReject: function () { return shiftQueue(opts.throwRejectQueue); },
             consumeThrowableEvent: function () { return shiftQueue(opts.throwableEventQueue); },
-            consumeAbilityEvent: function () { return shiftQueue(opts.abilityEventQueue); },
-            consumeClassCastResult: function () { return shiftQueue(opts.classCastResultQueue); },
+            consumeShotEffect: function () { return shiftQueue(opts.shotEffectQueue); },
             consumeDamageFeedback: function () { return shiftQueue(opts.damageFeedbackQueue); },
             consumeIncomingDamageFeedback: function () { return shiftQueue(opts.incomingDamageFeedbackQueue); }
         };

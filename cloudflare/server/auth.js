@@ -111,7 +111,7 @@ export async function getSessionFromRequest(env, request) {
     sessionId: row.session_id,
     userId: row.user_id,
     username: row.username,
-    classId: row.class_id || 'abilities',
+    classId: row.class_id || 'ffa',
     displayName: row.display_name || null,
     profileEnabled: !!row.profile_enabled,
     kills: row.kills || 0,
@@ -126,7 +126,7 @@ export async function ensureProfileRow(env, userId, classId) {
   await env.DB.prepare(
     `INSERT INTO profiles (user_id, class_id) VALUES (?1, ?2)
      ON CONFLICT(user_id) DO NOTHING`
-  ).bind(userId, classId || 'abilities').run();
+  ).bind(userId, classId || 'ffa').run();
 }
 
 export async function handleAuthConfig(env) {
@@ -182,7 +182,7 @@ export async function handleLogin(env, request) {
       'INSERT INTO users (id, username, username_norm, pin_plain, created_at) VALUES (?1, ?2, ?3, ?4, ?5)'
     ).bind(userId, usernameRaw, usernameNorm, pin, now).run();
 
-    await ensureProfileRow(env, userId, 'abilities');
+    await ensureProfileRow(env, userId, 'ffa');
 
     user = { id: userId, username: usernameRaw, pin_plain: pin };
   } else if (user.pin_plain !== pin) {
@@ -210,7 +210,7 @@ export async function handleLogin(env, request) {
     user: {
       id: user.id,
       username: user.username,
-      classId: (profile && profile.class_id) || 'abilities',
+      classId: (profile && profile.class_id) || 'ffa',
       displayName: (profile && profile.display_name) || null,
       profileEnabled: !!(profile && profile.profile_enabled),
       kills: (profile && profile.kills) || 0,

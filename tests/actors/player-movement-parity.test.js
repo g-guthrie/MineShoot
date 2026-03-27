@@ -807,6 +807,42 @@ test('player roll only triggers while there is movement input', async () => {
   });
 });
 
+test('player ignores new movement and jump presses during a roll until they are released', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.player.setRollState({
+    rollUntil: Date.now() + 1000,
+    rollInputState: {
+      movingForward: true,
+      movingBackward: false,
+      movingLeft: false,
+      movingRight: false
+    }
+  });
+  harness.documentObj.dispatch('keydown', { code: 'KeyA', repeat: false });
+  harness.documentObj.dispatch('keydown', { code: 'Space', repeat: false, preventDefault() {} });
+
+  stepAuthoritativeMovement(expected, createInputState({ forward: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.calls.triggerActions.some((entry) => entry.action === 'jump'), false);
+
+  harness.player.setRollState({ rollUntil: 0 });
+  stepAuthoritativeMovement(expected, createInputState({}), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.calls.triggerActions.some((entry) => entry.action === 'jump'), false);
+
+  harness.documentObj.dispatch('keyup', { code: 'KeyA' });
+  harness.documentObj.dispatch('keyup', { code: 'Space' });
+  harness.documentObj.dispatch('keydown', { code: 'KeyA', repeat: false });
+
+  stepAuthoritativeMovement(expected, createInputState({ left: true }), harness.buildStepOptions(0.1));
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+});
+
 test('player roll forwards the current movement direction to the avatar action', async () => {
   const harness = await loadPlayerMovementHarness();
 
@@ -823,4 +859,28 @@ test('player roll forwards the current movement direction to the avatar action',
       movingRight: true
     }
   });
+});
+
+test('player network input state keeps the frozen roll direction while rolling', async () => {
+  const harness = await loadPlayerMovementHarness();
+
+  harness.player.setRollState({
+    rollUntil: Date.now() + 1000,
+    rollInputState: {
+      movingForward: true,
+      movingBackward: false,
+      movingLeft: false,
+      movingRight: false
+    }
+  });
+
+  const inputState = harness.player.getNetworkInputState();
+
+  assert.equal(inputState.forward, true);
+  assert.equal(inputState.backward, false);
+  assert.equal(inputState.left, false);
+  assert.equal(inputState.right, false);
+  assert.equal(inputState.jump, false);
+  assert.equal(inputState.sprint, false);
+  assert.equal(inputState.adsActive, false);
 });

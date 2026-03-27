@@ -89,7 +89,7 @@ function snapshotEntity(id, overrides = {}) {
     id,
     kind: 'player',
     username: id,
-    classId: 'abilities',
+    classId: 'ffa',
     x: 0,
     y: 1.6,
     z: 0,

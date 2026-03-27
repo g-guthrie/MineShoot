@@ -808,7 +808,7 @@ So the rig has:
 
 That is another sign of a partially migrated presentation system.
 
-## 13. Reload, ADS, hook, choke: what the rig is told vs what it actually uses
+## 13. Reload And ADS: what the rig is told vs what it actually uses
 
 `player-view.js` builds and passes an `animState` with fields like:
 
@@ -817,8 +817,6 @@ That is another sign of a partially migrated presentation system.
 - `reloadPhase`
 - `reloadPhasePct`
 - `adsActive`
-- `hooked`
-- `choked`
 
 But the current `boxman-rig.js` does not read those fields.
 
@@ -826,7 +824,6 @@ So the live truth is:
 
 - reload presentation is computed
 - ADS status is computed
-- hook/choke status is computed
 - but the rig mostly ignores them
 
 That means the interface between `player-view` and `boxman-rig` currently advertises more animation capability than the rig is actually consuming.

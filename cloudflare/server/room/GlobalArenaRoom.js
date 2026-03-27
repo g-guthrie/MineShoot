@@ -1,10 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
   gameplayTuning,
-  getDefaultAbilityId,
   getDefaultWeaponLoadout,
-  getSelectableWeaponIds,
-  normalizeAbilityId
+  getSelectableWeaponIds
 } from '../../../shared/gameplay-tuning.js';
 import { PLAYER_SPAWN_SHIELD_MS } from '../../../shared/combat-timings.js';
 import {
@@ -17,7 +15,7 @@ import {
   normalizeThrowPayload,
   protocol
 } from '../../../shared/protocol.js';
-import { entityAimTargetY, logicalHitscanOriginFromEye } from '../../../shared/entity-points.js';
+import { entityAimTargetY, logicalHitscanOriginFromEye, logicalMuzzleOriginFromEye } from '../../../shared/entity-points.js';
 import {
   nowMs,
   safeJsonParse,
@@ -28,11 +26,11 @@ import {
   dot3,
   clamp
 } from '../transport.js';
-import { resolveHitscanShot } from '../../../shared/hitscan-authority.js';
+import { resolveHitscanShot, resolveHitscanTrace } from '../../../shared/hitscan-authority.js';
 import { buildWorldCollisionData } from '../../../shared/world-collision.js';
 import { createTerrainSampler } from '../../../shared/terrain-sampler.js';
 import { WORLD_MIN, WORLD_MAX } from '../../../shared/world-layout.js';
-import { EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS } from '../../../shared/entity-constants.js';
+import { EYE_HEIGHT, PLAYER_HEIGHT, PLAYER_RADIUS, ROLL_CONTACT_CYLINDER_HEIGHT_SCALE } from '../../../shared/entity-constants.js';
 import {
   createMovementInputState,
   hasIntentInputMessage,
@@ -58,7 +56,6 @@ import {
   broadcastDeathRespawn
 } from './CombatService.js';
 import { tickProjectiles, tickFireZones } from './ProjectileService.js';
-import { handleClassCast, tickClassAbilityState } from './AbilityService.js';
 import { handleRoomRequest, findSocketForUserId } from './RoomTransport.js';
 import { handleRoomSocketMessage, handleRoomSocketClose } from './RoomSocket.js';
 import {
@@ -108,12 +105,15 @@ import {
 import { applyPrivateRoomConfig as applyRoomPrivateConfig } from './RoomPrivateConfig.js';
 import {
   applyEntitySpawnPoint as applyRoomEntitySpawnPoint,
+  activateEntityMatchEntry as activateRoomEntityMatchEntry,
   applySpawnShield as applyRoomSpawnShield,
+  beginEntityMatchEntry as beginRoomEntityMatchEntry,
   buildPlayerEntity as buildRoomPlayerEntity,
   chooseEntitySpawnPoint as chooseRoomEntitySpawnPoint,
   consumeQueuedAuthoritativeInputs,
   enforceEntityTerrainFloor as enforceRoomEntityTerrainFloor,
   ensurePlayer as ensureRoomPlayer,
+  isEntityMatchEntryPending as isRoomEntityMatchEntryPending,
   planEntityRespawn as planRoomEntityRespawn,
   queueAuthoritativeInput,
   respawnIfNeeded as respawnRoomEntityIfNeeded,
@@ -122,6 +122,7 @@ import {
   syncSimulatedPlayers as syncRoomSimulatedPlayers,
   terrainEyeYAt as roomTerrainEyeYAt,
   terrainFeetYAt as roomTerrainFeetYAt,
+  tickEntityMatchEntries as tickRoomEntityMatchEntries,
   tickPlayers as tickRoomPlayers
 } from './RoomRuntime.js';
 import {
@@ -132,11 +133,9 @@ import {
   normalizeWeaponLoadout as normalizeRoomWeaponLoadout
 } from './RoomLoadout.js';
 import {
-  applyJustBeenHooked as applyCombatJustBeenHooked,
   applyPlasmaStreamHeat as applyCombatPlasmaStreamHeat,
   applyTimedSlow as applyCombatTimedSlow,
   applyTimedStun as applyCombatTimedStun,
-  canEntityUseAbility as canCombatEntityUseAbility,
   canEntityUseThrowable as canCombatEntityUseThrowable,
   canEntityUseWeapon as canCombatEntityUseWeapon,
   canTargetEntity as canCombatTargetEntity,
@@ -144,13 +143,11 @@ import {
   closestHostileInRange as closestCombatHostileInRange,
   consumeThrowCharge as consumeCombatThrowCharge,
   consumeWeaponAmmo as consumeCombatWeaponAmmo,
-  deadeyeCandidates as deadeyeCombatCandidates,
   entityAimTargetPosition as combatEntityAimTargetPosition,
   entityCorePosition as combatEntityCorePosition,
   entityForward as combatEntityForward,
   entityRight as combatEntityRight,
   firstWorldHitDistance as combatFirstWorldHitDistance,
-  handleClassQueue as handleCombatClassQueue,
   handleEquipWeapon as handleCombatEquipWeapon,
   handleFire as handleCombatFire,
   handleReload as handleCombatReload,
@@ -162,17 +159,11 @@ import {
   hostilesInRadius as combatHostilesInRadius,
   isEntityActionLocked as isCombatEntityActionLocked,
   isEntityActionRestricted as isCombatEntityActionRestricted,
-  isEntityChoked as isCombatEntityChoked,
-  isEntityJustBeenHooked as isCombatEntityJustBeenHooked,
   isEntityMovementLocked as isCombatEntityMovementLocked,
   isEntityRolling as isCombatEntityRolling,
   isEntitySpawnShielded as isCombatEntitySpawnShielded,
   nearestTargetForProjectile as nearestCombatTargetForProjectile,
-  pullEntityToward as pullCombatEntityToward,
-  readClassAimPoint as readCombatClassAimPoint,
   reloadRemainingForWeapon as reloadRemainingCombatWeapon,
-  resolveClassAimPoint as resolveCombatClassAimPoint,
-  resolveLockedHostile as resolveCombatLockedHostile,
   spawnProjectile as spawnCombatProjectile,
   syncWeaponAmmoState as syncCombatWeaponAmmoState,
   tickThrowableRegen as tickCombatThrowableRegen,
@@ -193,7 +184,6 @@ const MSG_S2C = SHARED_PROTOCOL.msg.s2c;
 const WEAPON_STATS = GAMEPLAY_TUNING_WU.weaponStats;
 const WEAPON_FALLOFF = GAMEPLAY_TUNING_WU.weaponFalloff || {};
 const THROWABLE_STATS = GAMEPLAY_TUNING_WU.throwables;
-const DEFAULT_ABILITY_ID = getDefaultAbilityId();
 const DEFAULT_WEAPON_LOADOUT = getDefaultWeaponLoadout();
 const SELECTABLE_WEAPON_IDS = getSelectableWeaponIds();
 
@@ -232,6 +222,7 @@ const PLAYER_SPAWN_PADDING_WU = 8;
 const PLAYER_SPAWN_MIN_CLEARANCE_WU = 14;
 const WORLD_RAY_EPSILON = 0.001;
 const RELOADED_FLASH_HOLD_MS = 900;
+const MATCH_ENTRY_WINDOW_MS = 20000;
 const HITSCAN_REWIND_HISTORY_MS = DEFAULT_REWIND_HISTORY_MS;
 const HITSCAN_MAX_REWIND_MS = DEFAULT_MAX_REWIND_MS;
 const HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU = 0.9;
@@ -623,6 +614,9 @@ export class GlobalArenaRoom extends DurableObject {
   ensurePlayer(userId, username, classId, actorId = '', actorName = '') {
     return ensureRoomPlayer(this, userId, username, classId, actorId, actorName, {
       isPrivateMatchRoom,
+      nowMs,
+      playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS,
+      matchEntryWindowMs: MATCH_ENTRY_WINDOW_MS,
       teamAlpha: TDM_TEAM_A,
       gameModeTdm: GAME_MODE_TDM
     });
@@ -647,6 +641,28 @@ export class GlobalArenaRoom extends DurableObject {
         // noop
       }
     }
+  }
+
+  broadcastShotEffect(effect) {
+    if (!effect || !effect.origin || !Array.isArray(effect.traces) || effect.traces.length === 0) return;
+    this.broadcast({
+      t: MSG_S2C.SHOT_EFFECT,
+      sourceId: String(effect.sourceId || ''),
+      weaponId: String(effect.weaponId || ''),
+      shotToken: String(effect.shotToken || ''),
+      origin: {
+        x: Number(effect.origin.x || 0),
+        y: Number(effect.origin.y || 0),
+        z: Number(effect.origin.z || 0)
+      },
+      traces: effect.traces.slice(0, 8).map((trace) => ({
+        x: Number(trace && trace.x || 0),
+        y: Number(trace && trace.y || 0),
+        z: Number(trace && trace.z || 0),
+        pelletIndex: Number.isFinite(Number(trace && trace.pelletIndex)) ? Number(trace.pelletIndex) : 0,
+        hitType: trace && trace.hitType === 'head' ? 'head' : (trace && trace.hitType === 'body' ? 'body' : 'miss')
+      }))
+    });
   }
 
   buildLobbyBroadcastPayload() {
@@ -811,7 +827,7 @@ export class GlobalArenaRoom extends DurableObject {
       : null;
     const pose = rewoundPose || readCurrentPose(player, now) || {};
     const forward = combatEntityForward(rewoundPose || player, { normalize3 });
-    const logicalOrigin = logicalHitscanOriginFromEye({
+    const logicalOrigin = logicalMuzzleOriginFromEye({
       x: Number(pose.x || 0),
       y: Number(pose.y || PLAYER_EYE_HEIGHT_WU),
       z: Number(pose.z || 0)
@@ -950,6 +966,9 @@ export class GlobalArenaRoom extends DurableObject {
       const movementLocked = !!step.movementLocked;
       const activeWeaponId = String(player.weaponId || 'rifle');
       const activeWeaponStats = WEAPON_STATS[activeWeaponId] || WEAPON_STATS.rifle || {};
+      const collisionHeight = this.isEntityRolling(player, now)
+        ? Math.max(PLAYER_RADIUS_WU, PLAYER_HEIGHT_WU * Number(ROLL_CONTACT_CYLINDER_HEIGHT_SCALE || 0.3))
+        : PLAYER_HEIGHT_WU;
       stepAuthoritativeMovement(player, step.inputState || createMovementInputState(), {
         dtSec: Number(step.dtSec || 0),
         bounds: {
@@ -964,7 +983,7 @@ export class GlobalArenaRoom extends DurableObject {
         moveSpeedMultiplier: Number(activeWeaponStats.moveSpeedMultiplier || 1),
         adsMoveMultiplier: Number(activeWeaponStats.adsMoveMultiplier || GAMEPLAY_TUNING_WU.movement.adsMoveMult || 0.4),
         eyeHeight: PLAYER_EYE_HEIGHT_WU,
-        playerHeight: PLAYER_HEIGHT_WU,
+        playerHeight: collisionHeight,
         playerRadius: boundsPad,
         epsilon: WORLD_RAY_EPSILON
       });
@@ -992,9 +1011,42 @@ export class GlobalArenaRoom extends DurableObject {
 
   getAliveEntities() {
     const out = [];
-    for (const p of this.players.values()) if (p && p.alive && !this.isEntityDisconnected(p)) out.push(p);
+    const now = nowMs();
+    for (const p of this.players.values()) {
+      if (!p || !p.alive || this.isEntityDisconnected(p) || this.isEntityMatchEntryPending(p, now)) continue;
+      out.push(p);
+    }
     for (const b of this.bots.values()) if (b && b.alive) out.push(b);
     return out;
+  }
+
+  isEntityMatchEntryPending(entity, now = nowMs()) {
+    return isRoomEntityMatchEntryPending(entity, now);
+  }
+
+  beginEntityMatchEntry(entity) {
+    return beginRoomEntityMatchEntry(this, entity, {
+      nowMs,
+      matchEntryWindowMs: MATCH_ENTRY_WINDOW_MS,
+      playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
+    });
+  }
+
+  activateEntityMatchEntry(entity) {
+    return activateRoomEntityMatchEntry(this, entity, {
+      nowMs,
+      playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
+    });
+  }
+
+  handleEnterMatch(player) {
+    return this.activateEntityMatchEntry(player);
+  }
+
+  canViewerReceiveEntity(viewer, entity) {
+    if (!entity) return false;
+    if (viewer && entity.id === viewer.id) return true;
+    return !this.isEntityMatchEntryPending(entity, nowMs());
   }
 
   isEntitySpawnShielded(entity) {
@@ -1022,28 +1074,11 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  readClassAimPoint(player, rawAimPoint, maxRange) {
-    return readCombatClassAimPoint(this, player, rawAimPoint, maxRange, {
-      distance3,
-      normalize3,
-      dot3,
-      playerEyeHeight: PLAYER_EYE_HEIGHT_WU
-    });
-  }
-
   clampWorldAimPoint(origin, desiredPoint, maxRange) {
     return clampCombatWorldAimPoint(this, origin, desiredPoint, maxRange, {
       normalize3,
       worldRayEpsilon: WORLD_RAY_EPSILON
     });
-  }
-
-  isEntityChoked(entity, now = nowMs()) {
-    return isCombatEntityChoked(entity, now);
-  }
-
-  isEntityJustBeenHooked(entity, now = nowMs()) {
-    return isCombatEntityJustBeenHooked(entity, now);
   }
 
   isEntityActionRestricted(entity, actionType, now = nowMs()) {
@@ -1056,10 +1091,6 @@ export class GlobalArenaRoom extends DurableObject {
 
   canEntityUseThrowable(entity, now = nowMs()) {
     return canCombatEntityUseThrowable(this, entity, now);
-  }
-
-  canEntityUseAbility(entity, now = nowMs()) {
-    return canCombatEntityUseAbility(this, entity, now);
   }
 
   isEntityMovementLocked(entity, now = nowMs()) {
@@ -1099,33 +1130,8 @@ export class GlobalArenaRoom extends DurableObject {
     return applyCombatTimedSlow(target, durationSec, multiplier, { nowMs });
   }
 
-  applyJustBeenHooked(target, durationSec) {
-    return applyCombatJustBeenHooked(target, durationSec, { nowMs });
-  }
-
-  pullEntityToward(player, target, pullDistance, pullSpeed, stunDuration = 1.0) {
-    return pullCombatEntityToward(player, target, pullDistance, pullSpeed, stunDuration, { nowMs });
-  }
-
   closestHostileInRange(player, range, minDot) {
     return closestCombatHostileInRange(this, player, range, minDot);
-  }
-
-  resolveLockedHostile(player, lockTargetId, range, minDot, options = null) {
-    return resolveCombatLockedHostile(this, player, lockTargetId, range, minDot, options, {
-      distance3,
-      normalize3,
-      dot3,
-      playerEyeHeight: PLAYER_EYE_HEIGHT_WU
-    });
-  }
-
-  deadeyeCandidates(player, range, minDot, maxTargets) {
-    return deadeyeCombatCandidates(this, player, range, minDot, maxTargets);
-  }
-
-  resolveClassAimPoint(player, msg, maxRange) {
-    return resolveCombatClassAimPoint(this, player, msg, maxRange, { addScaled3 });
   }
 
   handleFire(player, msg) {
@@ -1133,8 +1139,10 @@ export class GlobalArenaRoom extends DurableObject {
       nowMs,
       weaponStats: WEAPON_STATS,
       weaponFalloff: WEAPON_FALLOFF,
+      resolveHitscanTrace,
       resolveHitscanShot,
       applyDamageFromSource,
+      broadcastShotEffect: (arenaRoom, effect) => arenaRoom.broadcastShotEffect(effect),
       broadcastDamageEvent,
       broadcastDeathRespawn,
       canEquipWeaponId,
@@ -1220,14 +1228,6 @@ export class GlobalArenaRoom extends DurableObject {
     return applyCombatPlasmaStreamHeat(player, profile, now, { clamp });
   }
 
-  handleClassQueue(player, msg, ws) {
-    return handleCombatClassQueue(this, player, msg, ws, {
-      normalizeAbilityId,
-      msgClassChanged: MSG_S2C.CLASS_CHANGED,
-      defaultAbilityId: DEFAULT_ABILITY_ID
-    });
-  }
-
   handleThrow(player, msg, ws) {
     return handleCombatThrow(this, player, msg, ws, {
       normalizeThrowPayload,
@@ -1243,7 +1243,6 @@ export class GlobalArenaRoom extends DurableObject {
     return handleRoomSocketMessage(this, ws, message, {
       safeJsonParse,
       nowMs,
-      handleClassCast,
       isPrivateMatchRoom,
       roomPhaseActive: ROOM_PHASE_ACTIVE,
       msgC2s: MSG_C2S,
@@ -1296,8 +1295,13 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   tickPlayers(dtSec) {
-    return tickRoomPlayers(this, dtSec, {
-      tickClassAbilityState
+    return tickRoomPlayers(this, dtSec, {});
+  }
+
+  tickEntityMatchEntries() {
+    return tickRoomEntityMatchEntries(this, {
+      nowMs,
+      playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
     });
   }
 
@@ -1328,6 +1332,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.maybeResetPublicMatch();
     this.syncRoomFixtures();
     this.startPublicMatchIfReady();
+    this.tickEntityMatchEntries();
     this.tickPlayers(dtSec);
     tickBots(this, dtSec);
     this.recordAliveEntityPoseHistories(now);

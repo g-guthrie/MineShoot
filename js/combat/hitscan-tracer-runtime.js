@@ -5,7 +5,7 @@
 (function () {
     'use strict';
 
-    function create() {
+    function createTracerRuntime() {
         var tracerMaxCount = 96;
         var tracerPool = [];
         var tracerCursor = 0;
@@ -42,7 +42,7 @@
                 transparent: true,
                 opacity: 1.0,
                 depthWrite: false,
-                depthTest: false
+                depthTest: true
             });
             tracerInstancedMesh = new THREE.InstancedMesh(geo, mat, tracerMaxCount);
             tracerInstancedMesh.frustumCulled = false;
@@ -194,8 +194,13 @@
         };
     }
 
+    var tracerRuntimeSingleton = createTracerRuntime();
+
     globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
+    globalThis.__MAYHEM_RUNTIME.GameWorldTracerFx = tracerRuntimeSingleton;
     globalThis.__MAYHEM_RUNTIME.GameHitscanTracerRuntime = {
-        create: create
+        create: function () {
+            return tracerRuntimeSingleton;
+        }
     };
 })();

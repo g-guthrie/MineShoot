@@ -60,69 +60,6 @@
         return ghost;
     }
 
-    function createChokeTendril(angle, radius, tipLift, material) {
-        var baseX = Math.cos(angle) * radius;
-        var baseZ = Math.sin(angle) * radius * 0.8;
-        var curl = 0.08 + (tipLift * 0.01);
-        var curve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(baseX * 0.55, 1.78, baseZ * 0.55),
-            new THREE.Vector3(baseX, 1.98 + (tipLift * 0.03), baseZ),
-            new THREE.Vector3(
-                (baseX * 0.7) - (Math.sin(angle) * curl),
-                2.18 + (tipLift * 0.08),
-                (baseZ * 0.7) + (Math.cos(angle) * curl)
-            ),
-            new THREE.Vector3(-baseX * 0.08, 2.42 + tipLift, -baseZ * 0.08)
-        ]);
-        return new THREE.Mesh(
-            new THREE.TubeGeometry(curve, 18, 0.026, 6, false),
-            material.clone()
-        );
-    }
-
-    function createChokeFx() {
-        var group = new THREE.Group();
-        var glowMat = new THREE.MeshBasicMaterial({
-            color: 0xff6a7a,
-            transparent: true,
-            opacity: 0,
-            depthWrite: false
-        });
-        var ringMat = new THREE.MeshBasicMaterial({
-            color: 0xff8a96,
-            transparent: true,
-            opacity: 0,
-            wireframe: true,
-            depthWrite: false
-        });
-
-        var neckGrip = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.022, 6, 24), glowMat.clone());
-        neckGrip.position.set(0, 1.68, 0.02);
-        neckGrip.rotation.x = Math.PI * 0.5;
-        group.add(neckGrip);
-
-        var neckHalo = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.014, 5, 24), ringMat.clone());
-        neckHalo.position.set(0, 1.76, 0.01);
-        neckHalo.rotation.x = Math.PI * 0.5;
-        group.add(neckHalo);
-
-        var tendrils = [];
-        for (var i = 0; i < 4; i++) {
-            var angle = (i / 4) * Math.PI * 2;
-            var tendril = createChokeTendril(angle, 0.23 + ((i % 2) * 0.04), i * 0.03, glowMat);
-            group.add(tendril);
-            tendrils.push(tendril);
-        }
-
-        group.visible = false;
-        group.userData.parts = {
-            neckGrip: neckGrip,
-            neckHalo: neckHalo,
-            tendrils: tendrils
-        };
-        return group;
-    }
-
     function disposeMaterials(materials) {
         if (!Array.isArray(materials)) return;
         var seen = [];
@@ -258,8 +195,6 @@
         if (revealGhost) {
             root.add(revealGhost);
         }
-        var chokeFx = createChokeFx();
-        root.add(chokeFx);
         if (revealGhost && revealGhost.userData) {
             revealState.materials = Array.isArray(revealGhost.userData.revealMaterials) ? revealGhost.userData.revealMaterials : [];
             revealState.baseOpacity = Number(revealGhost.userData.baseOpacity || 0.26);
@@ -347,7 +282,12 @@
                 }
             }
             if (movementCollider) {
-                var colliderHeight = Math.max(0.05, Number(entityConstants.PLAYER_HEIGHT || movementCollider.userData.height || 2.8));
+                var baseColliderHeight = Math.max(0.05, Number(entityConstants.PLAYER_HEIGHT || movementCollider.userData.height || 2.8));
+                var rollHeightScale = Math.max(0.05, Number(entityConstants.ROLL_CONTACT_CYLINDER_HEIGHT_SCALE || 0.3));
+                var colliderHeight = combatHitboxState.rolling
+                    ? Math.max(Number(entityConstants.PLAYER_RADIUS || movementCollider.userData.radius || 0.5), baseColliderHeight * rollHeightScale)
+                    : baseColliderHeight;
+                movementCollider.scale.set(1, colliderHeight / Math.max(0.0001, baseColliderHeight), 1);
                 movementCollider.position.set(rootPosition.x, rootPosition.y + (colliderHeight * 0.5), rootPosition.z);
             }
         }
@@ -432,38 +372,6 @@
             }
         }
 
-        function setChokeFxState(active, startedAt) {
-            if (!chokeFx || !chokeFx.userData || !chokeFx.userData.parts) return;
-            var parts = chokeFx.userData.parts;
-            chokeFx.visible = !!active && alive;
-            if (!chokeFx.visible) return;
-
-            var stamp = Date.now();
-            var phase = startedAt ? ((stamp - startedAt) * 0.014) : (stamp * 0.014);
-            var pulse = 0.62 + (Math.sin(phase * 1.7) * 0.18);
-            var ringPulse = 0.84 + (Math.sin(phase * 1.3) * 0.12);
-
-            parts.neckGrip.material.opacity = 0.2 + (pulse * 0.18);
-            parts.neckGrip.scale.set(0.95 + (pulse * 0.08), 0.95 + (pulse * 0.08), 1);
-
-            parts.neckHalo.material.opacity = 0.18 + (pulse * 0.12);
-            parts.neckHalo.scale.set(ringPulse, ringPulse, 1);
-            parts.neckHalo.rotation.z = Math.sin(phase * 0.8) * 0.22;
-
-            for (var i = 0; i < parts.tendrils.length; i++) {
-                var tendril = parts.tendrils[i];
-                var tendrilPhase = phase + (i * 1.35);
-                tendril.position.y = Math.sin(tendrilPhase * 1.2) * 0.04;
-                tendril.rotation.y = Math.sin(tendrilPhase * 0.55) * 0.16;
-                tendril.scale.set(
-                    0.96 + (Math.sin(tendrilPhase * 1.6) * 0.05),
-                    0.94 + (pulse * 0.12),
-                    0.96 + (Math.cos(tendrilPhase * 1.4) * 0.05)
-                );
-                tendril.material.opacity = 0.14 + (0.12 * (1 + Math.sin(tendrilPhase * 1.9)));
-            }
-        }
-
         function destroy() {
             if (destroyed) return;
             destroyed = true;
@@ -473,7 +381,6 @@
             if (movementCollider && movementCollider.parent) movementCollider.parent.remove(movementCollider);
             if (rigApi && rigApi.dispose) rigApi.dispose();
             disposeMaterials(revealState.materials);
-            disposeObjectResources(chokeFx);
             disposeObjectResources(bodyHitbox);
             disposeObjectResources(headHitbox);
             disposeObjectResources(movementCollider);
@@ -507,7 +414,6 @@
             if (rigApi && rigApi.updateAnimation) {
                 rigApi.updateAnimation(dt, animState);
             }
-            setChokeFxState(!!(animState && animState.choked), Number(animState && animState.startedAt || 0));
         }
 
         function triggerAction(action, options) {
@@ -536,7 +442,6 @@
             headHitbox: headHitbox,
             movementCollider: movementCollider,
             revealGhost: revealGhost,
-            chokeFx: chokeFx,
             syncHitboxes: syncHitboxes,
             setPosition: setPosition,
             setYaw: setYaw,
@@ -546,7 +451,6 @@
             setDamageFlash: setDamageFlash,
             setSpawnShield: setSpawnShield,
             setRevealGhostState: setRevealGhostState,
-            setChokeFxState: setChokeFxState,
             setHitboxVisibility: setHitboxVisibility,
             setWeapon: setWeapon,
             updateAnimation: updateAnimation,

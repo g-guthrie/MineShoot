@@ -138,14 +138,7 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
     ['button', 'throwable-slot-summary'],
     ['div', 'throwable-slot-panel'],
     ['div', 'throwable-slot-title'],
-    ['div', 'throwable-choice-grid'],
-    ['button', 'ability-slot-summary'],
-    ['div', 'ability-slot-panel'],
-    ['div', 'ability-slot-title'],
-    ['div', 'ability-slot-buttons'],
-    ['button', 'ability-slot-primary'],
-    ['button', 'ability-slot-secondary'],
-    ['div', 'ability-choice-grid']
+    ['div', 'throwable-choice-grid']
   ];
 
   for (const [tagName, id] of ids) {
@@ -154,7 +147,6 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
 
   documentObj.elements['weapon-slot-panel'].hidden = true;
   documentObj.elements['throwable-slot-panel'].hidden = true;
-  documentObj.elements['ability-slot-panel'].hidden = true;
   documentObj.elements['loadout-collapsed-row'].hidden = true;
 
   const windowObj = {
@@ -182,26 +174,13 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
         order: ['frag', 'plasma'],
         frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' },
         plasma: { id: 'plasma', label: 'Plasma', previewType: 'none' }
-      },
-      abilityCatalog: {
-        choke: { id: 'choke', name: 'Choke' },
-        missile: { id: 'missile', name: 'Missile' },
-        hook: { id: 'hook', name: 'Hook' },
-        deadeye: { id: 'deadeye', name: 'Deadeye' }
-      },
-      defaultAbilityId: 'deadeye'
+      }
     },
     getSelectableWeaponIds() {
       return ['machinegun', 'shotgun', 'rifle'];
     },
     getDefaultWeaponLoadout() {
       return ['rifle', 'shotgun'];
-    },
-    getDefaultAbilityId() {
-      return 'deadeye';
-    },
-    normalizeAbilityId(abilityId) {
-      return String(abilityId || 'deadeye');
     },
     getDefaultThrowableId() {
       return 'frag';
@@ -284,77 +263,40 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
   };
 }
 
-test('loadout starts expanded, collapses to summaries, and reopens on reload', async () => {
+test('loadout initializes the active weapons and throwable panels', async () => {
   const storage = new Map();
   const harness = await loadMenuLoadoutHarness({ storageMap: storage });
   const { elements, runtime } = harness;
 
-  assert.equal(elements['loadout-expanded-shell'].hidden, false);
-  assert.equal(elements['loadout-collapsed-row'].hidden, true);
   assert.equal(elements['weapon-slot-title'].textContent, 'Weapons');
   assert.equal(elements['throwable-slot-title'].textContent, 'Throwables');
-  assert.equal(elements['ability-slot-title'].textContent, 'Abilities');
-  assert.equal(elements['loadout-collapse-btn'].textContent, 'Collapse');
-  assert.equal(elements['loadout-collapse-btn'].attributes['aria-expanded'], 'true');
   assert.equal(runtime.GameMenuLoadout.getExpandedSection(), 'all');
-
-  elements['loadout-collapse-btn'].click();
-
-  assert.equal(elements['loadout-expanded-shell'].hidden, true);
-  assert.equal(elements['loadout-collapsed-row'].hidden, false);
-  assert.equal(elements['loadout-collapse-btn'].textContent, 'open loadout');
-  assert.equal(elements['loadout-collapse-btn'].attributes['aria-expanded'], 'false');
-  assert.match(elements['weapon-slot-summary'].textContent, /^Weapons:/);
-  assert.match(elements['throwable-slot-summary'].textContent, /^Throwable:/);
-  assert.match(elements['ability-slot-summary'].textContent, /^Abilities:/);
-  assert.equal(runtime.GameMenuLoadout.getExpandedSection(), '');
-
-  const persistedHarness = await loadMenuLoadoutHarness({ storageMap: storage });
-  assert.equal(persistedHarness.elements['loadout-expanded-shell'].hidden, false);
-  assert.equal(persistedHarness.elements['loadout-collapsed-row'].hidden, true);
-  assert.equal(persistedHarness.elements['loadout-collapse-btn'].textContent, 'Collapse');
-
-  persistedHarness.elements['loadout-collapse-btn'].click();
-  assert.equal(persistedHarness.elements['loadout-expanded-shell'].hidden, true);
-  assert.equal(persistedHarness.elements['loadout-collapse-btn'].textContent, 'open loadout');
-  persistedHarness.elements['loadout-collapse-btn'].click();
-  assert.equal(persistedHarness.elements['loadout-expanded-shell'].hidden, false);
-  assert.equal(persistedHarness.elements['loadout-collapse-btn'].textContent, 'Collapse');
-  persistedHarness.elements['loadout-collapse-btn'].click();
-  persistedHarness.elements['weapon-slot-summary'].click();
-  assert.equal(persistedHarness.elements['loadout-expanded-shell'].hidden, false);
-  assert.equal(persistedHarness.elements['loadout-collapse-btn'].textContent, 'Collapse');
 });
 
-test('loadout updates collapsed summary pills after selections change', async () => {
+test('loadout runtime snapshot updates after weapon and throwable selections change', async () => {
   const harness = await loadMenuLoadoutHarness();
-  const { elements, runtime } = harness;
+  const { elements, runtime, throwableSelectionCalls, abilityLoadoutCalls, netAbilityLoadoutCalls } = harness;
 
   const machinegunChoice = findByDataset(elements['weapon-choice-grid'], 'weaponId', 'machinegun');
   const rifleChoice = findByDataset(elements['weapon-choice-grid'], 'weaponId', 'rifle');
   const plasmaChoice = findByDataset(elements['throwable-choice-grid'], 'throwableId', 'plasma');
-  const hookChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
 
   assert.ok(machinegunChoice);
   assert.ok(rifleChoice);
   assert.ok(plasmaChoice);
-  assert.ok(hookChoice);
 
   machinegunChoice.click();
   rifleChoice.click();
   plasmaChoice.click();
-  hookChoice.click();
-  elements['loadout-collapse-btn'].click();
 
   const snapshot = runtime.GameMenuLoadout.getRuntimeSnapshot();
 
   assert.deepEqual(Array.from(snapshot.weaponSlots), ['machinegun', 'rifle']);
   assert.equal(snapshot.selectedThrowableId, 'plasma');
-  assert.equal(snapshot.selectedAbilityId, 'hook');
-  assert.match(elements['weapon-slot-summary'].textContent, /Machinegun/i);
-  assert.match(elements['weapon-slot-summary'].textContent, /Rifle/i);
-  assert.match(elements['throwable-slot-summary'].textContent, /Plasma/i);
-  assert.match(elements['ability-slot-summary'].textContent, /Hook/i);
+  assert.equal(Object.prototype.hasOwnProperty.call(snapshot, 'selectedAbilityId'), false);
+  assert.equal(throwableSelectionCalls.at(-1), 'plasma');
+  assert.deepEqual(abilityLoadoutCalls, []);
+  assert.deepEqual(netAbilityLoadoutCalls, []);
 });
 
 test('weapon draft stays local until the second pick commits the selected loadout', async () => {
@@ -389,28 +331,12 @@ test('weapon draft stays local until the second pick commits the selected loadou
   assert.deepEqual(netWeaponLoadoutCalls, [['machinegun', 'rifle']]);
 });
 
-test('abilities use a single active option in the shared grid', async () => {
+test('loadout runtime snapshot only exposes weapons and throwables', async () => {
   const harness = await loadMenuLoadoutHarness();
   const { elements, runtime } = harness;
 
-  const chokeChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'choke');
-  const hookChoice = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
-
-  assert.ok(chokeChoice);
-  assert.ok(hookChoice);
-  assert.equal(runtime.GameMenuLoadout.getSelectedAbilityId(), 'deadeye');
-  assert.ok(!classTokens(chokeChoice).includes('active'));
-  assert.ok(!classTokens(hookChoice).includes('active'));
-
-  hookChoice.click();
-
-  const loadout = runtime.GameMenuLoadout.getAbilityLoadout();
-  const chokeAfter = findByDataset(elements['ability-choice-grid'], 'abilityId', 'choke');
-  const hookAfter = findByDataset(elements['ability-choice-grid'], 'abilityId', 'hook');
-
-  assert.equal(loadout.abilityId, 'hook');
-  assert.ok(!classTokens(chokeAfter).includes('active'));
-  assert.ok(classTokens(hookAfter).includes('active'));
+  const snapshot = runtime.GameMenuLoadout.getRuntimeSnapshot();
+  assert.equal(Object.prototype.hasOwnProperty.call(snapshot, 'selectedAbilityId'), false);
 });
 
 test('menu loadout resolves shared defaults after GameShared arrives post-load', async () => {
@@ -420,10 +346,7 @@ test('menu loadout resolves shared defaults after GameShared arrives post-load',
   harness.runtime.GameMenuLoadout.init();
 
   assert.deepEqual(Array.from(harness.runtime.GameMenuLoadout.getWeaponSlots()), ['rifle', 'shotgun']);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(harness.runtime.GameMenuLoadout.getAbilityLoadout())),
-    { abilityId: 'deadeye' }
-  );
+  assert.equal(Object.prototype.hasOwnProperty.call(harness.runtime.GameMenuLoadout.getRuntimeSnapshot(), 'selectedAbilityId'), false);
 });
 
 test('menu loadout normalizes the committed pair from remaining valid weapons when defaults are incomplete', async () => {
@@ -438,22 +361,13 @@ test('menu loadout normalizes the committed pair from remaining valid weapons wh
           order: ['frag'],
           frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' }
         },
-        abilityCatalog: {
-          deadeye: { id: 'deadeye', name: 'Deadeye' }
-        },
-        defaultAbilityId: 'deadeye'
+        
       },
       getSelectableWeaponIds() {
         return ['machinegun', 'rifle'];
       },
       getDefaultWeaponLoadout() {
         return ['machinegun', 'shotgun'];
-      },
-      getDefaultAbilityId() {
-        return 'deadeye';
-      },
-      normalizeAbilityId(abilityId) {
-        return String(abilityId || 'deadeye');
       },
       getDefaultThrowableId() {
         return 'frag';
@@ -481,22 +395,13 @@ test('menu loadout skips weapon runtime sync when the selectable set cannot fill
           order: ['frag'],
           frag: { id: 'frag', label: 'Frag', previewType: 'trajectory' }
         },
-        abilityCatalog: {
-          deadeye: { id: 'deadeye', name: 'Deadeye' }
-        },
-        defaultAbilityId: 'deadeye'
+        
       },
       getSelectableWeaponIds() {
         return ['machinegun'];
       },
       getDefaultWeaponLoadout() {
         return ['machinegun', 'shotgun'];
-      },
-      getDefaultAbilityId() {
-        return 'deadeye';
-      },
-      normalizeAbilityId(abilityId) {
-        return String(abilityId || 'deadeye');
       },
       getDefaultThrowableId() {
         return 'frag';
@@ -512,5 +417,5 @@ test('menu loadout skips weapon runtime sync when the selectable set cannot fill
   assert.deepEqual(harness.playerLoadoutCalls, []);
   assert.deepEqual(harness.netWeaponLoadoutCalls, []);
   assert.equal(harness.throwableSelectionCalls.at(-1), 'frag');
-  assert.equal(harness.abilityLoadoutCalls.at(-1), 'deadeye');
+  assert.deepEqual(harness.abilityLoadoutCalls, []);
 });

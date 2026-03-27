@@ -160,7 +160,6 @@ export const gameplayTuning = {
     throwIntentDirectionMinDot: -0.2
   },
   classPresets: {
-    abilities: { armorMax: 100, wallhackRadius: 90 },
     ffa: { armorMax: 100, wallhackRadius: 90 }
   },
   weaponStats: {
@@ -409,45 +408,11 @@ export const gameplayTuning = {
       id: 'knife', label: 'Knife', previewType: 'none', speed: 28, upward: 1.2, gravity: 7, life: 1.6, hitRadius: 0.5, bodyDamage: 90, headDamage: 180, regen: 8,
       armorBufferMode: 'normal'
     }
-  },
-  abilityCatalog: {
-    choke: {
-      id: 'choke', slot: 'ability', name: 'Vader Choke',
-      description: 'Single-target lift and stun in reticle box.',
-      debugSummary: 'Square = choke target box.',
-      tunableParams: ['lockBoxPx', 'range', 'targetTolerance', 'duration', 'liftHeight', 'tickRate', 'dotPerTick'],
-      cooldownMs: 18000, range: 26, minDot: 0.08, duration: 1.25,
-      liftHeight: 1.6, tickRate: 0.25, dotPerTick: 0, castDamage: 0, lockBoxPx: 280, targetTolerance: 1.35
-    },
-    hook: {
-      id: 'hook', slot: 'either', name: 'Chain Hook',
-      description: 'Latch a target and yank them into close range.',
-      debugSummary: 'Circle = hook catch radius debug.',
-      tunableParams: ['reticleRadiusPx', 'catchRadius', 'range', 'travelSpeed', 'pullSpeed', 'pullDistance', 'castDamage', 'cooldownMs'],
-      cooldownMs: 14000, range: 22, minDot: 0.04, pullDistance: 4.0,
-      stunDuration: 0.5, castDamage: 20, lockBoxPx: 150, reticleRadiusPx: 68, catchRadius: 1.8, travelSpeed: 26, pullSpeed: 20
-    },
-    missile: {
-      id: 'missile', slot: 'either', name: 'Missile',
-      description: 'Fast guided micro-rocket that bends toward nearby targets.',
-      debugSummary: 'Fires from muzzle and gently seeks toward nearby hostile hitboxes.',
-      tunableParams: ['range', 'cooldownMs', 'damage', 'radius', 'travelSpeed', 'acquireRange', 'catchRadius', 'lockHalfAngleDeg', 'homingBoost', 'homingLerp'],
-      cooldownMs: 7500, range: 36, damage: 70, radius: 2.0, travelSpeed: 34, acquireRange: 6.0, catchRadius: 1.1,
-      lockHalfAngleDeg: 10, homingBoost: 4.5, homingLerp: 6.0, gravity: 0.7, fuse: 1.1
-    },
-    deadeye: {
-      id: 'deadeye', name: 'Deadeye',
-      description: 'Lock and execute marked targets.',
-      debugSummary: 'Rectangle = deadeye acquisition FOV approximation.',
-      tunableParams: ['range', 'minDot', 'duration', 'maxTargets', 'damage', 'cooldownMs'],
-      cooldownMs: 20000, range: 60, duration: 1.6, maxTargets: 2, minDot: 0.28, damage: 160, lockBoxPx: 220
-    }
-  },
-  defaultAbilityId: 'deadeye'
+  }
 };
 
 export function getClassPreset(classId) {
-  return gameplayTuning.classPresets[classId] || gameplayTuning.classPresets.abilities;
+  return gameplayTuning.classPresets[classId] || gameplayTuning.classPresets.ffa;
 }
 
 export function getSurvivabilityTuning() {
@@ -737,14 +702,6 @@ export function createWeaponAmmoRuntime(loadout, deps = {}) {
   return ammo;
 }
 
-export function getAbilityDef(abilityId) {
-  return (gameplayTuning.abilityCatalog && gameplayTuning.abilityCatalog[abilityId]) || null;
-}
-
-export function getAbilityCatalog() {
-  return gameplayTuning.abilityCatalog || {};
-}
-
 export function getDefaultThrowableId() {
   const throwables = gameplayTuning.throwables || {};
   const order = Array.isArray(throwables.order) ? throwables.order : Object.keys(throwables).filter((key) => key !== 'order');
@@ -757,21 +714,6 @@ export function normalizeThrowableId(requestedId) {
   const requested = String(requestedId || '');
   if (requested && order.indexOf(requested) >= 0 && throwables[requested]) return requested;
   return getDefaultThrowableId();
-}
-
-export function getDefaultAbilityId() {
-  const requested = String(gameplayTuning.defaultAbilityId || '');
-  const catalog = getAbilityCatalog();
-  if (requested && catalog[requested]) return requested;
-  const catalogIds = Object.keys(catalog);
-  return catalogIds.length ? catalogIds[0] : '';
-}
-
-export function normalizeAbilityId(requestedId) {
-  const catalog = getAbilityCatalog();
-  const requested = String(requestedId || '');
-  if (requested && catalog[requested]) return requested;
-  return getDefaultAbilityId();
 }
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});
@@ -795,10 +737,6 @@ runtime.GameShared.isSelectableWeaponId = isSelectableWeaponId;
 runtime.GameShared.normalizeWeaponLoadout = normalizeWeaponLoadout;
 runtime.GameShared.canWeaponLoadoutEquipId = canWeaponLoadoutEquipId;
 runtime.GameShared.createWeaponAmmoRuntime = createWeaponAmmoRuntime;
-runtime.GameShared.getAbilityDef = getAbilityDef;
-runtime.GameShared.getAbilityCatalog = getAbilityCatalog;
 runtime.GameShared.getDefaultThrowableId = getDefaultThrowableId;
 runtime.GameShared.normalizeThrowableId = normalizeThrowableId;
-runtime.GameShared.getDefaultAbilityId = getDefaultAbilityId;
-runtime.GameShared.normalizeAbilityId = normalizeAbilityId;
 runtime.GameShared.resolveWeaponAimProfile = resolveWeaponAimProfile;

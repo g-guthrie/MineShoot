@@ -315,7 +315,7 @@
         var group = new THREE.Group();
         var wood = getLambert({ color: 0x7c5a36 });
         var wrap = getLambert({ color: 0xc65b4d });
-        var hookMat = getLambert({ color: 0xa8b4c4 });
+        var metalTipMat = getLambert({ color: 0xa8b4c4 });
         var lineMat = getBasic({ color: 0xdfe8ef, transparent: true, opacity: 0.85 });
 
         add(group, box(0.06, 0.06, 1.18, wood), 0, 0.08, 0.04);
@@ -332,10 +332,10 @@
         line.rotation.z = -0.55;
         line.position.set(0.64, 0.4, -0.58);
         group.add(line);
-        var hook = box(0.04, 0.16, 0.04, hookMat);
-        hook.position.set(0.64, -0.18, -1.1);
-        hook.rotation.z = 0.28;
-        group.add(hook);
+        var metalTip = box(0.04, 0.16, 0.04, metalTipMat);
+        metalTip.position.set(0.64, -0.18, -1.1);
+        metalTip.rotation.z = 0.28;
+        group.add(metalTip);
         return finalize(group, 'item', 'fishingRod');
     }
 

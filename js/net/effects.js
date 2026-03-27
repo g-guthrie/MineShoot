@@ -77,10 +77,6 @@
             return opts.getPlayerCombatApi ? opts.getPlayerCombatApi() : null;
         }
 
-        function abilityFxApi() {
-            return opts.getAbilityFxApi ? opts.getAbilityFxApi() : null;
-        }
-
         function damagePointY(entityY) {
             return opts.damagePointY ? opts.damagePointY(entityY) : (entityY + 1.06);
         }
@@ -187,53 +183,13 @@
             return out;
         }
 
-        function getChokeVictimStateForEntity(entityId) {
-            var timing = connectionTiming();
-            var state = netState();
-            var entitiesApi = GameNetEntities();
-            var abilityFxView = abilityFxApi();
-            var emptyState = abilityFxView && abilityFxView.emptyChokeVictimState
-                ? abilityFxView.emptyChokeVictimState()
-                : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
-            function withLocalTimestamps(nextState) {
-                if (!nextState) return emptyState;
-                return {
-                    lift: Number(nextState.lift || 0),
-                    liftHeight: Number(nextState.liftHeight || 0),
-                    startedAt: timing && timing.toLocalClockTime ? timing.toLocalClockTime(nextState.startedAt) : Number(nextState.startedAt || 0),
-                    endsAt: timing && timing.toLocalClockTime ? timing.toLocalClockTime(nextState.endsAt) : Number(nextState.endsAt || 0)
-                };
-            }
-            if (!entityId) return emptyState;
-            var now = timing && timing.authoritativeNowMs ? timing.authoritativeNowMs() : Date.now();
-            var selfState = state && state.getSelfState ? state.getSelfState() : null;
-            var selfFx = abilityFxView && abilityFxView.readAbilityFx
-                ? abilityFxView.readAbilityFx(selfState)
-                : (selfState && selfState.abilityFx ? selfState.abilityFx : null);
-            var selfChokeVictim = selfFx && selfFx.chokeVictim ? selfFx.chokeVictim : null;
-            if (selfState && selfState.id === entityId && selfChokeVictim && selfChokeVictim.endsAt > now) {
-                return abilityFxView && abilityFxView.toChokeVictimVisualState
-                    ? withLocalTimestamps(abilityFxView.toChokeVictimVisualState(selfChokeVictim, now))
-                    : emptyState;
-            }
-            var renderMap = entitiesApi && entitiesApi.getRenderMap ? entitiesApi.getRenderMap() : null;
-            var render = renderMap ? renderMap.get(entityId) : null;
-            if (render && render.chokeVictimState && render.chokeVictimState.endsAt > now) {
-                return abilityFxView && abilityFxView.toChokeVictimVisualState
-                    ? withLocalTimestamps(abilityFxView.toChokeVictimVisualState(render.chokeVictimState, now))
-                    : emptyState;
-            }
-            return emptyState;
-        }
-
         return {
             flushPendingWeaponLoadout: flushPendingWeaponLoadout,
             clearRemoteWorldState: clearRemoteWorldState,
             applyPendingSpawnSync: applyPendingSpawnSync,
             damagePointForEntityId: damagePointForEntityId,
             markerPointForEntityId: markerPointForEntityId,
-            getRenderCoreWorldPosition: getRenderCoreWorldPosition,
-            getChokeVictimStateForEntity: getChokeVictimStateForEntity
+            getRenderCoreWorldPosition: getRenderCoreWorldPosition
         };
     };
 

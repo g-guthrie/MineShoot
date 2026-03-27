@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { logicalHitscanOriginFromEye } from '../../../shared/entity-points.js';
+import { logicalHitscanOriginFromEye, logicalMuzzleOriginFromEye } from '../../../shared/entity-points.js';
 
 import {
   beginWeaponReload,
   canTargetEntity,
-  deadeyeCandidates,
   handleFire,
   handleEquipWeapon,
   handleReload,
@@ -230,12 +229,11 @@ test('combat runtime handleReload rejects reload when weapon use is locked', () 
   assert.equal(player.weaponId, 'rifle');
 });
 
-test('combat runtime relies on generic weapon locks instead of a deadeye special case', () => {
+test('combat runtime relies on generic weapon locks instead of a custom special case', () => {
   const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -8 };
   const player = {
     id: 'p1',
     alive: true,
-    deadeye: { lockIndex: 1 },
     lastShotAt: {},
     weaponId: 'rifle'
   };
@@ -251,7 +249,7 @@ test('combat runtime relies on generic weapon locks instead of a deadeye special
     getAliveEntities() { return [target]; }
   };
 
-  handleFire(room, player, { weaponId: 'rifle', shotToken: 'deadeye-fire' }, {
+  handleFire(room, player, { weaponId: 'rifle', shotToken: 'special-fire' }, {
     nowMs: () => 200,
     weaponStats: { rifle: { cooldownMs: 100, magazineSize: 30 } },
     weaponFalloff: { rifle: [] },
@@ -791,6 +789,80 @@ test('combat runtime emits one authoritative shotgun damage event per pellet whi
   ]);
 });
 
+test('combat runtime broadcasts authoritative shot effects for world-space tracers', () => {
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'rifle'
+  };
+  const shotEffects = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return []; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'rifle',
+    shotToken: 'trace-1'
+  }, {
+    nowMs: () => 200,
+    weaponStats: {
+      rifle: {
+        cooldownMs: 100,
+        magazineSize: 10,
+        pellets: 1
+      }
+    },
+    weaponFalloff: { rifle: [] },
+    resolveHitscanShot() { return []; },
+    resolveHitscanTrace() {
+      return [{
+        hit: false,
+        hitType: 'miss',
+        pelletIndex: 0,
+        point: { x: 0, y: 1.7, z: -40 }
+      }];
+    },
+    applyDamageFromSource() { return null; },
+    broadcastShotEffect(_room, effect) { shotEffects.push(effect); },
+    broadcastDamageEvent() {},
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    authoritativeHitscanOrigin() {
+      return logicalMuzzleOriginFromEye({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0, z: -1 });
+    },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(shotEffects, [{
+    sourceId: 'p1',
+    weaponId: 'rifle',
+    shotToken: 'trace-1',
+    origin: logicalMuzzleOriginFromEye({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0, z: -1 }),
+    traces: [{
+      x: 0,
+      y: 1.7,
+      z: -40,
+      pelletIndex: 0,
+      hitType: 'miss'
+    }]
+  }]);
+});
+
 test('spawnProjectile uses the full aim vector so trajectory changes with pitch', () => {
   const room = {
     projectiles: new Map(),
@@ -896,31 +968,4 @@ test('combat runtime rejects invalid throwable ids without consuming charges', (
     reason: 'invalid_throwable'
   }]);
   assert.equal(player.throwables.frag.charges, 2);
-});
-
-test('deadeyeCandidates prefers the target closest to the player aim line over raw distance', () => {
-  const centered = { id: 'center', alive: true, x: 0, y: 1.7, z: -10 };
-  const offCenterNear = { id: 'near', alive: true, x: 3, y: 1.7, z: -5 };
-  const player = { id: 'p1', alive: true, x: 0, y: 1.7, z: 0, yaw: 0, pitch: 0 };
-  const room = {
-    hostilesInCone() {
-      return [
-        { entity: offCenterNear, dist: 5.83 },
-        { entity: centered, dist: 10 }
-      ];
-    },
-    entityAimTargetPosition(entity) {
-      return { x: entity.x, y: entity.y, z: entity.z };
-    },
-    entityForward() {
-      return { x: 0, y: 0, z: -1 };
-    },
-    hasWorldLineOfSight() {
-      return true;
-    }
-  };
-
-  const picks = deadeyeCandidates(room, player, 70, 0.22, 2);
-
-  assert.deepEqual(picks.map((item) => item.id), ['center', 'near']);
 });

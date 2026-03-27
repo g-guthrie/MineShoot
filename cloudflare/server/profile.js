@@ -12,7 +12,7 @@ function profileResponse(row, fallbackUsername = '') {
     displayName: row && row.display_name ? row.display_name : null,
     headline: row && row.headline ? row.headline : null,
     bio: row && row.bio ? row.bio : null,
-    classId: row && row.class_id ? row.class_id : 'abilities',
+    classId: row && row.class_id ? row.class_id : 'ffa',
     kills: row && typeof row.kills === 'number' ? row.kills : 0,
     deaths: row && typeof row.deaths === 'number' ? row.deaths : 0,
     damageDone: row && typeof row.damage_done === 'number' ? row.damage_done : 0,

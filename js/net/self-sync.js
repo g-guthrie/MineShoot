@@ -38,7 +38,6 @@
         var netApi = RT.GameNet || null;
         var netView = netApi && netApi.view ? netApi.view : null;
         var timingApi = netApi && netApi.timing ? netApi.timing : null;
-        var abilityFxView = RT.GameAbilityFx || null;
         var matchState = netView && netView.getMatchState
             ? netView.getMatchState()
             : null;
@@ -48,11 +47,6 @@
             : null;
         var weaponSnapshotChanged = selfState !== lastAppliedWeaponSnapshotRef;
         var respawnSnapshotChanged = respawnState !== lastAppliedRespawnSnapshotRef;
-        var selfAbilityFx = abilityFxView && abilityFxView.readAbilityFx
-            ? abilityFxView.readAbilityFx(selfState)
-            : ((selfState.abilityFx && typeof selfState.abilityFx === 'object')
-                ? selfState.abilityFx
-                : null);
 
         if (RT.GamePlayerCombat && RT.GamePlayerCombat.syncFromNetwork && (weaponSnapshotChanged || respawnSnapshotChanged)) {
             RT.GamePlayerCombat.syncFromNetwork(Object.assign({}, selfState, {
@@ -89,24 +83,15 @@
         }
 
         if (RT.GamePlayer && RT.GamePlayer.setStatusState) {
-            var selfChokeVictimState = abilityFxView && abilityFxView.toChokeVictimVisualState
-                ? abilityFxView.toChokeVictimVisualState(selfAbilityFx ? selfAbilityFx.chokeVictim : null, serverNow)
-                : { lift: 0, liftHeight: 0, startedAt: 0, endsAt: 0 };
             RT.GamePlayer.setStatusState({
                 stunUntil: toLocalTime(netApi, selfState.stunUntil),
-                hookPullStartedAt: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedStartedAt : 0),
-                hookPullUntil: toLocalTime(netApi, selfAbilityFx ? selfAbilityFx.hookedUntil : 0),
-                chokeStartedAt: toLocalTime(netApi, selfChokeVictimState.startedAt),
-                chokeUntil: toLocalTime(netApi, selfChokeVictimState.endsAt),
-                chokeLift: Number(selfChokeVictimState.liftHeight || 0),
                 spawnShieldUntil: toLocalTime(netApi, selfState.spawnShieldUntil)
             });
 
             if (RT.GamePlayer.setActionRestrictions) {
                 RT.GamePlayer.setActionRestrictions({
                     weaponUntil: toLocalTime(netApi, selfState.weaponLockUntil),
-                    throwableUntil: toLocalTime(netApi, selfState.throwableLockUntil),
-                    abilityUntil: toLocalTime(netApi, selfState.abilityLockUntil)
+                    throwableUntil: toLocalTime(netApi, selfState.throwableLockUntil)
                 });
             }
         }
@@ -114,12 +99,6 @@
         if (opts.skipMotionSync !== true) {
             if (RT.GameNetSelfMotionSync && RT.GameNetSelfMotionSync.syncPlayerMotion) {
                 RT.GameNetSelfMotionSync.syncPlayerMotion(opts.reconciliationState || selfState, dt);
-            } else if (
-                selfAbilityFx && Number(selfAbilityFx.hookedUntil || 0) > serverNow &&
-                RT.GamePlayer &&
-                RT.GamePlayer.applyAuthoritativeMotion
-            ) {
-                RT.GamePlayer.applyAuthoritativeMotion(selfState);
             } else if (
                 selfState.alive !== false &&
                 RT.GamePlayer &&
