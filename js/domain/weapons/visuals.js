@@ -162,10 +162,10 @@
                 rearExtent: 0.22
             },
             parts: {
-                receiver: { position: [0, 0.0, -0.06], size: [0.14, 0.1, 0.55], color: 0x333333 },
-                grip: { position: [0, -0.1, 0.02], size: [0.08, 0.14, 0.08], color: 0x7a512d },
-                barrel: { position: [0, 0.02, -0.36], size: [0.08, 0.08, 0.26], color: 0x222222 },
-                stock: { position: [0, -0.04, 0.14], size: [0.12, 0.11, 0.16], color: 0x7a512d }
+                receiver: { position: [0, 0.0, -0.06], size: [0.2352, 0.1792, 0.55], color: 0x333333 },
+                grip: { position: [0, -0.1, 0.02], size: [0.1344, 0.2352, 0.08], color: 0x7a512d },
+                barrel: { position: [0, 0.02, -0.36], size: [0.1456, 0.1456, 0.26], color: 0x222222 },
+                stock: { position: [0, -0.04, 0.14], size: [0.2128, 0.1904, 0.16], color: 0x7a512d }
             }
         }),
         pistol: ensurePlatform({
@@ -184,10 +184,10 @@
                 rearExtent: 0.08
             },
             parts: {
-                receiver: { position: [0, -0.02, -0.06], size: [0.105, 0.085, 0.385], color: 0x3a3a3a },
-                grip: { position: [0, -0.14, -0.01], size: [0.072, 0.154, 0.1], color: 0x6f4d32 },
-                barrel: { position: [0, 0.0, -0.24], size: [0.0544, 0.0544, 0.169], color: 0x2c2c2c },
-                stock: { position: [0, -0.05, 0.09], size: [0.0624, 0.0935, 0.1152], color: 0x6f4d32 }
+                receiver: { position: [0, -0.02, -0.06], size: [0.1848, 0.1512, 0.385], color: 0x3a3a3a },
+                grip: { position: [0, -0.14, -0.01], size: [0.12096, 0.2464, 0.1], color: 0x6f4d32 },
+                barrel: { position: [0, 0.0, -0.24], size: [0.1008, 0.1008, 0.169], color: 0x2c2c2c },
+                stock: { position: [0, -0.05, 0.09], size: [0.1134, 0.1596, 0.1152], color: 0x6f4d32 }
             }
         }),
         machinegun: ensurePlatform({
@@ -206,10 +206,10 @@
                 rearExtent: 0.22
             },
             parts: {
-                receiver: { position: [0, 0.0, -0.08], size: [0.1932, 0.105, 0.726], color: 0x2b2b2b },
-                grip: { position: [0, -0.11, 0.01], size: [0.08, 0.1512, 0.08], color: 0x565656 },
-                barrel: { position: [0, 0.03, -0.52], size: [0.0944, 0.08, 0.4212], color: 0x191919 },
-                stock: { position: [0, -0.03, 0.19], size: [0.144, 0.1155, 0.1888], color: 0x565656 }
+                receiver: { position: [0, 0.0, -0.08], size: [0.336, 0.1848, 0.726], color: 0x2b2b2b },
+                grip: { position: [0, -0.11, 0.01], size: [0.14, 0.2492, 0.08], color: 0x565656 },
+                barrel: { position: [0, 0.03, -0.52], size: [0.1708, 0.1456, 0.4212], color: 0x191919 },
+                stock: { position: [0, -0.03, 0.19], size: [0.2576, 0.196, 0.1888], color: 0x565656 }
             }
         }),
         shotgun: ensurePlatform({
@@ -228,11 +228,11 @@
                 rearExtent: 0.24
             },
             parts: {
-                receiver: { position: [0, 0.0, -0.1], size: [0.182, 0.106, 0.649], color: 0x6b4220 },
-                grip: { position: [0, -0.1, 0.02], size: [0.0816, 0.1484, 0.0816], color: 0x8a5a2d },
-                barrel: { position: [0, 0.02, -0.47], size: [0.156, 0.0896, 0.403], color: 0x222222 },
-                stock: { position: [0, -0.03, 0.21], size: [0.144, 0.1144, 0.1856], color: 0x8a5a2d },
-                underbarrel: { position: [0, -0.03, -0.33], size: [0.144, 0.08, 0.12], color: 0x8a5a2d }
+                receiver: { position: [0, 0.0, -0.1], size: [0.3304, 0.1904, 0.649], color: 0x6b4220 },
+                grip: { position: [0, -0.1, 0.02], size: [0.1428, 0.2408, 0.0816], color: 0x8a5a2d },
+                barrel: { position: [0, 0.02, -0.47], size: [0.2632, 0.1512, 0.403], color: 0x222222 },
+                stock: { position: [0, -0.03, 0.21], size: [0.2548, 0.196, 0.1856], color: 0x8a5a2d },
+                underbarrel: { position: [0, -0.03, -0.33], size: [0.2408, 0.14, 0.12], color: 0x8a5a2d }
             }
         }),
         sniper: ensurePlatform({
@@ -251,11 +251,11 @@
                 rearExtent: 0.34
             },
             parts: {
-                receiver: { position: [0, -0.01, -0.16], size: [0.1764, 0.09, 1.045], color: 0x2f3f2f },
-                grip: { position: [0, -0.11, 0.01], size: [0.08, 0.14, 0.08], color: 0x5d3c1f },
-                barrel: { position: [0, 0.02, -0.7], size: [0.064, 0.064, 0.767], color: 0x1c1c1c },
-                stock: { position: [0, -0.02, 0.22], size: [0.1392, 0.11, 0.2048], color: 0x5d3c1f },
-                optic: { position: [0, 0.09, -0.21], size: [0.09, 0.08, 0.23], color: 0x666666 }
+                receiver: { position: [0, -0.01, -0.16], size: [0.2996, 0.1624, 1.045], color: 0x2f3f2f },
+                grip: { position: [0, -0.11, 0.01], size: [0.14, 0.2352, 0.08], color: 0x5d3c1f },
+                barrel: { position: [0, 0.02, -0.7], size: [0.112, 0.112, 0.767], color: 0x1c1c1c },
+                stock: { position: [0, -0.02, 0.22], size: [0.2352, 0.1904, 0.2048], color: 0x5d3c1f },
+                optic: { position: [0, 0.09, -0.21], size: [0.1568, 0.14, 0.23], color: 0x666666 }
             }
         })
     };

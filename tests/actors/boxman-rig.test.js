@@ -1053,10 +1053,12 @@ test('boxman keeps the weapon mount anchored off the right lower arm with the sa
   assert.equal(mount.rootPos.z, -0.06);
   assert.ok(mount.rootRot.y > 0.2);
   assert.equal(mount.handleBack.z, 0.08);
-  assert.equal(mount.receiverSize.x, 0.14);
-  assert.equal(mount.receiverSize.y, 0.1);
+  assert.equal(mount.receiverSize.x, 0.2352);
+  assert.equal(mount.receiverSize.y, 0.1792);
   assert.equal(mount.receiverSize.z, 0.55);
   assert.equal(mount.barrelPos.z, -0.36);
+  assert.equal(mount.barrelSize.x, 0.1456);
+  assert.equal(mount.barrelSize.y, 0.1456);
   assert.equal(mount.barrelSize.z, 0.26);
   assert.ok(mount.muzzlePos.z < 0);
 });
@@ -1143,7 +1145,7 @@ test('boxman applies procedural weapon parts using the current hand-forward moun
   assert.equal(rig.weaponBarrel.visible, true);
   assert.equal(rig.weaponStock.visible, true);
   assert.ok(rig.weaponModel.position.y > 0);
-  assert.ok(Math.abs(rig.weaponModel.position.z) < 0.000001);
+  assert.equal(rig.weaponModel.position.z, -0.175);
   assert.ok(rig.weaponModel.rotation.x > ((Math.PI * 0.5) - (15 * (Math.PI / 180)) - 0.01));
   assert.ok(rig.weaponModel.rotation.x < ((Math.PI * 0.5) - (15 * (Math.PI / 180)) + 0.1));
   assert.ok(rig.weaponModel.rotation.y > 0);

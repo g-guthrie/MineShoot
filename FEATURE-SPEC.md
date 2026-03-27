@@ -17,17 +17,21 @@ The design priority is low complexity for strong frame pacing and network respon
 
 ## Mode Menu (Current)
 Menu buttons:
-1. `MULTIPLAYER`
-2. `SINGLEPLAYER DEV SERVER`
-3. `SINGLEPLAYER DEV LOCAL`
+1. `PUBLIC LOBBY`
+2. `PRIVATE CLOUDFLARE`
+3. `LOCAL MULTIPLAYER` (local-only)
+4. `OFFLINE SANDBOX`
 
 Behavior:
-- `MULTIPLAYER`:
-  - Runs networked mode with guest auth.
-  - Uses room from `?room=<id>` when provided, else `global`.
-- `SINGLEPLAYER DEV SERVER`:
-  - Runs networked mode against shared room `dev-local`.
-- `SINGLEPLAYER DEV LOCAL`:
+- `PUBLIC LOBBY`:
+  - Runs networked mode with public guest/account auth.
+  - Uses the shared public room flow rooted at `global`.
+- `PRIVATE CLOUDFLARE`:
+  - Runs networked mode against a private Cloudflare room for room-code and invite flows.
+- `LOCAL MULTIPLAYER`:
+  - Runs networked mode against the shared local worker room `local-shared`.
+  - Only appears in local environments.
+- `OFFLINE SANDBOX`:
   - Runs local simulation (bots/dev loop), no server authority.
 
 Menu/subtitle/debug text must always match the effective room ID for clarity.

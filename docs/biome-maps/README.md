@@ -2,6 +2,20 @@
 
 These ASCII maps are kept as checked-in reference artifacts from retired tooling.
 
+They do not mirror the live 3x3 runtime biome lineup anymore. The current intentional runtime grid is:
+
+1. `arctic`
+2. `volcano`
+3. `desert`
+4. `jungle`
+5. `pirate-cove`
+6. `nuclear`
+7. `quarry`
+8. `wall-street`
+9. `whoville`
+
+The table below is legacy reference material only.
+
 | Biome | Features | Occupied Cells | Hotspot | File |
 | --- | ---: | ---: | --- | --- |
 | Arctic | 67 | 45/196 (23.0%) | r0 c11 (4) | [arctic.txt](./arctic.txt) |

@@ -1028,7 +1028,7 @@ import {
         rig.weaponModel.position.set(
             Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
             Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
-            Number(mountPos[2] || 0) - Number(handleBack[2] || 0)
+            (Number(mountPos[2] || 0) - Number(handleBack[2] || 0)) - 0.175
         );
         rig.weaponModel.rotation.set(
             (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
@@ -1737,9 +1737,9 @@ import {
                 rootPos: { x: -0.04, y: 0.65, z: -0.06 },
                 rootRot: { x: 0.08 - (10 * (Math.PI / 180)), y: 0.22, z: 0 },
                 handleBack: { x: 0, y: -0.1, z: 0.08 },
-                receiverSize: { x: 0.14, y: 0.1, z: 0.55 },
+                receiverSize: { x: 0.2352, y: 0.1792, z: 0.55 },
                 barrelPos: { x: 0, y: 0.02, z: -0.36 },
-                barrelSize: { x: 0.08, y: 0.08, z: 0.26 },
+                barrelSize: { x: 0.1456, y: 0.1456, z: 0.26 },
                 muzzlePos: { x: 0, y: 0, z: -0.09 }
             };
         },

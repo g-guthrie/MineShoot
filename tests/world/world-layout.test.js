@@ -23,8 +23,7 @@ import {
   BIOME_JUNGLE,
   BIOME_NUCLEAR,
   BIOME_QUARRY,
-  BIOME_RADAR,
-  BIOME_URBAN,
+  BIOME_VOLCANO,
   DEFAULT_QUADRANT_MAP,
   WORLD_SIZE,
   quadrantBounds,
@@ -49,14 +48,14 @@ test('world layout expands to a 3x3 biome grid', () => {
     DEFAULT_QUADRANT_MAP.map((entry) => entry.biome),
     [
       BIOME_ARCTIC,
-      BIOME_RADAR,
+      BIOME_VOLCANO,
       BIOME_DESERT,
       BIOME_JUNGLE,
-      BIOME_CITADEL,
+      'pirate-cove',
       BIOME_NUCLEAR,
       BIOME_QUARRY,
       BIOME_WALL_STREET,
-      BIOME_URBAN
+      'whoville'
     ]
   );
 });

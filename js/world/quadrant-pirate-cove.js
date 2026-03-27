@@ -70,9 +70,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             crateBand:     lib.getLambert({ color: 0x5a3a1a }),
             // Kraken
             krakenBody:    lib.getLambert({ color: 0x6B2D8B }),
-            krakenDark:    lib.getLambert({ color: 0x4A1D6B }),
-            krakenEye:     lib.getLambert({ color: 0x111111 }),
-            krakenEyeWhite:lib.getLambert({ color: 0xDDDDCC })
+            krakenDark:    lib.getLambert({ color: 0x4A1D6B })
         };
         return MATS;
     }
@@ -476,21 +474,6 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var headGeo = new THREE.SphereGeometry(headR, CYLINDER_SEGMENTS, CYLINDER_SEGMENTS);
         td(place, 'kraken', { part: 'head' }, kx, headY, kz, headGeo, mats.krakenBody);
 
-        // Eyes — black X marks painted on the +X face (facing the ship)
-        // Paper-thin boxes flush against the sphere surface to look like paint
-        var eyeGap = 1.1;
-        var eyeY = headY + 0.6;
-        var eyeX = kx + headR - 0.05; // right at surface
-        var xLen = 0.8;
-        var xW = 0.18;
-        var xD = 0.01; // paper thin
-        // Left eye X (upper-left on face = +Z side)
-        tb(place, 'kraken', { part: 'eyeX-L-1' }, eyeX, eyeY, kz - eyeGap, xD, xLen, xW, mats.krakenEye, false);
-        tb(place, 'kraken', { part: 'eyeX-L-2' }, eyeX, eyeY, kz - eyeGap, xD, xW, xLen, mats.krakenEye, false);
-        // Right eye X (+Z side)
-        tb(place, 'kraken', { part: 'eyeX-R-1' }, eyeX, eyeY, kz + eyeGap, xD, xLen, xW, mats.krakenEye, false);
-        tb(place, 'kraken', { part: 'eyeX-R-2' }, eyeX, eyeY, kz + eyeGap, xD, xW, xLen, mats.krakenEye, false);
-
         // ── Tentacles ──
         // 8 single tapered cones emerging from water, radiating outward from head
         // 3 large, 3 medium, 2 small — all bases at water level
@@ -498,7 +481,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var PI2 = Math.PI * 2;
         var tentacles = [
             // Large (3) — ramp tentacle reaching toward boat, one slightly tilted, one full tilt
-            { dist: 8.0, angle: 0,                tilt: 0.55, topR: 0.25, botR: 0.9, height: 7.2, mat: 'krakenBody' },  // ramp toward boat
+            { dist: 7.2, angle: 0,                tilt: 0.46, topR: 0.34, botR: 0.9, height: 5.8, mat: 'krakenBody' },  // ramp toward boat
             { dist: 5.0, angle: PI2 * 3/8,       tilt: 0.20, topR: 0.15, botR: 0.7, height: 5.5, mat: 'krakenBody' },  // mostly upright
             { dist: 5.5, angle: PI2 * 5/8,       tilt: 0.60, topR: 0.15, botR: 0.7, height: 5.0, mat: 'krakenBody' },  // full outward
             // Medium (3) — two more upright, one outward

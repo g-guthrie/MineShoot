@@ -81,14 +81,14 @@ function createTestWorldLayout(options = {}) {
 function createFullGridLayout() {
   const biomes = [
     'arctic',
-    'radar',
+    'volcano',
     'desert',
     'jungle',
-    'citadel',
+    'pirate-cove',
     'nuclear',
     'quarry',
     'wall-street',
-    'urban'
+    'whoville'
   ];
   const cells = [];
   for (let row = 0; row < 3; row++) {
