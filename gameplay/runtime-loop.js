@@ -22,6 +22,9 @@
             runtime.GamePlayer.update(dt);
 
             var currentWeapon = runtime.GameHitscan.getCurrentWeapon();
+            var reticlePreview = (runtime.GameHitscan && runtime.GameHitscan.getReticleTargetPreview)
+                ? runtime.GameHitscan.getReticleTargetPreview(opts.getCamera ? opts.getCamera() : null)
+                : null;
             if (currentWeapon) {
                 if (opts.syncReticleWithWeapon) opts.syncReticleWithWeapon(currentWeapon);
                 if (runtime.GameUI && runtime.GameUI.updateWeaponInfo) {
@@ -49,7 +52,7 @@
                 });
             }
 
-            if (
+            var shouldAutoFireFromHeldTrigger = !!(
                 opts.controlsApi &&
                 opts.controlsApi.isTriggerHeld &&
                 opts.controlsApi.isTriggerHeld() &&
@@ -58,7 +61,18 @@
                 currentWeapon &&
                 currentWeapon.automatic &&
                 !runtime.GamePlayer.isSprinting()
-            ) {
+            );
+            var shouldAutoFireFromReticle = !!(
+                opts.hasInputCapture &&
+                opts.hasInputCapture() &&
+                currentWeapon &&
+                reticlePreview &&
+                reticlePreview.reticleTarget &&
+                reticlePreview.reticleTarget.active &&
+                !runtime.GamePlayer.isSprinting() &&
+                (!opts.controlsApi || !opts.controlsApi.hasArmedThrowablePreview || !opts.controlsApi.hasArmedThrowablePreview())
+            );
+            if (shouldAutoFireFromHeldTrigger || shouldAutoFireFromReticle) {
                 if (opts.tryPlayerFire) opts.tryPlayerFire();
             }
 

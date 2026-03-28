@@ -78,25 +78,9 @@ canvas {
     right: max(14px, env(safe-area-inset-right));
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 12px;
     pointer-events: none;
-}
-
-.touch-gesture-hint {
-    max-width: min(68vw, 560px);
-    padding: 11px 14px;
-    border: 1px solid rgba(214, 243, 222, 0.26);
-    border-radius: 16px;
-    background: rgba(10, 18, 12, 0.46);
-    color: rgba(239, 255, 242, 0.92);
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: 0.04em;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
 }
 
 .touch-rotate-prompt {
@@ -140,18 +124,30 @@ canvas {
     position: absolute;
     left: max(14px, env(safe-area-inset-left));
     bottom: max(18px, env(safe-area-inset-bottom));
-    width: 138px;
-    height: 138px;
+    width: 224px;
+    height: 224px;
     pointer-events: auto;
     touch-action: none;
 }
 
+.touch-stick-outer,
 .touch-stick-ring {
     position: relative;
-    width: 104px;
-    height: 104px;
-    margin: 17px;
     border-radius: 50%;
+}
+
+.touch-stick-outer {
+    position: absolute;
+    inset: 12px;
+    border: 2px solid rgba(102, 183, 255, 0.42);
+    background: rgba(22, 52, 90, 0.12);
+    box-shadow: inset 0 0 22px rgba(47, 126, 214, 0.14);
+}
+
+.touch-stick-ring {
+    width: 156px;
+    height: 156px;
+    margin: 34px;
     border: 1px solid rgba(198, 235, 211, 0.34);
     background: rgba(8, 18, 11, 0.22);
     box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.22);
@@ -161,17 +157,17 @@ canvas {
 
 .touch-stick-knob {
     position: absolute;
-    left: 28px;
-    top: 28px;
-    width: 48px;
-    height: 48px;
+    left: 52px;
+    top: 52px;
+    width: 52px;
+    height: 52px;
     border-radius: 50%;
     background: radial-gradient(circle at 35% 35%, rgba(237, 255, 243, 0.94), rgba(106, 220, 143, 0.62));
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34);
 }
 
 .touch-stick-label {
-    margin-top: -2px;
+    margin-top: -6px;
     text-align: center;
     color: rgba(225, 255, 231, 0.9);
     font-family: 'Orbitron', 'Courier New', monospace;
@@ -184,7 +180,7 @@ canvas {
     right: max(14px, env(safe-area-inset-right));
     bottom: max(18px, env(safe-area-inset-bottom));
     display: grid;
-    grid-template-columns: 92px 136px;
+    grid-template-columns: 128px;
     align-items: end;
     gap: 14px;
     pointer-events: none;
@@ -240,38 +236,9 @@ canvas {
 }
 
 .touch-btn-jump {
-    min-width: 92px;
-    min-height: 92px;
+    min-width: 128px;
+    min-height: 128px;
     border-radius: 999px;
-}
-
-.touch-btn-fire {
-    min-width: 136px;
-    min-height: 136px;
-    padding: 14px 16px;
-    background: rgba(118, 28, 28, 0.54);
-    border-color: rgba(255, 204, 204, 0.42);
-}
-
-.touch-btn-fire .touch-btn-title {
-    font-size: 20px;
-}
-
-.touch-btn-fire .touch-btn-note {
-    max-width: 13ch;
-    line-height: 1.05;
-}
-
-.touch-btn-fire[data-gesture="throw"] {
-    background: rgba(146, 84, 22, 0.72);
-}
-
-.touch-btn-fire[data-gesture="reload"] {
-    background: rgba(94, 92, 20, 0.72);
-}
-
-.touch-btn-fire[data-gesture="swap"] {
-    background: rgba(40, 78, 122, 0.72);
 }
 
 #touch-controls[data-orientation="portrait"] .touch-look-surface,
@@ -294,6 +261,84 @@ canvas {
 @media (pointer: fine) {
     #touch-controls {
         display: none !important;
+    }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+    #kill-counter {
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        gap: 4px;
+        max-width: min(190px, calc(100vw - 24px));
+    }
+
+    .match-pill-row {
+        gap: 5px;
+    }
+
+    .match-pill {
+        padding: 3px 8px;
+    }
+
+    .match-pill-label {
+        font-size: 7px;
+        letter-spacing: 1px;
+    }
+
+    .match-pill-value {
+        font-size: 11px;
+        letter-spacing: 0.25px;
+    }
+
+    .match-pill-progress {
+        padding: 4px 8px 5px;
+    }
+
+    .match-pill-track {
+        margin-top: 4px;
+        height: 5px;
+    }
+
+    #hud-bottom-right {
+        right: clamp(148px, 22vw, 188px);
+        bottom: max(18px, env(safe-area-inset-bottom));
+        gap: 2px;
+        padding: 6px 8px;
+        border-radius: 12px;
+        max-width: 150px;
+    }
+
+    #throwable-info {
+        font-size: 10px;
+        line-height: 1.15;
+    }
+
+    #weapon-info {
+        max-width: 150px;
+        gap: 1px;
+    }
+
+    #weapon-info .weapon-line-name {
+        font-size: 12px;
+    }
+
+    #weapon-info .weapon-line-ammo {
+        font-size: 11px;
+    }
+
+    #weapon-info .weapon-line-meta {
+        font-size: 9px;
+        line-height: 1.05;
+    }
+
+    #cooldown-status {
+        font-size: 8px;
+        letter-spacing: 0.6px;
+    }
+
+    #cooldown-container {
+        width: 86px;
+        height: 5px;
     }
 }
 
