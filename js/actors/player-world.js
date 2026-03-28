@@ -120,6 +120,26 @@
             return ((dx * dx + dz * dz) < (radius * radius));
         }
 
+        function pointInsideXZ(x, z, box) {
+            return (
+                x >= (box.min.x - epsilon) &&
+                x <= (box.max.x + epsilon) &&
+                z >= (box.min.z - epsilon) &&
+                z <= (box.max.z + epsilon)
+            );
+        }
+
+        function buildGroundProbePoints(x, z) {
+            var probeInset = Math.max(0, playerRadius * 0.35);
+            return [
+                { x: x, z: z },
+                { x: x + probeInset, z: z },
+                { x: x - probeInset, z: z },
+                { x: x, z: z + probeInset },
+                { x: x, z: z - probeInset }
+            ];
+        }
+
         function isBlockedAt(nextX, nextZ, feetY) {
             var boxes = getCollisionBoxes();
             if (boxes.length === 0) return false;
@@ -135,20 +155,34 @@
 
         function findLandingSurfaceY(x, z, currentFeetY, nextFeetY) {
             var boxes = getCollisionBoxes();
-            var baseGroundY = getGroundHeightAt(x, z);
-            if (boxes.length === 0) return baseGroundY;
-
+            var probePoints = buildGroundProbePoints(x, z);
+            var minY = Math.min(currentFeetY, nextFeetY) - epsilon;
+            var maxY = currentFeetY + 0.05;
             var best = null;
+
+            for (var p = 0; p < probePoints.length; p++) {
+                var sample = probePoints[p];
+                var baseGroundY = getGroundHeightAt(sample.x, sample.z);
+                if (baseGroundY >= minY && baseGroundY <= maxY) {
+                    if (best === null || baseGroundY > best) best = baseGroundY;
+                }
+            }
+
+            if (boxes.length === 0) return best === null ? getGroundHeightAt(x, z) : best;
+
             for (var i = 0; i < boxes.length; i++) {
                 var box = boxes[i];
                 var top = box.max.y;
-                if (!intersectsXZ(x, z, playerRadius * 0.9, box)) continue;
-                if (top <= currentFeetY + epsilon && top >= nextFeetY - epsilon) {
+                if (top < minY || top > maxY) continue;
+                for (var j = 0; j < probePoints.length; j++) {
+                    var probePoint = probePoints[j];
+                    if (!pointInsideXZ(probePoint.x, probePoint.z, box)) continue;
                     if (best === null || top > best) best = top;
+                    break;
                 }
             }
-            if (best === null || best < baseGroundY) return baseGroundY;
-            return best;
+
+            return best === null ? getGroundHeightAt(x, z) : best;
         }
 
         function findCeilingY(x, z, currentHeadY, nextHeadY) {

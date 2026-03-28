@@ -15,10 +15,10 @@
             { label: bindingsApi.getDisplayLabel('jump'), title: 'Jump' },
             { label: bindingsApi.getDisplayLabel('roll'), title: 'Roll' },
             { label: 'LMB', title: 'Fire' },
-            { label: bindingsApi.getDisplayLabel('reload'), title: 'Reload' },
             { label: bindingsApi.getDisplayLabel('weapon_slot_1') + ' / ' + bindingsApi.getDisplayLabel('weapon_slot_2'), title: 'Weapon Slots' },
             { label: 'WHEEL', title: 'Toggle Weapon' },
             { label: bindingsApi.getDisplayLabel('throwable'), title: 'Throwable' },
+            { label: bindingsApi.getDisplayLabel('toggle_auto_fire'), title: 'Auto Fire' },
             { label: bindingsApi.getDisplayLabel('toggle_debug'), title: 'Debug Visuals' },
             { label: bindingsApi.getDisplayLabel('open_manual'), title: 'Field Manual' },
             { label: 'ESC', title: 'Release / Close' }
@@ -125,6 +125,7 @@
         function groupedActionDefs() {
             var api = bindingsApi();
             var defs = api && api.getActionDefs ? api.getActionDefs() : [];
+            defs = defs.filter(function (def) { return !def.hidden; });
             var groups = {};
             var ordered = [];
             for (var i = 0; i < defs.length; i++) {

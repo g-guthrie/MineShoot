@@ -529,7 +529,7 @@ test('real worker: firing faster than cooldown only produces one authoritative h
   });
 });
 
-test('real worker: reload blocks fire until the server finishes reloading', { timeout: TEST_TIMEOUT_MS }, async () => {
+test('real worker: reload can be interrupted with the rounds already in the magazine', { timeout: TEST_TIMEOUT_MS }, async () => {
   const roomId = buildRoomId('reload');
   const shooter = await worker.connectClient({ roomId, userId: buildUserId('reload_shooter'), username: 'RELOAD_SHOOTER' });
   const target = await worker.connectClient({ roomId, userId: buildUserId('reload_target'), username: 'RELOAD_TARGET' });
@@ -572,7 +572,7 @@ test('real worker: reload blocks fire until the server finishes reloading', { ti
     const duringReloadAmmo = Number(shooter.latestEntity(shooter.userId).weaponAmmo.rifle.ammoInMag || 0);
     await shooter.sendFire({
       weaponId: 'rifle',
-      shotToken: 'reload-blocked',
+      shotToken: 'reload-interrupt',
       adsActive: true,
       viewFovDeg: COMBAT_FOV_DEG,
       aimOrigin: {
@@ -584,12 +584,12 @@ test('real worker: reload blocks fire until the server finishes reloading', { ti
       estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
     });
 
-    await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === 'reload-blocked', 900);
+    await target.waitForMessage('damage_event', (message) => String(message.shotToken || '') === 'reload-interrupt', SNAPSHOT_TIMEOUT_MS);
     await delay(300);
-    const blockedFireState = shooter.latestEntity(shooter.userId);
-    assert.ok(blockedFireState && blockedFireState.weaponAmmo && blockedFireState.weaponAmmo.rifle);
-    assert.equal(Number(blockedFireState.weaponAmmo.rifle.ammoInMag || 0), duringReloadAmmo);
-    assert.equal(!!blockedFireState.weaponAmmo.rifle.reloading, true);
+    const interruptedFireState = shooter.latestEntity(shooter.userId);
+    assert.ok(interruptedFireState && interruptedFireState.weaponAmmo && interruptedFireState.weaponAmmo.rifle);
+    assert.ok(Number(interruptedFireState.weaponAmmo.rifle.ammoInMag || 0) < duringReloadAmmo);
+    assert.equal(!!interruptedFireState.weaponAmmo.rifle.reloading, false);
 
     await shooter.waitForSnapshot(() => {
       const current = shooter.latestEntity(shooter.userId);

@@ -84,6 +84,7 @@ export function applyPrivateRoomConfig(room, config, deps = {}) {
   const canHydrateWithoutReset =
     syncMode === 'hydrate' &&
     room.matchState &&
+    !room.matchState.ended &&
     room.gameMode === nextConfig.roomMode &&
     room.matchState.started === (nextConfig.roomPhase === roomPhaseActive);
 

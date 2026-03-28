@@ -343,12 +343,19 @@ export function createHeadlessRecorder() {
     ctx,
     place: {
       addBlock(x, y, z, w, h, d, material, isSolid) {
-        void isSolid;
-        return record(createRotatedBoxAabb(x, y, z, w, h, d, 0, 0), true, x, y, z, material, 0, 0);
+        return record(createRotatedBoxAabb(x, y, z, w, h, d, 0, 0), isSolid !== false, x, y, z, material, 0, 0);
       },
       addRamp(x, y, z, w, h, d, material, rotY, tiltX, isSolid) {
-        void isSolid;
-        return record(createRotatedBoxAabb(x, y, z, w, h, d, rotY || 0, tiltX || 0), true, x, y, z, material, rotY || 0, tiltX || 0);
+        return record(
+          createRotatedBoxAabb(x, y, z, w, h, d, rotY || 0, tiltX || 0),
+          isSolid !== false,
+          x,
+          y,
+          z,
+          material,
+          rotY || 0,
+          tiltX || 0
+        );
       },
       addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
         const bounds = headlessGeometryBounds(geometry);

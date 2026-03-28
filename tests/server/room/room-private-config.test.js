@@ -126,3 +126,35 @@ test('private room config apply falls back to full room sync when the match mode
   assert.equal(changed, true);
   assert.equal(room.syncPrivateRoomMatchStateCalled, 1);
 });
+
+test('private room config apply fully resets when a finished match is restarted from the lobby', () => {
+  const room = {
+    roomName: 'private-room1',
+    gameMode: 'tdm',
+    matchState: { started: true, ended: true },
+    players: new Map(),
+    privateRoomConfig: normalizePrivateRoomConfig({
+      roomMode: 'tdm',
+      roomPhase: 'lobby',
+      teamCount: 2
+    }, {
+      teamOrder: ['alpha', 'bravo', 'charlie', 'delta']
+    }),
+    syncPrivateRoomMatchStateCalled: 0,
+    syncPrivateRoomMatchState() { this.syncPrivateRoomMatchStateCalled += 1; }
+  };
+
+  const changed = applyPrivateRoomConfig(room, {
+    roomMode: 'tdm',
+    roomPhase: 'active',
+    syncMode: 'hydrate'
+  }, {
+    isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
+    roomPhaseActive: 'active',
+    roomPhaseLobby: 'lobby',
+    teamOrder: ['alpha', 'bravo', 'charlie', 'delta']
+  });
+
+  assert.equal(changed, true);
+  assert.equal(room.syncPrivateRoomMatchStateCalled, 1);
+});

@@ -86,6 +86,13 @@
             return opts.currentPartyIdentity ? opts.currentPartyIdentity() : null;
         }
 
+        function setPhoneLandscapeRequirement(required) {
+            if (typeof window === 'undefined') return;
+            var setter = window.__MAYHEM_SET_PHONE_LANDSCAPE_REQUIREMENT;
+            if (typeof setter !== 'function') return;
+            setter(required ? 'required' : 'optional');
+        }
+
         function savedFriendIds(state) {
             return opts.savedFriendIds ? opts.savedFriendIds(state) : new Set();
         }
@@ -647,10 +654,14 @@
                 (incomingInvite && incomingInvite.actorId)
             );
             var showSocialTools = !!state.socialToolsOpen || socialMustShow || hasRoom;
+            var phoneLandscapeRequired = state.activeSurface === 'room' ||
+                activeMatchShell ||
+                String(launch.activityState || '') === 'private_room_lobby';
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
             if (elements.overlay) elements.overlay.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
             if (elements.menuSurface) elements.menuSurface.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
+            setPhoneLandscapeRequirement(phoneLandscapeRequired);
 
             if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room' || activeMatchShell;
             if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;

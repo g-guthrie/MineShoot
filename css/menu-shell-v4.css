@@ -141,7 +141,6 @@
     background: var(--fill-card);
     box-shadow: inset 0 0 0 1px var(--border-shell);
     padding: 12px 14px;
-    container-type: inline-size;
 }
 
 /* -- Stack (vertical layout) -- */
@@ -188,6 +187,8 @@
     line-height: 1.15;
     text-align: center;
     white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     background: var(--fill-pill);
     color: var(--c-body);
     box-shadow: var(--shadow-pill);
@@ -360,6 +361,15 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 #overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 18px;
+    z-index: 100;
+    cursor: default;
+    overflow: hidden;
     background: url('/images/menu_backdrop_6036.jpg') center center / cover no-repeat;
 }
 
@@ -386,6 +396,9 @@ body { cursor: default; }
     max-height: calc(100vh - 48px);
     position: relative;
     z-index: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
     transform: translateY(-5vh);
 }
 
@@ -437,6 +450,9 @@ body { cursor: default; }
 }
 
 #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    align-items: start;
     background:
         radial-gradient(circle at top right, var(--c-blue-accent), transparent 36%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08)),
@@ -447,6 +463,11 @@ body { cursor: default; }
         0 42px 110px rgba(28, 44, 76, 0.09);
     backdrop-filter: blur(28px) saturate(185%);
 }
+
+#menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] > #menu-header { grid-row: 1; }
+#menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] > #menu-feedback { grid-row: 2; }
+#menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] > #active-match-shell { grid-row: 3; }
+#menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] > #menu-loadout-band { grid-row: 4; }
 
 
 /* ------------------------------------------------------------
@@ -463,6 +484,17 @@ body { cursor: default; }
 }
 #menu-shell.menu-shell-v4 #menu-social-hero {
     padding: 0;
+}
+
+#menu-shell.menu-shell-v4 #menu-home-hero,
+#menu-shell.menu-shell-v4 #menu-social-hero,
+#menu-shell.menu-shell-v4 #menu-party-hero,
+#menu-shell.menu-shell-v4 #party-room-section,
+#menu-shell.menu-shell-v4 #private-room-footer,
+#menu-shell.menu-shell-v4 #weapon-slot-panel,
+#menu-shell.menu-shell-v4 #throwable-slot-panel,
+#menu-shell.menu-shell-v4 #active-match-action-row {
+    container-type: inline-size;
 }
 
 
@@ -977,11 +1009,11 @@ body { cursor: default; }
    17. ACTIVE MATCH
    ------------------------------------------------------------ */
 
-#menu-shell.menu-shell-v4 #active-match-shell { margin: 0 var(--pad-inline) 0; padding: 8px 0 0; background: transparent; border-radius: 0; box-shadow: none; display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.38fr); gap: 16px; align-items: stretch; }
+#menu-shell.menu-shell-v4 #active-match-shell { margin: 0 var(--pad-inline) 0; padding: 8px 0 0; background: transparent; border-radius: 0; box-shadow: none; display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.38fr); gap: 16px; align-items: stretch; flex: 0 0 auto; min-width: 0; }
 #menu-shell.menu-shell-v4 #active-match-action-row { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px; padding: 26px 24px 22px; }
 #menu-shell.menu-shell-v4 #active-match-pill-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
     align-items: stretch;
     align-content: start;
     gap: 14px;
@@ -1013,6 +1045,9 @@ body { cursor: default; }
     background: var(--fill-card);
     box-shadow: inset 0 0 0 1px var(--border-card);
     font-family: inherit;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
 }
 
 #menu-shell.menu-shell-v4 .match-stat-pill::before {
@@ -1026,10 +1061,10 @@ body { cursor: default; }
     line-height: 1;
 }
 
-#menu-shell.menu-shell-v4 #active-match-mode-pill    { font-size: clamp(18px, 3vw, 24px); font-weight: 700; letter-spacing: -0.01em; line-height: 1.08; }
-#menu-shell.menu-shell-v4 #active-match-context-pill { font-size: clamp(16px, 3.2vw, 21px); font-weight: 700; line-height: 1.12; }
+#menu-shell.menu-shell-v4 #active-match-mode-pill    { font-size: clamp(15px, 2.8vw, 22px); font-weight: 700; letter-spacing: -0.01em; line-height: 1.08; text-wrap: balance; }
+#menu-shell.menu-shell-v4 #active-match-context-pill { font-size: clamp(14px, 2.6vw, 19px); font-weight: 700; line-height: 1.12; text-wrap: balance; }
 #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
-#menu-shell.menu-shell-v4 #active-match-secondary-stat-pill { font-size: clamp(17px, 3.2vw, 22px); font-weight: 720; letter-spacing: -0.01em; line-height: 1.12; font-variant-numeric: tabular-nums; }
+#menu-shell.menu-shell-v4 #active-match-secondary-stat-pill { font-size: clamp(14px, 2.6vw, 19px); font-weight: 720; letter-spacing: -0.01em; line-height: 1.12; font-variant-numeric: tabular-nums; text-wrap: balance; }
 
 
 /* ------------------------------------------------------------
@@ -1044,7 +1079,13 @@ body { cursor: default; }
     align-items: center;
     justify-items: center;
     padding: 24px;
-    background: transparent;
+    background:
+        radial-gradient(circle at 22% 18%, rgba(74, 123, 255, 0.14), transparent 28%),
+        radial-gradient(circle at 78% 82%, rgba(90, 221, 165, 0.1), transparent 30%),
+        rgba(241, 245, 251, 0.82);
+    backdrop-filter: blur(18px) saturate(126%);
+    -webkit-backdrop-filter: blur(18px) saturate(126%);
+    overflow: auto;
 }
 
 #menu-shell.menu-shell-v4 #postgame-flow[hidden] {
@@ -1056,16 +1097,19 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #active-match-shell,
 #menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-body,
 #menu-shell.menu-shell-v4 #menu-surface[data-session-overlay="postgame"] > #menu-loadout-band {
-    opacity: 0;
+    display: none !important;
     pointer-events: none;
 }
 
 #menu-shell.menu-shell-v4 .postgame-panel {
-    width: min(960px, 100%);
+    width: min(760px, 100%);
     max-width: 100%;
+    max-height: 100%;
     padding: 26px 24px 22px;
     gap: 14px;
     align-content: start;
+    overflow: auto;
+    container-type: normal;
     box-shadow:
         inset 0 0 0 1px var(--border-card),
         0 18px 48px rgba(28, 44, 76, 0.08);
@@ -1153,7 +1197,7 @@ body { cursor: default; }
 
 #menu-shell.menu-shell-v4 #postgame-results-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 14px;
     width: 100%;
     align-items: stretch;
@@ -1300,23 +1344,29 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 #menu-shell.menu-shell-v4 #menu-loadout-band {
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    min-height: 0;
     padding: 10px var(--pad-inline) var(--pad-inline);
     border: none;
     background: transparent;
 }
-#menu-shell.menu-shell-v4 #loadout-row { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+#menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-loadout-band {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding-top: 6px;
+}
+#menu-shell.menu-shell-v4 #loadout-row { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); align-content: start; }
 #menu-shell.menu-shell-v4 .loadout-section { min-width: 0; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-panel,
-#menu-shell.menu-shell-v4 #throwable-slot-panel { display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px; }
+#menu-shell.menu-shell-v4 #throwable-slot-panel { display: flex; flex-direction: column; gap: 14px; padding: 26px 24px 22px; min-width: 0; }
 
 #menu-shell.menu-shell-v4 #weapon-slot-title,
 #menu-shell.menu-shell-v4 #throwable-slot-title { font-size: 15px; font-weight: 700; color: #20304a; margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
 
 
 #menu-shell.menu-shell-v4 #throwable-choice-grid,
-#menu-shell.menu-shell-v4 #weapon-choice-grid { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; justify-content: center; }
+#menu-shell.menu-shell-v4 #weapon-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 124px), 1fr)); gap: 10px; margin: 0; justify-content: stretch; }
 
 
 /* ------------------------------------------------------------
@@ -1324,7 +1374,7 @@ body { cursor: default; }
    ------------------------------------------------------------ */
 
 #menu-shell.menu-shell-v4 .weapon-choice-btn,
-#menu-shell.menu-shell-v4 .throwable-choice-btn { border: none; background: var(--fill-pill); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); }
+#menu-shell.menu-shell-v4 .throwable-choice-btn { border: none; background: var(--fill-pill); color: var(--c-body); border-radius: var(--r-pill); padding: var(--pill-py-md) var(--pill-px-md); cursor: pointer; font-size: var(--pill-font-md); line-height: 1.2; text-wrap: balance; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), inset 0 0 0 1px var(--border-pill), var(--pill-shadow); backdrop-filter: var(--glass-blur-pill); min-width: 0; width: 100%; overflow-wrap: anywhere; word-break: break-word; }
 
 
 /* ------------------------------------------------------------
@@ -1410,6 +1460,7 @@ body { cursor: default; }
 
 @media (max-width: 640px) {
     #menu-stage { width: 100vw; max-height: 100vh; transform: translateY(-5vh); }
+    #overlay { padding: 10px; }
     #menu-shell.menu-shell-v4 #menu-surface { max-height: 100vh; border-radius: var(--r-card) var(--r-card) 0 0; --pad-inline: 12px; --gap-header: 8px; --gap-body-top: 6px; --gap-body-bottom: 12px; --gap-loadout: 10px; }
     #menu-shell.menu-shell-v4 #menu-header-main { grid-template-columns: 1fr; gap: 10px; }
     #menu-shell.menu-shell-v4 #menu-header-actions { justify-content: flex-start; }
@@ -1422,7 +1473,7 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 .private-room-action-spacer { display: none; }
     #menu-shell.menu-shell-v4 #private-room-action-row .btn-primary { width: 100%; }
     #menu-shell.menu-shell-v4 #private-room-action-row .btn-sm { width: auto; align-self: flex-start; }
-    #menu-shell.menu-shell-v4 #mode-screen-title { margin: 10px 0 8px; font-size: clamp(32px, 10vw, 42px); }
+    #menu-shell.menu-shell-v4 #mode-screen-title { margin: 10px 0 8px; font-size: clamp(32px, 10vw, 42px); white-space: normal; text-wrap: balance; }
     #menu-shell.menu-shell-v4 #primary-launch-btn { min-height: 82px; font-size: clamp(26px, 11vw, 44px); }
     #menu-shell.menu-shell-v4 #game-modes-toggle-btn { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
     #menu-shell.menu-shell-v4 .social-connect-row { grid-template-columns: 1fr; }
@@ -1433,6 +1484,184 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #menu-header-main { grid-template-columns: minmax(0, 1fr); }
     #menu-shell.menu-shell-v4 #menu-header-actions { justify-content: flex-start; }
     #menu-shell.menu-shell-v4 #active-match-pill-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (pointer: coarse) and (max-height: 500px) and (orientation: landscape) {
+    #menu-stage {
+        width: 100vw;
+        max-height: 100vh;
+        transform: none;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface {
+        max-height: 100vh;
+        border-radius: 18px;
+        --pad-inline: 10px;
+        --gap-header: 6px;
+        --gap-body-top: 6px;
+        --gap-body-bottom: 10px;
+        --gap-loadout: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header {
+        padding: 8px var(--pad-inline) 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header-main {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-header-leading,
+    #menu-shell.menu-shell-v4 #menu-header-actions {
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-party-id-btn,
+    #menu-shell.menu-shell-v4 #account-toggle-btn,
+    #menu-shell.menu-shell-v4 #social-tools-toggle-btn,
+    #menu-shell.menu-shell-v4 #utility-toggle-btn,
+    #menu-shell.menu-shell-v4 #party-back-btn {
+        min-height: 32px;
+        padding: 7px 10px;
+        font-size: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-party-id-btn {
+        max-width: 100%;
+        gap: 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-party-id-label,
+    #menu-shell.menu-shell-v4 #menu-party-id-value {
+        font-size: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-main-heroes,
+    #menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="2"],
+    #menu-shell.menu-shell-v4 #menu-main-heroes[data-columns="3"] {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-home-hero,
+    #menu-shell.menu-shell-v4 #menu-social-hero,
+    #menu-shell.menu-shell-v4 #menu-party-hero,
+    #menu-shell.menu-shell-v4 #party-room-section {
+        padding: 16px 12px 12px;
+    }
+
+    #menu-shell.menu-shell-v4 #mode-screen-title {
+        margin: 6px 0 4px;
+        font-size: clamp(26px, 6vw, 34px);
+    }
+
+    #menu-shell.menu-shell-v4 #primary-launch-btn {
+        min-height: 66px;
+        font-size: clamp(22px, 6vw, 30px);
+    }
+
+    #menu-shell.menu-shell-v4 #game-modes-toggle-btn {
+        width: 38px;
+        min-width: 38px;
+        height: 38px;
+        min-height: 38px;
+    }
+
+    #menu-shell.menu-shell-v4 #play-mode-options,
+    #menu-shell.menu-shell-v4 .social-connect-row,
+    #menu-shell.menu-shell-v4 #menu-social-layout,
+    #menu-shell.menu-shell-v4 #room-screen-grid,
+    #menu-shell.menu-shell-v4 #private-room-roster-grid,
+    #menu-shell.menu-shell-v4 #private-room-unassigned,
+    #menu-shell.menu-shell-v4 #loadout-row,
+    #menu-shell.menu-shell-v4 #active-match-shell,
+    #menu-shell.menu-shell-v4 #active-match-pill-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #menu-shell.menu-shell-v4 #active-match-shell {
+        gap: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #active-match-action-row {
+        padding: 16px 12px 12px;
+        gap: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-loadout-band {
+        padding-inline: 10px;
+        padding-bottom: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 .match-stat-pill {
+        padding: 10px 12px;
+    }
+
+    #menu-shell.menu-shell-v4 .match-stat-pill::before {
+        margin-bottom: 6px;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+    }
+
+    #menu-shell.menu-shell-v4 #active-match-mode-pill {
+        font-size: 15px;
+    }
+
+    #menu-shell.menu-shell-v4 #active-match-context-pill,
+    #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
+    #menu-shell.menu-shell-v4 #active-match-secondary-stat-pill {
+        font-size: 14px;
+        line-height: 1.15;
+    }
+
+    #menu-shell.menu-shell-v4 #weapon-slot-panel,
+    #menu-shell.menu-shell-v4 #throwable-slot-panel,
+    #menu-shell.menu-shell-v4 #private-room-footer {
+        padding: 14px 12px 12px;
+    }
+
+    #menu-shell.menu-shell-v4 #weapon-choice-grid,
+    #menu-shell.menu-shell-v4 #throwable-choice-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr));
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-flow {
+        padding: 12px;
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-panel {
+        width: min(100%, 620px);
+        padding: 16px 14px 14px;
+        gap: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-winner-banner,
+    #menu-shell.menu-shell-v4 .postgame-hero-outcome {
+        font-size: clamp(26px, 5vw, 40px);
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-result-banner,
+    #menu-shell.menu-shell-v4 .postgame-hero-winner,
+    #menu-shell.menu-shell-v4 #postgame-celebration-note {
+        font-size: 12px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-ghost-stage {
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-ghost {
+        min-height: 90px;
+        font-size: 14px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-results-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
 }
 
 @container (max-width: 360px) {

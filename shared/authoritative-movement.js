@@ -4,6 +4,8 @@ import { getMovementTuning } from './gameplay-tuning.js';
 const DEFAULT_TUNING = getMovementTuning();
 const DEFAULT_EPSILON = 0.001;
 const BACKWARD_SPRINT_SPEED_MULT = 1.25;
+const DEFAULT_GROUND_PROBE_INSET_MULT = 0.35;
+const DEFAULT_GROUND_PROBE_UP = 0.05;
 
 function defaultBounds(bounds) {
   return {
@@ -74,6 +76,34 @@ export function intersectsXZ(x, z, radius, box) {
   return ((dx * dx) + (dz * dz)) < (radius * radius);
 }
 
+function pointInsideXZ(x, z, box, epsilon) {
+  return (
+    x >= (box.min.x - epsilon) &&
+    x <= (box.max.x + epsilon) &&
+    z >= (box.min.z - epsilon) &&
+    z <= (box.max.z + epsilon)
+  );
+}
+
+function buildGroundProbePoints(x, z, playerRadius, options = {}) {
+  const probeInset = Math.max(
+    0,
+    Number(
+      options.groundProbeInset != null
+        ? options.groundProbeInset
+        : (playerRadius * DEFAULT_GROUND_PROBE_INSET_MULT)
+    ) || 0
+  );
+
+  return [
+    { x, z },
+    { x: x + probeInset, z },
+    { x: x - probeInset, z },
+    { x, z: z + probeInset },
+    { x, z: z - probeInset }
+  ];
+}
+
 export function isBlockedAt(nextX, nextZ, feetY, boxes, options = {}) {
   const playerHeight = Number(options.playerHeight || PLAYER_HEIGHT);
   const playerRadius = Number(options.playerRadius || PLAYER_RADIUS);
@@ -107,6 +137,44 @@ export function findLandingSurfaceY(x, z, currentFeetY, nextFeetY, boxes, getGro
     }
   }
   if (best === null || best < baseGroundY) return baseGroundY;
+  return best;
+}
+
+export function findGroundProbeY(x, z, currentFeetY, nextFeetY, boxes, getGroundHeightAt, options = {}) {
+  const playerRadius = Number(options.playerRadius || PLAYER_RADIUS);
+  const epsilon = Number(options.epsilon || DEFAULT_EPSILON);
+  const probeUp = Math.max(0, Number(options.groundProbeUp != null ? options.groundProbeUp : DEFAULT_GROUND_PROBE_UP) || DEFAULT_GROUND_PROBE_UP);
+  const minY = Math.min(currentFeetY, nextFeetY) - epsilon;
+  const maxY = currentFeetY + probeUp;
+  const probePoints = buildGroundProbePoints(x, z, playerRadius, options);
+
+  let best = null;
+  for (let i = 0; i < probePoints.length; i++) {
+    const sample = probePoints[i];
+    const baseGroundY = typeof getGroundHeightAt === 'function' ? Number(getGroundHeightAt(sample.x, sample.z) || 0) : 0;
+    if (baseGroundY >= minY && baseGroundY <= maxY) {
+      if (best === null || baseGroundY > best) best = baseGroundY;
+    }
+  }
+
+  if (!Array.isArray(boxes) || boxes.length === 0) {
+    return best === null ? 0 : best;
+  }
+
+  for (let i = 0; i < boxes.length; i++) {
+    const box = boxes[i];
+    if (!box || !box.min || !box.max) continue;
+    const top = Number(box.max.y);
+    if (top < minY || top > maxY) continue;
+
+    for (let j = 0; j < probePoints.length; j++) {
+      const sample = probePoints[j];
+      if (!pointInsideXZ(sample.x, sample.z, box, epsilon)) continue;
+      if (best === null || top > best) best = top;
+      break;
+    }
+  }
+
   return best;
 }
 
@@ -252,11 +320,11 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   let nextFeetY = currentFeetY + (Number(entity.velocityY || 0) * dtSec);
 
   if (Number(entity.velocityY || 0) <= 0) {
-    const landingY = findLandingSurfaceY(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, nextFeetY, boxes, getGroundHeightAt, {
+    const landingY = findGroundProbeY(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, nextFeetY, boxes, getGroundHeightAt, {
       playerRadius,
       epsilon
     });
-    if (nextFeetY <= (landingY + epsilon)) {
+    if (landingY !== null && nextFeetY <= (landingY + epsilon)) {
       nextFeetY = landingY;
       entity.velocityY = 0;
       entity.isGrounded = true;
@@ -318,6 +386,7 @@ runtime.__MAYHEM_RUNTIME.GameShared.authoritativeMovement = {
   intersectsXZ,
   isBlockedAt,
   findLandingSurfaceY,
+  findGroundProbeY,
   findCeilingY,
   stepAuthoritativeMovement
 };

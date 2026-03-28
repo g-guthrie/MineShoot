@@ -5,7 +5,8 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 import {
   compileCylinderColliderBoxes,
-  compileDomeColliderBoxes
+  compileDomeColliderBoxes,
+  compileSphereColliderBoxes
 } from '../../shared/collider-authoring.js';
 
 function createTestWorldLayout(options = {}) {
@@ -179,6 +180,7 @@ async function loadWorldRuntime(options = {}) {
     },
     __TEST_COMPILE_CYLINDER_COLLIDER_BOXES__: compileCylinderColliderBoxes,
     __TEST_COMPILE_DOME_COLLIDER_BOXES__: compileDomeColliderBoxes,
+    __TEST_COMPILE_SPHERE_COLLIDER_BOXES__: compileSphereColliderBoxes,
     globalThis: null
   };
   sandbox.globalThis = sandbox;
@@ -193,8 +195,8 @@ async function loadWorldRuntime(options = {}) {
       'const chooseSpawnPoint = globalThis.__TEST_CHOOSE_SPAWN_POINT__;\n'
     )
     .replace(
-      /^import\s+\{\s*compileCylinderColliderBoxes,\s*compileDomeColliderBoxes\s*\}\s+from\s+['"][^'"]+['"];\s*/m,
-      'const compileCylinderColliderBoxes = globalThis.__TEST_COMPILE_CYLINDER_COLLIDER_BOXES__;\nconst compileDomeColliderBoxes = globalThis.__TEST_COMPILE_DOME_COLLIDER_BOXES__;\n'
+      /^import\s+\{\s*compileCylinderColliderBoxes,\s*compileDomeColliderBoxes,\s*compileSphereColliderBoxes\s*\}\s+from\s+['"][^'"]+['"];\s*/m,
+      'const compileCylinderColliderBoxes = globalThis.__TEST_COMPILE_CYLINDER_COLLIDER_BOXES__;\nconst compileDomeColliderBoxes = globalThis.__TEST_COMPILE_DOME_COLLIDER_BOXES__;\nconst compileSphereColliderBoxes = globalThis.__TEST_COMPILE_SPHERE_COLLIDER_BOXES__;\n'
     );
   vm.runInContext(transformedWorldCode, sandbox);
 
@@ -288,4 +290,27 @@ test('world runtime can load before GameShared and resolve layout on create', as
   });
   assert.equal(GameWorld.getSize(), 32);
   assert.equal(GameWorld.getBounds().max, 32);
+});
+
+test('world runtime keeps non-solid surface skins visible without turning them into colliders', async () => {
+  const { GameWorld, runtime } = await loadWorldRuntime({ skipDefaultQuadrantBuilder: true });
+  runtime.WorldQuadrants.jungle = function buildTestQuadrant(_bounds, place) {
+    const material = runtime.GameMaterialLibrary.getLambert({ color: 0x336633 });
+    place.addBlock(4, 0.04, 4, 6, 0.08, 6, material, false);
+    place.addBlock(10, 1, 10, 2, 2, 2, material, true);
+  };
+  const scene = new THREE.Scene();
+
+  GameWorld.create(scene);
+
+  const authoredMeshes = scene.children.filter((object) =>
+    object.isMesh === true &&
+    object.userData &&
+    object.userData.isBiomeGround !== true
+  );
+  const collidables = GameWorld.getCollidables();
+
+  assert.equal(authoredMeshes.length >= 2, true);
+  assert.equal(collidables.length, 1);
+  assert.equal(collidables[0].userData.isSolid, true);
 });

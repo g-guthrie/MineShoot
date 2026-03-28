@@ -6,13 +6,72 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600;700&display=optional" rel="stylesheet">
+    <script>
+        (function () {
+            function isPhoneSizedTouchDevice() {
+                var touchCapable = ('ontouchstart' in window) || Number(navigator.maxTouchPoints || 0) > 0;
+                var coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+                return !!(touchCapable && coarse && (window.innerWidth <= 640 || window.innerHeight <= 500));
+            }
+
+            function applyPhoneLandscapeRequirement(nextMode) {
+                var body = document.body;
+                if (!body) return;
+                body.setAttribute('data-phone-landscape', String(nextMode || 'optional'));
+                syncPhoneOrientationBlocker();
+            }
+
+            function syncPhoneOrientationBlocker() {
+                var body = document.body;
+                var blocker = document.getElementById('phone-orientation-blocker');
+                if (!body || !blocker) return;
+                var required = body.getAttribute('data-phone-landscape') === 'required';
+                var portrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+                blocker.hidden = !(required && isPhoneSizedTouchDevice() && portrait);
+            }
+
+            function tryLockLandscape() {
+                if (!isPhoneSizedTouchDevice()) return;
+                var orientationApi = window.screen && window.screen.orientation;
+                if (!orientationApi || typeof orientationApi.lock !== 'function') return;
+                try {
+                    var maybePromise = orientationApi.lock('landscape');
+                    if (maybePromise && typeof maybePromise.catch === 'function') {
+                        maybePromise.catch(function () {});
+                    }
+                } catch (_err) {
+                    // no-op
+                }
+            }
+
+            window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE = isPhoneSizedTouchDevice;
+            window.__MAYHEM_SET_PHONE_LANDSCAPE_REQUIREMENT = applyPhoneLandscapeRequirement;
+
+            window.addEventListener('DOMContentLoaded', function () {
+                applyPhoneLandscapeRequirement('optional');
+                tryLockLandscape();
+                syncPhoneOrientationBlocker();
+            }, { once: true });
+            window.addEventListener('orientationchange', tryLockLandscape);
+            window.addEventListener('orientationchange', syncPhoneOrientationBlocker);
+            window.addEventListener('resize', syncPhoneOrientationBlocker);
+            window.addEventListener('touchstart', tryLockLandscape, { passive: true });
+        })();
+    </script>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <title>PvP</title>
     <link rel="stylesheet" href="/css/main.css">
     <link rel="stylesheet" href="/css/menu-shell-v4.css">
 </head>
-<body class="menu-booting">
+<body class="menu-booting" data-overlay-active="true">
     <button id="hud-manual-btn" type="button">MANUAL</button>
+    <div id="phone-orientation-blocker" aria-live="polite" aria-modal="true" role="dialog" hidden>
+        <div id="phone-orientation-card">
+            <div id="phone-orientation-kicker">PHONE MODE</div>
+            <div id="phone-orientation-title">LANDSCAPE ONLY</div>
+            <div id="phone-orientation-copy">Turn your phone sideways to use rooms, matches, and post-game screens.</div>
+        </div>
+    </div>
     <!-- Overlay -->
     <div id="overlay">
         <div id="launch-flow" hidden>

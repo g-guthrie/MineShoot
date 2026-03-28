@@ -536,6 +536,11 @@
         var pct = Math.max(0, Math.min(1, Number(state && state.pct != null ? state.pct : 1)));
         var phase = String(state && state.phase || 'ready');
         cooldownBarEl.style.width = (pct * 100) + '%';
+        if (status === 'overheated') {
+            cooldownBarEl.style.background = '#FF5A3D';
+            cooldownStatusEl.textContent = 'OVERHEAT';
+            cooldownStatusEl.style.color = '#FF5A3D';
+        } else
         if (status === 'reloading') {
             if (phase === 'present' || phase === 'raise') {
                 cooldownBarEl.style.background = '#FF9B00';
@@ -571,14 +576,14 @@
         if (weapon.pellets && weapon.pellets > 1) {
             mode = weapon.pellets + ' PELLETS';
         }
-        var ammoText = 'NO AMMO';
+        var ammoText = '';
         if (weapon.magazineSize && weapon.magazineSize > 0) {
             ammoText = Math.max(0, Number(weapon.ammoInMag || 0)) + '/' + Math.max(1, Number(weapon.magazineSize || 1));
         }
         clearChildren(weaponInfoEl);
         appendWeaponInfoLine(weapon.name, 'weapon-line weapon-line-name');
-        appendWeaponInfoLine(ammoText, 'weapon-line weapon-line-ammo');
-        appendWeaponInfoLine(mode + ' | ' + weapon.bodyDamage + '/' + weapon.headDamage + ' DMG', 'weapon-line weapon-line-meta');
+        appendWeaponInfoLine(ammoText || mode, 'weapon-line weapon-line-ammo');
+        appendWeaponInfoLine(weapon.bodyDamage + '/' + weapon.headDamage + ' DMG', 'weapon-line weapon-line-meta');
     };
 
     function setElementDisplay(el, visible) {

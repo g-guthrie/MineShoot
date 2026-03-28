@@ -506,9 +506,10 @@ import {
             mesh.position.set(x, y, z);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            mesh.userData = mesh.userData || {};
+            mesh.userData.isSolid = isSolid !== false;
             addTrackedObject(scene, mesh);
-            void isSolid;
-            markSolid(mesh);
+            if (isSolid !== false) markSolid(mesh);
             return mesh;
         }
 
@@ -520,9 +521,10 @@ import {
             mesh.rotation.x = tiltX || 0;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            mesh.userData = mesh.userData || {};
+            mesh.userData.isSolid = isSolid !== false;
             addTrackedObject(scene, mesh);
-            void isSolid;
-            markSolid(mesh);
+            if (isSolid !== false) markSolid(mesh);
             return mesh;
         }
 

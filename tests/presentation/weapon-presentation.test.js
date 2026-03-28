@@ -51,6 +51,23 @@ test('one-handed guns never use precision stocks while sniper does', async () =>
   assert.equal(harness.visuals.get('sniper').platform.stockClass, 'precision');
 });
 
+test('weapon grips stay readable below the receiver after chunky sizing changes', async () => {
+  const harness = await loadWeaponPresentation();
+  const weaponIds = ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper'];
+
+  for (const weaponId of weaponIds) {
+    const platform = harness.visuals.get(weaponId).platform;
+    const receiver = platform.parts.receiver;
+    const grip = platform.parts.grip;
+    const receiverBottom = receiver.position[1] - (receiver.size[1] * 0.5);
+    const gripTop = grip.position[1] + (grip.size[1] * 0.5);
+    const gripBottom = grip.position[1] - (grip.size[1] * 0.5);
+    const overlap = Math.max(0, gripTop - receiverBottom);
+
+    assert.ok(overlap <= 0.03, weaponId + ' grip should not disappear into the receiver');
+    assert.ok(gripBottom < receiverBottom, weaponId + ' grip should extend below the receiver');
+  }
+});
 test('weapon presentation resolves a single universal reload language', async () => {
   const harness = await loadWeaponPresentation();
 

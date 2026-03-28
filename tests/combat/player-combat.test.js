@@ -254,13 +254,23 @@ test('player combat owns weapon presentation state and repairs it from authorita
   harness.GamePlayerCombat.recordWeaponFire('sniper', 1050);
 
   assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(1050))), {
+    status: 'cooldown',
+    ready: false,
+    pct: 0
+  });
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloading, false);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).ammoInMag, 0);
+
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('sniper', 1100), true);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.GamePlayerCombat.getWeaponHudState(1100))), {
     status: 'reloading',
     ready: false,
     pct: 0,
     phase: 'raise'
   });
-  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloading, true);
-  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1050).reloadPhase, 'raise');
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1100).reloading, true);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1100).reloadPhase, 'raise');
 
   harness.GamePlayerCombat.syncWeaponState({
     weaponId: 'sniper',
@@ -422,7 +432,8 @@ test('player combat ignores stale zero-ammo snapshots while multiplayer reload p
   });
 
   harness.GamePlayerCombat.recordWeaponFire('rifle', 1000);
-  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1000).reloading, true);
+  assert.equal(harness.GamePlayerCombat.beginWeaponReload('rifle', 1010), true);
+  assert.equal(harness.GamePlayerCombat.getCurrentWeaponState(1010).reloading, true);
 
   harness.GamePlayerCombat.syncWeaponState({
     weaponId: 'rifle',

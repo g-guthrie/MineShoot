@@ -77,8 +77,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── shorthand helpers ── */
     function tb(place, role, meta, x, y, z, w, h, d, material, isSolid) {
-        void isSolid;
-        var mesh = place.addBlock(x, y, z, w, h, d, material, true);
+        var mesh = place.addBlock(x, y, z, w, h, d, material, isSolid);
         if (mesh) {
             mesh.userData = mesh.userData || {};
             mesh.userData.role = role;

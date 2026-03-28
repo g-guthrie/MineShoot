@@ -78,8 +78,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── shorthand helpers ── */
     function tb(place, role, meta, x, y, z, w, h, d, material, isSolid) {
-        void isSolid;
-        var mesh = place.addBlock(x, y, z, w, h, d, material, true);
+        var mesh = place.addBlock(x, y, z, w, h, d, material, isSolid);
         if (mesh) {
             mesh.userData = mesh.userData || {};
             mesh.userData.role = role;
@@ -119,8 +118,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
     /* ── Water plane ── */
     function buildWater(cx, cz, sizeX, sizeZ, place, mats) {
-        // Main water surface — top face at y=0.05, just below sand top (y=0.06)
-        tb(place, 'water', null, cx, -0.05, cz, sizeX, 0.2, sizeZ, mats.water, false);
+        // Keep the visible top perfectly flush with the shore skin so the seam stays flat.
+        tb(place, 'water', null, cx, 0.0, cz, sizeX, 0.08, sizeZ, mats.water, false);
         // Dark bottom beneath water
         tb(place, 'seabed', null, cx, -1.5, cz, sizeX, 2.6, sizeZ, mats.waterDeep, false);
     }
@@ -571,12 +570,14 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var qw = bounds.maxX - bounds.minX;
         var qd = bounds.maxZ - bounds.minZ;
 
-        /* ── 1. Water ── */
-        // Water fills the whole biome footprint so it reaches the outer edge.
-        buildWater(ox, oz, qw, qd, place, mats);
+        /* ── 1. Water + shore ── */
+        // Split the biome cleanly so water stops exactly where the sand begins.
+        var shoreWidth = 18;
+        var waterWidth = Math.max(0, qw - shoreWidth);
+        buildWater(bounds.minX + (waterWidth * 0.5), oz, waterWidth, qd, place, mats);
 
         /* ── 2. Sandy shore (east side, +X — faces toward desert) ── */
-        tb(place, 'shore', { part: 'sand' }, ox + 18, 0.02, oz, 18, 0.08, qd, mats.sand, false);
+        tb(place, 'shore', { part: 'sand' }, bounds.maxX - (shoreWidth * 0.5), 0.0, oz, shoreWidth, 0.08, qd, mats.sand, false);
 
         /* ── 3. Ship — positioned in the water, west-center ── */
         var shipX = ox - 8;

@@ -62,6 +62,16 @@
                 currentWeapon.automatic &&
                 !runtime.GamePlayer.isSprinting()
             );
+            var phoneSizedTouchAutoFire = !!(
+                opts.controlsApi &&
+                opts.controlsApi.isPhoneSizedTouchDevice &&
+                opts.controlsApi.isPhoneSizedTouchDevice()
+            );
+            var desktopAutoFire = !!(
+                opts.controlsApi &&
+                opts.controlsApi.isDesktopAutoFireEnabled &&
+                opts.controlsApi.isDesktopAutoFireEnabled()
+            );
             var shouldAutoFireFromReticle = !!(
                 opts.hasInputCapture &&
                 opts.hasInputCapture() &&
@@ -70,7 +80,8 @@
                 reticlePreview.reticleTarget &&
                 reticlePreview.reticleTarget.active &&
                 !runtime.GamePlayer.isSprinting() &&
-                (!opts.controlsApi || !opts.controlsApi.hasArmedThrowablePreview || !opts.controlsApi.hasArmedThrowablePreview())
+                (!opts.controlsApi || !opts.controlsApi.hasArmedThrowablePreview || !opts.controlsApi.hasArmedThrowablePreview()) &&
+                (phoneSizedTouchAutoFire || desktopAutoFire)
             );
             if (shouldAutoFireFromHeldTrigger || shouldAutoFireFromReticle) {
                 if (opts.tryPlayerFire) opts.tryPlayerFire();

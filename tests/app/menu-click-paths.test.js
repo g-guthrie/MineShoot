@@ -1902,3 +1902,44 @@ test('room screen outside pause reduces the left header to back and id', async (
   assert.equal(elements['continue-loadout-btn'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, false);
 });
+
+test('returning to a private room lobby clears stale in-match launch state so the next room activation relaunches cleanly', async () => {
+  const harness = await loadHarness();
+  const { elements, launchCalls, privateRoomState } = harness;
+
+  harness.emitPrivateRoomState();
+  await harness.flush();
+  elements['continue-loadout-btn'].click();
+  await harness.flush();
+
+  harness.emitSessionState({
+    runtimeReady: true,
+    inMatch: true,
+    awaitingInputCapture: false,
+    canResume: false,
+    activityState: 'in_match',
+    launchContext: {}
+  });
+  harness.emitSessionState({
+    runtimeReady: false,
+    inMatch: false,
+    awaitingInputCapture: false,
+    canResume: false,
+    activityState: 'private_room_lobby',
+    launchContext: {}
+  });
+  await harness.flush();
+
+  privateRoomState.room.roomPhase = 'active';
+  harness.emitPrivateRoomState();
+  await harness.flush();
+
+  assert.equal(elements['menu-screen-mode'].hidden, true);
+  assert.equal(elements['menu-screen-room'].hidden, true);
+  assert.equal(elements['active-match-shell'].hidden, false);
+  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(launchCalls.length, 1);
+  assert.equal(launchCalls[0].modeId, 'single_cloudflare');
+  assert.equal(launchCalls[0].options.roomId, privateRoomState.room.roomId);
+  assert.equal(launchCalls[0].options.gameMode, privateRoomState.room.roomMode);
+});

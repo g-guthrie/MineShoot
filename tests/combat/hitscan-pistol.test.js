@@ -315,7 +315,7 @@ test('pistol local fire spends the shot and misses when targets are out of range
   assert.equal(beforeAmmo - afterAmmo, 1);
 });
 
-test('firearms auto-reload after the magazine empties and refill after reload time elapses', async () => {
+test('firearms auto-reload after the idle delay and refill after reload time elapses', async () => {
   const harness = await loadHitscanHarness({
     magazineSize: 2,
     reloadMs: 900,
@@ -335,10 +335,18 @@ test('firearms auto-reload after the magazine empties and refill after reload ti
 
   const emptyState = harness.GameHitscan.getCurrentWeapon();
   assert.equal(emptyState.ammoInMag, 0);
-  assert.equal(emptyState.reloading, true);
-  assert.ok(emptyState.reloadRemaining > 0);
+  assert.equal(emptyState.reloading, false);
 
-  harness.setNow(2000);
+  harness.setNow(4010);
+  const waitingState = harness.GameHitscan.getCurrentWeapon();
+  assert.equal(waitingState.reloading, false);
+
+  harness.setNow(4020);
+  const reloadingState = harness.GameHitscan.getCurrentWeapon();
+  assert.equal(reloadingState.reloading, true);
+  assert.ok(reloadingState.reloadRemaining > 0);
+
+  harness.setNow(5000);
   const reloadedState = harness.GameHitscan.getCurrentWeapon();
   assert.equal(reloadedState.reloading, false);
   assert.equal(reloadedState.ammoInMag, 2);
@@ -391,7 +399,7 @@ test('manual reload notifies the player rig so the reload pose starts immediatel
   assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
 });
 
-test('empty-mag auto reload notifies the player rig so the reload pose starts immediately', async () => {
+test('empty-mag auto reload notifies the player rig when the delayed reload actually begins', async () => {
   const harness = await loadHitscanHarness({
     magazineSize: 2,
     reloadMs: 900,
@@ -409,6 +417,10 @@ test('empty-mag auto reload notifies the player rig so the reload pose starts im
   harness.setNow(1020);
   assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-2'), true);
 
+  assert.equal(harness.runtime.triggeredActions.length, 0);
+
+  harness.setNow(4020);
+  assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
   assert.equal(harness.runtime.triggeredActions.length, 1);
   assert.equal(harness.runtime.triggeredActions[0].action, 'reload');
   assert.equal(harness.runtime.triggeredActions[0].options.duration, 0.9);

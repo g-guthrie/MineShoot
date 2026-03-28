@@ -7,6 +7,7 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var domUtils = runtime.GameDomUtils || null;
+    var DESKTOP_AUTO_FIRE_STORAGE_KEY = 'mayhem.desktopAutoFireEnabled';
     var activeTestHandle = null;
     var activeGameplayControlsInstance = null;
 
@@ -28,6 +29,7 @@
         var touchMoveThumb = null;
         var touchMoveKnob = null;
         var touchJumpBtn = null;
+        var touchRollBtn = null;
         var touchMoveState = {
             pointerId: null,
             centerX: 0,
@@ -44,13 +46,10 @@
         };
         var touchJumpState = {
             pointerId: null,
-            lastTapAt: 0,
-            releaseTimer: 0,
-            startX: 0,
-            startY: 0,
-            swipeTriggered: false
+            releaseTimer: 0
         };
         var touchOrientationState = 'landscape';
+        var desktopAutoFireEnabled = true;
         var bound = false;
         var listenerRemovers = [];
 
@@ -77,14 +76,17 @@
         }
 
         function touchDevice() {
-            return !!(
-                typeof window !== 'undefined' &&
-                (
-                    ('ontouchstart' in window) ||
-                    Number(navigator && navigator.maxTouchPoints || 0) > 0 ||
-                    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
-                )
-            );
+            if (typeof window === 'undefined') return false;
+            var coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            var maxTouchPoints = typeof navigator !== 'undefined'
+                ? Number(navigator.maxTouchPoints || 0)
+                : 0;
+            var touchCapable = ('ontouchstart' in window) || maxTouchPoints > 0;
+            return !!(coarse && touchCapable);
+        }
+
+        function isPhoneSizedTouchDevice() {
+            return !!(touchDevice() && (window.innerWidth <= 640 || window.innerHeight <= 500));
         }
 
         function playerApi() {
@@ -93,6 +95,10 @@
 
         function sessionApi() {
             return runtime.GameSession || null;
+        }
+
+        function sharedApi() {
+            return runtime.GameShared || null;
         }
 
         function docsLoaderApi() {
@@ -117,6 +123,51 @@
 
         function setTransientDebug(text, ms) {
             if (opts.setTransientDebug) opts.setTransientDebug(text, ms);
+        }
+
+        function localStore() {
+            try {
+                return window.localStorage || null;
+            } catch (_err) {
+                return null;
+            }
+        }
+
+        function loadDesktopAutoFirePreference() {
+            var store = localStore();
+            if (!store || typeof store.getItem !== 'function') return true;
+            try {
+                var raw = store.getItem(DESKTOP_AUTO_FIRE_STORAGE_KEY);
+                if (raw == null) return true;
+                return raw === '1';
+            } catch (_err) {
+                return true;
+            }
+        }
+
+        function saveDesktopAutoFirePreference() {
+            var store = localStore();
+            if (!store || typeof store.setItem !== 'function') return desktopAutoFireEnabled;
+            try {
+                store.setItem(DESKTOP_AUTO_FIRE_STORAGE_KEY, desktopAutoFireEnabled ? '1' : '0');
+            } catch (_err) {
+                // no-op
+            }
+            return desktopAutoFireEnabled;
+        }
+
+        function isDesktopAutoFireEnabled() {
+            return !touchDevice() && !!desktopAutoFireEnabled;
+        }
+
+        function setDesktopAutoFireEnabled(nextValue) {
+            desktopAutoFireEnabled = !!nextValue;
+            saveDesktopAutoFirePreference();
+            return isDesktopAutoFireEnabled();
+        }
+
+        function toggleDesktopAutoFireEnabled() {
+            return setDesktopAutoFireEnabled(!desktopAutoFireEnabled);
         }
 
         function listen(target, type, handler, options) {
@@ -148,8 +199,8 @@
             return 84;
         }
 
-        function touchSprintRadiusPx() {
-            return 118;
+        function fullJumpHoldMs() {
+            return 200;
         }
 
         function syncTouchMovementState() {
@@ -164,7 +215,7 @@
                 left: touchLandscapeReady() && x < -deadzone,
                 right: touchLandscapeReady() && x > deadzone,
                 jump: touchLandscapeReady() && !!touchMoveState.jump,
-                sprint: touchLandscapeReady() && !!touchMoveState.sprint
+                sprint: false
             });
         }
 
@@ -174,7 +225,6 @@
             touchMoveState.centerY = 0;
             touchMoveState.dx = 0;
             touchMoveState.dy = 0;
-            touchMoveState.sprint = false;
             touchMoveState.jump = false;
             setTouchMoveVisual(0, 0);
             var player = playerApi();
@@ -206,11 +256,10 @@
         function updateMovePointer(event) {
             if (!event || touchMoveState.pointerId !== event.pointerId || !touchLandscapeReady()) return;
             var moveRadius = touchMoveRadiusPx();
-            var sprintRadius = touchSprintRadiusPx();
             var rawX = Number(event.clientX || 0) - touchMoveState.centerX;
             var rawY = Number(event.clientY || 0) - touchMoveState.centerY;
             var dist = Math.sqrt((rawX * rawX) + (rawY * rawY));
-            var visualScale = dist > sprintRadius ? (sprintRadius / dist) : 1;
+            var visualScale = dist > moveRadius ? (moveRadius / dist) : 1;
             var controlScale = dist > moveRadius ? (moveRadius / dist) : 1;
             var visualX = rawX * visualScale;
             var visualY = rawY * visualScale;
@@ -218,7 +267,6 @@
             var controlY = rawY * controlScale;
             touchMoveState.dx = controlX / moveRadius;
             touchMoveState.dy = controlY / moveRadius;
-            touchMoveState.sprint = dist > moveRadius;
             setTouchMoveVisual(visualX, visualY);
             syncTouchMovementState();
         }
@@ -282,12 +330,6 @@
             touchJumpState.releaseTimer = 0;
         }
 
-        function resetTouchJumpSwipeState() {
-            touchJumpState.startX = 0;
-            touchJumpState.startY = 0;
-            touchJumpState.swipeTriggered = false;
-        }
-
         function scheduleFullJumpRelease(pointerId) {
             clearTouchJumpReleaseTimer();
             if (typeof setTimeout !== 'function') return;
@@ -296,24 +338,12 @@
                 if (touchJumpState.pointerId !== pointerId) return;
                 touchJumpState.pointerId = null;
                 setJumpPressed(false);
-            }, 185);
+            }, fullJumpHoldMs());
         }
 
         function beginJumpPointer(event) {
             if (!event || touchJumpState.pointerId !== null || !touchLandscapeReady()) return;
-            var stamp = Date.now();
-            var doubleTap = (stamp - Number(touchJumpState.lastTapAt || 0)) < 260;
-            touchJumpState.lastTapAt = stamp;
-            if (doubleTap) {
-                triggerRoll();
-                setJumpPressed(false);
-                resetTouchJumpSwipeState();
-                return;
-            }
             touchJumpState.pointerId = event.pointerId;
-            touchJumpState.startX = Number(event.clientX || 0);
-            touchJumpState.startY = Number(event.clientY || 0);
-            touchJumpState.swipeTriggered = false;
             if (touchJumpBtn && touchJumpBtn.setPointerCapture) {
                 try {
                     touchJumpBtn.setPointerCapture(event.pointerId);
@@ -325,30 +355,10 @@
             scheduleFullJumpRelease(event.pointerId);
         }
 
-        function updateJumpPointer(event) {
-            if (!event || touchJumpState.pointerId !== event.pointerId || touchJumpState.swipeTriggered) return;
-            var dx = Number(event.clientX || 0) - Number(touchJumpState.startX || 0);
-            var dy = Number(event.clientY || 0) - Number(touchJumpState.startY || 0);
-            if (Math.sqrt((dx * dx) + (dy * dy)) < 26) return;
-            touchJumpState.swipeTriggered = true;
-            clearTouchJumpReleaseTimer();
-            setJumpPressed(false);
-            if (triggerRoll()) {
-                return;
-            }
-        }
-
         function endJumpPointer(event) {
             if (!event || touchJumpState.pointerId !== event.pointerId) return;
-            if (touchJumpState.swipeTriggered) {
-                touchJumpState.pointerId = null;
-                resetTouchJumpSwipeState();
-                setJumpPressed(false);
-                return;
-            }
             if (!touchJumpState.releaseTimer) {
                 touchJumpState.pointerId = null;
-                resetTouchJumpSwipeState();
                 setJumpPressed(false);
             }
         }
@@ -389,8 +399,6 @@
                 endLookPointer({ pointerId: touchLookState.pointerId });
                 clearTouchJumpReleaseTimer();
                 touchJumpState.pointerId = null;
-                touchJumpState.lastTapAt = 0;
-                resetTouchJumpSwipeState();
             }
             return next;
         }
@@ -402,7 +410,7 @@
             virtualCapture = true;
             setTouchRootVisible(true);
             updateTouchOrientationState();
-            return true;
+            return !isPhoneSizedTouchDevice() || touchLandscapeReady();
         }
 
         function deactivateTouchCaptureInternal() {
@@ -414,8 +422,6 @@
             endLookPointer({ pointerId: touchLookState.pointerId });
             clearTouchJumpReleaseTimer();
             touchJumpState.pointerId = null;
-            touchJumpState.lastTapAt = 0;
-            resetTouchJumpSwipeState();
             unlockLandscapeOrientation();
             return true;
         }
@@ -461,9 +467,7 @@
             var moveThumb = document.createElement('div');
             moveThumb.className = 'touch-stick touch-stick-left';
             moveThumb.innerHTML =
-                '<div class="touch-stick-outer"></div>' +
-                '<div class="touch-stick-ring"><div class="touch-stick-knob"></div></div>' +
-                '<div class="touch-stick-label">MOVE</div>';
+                '<div class="touch-stick-ring"><div class="touch-stick-knob"></div></div>';
             root.appendChild(moveThumb);
 
             var actionCluster = document.createElement('div');
@@ -471,7 +475,11 @@
             actionCluster.innerHTML =
                 '<button type="button" class="touch-btn touch-btn-jump" data-touch-action="jump">' +
                     '<span class="touch-btn-title">JUMP</span>' +
-                    '<span class="touch-btn-note">tap to full jump, swipe to roll</span>' +
+                    '<span class="touch-btn-note">full jump</span>' +
+                '</button>' +
+                '<button type="button" class="touch-btn touch-btn-roll" data-touch-action="roll">' +
+                    '<span class="touch-btn-title">ROLL</span>' +
+                    '<span class="touch-btn-note">quick dodge</span>' +
                 '</button>';
             root.appendChild(actionCluster);
             document.body.appendChild(root);
@@ -483,6 +491,7 @@
             touchMoveThumb = moveThumb;
             touchMoveKnob = moveThumb.querySelector('.touch-stick-knob');
             touchJumpBtn = actionCluster.querySelector('[data-touch-action="jump"]');
+            touchRollBtn = actionCluster.querySelector('[data-touch-action="roll"]');
 
             listen(window, 'resize', updateTouchOrientationState);
             listen(window, 'orientationchange', updateTouchOrientationState);
@@ -532,17 +541,17 @@
                 event.preventDefault();
                 beginJumpPointer(event);
             });
-            listen(touchJumpBtn, 'pointermove', function (event) {
-                if (!virtualCapture || !touchLandscapeReady()) return;
-                event.preventDefault();
-                updateJumpPointer(event);
-            });
             listen(touchJumpBtn, 'pointerup', function (event) {
                 event.preventDefault();
                 endJumpPointer(event);
             });
             listen(touchJumpBtn, 'pointercancel', function (event) {
                 endJumpPointer(event);
+            });
+            listen(touchRollBtn, 'pointerdown', function (event) {
+                if (!virtualCapture || !touchLandscapeReady()) return;
+                event.preventDefault();
+                triggerRoll();
             });
 
             listen(topbar.querySelector('[data-touch-action="menu"]'), 'click', function (event) {
@@ -553,6 +562,8 @@
 
             updateTouchOrientationState();
         }
+
+        desktopAutoFireEnabled = loadDesktopAutoFirePreference();
 
         var weaponSwapInput = runtime.GameWeaponSwapInput && runtime.GameWeaponSwapInput.create
             ? runtime.GameWeaponSwapInput.create({
@@ -799,11 +810,14 @@
         }
 
         function bindReloadControls() {
+            if (touchDevice()) return;
             listen(document, 'keydown', function (e) {
                 if (e.repeat) return;
                 if (!matchesBinding('reload', e, 'KeyR')) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
                 if (!hasInputCapture()) return;
                 e.preventDefault();
+                e.stopPropagation();
                 triggerReload();
             });
         }
@@ -900,6 +914,18 @@
             });
         }
 
+        function bindAutoFireToggleControl() {
+            listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (!matchesBinding('toggle_auto_fire', e, 'KeyG')) return;
+                if (touchDevice()) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
+                e.preventDefault();
+                var enabled = toggleDesktopAutoFireEnabled();
+                setTransientDebug(enabled ? 'Desktop auto fire: ON' : 'Desktop auto fire: OFF', 1100);
+            });
+        }
+
         return {
             bind: function () {
                 if (bound) return;
@@ -912,6 +938,7 @@
                 bindSoundToggleControl();
                 bindThrowableControls();
                 bindRollControls();
+                bindAutoFireToggleControl();
                 bindDebugKeys();
             },
             unbind: function () {
@@ -934,6 +961,7 @@
                 touchMoveThumb = null;
                 touchMoveKnob = null;
                 touchJumpBtn = null;
+                touchRollBtn = null;
                 deactivateTouchCaptureInternal();
                 touchLookState.pointerId = null;
             },
@@ -947,6 +975,12 @@
             },
             isTouchMode: function () {
                 return touchDevice();
+            },
+            isPhoneSizedTouchDevice: function () {
+                return isPhoneSizedTouchDevice();
+            },
+            isDesktopAutoFireEnabled: function () {
+                return isDesktopAutoFireEnabled();
             },
             hasVirtualCapture: function () {
                 return !!virtualCapture && touchLandscapeReady();
@@ -969,7 +1003,6 @@
                 resetTouchMovementState();
                 endLookPointer({ pointerId: touchLookState.pointerId });
                 clearTouchJumpReleaseTimer();
-                resetTouchJumpSwipeState();
             }
         };
     }
@@ -988,6 +1021,28 @@
                 activeGameplayControlsInstance &&
                 activeGameplayControlsInstance.isTouchMode &&
                 activeGameplayControlsInstance.isTouchMode()
+            );
+        },
+        isPhoneSizedTouchDevice: function () {
+            return !!(
+                activeGameplayControlsInstance &&
+                activeGameplayControlsInstance.isPhoneSizedTouchDevice &&
+                activeGameplayControlsInstance.isPhoneSizedTouchDevice()
+            );
+        },
+        isDesktopAutoFireEnabled: function () {
+            if (!activeGameplayControlsInstance) {
+                try {
+                    var raw = window.localStorage ? window.localStorage.getItem(DESKTOP_AUTO_FIRE_STORAGE_KEY) : null;
+                    return raw == null ? true : raw === '1';
+                } catch (_err) {
+                    return true;
+                }
+            }
+            return !!(
+                activeGameplayControlsInstance &&
+                activeGameplayControlsInstance.isDesktopAutoFireEnabled &&
+                activeGameplayControlsInstance.isDesktopAutoFireEnabled()
             );
         },
         _test: {

@@ -272,7 +272,6 @@
         {
             title: 'Combat',
             rows: [
-                { actionId: 'reload', fallbackKey: 'R', title: 'Reload', note: 'Manual reload starts immediately. Empty magazines still auto-reload if you forget.' },
                 { actionIds: ['weapon_slot_1', 'weapon_slot_2'], fallbackKeys: ['1', '2'], title: 'Weapon Slots', note: 'These map to your two menu loadout slots. The wheel is a straight toggle between them.' },
                 { actionId: 'throwable', fallbackKey: 'Q', title: 'Throwable', note: 'Frag and molotov preview on hold; plasma and knife throw on press/release with no arc preview.' }
             ]
@@ -282,6 +281,7 @@
             rows: [
                 { key: 'Menu', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to lock the mouse again.' },
                 { actionId: 'open_manual', fallbackKey: 'I', title: 'Field Manual', note: 'Open or close this manual from both menu and live gameplay.' },
+                { actionId: 'toggle_auto_fire', fallbackKey: 'G', title: 'Auto Fire', note: 'Desktop only. Toggles red-reticle auto fire on or off.' },
                 { actionId: 'toggle_debug', fallbackKey: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' }
             ]
         }
@@ -1035,7 +1035,8 @@
                 'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and swap weapons with the wheel or your slot keys.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
                 'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('roll', 'E') + ' to roll in your movement direction.',
-                'Standard guns do not manually scope in the current build. Sniper auto-scopes when you equip it, and empty magazines auto-reload if you let them.'
+                'Desktop auto fire on a red reticle can be toggled with ' + inputLabels.getBindingLabel('toggle_auto_fire', 'G') + '.',
+                'Standard guns do not manually scope in the current build. Sniper auto-scopes when you equip it, and weapons now refill automatically when you stop firing long enough.'
             ]),
             '</section>',
             '<section class="docs-card">',
@@ -1090,9 +1091,9 @@
             '<p>This page is about what your buttons really do in the current build. The game expects pointer lock, layered inputs, and fast transitions between moving, shooting, and repositioning instead of one system at a time.</p>',
             renderTagRow([
                 bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']),
-                inputLabels.getBindingLabel('reload', 'R') + ' reload',
                 bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or wheel',
-                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('roll', 'E')
+                inputLabels.getBindingLabel('throwable', 'Q') + ' / ' + inputLabels.getBindingLabel('roll', 'E'),
+                inputLabels.getBindingLabel('toggle_auto_fire', 'G') + ' auto fire'
             ]),
             '</section>',
             renderControls(CONTROL_GROUPS),
@@ -1115,8 +1116,9 @@
                 'The roll keeps its opening direction until it ends, ignores new movement and jump presses until you release them, and you do not fire during it.',
                 'Sniper auto-scopes when you equip it, cannot fire until the quick scope-in finishes, and is forced into slot 2 by the loadout rules.',
                 'The bindings menu still shows ADS inputs, but in the current build only sniper uses a live scoped view.',
+                'Desktop red-reticle auto fire defaults on and can be toggled with ' + inputLabels.getBindingLabel('toggle_auto_fire', 'G') + '.',
                 inputLabels.getBindingLabel('throwable', 'Q') + ' previews frag and molotov on hold, while plasma and knife are immediate no-preview throws.',
-                inputLabels.getBindingLabel('reload', 'R') + ' forces a reload early, and empty magazines still auto-reload if you forget.',
+                'Phone uses auto reload only. Desktop can still press ' + inputLabels.getBindingLabel('reload', 'R') + ' to start reloading early before the automatic refill delay ends.',
                 'The field manual is available in menu and in live gameplay on ' + inputLabels.getBindingLabel('open_manual', 'I') + '.'
             ]),
             '</section>',

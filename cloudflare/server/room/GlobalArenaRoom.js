@@ -103,6 +103,8 @@ import {
   usesConfiguredBots as roomUsesConfiguredBots
 } from './RoomIdentity.js';
 import { applyPrivateRoomConfig as applyRoomPrivateConfig } from './RoomPrivateConfig.js';
+import { setPrivateRoomState } from '../private-rooms.js';
+import { notifyPrivateRoomLobbyHub } from '../private-room-lobby-hub-sync.js';
 import {
   applyEntitySpawnPoint as applyRoomEntitySpawnPoint,
   activateEntityMatchEntry as activateRoomEntityMatchEntry,
@@ -382,6 +384,23 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
+  syncPrivateRoomLobbyPhase(roomPhase) {
+    if (!isPrivateMatchRoom(this.roomName)) return Promise.resolve(null);
+    const nextPhase = String(roomPhase || '') === ROOM_PHASE_ACTIVE ? ROOM_PHASE_ACTIVE : 'lobby';
+    const currentConfig = this.privateRoomConfig || defaultPrivateRoomConfig();
+    if (String(currentConfig.roomPhase || '') !== nextPhase) {
+      this.privateRoomConfig = Object.assign({}, currentConfig, {
+        roomPhase: nextPhase
+      });
+    }
+    this.broadcastLobbyState();
+    return Promise.resolve(setPrivateRoomState(this.env, this.roomName, {
+      roomPhase: nextPhase
+    }))
+      .then(() => notifyPrivateRoomLobbyHub(this.env, this.roomName))
+      .catch(() => null);
+  }
+
   buildWelcomePayload(selfId) {
     return buildRoomWelcomePayload(this, selfId, {
       msgType: MSG_S2C.WELCOME,
@@ -505,12 +524,16 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   finishPublicMatch(winnerId, winnerTeam) {
-    return finishRoomPublicMatch(this, {
+    const finished = finishRoomPublicMatch(this, {
       nowMs,
       matchResetDelayMs: MATCH_RESET_DELAY_MS,
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM
     }, winnerId, winnerTeam);
+    if (finished && isPrivateMatchRoom(this.roomName)) {
+      this.syncPrivateRoomLobbyPhase('lobby');
+    }
+    return finished;
   }
 
   recordElimination(sourceId, targetId) {

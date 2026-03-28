@@ -14,11 +14,12 @@
         { id: 'jump', title: 'Jump', group: 'Movement', defaultToken: 'Space', note: 'Variable jump height based on hold length.' },
         { id: 'roll', title: 'Roll', group: 'Movement', defaultToken: 'KeyE', note: 'Trigger a movement roll in your current travel direction.' },
         { id: 'ads_key', title: 'ADS Key', group: 'Combat', defaultToken: 'Alt', note: 'Scoped-aim input for supported weapons. In the current build this mainly matters for sniper.' },
-        { id: 'reload', title: 'Reload', group: 'Combat', defaultToken: 'KeyR', note: 'Manual reload. Empty magazines still auto-reload.' },
+        { id: 'reload', title: 'Reload', group: 'Combat', defaultToken: 'KeyR', note: 'Desktop only. Starts reload early before automatic reload begins.' },
         { id: 'weapon_slot_1', title: 'Weapon Slot 1', group: 'Combat', defaultToken: 'Digit1', note: 'Select your first loadout weapon.' },
         { id: 'weapon_slot_2', title: 'Weapon Slot 2', group: 'Combat', defaultToken: 'Digit2', note: 'Select your second loadout weapon.' },
         { id: 'throwable', title: 'Throwable', group: 'Combat', defaultToken: 'KeyQ', note: 'Throw or preview the selected throwable.' },
         { id: 'open_manual', title: 'Open Field Manual', group: 'Session', defaultToken: 'KeyI', note: 'Open or close the field manual.' },
+        { id: 'toggle_auto_fire', title: 'Toggle Auto Fire', group: 'Session', defaultToken: 'KeyG', note: 'Toggle desktop red-reticle auto fire on or off.' },
         { id: 'toggle_debug', title: 'Toggle Debug Visuals', group: 'Session', defaultToken: 'KeyH', note: 'Toggle extra combat debug helpers.' }
     ];
     var FIXED_CONTROLS = [
@@ -208,8 +209,9 @@
             var seenTokens = {};
             for (var i = 0; i < ACTION_DEFS.length; i++) {
                 var actionId = ACTION_DEFS[i].id;
-                if (!Object.prototype.hasOwnProperty.call(parsed, actionId)) return buildDefaultBindings();
-                var token = normalizeToken(parsed[actionId]);
+                var token = Object.prototype.hasOwnProperty.call(parsed, actionId)
+                    ? normalizeToken(parsed[actionId])
+                    : normalizeToken(ACTION_DEFS[i].defaultToken);
                 if (!isSupportedToken(token) || seenTokens[token]) return buildDefaultBindings();
                 next[actionId] = token;
                 seenTokens[token] = true;
@@ -319,6 +321,7 @@
                     group: def.group,
                     defaultToken: def.defaultToken,
                     note: def.note,
+                    hidden: !!def.hidden,
                     order: actionOrderIndex(def.id)
                 };
             });

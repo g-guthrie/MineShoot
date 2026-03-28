@@ -287,3 +287,48 @@ test('private room four-team tdm preserves assignments and scores the winning te
   assert.equal(room.matchState.teamProgress.charlie, 1);
   assert.deepEqual(finishCall, { winnerId: '', winnerTeam: 'charlie' });
 });
+
+test('private room reset stays in the lobby once the room phase has already dropped back from active', () => {
+  const room = {
+    roomName: 'private-room1',
+    gameMode: 'tdm',
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', kills: 3, deaths: 1, teamId: 'alpha', progressScore: 3 }]
+    ]),
+    matchState: Object.assign(emptyMatchState('tdm'), {
+      started: true,
+      ended: true,
+      endedAt: 100,
+      resetAt: 100
+    }),
+    privateRoomConfig: {
+      roomMode: 'tdm',
+      roomPhase: 'lobby'
+    },
+    isPublicMatchRoom() { return false; },
+    spawnEntityRandomly() {},
+    applySpawnShield() {},
+    startPublicMatchIfReadyCalled: 0,
+    startPublicMatchIfReady() {
+      this.startPublicMatchIfReadyCalled += 1;
+      return false;
+    },
+    syncPrivateRoomMatchStateCalled: 0,
+    syncPrivateRoomMatchState() {
+      this.syncPrivateRoomMatchStateCalled += 1;
+    }
+  };
+
+  const changed = maybeResetPublicMatch(room, {
+    emptyMatchState,
+    isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
+    nowMs: () => 200,
+    roomPhaseActive: 'active'
+  });
+
+  assert.equal(changed, true);
+  assert.equal(room.matchState.ended, false);
+  assert.equal(room.matchState.started, false);
+  assert.equal(room.startPublicMatchIfReadyCalled, 1);
+  assert.equal(room.syncPrivateRoomMatchStateCalled, 0);
+});

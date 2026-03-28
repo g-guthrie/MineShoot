@@ -553,7 +553,7 @@ test('gameplay controls keep keyboard weapon slot switching intact', async () =>
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'shotgun' }]);
 });
 
-test('gameplay controls trigger roll on E and ignore the removed G binding', async () => {
+test('gameplay controls trigger roll on E while leaving G available for auto-fire toggle', async () => {
   const harness = await loadControlsHarness();
 
   harness.documentObj.dispatch('keydown', {
@@ -563,7 +563,9 @@ test('gameplay controls trigger roll on E and ignore the removed G binding', asy
   });
   harness.documentObj.dispatch('keydown', {
     code: 'KeyG',
-    repeat: false
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
   });
 
   assert.equal(harness.calls.rolls, 1);

@@ -708,12 +708,30 @@
             var pausePhase = paused && String(detail.activityState || '') === 'paused'
                 ? 'paused'
                 : (paused ? 'resume' : '');
+            var currentLaunch = getState().launch || {};
+            var nextPhase = currentLaunch.phase;
+            if (detail.awaitingInputCapture) {
+                nextPhase = 'retryable';
+            } else if (pausePhase) {
+                nextPhase = pausePhase;
+            } else if (detail.inMatch) {
+                nextPhase = 'in_match';
+            } else if (!detail.runtimeReady) {
+                nextPhase = currentLaunch.error ? 'error' : 'idle';
+            }
+            if (!detail.runtimeReady) {
+                if (String(detail.activityState || '') === 'private_room_lobby') {
+                    setActiveSurface('room');
+                } else if (String(detail.activityState || '') === 'menu') {
+                    setActiveSurface('main');
+                }
+            }
             setPaused(paused);
             setLaunchState({
                 hasRuntime: !!detail.runtimeReady,
                 canResume: !!detail.canResume,
                 activityState: String(detail.activityState || 'menu'),
-                phase: detail.awaitingInputCapture ? 'retryable' : (pausePhase || (detail.inMatch ? 'in_match' : getState().launch.phase))
+                phase: nextPhase
             });
             render();
         }

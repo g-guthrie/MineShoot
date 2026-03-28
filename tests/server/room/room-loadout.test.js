@@ -50,6 +50,9 @@ test('room loadout runtime materializes ammo and throwable inventories from the 
     shotgun: {
       ammoInMag: 6,
       reloadUntil: 0,
+      reloadStartedAt: 0,
+      reloadSourceAmmo: 0,
+      autoReloadAt: 0,
       reloadedFlashUntil: 0
     }
   });

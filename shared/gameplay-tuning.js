@@ -682,6 +682,16 @@ export function canWeaponLoadoutEquipId(loadout, weaponId, deps = {}) {
   return normalizeWeaponLoadout(loadout, defaultWeaponLoadout, deps).indexOf(id) >= 0;
 }
 
+export const STANDARD_AUTO_RELOAD_DELAY_MS = 3000;
+
+export function resolveAutoReloadDelayMs(deps = {}) {
+  return STANDARD_AUTO_RELOAD_DELAY_MS;
+}
+
+export function resolveWeaponAutoReloadDelayMs(weaponId, deps = {}) {
+  return resolveAutoReloadDelayMs(deps);
+}
+
 export function createWeaponAmmoRuntime(loadout, deps = {}) {
   const ammo = {};
   const weaponStats = deps.weaponStats || gameplayTuning.weaponStats || {};
@@ -692,10 +702,14 @@ export function createWeaponAmmoRuntime(loadout, deps = {}) {
   for (let i = 0; i < ids.length; i++) {
     const weaponId = String(ids[i] || '');
     const stats = weaponStats[weaponId] || null;
-    if (!stats || !(Number(stats.magazineSize || 0) > 0)) continue;
+    if (!stats) continue;
+    if (!(Number(stats.magazineSize || 0) > 0)) continue;
     ammo[weaponId] = {
       ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
       reloadUntil: 0,
+      reloadStartedAt: 0,
+      reloadSourceAmmo: 0,
+      autoReloadAt: 0,
       reloadedFlashUntil: 0
     };
   }
@@ -736,6 +750,9 @@ runtime.GameShared.getSelectableWeaponIds = getSelectableWeaponIds;
 runtime.GameShared.isSelectableWeaponId = isSelectableWeaponId;
 runtime.GameShared.normalizeWeaponLoadout = normalizeWeaponLoadout;
 runtime.GameShared.canWeaponLoadoutEquipId = canWeaponLoadoutEquipId;
+runtime.GameShared.autoReloadDelayMs = STANDARD_AUTO_RELOAD_DELAY_MS;
+runtime.GameShared.resolveAutoReloadDelayMs = resolveAutoReloadDelayMs;
+runtime.GameShared.resolveWeaponAutoReloadDelayMs = resolveWeaponAutoReloadDelayMs;
 runtime.GameShared.createWeaponAmmoRuntime = createWeaponAmmoRuntime;
 runtime.GameShared.getDefaultThrowableId = getDefaultThrowableId;
 runtime.GameShared.normalizeThrowableId = normalizeThrowableId;

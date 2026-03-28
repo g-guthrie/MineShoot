@@ -59,6 +59,7 @@ function defaultBindings() {
     weapon_slot_2: 'Digit2',
     throwable: 'KeyQ',
     open_manual: 'KeyI',
+    toggle_auto_fire: 'KeyG',
     toggle_debug: 'KeyH'
   };
 }

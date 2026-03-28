@@ -227,7 +227,7 @@ Notes:
 - This Pages command deploys the current local `dist/` output, including uncommitted work.
 - Wrangler prints a preview deployment URL like `https://<hash>.mayhem-9uj.pages.dev`.
 - The production Pages URL for this project remains `https://mayhem-9uj.pages.dev/`.
-- If Wrangler warns that `wrangler.toml` does not yet include `pages_build_output_dir`, you can ignore that warning for now. The deploy still proceeds correctly with the explicit `dist` argument above.
+- `wrangler.toml` now declares `pages_build_output_dir = "dist"`, so Pages deploys should use the same output directory without that warning.
 - The wrapper script lives at [scripts/deploy-prod.sh](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/scripts/deploy-prod.sh).
 
 ### E) Pages/frontend note

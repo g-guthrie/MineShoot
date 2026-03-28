@@ -41,6 +41,7 @@ function clampNumber(value, min, max, fallback = 0) {
 
 const FORWARD_ROLL_ACTION_DURATION_MS = 360;
 const BACKWARD_ROLL_ACTION_DURATION_MS = 520;
+const STANDARD_AUTO_RELOAD_DELAY_MS = 3000;
 
 function normalizeRollInputState(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -494,7 +495,7 @@ export function syncWeaponAmmoState(room, entity, weaponId, now, deps) {
   const defaultWeaponLoadout = deps.defaultWeaponLoadout || [];
   if (!entity || !weaponId) return null;
   const stats = weaponStats[weaponId];
-  if (!stats || !(Number(stats.magazineSize || 0) > 0)) return null;
+  if (!stats) return null;
   if (!entity.weaponAmmo || typeof entity.weaponAmmo !== 'object') {
     entity.weaponAmmo = createWeaponAmmoRuntime(entity.weaponLoadout || defaultWeaponLoadout);
   }
@@ -502,14 +503,40 @@ export function syncWeaponAmmoState(room, entity, weaponId, now, deps) {
     entity.weaponAmmo[weaponId] = {
       ammoInMag: Math.max(0, Number(stats.magazineSize || 0)),
       reloadUntil: 0,
+      reloadStartedAt: 0,
+      reloadSourceAmmo: 0,
+      autoReloadAt: 0,
       reloadedFlashUntil: 0
     };
   }
   const entry = entity.weaponAmmo[weaponId];
-  if (entry.reloadUntil > 0 && now >= entry.reloadUntil) {
-    entry.reloadUntil = 0;
-    entry.ammoInMag = Math.max(0, Number(stats.magazineSize || 0));
-    entry.reloadedFlashUntil = now + Number(deps.reloadedFlashHoldMs || 0);
+  const magazineSize = Math.max(0, Number(stats.magazineSize || 0));
+  const reloadMs = Math.max(0, Number(stats.reloadMs || 0));
+  const autoReloadDelayMs = STANDARD_AUTO_RELOAD_DELAY_MS;
+  if (magazineSize <= 0 || reloadMs <= 0) return entry;
+  if (entry.reloadUntil > 0) {
+    if (now >= entry.reloadUntil) {
+      entry.reloadUntil = 0;
+      entry.reloadStartedAt = 0;
+      entry.reloadSourceAmmo = 0;
+      entry.autoReloadAt = 0;
+      entry.ammoInMag = magazineSize;
+      entry.reloadedFlashUntil = now + Number(deps.reloadedFlashHoldMs || 0);
+      return entry;
+    }
+    const reloadStartedAt = Math.max(0, Number(entry.reloadStartedAt || now));
+    const reloadSourceAmmo = Math.max(0, Number(entry.reloadSourceAmmo || 0));
+    const progress = Math.max(0, Math.min(1, (now - reloadStartedAt) / Math.max(1, reloadMs)));
+    const ammoFloat = reloadSourceAmmo + ((magazineSize - reloadSourceAmmo) * progress);
+    entry.ammoInMag = Math.max(reloadSourceAmmo, Math.min(magazineSize, Math.floor(ammoFloat)));
+    return entry;
+  }
+  if (Number(entry.autoReloadAt || 0) > 0 && now >= Number(entry.autoReloadAt || 0) && Number(entry.ammoInMag || 0) < magazineSize) {
+    entry.reloadStartedAt = now;
+    entry.reloadSourceAmmo = Math.max(0, Number(entry.ammoInMag || 0));
+    entry.reloadUntil = now + reloadMs;
+    entry.autoReloadAt = 0;
+    entry.reloadedFlashUntil = 0;
   }
   return entry;
 }
@@ -526,11 +553,15 @@ export function beginWeaponReload(room, entity, weaponId, now, deps) {
   const stats = weaponStats[weaponId];
   const entry = room.syncWeaponAmmoState(entity, weaponId, now);
   if (!stats || !entry) return false;
+  const magazineSize = Math.max(0, Number(stats.magazineSize || 0));
   const reloadMs = Math.max(0, Number(stats.reloadMs || 0));
-  if (reloadMs <= 0 || entry.reloadUntil > now) return false;
-  if (Number(entry.ammoInMag || 0) >= Math.max(0, Number(stats.magazineSize || 0))) return false;
-  entry.ammoInMag = 0;
+  if (magazineSize <= 0 || reloadMs <= 0) return false;
+  if (Number(entry.reloadUntil || 0) > now) return false;
+  if (Number(entry.ammoInMag || 0) >= magazineSize) return false;
+  entry.reloadStartedAt = now;
+  entry.reloadSourceAmmo = Math.max(0, Number(entry.ammoInMag || 0));
   entry.reloadUntil = now + reloadMs;
+  entry.autoReloadAt = 0;
   entry.reloadedFlashUntil = 0;
   return true;
 }
@@ -541,10 +572,18 @@ export function consumeWeaponAmmo(room, entity, weaponId, now, deps) {
   const stats = weaponStats[weaponId];
   const entry = room.syncWeaponAmmoState(entity, weaponId, now);
   if (!stats || !entry) return true;
+  const magazineSize = Math.max(0, Number(stats.magazineSize || 0));
+  const autoReloadDelayMs = STANDARD_AUTO_RELOAD_DELAY_MS;
+  if (entry.reloadUntil > now) {
+    entry.reloadUntil = 0;
+    entry.reloadStartedAt = 0;
+    entry.reloadSourceAmmo = 0;
+  }
+  entry.autoReloadAt = 0;
   entry.ammoInMag = Math.max(0, Number(entry.ammoInMag || stats.magazineSize || 0) - 1);
   entry.reloadedFlashUntil = 0;
-  if (entry.ammoInMag <= 0) {
-    room.beginWeaponReload(entity, weaponId, now);
+  if (entry.ammoInMag < magazineSize) {
+    entry.autoReloadAt = now + autoReloadDelayMs;
   }
   return true;
 }
@@ -601,17 +640,17 @@ export function handleEquipWeapon(room, player, msg, deps) {
 
 export function handleReload(room, player, msg, deps) {
   deps = deps || {};
-  const nowMs = typeof deps.nowMs === 'function' ? deps.nowMs : () => 0;
+  const nowMs = deps.nowMs || Date.now;
   const weaponStats = deps.weaponStats || {};
-  const canEquipWeaponId = typeof deps.canEquipWeaponId === 'function'
-    ? deps.canEquipWeaponId
-    : () => true;
+  const canEquipWeaponId = deps.canEquipWeaponId;
   if (!player || !player.alive) return false;
-  if (room && typeof room.canEntityUseWeapon === 'function' && !room.canEntityUseWeapon(player)) return false;
+  if (!room.canEntityUseWeapon(player)) return false;
   const weaponId = String(msg && msg.weaponId || player.weaponId || '');
-  if (!weaponStats[weaponId]) return false;
-  if (!canEquipWeaponId(player, weaponId)) return false;
-  player.weaponId = weaponId;
+  if (!weaponId || !weaponStats[weaponId]) return false;
+  if (weaponId !== String(player.weaponId || '')) {
+    if (typeof canEquipWeaponId !== 'function' || !canEquipWeaponId(player, weaponId)) return false;
+    player.weaponId = weaponId;
+  }
   return !!room.beginWeaponReload(player, weaponId, nowMs());
 }
 
@@ -695,9 +734,10 @@ export function handleFire(room, player, msg, deps) {
   if (!player.lastShotTokenByWeapon) player.lastShotTokenByWeapon = {};
   if (shotToken && player.lastShotTokenByWeapon && player.lastShotTokenByWeapon[weaponId] === shotToken) return;
   if ((now - prev) < stats.cooldownMs) return;
-  if (room.reloadRemainingForWeapon(player, weaponId, now) > 0) return;
+  if (room.reloadRemainingForWeapon(player, weaponId, now) > 0 && ammoEntry && Number(ammoEntry.ammoInMag || 0) <= 0) {
+    return;
+  }
   if (ammoEntry && Number(ammoEntry.ammoInMag || 0) <= 0) {
-    room.beginWeaponReload(player, weaponId, now);
     return;
   }
   let engagedIds = [];

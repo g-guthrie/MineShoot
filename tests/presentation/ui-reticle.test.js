@@ -327,7 +327,7 @@ test('weapon info renders compact stacked lines for name, ammo, and meta', async
   assert.equal(weaponInfo.children.length, 3);
   assert.equal(weaponInfo.children[0].textContent, 'Machine Gun');
   assert.equal(weaponInfo.children[1].textContent, '17/50');
-  assert.equal(weaponInfo.children[2].textContent, 'AUTO | 15/20 DMG');
+  assert.equal(weaponInfo.children[2].textContent, '15/20 DMG');
   assert.equal(weaponInfo.children[0].className, 'weapon-line weapon-line-name');
   assert.equal(weaponInfo.children[1].className, 'weapon-line weapon-line-ammo');
   assert.equal(weaponInfo.children[2].className, 'weapon-line weapon-line-meta');

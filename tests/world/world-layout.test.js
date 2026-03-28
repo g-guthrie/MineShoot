@@ -808,3 +808,37 @@ test('desert arch shadow slabs sit below the solid spans instead of overlapping 
   assert.ok((smallShadow.y + (smallShadow.h * 0.5)) < (smallSpan.y - (smallSpan.h * 0.5)));
   assert.ok((largeShadow.y + (largeShadow.h * 0.5)) < (largeSpan.y - (largeSpan.h * 0.5)));
 });
+
+test('pirate cove splits water and sand into one flat flush seam without overlap', () => {
+  const runtime = ensureHeadlessWorldRuntime();
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['pirate-cove'];
+  assert.equal(typeof builder, 'function');
+
+  const rawBounds = quadrantBounds('r1c1');
+  const recorder = createGeometryRecorder();
+  builder(rawBounds, recorder.place, {
+    ...recorder.ctx,
+    biomeEntry: { biome: 'pirate-cove' },
+    rawBounds
+  });
+
+  const water = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    block.userData &&
+    block.userData.role === 'water'
+  );
+  const sand = recorder.blocks.find((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
+    block.userData &&
+    block.userData.role === 'shore' &&
+    block.userData.part === 'sand'
+  );
+
+  assert.ok(water);
+  assert.ok(sand);
+  assert.ok(Math.abs((water.y + (water.h * 0.5)) - (sand.y + (sand.h * 0.5))) < 0.0001);
+  assert.ok(Math.abs((water.x + (water.w * 0.5)) - (sand.x - (sand.w * 0.5))) < 0.0001);
+  assert.ok((water.x + (water.w * 0.5)) <= (sand.x - (sand.w * 0.5)));
+});

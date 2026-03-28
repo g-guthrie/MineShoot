@@ -312,6 +312,15 @@
 
         function ensureRuntimeShell() {
             if (runtimeShell) return runtimeShell;
+            function showOverlay() {
+                var overlayEl = document.getElementById('overlay');
+                if (document && document.body && document.body.setAttribute) {
+                    document.body.setAttribute('data-overlay-active', 'true');
+                }
+                if (!overlayEl) return;
+                overlayEl.hidden = false;
+                overlayEl.style.display = 'flex';
+            }
             var shellFactory = depGet('GameRuntimeShell');
             if (!shellFactory || !shellFactory.create) {
                 throw new Error('GameRuntimeShell is required before gameplay starts.');
@@ -329,14 +338,12 @@
                 },
                 startRuntime: initGame,
                 onNetworkLaunchFailure: function (message, err) {
-                    var overlayEl = document.getElementById('overlay');
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    showOverlay();
                     console.error('Startup error:', err);
                     hardResetFailedNetworkLaunch(message);
                 },
                 onLaunchError: function (message, err) {
-                    var overlayEl = document.getElementById('overlay');
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    showOverlay();
                     var dbg = document.getElementById('debug-info');
                     if (dbg) dbg.textContent = 'Startup error: ' + message;
                     console.error('Startup error:', err);

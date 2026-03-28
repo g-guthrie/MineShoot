@@ -72,6 +72,18 @@
 
         var overlayEl = document.getElementById('overlay');
 
+        function setOverlayActiveFlag(visible) {
+            if (!document || !document.body || !document.body.setAttribute) return;
+            document.body.setAttribute('data-overlay-active', visible ? 'true' : 'false');
+        }
+
+        function setOverlayVisible(visible) {
+            setOverlayActiveFlag(visible);
+            if (!overlayEl) return;
+            overlayEl.hidden = !visible;
+            overlayEl.style.display = visible ? 'flex' : 'none';
+        }
+
         function menuSurfaceEl() {
             return document.getElementById('menu-surface');
         }
@@ -125,6 +137,13 @@
             timer: null
         };
         var activityStateOverride = '';
+
+        function setPhoneLandscapeRequirement(required) {
+            if (typeof window === 'undefined') return;
+            var setter = window.__MAYHEM_SET_PHONE_LANDSCAPE_REQUIREMENT;
+            if (typeof setter !== 'function') return;
+            setter(required ? 'required' : 'optional');
+        }
 
         function baseActivityState() {
             return opts.getActivityState ? String(opts.getActivityState() || 'menu') : 'menu';
@@ -407,7 +426,8 @@
                 : String(context && context.gameMode || '').toUpperCase();
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
             clearActivityStateOverride();
-            if (overlayEl) overlayEl.style.display = 'flex';
+            setPhoneLandscapeRequirement(true);
+            setOverlayVisible(true);
             isPlaying = false;
             pendingInputCapture = true;
             clearIdleMonitor();
@@ -421,7 +441,7 @@
             }
             if (els.note) {
                 els.note.textContent = opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()
-                    ? 'Tap ENTER MATCH to bring up the touch controls. Rotate your phone sideways to play.'
+                    ? 'Phones are landscape-only. Turn your phone sideways, then tap ENTER MATCH.'
                     : 'Click ENTER MATCH to capture the mouse and drop into the arena.';
             }
             if (els.roomLabel) {
@@ -436,8 +456,9 @@
 
         function showGameplayPrompt() {
             clearActivityStateOverride();
+            setPhoneLandscapeRequirement(true);
             if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
-            if (overlayEl) overlayEl.style.display = 'flex';
+            setOverlayVisible(true);
             isPlaying = false;
             pendingInputCapture = false;
             clearIdleMonitor();
@@ -449,8 +470,9 @@
 
         function restoreResumablePauseState() {
             clearActivityStateOverride();
+            setPhoneLandscapeRequirement(true);
             if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
-            if (overlayEl) overlayEl.style.display = 'flex';
+            setOverlayVisible(true);
             isPlaying = false;
             pendingInputCapture = false;
             clearIdleMonitor();
@@ -467,6 +489,7 @@
             postGameState.matchEndedAt = 0;
             postGameState.snapshot = null;
             clearIdleMonitor();
+            setPhoneLandscapeRequirement(false);
             if (els.flow) els.flow.hidden = true;
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = true;
@@ -482,7 +505,7 @@
             if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) {
                 if (opts.teardownRuntime) opts.teardownRuntime('postgame_private_room');
                 setActivityStateOverride('private_room_lobby');
-                if (overlayEl) overlayEl.style.display = 'flex';
+                setOverlayVisible(true);
                 isPlaying = false;
                 clearIdleMonitor();
                 setResumeButtonsVisible(false);
@@ -541,13 +564,14 @@
 
             clearIdleMonitor();
             clearPostGameTimer();
+            setPhoneLandscapeRequirement(true);
             if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
             if (document.pointerLockElement && document.exitPointerLock) {
                 document.exitPointerLock();
             }
             setMenuContext('active-match');
             setMenuOverlayMode('postgame');
-            if (overlayEl) overlayEl.style.display = 'flex';
+            setOverlayVisible(true);
             isPlaying = false;
             pendingInputCapture = false;
             hideLaunchHandoff();
@@ -610,10 +634,22 @@
             clearIdleWarning();
 
             if (opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()) {
-                if (opts.activateTouchGameplayCapture) opts.activateTouchGameplayCapture();
+                var touchEntered = opts.activateTouchGameplayCapture ? !!opts.activateTouchGameplayCapture() : false;
+                if (!touchEntered) {
+                    setPhoneLandscapeRequirement(true);
+                    setOverlayVisible(true);
+                    isPlaying = false;
+                    pendingInputCapture = false;
+                    clearIdleMonitor();
+                    hideLaunchHandoff();
+                    setResumeButtonsVisible(false);
+                    emitSessionState();
+                    return Promise.resolve({ ok: true, entered: false, pendingCapture: false, error: 'Landscape required.' });
+                }
+                setPhoneLandscapeRequirement(true);
                 pendingInputCapture = false;
                 hideLaunchHandoff();
-                if (overlayEl) overlayEl.style.display = 'none';
+                setOverlayVisible(false);
                 isPlaying = true;
                 recordGameplayActivity();
                 syncIdleMonitor();
@@ -627,7 +663,7 @@
                 if (resumeFromPause) {
                     restoreResumablePauseState();
                 } else {
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    setOverlayVisible(true);
                     isPlaying = false;
                     pendingInputCapture = true;
                     setResumeButtonsVisible(true);
@@ -642,7 +678,7 @@
                 if (resumeFromPause) {
                     restoreResumablePauseState();
                 } else {
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    setOverlayVisible(true);
                     isPlaying = false;
                     pendingInputCapture = true;
                     setResumeButtonsVisible(true);
@@ -675,7 +711,7 @@
                         };
                     }).catch(function () {
                         if (!document.pointerLockElement) {
-                            if (overlayEl) overlayEl.style.display = 'flex';
+                            setOverlayVisible(true);
                             isPlaying = false;
                             if (opts.setTransientDebug) opts.setTransientDebug('Pointer lock denied. Click PLAY to retry.', 2200);
                         }
@@ -712,7 +748,7 @@
                 if (resumeFromPause) {
                     restoreResumablePauseState();
                 } else {
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    setOverlayVisible(true);
                     isPlaying = false;
                     pendingInputCapture = true;
                     setResumeButtonsVisible(true);
@@ -838,7 +874,7 @@
                         pendingInputCapture = false;
                         clearPauseState();
                         hideLaunchHandoff();
-                        if (overlayEl) overlayEl.style.display = 'none';
+                        setOverlayVisible(false);
                         isPlaying = true;
                         recordGameplayActivity();
                         syncIdleMonitor();
@@ -846,7 +882,7 @@
                     } else {
                         if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                         if (opts.releaseTransientInput) opts.releaseTransientInput();
-                        if (overlayEl) overlayEl.style.display = 'flex';
+                        setOverlayVisible(true);
                         isPlaying = false;
                         clearIdleMonitor();
                         if (lostWhilePlaying && !postGameState.active && pendingPauseReason === 'idle') {
@@ -873,7 +909,7 @@
                         if (resumablePause) {
                             restoreResumablePauseState();
                         } else {
-                            if (overlayEl) overlayEl.style.display = 'flex';
+                            setOverlayVisible(true);
                             isPlaying = false;
                             clearIdleMonitor();
                             pendingInputCapture = true;
@@ -905,10 +941,11 @@
                 clearActivityStateOverride();
                 clearPauseState();
                 clearIdleMonitor();
+                setPhoneLandscapeRequirement(false);
                 if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                 pendingInputCapture = false;
                 hideLaunchHandoff();
-                if (overlayEl) overlayEl.style.display = 'flex';
+                setOverlayVisible(true);
                 isPlaying = false;
                 if (handoffEls.flow) handoffEls.flow.hidden = true;
                 if (handoffEls.title) handoffEls.title.textContent = 'CONNECTING';
@@ -963,6 +1000,7 @@
                 clearPauseState();
                 clearIdleMonitor();
                 clearPostGameTimer();
+                setPhoneLandscapeRequirement(false);
                 if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                 hidePostGameFlow();
                 setMenuContext('menu');
@@ -970,7 +1008,7 @@
                 if (opts.isPrivateRoomSession && opts.isPrivateRoomSession(null)) {
                     if (opts.teardownRuntime) opts.teardownRuntime('return_to_room_lobby');
                     setActivityStateOverride('private_room_lobby');
-                    if (overlayEl) overlayEl.style.display = 'flex';
+                    setOverlayVisible(true);
                     isPlaying = false;
                     setResumeButtonsVisible(false);
                     emitSessionState();

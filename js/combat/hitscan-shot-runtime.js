@@ -726,11 +726,11 @@
         function fire(camera, onHit, onMiss, shotToken, timing) {
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!weapon) return false;
-            if (weapon.magazineSize > 0 && weaponRuntime.getAmmoInMag(weapon, timing) <= 0) {
-                weaponRuntime.beginReload(weapon, timing);
+            var ammoInMag = weapon.magazineSize > 0 ? weaponRuntime.getAmmoInMag(weapon, timing) : 0;
+            if (weapon.magazineSize > 0 && ammoInMag <= 0) {
                 return false;
             }
-            if (weaponRuntime.isReloadingWeapon(weapon, timing)) {
+            if (weaponRuntime.isReloadingWeapon(weapon, timing) && ammoInMag <= 0) {
                 return false;
             }
             if (weapon.id === 'sniper' && !weaponRuntime.isAdsActiveForWeapon('sniper')) {
@@ -753,11 +753,11 @@
         function canFire(timing) {
             var weapon = weaponRuntime.getCurrentWeaponData();
             if (!weapon) return false;
-            if (weapon.magazineSize > 0 && weaponRuntime.getAmmoInMag(weapon, timing) <= 0) {
-                weaponRuntime.beginReload(weapon, timing);
+            var ammoInMag = weapon.magazineSize > 0 ? weaponRuntime.getAmmoInMag(weapon, timing) : 0;
+            if (weapon.magazineSize > 0 && ammoInMag <= 0) {
                 return false;
             }
-            if (weaponRuntime.isReloadingWeapon(weapon, timing)) return false;
+            if (weaponRuntime.isReloadingWeapon(weapon, timing) && ammoInMag <= 0) return false;
             if (weapon.id === 'sniper' && !weaponRuntime.isAdsActiveForWeapon('sniper')) return false;
             return weaponRuntime.getCooldownRemaining(timing) <= 0;
         }

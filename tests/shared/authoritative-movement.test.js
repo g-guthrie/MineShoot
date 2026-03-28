@@ -318,3 +318,52 @@ test('authoritative movement cancels sprint carry in air and resumes sprint on l
   assert.equal(landingEntity.sprinting, true);
   assert.equal(landingEntity.airborneSprintCarry, false);
 });
+
+test('authoritative movement only treats support directly underfoot as ground', () => {
+  const entity = createEntity({
+    y: 1.9,
+    velocityY: -5,
+    isGrounded: false,
+    jumpHeldLast: false
+  });
+  const sideShelf = {
+    min: { x: 0.36, y: 0, z: -1 },
+    max: { x: 1.2, y: 0.12, z: 1 }
+  };
+
+  stepAuthoritativeMovement(entity, createMovementInputState(), {
+    dtSec: 0.05,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [sideShelf],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(entity.isGrounded, false);
+  assert.ok(entity.y < 1.62 && entity.y > 1.60);
+});
+
+test('authoritative movement lands on support directly under the foot probe', () => {
+  const entity = createEntity({
+    y: 1.9,
+    velocityY: -5,
+    isGrounded: false,
+    jumpHeldLast: false
+  });
+  const centeredShelf = {
+    min: { x: -0.6, y: 0, z: -1 },
+    max: { x: 0.6, y: 0.12, z: 1 }
+  };
+
+  stepAuthoritativeMovement(entity, createMovementInputState(), {
+    dtSec: 0.05,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [centeredShelf],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(entity.isGrounded, true);
+  assert.equal(entity.velocityY, 0);
+  assert.ok(entity.y > 1.71 && entity.y < 1.73);
+});
