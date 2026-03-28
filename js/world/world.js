@@ -1,7 +1,8 @@
 import { chooseSpawnPoint } from '../../shared/spawn-logic.js';
 import {
     compileCylinderColliderBoxes,
-    compileDomeColliderBoxes
+    compileDomeColliderBoxes,
+    compileSphereColliderBoxes
 } from '../../shared/collider-authoring.js';
 
 /**
@@ -276,6 +277,7 @@ import {
 
     function markDecorSolid(mesh) {
         if (!mesh || !mesh.geometry) return false;
+        if (mesh.geometry.userData && mesh.geometry.userData.collisionDisabled) return false;
         var localBounds = geometryLocalBounds(mesh.geometry);
         if (!localBounds) return false;
         mesh.updateMatrixWorld(true);
@@ -545,6 +547,10 @@ import {
             return addColliderBoxes(compileDomeColliderBoxes(spec || {}), spec || {}, 'dome');
         }
 
+        function addSphereCollider(spec) {
+            return addColliderBoxes(compileSphereColliderBoxes(spec || {}), spec || {}, 'sphere');
+        }
+
         function addBoxCollider(spec) {
             spec = spec || {};
             return addColliderBoxes([{
@@ -563,7 +569,8 @@ import {
             addDecor: addDecor,
             addBoxCollider: addBoxCollider,
             addCylinderCollider: addCylinderCollider,
-            addDomeCollider: addDomeCollider
+            addDomeCollider: addDomeCollider,
+            addSphereCollider: addSphereCollider
         };
 
         var quadrantCtx = {

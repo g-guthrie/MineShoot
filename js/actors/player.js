@@ -17,6 +17,10 @@
         return globalThis.__MAYHEM_RUNTIME || {};
     }
 
+    function gameplayControlsApi() {
+        return runtimeRoot().GameGameplayControls || null;
+    }
+
     function playerDeps() {
         return runtimeRoot().GamePlayerDeps || {};
     }
@@ -302,7 +306,9 @@
     var rollUntil = 0;
 
     function hasInputCapture() {
-        return !!document.pointerLockElement;
+        if (!!document.pointerLockElement) return true;
+        var controlsApi = gameplayControlsApi();
+        return !!(controlsApi && controlsApi.hasVirtualCapture && controlsApi.hasVirtualCapture());
     }
 
     function clearMovementKeys() {
@@ -319,6 +325,36 @@
         rollInputSuppressedUntilRelease.jump = false;
         rollInputSuppressedUntilRelease.sprint = false;
         activeRollInputState = null;
+    }
+
+    function setMovementInputState(nextState) {
+        if (!nextState || typeof nextState !== 'object') return buildCurrentInputState();
+        if (Object.prototype.hasOwnProperty.call(nextState, 'forward')) keys.forward = !!nextState.forward;
+        if (Object.prototype.hasOwnProperty.call(nextState, 'backward')) keys.backward = !!nextState.backward;
+        if (Object.prototype.hasOwnProperty.call(nextState, 'left')) keys.left = !!nextState.left;
+        if (Object.prototype.hasOwnProperty.call(nextState, 'right')) keys.right = !!nextState.right;
+        if (Object.prototype.hasOwnProperty.call(nextState, 'jump')) keys.jump = !!nextState.jump;
+        if (Object.prototype.hasOwnProperty.call(nextState, 'sprint')) {
+            keys.sprint = !!nextState.sprint;
+            if (!keys.sprint) {
+                sprintCanceledUntilRelease = false;
+                clearSprintTemporaryResumeTimer();
+                sprintTemporarilyCanceledUntil = 0;
+            }
+        }
+        return buildCurrentInputState();
+    }
+
+    function applyLookDelta(deltaX, deltaY, multiplier) {
+        if (!hasInputCapture()) return { yaw: yaw, pitch: pitch };
+        var view = viewHelper();
+        var blend = view && view.getScopeBlend ? view.getScopeBlend() : 0;
+        var sensitivityMult = isSniperScopeWeapon() ? SNIPER_SCOPE_SENSITIVITY_MULT : ADS_SENSITIVITY_MULT;
+        var sensitivity = MOUSE_SENSITIVITY * (1 - (blend * (1 - sensitivityMult))) * Math.max(0, Number(multiplier || 1));
+        yaw -= Number(deltaX || 0) * sensitivity;
+        pitch -= Number(deltaY || 0) * sensitivity;
+        pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+        return { yaw: yaw, pitch: pitch };
     }
 
     function movementHelper() {
@@ -774,13 +810,7 @@
             },
             mousemove: function (e) {
             if (!hasInputCapture()) return;
-            var sensitivityMult = isSniperScopeWeapon() ? SNIPER_SCOPE_SENSITIVITY_MULT : ADS_SENSITIVITY_MULT;
-            var view = viewHelper();
-            var blend = view && view.getScopeBlend ? view.getScopeBlend() : 0;
-            var sensitivity = MOUSE_SENSITIVITY * (1 - (blend * (1 - sensitivityMult)));
-            yaw -= (e.movementX || 0) * sensitivity;
-            pitch -= (e.movementY || 0) * sensitivity;
-            pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+            applyLookDelta(e.movementX || 0, e.movementY || 0, 1);
             },
             contextmenu: function (e) {
             if (!hasInputCapture()) return;
@@ -1485,6 +1515,22 @@
 
     GamePlayer.isSprintKeyHeld = function () {
         return !!keys.sprint;
+    };
+
+    GamePlayer.setMovementInputState = function (nextState) {
+        return setMovementInputState(nextState);
+    };
+
+    GamePlayer.applyLookDelta = function (deltaX, deltaY, multiplier) {
+        return applyLookDelta(deltaX, deltaY, multiplier);
+    };
+
+    GamePlayer.clearMovementInputState = function () {
+        clearMovementKeys();
+        sprintCanceledUntilRelease = false;
+        clearSprintTemporaryResumeTimer();
+        sprintTemporarilyCanceledUntil = 0;
+        return buildCurrentInputState();
     };
 
     GamePlayer.isSprinting = function () {

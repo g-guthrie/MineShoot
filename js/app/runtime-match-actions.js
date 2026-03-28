@@ -13,6 +13,7 @@
 
         var debugVisualsOn = false;
         var netShotCounter = 0;
+        var worldCollisionDebugRoot = null;
 
         function gameUiApi() {
             return opts.getGameUiApi ? opts.getGameUiApi() : null;
@@ -82,6 +83,10 @@
             return opts.getCamera ? opts.getCamera() : null;
         }
 
+        function scene() {
+            return opts.getScene ? opts.getScene() : null;
+        }
+
         function multiplayerMode() {
             return !!(opts.isMultiplayerMode && opts.isMultiplayerMode());
         }
@@ -96,6 +101,65 @@
 
         function notifyDebugVisualChange() {
             if (opts.onDebugVisualsChanged) opts.onDebugVisualsChanged(debugVisualsOn);
+        }
+
+        function clearWorldCollisionDebug() {
+            if (worldCollisionDebugRoot && worldCollisionDebugRoot.parent) {
+                worldCollisionDebugRoot.parent.remove(worldCollisionDebugRoot);
+            }
+            worldCollisionDebugRoot = null;
+        }
+
+        function ensureWorldCollisionDebug() {
+            if (worldCollisionDebugRoot) return worldCollisionDebugRoot;
+            var runtimeWorld = runtime.GameWorld || null;
+            var sceneRef = scene();
+            var THREE = globalThis.THREE;
+            if (!runtimeWorld || !runtimeWorld.getCollidables || !sceneRef || !THREE) return null;
+
+            var collidables = runtimeWorld.getCollidables() || [];
+            var root = new THREE.Group();
+            root.name = 'world-collision-debug';
+
+            var lineMaterial = new THREE.LineBasicMaterial({
+                color: 0x57e3ff,
+                transparent: true,
+                opacity: 0.38,
+                depthWrite: false
+            });
+
+            for (var i = 0; i < collidables.length; i++) {
+                var mesh = collidables[i];
+                if (!mesh || !mesh.userData || !mesh.userData.collisionBox) continue;
+                var box = mesh.userData.collisionBox;
+                var size = new THREE.Vector3();
+                var center = new THREE.Vector3();
+                box.getSize(size);
+                box.getCenter(center);
+                if (!(size.x > 0 && size.y > 0 && size.z > 0)) continue;
+
+                var helper = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)),
+                    lineMaterial
+                );
+                helper.position.copy(center);
+                helper.renderOrder = 998;
+                helper.frustumCulled = false;
+                root.add(helper);
+            }
+
+            sceneRef.add(root);
+            worldCollisionDebugRoot = root;
+            return root;
+        }
+
+        function setWorldCollisionDebugVisibility(visible) {
+            if (!visible) {
+                clearWorldCollisionDebug();
+                return;
+            }
+            var root = ensureWorldCollisionDebug();
+            if (root) root.visible = true;
         }
 
         function isLocalActionLocked() {
@@ -140,6 +204,8 @@
             if (playerApi && playerApi.setHitboxVisibility) {
                 playerApi.setHitboxVisibility(!!visible);
             }
+
+            setWorldCollisionDebugVisibility(!!visible);
 
             var throwablesApi = gameThrowablesApi();
             if (throwablesApi && throwablesApi.setDebugMode) {
@@ -344,6 +410,7 @@
             canUseLocalAction: canUseLocalAction,
             applyDebugVisuals: applyDebugVisuals,
             toggleDebugVisuals: toggleDebugVisuals,
+            clearWorldCollisionDebug: clearWorldCollisionDebug,
             syncReticleWithWeapon: syncReticleWithWeapon,
             applyWeapon: applyWeapon,
             syncCommittedLoadoutToRuntime: syncCommittedLoadoutToRuntime,

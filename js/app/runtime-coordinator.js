@@ -215,6 +215,7 @@
                 getLoadoutStateApi: function () { return depGet('GameLoadoutState'); },
                 getLoadoutRuntimeApi: function () { return depGet('GameLoadoutRuntimeSync'); },
                 getCamera: function () { return ensureMatchHostApi().getCamera(); },
+                getScene: function () { return ensureMatchHostApi().getScene(); },
                 isMultiplayerMode: function () { return ensureMatchHostApi().isMultiplayerMode(); },
                 hasInputCapture: function () { return ensureMatchHostApi().hasInputCapture(); },
                 setTransientDebug: setTransientDebug,

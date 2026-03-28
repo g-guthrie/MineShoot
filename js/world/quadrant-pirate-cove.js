@@ -70,7 +70,8 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             crateBand:     lib.getLambert({ color: 0x5a3a1a }),
             // Kraken
             krakenBody:    lib.getLambert({ color: 0x6B2D8B }),
-            krakenDark:    lib.getLambert({ color: 0x4A1D6B })
+            krakenDark:    lib.getLambert({ color: 0x4A1D6B }),
+            krakenEye:     lib.getLambert({ color: 0xF2F2D8, emissive: 0x4A3A18 })
         };
         return MATS;
     }
@@ -95,6 +96,21 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
             if (meta) { for (var k in meta) { mesh.userData[k] = meta[k]; } }
         }
         return mesh;
+    }
+
+    function tsphereCollider(place, role, meta, x, y, z, radius, options) {
+        if (!place || typeof place.addSphereCollider !== 'function') return null;
+        return place.addSphereCollider({
+            x: x,
+            y: y,
+            z: z,
+            radius: radius,
+            radialSlices: options && options.radialSlices,
+            heightSlices: options && options.heightSlices,
+            collisionGroup: options && options.collisionGroup ? options.collisionGroup : 'kraken-head',
+            role: role,
+            meta: meta
+        });
     }
 
     /* ══════════════════════════════════════════════════════ */
@@ -464,7 +480,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
     }
 
     /* ── Kraken ── */
-    function buildKraken(kx, kz, place, mats) {
+    function buildKraken(kx, kz, targetX, targetZ, place, mats) {
         // kx, kz = center of kraken head at water level
         var headR = 3.0;
         // Sink the whole assembly so angled cone bases dip below water
@@ -472,7 +488,42 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         // Head dome — center raised so bottom ~5% is submerged below water (y≈0)
         var headY = headR - 0.3 + sinkY;
         var headGeo = new THREE.SphereGeometry(headR, CYLINDER_SEGMENTS, CYLINDER_SEGMENTS);
+        headGeo.userData = headGeo.userData || {};
+        headGeo.userData.collisionDisabled = true;
         td(place, 'kraken', { part: 'head' }, kx, headY, kz, headGeo, mats.krakenBody);
+        tsphereCollider(place, 'kraken-collider', { part: 'head' }, kx, headY, kz, headR, {
+            radialSlices: 11,
+            heightSlices: 10,
+            collisionGroup: 'kraken-head'
+        });
+
+        var eyeGeo = new THREE.SphereGeometry(0.7, 12, 12);
+        var pupilGeo = new THREE.SphereGeometry(0.28, 10, 10);
+        var toShipX = targetX - kx;
+        var toShipZ = targetZ - kz;
+        var toShipLen = Math.sqrt(toShipX * toShipX + toShipZ * toShipZ) || 1;
+        var faceX = toShipX / toShipLen;
+        var faceZ = toShipZ / toShipLen;
+        var sideX = -faceZ;
+        var sideZ = faceX;
+        var eyeForward = 2.7;
+        var eyeLift = 1.05;
+        var eyeSpread = 1.15;
+
+        function addEye(part, sideSign) {
+            var eyeX = kx + faceX * eyeForward + sideX * sideSign * eyeSpread;
+            var eyeY = headY + eyeLift;
+            var eyeZ = kz + faceZ * eyeForward + sideZ * sideSign * eyeSpread;
+            td(place, 'kraken', { part: part + '-eye' }, eyeX, eyeY, eyeZ, eyeGeo, mats.krakenEye);
+            td(place, 'kraken', { part: part + '-pupil' },
+                eyeX + faceX * 0.34,
+                eyeY + 0.04,
+                eyeZ + faceZ * 0.34,
+                pupilGeo, mats.krakenDark);
+        }
+
+        addEye('left', -1);
+        addEye('right', 1);
 
         // ── Tentacles ──
         // 8 single tapered cones emerging from water, radiating outward from head
@@ -616,7 +667,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         buildSeaRockMedium(ox + 4, oz + 23, place, mats);
 
         /* ── 15. Kraken — lurking off the port (left/-X) side of the ship ── */
-        buildKraken(shipX - 13, shipZ + 5, place, mats);
+        buildKraken(shipX - 13, shipZ + 5, shipX, shipZ, place, mats);
 
         /* ── 14. Anchor ── */
         // Visual anchor on the bow

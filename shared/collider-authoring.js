@@ -2,6 +2,7 @@ const EPSILON = 0.0001;
 const DEFAULT_RADIAL_SLICES = 7;
 const DEFAULT_DOME_HEIGHT_SLICES = 4;
 const DEFAULT_FRUSTUM_HEIGHT_SLICES = 3;
+const DEFAULT_SPHERE_HEIGHT_SLICES = 8;
 
 function clampPositive(value, fallback = 0) {
   const number = Number(value);
@@ -99,6 +100,34 @@ export function compileDomeColliderBoxes(spec = {}) {
     const y1 = (i + 1) * layerHeight;
     const layerRadius = Math.sqrt(Math.max(0, (radius * radius) - (y0 * y0)));
     const layerCenterY = baseY + ((y0 + y1) * 0.5);
+    pushDiskStripBoxes(out, x, layerCenterY, z, layerRadius, layerHeight, radialSlices);
+  }
+
+  return out;
+}
+
+export function compileSphereColliderBoxes(spec = {}) {
+  const x = Number(spec.x || 0);
+  const y = Number(spec.y || 0);
+  const z = Number(spec.z || 0);
+  const radius = clampPositive(spec.radius);
+  if (!(radius > EPSILON)) return [];
+
+  const radialSlices = normalizeOddSliceCount(spec.radialSlices, DEFAULT_RADIAL_SLICES);
+  const heightSlices = Math.max(
+    1,
+    Math.round(Number(spec.heightSlices || DEFAULT_SPHERE_HEIGHT_SLICES) || DEFAULT_SPHERE_HEIGHT_SLICES)
+  );
+  const layerHeight = (radius * 2) / heightSlices;
+  const bottomY = y - radius;
+  const out = [];
+
+  for (let i = 0; i < heightSlices; i++) {
+    const localMinY = -radius + (i * layerHeight);
+    const localMaxY = localMinY + layerHeight;
+    const sampleAbsY = Math.max(Math.abs(localMinY), Math.abs(localMaxY));
+    const layerRadius = Math.sqrt(Math.max(0, (radius * radius) - (sampleAbsY * sampleAbsY)));
+    const layerCenterY = bottomY + ((i + 0.5) * layerHeight);
     pushDiskStripBoxes(out, x, layerCenterY, z, layerRadius, layerHeight, radialSlices);
   }
 

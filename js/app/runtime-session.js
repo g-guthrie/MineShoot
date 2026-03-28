@@ -420,7 +420,9 @@
                     : 'MATCH READY.';
             }
             if (els.note) {
-                els.note.textContent = 'Click ENTER MATCH to capture the mouse and drop into the arena.';
+                els.note.textContent = opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()
+                    ? 'Tap ENTER MATCH to bring up the touch controls. Rotate your phone sideways to play.'
+                    : 'Click ENTER MATCH to capture the mouse and drop into the arena.';
             }
             if (els.roomLabel) {
                 els.roomLabel.hidden = true;
@@ -434,6 +436,7 @@
 
         function showGameplayPrompt() {
             clearActivityStateOverride();
+            if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
@@ -446,6 +449,7 @@
 
         function restoreResumablePauseState() {
             clearActivityStateOverride();
+            if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
             if (overlayEl) overlayEl.style.display = 'flex';
             isPlaying = false;
             pendingInputCapture = false;
@@ -537,6 +541,7 @@
 
             clearIdleMonitor();
             clearPostGameTimer();
+            if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
             if (document.pointerLockElement && document.exitPointerLock) {
                 document.exitPointerLock();
             }
@@ -603,6 +608,19 @@
             clearActivityStateOverride();
             clearPauseState();
             clearIdleWarning();
+
+            if (opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()) {
+                if (opts.activateTouchGameplayCapture) opts.activateTouchGameplayCapture();
+                pendingInputCapture = false;
+                hideLaunchHandoff();
+                if (overlayEl) overlayEl.style.display = 'none';
+                isPlaying = true;
+                recordGameplayActivity();
+                syncIdleMonitor();
+                setResumeButtonsVisible(false);
+                emitSessionState();
+                return Promise.resolve({ ok: true, entered: true, pendingCapture: false });
+            }
 
             var target = opts.getPointerLockTarget ? opts.getPointerLockTarget() : null;
             if (!target) {
@@ -826,6 +844,7 @@
                         syncIdleMonitor();
                         setResumeButtonsVisible(false);
                     } else {
+                        if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                         if (opts.releaseTransientInput) opts.releaseTransientInput();
                         if (overlayEl) overlayEl.style.display = 'flex';
                         isPlaying = false;
@@ -886,6 +905,7 @@
                 clearActivityStateOverride();
                 clearPauseState();
                 clearIdleMonitor();
+                if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                 pendingInputCapture = false;
                 hideLaunchHandoff();
                 if (overlayEl) overlayEl.style.display = 'flex';
@@ -943,6 +963,7 @@
                 clearPauseState();
                 clearIdleMonitor();
                 clearPostGameTimer();
+                if (opts.deactivateTouchGameplayCapture) opts.deactivateTouchGameplayCapture();
                 hidePostGameFlow();
                 setMenuContext('menu');
                 // Private room: stay on page and return to room lobby gracefully

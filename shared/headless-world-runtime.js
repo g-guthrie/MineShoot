@@ -1,6 +1,7 @@
 import {
   compileCylinderColliderBoxes,
-  compileDomeColliderBoxes
+  compileDomeColliderBoxes,
+  compileSphereColliderBoxes
 } from './collider-authoring.js';
 
 function createHeadlessColor(value) {
@@ -352,8 +353,10 @@ export function createHeadlessRecorder() {
       addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
         const bounds = headlessGeometryBounds(geometry);
         const mesh = record(
-          bounds ? createRotatedBoxAabb(x, y, z, bounds.w, bounds.h, bounds.d, rotY || 0, rotX || 0) : null,
-          !!bounds,
+          bounds && !(geometry && geometry.userData && geometry.userData.collisionDisabled)
+            ? createRotatedBoxAabb(x, y, z, bounds.w, bounds.h, bounds.d, rotY || 0, rotX || 0)
+            : null,
+          !!(bounds && !(geometry && geometry.userData && geometry.userData.collisionDisabled)),
           x,
           y,
           z,
@@ -381,6 +384,9 @@ export function createHeadlessRecorder() {
       },
       addDomeCollider(spec) {
         return recordColliderBoxes(compileDomeColliderBoxes(spec || {}), spec || {}, 'dome');
+      },
+      addSphereCollider(spec) {
+        return recordColliderBoxes(compileSphereColliderBoxes(spec || {}), spec || {}, 'sphere');
       }
     }
   };

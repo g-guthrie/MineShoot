@@ -52,7 +52,8 @@
         }
 
         function hasInputCapture() {
-            return !!renderer && document.pointerLockElement === renderer.domElement;
+            return (!!renderer && document.pointerLockElement === renderer.domElement) ||
+                !!(controlsApi && controlsApi.hasVirtualCapture && controlsApi.hasVirtualCapture());
         }
 
         function loopApi() {
@@ -127,6 +128,15 @@
                 },
                 getPointerLockTarget: function () {
                     return renderer ? renderer.domElement : null;
+                },
+                isTouchGameplayEnabled: function () {
+                    return !!(controlsApi && controlsApi.isTouchMode && controlsApi.isTouchMode());
+                },
+                activateTouchGameplayCapture: function () {
+                    return !!(controlsApi && controlsApi.activateTouchCapture && controlsApi.activateTouchCapture());
+                },
+                deactivateTouchGameplayCapture: function () {
+                    return !!(controlsApi && controlsApi.deactivateTouchCapture && controlsApi.deactivateTouchCapture());
                 },
                 validateLaunch: function () {
                     return actionsApi && actionsApi.validateLoadoutSelections
