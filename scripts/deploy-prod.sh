@@ -89,8 +89,24 @@ echo "[INFO] Deploying Worker..."
 
 echo
 echo "[INFO] Deploying Pages..."
-"$ROOT_DIR/scripts/wrangler.sh" pages deploy "$PAGES_DIR" \
+PAGES_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mayhem-pages-deploy-XXXX")"
+cleanup_pages_tmp() {
+  rm -rf "$PAGES_TMP_DIR"
+}
+trap cleanup_pages_tmp EXIT
+
+cp -R "$PAGES_DIR" "$PAGES_TMP_DIR/dist"
+if [[ -d "$ROOT_DIR/functions" ]]; then
+  cp -R "$ROOT_DIR/functions" "$PAGES_TMP_DIR/functions"
+fi
+cat > "$PAGES_TMP_DIR/wrangler.toml" <<EOF
+name = "$PAGES_PROJECT"
+pages_build_output_dir = "dist"
+EOF
+
+"$ROOT_DIR/scripts/wrangler.sh" pages deploy dist \
   --project-name "$PAGES_PROJECT" \
   --branch "$PAGES_BRANCH" \
   --commit-dirty=true \
-  --commit-message "$DEPLOY_MESSAGE"
+  --commit-message "$DEPLOY_MESSAGE" \
+  --cwd "$PAGES_TMP_DIR"

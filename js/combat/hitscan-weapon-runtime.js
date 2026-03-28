@@ -460,7 +460,13 @@
             state.autoReloadAt = 0;
             state.ammoInMag = Math.max(0, Number(state.ammoInMag || weapon.magazineSize) - 1);
             state.reloadedFlashUntil = 0;
-            if (state.ammoInMag < weapon.magazineSize) {
+            if (state.ammoInMag <= 0) {
+                state.reloadStartedAt = stamp;
+                state.reloadSourceAmmo = 0;
+                state.reloadUntil = stamp + Math.max(1, Number(weapon.reloadMs || 1));
+                state.autoReloadAt = 0;
+                notifyReloadStarted(weapon);
+            } else if (state.ammoInMag < weapon.magazineSize) {
                 state.autoReloadAt = stamp + getAutoReloadDelayMs(sharedApi());
             }
         }

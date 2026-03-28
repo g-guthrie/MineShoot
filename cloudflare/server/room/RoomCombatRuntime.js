@@ -582,7 +582,12 @@ export function consumeWeaponAmmo(room, entity, weaponId, now, deps) {
   entry.autoReloadAt = 0;
   entry.ammoInMag = Math.max(0, Number(entry.ammoInMag || stats.magazineSize || 0) - 1);
   entry.reloadedFlashUntil = 0;
-  if (entry.ammoInMag < magazineSize) {
+  if (entry.ammoInMag <= 0) {
+    entry.reloadStartedAt = now;
+    entry.reloadSourceAmmo = 0;
+    entry.reloadUntil = now + Math.max(1, Number(stats.reloadMs || 1));
+    entry.autoReloadAt = 0;
+  } else if (entry.ammoInMag < magazineSize) {
     entry.autoReloadAt = now + autoReloadDelayMs;
   }
   return true;

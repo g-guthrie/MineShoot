@@ -534,7 +534,14 @@
         state.autoReloadAt = 0;
         state.ammoInMag = Math.max(0, Number(state.ammoInMag || magazineSize) - 1);
         state.reloadedFlashUntil = 0;
-        if (state.ammoInMag < magazineSize) {
+        if (state.ammoInMag <= 0) {
+            state.reloadStartedAt = stamp;
+            state.reloadSourceAmmo = 0;
+            state.reloadUntil = stamp + Math.max(1, Number(stats.reloadMs || 1));
+            state.autoReloadAt = 0;
+            rememberPredictedMultiplayerReload(id, stamp, Number(stats.reloadMs || 0));
+            notifyReloadStarted(id, Number(stats.reloadMs || 0));
+        } else if (state.ammoInMag < magazineSize) {
             state.autoReloadAt = stamp + getAutoReloadDelayMs();
         }
         return buildWeaponState(id, stamp);
