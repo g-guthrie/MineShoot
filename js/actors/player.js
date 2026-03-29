@@ -304,7 +304,6 @@
         throwableUntil: 0
     };
     var rollUntil = 0;
-
     function hasInputCapture() {
         if (!!document.pointerLockElement) return true;
         var controlsApi = gameplayControlsApi();
@@ -939,13 +938,17 @@
         if (!state) return false;
         playerX = Number(state.x || 0);
         playerZ = Number(state.z || 0);
+        var groundHeightAt = options && typeof options.getGroundHeightAt === 'function'
+            ? options.getGroundHeightAt
+            : null;
         if (typeof state.y === 'number' && isFinite(state.y)) {
             posY = Number(state.y);
         } else {
-            var groundHeightAt = options && typeof options.getGroundHeightAt === 'function'
-                ? options.getGroundHeightAt
-                : null;
             posY = groundHeightAt ? (Number(groundHeightAt(playerX, playerZ) || 0) + eyeHeight()) : eyeHeight();
+        }
+        if (groundHeightAt) {
+            var floorEyeY = Number(groundHeightAt(playerX, playerZ) || 0) + eyeHeight();
+            if (!isFinite(posY) || posY < floorEyeY) posY = floorEyeY;
         }
         yaw = (typeof state.yaw === 'number' && isFinite(state.yaw)) ? Number(state.yaw) : yaw;
         pitch = (typeof state.pitch === 'number' && isFinite(state.pitch))
@@ -1269,8 +1272,7 @@
             horizontalDistSq >= (hardSnapDistance * hardSnapDistance) ||
             Math.abs(dy) >= thresholds.hardSnapVerticalDistance
         ) {
-            var snapState = replayFirstSelfCorrection && comparisonState ? comparisonState : state;
-            var snapped = applyAuthoritativeMotion(snapState);
+            var snapped = applyAuthoritativeMotion(state);
             if (snapped) lastReconciledMotionKey = motionKey;
             return snapped;
         }

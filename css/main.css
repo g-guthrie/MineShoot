@@ -2044,15 +2044,14 @@ canvas {
 /* Extra life progress bar */
 #extra-life-bar-container {
     position: fixed;
-    bottom: 78px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 120px;
+    right: 18px;
     display: none;
     align-items: center;
     gap: 6px;
-    width: 180px;
-    height: 22px;
-    padding: 0 10px;
+    width: 160px;
+    height: 20px;
+    padding: 0 8px;
     border-radius: 999px;
     background: rgba(10, 18, 28, 0.52);
     backdrop-filter: blur(12px) saturate(120%);
@@ -2710,6 +2709,12 @@ canvas {
         max-width: min(48vw, calc(100vw - 28px));
     }
 
+    #extra-life-bar-container {
+        top: 110px;
+        right: 14px;
+        width: 148px;
+    }
+
     .match-pill {
         padding: 4px 10px;
     }
@@ -2986,13 +2991,13 @@ canvas {
     /* ===== BOTTOM-CENTER ZONE ===== */
 
     #extra-life-bar-container {
-        top: max(72px, calc(env(safe-area-inset-top) + 64px));
+        top: max(74px, calc(env(safe-area-inset-top) + 66px));
         right: max(8px, env(safe-area-inset-right));
         left: auto;
         bottom: auto;
         transform: none;
         width: 124px;
-        height: 18px;
+        height: 16px;
         padding: 0 6px;
         gap: 4px;
     }
@@ -3026,11 +3031,11 @@ canvas {
         height: 5px;
     }
 
-    /* ===== TOP-CENTER-RIGHT HUD PILL ===== */
+    /* ===== TOP-RIGHT HUD PILL (under kill counter + extra life) ===== */
 
     #hud-bottom-right {
-        top: max(166px, calc(env(safe-area-inset-top) + 158px));
-        right: clamp(148px, 20vw, 188px);
+        top: max(98px, calc(env(safe-area-inset-top) + 90px));
+        right: max(8px, env(safe-area-inset-right));
         bottom: auto;
         gap: 1px;
         padding: 4px 8px 5px;

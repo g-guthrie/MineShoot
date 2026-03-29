@@ -61,7 +61,7 @@
     var sceneRef = null;
     var connectAttemptSeq = 0;
 
-    var DEFAULT_INPUT_SEND_INTERVAL = 1 / 30;
+    var DEFAULT_INPUT_SEND_INTERVAL = 1 / 60;
     var netState = netStateFactory.create({
         initialRoomId: 'global',
         inputSendInterval: DEFAULT_INPUT_SEND_INTERVAL

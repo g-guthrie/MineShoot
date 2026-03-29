@@ -15,6 +15,45 @@
         var playerHeight = Math.max(playerRadius, Number(options.playerHeight || 2.8));
         var epsilon = Math.max(0.000001, Number(options.epsilon || 0.001));
         var collisionBoxesScratch = [];
+        var canonicalCollisionBoxes = null;
+        var canonicalCollisionKey = '';
+
+        function cloneWorldFlags(flags) {
+            return {
+                envV2: !!(flags && flags.envV2),
+                terrainPhysicsV2: !!(flags && flags.terrainPhysicsV2)
+            };
+        }
+
+        function worldMetaKey(meta) {
+            if (!meta || typeof meta !== 'object') return '';
+            var flags = cloneWorldFlags(meta.worldFlags);
+            return [
+                String(meta.worldSeed || meta.seed || ''),
+                Math.max(0, Number(meta.worldProfileVersion || 0)),
+                flags.envV2 ? '1' : '0',
+                flags.terrainPhysicsV2 ? '1' : '0'
+            ].join('|');
+        }
+
+        function getCanonicalCollisionBoxes() {
+            if (!runtime.GameWorld || !runtime.GameWorld.getWorldMeta) return null;
+            var shared = runtime.GameShared || {};
+            var worldCollision = shared.worldCollision || null;
+            if (!worldCollision || !worldCollision.buildWorldCollisionData) return null;
+
+            var worldMeta = runtime.GameWorld.getWorldMeta();
+            var key = worldMetaKey(worldMeta);
+            if (!key) return null;
+            if (key !== canonicalCollisionKey || !Array.isArray(canonicalCollisionBoxes)) {
+                var collisionData = worldCollision.buildWorldCollisionData(worldMeta);
+                canonicalCollisionBoxes = collisionData && Array.isArray(collisionData.collidables)
+                    ? collisionData.collidables.slice()
+                    : [];
+                canonicalCollisionKey = key;
+            }
+            return canonicalCollisionBoxes;
+        }
 
         function getWorldBounds() {
             return runtime.GameWorld.getBounds();
@@ -83,6 +122,8 @@
         }
 
         function getCollisionBoxes() {
+            var canonicalBoxes = getCanonicalCollisionBoxes();
+            if (canonicalBoxes) return canonicalBoxes;
             collisionBoxesScratch.length = 0;
             if (!runtime.GameWorld || !runtime.GameWorld.getCollidables) return collisionBoxesScratch;
 

@@ -35,10 +35,10 @@ Useful slices while debugging:
 
 ## 2.5. Remember the shipped input baseline
 
-- The runtime base input cadence is intentionally `30 Hz`.
-- It is not “30 Hz only”.
+- The runtime base input cadence is intentionally `60 Hz`.
+- It is not “60 Hz only”.
 - Immediate sends still happen on jump, movement state changes, look deltas, and cumulative unsent drift.
-- When debugging packet volume, treat the 30 Hz interval as the idle floor, not the whole policy.
+- When debugging packet volume, treat the 60 Hz interval as the idle floor, not the whole policy.
 
 ## 3. Read the right metrics
 

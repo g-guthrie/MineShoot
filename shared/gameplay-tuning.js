@@ -54,10 +54,10 @@ export const gameplayTuning = {
   network: {
     flags: {
       adaptiveSelfReconciliation: true,
-      replayFirstSelfCorrection: true,
-      remoteReceiveJitterBuffer: true,
-      snapshotDeltaCompression: true,
-      adaptiveSnapshotCadence: true,
+      replayFirstSelfCorrection: false,
+      remoteReceiveJitterBuffer: false,
+      snapshotDeltaCompression: false,
+      adaptiveSnapshotCadence: false,
       combatBurstSnapshots: true,
       shotTokenDamageAggregation: false
     },
