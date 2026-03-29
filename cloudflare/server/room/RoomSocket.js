@@ -1,6 +1,9 @@
 const MESSAGE_RATE_LIMITS = {
   enter_match: { ratePerSec: 1, burst: 3 },
-  input: { ratePerSec: 45, burst: 90 },
+  // Normal movement now ships at a 60 Hz floor and may spike above that
+  // from immediate sends on state changes, so input throttling needs
+  // meaningful headroom above the base cadence.
+  input: { ratePerSec: 120, burst: 240 },
   roll: { ratePerSec: 8, burst: 16 },
   fire: { ratePerSec: 20, burst: 40 },
   reload: { ratePerSec: 4, burst: 8 },

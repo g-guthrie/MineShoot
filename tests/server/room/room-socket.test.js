@@ -271,13 +271,45 @@ test('room socket throttles abusive input and eventually closes the socket', () 
     msgS2c: { PONG: 'pong' }
   };
 
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 300; i++) {
     handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'input', seq: i }), deps);
   }
 
-  assert.equal(inputCount, 90);
+  assert.equal(inputCount, 240);
   assert.equal(ws.closeCalls.length > 0, true);
   assert.equal(ws.closeCalls[0].code, 1008);
+});
+
+test('room socket accepts a normal 60hz input stream without closing the socket', () => {
+  const ws = createSocket();
+  let inputCount = 0;
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleInput() {
+      inputCount += 1;
+    }
+  };
+  let now = 1000;
+  const deps = {
+    safeJsonParse: JSON.parse,
+    nowMs: () => now,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { INPUT: 'input', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  };
+
+  for (let i = 0; i < 60; i++) {
+    handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'input', seq: i }), deps);
+    now += 1000 / 60;
+  }
+
+  assert.equal(inputCount, 60);
+  assert.equal(ws.closeCalls.length, 0);
 });
 
 test('room socket rejects oversized redundant input batches before forwarding them', () => {
