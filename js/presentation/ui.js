@@ -17,6 +17,7 @@
     var combatBeaconEls = [];
     var weaponInfoEl, throwableInfoEl;
     var cooldownBarEl, cooldownStatusEl;
+    var extraLifeBarContainer, extraLifeValue, extraLifeFill;
     var sprintSpeedLinesEl;
     var sprintSpeedLineEls = [];
     var damageVignetteEl, damageIndicatorEl;
@@ -150,11 +151,15 @@
         throwableInfoEl = document.getElementById('throwable-info');
         cooldownBarEl = document.getElementById('cooldown-bar');
         cooldownStatusEl = document.getElementById('cooldown-status');
+        extraLifeBarContainer = document.getElementById('extra-life-bar-container');
+        extraLifeValue = document.getElementById('extra-life-value');
+        extraLifeFill = document.getElementById('extra-life-fill');
         sprintSpeedLinesEl = document.getElementById('sprint-speed-lines');
         damageVignetteEl = document.getElementById('damage-vignette');
         damageIndicatorEl = document.getElementById('damage-indicator');
 
         GameUI.updateMatchStatus(null, null);
+        GameUI.updateExtraLifeProgress(0);
 
         damageTicks = [];
         damageTickTimers = [];
@@ -348,24 +353,30 @@
             var lives = Math.max(0, Number(selfState && selfState.stocksRemaining || 0));
             var maxLives = Math.max(lives, Number(selfState && selfState.maxStocks || 0));
             var aliveCount = Math.max(0, Number(matchState && matchState.aliveCount || 0));
-            var nextLifePct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
             killCounterEl.innerHTML =
                 '<div class="match-pill-row">' +
                     '<div class="match-pill"><span class="match-pill-label">LIVES</span><span class="match-pill-value">' + lives + '</span></div>' +
                     '<div class="match-pill"><span class="match-pill-label">ALIVE</span><span class="match-pill-value">' + aliveCount + '</span></div>' +
-                '</div>' +
-                '<div class="match-pill match-pill-progress">' +
-                    '<div class="match-pill-progress-header"><span class="match-pill-label">EXTRA LIFE</span><span class="match-pill-value">' + Math.round(nextLifePct) + '%</span></div>' +
-                    '<div class="match-pill-track"><div class="match-pill-fill" style="width:' + nextLifePct.toFixed(1) + '%"></div></div>' +
                 '</div>';
+            GameUI.updateExtraLifeProgress(selfState && selfState.extraLifeProgressPct || 0);
             return;
         }
         var matchRules = sharedMatchRules();
         if (matchRules && matchRules.formatMatchHudCounter) {
+            GameUI.updateExtraLifeProgress(0);
             killCounterEl.textContent = matchRules.formatMatchHudCounter(matchState, selfState);
             return;
         }
         killCounterEl.textContent = 'Kills: ' + killCount;
+        GameUI.updateExtraLifeProgress(0);
+    };
+
+    GameUI.updateExtraLifeProgress = function (pct) {
+        if (!extraLifeBarContainer) return;
+        var p = Math.max(0, Math.min(100, Number(pct) || 0));
+        extraLifeBarContainer.style.display = p > 0 ? 'flex' : 'none';
+        if (extraLifeValue) extraLifeValue.textContent = Math.round(p) + '%';
+        if (extraLifeFill) extraLifeFill.style.width = p.toFixed(1) + '%';
     };
 
     GameUI.updateHealth = function (hp, maxHp) {

@@ -29,6 +29,7 @@
         var touchMoveThumb = null;
         var touchMoveKnob = null;
         var touchJumpBtn = null;
+        var touchSwapBtn = null;
         var touchRollBtn = null;
         var touchMoveState = {
             pointerId: null,
@@ -195,8 +196,26 @@
             touchMoveKnob.style.transform = 'translate(' + dx.toFixed(1) + 'px, ' + dy.toFixed(1) + 'px)';
         }
 
+        function setTouchSprintVisual(active) {
+            if (!touchMoveThumb || !touchMoveThumb.classList) return;
+            touchMoveThumb.classList.toggle('sprinting', !!active);
+        }
+
         function touchMoveRadiusPx() {
             return 84;
+        }
+
+        function touchSprintHalfAngleRad() {
+            return (15 * Math.PI / 180) * 0.5;
+        }
+
+        function resolveTouchSprintState(dx, dy) {
+            var x = Number(dx || 0);
+            var y = Number(dy || 0);
+            var magnitude = Math.sqrt((x * x) + (y * y));
+            if (!(magnitude >= 0.9)) return false;
+            var forwardAngle = Math.abs(Math.atan2(x, -y));
+            return forwardAngle <= touchSprintHalfAngleRad();
         }
 
         function fullJumpHoldMs() {
@@ -215,7 +234,7 @@
                 left: touchLandscapeReady() && x < -deadzone,
                 right: touchLandscapeReady() && x > deadzone,
                 jump: touchLandscapeReady() && !!touchMoveState.jump,
-                sprint: false
+                sprint: touchLandscapeReady() && !!touchMoveState.sprint
             });
         }
 
@@ -225,8 +244,10 @@
             touchMoveState.centerY = 0;
             touchMoveState.dx = 0;
             touchMoveState.dy = 0;
+            touchMoveState.sprint = false;
             touchMoveState.jump = false;
             setTouchMoveVisual(0, 0);
+            setTouchSprintVisual(false);
             var player = playerApi();
             if (player && player.clearMovementInputState) {
                 player.clearMovementInputState();
@@ -267,7 +288,9 @@
             var controlY = rawY * controlScale;
             touchMoveState.dx = controlX / moveRadius;
             touchMoveState.dy = controlY / moveRadius;
+            touchMoveState.sprint = resolveTouchSprintState(touchMoveState.dx, touchMoveState.dy);
             setTouchMoveVisual(visualX, visualY);
+            setTouchSprintVisual(touchMoveState.sprint);
             syncTouchMovementState();
         }
 
@@ -459,6 +482,7 @@
             rotatePrompt.className = 'touch-rotate-prompt';
             rotatePrompt.innerHTML =
                 '<div class="touch-rotate-card">' +
+                    '<div class="touch-rotate-kicker">Phone Mode</div>' +
                     '<div class="touch-rotate-title">Rotate To Landscape</div>' +
                     '<div class="touch-rotate-copy">The phone controls are built for sideways play.</div>' +
                 '</div>';
@@ -467,7 +491,7 @@
             var moveThumb = document.createElement('div');
             moveThumb.className = 'touch-stick touch-stick-left';
             moveThumb.innerHTML =
-                '<div class="touch-stick-ring"><div class="touch-stick-knob"></div></div>';
+                '<div class="touch-stick-ring"><div class="touch-stick-sprint-wedge"></div><div class="touch-stick-knob"></div></div>';
             root.appendChild(moveThumb);
 
             var actionCluster = document.createElement('div');
@@ -476,6 +500,10 @@
                 '<button type="button" class="touch-btn touch-btn-jump" data-touch-action="jump">' +
                     '<span class="touch-btn-title">JUMP</span>' +
                     '<span class="touch-btn-note">full jump</span>' +
+                '</button>' +
+                '<button type="button" class="touch-btn touch-btn-swap" data-touch-action="swap">' +
+                    '<span class="touch-btn-title">SWAP</span>' +
+                    '<span class="touch-btn-note">switch gun</span>' +
                 '</button>' +
                 '<button type="button" class="touch-btn touch-btn-roll" data-touch-action="roll">' +
                     '<span class="touch-btn-title">ROLL</span>' +
@@ -491,6 +519,7 @@
             touchMoveThumb = moveThumb;
             touchMoveKnob = moveThumb.querySelector('.touch-stick-knob');
             touchJumpBtn = actionCluster.querySelector('[data-touch-action="jump"]');
+            touchSwapBtn = actionCluster.querySelector('[data-touch-action="swap"]');
             touchRollBtn = actionCluster.querySelector('[data-touch-action="roll"]');
 
             listen(window, 'resize', updateTouchOrientationState);
@@ -547,6 +576,11 @@
             });
             listen(touchJumpBtn, 'pointercancel', function (event) {
                 endJumpPointer(event);
+            });
+            listen(touchSwapBtn, 'pointerdown', function (event) {
+                if (!virtualCapture || !touchLandscapeReady()) return;
+                event.preventDefault();
+                triggerWeaponSwap();
             });
             listen(touchRollBtn, 'pointerdown', function (event) {
                 if (!virtualCapture || !touchLandscapeReady()) return;
@@ -706,6 +740,20 @@
                     commandsApi.sendRoll(rollOptions);
                 }
             }
+            return true;
+        }
+
+        function triggerWeaponSwap() {
+            if (!hasInputCapture()) return false;
+            if (!canUseLocalAction('weapon')) return false;
+            if (weaponSwapInput && weaponSwapInput.triggerToggle) {
+                var swapResult = weaponSwapInput.triggerToggle();
+                return !!(swapResult && swapResult.toggled);
+            }
+            if (!runtime.GameHitscan || !runtime.GameHitscan.toggleWeapon || !opts.applyWeapon) return false;
+            var weapon = runtime.GameHitscan.toggleWeapon();
+            if (!weapon) return false;
+            opts.applyWeapon(weapon);
             return true;
         }
 
@@ -961,6 +1009,7 @@
                 touchMoveThumb = null;
                 touchMoveKnob = null;
                 touchJumpBtn = null;
+                touchSwapBtn = null;
                 touchRollBtn = null;
                 deactivateTouchCaptureInternal();
                 touchLookState.pointerId = null;

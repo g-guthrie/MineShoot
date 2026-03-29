@@ -1,9 +1,11 @@
 import { cloneWorldFlags } from '../../../shared/protocol.js';
 
-const SNAPSHOT_SELF_CADENCE_MS = 1000 / 60;
+const SNAPSHOT_SELF_CADENCE_MS = 1000 / 30;
 const SNAPSHOT_ENGAGED_CADENCE_MS = 1000 / 60;
-const SNAPSHOT_NEARBY_CADENCE_MS = 1000 / 30;
-const SNAPSHOT_FAR_CADENCE_MS = 1000 / 15;
+const SNAPSHOT_NEARBY_CADENCE_MS = 1000 / 45;
+const SNAPSHOT_FAR_CADENCE_MS = 1000 / 30;
+const SNAPSHOT_FAST_MOVER_CADENCE_MS = 1000 / 60;
+const SNAPSHOT_FAST_MOVER_SPEED_NORM = 0.65;
 const SNAPSHOT_NEARBY_DISTANCE = 35;
 
 function defaultDistanceBetween(a, b) {
@@ -71,15 +73,29 @@ export function snapshotCadenceMsForEntity(viewerEntity, entity, nowMs = 0, deps
   const engagedCadenceMs = Math.max(1, Number(deps.engagedCadenceMs || SNAPSHOT_ENGAGED_CADENCE_MS));
   const nearbyCadenceMs = Math.max(1, Number(deps.nearbyCadenceMs || SNAPSHOT_NEARBY_CADENCE_MS));
   const farCadenceMs = Math.max(1, Number(deps.farCadenceMs || SNAPSHOT_FAR_CADENCE_MS));
+  const fastMoverCadenceMs = Math.max(1, Number(deps.fastMoverCadenceMs || SNAPSHOT_FAST_MOVER_CADENCE_MS));
+  const fastMoverSpeedNorm = Math.max(0, Number(deps.fastMoverSpeedNorm || SNAPSHOT_FAST_MOVER_SPEED_NORM));
   const nearbyDistance = Math.max(0, Number(deps.nearbyDistance || SNAPSHOT_NEARBY_DISTANCE));
   const isEngaged = typeof deps.isEngaged === 'function' ? deps.isEngaged : (() => false);
   const distanceBetween = typeof deps.distanceBetween === 'function' ? deps.distanceBetween : defaultDistanceBetween;
+  const adaptiveCadenceEnabled = deps.adaptiveCadenceEnabled !== false;
+  const intervalMultiplier = adaptiveCadenceEnabled
+    ? Math.max(1, Number(deps.qualityIntervalMultiplier || 1))
+    : 1;
+
+  function applyCadenceMultiplier(baseCadenceMs, maxIntervalMs) {
+    if (intervalMultiplier <= 1) return baseCadenceMs;
+    return Math.min(maxIntervalMs, baseCadenceMs * intervalMultiplier);
+  }
 
   if (!entity) return farCadenceMs;
-  if (viewerEntity && entity.id === viewerEntity.id) return selfCadenceMs;
-  if (viewerEntity && isEngaged(viewerEntity, entity, nowMs)) return engagedCadenceMs;
-  if (viewerEntity && distanceBetween(viewerEntity, entity) <= nearbyDistance) return nearbyCadenceMs;
-  return farCadenceMs;
+  if (viewerEntity && entity.id === viewerEntity.id) return applyCadenceMultiplier(selfCadenceMs, 1000 / 20);
+  if (viewerEntity && isEngaged(viewerEntity, entity, nowMs)) return applyCadenceMultiplier(engagedCadenceMs, 1000 / 20);
+  if (viewerEntity && distanceBetween(viewerEntity, entity) <= nearbyDistance) {
+    if (Number(entity.moveSpeedNorm || 0) >= fastMoverSpeedNorm) return applyCadenceMultiplier(fastMoverCadenceMs, 1000 / 15);
+    return applyCadenceMultiplier(nearbyCadenceMs, 1000 / 15);
+  }
+  return applyCadenceMultiplier(farCadenceMs, 1000 / 10);
 }
 
 export function buildViewerEntitySnapshot(entities, viewerEntity, viewerSnapshotState, options = {}) {
@@ -101,6 +117,12 @@ export function buildViewerEntitySnapshot(entities, viewerEntity, viewerSnapshot
     : new Map();
   const nextEntityStateById = forceFull ? new Map() : new Map(prevEntityStateById);
   const nextEntityLastSentAtById = forceFull ? new Map() : new Map(prevEntityLastSentAtById);
+  const hasCompareEntityState = typeof options.hasCompareEntityState === 'function'
+    ? options.hasCompareEntityState
+    : ((entityId) => prevEntityStateById.has(entityId));
+  const readCompareEntityState = typeof options.readCompareEntityState === 'function'
+    ? options.readCompareEntityState
+    : ((entityId) => prevEntityStateById.get(entityId));
   const currentIds = new Set();
   const payloadEntities = [];
   const removedEntityIds = [];
@@ -116,13 +138,16 @@ export function buildViewerEntitySnapshot(entities, viewerEntity, viewerSnapshot
       : serializeEntity(entity);
     if (!serializedById.has(entityId)) serializedById.set(entityId, serialized);
 
-    const previousSerialized = prevEntityStateById.get(entityId);
+    const hasPreviousSerialized = !!hasCompareEntityState(entityId);
+    const previousSerialized = readCompareEntityState(entityId);
     const lastSentAt = Math.max(0, Number(prevEntityLastSentAtById.get(entityId) || 0));
+    const lastAuthoritativeChangeAt = Math.max(0, Number(entity.lastAuthoritativeChangeAt || 0));
     const cadenceMs = snapshotCadenceMsForEntity(viewerEntity, entity, nowMs, options);
     const priorityDue = priorityEntityIds.has(entityId);
-    const due = forceFull || priorityDue || !prevEntityStateById.has(entityId) || ((nowMs - lastSentAt) >= cadenceMs);
+    const due = forceFull || priorityDue || !hasPreviousSerialized || ((nowMs - lastSentAt) >= cadenceMs);
+    const changedSinceLastSend = lastAuthoritativeChangeAt > lastSentAt;
 
-    if (forceFull || !prevEntityStateById.has(entityId) || (due && previousSerialized !== serialized)) {
+    if (forceFull || !hasPreviousSerialized || (due && (previousSerialized !== serialized || changedSinceLastSend))) {
       payloadEntities.push(entity);
       nextEntityStateById.set(entityId, serialized);
       nextEntityLastSentAtById.set(entityId, nowMs);
@@ -168,16 +193,30 @@ export function buildWelcomePayload(room, selfId, deps) {
 export function buildSnapshotPayload(room, snapshot, deps) {
   deps = deps || {};
   snapshot = snapshot || {};
+  const forceFull = !!snapshot.forceFull;
+  const isDelta = !forceFull;
   const payload = {
     t: deps.msgType,
     serverTime: deps.nowMs ? deps.nowMs() : 0,
-    delta: !snapshot.forceFull,
+    delta: isDelta,
     gameMode: room.gameMode || '',
     privateRoomPhase: currentPrivateRoomPhase(room, deps),
     matchState: serializeMatchState(room, deps),
-    entities: snapshot.forceFull ? (snapshot.entities || []) : (snapshot.changedEntities || []),
     removedEntityIds: snapshot.removedEntityIds || []
   };
+  if (forceFull || !Array.isArray(snapshot.entityPatches)) {
+    payload.entities = forceFull ? (snapshot.entities || []) : (snapshot.changedEntities || []);
+  } else {
+    payload.entityPatches = snapshot.entityPatches || [];
+  }
+  const snapshotSeq = Math.max(0, Number(snapshot.snapshotSeq || 0));
+  if (snapshotSeq > 0) {
+    payload.snapshotSeq = snapshotSeq;
+  }
+  const baseSnapshotSeq = Math.max(0, Number(snapshot.baseSnapshotSeq || 0));
+  if (isDelta && baseSnapshotSeq > 0) {
+    payload.baseSnapshotSeq = baseSnapshotSeq;
+  }
   if (snapshot.projectiles !== undefined) {
     payload.projectiles = snapshot.projectiles || [];
   }

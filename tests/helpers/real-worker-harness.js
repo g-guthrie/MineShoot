@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applySnapshotEntityPatch, cloneSnapshotValue } from '../../shared/protocol.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '../..');
@@ -141,9 +142,17 @@ function buildDebugState(worker, roomId, clients) {
       transport: {
         delayedOutboundCount: Number(client.delayedOutboundCount || 0),
         droppedOutboundCount: Number(client.droppedOutboundCount || 0),
+        delayedInboundCount: Number(client.delayedInboundCount || 0),
+        droppedInboundCount: Number(client.droppedInboundCount || 0),
+        reorderedInboundCount: Number(client.reorderedInboundCount || 0),
         outboundDelayMs: Number(client.outboundDelayMs || 0),
         outboundJitterMs: Number(client.outboundJitterMs || 0),
-        outboundDropRate: Number(client.outboundDropRate || 0)
+        outboundDropRate: Number(client.outboundDropRate || 0),
+        inboundDelayMs: Number(client.inboundDelayMs || 0),
+        inboundJitterMs: Number(client.inboundJitterMs || 0),
+        inboundDropRate: Number(client.inboundDropRate || 0),
+        inboundReorderRate: Number(client.inboundReorderRate || 0),
+        inboundReorderWindowMs: Number(client.inboundReorderWindowMs || 0)
       },
       messages: client.messages.slice(-20).map(formatMessage),
       entities: Array.from(client.snapshotMap.values()).map(summarizeEntity).filter(Boolean)
@@ -175,16 +184,68 @@ function computeOutboundDelay(client) {
   return Math.max(0, baseDelayMs + ((client.random() * 2 - 1) * jitterMs));
 }
 
+function computeInboundDelay(client) {
+  const baseDelayMs = Math.max(0, Number(client.inboundDelayMs || 0));
+  const jitterMs = Math.max(0, Number(client.inboundJitterMs || 0));
+  let totalDelayMs = !(jitterMs > 0)
+    ? baseDelayMs
+    : Math.max(0, baseDelayMs + ((client.random() * 2 - 1) * jitterMs));
+  if (client.inboundReorderRate > 0 && client.random() < client.inboundReorderRate) {
+    totalDelayMs += Math.max(1, Number(client.inboundReorderWindowMs || 0));
+    client.reorderedInboundCount += 1;
+  }
+  return totalDelayMs;
+}
+
+function applyInboundNetworkConditions(client, config = {}) {
+  client.inboundDelayMs = Math.max(0, Number(config.inboundDelayMs != null ? config.inboundDelayMs : client.inboundDelayMs || 0));
+  client.inboundJitterMs = Math.max(0, Number(config.inboundJitterMs != null ? config.inboundJitterMs : client.inboundJitterMs || 0));
+  client.inboundDropRate = Math.max(0, Math.min(1, Number(config.inboundDropRate != null ? config.inboundDropRate : client.inboundDropRate || 0)));
+  client.inboundReorderRate = Math.max(0, Math.min(1, Number(config.inboundReorderRate != null ? config.inboundReorderRate : client.inboundReorderRate || 0)));
+  client.inboundReorderWindowMs = Math.max(0, Number(config.inboundReorderWindowMs != null ? config.inboundReorderWindowMs : client.inboundReorderWindowMs || 0));
+}
+
+function rememberSnapshotBaseline(client, snapshotSeq) {
+  const seq = Math.max(0, Math.floor(Number(snapshotSeq || 0)));
+  if (!(seq > 0)) return;
+  const cloned = new Map();
+  client.snapshotMap.forEach((entity, id) => {
+    cloned.set(String(id || ''), cloneSnapshotValue(entity));
+  });
+  client.snapshotBaselines.set(seq, cloned);
+  client.snapshotBaselineOrder.push(seq);
+  while (client.snapshotBaselineOrder.length > 16) {
+    const staleSeq = client.snapshotBaselineOrder.shift();
+    client.snapshotBaselines.delete(staleSeq);
+  }
+}
+
 function applySnapshot(client, message) {
   if (!message || typeof message !== 'object') return;
+  const useEntityPatches = !!message.delta && Array.isArray(message.entityPatches);
   if (!message.delta) {
     client.snapshotMap.clear();
+  }
+  if (useEntityPatches) {
+    const baseSnapshotSeq = Math.max(0, Number(message.baseSnapshotSeq || 0));
+    const baseline = client.snapshotBaselines.get(baseSnapshotSeq);
+    if (!baseline && message.entityPatches.length > 0) {
+      client.latestSnapshot = JSON.parse(JSON.stringify(message));
+      return;
+    }
+    for (let i = 0; i < message.entityPatches.length; i++) {
+      const patch = message.entityPatches[i];
+      if (!patch || !patch.id) continue;
+      const nextEntity = applySnapshotEntityPatch(baseline ? baseline.get(String(patch.id || '')) || null : null, patch);
+      if (!nextEntity || !nextEntity.id) continue;
+      client.snapshotMap.set(String(nextEntity.id), cloneSnapshotValue(nextEntity));
+    }
   }
   if (Array.isArray(message.entities)) {
     for (let i = 0; i < message.entities.length; i++) {
       const entity = message.entities[i];
       if (!entity || !entity.id) continue;
-      client.snapshotMap.set(String(entity.id), JSON.parse(JSON.stringify(entity)));
+      client.snapshotMap.set(String(entity.id), cloneSnapshotValue(entity));
     }
   }
   if (Array.isArray(message.removedEntityIds)) {
@@ -192,6 +253,8 @@ function applySnapshot(client, message) {
       client.snapshotMap.delete(String(message.removedEntityIds[i] || ''));
     }
   }
+  client.snapshotAckSeq = Math.max(0, Number(message.snapshotSeq || client.snapshotAckSeq || 0));
+  rememberSnapshotBaseline(client, message.snapshotSeq);
   client.latestSnapshot = JSON.parse(JSON.stringify(message));
 }
 
@@ -241,6 +304,32 @@ function handleClientMessage(client, message) {
     waiter.resolve(message);
   }
   client.waiters = remaining;
+}
+
+function scheduleInboundMessage(client, rawMessage, worker) {
+  if (client.inboundDropRate > 0 && client.random() < client.inboundDropRate) {
+    client.droppedInboundCount += 1;
+    return;
+  }
+  const deliveryDelayMs = computeInboundDelay(client);
+  const deliver = async () => {
+    const message = JSON.parse(rawMessage);
+    handleClientMessage(client, message);
+  };
+  if (deliveryDelayMs <= 0) {
+    client.messageChain = client.messageChain.then(deliver).catch((err) => {
+      worker.logs.stderr = appendLog(worker.logs.stderr, `[harness-message-error] ${err && err.stack ? err.stack : err}\n`);
+    });
+    return;
+  }
+  client.delayedInboundCount += 1;
+  const timer = setTimeout(() => {
+    client.pendingTimers.delete(timer);
+    client.messageChain = client.messageChain.then(deliver).catch((err) => {
+      worker.logs.stderr = appendLog(worker.logs.stderr, `[harness-message-error] ${err && err.stack ? err.stack : err}\n`);
+    });
+  }, deliveryDelayMs);
+  client.pendingTimers.add(timer);
 }
 
 async function closeClient(client) {
@@ -299,7 +388,19 @@ function buildClientApi(client) {
       ]);
     },
     async send(payload) {
-      const message = JSON.stringify(payload);
+      const messagePayload = payload && typeof payload === 'object' ? { ...payload } : payload;
+      if (messagePayload && typeof messagePayload === 'object' && (messagePayload.t === 'input' || messagePayload.t === 'ping')) {
+        if (!Object.prototype.hasOwnProperty.call(messagePayload, 'snapshotAckSeq')) {
+          messagePayload.snapshotAckSeq = Math.max(0, Number(client.snapshotAckSeq || 0));
+        }
+        if (!Object.prototype.hasOwnProperty.call(messagePayload, 'linkRttMs')) {
+          messagePayload.linkRttMs = 0;
+        }
+        if (!Object.prototype.hasOwnProperty.call(messagePayload, 'linkJitterMs')) {
+          messagePayload.linkJitterMs = 0;
+        }
+      }
+      const message = JSON.stringify(messagePayload);
       if (client.outboundDropRate > 0 && client.random() < client.outboundDropRate) {
         client.droppedOutboundCount += 1;
         return;
@@ -395,24 +496,36 @@ function buildClientApi(client) {
         weaponId: String(weaponId || '')
       });
     },
-    async sendReload(weaponId) {
-      await this.send({
-        t: 'reload',
-        weaponId: String(weaponId || '')
-      });
+      async sendReload(weaponId) {
+        await this.send({
+          t: 'reload',
+          weaponId: String(weaponId || '')
+        });
     },
-    getTransportStats() {
-      return {
-        delayedOutboundCount: Number(client.delayedOutboundCount || 0),
-        droppedOutboundCount: Number(client.droppedOutboundCount || 0),
-        outboundDelayMs: Number(client.outboundDelayMs || 0),
-        outboundJitterMs: Number(client.outboundJitterMs || 0),
-        outboundDropRate: Number(client.outboundDropRate || 0)
-      };
-    },
-    async close() {
-      await closeClient(client);
-    }
+      getTransportStats() {
+        return {
+          delayedOutboundCount: Number(client.delayedOutboundCount || 0),
+          droppedOutboundCount: Number(client.droppedOutboundCount || 0),
+          delayedInboundCount: Number(client.delayedInboundCount || 0),
+          droppedInboundCount: Number(client.droppedInboundCount || 0),
+          reorderedInboundCount: Number(client.reorderedInboundCount || 0),
+          outboundDelayMs: Number(client.outboundDelayMs || 0),
+          outboundJitterMs: Number(client.outboundJitterMs || 0),
+          outboundDropRate: Number(client.outboundDropRate || 0),
+          inboundDelayMs: Number(client.inboundDelayMs || 0),
+          inboundJitterMs: Number(client.inboundJitterMs || 0),
+          inboundDropRate: Number(client.inboundDropRate || 0),
+          inboundReorderRate: Number(client.inboundReorderRate || 0),
+          inboundReorderWindowMs: Number(client.inboundReorderWindowMs || 0)
+        };
+      },
+      setInboundNetworkConditions(config = {}) {
+        applyInboundNetworkConditions(client, config);
+        return this.getTransportStats();
+      },
+      async close() {
+        await closeClient(client);
+      }
   };
   return client.api;
 }
@@ -453,7 +566,6 @@ export async function createRealWorkerHarness(options = {}) {
       ...process.env,
       WORKER_PORT: String(port),
       WRANGLER_PERSIST_DIR: persistDir,
-      BOT_COUNT: String(options.botCount != null ? options.botCount : 0),
       REUSE_EXISTING_SERVER: '0',
       WRANGLER_ENV: 'e2e'
     },
@@ -500,16 +612,27 @@ export async function createRealWorkerHarness(options = {}) {
       outboundDelayMs: Math.max(0, Number(config.outboundDelayMs || 0)),
       outboundJitterMs: Math.max(0, Number(config.outboundJitterMs || 0)),
       outboundDropRate: Math.max(0, Math.min(1, Number(config.outboundDropRate || 0))),
+      inboundDelayMs: Math.max(0, Number(config.inboundDelayMs || 0)),
+      inboundJitterMs: Math.max(0, Number(config.inboundJitterMs || 0)),
+      inboundDropRate: Math.max(0, Math.min(1, Number(config.inboundDropRate || 0))),
+      inboundReorderRate: Math.max(0, Math.min(1, Number(config.inboundReorderRate || 0))),
+      inboundReorderWindowMs: Math.max(0, Number(config.inboundReorderWindowMs || 0)),
       random: createSeededRandom(hashSeed(config.randomSeed || `${roomId}:${userId}`)),
       snapshotMap: new Map(),
       latestSnapshot: null,
       waiters: [],
       messages: [],
       messageIndex: 0,
+      snapshotBaselines: new Map(),
+      snapshotBaselineOrder: [],
+      snapshotAckSeq: 0,
       pendingTimers: new Set(),
       closeInfo: null,
       delayedOutboundCount: 0,
       droppedOutboundCount: 0,
+      delayedInboundCount: 0,
+      droppedInboundCount: 0,
+      reorderedInboundCount: 0,
       closePromise: null,
       messageChain: Promise.resolve(),
       api: null
@@ -534,8 +657,7 @@ export async function createRealWorkerHarness(options = {}) {
     ws.addEventListener('message', (event) => {
       client.messageChain = client.messageChain.then(async () => {
         const raw = await readMessageText(event.data);
-        const message = JSON.parse(raw);
-        handleClientMessage(client, message);
+        scheduleInboundMessage(client, raw, worker);
       }).catch((err) => {
         worker.logs.stderr = appendLog(worker.logs.stderr, `[harness-message-error] ${err && err.stack ? err.stack : err}\n`);
       });

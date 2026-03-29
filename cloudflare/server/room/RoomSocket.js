@@ -13,6 +13,7 @@ const MESSAGE_RATE_LIMITS = {
 const MAX_GAMEPLAY_MESSAGE_BYTES = 8192;
 const MAX_LOBBY_MESSAGE_BYTES = 1024;
 const RATE_LIMIT_CLOSE_AFTER = 3;
+const MAX_INPUT_BATCH_SAMPLES = 4;
 
 function consumeCombatRateLimit(player, key, now) {
   if (!player || !key) return true;
@@ -73,6 +74,45 @@ function closeSocket(ws, code, reason) {
   } catch (_err) {
     // no-op
   }
+}
+
+function normalizeSnapshotAckSeq(value) {
+  const seq = Math.max(0, Math.floor(Number(value || 0)));
+  return Number.isFinite(seq) ? seq : 0;
+}
+
+function normalizeLinkMetric(value, maxValue) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(Number(maxValue || 0) || parsed, parsed);
+}
+
+function updateConnectionQualityState(meta, player, msg, now) {
+  if (!meta || !msg || typeof msg !== 'object') return;
+  const snapshotAckSeq = normalizeSnapshotAckSeq(msg.snapshotAckSeq);
+  if (snapshotAckSeq > 0) {
+    meta.snapshotAckSeq = Math.max(normalizeSnapshotAckSeq(meta.snapshotAckSeq), snapshotAckSeq);
+  }
+  if (Object.prototype.hasOwnProperty.call(msg, 'linkRttMs')) {
+    meta.linkRttMs = normalizeLinkMetric(msg.linkRttMs, 4000);
+  }
+  if (Object.prototype.hasOwnProperty.call(msg, 'linkJitterMs')) {
+    meta.linkJitterMs = normalizeLinkMetric(msg.linkJitterMs, 2000);
+  }
+  meta.lastConnectionQualityAt = Number(now || 0);
+  if (player && typeof player === 'object') {
+    player.linkRttMs = Math.max(0, Number(meta.linkRttMs || 0));
+    player.linkJitterMs = Math.max(0, Number(meta.linkJitterMs || 0));
+    player.lastSnapshotAckSeq = Math.max(0, Number(meta.snapshotAckSeq || 0));
+  }
+}
+
+function inputBatchLength(msg) {
+  if (Array.isArray(msg && msg.inputs)) return msg.inputs.length;
+  if (msg && (Object.prototype.hasOwnProperty.call(msg, 'seq') || Object.prototype.hasOwnProperty.call(msg, 'inputMode'))) {
+    return 1;
+  }
+  return 0;
 }
 
 export function handleRoomSocketMessage(room, ws, message, deps) {
@@ -137,7 +177,14 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
 
   if (type === msgC2s.INPUT) {
     if (privateLobbyLocked) return;
+    const batchLength = inputBatchLength(msg);
+    if (batchLength > MAX_INPUT_BATCH_SAMPLES) {
+      closeSocket(ws, 1008, 'Invalid input batch');
+      return;
+    }
     if (!consumeOrClose('input')) return;
+    updateConnectionQualityState(meta, player, msg, now);
+    room.clients.set(ws, meta);
     room.handleInput(player, msg);
     return;
   }
@@ -182,6 +229,8 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
   }
   if (type === msgC2s.PING) {
     if (!consumeOrClose('ping')) return;
+    updateConnectionQualityState(meta, player, msg, now);
+    room.clients.set(ws, meta);
     room.send(ws, { t: msgS2c.PONG, clientTime: msg.clientTime || 0, serverTime: now });
   }
 }

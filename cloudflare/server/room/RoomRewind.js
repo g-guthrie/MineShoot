@@ -7,8 +7,8 @@ import {
   isRollStateActive
 } from '../../../shared/entity-points.js';
 
-export const DEFAULT_REWIND_HISTORY_MS = 300;
-export const DEFAULT_MAX_REWIND_MS = 250;
+export const DEFAULT_REWIND_HISTORY_MS = 550;
+export const DEFAULT_MAX_REWIND_MS = 500;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -92,6 +92,14 @@ export function clampRewindShotTime(requestedShotTime, now = 0, options = {}) {
   const raw = Number(requestedShotTime);
   if (!Number.isFinite(raw) || raw <= 0) return stamp;
   return clamp(raw, stamp - maxRewindMs, stamp);
+}
+
+export function computeAdaptiveMaxRewindMs(linkRttMs = 0, linkJitterMs = 0, options = {}) {
+  const rttMs = Math.max(0, Number(linkRttMs || 0));
+  const jitterMs = Math.max(0, Number(linkJitterMs || 0));
+  const minRewindMs = Math.max(1, Number(options.minRewindMs || 250));
+  const maxRewindMs = Math.max(minRewindMs, Number(options.maxRewindMs || DEFAULT_MAX_REWIND_MS));
+  return clamp(125 + (0.5 * rttMs) + (2 * jitterMs), minRewindMs, maxRewindMs);
 }
 
 export function rewindEntityPose(entity, requestedShotTime, now = 0, options = {}) {

@@ -15,10 +15,30 @@ Use this order when debugging multiplayer motion issues.
 
 - Run `npm run test:networking`
 - This covers:
-  - real-worker multiplayer movement and reconnect scenarios
-  - measured jump/move/shoot correction scenarios
+  - owner-player correction and runtime handoff
+  - transport, reconnect, stale-packet, and clock behavior
+  - remote interpolation and state-view helpers
+  - server room runtime, snapshot, serializer, and socket behavior
+  - combat, rewind, and hit-feedback behavior
+  - real-worker multiplayer integration scenarios
 
-If you need the broader suites after that, run `npm run test:networking:full`.
+If you need the full repo-wide sweep after that, run `npm run test:all`.
+
+Useful slices while debugging:
+
+- `npm run test:networking:owner`
+- `npm run test:networking:transport`
+- `npm run test:networking:client`
+- `npm run test:networking:server`
+- `npm run test:networking:combat`
+- `npm run test:networking:integration`
+
+## 2.5. Remember the shipped input baseline
+
+- The runtime base input cadence is intentionally `30 Hz`.
+- It is not “30 Hz only”.
+- Immediate sends still happen on jump, movement state changes, look deltas, and cumulative unsent drift.
+- When debugging packet volume, treat the 30 Hz interval as the idle floor, not the whole policy.
 
 ## 3. Read the right metrics
 
@@ -29,6 +49,13 @@ For correction problems, check:
 - delayed movement convergence
 - giant teleport step size
 - respawn scheduling after clock alignment
+
+For trust problems in the suite itself, check:
+
+- whether the test is driving the real owner path or only helpers
+- whether it measures final presented motion or only raw snapshots
+- whether it covers server-to-client impairment, not just client-to-server impairment
+- whether a passing result depends on loose thresholds that still allow visible hitching
 
 ## 4. Ignore stale references
 

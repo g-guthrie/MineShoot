@@ -21,27 +21,12 @@
     }
 
     function buildMotionSyncKey(selfState) {
+        var reconcile = runtime().GameShared && runtime().GameShared.authoritativeReconciliation;
+        if (reconcile && reconcile.buildAuthoritativeMotionRevision) {
+            return reconcile.buildAuthoritativeMotionRevision(selfState);
+        }
         if (!selfState || typeof selfState !== 'object') return '';
-        var precision = function (value) {
-            return Math.round(Number(value || 0) * 1000);
-        };
-        return [
-            String(selfState.id || ''),
-            precision(selfState.x),
-            precision(selfState.y),
-            precision(selfState.z),
-            precision(selfState.yaw),
-            precision(selfState.pitch),
-            precision(selfState.velocityY),
-            precision(selfState.jumpHoldTimer),
-            precision(selfState.moveSpeedNorm),
-            selfState.isGrounded ? '1' : '0',
-            selfState.jumpHeldLast ? '1' : '0',
-            selfState.sprinting ? '1' : '0',
-            selfState.fastBackpedal ? '1' : '0',
-            selfState.alive === false ? '0' : '1',
-            String(selfState.weaponId || '')
-        ].join('|');
+        return String(selfState.id || '');
     }
 
     function fallbackReconciliationContract(authoritativeState) {

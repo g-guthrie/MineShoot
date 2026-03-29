@@ -5,6 +5,7 @@ import {
   buildHitboxesFromPose,
   buildRewoundTargetEntity,
   clampRewindShotTime,
+  computeAdaptiveMaxRewindMs,
   recordEntityPoseHistory,
   rewindEntityPose,
   seedEntityPoseHistory
@@ -48,9 +49,16 @@ test('room rewind interpolates entity pose between stored samples', () => {
 });
 
 test('room rewind clamps stale shot times to the maximum rewind window', () => {
-  assert.equal(clampRewindShotTime(1000, 1500), 1250);
+  assert.equal(clampRewindShotTime(1000, 1500), 1000);
   assert.equal(clampRewindShotTime(1490, 1500), 1490);
   assert.equal(clampRewindShotTime(0, 1500), 1500);
+});
+
+test('room rewind computes adaptive max rewind from link quality with hard floor and cap', () => {
+  assert.equal(computeAdaptiveMaxRewindMs(0, 0), 250);
+  assert.equal(computeAdaptiveMaxRewindMs(150, 20), 250);
+  assert.equal(computeAdaptiveMaxRewindMs(300, 40), 355);
+  assert.equal(computeAdaptiveMaxRewindMs(900, 200), 500);
 });
 
 test('room rewind falls back to the current pose when history is unavailable', () => {

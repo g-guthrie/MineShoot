@@ -85,7 +85,7 @@ fi
 
 echo
 echo "[INFO] Deploying Worker..."
-"$ROOT_DIR/scripts/wrangler.sh" deploy --env=""
+"$ROOT_DIR/scripts/wrangler.sh" deploy --config "$ROOT_DIR/wrangler.worker.toml" --env="" --message "$DEPLOY_MESSAGE"
 
 echo
 echo "[INFO] Deploying Pages..."

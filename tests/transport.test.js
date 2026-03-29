@@ -101,3 +101,31 @@ test('transport does not reconnect after shutdown while superseded recovery is s
 
   assert.equal(harness.sockets.length, 1);
 });
+
+test('transport ignores late messages from a replaced socket after reconnect', async () => {
+  const harness = await loadTransportHarness();
+  const messages = [];
+  const transport = harness.create({
+    endpoint() { return 'wss://example.test'; },
+    isActive() { return true; },
+    reconnectMs: 1,
+    onMessage(raw) {
+      messages.push(String(raw || ''));
+    }
+  });
+
+  transport.connect();
+  assert.equal(harness.sockets.length, 1);
+
+  const firstSocket = harness.sockets[0];
+  firstSocket.emit('close', { code: 1006 });
+  harness.flushTimers();
+
+  assert.equal(harness.sockets.length, 2);
+  const secondSocket = harness.sockets[1];
+
+  firstSocket.emit('message', { data: 'late-from-old' });
+  secondSocket.emit('message', { data: 'from-new' });
+
+  assert.deepEqual(messages, ['from-new']);
+});

@@ -124,7 +124,10 @@
     }
 
     function launchPillLabel(modeId) {
-        return 'Play';
+        var mode = normalizeMode(modeId);
+        if (!mode || mode === 'ffa') return 'Play';
+        var label = modeLabel(mode);
+        return label ? ('Play ' + label) : 'Play';
     }
 
     function isRoomSeedMode(modeId) {

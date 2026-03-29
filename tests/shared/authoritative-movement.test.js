@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   createMovementInputState,
   isBlockedAt,
+  resolvePenetrationXZ,
   stepAuthoritativeMovement
 } from '../../shared/authoritative-movement.js';
 import { PLAYER_HEIGHT, PLAYER_RADIUS } from '../../shared/entity-constants.js';
@@ -366,4 +367,40 @@ test('authoritative movement lands on support directly under the foot probe', ()
   assert.equal(entity.isGrounded, true);
   assert.equal(entity.velocityY, 0);
   assert.ok(entity.y > 1.71 && entity.y < 1.73);
+});
+
+test('authoritative movement resolves shallow penetration by pushing the player out of blocking geometry', () => {
+  const resolution = resolvePenetrationXZ(0.2, 0, 0, [{
+    min: { x: -0.4, y: 0, z: -1 },
+    max: { x: 0.4, y: 3, z: 1 }
+  }]);
+
+  assert.equal(resolution.changed, true);
+  assert.ok(Math.abs(resolution.x) > 0.89);
+});
+
+test('authoritative movement can step out of a trapped overlap instead of staying stuck inside the box', () => {
+  const entity = createEntity({
+    x: 0.2,
+    z: 0,
+    y: 1.6
+  });
+  const input = createMovementInputState();
+  input.forward = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.05,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [{
+      min: { x: -0.4, y: 0, z: -1 },
+      max: { x: 0.4, y: 3, z: 1 }
+    }],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(isBlockedAt(entity.x, entity.z, 0, [{
+    min: { x: -0.4, y: 0, z: -1 },
+    max: { x: 0.4, y: 3, z: 1 }
+  }]), false);
 });

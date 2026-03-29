@@ -1,0 +1,51 @@
+name = "mayhem"
+main = "cloudflare/worker.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+PUBLIC_OVERFLOW_ROOM_COUNT = "8"
+
+[[durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[durable_objects.bindings]]
+name = "PRIVATE_ROOM_LOBBY_HUB"
+class_name = "PrivateRoomLobbyHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GlobalArenaRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PrivateRoomLobbyHub"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db-prod"
+database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"
+
+[env.e2e.vars]
+SESSION_COOKIE_NAME = "mfa_session"
+SESSION_DAYS = "30"
+ROOM_NAME = "global"
+PUBLIC_OVERFLOW_ROOM_COUNT = "8"
+ENABLE_TEST_FIXTURES = "1"
+
+[[env.e2e.durable_objects.bindings]]
+name = "GLOBAL_ARENA"
+class_name = "GlobalArenaRoom"
+
+[[env.e2e.durable_objects.bindings]]
+name = "PRIVATE_ROOM_LOBBY_HUB"
+class_name = "PrivateRoomLobbyHub"
+
+[[env.e2e.d1_databases]]
+binding = "DB"
+database_name = "minecraft-fps-db-prod"
+database_id = "340efedb-7247-447b-ac66-7a8e7acef9d6"

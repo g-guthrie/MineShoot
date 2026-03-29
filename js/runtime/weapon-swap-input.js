@@ -145,6 +145,26 @@
             };
         }
 
+        function triggerToggle() {
+            if (!hasInputCapture()) {
+                return { handled: false, toggled: false, reason: 'input_capture_required' };
+            }
+
+            var now = readNow();
+            if (switchLockUntil > now) {
+                return { handled: true, toggled: false, mode: 'direct', reason: 'switch_lockout' };
+            }
+
+            resetBurstState();
+            resetDiscreteState();
+            var result = applyToggle('direct');
+            if (result.toggled) {
+                discreteState.lockUntil = now + config.switchLockoutMs;
+                switchLockUntil = now + config.switchLockoutMs;
+            }
+            return result;
+        }
+
         function handleWheel(event) {
             var e = event || {};
             if (!hasInputCapture()) {
@@ -231,6 +251,7 @@
 
         return {
             handleWheel: handleWheel,
+            triggerToggle: triggerToggle,
             resetState: resetState,
             readState: readState,
             setInputCaptureOverride: setInputCaptureOverride

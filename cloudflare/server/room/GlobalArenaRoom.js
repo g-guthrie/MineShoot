@@ -45,7 +45,6 @@ import {
 } from '../../../shared/match-rules.js';
 import { PUBLIC_ROOM_START_THRESHOLD } from '../../../shared/matchmaking-config.js';
 
-import { ensureBots, tickBots } from './BotAI.js';
 import {
   createPlayerEntity,
   resetEntityForRespawn
@@ -75,6 +74,7 @@ import {
 import {
   buildRewoundTargetEntity,
   clampRewindShotTime,
+  computeAdaptiveMaxRewindMs,
   readCurrentPose,
   rewindEntityPose,
   recordEntityPoseHistory,
@@ -99,8 +99,7 @@ import {
   detectGameMode,
   emptyMatchState as buildRoomMatchState,
   isPrivateMatchRoom,
-  isPublicMatchRoom,
-  usesConfiguredBots as roomUsesConfiguredBots
+  isPublicMatchRoom
 } from './RoomIdentity.js';
 import { applyPrivateRoomConfig as applyRoomPrivateConfig } from './RoomPrivateConfig.js';
 import { setPrivateRoomState } from '../private-rooms.js';
@@ -192,6 +191,8 @@ const SELECTABLE_WEAPON_IDS = getSelectableWeaponIds();
 const ROOM_SIM_TICK_MS = 1000 / 60;
 const ROOM_SNAPSHOT_TICK_MS = 1000 / 60;
 const ROOM_INPUT_SEND_HZ = 30;
+const MAX_ROOM_TICK_FRAME_MS = 250;
+const MAX_SIM_STEPS_PER_TICK = 6;
 const DISCONNECT_GRACE_MS = 5000;
 const REMOTE_MUZZLE_FLASH_HOLD_MS = 90;
 const SNAPSHOT_ENGAGEMENT_TTL_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.engagementTtlMs || 1800));
@@ -201,6 +202,8 @@ const SNAPSHOT_ENGAGEMENT_MAX_TARGETS = Math.max(1, Number(NETWORK_COMBAT_PRIORI
 const SNAPSHOT_BURST_CADENCE_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.burstCadenceMs || 16));
 const SNAPSHOT_BURST_WINDOW_MS = Math.max(1, Number(NETWORK_COMBAT_PRIORITY.burstWindowMs || 250));
 const COMBAT_BURST_SNAPSHOTS = NETWORK_FLAGS.combatBurstSnapshots !== false;
+const SNAPSHOT_DELTA_COMPRESSION = NETWORK_FLAGS.snapshotDeltaCompression !== false;
+const ADAPTIVE_SNAPSHOT_CADENCE = NETWORK_FLAGS.adaptiveSnapshotCadence !== false;
 const SHOT_TOKEN_DAMAGE_AGGREGATION = NETWORK_FLAGS.shotTokenDamageAggregation !== false;
 const PLAYER_EYE_HEIGHT_WU = EYE_HEIGHT;
 const PLAYER_HEIGHT_WU = PLAYER_HEIGHT;
@@ -304,9 +307,12 @@ export class GlobalArenaRoom extends DurableObject {
     this.activeSocketByUserId = new Map();
     this.lobbyObservers = new Map();
     this.players = new Map();
-    this.bots = new Map();
     this.tickHandle = null;
     this.lastTickAt = nowMs();
+    this.simulationNowMs = this.lastTickAt;
+    this.inSimulationTick = false;
+    this.simulationAccumulatorMs = 0;
+    this.snapshotAccumulatorMs = 0;
     this.lastSnapshotAt = 0;
     this.roomName = env.ROOM_NAME || 'global';
     const initialWorldMeta = buildExpectedWorldMeta(this.roomName, SHARED_PROTOCOL.world);
@@ -322,6 +328,7 @@ export class GlobalArenaRoom extends DurableObject {
     this.fireZones = new Map();
     this.nextProjectileSeq = 1;
     this.nextFireZoneSeq = 1;
+    this.nextSnapshotSeq = 1;
     this.gameMode = detectGameMode(this.roomName);
     this.matchState = emptyMatchState(this.gameMode);
     this.privateRoomConfig = defaultPrivateRoomConfig();
@@ -357,9 +364,6 @@ export class GlobalArenaRoom extends DurableObject {
     const out = [];
     for (const player of this.players.values()) {
       if (player && !this.isEntityDisconnected(player)) out.push(player);
-    }
-    for (const bot of this.bots.values()) {
-      if (bot) out.push(bot);
     }
     return out;
   }
@@ -417,6 +421,8 @@ export class GlobalArenaRoom extends DurableObject {
   ensureTick() {
     if (this.tickHandle) return;
     this.lastTickAt = nowMs();
+    this.simulationAccumulatorMs = 0;
+    this.snapshotAccumulatorMs = 0;
     this.lastSnapshotAt = 0;
     this.tickHandle = setInterval(() => {
       try {
@@ -437,6 +443,16 @@ export class GlobalArenaRoom extends DurableObject {
       clearInterval(this.tickHandle);
       this.tickHandle = null;
     }
+    this.inSimulationTick = false;
+    this.simulationAccumulatorMs = 0;
+    this.snapshotAccumulatorMs = 0;
+  }
+
+  currentNowMs() {
+    if (this.inSimulationTick) {
+      return Math.max(0, Number(this.simulationNowMs || 0));
+    }
+    return nowMs();
   }
 
   async fetch(request) {
@@ -445,10 +461,6 @@ export class GlobalArenaRoom extends DurableObject {
 
   isDevLocalRoom() {
     return this.roomName === DEV_LOCAL_ROOM_NAME;
-  }
-
-  usesConfiguredBots() {
-    return roomUsesConfiguredBots(this.roomName);
   }
 
   isPublicMatchRoom() {
@@ -488,7 +500,7 @@ export class GlobalArenaRoom extends DurableObject {
   startPublicMatchIfReady() {
     return startRoomPublicMatchIfReady(this, {
       emptyMatchState,
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       publicRoomStartThreshold: PUBLIC_ROOM_START_THRESHOLD,
       ffaTargetProgress: FFA_TARGET_PROGRESS,
       tdmTargetProgress: TDM_TARGET_PROGRESS,
@@ -503,7 +515,7 @@ export class GlobalArenaRoom extends DurableObject {
     return maybeResetRoomPublicMatch(this, {
       emptyMatchState,
       isPrivateMatchRoom,
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       roomPhaseActive: ROOM_PHASE_ACTIVE
     });
   }
@@ -525,7 +537,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   finishPublicMatch(winnerId, winnerTeam) {
     const finished = finishRoomPublicMatch(this, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       matchResetDelayMs: MATCH_RESET_DELAY_MS,
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM
@@ -538,16 +550,12 @@ export class GlobalArenaRoom extends DurableObject {
 
   recordElimination(sourceId, targetId) {
     return recordRoomElimination(this, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       ffaTargetProgress: FFA_TARGET_PROGRESS,
       tdmTargetProgress: TDM_TARGET_PROGRESS,
       gameModeFfa: GAME_MODE_FFA,
       gameModeTdm: GAME_MODE_TDM
     }, sourceId, targetId);
-  }
-
-  desiredBotCount() {
-    return 0;
   }
 
   humanPlayerCount() {
@@ -594,7 +602,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   applySpawnShield(entity) {
     return applyRoomSpawnShield(entity, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
     });
   }
@@ -614,7 +622,7 @@ export class GlobalArenaRoom extends DurableObject {
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU,
       spawnPadding: PLAYER_SPAWN_PADDING_WU,
       spawnMinClearance: PLAYER_SPAWN_MIN_CLEARANCE_WU,
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
     });
   }
@@ -629,15 +637,14 @@ export class GlobalArenaRoom extends DurableObject {
   syncRoomFixtures() {
     return syncRoomRuntimeFixtures(this, {
       simPlayerIds: DEV_LOCAL_SIM_PLAYER_IDS,
-      simPlayerNames: DEV_LOCAL_SIM_PLAYER_NAMES,
-      ensureBots
+      simPlayerNames: DEV_LOCAL_SIM_PLAYER_NAMES
     });
   }
 
   ensurePlayer(userId, username, classId, actorId = '', actorName = '') {
     return ensureRoomPlayer(this, userId, username, classId, actorId, actorName, {
       isPrivateMatchRoom,
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS,
       matchEntryWindowMs: MATCH_ENTRY_WINDOW_MS,
       teamAlpha: TDM_TEAM_A,
@@ -685,6 +692,19 @@ export class GlobalArenaRoom extends DurableObject {
         pelletIndex: Number.isFinite(Number(trace && trace.pelletIndex)) ? Number(trace.pelletIndex) : 0,
         hitType: trace && trace.hitType === 'head' ? 'head' : (trace && trace.hitType === 'body' ? 'body' : 'miss')
       }))
+    });
+  }
+
+  broadcastShotReject(player, rejection) {
+    if (!player || !player.id || !rejection) return;
+    const ws = this.activeSocketByUserId.get(player.id);
+    if (!ws) return;
+    this.send(ws, {
+      t: MSG_S2C.SHOT_REJECT,
+      shotToken: String(rejection.shotToken || ''),
+      weaponId: String(rejection.weaponId || ''),
+      reason: String(rejection.reason || 'rejected'),
+      serverTime: Math.max(0, Number(rejection.serverTime || 0))
     });
   }
 
@@ -752,7 +772,7 @@ export class GlobalArenaRoom extends DurableObject {
     return ensureRoomSnapshotBurstState(meta);
   }
 
-  collectSnapshotFrame(now = nowMs()) {
+  collectSnapshotFrame(now = this.currentNowMs()) {
     return collectRoomSnapshotFrame(this, now);
   }
 
@@ -769,9 +789,11 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  markSnapshotBurst(viewerIds, entityIds, now = nowMs(), ttlMs = SNAPSHOT_BURST_WINDOW_MS) {
+  markSnapshotBurst(viewerIds, entityIds, now = this.currentNowMs(), ttlMs = SNAPSHOT_BURST_WINDOW_MS) {
     return markRoomSnapshotBurst(this, viewerIds, entityIds, now, ttlMs, {
       combatBurstSnapshots: COMBAT_BURST_SNAPSHOTS,
+      snapshotDeltaCompression: SNAPSHOT_DELTA_COMPRESSION,
+      adaptiveSnapshotCadence: ADAPTIVE_SNAPSHOT_CADENCE,
       snapshotBurstCadenceMs: SNAPSHOT_BURST_CADENCE_MS,
       snapshotBurstWindowMs: SNAPSHOT_BURST_WINDOW_MS,
       msgType: MSG_S2C.SNAPSHOT,
@@ -793,7 +815,7 @@ export class GlobalArenaRoom extends DurableObject {
     return isRoomEntityEngagedForViewer(viewerEntity, entityId, now);
   }
 
-  markFireEngagement(player, msg, now = nowMs()) {
+  markFireEngagement(player, msg, now = this.currentNowMs()) {
     return markRoomFireEngagement(this, player, msg, now, {
       distance3,
       normalize3,
@@ -818,34 +840,39 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
-  recordAliveEntityPoseHistories(now = nowMs()) {
+  recordAliveEntityPoseHistories(now = this.currentNowMs()) {
     for (const player of this.players.values()) {
       if (!player || !player.alive || this.isEntityDisconnected(player)) continue;
       this.recordEntityPoseHistory(player, now);
     }
-    for (const bot of this.bots.values()) {
-      if (!bot || !bot.alive) continue;
-      this.recordEntityPoseHistory(bot, now);
-    }
   }
 
-  resolveHitscanShotTime(msg, now = nowMs()) {
+  resolveHitscanShotTime(player, msg, now = nowMs()) {
     return clampRewindShotTime(msg && msg.estimatedServerShotTime, now, {
-      maxRewindMs: HITSCAN_MAX_REWIND_MS
+      maxRewindMs: this.adaptiveRewindBudgetMs(player)
     });
   }
 
   buildRewoundHitscanTarget(entity, requestedShotTime, now = nowMs()) {
     return buildRewoundTargetEntity(entity, requestedShotTime, now, {
-      maxRewindMs: HITSCAN_MAX_REWIND_MS
+      maxRewindMs: this.adaptiveRewindBudgetMs(entity)
     });
+  }
+
+  adaptiveRewindBudgetMs(player) {
+    return computeAdaptiveMaxRewindMs(
+      player && player.linkRttMs,
+      player && player.linkJitterMs,
+      { minRewindMs: 250, maxRewindMs: HITSCAN_MAX_REWIND_MS }
+    );
   }
 
   authoritativeHitscanOrigin(player, requestedShotTime = 0, now = nowMs()) {
     if (!player) return { x: 0, y: PLAYER_EYE_HEIGHT_WU, z: 0 };
+    const maxRewindMs = this.adaptiveRewindBudgetMs(player);
     const rewoundPose = Number(requestedShotTime || 0) > 0
       ? rewindEntityPose(player, requestedShotTime, now, {
-          maxRewindMs: HITSCAN_MAX_REWIND_MS
+          maxRewindMs
         })
       : null;
     const pose = rewoundPose || readCurrentPose(player, now) || {};
@@ -865,9 +892,10 @@ export class GlobalArenaRoom extends DurableObject {
 
   authoritativeHitscanForward(player, requestedShotTime = 0, now = nowMs()) {
     if (!player) return { x: 0, y: 0, z: -1 };
+    const maxRewindMs = this.adaptiveRewindBudgetMs(player);
     const rewoundPose = Number(requestedShotTime || 0) > 0
       ? rewindEntityPose(player, requestedShotTime, now, {
-          maxRewindMs: HITSCAN_MAX_REWIND_MS
+          maxRewindMs
         })
       : null;
     return combatEntityForward(rewoundPose || player, { normalize3 });
@@ -972,6 +1000,14 @@ export class GlobalArenaRoom extends DurableObject {
     if (!player || !player.alive) return;
 
     const now = nowMs();
+    const startX = Number(player.x || 0);
+    const startY = Number(player.y || 0);
+    const startZ = Number(player.z || 0);
+    const startYaw = Number(player.yaw || 0);
+    const startPitch = Number(player.pitch || 0);
+    const startMoveSpeedNorm = Number(player.moveSpeedNorm || 0);
+    const startSprinting = !!player.sprinting;
+    const startFastBackpedal = !!player.fastBackpedal;
     const slowMult = (player.slowUntil || 0) > now
       ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
       : 1;
@@ -1015,11 +1051,22 @@ export class GlobalArenaRoom extends DurableObject {
       player.lastProcessedInputSeq = movementPlan.processedSeq;
     }
     this.enforceEntityTerrainFloor(player);
+    if (
+      Math.abs(Number(player.x || 0) - startX) > 0.0001 ||
+      Math.abs(Number(player.y || 0) - startY) > 0.0001 ||
+      Math.abs(Number(player.z || 0) - startZ) > 0.0001 ||
+      Math.abs(Number(player.yaw || 0) - startYaw) > 0.0001 ||
+      Math.abs(Number(player.pitch || 0) - startPitch) > 0.0001 ||
+      Math.abs(Number(player.moveSpeedNorm || 0) - startMoveSpeedNorm) > 0.0001 ||
+      !!player.sprinting !== startSprinting ||
+      !!player.fastBackpedal !== startFastBackpedal
+    ) {
+      player.lastAuthoritativeChangeAt = now;
+    }
   }
 
   getEntityById(entityId) {
     if (this.players.has(entityId)) return this.players.get(entityId);
-    if (this.bots.has(entityId)) return this.bots.get(entityId);
     return null;
   }
 
@@ -1039,7 +1086,6 @@ export class GlobalArenaRoom extends DurableObject {
       if (!p || !p.alive || this.isEntityDisconnected(p) || this.isEntityMatchEntryPending(p, now)) continue;
       out.push(p);
     }
-    for (const b of this.bots.values()) if (b && b.alive) out.push(b);
     return out;
   }
 
@@ -1159,23 +1205,25 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleFire(player, msg) {
     return handleCombatFire(this, player, msg, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       weaponStats: WEAPON_STATS,
       weaponFalloff: WEAPON_FALLOFF,
       resolveHitscanTrace,
       resolveHitscanShot,
       applyDamageFromSource,
       broadcastShotEffect: (arenaRoom, effect) => arenaRoom.broadcastShotEffect(effect),
+      broadcastShotReject: (arenaRoom, firingPlayer, rejection) => arenaRoom.broadcastShotReject(firingPlayer, rejection),
       broadcastDamageEvent,
       broadcastDeathRespawn,
       canEquipWeaponId,
       markFireEngagement: (firingPlayer, fireMsg, stamp) => this.markFireEngagement(firingPlayer, fireMsg, stamp),
       markSnapshotBurst: (viewerIds, entityIds, stamp, ttlMs) => this.markSnapshotBurst(viewerIds, entityIds, stamp, ttlMs),
-      resolveHitscanShotTime: (fireMsg, stamp) => this.resolveHitscanShotTime(fireMsg, stamp),
+      resolveHitscanShotTime: (firingPlayer, fireMsg, stamp) => this.resolveHitscanShotTime(firingPlayer, fireMsg, stamp),
       buildRewoundHitscanTarget: (entity, requestedShotTime, stamp) => this.buildRewoundHitscanTarget(entity, requestedShotTime, stamp),
       authoritativeHitscanOrigin: (entity, requestedShotTime, stamp) => this.authoritativeHitscanOrigin(entity, requestedShotTime, stamp),
       authoritativeHitscanForward: (entity, requestedShotTime, stamp) => this.authoritativeHitscanForward(entity, requestedShotTime, stamp),
       shotTokenDamageAggregation: SHOT_TOKEN_DAMAGE_AGGREGATION,
+      hitscanAimDirectionMinDot: 0.95,
       hitscanAimOriginMaxOffset: HITSCAN_AIM_ORIGIN_MAX_OFFSET_WU,
       playerEyeHeight: PLAYER_EYE_HEIGHT_WU,
       remoteMuzzleFlashHoldMs: REMOTE_MUZZLE_FLASH_HOLD_MS
@@ -1183,7 +1231,7 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   handleRoll(player, msg) {
-    return handleCombatRoll(this, player, msg, { nowMs });
+    return handleCombatRoll(this, player, msg, { nowMs: () => this.currentNowMs() });
   }
 
   handleWeaponLoadout(player, msg) {
@@ -1204,7 +1252,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   handleReload(player, msg) {
     return handleCombatReload(this, player, msg, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       weaponStats: WEAPON_STATS,
       canEquipWeaponId
     });
@@ -1294,12 +1342,12 @@ export class GlobalArenaRoom extends DurableObject {
   }
 
   regenArmor(entity, dtSec) {
-    regenArmorFromLastDamage(entity, dtSec, nowMs(), { regenDelayMs: ARMOR_REGEN_DELAY_MS });
+    regenArmorFromLastDamage(entity, dtSec, this.currentNowMs(), { regenDelayMs: ARMOR_REGEN_DELAY_MS });
   }
 
   tickStreamState(entity, dtSec) {
     if (!entity) return;
-    const now = nowMs();
+    const now = this.currentNowMs();
     const overheated = now < (entity.streamOverheatedUntil || 0);
     const coolRate = overheated ? 0.35 : 0.55;
     entity.streamHeat = Math.max(0, (entity.streamHeat || 0) - (coolRate * dtSec));
@@ -1310,7 +1358,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   respawnIfNeeded(entity) {
     return respawnRoomEntityIfNeeded(this, entity, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       resetEntityForRespawn,
       createWeaponAmmoRuntime,
       createMovementInputState
@@ -1323,7 +1371,7 @@ export class GlobalArenaRoom extends DurableObject {
 
   tickEntityMatchEntries() {
     return tickRoomEntityMatchEntries(this, {
-      nowMs,
+      nowMs: () => this.currentNowMs(),
       playerSpawnShieldMs: PLAYER_SPAWN_SHIELD_MS
     });
   }
@@ -1332,6 +1380,8 @@ export class GlobalArenaRoom extends DurableObject {
     return broadcastRoomSnapshot(this, forceFull, {
       nowMs,
       msgType: MSG_S2C.SNAPSHOT,
+      snapshotDeltaCompression: SNAPSHOT_DELTA_COMPRESSION,
+      adaptiveSnapshotCadence: ADAPTIVE_SNAPSHOT_CADENCE,
       distanceBetween: distance3,
       isEntityEngagedForViewer: isRoomEntityEngagedForViewer,
       isPrivateMatchRoom,
@@ -1342,9 +1392,15 @@ export class GlobalArenaRoom extends DurableObject {
     });
   }
 
+  allocateSnapshotSeq() {
+    const seq = Math.max(1, Number(this.nextSnapshotSeq || 1));
+    this.nextSnapshotSeq = seq + 1;
+    return seq;
+  }
+
   tick() {
     const now = nowMs();
-    const dtSec = Math.max(0.001, Math.min(0.2, (now - this.lastTickAt) / 1000));
+    const frameDeltaMs = Math.max(0, Math.min(MAX_ROOM_TICK_FRAME_MS, now - this.lastTickAt));
     this.lastTickAt = now;
 
     this.cleanupDisconnectedPlayers(now);
@@ -1352,18 +1408,38 @@ export class GlobalArenaRoom extends DurableObject {
       this.stopTickIfEmpty();
       return;
     }
-    this.maybeResetPublicMatch();
     this.syncRoomFixtures();
-    this.startPublicMatchIfReady();
-    this.tickEntityMatchEntries();
-    this.tickPlayers(dtSec);
-    tickBots(this, dtSec);
-    this.recordAliveEntityPoseHistories(now);
-    tickProjectiles(this, dtSec);
-    tickFireZones(this, dtSec);
-    this.updateLeaderProgress();
-    if ((now - this.lastSnapshotAt) >= ROOM_SNAPSHOT_TICK_MS) {
+    this.simulationAccumulatorMs = Math.min(MAX_ROOM_TICK_FRAME_MS, Math.max(0, Number(this.simulationAccumulatorMs || 0)) + frameDeltaMs);
+    this.snapshotAccumulatorMs = Math.min(MAX_ROOM_TICK_FRAME_MS, Math.max(0, Number(this.snapshotAccumulatorMs || 0)) + frameDeltaMs);
+
+    let simSteps = 0;
+    while (this.simulationAccumulatorMs >= ROOM_SIM_TICK_MS && simSteps < MAX_SIM_STEPS_PER_TICK) {
+      this.inSimulationTick = true;
+      this.simulationNowMs += ROOM_SIM_TICK_MS;
+      const dtSec = ROOM_SIM_TICK_MS / 1000;
+      this.maybeResetPublicMatch();
+      this.startPublicMatchIfReady();
+      this.tickEntityMatchEntries();
+      this.tickPlayers(dtSec);
+      if (typeof tickBots === 'function') {
+        tickBots(this, dtSec);
+      }
+      this.recordAliveEntityPoseHistories(this.currentNowMs());
+      tickProjectiles(this, dtSec);
+      tickFireZones(this, dtSec);
+      this.updateLeaderProgress();
+      this.simulationAccumulatorMs -= ROOM_SIM_TICK_MS;
+      simSteps += 1;
+    }
+    this.inSimulationTick = false;
+
+    if (simSteps >= MAX_SIM_STEPS_PER_TICK && this.simulationAccumulatorMs >= ROOM_SIM_TICK_MS) {
+      this.simulationAccumulatorMs = Math.min(this.simulationAccumulatorMs, ROOM_SIM_TICK_MS);
+    }
+
+    if (this.snapshotAccumulatorMs >= ROOM_SNAPSHOT_TICK_MS) {
       this.broadcastSnapshot(false);
+      this.snapshotAccumulatorMs = this.snapshotAccumulatorMs % ROOM_SNAPSHOT_TICK_MS;
       this.lastSnapshotAt = now;
     }
 

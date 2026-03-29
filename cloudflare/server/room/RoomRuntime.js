@@ -49,6 +49,19 @@ function normalizeInputSample(player, msg, deps) {
   };
 }
 
+function normalizeInputSamples(player, msg, deps) {
+  if (Array.isArray(msg && msg.inputs) && msg.inputs.length > 0) {
+    const out = [];
+    for (let i = 0; i < msg.inputs.length; i++) {
+      const sample = msg.inputs[i];
+      if (!sample || typeof sample !== 'object') continue;
+      out.push(normalizeInputSample(player, sample, deps));
+    }
+    return out;
+  }
+  return [normalizeInputSample(player, msg, deps)];
+}
+
 function ensureInputQueue(entity) {
   if (!entity) return [];
   if (!Array.isArray(entity.inputQueue)) entity.inputQueue = [];
@@ -354,7 +367,6 @@ export function syncSimulatedPlayers(room, deps) {
 export function syncRoomFixtures(room, deps) {
   deps = deps || {};
   syncSimulatedPlayers(room, deps);
-  if (deps.ensureBots) deps.ensureBots(room);
 }
 
 export function ensurePlayer(room, userId, username, classId, actorId, actorName, deps) {
@@ -404,20 +416,23 @@ export function queueAuthoritativeInput(player, msg, deps) {
   player.seq = Math.max(0, Number(player.seq || 0));
   player.lastProcessedInputSeq = Math.max(0, Number(player.lastProcessedInputSeq || player.seq || 0));
   player.inputMode = 'intent';
-  const sample = normalizeInputSample(player, msg, {
+  const samples = normalizeInputSamples(player, msg, {
     clamp,
     movementLocked,
     createMovementInputState
   });
-
-  player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), sample.seq);
-  player.lastReceivedInputSeq = Math.max(Number(player.lastReceivedInputSeq || 0), sample.seq);
-  player.inputState = cloneInputState(sample.inputState, createMovementInputState);
-  player.yaw = sample.yaw;
-  player.pitch = sample.pitch;
-
-  if (sample.seq <= Math.max(0, Number(player.lastProcessedInputSeq || 0))) return;
-  insertInputSample(ensureInputQueue(player), sample);
+  const queue = ensureInputQueue(player);
+  for (let i = 0; i < samples.length; i++) {
+    const sample = samples[i];
+    if (!sample) continue;
+    player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), sample.seq);
+    player.lastReceivedInputSeq = Math.max(Number(player.lastReceivedInputSeq || 0), sample.seq);
+    player.inputState = cloneInputState(sample.inputState, createMovementInputState);
+    player.yaw = sample.yaw;
+    player.pitch = sample.pitch;
+    if (sample.seq <= Math.max(0, Number(player.lastProcessedInputSeq || 0))) continue;
+    insertInputSample(queue, sample);
+  }
 }
 
 export function applyPendingInputAck(entity) {

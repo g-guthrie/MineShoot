@@ -25,6 +25,28 @@ export function clampReplaySampleDtSec(dtMs) {
   return Math.max(MIN_REPLAY_SAMPLE_DT_SEC, Math.min(MAX_REPLAY_SAMPLE_DT_SEC, dtSec || 0));
 }
 
+export function buildAuthoritativeMotionRevision(state) {
+  if (!state || typeof state !== 'object') return '';
+  const precision = (value) => Math.round(Number(value || 0) * 1000);
+  return [
+    String(state.id || ''),
+    precision(state.x),
+    precision(state.y),
+    precision(state.z),
+    precision(state.yaw),
+    precision(state.pitch),
+    precision(state.velocityY),
+    precision(state.jumpHoldTimer),
+    precision(state.moveSpeedNorm),
+    state.isGrounded === false ? '0' : '1',
+    state.jumpHeldLast ? '1' : '0',
+    state.sprinting ? '1' : '0',
+    state.fastBackpedal ? '1' : '0',
+    state.alive === false ? '0' : '1',
+    String(state.weaponId || '')
+  ].join('|');
+}
+
 export function buildReplayStepsFromPendingInputs(pendingInputs, options = {}) {
   const createMovementInputState = typeof options.createMovementInputState === 'function'
     ? options.createMovementInputState
@@ -51,6 +73,7 @@ export function buildReplayStepsFromPendingInputs(pendingInputs, options = {}) {
       yaw: (typeof entry.yaw === 'number' && isFinite(entry.yaw)) ? Number(entry.yaw) : fallbackYaw,
       pitch: (typeof entry.pitch === 'number' && isFinite(entry.pitch)) ? Number(entry.pitch) : fallbackPitch,
       inputState: cloneReplayInputState(entry.inputState, createMovementInputState),
+      weaponId: String(entry.weaponId || options.fallbackWeaponId || ''),
       movementLocked: !!(Object.prototype.hasOwnProperty.call(entry, 'movementLocked')
         ? entry.movementLocked
         : movementLocked(entry)),
@@ -80,6 +103,7 @@ export function buildReplayStepsFromPendingInputs(pendingInputs, options = {}) {
       yaw: entry.yaw,
       pitch: entry.pitch,
       inputState: entry.inputState,
+      weaponId: entry.weaponId,
       seq: entry.seq,
       movementLocked: entry.movementLocked,
       weightSec: entry.weightSec
@@ -149,10 +173,14 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
   const bounds = options.bounds || { minX: -Infinity, maxX: Infinity, minZ: -Infinity, maxZ: Infinity };
   const collisionBoxes = Array.isArray(options.collisionBoxes) ? options.collisionBoxes : [];
   const getGroundHeightAt = typeof options.getGroundHeightAt === 'function' ? options.getGroundHeightAt : (() => 0);
+  const resolveStepMovementOptions = typeof options.resolveStepMovementOptions === 'function'
+    ? options.resolveStepMovementOptions
+    : null;
   const replayPlan = buildReplayStepsFromPendingInputs(pendingInputs, {
     createMovementInputState: options.createMovementInputState,
     fallbackYaw: state.yaw,
     fallbackPitch: state.pitch,
+    fallbackWeaponId: options.fallbackWeaponId,
     movementLocked: options.movementLocked
   });
 
@@ -161,12 +189,15 @@ export function replayMotionState(snapshotState, pendingInputs, options = {}) {
     if (!step || !step.inputState || !(Number(step.dtSec || 0) > 0)) continue;
     state.yaw = Number(step.yaw || state.yaw);
     state.pitch = Number(step.pitch || state.pitch);
+    const stepMovementOptions = resolveStepMovementOptions ? (resolveStepMovementOptions(step, state) || {}) : {};
     stepMovement(state, step.inputState, {
       dtSec: Number(step.dtSec || 0),
       bounds: bounds,
       collisionBoxes: collisionBoxes,
       getGroundHeightAt: getGroundHeightAt,
       movementLocked: !!step.movementLocked,
+      moveSpeedMultiplier: Number(stepMovementOptions.moveSpeedMultiplier || 1),
+      adsMoveMultiplier: Number(stepMovementOptions.adsMoveMultiplier || 0),
       eyeHeight: Number(options.eyeHeight || EYE_HEIGHT),
       playerHeight: Number(options.playerHeight || PLAYER_HEIGHT),
       playerRadius: Number(options.playerRadius || PLAYER_RADIUS),
@@ -180,6 +211,7 @@ const runtime = (typeof globalThis !== 'undefined') ? globalThis : {};
 runtime.__MAYHEM_RUNTIME = runtime.__MAYHEM_RUNTIME || {};
 runtime.__MAYHEM_RUNTIME.GameShared = runtime.__MAYHEM_RUNTIME.GameShared || {};
 runtime.__MAYHEM_RUNTIME.GameShared.authoritativeReconciliation = {
+  buildAuthoritativeMotionRevision,
   buildMotionStateFromSnapshot,
   clampReplaySampleDtSec,
   buildReplayStepsFromPendingInputs,

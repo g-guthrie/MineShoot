@@ -10,6 +10,7 @@ import {
   markEntityEngaged,
   sendSnapshotToClient
 } from '../../../cloudflare/server/room/RoomSnapshotRuntime.js';
+import { snapshotCadenceMsForEntity } from '../../../cloudflare/server/room/RoomState.js';
 
 function makeRoom() {
   const sent = [];
@@ -25,7 +26,6 @@ function makeRoom() {
       teamBaselineSize: { alpha: 0, bravo: 0 }
     },
     players: new Map(),
-    bots: new Map(),
     projectiles: new Map(),
     fireZones: new Map(),
     clients: new Map(),
@@ -39,7 +39,7 @@ function makeRoom() {
       return !!entity.disconnected;
     },
     getEntityById(id) {
-      return this.players.get(id) || this.bots.get(id) || null;
+      return this.players.get(id) || null;
     },
     getAliveEntities() {
       return Array.from(this.players.values()).filter((entity) => entity.alive !== false);
@@ -124,19 +124,18 @@ function snapshotDeps() {
   };
 }
 
-test('snapshot runtime collects serialized frame data for live players, bots, projectiles, and fire zones', () => {
+test('snapshot runtime collects serialized frame data for live players, projectiles, and fire zones', () => {
   const room = makeRoom();
   room.players.set('u1', baseEntity('u1'));
   room.players.set('u2', baseEntity('u2', { disconnected: true }));
-  room.bots.set('bot1', baseEntity('bot1', { kind: 'bot' }));
   room.projectiles.set('p1', { id: 'p1', alive: true, type: 'frag', ownerId: 'u1', x: 1, y: 2, z: 3, vx: 0, vy: 0, vz: 0, age: 0, stickyUntil: 0, stuckToTargetId: '', stuckOffsetX: 0, stuckOffsetY: 0, stuckOffsetZ: 0 });
   room.projectiles.set('p2', { id: 'p2', alive: false });
   room.fireZones.set('f1', { id: 'f1', ownerId: 'u1', x: 2, y: 0, z: 3, radius: 4, life: 5 });
 
   const frame = collectSnapshotFrame(room, 500);
 
-  assert.deepEqual(frame.entities.map((entity) => entity.id), ['u1', 'bot1']);
-  assert.deepEqual(room.materializeTrackedWeaponAmmoCalls, [{ id: 'u1', now: 500 }, { id: 'bot1', now: 500 }]);
+  assert.deepEqual(frame.entities.map((entity) => entity.id), ['u1']);
+  assert.deepEqual(room.materializeTrackedWeaponAmmoCalls, [{ id: 'u1', now: 500 }]);
   assert.equal(frame.projectiles.length, 1);
   assert.equal(frame.projectiles[0].id, 'p1');
   assert.equal(frame.fireZones.length, 1);
@@ -162,13 +161,116 @@ test('snapshot runtime sends viewer deltas and preserves snapshot bookkeeping', 
 
   room.sent.length = 0;
   const nextFrame = collectSnapshotFrame(room, 760);
-  assert.equal(sendSnapshotToClient(room, ws, meta, nextFrame, {}, snapshotDeps()), false);
+  assert.equal(sendSnapshotToClient(room, ws, meta, nextFrame, {}, Object.assign({}, snapshotDeps(), {
+    snapshotDeltaCompression: false
+  })), false);
 
   room.players.get('u2').x = 11;
   const changedFrame = collectSnapshotFrame(room, 820);
-  assert.equal(sendSnapshotToClient(room, ws, meta, changedFrame, {}, snapshotDeps()), true);
+  assert.equal(sendSnapshotToClient(room, ws, meta, changedFrame, {}, Object.assign({}, snapshotDeps(), {
+    snapshotDeltaCompression: false
+  })), true);
   assert.equal(room.sent.length, 1);
   assert.deepEqual(room.sent[0].payload.entities.map((entity) => entity.id), ['u2']);
+});
+
+test('snapshot runtime emits ack-based entity patches when a retained baseline is available', () => {
+  const room = makeRoom();
+  const ws = { id: 'socket-1' };
+  let nextSnapshotSeq = 1;
+  room.allocateSnapshotSeq = () => nextSnapshotSeq++;
+  room.players.set('u1', baseEntity('u1'));
+  room.players.set('u2', baseEntity('u2', { x: 10 }));
+  room.clients.set(ws, { userId: 'u1', snapshotAckSeq: 1 });
+  room.activeSocketByUserId.set('u1', ws);
+
+  const firstFrame = collectSnapshotFrame(room, 700);
+  const meta = room.clients.get(ws);
+  assert.equal(sendSnapshotToClient(room, ws, meta, firstFrame, { forceFull: true }, snapshotDeps()), true);
+  const firstSeq = Number(room.sent[0].payload.snapshotSeq || 0);
+
+  room.sent.length = 0;
+  room.players.get('u2').x = 11;
+  room.players.get('u2').lastAuthoritativeChangeAt = 800;
+  meta.snapshotAckSeq = firstSeq;
+  const secondFrame = collectSnapshotFrame(room, 820);
+  assert.equal(sendSnapshotToClient(room, ws, meta, secondFrame, {}, snapshotDeps()), true);
+  assert.equal(Array.isArray(room.sent[0].payload.entityPatches), true);
+  assert.equal(room.sent[0].payload.entities, undefined);
+  assert.equal(room.sent[0].payload.baseSnapshotSeq > 0, true);
+  assert.deepEqual(room.sent[0].payload.entityPatches.map((patch) => patch.id), ['u2']);
+});
+
+test('snapshot runtime falls back to a full snapshot when the acked baseline has aged out', () => {
+  const room = makeRoom();
+  const ws = { id: 'socket-1' };
+  let nextSnapshotSeq = 1;
+  room.allocateSnapshotSeq = () => nextSnapshotSeq++;
+  room.players.set('u1', baseEntity('u1'));
+  room.players.set('u2', baseEntity('u2', { x: 10 }));
+  room.clients.set(ws, { userId: 'u1' });
+  room.activeSocketByUserId.set('u1', ws);
+
+  const meta = room.clients.get(ws);
+  const firstFrame = collectSnapshotFrame(room, 700);
+  assert.equal(sendSnapshotToClient(room, ws, meta, firstFrame, { forceFull: true }, snapshotDeps()), true);
+  const firstSeq = Number(room.sent[0].payload.snapshotSeq || 0);
+
+  for (let i = 0; i < 40; i++) {
+    room.players.get('u2').x += 1;
+    room.players.get('u2').lastAuthoritativeChangeAt = 720 + (i * 20);
+    const frame = collectSnapshotFrame(room, 740 + (i * 20));
+    sendSnapshotToClient(room, ws, meta, frame, {}, snapshotDeps());
+    meta.snapshotAckSeq = Number(room.sent[room.sent.length - 1].payload.snapshotSeq || 0);
+  }
+
+  room.sent.length = 0;
+  meta.snapshotAckSeq = firstSeq;
+  room.players.get('u2').x += 1;
+  room.players.get('u2').lastAuthoritativeChangeAt = 1200;
+  const staleFrame = collectSnapshotFrame(room, 1220);
+  assert.equal(sendSnapshotToClient(room, ws, meta, staleFrame, {}, snapshotDeps()), true);
+  assert.equal(room.sent[0].payload.delta, false);
+  assert.ok(Array.isArray(room.sent[0].payload.entities));
+});
+
+test('snapshot runtime keeps cadence multipliers and tier recovery behavior stable', () => {
+  const viewer = baseEntity('u1');
+  const remote = baseEntity('u2', { x: 6, z: 2, moveSpeedNorm: 0.8 });
+  assert.equal(snapshotCadenceMsForEntity(viewer, remote, 100, { qualityIntervalMultiplier: 1 }), 1000 / 60);
+  assert.equal(snapshotCadenceMsForEntity(viewer, remote, 100, { qualityIntervalMultiplier: 1.5 }), 25);
+  assert.equal(Number(snapshotCadenceMsForEntity(viewer, remote, 100, { qualityIntervalMultiplier: 2 }).toFixed(3)), Number((1000 / 30).toFixed(3)));
+
+  const room = makeRoom();
+  const ws = { id: 'socket-1' };
+  let nextSnapshotSeq = 10;
+  room.allocateSnapshotSeq = () => nextSnapshotSeq++;
+  room.players.set('u1', baseEntity('u1'));
+  room.players.set('u2', baseEntity('u2', { x: 10, lastAuthoritativeChangeAt: 1 }));
+  room.clients.set(ws, { userId: 'u1', snapshotAckSeq: 0 });
+  room.activeSocketByUserId.set('u1', ws);
+
+  const meta = room.clients.get(ws);
+
+  meta.linkRttMs = 120;
+  meta.linkJitterMs = 30;
+  meta.snapshotAckSeq = 7;
+  sendSnapshotToClient(room, ws, meta, collectSnapshotFrame(room, 1000), { forceFull: true }, snapshotDeps());
+  meta.snapshotAckSeq = 8;
+  sendSnapshotToClient(room, ws, meta, collectSnapshotFrame(room, 1100), { forceFull: true }, snapshotDeps());
+  meta.snapshotAckSeq = 9;
+  sendSnapshotToClient(room, ws, meta, collectSnapshotFrame(room, 1200), { forceFull: true }, snapshotDeps());
+  assert.equal(meta.connectionQualityState.tier, 'fair');
+
+  meta.linkRttMs = 40;
+  meta.linkJitterMs = 10;
+  meta.snapshotAckSeq = 12;
+  sendSnapshotToClient(room, ws, meta, collectSnapshotFrame(room, 2000), { forceFull: true }, snapshotDeps());
+  assert.equal(meta.connectionQualityState.tier, 'fair');
+
+  meta.snapshotAckSeq = 13;
+  sendSnapshotToClient(room, ws, meta, collectSnapshotFrame(room, 4101), { forceFull: true }, snapshotDeps());
+  assert.equal(meta.connectionQualityState.tier, 'good');
 });
 
 test('snapshot runtime still sends when only room state changes', () => {

@@ -57,6 +57,10 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
     harness.ui.startupSubtitleForMode({ id: 'single_full_sandbox', roomId: '', gameMode: 'ffa' }),
     'Starting Offline Sandbox: Free For All...'
   );
+  assert.equal(
+    harness.ui.startupNoticeForMode({ id: 'single_full_sandbox', roomId: '', gameMode: 'ffa' }),
+    'Offline Sandbox Free For All: local-only match.'
+  );
 });
 
 test('runtime mode ui renders indicator text from one shared formatter', async () => {

@@ -31,7 +31,11 @@
             var el = document.getElementById('auth-status');
             if (!el) return;
             el.textContent = msg || '';
-            el.style.color = isErr ? '#ff9a9a' : '#d4ffd4';
+            if (msg) {
+                el.setAttribute('data-state', isErr ? 'error' : 'success');
+            } else {
+                el.removeAttribute('data-state');
+            }
         }
 
         function turnstileWrap() {

@@ -43,14 +43,14 @@
     }
 
     function applyBrandingOverrides() {
-        document.title = 'PvP';
+        document.title = 'PvP by Greer';
         var modeTitle = document.getElementById('mode-screen-title');
         if (modeTitle) {
-            modeTitle.textContent = 'PvP';
+            modeTitle.textContent = 'PvP by Greer';
         }
         var docsTitle = document.getElementById('docs-title');
         if (docsTitle) {
-            docsTitle.textContent = String(docsTitle.textContent || '').replace(/minecraft fps|mayhem/ig, 'PvP');
+            docsTitle.textContent = String(docsTitle.textContent || '').replace(/minecraft fps|mayhem/ig, 'PvP by Greer');
         }
     }
 

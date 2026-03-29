@@ -52,12 +52,15 @@
         var shared = sharedApi();
         var network = shared.getNetworkTuning ? shared.getNetworkTuning() : null;
         var feedback = network && network.feedback ? network.feedback : {};
+        var confirmedShotWindowMs = Math.max(1, Number(feedback.confirmedShotWindowMs || 5000));
+        var confirmedShotStaleWindowMs = Math.max(
+            confirmedShotWindowMs,
+            Number(feedback.confirmedShotStaleWindowMs || Math.max(30000, confirmedShotWindowMs))
+        );
         return {
             predictedHitTtlMs: Math.max(1, Number(feedback.predictedHitTtlMs || 900)),
-            confirmedShotTtlMs: Math.max(
-                Math.max(1, Number(feedback.predictedHitTtlMs || 900)),
-                Number(feedback.confirmedShotTtlMs || (Math.max(1, Number(feedback.predictedHitTtlMs || 900)) * 2.25))
-            )
+            confirmedShotWindowMs: confirmedShotWindowMs,
+            confirmedShotStaleWindowMs: confirmedShotStaleWindowMs
         };
     }
 
@@ -93,8 +96,8 @@
         for (var i = 0; i < confirmedShotFeedback.length; i++) {
             var entry = confirmedShotFeedback[i];
             if (!entry) continue;
-            var ageMs = stamp - Number(entry.at || 0);
-            if (ageMs < 0 || ageMs > feedbackTuning().confirmedShotTtlMs) continue;
+            var ageMs = stamp - Number(entry.firstAt || entry.at || 0);
+            if (ageMs < 0 || ageMs > feedbackTuning().confirmedShotStaleWindowMs) continue;
             next.push(entry);
         }
         confirmedShotFeedback = next;
@@ -172,7 +175,7 @@
 
     function markConfirmedShotToken(shotToken) {
         var token = String(shotToken || '');
-        if (!token) return true;
+        if (!token) return { allow: true, stale: false };
         var stamp = Date.now();
         pruneConfirmedShotFeedback(stamp);
         for (var i = 0; i < confirmedShotFeedback.length; i++) {
@@ -180,17 +183,38 @@
             if (!entry) continue;
             if (String(entry.shotToken || '') === token) {
                 entry.at = stamp;
-                return false;
+                if ((stamp - Number(entry.firstAt || entry.at || stamp)) > feedbackTuning().confirmedShotWindowMs) {
+                    return { allow: false, stale: true };
+                }
+                return { allow: false, stale: false };
             }
         }
         confirmedShotFeedback.push({
             shotToken: token,
+            firstAt: stamp,
             at: stamp
         });
         while (confirmedShotFeedback.length > CONFIRMED_SHOT_MAX) {
             confirmedShotFeedback.shift();
         }
-        return true;
+        return { allow: true, stale: false };
+    }
+
+    function warnProtocolFault(label, payload) {
+        if (globalThis.console && typeof globalThis.console.warn === 'function') {
+            globalThis.console.warn(label, payload);
+        }
+    }
+
+    function handleShotReject(rejection) {
+        if (!rejection) return;
+        clearPredictedHitFeedbackByShotToken(rejection.shotToken || '');
+        warnProtocolFault('[GameNetFeedbackSync] authoritative shot rejected', {
+            shotToken: String(rejection.shotToken || ''),
+            weaponId: String(rejection.weaponId || ''),
+            reason: String(rejection.reason || 'rejected'),
+            serverTime: Math.max(0, Number(rejection.serverTime || 0))
+        });
     }
 
     function damageNumberSpread(feedback) {
@@ -298,9 +322,17 @@
             RT.GameOverhead.revealTarget(String(feedback.targetId || ''), 1500);
         }
         var matchedPrediction = consumePredictedHitFeedback(feedback);
-        var suppressLocalAudio = !!matchedPrediction;
-        var suppressDamageNumber = !!matchedPrediction;
-        var shouldShowAuthoritativeConfirm = !feedback.killed && markConfirmedShotToken(feedback.shotToken || '');
+        var confirmationState = markConfirmedShotToken(feedback.shotToken || '');
+        if (confirmationState.stale) {
+            warnProtocolFault('[GameNetFeedbackSync] stale confirmed-shot token dropped', {
+                shotToken: String(feedback.shotToken || ''),
+                weaponId: String(feedback.weaponId || '')
+            });
+            return;
+        }
+        var suppressLocalAudio = !!matchedPrediction || !confirmationState.allow;
+        var suppressDamageNumber = !!matchedPrediction || !confirmationState.allow;
+        var shouldShowAuthoritativeConfirm = !feedback.killed && confirmationState.allow;
 
         if (!suppressLocalAudio && RT.GameAudio && RT.GameAudio.play) {
             RT.GameAudio.play('bulletImpact', {
@@ -309,7 +341,7 @@
                 weapon: feedback.weaponId || ''
             });
         }
-        if (feedback.killed) {
+        if (feedback.killed && confirmationState.allow) {
             if (RT.GameUI && RT.GameUI.showKillMarker) RT.GameUI.showKillMarker();
         } else if (shouldShowAuthoritativeConfirm) {
             if (RT.GameUI && RT.GameUI.showHitMarker) RT.GameUI.showHitMarker();
@@ -344,6 +376,14 @@
                 shotEffect = viewApi.consumeShotEffect();
                 if (shotEffect) handleShotEffect(shotEffect, camera, selfState);
             } while (shotEffect);
+        }
+
+        if (viewApi && viewApi.consumeShotReject) {
+            var shotReject = null;
+            do {
+                shotReject = viewApi.consumeShotReject();
+                if (shotReject) handleShotReject(shotReject);
+            } while (shotReject);
         }
 
         if (viewApi && viewApi.consumeIncomingDamageFeedback && RT.GamePlayerCombat && RT.GamePlayerCombat.showIncomingFeedback) {

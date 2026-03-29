@@ -48,7 +48,7 @@ const RUNTIME_MODE_DEFS = {
     id: 'single_full_sandbox',
     label: 'Offline Sandbox',
     menuTitle: 'OFFLINE SANDBOX',
-    menuDesc: 'Offline sandbox with local simulated bots.',
+    menuDesc: 'Offline sandbox that runs locally in your browser.',
     backendKind: 'sandbox',
     backendLabel: 'OFFLINE SANDBOX',
     authorityMode: 'offline',

@@ -275,9 +275,14 @@ import {
         return geometry.boundingBox || null;
     }
 
+    function shouldDecorCollide(geometry) {
+        var userData = geometry && geometry.userData;
+        return !!(userData && userData.collisionEnabled === true && userData.collisionDisabled !== true);
+    }
+
     function markDecorSolid(mesh) {
         if (!mesh || !mesh.geometry) return false;
-        if (mesh.geometry.userData && mesh.geometry.userData.collisionDisabled) return false;
+        if (!shouldDecorCollide(mesh.geometry)) return false;
         var localBounds = geometryLocalBounds(mesh.geometry);
         if (!localBounds) return false;
         mesh.updateMatrixWorld(true);

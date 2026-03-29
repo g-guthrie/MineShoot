@@ -1,5 +1,5 @@
 /**
- * remote-entities.js - Remote player/bot visual & hitbox management
+ * remote-entities.js - Remote player visual & hitbox management
  * Extracted from network.js. Loaded as: globalThis.__MAYHEM_RUNTIME.GameNetEntities
  */
 (function () {
@@ -343,6 +343,19 @@
         }
     }
 
+    function setRenderAliveState(render, alive) {
+        if (!render) return false;
+        render.alive = !!alive;
+        if (render.group) render.group.visible = !!alive;
+        if (render.actorVisual && render.actorVisual.setAlive) {
+            render.actorVisual.setAlive(!!alive);
+            render.actorVisual.setHitboxVisibility(hitboxVisible);
+        }
+        if (render.bodyHitbox) render.bodyHitbox.visible = !!alive;
+        if (render.headHitbox) render.headHitbox.visible = !!alive;
+        return true;
+    }
+
     function classWallhackRadiusFor(classId) {
         var preset = sharedClassPreset(classId);
         var radius = Number(preset && preset.wallhackRadius || 0);
@@ -366,16 +379,15 @@
     }
 
     function createRemoteVisual(entity, snapshotMeta) {
-        var color = entity.kind === 'bot' ? 0x8f5a2d : 0x3772c4;
         var actorFactory = actorVisualFactory();
         if (!actorFactory || !actorFactory.create) {
             throw new Error('GameNetEntities requires GameActorVisualFactory.create.');
         }
         var actorVisual = actorFactory.create({
             ownerType: 'net',
-            bodyColor: color,
+            bodyColor: 0x3772c4,
             skinColor: 0xd2a77d,
-            legColor: entity.kind === 'bot' ? 0x4a3420 : 0x2d2d2d,
+            legColor: 0x2d2d2d,
             weaponId: entity.weaponId || 'rifle',
             targetId: 'net:' + entity.id,
             netEntityId: entity.id,
@@ -556,11 +568,7 @@
             }
             : null;
 
-        r.group.visible = !!entity.alive;
-        if (r.actorVisual && r.actorVisual.setAlive) {
-            r.actorVisual.setAlive(entity.alive);
-            r.actorVisual.setHitboxVisibility(hitboxVisible);
-        }
+        setRenderAliveState(r, entity.alive !== false);
         if (teleported) {
             applyImmediateRemoteTransform(r, entity, snapshotMeta);
         }
@@ -587,6 +595,12 @@
 
     GameNetEntities.getRenderMap = function () {
         return renderMap;
+    };
+
+    GameNetEntities.setAliveState = function (id, alive) {
+        var render = renderMap.get(String(id || ''));
+        if (!render) return false;
+        return setRenderAliveState(render, alive !== false);
     };
 
     GameNetEntities.configure = function (nextDeps) {

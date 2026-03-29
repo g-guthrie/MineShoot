@@ -184,6 +184,25 @@ test('remote entities reseed history on dead-to-alive transitions', async () => 
   assert.equal(render.group.visible, true);
 });
 
+test('remote entities hide the live target immediately when alive state is cleared', async () => {
+  const { entitiesApi } = await loadRemoteEntities();
+  const entityId = 'usr_fell';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  assert.equal(entitiesApi.setAliveState(entityId, false), true);
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  assert.ok(render);
+  assert.equal(render.alive, false);
+  assert.equal(render.group.visible, false);
+  assert.equal(render.bodyHitbox.visible, false);
+  assert.equal(render.headHitbox.visible, false);
+});
+
 test('remote entities keep sprint movement gaps in history when the speed-aware teleport threshold covers them', async () => {
   const { entitiesApi } = await loadRemoteEntities({
     movement: {
@@ -365,4 +384,65 @@ test('remote entities raise interpolation delay faster than they lower it', asyn
   assert.equal(Number(raisedDelay.toFixed(2)), 158.4);
   assert.equal(Number(loweredDelay.toFixed(2)), 142.72);
   assert.equal(increaseAmount > decreaseAmount, true);
+});
+
+test('remote entities seed a recovery blend when fresh snapshots resume after a freeze', async () => {
+  const { entitiesApi } = await loadRemoteEntities({
+    network: {
+      remoteInterpolation: {
+        freezeRecoveryBlendMs: 64
+      }
+    }
+  });
+  const entityId = 'usr_freeze_recover';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 0,
+    z: 0
+  }), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 2,
+    z: 0
+  }), {
+    serverTime: 1100,
+    receivedAt: 1100
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  render.freezePresentation = {
+    x: 1.25,
+    footY: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    moveSpeedNorm: 0,
+    sprinting: false,
+    fastBackpedal: false,
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false,
+    isGrounded: true,
+    velocityY: 0,
+    muzzleFlashUntil: 0
+  };
+  render.freezePresentationAt = 1180;
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    x: 3,
+    z: 0
+  }), {
+    serverTime: 1200,
+    receivedAt: 1200
+  });
+
+  assert.ok(render.freezeBlendFrom);
+  assert.equal(Number(render.freezeBlendFrom.x || 0), 1.25);
+  assert.equal(Number(render.freezeBlendStartAt || 0), 1200);
+  assert.equal(Number(render.freezeBlendDurationMs || 0), 64);
+  assert.equal(render.freezePresentation, null);
 });

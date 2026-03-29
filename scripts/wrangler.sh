@@ -10,4 +10,4 @@ if [[ -z "$WRANGLER_VERSION" ]]; then
 fi
 WRANGLER_VERSION="${WRANGLER_VERSION#^}"
 
-exec npx -p node@20 -p "wrangler@${WRANGLER_VERSION}" sh -lc 'wrangler "$@"' sh "$@"
+exec npx --yes -p node@20 -p "wrangler@${WRANGLER_VERSION}" sh -lc 'wrangler "$@"' sh "$@"

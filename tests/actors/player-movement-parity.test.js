@@ -9,6 +9,7 @@ import {
   stepAuthoritativeMovement
 } from '../../shared/authoritative-movement.js';
 import {
+  buildAuthoritativeMotionRevision,
   buildReplayStepsFromPendingInputs,
   replayMotionState,
   shouldReplayAuthoritativeCorrection
@@ -122,6 +123,10 @@ async function loadPlayerMovementHarness(options = {}) {
       ? options.getGroundHeightAt
       : (() => 0)
   };
+  const configuredWeaponStats = Object.assign({
+    rifle: { id: 'rifle', adsFovDeg: 56 },
+    sniper: { id: 'sniper', adsFovDeg: 24 }
+  }, options.weaponStats || {});
 
   const runtime = {
     GameShared: {
@@ -130,16 +135,14 @@ async function loadPlayerMovementHarness(options = {}) {
         stepAuthoritativeMovement
       },
       authoritativeReconciliation: {
+        buildAuthoritativeMotionRevision,
         buildReplayStepsFromPendingInputs,
         replayMotionState,
         shouldReplayAuthoritativeCorrection
       },
       gameplayTuning: {
         movement: {},
-        weaponStats: {
-          rifle: { id: 'rifle', adsFovDeg: 56 },
-          sniper: { id: 'sniper', adsFovDeg: 24 }
-        }
+        weaponStats: configuredWeaponStats
       },
       entityConstants: {},
       getWeaponStats(weaponId) {
@@ -149,7 +152,7 @@ async function loadPlayerMovementHarness(options = {}) {
         return Number(weaponStats && weaponStats.adsFovDeg || 56);
       },
       getSelectableWeaponIds() {
-        return ['rifle', 'sniper'];
+        return Object.keys(configuredWeaponStats);
       }
     },
     GamePlayerWorld: {
@@ -419,6 +422,22 @@ test('player live collision stop matches the shared authoritative step', async (
   harness.player.update(0.1);
 
   assertPlayerMatchesExpected(harness.player, expected);
+});
+
+test('player can recover from a shallow blocking overlap instead of staying trapped in the mesh', async () => {
+  const harness = await loadPlayerMovementHarness({
+    spawn: { x: 0.2, z: 0 },
+    collisionBoxes: [{
+      min: { x: -0.4, y: 0, z: -1 },
+      max: { x: 0.4, y: 3, z: 1 }
+    }]
+  });
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  harness.player.update(0.05);
+
+  const pos = harness.player.getPosition();
+  assert.ok(Math.abs(Number(pos.x || 0)) > 0.89 || Math.abs(Number(pos.z || 0)) > 1.0);
 });
 
 test('player jump start and hold match the shared authoritative step', async () => {
@@ -778,6 +797,105 @@ test('player replay correction stays replay-first for a recent fast sprint windo
     hasUnsentInputTail: true,
     inputSendIntervalMs: 50,
     pendingInputs: sprintInputs,
+    rttMs: 60,
+    rttJitterMs: 0
+  });
+
+  assert.equal(corrected, true);
+  assertPlayerMatchesExpected(harness.player, expectedCorrected);
+});
+
+test('player replay correction respects the historical movement-locked state on queued inputs', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const acknowledged = createExpectedEntity(harness.worldState.spawn);
+
+  harness.player.applyAuthoritativeMotion({
+    ...acknowledged,
+    z: acknowledged.z - 2.5
+  });
+
+  const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
+    dt: 0.05,
+    allowReplayCorrection: true,
+    pendingInputCount: 1,
+    lastSentSeq: 2,
+    lastAckedSeq: 1,
+    latestPendingAgeMs: 80,
+    latestAckAgeMs: 20,
+    ackDrift: 1,
+    hasUnsentInputTail: false,
+    pendingInputs: [{
+      seq: 2,
+      dtMs: 50,
+      yaw: acknowledged.yaw,
+      pitch: acknowledged.pitch,
+      weaponId: 'rifle',
+      movementLocked: true,
+      inputState: createInputState({ forward: true })
+    }],
+    rttMs: 60,
+    rttJitterMs: 0
+  });
+
+  assert.equal(corrected, true);
+  assertPlayerMatchesExpected(harness.player, acknowledged);
+});
+
+test('player replay correction respects the historical weapon movement multipliers on queued inputs', async () => {
+  const harness = await loadPlayerMovementHarness({
+    weaponStats: {
+      rifle: { id: 'rifle', adsFovDeg: 56, moveSpeedMultiplier: 1 },
+      sniper: { id: 'sniper', adsFovDeg: 24, moveSpeedMultiplier: 0.5 }
+    }
+  });
+  const acknowledged = createExpectedEntity(harness.worldState.spawn);
+
+  harness.player.applyAuthoritativeMotion({
+    ...acknowledged,
+    z: acknowledged.z - 2.5
+  });
+
+  const pendingInputs = [{
+    seq: 2,
+    dtMs: 100,
+    yaw: acknowledged.yaw,
+    pitch: acknowledged.pitch,
+    weaponId: 'sniper',
+    movementLocked: false,
+    inputState: createInputState({ forward: true })
+  }];
+  const expectedCorrected = replayMotionState(acknowledged, pendingInputs, {
+    stepMovement: stepAuthoritativeMovement,
+    bounds: harness.worldState.bounds,
+    collisionBoxes: harness.worldState.collisionBoxes,
+    getGroundHeightAt: harness.worldState.getGroundHeightAt,
+    movementLocked: false,
+    fallbackWeaponId: 'rifle',
+    resolveStepMovementOptions(step) {
+      if (String(step && step.weaponId || '') === 'sniper') {
+        return { moveSpeedMultiplier: 0.5, adsMoveMultiplier: 0.4 };
+      }
+      return { moveSpeedMultiplier: 1, adsMoveMultiplier: 0.4 };
+    },
+    eyeHeight: EYE_HEIGHT,
+    playerHeight: PLAYER_HEIGHT,
+    playerRadius: PLAYER_RADIUS,
+    epsilon: 0.001,
+    fallbackYaw: acknowledged.yaw,
+    fallbackPitch: acknowledged.pitch
+  });
+
+  const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
+    dt: 0.1,
+    allowReplayCorrection: true,
+    pendingInputCount: 1,
+    lastSentSeq: 2,
+    lastAckedSeq: 1,
+    latestPendingAgeMs: 80,
+    latestAckAgeMs: 20,
+    ackDrift: 1,
+    hasUnsentInputTail: false,
+    pendingInputs,
     rttMs: 60,
     rttJitterMs: 0
   });

@@ -997,22 +997,38 @@
 
     function replayAuthoritativeMotion(state, pendingInputs, options) {
         if (!camera || !state) return false;
+        var opts = options || {};
+        var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
+        if (ackSeq > 0) lastReplayAckSeq = ackSeq;
+        var motionState = computeReplayMotionState(state, pendingInputs, opts);
+        if (!motionState) return applyAuthoritativeMotion(state);
+        return applyMotionState(motionState, opts.dt);
+    }
+
+    function computeReplayMotionState(state, pendingInputs, options) {
+        if (!camera || !state) return null;
         var helper = movementHelper();
         var reconcile = reconciliationHelper();
         var world = worldHelper();
         if (!helper || !helper.stepAuthoritativeMovement || !reconcile || !reconcile.replayMotionState) {
-            return applyAuthoritativeMotion(state);
+            return cloneMotionState(state);
         }
 
         var opts = options || {};
-        var ackSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
-        if (ackSeq > 0) lastReplayAckSeq = ackSeq;
         var motionState = reconcile.replayMotionState(state, Array.isArray(pendingInputs) ? pendingInputs : [], {
             stepMovement: helper.stepAuthoritativeMovement,
             bounds: world.getWorldBounds(),
             collisionBoxes: world.getCollisionBoxes(),
             getGroundHeightAt: world.getGroundHeightAt,
             movementLocked: function () { return isMovementLocked(); },
+            fallbackWeaponId: currentWeaponId,
+            resolveStepMovementOptions: function (step) {
+                var weaponId = String(step && step.weaponId || currentWeaponId || 'rifle');
+                return {
+                    moveSpeedMultiplier: weaponMoveSpeedMultiplier(weaponId),
+                    adsMoveMultiplier: weaponAdsMoveMultiplier(weaponId)
+                };
+            },
             eyeHeight: eyeHeight(),
             playerHeight: effectivePlayerCollisionHeight(),
             playerRadius: playerRadius(),
@@ -1020,30 +1036,25 @@
             fallbackYaw: yaw,
             fallbackPitch: pitch
         });
-        return applyMotionState(motionState, opts.dt);
+        return motionState || null;
+    }
+
+    function cloneMotionState(state) {
+        if (!state || typeof state !== 'object') return null;
+        var out = {};
+        for (var key in state) {
+            if (!Object.prototype.hasOwnProperty.call(state, key)) continue;
+            out[key] = state[key];
+        }
+        return out;
     }
 
     function buildAuthoritativeMotionKey(state) {
-        if (!state || typeof state !== 'object') return '';
-        function precision(value) {
-            return Math.round(Number(value || 0) * 1000);
+        var reconcile = reconciliationHelper();
+        if (reconcile && reconcile.buildAuthoritativeMotionRevision) {
+            return reconcile.buildAuthoritativeMotionRevision(state);
         }
-        return [
-            precision(state.x),
-            precision(state.y),
-            precision(state.z),
-            precision(state.yaw),
-            precision(state.pitch),
-            precision(state.velocityY),
-            precision(state.jumpHoldTimer),
-            precision(state.moveSpeedNorm),
-            state.isGrounded === false ? '0' : '1',
-            state.jumpHeldLast ? '1' : '0',
-            state.sprinting ? '1' : '0',
-            state.fastBackpedal ? '1' : '0',
-            state.alive === false ? '0' : '1',
-            String(state.weaponId || '')
-        ].join('|');
+        return state && typeof state === 'object' ? String(state.weaponId || '') : '';
     }
 
     function hasMovementIntentInput() {
@@ -1074,7 +1085,8 @@
             if (!entry || !entry.inputState) continue;
             steps.push({
                 dtSec: Math.max(1 / 240, Math.min(0.075, Number(entry.dtMs || 50) / 1000)),
-                inputState: entry.inputState
+                inputState: entry.inputState,
+                weaponId: String(entry.weaponId || '')
             });
         }
         return steps;
@@ -1098,7 +1110,7 @@
         for (var i = 0; i < steps.length; i++) {
             var step = steps[i];
             if (!step || !(Number(step.dtSec || 0) > 0)) continue;
-            totalWu += topSpeedForInputState(step.inputState, currentWeaponId, airborne) * Number(step.dtSec || 0);
+            totalWu += topSpeedForInputState(step.inputState, step.weaponId || currentWeaponId, airborne) * Number(step.dtSec || 0);
         }
         if (opts && opts.hasUnsentInputTail) {
             totalWu += topSpeedForInputState(buildCurrentInputState(), currentWeaponId, airborne) *
@@ -1219,10 +1231,19 @@
         var networkFlags = netTuning.flags || {};
         var reconcileTuning = netTuning.selfReconciliation || {};
         var adaptiveSelfReconciliation = networkFlags.adaptiveSelfReconciliation !== false;
+        var replayFirstSelfCorrection = networkFlags.replayFirstSelfCorrection !== false;
         var dt = Math.max(1 / 240, Number(opts.dt || (1 / 60)));
-        var dx = x - playerX;
-        var dz = z - playerZ;
-        var authoritativeY = (typeof state.y === 'number' && isFinite(state.y)) ? Number(state.y) : posY;
+        var pendingInputs = Array.isArray(opts.pendingInputs) ? opts.pendingInputs : [];
+        var comparisonState = state;
+        if (replayFirstSelfCorrection && pendingInputs.length > 0) {
+            var replayTargetState = computeReplayMotionState(state, pendingInputs, opts);
+            if (replayTargetState) comparisonState = replayTargetState;
+        }
+        var comparisonX = Number(comparisonState.x);
+        var comparisonZ = Number(comparisonState.z);
+        var dx = comparisonX - playerX;
+        var dz = comparisonZ - playerZ;
+        var authoritativeY = (typeof comparisonState.y === 'number' && isFinite(comparisonState.y)) ? Number(comparisonState.y) : posY;
         var dy = authoritativeY - posY;
         var horizontalDistSq = (dx * dx) + (dz * dz);
         var airborne = isGrounded === false || state.isGrounded === false;
@@ -1236,7 +1257,6 @@
             pendingInputCount <= thresholds.movingPendingInputLimit &&
             ackDrift <= thresholds.movingAckDriftLimit;
         var allowFreshPendingReplay = movingIntent && horizontalDistSq >= (thresholds.emergencyReplayDistance * thresholds.emergencyReplayDistance);
-        var pendingInputs = Array.isArray(opts.pendingInputs) ? opts.pendingInputs : [];
         var reconcile = reconciliationHelper();
         var believableDistance = believableReplayDistanceWu(reconcile, pendingInputs, opts, airborne);
         var hardSnapDistance = Math.max(
@@ -1249,7 +1269,8 @@
             horizontalDistSq >= (hardSnapDistance * hardSnapDistance) ||
             Math.abs(dy) >= thresholds.hardSnapVerticalDistance
         ) {
-            var snapped = applyAuthoritativeMotion(state);
+            var snapState = replayFirstSelfCorrection && comparisonState ? comparisonState : state;
+            var snapped = applyAuthoritativeMotion(snapState);
             if (snapped) lastReconciledMotionKey = motionKey;
             return snapped;
         }
@@ -1284,8 +1305,8 @@
 
         var blended = applyIdleBlendCorrection(
             dt,
-            x,
-            z,
+            comparisonX,
+            comparisonZ,
             authoritativeY,
             dx,
             dz,

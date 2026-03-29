@@ -102,60 +102,6 @@ export function createPlayerEntity(options = {}) {
   return entity;
 }
 
-export function createBotEntity(index, options = {}) {
-  const botIndex = Math.max(0, Number(index || 0));
-  const classId = DEFAULT_CLASS_ID;
-  const preset = getClassPreset(classId);
-  const weaponLoadout = cloneWeaponLoadout();
-
-  const entity = {
-    id: `bot-${botIndex + 1}`,
-    kind: 'bot',
-    username: `BOT_${botIndex + 1}`,
-    classId,
-    weaponLoadout,
-    x: 10 + (Math.random() * 90),
-    y: Number(options.eyeHeight || 0),
-    z: 10 + (Math.random() * 90),
-    yaw: Math.random() * Math.PI * 2,
-    pitch: 0,
-    hp: DEFAULT_HP_MAX,
-    hpMax: DEFAULT_HP_MAX,
-    armor: preset.armorMax,
-    armorMax: preset.armorMax,
-    wallhackRadius: preset.wallhackRadius,
-    alive: true,
-    respawnAt: 0,
-    lastDamageAt: 0,
-    weaponId: weaponLoadout[0],
-    lastShotAt: {},
-    lastShotTokenByWeapon: {},
-    moveSpeedNorm: 0,
-    sprinting: false,
-    streamHeat: 0,
-    streamOverheatedUntil: 0,
-    muzzleFlashUntil: 0,
-    throwables: typeof options.createThrowableRuntime === 'function'
-      ? options.createThrowableRuntime()
-      : {},
-    lastThrowAt: 0,
-    poseHistory: [],
-    aiDirX: Math.cos(Math.random() * Math.PI * 2),
-    aiDirZ: Math.sin(Math.random() * Math.PI * 2),
-    aiSpeed: 2.2,
-    aiTurnTimer: 1 + (Math.random() * 3)
-  };
-
-  entity.stocksRemaining = 3;
-  entity.maxStocks = 5;
-  entity.bonusLivesEarned = 0;
-  entity.extraLifeProgressPct = 0;
-  entity.eliminated = false;
-
-  applyActionRuntimeDefaults(entity);
-  return entity;
-}
-
 export function resetEntityForRespawn(entity, options = {}) {
   if (!entity) return entity;
 

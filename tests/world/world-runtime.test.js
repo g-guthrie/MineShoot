@@ -220,7 +220,7 @@ test('world runtime rebuild removes old world objects while reusing shared block
   const firstGroundMeshes = scene.children.filter((object) => object.userData && object.userData.isBiomeGround);
   const firstCollidables = GameWorld.getCollidables();
   assert.equal(firstGroundMeshes.length, 1);
-  assert.equal(firstCollidables.length, 3);
+  assert.equal(firstCollidables.length, 2);
   assert.equal(firstCollidables[0].geometry, firstCollidables[1].geometry);
   const firstSharedGeometry = firstCollidables[0].geometry;
   const firstGroundMesh = firstGroundMeshes[0];
@@ -240,6 +240,28 @@ test('world runtime rebuild removes old world objects while reusing shared block
   assert.equal(firstUniqueMaterial.wasDisposed, true);
   assert.equal(secondGroundMeshes.length, 1);
   assert.equal(secondCollidables[0].geometry, firstSharedGeometry);
+});
+
+test('world runtime keeps decor non-blocking by default but allows explicit collision opt-in', async () => {
+  const { GameWorld, runtime } = await loadWorldRuntime({ skipDefaultQuadrantBuilder: true });
+  runtime.WorldQuadrants.jungle = function buildTestQuadrant(_bounds, place) {
+    const material = runtime.GameMaterialLibrary.getLambert({ color: 0x336633 });
+    const visualOnlyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+    const collidingGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+    collidingGeometry.userData = collidingGeometry.userData || {};
+    collidingGeometry.userData.collisionEnabled = true;
+
+    place.addDecor(4, 1, 4, visualOnlyGeometry, material);
+    place.addDecor(8, 1, 8, collidingGeometry, material);
+  };
+  const scene = new THREE.Scene();
+
+  GameWorld.create(scene);
+
+  const collidables = GameWorld.getCollidables();
+  assert.equal(collidables.length, 1);
+  assert.equal(Math.round(collidables[0].position.x), 8);
+  assert.equal(Math.round(collidables[0].position.z), 8);
 });
 
 test('world runtime builds one tagged ground mesh per biome cell without crossing seams', async () => {

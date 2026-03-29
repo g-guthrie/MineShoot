@@ -102,7 +102,7 @@
         if (mode.id === 'single_dev_server') {
             return 'Local Multiplayer: shared local-worker room ' + mode.roomId + '.';
         }
-        return 'Offline Sandbox Free For All: local simulated players.';
+        return 'Offline Sandbox Free For All: local-only match.';
     }
 
     GameRuntimeModeUi.roomCodeFromRoomId = roomCodeFromRoomId;

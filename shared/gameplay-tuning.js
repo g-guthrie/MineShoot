@@ -54,6 +54,10 @@ export const gameplayTuning = {
   network: {
     flags: {
       adaptiveSelfReconciliation: true,
+      replayFirstSelfCorrection: true,
+      remoteReceiveJitterBuffer: true,
+      snapshotDeltaCompression: true,
+      adaptiveSnapshotCadence: true,
       combatBurstSnapshots: true,
       shotTokenDamageAggregation: false
     },
@@ -122,6 +126,8 @@ export const gameplayTuning = {
     },
     feedback: {
       predictedHitTtlMs: 900,
+      confirmedShotWindowMs: 5000,
+      confirmedShotStaleWindowMs: 30000,
       shotgunAggregateWindowMs: 60
     }
   },

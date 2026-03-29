@@ -17,7 +17,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `WORKER_PORT=${workerPort} WRANGLER_PERSIST_DIR=${persistDir} REUSE_EXISTING_SERVER=${reuseExistingServer ? '1' : '0'} npm run dev:e2e:worker`,
+      command: `WORKER_PORT=${workerPort} WRANGLER_PERSIST_DIR=${persistDir} WRANGLER_ENV=e2e REUSE_EXISTING_SERVER=${reuseExistingServer ? '1' : '0'} npm run dev:e2e:worker`,
       url: `http://127.0.0.1:${workerPort}/api/me`,
       reuseExistingServer,
       timeout: 120_000

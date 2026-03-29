@@ -236,21 +236,21 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         // Trim bars to stop just inside the building corners (leave room for wrap)
         var westBarLen = glowW - 0.1;
         tb(place, 'reactor-frame-w-top', null, cx - halfW - fo, winY + winH * 0.5, cz, 0.01, ft, westBarLen, mats.asphalt, false);
-        tb(place, 'reactor-frame-w-bot', null, cx - halfW - fo, winY - winH * 0.5, cz, 0.01, ft, westBarLen, mats.asphalt, false);
+        tb(place, 'reactor-frame-w-bottom', null, cx - halfW - fo, winY - winH * 0.5, cz, 0.01, ft, westBarLen, mats.asphalt, false);
 
         // ── North face wrap ──
         tb(place, 'reactor-glow-north', { reactorId: reactorId },
             nWrapX, winY, cz - halfD - go, wrapW, winH, 0.01, mats.nuclearGlow, false);
         // Top, bottom, and right-end bar only (no left bar — that's the corner)
         tb(place, 'reactor-frame-n-top', null, nWrapX, winY + winH * 0.5, cz - halfD - fo, wrapW, ft, 0.01, mats.asphalt, false);
-        tb(place, 'reactor-frame-n-bot', null, nWrapX, winY - winH * 0.5, cz - halfD - fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-n-bottom', null, nWrapX, winY - winH * 0.5, cz - halfD - fo, wrapW, ft, 0.01, mats.asphalt, false);
         tb(place, 'reactor-frame-n-rgt', null, nWrapX + wrapW * 0.5, winY, cz - halfD - fo, ft, winH, 0.01, mats.asphalt, false);
 
         // ── South face wrap ──
         tb(place, 'reactor-glow-south', { reactorId: reactorId },
             nWrapX, winY, cz + halfD + go, wrapW, winH, 0.01, mats.nuclearGlow, false);
         tb(place, 'reactor-frame-s-top', null, nWrapX, winY + winH * 0.5, cz + halfD + fo, wrapW, ft, 0.01, mats.asphalt, false);
-        tb(place, 'reactor-frame-s-bot', null, nWrapX, winY - winH * 0.5, cz + halfD + fo, wrapW, ft, 0.01, mats.asphalt, false);
+        tb(place, 'reactor-frame-s-bottom', null, nWrapX, winY - winH * 0.5, cz + halfD + fo, wrapW, ft, 0.01, mats.asphalt, false);
         tb(place, 'reactor-frame-s-rgt', null, nWrapX + wrapW * 0.5, winY, cz + halfD + fo, ft, winH, 0.01, mats.asphalt, false);
 
         return {

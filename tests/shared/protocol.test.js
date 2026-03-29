@@ -4,7 +4,10 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_ROOM_ID,
   MSG_C2S,
+  applySnapshotEntityPatch,
+  buildSnapshotEntityPatch,
   buildExpectedWorldMeta,
+  cloneSnapshotValue,
   normalizeReloadPayload,
   normalizeThrowPayload
 } from '../../shared/protocol.js';
@@ -52,4 +55,36 @@ test('normalizeReloadPayload emits a reload command for the requested weapon', (
     t: MSG_C2S.RELOAD,
     weaponId: 'shotgun'
   });
+});
+
+test('snapshot protocol helpers build shallow patches and apply them against a baseline entity', () => {
+  const baseEntity = {
+    id: 'u1',
+    x: 1,
+    weaponLoadout: ['rifle', 'shotgun'],
+    weaponAmmo: {
+      rifle: { ammoInMag: 10 }
+    }
+  };
+  const nextEntity = {
+    id: 'u1',
+    x: 2,
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: { ammoInMag: 8 }
+    }
+  };
+
+  const patch = buildSnapshotEntityPatch(nextEntity, baseEntity);
+  assert.deepEqual(patch, {
+    id: 'u1',
+    x: 2,
+    weaponLoadout: ['rifle', 'sniper'],
+    weaponAmmo: {
+      rifle: { ammoInMag: 8 }
+    }
+  });
+  assert.deepEqual(applySnapshotEntityPatch(baseEntity, patch), nextEntity);
+  assert.deepEqual(cloneSnapshotValue(nextEntity), nextEntity);
+  assert.notEqual(cloneSnapshotValue(nextEntity).weaponAmmo, nextEntity.weaponAmmo);
 });

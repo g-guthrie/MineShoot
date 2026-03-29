@@ -9,6 +9,7 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   const uiCalls = [];
   const damageCalls = [];
   const tracerCalls = [];
+  const warnCalls = [];
   const overrideNet = runtimeOverrides.GameNet || null;
   const normalizedNet = {
     view: {
@@ -20,7 +21,8 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       consumeThrowReject() { return null; },
       getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
       consumeThrowableEvent() { return null; },
-      consumeShotEffect() { return null; }
+      consumeShotEffect() { return null; },
+      consumeShotReject() { return null; }
     },
     effects: {
       damagePointForEntityId() { return null; }
@@ -44,7 +46,8 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       consumeThrowReject: overrideNet.consumeThrowReject || normalizedNet.view.consumeThrowReject,
       getAuthoritativeThrowableState: overrideNet.getAuthoritativeThrowableState || normalizedNet.view.getAuthoritativeThrowableState,
       consumeThrowableEvent: overrideNet.consumeThrowableEvent || normalizedNet.view.consumeThrowableEvent,
-      consumeShotEffect: overrideNet.consumeShotEffect || normalizedNet.view.consumeShotEffect
+      consumeShotEffect: overrideNet.consumeShotEffect || normalizedNet.view.consumeShotEffect,
+      consumeShotReject: overrideNet.consumeShotReject || normalizedNet.view.consumeShotReject
     };
     normalizedNet.effects = {
       damagePointForEntityId: overrideNet.damagePointForEntityId || normalizedNet.effects.damagePointForEntityId
@@ -56,7 +59,8 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
       network: {
         feedback: {
           predictedHitTtlMs: 900,
-          confirmedShotTtlMs: 2000
+          confirmedShotWindowMs: 5000,
+          confirmedShotStaleWindowMs: 30000
         }
       }
     },
@@ -113,7 +117,12 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
-    console,
+    console: {
+      ...console,
+      warn(...args) {
+        warnCalls.push(args);
+      }
+    },
     Date,
     THREE: {
       Vector3: class {
@@ -135,7 +144,8 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     audioCalls,
     uiCalls,
     damageCalls,
-    tracerCalls
+    tracerCalls,
+    warnCalls
   };
 }
 
@@ -476,12 +486,100 @@ test('feedback sync keeps confirmed-shot suppression alive past the predicted-hi
     now = 9200;
     harness.syncGameplayFeedback({ camera: {} });
 
-    assert.deepEqual(harness.audioCalls, ['bulletImpact', 'bulletImpact']);
-    assert.deepEqual(harness.uiCalls, ['hit', 'damage', 'damage']);
-    assert.equal(harness.damageCalls.length, 2);
+    assert.deepEqual(harness.audioCalls, ['bulletImpact']);
+    assert.deepEqual(harness.uiCalls, ['hit', 'damage']);
+    assert.equal(harness.damageCalls.length, 1);
+    assert.equal(harness.warnCalls.length, 0);
   } finally {
     Date.now = originalDateNow;
   }
+});
+
+test('feedback sync drops and warns on stale duplicate confirmed-shot tokens outside the suppression window', async () => {
+  const first = {
+    damage: 26,
+    hitType: 'body',
+    weaponId: 'rifle',
+    shotToken: 'stale-confirm',
+    pelletIndex: 0,
+    killed: false,
+    worldPos: { x: 1, y: 2, z: 3 }
+  };
+  const second = {
+    damage: 26,
+    hitType: 'body',
+    weaponId: 'rifle',
+    shotToken: 'stale-confirm',
+    pelletIndex: 0,
+    killed: false,
+    worldPos: { x: 1, y: 2, z: 3 }
+  };
+  const originalDateNow = Date.now;
+  let now = 8000;
+  Date.now = () => now;
+  try {
+    const harness = await loadFeedbackSyncHarness({
+      GameNet: {
+        consumeClassCastResult() { return null; },
+        consumeDamageFeedback() {
+          if (now < 10000) {
+            if (this.__firstDelivered) return null;
+            this.__firstDelivered = true;
+            return first;
+          }
+          if (this.__secondDelivered) return null;
+          this.__secondDelivered = true;
+          return second;
+        },
+        consumeIncomingDamageFeedback() { return null; },
+        consumeThrowAck() { return null; },
+        consumeThrowReject() { return null; },
+        consumeShotReject() { return null; },
+        getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
+        consumeThrowableEvent() { return null; },
+        consumeAbilityEvent() { return null; },
+        damagePointForEntityId() { return null; }
+      }
+    });
+
+    harness.syncGameplayFeedback({ camera: {} });
+    now = 14050;
+    harness.syncGameplayFeedback({ camera: {} });
+
+    assert.deepEqual(harness.audioCalls, ['bulletImpact']);
+    assert.deepEqual(harness.uiCalls, ['hit', 'damage']);
+    assert.equal(harness.damageCalls.length, 1);
+    assert.equal(harness.warnCalls.length, 1);
+  } finally {
+    Date.now = originalDateNow;
+  }
+});
+
+test('feedback sync clears predicted hit tracking when the server rejects a shot token', async () => {
+  const queue = [{
+    shotToken: 'reject-me',
+    weaponId: 'rifle',
+    reason: 'aim_direction_mismatch',
+    serverTime: 1234
+  }];
+  const harness = await loadFeedbackSyncHarness({
+    GameNet: {
+      consumeClassCastResult() { return null; },
+      consumeDamageFeedback() { return null; },
+      consumeIncomingDamageFeedback() { return null; },
+      consumeThrowAck() { return null; },
+      consumeThrowReject() { return null; },
+      consumeShotReject() { return queue.shift() || null; },
+      getAuthoritativeThrowableState() { return { projectiles: [], fireZones: [], selfThrowables: null }; },
+      consumeThrowableEvent() { return null; },
+      consumeAbilityEvent() { return null; },
+      damagePointForEntityId() { return null; }
+    }
+  });
+
+  harness.notifyPredictedLocalHit({ weaponId: 'rifle', shotToken: 'reject-me', pelletIndex: 0 });
+  harness.syncGameplayFeedback({ camera: {} });
+  assert.equal(harness.warnCalls.length, 1);
 });
 
 test('feedback sync reads suppression TTLs from shared tuning', async () => {

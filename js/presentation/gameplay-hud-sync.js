@@ -69,6 +69,9 @@
         if (runtime.GameUI.updateArmor) {
             runtime.GameUI.updateArmor(combatState.armor, combatState.armorMax);
         }
+        if (runtime.GameUI.updateExtraLifeProgress && runtime.GamePlayerCombat && runtime.GamePlayerCombat.getExtraLifeProgressPct) {
+            runtime.GameUI.updateExtraLifeProgress(runtime.GamePlayerCombat.getExtraLifeProgressPct());
+        }
         return combatState;
     }
 

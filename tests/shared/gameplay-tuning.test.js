@@ -223,6 +223,10 @@ test('throwable defaults and normalization resolve to a single equipped throwabl
 test('network tuning exposes the canonical ping, reconcile, burst, and feedback defaults', () => {
   assert.deepEqual(gameplayTuning.network.flags, {
     adaptiveSelfReconciliation: true,
+    replayFirstSelfCorrection: true,
+    remoteReceiveJitterBuffer: true,
+    snapshotDeltaCompression: true,
+    adaptiveSnapshotCadence: true,
     combatBurstSnapshots: true,
     shotTokenDamageAggregation: false
   });

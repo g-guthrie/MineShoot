@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "backend",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "cloudflare/worker.js", "--config", "wrangler.toml", "--port", "8787", "--local"],
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "source /Users/gguthrie/.nvm/nvm.sh && npx wrangler dev cloudflare/worker.js --config wrangler.toml --port 8787 --local"],
       "port": 8787
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--host", "127.0.0.1", "--port", "3001"],
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "source /Users/gguthrie/.nvm/nvm.sh && npx vite --host 127.0.0.1 --port 3001"],
       "port": 3001
     },
     {

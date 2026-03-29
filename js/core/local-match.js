@@ -235,9 +235,9 @@
     GameLocalMatch.registerEnemy = function (enemy) {
         if (!active || !enemy) return null;
         ensureSelf();
-        var id = String(enemy.localMatchId || ('guest-bot-' + String((enemy.index || 0) + 1)));
+        var id = String(enemy.localMatchId || ('guest-opponent-' + String((enemy.index || 0) + 1)));
         enemy.localMatchId = id;
-        var entry = baseParticipant(id, enemy.displayName || ('BOT_' + String((enemy.index || 0) + 1)));
+        var entry = baseParticipant(id, enemy.displayName || ('OPPONENT_' + String((enemy.index || 0) + 1)));
         if (modeId === 'tdm') {
             entry.teamId = (Math.max(0, Number(enemy.index || 0)) % 2 === 0) ? matchTeamBravo() : matchTeamAlpha();
         }

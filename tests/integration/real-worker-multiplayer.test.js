@@ -1,7 +1,7 @@
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildExpectedWorldMeta } from '../../shared/protocol.js';
+import { applySnapshotEntityPatch, buildExpectedWorldMeta, cloneSnapshotValue } from '../../shared/protocol.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
 import { PLAYER_HEIGHT, PLAYER_RADIUS } from '../../shared/entity-constants.js';
 import { gameplayTuning } from '../../shared/gameplay-tuning.js';
@@ -96,6 +96,37 @@ function findOpenLayout() {
 }
 
 const openLayout = findOpenLayout();
+
+function findOpenObserverPoints(origin, count = 1) {
+  const offsets = [
+    { x: 6, z: 2 },
+    { x: -6, z: 2 },
+    { x: 8, z: -2 },
+    { x: -8, z: -2 },
+    { x: 10, z: 0 },
+    { x: -10, z: 0 },
+    { x: 12, z: 4 },
+    { x: -12, z: 4 }
+  ];
+  const out = [];
+  for (let i = 0; i < offsets.length && out.length < Math.max(1, count); i++) {
+    const point = {
+      x: Number(origin && origin.x || 0) + Number(offsets[i].x || 0),
+      z: Number(origin && origin.z || 0) + Number(offsets[i].z || 0)
+    };
+    if (pointBlocked(point.x, point.z)) continue;
+    if (out.some((existing) => distanceXZ(existing, point) < 1)) continue;
+    out.push(point);
+  }
+  if (out.length < Math.max(1, count)) {
+    throw new Error('Failed to find enough open observer points for the integration layout.');
+  }
+  return out;
+}
+
+function cloneEntityMessageState(entity) {
+  return cloneSnapshotValue(entity && typeof entity === 'object' ? entity : {});
+}
 
 function normalizeForward(from, to) {
   const dx = Number(to.x || 0) - Number(from.x || 0);
@@ -194,21 +225,78 @@ async function waitForCondition(check, timeoutMs, label) {
 
 function snapshotEntitySamples(client, entityId, startIndex) {
   const samples = [];
+  let currentEntity = null;
   for (let i = 0; i < client.messages.length; i++) {
     const entry = client.messages[i];
     if (entry.index < startIndex) continue;
     const message = entry.message;
     if (String(message && message.t || '') !== 'snapshot') continue;
-    if (!Array.isArray(message.entities)) continue;
-    const entity = message.entities.find((candidate) => String(candidate && candidate.id || '') === String(entityId || ''));
-    if (!entity) continue;
+    if (Array.isArray(message.removedEntityIds) && message.removedEntityIds.some((id) => String(id || '') === String(entityId || ''))) {
+      currentEntity = null;
+    }
+    if (Array.isArray(message.entities)) {
+      const entity = message.entities.find((candidate) => String(candidate && candidate.id || '') === String(entityId || ''));
+      if (entity) currentEntity = cloneEntityMessageState(entity);
+    }
+    if (Array.isArray(message.entityPatches)) {
+      const patch = message.entityPatches.find((candidate) => String(candidate && candidate.id || '') === String(entityId || ''));
+      if (patch) {
+        currentEntity = applySnapshotEntityPatch(currentEntity, patch);
+      }
+    }
+    if (!currentEntity) continue;
     samples.push({
-      x: Number(entity.x || 0),
-      z: Number(entity.z || 0),
+      x: Number(currentEntity.x || 0),
+      z: Number(currentEntity.z || 0),
       serverTime: Number(message.serverTime || 0)
     });
   }
   return samples;
+}
+
+function countEntitySnapshotUpdates(client, entityId, startIndex) {
+  let count = 0;
+  for (let i = 0; i < client.messages.length; i++) {
+    const entry = client.messages[i];
+    if (entry.index < startIndex) continue;
+    const message = entry.message;
+    if (String(message && message.t || '') !== 'snapshot') continue;
+    const hasEntity = Array.isArray(message.entities) && message.entities.some((candidate) => String(candidate && candidate.id || '') === String(entityId || ''));
+    const hasPatch = Array.isArray(message.entityPatches) && message.entityPatches.some((candidate) => String(candidate && candidate.id || '') === String(entityId || ''));
+    if (hasEntity || hasPatch) count += 1;
+  }
+  return count;
+}
+
+function percentile(values, pct) {
+  const list = Array.isArray(values) ? values.slice().sort((a, b) => a - b) : [];
+  if (!list.length) return 0;
+  const normalizedPct = Math.max(0, Math.min(1, Number(pct || 0)));
+  const index = Math.min(list.length - 1, Math.max(0, Math.ceil((list.length * normalizedPct)) - 1));
+  return Number(list[index] || 0);
+}
+
+function summarizeMotionSamples(samples) {
+  const steps = [];
+  let maxStep = 0;
+  let backtrackCount = 0;
+  let largestBacktrack = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const step = distanceXZ(samples[i], samples[i - 1]);
+    steps.push(step);
+    maxStep = Math.max(maxStep, step);
+    const deltaZ = Number(samples[i].z || 0) - Number(samples[i - 1].z || 0);
+    if (deltaZ > 0.18) {
+      backtrackCount += 1;
+      largestBacktrack = Math.max(largestBacktrack, deltaZ);
+    }
+  }
+  return {
+    maxStep,
+    p95Step: percentile(steps, 0.95),
+    backtrackCount,
+    largestBacktrack
+  };
 }
 
 function countMessages(client, type, predicate = null) {
@@ -266,7 +354,6 @@ test('real worker: movement replication converges across clients', { timeout: TE
   await withDebug(roomId, [mover, observer], async () => {
     await mover.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
     await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
-    await waitForBothClientsToSee(roomId, mover, observer, [mover.userId, observer.userId]);
 
     await applyFixtureAndWait(roomId, [mover, observer], [
       { userId: mover.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
@@ -290,6 +377,112 @@ test('real worker: movement replication converges across clients', { timeout: TE
       if (!moverSelf || !moverRemote) return false;
       return distanceXZ(moverSelf, moverRemote) < 0.9 ? { moverSelf, moverRemote } : false;
     }, SNAPSHOT_TIMEOUT_MS, 'movement convergence');
+  });
+});
+
+test('real worker: adaptive snapshot cadence reduces sends to degraded viewers', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('cadencepoor');
+  const mover = await worker.connectClient({ roomId, userId: buildUserId('cadence_mover'), username: 'CADENCE_MOVER' });
+  const cleanObserver = await worker.connectClient({ roomId, userId: buildUserId('cadence_clean'), username: 'CADENCE_CLEAN' });
+  const degradedObserver = await worker.connectClient({
+    roomId,
+    userId: buildUserId('cadence_degraded'),
+    username: 'CADENCE_DEGRADED',
+    outboundDelayMs: 200,
+    outboundJitterMs: 50,
+    inboundDelayMs: 200,
+    inboundJitterMs: 50,
+    inboundDropRate: 0.15,
+    randomSeed: 91
+  });
+
+  await withDebug(roomId, [mover, cleanObserver, degradedObserver], async () => {
+    await mover.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await cleanObserver.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await degradedObserver.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+
+    const observerPoints = findOpenObserverPoints(openLayout.mover, 2);
+    await applyFixtureAndWait(roomId, [mover, cleanObserver, degradedObserver], [
+      { userId: mover.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: cleanObserver.userId, x: observerPoints[0].x, z: observerPoints[0].z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: degradedObserver.userId, x: observerPoints[1].x, z: observerPoints[1].z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    await delay(2200);
+
+    const cleanStartIndex = cleanObserver.messages.length;
+    const degradedStartIndex = degradedObserver.messages.length;
+
+    await sendForwardBurst(mover, 1, 36);
+    await delay(1200);
+
+    const cleanCount = countEntitySnapshotUpdates(cleanObserver, mover.userId, cleanStartIndex);
+    const degradedCount = countEntitySnapshotUpdates(degradedObserver, mover.userId, degradedStartIndex);
+
+    assert.ok(cleanCount > degradedCount, `expected clean observer to receive more mover updates (${cleanCount} vs ${degradedCount})`);
+    assert.ok(degradedCount >= 3, `expected degraded observer to still receive some mover updates, saw ${degradedCount}`);
+  });
+});
+
+test('real worker: delta snapshots round-trip into the observer state map', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('deltart');
+  const mover = await worker.connectClient({ roomId, userId: buildUserId('delta_mover'), username: 'DELTA_MOVER' });
+  const observer = await worker.connectClient({ roomId, userId: buildUserId('delta_observer'), username: 'DELTA_OBSERVER' });
+
+  await withDebug(roomId, [mover, observer], async () => {
+    await mover.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, mover, observer, [mover.userId, observer.userId]);
+
+    await applyFixtureAndWait(roomId, [mover, observer], [
+      { userId: mover.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: observer.userId, x: openLayout.observer.x, z: openLayout.observer.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    const hadFullSnapshot = observer.messages.some((entry) => {
+      const message = entry && entry.message;
+      return String(message && message.t || '') === 'snapshot' &&
+        Array.isArray(message.entities) &&
+        message.entities.some((entity) => String(entity && entity.id || '') === mover.userId);
+    });
+    assert.equal(hadFullSnapshot, true);
+
+    await observer.sendInput({
+      seq: 1,
+      dtMs: MOVEMENT_STEP_DT_MS,
+      yaw: 0,
+      pitch: 0,
+      forward: false,
+      weaponId: 'rifle'
+    });
+    await delay(150);
+
+    const deltaStartIndex = observer.messages.length;
+    await sendForwardBurst(mover, 1, 20);
+
+    const converged = await waitForCondition(() => {
+      const selfState = mover.latestEntity(mover.userId);
+      const observedState = observer.latestEntity(mover.userId);
+      if (!selfState || !observedState) return false;
+      return distanceXZ(selfState, observedState) < 1.1 ? { selfState, observedState } : false;
+    }, SNAPSHOT_TIMEOUT_MS, 'observer delta convergence');
+
+    const deltaMessages = observer.messages.filter((entry) => {
+      const message = entry && entry.message;
+      return entry.index >= deltaStartIndex &&
+        String(message && message.t || '') === 'snapshot' &&
+        Array.isArray(message.entityPatches) &&
+        message.entityPatches.some((patch) => String(patch && patch.id || '') === mover.userId) &&
+        Number(message.baseSnapshotSeq || 0) > 0;
+    });
+    assert.ok(deltaMessages.length > 0, 'expected at least one delta snapshot for the mover');
+
+    const samples = snapshotEntitySamples(observer, mover.userId, 0);
+    assert.ok(samples.length > 0, 'expected reconstructed snapshot samples for the mover');
+    const lastSample = samples[samples.length - 1];
+    assert.ok(Math.abs(Number(lastSample.x || 0) - Number(converged.observedState.x || 0)) < 0.001);
+    assert.ok(Math.abs(Number(lastSample.z || 0) - Number(converged.observedState.z || 0)) < 0.001);
+    assert.ok(distanceXZ(converged.selfState, converged.observedState) < 1.1);
   });
 });
 
@@ -778,16 +971,16 @@ test('real worker: delayed inputs still converge without giant teleports', { tim
       const moverSelf = delayedMover.latestEntity(delayedMover.userId);
       const moverRemote = observer.latestEntity(delayedMover.userId);
       if (!moverSelf || !moverRemote) return false;
-      return distanceXZ(moverSelf, moverRemote) < 1.2 ? true : false;
+      return distanceXZ(moverSelf, moverRemote) < 0.8 ? true : false;
     }, SNAPSHOT_TIMEOUT_MS, 'delayed movement convergence');
 
     const samples = snapshotEntitySamples(observer, delayedMover.userId, startIndex);
     assert.ok(samples.length >= 2);
-    let maxStep = 0;
-    for (let i = 1; i < samples.length; i++) {
-      maxStep = Math.max(maxStep, distanceXZ(samples[i], samples[i - 1]));
-    }
-    assert.ok(maxStep < 4.0, `expected no giant teleports, saw step ${maxStep.toFixed(3)}`);
+    const metrics = summarizeMotionSamples(samples);
+    assert.ok(metrics.maxStep < 3.0, `expected no giant teleports, saw step ${metrics.maxStep.toFixed(3)}`);
+    assert.ok(metrics.p95Step < 1.2, `expected smoother delayed movement, saw p95 step ${metrics.p95Step.toFixed(3)}`);
+    assert.ok(metrics.backtrackCount <= 1, `expected almost no delayed snap-backs, saw ${metrics.backtrackCount}`);
+    assert.ok(metrics.largestBacktrack < 0.25, `expected delayed snap-back under 0.25wu, saw ${metrics.largestBacktrack.toFixed(3)}`);
   });
 });
 
@@ -825,18 +1018,117 @@ test('real worker: packet loss with delay still converges without repeated giant
       const moverSelf = lossyMover.latestEntity(lossyMover.userId);
       const moverRemote = observer.latestEntity(lossyMover.userId);
       if (!moverSelf || !moverRemote) return false;
-      return distanceXZ(moverSelf, moverRemote) < 1.8 ? true : false;
+      return distanceXZ(moverSelf, moverRemote) < 1.1 ? true : false;
     }, SNAPSHOT_TIMEOUT_MS, 'lossy delayed movement convergence');
 
     const samples = snapshotEntitySamples(observer, lossyMover.userId, startIndex);
     assert.ok(samples.length >= 2);
-    let maxStep = 0;
-    for (let i = 1; i < samples.length; i++) {
-      maxStep = Math.max(maxStep, distanceXZ(samples[i], samples[i - 1]));
-    }
-    assert.ok(maxStep < 4.5, `expected no repeated giant teleports, saw step ${maxStep.toFixed(3)}`);
+    const metrics = summarizeMotionSamples(samples);
+    assert.ok(metrics.maxStep < 3.25, `expected no repeated giant teleports, saw step ${metrics.maxStep.toFixed(3)}`);
+    assert.ok(metrics.p95Step < 1.5, `expected smoother lossy motion, saw p95 step ${metrics.p95Step.toFixed(3)}`);
+    assert.ok(metrics.backtrackCount <= 2, `expected few lossy snap-backs, saw ${metrics.backtrackCount}`);
+    assert.ok(metrics.largestBacktrack < 0.45, `expected lossy snap-back under 0.45wu, saw ${metrics.largestBacktrack.toFixed(3)}`);
 
     const stats = lossyMover.getTransportStats();
     assert.ok(stats.droppedOutboundCount > 0);
+  });
+});
+
+test('real worker: observer inbound delay, loss, and reordering still converge without repeated giant teleports', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('inbound');
+  const mover = await worker.connectClient({
+    roomId,
+    userId: buildUserId('inbound_mover'),
+    username: 'INBOUND_MOVER'
+  });
+  const observer = await worker.connectClient({
+    roomId,
+    userId: buildUserId('inbound_observer'),
+    username: 'INBOUND_OBSERVER',
+    randomSeed: 17
+  });
+
+  await withDebug(roomId, [mover, observer], async () => {
+    await mover.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await observer.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, mover, observer, [mover.userId, observer.userId]);
+
+    await applyFixtureAndWait(roomId, [mover, observer], [
+      { userId: mover.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: observer.userId, x: openLayout.observer.x, z: openLayout.observer.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+    observer.setInboundNetworkConditions({
+      inboundDelayMs: 60,
+      inboundJitterMs: 25,
+      inboundDropRate: 0.25,
+      inboundReorderRate: 0.2,
+      inboundReorderWindowMs: 90
+    });
+
+    const startIndex = observer.messages.length;
+    const startSnapshot = observer.latestSnapshot;
+    const startServerTime = Number(startSnapshot && startSnapshot.serverTime || 0);
+
+    await sendForwardBurst(mover, 1, MOVEMENT_STEPS);
+    await observer.waitForSnapshot((message) => Number(message.serverTime || 0) > startServerTime, SNAPSHOT_TIMEOUT_MS);
+
+    await waitForCondition(() => {
+      const moverSelf = mover.latestEntity(mover.userId);
+      const moverRemote = observer.latestEntity(mover.userId);
+      if (!moverSelf || !moverRemote) return false;
+      return distanceXZ(moverSelf, moverRemote) < 1.1 ? true : false;
+    }, SNAPSHOT_TIMEOUT_MS, 'inbound delayed movement convergence');
+
+    const samples = snapshotEntitySamples(observer, mover.userId, startIndex);
+    assert.ok(samples.length >= 2);
+    const metrics = summarizeMotionSamples(samples);
+    assert.ok(metrics.maxStep < 3.25, `expected no repeated giant teleports, saw step ${metrics.maxStep.toFixed(3)}`);
+    assert.ok(metrics.p95Step < 1.5, `expected smoother inbound-impaired motion, saw p95 step ${metrics.p95Step.toFixed(3)}`);
+    assert.ok(metrics.backtrackCount <= 2, `expected few inbound-impaired snap-backs, saw ${metrics.backtrackCount}`);
+    assert.ok(metrics.largestBacktrack < 0.45, `expected inbound-impaired snap-back under 0.45wu, saw ${metrics.largestBacktrack.toFixed(3)}`);
+
+    const stats = observer.getTransportStats();
+    assert.ok(stats.droppedInboundCount > 0);
+    assert.ok(stats.reorderedInboundCount > 0);
+  });
+});
+
+test('real worker: authoritative fire rejects badly diverged client aim without damage', { timeout: TEST_TIMEOUT_MS }, async () => {
+  const roomId = buildRoomId('shotreject');
+  const shooter = await worker.connectClient({ roomId, userId: buildUserId('reject_shooter'), username: 'REJECT_SHOOTER' });
+  const target = await worker.connectClient({ roomId, userId: buildUserId('reject_target'), username: 'REJECT_TARGET' });
+
+  await withDebug(roomId, [shooter, target], async () => {
+    await shooter.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await target.waitForMessage('welcome', null, SNAPSHOT_TIMEOUT_MS);
+    await waitForBothClientsToSee(roomId, shooter, target, [shooter.userId, target.userId]);
+
+    await applyFixtureAndWait(roomId, [shooter, target], [
+      { userId: shooter.userId, x: openLayout.mover.x, z: openLayout.mover.z, yaw: 0, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' },
+      { userId: target.userId, x: openLayout.target.x, z: openLayout.target.z, yaw: Math.PI, pitch: 0, clearSpawnShield: true, weaponId: 'rifle' }
+    ]);
+
+    const shotToken = 'reject-diverged-aim';
+    await shooter.sendFire({
+      weaponId: 'rifle',
+      shotToken,
+      viewFovDeg: COMBAT_FOV_DEG,
+      aimOrigin: {
+        x: Number(openLayout.mover.x || 0),
+        y: 1.7,
+        z: Number(openLayout.mover.z || 0)
+      },
+      aimForward: { x: 0, y: 0, z: 1 },
+      estimatedServerShotTime: Number(shooter.latestSnapshot && shooter.latestSnapshot.serverTime || 0)
+    });
+
+    await Promise.race([
+      shooter.waitForMessage('shot_reject', (message) => {
+        return String(message.shotToken || '') === shotToken;
+      }, 1000).catch(() => null),
+      delay(1000).then(() => null)
+    ]);
+
+    await expectNoMessage(target, 'damage_event', (message) => String(message.shotToken || '') === shotToken, 900);
   });
 });

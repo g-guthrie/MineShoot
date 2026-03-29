@@ -82,6 +82,21 @@ test('headless world collision data builds for the full 3x3 biome layout', () =>
   assert.ok(data.spawnExclusionZones.length > 0);
 });
 
+test('headless world recorder keeps decor non-blocking by default unless geometry opts in', () => {
+  ensureHeadlessWorldRuntime();
+  const recorder = createHeadlessRecorder();
+  const visualOnlyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+  const collidingGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 8);
+  collidingGeometry.userData = collidingGeometry.userData || {};
+  collidingGeometry.userData.collisionEnabled = true;
+
+  recorder.place.addDecor(4, 1, 4, visualOnlyGeometry, null);
+  recorder.place.addDecor(8, 1, 8, collidingGeometry, null);
+
+  assert.equal(recorder.collidables.length, 1);
+  assert.deepEqual(recorder.collidables[0], createRotatedBoxAabb(8, 1, 8, 1, 2, 1, 0, 0));
+});
+
 test('headless world collision data no longer includes thin seam colliders on biome divider lines', () => {
   const data = buildWorldCollisionData({
     worldSeed: 'audit-seed',

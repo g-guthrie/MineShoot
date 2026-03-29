@@ -54,9 +54,10 @@
                     startupDebugNotice = '';
                     return { ok: false, error: 'Network room join unavailable.' };
                 }
+                var e2eJoinTimeoutMs = globalThis.__MAYHEM_E2E && globalThis.__MAYHEM_E2E.active ? 15000 : 5000;
                 joinPromise = currentNetApi.beginJoinAttempt({
                     expectedRoomId: selectedMode.roomId || 'global',
-                    timeoutMs: 5000
+                    timeoutMs: e2eJoinTimeoutMs
                 });
             }
 

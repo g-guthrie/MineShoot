@@ -349,15 +349,11 @@ test('room runtime ensures players and simulated fixtures through one boundary',
 
   syncRoomFixtures(room, {
     simPlayerIds: ['sim-1'],
-    simPlayerNames: ['SIM ONE'],
-    ensureBots(targetRoom) {
-      targetRoom.botsEnsured = true;
-    }
+    simPlayerNames: ['SIM ONE']
   });
 
   assert.equal(room.players.has('sim-1'), true);
   assert.equal(room.players.get('sim-1').fixtureType, 'sim_player');
-  assert.equal(room.botsEnsured, true);
 });
 
 test('room runtime respawns dead entities and ticks live players through shared helpers', () => {

@@ -58,7 +58,7 @@ Backend ownership notes:
 Open two browser windows to the deployed URL:
 1. Login with two different usernames and 4-digit PINs.
 2. Confirm both users appear in the same arena.
-3. Confirm overhead health/armor bars render for bots + other players.
+3. Confirm overhead health/armor bars render for other players.
 4. Press `H` and verify hitboxes + wallhack circle hide/show together while silhouettes still work in range.
 
 ## 9) Unified local dev
@@ -185,7 +185,7 @@ The workflow lives at [.github/workflows/deploy-worker.yml](/Users/gguthrie/Desk
 Manual fallback:
 
 ```bash
-./scripts/wrangler.sh deploy
+./scripts/wrangler.sh deploy --config wrangler.worker.toml
 ```
 
 Expected backend URL for this project:
@@ -213,7 +213,7 @@ npm run build
 Deploy the Worker/backend:
 
 ```bash
-./scripts/wrangler.sh deploy
+./scripts/wrangler.sh deploy --config wrangler.worker.toml
 ```
 
 Deploy the built frontend to Pages:

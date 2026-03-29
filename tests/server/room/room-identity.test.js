@@ -3,13 +3,11 @@ import assert from 'node:assert/strict';
 
 import {
   DEV_LOCAL_ROOM_NAME,
-  LOCAL_SHARED_ROOM_NAME,
   createDefaultPrivateRoomConfig,
   detectGameMode,
   emptyMatchState,
   isPrivateMatchRoom,
-  isPublicMatchRoom,
-  usesConfiguredBots
+  isPublicMatchRoom
 } from '../../../cloudflare/server/room/RoomIdentity.js';
 
 test('room identity helpers derive room modes and default private room state', () => {
@@ -29,15 +27,6 @@ test('room identity helpers derive room modes and default private room state', (
   assert.equal(config.teamCount, 2);
   assert.equal(config.roomPhase, 'active');
   assert.equal(config.teams.size, 0);
-});
-
-test('room identity helpers share the room prefix rules used by the room server', () => {
-  assert.equal(usesConfiguredBots(LOCAL_SHARED_ROOM_NAME), true);
-  assert.equal(usesConfiguredBots('cf-solo-123'), true);
-  assert.equal(usesConfiguredBots('global'), false);
-  assert.equal(usesConfiguredBots('ffa-01'), false);
-  assert.equal(usesConfiguredBots('private-room1'), false);
-  assert.equal(usesConfiguredBots(DEV_LOCAL_ROOM_NAME), false);
 });
 
 test('room identity empty match state uses the shared match defaults', () => {

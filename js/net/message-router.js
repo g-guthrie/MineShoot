@@ -10,6 +10,7 @@
             WELCOME: 'welcome',
             SNAPSHOT: 'snapshot',
             SHOT_EFFECT: 'shot_effect',
+            SHOT_REJECT: 'shot_reject',
             THROW_SPAWN: 'throw_spawn',
             THROW_REJECT: 'throw_reject',
             THROW_IMPACT: 'throw_impact',
@@ -113,7 +114,12 @@
             if (targetRender) {
                 if (typeof msg.health === 'number') targetRender.hp = msg.health;
                 if (typeof msg.armor === 'number') targetRender.armor = msg.armor;
-                if (msg.killed) targetRender.alive = false;
+                if (msg.killed) {
+                    targetRender.alive = false;
+                    if (opts.setRemoteAliveState) {
+                        opts.setRemoteAliveState(msg.targetId, false);
+                    }
+                }
             }
         }
 
@@ -215,7 +221,10 @@
                 var hasFireZones = Object.prototype.hasOwnProperty.call(msg, 'fireZones');
                 opts.applySnapshot(msg.entities || [], hasProjectiles ? (msg.projectiles || []) : undefined, hasFireZones ? (msg.fireZones || []) : undefined, {
                     delta: !!msg.delta,
+                    entityPatches: Array.isArray(msg.entityPatches) ? msg.entityPatches : [],
+                    baseSnapshotSeq: Math.max(0, Math.floor(Number(msg.baseSnapshotSeq || 0))),
                     removedEntityIds: msg.removedEntityIds || [],
+                    snapshotSeq: Math.max(0, Math.floor(Number(msg.snapshotSeq || 0))),
                     serverTime: Number(msg.serverTime || 0),
                     receivedAt: Date.now()
                 });
@@ -245,6 +254,16 @@
                 msg.t === msgTypes.SHOT_EFFECT
             ) {
                 pushBounded(opts.shotEffectQueue, msg, 64);
+                return;
+            }
+
+            if (msg.t === msgTypes.SHOT_REJECT) {
+                pushBounded(opts.shotRejectQueue, {
+                    shotToken: String(msg.shotToken || ''),
+                    weaponId: String(msg.weaponId || ''),
+                    reason: String(msg.reason || 'rejected'),
+                    serverTime: Math.max(0, Number(msg.serverTime || 0))
+                }, 32);
                 return;
             }
 

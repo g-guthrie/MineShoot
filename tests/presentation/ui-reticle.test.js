@@ -131,6 +131,7 @@ async function loadUiHarness() {
 
   return {
     GameUI: sandbox.__MAYHEM_RUNTIME.GameUI,
+    runtime: sandbox.__MAYHEM_RUNTIME,
     spreadReticleState,
     getElement
   };
@@ -289,6 +290,42 @@ test('damage numbers skip points behind the camera and kill count access stays s
 
   harness.GameUI.showDamageNumber(new THREE.Vector3(0, 1.6, -5), 25, false, camera, 'body');
   assert.equal(harness.getElement('damage-numbers').children.length, 1);
+});
+
+test('custom match HUD counters clear stale extra-life progress when leaving stock mode', async () => {
+  const harness = await loadUiHarness();
+
+  harness.GameUI.updateMatchStatus({
+    stockMode: true,
+    aliveCount: 3
+  }, {
+    stocksRemaining: 2,
+    maxStocks: 3,
+    extraLifeProgressPct: 42
+  });
+
+  assert.equal(harness.getElement('extra-life-bar-container').style.display, 'flex');
+  assert.equal(harness.getElement('extra-life-value').textContent, '42%');
+
+  harness.runtime.GameShared = {
+    matchRules: {
+      formatMatchHudCounter() {
+        return 'Custom Counter';
+      }
+    }
+  };
+
+  harness.GameUI.updateMatchStatus({
+    stockMode: false
+  }, {
+    maxStocks: 0,
+    extraLifeProgressPct: 0
+  });
+
+  assert.equal(harness.getElement('extra-life-bar-container').style.display, 'none');
+  assert.equal(harness.getElement('extra-life-fill').style.width, '0.0%');
+  assert.equal(harness.getElement('extra-life-value').textContent, '0%');
+  assert.equal(harness.getElement('kill-counter').textContent, 'Custom Counter');
 });
 
 test('combat radar keeps empty sectors quiet while making distant occupied sectors readable', async () => {

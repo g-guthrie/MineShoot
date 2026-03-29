@@ -326,3 +326,89 @@ test('network state view keeps grounded vertical interpolation linear', async ()
   const sample = view.sampleRemoteEntityPresentation('usr_remote', 1250);
   assert.equal(Number(sample.y.toFixed(2)), 0.93);
 });
+
+test('network state view keeps reconciliation pending samples, count, and age aligned', async () => {
+  const nowMs = 1000;
+  class FakeDate extends Date {
+    constructor(...args) {
+      super(...(args.length ? args : [nowMs]));
+    }
+
+    static now() {
+      return nowMs;
+    }
+  }
+  FakeDate.parse = Date.parse;
+  FakeDate.UTC = Date.UTC;
+
+  const [interpCode, code] = await Promise.all([
+    fs.readFile(new URL('../../js/net/interpolation.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/net/state-view.js', import.meta.url), 'utf8')
+  ]);
+  const sandbox = {
+    __MAYHEM_RUNTIME: {
+      GameShared: {}
+    },
+    globalThis: null,
+    console,
+    Date: FakeDate,
+    Map,
+    THREE
+  };
+  sandbox.globalThis = sandbox;
+  const context = vm.createContext(sandbox);
+  vm.runInContext(interpCode, context);
+  vm.runInContext(code, context);
+  const view = sandbox.__MAYHEM_RUNTIME.GameNetStateView.create({
+    getSelfState() {
+      return { id: 'usr_self', seq: 2, x: 0, y: 1.6, z: 0 };
+    },
+    getInputSeqHistory() {
+      return [{
+        seq: 3,
+        at: 980,
+        dtMs: 20,
+        yaw: 0,
+        pitch: 0,
+        weaponId: 'sniper',
+        movementLocked: true,
+        inputState: { forward: true }
+      }];
+    },
+    getLastInputSeqSent() {
+      return 3;
+    },
+    getLastInputSeqAcked() {
+      return 2;
+    },
+    getLastSentInputSample() {
+      return null;
+    },
+    getInputSendTimer() {
+      return 0;
+    },
+    getInputSendInterval() {
+      return 1 / 60;
+    },
+    getConnectionTimingState() {
+      return null;
+    },
+    getLastAcceptedSelfAckAt() {
+      return 950;
+    },
+    getCurrentInputState() {
+      return null;
+    },
+    getCurrentRotation() {
+      return null;
+    }
+  });
+
+  const reconciliationState = view.getSelfReconciliationState();
+  assert.equal(reconciliationState.pendingInputs.length, 1);
+  assert.equal(reconciliationState.pendingInputCount, 1);
+  assert.equal(reconciliationState.latestPendingAgeMs, 20);
+  assert.equal(reconciliationState.pendingInputs[0].seq, 3);
+  assert.equal(reconciliationState.pendingInputs[0].weaponId, 'sniper');
+  assert.equal(reconciliationState.pendingInputs[0].movementLocked, true);
+});

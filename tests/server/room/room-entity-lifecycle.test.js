@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  createBotEntity,
   createPlayerEntity,
   resetEntityForRespawn
 } from '../../../cloudflare/server/room/EntityLifecycle.js';
@@ -69,21 +68,6 @@ test('createPlayerEntity centralizes default runtime state', () => {
   assert.deepEqual(Object.keys(player.weaponAmmo), ['machinegun', 'shotgun']);
   assert.equal(player.abilityCooldownUntil, undefined);
   assert.equal(player.weaponLockUntil, 0);
-});
-
-test('createBotEntity keeps bot defaults aligned with shared room lifecycle state', () => {
-  const bot = createBotEntity(1, {
-    eyeHeight: 1.6,
-    createThrowableRuntime
-  });
-
-  assert.equal(bot.id, 'bot-2');
-  assert.equal(bot.username, 'BOT_2');
-  assert.equal(bot.classId, 'ffa');
-  assert.equal(bot.abilityId, undefined);
-  assert.deepEqual(bot.weaponLoadout, ['machinegun', 'shotgun']);
-  assert.deepEqual(bot.throwables, createThrowableRuntime());
-  assert.equal(bot.abilityCooldownUntil, undefined);
 });
 
 test('resetEntityForRespawn restores transient combat and movement state', () => {

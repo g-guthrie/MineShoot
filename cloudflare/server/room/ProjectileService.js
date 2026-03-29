@@ -137,7 +137,6 @@ function firstEntityHit(room, projectile, origin, end, expandRadius, trackedOnly
 
   const entities = [];
   for (const p of room.players.values()) entities.push(p);
-  for (const b of room.bots.values()) entities.push(b);
 
   let best = null;
   for (let i = 0; i < entities.length; i++) {
@@ -256,11 +255,10 @@ function worldProjectileHit(room, start, end) {
 
 export function tickProjectiles(room, dtSec) {
   if (room.projectiles.size === 0) return;
-  const now = nowMs();
+  const now = room && typeof room.currentNowMs === 'function' ? room.currentNowMs() : nowMs();
   const toRemove = [];
   const entities = [];
   for (const p of room.players.values()) entities.push(p);
-  for (const b of room.bots.values()) entities.push(b);
 
   const stickProjectile = (proj, targetEntity, x, y, z) => {
     if (!proj) return false;
@@ -590,7 +588,6 @@ export function tickProjectiles(room, dtSec) {
 export function tickFireZones(room, dtSec) {
   const entities = [];
   for (const p of room.players.values()) entities.push(p);
-  for (const b of room.bots.values()) entities.push(b);
   let hasLingeringBurn = false;
   for (let i = 0; i < entities.length; i++) {
     if ((entities[i].burnUntil || 0) > 0) {
@@ -601,7 +598,7 @@ export function tickFireZones(room, dtSec) {
   if (room.fireZones.size === 0 && !hasLingeringBurn) return;
 
   const toRemove = [];
-  const now = nowMs();
+  const now = room && typeof room.currentNowMs === 'function' ? room.currentNowMs() : nowMs();
   const def = THROWABLE_STATS.molotov;
   const heatedEntityIds = new Set();
 

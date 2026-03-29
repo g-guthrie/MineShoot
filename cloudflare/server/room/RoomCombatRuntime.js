@@ -42,6 +42,7 @@ function clampNumber(value, min, max, fallback = 0) {
 const FORWARD_ROLL_ACTION_DURATION_MS = 360;
 const BACKWARD_ROLL_ACTION_DURATION_MS = 520;
 const STANDARD_AUTO_RELOAD_DELAY_MS = 3000;
+const RECENT_SHOT_PELLET_DEDUP_TTL_MS = 5000;
 
 function normalizeRollInputState(raw) {
   const source = raw && typeof raw === 'object' ? raw : {};
@@ -69,6 +70,43 @@ function sanitizeThrowableSpawnDef(rawDef, throwableId = '') {
     trackDurationSec: clampNumber(rawDef.trackDuration, 0, 5, 0),
     trackLerp: clampNumber(rawDef.trackLerp, 0, 20, 0)
   };
+}
+
+function ensureRecentShotPelletState(room) {
+  if (!room || typeof room !== 'object') return new Map();
+  if (!(room.recentShotPelletHits instanceof Map)) {
+    room.recentShotPelletHits = new Map();
+  }
+  return room.recentShotPelletHits;
+}
+
+function cleanupRecentShotPelletState(room, now = 0, ttlMs = RECENT_SHOT_PELLET_DEDUP_TTL_MS) {
+  const state = ensureRecentShotPelletState(room);
+  const cutoff = Math.max(0, Number(now || 0)) - Math.max(1, Number(ttlMs || 0));
+  for (const [key, stamp] of state.entries()) {
+    if (Number(stamp || 0) >= cutoff) continue;
+    state.delete(key);
+  }
+  return state;
+}
+
+function recentShotPelletKey(ownerId, weaponId, shotToken, pelletIndex, targetId) {
+  return [
+    String(ownerId || ''),
+    String(weaponId || ''),
+    String(shotToken || ''),
+    pelletIndex == null ? 'single' : String(Math.max(0, Math.floor(Number(pelletIndex || 0)))),
+    String(targetId || '')
+  ].join('|');
+}
+
+function shouldSkipAggregatedShotHit(room, ownerId, weaponId, shotToken, pelletIndex, targetId, now = 0) {
+  if (!shotToken) return false;
+  const state = cleanupRecentShotPelletState(room, now);
+  const key = recentShotPelletKey(ownerId, weaponId, shotToken, pelletIndex, targetId);
+  if (state.has(key)) return true;
+  state.set(key, Math.max(0, Number(now || 0)));
+  return false;
 }
 
 export function entityCorePosition(entity, deps) {
@@ -209,7 +247,6 @@ export function nearestTargetForProjectile(room, projectile, maxRange) {
   let nearestDist = maxRange;
   const entities = [];
   for (const p of room.players.values()) entities.push(p);
-  for (const b of room.bots.values()) entities.push(b);
   for (let i = 0; i < entities.length; i++) {
     const entity = entities[i];
     if (!room.canTargetEntity(entity, projectile.ownerId)) continue;
@@ -718,9 +755,12 @@ export function handleFire(room, player, msg, deps) {
   const buildRewoundHitscanTarget = deps.buildRewoundHitscanTarget;
   const authoritativeHitscanOrigin = deps.authoritativeHitscanOrigin;
   const authoritativeHitscanForward = deps.authoritativeHitscanForward;
+  const broadcastShotReject = deps.broadcastShotReject;
+  const hitscanAimDirectionMinDot = Number(deps.hitscanAimDirectionMinDot || 0.95);
   const hitscanAimOriginMaxOffset = Number(deps.hitscanAimOriginMaxOffset || 0.9);
   const playerEyeHeight = Number(deps.playerEyeHeight || 0);
   const remoteMuzzleFlashHoldMs = Number(deps.remoteMuzzleFlashHoldMs || 0);
+  const shotTokenDamageAggregation = deps.shotTokenDamageAggregation === true;
 
   if (!player || !player.alive) return;
   if (!room.canEntityUseWeapon(player)) return;
@@ -757,7 +797,7 @@ export function handleFire(room, player, msg, deps) {
   }
   room.consumeWeaponAmmo(player, weaponId, now);
   const shotServerTime = typeof resolveHitscanShotTime === 'function'
-    ? Number(resolveHitscanShotTime(msg, now) || now)
+    ? Number(resolveHitscanShotTime(player, msg, now) || now)
     : now;
   const fallbackAimForward = typeof authoritativeHitscanForward === 'function'
     ? authoritativeHitscanForward(player, shotServerTime, now)
@@ -772,8 +812,18 @@ export function handleFire(room, player, msg, deps) {
       const normalized = { x: rawX / len, y: rawY / len, z: rawZ / len };
       const authoritativeForward = fallbackAimForward;
       const dot = (normalized.x * authoritativeForward.x) + (normalized.y * authoritativeForward.y) + (normalized.z * authoritativeForward.z);
-      if (dot >= 0.1) {
+      if (dot >= hitscanAimDirectionMinDot) {
         aimForward = normalized;
+      } else {
+        if (typeof broadcastShotReject === 'function') {
+          broadcastShotReject(room, player, {
+            shotToken,
+            weaponId,
+            reason: 'aim_direction_mismatch',
+            serverTime: shotServerTime
+          });
+        }
+        return;
       }
     }
   }
@@ -784,20 +834,7 @@ export function handleFire(room, player, msg, deps) {
         y: Number(player.y || playerEyeHeight),
         z: Number(player.z || 0)
       };
-  let aimOrigin = (msg && msg.aimOrigin && typeof msg.aimOrigin === 'object')
-    ? {
-        x: Number.isFinite(Number(msg.aimOrigin.x)) ? Number(msg.aimOrigin.x) : Number(player.x || 0),
-        y: Number.isFinite(Number(msg.aimOrigin.y)) ? Number(msg.aimOrigin.y) : Number(player.y || playerEyeHeight),
-        z: Number.isFinite(Number(msg.aimOrigin.z)) ? Number(msg.aimOrigin.z) : Number(player.z || 0)
-      }
-    : fallbackAimOrigin;
-  const aimOriginDx = Number(aimOrigin.x || 0) - Number(fallbackAimOrigin.x || 0);
-  const aimOriginDy = Number(aimOrigin.y || 0) - Number(fallbackAimOrigin.y || 0);
-  const aimOriginDz = Number(aimOrigin.z || 0) - Number(fallbackAimOrigin.z || 0);
-  const aimOriginDelta = Math.sqrt((aimOriginDx * aimOriginDx) + (aimOriginDy * aimOriginDy) + (aimOriginDz * aimOriginDz));
-  if (!Number.isFinite(aimOriginDelta) || aimOriginDelta > hitscanAimOriginMaxOffset) {
-    aimOrigin = fallbackAimOrigin;
-  }
+  const aimOrigin = fallbackAimOrigin;
   const targets = room.getAliveEntities()
     .filter((entity) => room.canTargetEntity(entity, player.id))
     .map((entity) => {
@@ -861,6 +898,13 @@ export function handleFire(room, player, msg, deps) {
       ? room.getEntityById(targetId)
       : resolvedShotTarget;
     if (!room.canTargetEntity(liveTarget, player.id)) continue;
+    const pelletIndex = Number.isFinite(Number(shot && shot.pelletIndex)) ? Number(shot.pelletIndex) : null;
+    if (
+      shotTokenDamageAggregation &&
+      shouldSkipAggregatedShotHit(room, player.id, weaponId, shotToken, pelletIndex, liveTarget && liveTarget.id, now)
+    ) {
+      continue;
+    }
     const out = applyDamageFromSource(player, liveTarget, shot.damage, {
       hitType: shot.hitType === 'head' ? 'head' : 'body',
       weaponId,
@@ -876,7 +920,7 @@ export function handleFire(room, player, msg, deps) {
       shot.hitType === 'head' ? 'head' : 'body',
       weaponId,
       shotToken,
-      Number.isFinite(Number(shot && shot.pelletIndex)) ? Number(shot.pelletIndex) : null
+      pelletIndex
     );
     if (out.killed) {
       broadcastDeathRespawn(room, liveTarget);

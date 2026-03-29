@@ -121,10 +121,10 @@
         function applyPendingSpawnSync() {
             var state = netState();
             var pendingSpawnSync = state && state.getPendingSpawnSync ? state.getPendingSpawnSync() : null;
-            if (!pendingSpawnSync) return;
-            if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return;
+            if (!pendingSpawnSync) return false;
+            if (Date.now() < Number(pendingSpawnSync.executeAt || 0)) return false;
             var gamePlayer = playerApi();
-            if (!gamePlayer || !gamePlayer.respawn) return;
+            if (!gamePlayer || !gamePlayer.respawn) return false;
             gamePlayer.respawn(
                 Number(pendingSpawnSync.x || 0),
                 Number(pendingSpawnSync.z || 0)
@@ -139,6 +139,7 @@
             if (state && state.setPendingSpawnSync) {
                 state.setPendingSpawnSync(null);
             }
+            return true;
         }
 
         function pointForEntityId(entityId, translateY, outPoint) {

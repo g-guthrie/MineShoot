@@ -408,7 +408,7 @@ test('combat runtime applies pistol shared shot results without a special server
   assert.equal(shotRequest.shotToken, 'sp1');
   assert.equal(shotRequest.weaponStats.id, 'pistol');
   assert.equal(shotRequest.weaponStats.pellets, 1);
-  assert.deepEqual(shotRequest.aimOrigin, { x: 0.2, y: 1.8, z: -0.2 });
+  assert.deepEqual(shotRequest.aimOrigin, { x: 0, y: 1.7, z: 0 });
   assert.ok(shotRequest.aimForward.z < 0);
   assert.deepEqual(sent, [{
     ownerId: 'p1',
@@ -500,7 +500,7 @@ test('combat runtime rewinds targets and clamps far client aim origins to the au
   });
 });
 
-test('combat runtime clamps client aim origins against the rewound shooter eye when firing while moving', () => {
+test('combat runtime resolves aim origins from the rewound shooter eye when firing while moving', () => {
   const target = { id: 't1', alive: true, x: 20, y: 1.7, z: -8 };
   const player = {
     id: 'p1',
@@ -557,10 +557,10 @@ test('combat runtime clamps client aim origins against the rewound shooter eye w
     remoteMuzzleFlashHoldMs: 90
   });
 
-  assert.deepEqual(shotRequest.aimOrigin, { x: 0.35, y: 1.72, z: -0.15 });
+  assert.deepEqual(shotRequest.aimOrigin, logicalHitscanOriginFromEye({ x: 0, y: 1.7, z: 0 }, { x: 0, y: 0, z: -1 }));
 });
 
-test('combat runtime validates aim forward against the rewound shooter facing', () => {
+test('combat runtime rejects client aim that diverges too far from the rewound shooter facing', () => {
   const target = { id: 't1', alive: true, x: 20, y: 1.7, z: -8 };
   const player = {
     id: 'p1',
@@ -574,6 +574,7 @@ test('combat runtime validates aim forward against the rewound shooter facing', 
     weaponId: 'rifle'
   };
   let shotRequest = null;
+  const shotRejects = [];
   const room = {
     canEntityUseWeapon() { return true; },
     syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
@@ -603,6 +604,9 @@ test('combat runtime validates aim forward against the rewound shooter facing', 
     applyDamageFromSource() { return null; },
     broadcastDamageEvent() {},
     broadcastDeathRespawn() {},
+    broadcastShotReject(_room, _player, rejection) {
+      shotRejects.push(rejection);
+    },
     canEquipWeaponId() { return true; },
     resolveHitscanShotTime() { return 1260; },
     buildRewoundHitscanTarget(entity) {
@@ -613,14 +617,21 @@ test('combat runtime validates aim forward against the rewound shooter facing', 
     },
     authoritativeHitscanForward(_player, requestedShotTime) {
       assert.equal(requestedShotTime, 1260);
-      return { x: 0, y: 0, z: -1 };
+      return { x: 0, y: 0, z: 1 };
     },
+    hitscanAimDirectionMinDot: 0.95,
     hitscanAimOriginMaxOffset: 0.9,
     playerEyeHeight: 1.7,
     remoteMuzzleFlashHoldMs: 90
   });
 
-  assert.deepEqual(shotRequest.aimForward, { x: 0, y: 0, z: -1 });
+  assert.equal(shotRequest, null);
+  assert.deepEqual(shotRejects, [{
+    shotToken: 'move-forward',
+    weaponId: 'rifle',
+    reason: 'aim_direction_mismatch',
+    serverTime: 1260
+  }]);
 });
 
 test('combat runtime applies rewound hits to the live room entity instead of the rewound clone', () => {
@@ -787,6 +798,150 @@ test('combat runtime emits one authoritative shotgun damage event per pellet whi
       pelletIndex: 1
     }
   ]);
+});
+
+test('combat runtime suppresses duplicate shotgun pellets when shot token aggregation is enabled', () => {
+  const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -6 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'shotgun'
+  };
+  const applied = [];
+  const broadcasts = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 6, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [target]; },
+    getEntityById(id) { return id === target.id ? target : null; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'shotgun',
+    shotToken: 'sg-dup'
+  }, {
+    nowMs: () => 400,
+    shotTokenDamageAggregation: true,
+    weaponStats: {
+      shotgun: {
+        cooldownMs: 100,
+        magazineSize: 6,
+        pellets: 12,
+        singleHitFromPellets: false
+      }
+    },
+    weaponFalloff: { shotgun: [] },
+    resolveHitscanShot() {
+      return [
+        { target, damage: 17, hitType: 'body', pelletIndex: 0 },
+        { target, damage: 17, hitType: 'body', pelletIndex: 0 }
+      ];
+    },
+    applyDamageFromSource(_source, _target, damage, options) {
+      applied.push({ damage, hitType: options.hitType });
+      return { killed: false, damageApplied: damage };
+    },
+    broadcastDamageEvent(_room, ownerId, hitTarget, out, hitType, weaponId, shotToken, pelletIndex) {
+      broadcasts.push({ ownerId, hitTargetId: hitTarget.id, out, hitType, weaponId, shotToken, pelletIndex });
+    },
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(applied, [{ damage: 17, hitType: 'body' }]);
+  assert.deepEqual(broadcasts, [{
+    ownerId: 'p1',
+    hitTargetId: 't1',
+    out: { killed: false, damageApplied: 17 },
+    hitType: 'body',
+    weaponId: 'shotgun',
+    shotToken: 'sg-dup',
+    pelletIndex: 0
+  }]);
+});
+
+test('combat runtime still applies distinct pellet indexes once each when shot token aggregation is enabled', () => {
+  const target = { id: 't1', alive: true, x: 0, y: 1.7, z: -6 };
+  const player = {
+    id: 'p1',
+    alive: true,
+    x: 0,
+    y: 1.7,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    lastShotAt: {},
+    weaponId: 'shotgun'
+  };
+  const applied = [];
+  const broadcasts = [];
+  const room = {
+    canEntityUseWeapon() { return true; },
+    syncWeaponAmmoState() { return { ammoInMag: 6, reloadUntil: 0, reloadedFlashUntil: 0 }; },
+    reloadRemainingForWeapon() { return 0; },
+    beginWeaponReload() { throw new Error('should not reload'); },
+    consumeWeaponAmmo() {},
+    entityForward() { return { x: 0, y: 0, z: -1 }; },
+    getAliveEntities() { return [target]; },
+    getEntityById(id) { return id === target.id ? target : null; },
+    canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
+    worldCollidables() { return []; }
+  };
+
+  handleFire(room, player, {
+    weaponId: 'shotgun',
+    shotToken: 'sg-multi'
+  }, {
+    nowMs: () => 400,
+    shotTokenDamageAggregation: true,
+    weaponStats: {
+      shotgun: {
+        cooldownMs: 100,
+        magazineSize: 6,
+        pellets: 12,
+        singleHitFromPellets: false
+      }
+    },
+    weaponFalloff: { shotgun: [] },
+    resolveHitscanShot() {
+      return [
+        { target, damage: 17, hitType: 'body', pelletIndex: 0 },
+        { target, damage: 25, hitType: 'head', pelletIndex: 1 }
+      ];
+    },
+    applyDamageFromSource(_source, _target, damage, options) {
+      applied.push({ damage, hitType: options.hitType });
+      return { killed: false, damageApplied: damage };
+    },
+    broadcastDamageEvent(_room, ownerId, hitTarget, out, hitType, weaponId, shotToken, pelletIndex) {
+      broadcasts.push({ ownerId, hitTargetId: hitTarget.id, out, hitType, weaponId, shotToken, pelletIndex });
+    },
+    broadcastDeathRespawn() {},
+    canEquipWeaponId() { return true; },
+    playerEyeHeight: 1.7,
+    remoteMuzzleFlashHoldMs: 90
+  });
+
+  assert.deepEqual(applied, [
+    { damage: 17, hitType: 'body' },
+    { damage: 25, hitType: 'head' }
+  ]);
+  assert.equal(broadcasts.length, 2);
+  assert.deepEqual(broadcasts.map((entry) => entry.pelletIndex), [0, 1]);
 });
 
 test('combat runtime broadcasts authoritative shot effects for world-space tracers', () => {

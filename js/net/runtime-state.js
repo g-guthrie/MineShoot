@@ -12,14 +12,19 @@
 
         var snapshotMap = new Map();
         var remoteSnapshotTimelineMap = new Map();
+        var remoteFrameQueue = [];
+        var snapshotBaselineBySeq = new Map();
+        var snapshotBaselineOrder = [];
         var throwAckQueue = [];
         var throwRejectQueue = [];
         var throwableEventQueue = [];
         var shotEffectQueue = [];
+        var shotRejectQueue = [];
         var damageFeedbackQueue = [];
         var incomingDamageFeedbackQueue = [];
         var notices = [];
         var remoteSnapshotTiming = {
+            latestSnapshotSeq: 0,
             latestServerTime: 0,
             latestReceivedAt: 0,
             clockOffsetMs: 0,
@@ -41,6 +46,12 @@
             initialSpawnApplied: false,
             pendingWeaponLoadout: null,
             lastSentInputSample: null,
+            lastSentPlayerPos: null,
+            lastDriftSamplePos: null,
+            accumulatedPositionDriftWu: 0,
+            lastDriftSampleYaw: 0,
+            accumulatedYawDriftRad: 0,
+            snapshotAckSeq: 0,
             inputSeq: 1,
             lastInputSeqSent: 0,
             lastInputSeqAcked: 0,
@@ -65,6 +76,12 @@
             state.initialSpawnApplied = false;
             state.pendingWeaponLoadout = null;
             state.lastSentInputSample = null;
+            state.lastSentPlayerPos = null;
+            state.lastDriftSamplePos = null;
+            state.accumulatedPositionDriftWu = 0;
+            state.lastDriftSampleYaw = 0;
+            state.accumulatedYawDriftRad = 0;
+            state.snapshotAckSeq = 0;
             state.inputSeq = 1;
             state.lastInputSeqSent = 0;
             state.lastInputSeqAcked = 0;
@@ -76,13 +93,18 @@
             state.remoteFireZoneState = [];
             snapshotMap.clear();
             remoteSnapshotTimelineMap.clear();
+            remoteFrameQueue.length = 0;
+            snapshotBaselineBySeq.clear();
+            snapshotBaselineOrder.length = 0;
             throwAckQueue.length = 0;
             throwRejectQueue.length = 0;
             throwableEventQueue.length = 0;
             shotEffectQueue.length = 0;
+            shotRejectQueue.length = 0;
             damageFeedbackQueue.length = 0;
             incomingDamageFeedbackQueue.length = 0;
             notices.length = 0;
+            remoteSnapshotTiming.latestSnapshotSeq = 0;
             remoteSnapshotTiming.latestServerTime = 0;
             remoteSnapshotTiming.latestReceivedAt = 0;
             remoteSnapshotTiming.clockOffsetMs = 0;
@@ -152,10 +174,17 @@
             return isFinite(parsed) ? parsed : Number(fallback || 0);
         }
 
-        function recordRemoteSnapshotTiming(serverTime, receivedAt) {
+        function recordRemoteSnapshotTiming(serverTime, receivedAt, snapshotSeq) {
             var nextServerTime = Math.max(0, Math.round(Number(serverTime || 0)));
             var nextReceivedAt = Math.max(0, Math.round(Number(receivedAt || Date.now())));
+            var nextSnapshotSeq = Math.max(0, Math.floor(Number(snapshotSeq || 0)));
             if (!(nextServerTime > 0)) return remoteSnapshotTiming.latestServerTime;
+            if (nextSnapshotSeq > 0 && remoteSnapshotTiming.latestSnapshotSeq > 0 && nextSnapshotSeq <= remoteSnapshotTiming.latestSnapshotSeq) {
+                return remoteSnapshotTiming.latestServerTime;
+            }
+            if (!(nextSnapshotSeq > 0) && remoteSnapshotTiming.latestServerTime > 0 && nextServerTime <= remoteSnapshotTiming.latestServerTime) {
+                return remoteSnapshotTiming.latestServerTime;
+            }
             if (remoteSnapshotTiming.latestServerTime > 0 && nextServerTime > remoteSnapshotTiming.latestServerTime) {
                 var intervalMs = nextServerTime - remoteSnapshotTiming.latestServerTime;
                 if (intervalMs > 0) {
@@ -168,6 +197,9 @@
             remoteSnapshotTiming.clockOffsetMs = remoteSnapshotTiming.clockSampleCount > 0
                 ? Number(((remoteSnapshotTiming.clockOffsetMs * 0.8) + (sampleOffsetMs * 0.2)).toFixed(3))
                 : sampleOffsetMs;
+            if (nextSnapshotSeq > 0) {
+                remoteSnapshotTiming.latestSnapshotSeq = nextSnapshotSeq;
+            }
             remoteSnapshotTiming.clockSampleCount += 1;
             remoteSnapshotTiming.latestServerTime = Math.max(remoteSnapshotTiming.latestServerTime, nextServerTime);
             remoteSnapshotTiming.latestReceivedAt = Math.max(remoteSnapshotTiming.latestReceivedAt, nextReceivedAt);
@@ -200,6 +232,9 @@
             if (!Array.isArray(history)) {
                 history = [];
                 remoteSnapshotTimelineMap.set(id, history);
+            }
+            if (history.length > 0 && snapshotTime < Number(history[history.length - 1].serverTime || 0)) {
+                return history;
             }
             if (history.length > 0 && Number(history[history.length - 1].serverTime || 0) === snapshotTime) {
                 history[history.length - 1] = sample;
@@ -243,12 +278,148 @@
             return state.localPredictionSamples;
         }
 
+        function clonePlayerPosition(value) {
+            if (!value || typeof value !== 'object') return null;
+            var x = Number(value.x || 0);
+            var y = Number(value.y || 0);
+            var z = Number(value.z || 0);
+            if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return null;
+            return { x: x, y: y, z: z };
+        }
+
+        function normalizeAngle(rad) {
+            var value = Number(rad || 0);
+            while (value > Math.PI) value -= Math.PI * 2;
+            while (value < -Math.PI) value += Math.PI * 2;
+            return value;
+        }
+
+        function resetInputDriftTracking(position, yaw) {
+            state.lastSentPlayerPos = clonePlayerPosition(position);
+            state.lastDriftSamplePos = clonePlayerPosition(position);
+            state.accumulatedPositionDriftWu = 0;
+            state.lastDriftSampleYaw = Number(isFinite(Number(yaw)) ? yaw : 0);
+            state.accumulatedYawDriftRad = 0;
+            return {
+                position: state.lastSentPlayerPos,
+                yaw: state.lastDriftSampleYaw
+            };
+        }
+
+        function updateInputDriftTracking(position, yaw) {
+            var nextPosition = clonePlayerPosition(position);
+            if (nextPosition && state.lastDriftSamplePos) {
+                var dx = nextPosition.x - Number(state.lastDriftSamplePos.x || 0);
+                var dy = nextPosition.y - Number(state.lastDriftSamplePos.y || 0);
+                var dz = nextPosition.z - Number(state.lastDriftSamplePos.z || 0);
+                state.accumulatedPositionDriftWu += Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+            }
+            if (nextPosition) {
+                state.lastDriftSamplePos = nextPosition;
+            } else if (!state.lastDriftSamplePos) {
+                state.lastDriftSamplePos = null;
+            }
+            if (isFinite(Number(yaw))) {
+                var normalizedYaw = normalizeAngle(Number(yaw || 0));
+                if (isFinite(Number(state.lastDriftSampleYaw))) {
+                    state.accumulatedYawDriftRad += Math.abs(normalizeAngle(normalizedYaw - Number(state.lastDriftSampleYaw || 0)));
+                }
+                state.lastDriftSampleYaw = normalizedYaw;
+            }
+            return {
+                positionDriftWu: Number(state.accumulatedPositionDriftWu || 0),
+                yawDriftRad: Number(state.accumulatedYawDriftRad || 0)
+            };
+        }
+
+        function enqueueRemoteFrame(frame) {
+            if (!frame || typeof frame !== 'object') return remoteFrameQueue;
+            remoteFrameQueue.push(frame);
+            while (remoteFrameQueue.length > 8) {
+                remoteFrameQueue.shift();
+            }
+            return remoteFrameQueue;
+        }
+
+        function peekRemoteFrame() {
+            return remoteFrameQueue.length > 0 ? remoteFrameQueue[0] : null;
+        }
+
+        function shiftRemoteFrame() {
+            return remoteFrameQueue.length > 0 ? remoteFrameQueue.shift() : null;
+        }
+
+        function clearRemoteFrameQueue() {
+            remoteFrameQueue.length = 0;
+            return remoteFrameQueue;
+        }
+
+        function setSnapshotAckSeq(seq) {
+            var next = Math.max(0, Math.floor(Number(seq || 0)));
+            if (next <= 0) {
+                state.snapshotAckSeq = 0;
+                return state.snapshotAckSeq;
+            }
+            if (next > state.snapshotAckSeq) {
+                state.snapshotAckSeq = next;
+            }
+            return state.snapshotAckSeq;
+        }
+
+        function cloneSnapshotValue(value) {
+            if (Array.isArray(value)) {
+                return value.map(cloneSnapshotValue);
+            }
+            if (value && typeof value === 'object') {
+                var out = {};
+                for (var key in value) {
+                    if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+                    out[key] = cloneSnapshotValue(value[key]);
+                }
+                return out;
+            }
+            return value;
+        }
+
+        function cloneSnapshotMap(source) {
+            var sourceMap = source instanceof Map ? source : new Map();
+            var out = new Map();
+            sourceMap.forEach(function (entity, id) {
+                out.set(String(id || ''), cloneSnapshotValue(entity));
+            });
+            return out;
+        }
+
+        function rememberSnapshotBaseline(snapshotSeq, sourceMap) {
+            var seq = Math.max(0, Math.floor(Number(snapshotSeq || 0)));
+            if (!(seq > 0)) return null;
+            var cloned = cloneSnapshotMap(sourceMap);
+            snapshotBaselineBySeq.set(seq, cloned);
+            snapshotBaselineOrder.push(seq);
+            while (snapshotBaselineOrder.length > 16) {
+                var staleSeq = snapshotBaselineOrder.shift();
+                snapshotBaselineBySeq.delete(staleSeq);
+            }
+            return cloned;
+        }
+
+        function getSnapshotBaseline(snapshotSeq) {
+            return snapshotBaselineBySeq.get(Math.max(0, Math.floor(Number(snapshotSeq || 0)))) || null;
+        }
+
+        function clearSnapshotBaselines() {
+            snapshotBaselineBySeq.clear();
+            snapshotBaselineOrder.length = 0;
+            return snapshotBaselineBySeq;
+        }
+
         function queueRefs() {
             return {
                 throwAckQueue: throwAckQueue,
                 throwRejectQueue: throwRejectQueue,
                 throwableEventQueue: throwableEventQueue,
                 shotEffectQueue: shotEffectQueue,
+                shotRejectQueue: shotRejectQueue,
                 damageFeedbackQueue: damageFeedbackQueue,
                 incomingDamageFeedbackQueue: incomingDamageFeedbackQueue
             };
@@ -282,11 +453,23 @@
             setPendingWeaponLoadout: function (value) { state.pendingWeaponLoadout = value || null; },
             getLastSentInputSample: function () { return state.lastSentInputSample || null; },
             setLastSentInputSample: function (value) { state.lastSentInputSample = value || null; },
+            getLastSentPlayerPos: function () { return state.lastSentPlayerPos; },
+            getAccumulatedPositionDriftWu: function () { return Number(state.accumulatedPositionDriftWu || 0); },
+            getAccumulatedYawDriftRad: function () { return Number(state.accumulatedYawDriftRad || 0); },
+            updateInputDriftTracking: updateInputDriftTracking,
+            resetInputDriftTracking: resetInputDriftTracking,
+            getSnapshotAckSeq: function () { return state.snapshotAckSeq; },
+            setSnapshotAckSeq: setSnapshotAckSeq,
             getInputSeqHistory: function () { return state.inputSeqHistory; },
             setInputSeqHistory: function (value) { state.inputSeqHistory = Array.isArray(value) ? value : []; },
             getLocalPredictionSamples: function () { return state.localPredictionSamples; },
             pushLocalPredictionSample: pushLocalPredictionSample,
             clearLocalPredictionSamples: clearLocalPredictionSamples,
+            getRemoteFrameQueue: function () { return remoteFrameQueue; },
+            enqueueRemoteFrame: enqueueRemoteFrame,
+            peekRemoteFrame: peekRemoteFrame,
+            shiftRemoteFrame: shiftRemoteFrame,
+            clearRemoteFrameQueue: clearRemoteFrameQueue,
             getLastInputSeqSent: function () { return state.lastInputSeqSent; },
             setLastInputSeqSent: function (value) { state.lastInputSeqSent = Number(value || 0); },
             getLastInputSeqAcked: function () { return state.lastInputSeqAcked; },
@@ -310,9 +493,13 @@
             setSnapshotEntity: function (id, entity) { snapshotMap.set(id, entity); },
             deleteSnapshotEntity: function (id) { snapshotMap.delete(id); },
             replaceSnapshotMap: function (nextMap) { snapshotMap = nextMap instanceof Map ? nextMap : new Map(); },
+            rememberSnapshotBaseline: rememberSnapshotBaseline,
+            getSnapshotBaseline: getSnapshotBaseline,
+            clearSnapshotBaselines: clearSnapshotBaselines,
             recordRemoteSnapshotTiming: recordRemoteSnapshotTiming,
             getRemoteSnapshotTiming: function () {
                 return {
+                    latestSnapshotSeq: Number(remoteSnapshotTiming.latestSnapshotSeq || 0),
                     latestServerTime: Number(remoteSnapshotTiming.latestServerTime || 0),
                     latestReceivedAt: Number(remoteSnapshotTiming.latestReceivedAt || 0),
                     clockOffsetMs: Number(remoteSnapshotTiming.clockOffsetMs || 0),
@@ -333,6 +520,7 @@
             getThrowRejectQueue: function () { return throwRejectQueue; },
             getThrowableEventQueue: function () { return throwableEventQueue; },
             getShotEffectQueue: function () { return shotEffectQueue; },
+            getShotRejectQueue: function () { return shotRejectQueue; },
             getDamageFeedbackQueue: function () { return damageFeedbackQueue; },
             getIncomingDamageFeedbackQueue: function () { return incomingDamageFeedbackQueue; }
         };

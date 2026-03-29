@@ -10,6 +10,7 @@
 
         var lastSnapshotServerTime = 0;
         var lastSnapshotReceivedAt = 0;
+        var lastAcceptedSnapshotSeq = 0;
         var serverTimeOffsetMs = NaN;
         var snapshotIntervalMs = 0;
         var snapshotJitterMs = 0;
@@ -47,9 +48,15 @@
             return isFinite(serverTime) && serverTime > 0 ? serverTime : 0;
         }
 
+        function readSnapshotSeq(snapshotMeta) {
+            var seq = Math.floor(Number(snapshotMeta && snapshotMeta.snapshotSeq || 0));
+            return isFinite(seq) && seq > 0 ? seq : 0;
+        }
+
         function reset() {
             lastSnapshotServerTime = 0;
             lastSnapshotReceivedAt = 0;
+            lastAcceptedSnapshotSeq = 0;
             serverTimeOffsetMs = NaN;
             snapshotIntervalMs = 0;
             snapshotJitterMs = 0;
@@ -168,6 +175,7 @@
         function snapshotTimingState() {
             if (!isFinite(serverTimeOffsetMs) || lastSnapshotServerTime <= 0 || lastSnapshotReceivedAt <= 0) return null;
             return {
+                snapshotSeq: Math.max(0, Number(lastAcceptedSnapshotSeq || 0)),
                 serverTime: Number(lastSnapshotServerTime || 0),
                 receivedAt: Number(lastSnapshotReceivedAt || 0),
                 serverTimeOffsetMs: Number(serverTimeOffsetMs || 0)
@@ -192,6 +200,7 @@
             var snapshotState = snapshotTimingState();
             return {
                 snapshot: snapshotState ? {
+                    snapshotSeq: snapshotState.snapshotSeq,
                     serverTime: snapshotState.serverTime,
                     receivedAt: snapshotState.receivedAt,
                     serverTimeOffsetMs: snapshotState.serverTimeOffsetMs,
@@ -207,12 +216,33 @@
             };
         }
 
+        function canAcceptSnapshotTiming(snapshotTiming) {
+            var timing = snapshotTiming || {};
+            var serverTime = Number(timing.serverTime || 0);
+            var snapshotSeq = readSnapshotSeq(timing);
+            if (!isFinite(serverTime) || serverTime <= 0) return false;
+            if (snapshotSeq > 0 && lastAcceptedSnapshotSeq > 0 && snapshotSeq <= lastAcceptedSnapshotSeq) {
+                return false;
+            }
+            if (!(snapshotSeq > 0) && lastSnapshotServerTime > 0 && serverTime <= lastSnapshotServerTime) {
+                return false;
+            }
+            return true;
+        }
+
         function updateSnapshotTiming(snapshotTiming) {
             var timing = snapshotTiming || {};
             var serverTime = Number(timing.serverTime || 0);
+            var snapshotSeq = readSnapshotSeq(timing);
             var receivedAt = Number(timing.receivedAt || nowMs());
             if (!isFinite(serverTime) || serverTime <= 0) return false;
             if (!isFinite(receivedAt) || receivedAt <= 0) receivedAt = nowMs();
+            if (snapshotSeq > 0 && lastAcceptedSnapshotSeq > 0 && snapshotSeq <= lastAcceptedSnapshotSeq) {
+                return false;
+            }
+            if (!(snapshotSeq > 0) && lastSnapshotServerTime > 0 && serverTime <= lastSnapshotServerTime) {
+                return false;
+            }
             if (lastSnapshotReceivedAt > 0) {
                 var nextStepMs = Math.max(1, receivedAt - lastSnapshotReceivedAt);
                 if (snapshotIntervalMs <= 0) {
@@ -226,6 +256,9 @@
                     snapshotJitterMs = (Number(snapshotJitterMs || 0) * 0.65) + (Math.abs(nextStepMs - priorStepMs) * 0.35);
                     lastSnapshotStepMs = nextStepMs;
                 }
+            }
+            if (snapshotSeq > 0) {
+                lastAcceptedSnapshotSeq = snapshotSeq;
             }
             lastSnapshotServerTime = serverTime;
             lastSnapshotReceivedAt = receivedAt;
@@ -273,6 +306,7 @@
             authoritativeNowMs: authoritativeNowMs,
             toLocalClockTime: toLocalClockTime,
             connectionTimingState: connectionTimingState,
+            canAcceptSnapshotTiming: canAcceptSnapshotTiming,
             updateSnapshotTiming: updateSnapshotTiming,
             getLastAcceptedSelfAckAt: getLastAcceptedSelfAckAt,
             getPingSendTimer: getPingSendTimer,

@@ -1149,7 +1149,7 @@ test('game modes reveal below the launch row and the primary launch pill starts 
 
   elements['play-mode-tdm-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1183,7 +1183,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
 
   elements['sandbox-mode-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1198,7 +1198,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
   assert.equal(elements['menu-loadout-band'].hidden, false);
 });
 
-test('sandbox mode keeps the simple play launch label even when shared mode lookup falls back to ffa', async () => {
+test('sandbox mode keeps the offline sandbox label even when shared mode lookup falls back to ffa', async () => {
   const harness = await loadHarness({
     gameSharedOverride: {
       getGameMode(modeId) {
@@ -1214,7 +1214,7 @@ test('sandbox mode keeps the simple play launch label even when shared mode look
   elements['game-modes-toggle-btn'].click();
   elements['sandbox-mode-btn'].click();
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Offline Sandbox');
 });
 
 test('main room action creates a room and opens the party surface', async () => {
@@ -1823,7 +1823,7 @@ test('session-state updates preserve the selected launch mode', async () => {
 
   elements['game-modes-toggle-btn'].click();
   elements['play-mode-tdm-btn'].click();
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 
   harness.emitSessionState({
     runtimeReady: true,
@@ -1842,7 +1842,7 @@ test('session-state updates preserve the selected launch mode', async () => {
     launchContext: {}
   });
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
 });
 
 test('menu refresh button appears on menu surfaces and hides in the active match shell', async () => {

@@ -78,17 +78,21 @@
                 var endpoint = opts.wsEndpoint();
                 var ws = new WebSocket(endpoint);
                 opts.setWs(ws);
+                var socketRef = ws;
 
                 ws.addEventListener('open', function () {
+                    if (opts.getWs && opts.getWs() !== socketRef) return;
                     opts.setConnected(true);
                     if (opts.onTransportOpen) opts.onTransportOpen(ws);
                 });
 
                 ws.addEventListener('message', function (event) {
+                    if (opts.getWs && opts.getWs() !== socketRef) return;
                     opts.handleMessage(event.data);
                 });
 
                 ws.addEventListener('close', function () {
+                    if (opts.getWs && opts.getWs() !== socketRef) return;
                     opts.setConnected(false);
                     opts.setWs(null);
                     if (opts.onTransportClose) opts.onTransportClose();
@@ -99,6 +103,7 @@
                 });
 
                 ws.addEventListener('error', function () {
+                    if (opts.getWs && opts.getWs() !== socketRef) return;
                     opts.setConnected(false);
                     if (opts.onTransportError) opts.onTransportError();
                 });
@@ -137,16 +142,85 @@
             ));
         }
 
-        function shouldFlushInputImmediately(inputState, lastSentInputSample) {
+        function inputStatesEqual(a, b) {
+            var left = cloneInputState(a);
+            var right = cloneInputState(b);
+            if (!left && !right) return true;
+            if (!left || !right) return false;
+            return left.forward === right.forward &&
+                left.backward === right.backward &&
+                left.left === right.left &&
+                left.right === right.right &&
+                left.jump === right.jump &&
+                left.sprint === right.sprint &&
+                left.adsActive === right.adsActive;
+        }
+
+        function normalizeAngle(rad) {
+            var value = Number(rad || 0);
+            while (value > Math.PI) value -= Math.PI * 2;
+            while (value < -Math.PI) value += Math.PI * 2;
+            return value;
+        }
+
+        function getLinkMetrics() {
+            var timing = opts.getConnectionTimingState ? (opts.getConnectionTimingState() || null) : null;
+            return {
+                snapshotAckSeq: Math.max(0, Number(opts.getSnapshotAckSeq ? opts.getSnapshotAckSeq() : 0)),
+                linkRttMs: timing ? Math.max(0, Number(timing.rttMs || 0)) : 0,
+                linkJitterMs: timing ? Math.max(0, Number(timing.rttJitterMs || 0)) : 0
+            };
+        }
+
+        function serializeInputSample(sample) {
+            var entry = sample && typeof sample === 'object' ? sample : null;
+            return {
+                seq: Math.max(0, Number(entry && entry.seq || 0)),
+                dtMs: Math.max(1, Number(entry && entry.dtMs || 0)),
+                yaw: Number(entry && entry.yaw || 0),
+                pitch: Number(entry && entry.pitch || 0),
+                weaponId: String(entry && entry.weaponId || 'rifle'),
+                inputMode: 'intent',
+                forward: !!(entry && entry.inputState && entry.inputState.forward),
+                backward: !!(entry && entry.inputState && entry.inputState.backward),
+                left: !!(entry && entry.inputState && entry.inputState.left),
+                right: !!(entry && entry.inputState && entry.inputState.right),
+                jump: !!(entry && entry.inputState && entry.inputState.jump),
+                sprint: !!(entry && entry.inputState && entry.inputState.sprint),
+                adsActive: !!(entry && entry.inputState && entry.inputState.adsActive)
+            };
+        }
+
+        function shouldFlushInputImmediately(inputState, rotation, lastSentInputSample) {
             if (!lastSentInputSample) return false;
             var priorInputState = lastSentInputSample.inputState || null;
             if (!!(inputState && inputState.jump) && !(priorInputState && priorInputState.jump)) return true;
-            if (!!(inputState && inputState.adsActive) !== !!(priorInputState && priorInputState.adsActive)) return true;
-            if (!!(inputState && inputState.sprint) !== !!(priorInputState && priorInputState.sprint)) return true;
-            return hasMovementIntent(inputState) !== hasMovementIntent(priorInputState);
+            if (!inputStatesEqual(inputState, priorInputState)) return true;
+            var lookDeltaThresholdRad = (0.25 * Math.PI) / 180;
+            var yawDelta = Math.abs(normalizeAngle(Number(rotation && rotation.yaw || 0) - Number(lastSentInputSample.yaw || 0)));
+            var pitchDelta = Math.abs(Number(rotation && rotation.pitch || 0) - Number(lastSentInputSample.pitch || 0));
+            return yawDelta >= lookDeltaThresholdRad || pitchDelta >= lookDeltaThresholdRad || hasMovementIntent(inputState) !== hasMovementIntent(priorInputState);
         }
 
-        function sendInputSample(inputState, rotation, anim, inputSendInterval) {
+        function shouldFlushForAccumulatedDrift() {
+            var positionThresholdWu = 0.05;
+            var yawThresholdRad = (0.75 * Math.PI) / 180;
+            var positionDriftWu = Math.max(0, Number(opts.getAccumulatedPositionDriftWu ? opts.getAccumulatedPositionDriftWu() : 0));
+            var yawDriftRad = Math.max(0, Number(opts.getAccumulatedYawDriftRad ? opts.getAccumulatedYawDriftRad() : 0));
+            return positionDriftWu >= positionThresholdWu || yawDriftRad >= yawThresholdRad;
+        }
+
+        function resetInputDriftTracking(position, rotation) {
+            if (!opts.resetInputDriftTracking) return null;
+            return opts.resetInputDriftTracking(position, rotation && rotation.yaw);
+        }
+
+        function updateInputDriftTracking(position, rotation) {
+            if (!opts.updateInputDriftTracking) return null;
+            return opts.updateInputDriftTracking(position, rotation && rotation.yaw);
+        }
+
+        function sendInputSample(inputState, rotation, anim, inputSendInterval, playerPos) {
             var seq = opts.nextInputSeq();
             var sentAt = Date.now();
             var inputSeqHistory = opts.getInputSeqHistory();
@@ -160,8 +234,12 @@
                 dtMs: dtMs,
                 yaw: rotation.yaw || 0,
                 pitch: rotation.pitch || 0,
+                weaponId: (anim && anim.equippedWeaponId) ? String(anim.equippedWeaponId || '') : 'rifle',
+                movementLocked: !!(opts.getPlayerApi && opts.getPlayerApi() && opts.getPlayerApi().isMovementLocked && opts.getPlayerApi().isMovementLocked()),
                 inputState: cloneInputState(inputState)
             };
+            var recentSamples = inputSeqHistory.slice(Math.max(0, inputSeqHistory.length - 3)).concat([sentSample]);
+            var linkMetrics = getLinkMetrics();
             if (wsSend({
                 t: opts.getInputMessageType(),
                 seq: seq,
@@ -175,8 +253,12 @@
                 jump: !!(inputState && inputState.jump),
                 sprint: !!(inputState && inputState.sprint),
                 adsActive: !!(inputState && inputState.adsActive),
-                weaponId: (anim && anim.equippedWeaponId) ? anim.equippedWeaponId : 'rifle',
-                inputMode: 'intent'
+                weaponId: sentSample.weaponId,
+                inputMode: 'intent',
+                inputs: recentSamples.slice(-4).map(serializeInputSample),
+                snapshotAckSeq: linkMetrics.snapshotAckSeq,
+                linkRttMs: linkMetrics.linkRttMs,
+                linkJitterMs: linkMetrics.linkJitterMs
             })) {
                 opts.setLastInputSeqSent(seq);
                 if (opts.setLastSentInputSample) {
@@ -184,6 +266,7 @@
                 }
                 inputSeqHistory.push(sentSample);
                 if (inputSeqHistory.length > 96) inputSeqHistory.shift();
+                resetInputDriftTracking(playerPos, rotation);
             }
         }
 
@@ -215,16 +298,23 @@
             if (pendingRespawnInfo && pendingRespawnInfo.active && Date.now() >= Number(pendingRespawnInfo.localRespawnAt || pendingRespawnInfo.respawnAt || 0)) {
                 opts.setPendingRespawnInfo(null);
             }
-            opts.applyPendingSpawnSync();
+            var spawnSynced = opts.applyPendingSpawnSync ? !!opts.applyPendingSpawnSync() : false;
+            if (spawnSynced) {
+                resetInputDriftTracking(playerPos, rotation);
+            }
 
             var pingCadenceSec = Math.max(0.1, Number(opts.getPingCadenceSeconds ? opts.getPingCadenceSeconds() : 0.5));
             var pingSendTimer = Number(opts.getPingSendTimer ? opts.getPingSendTimer() : pingCadenceSec) - dt;
             if (opts.isConnected && opts.isConnected()) {
                 if (pingSendTimer <= 0) {
                     pingSendTimer = pingCadenceSec;
+                    var linkMetrics = getLinkMetrics();
                     wsSend({
                         t: opts.getPingMessageType ? opts.getPingMessageType() : 'ping',
-                        clientTime: Date.now()
+                        clientTime: Date.now(),
+                        snapshotAckSeq: linkMetrics.snapshotAckSeq,
+                        linkRttMs: linkMetrics.linkRttMs,
+                        linkJitterMs: linkMetrics.linkJitterMs
                     });
                 }
             } else {
@@ -239,16 +329,19 @@
             var playerApi = opts.getPlayerApi();
             var anim = (playerApi && playerApi.getAnimNetState) ? playerApi.getAnimNetState() : null;
             var inputState = (playerApi && playerApi.getNetworkInputState) ? playerApi.getNetworkInputState() : null;
+            updateInputDriftTracking(playerPos, rotation);
             var sendDue = inputSendTimer <= 0;
             var canSendInput = playerPos && rotation && (!opts.isConnected || opts.isConnected());
             var forceImmediate = canSendInput && shouldFlushInputImmediately(
                 inputState,
+                rotation,
                 opts.getLastSentInputSample ? opts.getLastSentInputSample() : null
             );
-            if (sendDue || forceImmediate) {
+            var forceFromDrift = canSendInput && shouldFlushForAccumulatedDrift();
+            if (sendDue || forceImmediate || forceFromDrift) {
                 inputSendTimer = sendDue ? (inputSendTimer + inputSendInterval) : inputSendInterval;
                 if (canSendInput) {
-                    sendInputSample(inputState, rotation, anim, inputSendInterval);
+                    sendInputSample(inputState, rotation, anim, inputSendInterval, playerPos);
                 }
             }
             opts.setInputSendTimer(inputSendTimer);

@@ -72,6 +72,78 @@ export function normalizeThrowIntent(rawIntent) {
   };
 }
 
+export function cloneSnapshotValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(cloneSnapshotValue);
+  }
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const key in value) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+      out[key] = cloneSnapshotValue(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function snapshotValueEqual(left, right) {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    for (let i = 0; i < left.length; i++) {
+      if (!snapshotValueEqual(left[i], right[i])) return false;
+    }
+    return true;
+  }
+  if (left && right && typeof left === 'object' && typeof right === 'object') {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    for (let i = 0; i < leftKeys.length; i++) {
+      const key = leftKeys[i];
+      if (!Object.prototype.hasOwnProperty.call(right, key)) return false;
+      if (!snapshotValueEqual(left[key], right[key])) return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function buildSnapshotEntityPatch(entity, baseEntity) {
+  const nextEntity = entity && typeof entity === 'object' ? entity : null;
+  if (!nextEntity || !nextEntity.id) return null;
+  const base = baseEntity && typeof baseEntity === 'object' ? baseEntity : null;
+  const patch = { id: String(nextEntity.id) };
+  let changed = !base;
+  const keys = new Set(Object.keys(nextEntity));
+  if (base) {
+    Object.keys(base).forEach((key) => keys.add(key));
+  }
+  keys.delete('id');
+  keys.forEach((key) => {
+    const nextValue = nextEntity[key];
+    const priorValue = base ? base[key] : undefined;
+    if (!base || !snapshotValueEqual(nextValue, priorValue)) {
+      patch[key] = cloneSnapshotValue(nextValue);
+      changed = true;
+    }
+  });
+  return changed ? patch : null;
+}
+
+export function applySnapshotEntityPatch(baseEntity, patch) {
+  const nextPatch = patch && typeof patch === 'object' ? patch : null;
+  if (!nextPatch || !nextPatch.id) return null;
+  const nextEntity = cloneSnapshotValue(baseEntity && typeof baseEntity === 'object' ? baseEntity : {});
+  nextEntity.id = String(nextPatch.id);
+  for (const key in nextPatch) {
+    if (!Object.prototype.hasOwnProperty.call(nextPatch, key) || key === 'id') continue;
+    nextEntity[key] = cloneSnapshotValue(nextPatch[key]);
+  }
+  return nextEntity;
+}
+
 export function normalizeWeaponLoadoutPayload(slot1, slot2) {
   const first = String(slot1 || '');
   const second = String(slot2 || '');
@@ -122,6 +194,7 @@ export const MSG_S2C = {
   WELCOME: 'welcome',
   SNAPSHOT: 'snapshot',
   SHOT_EFFECT: 'shot_effect',
+  SHOT_REJECT: 'shot_reject',
   THROW_SPAWN: 'throw_spawn',
   THROW_REJECT: 'throw_reject',
   THROW_IMPACT: 'throw_impact',
@@ -154,6 +227,9 @@ export const protocol = {
   sanitizeRoomId,
   cloneWorldFlags,
   buildExpectedWorldMeta,
+  cloneSnapshotValue,
+  buildSnapshotEntityPatch,
+  applySnapshotEntityPatch,
   normalizeVec3,
   normalizeThrowIntent,
   normalizeWeaponLoadoutPayload,

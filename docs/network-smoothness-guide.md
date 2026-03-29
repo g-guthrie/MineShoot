@@ -1,5 +1,7 @@
 # How We Made Movement And Shots Feel Smooth And Instant
 
+This document explains the intended behavior of the networking stack. It is not a proof that the current build still behaves exactly this way. Use the current networking tests and live measurements as the source of truth when this document and the runtime disagree.
+
 This explains the practical choices that made the game feel responsive online.
 
 The short version is:

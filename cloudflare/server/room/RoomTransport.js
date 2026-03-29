@@ -17,7 +17,6 @@ export function buildRoomStatePayload(room) {
     players: room.humanPlayerCount(),
     connectedPlayers: room.connectedHumanCount(),
     simPlayers: room.simulatedPlayerCount(),
-    bots: room.bots.size,
     softTarget: PUBLIC_ROOM_SOFT_TARGET,
     hardCap: PUBLIC_ROOM_HARD_CAP
   };
@@ -225,10 +224,24 @@ function handleWebSocketRequest(room, request, url) {
       entityStateById: new Map(),
       entityLastSentAtById: new Map()
     },
+    snapshotBaselineState: {
+      baselinesBySeq: new Map(),
+      baselineOrder: [],
+      lastFullSentAt: 0,
+      lastSentSnapshotSeq: 0
+    },
     snapshotBurstState: {
       untilAt: 0,
       lastSentAt: 0,
       entityIds: new Set()
+    },
+    snapshotAckSeq: 0,
+    linkRttMs: 0,
+    linkJitterMs: 0,
+    connectionQualityState: {
+      tier: 'good',
+      nonGoodCount: 0,
+      stableGoodSince: 0
     },
     lastProjectilesSerialized: '',
     lastFireZonesSerialized: ''

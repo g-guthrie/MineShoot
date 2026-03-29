@@ -162,6 +162,19 @@ test('weapon swap input recovers after the one-second switch lockout without a q
   assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
 });
 
+test('weapon swap input direct toggle uses the same lockout window', async () => {
+  const harness = await loadWeaponSwapHarness();
+
+  harness.timeState.now = 10;
+  const first = harness.api.triggerToggle();
+  harness.timeState.now = 60;
+  const second = harness.api.triggerToggle();
+
+  assert.equal(first.toggled, true);
+  assert.equal(second.reason, 'switch_lockout');
+  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper']);
+});
+
 test('weapon swap input counts horizontal-dominant swipe bursts', async () => {
   const harness = await loadWeaponSwapHarness();
 

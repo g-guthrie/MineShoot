@@ -164,6 +164,11 @@ function headlessGeometryBounds(geometry) {
   return null;
 }
 
+function shouldDecorCollide(geometry) {
+  const userData = geometry && geometry.userData;
+  return !!(userData && userData.collisionEnabled === true && userData.collisionDisabled !== true);
+}
+
 function createHeadlessMaterialLibrary() {
   return {
     getLambert(spec) { return createHeadlessMaterial(spec); },
@@ -359,11 +364,12 @@ export function createHeadlessRecorder() {
       },
       addDecor(x, y, z, geometry, material, rotY, rotX, rotZ) {
         const bounds = headlessGeometryBounds(geometry);
+        const solid = !!(bounds && shouldDecorCollide(geometry));
         const mesh = record(
-          bounds && !(geometry && geometry.userData && geometry.userData.collisionDisabled)
+          solid
             ? createRotatedBoxAabb(x, y, z, bounds.w, bounds.h, bounds.d, rotY || 0, rotX || 0)
             : null,
-          !!(bounds && !(geometry && geometry.userData && geometry.userData.collisionDisabled)),
+          solid,
           x,
           y,
           z,

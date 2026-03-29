@@ -77,6 +77,25 @@
             return out;
         }
 
+        function isCombatHitboxActive(hitbox) {
+            if (!hitbox || hitbox.visible === false) return false;
+            var userData = hitbox.userData || {};
+            if (userData.ownerType !== 'net') return true;
+            var net = netApi();
+            var netEntityId = String(userData.netEntityId || '');
+            if (!netEntityId) {
+                var targetId = String(userData.targetId || '');
+                if (targetId.indexOf('net:') === 0) netEntityId = targetId.slice(4);
+            }
+            if (!netEntityId || !net || !net.getRenderMap) return hitbox.visible !== false;
+            var renderMap = net.getRenderMap();
+            var render = renderMap && renderMap.get ? renderMap.get(netEntityId) : null;
+            if (!render) return false;
+            if (render.alive === false) return false;
+            if (render.group && render.group.visible === false) return false;
+            return true;
+        }
+
         function isNetCombatReady() {
             var net = netApi();
             if (!net || !net.isActive || !net.isActive()) return false;
@@ -157,10 +176,13 @@
             }
             if (isNetCombatReady() && net && net.getHitboxArray) {
                 appendArrayItems(combatHitboxesScratch, net.getHitboxArray() || []);
-                return combatHitboxesScratch;
-            }
-            if (isNetCombatReady() && netRemote && netRemote.getHitboxArray) {
+            } else if (isNetCombatReady() && netRemote && netRemote.getHitboxArray) {
                 appendArrayItems(combatHitboxesScratch, netRemote.getHitboxArray() || []);
+            }
+            for (var i = combatHitboxesScratch.length - 1; i >= 0; i--) {
+                if (!isCombatHitboxActive(combatHitboxesScratch[i])) {
+                    combatHitboxesScratch.splice(i, 1);
+                }
             }
             return combatHitboxesScratch;
         }

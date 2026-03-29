@@ -120,6 +120,84 @@ export function isBlockedAt(nextX, nextZ, feetY, boxes, options = {}) {
   return false;
 }
 
+function isCenterEmbeddedAt(nextX, nextZ, feetY, box, options = {}) {
+  const playerHeight = Number(options.playerHeight || PLAYER_HEIGHT);
+  const epsilon = Number(options.epsilon || DEFAULT_EPSILON);
+  if (!box || !box.min || !box.max) return false;
+  const headY = Number(feetY || 0) + playerHeight;
+  if (headY <= (box.min.y + epsilon) || Number(feetY || 0) >= (box.max.y - epsilon)) return false;
+  return (
+    Number(nextX || 0) > (Number(box.min.x || 0) + epsilon) &&
+    Number(nextX || 0) < (Number(box.max.x || 0) - epsilon) &&
+    Number(nextZ || 0) > (Number(box.min.z || 0) + epsilon) &&
+    Number(nextZ || 0) < (Number(box.max.z || 0) - epsilon)
+  );
+}
+
+function overlapDepthOnAxis(value, min, max) {
+  return Math.min(Math.abs(value - min), Math.abs(max - value));
+}
+
+export function resolvePenetrationXZ(x, z, feetY, boxes, options = {}) {
+  const playerHeight = Number(options.playerHeight || PLAYER_HEIGHT);
+  const playerRadius = Number(options.playerRadius || PLAYER_RADIUS);
+  const epsilon = Number(options.epsilon || DEFAULT_EPSILON);
+  if (!Array.isArray(boxes) || boxes.length === 0) {
+    return {
+      x: Number(x || 0),
+      z: Number(z || 0),
+      changed: false
+    };
+  }
+
+  let resolvedX = Number(x || 0);
+  let resolvedZ = Number(z || 0);
+  let changed = false;
+  const headY = Number(feetY || 0) + playerHeight;
+
+  for (let pass = 0; pass < 4; pass++) {
+    let passChanged = false;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      if (!box || !box.min || !box.max) continue;
+      if (headY <= (box.min.y + epsilon) || Number(feetY || 0) >= (box.max.y - epsilon)) continue;
+      if (!intersectsXZ(resolvedX, resolvedZ, playerRadius, box)) continue;
+
+      const nearestX = resolvedX < ((Number(box.min.x || 0) + Number(box.max.x || 0)) * 0.5)
+        ? (Number(box.min.x || 0) - playerRadius - epsilon)
+        : (Number(box.max.x || 0) + playerRadius + epsilon);
+      const nearestZ = resolvedZ < ((Number(box.min.z || 0) + Number(box.max.z || 0)) * 0.5)
+        ? (Number(box.min.z || 0) - playerRadius - epsilon)
+        : (Number(box.max.z || 0) + playerRadius + epsilon);
+      const xDepth = overlapDepthOnAxis(
+        clamp(resolvedX, Number(box.min.x || 0), Number(box.max.x || 0)),
+        Number(box.min.x || 0),
+        Number(box.max.x || 0)
+      );
+      const zDepth = overlapDepthOnAxis(
+        clamp(resolvedZ, Number(box.min.z || 0), Number(box.max.z || 0)),
+        Number(box.min.z || 0),
+        Number(box.max.z || 0)
+      );
+
+      if (xDepth <= zDepth) {
+        resolvedX = nearestX;
+      } else {
+        resolvedZ = nearestZ;
+      }
+      passChanged = true;
+      changed = true;
+    }
+    if (!passChanged) break;
+  }
+
+  return {
+    x: resolvedX,
+    z: resolvedZ,
+    changed
+  };
+}
+
 export function findLandingSurfaceY(x, z, currentFeetY, nextFeetY, boxes, getGroundHeightAt, options = {}) {
   const playerRadius = Number(options.playerRadius || PLAYER_RADIUS) * 0.9;
   const epsilon = Number(options.epsilon || DEFAULT_EPSILON);
@@ -252,6 +330,25 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
 
   let moveForward = 0;
   let moveRight = 0;
+  let startedBlocked = false;
+  for (let i = 0; i < boxes.length; i++) {
+    if (isCenterEmbeddedAt(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes[i], {
+      playerHeight,
+      epsilon
+    })) {
+      startedBlocked = true;
+      break;
+    }
+  }
+  const penetrationResolution = startedBlocked ? resolvePenetrationXZ(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes, {
+    playerHeight,
+    playerRadius,
+    epsilon
+  }) : { changed: false, x: Number(entity.x || 0), z: Number(entity.z || 0) };
+  if (startedBlocked && penetrationResolution.changed) {
+    entity.x = penetrationResolution.x;
+    entity.z = penetrationResolution.z;
+  }
   if (!movementLocked) {
     if (input.forward) moveForward += 1;
     if (input.backward) moveForward -= 1;
@@ -385,6 +482,7 @@ runtime.__MAYHEM_RUNTIME.GameShared.authoritativeMovement = {
   hasIntentInputMessage,
   intersectsXZ,
   isBlockedAt,
+  resolvePenetrationXZ,
   findLandingSurfaceY,
   findGroundProbeY,
   findCeilingY,

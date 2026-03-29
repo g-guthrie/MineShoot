@@ -32,7 +32,7 @@ Behavior:
   - Runs networked mode against the shared local worker room `local-shared`.
   - Only appears in local environments.
 - `OFFLINE SANDBOX`:
-  - Runs local simulation (bots/dev loop), no server authority.
+  - Runs locally in the browser with no server authority for the match itself.
 
 Menu/subtitle/debug text must always match the effective room ID for clarity.
 
@@ -77,7 +77,7 @@ Menu/subtitle/debug text must always match the effective room ID for clarity.
 - Terrain physics remains rollback-safe through `worldFlags.terrainPhysicsV2`.
 
 Out of scope for this phase:
-- Bot-specific locomotion updates are intentionally deferred.
+- Non-player entity locomotion updates are intentionally deferred.
 
 ## Current Public Interfaces
 - `GameWorld.create(scene, options?)`

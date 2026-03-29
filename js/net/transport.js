@@ -26,12 +26,15 @@
             closedByShutdown = false;
             clearReconnectTimer();
             ws = new WebSocket(opts.endpoint());
+            var socketRef = ws;
 
             ws.addEventListener('open', function () {
-                if (opts.onOpen) opts.onOpen(ws);
+                if (ws !== socketRef) return;
+                if (opts.onOpen) opts.onOpen(socketRef);
             });
 
             ws.addEventListener('message', function (event) {
+                if (ws !== socketRef) return;
                 if (opts.onMessage) opts.onMessage(event.data);
             });
 
@@ -46,6 +49,7 @@
             }
 
             ws.addEventListener('close', function (event) {
+                if (ws !== socketRef) return;
                 ws = null;
                 if (opts.onClose) opts.onClose(event);
                 if (closedByShutdown) return;
@@ -65,6 +69,7 @@
             });
 
             ws.addEventListener('error', function () {
+                if (ws !== socketRef) return;
                 if (opts.onError) opts.onError();
             });
         }

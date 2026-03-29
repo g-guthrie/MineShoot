@@ -6,7 +6,6 @@ import { tickProjectiles, tickFireZones } from '../../../cloudflare/server/room/
 function createRoom(overrides = {}) {
   return {
     players: new Map(),
-    bots: new Map(),
     projectiles: new Map(),
     fireZones: new Map(),
     worldCollidables() { return []; },

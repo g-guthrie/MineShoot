@@ -393,26 +393,12 @@
         }
 
         function buildAuthoritativeMotionRevision(state) {
-            if (!state || typeof state !== 'object') return '';
-            function precision(value) {
-                return Math.round(Number(value || 0) * 1000);
+            var shared = sharedApi();
+            var reconcile = shared && shared.authoritativeReconciliation ? shared.authoritativeReconciliation : null;
+            if (reconcile && reconcile.buildAuthoritativeMotionRevision) {
+                return reconcile.buildAuthoritativeMotionRevision(state);
             }
-            return [
-                String(state.id || ''),
-                precision(state.x),
-                precision(state.y),
-                precision(state.z),
-                precision(state.yaw),
-                precision(state.pitch),
-                precision(state.velocityY),
-                precision(state.jumpHoldTimer),
-                precision(state.moveSpeedNorm),
-                state.isGrounded === false ? '0' : '1',
-                state.jumpHeldLast ? '1' : '0',
-                state.sprinting ? '1' : '0',
-                state.alive === false ? '0' : '1',
-                String(state.weaponId || '')
-            ].join('|');
+            return state && typeof state === 'object' ? String(state.id || '') : '';
         }
 
         function getInputSyncState() {
@@ -496,6 +482,8 @@
                     dtMs: Math.max(1, Number(entry.dtMs || Math.round(((typeof opts.getInputSendInterval === 'function' ? opts.getInputSendInterval() : 0) || 0) * 1000))),
                     yaw: Number(entry.yaw || 0),
                     pitch: Number(entry.pitch || 0),
+                    weaponId: String(entry.weaponId || ''),
+                    movementLocked: !!entry.movementLocked,
                     inputState: entry.inputState ? {
                         forward: !!entry.inputState.forward,
                         backward: !!entry.inputState.backward,
@@ -592,6 +580,7 @@
             consumeThrowReject: function () { return shiftQueue(opts.throwRejectQueue); },
             consumeThrowableEvent: function () { return shiftQueue(opts.throwableEventQueue); },
             consumeShotEffect: function () { return shiftQueue(opts.shotEffectQueue); },
+            consumeShotReject: function () { return shiftQueue(opts.shotRejectQueue); },
             consumeDamageFeedback: function () { return shiftQueue(opts.damageFeedbackQueue); },
             consumeIncomingDamageFeedback: function () { return shiftQueue(opts.incomingDamageFeedbackQueue); }
         };

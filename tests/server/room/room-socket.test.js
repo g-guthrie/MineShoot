@@ -280,6 +280,37 @@ test('room socket throttles abusive input and eventually closes the socket', () 
   assert.equal(ws.closeCalls[0].code, 1008);
 });
 
+test('room socket rejects oversized redundant input batches before forwarding them', () => {
+  const ws = createSocket();
+  let inputCount = 0;
+  const room = {
+    roomName: 'global',
+    privateRoomConfig: { roomPhase: 'active' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleInput() {
+      inputCount += 1;
+    }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({
+    t: 'input',
+    inputs: [{ seq: 1 }, { seq: 2 }, { seq: 3 }, { seq: 4 }, { seq: 5 }]
+  }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 1000,
+    isPrivateMatchRoom: () => false,
+    roomPhaseActive: 'active',
+    msgC2s: { INPUT: 'input', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(inputCount, 0);
+  assert.equal(ws.closeCalls.length, 1);
+  assert.equal(ws.closeCalls[0].code, 1008);
+});
+
 test('room socket rejects oversized gameplay messages before parsing', () => {
   const ws = createSocket();
   let parsed = 0;
