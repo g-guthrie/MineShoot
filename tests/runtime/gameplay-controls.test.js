@@ -676,3 +676,25 @@ test('gameplay controls close the loaded docs runtime on escape', async () => {
 
   assert.equal(harness.calls.docsClose, 1);
 });
+
+test('gameplay controls widen the touch sprint wedge and bias it slightly clockwise', async () => {
+  const harness = await loadControlsHarness();
+  const sprintTest = harness.runtime.GameGameplayControls._test.resolveTouchSprintState;
+
+  assert.equal(typeof sprintTest, 'function');
+  assert.equal(sprintTest(0, -1), true);
+  assert.equal(sprintTest(0.18, -0.98), true);
+  assert.equal(sprintTest(0.3, -0.95), true);
+  assert.equal(sprintTest(-0.12, -0.99), true);
+  assert.equal(sprintTest(-0.2, -0.98), false);
+  assert.equal(sprintTest(0.58, -0.82), false);
+});
+
+test('gameplay controls treat a small touch-stick tap as a jump gesture', async () => {
+  const harness = await loadControlsHarness();
+  const jumpTapTest = harness.runtime.GameGameplayControls._test.isMoveTapJumpGesture;
+
+  assert.equal(typeof jumpTapTest, 'function');
+  assert.equal(jumpTapTest(100, 100, 108, 110), true);
+  assert.equal(jumpTapTest(100, 100, 117, 106), false);
+});

@@ -201,6 +201,10 @@ test('remote entities hide the live target immediately when alive state is clear
   assert.equal(render.group.visible, false);
   assert.equal(render.bodyHitbox.visible, false);
   assert.equal(render.headHitbox.visible, false);
+  assert.equal(render.snapshotHistory.length, 1);
+  assert.equal(render.snapshotHistory[0].alive, false);
+  assert.equal(render.snapshotHistory[0].x, 0);
+  assert.equal(render.snapshotHistory[0].z, 0);
 });
 
 test('remote entities keep sprint movement gaps in history when the speed-aware teleport threshold covers them', async () => {

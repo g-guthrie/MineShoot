@@ -323,9 +323,9 @@ canvas {
     pointer-events: none;
     opacity: 0.42;
     background: conic-gradient(
-        from -7.5deg,
-        rgba(70, 215, 118, 0.88) 0deg 15deg,
-        transparent 15deg 360deg
+        from -10deg,
+        rgba(70, 215, 118, 0.88) 0deg 30deg,
+        transparent 30deg 360deg
     );
     -webkit-mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);
     mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);

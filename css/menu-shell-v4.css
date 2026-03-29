@@ -1506,13 +1506,26 @@ body { cursor: default; }
 
     #menu-shell.menu-shell-v4 #menu-surface {
         max-height: 100vh;
-        border-radius: 18px;
+        border-radius: 14px;
         padding-bottom: env(safe-area-inset-bottom);
-        --pad-inline: 8px;
-        --gap-header: 4px;
-        --gap-body-top: 4px;
-        --gap-body-bottom: 8px;
-        --gap-loadout: 6px;
+        --pad-inline: 6px;
+        --gap-header: 3px;
+        --gap-body-top: 3px;
+        --gap-body-bottom: 6px;
+        --gap-loadout: 4px;
+        --r-card: 14px;
+        --pill-py-sm: 4px;
+        --pill-px-sm: 8px;
+        --pill-py-md: 5px;
+        --pill-px-md: 8px;
+        --pill-py-lg: 6px;
+        --pill-px-lg: 10px;
+        --pill-py-xl: 6px;
+        --pill-px-xl: 10px;
+        --pill-font-sm: 10px;
+        --pill-font-md: 10px;
+        --pill-font-lg: 11px;
+        --pill-font-xl: 12px;
     }
 
     /* ---- Header — compact single row ---- */
@@ -1592,9 +1605,7 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #menu-social-layout,
     #menu-shell.menu-shell-v4 #room-screen-grid,
     #menu-shell.menu-shell-v4 #private-room-roster-grid,
-    #menu-shell.menu-shell-v4 #private-room-unassigned,
-    #menu-shell.menu-shell-v4 #loadout-row,
-    #menu-shell.menu-shell-v4 #active-match-shell {
+    #menu-shell.menu-shell-v4 #private-room-unassigned {
         grid-template-columns: 1fr;
     }
 
@@ -1602,15 +1613,27 @@ body { cursor: default; }
         gap: 6px 7px;
     }
 
-    /* ---- Active match ---- */
+    /* ---- Active match — side-by-side pills + actions ---- */
 
     #menu-shell.menu-shell-v4 #active-match-shell {
-        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 6px;
     }
 
     #menu-shell.menu-shell-v4 #active-match-action-row {
-        padding: 10px 10px 8px;
-        gap: 8px;
+        padding: 8px;
+        gap: 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #active-match-action-row .btn-lg {
+        padding: 6px 10px;
+        font-size: 11px;
+        min-height: 0;
+    }
+
+    #menu-shell.menu-shell-v4 #play-btn {
+        min-height: 32px !important;
+        font-size: 13px !important;
     }
 
     #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] #menu-loadout-band {
@@ -1618,40 +1641,104 @@ body { cursor: default; }
         padding-bottom: 8px;
     }
 
+    #menu-shell.menu-shell-v4 #active-match-pill-grid {
+        gap: 4px 6px;
+    }
+
     #menu-shell.menu-shell-v4 .match-stat-pill {
-        max-width: min(100%, 200px);
-        padding: 6px 10px 5px;
+        max-width: none;
+        padding: 4px 8px 4px;
+        flex-basis: calc(50% - 6px);
     }
 
     #menu-shell.menu-shell-v4 .match-stat-pill::before {
-        margin-bottom: 2px;
-        font-size: 7px;
+        margin-bottom: 1px;
+        font-size: 6px;
         letter-spacing: 0.08em;
     }
 
     #menu-shell.menu-shell-v4 #active-match-mode-pill {
-        font-size: 11px;
+        font-size: 10px;
     }
 
     #menu-shell.menu-shell-v4 #active-match-context-pill,
     #menu-shell.menu-shell-v4 #active-match-primary-stat-pill,
     #menu-shell.menu-shell-v4 #active-match-secondary-stat-pill {
-        font-size: 10px;
+        font-size: 9px;
         line-height: 1.1;
     }
 
-    /* ---- Loadout ---- */
+    /* ---- Loadout — compact ---- */
+
+    #menu-shell.menu-shell-v4 #loadout-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
 
     #menu-shell.menu-shell-v4 #weapon-slot-panel,
     #menu-shell.menu-shell-v4 #throwable-slot-panel,
     #menu-shell.menu-shell-v4 #private-room-footer {
-        padding: 10px 10px 8px;
+        padding: 8px 8px 6px;
+        gap: 6px;
+    }
+
+    #menu-shell.menu-shell-v4 #weapon-slot-title,
+    #menu-shell.menu-shell-v4 #throwable-slot-title {
+        font-size: 10px;
     }
 
     #menu-shell.menu-shell-v4 #weapon-choice-grid,
     #menu-shell.menu-shell-v4 #throwable-choice-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 90px), 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 72px), 1fr));
+        gap: 4px;
+    }
+
+    #menu-shell.menu-shell-v4 .weapon-choice-btn,
+    #menu-shell.menu-shell-v4 .throwable-choice-btn {
+        padding: 4px 6px;
+        font-size: 9px;
+        line-height: 1.15;
+    }
+
+    #weapon-pick-flag {
+        font-size: 8px;
+    }
+
+    /* ---- Leave confirm — compact ---- */
+
+    #leave-confirm-panel,
+    #leave-room-confirm-panel {
+        width: min(280px, 100%);
+        padding: 16px 14px;
+    }
+
+    #leave-confirm-title,
+    #leave-room-confirm-title {
+        font-size: 16px;
+    }
+
+    #leave-confirm-copy,
+    #leave-room-confirm-copy {
+        font-size: 11px;
+        margin-top: 4px;
+    }
+
+    #leave-confirm-actions,
+    #leave-room-confirm-actions {
+        margin-top: 12px;
         gap: 6px;
+    }
+
+    #leave-confirm-panel .btn,
+    #leave-room-confirm-panel .btn {
+        padding: 7px 14px;
+        font-size: 11px;
+    }
+
+    /* ---- Card base — tighter radius + shadow ---- */
+
+    #menu-shell.menu-shell-v4 .card {
+        border-radius: 14px;
     }
 
     /* ---- Post-game ---- */

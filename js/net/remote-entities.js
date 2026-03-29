@@ -343,8 +343,50 @@
         }
     }
 
+    function captureRenderTransformSample(render, aliveOverride, sampleMeta) {
+        if (!render || !render.group) return null;
+        var stamp = Math.max(0, Number(sampleMeta && sampleMeta.receivedAt || Date.now()));
+        var serverTime = snapshotServerTimeMs(sampleMeta);
+        var groupPosition = render.group.position || { x: 0, y: 0, z: 0 };
+        var latest = render.lastPresentedTransform || null;
+        return {
+            serverTime: serverTime,
+            receivedAt: stamp,
+            x: latest ? Number(latest.x || 0) : Number(groupPosition.x || 0),
+            footY: latest ? Number(latest.footY || 0) : Number(groupPosition.y || 0),
+            z: latest ? Number(latest.z || 0) : Number(groupPosition.z || 0),
+            yaw: latest ? Number(latest.yaw || 0) : Number(render.group.rotation && render.group.rotation.y || 0),
+            pitch: latest ? Number(latest.pitch || 0) : Number(render.combatPitch || 0),
+            alive: aliveOverride !== undefined ? !!aliveOverride : (render.alive !== false),
+            moveSpeedNorm: latest ? Number(latest.moveSpeedNorm || 0) : Number(render.moveSpeedNorm || 0),
+            sprinting: latest ? !!latest.sprinting : !!render.sprinting,
+            fastBackpedal: latest ? !!latest.fastBackpedal : !!render.fastBackpedal,
+            movingForward: latest ? !!latest.movingForward : !!render.movingForward,
+            movingBackward: latest ? !!latest.movingBackward : !!render.movingBackward,
+            movingLeft: latest ? !!latest.movingLeft : !!render.movingLeft,
+            movingRight: latest ? !!latest.movingRight : !!render.movingRight,
+            isGrounded: latest ? (latest.isGrounded !== false) : (render.isGrounded !== false),
+            velocityY: latest ? Number(latest.velocityY || 0) : Number(render.velocityY || 0),
+            muzzleFlashUntil: latest ? Number(latest.muzzleFlashUntil || 0) : Number(render.muzzleFlashUntil || 0)
+        };
+    }
+
     function setRenderAliveState(render, alive) {
         if (!render) return false;
+        if (!alive) {
+            var deadSample = captureRenderTransformSample(render, false, {
+                receivedAt: Date.now()
+            });
+            if (deadSample) {
+                render.snapshotHistory = [deadSample];
+            }
+            render.freezePresentation = null;
+            render.freezePresentationAt = 0;
+            render.freezeBlendFrom = null;
+            render.freezeBlendStartAt = 0;
+            render.lossDelayPaddingMs = 0;
+            render.consecutiveMissedSnapshots = 0;
+        }
         render.alive = !!alive;
         if (render.group) render.group.visible = !!alive;
         if (render.actorVisual && render.actorVisual.setAlive) {

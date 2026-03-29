@@ -404,3 +404,30 @@ test('authoritative movement can step out of a trapped overlap instead of stayin
     max: { x: 0.4, y: 3, z: 1 }
   }]), false);
 });
+
+test('authoritative movement resolves edge-only overlap even when the player center starts outside the blocker', () => {
+  const entity = createEntity({
+    x: 0.78,
+    z: 0,
+    y: 1.6
+  });
+  const input = createMovementInputState();
+  input.right = true;
+
+  stepAuthoritativeMovement(entity, input, {
+    dtSec: 0.05,
+    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    collisionBoxes: [{
+      min: { x: -0.4, y: 0, z: -1 },
+      max: { x: 0.4, y: 3, z: 1 }
+    }],
+    getGroundHeightAt: flatGround,
+    movementLocked: false
+  });
+
+  assert.equal(isBlockedAt(entity.x, entity.z, 0, [{
+    min: { x: -0.4, y: 0, z: -1 },
+    max: { x: 0.4, y: 3, z: 1 }
+  }]), false);
+  assert.ok(entity.x > 0.89);
+});

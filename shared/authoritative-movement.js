@@ -330,24 +330,20 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
 
   let moveForward = 0;
   let moveRight = 0;
-  let startedBlocked = false;
+  const startPositionBlocked = isBlockedAt(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes, {
+    playerHeight,
+    playerRadius,
+    epsilon
+  });
+  let startedCenterEmbedded = false;
   for (let i = 0; i < boxes.length; i++) {
     if (isCenterEmbeddedAt(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes[i], {
       playerHeight,
       epsilon
     })) {
-      startedBlocked = true;
+      startedCenterEmbedded = true;
       break;
     }
-  }
-  const penetrationResolution = startedBlocked ? resolvePenetrationXZ(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes, {
-    playerHeight,
-    playerRadius,
-    epsilon
-  }) : { changed: false, x: Number(entity.x || 0), z: Number(entity.z || 0) };
-  if (startedBlocked && penetrationResolution.changed) {
-    entity.x = penetrationResolution.x;
-    entity.z = penetrationResolution.z;
   }
   if (!movementLocked) {
     if (input.forward) moveForward += 1;
@@ -372,6 +368,23 @@ export function stepAuthoritativeMovement(entity, inputState, options = {}) {
   } else {
     moveX = 0;
     moveZ = 0;
+  }
+
+  if (startPositionBlocked) {
+    const penetrationResolution = resolvePenetrationXZ(Number(entity.x || 0), Number(entity.z || 0), currentFeetY, boxes, {
+      playerHeight,
+      playerRadius,
+      epsilon
+    });
+    if (penetrationResolution.changed) {
+      const pushX = Number(penetrationResolution.x || 0) - Number(entity.x || 0);
+      const pushZ = Number(penetrationResolution.z || 0) - Number(entity.z || 0);
+      const pushAlignsWithIntent = ((pushX * moveX) + (pushZ * moveZ)) > epsilon;
+      if (startedCenterEmbedded || pushAlignsWithIntent) {
+        entity.x = penetrationResolution.x;
+        entity.z = penetrationResolution.z;
+      }
+    }
   }
 
   const startX = Number(entity.x || 0);
