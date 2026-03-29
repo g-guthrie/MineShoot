@@ -97,6 +97,30 @@ test('network state view reuses entity state arrays and wrappers across calls', 
   assert.equal(second[0].worldPos, render.group.position);
 });
 
+test('network state view does not expose hidden remote renders as lock targets or entity states', async () => {
+  const hiddenRender = {
+    id: 'usr_hidden',
+    kind: 'player',
+    username: 'HIDDEN',
+    classId: 'ffa',
+    hp: 90,
+    hpMax: 100,
+    armor: 20,
+    armorMax: 40,
+    alive: true,
+    bodyHitbox: { visible: false },
+    headHitbox: { visible: false },
+    group: {
+      position: new THREE.Vector3(1, 2, 3),
+      visible: false
+    }
+  };
+  const view = await loadStateView(new Map([['usr_hidden', hiddenRender]]));
+
+  assert.equal(view.getLockTargets().length, 0);
+  assert.equal(view.getEntityStateList().length, 0);
+});
+
 test('network state view uses shared interpolation clock helpers and entity constants defaults', async () => {
   const [interpCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/net/interpolation.js', import.meta.url), 'utf8'),

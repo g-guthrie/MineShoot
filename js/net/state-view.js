@@ -309,9 +309,20 @@
             };
         }
 
+        function isRenderTargetActive(render) {
+            if (!render || render.alive === false) return false;
+            if (render.group && render.group.visible === false) return false;
+            var hasCombatHitbox = !!(render.bodyHitbox || render.headHitbox);
+            if (!hasCombatHitbox) return true;
+            var bodyVisible = !!(render.bodyHitbox && render.bodyHitbox.visible !== false);
+            var headVisible = !!(render.headHitbox && render.headHitbox.visible !== false);
+            return bodyVisible || headVisible;
+        }
+
         function getEntityStateList() {
             entityStatesScratch.length = 0;
             readMap('getRenderMap').forEach(function (r) {
+                if (!isRenderTargetActive(r)) return;
                 var desc = r.entityStateDescriptor || (r.entityStateDescriptor = {
                     id: r.id,
                     kind: r.kind,
@@ -525,7 +536,7 @@
         function getLockTargets() {
             lockTargetsScratch.length = 0;
             readMap('getRenderMap').forEach(function (r) {
-                if (!r || !r.alive) return;
+                if (!isRenderTargetActive(r)) return;
                 var worldPos = typeof opts.getRenderCoreWorldPosition === 'function'
                     ? opts.getRenderCoreWorldPosition(r, r.lockTargetWorldPos || (r.lockTargetWorldPos = new THREE.Vector3()))
                     : null;
@@ -546,7 +557,7 @@
                 desc.hitbox = r.bodyHitbox || null;
                 desc.bodyHitbox = r.bodyHitbox || null;
                 desc.headHitbox = r.headHitbox || null;
-                desc.alive = true;
+                desc.alive = r.alive !== false;
                 desc.netEntityId = r.id;
                 lockTargetsScratch.push(desc);
             });

@@ -28,14 +28,13 @@
         var touchLookSurface = null;
         var touchMoveThumb = null;
         var touchMoveKnob = null;
+        var touchJumpBtn = null;
         var touchSwapBtn = null;
         var touchRollBtn = null;
         var touchMoveState = {
             pointerId: null,
             centerX: 0,
             centerY: 0,
-            startX: 0,
-            startY: 0,
             dx: 0,
             dy: 0,
             sprint: false,
@@ -48,7 +47,6 @@
         };
         var DEFAULT_TOUCH_LOOK_MULTIPLIER = 1.9;
         var IPHONE_TOUCH_LOOK_MULTIPLIER = DEFAULT_TOUCH_LOOK_MULTIPLIER * 1.25;
-        var MOVE_TAP_JUMP_MAX_TRAVEL_PX = 18;
         var touchJumpState = {
             pointerId: null,
             releaseTimer: 0
@@ -261,8 +259,6 @@
             touchMoveState.pointerId = null;
             touchMoveState.centerX = 0;
             touchMoveState.centerY = 0;
-            touchMoveState.startX = 0;
-            touchMoveState.startY = 0;
             touchMoveState.dx = 0;
             touchMoveState.dy = 0;
             touchMoveState.sprint = false;
@@ -278,8 +274,6 @@
         function beginMovePointer(event) {
             if (!event || touchMoveState.pointerId !== null || !touchLandscapeReady()) return;
             touchMoveState.pointerId = event.pointerId;
-            touchMoveState.startX = Number(event.clientX || 0);
-            touchMoveState.startY = Number(event.clientY || 0);
             if (touchMoveThumb && typeof touchMoveThumb.getBoundingClientRect === 'function') {
                 var rect = touchMoveThumb.getBoundingClientRect();
                 touchMoveState.centerX = rect.left + (rect.width * 0.5);
@@ -317,31 +311,9 @@
             syncTouchMovementState();
         }
 
-        function isMoveTapJumpGesture(startX, startY, endX, endY) {
-            var dx = Number(endX || 0) - Number(startX || 0);
-            var dy = Number(endY || 0) - Number(startY || 0);
-            return Math.sqrt((dx * dx) + (dy * dy)) <= MOVE_TAP_JUMP_MAX_TRAVEL_PX;
-        }
-
-        function triggerFullJumpPulse(pointerId) {
-            touchJumpState.pointerId = pointerId;
-            setJumpPressed(true);
-            scheduleFullJumpRelease(pointerId);
-        }
-
-        function endMovePointer(event, options) {
+        function endMovePointer(event) {
             if (!event || touchMoveState.pointerId !== event.pointerId) return;
-            var allowTapJump = !!(options && options.allowTapJump) && touchLandscapeReady();
-            var shouldTapJump = allowTapJump && isMoveTapJumpGesture(
-                touchMoveState.startX,
-                touchMoveState.startY,
-                Number(event.clientX || 0),
-                Number(event.clientY || 0)
-            );
             resetTouchMovementState();
-            if (shouldTapJump) {
-                triggerFullJumpPulse('move:' + String(event.pointerId || ''));
-            }
         }
 
         function beginLookPointer(event) {
@@ -411,6 +383,28 @@
                 touchJumpState.pointerId = null;
                 setJumpPressed(false);
             }, fullJumpHoldMs());
+        }
+
+        function beginJumpPointer(event) {
+            if (!event || touchJumpState.pointerId !== null || !touchLandscapeReady()) return;
+            touchJumpState.pointerId = event.pointerId;
+            if (touchJumpBtn && touchJumpBtn.setPointerCapture) {
+                try {
+                    touchJumpBtn.setPointerCapture(event.pointerId);
+                } catch (_err) {
+                    // no-op
+                }
+            }
+            setJumpPressed(true);
+            scheduleFullJumpRelease(event.pointerId);
+        }
+
+        function endJumpPointer(event) {
+            if (!event || touchJumpState.pointerId !== event.pointerId) return;
+            if (!touchJumpState.releaseTimer) {
+                touchJumpState.pointerId = null;
+                setJumpPressed(false);
+            }
         }
 
         function lockLandscapeOrientation() {
@@ -524,6 +518,10 @@
             var actionCluster = document.createElement('div');
             actionCluster.className = 'touch-action-cluster';
             actionCluster.innerHTML =
+                '<button type="button" class="touch-btn touch-btn-jump" data-touch-action="jump">' +
+                    '<span class="touch-btn-title">JUMP</span>' +
+                    '<span class="touch-btn-note">full jump</span>' +
+                '</button>' +
                 '<button type="button" class="touch-btn touch-btn-swap" data-touch-action="swap">' +
                     '<span class="touch-btn-title">SWAP</span>' +
                     '<span class="touch-btn-note">switch gun</span>' +
@@ -541,6 +539,7 @@
             touchLookSurface = look;
             touchMoveThumb = moveThumb;
             touchMoveKnob = moveThumb.querySelector('.touch-stick-knob');
+            touchJumpBtn = actionCluster.querySelector('[data-touch-action="jump"]');
             touchSwapBtn = actionCluster.querySelector('[data-touch-action="swap"]');
             touchRollBtn = actionCluster.querySelector('[data-touch-action="roll"]');
 
@@ -563,10 +562,10 @@
             });
             listen(moveThumb, 'pointerup', function (event) {
                 event.preventDefault();
-                endMovePointer(event, { allowTapJump: true });
+                endMovePointer(event);
             });
             listen(moveThumb, 'pointercancel', function (event) {
-                endMovePointer(event, { allowTapJump: false });
+                endMovePointer(event);
             });
 
             listen(look, 'pointerdown', function (event) {
@@ -587,6 +586,18 @@
                 endLookPointer(event);
             });
 
+            listen(touchJumpBtn, 'pointerdown', function (event) {
+                if (!virtualCapture || !touchLandscapeReady()) return;
+                event.preventDefault();
+                beginJumpPointer(event);
+            });
+            listen(touchJumpBtn, 'pointerup', function (event) {
+                event.preventDefault();
+                endJumpPointer(event);
+            });
+            listen(touchJumpBtn, 'pointercancel', function (event) {
+                endJumpPointer(event);
+            });
             listen(touchSwapBtn, 'pointerdown', function (event) {
                 if (!virtualCapture || !touchLandscapeReady()) return;
                 event.preventDefault();
@@ -1018,6 +1029,7 @@
                 touchLookSurface = null;
                 touchMoveThumb = null;
                 touchMoveKnob = null;
+                touchJumpBtn = null;
                 touchSwapBtn = null;
                 touchRollBtn = null;
                 deactivateTouchCaptureInternal();
@@ -1063,8 +1075,6 @@
                 clearTouchJumpReleaseTimer();
             },
             _resolveTouchSprintState: resolveTouchSprintState
-            ,
-            _isMoveTapJumpGesture: isMoveTapJumpGesture
         };
     }
 
@@ -1115,13 +1125,6 @@
                     activeGameplayControlsInstance &&
                     activeGameplayControlsInstance._resolveTouchSprintState &&
                     activeGameplayControlsInstance._resolveTouchSprintState(dx, dy)
-                );
-            },
-            isMoveTapJumpGesture: function (startX, startY, endX, endY) {
-                return !!(
-                    activeGameplayControlsInstance &&
-                    activeGameplayControlsInstance._isMoveTapJumpGesture &&
-                    activeGameplayControlsInstance._isMoveTapJumpGesture(startX, startY, endX, endY)
                 );
             }
         }

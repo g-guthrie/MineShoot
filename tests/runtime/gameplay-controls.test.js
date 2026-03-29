@@ -689,12 +689,3 @@ test('gameplay controls widen the touch sprint wedge and bias it slightly clockw
   assert.equal(sprintTest(-0.2, -0.98), false);
   assert.equal(sprintTest(0.58, -0.82), false);
 });
-
-test('gameplay controls treat a small touch-stick tap as a jump gesture', async () => {
-  const harness = await loadControlsHarness();
-  const jumpTapTest = harness.runtime.GameGameplayControls._test.isMoveTapJumpGesture;
-
-  assert.equal(typeof jumpTapTest, 'function');
-  assert.equal(jumpTapTest(100, 100, 108, 110), true);
-  assert.equal(jumpTapTest(100, 100, 117, 106), false);
-});
