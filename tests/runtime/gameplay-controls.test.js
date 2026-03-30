@@ -174,7 +174,12 @@ async function loadControlsHarness(options = {}) {
     document: documentObj,
     window: Object.assign(windowObj, {
       localStorage: {
-        getItem() { return null; },
+        getItem(key) {
+          if (options.localStorageValues && Object.prototype.hasOwnProperty.call(options.localStorageValues, key)) {
+            return options.localStorageValues[key];
+          }
+          return null;
+        },
         setItem() {},
         removeItem() {}
       }
@@ -675,6 +680,13 @@ test('gameplay controls close the loaded docs runtime on escape', async () => {
   });
 
   assert.equal(harness.calls.docsClose, 1);
+});
+
+test('gameplay controls default desktop auto fire to off until the user enables it', async () => {
+  const harness = await loadControlsHarness();
+
+  assert.equal(harness.controls.isDesktopAutoFireEnabled(), false);
+  assert.equal(harness.runtime.GameGameplayControls.isDesktopAutoFireEnabled(), false);
 });
 
 test('gameplay controls widen the touch sprint wedge and bias it slightly clockwise', async () => {

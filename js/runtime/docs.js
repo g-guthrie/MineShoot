@@ -1116,7 +1116,7 @@
                 'The roll keeps its opening direction until it ends, ignores new movement and jump presses until you release them, and you do not fire during it.',
                 'Sniper auto-scopes when you equip it, cannot fire until the quick scope-in finishes, and is forced into slot 2 by the loadout rules.',
                 'The bindings menu still shows ADS inputs, but in the current build only sniper uses a live scoped view.',
-                'Desktop red-reticle auto fire defaults on and can be toggled with ' + inputLabels.getBindingLabel('toggle_auto_fire', 'G') + '.',
+                'Desktop red-reticle auto fire defaults off and can be toggled with ' + inputLabels.getBindingLabel('toggle_auto_fire', 'G') + '.',
                 inputLabels.getBindingLabel('throwable', 'Q') + ' previews frag and molotov on hold, while plasma and knife are immediate no-preview throws.',
                 'Phone uses auto reload only. Desktop can still press ' + inputLabels.getBindingLabel('reload', 'R') + ' to start reloading early before the automatic refill delay ends.',
                 'The field manual is available in menu and in live gameplay on ' + inputLabels.getBindingLabel('open_manual', 'I') + '.'

@@ -52,7 +52,7 @@
             releaseTimer: 0
         };
         var touchOrientationState = 'landscape';
-        var desktopAutoFireEnabled = true;
+        var desktopAutoFireEnabled = false;
         var bound = false;
         var listenerRemovers = [];
 
@@ -148,13 +148,13 @@
 
         function loadDesktopAutoFirePreference() {
             var store = localStore();
-            if (!store || typeof store.getItem !== 'function') return true;
+            if (!store || typeof store.getItem !== 'function') return false;
             try {
                 var raw = store.getItem(DESKTOP_AUTO_FIRE_STORAGE_KEY);
-                if (raw == null) return true;
+                if (raw == null) return false;
                 return raw === '1';
             } catch (_err) {
-                return true;
+                return false;
             }
         }
 
@@ -1105,16 +1105,16 @@
             if (!activeGameplayControlsInstance) {
                 try {
                     var raw = window.localStorage ? window.localStorage.getItem(DESKTOP_AUTO_FIRE_STORAGE_KEY) : null;
-                    return raw == null ? true : raw === '1';
+                    return raw == null ? false : raw === '1';
                 } catch (_err) {
-                    return true;
+                    return false;
                 }
             }
             return !!(
                 activeGameplayControlsInstance &&
                 activeGameplayControlsInstance.isDesktopAutoFireEnabled &&
-                activeGameplayControlsInstance.isDesktopAutoFireEnabled()
-            );
+                    activeGameplayControlsInstance.isDesktopAutoFireEnabled()
+                );
         },
         _test: {
             getActiveHandle: function () {
