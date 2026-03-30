@@ -65,7 +65,7 @@ Source of truth: [shared/gameplay-tuning.js](/Users/gguthrie/Desktop/code bs/min
 | Internal id | Role | Cooldown ms | Reload ms | Mag | Body | Head | Movement |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `machinegun` | Auto Rifle | `133` | `1800` | `32` | `18` | `27` | `1.04x` |
-| `pistol` | Hand Cannon | `430` | `2050` | `10` | `60` | `90` | `1.10x` |
+| `pistol` | Hand Cannon | `430` | `2050` | `10` | `68` | `102` | `1.10x` |
 | `rifle` | Scout Rifle | `400` | `1850` | `14` | `50` | `78` | `0.96x` |
 | `shotgun` | Shotgun | `900` | `2100` | `5` | `20` pellet | `22` pellet | `1.00x` |
 | `sniper` | Sniper | `1800` | `2400` | `4` | `180` | `420` | `0.85x` |
@@ -86,10 +86,10 @@ The game now uses a simple linear falloff profile per weapon:
 
 First-pass live profiles:
 
-- Auto Rifle: `33 -> 42`, min `50%`
-- Hand Cannon: `32 -> 40`, min `33.3%`
-- Scout Rifle: `42 -> 65`, min `50%`
-- Shotgun: `6.8 -> 9.2`, min `0%`
+- Auto Rifle: `18 -> 36`, min `72%`
+- Hand Cannon: `7.5 -> 23`, min `60%`
+- Shotgun: `7.5 -> 12.5`, min `35%`
+- Scout Rifle: `24 -> 48`, min `72%`
 - Sniper: effectively no damage falloff inside normal combat distance
 
 ## Design Read

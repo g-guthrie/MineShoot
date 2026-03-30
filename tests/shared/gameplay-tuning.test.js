@@ -89,6 +89,10 @@ test('shared weapon helpers expose the selectable loadout order and falloff prof
   const machinegunFalloff = getWeaponFalloffProfile('machinegun');
   assert.deepEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
   assert.notEqual(machinegunFalloff, gameplayTuning.weaponFalloff.machinegun);
+  const shotgunFalloff = getWeaponFalloffProfile('shotgun');
+  assert.equal(shotgunFalloff.start, 7.5);
+  assert.equal(shotgunFalloff.end, 12.5);
+  assert.equal(shotgunFalloff.minScalar, 0.35);
 });
 
 test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs', () => {

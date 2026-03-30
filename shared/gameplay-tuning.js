@@ -148,10 +148,10 @@ export const gameplayTuning = {
     defaultWallhackRadius: 90
   },
   weaponFalloff: {
-    rifle: { start: 42, end: 65, minScalar: 0.5 },
-    pistol: { start: 32, end: 40, minScalar: 0.333 },
-    machinegun: { start: 33, end: 42, minScalar: 0.5 },
-    shotgun: { start: 6.8, end: 9.2, minScalar: 0.0 },
+    rifle: { start: 24, end: 48, minScalar: 0.72 },
+    pistol: { start: 7.5, end: 23, minScalar: 0.6 },
+    machinegun: { start: 18, end: 36, minScalar: 0.72 },
+    shotgun: { start: 7.5, end: 12.5, minScalar: 0.35 },
     sniper: { start: 9999, end: 10000, minScalar: 1.0 },
     missile: { start: 34, end: 34, minScalar: 1.0 }
   },
@@ -174,7 +174,7 @@ export const gameplayTuning = {
       bodyDamage: 50, headDamage: 78, maxRange: 90, pellets: 1, hipfireSpread: 0.024, adsSpread: 0, adsFovDeg: 56, adsMaxRange: 110,
       moveSpeedMultiplier: 0.96, adsMoveMultiplier: 0.75,
       hipfireBloomScale: 2.5, adsBloomScale: 1,
-      falloff: { start: 42, end: 65, minScalar: 0.5 },
+      falloff: { start: 24, end: 48, minScalar: 0.72 },
       aimProfile: { hipfire: { spread: 0.024, maxRange: 90 }, ads: { spread: 0, maxRange: 110 } },
       armorBufferMode: 'normal',
       presentation: {
@@ -214,9 +214,9 @@ export const gameplayTuning = {
     },
     pistol: {
       name: 'Hand Cannon', displayName: 'Hand Cannon', primitiveType: 'hitscan_single', automatic: false, cooldownMs: 430, reloadMs: 2050, magazineSize: 10,
-      bodyDamage: 60, headDamage: 90, maxRange: 52, pellets: 1, hipfireSpread: 0.105, adsSpread: 0.105, adsFovDeg: 56, adsMaxRange: 52,
+      bodyDamage: 68, headDamage: 102, maxRange: 52, pellets: 1, hipfireSpread: 0.105, adsSpread: 0.105, adsFovDeg: 56, adsMaxRange: 52,
       moveSpeedMultiplier: 1.1, adsMoveMultiplier: 0.9,
-      falloff: { start: 32, end: 40, minScalar: 0.333 },
+      falloff: { start: 7.5, end: 23, minScalar: 0.6 },
       aimProfile: { hipfire: { spread: 0.105, maxRange: 52 }, ads: { spread: 0.105, maxRange: 52 } },
       armorBufferMode: 'normal',
       presentation: {
@@ -258,7 +258,7 @@ export const gameplayTuning = {
       name: 'Auto Rifle', displayName: 'Auto Rifle', primitiveType: 'hitscan_single', automatic: true, cooldownMs: 133, reloadMs: 1800, magazineSize: 32,
       bodyDamage: 18, headDamage: 27, maxRange: 70, pellets: 1, hipfireSpread: 0.045, adsSpread: 0.035, adsFovDeg: 56, adsMaxRange: 78,
       moveSpeedMultiplier: 1.04, adsMoveMultiplier: 0.95,
-      falloff: { start: 33, end: 42, minScalar: 0.5 },
+      falloff: { start: 18, end: 36, minScalar: 0.72 },
       aimProfile: { hipfire: { spread: 0.045, maxRange: 70 }, ads: { spread: 0.035, maxRange: 78 } },
       armorBufferMode: 'normal',
       presentation: {
@@ -300,7 +300,7 @@ export const gameplayTuning = {
       name: 'Shotgun', displayName: 'Shotgun', primitiveType: 'hitscan_multi', automatic: false, cooldownMs: 900, reloadMs: 2100, magazineSize: 5,
       bodyDamage: 20, headDamage: 22, maxRange: 24, pellets: 12, hipfireSpread: 0.185, adsSpread: 0.185, adsFovDeg: 56, adsMaxRange: 24,
       moveSpeedMultiplier: 1.0, adsMoveMultiplier: 0.9,
-      falloff: { start: 6.8, end: 9.2, minScalar: 0.0 },
+      falloff: { start: 7.5, end: 12.5, minScalar: 0.35 },
       aimProfile: { hipfire: { spread: 0.185, maxRange: 24 }, ads: { spread: 0.185, maxRange: 24 } },
       armorBufferMode: 'normal',
       presentation: {
