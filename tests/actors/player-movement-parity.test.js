@@ -102,10 +102,19 @@ function createInputState(patch = {}) {
 }
 
 async function loadPlayerMovementHarness(options = {}) {
-  const [inputBindingsCode, inputLabelsCode, statusCode, code] = await Promise.all([
+  const [inputBindingsCode, inputLabelsCode, statusCode, reconciliationCode, loadoutCode, cameraCode, inputCode, sprintCode, visualCode, motionStateCode, replayCode, statusBridgeCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-reconciliation.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-loadout.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-camera.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-input.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-sprint.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-visual.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-motion-state.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-replay.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-status-bridge.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8')
   ]);
   const documentObj = new FakeDocument();
@@ -142,9 +151,13 @@ async function loadPlayerMovementHarness(options = {}) {
       },
       gameplayTuning: {
         movement: {},
+        network: options.networkTuning || {},
         weaponStats: configuredWeaponStats
       },
       entityConstants: {},
+      getNetworkTuning() {
+        return this.gameplayTuning.network || {};
+      },
       getWeaponStats(weaponId) {
         return this.gameplayTuning.weaponStats[weaponId] || null;
       },
@@ -314,6 +327,15 @@ async function loadPlayerMovementHarness(options = {}) {
   vm.runInContext(inputBindingsCode, context);
   vm.runInContext(inputLabelsCode, context);
   vm.runInContext(statusCode, context);
+  vm.runInContext(reconciliationCode, context);
+  vm.runInContext(loadoutCode, context);
+  vm.runInContext(cameraCode, context);
+  vm.runInContext(inputCode, context);
+  vm.runInContext(sprintCode, context);
+  vm.runInContext(visualCode, context);
+  vm.runInContext(motionStateCode, context);
+  vm.runInContext(replayCode, context);
+  vm.runInContext(statusBridgeCode, context);
   vm.runInContext(code, context);
 
   const player = sandbox.__MAYHEM_RUNTIME.GamePlayer;
@@ -803,6 +825,54 @@ test('player replay correction stays replay-first for a recent fast sprint windo
 
   assert.equal(corrected, true);
   assertPlayerMatchesExpected(harness.player, expectedCorrected);
+});
+
+test('player small moving correction eases toward the acknowledged state instead of snapping instantly', async () => {
+  const harness = await loadPlayerMovementHarness({
+    networkTuning: {
+      flags: {
+        adaptiveSelfReconciliation: true
+      },
+      selfReconciliation: {
+        movingBlendDistanceWu: 0.5,
+        movingBlendVerticalWu: 0.35,
+        movingCorrectionDecayMs: 100
+      }
+    }
+  });
+  const acknowledged = createExpectedEntity(harness.worldState.spawn);
+
+  harness.player.applyAuthoritativeMotion({
+    ...acknowledged,
+    z: acknowledged.z - 0.4
+  });
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+
+  const before = harness.player.getPosition();
+  const beforeError = Math.abs(Number(before.z || 0) - Number(acknowledged.z || 0));
+
+  const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
+    dt: 0.05,
+    allowReplayCorrection: true,
+    pendingInputCount: 0,
+    lastSentSeq: 1,
+    lastAckedSeq: 1,
+    latestPendingAgeMs: 0,
+    latestAckAgeMs: 0,
+    ackDrift: 0,
+    hasUnsentInputTail: false,
+    pendingInputs: [],
+    rttMs: 40,
+    rttJitterMs: 0
+  });
+
+  const after = harness.player.getPosition();
+  const afterError = Math.abs(Number(after.z || 0) - Number(acknowledged.z || 0));
+
+  assert.equal(corrected, true);
+  assert.equal(afterError < beforeError, true);
+  assert.equal(afterError > 0.01, true);
 });
 
 test('player replay correction respects the historical movement-locked state on queued inputs', async () => {

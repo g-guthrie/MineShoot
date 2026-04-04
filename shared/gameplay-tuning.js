@@ -54,9 +54,9 @@ export const gameplayTuning = {
   network: {
     flags: {
       adaptiveSelfReconciliation: true,
-      replayFirstSelfCorrection: false,
+      replayFirstSelfCorrection: true,
       remoteReceiveJitterBuffer: false,
-      snapshotDeltaCompression: false,
+      snapshotDeltaCompression: true,
       adaptiveSnapshotCadence: false,
       combatBurstSnapshots: true,
       shotTokenDamageAggregation: false
@@ -72,6 +72,9 @@ export const gameplayTuning = {
     selfReconciliation: {
       hardSnapDistanceWu: 4.5,
       hardSnapVerticalWu: 1.35,
+      movingBlendDistanceWu: 0.5,
+      movingBlendVerticalWu: 0.35,
+      movingCorrectionDecayMs: 100,
       idleReplayDistanceWu: 0.7,
       movingReplayDistanceWu: 1.25,
       emergencyReplayDistanceWu: 2.0,
@@ -92,25 +95,25 @@ export const gameplayTuning = {
     },
     remoteInterpolation: {
       historySize: 20,
-      defaultDelayMs: 78,
-      minDelayMs: 56,
-      maxDelayMs: 160,
-      intervalDelayScale: 1.6,
-      jitterDelayScale: 1.4,
-      delayIncreaseTargetWeight: 0.7,
-      delayDecreaseTargetWeight: 0.2,
-      freezeGapMinMs: 48,
-      freezeGapMaxMs: 160,
-      freezeGapIntervalScale: 1.25,
-      freezeGapJitterScale: 1.8,
-      freezeRecoveryBlendMs: 48,
+      defaultDelayMs: 50,
+      minDelayMs: 34,
+      maxDelayMs: 96,
+      intervalDelayScale: 1.0,
+      jitterDelayScale: 1.0,
+      delayIncreaseTargetWeight: 0.6,
+      delayDecreaseTargetWeight: 0.35,
+      freezeGapMinMs: 40,
+      freezeGapMaxMs: 120,
+      freezeGapIntervalScale: 1.1,
+      freezeGapJitterScale: 1.6,
+      freezeRecoveryBlendMs: 32,
       maxExtrapolationMinMs: 8,
       maxExtrapolationMaxMs: 36,
       maxExtrapolationIntervalScale: 0.28,
       maxExtrapolationJitterScale: 0.45,
       extrapolationDecay: 1.2,
       verticalBallisticEnabled: true,
-      animationStateBlendMs: 120,
+      animationStateBlendMs: 80,
       muzzleFlashPresentationMs: 70,
       serverOffsetSnapDeltaMs: 120,
       offsetLerpAlpha: 0.12,
@@ -140,12 +143,6 @@ export const gameplayTuning = {
     jumpReleaseMult: 0.42,
     gravity: 18,
     adsMoveMult: 0.4
-  },
-  enemy: {
-    fireRange: 34,
-    headshotNearRange: 12,
-    headshotMidRange: 22,
-    defaultWallhackRadius: 90
   },
   weaponFalloff: {
     rifle: { start: 24, end: 48, minScalar: 0.72 },
@@ -435,10 +432,6 @@ export function getMovementTuning() {
 
 export function getNetworkTuning() {
   return gameplayTuning.network || {};
-}
-
-export function getEnemyTuning() {
-  return gameplayTuning.enemy || {};
 }
 
 export function getThrowableMechanicsTuning() {
@@ -744,7 +737,6 @@ runtime.GameShared.getSurvivabilityTuning = getSurvivabilityTuning;
 runtime.GameShared.getAwarenessTuning = getAwarenessTuning;
 runtime.GameShared.getMovementTuning = getMovementTuning;
 runtime.GameShared.getNetworkTuning = getNetworkTuning;
-runtime.GameShared.getEnemyTuning = getEnemyTuning;
 runtime.GameShared.getThrowableMechanicsTuning = getThrowableMechanicsTuning;
 runtime.GameShared.getWeaponStats = getWeaponStats;
 runtime.GameShared.getWeaponPresentation = getWeaponPresentation;

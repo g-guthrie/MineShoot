@@ -83,57 +83,80 @@
         getIsConnected: function () { return connected; },
         getNowMs: function () { return Date.now(); }
     });
+    var accessApi = runtime.GameNetAccess && runtime.GameNetAccess.create
+        ? runtime.GameNetAccess.create(runtime, assemblyDeps, {})
+        : null;
+    var configApi = runtime.GameNetConfig || null;
+    var firePayloadApi = runtime.GameNetFirePayload || null;
+    var loadoutHelper = runtime.GameNetNetworkLoadout && runtime.GameNetNetworkLoadout.create
+        ? runtime.GameNetNetworkLoadout.create({
+            getNetState: function () { return netState; },
+            getProtocol: function () { return PROTOCOL; },
+            getConnectionTiming: function () { return connectionTiming; }
+        })
+        : null;
+    var snapshotBufferApi = runtime.GameNetSnapshotBuffer || null;
+    var snapshotApplyApi = runtime.GameNetNetworkSnapshotApply || null;
 
     function runtimeProfileApi() {
-        return runtime.GameRuntimeProfile || null;
+        return accessApi && accessApi.runtimeProfile ? accessApi.runtimeProfile() : (runtime.GameRuntimeProfile || null);
     }
 
     function playerApi() {
-        return runtime.GamePlayer || null;
+        return accessApi && accessApi.playerApi ? accessApi.playerApi() : (runtime.GamePlayer || null);
     }
 
     function playerCombatApi() {
-        return runtime.GamePlayerCombat || null;
+        return accessApi && accessApi.playerCombatApi ? accessApi.playerCombatApi() : (runtime.GamePlayerCombat || null);
     }
 
     function transportApi() {
-        return runtime.GameNetTransport || null;
+        return accessApi && accessApi.transportApi ? accessApi.transportApi() : (runtime.GameNetTransport || null);
     }
 
     function remoteSyncApi() {
-        return runtime.GameNetRemoteSync || null;
+        return accessApi && accessApi.remoteSyncApi ? accessApi.remoteSyncApi() : (runtime.GameNetRemoteSync || null);
     }
 
     function hitscanApi() {
-        return runtime.GameHitscan || null;
+        return accessApi && accessApi.hitscanApi ? accessApi.hitscanApi() : (runtime.GameHitscan || null);
     }
 
     function socketIdentity() {
+        if (accessApi && accessApi.socketIdentity) return accessApi.socketIdentity();
         if (GameNetAuth && GameNetAuth.getSocketIdentity) return GameNetAuth.getSocketIdentity();
         return GameNetAuth && GameNetAuth.getUser ? GameNetAuth.getUser() : null;
     }
 
     function currentUser() {
+        if (accessApi && accessApi.currentUser) return accessApi.currentUser();
         if (GameNetAuth && GameNetAuth.getCurrentUser) return GameNetAuth.getCurrentUser();
         return socketIdentity();
     }
 
     function activeWorldMeta() {
-        var worldApi = runtime.GameWorld || null;
-        return worldApi && worldApi.getWorldMeta ? worldApi.getWorldMeta() : null;
+        return accessApi && accessApi.activeWorldMeta ? accessApi.activeWorldMeta() : null;
     }
 
     function damagePointY(entityY) {
-        var points = sharedApi.entityPoints || {};
-        return points.entityDamagePointY ? points.entityDamagePointY(entityY) : (entityY + 1.06);
+        return accessApi && accessApi.damagePointY ? accessApi.damagePointY(entityY) : (entityY + 1.06);
     }
 
     function markerPointY(entityY) {
-        var points = sharedApi.entityPoints || {};
-        return points.entityMarkerPointY ? points.entityMarkerPointY(entityY) : (entityY + 2.25);
+        return accessApi && accessApi.markerPointY ? accessApi.markerPointY(entityY) : (entityY + 2.25);
     }
 
     function buildWsEndpoint() {
+        if (accessApi && accessApi.buildWsEndpoint) {
+            return accessApi.buildWsEndpoint({
+                roomId: netState.getRoomId,
+                socketPlayerId: GameNetAuth && GameNetAuth.getSocketPlayerId ? GameNetAuth.getSocketPlayerId() : null,
+                actorIdentity: GameNetAuth && GameNetAuth.getPartyIdentity ? GameNetAuth.getPartyIdentity() : null,
+                socketIdentity: socketIdentity(),
+                runtimeProfile: runtimeProfileApi(),
+                wsPath: WS_URL
+            });
+        }
         var profile = runtimeProfileApi();
         var endpoint = (profile && profile.resolveWsUrl)
             ? profile.resolveWsUrl(WS_URL)
@@ -158,6 +181,19 @@
     }
 
     function buildFirePayload(msgType, weaponId, shotToken) {
+        if (firePayloadApi && firePayloadApi.buildPayload) {
+            return firePayloadApi.buildPayload({
+                msgType: msgType,
+                weaponId: weaponId,
+                shotToken: shotToken,
+                fireIntent: hitscanApi() && hitscanApi().buildNetworkFireIntent
+                    ? hitscanApi().buildNetworkFireIntent(shotToken)
+                    : null,
+                player: playerApi(),
+                sharedApi: sharedApi,
+                connectionTiming: connectionTiming
+            });
+        }
         if (!weaponId) return null;
         var payload = {
             t: msgType,
@@ -251,14 +287,22 @@
     }
 
     function buildExpectedWorldMeta(roomName) {
+        if (configApi && configApi.buildExpectedWorldMeta) {
+            return configApi.buildExpectedWorldMeta(roomName || netState.getRoomId() || 'global');
+        }
         return PROTOCOL.buildExpectedWorldMeta(roomName || netState.getRoomId() || 'global', PROTOCOL.world);
     }
 
     function classStats(classId) {
+        if (configApi && configApi.classStats) return configApi.classStats(classId);
         return GameNetEntities.classStats(classId);
     }
 
     function pushNotice(text) {
+        if (loadoutHelper && loadoutHelper.pushNotice) {
+            loadoutHelper.pushNotice(text);
+            return;
+        }
         netState.pushNotice(text);
     }
 
@@ -272,6 +316,10 @@
     }
 
     function seedCommittedWeaponLoadoutPending() {
+        if (loadoutHelper && loadoutHelper.seedCommittedWeaponLoadoutPending) {
+            loadoutHelper.seedCommittedWeaponLoadoutPending();
+            return;
+        }
         var loadoutState = runtime.GameLoadoutState || null;
         if (!loadoutState || !loadoutState.getCommittedLoadout || !netState.setPendingWeaponLoadout) return;
         var committed = loadoutState.getCommittedLoadout();
@@ -283,6 +331,9 @@
     }
 
     function normalizeLoadoutPair(slots) {
+        if (loadoutHelper && loadoutHelper.normalizeLoadoutPair) {
+            return loadoutHelper.normalizeLoadoutPair(slots);
+        }
         if (!Array.isArray(slots)) return [];
         var out = [];
         var seen = {};
@@ -296,6 +347,9 @@
     }
 
     function pendingSelfWeaponLoadout(entity) {
+        if (loadoutHelper && loadoutHelper.pendingSelfWeaponLoadout) {
+            return loadoutHelper.pendingSelfWeaponLoadout(entity);
+        }
         var pending = netState.getPendingWeaponLoadout ? netState.getPendingWeaponLoadout() : null;
         if (!pending || !entity || entity.id !== netState.getSelfId()) return entity;
 
@@ -328,10 +382,15 @@
     }
 
     function consumeNotice() {
-        return netState.consumeNotice();
+        return loadoutHelper && loadoutHelper.consumeNotice
+            ? loadoutHelper.consumeNotice()
+            : netState.consumeNotice();
     }
 
     function translateSelfEntryState(entity) {
+        if (loadoutHelper && loadoutHelper.translateSelfEntryState) {
+            return loadoutHelper.translateSelfEntryState(entity);
+        }
         if (!entity || entity.id !== netState.getSelfId()) return entity;
         var entryUntil = Number(entity.matchEntryUntil || 0);
         if (!(entryUntil > 0)) return entity;
@@ -345,27 +404,33 @@
     }
 
     function gameplayNetworkTuning() {
+        if (configApi && configApi.gameplayNetworkTuning) return configApi.gameplayNetworkTuning();
         var shared = sharedApi || {};
         return shared.getNetworkTuning ? (shared.getNetworkTuning() || {}) : {};
     }
 
     function gameplayNetworkFlags() {
+        if (configApi && configApi.gameplayNetworkFlags) return configApi.gameplayNetworkFlags();
         return gameplayNetworkTuning().flags || {};
     }
 
     function replayFirstSelfCorrectionEnabled() {
+        if (configApi && configApi.replayFirstSelfCorrectionEnabled) return configApi.replayFirstSelfCorrectionEnabled();
         return gameplayNetworkFlags().replayFirstSelfCorrection !== false;
     }
 
     function remoteReceiveJitterBufferEnabled() {
+        if (configApi && configApi.remoteReceiveJitterBufferEnabled) return configApi.remoteReceiveJitterBufferEnabled();
         return gameplayNetworkFlags().remoteReceiveJitterBuffer !== false;
     }
 
     function snapshotDeltaCompressionEnabled() {
+        if (configApi && configApi.snapshotDeltaCompressionEnabled) return configApi.snapshotDeltaCompressionEnabled();
         return gameplayNetworkFlags().snapshotDeltaCompression !== false;
     }
 
     function pingCadenceMs() {
+        if (configApi && configApi.pingCadenceMs) return configApi.pingCadenceMs();
         var ping = gameplayNetworkTuning().ping || {};
         var raw = Number(ping.cadenceMs || 500);
         if (!isFinite(raw) || raw <= 0) return 500;
@@ -373,6 +438,9 @@
     }
 
     function cloneSnapshotValue(value) {
+        if (snapshotBufferApi && snapshotBufferApi.cloneSnapshotValue) {
+            return snapshotBufferApi.cloneSnapshotValue(value, PROTOCOL);
+        }
         if (PROTOCOL.cloneSnapshotValue) {
             return PROTOCOL.cloneSnapshotValue(value);
         }
@@ -382,6 +450,12 @@
     }
 
     function applySnapshotEntityPatch(baseEntity, patch) {
+        if (snapshotBufferApi && snapshotBufferApi.applySnapshotEntityPatch) {
+            return snapshotBufferApi.applySnapshotEntityPatch(baseEntity, patch, {
+                protocol: PROTOCOL,
+                cloneSnapshotValue: cloneSnapshotValue
+            });
+        }
         if (PROTOCOL.applySnapshotEntityPatch) {
             return PROTOCOL.applySnapshotEntityPatch(baseEntity, patch);
         }
@@ -397,6 +471,12 @@
     }
 
     function computeRemoteBufferDelayMs(frame) {
+        if (snapshotBufferApi && snapshotBufferApi.computeRemoteBufferDelayMs) {
+            return snapshotBufferApi.computeRemoteBufferDelayMs(frame, {
+                getConnectionTimingState: connectionTiming.connectionTimingState,
+                getRenderMap: function () { return GameNetEntities.getRenderMap(); }
+            });
+        }
         var timingState = connectionTiming.connectionTimingState ? connectionTiming.connectionTimingState() : null;
         var snapshotState = timingState && timingState.snapshot ? timingState.snapshot : null;
         var cadenceMs = Math.max(0, Number(snapshotState && snapshotState.intervalMs || 0));
@@ -451,6 +531,13 @@
     }
 
     function enqueueBufferedRemoteFrame(frame) {
+        if (snapshotBufferApi && snapshotBufferApi.enqueueBufferedRemoteFrame) {
+            return snapshotBufferApi.enqueueBufferedRemoteFrame(frame, {
+                nowMs: Date.now,
+                computeRemoteBufferDelayMs: computeRemoteBufferDelayMs,
+                enqueueRemoteFrame: netState.enqueueRemoteFrame
+            });
+        }
         if (!frame) return false;
         var receivedAt = Math.max(0, Number(frame.receivedAt || Date.now()));
         frame.readyAt = receivedAt + computeRemoteBufferDelayMs(frame);
@@ -459,6 +546,16 @@
     }
 
     function drainBufferedRemoteFrames() {
+        if (snapshotBufferApi && snapshotBufferApi.drainBufferedRemoteFrames) {
+            snapshotBufferApi.drainBufferedRemoteFrames({
+                enabled: remoteReceiveJitterBufferEnabled(),
+                nowMs: Date.now,
+                peekRemoteFrame: netState.peekRemoteFrame,
+                shiftRemoteFrame: netState.shiftRemoteFrame,
+                applyFrame: applyBufferedRemoteFrame
+            });
+            return;
+        }
         if (!remoteReceiveJitterBufferEnabled()) return;
         var now = Date.now();
         var nextFrame = netState.peekRemoteFrame ? netState.peekRemoteFrame() : null;
@@ -469,6 +566,21 @@
     }
 
     function updateRemoteFromSnapshot(entity, snapshotMeta) {
+        if (snapshotApplyApi && snapshotApplyApi.updateRemoteFromSnapshot) {
+            return snapshotApplyApi.updateRemoteFromSnapshot({
+                sceneRef: sceneRef,
+                protocol: PROTOCOL,
+                netState: netState,
+                connectionTiming: connectionTiming,
+                joinState: joinState,
+                GameNetEntities: GameNetEntities,
+                remoteReceiveJitterBufferEnabled: remoteReceiveJitterBufferEnabled(),
+                getRemoteFrameCollector: function () { return remoteFrameCollector; },
+                setRemoteFrameCollector: function (value) { remoteFrameCollector = value; },
+                pendingSelfWeaponLoadout: pendingSelfWeaponLoadout,
+                translateSelfEntryState: translateSelfEntryState
+            }, entity, snapshotMeta);
+        }
         if (!sceneRef) return;
         entity = pendingSelfWeaponLoadout(entity);
         entity = translateSelfEntryState(entity);
@@ -501,6 +613,13 @@
     }
 
     function decodeSnapshotEntities(entities, opts) {
+        if (snapshotApplyApi && snapshotApplyApi.decodeSnapshotEntities) {
+            return snapshotApplyApi.decodeSnapshotEntities({
+                protocol: PROTOCOL,
+                netState: netState,
+                snapshotDeltaCompressionEnabled: snapshotDeltaCompressionEnabled()
+            }, entities, opts);
+        }
         var patches = Array.isArray(opts && opts.entityPatches) ? opts.entityPatches : [];
         if (!(snapshotDeltaCompressionEnabled() && opts && opts.delta && patches.length > 0)) {
             return Array.isArray(entities) ? entities : [];
@@ -521,6 +640,22 @@
     }
 
     function applySnapshot(entities, projectiles, fireZones, opts) {
+        if (snapshotApplyApi && snapshotApplyApi.applySnapshot) {
+            return snapshotApplyApi.applySnapshot({
+                protocol: PROTOCOL,
+                netState: netState,
+                connectionTiming: connectionTiming,
+                GameNetEntities: GameNetEntities,
+                snapshotHelper: snapshotHelper,
+                remoteReceiveJitterBufferEnabled: remoteReceiveJitterBufferEnabled(),
+                snapshotDeltaCompressionEnabled: snapshotDeltaCompressionEnabled(),
+                getRemoteFrameCollector: function () { return remoteFrameCollector; },
+                setRemoteFrameCollector: function (value) { remoteFrameCollector = value; },
+                enqueueBufferedRemoteFrame: enqueueBufferedRemoteFrame,
+                pendingSelfWeaponLoadout: pendingSelfWeaponLoadout,
+                translateSelfEntryState: translateSelfEntryState
+            }, entities, projectiles, fireZones, opts);
+        }
         opts = opts || {};
         var shouldValidateSnapshotOrder = Number(opts.snapshotSeq || 0) > 0 || Number(opts.serverTime || 0) > 0;
         if (

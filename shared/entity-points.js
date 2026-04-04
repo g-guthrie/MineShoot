@@ -30,14 +30,6 @@ export function entityHeadHitboxYFromFeet(feetY) {
   return Number(feetY || 0) + HEAD_HITBOX_CENTER_OFFSET_Y;
 }
 
-export function entityBodyHitboxY(entityY) {
-  return entityBodyHitboxYFromFeet(entityFeetY(entityY));
-}
-
-export function entityHeadHitboxY(entityY) {
-  return entityHeadHitboxYFromFeet(entityFeetY(entityY));
-}
-
 export function entityDamagePointY(entityY) {
   return entityFeetY(entityY) + DAMAGE_POINT_OFFSET_Y;
 }
@@ -136,8 +128,6 @@ runtime.GameShared.entityPoints = {
   entityAimTargetY,
   entityBodyHitboxYFromFeet,
   entityHeadHitboxYFromFeet,
-  entityBodyHitboxY,
-  entityHeadHitboxY,
   entityDamagePointY,
   entityMarkerPointYFromFeet,
   entityMarkerPointY,

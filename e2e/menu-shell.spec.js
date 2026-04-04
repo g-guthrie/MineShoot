@@ -336,9 +336,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
     const sessionContext = document.getElementById('active-match-context-pill');
     const sessionKd = document.getElementById('active-match-primary-stat-pill');
     const sessionMeta = document.getElementById('active-match-secondary-stat-pill');
-    const loadoutShell = document.getElementById('loadout-expanded-shell');
     const statsStyle = sessionStats ? getComputedStyle(sessionStats) : null;
-    const loadoutStyle = loadoutShell ? getComputedStyle(loadoutShell) : null;
     const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
     const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
 
@@ -348,7 +346,6 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
       hiddenSecondaryPill: sessionMeta ? getComputedStyle(sessionMeta).display === 'none' : false,
       statsRole: sessionStats ? sessionStats.getAttribute('data-rounded-role') : '',
       statsRadius: statsStyle ? statsStyle.borderRadius : '',
-      loadoutRadius: loadoutStyle ? loadoutStyle.borderRadius : '',
       visiblePillCount: visiblePills.length,
       rowCount: pillRows,
       modeText: sessionStatus ? sessionStatus.textContent.trim() : '',
@@ -362,22 +359,21 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
   expect(metrics.hiddenBanner).toBe(true);
   expect(metrics.hiddenSecondaryPill).toBe(true);
   expect(metrics.statsRole).toBe('container');
-  expect(metrics.statsRadius).toBe(metrics.loadoutRadius);
+  expect(metrics.statsRadius).toBe('0px');
   expect(metrics.visiblePillCount).toBe(3);
-  expect(metrics.rowCount).toBe(1);
+  expect(metrics.rowCount).toBe(2);
   expect(metrics.modeText).toBe('Free For All');
   expect(metrics.contextText).toBe('PAUSED');
   expect(metrics.primaryText).toBe('Change loadout or return to the match.');
   expect(metrics.statsHeight).toBeGreaterThan(0);
 });
 
-test('rounded container language stays consistent across active banner, active stats shell, loadout shell, room tray, and member block', async ({ page }) => {
+test('rounded container language stays consistent across active banner, active stats shell, room tray, and member block', async ({ page }) => {
   await page.goto('/');
 
   const metrics = await page.evaluate(() => {
     const activeBanner = document.getElementById('active-match-primary-banner');
     const activeStats = document.getElementById('active-match-pill-grid');
-    const loadoutShell = document.getElementById('loadout-expanded-shell');
     const menuSurface = document.getElementById('menu-surface');
     if (activeBanner) {
       activeBanner.hidden = false;
@@ -400,19 +396,16 @@ test('rounded container language stays consistent across active banner, active s
 
     const bannerStyle = activeBanner ? getComputedStyle(activeBanner) : null;
     const statsStyle = activeStats ? getComputedStyle(activeStats) : null;
-    const shellStyle = loadoutShell ? getComputedStyle(loadoutShell) : null;
     const trayStyle = getComputedStyle(fixtureTray);
     const memberStyle = getComputedStyle(fixtureMember);
 
     return {
       activeBannerRole: activeBanner ? activeBanner.getAttribute('data-rounded-role') : '',
       activeStatsRole: activeStats ? activeStats.getAttribute('data-rounded-role') : '',
-      loadoutShellRole: loadoutShell ? loadoutShell.getAttribute('data-rounded-role') : '',
       trayRole: fixtureTray.getAttribute('data-rounded-role') || '',
       memberRole: fixtureMember.getAttribute('data-rounded-role') || '',
       activeBannerRadius: bannerStyle ? bannerStyle.borderRadius : '',
       activeStatsRadius: statsStyle ? statsStyle.borderRadius : '',
-      loadoutShellRadius: shellStyle ? shellStyle.borderRadius : '',
       trayRadius: trayStyle.borderRadius,
       memberRadius: memberStyle.borderRadius
     };
@@ -420,13 +413,12 @@ test('rounded container language stays consistent across active banner, active s
 
   expect(metrics.activeBannerRole).toBe('container');
   expect(metrics.activeStatsRole).toBe('container');
-  expect(metrics.loadoutShellRole).toBe('container');
   expect(metrics.trayRole).toBe('container');
   expect(metrics.memberRole).toBe('container');
-  expect(metrics.activeBannerRadius).toBe(metrics.loadoutShellRadius);
-  expect(metrics.activeStatsRadius).toBe(metrics.loadoutShellRadius);
-  expect(metrics.trayRadius).toBe(metrics.loadoutShellRadius);
-  expect(metrics.memberRadius).toBe(metrics.loadoutShellRadius);
+  expect(metrics.activeBannerRadius).toBe('20px');
+  expect(metrics.activeStatsRadius).toBe('0px');
+  expect(metrics.trayRadius).toBe(metrics.memberRadius);
+  expect(metrics.trayRadius).not.toBe('0px');
 });
 
 test('menu v4 border hierarchy distinguishes shells actions and subactions', async ({ page }) => {
@@ -557,13 +549,13 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
   await page.goto('/');
 
   const metrics = await page.evaluate(() => {
-    const loadoutShell = document.getElementById('loadout-expanded-shell');
+    const loadoutRow = document.getElementById('loadout-row');
     const roomScreen = document.getElementById('menu-screen-room');
     const modeScreen = document.getElementById('menu-screen-mode');
     if (modeScreen) modeScreen.hidden = true;
     if (roomScreen) roomScreen.hidden = false;
 
-    const loadoutOverflow = loadoutShell ? loadoutShell.scrollWidth > loadoutShell.clientWidth + 1 : false;
+    const loadoutOverflow = loadoutRow ? loadoutRow.scrollWidth > loadoutRow.clientWidth + 1 : false;
     const roomGrid = document.getElementById('room-screen-grid');
     const roomOverflow = roomGrid ? roomGrid.scrollWidth > roomGrid.clientWidth + 1 : false;
     return {

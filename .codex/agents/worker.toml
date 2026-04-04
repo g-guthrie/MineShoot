@@ -1,7 +1,7 @@
 name = "worker"
 description = "Bounded implementation agent for pre-scoped code changes where correctness still matters."
 model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
 developer_instructions = """

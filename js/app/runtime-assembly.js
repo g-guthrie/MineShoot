@@ -140,15 +140,3 @@ export function applyRuntimeAssembly(seedRuntime) {
     runtime.GamePlayerDeps = buildPlayerDeps(runtime);
     return runtime;
 }
-
-export const gameNetRuntimeScriptUrls = Object.freeze([
-    new URL('../net/join-state.js', import.meta.url),
-    new URL('../net/connection-timing.js', import.meta.url),
-    new URL('../net/runtime-state.js', import.meta.url),
-    new URL('../net/commands.js', import.meta.url),
-    new URL('../net/message-router.js', import.meta.url),
-    new URL('../net/runtime-core.js', import.meta.url),
-    new URL('../net/state-view.js', import.meta.url),
-    new URL('../net/effects.js', import.meta.url),
-    new URL('../net/network.js', import.meta.url)
-]);

@@ -17,7 +17,7 @@ test('play free for all hands off into a real free for all room and reaches the 
   await page.goto('/');
   await login(page, username);
 
-  await expect(page.locator('#primary-launch-btn')).toHaveText('Play Free For All');
+  await expect(page.locator('#primary-launch-btn')).toHaveText('Play');
   const matchmakingResponsePromise = page.waitForResponse((response) => {
     return response.url().includes('/api/matchmaking') && response.request().method() === 'POST';
   });
@@ -34,9 +34,13 @@ test('play free for all hands off into a real free for all room and reaches the 
   expect(String(payload.roomId || '')).not.toBe('global');
 
   await expect(page.locator('#active-match-shell')).toBeVisible();
+  await expect(page.locator('#active-match-mode-pill')).toHaveText('Free For All');
+  await expect(page.locator('#active-match-context-pill')).toHaveText('STAGING');
+  await expect(page.locator('#active-match-primary-stat-pill')).toHaveText('3');
   await expect(page.locator('#play-btn')).toHaveText('ENTER MATCH');
   await expect(page.locator('#back-mode-btn')).toHaveText('RETURN TO MENU');
-  await expect(page.locator('body')).toContainText('Goal: 10');
+  await expect(page.locator('#active-match-secondary-stat-pill')).toHaveAttribute('data-session-label', 'AUTO ENTER');
+  await expect(page.locator('#active-match-secondary-stat-pill')).toHaveText(/[0-9.]+s/);
   await expect(page.locator('body')).not.toContainText(/required before gameplay starts/i);
   await expect(page.locator('body')).not.toContainText(/network room join unavailable/i);
 });

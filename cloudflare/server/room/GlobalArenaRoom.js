@@ -1421,9 +1421,6 @@ export class GlobalArenaRoom extends DurableObject {
       this.startPublicMatchIfReady();
       this.tickEntityMatchEntries();
       this.tickPlayers(dtSec);
-      if (typeof tickBots === 'function') {
-        tickBots(this, dtSec);
-      }
       this.recordAliveEntityPoseHistories(this.currentNowMs());
       tickProjectiles(this, dtSec);
       tickFireZones(this, dtSec);

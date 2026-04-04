@@ -2,7 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
-import { gameNetRuntimeScriptUrls } from '../../js/app/runtime-assembly.js';
+
+function getGameNetRuntimeScriptUrls() {
+  return [
+    new URL('../../js/net/join-state.js', import.meta.url),
+    new URL('../../js/net/connection-timing.js', import.meta.url),
+    new URL('../../js/net/runtime-state.js', import.meta.url),
+    new URL('../../js/net/commands.js', import.meta.url),
+    new URL('../../js/net/message-router.js', import.meta.url),
+    new URL('../../js/net/runtime-core.js', import.meta.url),
+    new URL('../../js/net/state-view.js', import.meta.url),
+    new URL('../../js/net/effects.js', import.meta.url),
+    new URL('../../js/net/network.js', import.meta.url)
+  ];
+}
 
 async function loadScript(modulePath, sandbox) {
   const code = await fs.readFile(modulePath instanceof URL ? modulePath : new URL(modulePath, import.meta.url), 'utf8');
@@ -105,7 +118,7 @@ async function createNetHarness() {
     }
   };
 
-  const scriptUrls = gameNetRuntimeScriptUrls.filter((scriptUrl) => {
+  const scriptUrls = getGameNetRuntimeScriptUrls().filter((scriptUrl) => {
     const href = String(scriptUrl);
     return !href.endsWith('/js/net/runtime-core.js');
   });

@@ -21,6 +21,42 @@
         return runtimeRoot().GameGameplayControls || null;
     }
 
+    function reconciliationRuntimeApi() {
+        return runtimeRoot().GamePlayerReconciliation || null;
+    }
+
+    function loadoutRuntimeApi() {
+        return runtimeRoot().GamePlayerLoadout || null;
+    }
+
+    function cameraRuntimeApi() {
+        return runtimeRoot().GamePlayerCamera || null;
+    }
+
+    function inputRuntimeApi() {
+        return runtimeRoot().GamePlayerInput || null;
+    }
+
+    function sprintRuntimeApi() {
+        return runtimeRoot().GamePlayerSprint || null;
+    }
+
+    function visualRuntimeApi() {
+        return runtimeRoot().GamePlayerVisual || null;
+    }
+
+    function motionStateRuntimeApi() {
+        return runtimeRoot().GamePlayerMotionState || null;
+    }
+
+    function replayRuntimeApi() {
+        return runtimeRoot().GamePlayerReplay || null;
+    }
+
+    function statusBridgeRuntimeApi() {
+        return runtimeRoot().GamePlayerStatusBridge || null;
+    }
+
     function playerDeps() {
         return runtimeRoot().GamePlayerDeps || {};
     }
@@ -83,49 +119,53 @@
     }
 
     function selectableWeaponIds() {
-        var shared = sharedApi();
-        var selected = shared.getSelectableWeaponIds ? shared.getSelectableWeaponIds() : null;
-        return Array.isArray(selected) && selected.length ? selected : ['rifle'];
+        var helper = loadoutRuntimeApi();
+        return helper && helper.getSelectableWeaponIds
+            ? helper.getSelectableWeaponIds(sharedApi())
+            : ['rifle'];
+    }
+
+    function defaultWeaponLoadout() {
+        var helper = loadoutRuntimeApi();
+        return helper && helper.getDefaultWeaponLoadout
+            ? helper.getDefaultWeaponLoadout(sharedApi())
+            : selectableWeaponIds().slice(0, 2);
     }
 
     function weaponStatsFor(weaponId) {
-        var shared = sharedApi();
-        return shared.getWeaponStats ? shared.getWeaponStats(weaponId) : null;
+        var helper = loadoutRuntimeApi();
+        return helper && helper.getWeaponStats
+            ? helper.getWeaponStats(sharedApi(), weaponId)
+            : null;
     }
 
     function adsFovForWeapon(weaponId) {
-        var shared = sharedApi();
-        var weaponStats = weaponStatsFor(weaponId);
-        if (shared.resolveWeaponAdsFovDeg) {
-            return Number(shared.resolveWeaponAdsFovDeg(weaponStats || { id: weaponId })) || ADS_FOV;
-        }
-        return weaponId === 'sniper' ? SNIPER_SCOPE_FOV : ADS_FOV;
+        var helper = loadoutRuntimeApi();
+        return helper && helper.resolveAdsFov
+            ? helper.resolveAdsFov(sharedApi(), weaponId, ADS_FOV, SNIPER_SCOPE_FOV)
+            : ADS_FOV;
     }
 
     function weaponPresentationFor(weaponId) {
-        var shared = sharedApi();
-        return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
+        var helper = loadoutRuntimeApi();
+        return helper && helper.getWeaponPresentation
+            ? helper.getWeaponPresentation(sharedApi(), weaponId)
+            : null;
     }
 
     function normalizeSniperLoadoutOrder(slots) {
-        var next = Array.isArray(slots) ? slots.slice(0, 2) : [];
-        if (String(next[0] || '') !== 'sniper') return next;
-        if (String(next[1] || '') && String(next[1] || '') !== 'sniper') {
-            return [String(next[1] || ''), 'sniper'];
-        }
-        var candidates = defaultWeaponLoadout().concat(selectableWeaponIds());
-        for (var i = 0; i < candidates.length; i++) {
-            var id = String(candidates[i] || '');
-            if (!id || id === 'sniper') continue;
-            return [id, 'sniper'];
-        }
-        return next;
+        var helper = loadoutRuntimeApi();
+        return helper && helper.normalizeSniperLoadoutOrder
+            ? helper.normalizeSniperLoadoutOrder(slots, sharedApi())
+            : (Array.isArray(slots) ? slots.slice(0, 2) : []);
     }
 
     function ensureLoadoutSlots() {
         if (Array.isArray(loadoutSlots) && loadoutSlots.length) return loadoutSlots;
-        loadoutSlots = normalizeSniperLoadoutOrder(selectableWeaponIds().slice());
-        if (!loadoutSlots.length) loadoutSlots = ['rifle'];
+        var helper = loadoutRuntimeApi();
+        loadoutSlots = helper && helper.ensureLoadoutSlots
+            ? helper.ensureLoadoutSlots(loadoutSlots, sharedApi())
+            : ['rifle'];
         return loadoutSlots;
     }
 
@@ -152,14 +192,17 @@
     }
 
     function weaponMoveSpeedMultiplier(weaponId) {
-        var stats = weaponStatsFor(weaponId);
-        return Math.max(0.1, Number(stats && stats.moveSpeedMultiplier || 1));
+        var helper = loadoutRuntimeApi();
+        return helper && helper.weaponMoveSpeedMultiplier
+            ? helper.weaponMoveSpeedMultiplier(sharedApi(), weaponId)
+            : 1;
     }
 
     function weaponAdsMoveMultiplier(weaponId) {
-        var stats = weaponStatsFor(weaponId);
-        var movement = movementTuningApi();
-        return Math.max(0.1, Number(stats && stats.adsMoveMultiplier || movement.adsMoveMult || 0.4));
+        var helper = loadoutRuntimeApi();
+        return helper && helper.weaponAdsMoveMultiplier
+            ? helper.weaponAdsMoveMultiplier(sharedApi(), movementTuningApi(), weaponId)
+            : 0.4;
     }
 
     function effectiveRunSpeedForWeapon(weaponId) {
@@ -271,6 +314,9 @@
         sprinting: false,
         fastBackpedal: false
     };
+    var queuedMotionCorrection = (reconciliationRuntimeApi() && reconciliationRuntimeApi().createMotionCorrectionState)
+        ? reconciliationRuntimeApi().createMotionCorrectionState()
+        : { x: 0, y: 0, z: 0 };
     var inputStateScratch = {
         forward: false,
         backward: false,
@@ -305,54 +351,47 @@
     };
     var rollUntil = 0;
     function hasInputCapture() {
+        var helper = inputRuntimeApi();
+        if (helper && helper.hasInputCapture) {
+            return !!helper.hasInputCapture(inputHelperState());
+        }
         if (!!document.pointerLockElement) return true;
         var controlsApi = gameplayControlsApi();
         return !!(controlsApi && controlsApi.hasVirtualCapture && controlsApi.hasVirtualCapture());
     }
 
     function clearMovementKeys() {
-        keys.forward = false;
-        keys.backward = false;
-        keys.left = false;
-        keys.right = false;
-        keys.jump = false;
-        keys.sprint = false;
-        rollInputSuppressedUntilRelease.forward = false;
-        rollInputSuppressedUntilRelease.backward = false;
-        rollInputSuppressedUntilRelease.left = false;
-        rollInputSuppressedUntilRelease.right = false;
-        rollInputSuppressedUntilRelease.jump = false;
-        rollInputSuppressedUntilRelease.sprint = false;
-        activeRollInputState = null;
+        var helper = inputRuntimeApi();
+        if (helper && helper.clearMovementKeys) {
+            helper.clearMovementKeys(inputHelperState());
+            activeRollInputState = null;
+            return;
+        }
     }
 
     function setMovementInputState(nextState) {
-        if (!nextState || typeof nextState !== 'object') return buildCurrentInputState();
-        if (Object.prototype.hasOwnProperty.call(nextState, 'forward')) keys.forward = !!nextState.forward;
-        if (Object.prototype.hasOwnProperty.call(nextState, 'backward')) keys.backward = !!nextState.backward;
-        if (Object.prototype.hasOwnProperty.call(nextState, 'left')) keys.left = !!nextState.left;
-        if (Object.prototype.hasOwnProperty.call(nextState, 'right')) keys.right = !!nextState.right;
-        if (Object.prototype.hasOwnProperty.call(nextState, 'jump')) keys.jump = !!nextState.jump;
-        if (Object.prototype.hasOwnProperty.call(nextState, 'sprint')) {
-            keys.sprint = !!nextState.sprint;
+        var helper = inputRuntimeApi();
+        if (helper && helper.patchMovementInputState) {
+            var next = helper.patchMovementInputState(inputHelperState(), nextState);
             if (!keys.sprint) {
                 sprintCanceledUntilRelease = false;
                 clearSprintTemporaryResumeTimer();
                 sprintTemporarilyCanceledUntil = 0;
             }
+            return next;
         }
         return buildCurrentInputState();
     }
 
     function applyLookDelta(deltaX, deltaY, multiplier) {
-        if (!hasInputCapture()) return { yaw: yaw, pitch: pitch };
-        var view = viewHelper();
-        var blend = view && view.getScopeBlend ? view.getScopeBlend() : 0;
-        var sensitivityMult = isSniperScopeWeapon() ? SNIPER_SCOPE_SENSITIVITY_MULT : ADS_SENSITIVITY_MULT;
-        var sensitivity = MOUSE_SENSITIVITY * (1 - (blend * (1 - sensitivityMult))) * Math.max(0, Number(multiplier || 1));
-        yaw -= Number(deltaX || 0) * sensitivity;
-        pitch -= Number(deltaY || 0) * sensitivity;
-        pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+        var helper = inputRuntimeApi();
+        if (helper && helper.applyLookDelta) {
+            var state = inputHelperState();
+            var result = helper.applyLookDelta(state, deltaX, deltaY, multiplier);
+            yaw = Number(state.lookState.yaw || yaw);
+            pitch = Number(state.lookState.pitch || pitch);
+            return result;
+        }
         return { yaw: yaw, pitch: pitch };
     }
 
@@ -368,6 +407,119 @@
 
     function nowMs() {
         return Date.now();
+    }
+
+    function inputHelperState() {
+        return {
+            keys: keys,
+            rollInputSuppressedUntilRelease: rollInputSuppressedUntilRelease,
+            activeRollInputState: activeRollInputState,
+            currentInputState: inputStateScratch,
+            lookState: { yaw: yaw, pitch: pitch },
+            document: typeof document !== 'undefined' ? document : null,
+            controlsApi: gameplayControlsApi(),
+            hasVirtualCapture: function () {
+                var controlsApi = gameplayControlsApi();
+                return !!(controlsApi && controlsApi.hasVirtualCapture && controlsApi.hasVirtualCapture());
+            },
+            getScopeBlend: function () {
+                var view = viewHelper();
+                return view && view.getScopeBlend ? view.getScopeBlend() : 0;
+            },
+            isSniperScopeWeapon: function () { return isSniperScopeWeapon(); },
+            currentWeaponId: currentWeaponId,
+            mouseSensitivity: MOUSE_SENSITIVITY,
+            adsSensitivityMult: ADS_SENSITIVITY_MULT,
+            sniperScopeSensitivityMult: SNIPER_SCOPE_SENSITIVITY_MULT,
+            pitchLimit: PITCH_LIMIT,
+            isMovementInputBlocked: movementInputBlocked,
+            isRolling: function () { return isRolling(); },
+            isSprintInputActive: isSprintInputActive,
+            isScopeModeActive: isScopeModeActive,
+            sprintCanceledUntilRelease: sprintCanceledUntilRelease,
+            sprintTemporarilyCanceledUntil: sprintTemporarilyCanceledUntil,
+            sprintTemporaryResumeTimer: sprintTemporaryResumeTimer,
+            nowMs: nowMs
+        };
+    }
+
+    function sprintHelperState() {
+        return {
+            keys: keys,
+            sprinting: sprinting,
+            sprintCanceledUntilRelease: sprintCanceledUntilRelease,
+            sprintTemporarilyCanceledUntil: sprintTemporarilyCanceledUntil,
+            sprintTemporaryResumeTimer: sprintTemporaryResumeTimer
+        };
+    }
+
+    function syncSprintStateFrom(state) {
+        if (!state || typeof state !== 'object') return;
+        sprinting = !!state.sprinting;
+        sprintCanceledUntilRelease = !!state.sprintCanceledUntilRelease;
+        sprintTemporarilyCanceledUntil = Number(state.sprintTemporarilyCanceledUntil || 0);
+        sprintTemporaryResumeTimer = state.sprintTemporaryResumeTimer || 0;
+    }
+
+    function visualHelperState() {
+        return {
+            actorVisual: actorVisual,
+            avatarRigApi: avatarRigApi,
+            avatarGroup: avatarGroup,
+            avatarAliveVisible: avatarAliveVisible,
+            hitboxVisible: hitboxVisible,
+            currentWeaponId: currentWeaponId,
+            playerX: playerX,
+            playerZ: playerZ,
+            posY: posY,
+            eyeHeight: eyeHeight(),
+            yaw: yaw,
+            rolling: isRolling(),
+            scopeBlend: (function () {
+                var view = viewHelper();
+                return view && view.getScopeBlend ? view.getScopeBlend() : 0;
+            })(),
+            sniperMode: isSniperScopeWeapon()
+        };
+    }
+
+    function motionStateView() {
+        return {
+            x: playerX,
+            y: posY,
+            z: playerZ,
+            yaw: yaw,
+            pitch: pitch,
+            velocityY: velocityY,
+            isGrounded: isGrounded,
+            jumpHoldTimer: jumpHoldTimer,
+            jumpHeldLast: jumpPressedLastFrame,
+            airborneSprintCarry: airborneSprintCarry,
+            moveSpeedNorm: lastMoveSpeedNorm,
+            sprinting: sprinting,
+            fastBackpedal: fastBackpedal,
+            rollUntil: rollUntil,
+            activeRollInputState: activeRollInputState
+        };
+    }
+
+    function applyMotionStateView(state) {
+        if (!state || typeof state !== 'object') return;
+        playerX = Number(state.x || 0);
+        posY = Number(state.y || 0);
+        playerZ = Number(state.z || 0);
+        yaw = Number(state.yaw || 0);
+        pitch = Number(state.pitch || 0);
+        velocityY = Number(state.velocityY || 0);
+        isGrounded = !!state.isGrounded;
+        jumpHoldTimer = Number(state.jumpHoldTimer || 0);
+        jumpPressedLastFrame = !!state.jumpHeldLast;
+        airborneSprintCarry = !!state.airborneSprintCarry;
+        lastMoveSpeedNorm = Number(state.moveSpeedNorm || 0);
+        sprinting = !!state.sprinting;
+        fastBackpedal = !!state.fastBackpedal;
+        rollUntil = Number(state.rollUntil || 0);
+        activeRollInputState = state.activeRollInputState || null;
     }
 
     function worldHelper() {
@@ -405,15 +557,24 @@
     }
 
     function isStunned(now) {
-        return statusApi ? statusApi.isStunned(now) : false;
+        var helper = statusBridgeRuntimeApi();
+        return helper && helper.isStunned
+            ? !!helper.isStunned(statusApi, now, { nowMs: nowMs })
+            : (statusApi ? statusApi.isStunned(now) : false);
     }
 
     function isSpawnShielded(now) {
-        return statusApi ? statusApi.isSpawnShielded(now) : false;
+        var helper = statusBridgeRuntimeApi();
+        return helper && helper.isSpawnShielded
+            ? !!helper.isSpawnShielded(statusApi, now, { nowMs: nowMs })
+            : (statusApi ? statusApi.isSpawnShielded(now) : false);
     }
 
     function isActionRestricted(actionType, now) {
-        return statusApi ? statusApi.isActionRestricted(actionType, now) : false;
+        var helper = statusBridgeRuntimeApi();
+        return helper && helper.isActionRestricted
+            ? !!helper.isActionRestricted(statusApi, actionType, now, { nowMs: nowMs })
+            : (statusApi ? statusApi.isActionRestricted(actionType, now) : false);
     }
 
     function isMovementAnimationLocked() {
@@ -421,15 +582,25 @@
     }
 
     function isMovementLocked(now) {
-        return statusApi ? statusApi.isMovementLocked(now) : false;
+        var helper = statusBridgeRuntimeApi();
+        return helper && helper.isMovementLocked
+            ? !!helper.isMovementLocked(statusApi, now, { nowMs: nowMs })
+            : (statusApi ? statusApi.isMovementLocked(now) : false);
     }
 
     function movementInputBlocked() {
+        var helper = statusBridgeRuntimeApi();
+        if (helper && helper.deriveMovementBlocked) {
+            return !!helper.deriveMovementBlocked(statusApi, undefined, { nowMs: nowMs }) || isMovementAnimationLocked();
+        }
         return isMovementLocked() || isMovementAnimationLocked();
     }
 
     function isActionLocked(now) {
-        return statusApi ? statusApi.isActionLocked(now) : false;
+        var helper = statusBridgeRuntimeApi();
+        return helper && helper.isActionLocked
+            ? !!helper.isActionLocked(statusApi, now, { nowMs: nowMs })
+            : (statusApi ? statusApi.isActionLocked(now) : false);
     }
 
     function canUseWeapon(now) {
@@ -445,29 +616,47 @@
     }
 
     function clearExpiredStatusState(now) {
-        if (statusApi && statusApi.clearExpiredStatusState) {
-            statusApi.clearExpiredStatusState(now);
+        var helper = statusBridgeRuntimeApi();
+        if (helper && helper.clearExpiredStatusState) {
+            helper.clearExpiredStatusState(statusApi, now, { nowMs: nowMs });
+            return;
         }
+        if (statusApi && statusApi.clearExpiredStatusState) statusApi.clearExpiredStatusState(now);
     }
 
     function applyStatusState(patch) {
-        if (statusApi && statusApi.applyStatusState) {
-            statusApi.applyStatusState(patch);
+        var helper = statusBridgeRuntimeApi();
+        if (helper && helper.applyStatusState) {
+            helper.applyStatusState(statusApi, patch, {
+                nowMs: nowMs,
+                onStatusVisualChange: function (snapshot) {
+                    setSpawnShieldVisual(!!(snapshot && snapshot.spawnShielded));
+                }
+            });
+            return;
         }
+        if (statusApi && statusApi.applyStatusState) statusApi.applyStatusState(patch);
     }
 
     function isSniperScopeWeapon() {
-        return currentWeaponId === 'sniper';
+        var helper = cameraRuntimeApi();
+        return helper && helper.isSniperScopeWeapon
+            ? helper.isSniperScopeWeapon(currentWeaponId)
+            : currentWeaponId === 'sniper';
     }
 
     function scopeTargetActive() {
-        return isSniperScopeWeapon() && hasInputCapture() && !isSprintInputActive();
+        var helper = cameraRuntimeApi();
+        return helper && helper.scopeTargetActive
+            ? helper.scopeTargetActive(currentWeaponId, hasInputCapture(), isSprintInputActive())
+            : (isSniperScopeWeapon() && hasInputCapture() && !isSprintInputActive());
     }
 
     function scopeStateSnapshot() {
         var view = viewHelper();
-        return view && view.getAdsState
-            ? view.getAdsState({
+        var helper = cameraRuntimeApi();
+        return helper && helper.scopeStateSnapshot
+            ? helper.scopeStateSnapshot(view, {
                 currentWeaponId: currentWeaponId,
                 scopeTargetActive: scopeTargetActive(),
                 sniperMode: isSniperScopeWeapon()
@@ -485,101 +674,135 @@
 
     function isScopeModeActive() {
         var scopeState = scopeStateSnapshot();
-        return !!(scopeState && scopeState.active && scopeState.weaponId === currentWeaponId);
+        var helper = cameraRuntimeApi();
+        return helper && helper.isScopeModeActive
+            ? helper.isScopeModeActive(scopeState, currentWeaponId)
+            : !!(scopeState && scopeState.active && scopeState.weaponId === currentWeaponId);
     }
 
     function isSniperScopeReady() {
         var scopeState = scopeStateSnapshot();
-        return !!(scopeState && scopeState.ready && scopeState.weaponId === currentWeaponId);
+        var helper = cameraRuntimeApi();
+        return helper && helper.isSniperScopeReady
+            ? helper.isSniperScopeReady(scopeState, currentWeaponId)
+            : !!(scopeState && scopeState.ready && scopeState.weaponId === currentWeaponId);
     }
 
     function isSprintInputActive() {
-        return !!keys.sprint &&
-            !sprintCanceledUntilRelease &&
-            Number(sprintTemporarilyCanceledUntil || 0) <= nowMs();
+        var helper = sprintRuntimeApi();
+        return helper && helper.isSprintActive
+            ? !!helper.isSprintActive(sprintHelperState(), nowMs())
+            : (!!keys.sprint &&
+                !sprintCanceledUntilRelease &&
+                Number(sprintTemporarilyCanceledUntil || 0) <= nowMs());
     }
 
     function clearSprintTemporaryResumeTimer() {
-        if (sprintTemporaryResumeTimer && typeof clearTimeout === 'function') {
-            clearTimeout(sprintTemporaryResumeTimer);
+        var helper = sprintRuntimeApi();
+        if (helper && helper.clearSprintTimerState) {
+            var state = sprintHelperState();
+            helper.clearSprintTimerState(state, typeof clearTimeout === 'function' ? clearTimeout : null);
+            syncSprintStateFrom(state);
+            return;
         }
         sprintTemporaryResumeTimer = 0;
     }
 
     function cancelSprintUntilRelease() {
-        var hadSprint = !!keys.sprint || !!sprinting || sprintCanceledUntilRelease;
-        if (!hadSprint) return false;
-        if (keys.sprint) sprintCanceledUntilRelease = true;
-        clearSprintTemporaryResumeTimer();
-        sprintTemporarilyCanceledUntil = 0;
-        sprinting = false;
-        return true;
+        var helper = sprintRuntimeApi();
+        if (helper && helper.cancelSprintUntilRelease) {
+            var state = sprintHelperState();
+            var result = helper.cancelSprintUntilRelease(state, typeof clearTimeout === 'function' ? clearTimeout : null);
+            syncSprintStateFrom(state);
+            return result;
+        }
+        return false;
     }
 
     function cancelSprintTemporarily(durationMs) {
-        var duration = Math.max(0, Number(durationMs || 0));
-        var hadSprint = !!keys.sprint || !!sprinting || Number(sprintTemporarilyCanceledUntil || 0) > nowMs();
-        if (!hadSprint || duration <= 0) return false;
-        sprintCanceledUntilRelease = false;
-        sprintTemporarilyCanceledUntil = nowMs() + duration;
-        sprinting = false;
-        clearSprintTemporaryResumeTimer();
-        if (typeof setTimeout === 'function') {
-            sprintTemporaryResumeTimer = setTimeout(function () {
-                sprintTemporaryResumeTimer = 0;
-                if (!keys.sprint || sprintCanceledUntilRelease) return;
-                sprintTemporarilyCanceledUntil = 0;
-            }, duration);
+        var helper = sprintRuntimeApi();
+        if (helper && helper.cancelSprintTemporarily) {
+            var state = sprintHelperState();
+            var result = helper.cancelSprintTemporarily(
+                state,
+                durationMs,
+                nowMs(),
+                typeof setTimeout === 'function' ? setTimeout : null,
+                typeof clearTimeout === 'function' ? clearTimeout : null
+            );
+            syncSprintStateFrom(state);
+            return result;
         }
-        return true;
+        return false;
     }
 
     function cancelScopedView() {
         var view = viewHelper();
+        var helper = cameraRuntimeApi();
+        if (helper && helper.cancelScopedView) {
+            helper.cancelScopedView(view);
+            return;
+        }
         if (view && view.cancelScope) view.cancelScope();
     }
 
     function setAdsEnabled(enabled) {
+        var helper = cameraRuntimeApi();
+        if (helper && helper.setAdsEnabled) {
+            return helper.setAdsEnabled(enabled, viewHelper());
+        }
         if (!enabled) cancelScopedView();
         return false;
     }
 
     function applyAvatarWeaponPose() {
-        if (actorVisual && actorVisual.setWeapon) {
-            actorVisual.setWeapon(currentWeaponId);
-            avatarRig = actorVisual.rig || avatarRig;
-        } else if (avatarRigApi && avatarRigApi.setWeapon) {
-            avatarRigApi.setWeapon(currentWeaponId);
-            avatarRig = avatarRigApi.rig || avatarRig;
+        var helper = visualRuntimeApi();
+        if (helper && helper.setWeaponPose) {
+            helper.setWeaponPose(visualHelperState(), currentWeaponId);
+            avatarRig = actorVisual && actorVisual.rig ? actorVisual.rig : avatarRig;
+            return;
         }
     }
 
     function syncAvatarVisibility(sniperMode, view) {
         var resolvedView = view || viewHelper();
-        var viewApi = resolvedView;
-        if (!viewApi || !viewApi.syncAvatarVisibility) return;
-        viewApi.syncAvatarVisibility({
+        var helper = cameraRuntimeApi();
+        var payload = {
             avatarGroup: avatarGroup,
             avatarRigApi: avatarRigApi,
             avatarAliveVisible: avatarAliveVisible,
             sniperMode: !!sniperMode
-        });
+        };
+        if (helper && helper.syncAvatarVisibility) {
+            helper.syncAvatarVisibility(resolvedView, payload);
+            return;
+        }
+        return;
     }
 
     function resetRecoilState(view) {
         var viewApi = view || viewHelper();
+        var helper = cameraRuntimeApi();
+        if (helper && helper.resetRecoilState) {
+            helper.resetRecoilState(viewApi);
+            return;
+        }
         if (viewApi && viewApi.resetRecoilState) viewApi.resetRecoilState();
     }
 
     function applyUnifiedGunOffsets(dt, view) {
         var viewApi = view || viewHelper();
+        var helper = cameraRuntimeApi();
+        if (helper && helper.applyUnifiedGunOffsets) {
+            helper.applyUnifiedGunOffsets(viewApi, dt, avatarRigApi);
+            return;
+        }
         if (viewApi && viewApi.applyUnifiedGunOffsets) viewApi.applyUnifiedGunOffsets(dt, avatarRigApi);
     }
 
     function updateAvatarAnimation(dt, speed, view) {
         var viewApi = view || viewHelper();
-        if (!viewApi || !viewApi.updateAvatarAnimation) return;
-        viewApi.updateAvatarAnimation(dt, speed, {
+        var payload = {
             actorVisual: actorVisual,
             avatarRigApi: avatarRigApi,
             runSpeed: effectiveRunSpeedForWeapon(currentWeaponId),
@@ -594,16 +817,22 @@
             movingBackward: !!keys.backward,
             movingLeft: !!keys.left,
             movingRight: !!keys.right
-        });
+        };
+        var helper = cameraRuntimeApi();
+        if (helper && helper.updateAvatarAnimation) {
+            helper.updateAvatarAnimation(viewApi, dt, speed, payload);
+            return;
+        }
+        if (!viewApi || !viewApi.updateAvatarAnimation) return;
+        viewApi.updateAvatarAnimation(dt, speed, payload);
     }
 
     function updateCameraFromPlayer(dt, view, speedNorm) {
         var viewApi = view || viewHelper();
-        if (!viewApi || !viewApi.updateCamera) return;
         var cameraProfile = avatarRigApi && avatarRigApi.getCameraProfile
             ? (avatarRigApi.getCameraProfile() || {})
             : {};
-        viewApi.updateCamera(dt, {
+        var payload = {
             camera: camera,
             playerX: playerX,
             playerZ: playerZ,
@@ -642,54 +871,52 @@
             cameraFov: CAMERA_FOV,
             adsFov: ADS_FOV,
             adsFovForWeapon: adsFovForWeapon
-        });
+        };
+        var helper = cameraRuntimeApi();
+        if (helper && helper.updateCamera) {
+            helper.updateCamera(viewApi, dt, payload);
+            return;
+        }
+        if (!viewApi || !viewApi.updateCamera) return;
+        viewApi.updateCamera(dt, payload);
     }
 
     function triggerFireAction(view) {
         var viewApi = view || viewHelper();
-        if (!viewApi || !viewApi.triggerFireAction) return;
-        viewApi.triggerFireAction({
+        var payload = {
             currentWeaponId: currentWeaponId,
             adsActive: isScopeModeActive(),
             scopeTargetActive: isScopeModeActive(),
             sniperMode: isSniperScopeWeapon(),
             actorVisual: actorVisual,
             avatarRigApi: avatarRigApi
-        });
+        };
+        var helper = cameraRuntimeApi();
+        if (helper && helper.triggerFireAction) {
+            helper.triggerFireAction(viewApi, payload);
+            return;
+        }
+        if (!viewApi || !viewApi.triggerFireAction) return;
+        viewApi.triggerFireAction(payload);
     }
 
     function updateAvatarPose() {
-        if (!avatarGroup) return;
-        var feetY = posY - eyeHeight();
-        var rollingHitboxState = { rolling: isRolling() };
-        if (actorVisual && actorVisual.setWorldTransform) {
-            avatarTransformScratch.x = playerX;
-            avatarTransformScratch.y = feetY;
-            avatarTransformScratch.z = playerZ;
-            actorVisual.setWorldTransform(avatarTransformScratch, yaw, rollingHitboxState);
+        var helper = visualRuntimeApi();
+        if (helper && helper.applyAvatarPose) {
+            helper.applyAvatarPose(visualHelperState());
             return;
         }
-        avatarGroup.position.set(playerX, feetY, playerZ);
-        avatarGroup.rotation.y = yaw;
-        syncHitboxPositions();
     }
 
     function syncHitboxPositions() {
-        var feetY = posY - eyeHeight();
-        if (actorVisual && actorVisual.syncHitboxes) {
-            avatarTransformScratch.x = playerX;
-            avatarTransformScratch.y = feetY;
-            avatarTransformScratch.z = playerZ;
-            actorVisual.syncHitboxes(avatarTransformScratch, { rolling: isRolling() });
-        }
+        var helper = visualRuntimeApi();
+        if (helper && helper.syncHitboxPositions) helper.syncHitboxPositions(visualHelperState());
     }
 
     function setAliveVisual(active) {
         avatarAliveVisible = !!active;
-        if (actorVisual && actorVisual.setAlive) {
-            actorVisual.setAlive(active);
-            actorVisual.setHitboxVisibility(hitboxVisible);
-        }
+        var helper = visualRuntimeApi();
+        if (helper && helper.setAliveVisual) helper.setAliveVisual(visualHelperState(), active);
         syncAvatarVisibility(isSniperScopeWeapon());
     }
 
@@ -724,14 +951,14 @@
 
     function setHitboxVisibility(visible) {
         hitboxVisible = !!visible;
-        if (actorVisual && actorVisual.setHitboxVisibility) {
-            actorVisual.setHitboxVisibility(hitboxVisible);
-        }
+        var helper = visualRuntimeApi();
+        if (helper && helper.setHitboxVisibility) helper.setHitboxVisibility(visualHelperState(), visible);
         return hitboxVisible;
     }
 
     function setSpawnShieldVisual(active) {
-        if (actorVisual && actorVisual.setSpawnShield) actorVisual.setSpawnShield(active);
+        var helper = visualRuntimeApi();
+        if (helper && helper.setSpawnShieldVisual) helper.setSpawnShieldVisual(visualHelperState(), active);
     }
 
     function teardownInput() {
@@ -844,25 +1071,30 @@
     }
 
     function resetVerticalState(feetY) {
-        velocityY = 0;
-        posY = feetY + eyeHeight();
-        isGrounded = true;
-        jumpHoldTimer = 0;
-        jumpPressedLastFrame = false;
-        airborneSprintCarry = false;
-        lastMoveSpeedNorm = 0;
-        sprinting = false;
-        fastBackpedal = false;
+        var helper = motionStateRuntimeApi();
+        if (helper && helper.resetVerticalState) {
+            var state = motionStateView();
+            helper.resetVerticalState(state, feetY, { eyeHeight: eyeHeight() });
+            applyMotionStateView(state);
+        }
         clearSprintTemporaryResumeTimer();
         sprintTemporarilyCanceledUntil = 0;
     }
 
     function setSpawnPosition(x, z, feetY) {
         if (!camera) return false;
-        feetY = (typeof feetY === 'number') ? feetY : 0;
-        playerX = x;
-        playerZ = z;
-        resetVerticalState(feetY);
+        clearQueuedMotionCorrection();
+        var helper = motionStateRuntimeApi();
+        if (helper && helper.setSpawnPosition) {
+            var state = motionStateView();
+            helper.setSpawnPosition(state, x, z, feetY, { eyeHeight: eyeHeight() });
+            applyMotionStateView(state);
+        } else {
+            feetY = (typeof feetY === 'number') ? feetY : 0;
+            playerX = x;
+            playerZ = z;
+            resetVerticalState(feetY);
+        }
         var view = viewHelper();
         resetRecoilState(view);
         updateAvatarPose();
@@ -871,49 +1103,26 @@
     }
 
     function buildLocalMotionState() {
-        motionStateScratch.x = playerX;
-        motionStateScratch.y = posY;
-        motionStateScratch.z = playerZ;
-        motionStateScratch.yaw = yaw;
-        motionStateScratch.pitch = pitch;
-        motionStateScratch.velocityY = velocityY;
-        motionStateScratch.isGrounded = isGrounded;
-        motionStateScratch.jumpHoldTimer = jumpHoldTimer;
-        motionStateScratch.jumpHeldLast = !!jumpPressedLastFrame;
-        motionStateScratch.airborneSprintCarry = !!airborneSprintCarry;
-        motionStateScratch.moveSpeedNorm = lastMoveSpeedNorm;
-        motionStateScratch.sprinting = !!sprinting;
-        motionStateScratch.fastBackpedal = !!fastBackpedal;
-        return motionStateScratch;
+        var helper = motionStateRuntimeApi();
+        return helper && helper.buildLocalMotionState
+            ? helper.buildLocalMotionState(motionStateView(), motionStateScratch, { pitchLimit: PITCH_LIMIT })
+            : motionStateScratch;
     }
 
     function buildCurrentInputState() {
-        var blocked = movementInputBlocked();
-        var rolling = isRolling();
-        var frozenRollInput = rolling && activeRollInputState ? activeRollInputState : null;
-        inputStateScratch.forward = !blocked && (frozenRollInput ? !!frozenRollInput.movingForward : !!keys.forward);
-        inputStateScratch.backward = !blocked && (frozenRollInput ? !!frozenRollInput.movingBackward : !!keys.backward);
-        inputStateScratch.left = !blocked && (frozenRollInput ? !!frozenRollInput.movingLeft : !!keys.left);
-        inputStateScratch.right = !blocked && (frozenRollInput ? !!frozenRollInput.movingRight : !!keys.right);
-        inputStateScratch.jump = !blocked && !rolling && !!keys.jump;
-        inputStateScratch.sprint = !blocked && !rolling && !!isSprintInputActive();
-        inputStateScratch.adsActive = !!isScopeModeActive();
+        var helper = inputRuntimeApi();
+        if (helper && helper.buildCurrentInputState) {
+            return helper.buildCurrentInputState(inputHelperState());
+        }
         return inputStateScratch;
     }
 
     function buildRollActionOptions() {
-        if (movementInputBlocked()) return null;
-        var movingForward = !!keys.forward;
-        var movingBackward = !!keys.backward;
-        var movingLeft = !!keys.left;
-        var movingRight = !!keys.right;
-        if (!movingForward && !movingBackward && !movingLeft && !movingRight) return null;
-        return {
-            movingForward: movingForward,
-            movingBackward: movingBackward,
-            movingLeft: movingLeft,
-            movingRight: movingRight
-        };
+        var helper = inputRuntimeApi();
+        if (helper && helper.buildRollActionOptions) {
+            return helper.buildRollActionOptions(inputHelperState());
+        }
+        return null;
     }
 
     function rollActionDurationMs(rollOptions) {
@@ -924,9 +1133,14 @@
     }
 
     function setRollUntil(nextRollUntil) {
-        rollUntil = Math.max(0, Number(nextRollUntil || 0));
-        if (!isRolling()) {
-            activeRollInputState = null;
+        var helper = motionStateRuntimeApi();
+        if (helper && helper.setRollUntil) {
+            var state = motionStateView();
+            helper.setRollUntil(state, nextRollUntil, { nowMs: nowMs });
+            applyMotionStateView(state);
+        } else {
+            rollUntil = Math.max(0, Number(nextRollUntil || 0));
+            if (!isRolling()) activeRollInputState = null;
         }
         if (actorVisual && avatarGroup) {
             updateAvatarPose();
@@ -934,36 +1148,79 @@
         return rollUntil;
     }
 
+    function clearQueuedMotionCorrection() {
+        var helper = reconciliationRuntimeApi();
+        if (helper && helper.clearMotionCorrection) {
+            helper.clearMotionCorrection(queuedMotionCorrection);
+            return;
+        }
+        queuedMotionCorrection.x = 0;
+        queuedMotionCorrection.y = 0;
+        queuedMotionCorrection.z = 0;
+    }
+
+    function hasQueuedMotionCorrection() {
+        var helper = reconciliationRuntimeApi();
+        if (helper && helper.hasMotionCorrection) {
+            return helper.hasMotionCorrection(queuedMotionCorrection);
+        }
+        return Math.abs(Number(queuedMotionCorrection.x || 0)) > 0.0001 ||
+            Math.abs(Number(queuedMotionCorrection.y || 0)) > 0.0001 ||
+            Math.abs(Number(queuedMotionCorrection.z || 0)) > 0.0001;
+    }
+
+    function queueMotionCorrection(dx, dz, dy, maxDistance) {
+        var helper = reconciliationRuntimeApi();
+        if (helper && helper.queueMotionCorrection) {
+            helper.queueMotionCorrection(queuedMotionCorrection, dx, dz, dy, maxDistance);
+            return;
+        }
+        queuedMotionCorrection.x += Number(dx || 0);
+        queuedMotionCorrection.z += Number(dz || 0);
+        queuedMotionCorrection.y += Number(dy || 0);
+    }
+
+    function applyQueuedMotionCorrection(dtSec, options) {
+        var helper = reconciliationRuntimeApi();
+        var opts = options || {};
+        var applied = helper && helper.applyMotionCorrection
+            ? helper.applyMotionCorrection(queuedMotionCorrection, dtSec, {
+                decayMs: opts.decayMs,
+                applyDelta: function (dx, dy, dz) {
+                    playerX += dx;
+                    posY += dy;
+                    playerZ += dz;
+                }
+            })
+            : false;
+
+        if (!applied) return false;
+
+        if (opts.syncVisual !== false) {
+            updateAvatarPose();
+            updateCameraFromPlayer(Math.max(1 / 240, Number(dtSec || (1 / 60))), viewHelper());
+        }
+        return true;
+    }
+
     function copyMotionStateFields(state, options) {
-        if (!state) return false;
-        playerX = Number(state.x || 0);
-        playerZ = Number(state.z || 0);
+        var helper = motionStateRuntimeApi();
+        if (!helper || !helper.copyMotionStateFields || !state) return false;
+        var snapshot = motionStateView();
+        helper.copyMotionStateFields(snapshot, state, { pitchLimit: PITCH_LIMIT });
         var groundHeightAt = options && typeof options.getGroundHeightAt === 'function'
             ? options.getGroundHeightAt
             : null;
         if (typeof state.y === 'number' && isFinite(state.y)) {
-            posY = Number(state.y);
+            snapshot.y = Number(state.y);
         } else {
-            posY = groundHeightAt ? (Number(groundHeightAt(playerX, playerZ) || 0) + eyeHeight()) : eyeHeight();
+            snapshot.y = groundHeightAt ? (Number(groundHeightAt(snapshot.x, snapshot.z) || 0) + eyeHeight()) : eyeHeight();
         }
         if (groundHeightAt) {
-            var floorEyeY = Number(groundHeightAt(playerX, playerZ) || 0) + eyeHeight();
-            if (!isFinite(posY) || posY < floorEyeY) posY = floorEyeY;
+            var floorEyeY = Number(groundHeightAt(snapshot.x, snapshot.z) || 0) + eyeHeight();
+            if (!isFinite(snapshot.y) || snapshot.y < floorEyeY) snapshot.y = floorEyeY;
         }
-        yaw = (typeof state.yaw === 'number' && isFinite(state.yaw)) ? Number(state.yaw) : yaw;
-        pitch = (typeof state.pitch === 'number' && isFinite(state.pitch))
-            ? Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, Number(state.pitch)))
-            : pitch;
-        velocityY = Number(state.velocityY || 0);
-        isGrounded = state.isGrounded !== undefined ? !!state.isGrounded : true;
-        jumpHoldTimer = Number(state.jumpHoldTimer || 0);
-        jumpPressedLastFrame = !!state.jumpHeldLast;
-        airborneSprintCarry = state && Object.prototype.hasOwnProperty.call(state, 'airborneSprintCarry')
-            ? !!state.airborneSprintCarry
-            : (!!state.sprinting && !isGrounded);
-        lastMoveSpeedNorm = Number(state.moveSpeedNorm || 0);
-        sprinting = !!state.sprinting;
-        fastBackpedal = !!(state && state.fastBackpedal);
+        applyMotionStateView(snapshot);
         return true;
     }
 
@@ -973,6 +1230,7 @@
         var z = Number(state.z);
         if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
         var world = worldHelper();
+        clearQueuedMotionCorrection();
         copyMotionStateFields(state, {
             getGroundHeightAt: world && world.getGroundHeightAt
                 ? world.getGroundHeightAt
@@ -988,6 +1246,7 @@
 
     function applyMotionState(state, dt) {
         var world = worldHelper();
+        clearQueuedMotionCorrection();
         if (!copyMotionStateFields(state, {
             getGroundHeightAt: world && world.getGroundHeightAt
                 ? world.getGroundHeightAt
@@ -1043,21 +1302,15 @@
     }
 
     function cloneMotionState(state) {
-        if (!state || typeof state !== 'object') return null;
-        var out = {};
-        for (var key in state) {
-            if (!Object.prototype.hasOwnProperty.call(state, key)) continue;
-            out[key] = state[key];
-        }
-        return out;
+        var helper = motionStateRuntimeApi();
+        return helper && helper.cloneMotionState ? helper.cloneMotionState(state, { pitchLimit: PITCH_LIMIT }) : null;
     }
 
     function buildAuthoritativeMotionKey(state) {
-        var reconcile = reconciliationHelper();
-        if (reconcile && reconcile.buildAuthoritativeMotionRevision) {
-            return reconcile.buildAuthoritativeMotionRevision(state);
-        }
-        return state && typeof state === 'object' ? String(state.weaponId || '') : '';
+        var helper = replayRuntimeApi();
+        return helper && helper.buildAuthoritativeMotionKey
+            ? helper.buildAuthoritativeMotionKey(state)
+            : '';
     }
 
     function hasMovementIntentInput() {
@@ -1081,143 +1334,87 @@
     }
 
     function fallbackReplaySteps(pendingInputs) {
-        var entries = Array.isArray(pendingInputs) ? pendingInputs : [];
-        var steps = [];
-        for (var i = 0; i < entries.length; i++) {
-            var entry = entries[i];
-            if (!entry || !entry.inputState) continue;
-            steps.push({
-                dtSec: Math.max(1 / 240, Math.min(0.075, Number(entry.dtMs || 50) / 1000)),
-                inputState: entry.inputState,
-                weaponId: String(entry.weaponId || '')
-            });
-        }
-        return steps;
+        var helper = replayRuntimeApi();
+        var plan = helper && helper.fallbackReplaySteps
+            ? helper.fallbackReplaySteps(pendingInputs, { fallbackYaw: yaw, fallbackPitch: pitch })
+            : null;
+        return plan && Array.isArray(plan.steps) ? plan.steps : [];
     }
 
     function buildReplayStepPlan(reconcile, pendingInputs) {
-        if (reconcile && reconcile.buildReplayStepsFromPendingInputs) {
-            var plan = reconcile.buildReplayStepsFromPendingInputs(pendingInputs, {
+        var helper = replayRuntimeApi();
+        var plan = helper && helper.buildReplayStepPlan
+            ? helper.buildReplayStepPlan(reconcile, pendingInputs, {
                 fallbackYaw: yaw,
                 fallbackPitch: pitch,
                 movementLocked: function () { return isMovementLocked(); }
-            });
-            if (plan && Array.isArray(plan.steps)) return plan.steps;
-        }
-        return fallbackReplaySteps(pendingInputs);
+            })
+            : null;
+        return plan && Array.isArray(plan.steps) ? plan.steps : fallbackReplaySteps(pendingInputs);
     }
 
     function believableReplayDistanceWu(reconcile, pendingInputs, opts, airborne) {
-        var steps = buildReplayStepPlan(reconcile, pendingInputs);
-        var totalWu = 0;
-        for (var i = 0; i < steps.length; i++) {
-            var step = steps[i];
-            if (!step || !(Number(step.dtSec || 0) > 0)) continue;
-            totalWu += topSpeedForInputState(step.inputState, step.weaponId || currentWeaponId, airborne) * Number(step.dtSec || 0);
-        }
-        if (opts && opts.hasUnsentInputTail) {
-            totalWu += topSpeedForInputState(buildCurrentInputState(), currentWeaponId, airborne) *
-                Math.max(0, Number(opts.inputSendIntervalMs || 0)) / 1000;
-        }
-        return totalWu * Math.max(1, Number(opts && opts.speedAwareSafetyMargin || 1.15));
+        var helper = replayRuntimeApi();
+        return helper && helper.believableReplayDistanceWu
+            ? helper.believableReplayDistanceWu(reconcile, pendingInputs, Object.assign({}, opts, {
+                currentWeaponId: currentWeaponId,
+                currentInputState: buildCurrentInputState(),
+                getTopSpeedForInputState: topSpeedForInputState
+            }), airborne)
+            : 0;
     }
 
     function resolveReconciliationThresholds(opts, reconcileTuning, adaptiveSelfReconciliation, airborne, movingIntent) {
-        var hardSnapDistance = Number(opts.hardSnapDistance || (adaptiveSelfReconciliation ? reconcileTuning.hardSnapDistanceWu : 4.25) || 4.25);
-        var hardSnapVerticalDistance = Number(opts.hardSnapVerticalDistance || (adaptiveSelfReconciliation ? reconcileTuning.hardSnapVerticalWu : 1.25) || 1.25);
-        var idleBlendDistance = Number(opts.idleBlendDistance || 0.45);
-        var idleBlendRate = Number(opts.idleBlendRate || 5);
-        var replayCorrectionDistance = Number(opts.replayCorrectionDistance || (adaptiveSelfReconciliation ? reconcileTuning.idleReplayDistanceWu : 0.95) || 0.95);
-        var movingReplayCorrectionDistance = Number(opts.movingReplayCorrectionDistance || (adaptiveSelfReconciliation ? reconcileTuning.movingReplayDistanceWu : 1.35) || 1.35);
-        var baseReplayGraceMs = Math.max(0, Number(opts.pendingReplayGraceMs || (adaptiveSelfReconciliation ? reconcileTuning.baseGraceMs : 125) || 125));
-        var maxExtraGraceMs = Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.maxExtraGraceMs : 0) || 0);
-        var rttJitterMs = Math.max(0, Number(opts.rttJitterMs || 0));
-        var pendingReplayGraceMs = baseReplayGraceMs + Math.min(maxExtraGraceMs, rttJitterMs);
-        var emergencyReplayDistance = Number(opts.emergencyReplayDistance || (adaptiveSelfReconciliation ? reconcileTuning.emergencyReplayDistanceWu : 2.1) || 2.1);
-        var replayDistance = movingIntent
-            ? Math.max(replayCorrectionDistance, movingReplayCorrectionDistance)
-            : replayCorrectionDistance;
-        var movingAckDriftLimit = Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.movingAckDriftLimit : 2) || 2);
-        var movingPendingInputLimit = 2;
-
-        if (airborne) {
-            hardSnapDistance = Math.max(
-                hardSnapDistance,
-                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneHardSnapDistanceWu : hardSnapDistance) || hardSnapDistance
-            );
-            hardSnapVerticalDistance = Math.max(
-                hardSnapVerticalDistance,
-                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneHardSnapVerticalWu : hardSnapVerticalDistance) || hardSnapVerticalDistance
-            );
-            replayDistance = Math.max(
-                replayDistance,
-                Number(adaptiveSelfReconciliation ? reconcileTuning.airborneReplayDistanceWu : replayDistance) || replayDistance
-            );
-            pendingReplayGraceMs = Math.max(
-                pendingReplayGraceMs,
-                Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneGraceMs : pendingReplayGraceMs) || pendingReplayGraceMs)
-            );
-            movingAckDriftLimit = Math.max(
-                movingAckDriftLimit,
-                Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneMovingAckDriftLimit : movingAckDriftLimit) || movingAckDriftLimit)
-            );
-            movingPendingInputLimit = Math.max(2, movingAckDriftLimit);
+        var helper = reconciliationRuntimeApi();
+        if (helper && helper.resolveReconciliationThresholds) {
+            return helper.resolveReconciliationThresholds(opts, reconcileTuning, adaptiveSelfReconciliation, airborne, movingIntent);
         }
-
         return {
-            hardSnapDistance: hardSnapDistance,
-            hardSnapVerticalDistance: hardSnapVerticalDistance,
-            idleBlendDistance: idleBlendDistance,
-            idleBlendRate: idleBlendRate,
-            replayDistance: replayDistance,
-            pendingReplayGraceMs: pendingReplayGraceMs,
-            emergencyReplayDistance: emergencyReplayDistance,
-            movingAckDriftLimit: movingAckDriftLimit,
-            movingPendingInputLimit: movingPendingInputLimit
+            hardSnapDistance: Number(opts.hardSnapDistance || 4.25),
+            hardSnapVerticalDistance: Number(opts.hardSnapVerticalDistance || 1.25),
+            idleBlendDistance: Number(opts.idleBlendDistance || 0.45),
+            idleBlendRate: Number(opts.idleBlendRate || 5),
+            movingBlendDistance: Number(opts.movingBlendDistance || 0.5),
+            movingBlendVerticalDistance: Number(opts.movingBlendVerticalDistance || 0.35),
+            movingCorrectionDecayMs: Math.max(1, Number(opts.movingCorrectionDecayMs || 100)),
+            replayDistance: Number(opts.replayCorrectionDistance || 0.95),
+            pendingReplayGraceMs: Math.max(0, Number(opts.pendingReplayGraceMs || 125)),
+            emergencyReplayDistance: Number(opts.emergencyReplayDistance || 2.1),
+            movingAckDriftLimit: 2,
+            movingPendingInputLimit: 2
         };
     }
 
     function shouldReplayAuthoritativeMotion(reconcile, opts, pendingInputCount, horizontalDistSq, replayDistance, replayTriggerChanged, allowReplayWithoutAckAdvance, movingIntent, canCorrectWhileMoving, latestPendingAgeMs, pendingReplayGraceMs, allowFreshPendingReplay) {
-        return !!(
-            opts.allowReplayCorrection !== false &&
-            reconcile &&
-            reconcile.shouldReplayAuthoritativeCorrection &&
-            reconcile.shouldReplayAuthoritativeCorrection({
-                pendingInputCount: pendingInputCount,
-                lastAckedSeq: Number(opts.lastAckedSeq || 0),
-                lastReplayAckSeq: lastReplayAckSeq,
-                horizontalDistSq: horizontalDistSq,
-                replayCorrectionDistance: replayDistance,
-                authoritativeStateChanged: replayTriggerChanged,
-                allowReplayWithoutAckAdvance: allowReplayWithoutAckAdvance,
-                movingIntent: movingIntent,
-                canCorrectWhileMoving: canCorrectWhileMoving,
-                latestPendingAgeMs: latestPendingAgeMs,
-                minPendingAgeMs: movingIntent ? pendingReplayGraceMs : 0,
-                allowFreshPendingReplay: allowFreshPendingReplay
-            })
-        );
+        var helper = replayRuntimeApi();
+        return helper && helper.shouldReplayAuthoritativeMotion
+            ? !!helper.shouldReplayAuthoritativeMotion(reconcile, Object.assign({}, opts, { lastReplayAckSeq: lastReplayAckSeq }), pendingInputCount, horizontalDistSq, replayDistance, replayTriggerChanged, allowReplayWithoutAckAdvance, movingIntent, canCorrectWhileMoving, latestPendingAgeMs, pendingReplayGraceMs, allowFreshPendingReplay)
+            : false;
     }
 
     function applyIdleBlendCorrection(dt, x, z, authoritativeY, dx, dz, dy, horizontalDistSq, idleBlendRate) {
-        var rate = Math.max(0.1, idleBlendRate);
-        var distFactor = Math.min(1, Math.sqrt(horizontalDistSq) * 0.6);
-        var blend = Math.min(1, dt * (rate + rate * distFactor));
-        playerX += dx * blend;
-        playerZ += dz * blend;
-        posY += dy * blend;
-
-        if (horizontalDistSq < 0.005) {
-            playerX = x;
-            playerZ = z;
+        var helper = replayRuntimeApi();
+        if (helper && helper.applyIdleBlendCorrectionState) {
+            var state = { x: playerX, y: posY, z: playerZ };
+            helper.applyIdleBlendCorrectionState(state, {
+                dt: dt,
+                authoritativeX: x,
+                authoritativeY: authoritativeY,
+                authoritativeZ: z,
+                dx: dx,
+                dy: dy,
+                dz: dz,
+                horizontalDistSq: horizontalDistSq,
+                idleBlendRate: idleBlendRate
+            });
+            playerX = state.x;
+            posY = state.y;
+            playerZ = state.z;
+            updateAvatarPose();
+            updateCameraFromPlayer(dt, viewHelper());
+            return true;
         }
-        if (Math.abs(dy) < 0.05) {
-            posY = authoritativeY;
-        }
-
-        updateAvatarPose();
-        updateCameraFromPlayer(dt, viewHelper());
-        return true;
+        return false;
     }
 
     function reconcileAuthoritativeMotion(state, options) {
@@ -1297,6 +1494,22 @@
         }
 
         if (
+            movingIntent &&
+            pendingInputCount === 0 &&
+            !hasUnsentInputTail &&
+            horizontalDistSq > 0.0004 &&
+            horizontalDistSq < (thresholds.movingBlendDistance * thresholds.movingBlendDistance) &&
+            Math.abs(dy) < thresholds.movingBlendVerticalDistance
+        ) {
+            queueMotionCorrection(dx, dz, dy, thresholds.movingBlendDistance);
+            var movingBlendApplied = applyQueuedMotionCorrection(dt, {
+                decayMs: thresholds.movingCorrectionDecayMs
+            });
+            if (movingBlendApplied) lastReconciledMotionKey = motionKey;
+            return movingBlendApplied;
+        }
+
+        if (
             pendingInputCount > 0 ||
             hasUnsentInputTail ||
             movingIntent ||
@@ -1332,6 +1545,7 @@
     function destroyPlayerState() {
         teardownInput();
         clearMovementKeys();
+        clearQueuedMotionCorrection();
         cancelScopedView();
         sprintCanceledUntilRelease = false;
         sprinting = false;
@@ -1400,13 +1614,17 @@
         var helper = movementHelper();
         var world = worldHelper();
         if (!helper || !helper.stepAuthoritativeMovement || !world) return;
+        var frameDt = Math.max(0, Number(dt || 0));
+        applyQueuedMotionCorrection(frameDt, {
+            decayMs: Number((networkTuning().selfReconciliation || {}).movingCorrectionDecayMs || 100),
+            syncVisual: false
+        });
         if (!hasInputCapture()) {
             updateAvatarPose();
             updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))), viewHelper(), lastMoveSpeedNorm);
             return;
         }
 
-        var frameDt = Math.max(0, Number(dt || 0));
         var wasGrounded = !!isGrounded;
         var prevVelocityY = Number(velocityY || 0);
         var motionState = buildLocalMotionState();
@@ -1589,35 +1807,22 @@
 
     GamePlayer.setLoadout = function (loadoutConfig) {
         ensureLoadoutSlots();
-        if (!loadoutConfig || !Array.isArray(loadoutConfig.slots)) {
+        var hitscan = hitscanApi();
+        var helper = loadoutRuntimeApi();
+        if (!helper || !helper.normalizeRequestedLoadout) {
             return { slots: loadoutSlots.slice() };
         }
 
-        var allowed = {};
-        var hasAllowed = false;
-        var hitscan = hitscanApi();
-        if (hitscan && hitscan.getAllWeaponIds) {
-            var ids = hitscan.getAllWeaponIds();
-            for (var n = 0; n < ids.length; n++) {
-                allowed[ids[n]] = true;
-                hasAllowed = true;
-            }
-        }
-
-        var next = [];
-        var seen = {};
-        for (var i = 0; i < loadoutConfig.slots.length; i++) {
-            var id = String(loadoutConfig.slots[i] || '');
-            if (!id || seen[id]) continue;
-            if (hasAllowed && !allowed[id]) continue;
-            seen[id] = true;
-            next.push(id);
-        }
-        next = normalizeSniperLoadoutOrder(next);
-        if (next.length > 0) {
-            loadoutSlots = next;
-            if (loadoutSlots.indexOf(currentWeaponId) === -1) {
-                currentWeaponId = loadoutSlots[0];
+        var normalized = helper.normalizeRequestedLoadout(
+            loadoutConfig,
+            sharedApi(),
+            currentWeaponId,
+            hitscan && hitscan.getAllWeaponIds ? hitscan.getAllWeaponIds() : []
+        );
+        if (normalized && normalized.changed) {
+            loadoutSlots = normalized.slots.slice();
+            if (String(normalized.nextWeaponId || '') !== String(currentWeaponId || '')) {
+                currentWeaponId = normalized.nextWeaponId;
                 cancelScopedView();
                 resetRecoilState(viewHelper());
                 applyAvatarWeaponPose();

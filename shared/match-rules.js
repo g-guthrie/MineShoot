@@ -168,56 +168,6 @@ export function formatMatchHudCounter(matchState, selfState) {
     ' | Lead: ' + formatMatchProgress(match.leaderProgress, 0);
 }
 
-export function formatMenuMatchStats(matchState, selfState) {
-  const match = matchState || null;
-  const mode = normalizeMatchGameMode(match && match.gameMode);
-  const kills = Math.max(0, Number(selfState && selfState.kills || 0));
-  const deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
-  return 'KILLS ' + kills + ' | DEATHS ' + deaths;
-}
-
-export function formatMenuMatchStatus(matchState, selfState, options = {}) {
-  const match = matchState || null;
-  const nowMs = typeof options.nowMs === 'function' ? options.nowMs : Date.now;
-  const privateRoomPhase = String(options.privateRoomPhase || '');
-  const respawnState = options.respawnState || null;
-
-  if (!match || !match.started) {
-    return privateRoomPhase === 'lobby' ? 'PRIVATE ROOM LOBBY' : 'WAITING FOR MATCH START';
-  }
-
-  if (match.ended) {
-    return formatWinnerLabel(match, selfState, options) +
-      ' WON | RESET ' + formatSecondsRemaining(Number(match.resetAt || 0) - nowMs());
-  }
-
-  if (match.stockMode || Number(selfState && selfState.maxStocks || 0) > 0) {
-    return 'ALIVE ' + Math.max(0, Number(match.aliveCount || 0)) +
-      ' | LIVES ' + Math.max(0, Number(selfState && selfState.stocksRemaining || 0)) +
-      '/' + Math.max(0, Number(selfState && selfState.maxStocks || 0)) +
-      ' | NEXT ' + Math.round(Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)))) + '%';
-  }
-
-  if (respawnState && respawnState.active) {
-    return 'RESPAWN IN ' + formatSecondsRemaining(respawnState.remainingMs);
-  }
-
-  const mode = normalizeMatchGameMode(match.gameMode);
-  if (mode === MATCH_GAME_MODE_TDM) {
-    const teamId = String(selfState && selfState.teamId || '');
-    const teamProgress = Number(match.teamProgress && match.teamProgress[teamId] || 0);
-    const opposing = getLeadingOpposingTeam(match, teamId);
-    return 'TEAM DEATH MATCH TEAM ' + formatMatchProgress(teamProgress) +
-      ' / ' + formatMatchProgress(match.targetProgress) +
-      ' | OPP ' + (opposing.teamId ? opposing.teamId.toUpperCase() : '--') + ' ' + formatMatchProgress(opposing.progress);
-  }
-
-  const kills = Math.max(0, Number(selfState && selfState.kills || 0));
-  return 'FREE FOR ALL ' + kills +
-    ' / ' + formatMatchProgress(match.targetProgress, 0) +
-    ' | LEAD ' + formatMatchProgress(match.leaderProgress, 0);
-}
-
 export const matchRules = {
   gameModeFfa: MATCH_GAME_MODE_FFA,
   gameModeTdm: MATCH_GAME_MODE_TDM,
@@ -237,9 +187,7 @@ export const matchRules = {
   formatSecondsRemaining,
   getLeadingOpposingTeam,
   formatWinnerLabel,
-  formatMatchHudCounter,
-  formatMenuMatchStats,
-  formatMenuMatchStatus
+  formatMatchHudCounter
 };
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});

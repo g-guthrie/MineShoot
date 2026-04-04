@@ -8,14 +8,9 @@ export var PLAYER_RADIUS = 0.5;
 export var PLAYER_HEIGHT = 2.8;
 export var ROLL_CONTACT_CYLINDER_HEIGHT_SCALE = 0.3;
 
-export var DEFAULT_HP = 400;
 export var DEFAULT_HP_MAX = 400;
 export var DEFAULT_ARMOR = 100;
 export var DEFAULT_ARMOR_MAX = 100;
-export var ENEMY_HP = 400;
-export var ENEMY_HP_MAX = 400;
-export var ENEMY_ARMOR = 100;
-export var ENEMY_ARMOR_MAX = 100;
 
 // Shared avatar part definitions. Update these once and both the rig geometry
 // and combat hitboxes follow the same authored dimensions.
@@ -103,7 +98,6 @@ runtime.__MAYHEM_RUNTIME.GameShared.entityConstants = {
   PLAYER_RADIUS: PLAYER_RADIUS,
   PLAYER_HEIGHT: PLAYER_HEIGHT,
   ROLL_CONTACT_CYLINDER_HEIGHT_SCALE: ROLL_CONTACT_CYLINDER_HEIGHT_SCALE,
-  DEFAULT_HP: DEFAULT_HP,
   DEFAULT_HP_MAX: DEFAULT_HP_MAX,
   DEFAULT_ARMOR: DEFAULT_ARMOR,
   DEFAULT_ARMOR_MAX: DEFAULT_ARMOR_MAX,

@@ -12,7 +12,7 @@ async function login(page, username, pin = '1234') {
   await expect(page.locator('#menu-party-id-value')).toContainText('USR_');
 }
 
-test('party join, friend save, and private room join work from the current menu selectors', async ({ browser }) => {
+test('social join feedback and private room join work from the current menu selectors', async ({ browser }) => {
   const pageA = await browser.newPage();
   const pageB = await browser.newPage();
 
@@ -25,17 +25,13 @@ test('party join, friend save, and private room join work from the current menu 
 
   await login(pageA, alphaName);
   await login(pageB, bravoName);
+  await pageA.locator('#social-tools-toggle-btn').click();
+  await pageB.locator('#social-tools-toggle-btn').click();
 
   const alphaId = await pageA.locator('#menu-party-id-value').textContent();
   await pageB.locator('#party-id-input').fill(String(alphaId || '').trim());
   await pageB.locator('#join-friend-btn').click();
-
-  await expect(pageA.locator('#party-hero-members')).toContainText(bravoName);
-
-  const bravoCard = pageA.locator('#party-hero-members').getByText(bravoName).first();
-  await bravoCard.click();
-  await pageA.getByRole('button', { name: 'Add Friend' }).click();
-  await expect(pageA.locator('#social-friends-list')).toContainText(bravoName);
+  await expect(pageB.locator('#social-hero-status')).toContainText('Joined friend.');
 
   await pageA.locator('#continue-loadout-btn').click();
   await expect(pageA.locator('#private-room-view')).toBeVisible();

@@ -6,116 +6,57 @@
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
-    var LAUNCH_ERROR_KEY = 'mayhem.launchError';
 
     function create(deps) {
         deps = deps || {};
-        var debugTimer = null;
         var runtimeShell = null;
         var matchViewApi = null;
         var matchActionsApi = null;
         var matchHostApi = null;
+        var accessFactory = runtime.GameRuntimeCoordinatorAccess;
+        var access = accessFactory && accessFactory.create
+            ? accessFactory.create(runtime, deps, {
+                ensureMatchHostApi: function () { return ensureMatchHostApi(); }
+            })
+            : null;
+        var uiFactory = runtime.GameRuntimeCoordinatorUi;
+        var uiBridge = uiFactory && uiFactory.create
+            ? uiFactory.create({
+                getGameUiApi: gameUiApi,
+                getRuntimeModeUi: runtimeModeUi,
+                getRuntimeProfile: runtimeProfile,
+                getMatchActionsApi: function () { return matchActionsApi; }
+            })
+            : null;
 
         function depGet(name) {
+            if (access && access.depGet) return access.depGet(name);
             if (Object.prototype.hasOwnProperty.call(deps, name)) {
                 var explicit = deps[name];
-                if (explicit != null) {
-                    return explicit;
-                }
+                if (explicit != null) return explicit;
             }
             return globalThis.__MAYHEM_RUNTIME[name];
         }
 
-        function sharedApi() {
-            return depGet('GameShared') || runtime.GameShared || null;
-        }
-
-        function gameUiApi() {
-            return depGet('GameUI') || null;
-        }
-
-        function gamePlayerApi() {
-            return depGet('GamePlayer') || null;
-        }
-
-        function gameHitscanApi() {
-            return depGet('GameHitscan') || null;
-        }
-
-        function gameAudioApi() {
-            return depGet('GameAudio') || null;
-        }
-
-        function gameThrowablesApi() {
-            return depGet('GameThrowables') || null;
-        }
-
-        function gameRuntimeLoaderApi() {
-            return depGet('GameRuntimeLoader') || runtime.GameRuntimeLoader || null;
-        }
-
-        function gameDocsApi() {
-            var loader = gameRuntimeLoaderApi();
-            if (loader && loader.getLoadedDocsRuntime) {
-                var loadedDocsApi = loader.getLoadedDocsRuntime();
-                if (loadedDocsApi) return loadedDocsApi;
-            }
-            return depGet('GameDocs') || null;
-        }
-
-        function gameOverheadApi() {
-            return depGet('GameOverhead') || null;
-        }
-
-        function gameNetApi() {
-            return depGet('GameNet') || null;
-        }
-
-        function gameLocalMatchApi() {
-            return depGet('GameLocalMatch') || null;
-        }
-
-        function gameNetFeedbackSyncApi() {
-            return depGet('GameNetFeedbackSync') || null;
-        }
-
-        function sessionStore() {
-            try {
-                return window.sessionStorage || null;
-            } catch (_err) {
-                return null;
-            }
-        }
-
-        function persistLaunchError(message) {
-            var store = sessionStore();
-            if (!store) return;
-            try {
-                store.setItem(LAUNCH_ERROR_KEY, String(message || 'Room join failed.'));
-            } catch (_err) {
-                // no-op
-            }
-        }
-
-        function menuLoadoutApi() {
-            return depGet('GameMenuLoadout');
-        }
+        function sharedApi() { return access && access.sharedApi ? access.sharedApi() : (depGet('GameShared') || runtime.GameShared || null); }
+        function gameUiApi() { return access && access.gameUiApi ? access.gameUiApi() : (depGet('GameUI') || null); }
+        function gamePlayerApi() { return access && access.gamePlayerApi ? access.gamePlayerApi() : (depGet('GamePlayer') || null); }
+        function gameHitscanApi() { return access && access.gameHitscanApi ? access.gameHitscanApi() : (depGet('GameHitscan') || null); }
+        function gameAudioApi() { return access && access.gameAudioApi ? access.gameAudioApi() : (depGet('GameAudio') || null); }
+        function gameThrowablesApi() { return access && access.gameThrowablesApi ? access.gameThrowablesApi() : (depGet('GameThrowables') || null); }
+        function gameRuntimeLoaderApi() { return access && access.gameRuntimeLoaderApi ? access.gameRuntimeLoaderApi() : (depGet('GameRuntimeLoader') || runtime.GameRuntimeLoader || null); }
+        function gameDocsApi() { return access && access.gameDocsApi ? access.gameDocsApi() : (depGet('GameDocs') || null); }
+        function gameOverheadApi() { return access && access.gameOverheadApi ? access.gameOverheadApi() : (depGet('GameOverhead') || null); }
+        function gameNetApi() { return access && access.gameNetApi ? access.gameNetApi() : (depGet('GameNet') || null); }
+        function gameLocalMatchApi() { return access && access.gameLocalMatchApi ? access.gameLocalMatchApi() : (depGet('GameLocalMatch') || null); }
+        function gameNetFeedbackSyncApi() { return access && access.gameNetFeedbackSyncApi ? access.gameNetFeedbackSyncApi() : (depGet('GameNetFeedbackSync') || null); }
+        function menuLoadoutApi() { return access && access.menuLoadoutApi ? access.menuLoadoutApi() : depGet('GameMenuLoadout'); }
+        function sharedMatchRules() { return access && access.sharedMatchRules ? access.sharedMatchRules() : null; }
 
         function applyBrandingOverrides() {
-            document.title = 'PvP by Greer';
-            var modeTitle = document.getElementById('mode-screen-title');
-            if (modeTitle) {
-                modeTitle.textContent = 'PvP by Greer';
+            if (uiBridge && uiBridge.applyBrandingOverrides) {
+                uiBridge.applyBrandingOverrides();
             }
-            var docsTitle = document.getElementById('docs-title');
-            if (docsTitle) {
-                docsTitle.textContent = String(docsTitle.textContent || '').replace(/minecraft fps|mayhem/ig, 'PvP by Greer');
-            }
-        }
-
-        function sharedMatchRules() {
-            var shared = sharedApi();
-            return shared && shared.matchRules ? shared.matchRules : null;
         }
 
         function isPrivateRoomSession(snapshot) {
@@ -124,32 +65,23 @@
         }
 
         function currentMatchRuntimeApi() {
-            if (ensureMatchHostApi().isMultiplayerMode()) return gameNetApi();
-            return gameLocalMatchApi() || gameNetApi();
+            return access && access.currentMatchRuntimeApi ? access.currentMatchRuntimeApi() : (ensureMatchHostApi().isMultiplayerMode() ? gameNetApi() : (gameLocalMatchApi() || gameNetApi()));
         }
 
         function currentMatchViewApi() {
-            var api = currentMatchRuntimeApi();
-            if (ensureMatchHostApi().isMultiplayerMode()) {
-                return api && api.view ? api.view : null;
-            }
-            return api;
+            return access && access.currentMatchViewApi ? access.currentMatchViewApi() : currentMatchRuntimeApi();
         }
 
         function currentSelfCombatApi() {
-            return depGet('GamePlayerCombat') || null;
+            return access && access.currentSelfCombatApi ? access.currentSelfCombatApi() : (depGet('GamePlayerCombat') || null);
         }
 
         function currentMatchCommandApi() {
-            if (!ensureMatchHostApi().isMultiplayerMode()) return null;
-            var api = currentMatchRuntimeApi();
-            return api && api.commands ? api.commands : null;
+            return access && access.currentMatchCommandApi ? access.currentMatchCommandApi() : null;
         }
 
         function currentMatchRemoteEntitiesApi() {
-            if (!ensureMatchHostApi().isMultiplayerMode()) return null;
-            var api = currentMatchRuntimeApi();
-            return api && api.remoteEntities ? api.remoteEntities : null;
+            return access && access.currentMatchRemoteEntitiesApi ? access.currentMatchRemoteEntitiesApi() : null;
         }
 
         function ensureMatchViewApi() {
@@ -173,25 +105,13 @@
         }
 
         function setTransientDebug(text, ms) {
-            var uiApi = gameUiApi();
-            if (!uiApi || !uiApi.setDebugInfo) return;
-            uiApi.setDebugInfo(text || '');
-            if (debugTimer) clearTimeout(debugTimer);
-            if (!text) {
-                debugTimer = null;
-                return;
+            if (uiBridge && uiBridge.setTransientDebug) {
+                uiBridge.setTransientDebug(text, ms);
             }
-            debugTimer = setTimeout(function () {
-                uiApi.setDebugInfo('');
-                debugTimer = null;
-            }, ms || 1000);
         }
 
         function setIdleWarning(text) {
-            var uiApi = gameUiApi();
-            if (uiApi && uiApi.setIdleWarning) {
-                uiApi.setIdleWarning(text || '');
-            }
+            if (uiBridge && uiBridge.setIdleWarning) uiBridge.setIdleWarning(text);
         }
         function ensureMatchActionsApi() {
             if (matchActionsApi) return matchActionsApi;
@@ -282,48 +202,25 @@
         }
 
         function runtimeProfile() {
-            return depGet('GameRuntimeProfile');
+            return access && access.runtimeProfile ? access.runtimeProfile() : depGet('GameRuntimeProfile');
         }
 
         function runtimeModeUi() {
-            return depGet('GameRuntimeModeUi');
+            return access && access.runtimeModeUi ? access.runtimeModeUi() : depGet('GameRuntimeModeUi');
         }
 
         function setRuntimeIndicator(mode) {
-            var modeUi = runtimeModeUi();
-            var actionsApi = matchActionsApi;
-            if (modeUi && modeUi.setRuntimeIndicator) {
-                modeUi.setRuntimeIndicator(mode, {
-                    debugActive: !!(actionsApi && actionsApi.isDebugVisualsOn && actionsApi.isDebugVisualsOn())
-                });
-            }
+            if (uiBridge && uiBridge.setRuntimeIndicator) uiBridge.setRuntimeIndicator(mode);
         }
 
         function hardResetFailedNetworkLaunch(message) {
-            var msg = String(message || 'Room join failed.');
-            persistLaunchError(msg);
-            var dbg = document.getElementById('debug-info');
-            if (dbg) dbg.textContent = 'Startup error: ' + msg;
-            var runtimeProfileApi = runtimeProfile();
-            if (runtimeProfileApi && runtimeProfileApi.clearSelectedMode) {
-                runtimeProfileApi.clearSelectedMode();
-            }
-            if (window.location) {
-                window.location.href = (window.location && window.location.pathname) ? window.location.pathname : '/';
+            if (uiBridge && uiBridge.hardResetFailedNetworkLaunch) {
+                uiBridge.hardResetFailedNetworkLaunch(message);
             }
         }
 
         function ensureRuntimeShell() {
             if (runtimeShell) return runtimeShell;
-            function showOverlay() {
-                var overlayEl = document.getElementById('overlay');
-                if (document && document.body && document.body.setAttribute) {
-                    document.body.setAttribute('data-overlay-active', 'true');
-                }
-                if (!overlayEl) return;
-                overlayEl.hidden = false;
-                overlayEl.style.display = 'flex';
-            }
             var shellFactory = depGet('GameRuntimeShell');
             if (!shellFactory || !shellFactory.create) {
                 throw new Error('GameRuntimeShell is required before gameplay starts.');
@@ -341,12 +238,12 @@
                 },
                 startRuntime: initGame,
                 onNetworkLaunchFailure: function (message, err) {
-                    showOverlay();
+                    if (uiBridge && uiBridge.showOverlay) uiBridge.showOverlay();
                     console.error('Startup error:', err);
                     hardResetFailedNetworkLaunch(message);
                 },
                 onLaunchError: function (message, err) {
-                    showOverlay();
+                    if (uiBridge && uiBridge.showOverlay) uiBridge.showOverlay();
                     var dbg = document.getElementById('debug-info');
                     if (dbg) dbg.textContent = 'Startup error: ' + message;
                     console.error('Startup error:', err);

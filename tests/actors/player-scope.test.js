@@ -5,10 +5,19 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 
 async function loadPlayerHarness(runtimeOverrides = {}, options = {}) {
-  const [inputBindingsCode, inputLabelsCode, statusCode, viewCode, code] = await Promise.all([
+  const [inputBindingsCode, inputLabelsCode, statusCode, reconciliationCode, loadoutCode, cameraCode, inputCode, sprintCode, visualCode, motionStateCode, replayCode, statusBridgeCode, viewCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/core/input-bindings.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/core/input-labels.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/actors/player-status.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-reconciliation.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-loadout.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-camera.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-input.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-sprint.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-visual.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-motion-state.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-replay.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../../js/actors/player-status-bridge.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/actors/player-view.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/actors/player.js', import.meta.url), 'utf8')
   ]);
@@ -125,6 +134,15 @@ async function loadPlayerHarness(runtimeOverrides = {}, options = {}) {
   vm.runInContext(inputBindingsCode, context);
   vm.runInContext(inputLabelsCode, context);
   vm.runInContext(statusCode, context);
+  vm.runInContext(reconciliationCode, context);
+  vm.runInContext(loadoutCode, context);
+  vm.runInContext(cameraCode, context);
+  vm.runInContext(inputCode, context);
+  vm.runInContext(sprintCode, context);
+  vm.runInContext(visualCode, context);
+  vm.runInContext(motionStateCode, context);
+  vm.runInContext(replayCode, context);
+  vm.runInContext(statusBridgeCode, context);
   vm.runInContext(viewCode, context);
   vm.runInContext(code, context);
   if (options.returnRuntime) {

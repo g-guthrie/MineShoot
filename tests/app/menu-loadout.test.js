@@ -123,19 +123,13 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
 
   const ids = [
     ['div', 'menu-loadout-band'],
-    ['div', 'loadout-band-actions'],
-    ['div', 'loadout-expanded-shell'],
-    ['button', 'loadout-collapse-btn'],
     ['div', 'loadout-row'],
-    ['div', 'loadout-collapsed-row'],
-    ['button', 'weapon-slot-summary'],
     ['div', 'weapon-slot-panel'],
     ['div', 'weapon-slot-title'],
     ['div', 'weapon-slot-buttons'],
     ['button', 'weapon-slot-primary'],
     ['button', 'weapon-slot-secondary'],
     ['div', 'weapon-choice-grid'],
-    ['button', 'throwable-slot-summary'],
     ['div', 'throwable-slot-panel'],
     ['div', 'throwable-slot-title'],
     ['div', 'throwable-choice-grid']
@@ -147,7 +141,6 @@ async function loadMenuLoadoutHarness({ storageMap, deferShared = false, autoIni
 
   documentObj.elements['weapon-slot-panel'].hidden = true;
   documentObj.elements['throwable-slot-panel'].hidden = true;
-  documentObj.elements['loadout-collapsed-row'].hidden = true;
 
   const windowObj = {
     localStorage: {

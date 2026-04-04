@@ -1,6 +1,6 @@
 name = "monitor"
 description = "Ultra-fast read-only poller for repetitive checks, grep, logs, and simple status watching."
-model = "gpt-5.3-codex-spark"
+model = "gpt-5.4"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 

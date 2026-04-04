@@ -74,26 +74,8 @@ export const ASSET_RECIPES = {
   }
 };
 
-export function getAssetRecipe(categoryId, assetId) {
-  const category = ASSET_RECIPES[String(categoryId || '')] || null;
-  if (!category) return null;
-  return category[String(assetId || '')] || null;
-}
-
-export function getAssetRecipeList(categoryId) {
-  const category = ASSET_RECIPES[String(categoryId || '')] || null;
-  return category ? Object.values(category) : [];
-}
-
-export function getAssetRecipeCategories() {
-  return Object.keys(ASSET_RECIPES);
-}
-
 export const assetRecipes = {
-  definitions: ASSET_RECIPES,
-  get: getAssetRecipe,
-  list: getAssetRecipeList,
-  categories: getAssetRecipeCategories
+  definitions: ASSET_RECIPES
 };
 
 const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {});

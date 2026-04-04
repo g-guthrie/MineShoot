@@ -1,15 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  ASSET_RECIPES,
-  getAssetRecipe,
-  getAssetRecipeCategories,
-  getAssetRecipeList
-} from '../../shared/asset-recipes.js';
+import { ASSET_RECIPES } from '../../shared/asset-recipes.js';
 
 test('asset recipes cover every requested category with concrete example assets', () => {
-  assert.deepEqual(getAssetRecipeCategories(), [
+  assert.deepEqual(Object.keys(ASSET_RECIPES), [
     'entity',
     'misc',
     'item',
@@ -33,16 +28,12 @@ test('asset recipes cover every requested category with concrete example assets'
   assert.equal(Object.keys(ASSET_RECIPES.environment).length, 5);
   assert.deepEqual(Object.keys(ASSET_RECIPES.structure), ['fence', 'lightPole', 'sign']);
   assert.deepEqual(Object.keys(ASSET_RECIPES.ui), ['icon', 'image', 'background', 'font']);
-});
-
-test('asset recipe helpers resolve concrete entries', () => {
-  assert.deepEqual(getAssetRecipe('projectile', 'laser'), {
+  assert.deepEqual(ASSET_RECIPES.projectile.laser, {
     id: 'laser',
     label: 'Laser',
     referenceFamily: 'energy'
   });
-
-  assert.equal(getAssetRecipe('particle', 'steam'), null);
-  assert.equal(getAssetRecipe('vehicle', 'cart'), null);
-  assert.equal(getAssetRecipeList('structure').length, 3);
+  assert.equal(ASSET_RECIPES.particle.steam, undefined);
+  assert.equal(ASSET_RECIPES.vehicle, undefined);
+  assert.equal(Object.keys(ASSET_RECIPES.structure).length, 3);
 });

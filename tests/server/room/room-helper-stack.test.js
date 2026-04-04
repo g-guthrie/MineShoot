@@ -223,7 +223,6 @@ test('room helper stack interoperates across transport, state, runtime, socket, 
     }), {
       safeJsonParse: JSON.parse,
       nowMs: () => 100,
-      handleClassCast() {},
       isPrivateMatchRoom: () => false,
       roomPhaseActive: 'active',
       msgC2s: { THROW: 'throw' },

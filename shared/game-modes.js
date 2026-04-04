@@ -53,10 +53,6 @@ export function getGameMode(modeId) {
   return cloneMode(GAME_MODE_DEFS[normalized] || GAME_MODE_DEFS.ffa);
 }
 
-export function getQuickPlayGameModes() {
-  return allModes().filter((mode) => mode.showInMainMenu);
-}
-
 export function getDefaultGameMode() {
   const primary = allModes().find((mode) => mode.primaryQuickPlay);
   return primary ? primary.id : 'ffa';
@@ -82,7 +78,6 @@ const runtime = (globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {}
 runtime.GameShared = runtime.GameShared || {};
 runtime.GameShared.getGameModeCatalog = getGameModeCatalog;
 runtime.GameShared.getGameMode = getGameMode;
-runtime.GameShared.getQuickPlayGameModes = getQuickPlayGameModes;
 runtime.GameShared.getDefaultGameMode = getDefaultGameMode;
 runtime.GameShared.normalizeGameMode = normalizeGameMode;
 runtime.GameShared.getGameModeLabel = getGameModeLabel;

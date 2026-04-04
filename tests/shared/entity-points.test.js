@@ -29,10 +29,8 @@ import {
   MUZZLE_ORIGIN_FORWARD_OFFSET,
   ROLL_BODY_HITBOX_LINEAR_SCALE,
   buildCombatHitboxesFromFeetPosition,
-  entityBodyHitboxY,
   entityBodyHitboxYFromFeet,
   entityFeetY,
-  entityHeadHitboxY,
   entityHeadHitboxYFromFeet,
   entityMarkerPointYFromFeet,
   logicalHitscanOriginFromEye,
@@ -51,8 +49,9 @@ test('entity-space and feet-space hitbox helpers agree on the same position', ()
   const entityY = 4.85;
   const feetY = entityFeetY(entityY);
 
-  assert.equal(entityBodyHitboxY(entityY), entityBodyHitboxYFromFeet(feetY));
-  assert.equal(entityHeadHitboxY(entityY), entityHeadHitboxYFromFeet(feetY));
+  assert.equal(entityFeetY(entityY), feetY);
+  assert.equal(entityBodyHitboxYFromFeet(feetY), feetY + BODY_HITBOX_CENTER_OFFSET_Y);
+  assert.equal(entityHeadHitboxYFromFeet(feetY), feetY + HEAD_HITBOX_CENTER_OFFSET_Y);
 });
 
 test('combat hitbox vertical split is derived from avatar torso and head primitives', () => {

@@ -5,8 +5,6 @@ import {
   MATCH_RESET_DELAY_MS,
   createMatchState,
   formatMatchHudCounter,
-  formatMenuMatchStats,
-  formatMenuMatchStatus,
   formatWinnerLabel,
   targetProgressForGameMode
 } from '../../shared/match-rules.js';
@@ -33,7 +31,6 @@ test('shared match rules format ffa win progress and winner labels', () => {
   const selfState = { id: 'u1', kills: 4, deaths: 1 };
 
   assert.equal(formatMatchHudCounter(matchState, selfState), 'Kills: 4 | Goal: 10 | Lead: 6');
-  assert.equal(formatMenuMatchStats(matchState, selfState), 'KILLS 4 | DEATHS 1');
 
   const ended = {
     gameMode: 'ffa',
@@ -43,10 +40,6 @@ test('shared match rules format ffa win progress and winner labels', () => {
     winnerId: 'u1'
   };
   assert.equal(formatWinnerLabel(ended, selfState), 'YOU');
-  assert.equal(
-    formatMenuMatchStatus(ended, selfState, { nowMs: () => 9500 }),
-    'YOU WON | RESET 5.0s'
-  );
 });
 
 test('shared match rules format tdm progress as team progress, not raw kills', () => {
@@ -70,10 +63,6 @@ test('shared match rules format tdm progress as team progress, not raw kills', (
   assert.equal(
     formatMatchHudCounter(matchState, selfState),
     'Kills: 2 | Team: 4.5/10 | Opp: BRAVO 3'
-  );
-  assert.equal(
-    formatMenuMatchStatus(matchState, selfState),
-    'TEAM DEATH MATCH TEAM 4.5 / 10 | OPP BRAVO 3'
   );
 });
 
@@ -101,9 +90,5 @@ test('shared match rules use the leading opposing team in multi-team tdm summari
   assert.equal(
     formatMatchHudCounter(matchState, selfState),
     'Kills: 1 | Team: 2/10 | Opp: CHARLIE 5'
-  );
-  assert.equal(
-    formatMenuMatchStatus(matchState, selfState),
-    'TEAM DEATH MATCH TEAM 2 / 10 | OPP CHARLIE 5'
   );
 });

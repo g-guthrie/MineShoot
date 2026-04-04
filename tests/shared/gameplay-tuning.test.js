@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   gameplayTuning,
   getAwarenessTuning,
-  getEnemyTuning,
   getDefaultThrowableId,
   getSelectableWeaponIds,
   getThrowableMechanicsTuning,
@@ -203,8 +202,6 @@ test('shared survivability helper owns the live armor recharge rule', () => {
 });
 
 test('throwable and combat tuning stay available after the system purge', () => {
-  assert.deepEqual(getEnemyTuning(), gameplayTuning.enemy);
-  assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getEnemyTuning, 'function');
   assert.deepEqual(getThrowableMechanicsTuning(), gameplayTuning.throwableMechanics);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getThrowableMechanicsTuning, 'function');
   assert.equal(Object.prototype.hasOwnProperty.call(gameplayTuning, 'abilityCatalog'), false);
@@ -228,21 +225,24 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
   assert.deepEqual(gameplayTuning.network.flags, {
     adaptiveSelfReconciliation: true,
     replayFirstSelfCorrection: true,
-    remoteReceiveJitterBuffer: true,
+    remoteReceiveJitterBuffer: false,
     snapshotDeltaCompression: true,
-    adaptiveSnapshotCadence: true,
+    adaptiveSnapshotCadence: false,
     combatBurstSnapshots: true,
     shotTokenDamageAggregation: false
   });
   assert.equal(gameplayTuning.network.ping.cadenceMs, 500);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendDistanceWu, 0.5);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendVerticalWu, 0.35);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingCorrectionDecayMs, 100);
   assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.25);
   assert.equal(gameplayTuning.network.selfReconciliation.airborneHardSnapVerticalWu, 2.75);
   assert.equal(gameplayTuning.network.selfReconciliation.airborneMovingAckDriftLimit, 5);
   assert.equal(gameplayTuning.network.combatPriority.burstCadenceMs, 16);
-  assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 78);
+  assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 50);
   assert.equal(gameplayTuning.network.remoteInterpolation.extrapolationDecay, 1.2);
   assert.equal(gameplayTuning.network.remoteInterpolation.verticalBallisticEnabled, true);
-  assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 120);
+  assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 80);
   assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 70);
   assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 24);
   assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 120);

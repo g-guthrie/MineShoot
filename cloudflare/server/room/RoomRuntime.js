@@ -537,6 +537,5 @@ export function tickPlayers(room, dtSec, deps) {
     room.regenArmor(player, dtSec);
     room.tickStreamState(player, dtSec);
     room.tickThrowableRegen(player, dtSec);
-    if (deps.tickClassAbilityState) deps.tickClassAbilityState(room, player);
   }
 }
