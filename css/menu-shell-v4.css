@@ -1126,6 +1126,16 @@ body { cursor: default; }
     justify-self: stretch;
 }
 
+#menu-shell.menu-shell-v4 #postgame-celebration {
+    display: grid;
+    justify-items: stretch;
+}
+
+#menu-shell.menu-shell-v4 #postgame-results {
+    display: grid;
+    justify-items: stretch;
+}
+
 #menu-shell.menu-shell-v4 #postgame-winner-banner,
 #menu-shell.menu-shell-v4 .postgame-hero-outcome {
     color: var(--c-heading);
@@ -1167,6 +1177,8 @@ body { cursor: default; }
 #menu-shell.menu-shell-v4 #postgame-celebration-note {
     font-size: 13px;
     line-height: 1.35;
+    max-width: 46ch;
+    justify-self: center;
 }
 
 #menu-shell.menu-shell-v4 #postgame-ghost-stage {
@@ -1178,10 +1190,11 @@ body { cursor: default; }
 }
 
 #menu-shell.menu-shell-v4 .postgame-ghost {
-    margin: 0;
-    min-height: 148px;
+    display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0;
+    min-height: 148px;
     text-align: center;
     white-space: pre;
     color: var(--c-body);
@@ -1485,6 +1498,56 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #game-modes-toggle-btn { width: 40px; min-width: 40px; height: 40px; min-height: 40px; }
     #menu-shell.menu-shell-v4 .social-connect-row { grid-template-columns: 1fr; }
     #utility-overlay { left: 16px; right: 16px; width: auto; }
+
+    #menu-shell.menu-shell-v4 #postgame-flow {
+        padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+        align-items: start;
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-panel {
+        width: min(100%, 560px);
+        padding: 20px 16px 16px;
+        gap: 12px;
+        border-radius: 18px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-winner-banner,
+    #menu-shell.menu-shell-v4 .postgame-hero-outcome {
+        font-size: clamp(30px, 10vw, 42px);
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-result-banner,
+    #menu-shell.menu-shell-v4 .postgame-hero-winner {
+        font-size: clamp(14px, 4.6vw, 18px);
+        letter-spacing: 0.08em;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-celebration-note {
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        line-height: 1.45;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-ghost-stage {
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-ghost {
+        min-height: 74px;
+        padding: 10px 8px;
+        border-radius: 14px;
+        font-size: 13px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-results-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-actions > .btn {
+        width: 100%;
+        max-width: none;
+    }
 }
 
 @media (max-width: 560px) {
@@ -1492,6 +1555,26 @@ body { cursor: default; }
     #menu-shell.menu-shell-v4 #menu-header-actions { justify-content: flex-start; }
     #menu-shell.menu-shell-v4 #active-match-pill-grid { gap: 6px; }
     #menu-shell.menu-shell-v4 .match-stat-pill { flex-basis: 100%; }
+
+    #menu-shell.menu-shell-v4 #postgame-flow {
+        padding: 10px 8px calc(12px + env(safe-area-inset-bottom));
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-panel {
+        padding: 16px 12px 14px;
+        gap: 10px;
+    }
+
+    #menu-shell.menu-shell-v4 #postgame-ghost-stage {
+        grid-template-columns: 1fr;
+        max-width: 220px;
+        justify-self: center;
+    }
+
+    #menu-shell.menu-shell-v4 .postgame-ghost {
+        min-height: 58px;
+        font-size: 12px;
+    }
 }
 
 @media (pointer: coarse) and (max-height: 500px) and (orientation: landscape) {
@@ -1744,39 +1827,42 @@ body { cursor: default; }
     /* ---- Post-game ---- */
 
     #menu-shell.menu-shell-v4 #postgame-flow {
-        padding: 8px;
+        padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
     }
 
     #menu-shell.menu-shell-v4 .postgame-panel {
-        width: min(100%, 620px);
-        padding: 10px 10px 8px;
-        gap: 6px;
+        width: min(100%, 640px);
+        padding: 12px 12px 10px;
+        gap: 8px;
     }
 
     #menu-shell.menu-shell-v4 #postgame-winner-banner,
     #menu-shell.menu-shell-v4 .postgame-hero-outcome {
-        font-size: clamp(20px, 4vw, 32px);
+        font-size: clamp(24px, 4vw, 36px);
     }
 
     #menu-shell.menu-shell-v4 #postgame-result-banner,
-    #menu-shell.menu-shell-v4 .postgame-hero-winner,
+    #menu-shell.menu-shell-v4 .postgame-hero-winner {
+        font-size: 12px;
+    }
+
     #menu-shell.menu-shell-v4 #postgame-celebration-note {
-        font-size: 10px;
+        font-size: 11px;
     }
 
     #menu-shell.menu-shell-v4 #postgame-ghost-stage {
-        gap: 4px;
+        gap: 6px;
     }
 
     #menu-shell.menu-shell-v4 .postgame-ghost {
-        min-height: 44px;
-        font-size: 10px;
+        min-height: 52px;
+        font-size: 11px;
         padding: 8px 6px;
         border-radius: 12px;
     }
 
     #menu-shell.menu-shell-v4 #postgame-results-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: 6px;
     }
 }

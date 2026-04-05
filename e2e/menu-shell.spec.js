@@ -569,3 +569,88 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
   expect(metrics.roomOverflow).toBe(false);
   expect(metrics.viewportOverflow).toBe(false);
 });
+
+test('postgame flow stays readable and fully visible on phone-sized screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.locator('#game-modes-toggle-btn').click();
+  await page.locator('#sandbox-mode-btn').click();
+  await page.locator('#primary-launch-btn').click();
+  await page.waitForTimeout(1200);
+
+  await page.evaluate(() => {
+    const session = window.__MAYHEM_RUNTIME && window.__MAYHEM_RUNTIME.GameSession;
+    if (!session || !session.syncMatchState) throw new Error('GameSession.syncMatchState unavailable');
+    session.syncMatchState({
+      matchState: {
+        ended: true,
+        endedAt: 123456,
+        resetAt: 127000,
+        winnerId: 'usr_self',
+        mode: 'ffa',
+        targetScore: 10,
+        scoreByPlayer: { usr_self: 10 }
+      },
+      selfState: {
+        id: 'usr_self',
+        kills: 10,
+        deaths: 3
+      }
+    });
+  });
+
+  await page.waitForTimeout(150);
+
+  const celebrationMetrics = await page.evaluate(() => {
+    const flow = document.getElementById('postgame-flow');
+    const celebration = document.getElementById('postgame-celebration');
+    const results = document.getElementById('postgame-results');
+    const winner = document.getElementById('postgame-winner-banner');
+    const note = document.getElementById('postgame-celebration-note');
+    const ghosts = Array.from(document.querySelectorAll('#postgame-ghost-stage .postgame-ghost'));
+    const ghostColumns = new Set(ghosts.map((node) => Math.round(node.getBoundingClientRect().left))).size;
+    return {
+      flowVisible: !!flow && !flow.hidden,
+      celebrationVisible: !!celebration && !celebration.hidden,
+      resultsHidden: !!results && results.hidden,
+      winnerFontSize: winner ? Number.parseFloat(getComputedStyle(winner).fontSize) : 0,
+      noteFontSize: note ? Number.parseFloat(getComputedStyle(note).fontSize) : 0,
+      ghostColumns,
+      viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    };
+  });
+
+  expect(celebrationMetrics.flowVisible).toBe(true);
+  expect(celebrationMetrics.celebrationVisible).toBe(true);
+  expect(celebrationMetrics.resultsHidden).toBe(true);
+  expect(celebrationMetrics.winnerFontSize).toBeGreaterThanOrEqual(28);
+  expect(celebrationMetrics.noteFontSize).toBeGreaterThanOrEqual(12);
+  expect(celebrationMetrics.ghostColumns).toBe(1);
+  expect(celebrationMetrics.viewportOverflow).toBe(false);
+
+  await page.waitForTimeout(2900);
+
+  const resultsMetrics = await page.evaluate(() => {
+    const celebration = document.getElementById('postgame-celebration');
+    const results = document.getElementById('postgame-results');
+    const continueBtn = document.getElementById('postgame-continue-btn');
+    const resultCards = Array.from(document.querySelectorAll('#postgame-results-grid .match-stat-pill'));
+    const resultColumns = new Set(resultCards.map((node) => Math.round(node.getBoundingClientRect().left))).size;
+    const continueRect = continueBtn ? continueBtn.getBoundingClientRect() : null;
+    return {
+      celebrationHidden: !!celebration && celebration.hidden,
+      resultsVisible: !!results && !results.hidden,
+      resultColumns,
+      continueBottom: continueRect ? continueRect.bottom : 0,
+      viewportHeight: window.innerHeight,
+      viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    };
+  });
+
+  expect(resultsMetrics.celebrationHidden).toBe(true);
+  expect(resultsMetrics.resultsVisible).toBe(true);
+  expect(resultsMetrics.resultColumns).toBe(1);
+  expect(resultsMetrics.continueBottom).toBeLessThanOrEqual(resultsMetrics.viewportHeight);
+  expect(resultsMetrics.viewportOverflow).toBe(false);
+});
