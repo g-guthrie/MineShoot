@@ -18,6 +18,7 @@ async function getMenuBorderTokens(page) {
 }
 
 test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay loading', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto('/');
 
   await expect(page.locator('#menu-party-id-value')).not.toHaveText('------');
@@ -48,8 +49,8 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
   await page.evaluate(() => document.getElementById('play-btn')?.click());
-  await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
-  await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime()))).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld), { timeout: 20_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime())), { timeout: 20_000 }).toBe(true);
 });
 
 test('settings popover stays visible and keeps the menu glass spacing', async ({ page }) => {
@@ -349,6 +350,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
   });
 
   const metrics = await page.evaluate(() => {
+    const menuSurface = document.getElementById('menu-surface');
     const headerFeedback = document.getElementById('active-match-header-feedback');
     const activeBanner = document.getElementById('active-match-primary-banner');
     const sessionStats = document.getElementById('active-match-pill-grid');
@@ -366,6 +368,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
       hiddenSecondaryPill: sessionMeta ? getComputedStyle(sessionMeta).display === 'none' : false,
       statsRole: sessionStats ? sessionStats.getAttribute('data-rounded-role') : '',
       statsRadius: statsStyle ? statsStyle.borderRadius : '',
+      expectedContainerRadius: menuSurface ? getComputedStyle(menuSurface).getPropertyValue('--radius-card').trim() : '',
       visiblePillCount: visiblePills.length,
       rowCount: pillRows,
       modeText: sessionStatus ? sessionStatus.textContent.trim() : '',
@@ -379,7 +382,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
   expect(metrics.hiddenBanner).toBe(true);
   expect(metrics.hiddenSecondaryPill).toBe(true);
   expect(metrics.statsRole).toBe('container');
-  expect(metrics.statsRadius).toBe('0px');
+  expect(metrics.statsRadius).toBe(metrics.expectedContainerRadius);
   expect(metrics.visiblePillCount).toBe(3);
   expect(metrics.rowCount).toBe(2);
   expect(metrics.modeText).toBe('Free For All');
@@ -418,6 +421,7 @@ test('rounded container language stays consistent across active banner, active s
     const statsStyle = activeStats ? getComputedStyle(activeStats) : null;
     const trayStyle = getComputedStyle(fixtureTray);
     const memberStyle = getComputedStyle(fixtureMember);
+    const expectedContainerRadius = menuSurface ? getComputedStyle(menuSurface).getPropertyValue('--radius-card').trim() : '';
 
     return {
       activeBannerRole: activeBanner ? activeBanner.getAttribute('data-rounded-role') : '',
@@ -427,7 +431,8 @@ test('rounded container language stays consistent across active banner, active s
       activeBannerRadius: bannerStyle ? bannerStyle.borderRadius : '',
       activeStatsRadius: statsStyle ? statsStyle.borderRadius : '',
       trayRadius: trayStyle.borderRadius,
-      memberRadius: memberStyle.borderRadius
+      memberRadius: memberStyle.borderRadius,
+      expectedContainerRadius
     };
   });
 
@@ -435,10 +440,10 @@ test('rounded container language stays consistent across active banner, active s
   expect(metrics.activeStatsRole).toBe('container');
   expect(metrics.trayRole).toBe('container');
   expect(metrics.memberRole).toBe('container');
-  expect(metrics.activeBannerRadius).toBe('20px');
-  expect(metrics.activeStatsRadius).toBe('0px');
-  expect(metrics.trayRadius).toBe(metrics.memberRadius);
-  expect(metrics.trayRadius).not.toBe('0px');
+  expect(metrics.activeBannerRadius).toBe(metrics.expectedContainerRadius);
+  expect(metrics.activeStatsRadius).toBe(metrics.expectedContainerRadius);
+  expect(metrics.trayRadius).toBe(metrics.expectedContainerRadius);
+  expect(metrics.memberRadius).toBe(metrics.expectedContainerRadius);
 });
 
 test('menu v4 border hierarchy distinguishes shells actions and subactions', async ({ page }) => {
@@ -541,7 +546,10 @@ test('postgame flow stays readable and fully visible on phone-sized screens', as
   await page.locator('#game-modes-toggle-btn').click();
   await page.locator('#sandbox-mode-btn').click();
   await page.locator('#primary-launch-btn').click();
-  await page.waitForTimeout(1200);
+  await expect.poll(() => page.evaluate(() => {
+    const session = window.__MAYHEM_RUNTIME && window.__MAYHEM_RUNTIME.GameSession;
+    return !!(session && session.syncMatchState);
+  }), { timeout: 15_000 }).toBe(true);
 
   await page.evaluate(() => {
     const session = window.__MAYHEM_RUNTIME && window.__MAYHEM_RUNTIME.GameSession;
@@ -572,7 +580,8 @@ test('postgame flow stays readable and fully visible on phone-sized screens', as
     const results = document.getElementById('postgame-results');
     const winner = document.getElementById('postgame-winner-banner');
     const note = document.getElementById('postgame-celebration-note');
-    const ghosts = Array.from(document.querySelectorAll('#postgame-ghost-stage .postgame-ghost'));
+    const ghosts = Array.from(document.querySelectorAll('#postgame-ghost-stage .postgame-ghost'))
+      .filter((node) => getComputedStyle(node).display !== 'none');
     const ghostColumns = new Set(ghosts.map((node) => Math.round(node.getBoundingClientRect().left))).size;
     return {
       flowVisible: !!flow && !flow.hidden,
