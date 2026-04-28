@@ -9,7 +9,6 @@
     var domUtils = runtime.GameDomUtils || null;
     var DESKTOP_AUTO_FIRE_STORAGE_KEY = 'mayhem.desktopAutoFireEnabled';
     var CAMERA_VIEW_STORAGE_KEY = 'mayhem.cameraViewMode';
-    var activeTestHandle = null;
     var activeGameplayControlsInstance = null;
 
     function readStoredFirstPersonViewPreference() {
@@ -669,20 +668,6 @@
             })
             : null;
 
-        activeTestHandle = weaponSwapInput ? {
-            setInputCaptureOverride: function (value) {
-                return weaponSwapInput.setInputCaptureOverride
-                    ? weaponSwapInput.setInputCaptureOverride(value)
-                    : null;
-            },
-            resetState: function () {
-                if (weaponSwapInput.resetState) weaponSwapInput.resetState();
-            },
-            readState: function () {
-                return weaponSwapInput.readState ? weaponSwapInput.readState() : null;
-            }
-        } : null;
-
         function clearTrackingReticle() {
             if (runtime.GameUI && runtime.GameUI.updateTrackingReticle) {
                 runtime.GameUI.updateTrackingReticle(false, false);
@@ -1150,8 +1135,7 @@
                 resetTouchMovementState();
                 endLookPointer({ pointerId: touchLookState.pointerId });
                 clearTouchJumpReleaseTimer();
-            },
-            _resolveTouchSprintState: resolveTouchSprintState
+            }
         };
     }
 
@@ -1222,18 +1206,6 @@
             return controlsApi.setFirstPersonViewEnabled
                 ? controlsApi.setFirstPersonViewEnabled(!enabled)
                 : !enabled;
-        },
-        _test: {
-            getActiveHandle: function () {
-                return activeTestHandle;
-            },
-            resolveTouchSprintState: function (dx, dy) {
-                return !!(
-                    activeGameplayControlsInstance &&
-                    activeGameplayControlsInstance._resolveTouchSprintState &&
-                    activeGameplayControlsInstance._resolveTouchSprintState(dx, dy)
-                );
-            }
         }
     };
 })();

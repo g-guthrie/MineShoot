@@ -62,10 +62,6 @@
 
     GameWeaponPresentation.getWeaponDefinition = weaponDefinition;
     GameWeaponPresentation.resolveReloadState = resolveReloadState;
-    GameWeaponPresentation._test = {
-        resolveWeaponEntry: resolveWeaponEntry,
-        resolveReloadState: resolveReloadState
-    };
 
     runtime.GameWeaponPresentation = GameWeaponPresentation;
 })();

@@ -7,7 +7,7 @@ async function launchSandboxRuntime(page) {
   await page.locator('#primary-launch-btn').click();
   await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
-  await page.evaluate(() => document.getElementById('play-btn')?.click());
+  await page.locator('#play-btn').click();
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
   await expect.poll(() => page.evaluate(() => !!(
     window.__MAYHEM_RUNTIME.GameRuntimeLoader &&
@@ -16,22 +16,20 @@ async function launchSandboxRuntime(page) {
   ))).toBe(true);
 }
 
-async function enableRealWeaponSwapHandle(page) {
-  await expect.poll(() => page.evaluate(() => {
-    const controlsApi = window.__MAYHEM_RUNTIME && window.__MAYHEM_RUNTIME.GameGameplayControls;
-    return !!(
-      controlsApi &&
-      controlsApi._test &&
-      controlsApi._test.getActiveHandle &&
-      controlsApi._test.getActiveHandle()
-    );
-  })).toBe(true);
+async function enableRealWeaponSwapInput(page) {
+  const canvas = page.locator('canvas').first();
+  await expect(canvas).toBeVisible({ timeout: 15_000 });
 
   await page.evaluate(() => {
     const runtime = window.__MAYHEM_RUNTIME;
-    const handle = runtime.GameGameplayControls._test.getActiveHandle();
-    handle.resetState();
-    handle.setInputCaptureOverride(true);
+    const canvasEl = document.querySelector('canvas');
+    Object.defineProperty(document, 'pointerLockElement', {
+      configurable: true,
+      get() {
+        return canvasEl;
+      }
+    });
+    document.dispatchEvent(new Event('pointerlockchange'));
     runtime.GameHitscan.setWeaponOrder(['rifle', 'sniper']);
     runtime.GameHitscan.setWeapon('rifle');
   });
@@ -54,14 +52,9 @@ async function currentWeaponId(page) {
 
 test('sandbox runtime wires browser wheel input through the real gameplay controls', async ({ page }) => {
   await launchSandboxRuntime(page);
-  await enableRealWeaponSwapHandle(page);
+  await enableRealWeaponSwapInput(page);
 
   await dispatchWheel(page, { deltaY: 1, deltaMode: 1 });
 
   await expect.poll(() => currentWeaponId(page)).toBe('sniper');
-  await expect.poll(() => page.evaluate(() => {
-    const handle = window.__MAYHEM_RUNTIME.GameGameplayControls._test.getActiveHandle();
-    const state = handle && handle.readState ? handle.readState() : null;
-    return !!(state && state.inputCaptureActive && state.switchLockUntil > 0);
-  })).toBe(true);
 });

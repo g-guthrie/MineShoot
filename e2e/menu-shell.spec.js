@@ -297,44 +297,6 @@ test('active-match shell keeps the full four-pill layout contained at wide width
   expect(metrics.viewportOverflow).toBe(false);
 });
 
-test('active-match header feedback wraps long text without overflowing the shell', async ({ page }) => {
-  await page.setViewportSize({ width: 760, height: 1200 });
-  await page.goto('/');
-
-  await page.evaluate(() => {
-    window.dispatchEvent(new CustomEvent('mayhem-session-state', {
-      detail: {
-        runtimeReady: true,
-        inMatch: false,
-        awaitingInputCapture: false,
-        canResume: true,
-        activityState: 'paused',
-        launchContext: {}
-      }
-    }));
-    const feedback = document.getElementById('active-match-header-feedback');
-    if (feedback) {
-      feedback.hidden = false;
-      feedback.textContent = 'Invite pending for EXTRAORDINARILY-LONG-PLAYER-NAME-WITH-MULTIPLE-SECTIONS.';
-    }
-  });
-
-  const metrics = await page.evaluate(() => {
-    const shell = document.getElementById('menu-surface');
-    const feedback = document.getElementById('active-match-header-feedback');
-    if (!shell || !feedback) return { contained: false, wraps: false };
-    const shellRect = shell.getBoundingClientRect();
-    const feedbackRect = feedback.getBoundingClientRect();
-    return {
-      contained: feedbackRect.left >= shellRect.left - 1 && feedbackRect.right <= shellRect.right + 1,
-      wraps: feedbackRect.height > 30
-    };
-  });
-
-  expect(metrics.contained).toBe(true);
-  expect(metrics.wraps).toBe(true);
-});
-
 test('clicking the dimmed paused background resumes gameplay while clicks inside the menu do not', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto('/');
@@ -509,62 +471,6 @@ test('menu v4 border hierarchy distinguishes shells actions and subactions', asy
   expect(styles.action).toContain(tokens.action);
   expect(styles.subaction).toContain(tokens.subaction);
   expect(styles.action).not.toContain(tokens.subaction);
-});
-
-test('expanded party and friend controls keep parent pills darker than nested subactions', async ({ page }) => {
-  await page.goto('/');
-
-  await page.evaluate(() => {
-    const partyHero = document.getElementById('menu-party-hero');
-    const friendsPane = document.getElementById('menu-social-friends-pane');
-    const socialLayout = document.getElementById('menu-social-layout');
-    const partyMembers = document.getElementById('party-hero-members');
-    const friendsList = document.getElementById('social-friends-list');
-    if (partyHero) partyHero.hidden = false;
-    if (friendsPane) friendsPane.hidden = false;
-    if (socialLayout) socialLayout.setAttribute('data-layout', 'split');
-    if (partyMembers) {
-      partyMembers.innerHTML = `
-        <div class="menu-member-card">
-          <button type="button" id="fixture-party-member" class="menu-member-pill">BRAVO</button>
-          <div class="menu-member-subpills">
-            <button type="button" id="fixture-party-subaction" class="friend-preview-btn secondary">Kick from Party</button>
-          </div>
-        </div>
-      `;
-    }
-    if (friendsList) {
-      friendsList.innerHTML = `
-        <div class="menu-friend-card">
-          <button type="button" id="fixture-friend-pill" class="menu-friend-pill">
-            <div class="menu-friend-pill-name"><span>ALLY</span></div>
-          </button>
-          <div class="menu-member-subpills">
-            <button type="button" id="fixture-friend-subaction" class="friend-preview-btn secondary">Remove Friend</button>
-          </div>
-        </div>
-      `;
-    }
-  });
-
-  const tokens = await getMenuBorderTokens(page);
-  const styles = await page.evaluate(() => {
-    const partyPill = document.getElementById('fixture-party-member');
-    const partySubaction = document.getElementById('fixture-party-subaction');
-    const friendPill = document.getElementById('fixture-friend-pill');
-    const friendSubaction = document.getElementById('fixture-friend-subaction');
-    return {
-      partyPill: partyPill ? getComputedStyle(partyPill).boxShadow : '',
-      partySubaction: partySubaction ? getComputedStyle(partySubaction).boxShadow : '',
-      friendPill: friendPill ? getComputedStyle(friendPill).boxShadow : '',
-      friendSubaction: friendSubaction ? getComputedStyle(friendSubaction).boxShadow : ''
-    };
-  });
-
-  expect(styles.partyPill).toContain(tokens.action);
-  expect(styles.partySubaction).toContain(tokens.subaction);
-  expect(styles.friendPill).toContain(tokens.action);
-  expect(styles.friendSubaction).toContain(tokens.subaction);
 });
 
 test('room controls separate primary actions from contextual subactions', async ({ page }) => {

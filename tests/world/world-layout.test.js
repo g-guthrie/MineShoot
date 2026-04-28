@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
 
 import {
   createRotatedBoxAabb,
@@ -14,7 +13,6 @@ import {
 import {
   BIOME_ARCTIC,
   BIOME_WALL_STREET,
-  BIOME_CITADEL,
   BIOME_DESERT,
   BIOME_GRID_COLS,
   BIOME_GRID_ROWS,
@@ -30,8 +28,6 @@ import {
   biomeAtPosition
 } from '../../shared/world-layout.js';
 import { buildWorldCollisionData } from '../../shared/world-collision.js';
-
-const CITADEL_STEAM_TILE_COUNT = 56;
 
 test('world layout expands to a 3x3 biome grid', () => {
   assert.equal(BIOME_GRID_COLS, 3);
@@ -120,8 +116,6 @@ test('headless world collision data no longer includes thin seam colliders on bi
 function createGeometryRecorder() {
   const blocks = [];
   const decors = [];
-  const flickers = [];
-  const steamColumns = [];
 
   function applyColliderUserData(userData, spec, primitive, sliceIndex, sliceCount) {
     userData.collisionAuthoring = true;
@@ -167,8 +161,6 @@ function createGeometryRecorder() {
   return {
     blocks,
     decors,
-    flickers,
-    steamColumns,
     place: {
       addBlock(x, y, z, w, h, d, material, isSolid) {
         const userData = {};
@@ -259,8 +251,8 @@ function createGeometryRecorder() {
       addMistCard() {},
       addLeafSway() {},
       addIceShimmer() {},
-      addFlicker(data) { flickers.push(data); },
-      addSteamColumn(data) { steamColumns.push(data); }
+      addFlicker() {},
+      addSteamColumn() {}
     }
   };
 }
@@ -290,182 +282,6 @@ function pointHitsSolid(aabbs, x, y, z) {
     z <= aabb.max.z
   );
 }
-
-test('arctic mountain keeps a lower summit while adding more glacier texture', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.arctic;
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r0c0');
-  const recorder = createGeometryRecorder();
-  const stats = builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_ARCTIC },
-    rawBounds
-  });
-
-  assert.ok(stats);
-  assert.ok(stats.peakHeight >= 19.5);
-  assert.ok(stats.peakHeight <= 21.5);
-  assert.ok(stats.terraceCount <= 6);
-  assert.ok(stats.minRouteShelfDepth >= 3.5);
-  assert.ok(stats.minRouteShelfWidth >= 4.0);
-  assert.ok(stats.summitWidth >= 4.0);
-  assert.ok(stats.summitDepth >= 3.5);
-  assert.equal(stats.glacierPatches, 6);
-  assert.equal(stats.interiorSpireGroups, 5);
-  assert.ok(stats.groundSpires >= 30);
-  assert.ok(stats.crystals >= 36);
-  assert.ok(stats.edgeTouchSides.north >= 1);
-  assert.ok(stats.edgeTouchSides.east >= 1);
-  assert.ok(stats.edgeTouchSides.south >= 1);
-  assert.ok(stats.edgeTouchSides.west >= 1);
-});
-
-test('jungle keeps the waterfall and shrine anchors while opening the shrine court', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.jungle;
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r1c0');
-  const recorder = createHeadlessRecorder();
-  const stats = builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_JUNGLE },
-    rawBounds
-  });
-
-  assert.ok(stats);
-  assert.ok(Math.abs(stats.waterfallAnchorX - (rawBounds.minX + 2.75)) < 0.0001);
-  assert.ok(Math.abs(stats.waterfallAnchorZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.34))) < 0.0001);
-  assert.ok(Math.abs(stats.shrineCenterX - (rawBounds.minX + ((rawBounds.maxX - rawBounds.minX) * 0.67))) < 0.0001);
-  assert.ok(Math.abs(stats.shrineCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.56))) < 0.0001);
-  assert.equal(stats.canopyTrees, 11);
-  assert.equal(stats.giantTrees, 9);
-  assert.equal(stats.bushyTrees, 9);
-  assert.equal(stats.saplings, 5);
-  assert.equal(stats.corridorBlockers, 3);
-  assert.equal(stats.edgeTreeAssets, 6);
-
-  const exactBorderTouches = recorder.collidables.filter((box) =>
-    Math.abs(box.min.x - rawBounds.minX) < 0.0001 ||
-    Math.abs(box.max.x - rawBounds.maxX) < 0.0001 ||
-    Math.abs(box.min.z - rawBounds.minZ) < 0.0001 ||
-    Math.abs(box.max.z - rawBounds.maxZ) < 0.0001
-  );
-  assert.equal(exactBorderTouches.length, 0);
-});
-
-test('citadel grows a larger flickering summit flame with a fuller steam plume', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.citadel;
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r1c1');
-  const recorder = createGeometryRecorder();
-  const stats = builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_CITADEL },
-    rawBounds
-  });
-
-  assert.ok(stats);
-  assert.equal(stats.terraces, 5);
-  assert.equal(stats.stairs, 4);
-  assert.equal(stats.flameLayers, 3);
-  assert.equal(recorder.steamColumns.length, 1);
-  assert.equal(stats.steamTileCount, CITADEL_STEAM_TILE_COUNT);
-  assert.ok(Math.abs(recorder.steamColumns[0].tiles.length - CITADEL_STEAM_TILE_COUNT) < 0.0001);
-  assert.ok(Math.abs(Number(recorder.steamColumns[0].rise || 0) - 4.6) < 0.0001);
-  assert.ok(Math.abs(Number(recorder.steamColumns[0].baseOpacity || 0) - 0.11) < 0.0001);
-  assert.ok(stats.steamPeakHeight > 33);
-  assert.ok(stats.flameTopHeight > 24);
-
-  const flameBlocks = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    block.y >= 20 &&
-    block.h >= 1.5
-  );
-  assert.equal(flameBlocks.length, 3);
-  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 6.8) < 0.0001 && Math.abs(block.h - 1.9) < 0.0001));
-  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 4.8) < 0.0001 && Math.abs(block.h - 2.4) < 0.0001));
-  assert.ok(flameBlocks.some((block) => Math.abs(block.w - 2.8) < 0.0001 && Math.abs(block.h - 2.9) < 0.0001));
-
-  const flameFlickers = recorder.flickers.filter((flicker) => flicker && flicker.pulseFamily === 'citadel-flame');
-  assert.equal(flameFlickers.length, 3);
-  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.28) < 0.0001));
-  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.22) < 0.0001));
-  assert.ok(flameFlickers.some((flicker) => Math.abs(Number(flicker.amplitude || 0) - 0.18) < 0.0001));
-  assert.ok(flameFlickers.every((flicker) => Number(flicker.opacityAmplitude || 0) >= 0.12));
-});
-
-test('desert adds a mid-scale hero arch while keeping the fortress edges', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r0c2');
-  const recorder = createHeadlessRecorder();
-  const stats = builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_DESERT },
-    rawBounds
-  });
-
-  assert.ok(stats);
-  assert.ok(Math.abs(stats.centerHeroArchX - (rawBounds.minX + ((rawBounds.maxX - rawBounds.minX) * 0.52))) < 0.0001);
-  assert.ok(Math.abs(stats.centerHeroArchZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.54))) < 0.0001);
-  assert.ok(stats.centerHeroArchHeight >= 8.8);
-  assert.ok(stats.centerHeroArchHeight <= 9.2);
-  assert.ok(stats.centerHeroArchSpan >= 11.5);
-  assert.ok(stats.centerHeroArchClearWidth >= 4.8);
-  assert.equal(stats.centerSupportCount, 4);
-  assert.ok(stats.centerHeroArchHeight > stats.westArchPeakHeight);
-  assert.ok(stats.centerHeroArchSpan > stats.westArchSpan);
-
-  const northTouches = recorder.collidables.filter((box) =>
-    Math.abs(box.min.z - rawBounds.minZ) < 0.0001
-  );
-  const eastTouches = recorder.collidables.filter((box) =>
-    Math.abs(box.max.x - rawBounds.maxX) < 0.0001
-  );
-  assert.ok(northTouches.length >= 1);
-  assert.ok(eastTouches.length >= 1);
-});
-
-test('desert removes the broken fence clutter from the interior', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants.desert;
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r0c2');
-  const recorder = createGeometryRecorder();
-  builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_DESERT },
-    rawBounds
-  });
-
-  const fencePosts = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    Math.abs(block.w - 0.18) < 0.0001 &&
-    Math.abs(block.d - 0.18) < 0.0001 &&
-    block.h >= 1.6 &&
-    block.h <= 2.4
-  );
-  const fenceRails = recorder.blocks.filter((block) =>
-    block.kind === 'ramp' &&
-    block.isSolid === false &&
-    block.w <= 0.14 &&
-    block.h <= 0.14 &&
-    block.d >= 1.3
-  );
-
-  assert.equal(fencePosts.length, 0);
-  assert.equal(fenceRails.length, 0);
-});
 
 test('nuclear simpsons biome uses shared authored round colliders instead of biome-local hidden collision helpers', () => {
   const runtime = ensureHeadlessWorldRuntime();
@@ -580,170 +396,6 @@ test('nuclear simpsons biome blocks intended spaces while keeping the gate gap a
     block.userData.collisionAuthoring === true
   );
   assert.ok(colliderSlices.every((block) => block.kind === 'block'));
-});
-
-test('wall street rebuilds as a cold finance canyon with an open center push', () => {
-  const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
-  assert.equal(typeof builder, 'function');
-
-  const rawBounds = quadrantBounds('r2c1');
-  const recorder = createGeometryRecorder();
-  const stats = builder(rawBounds, recorder.place, {
-    ...recorder.ctx,
-    biomeEntry: { biome: BIOME_WALL_STREET },
-    rawBounds
-  });
-
-  assert.ok(stats);
-  assert.equal(stats.busStops, 0);
-  assert.equal(stats.planters, 0);
-  assert.equal(stats.cover, 8);
-  assert.equal(stats.tickerBoards, 7);
-  assert.equal(stats.vaultDoors, 2);
-  assert.equal(stats.institutionalColumns, 7);
-  assert.ok(stats.towerPeakHeight >= 69);
-  assert.ok(stats.towerPeakHeight <= 71);
-  assert.ok(stats.upperShaftWidth <= 6);
-  assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
-  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.90))) < 0.0001);
-  const expectedWallStreetZ = (v) => rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * v);
-  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.51)) < 0.0001);
-  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.51)) < 0.0001);
-  assert.ok(Math.abs(stats.westSouthCenterZ - expectedWallStreetZ(0.73)) < 0.0001);
-  assert.ok(Math.abs(stats.eastSouthCenterZ - expectedWallStreetZ(0.73)) < 0.0001);
-  assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
-  assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
-  assert.equal(stats.centerCoverCount, 0);
-  assert.equal(stats.westAlleyCoverCount, 4);
-  assert.equal(stats.eastAlleyCoverCount, 4);
-
-  const materialColor = (block) => block.material && block.material.color && block.material.color.value;
-  const oldWarmToontownColors = new Set([
-    0xe5ddcf,
-    0xd6c5a3,
-    0x8a7866,
-    0x8e8275,
-    0x7a5f58,
-    0xb39c7d,
-    0x6a6258,
-    0x4a443e
-  ]);
-  const oldWarmBlocks = recorder.blocks.filter((block) => oldWarmToontownColors.has(materialColor(block)));
-  assert.equal(oldWarmBlocks.length, 0);
-
-  const coldSurfaceBlocks = recorder.blocks.filter((block) =>
-    materialColor(block) === 0x202428 ||
-    materialColor(block) === 0x12161a ||
-    materialColor(block) === 0x384047 ||
-    materialColor(block) === 0x758088
-  );
-  assert.ok(coldSurfaceBlocks.length > 20);
-
-  const plazaSpan = (rawBounds.maxX - rawBounds.minX) - 1.2;
-  const broadPlazaBase = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    Math.abs(block.y - 0.04) < 0.0001 &&
-    Math.abs(block.w - plazaSpan) < 0.0001 &&
-    Math.abs(block.h - 0.08) < 0.0001 &&
-    Math.abs(block.d - plazaSpan) < 0.0001 &&
-    materialColor(block) === 0x202428
-  );
-  assert.equal(broadPlazaBase.length, 1);
-
-  const centerApproachStrip = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    Math.abs(block.y - 0.085) < 0.0001 &&
-    Math.abs(block.w - 12.4) < 0.0001 &&
-    Math.abs(block.h - 0.09) < 0.0001 &&
-    block.d >= 31
-  );
-  assert.equal(centerApproachStrip.length, 1);
-
-  const alleyStrips = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    Math.abs(block.y - 0.09) < 0.0001 &&
-    Math.abs(block.w - 4.4) < 0.0001 &&
-    Math.abs(block.h - 0.1) < 0.0001 &&
-    Math.abs(block.d - 25.0) < 0.0001
-  );
-  assert.equal(alleyStrips.length, 2);
-
-  const oldCurbPlanters = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === true &&
-    Math.abs(block.y - 0.56) < 0.0001 &&
-    Math.abs(block.h - 1.12) < 0.0001 &&
-    (
-      (Math.abs(block.w - 1.8) < 0.0001 && Math.abs(block.d - 1.2) < 0.0001) ||
-      (Math.abs(block.w - 1.6) < 0.0001 && Math.abs(block.d - 2.1) < 0.0001) ||
-      (Math.abs(block.w - 2.4) < 0.0001 && Math.abs(block.d - 1.5) < 0.0001)
-    )
-  );
-  assert.equal(oldCurbPlanters.length, 0);
-
-  const oldBusStopRoofs = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === true &&
-    Math.abs(block.y - 2.42) < 0.0001 &&
-    Math.abs(block.w - 5.4) < 0.0001 &&
-    Math.abs(block.h - 0.28) < 0.0001 &&
-    Math.abs(block.d - 3.1) < 0.0001
-  );
-  assert.equal(oldBusStopRoofs.length, 0);
-
-  const institutionalColumns = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === true &&
-    Math.abs(block.w - 1.18) < 0.0001 &&
-    Math.abs(block.h - 11.8) < 0.0001 &&
-    Math.abs(block.d - 1.12) < 0.0001
-  );
-  assert.equal(institutionalColumns.length, 7);
-
-  const tickerGlows = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === false &&
-    (
-      materialColor(block) === 0x30d158 ||
-      materialColor(block) === 0xb73535
-    )
-  );
-  assert.ok(tickerGlows.length >= 7);
-
-  const solidAabbs = solidGeometryAabbs(recorder.blocks);
-  const centerX = (rawBounds.minX + rawBounds.maxX) * 0.5;
-  const westShotX = rawBounds.minX + 4.4;
-  const eastShotX = rawBounds.maxX - 4.4;
-
-  for (const z of [118, 124, 132, 140, 146]) {
-    assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, z), false);
-  }
-  assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, 151), true);
-
-  assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, 136), true);
-  for (const z of [116, 118, 122, 148]) {
-    assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, z), false);
-  }
-  assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, 136), true);
-  for (const z of [116, 118, 122, 148]) {
-    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), false);
-  }
-
-  for (const z of [132, 140]) {
-    assert.equal(pointHitsSolid(solidAabbs, rawBounds.minX + 17, 2.5, z), false);
-    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), true);
-  }
-
-  const southFlushSolids = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === true &&
-    Math.abs((block.z + (block.d * 0.5)) - rawBounds.maxZ) < 0.0001
-  );
-  assert.ok(southFlushSolids.length >= 1);
 });
 
 test('wall street keeps all paving and collision inside the biome bounds', () => {

@@ -4,4 +4,5 @@ dist/
 .hermes-flow/
 .wrangler/
 test-results/
+.playwright-mcp/
 .codex/*.png

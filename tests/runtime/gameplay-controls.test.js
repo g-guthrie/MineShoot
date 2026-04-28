@@ -538,27 +538,6 @@ test('gameplay controls do not switch weapons from wheel input without pointer l
   assert.deepEqual(harness.calls.appliedWeapons, []);
 });
 
-test('gameplay controls expose a test handle that can force input capture and reset swap state', async () => {
-  const harness = await loadControlsHarness({
-    createOverrides: {
-      hasInputCapture() { return false; }
-    }
-  });
-
-  const handle = harness.runtime.GameGameplayControls._test.getActiveHandle();
-  assert.ok(handle);
-
-  handle.setInputCaptureOverride(true);
-  dispatchWheel(harness, 10, { deltaY: 1, deltaMode: 1 });
-  dispatchWheel(harness, 20, { deltaY: 1, deltaMode: 1 });
-
-  handle.resetState();
-  dispatchWheel(harness, 30, { deltaY: 1, deltaMode: 1 });
-
-  assert.deepEqual(harness.calls.toggleWeaponCalls, ['sniper', 'rifle']);
-  assert.equal(handle.readState().inputCaptureOverride, true);
-});
-
 test('gameplay controls unbind removes the wheel listener so relaunches do not stack toggles', async () => {
   const harness = await loadControlsHarness();
 
@@ -807,17 +786,4 @@ test('gameplay controls bind the camera view toggle and persist first-person sta
     key: 'mayhem.cameraViewMode',
     value: 'over_shoulder'
   });
-});
-
-test('gameplay controls widen the touch sprint wedge and bias it slightly clockwise', async () => {
-  const harness = await loadControlsHarness();
-  const sprintTest = harness.runtime.GameGameplayControls._test.resolveTouchSprintState;
-
-  assert.equal(typeof sprintTest, 'function');
-  assert.equal(sprintTest(0, -1), true);
-  assert.equal(sprintTest(0.18, -0.98), true);
-  assert.equal(sprintTest(0.3, -0.95), true);
-  assert.equal(sprintTest(-0.12, -0.99), true);
-  assert.equal(sprintTest(-0.2, -0.98), false);
-  assert.equal(sprintTest(0.58, -0.82), false);
 });

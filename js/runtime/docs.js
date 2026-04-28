@@ -1499,24 +1499,5 @@
         return !!panelEl && !panelEl.hidden;
     };
 
-    GameDocs._test = {
-        getData: getData,
-        setState: function (patch) {
-            patch = patch || {};
-            if (patch.activePage) state.activePage = String(patch.activePage);
-            if (patch.selectedWeaponId) state.selectedWeaponId = String(patch.selectedWeaponId);
-            if (patch.selectedThrowableId) state.selectedThrowableId = String(patch.selectedThrowableId);
-        },
-        buildContent: function (pageId) {
-            var data = getData();
-            ensureSelections(data);
-            state.activePage = String(pageId || state.activePage || 'home');
-            return buildContent(state.activePage, data);
-        },
-        weaponFireModelLabel: weaponFireModelLabel,
-        buildWeaponCombatRows: buildWeaponCombatRows,
-        buildWeaponFeelRows: buildWeaponFeelRows
-    };
-
     runtime.GameDocs = GameDocs;
 })();

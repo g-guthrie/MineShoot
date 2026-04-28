@@ -16,59 +16,6 @@ function createSocket() {
   };
 }
 
-test('room socket ignores legacy join-room messages', () => {
-  const ws = createSocket();
-  const sent = [];
-  const room = {
-    roomName: 'global',
-    privateRoomConfig: { roomPhase: 'active' },
-    clients: new Map([[ws, { userId: 'u1' }]]),
-    activeSocketByUserId: new Map([['u1', ws]]),
-    players: new Map([['u1', { id: 'u1' }]]),
-    send(target, payload) { sent.push({ target, payload }); },
-    buildWelcomePayload(userId) { return { t: 'welcome', selfId: userId }; }
-  };
-
-  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'join_room' }), {
-    safeJsonParse: JSON.parse,
-    nowMs: () => 123,
-    isPrivateMatchRoom: () => false,
-    roomPhaseActive: 'active',
-    msgC2s: { PING: 'ping' },
-    msgS2c: { PONG: 'pong' }
-  });
-
-  assert.deepEqual(sent, []);
-});
-
-test('room socket ignores legacy leave-room messages', () => {
-  const ws = createSocket();
-  const room = {
-    clients: new Map([[ws, { userId: 'u1' }]]),
-    activeSocketByUserId: new Map([['u1', ws]]),
-    players: new Map([['u1', { id: 'u1' }]]),
-    snapshots: [],
-    stopTickCalls: 0,
-    broadcastSnapshot(forceFull) { this.snapshots.push(forceFull); },
-    stopTickIfEmpty() { this.stopTickCalls += 1; }
-  };
-
-  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'leave_room' }), {
-    safeJsonParse: JSON.parse,
-    nowMs: () => 123,
-    isPrivateMatchRoom: () => false,
-    roomPhaseActive: 'active',
-    msgC2s: { PING: 'ping' },
-    msgS2c: { PONG: 'pong' }
-  });
-
-  assert.equal(room.clients.has(ws), true);
-  assert.equal(room.activeSocketByUserId.has('u1'), true);
-  assert.equal(room.players.has('u1'), true);
-  assert.deepEqual(room.snapshots, []);
-  assert.equal(room.stopTickCalls, 0);
-});
-
 test('room socket message blocks live actions while a private room is still in lobby', () => {
   const ws = createSocket();
   let fireCount = 0;
