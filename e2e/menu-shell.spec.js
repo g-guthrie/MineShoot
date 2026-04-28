@@ -17,6 +17,72 @@ async function getMenuBorderTokens(page) {
   });
 }
 
+async function expectCleanMenuLayout(page) {
+  const metrics = await page.evaluate(() => {
+    function isVisible(node) {
+      if (!node) return false;
+      if (node.hidden) return false;
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }
+
+    function containedInViewport(node) {
+      if (!node || !isVisible(node)) return true;
+      const rect = node.getBoundingClientRect();
+      return rect.left >= -1 &&
+        rect.right <= window.innerWidth + 1 &&
+        rect.top >= -1 &&
+        rect.bottom <= window.innerHeight + 1;
+    }
+
+    const visibleMenuNodes = Array.from(document.querySelectorAll([
+      '#menu-shell.menu-shell-v4',
+      '#menu-shell.menu-shell-v4 #menu-surface',
+      '#menu-shell.menu-shell-v4 #menu-body',
+      '#menu-shell.menu-shell-v4 .card',
+      '#menu-shell.menu-shell-v4 .banner',
+      '#menu-shell.menu-shell-v4 .flow',
+      '#menu-shell.menu-shell-v4 .grid',
+      '#menu-shell.menu-shell-v4 button',
+      '#menu-shell.menu-shell-v4 input',
+      '.modal-overlay:not([hidden]) .modal-card',
+      '.modal-overlay:not([hidden]) button',
+      '.modal-overlay:not([hidden]) input'
+    ].join(','))).filter(isVisible);
+
+    const overflowers = visibleMenuNodes
+      .filter((node) => node.scrollWidth > node.clientWidth + 1)
+      .map((node) => ({
+        id: node.id || '',
+        className: typeof node.className === 'string' ? node.className : '',
+        tagName: node.tagName,
+        scrollWidth: node.scrollWidth,
+        clientWidth: node.clientWidth
+      }))
+      .slice(0, 6);
+
+    const surface = document.getElementById('menu-surface');
+    const utility = document.getElementById('utility-overlay');
+    const modalCard = document.querySelector('.modal-overlay:not([hidden]) .modal-card');
+
+    return {
+      viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      overflowers,
+      surfaceContained: containedInViewport(surface),
+      utilityContained: containedInViewport(utility),
+      modalContained: containedInViewport(modalCard)
+    };
+  });
+
+  expect(metrics.viewportOverflow).toBe(false);
+  expect(metrics.overflowers).toEqual([]);
+  expect(metrics.surfaceContained).toBe(true);
+  expect(metrics.utilityContained).toBe(true);
+  expect(metrics.modalContained).toBe(true);
+}
+
 test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay loading', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('/');
@@ -537,6 +603,93 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
   expect(metrics.loadoutOverflow).toBe(false);
   expect(metrics.roomOverflow).toBe(false);
   expect(metrics.viewportOverflow).toBe(false);
+});
+
+test('phone-sized menu flow keeps main social settings auth and room surfaces contained', async ({ page }) => {
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 844, height: 390 }
+  ]) {
+    await test.step(`${size.width}x${size.height}`, async () => {
+      await page.setViewportSize(size);
+      await page.goto('/');
+      await expect(page.locator('#menu-surface')).toBeVisible();
+      await expectCleanMenuLayout(page);
+
+      await page.locator('#social-tools-toggle-btn').click();
+      await expect(page.locator('#menu-social-hero')).toBeVisible();
+      await expectCleanMenuLayout(page);
+
+      await page.locator('#utility-toggle-btn').click();
+      await expect(page.locator('#utility-overlay')).toBeVisible();
+      await expectCleanMenuLayout(page);
+      await page.locator('#utility-close-btn').click();
+      await expect(page.locator('#utility-overlay')).toBeHidden();
+
+      await page.locator('#account-toggle-btn').click();
+      await expect(page.locator('#auth-overlay')).toBeVisible();
+      await expectCleanMenuLayout(page);
+      await page.locator('#auth-close-btn').click();
+      await expect(page.locator('#auth-overlay')).toBeHidden();
+
+      await page.locator('#game-modes-toggle-btn').click();
+      await expect(page.locator('#play-mode-options')).toBeVisible();
+      await expectCleanMenuLayout(page);
+
+      await page.evaluate(() => {
+        const main = document.getElementById('menu-screen-mode');
+        const roomScreen = document.getElementById('menu-screen-room');
+        const roomView = document.getElementById('private-room-view');
+        const sharePanel = document.getElementById('room-share-panel');
+        const shareCode = document.getElementById('room-share-code');
+        const rosterGrid = document.getElementById('private-room-roster-grid');
+        const unassignedWrap = document.getElementById('private-room-unassigned-wrap');
+        const teamCount = document.getElementById('private-room-team-count-actions');
+        if (main) main.hidden = true;
+        if (roomScreen) roomScreen.hidden = false;
+        if (roomView) roomView.hidden = false;
+        if (sharePanel) sharePanel.hidden = false;
+        if (shareCode) shareCode.textContent = 'ABCD12';
+        if (unassignedWrap) unassignedWrap.hidden = true;
+        if (teamCount) teamCount.hidden = false;
+        if (rosterGrid) {
+          rosterGrid.replaceChildren();
+          ['alpha', 'bravo', 'charlie', 'delta'].forEach((teamId, index) => {
+            const lane = document.createElement('section');
+            lane.className = 'private-room-team-lane';
+            lane.setAttribute('data-team-id', teamId);
+            const header = document.createElement('div');
+            header.className = 'private-room-team-header';
+            const name = document.createElement('div');
+            name.className = 'private-room-team-name';
+            name.textContent = `Team ${teamId}`;
+            const meta = document.createElement('div');
+            meta.className = 'private-room-team-subtitle';
+            meta.textContent = index === 0 ? 'Host' : 'Ready';
+            header.append(name, meta);
+            const tray = document.createElement('div');
+            tray.className = 'private-room-team-tray';
+            const member = document.createElement('div');
+            member.className = 'private-room-member-pill';
+            member.setAttribute('data-rounded-role', 'container');
+            const top = document.createElement('div');
+            top.className = 'private-room-member-topline';
+            const memberName = document.createElement('div');
+            memberName.className = 'private-room-member-name';
+            memberName.textContent = `PLAYER_${teamId.toUpperCase()}_${index}`;
+            top.append(memberName);
+            member.append(top);
+            tray.append(member);
+            lane.append(header, tray);
+            rosterGrid.append(lane);
+          });
+        }
+      });
+
+      await page.locator('#private-room-action-row').scrollIntoViewIfNeeded();
+      await expectCleanMenuLayout(page);
+    });
+  }
 });
 
 test('postgame flow stays readable and fully visible on phone-sized screens', async ({ page }) => {

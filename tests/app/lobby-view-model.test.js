@@ -52,6 +52,9 @@ test('menu view model keeps the default main menu minimal', async () => {
   assert.equal(view.heroes.socialVisible, false);
   assert.equal(view.heroes.partyVisible, false);
   assert.equal(view.heroes.count, 1);
+  assert.equal(view.feedback.menu, null);
+  assert.equal(view.feedback.roomAccess, null);
+  assert.equal(view.activeMatch, null);
 });
 
 test('menu view model expands social and party heroes from explicit state only', async () => {
@@ -135,4 +138,97 @@ test('menu view model forces invite surfaces visible without showing the social 
   assert.equal(view.controls.socialToolsVisible, false);
   assert.equal(view.heroes.socialVisible, true);
   assert.equal(view.heroes.count, 2);
+  assert.equal(view.primaryBanner.kind, 'invite');
+  assert.equal(view.primaryBanner.incomingInvite.actorId, 'friend-1');
+});
+
+test('menu view model owns visible status routing for room access and social feedback', async () => {
+  const viewModel = await loadViewModel();
+  const view = viewModel.build(baseState({
+    roomStatus: { text: 'Room not found.', error: true },
+    partyStatus: { text: 'Party joined.', error: false },
+    party: {
+      directInvite: {
+        outgoing: { displayName: 'BRAVO' }
+      }
+    }
+  }));
+
+  assert.equal(view.feedback.menu, null);
+  assert.equal(view.feedback.roomAccess.text, 'Room not found.');
+  assert.equal(view.feedback.roomAccess.error, true);
+  assert.equal(view.feedback.social.text, 'Joined friend.');
+  assert.equal(view.feedback.social.error, false);
+});
+
+test('menu view model suppresses local-only social backend noise', async () => {
+  const viewModel = await loadViewModel();
+  const view = viewModel.build(baseState({
+    friendsStatus: { text: 'Friends endpoint offline. Retrying...', error: true }
+  }), {
+    isLocalEnvironment: true
+  });
+
+  assert.equal(view.feedback.menu.text, 'Friends endpoint offline. Retrying...');
+  assert.equal(view.feedback.menu.error, true);
+  assert.equal(view.feedback.social, null);
+});
+
+test('menu view model builds active match pills and critical banners without renderer help', async () => {
+  const viewModel = await loadViewModel();
+  const view = viewModel.build(baseState({
+    paused: true,
+    launch: {
+      selectedMode: 'tdm',
+      phase: 'paused',
+      activityState: 'paused'
+    },
+    matchMenu: {
+      ready: true,
+      banner: {
+        kind: 'critical',
+        title: 'Connection lost',
+        detail: 'Reconnecting'
+      },
+      modePill: { label: 'MODE', value: 'Team Death Match' },
+      contextPill: { label: 'LEAD', value: '7' },
+      primaryPill: { label: 'KILLS', value: '12' },
+      secondaryPill: { label: 'DEATHS', value: '3' }
+    }
+  }));
+
+  assert.equal(view.primaryBanner.kind, 'critical');
+  assert.equal(view.activeMatch.primaryBanner.title, 'Connection lost');
+  assert.equal(view.activeMatch.modePill.label, 'MODE');
+  assert.equal(view.activeMatch.modePill.value, 'Team Death Match');
+  assert.equal(view.activeMatch.modePill.tone, 'default');
+  assert.equal(view.activeMatch.secondaryPill.label, 'DEATHS');
+  assert.equal(view.activeMatch.secondaryPill.value, '3');
+  assert.equal(view.activeMatch.secondaryPill.tone, 'default');
+});
+
+test('menu view model does not let stale match banners hide live menu invites', async () => {
+  const viewModel = await loadViewModel();
+  const view = viewModel.build(baseState({
+    matchMenu: {
+      ready: true,
+      banner: {
+        kind: 'critical',
+        title: 'Old match warning',
+        detail: 'Stale'
+      }
+    },
+    party: {
+      roomInvite: {
+        incoming: {
+          roomId: 'room-1',
+          roomCode: 'ABCD12'
+        }
+      }
+    }
+  }));
+
+  assert.equal(view.activeMatch, null);
+  assert.equal(view.primaryBanner.kind, 'invite');
+  assert.equal(view.primaryBanner.incomingRoomInvite.roomCode, 'ABCD12');
 });

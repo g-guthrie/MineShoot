@@ -13,12 +13,12 @@
         target.textContent = String(value || '');
     }
 
-    function setStatusEl(target, status, okColor, errorColor) {
+    function applyStatusEl(target, status, localize) {
         if (!target) return;
         var text = status && status.text ? String(status.text) : '';
-        target.textContent = text;
-        target.style.color = status && status.error ? (errorColor || '#d14f45') : (okColor || '#2f6fed');
+        target.textContent = localize ? localize(text) : text;
         target.hidden = !text;
+        target.classList.toggle('error', !!(status && status.error));
     }
 
     GameLobbyRenderer.create = function (opts) {
@@ -89,7 +89,10 @@
 
         function buildMenuViewModel(state) {
             return viewModelApi.build(state || {}, {
-                normalizeMode: normalizeMode
+                normalizeMode: normalizeMode,
+                modeLabel: modeLabel,
+                normalizeMatchMenuModel: normalizeMatchMenuModel,
+                isLocalEnvironment: isLocalEnvironment
             });
         }
 
@@ -184,7 +187,7 @@
             }
         }
 
-        function renderFriends(state) {
+        function renderFriends(state, view) {
             if (!elements.socialFriendsPane || !elements.socialFriendsList || !elements.socialLayout) return;
 
             // Preserve scroll position across full rebuild
@@ -203,15 +206,9 @@
                 );
             });
 
-            var socialVisible = !!state.socialToolsOpen;
-            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
-            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
-            if ((incomingRoomInvite && incomingRoomInvite.roomId) || (incomingInvite && incomingInvite.actorId)) {
-                socialVisible = true;
-            }
-            var showPane = socialVisible && loggedIn && friends.length > 0;
+            var showPane = !!(view && view.social && view.social.friendsPaneVisible);
             elements.socialFriendsPane.hidden = !showPane;
-            elements.socialLayout.setAttribute('data-layout', showPane ? 'split' : 'stack');
+            elements.socialLayout.setAttribute('data-layout', view && view.social ? view.social.layout : (showPane ? 'split' : 'stack'));
             if (!showPane) return;
 
             for (var i = 0; i < friends.length; i++) {
@@ -368,92 +365,30 @@
             }
         }
 
-        function renderFeedback(state) {
-            var text = '';
-            var error = false;
-            if (state.activeSurface === 'room') {
-                if (state.roomStatus.text) {
-                    text = state.roomStatus.text;
-                    error = state.roomStatus.error;
-                } else if (state.partyStatus.text) {
-                    text = state.partyStatus.text;
-                    error = state.partyStatus.error;
-                } else if (state.friendsStatus.text) {
-                    text = state.friendsStatus.text;
-                    error = state.friendsStatus.error;
-                }
-            } else {
-                var homeStatuses = [state.partyStatus, state.friendsStatus, state.roomStatus];
-                for (var i = 0; i < homeStatuses.length; i++) {
-                    var status = homeStatuses[i];
-                    var candidate = status && status.text ? String(status.text || '') : '';
-                    if (!candidate || !status || !status.error) continue;
-                    if (!/(service unavailable|endpoint offline|retrying)/i.test(candidate)) continue;
-                    text = candidate;
-                    error = true;
-                    break;
-                }
-            }
-            if (!elements.menuFeedback) return;
-            elements.menuFeedback.textContent = localizeServiceStatusText(text);
-            elements.menuFeedback.hidden = !text;
-            elements.menuFeedback.classList.toggle('error', !!error);
+        function renderFeedback(view) {
+            applyStatusEl(elements.menuFeedback, view && view.feedback ? view.feedback.menu : null, localizeServiceStatusText);
         }
 
-        function buildSocialActionFeedback(state) {
-            var text = '';
-            var error = false;
-            if (state.friendsStatus.text) {
-                text = String(state.friendsStatus.text || '');
-                error = !!state.friendsStatus.error;
-            } else if (state.partyStatus.text) {
-                text = String(state.partyStatus.text || '');
-                error = !!state.partyStatus.error;
-                if (/^party service unavailable\./i.test(text)) {
-                    text = 'SOCIAL SERVICE UNAVAILABLE. RETRYING...';
-                } else if (/^party joined\./i.test(text)) {
-                    text = 'Joined friend.';
-                }
-            } else {
-                var outgoingInvite = state.party && state.party.directInvite ? state.party.directInvite.outgoing : null;
-                if (outgoingInvite && outgoingInvite.displayName) {
-                    text = 'Invite pending for ' + String(outgoingInvite.displayName || 'PLAYER') + '.';
-                }
-            }
-
-            if (isLocalEnvironment() && /(?:service unavailable|endpoint offline|retrying)/i.test(text)) {
-                text = '';
-                error = false;
-            }
-            return text ? { text: text, error: error } : null;
-        }
-
-        function renderSocialHeroStatus(state) {
+        function renderSocialHeroStatus(view) {
             if (!elements.socialHeroStatus) return;
-            if (state.activeSurface !== 'main' || state.paused || (state.launch && state.launch.phase === 'retryable')) {
+            if (!view || view.activeSurface !== 'main' || view.activeMatchShell) {
                 elements.socialHeroStatus.hidden = true;
                 elements.socialHeroStatus.textContent = '';
                 elements.socialHeroStatus.classList.remove('error');
                 return;
             }
-            var feedback = buildSocialActionFeedback(state);
-            elements.socialHeroStatus.textContent = feedback ? String(feedback.text || '') : '';
-            elements.socialHeroStatus.hidden = !elements.socialHeroStatus.textContent;
-            elements.socialHeroStatus.classList.toggle('error', !!(feedback && feedback.error));
+            applyStatusEl(elements.socialHeroStatus, view.feedback ? view.feedback.social : null);
         }
 
-        function renderRoomSocialFeedback(state) {
+        function renderRoomSocialFeedback(view) {
             if (!elements.roomSocialFeedback) return;
-            if (state.activeSurface !== 'room' || state.paused || (state.launch && state.launch.phase === 'retryable')) {
+            if (!view || view.activeSurface !== 'room' || view.activeMatchShell) {
                 elements.roomSocialFeedback.hidden = true;
                 elements.roomSocialFeedback.textContent = '';
                 elements.roomSocialFeedback.classList.remove('error');
                 return;
             }
-            var feedback = buildSocialActionFeedback(state);
-            elements.roomSocialFeedback.textContent = feedback ? String(feedback.text || '') : '';
-            elements.roomSocialFeedback.hidden = !elements.roomSocialFeedback.textContent;
-            elements.roomSocialFeedback.classList.toggle('error', !!(feedback && feedback.error));
+            applyStatusEl(elements.roomSocialFeedback, view.feedback ? view.feedback.social : null);
         }
 
         function applyActiveHeaderFeedback(feedback, activeMatchShell) {
@@ -467,49 +402,6 @@
             elements.activeHeaderStatus.textContent = String(feedback.text || '');
             elements.activeHeaderStatus.hidden = !elements.activeHeaderStatus.textContent;
             elements.activeHeaderStatus.classList.toggle('error', !!feedback.error);
-        }
-
-        function buildActiveMatchViewModel(state) {
-            var matchMenu = normalizeMatchMenuModel(state.matchMenu);
-            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
-            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
-            var primaryBanner = null;
-
-            if (matchMenu.banner && matchMenu.banner.kind === 'critical') {
-                primaryBanner = {
-                    kind: 'critical',
-                    title: matchMenu.banner.title,
-                    detail: matchMenu.banner.detail,
-                    tone: matchMenu.banner.tone
-                };
-            } else if ((incomingRoomInvite && incomingRoomInvite.roomId) || (incomingInvite && incomingInvite.actorId)) {
-                primaryBanner = {
-                    kind: 'invite',
-                    incomingRoomInvite: incomingRoomInvite,
-                    incomingInvite: incomingInvite
-                };
-            }
-
-            if (matchMenu.ready) {
-                return {
-                    primaryBanner: primaryBanner,
-                    headerFeedback: buildSocialActionFeedback(state),
-                    modePill: matchMenu.modePill,
-                    contextPill: matchMenu.contextPill,
-                    primaryPill: matchMenu.primaryPill,
-                    secondaryPill: matchMenu.secondaryPill
-                };
-            }
-
-            var selectedMode = normalizeMode(state.launch && state.launch.selectedMode) || 'ffa';
-            return {
-                primaryBanner: primaryBanner,
-                headerFeedback: buildSocialActionFeedback(state),
-                modePill: { label: 'Mode', value: modeLabel(selectedMode || 'ffa') || 'Match' },
-                contextPill: { label: 'State', value: state.launch && state.launch.phase === 'retryable' ? 'Ready' : (state.launch && state.launch.phase === 'paused' ? 'Paused' : 'Live') },
-                primaryPill: { label: state.launch && state.launch.phase === 'retryable' ? 'Detail' : 'Loadout', value: state.launch && state.launch.phase === 'retryable' ? String(state.launch.message || 'Ready to enter.') : 'Change loadout or return to the match.' },
-                secondaryPill: null
-            };
         }
 
         function applyMatchPill(target, pill) {
@@ -575,7 +467,7 @@
             surface.banner.hidden = false;
         }
 
-        function renderPrimaryBanner(model, state, activeMatchShell) {
+        function renderPrimaryBanner(view) {
             hideInviteSurface({
                 banner: elements.socialDirectInviteBanner,
                 copy: elements.socialDirectInviteCopy,
@@ -598,7 +490,8 @@
                 dismissBtn: elements.roomSocialInviteDismissBtn
             });
 
-            var primaryBanner = model && model.primaryBanner ? model.primaryBanner : null;
+            var activeMatchShell = !!(view && view.activeMatchShell);
+            var primaryBanner = view && view.primaryBanner ? view.primaryBanner : null;
 
             if (activeMatchShell && elements.activeInviteBanner && primaryBanner) {
                 if (primaryBanner.kind === 'invite') {
@@ -619,33 +512,30 @@
                 return;
             }
 
-            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
-            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
-            if ((!incomingRoomInvite || !incomingRoomInvite.roomId) && (!incomingInvite || !incomingInvite.actorId)) return;
-            if (state.activeSurface === 'room' && elements.roomSocialInviteBanner) {
+            if (!primaryBanner || primaryBanner.kind !== 'invite') return;
+            if (view.activeSurface === 'room' && elements.roomSocialInviteBanner) {
                 showInviteSurface({
                     banner: elements.roomSocialInviteBanner,
                     copy: elements.roomSocialInviteCopy,
                     actions: elements.roomSocialInviteActions,
                     acceptBtn: elements.roomSocialInviteAcceptBtn,
                     dismissBtn: elements.roomSocialInviteDismissBtn
-                }, incomingRoomInvite, incomingInvite);
+                }, primaryBanner.incomingRoomInvite, primaryBanner.incomingInvite);
                 return;
             }
-            if (state.activeSurface === 'main' && elements.socialDirectInviteBanner) {
+            if (view.activeSurface === 'main' && elements.socialDirectInviteBanner) {
                 showInviteSurface({
                     banner: elements.socialDirectInviteBanner,
                     copy: elements.socialDirectInviteCopy,
                     actions: elements.socialDirectInviteActions,
                     acceptBtn: elements.socialDirectInviteAcceptBtn,
                     dismissBtn: elements.socialDirectInviteDismissBtn
-                }, incomingRoomInvite, incomingInvite);
+                }, primaryBanner.incomingRoomInvite, primaryBanner.incomingInvite);
             }
         }
 
         function render() {
             var state = getState();
-            var launch = state.launch || {};
             var view = buildMenuViewModel(state);
             var showSessionStrip = view.showSessionStrip;
             var activeMatchShell = view.activeMatchShell;
@@ -657,7 +547,7 @@
             var identity = currentPartyIdentity();
             var loggedIn = view.loggedIn;
             var headerVariant = view.headerVariant;
-            var activeMatchModel = activeMatchShell ? buildActiveMatchViewModel(state) : null;
+            var activeMatchModel = view.activeMatch;
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
             if (elements.overlay) elements.overlay.setAttribute('data-menu-context', view.menuContext);
@@ -689,13 +579,13 @@
                 elements.settingsAccountBtn.textContent = loggedIn ? 'Profile' : 'Login';
             }
 
-            renderFeedback(state);
-            renderSocialHeroStatus(state);
-            renderRoomSocialFeedback(state);
+            renderFeedback(view);
+            renderSocialHeroStatus(view);
+            renderRoomSocialFeedback(view);
             applyActiveHeaderFeedback(activeMatchModel ? activeMatchModel.headerFeedback : null, activeMatchShell);
-            renderPrimaryBanner(activeMatchModel, state, activeMatchShell);
+            renderPrimaryBanner(view);
             renderPartyMembers(state);
-            renderFriends(state);
+            renderFriends(state, view);
             renderPrivateRoom(state);
             setFriendTargetValue(elements.partyIdInput ? elements.partyIdInput.value : '');
 
@@ -745,18 +635,7 @@
             if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
             if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {
-                var roomAccessText = '';
-                var roomAccessError = !!launch.error;
-                if (state.activeSurface === 'main' && !showSessionStrip) {
-                    roomAccessText = String(launch.message || '');
-                    if (!roomAccessText && state.roomStatus && state.roomStatus.text) {
-                        roomAccessText = String(state.roomStatus.text || '');
-                        roomAccessError = !!state.roomStatus.error;
-                    }
-                }
-                elements.roomAccessStatus.textContent = roomAccessText;
-                elements.roomAccessStatus.classList.toggle('error', roomAccessError);
-                elements.roomAccessStatus.hidden = !elements.roomAccessStatus.textContent;
+                applyStatusEl(elements.roomAccessStatus, view.feedback ? view.feedback.roomAccess : null);
             }
 
             if (elements.menuBody) elements.menuBody.hidden = !view.surfaces.menuBodyVisible;
@@ -814,16 +693,6 @@
         }
 
         return {
-            renderPartyMembers: renderPartyMembers,
-            renderFriends: renderFriends,
-            renderPrivateRoom: renderPrivateRoom,
-            renderFeedback: renderFeedback,
-            renderSocialHeroStatus: renderSocialHeroStatus,
-            renderRoomSocialFeedback: renderRoomSocialFeedback,
-            buildSocialActionFeedback: buildSocialActionFeedback,
-            applyActiveHeaderFeedback: applyActiveHeaderFeedback,
-            buildActiveMatchViewModel: buildActiveMatchViewModel,
-            renderPrimaryBanner: renderPrimaryBanner,
             render: render
         };
     };

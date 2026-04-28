@@ -586,66 +586,6 @@ import {
             }
         }
 
-        function renderPartyMembers(state) {
-            if (rendererApi && rendererApi.renderPartyMembers) {
-                rendererApi.renderPartyMembers(state);
-            }
-        }
-
-        function renderFriends(state) {
-            if (rendererApi && rendererApi.renderFriends) {
-                rendererApi.renderFriends(state);
-            }
-        }
-
-        function renderPrivateRoom(state) {
-            if (rendererApi && rendererApi.renderPrivateRoom) {
-                rendererApi.renderPrivateRoom(state);
-            }
-        }
-
-        function renderFeedback(state) {
-            if (rendererApi && rendererApi.renderFeedback) {
-                rendererApi.renderFeedback(state);
-            }
-        }
-
-        function renderSocialHeroStatus(state) {
-            if (rendererApi && rendererApi.renderSocialHeroStatus) {
-                rendererApi.renderSocialHeroStatus(state);
-            }
-        }
-
-        function buildSocialActionFeedback(state) {
-            return rendererApi && rendererApi.buildSocialActionFeedback
-                ? rendererApi.buildSocialActionFeedback(state)
-                : null;
-        }
-
-        function renderRoomSocialFeedback(state) {
-            if (rendererApi && rendererApi.renderRoomSocialFeedback) {
-                rendererApi.renderRoomSocialFeedback(state);
-            }
-        }
-
-        function applyActiveHeaderFeedback(feedback, activeMatchShell) {
-            if (rendererApi && rendererApi.applyActiveHeaderFeedback) {
-                rendererApi.applyActiveHeaderFeedback(feedback, activeMatchShell);
-            }
-        }
-
-        function buildActiveMatchViewModel(state) {
-            return rendererApi && rendererApi.buildActiveMatchViewModel
-                ? rendererApi.buildActiveMatchViewModel(state)
-                : null;
-        }
-
-        function renderPrimaryBanner(model, state, activeMatchShell) {
-            if (rendererApi && rendererApi.renderPrimaryBanner) {
-                rendererApi.renderPrimaryBanner(model, state, activeMatchShell);
-            }
-        }
-
         function syncSessionState(detail) {
             detail = detail || {};
             var paused = !!(
