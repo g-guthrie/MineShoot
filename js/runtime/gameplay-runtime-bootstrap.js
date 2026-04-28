@@ -8,7 +8,7 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameGameplayRuntimeBootstrap = {};
 
-    var MAX_PIXEL_RATIO = 1.75;
+    var MAX_PIXEL_RATIO = 1.5;
 
     function cappedPixelRatio() {
         return Math.min(MAX_PIXEL_RATIO, Math.max(1, Number(window.devicePixelRatio) || 1));

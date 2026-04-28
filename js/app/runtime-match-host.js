@@ -7,6 +7,10 @@
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameRuntimeMatchHost = {};
+    var TARGET_GAMEPLAY_STEP_SEC = 1 / 60;
+    var GAMEPLAY_STEP_GRACE_SEC = 1 / 240;
+    var MAX_GAMEPLAY_STEPS_PER_FRAME = 4;
+    var MAX_GAMEPLAY_FRAME_DT_SEC = TARGET_GAMEPLAY_STEP_SEC * MAX_GAMEPLAY_STEPS_PER_FRAME;
 
     GameRuntimeMatchHost.create = function (opts) {
         opts = opts || {};
@@ -76,6 +80,29 @@
                 return;
             }
             cancelAnimationFrame(handle);
+        }
+
+        function cleanFrameDt(rawDt) {
+            var dt = Number(rawDt || 0);
+            if (!isFinite(dt) || dt < 0) return 0;
+            return Math.min(MAX_GAMEPLAY_FRAME_DT_SEC, dt);
+        }
+
+        function stepGameplayFrame(rawDt) {
+            var frameDt = cleanFrameDt(rawDt);
+            var steps = frameDt <= (TARGET_GAMEPLAY_STEP_SEC + GAMEPLAY_STEP_GRACE_SEC)
+                ? 1
+                : Math.max(1, Math.ceil(frameDt / TARGET_GAMEPLAY_STEP_SEC));
+            steps = Math.min(MAX_GAMEPLAY_STEPS_PER_FRAME, steps);
+            var stepDt = steps > 0 ? (frameDt / steps) : 0;
+            var frameState = null;
+
+            for (var i = 0; i < steps; i++) {
+                frameState = gameplayRuntimeLoop.step(stepDt);
+            }
+            frameState = frameState || {};
+            frameState.dt = frameDt;
+            return frameState;
         }
 
         function detachCanvas(node) {
@@ -243,9 +270,7 @@
             animationFrameHandle = requestFrame(function () {
                 animate(runToken);
             });
-            var dt = clock.getDelta();
-            if (dt > 0.1) dt = 0.1;
-            var frameState = gameplayRuntimeLoop.step(dt);
+            var frameState = stepGameplayFrame(clock.getDelta());
             presentationRuntimeLoop.renderFrame(frameState);
         }
 

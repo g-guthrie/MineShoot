@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
-async function loadHostHarness({ bootstrapStart } = {}) {
+async function loadHostHarness({ bootstrapStart, clockDeltas } = {}) {
   const code = await fs.readFile(new URL('../../js/app/runtime-match-host.js', import.meta.url), 'utf8');
   const calls = {
     frameRequests: [],
@@ -11,9 +11,16 @@ async function loadHostHarness({ bootstrapStart } = {}) {
     bootstrapStarts: 0,
     bootstrapDisposals: [],
     controlsUnbind: [],
-    sessionEmits: 0
+    sessionEmits: 0,
+    stepDts: [],
+    renderFrames: []
   };
   let nextFrameHandle = 1;
+  const pendingClockDeltas = Array.isArray(clockDeltas) ? clockDeltas.slice() : [];
+
+  function nextClockDelta() {
+    return pendingClockDeltas.length ? pendingClockDeltas.shift() : 0.016;
+  }
 
   const sandbox = {
     requestAnimationFrame() {
@@ -59,7 +66,7 @@ async function loadHostHarness({ bootstrapStart } = {}) {
                 scene: {},
                 clock: {
                   getDelta() {
-                    return 0.016;
+                    return nextClockDelta();
                   }
                 },
                 camera: {},
@@ -96,8 +103,9 @@ async function loadHostHarness({ bootstrapStart } = {}) {
       return {
         create() {
           return {
-            step() {
-              return {};
+            step(dt) {
+              calls.stepDts.push(dt);
+              return { dt, stepIndex: calls.stepDts.length };
             }
           };
         }
@@ -107,7 +115,9 @@ async function loadHostHarness({ bootstrapStart } = {}) {
       return {
         create() {
           return {
-            renderFrame() {}
+            renderFrame(frame) {
+              calls.renderFrames.push(frame);
+            }
           };
         }
       };
@@ -207,6 +217,8 @@ test('runtime match host cancels the frame loop and tears down the active runtim
   await harness.host.startRuntime({});
 
   assert.equal(harness.calls.frameRequests.length, 1);
+  assert.deepEqual(harness.calls.stepDts, [0.016]);
+  assert.equal(harness.calls.renderFrames.length, 1);
   assert.equal(harness.host.isRuntimeReady(), true);
 
   harness.host.teardownRuntime('test_exit');
@@ -215,6 +227,33 @@ test('runtime match host cancels the frame loop and tears down the active runtim
   assert.deepEqual(harness.calls.frameCancels, [harness.calls.frameRequests[0].handle]);
   assert.deepEqual(harness.calls.bootstrapDisposals, [1]);
   assert.deepEqual(harness.calls.controlsUnbind, [1]);
+});
+
+test('runtime match host slices browser frame spikes before gameplay and renders once', async () => {
+  const harness = await loadHostHarness({ clockDeltas: [0.1] });
+
+  await harness.host.startRuntime({});
+
+  assert.equal(harness.calls.frameRequests.length, 1);
+  assert.equal(harness.calls.stepDts.length, 4);
+  assert.equal(harness.calls.renderFrames.length, 1);
+  assert.equal(
+    Math.round(harness.calls.stepDts.reduce((total, dt) => total + dt, 0) * 1000),
+    Math.round((4 / 60) * 1000)
+  );
+  for (const dt of harness.calls.stepDts) {
+    assert.ok(dt <= (1 / 60) + 0.000001);
+  }
+  assert.equal(Math.round(harness.calls.renderFrames[0].dt * 1000), Math.round((4 / 60) * 1000));
+});
+
+test('runtime match host does not double-step normal 60hz frame jitter', async () => {
+  const harness = await loadHostHarness({ clockDeltas: [0.018] });
+
+  await harness.host.startRuntime({});
+
+  assert.deepEqual(harness.calls.stepDts, [0.018]);
+  assert.equal(harness.calls.renderFrames.length, 1);
 });
 
 test('runtime match host tears down the previous runtime before starting a new one', async () => {
