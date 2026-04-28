@@ -1397,6 +1397,22 @@
             thresholds.pendingReplayGraceMs,
             allowFreshPendingReplay
         )) {
+            if (
+                comparisonState &&
+                horizontalDistSq < (thresholds.replayBlendDistance * thresholds.replayBlendDistance) &&
+                Math.abs(dy) < thresholds.replayBlendVerticalDistance
+            ) {
+                queueMotionCorrection(dx, dz, dy, thresholds.replayBlendDistance);
+                var replayBlendApplied = applyQueuedMotionCorrection(dt, {
+                    decayMs: thresholds.replayCorrectionDecayMs
+                });
+                if (replayBlendApplied) {
+                    var replayAckSeq = Math.max(0, Number(opts.lastAckedSeq || 0));
+                    if (replayAckSeq > 0) lastReplayAckSeq = replayAckSeq;
+                    lastReconciledMotionKey = motionKey;
+                }
+                return replayBlendApplied;
+            }
             var replayed = replayAuthoritativeMotion(state, pendingInputs, opts);
             if (replayed) lastReconciledMotionKey = motionKey;
             return replayed;

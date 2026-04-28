@@ -225,29 +225,68 @@ test('network tuning exposes the canonical ping, reconcile, burst, and feedback 
   assert.deepEqual(gameplayTuning.network.flags, {
     adaptiveSelfReconciliation: true,
     replayFirstSelfCorrection: true,
-    remoteReceiveJitterBuffer: false,
+    remoteReceiveJitterBuffer: true,
     snapshotDeltaCompression: true,
     adaptiveSnapshotCadence: false,
     combatBurstSnapshots: true,
     shotTokenDamageAggregation: false
   });
   assert.equal(gameplayTuning.network.ping.cadenceMs, 500);
-  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendDistanceWu, 0.5);
-  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendVerticalWu, 0.35);
-  assert.equal(gameplayTuning.network.selfReconciliation.movingCorrectionDecayMs, 100);
-  assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.25);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendDistanceWu, 0.85);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingBlendVerticalWu, 0.55);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingCorrectionDecayMs, 180);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingReplayDistanceWu, 1.65);
+  assert.equal(gameplayTuning.network.selfReconciliation.replayBlendDistanceWu, 4.5);
+  assert.equal(gameplayTuning.network.selfReconciliation.replayBlendVerticalWu, 1.2);
+  assert.equal(gameplayTuning.network.selfReconciliation.replayCorrectionDecayMs, 260);
+  assert.equal(gameplayTuning.network.selfReconciliation.baseGraceMs, 140);
+  assert.equal(gameplayTuning.network.selfReconciliation.maxExtraGraceMs, 140);
+  assert.equal(gameplayTuning.network.selfReconciliation.movingAckDriftLimit, 5);
   assert.equal(gameplayTuning.network.selfReconciliation.airborneHardSnapVerticalWu, 2.75);
   assert.equal(gameplayTuning.network.selfReconciliation.airborneMovingAckDriftLimit, 5);
   assert.equal(gameplayTuning.network.combatPriority.burstCadenceMs, 16);
-  assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 50);
-  assert.equal(gameplayTuning.network.remoteInterpolation.extrapolationDecay, 1.2);
+  assert.equal(gameplayTuning.network.remoteInterpolation.defaultDelayMs, 70);
+  assert.equal(gameplayTuning.network.remoteInterpolation.minDelayMs, 64);
+  assert.equal(gameplayTuning.network.remoteInterpolation.maxDelayMs, 180);
+  assert.equal(gameplayTuning.network.remoteInterpolation.jitterDelayScale, 2);
+  assert.equal(gameplayTuning.network.remoteInterpolation.extrapolationDecay, 1.4);
+  assert.equal(gameplayTuning.network.remoteInterpolation.maxExtrapolationMaxMs, 22);
   assert.equal(gameplayTuning.network.remoteInterpolation.verticalBallisticEnabled, true);
+  assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockCatchupScale, 1.15);
+  assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockMaxStepMs, 250);
+  assert.equal(gameplayTuning.network.remoteInterpolation.presentationClockMaxLagMs, 250);
   assert.equal(gameplayTuning.network.remoteInterpolation.animationStateBlendMs, 80);
   assert.equal(gameplayTuning.network.remoteInterpolation.muzzleFlashPresentationMs, 70);
   assert.equal(gameplayTuning.network.remoteInterpolation.hitboxLeadMs, 24);
-  assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 120);
+  assert.equal(gameplayTuning.network.remoteInterpolation.serverOffsetSnapDeltaMs, 180);
   assert.equal(gameplayTuning.network.ping.pessimisticRttAlpha, 0.05);
   assert.equal(gameplayTuning.network.ping.pessimisticWindowMs, 2000);
   assert.equal(gameplayTuning.network.feedback.shotgunAggregateWindowMs, 60);
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.getNetworkTuning, 'function');
+});
+
+test('remote interpolation delay stays ahead of the receive jitter buffer at live snapshot cadences', () => {
+  const t = gameplayTuning.network.remoteInterpolation;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  const remoteBufferDelayMs = (cadenceMs, jitterMs) => Math.min(
+    180,
+    Math.max(60, Math.max((cadenceMs * 1.25) + (jitterMs * 2), 60))
+  );
+  const interpolationDelayMs = (cadenceMs, jitterMs) => clamp(
+    (cadenceMs * t.intervalDelayScale) + (jitterMs * t.jitterDelayScale),
+    t.minDelayMs,
+    t.maxDelayMs
+  );
+
+  for (const [cadenceMs, jitterMs] of [
+    [1000 / 60, 0],
+    [1000 / 45, 8],
+    [1000 / 30, 20],
+    [100, 20]
+  ]) {
+    assert.equal(
+      interpolationDelayMs(cadenceMs, jitterMs) >= remoteBufferDelayMs(cadenceMs, jitterMs),
+      true
+    );
+  }
 });

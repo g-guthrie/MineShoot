@@ -174,6 +174,8 @@
             render.freezePresentationAt = 0;
             render.freezeBlendFrom = null;
             render.freezeBlendStartAt = 0;
+            render.presentationRenderServerTime = NaN;
+            render.presentationRenderClockAtMs = 0;
         } else if (previous && Math.abs(Number(previous.serverTime || 0) - serverTime) < 0.001) {
             history[history.length - 1] = sample;
         } else {
@@ -384,6 +386,8 @@
             render.freezePresentationAt = 0;
             render.freezeBlendFrom = null;
             render.freezeBlendStartAt = 0;
+            render.presentationRenderServerTime = NaN;
+            render.presentationRenderClockAtMs = 0;
             render.lossDelayPaddingMs = 0;
             render.consecutiveMissedSnapshots = 0;
         }

@@ -64,3 +64,20 @@ test('interpolation uses a ballistic vertical curve when both samples are airbor
 
   assert.equal(Number(nextFootY.toFixed(2)), 0.71);
 });
+
+test('interpolation render clock is monotonic and caps catch-up jumps', async () => {
+  const interpolation = await loadInterpolation();
+  const render = {};
+  const tuning = {
+    presentationClockCatchupScale: 1.1,
+    presentationClockMaxStepMs: 250,
+    presentationClockMaxLagMs: 250
+  };
+
+  assert.equal(interpolation.stabilizeRenderServerTime(render, 1000, 2000, 50, tuning), 1000);
+  assert.equal(interpolation.stabilizeRenderServerTime(render, 990, 2016, 50, tuning), 1000);
+  assert.equal(
+    Number(interpolation.stabilizeRenderServerTime(render, 1100, 2032, 50, tuning).toFixed(1)),
+    1017.6
+  );
+});

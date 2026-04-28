@@ -311,7 +311,8 @@
                     var presentDelayMs = Math.max(0, Number(r.interpolationDelayMs || 0));
                     var combatDelayMs = Math.max(0, presentDelayMs - hitboxLeadMs);
                     hitboxTransform = interpolateBufferedTransform(r, nowMs, {
-                        delayMs: combatDelayMs
+                        delayMs: combatDelayMs,
+                        disableClockStabilization: true
                     }) || hitboxTransform;
                 }
                 var hitboxPosition = hitboxTransform

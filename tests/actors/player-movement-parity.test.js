@@ -385,6 +385,21 @@ function assertPlayerMatchesExpected(player, expected) {
   assert.equal(anim.fastBackpedal, !!expected.fastBackpedal);
 }
 
+function motionDistanceToExpected(pos, expected) {
+  const dx = Number(pos.x || 0) - Number(expected.x || 0);
+  const dy = Number(pos.y || 0) - Number(expected.y || 0);
+  const dz = Number(pos.z || 0) - Number(expected.z || 0);
+  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+}
+
+function assertSmoothCorrectionToward(player, before, expected) {
+  const after = player.getPosition();
+  const beforeError = motionDistanceToExpected(before, expected);
+  const afterError = motionDistanceToExpected(after, expected);
+  assert.equal(afterError < beforeError, true);
+  assert.equal(afterError > 0.01, true);
+}
+
 test('player live forward movement matches the shared authoritative step', async () => {
   const harness = await loadPlayerMovementHarness();
   const expected = createExpectedEntity(harness.worldState.spawn);
@@ -727,7 +742,7 @@ test('jump while sniper auto-scope is active keeps airborne movement and sampled
   });
 });
 
-test('player replay correction restores the airborne forward jump path after local drift', async () => {
+test('player replay correction eases the airborne forward jump path back after local drift', async () => {
   const harness = await loadPlayerMovementHarness();
   const acknowledged = createExpectedEntity(harness.worldState.spawn);
   const replayed = createExpectedEntity(harness.worldState.spawn);
@@ -789,10 +804,10 @@ test('player replay correction restores the airborne forward jump path after loc
     fallbackPitch: acknowledged.pitch
   });
 
-  assertPlayerMatchesExpected(harness.player, expectedCorrected);
+  assertSmoothCorrectionToward(harness.player, driftedPos, expectedCorrected);
 });
 
-test('player replay correction stays replay-first for a recent fast sprint window instead of hard snapping', async () => {
+test('player replay correction stays replay-first for a recent fast sprint window and blends instead of snapping', async () => {
   const harness = await loadPlayerMovementHarness();
   const acknowledged = createExpectedEntity(harness.worldState.spawn);
   const sprintInputs = [];
@@ -824,6 +839,7 @@ test('player replay correction stays replay-first for a recent fast sprint windo
     ...expectedCorrected,
     z: acknowledged.z - 5.1
   });
+  const driftedPos = harness.player.getPosition();
 
   const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
     dt: 0.05,
@@ -842,7 +858,7 @@ test('player replay correction stays replay-first for a recent fast sprint windo
   });
 
   assert.equal(corrected, true);
-  assertPlayerMatchesExpected(harness.player, expectedCorrected);
+  assertSmoothCorrectionToward(harness.player, driftedPos, expectedCorrected);
 });
 
 test('player small moving correction eases toward the acknowledged state instead of snapping instantly', async () => {
@@ -901,6 +917,7 @@ test('player replay correction respects the historical movement-locked state on 
     ...acknowledged,
     z: acknowledged.z - 2.5
   });
+  const driftedPos = harness.player.getPosition();
 
   const corrected = harness.player.reconcileAuthoritativeMotion(acknowledged, {
     dt: 0.05,
@@ -926,7 +943,7 @@ test('player replay correction respects the historical movement-locked state on 
   });
 
   assert.equal(corrected, true);
-  assertPlayerMatchesExpected(harness.player, acknowledged);
+  assertSmoothCorrectionToward(harness.player, driftedPos, acknowledged);
 });
 
 test('player replay correction respects the historical weapon movement multipliers on queued inputs', async () => {
@@ -942,6 +959,7 @@ test('player replay correction respects the historical weapon movement multiplie
     ...acknowledged,
     z: acknowledged.z - 2.5
   });
+  const driftedPos = harness.player.getPosition();
 
   const pendingInputs = [{
     seq: 2,
@@ -989,7 +1007,7 @@ test('player replay correction respects the historical weapon movement multiplie
   });
 
   assert.equal(corrected, true);
-  assertPlayerMatchesExpected(harness.player, expectedCorrected);
+  assertSmoothCorrectionToward(harness.player, driftedPos, expectedCorrected);
 });
 
 test('player roll only triggers while there is movement input', async () => {

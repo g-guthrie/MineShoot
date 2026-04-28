@@ -173,6 +173,42 @@
         };
     }
 
+    function stabilizeRenderServerTime(render, targetServerTime, nowMs, intervalMs, tuning, options) {
+        if (!render || (options && options.disableClockStabilization === true)) {
+            return targetServerTime;
+        }
+        var target = Math.max(0, Number(targetServerTime || 0));
+        var sampleNowMs = Math.max(0, Number(nowMs || Date.now()));
+        var previous = Number(render.presentationRenderServerTime);
+        var previousNow = Number(render.presentationRenderClockAtMs);
+        if (!isFinite(previous) || !(previousNow > 0)) {
+            render.presentationRenderServerTime = target;
+            render.presentationRenderClockAtMs = sampleNowMs;
+            return target;
+        }
+
+        var t = tuning || readInterpolationTuning();
+        var elapsedMs = clamp(sampleNowMs - previousNow, 0, Math.max(1, Number(t.presentationClockMaxStepMs || 250)));
+        var catchupScale = Math.max(1, Number(t.presentationClockCatchupScale || 1.15));
+        var maxAdvanceMs = Math.max(0.5, elapsedMs * catchupScale);
+        var maxLagMs = Math.max(
+            Math.max(1, Number(intervalMs || 0)) * 4,
+            Number(t.presentationClockMaxLagMs || 250)
+        );
+        var next = target;
+        if (target < previous) {
+            next = previous;
+        } else if (target > previous + maxAdvanceMs) {
+            next = previous + maxAdvanceMs;
+        }
+        if (target - next > maxLagMs) {
+            next = target - maxLagMs;
+        }
+        render.presentationRenderServerTime = Math.max(0, next);
+        render.presentationRenderClockAtMs = sampleNowMs;
+        return render.presentationRenderServerTime;
+    }
+
     // ── Damped extrapolation scale ──
     // Quadratic decay so that extrapolation slows down as it extends
     // further from the last known position, reducing snap-back when the
@@ -317,6 +353,7 @@
         if (isFinite(overrideDelay) && overrideDelay >= 0) {
             renderServerTime = nowMs - Number(renderClock && renderClock.clockOffsetMs || 0) - overrideDelay;
         }
+        renderServerTime = stabilizeRenderServerTime(render, renderServerTime, nowMs, intervalMs, tuning, opts);
 
         // -- single entry or before first sample --
         if (history.length === 1 || renderServerTime <= Number(history[0].serverTime || 0)) {
@@ -420,6 +457,7 @@
         readInterpolationTuning: readInterpolationTuning,
         buildPresentationClock: buildPresentationClock,
         smoothClockOffset: smoothClockOffset,
+        stabilizeRenderServerTime: stabilizeRenderServerTime,
         computeInterpolationDelay: computeInterpolationDelay,
         computeMaxExtrapolation: computeMaxExtrapolation,
         computeFreezeGap: computeFreezeGap,

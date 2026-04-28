@@ -89,11 +89,15 @@
         var movingCorrectionDecayMs = Math.max(1, Number(opts.movingCorrectionDecayMs || (adaptiveSelfReconciliation ? reconcileTuning.movingCorrectionDecayMs : 100) || 100));
         var replayCorrectionDistance = Number(opts.replayCorrectionDistance || (adaptiveSelfReconciliation ? reconcileTuning.idleReplayDistanceWu : 0.95) || 0.95);
         var movingReplayCorrectionDistance = Number(opts.movingReplayCorrectionDistance || (adaptiveSelfReconciliation ? reconcileTuning.movingReplayDistanceWu : 1.35) || 1.35);
+        var replayBlendDistance = Number(opts.replayBlendDistance || (adaptiveSelfReconciliation ? reconcileTuning.replayBlendDistanceWu : hardSnapDistance) || hardSnapDistance);
+        var replayBlendVerticalDistance = Number(opts.replayBlendVerticalDistance || (adaptiveSelfReconciliation ? reconcileTuning.replayBlendVerticalWu : hardSnapVerticalDistance) || hardSnapVerticalDistance);
+        var replayCorrectionDecayMs = Math.max(1, Number(opts.replayCorrectionDecayMs || (adaptiveSelfReconciliation ? reconcileTuning.replayCorrectionDecayMs : 220) || 220));
         var baseReplayGraceMs = Math.max(0, Number(opts.pendingReplayGraceMs || (adaptiveSelfReconciliation ? reconcileTuning.baseGraceMs : 125) || 125));
         var maxExtraGraceMs = Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.maxExtraGraceMs : 0) || 0);
         var rttJitterMs = Math.max(0, Number(opts.rttJitterMs || 0));
         var pendingReplayGraceMs = baseReplayGraceMs + Math.min(maxExtraGraceMs, rttJitterMs);
         var emergencyReplayDistance = Number(opts.emergencyReplayDistance || (adaptiveSelfReconciliation ? reconcileTuning.emergencyReplayDistanceWu : 2.1) || 2.1);
+        replayBlendDistance = Math.max(replayBlendDistance, hardSnapDistance);
         var replayDistance = movingIntent
             ? Math.max(replayCorrectionDistance, movingReplayCorrectionDistance)
             : replayCorrectionDistance;
@@ -117,6 +121,8 @@
                 pendingReplayGraceMs,
                 Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneGraceMs : pendingReplayGraceMs) || pendingReplayGraceMs)
             );
+            replayBlendDistance = Math.max(replayBlendDistance, hardSnapDistance);
+            replayBlendVerticalDistance = Math.max(replayBlendVerticalDistance, hardSnapVerticalDistance * 0.85);
             movingAckDriftLimit = Math.max(
                 movingAckDriftLimit,
                 Math.max(0, Number(adaptiveSelfReconciliation ? reconcileTuning.airborneMovingAckDriftLimit : movingAckDriftLimit) || movingAckDriftLimit)
@@ -133,6 +139,9 @@
             movingBlendVerticalDistance: movingBlendVerticalDistance,
             movingCorrectionDecayMs: movingCorrectionDecayMs,
             replayDistance: replayDistance,
+            replayBlendDistance: replayBlendDistance,
+            replayBlendVerticalDistance: replayBlendVerticalDistance,
+            replayCorrectionDecayMs: replayCorrectionDecayMs,
             pendingReplayGraceMs: pendingReplayGraceMs,
             emergencyReplayDistance: emergencyReplayDistance,
             movingAckDriftLimit: movingAckDriftLimit,
