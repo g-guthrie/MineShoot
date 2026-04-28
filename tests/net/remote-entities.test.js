@@ -278,6 +278,32 @@ test('remote entities reuse the same snapshot history array between updates', as
   assert.equal(render.snapshotHistory.length, 2);
 });
 
+test('remote entities refresh lateral movement flags on every snapshot', async () => {
+  const { entitiesApi } = await loadRemoteEntities();
+  const entityId = 'usr_lateral_flags';
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    movingLeft: true,
+    movingRight: false
+  }), {
+    serverTime: 1000,
+    receivedAt: 1000
+  });
+
+  entitiesApi.updateFromSnapshot(snapshotEntity(entityId, {
+    movingLeft: false,
+    movingRight: true
+  }), {
+    serverTime: 1050,
+    receivedAt: 1050
+  });
+
+  const render = entitiesApi.getRenderMap().get(entityId);
+  assert.ok(render);
+  assert.equal(render.movingLeft, false);
+  assert.equal(render.movingRight, true);
+});
+
 test('remote entities clamp extreme interval spikes before smoothing cadence', async () => {
   const { entitiesApi } = await loadRemoteEntities();
   const entityId = 'usr_outlier_interval';

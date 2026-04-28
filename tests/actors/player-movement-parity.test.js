@@ -122,7 +122,8 @@ async function loadPlayerMovementHarness(options = {}) {
   const calls = {
     triggerActions: [],
     animationUpdates: [],
-    gunOffsetUpdates: 0
+    gunOffsetUpdates: 0,
+    cameraUpdates: []
   };
   const worldState = {
     bounds: options.bounds || { minX: 0, maxX: 50, minZ: 0, maxZ: 50, size: 50 },
@@ -243,6 +244,9 @@ async function loadPlayerMovementHarness(options = {}) {
           },
           updateCamera(_dt, options) {
             if (!options || !options.camera) return;
+            calls.cameraUpdates.push({
+              firstPersonView: !!options.firstPersonView
+            });
             const scopeActive = options.scopeTargetActive != null ? !!options.scopeTargetActive : !!options.adsActive;
             options.camera.position.set(
               Number(options.playerX || 0),
@@ -405,6 +409,20 @@ test('player initial spawn uses terrain height instead of a flat eye-height fall
   assertClose(pos.x, 5);
   assertClose(pos.z, 6);
   assertClose(pos.y, 5.1);
+});
+
+test('player passes the first-person camera toggle into the camera view payload', async () => {
+  const harness = await loadPlayerMovementHarness({
+    runtimeOverrides: {
+      GameGameplayControls: {
+        isFirstPersonViewEnabled() {
+          return true;
+        }
+      }
+    }
+  });
+
+  assert.equal(harness.calls.cameraUpdates.at(-1).firstPersonView, true);
 });
 
 test('player movement honors remapped forward input and ignores the old key', async () => {

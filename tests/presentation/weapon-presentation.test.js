@@ -41,6 +41,43 @@ test('weapon platforms expose semantic hold classes, stock classes, and required
   }
 });
 
+test('weapon platforms point at the Toon Shooter pack meshes with explicit muzzle origins', async () => {
+  const harness = await loadWeaponPresentation();
+  const weaponIds = ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper'];
+
+  for (const weaponId of weaponIds) {
+    const asset = harness.visuals.get(weaponId).platform.asset;
+    assert.equal(asset.type, 'gltf');
+    assert.match(asset.url, /^\/assets\/weapons\/toon-shooter\/.+\.gltf$/);
+    assert.equal(asset.textureUrl, '');
+    assert.ok(asset.scale > 0);
+    assert.equal(asset.rotationDeg[0], 0);
+    assert.equal(asset.rotationDeg[1], -90);
+    assert.equal(asset.rotationDeg[2], 0);
+    assert.ok(Array.isArray(asset.sourceMuzzle));
+    assert.ok(asset.sourceMuzzle[0] < 0);
+  }
+});
+
+test('weapon platforms preserve the Toon Shooter character hand attachment transforms', async () => {
+  const harness = await loadWeaponPresentation();
+  const rifle = harness.visuals.get('rifle').platform.toonAttachment;
+  const pistol = harness.visuals.get('pistol').platform.toonAttachment;
+  const shotgun = harness.visuals.get('shotgun').platform.toonAttachment;
+
+  assert.equal(rifle.sourceUrl, '/assets/characters/toon-shooter/Character_Enemy.gltf');
+  assert.equal(rifle.parentNode, 'Index1.R');
+  assert.equal(rifle.weaponNode, 'Sniper_2');
+  assert.equal(pistol.weaponNode, 'Revolver');
+  assert.equal(shotgun.weaponNode, 'Shotgun');
+  assert.equal(rifle.useMountOffset, false);
+  assert.equal(pistol.useMountOffset, true);
+  assert.equal(shotgun.useMountOffset, true);
+  assert.equal(pistol.translation.length, 3);
+  assert.equal(pistol.rotation.length, 4);
+  assert.equal(pistol.scale.length, 3);
+});
+
 test('one-handed guns never use precision stocks while sniper does', async () => {
   const harness = await loadWeaponPresentation();
 

@@ -150,6 +150,32 @@ test('room socket message forwards enter-match commands to the room runtime', ()
   assert.deepEqual(entered[0].msg, { t: 'enter_match' });
 });
 
+test('room socket message blocks enter-match commands while a private room is still in lobby', () => {
+  const ws = createSocket();
+  let enterCount = 0;
+  const room = {
+    roomName: 'private-room1',
+    privateRoomConfig: { roomPhase: 'lobby' },
+    clients: new Map([[ws, { userId: 'u1' }]]),
+    activeSocketByUserId: new Map([['u1', ws]]),
+    players: new Map([['u1', { id: 'u1' }]]),
+    handleEnterMatch() {
+      enterCount += 1;
+    }
+  };
+
+  handleRoomSocketMessage(room, ws, JSON.stringify({ t: 'enter_match' }), {
+    safeJsonParse: JSON.parse,
+    nowMs: () => 123,
+    isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
+    roomPhaseActive: 'active',
+    msgC2s: { ENTER_MATCH: 'enter_match', PING: 'ping' },
+    msgS2c: { PONG: 'pong' }
+  });
+
+  assert.equal(enterCount, 0);
+});
+
 test('room socket message blocks reload commands while a private room is still in lobby', () => {
   const ws = createSocket();
   let reloadCount = 0;

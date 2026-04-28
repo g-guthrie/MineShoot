@@ -274,10 +274,10 @@ async function loadRuntimeSessionHarness(overrides = {}) {
       return false;
     },
     modeDisplayName() {
-      return 'FREE FOR ALL';
+      return 'Free For All';
     },
     objectiveSummary() {
-      return 'GOAL 0';
+      return 'Goal 0';
     },
     resultsSummary() {
       return 'Summary unavailable.';
@@ -640,16 +640,16 @@ test('networked runtime session routes joined-ready handoff through the session 
 
   assert.equal(harness.launchFlow.hidden, true);
   assert.equal(harness.menuStage.hidden, false);
-  assert.equal(harness.launchTitle.textContent, 'ENTER MATCH');
-  assert.equal(harness.launchStatus.textContent, 'FREE FOR ALL READY.');
-  assert.equal(harness.launchNote.textContent, 'Click ENTER MATCH to capture the mouse and drop into the arena.');
+  assert.equal(harness.launchTitle.textContent, 'Enter Match');
+  assert.equal(harness.launchStatus.textContent, 'Free For All ready.');
+  assert.equal(harness.launchNote.textContent, 'Click Enter Match to capture the mouse and drop into the arena.');
   assert.equal(harness.launchRoomLabel.hidden, true);
-  assert.equal(harness.launchRoomLabel.textContent, 'ROOM FFA-01');
+  assert.equal(harness.launchRoomLabel.textContent, 'Room FFA-01');
   assert.equal(harness.launchEnterBtn.hidden, true);
   assert.equal(harness.playBtn.style.display, 'inline-block');
-  assert.equal(harness.playBtn.textContent, 'ENTER MATCH');
+  assert.equal(harness.playBtn.textContent, 'Enter Match');
   assert.equal(harness.backBtn.style.display, 'inline-block');
-  assert.equal(harness.backBtn.textContent, 'RETURN TO MENU');
+  assert.equal(harness.backBtn.textContent, 'Return to Menu');
 });
 
 test('preparing a fresh launch clears any leftover postgame flow', async () => {
@@ -726,7 +726,7 @@ test('active postgame flow ignores later match updates until the player exits it
 
   assert.equal(postgameFlow.hidden, false);
   assert.equal(winnerBanner.textContent, 'usr_self');
-  assert.equal(resultBanner.textContent, 'VICTORY');
+  assert.equal(resultBanner.textContent, 'Victory');
 
   harness.session.syncMatchState({
     matchState: {
@@ -743,5 +743,5 @@ test('active postgame flow ignores later match updates until the player exits it
   });
 
   assert.equal(winnerBanner.textContent, 'usr_self');
-  assert.equal(resultBanner.textContent, 'VICTORY');
+  assert.equal(resultBanner.textContent, 'Victory');
 });

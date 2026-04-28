@@ -165,6 +165,16 @@
             activityStateOverride = String(nextState || '');
         }
 
+        function normalizeMenuLabel(label) {
+            var text = String(label || '').trim();
+            var key = text.toUpperCase();
+            if (key === 'FFA') return 'Free For All';
+            if (key === 'TDM') return 'Team Deathmatch';
+            if (key === 'FREE FOR ALL') return 'Free For All';
+            if (key === 'TEAM DEATHMATCH' || key === 'TEAM DEATH MATCH') return 'Team Deathmatch';
+            return text;
+        }
+
         function isNetworkedRuntime() {
             return !!(opts.isNetworkedRuntime && opts.isNetworkedRuntime());
         }
@@ -173,16 +183,16 @@
             var els = ensureMenuSessionEls();
             if (els.playBtn) {
                 els.playBtn.style.display = playVisible ? 'inline-block' : 'none';
-                els.playBtn.textContent = pendingInputCapture ? 'ENTER MATCH' : 'RESUME MATCH';
+                els.playBtn.textContent = pendingInputCapture ? 'Enter Match' : 'Resume Match';
             }
             if (els.backBtn) {
                 els.backBtn.style.display = backVisible ? 'inline-block' : 'none';
                 if (pendingInputCapture) {
-                    els.backBtn.textContent = 'RETURN TO MENU';
+                    els.backBtn.textContent = 'Return to Menu';
                 } else if (pauseState.active || canResumeGameplay()) {
-                    els.backBtn.textContent = 'LEAVE GAME';
+                    els.backBtn.textContent = 'Leave Game';
                 } else {
-                    els.backBtn.textContent = 'RETURN TO MENU';
+                    els.backBtn.textContent = 'Return to Menu';
                 }
             }
         }
@@ -422,8 +432,8 @@
         function showLaunchHandoff(context) {
             var els = ensureLaunchHandoffEls();
             var modeLabel = opts.modeDisplayName
-                ? opts.modeDisplayName({ gameMode: context && context.gameMode })
-                : String(context && context.gameMode || '').toUpperCase();
+                ? normalizeMenuLabel(opts.modeDisplayName({ gameMode: context && context.gameMode }))
+                : normalizeMenuLabel(context && context.gameMode);
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
             clearActivityStateOverride();
             setPhoneLandscapeRequirement(true);
@@ -433,20 +443,20 @@
             clearIdleMonitor();
             if (els.menuStage) els.menuStage.hidden = false;
             if (els.flow) els.flow.hidden = true;
-            if (els.title) els.title.textContent = 'ENTER MATCH';
+            if (els.title) els.title.textContent = 'Enter Match';
             if (els.copy) {
                 els.copy.textContent = modeLabel
-                    ? (modeLabel + ' READY.')
-                    : 'MATCH READY.';
+                    ? (modeLabel + ' ready.')
+                    : 'Match ready.';
             }
             if (els.note) {
                 els.note.textContent = opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()
-                    ? 'Phones are landscape-only. Turn your phone sideways, then tap ENTER MATCH.'
-                    : 'Click ENTER MATCH to capture the mouse and drop into the arena.';
+                    ? 'Phones are landscape-only. Turn your phone sideways, then tap Enter Match.'
+                    : 'Click Enter Match to capture the mouse and drop into the arena.';
             }
             if (els.roomLabel) {
                 els.roomLabel.hidden = true;
-                els.roomLabel.textContent = roomLabel ? ('ROOM ' + roomLabel) : 'ROOM ----';
+                els.roomLabel.textContent = roomLabel ? ('Room ' + roomLabel) : 'Room ----';
             }
             if (els.enterBtn) els.enterBtn.hidden = true;
             setResumeButtonsVisible(true);
@@ -521,7 +531,7 @@
             var snapshot = postGameState.snapshot || {};
             var matchState = snapshot.matchState || null;
             var selfState = snapshot.selfState || null;
-            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'PLAYER') : 'PLAYER';
+            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'Player') : 'Player';
             var won = opts.didSelfWin ? !!opts.didSelfWin(matchState, selfState) : false;
             var kills = Math.max(0, Number(selfState && selfState.kills || 0));
             var deaths = Math.max(0, Number(selfState && selfState.deaths || 0));
@@ -530,15 +540,15 @@
             clearPostGameTimer();
             if (els.celebration) els.celebration.hidden = true;
             if (els.results) els.results.hidden = false;
-            if (els.resultsOutcome) els.resultsOutcome.textContent = won ? 'VICTORY' : 'DEFEAT';
+            if (els.resultsOutcome) els.resultsOutcome.textContent = won ? 'Victory' : 'Defeat';
             if (els.resultsWinner) els.resultsWinner.textContent = winner;
-            if (els.resultsMode) els.resultsMode.textContent = opts.modeDisplayName ? opts.modeDisplayName(matchState) : 'FREE FOR ALL';
+            if (els.resultsMode) els.resultsMode.textContent = opts.modeDisplayName ? normalizeMenuLabel(opts.modeDisplayName(matchState)) : 'Free For All';
             if (els.resultsLine) els.resultsLine.textContent = kills + ' / ' + deaths;
             if (els.resultsObjective) {
-                els.resultsObjective.textContent = opts.objectiveSummary ? opts.objectiveSummary(matchState, selfState) : 'GOAL 0';
+                els.resultsObjective.textContent = opts.objectiveSummary ? opts.objectiveSummary(matchState, selfState) : 'Goal 0';
             }
             if (els.continueBtn) {
-                els.continueBtn.textContent = (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) ? 'RETURN TO ROOM' : 'MAIN MENU';
+                els.continueBtn.textContent = (opts.isPrivateRoomSession && opts.isPrivateRoomSession(snapshot)) ? 'Return to Room' : 'Main Menu';
             }
         }
 
@@ -549,7 +559,7 @@
 
             var els = ensurePostGameEls();
             var selfState = matchContext ? matchContext.selfState : null;
-            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'PLAYER') : 'PLAYER';
+            var winner = opts.resolveWinnerLabel ? (opts.resolveWinnerLabel(matchState, selfState) || 'Player') : 'Player';
             var won = opts.didSelfWin ? !!opts.didSelfWin(matchState, selfState) : false;
 
             postGameState.active = true;
@@ -581,11 +591,11 @@
             if (els.results) els.results.hidden = true;
             if (els.celebration) els.celebration.hidden = false;
             if (els.winnerBanner) els.winnerBanner.textContent = winner;
-            if (els.resultBanner) els.resultBanner.textContent = won ? 'VICTORY' : 'DEFEAT';
+            if (els.resultBanner) els.resultBanner.textContent = won ? 'Victory' : 'Defeat';
             if (els.celebrationNote) {
                 els.celebrationNote.textContent = won
-                    ? 'YOUR GHOST CREW IS DOING A SICK LITTLE WIN DANCE.'
-                    : (winner + ' GETS THE TROPHY. YOUR GHOSTS ARE FORCED TO APPLAUD.');
+                    ? 'Victory saved.'
+                    : (winner + ' takes the round.');
             }
             postGameState.timer = setTimeout(showPostGameResults, 2600);
             emitSessionState();
@@ -948,12 +958,12 @@
                 setOverlayVisible(true);
                 isPlaying = false;
                 if (handoffEls.flow) handoffEls.flow.hidden = true;
-                if (handoffEls.title) handoffEls.title.textContent = 'CONNECTING';
+                if (handoffEls.title) handoffEls.title.textContent = 'Connecting';
                 if (handoffEls.copy) handoffEls.copy.textContent = 'Loading gameplay runtime...';
                 if (handoffEls.note) handoffEls.note.textContent = 'Waiting for authoritative room admission.';
                 if (handoffEls.roomLabel) {
                     handoffEls.roomLabel.hidden = true;
-                    handoffEls.roomLabel.textContent = roomLabel ? ('ROOM ' + roomLabel) : 'ROOM ----';
+                    handoffEls.roomLabel.textContent = roomLabel ? ('Room ' + roomLabel) : 'Room ----';
                 }
                 setResumeButtonsVisible(false);
                 emitSessionState();

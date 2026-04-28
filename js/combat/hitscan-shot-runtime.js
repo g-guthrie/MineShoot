@@ -32,7 +32,7 @@
         var combatHitboxesScratch = [];
         var lockTargetsScratch = [];
 
-        var TRACER_ORIGIN_FORWARD_OFFSET = 0.12;
+        var TRACER_ORIGIN_FORWARD_OFFSET = 0;
 
         function runtime() {
             return globalThis.__MAYHEM_RUNTIME || {};

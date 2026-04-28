@@ -591,6 +591,8 @@
         r.fastBackpedal = !!entity.fastBackpedal;
         r.movingForward = !!entity.movingForward;
         r.movingBackward = !!entity.movingBackward;
+        r.movingLeft = !!entity.movingLeft;
+        r.movingRight = !!entity.movingRight;
         r.isGrounded = entity.isGrounded !== false;
         r.velocityY = Number(entity.velocityY || 0);
         r.weaponId = entity.weaponId || 'rifle';

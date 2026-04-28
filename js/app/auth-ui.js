@@ -182,7 +182,7 @@
             if (profileView) profileView.hidden = !loggedIn;
             if (localBtn) localBtn.style.display = localEnvironment() ? '' : 'none';
             if (toggle) {
-                toggle.textContent = loggedIn ? String(user.username || 'PLAYER') : 'LOGIN';
+                toggle.textContent = loggedIn ? String(user.username || 'Player') : 'Login';
             }
             if (loggedIn) {
                 renderProfileSummary();

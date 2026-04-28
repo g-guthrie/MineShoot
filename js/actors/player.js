@@ -21,6 +21,11 @@
         return runtimeRoot().GameGameplayControls || null;
     }
 
+    function firstPersonCameraViewEnabled() {
+        var controls = gameplayControlsApi();
+        return !!(controls && controls.isFirstPersonViewEnabled && controls.isFirstPersonViewEnabled());
+    }
+
     function reconciliationRuntimeApi() {
         return runtimeRoot().GamePlayerReconciliation || null;
     }
@@ -843,6 +848,7 @@
             avatarGroup: avatarGroup,
             avatarRigApi: avatarRigApi,
             avatarAliveVisible: avatarAliveVisible,
+            firstPersonView: firstPersonCameraViewEnabled(),
             sniperMode: isSniperScopeWeapon(),
             adsActive: isSniperScopeReady(),
             scopeTargetActive: isScopeModeActive(),

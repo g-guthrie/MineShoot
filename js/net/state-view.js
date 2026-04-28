@@ -110,6 +110,11 @@
             return t >= 0.5 ? newerValue : olderValue;
         }
 
+        function sampleFootY(entry) {
+            if (!entry) return 0;
+            return Number((entry.footY != null ? entry.footY : entry.y) || 0);
+        }
+
         function buildRemotePresentationSample(older, newer, t, serverTime) {
             var sampleT = clamp(Number(t || 0), 0, 1);
             var base = older || newer || null;
@@ -117,8 +122,8 @@
             if (!base || !head) return null;
             var api = interpolationApi();
             var spanMs = Math.max(1, Number(head.serverTime || 0) - Number(base.serverTime || 0));
-            var baseFootY = base.footY != null ? base.footY : base.y;
-            var headFootY = head.footY != null ? head.footY : head.y;
+            var baseFootY = sampleFootY(base);
+            var headFootY = sampleFootY(head);
             return {
                 serverTime: Math.max(0, Number(serverTime != null ? serverTime : choosePresentationValue(base.serverTime, head.serverTime, sampleT)) || 0),
                 x: lerpNumber(base.x, head.x, sampleT),
@@ -129,7 +134,7 @@
                         sampleT,
                         spanMs
                     )
-                    : lerpNumber(base.y, head.y, sampleT),
+                    : lerpNumber(baseFootY, headFootY, sampleT),
                 z: lerpNumber(base.z, head.z, sampleT),
                 yaw: Number(base.yaw || 0) + (normalizeAngle(Number(head.yaw || 0) - Number(base.yaw || 0)) * sampleT),
                 pitch: lerpNumber(base.pitch, head.pitch, sampleT),
@@ -264,8 +269,8 @@
                 serverTime: Number(last && last.serverTime || 0) + extrapolationMs,
                 x: Number(last && last.x || 0) + ((Number(last && last.x || 0) - Number(prev && prev.x || 0)) * extrapolationT),
                 y: api.projectBallisticFootY && last && last.isGrounded === false
-                    ? api.projectBallisticFootY(Object.assign({}, last, { footY: last.y }), extrapolationMs)
-                    : (Number(last && last.y || 0) + ((Number(last && last.y || 0) - Number(prev && prev.y || 0)) * extrapolationT)),
+                    ? api.projectBallisticFootY(Object.assign({}, last, { footY: sampleFootY(last) }), extrapolationMs)
+                    : (sampleFootY(last) + ((sampleFootY(last) - sampleFootY(prev)) * extrapolationT)),
                 z: Number(last && last.z || 0) + ((Number(last && last.z || 0) - Number(prev && prev.z || 0)) * extrapolationT),
                 yaw: Number(last && last.yaw || 0) + (normalizeAngle(Number(last && last.yaw || 0) - Number(prev && prev.yaw || 0)) * extrapolationT),
                 pitch: Number(last && last.pitch || 0) + ((Number(last && last.pitch || 0) - Number(prev && prev.pitch || 0)) * extrapolationT),
@@ -274,6 +279,8 @@
                 fastBackpedal: !!(last && last.fastBackpedal),
                 movingForward: !!(last && last.movingForward),
                 movingBackward: !!(last && last.movingBackward),
+                movingLeft: !!(last && last.movingLeft),
+                movingRight: !!(last && last.movingRight),
                 isGrounded: last ? last.isGrounded !== false : true,
                 velocityY: Number(last && last.velocityY || 0),
                 weaponId: String(last && last.weaponId || 'rifle')

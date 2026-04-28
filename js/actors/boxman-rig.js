@@ -53,6 +53,7 @@ import {
     var WEAPON_MODEL_ROTATE_X = (Math.PI * 0.5) - (15 * (Math.PI / 180));
     var WEAPON_MODEL_ROTATE_Y = 0;
     var WEAPON_MODEL_ROTATE_Z = Math.PI;
+    var TOON_ATTACHMENT_MOUNT_SCALE = 1;
     var torsoCarryPositionScratch = new THREE.Vector3();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
@@ -72,6 +73,14 @@ import {
 
     var templateAsset = null;
     var templatePromise = null;
+    var weaponAssetPromiseMap = Object.create(null);
+    var weaponAssetMap = Object.create(null);
+    var weaponTexturePromiseMap = Object.create(null);
+    var weaponTextureMap = Object.create(null);
+    var weaponGltfLoader = null;
+    var weaponTextureLoader = null;
+    var weaponAssetMuzzleScratch = new THREE.Vector3();
+    var weaponAssetRotScratch = new THREE.Euler();
 
     function sharedApi() {
         return runtime.GameShared || {};
@@ -140,6 +149,159 @@ import {
                 node.material = node.material.clone();
             }
         });
+    }
+
+    function cloneVec3(list, fallback) {
+        var source = Array.isArray(list) ? list : fallback;
+        return [
+            Number(source && source[0] || 0),
+            Number(source && source[1] || 0),
+            Number(source && source[2] || 0)
+        ];
+    }
+
+    function weaponAssetSpecForPlatform(platform) {
+        if (!platform || !platform.asset || !platform.asset.url) return null;
+        var type = String(platform.asset.type || '');
+        if (type !== 'glb' && type !== 'gltf') return null;
+        return platform.asset;
+    }
+
+    function setWeaponProceduralPartsVisible(rig, visible) {
+        if (!rig) return;
+        var parts = rig.weaponProceduralParts || [];
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) parts[i].visible = !!visible;
+        }
+    }
+
+    function configureTexture(texture) {
+        if (!texture) return texture;
+        if (THREE.SRGBColorSpace !== undefined) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+        } else if (THREE.sRGBEncoding !== undefined) {
+            texture.encoding = THREE.sRGBEncoding;
+        }
+        texture.flipY = false;
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    function getWeaponGltfLoader() {
+        if (!weaponGltfLoader) weaponGltfLoader = new GLTFLoader();
+        return weaponGltfLoader;
+    }
+
+    function getWeaponTextureLoader() {
+        if (!weaponTextureLoader) weaponTextureLoader = new THREE.TextureLoader();
+        return weaponTextureLoader;
+    }
+
+    function loadWeaponTexture(url) {
+        var textureUrl = String(url || '');
+        if (!textureUrl || !isBrowserRuntime()) return Promise.resolve(null);
+        if (weaponTextureMap[textureUrl]) return Promise.resolve(weaponTextureMap[textureUrl]);
+        if (weaponTexturePromiseMap[textureUrl]) return weaponTexturePromiseMap[textureUrl];
+        weaponTexturePromiseMap[textureUrl] = ensureThreeGlobal()
+            .then(function () {
+                return new Promise(function (resolve, reject) {
+                    getWeaponTextureLoader().load(
+                        textureUrl,
+                        function (texture) {
+                            weaponTextureMap[textureUrl] = configureTexture(texture);
+                            resolve(weaponTextureMap[textureUrl]);
+                        },
+                        undefined,
+                        reject
+                    );
+                });
+            })
+            .catch(function (err) {
+                delete weaponTexturePromiseMap[textureUrl];
+                throw err;
+            });
+        return weaponTexturePromiseMap[textureUrl];
+    }
+
+    function ensureLoadedWeaponMaterial(node) {
+        if (!node || !node.isMesh) return [];
+        if (!node.material) {
+            node.material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.76,
+                metalness: 0.12,
+                side: THREE.DoubleSide
+            });
+        }
+        return Array.isArray(node.material) ? node.material : [node.material];
+    }
+
+    function applyLoadedWeaponMaterial(root, texture) {
+        if (!root || !root.traverse) return;
+        root.visible = true;
+        root.traverse(function (node) {
+            if (!node || !node.isMesh) return;
+            node.visible = true;
+            node.frustumCulled = false;
+            node.castShadow = true;
+            node.receiveShadow = true;
+            var materials = ensureLoadedWeaponMaterial(node);
+            for (var i = 0; i < materials.length; i++) {
+                var material = materials[i];
+                if (!material) continue;
+                if (texture) material.map = texture;
+                if (texture && material.color && material.color.setHex) material.color.setHex(0xffffff);
+                if (typeof material.roughness === 'number') material.roughness = 0.76;
+                if (typeof material.metalness === 'number') material.metalness = 0.12;
+                if (typeof material.opacity === 'number') material.opacity = 1;
+                material.transparent = false;
+                material.side = THREE.DoubleSide;
+                material.needsUpdate = true;
+            }
+        });
+    }
+
+    function loadWeaponAsset(asset) {
+        if (!asset || !asset.url || !isBrowserRuntime()) return Promise.resolve(null);
+        var url = String(asset.url || '');
+        if (weaponAssetMap[url]) return Promise.resolve(weaponAssetMap[url]);
+        if (weaponAssetPromiseMap[url]) return weaponAssetPromiseMap[url];
+        weaponAssetPromiseMap[url] = ensureThreeGlobal()
+            .then(function () {
+                return Promise.all([
+                    new Promise(function (resolve, reject) {
+                        getWeaponGltfLoader().load(url, resolve, undefined, reject);
+                    }),
+                    loadWeaponTexture(asset.textureUrl)
+                ]);
+            })
+            .then(function (results) {
+                var gltf = results[0] || null;
+                var object = gltf && gltf.scene ? gltf.scene : null;
+                var texture = results[1] || null;
+                applyLoadedWeaponMaterial(object, texture);
+                weaponAssetMap[url] = object;
+                return object;
+            })
+            .catch(function (err) {
+                delete weaponAssetPromiseMap[url];
+                throw err;
+            });
+        return weaponAssetPromiseMap[url];
+    }
+
+    function preloadWeaponPackAssets() {
+        if (!isBrowserRuntime()) return Promise.resolve(null);
+        var visuals = runtime.GameWeaponVisuals || null;
+        if (!visuals || !visuals.get) return Promise.resolve(null);
+        var weaponIds = ['rifle', 'pistol', 'machinegun', 'shotgun', 'sniper'];
+        var loads = [];
+        for (var i = 0; i < weaponIds.length; i++) {
+            var entry = visuals.get(weaponIds[i]);
+            var asset = entry && entry.platform ? weaponAssetSpecForPlatform(entry.platform) : null;
+            if (asset) loads.push(loadWeaponAsset(asset).catch(function () { return null; }));
+        }
+        return Promise.all(loads);
     }
 
     function cloneWithDetachedRootUserData(root, cloneFn) {
@@ -958,6 +1120,135 @@ import {
         return visuals.get(weaponId);
     }
 
+    function resolveToonAttachmentMountOffset(platform) {
+        var attachment = platform && platform.toonAttachment ? platform.toonAttachment : null;
+        if (!attachment || attachment.useMountOffset !== true || !Array.isArray(attachment.translation)) {
+            return [0, 0, 0];
+        }
+        var baselineEntry = resolveWeaponVisualEntry('rifle');
+        var baseline = baselineEntry && baselineEntry.platform && baselineEntry.platform.toonAttachment
+            ? baselineEntry.platform.toonAttachment
+            : null;
+        if (!baseline || !Array.isArray(baseline.translation)) return [0, 0, 0];
+        if (attachment.sourceUrl !== baseline.sourceUrl || attachment.parentNode !== baseline.parentNode) {
+            return [0, 0, 0];
+        }
+
+        var dx = Number(attachment.translation[0] || 0) - Number(baseline.translation[0] || 0);
+        var dy = Number(attachment.translation[1] || 0) - Number(baseline.translation[1] || 0);
+        var dz = Number(attachment.translation[2] || 0) - Number(baseline.translation[2] || 0);
+
+        // Boxman has no Index1.R bone, so keep scout as calibration and use only authored translation deltas.
+        return [
+            dx * TOON_ATTACHMENT_MOUNT_SCALE,
+            -dy * TOON_ATTACHMENT_MOUNT_SCALE,
+            -dz * TOON_ATTACHMENT_MOUNT_SCALE
+        ];
+    }
+
+    function composeToonAttachmentMatrix(attachment) {
+        if (!attachment || !Array.isArray(attachment.translation) || !Array.isArray(attachment.rotation)) return null;
+        return new THREE.Matrix4().compose(
+            new THREE.Vector3(
+                Number(attachment.translation[0] || 0),
+                Number(attachment.translation[1] || 0),
+                Number(attachment.translation[2] || 0)
+            ),
+            new THREE.Quaternion(
+                Number(attachment.rotation[0] || 0),
+                Number(attachment.rotation[1] || 0),
+                Number(attachment.rotation[2] || 0),
+                Number(attachment.rotation[3] != null ? attachment.rotation[3] : 1)
+            ),
+            new THREE.Vector3(
+                Number(attachment.scale && attachment.scale[0] != null ? attachment.scale[0] : 1),
+                Number(attachment.scale && attachment.scale[1] != null ? attachment.scale[1] : 1),
+                Number(attachment.scale && attachment.scale[2] != null ? attachment.scale[2] : 1)
+            )
+        );
+    }
+
+    function composeWeaponAssetPlacementMatrix(platform) {
+        var asset = weaponAssetSpecForPlatform(platform);
+        if (!asset) return null;
+        var zones = platform && platform.zones ? platform.zones : {};
+        var scale = Math.max(0.001, Number(asset.scale || 1));
+        var rotationDeg = cloneVec3(asset.rotationDeg, [0, 0, 0]);
+        var sourceMuzzle = cloneVec3(asset.sourceMuzzle, [0, 0, 0]);
+        var muzzle = cloneVec3(zones.muzzle, [0, 0.02, -0.56]);
+        var rotation = new THREE.Euler(
+            Number(rotationDeg[0] || 0) * (Math.PI / 180),
+            Number(rotationDeg[1] || 0) * (Math.PI / 180),
+            Number(rotationDeg[2] || 0) * (Math.PI / 180)
+        );
+        var source = new THREE.Vector3(sourceMuzzle[0], sourceMuzzle[1], sourceMuzzle[2]);
+        source.applyEuler(rotation).multiplyScalar(scale);
+        return new THREE.Matrix4().compose(
+            new THREE.Vector3(
+                Number(muzzle[0] || 0) - source.x,
+                Number(muzzle[1] || 0) - source.y,
+                Number(muzzle[2] || 0) - source.z
+            ),
+            new THREE.Quaternion().setFromEuler(rotation),
+            new THREE.Vector3(scale, scale, scale)
+        );
+    }
+
+    function composeLegacyWeaponModelMatrix(platform) {
+        if (!platform) return null;
+        var mount = platform.mount || {};
+        var zones = platform.zones || {};
+        var handleBack = Array.isArray(zones.handleBack) ? zones.handleBack : [0, -0.12, 0.12];
+        var mountPos = Array.isArray(mount.position) ? mount.position : [0, 0, 0];
+        var mountRotDeg = Array.isArray(mount.rotationDeg) ? mount.rotationDeg : [0, 0, 0];
+        return new THREE.Matrix4().compose(
+            new THREE.Vector3(
+                Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
+                Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
+                (Number(mountPos[2] || 0) - Number(handleBack[2] || 0)) - 0.175
+            ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
+                (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
+                (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
+            )),
+            new THREE.Vector3(1, 1, 1)
+        );
+    }
+
+    function resolveToonAttachmentModelTransform(platform) {
+        var attachment = platform && platform.toonAttachment ? platform.toonAttachment : null;
+        if (!attachment || attachment.useMountOffset !== true) return null;
+        var baselineEntry = resolveWeaponVisualEntry('rifle');
+        var baselinePlatform = baselineEntry && baselineEntry.platform ? baselineEntry.platform : null;
+        var baseline = baselinePlatform && baselinePlatform.toonAttachment ? baselinePlatform.toonAttachment : null;
+        if (!baseline || attachment.sourceUrl !== baseline.sourceUrl || attachment.parentNode !== baseline.parentNode) {
+            return null;
+        }
+
+        var baselineModel = composeLegacyWeaponModelMatrix(baselinePlatform);
+        var baselineAsset = composeWeaponAssetPlacementMatrix(baselinePlatform);
+        var baselineAttachment = composeToonAttachmentMatrix(baseline);
+        var weaponAsset = composeWeaponAssetPlacementMatrix(platform);
+        var weaponAttachment = composeToonAttachmentMatrix(attachment);
+        if (!baselineModel || !baselineAsset || !baselineAttachment || !weaponAsset || !weaponAttachment) return null;
+
+        var matrix = baselineModel
+            .clone()
+            .multiply(baselineAsset)
+            .multiply(baselineAttachment.clone().invert())
+            .multiply(weaponAttachment)
+            .multiply(weaponAsset.clone().invert());
+        var position = new THREE.Vector3();
+        var rotation = new THREE.Quaternion();
+        var scale = new THREE.Vector3();
+        matrix.decompose(position, rotation, scale);
+        return {
+            position: position,
+            rotation: new THREE.Euler().setFromQuaternion(rotation, 'XYZ')
+        };
+    }
+
     function defaultWeaponMaterialTuning(partName) {
         var name = String(partName || '');
         if (name === 'grip' || name === 'stock' || name === 'underbarrel') {
@@ -979,6 +1270,25 @@ import {
                 metalness: tuning.metalness
             })
         );
+    }
+
+    function createMuzzleFlashMesh() {
+        var group = new THREE.Group();
+        group.visible = false;
+        group.position.z = -0.035;
+        var material = new THREE.MeshBasicMaterial({
+            color: 0xffd27a,
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        var planeA = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.08), material);
+        var planeB = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.06), material.clone());
+        planeB.rotation.x = Math.PI * 0.5;
+        group.add(planeA);
+        group.add(planeB);
+        return group;
     }
 
     function applyWeaponPartMesh(mesh, part, partName) {
@@ -1013,6 +1323,74 @@ import {
         return true;
     }
 
+    function clearLoadedWeaponAsset(rig) {
+        if (!rig) return;
+        if (rig.weaponLoadedAssetRoot && rig.weaponLoadedAssetRoot.parent) {
+            rig.weaponLoadedAssetRoot.parent.remove(rig.weaponLoadedAssetRoot);
+        }
+        rig.weaponLoadedAssetRoot = null;
+        rig.weaponLoadedAssetUrl = '';
+        setWeaponProceduralPartsVisible(rig, true);
+    }
+
+    function attachLoadedWeaponAsset(rig, platform, sourceRoot, token) {
+        if (!rig || !platform || !sourceRoot || rig.weaponAssetToken !== token) return false;
+        var asset = weaponAssetSpecForPlatform(platform);
+        if (!asset || !rig.weaponModel) return false;
+
+        clearLoadedWeaponAsset(rig);
+        var clone = sourceRoot.clone(true);
+        var scale = Math.max(0.001, Number(asset.scale || 1));
+        var rotationDeg = cloneVec3(asset.rotationDeg, [0, 0, 0]);
+        var zones = platform.zones || {};
+        var muzzle = cloneVec3(zones.muzzle, [0, 0.02, -0.56]);
+        var sourceMuzzle = cloneVec3(asset.sourceMuzzle, [0, 0, 0]);
+
+        weaponAssetRotScratch.set(
+            Number(rotationDeg[0] || 0) * (Math.PI / 180),
+            Number(rotationDeg[1] || 0) * (Math.PI / 180),
+            Number(rotationDeg[2] || 0) * (Math.PI / 180)
+        );
+        weaponAssetMuzzleScratch.set(sourceMuzzle[0], sourceMuzzle[1], sourceMuzzle[2]);
+        weaponAssetMuzzleScratch.applyEuler(weaponAssetRotScratch).multiplyScalar(scale);
+
+        clone.scale.setScalar(scale);
+        clone.rotation.copy(weaponAssetRotScratch);
+        clone.position.set(
+            Number(muzzle[0] || 0) - weaponAssetMuzzleScratch.x,
+            Number(muzzle[1] || 0) - weaponAssetMuzzleScratch.y,
+            Number(muzzle[2] || 0) - weaponAssetMuzzleScratch.z
+        );
+        clone.userData = clone.userData || {};
+        clone.userData.weaponAssetUrl = String(asset.url || '');
+        rig.weaponModel.add(clone);
+        rig.weaponLoadedAssetRoot = clone;
+        rig.weaponLoadedAssetUrl = String(asset.url || '');
+        setWeaponProceduralPartsVisible(rig, false);
+        return true;
+    }
+
+    function syncLoadedWeaponAsset(rig, platform) {
+        if (!rig) return;
+        var asset = weaponAssetSpecForPlatform(platform);
+        rig.weaponAssetToken = (Number(rig.weaponAssetToken || 0) + 1);
+        var token = rig.weaponAssetToken;
+        if (!asset || !isBrowserRuntime()) {
+            clearLoadedWeaponAsset(rig);
+            return;
+        }
+        if (rig.weaponLoadedAssetUrl === String(asset.url || '') && rig.weaponLoadedAssetRoot) {
+            setWeaponProceduralPartsVisible(rig, false);
+            return;
+        }
+        setWeaponProceduralPartsVisible(rig, true);
+        loadWeaponAsset(asset).then(function (sourceRoot) {
+            attachLoadedWeaponAsset(rig, platform, sourceRoot, token);
+        }).catch(function () {
+            if (rig.weaponAssetToken === token) setWeaponProceduralPartsVisible(rig, true);
+        });
+    }
+
     function applyWeaponVisualState(rig, weaponId) {
         if (!rig || !rig.weaponRoot || !rig.weaponModel) return false;
         var resolvedEntry = resolveWeaponVisualEntry(weaponId) || resolveWeaponVisualEntry('rifle');
@@ -1024,17 +1402,37 @@ import {
         var mountPos = Array.isArray(mount.position) ? mount.position : [0, 0, 0];
         var mountRotDeg = Array.isArray(mount.rotationDeg) ? mount.rotationDeg : [0, 0, 0];
         var muzzlePos = Array.isArray(zones.muzzle) ? zones.muzzle : [0, 0.02, -0.56];
+        var authoredMountOffset = resolveToonAttachmentMountOffset(platform);
+        var effectiveMountPos = [
+            Number(mountPos[0] || 0) + authoredMountOffset[0],
+            Number(mountPos[1] || 0) + authoredMountOffset[1],
+            Number(mountPos[2] || 0) + authoredMountOffset[2]
+        ];
+        var toonAttachmentTransform = resolveToonAttachmentModelTransform(platform);
 
-        rig.weaponModel.position.set(
-            Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
-            Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
-            (Number(mountPos[2] || 0) - Number(handleBack[2] || 0)) - 0.175
-        );
-        rig.weaponModel.rotation.set(
-            (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
-            (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
-            (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
-        );
+        if (toonAttachmentTransform) {
+            rig.weaponModel.position.set(
+                toonAttachmentTransform.position.x,
+                toonAttachmentTransform.position.y,
+                toonAttachmentTransform.position.z
+            );
+            rig.weaponModel.rotation.set(
+                toonAttachmentTransform.rotation.x,
+                toonAttachmentTransform.rotation.y,
+                toonAttachmentTransform.rotation.z
+            );
+        } else {
+            rig.weaponModel.position.set(
+                effectiveMountPos[0] - Number(handleBack[0] || 0),
+                effectiveMountPos[1] - Number(handleBack[1] || 0),
+                (effectiveMountPos[2] - Number(handleBack[2] || 0)) - 0.175
+            );
+            rig.weaponModel.rotation.set(
+                (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
+                (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
+                (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
+            );
+        }
         rig.muzzleAnchor.position.set(
             Number(muzzlePos[0] || 0),
             Number(muzzlePos[1] || 0),
@@ -1053,6 +1451,7 @@ import {
         applyWeaponPartMesh(rig.weaponAccentB, parts.accentB, 'accentB');
         rig.weaponId = resolvedEntry && resolvedEntry.weaponId ? resolvedEntry.weaponId : String(weaponId || 'rifle');
         rig.weaponDefinition = platform;
+        syncLoadedWeaponAsset(rig, platform);
         return true;
     }
 
@@ -1266,8 +1665,11 @@ import {
         weaponRoot.position.set(pistolConfig.rootPos.x, pistolConfig.rootPos.y, pistolConfig.rootPos.z);
         weaponRoot.rotation.set(pistolConfig.rootRot.x, pistolConfig.rootRot.y, pistolConfig.rootRot.z);
         armLowerR.add(weaponRoot);
+        var weaponHandAnchor = new THREE.Group();
+        weaponHandAnchor.name = 'Index1.R';
+        weaponRoot.add(weaponHandAnchor);
         var weaponModel = new THREE.Group();
-        weaponRoot.add(weaponModel);
+        weaponHandAnchor.add(weaponModel);
         var weaponBody = createWeaponPartMesh('receiver');
         var weaponGrip = createWeaponPartMesh('grip');
         var weaponBarrel = createWeaponPartMesh('barrel');
@@ -1291,6 +1693,8 @@ import {
         weaponModel.add(weaponAccentA);
         weaponModel.add(weaponAccentB);
         var muzzleAnchor = createAnchor(weaponModel, pistolConfig.muzzlePos.x, pistolConfig.muzzlePos.y, pistolConfig.muzzlePos.z);
+        var muzzleFlash = createMuzzleFlashMesh();
+        muzzleAnchor.add(muzzleFlash);
 
         var rig = {
             root: root,
@@ -1307,6 +1711,7 @@ import {
             throwableRoot: throwableRoot,
             throwableOriginAnchor: throwableOriginAnchor,
             weaponRoot: weaponRoot,
+            weaponHandAnchor: weaponHandAnchor,
             weaponModel: weaponModel,
             weaponCube: weaponBody,
             weaponBody: weaponBody,
@@ -1320,7 +1725,21 @@ import {
             weaponUnderbarrel: weaponUnderbarrel,
             weaponAccentA: weaponAccentA,
             weaponAccentB: weaponAccentB,
+            weaponProceduralParts: [
+                weaponBody,
+                weaponGrip,
+                weaponBarrel,
+                weaponStock,
+                weaponOpticRail,
+                weaponOptic,
+                weaponMuzzleDevice,
+                weaponFeed,
+                weaponUnderbarrel,
+                weaponAccentA,
+                weaponAccentB
+            ],
             muzzleAnchor: muzzleAnchor,
+            muzzleFlash: muzzleFlash,
             weaponRootBaseRot: weaponRoot.rotation.clone(),
             upperBodyPivot: bodyUpper,
             activeClipName: 'idle',
@@ -1343,6 +1762,9 @@ import {
             weaponRootBasePos: weaponRoot.position.clone(),
             weaponId: currentWeaponId,
             weaponDefinition: null,
+            weaponAssetToken: 0,
+            weaponLoadedAssetRoot: null,
+            weaponLoadedAssetUrl: '',
             fireRecoilState: fireRecoilState,
             activePoseName: ''
         };
@@ -1628,8 +2050,10 @@ import {
             return applyWeaponVisualState(rig, currentWeaponId);
         }
 
-        function setMuzzleVisible() {
-            return false;
+        function setMuzzleVisible(visible) {
+            if (!muzzleFlash) return false;
+            muzzleFlash.visible = !!visible;
+            return true;
         }
 
         function getWeaponId() {
@@ -1651,6 +2075,7 @@ import {
         function dispose() {
             if (disposed) return;
             disposed = true;
+            clearLoadedWeaponAsset(rig);
             disposeUniqueMaterials(modelRoot);
         }
 
@@ -1677,7 +2102,12 @@ import {
     }
 
     GameBoxmanRig.preload = function () {
-        return loadTemplate();
+        return Promise.all([
+            loadTemplate(),
+            preloadWeaponPackAssets()
+        ]).then(function (results) {
+            return results[0];
+        });
     };
 
     GameBoxmanRig.isSupported = function () {
@@ -1721,7 +2151,11 @@ import {
         resolveIdleAimYawState: resolveIdleAimYawState,
         idleAimPoseWeight: idleAimPoseWeight,
         resolveWeaponVisualEntry: resolveWeaponVisualEntry,
+        resolveToonAttachmentMountOffset: resolveToonAttachmentMountOffset,
+        resolveToonAttachmentModelTransform: resolveToonAttachmentModelTransform,
         applyWeaponPartMesh: applyWeaponPartMesh,
+        applyLoadedWeaponMaterial: applyLoadedWeaponMaterial,
+        clearLoadedWeaponAsset: clearLoadedWeaponAsset,
         applyWeaponVisualState: applyWeaponVisualState,
         lockedRightArmUpperPitchOffset: lockedRightArmUpperPitchOffset,
         applyLockedRightArmAimBasePose: applyLockedRightArmAimBasePose,

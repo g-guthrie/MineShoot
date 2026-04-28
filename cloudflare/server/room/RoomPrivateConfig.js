@@ -87,8 +87,14 @@ export function applyPrivateRoomConfig(room, config, deps = {}) {
     !room.matchState.ended &&
     room.gameMode === nextConfig.roomMode &&
     room.matchState.started === (nextConfig.roomPhase === roomPhaseActive);
+  const canPreserveActiveMatch =
+    room.matchState &&
+    room.matchState.started &&
+    !room.matchState.ended &&
+    nextConfig.roomPhase === roomPhaseActive &&
+    room.gameMode === nextConfig.roomMode;
 
-  if (!changed || canHydrateWithoutReset) {
+  if (!changed || canHydrateWithoutReset || canPreserveActiveMatch) {
     syncAssignedTeams(room, nextConfig.teams, nextConfig.teamIds[0]);
     return changed;
   }

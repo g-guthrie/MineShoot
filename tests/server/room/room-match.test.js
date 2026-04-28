@@ -42,8 +42,8 @@ test('private room match sync normalizes mode and team assignment', () => {
       teams: new Map([['a1', 'bravo']])
     },
     players: new Map([
-      ['u1', { id: 'u1', actorId: 'a1', fixtureType: '', teamId: '', progressScore: 5 }],
-      ['u2', { id: 'u2', actorId: 'a2', fixtureType: '', teamId: '', progressScore: 7 }]
+      ['u1', { id: 'u1', actorId: 'a1', fixtureType: '', teamId: '', progressScore: 5, kills: 2, deaths: 1, hp: 10, hpMax: 100, armor: 3, armorMax: 40, alive: false, respawnAt: 99 }],
+      ['u2', { id: 'u2', actorId: 'a2', fixtureType: '', teamId: '', progressScore: 7, kills: 1, deaths: 2, hp: 12, hpMax: 100, armor: 4, armorMax: 40, alive: false, respawnAt: 88 }]
     ])
   };
 
@@ -61,6 +61,12 @@ test('private room match sync normalizes mode and team assignment', () => {
   assert.equal(room.players.get('u1').teamId, 'bravo');
   assert.equal(room.players.get('u2').teamId, 'alpha');
   assert.equal(room.players.get('u1').progressScore, 0);
+  assert.equal(room.players.get('u1').kills, 0);
+  assert.equal(room.players.get('u1').deaths, 0);
+  assert.equal(room.players.get('u1').hp, 100);
+  assert.equal(room.players.get('u1').armor, 40);
+  assert.equal(room.players.get('u1').alive, true);
+  assert.equal(room.players.get('u1').respawnAt, 0);
 });
 
 test('public match helpers start tdm and assign the lighter team on join baseline', () => {
@@ -68,8 +74,8 @@ test('public match helpers start tdm and assign the lighter team on join baselin
     roomName: 'tdm-01',
     gameMode: 'tdm',
     players: new Map([
-      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 0, progressScore: 0 }],
-      ['u2', { id: 'u2', fixtureType: '', teamId: '', kills: 0, progressScore: 0 }]
+      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 4, deaths: 2, progressScore: 4, hp: 15, hpMax: 100, armor: 2, armorMax: 40, alive: false, respawnAt: 77 }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: '', kills: 2, deaths: 3, progressScore: 2, hp: 16, hpMax: 100, armor: 3, armorMax: 40, alive: false, respawnAt: 66 }]
     ]),
     matchState: emptyMatchState('tdm'),
     isPublicMatchRoom() { return true; },
@@ -93,6 +99,13 @@ test('public match helpers start tdm and assign the lighter team on join baselin
   assert.equal(room.matchState.startedAt, 99);
   assert.equal(room.matchState.teamBaselineSize.alpha, 1);
   assert.equal(room.matchState.teamBaselineSize.bravo, 1);
+  assert.equal(room.players.get('u1').kills, 0);
+  assert.equal(room.players.get('u1').deaths, 0);
+  assert.equal(room.players.get('u1').progressScore, 0);
+  assert.equal(room.players.get('u1').hp, 100);
+  assert.equal(room.players.get('u1').armor, 40);
+  assert.equal(room.players.get('u1').alive, true);
+  assert.equal(room.players.get('u1').respawnAt, 0);
 
   const joiner = { id: 'u3', fixtureType: '', teamId: '', progressScore: 0 };
   room.players.set('u3', joiner);
@@ -286,6 +299,44 @@ test('private room four-team tdm preserves assignments and scores the winning te
 
   assert.equal(room.matchState.teamProgress.charlie, 1);
   assert.deepEqual(finishCall, { winnerId: '', winnerTeam: 'charlie' });
+});
+
+test('TDM eliminations ignore same-team targets', () => {
+  const room = {
+    gameMode: 'tdm',
+    matchState: Object.assign(emptyMatchState('tdm'), {
+      started: true,
+      targetProgress: 1,
+      teamProgress: { alpha: 0, bravo: 0 },
+      teamBaselineSize: { alpha: 1, bravo: 1 }
+    }),
+    players: new Map([
+      ['u1', { id: 'u1', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }],
+      ['u2', { id: 'u2', fixtureType: '', teamId: 'alpha', kills: 0, deaths: 0, progressScore: 0 }]
+    ]),
+    getEntityById(id) { return this.players.get(id) || null; },
+    assignPlayerToCurrentTeam(player) {
+      return assignPlayerToCurrentTeam(this, player, {
+        teamAlpha: 'alpha',
+        teamBravo: 'bravo'
+      });
+    },
+    updateLeaderProgress() {},
+    finishPublicMatch() {
+      throw new Error('same-team elimination should not finish the match');
+    }
+  };
+
+  recordElimination(room, {
+    nowMs: () => 100,
+    gameModeFfa: 'ffa',
+    gameModeTdm: 'tdm',
+    tdmTargetProgress: 1
+  }, 'u1', 'u2');
+
+  assert.equal(room.players.get('u1').kills, 0);
+  assert.equal(room.players.get('u2').deaths, 0);
+  assert.equal(room.matchState.teamProgress.alpha, 0);
 });
 
 test('private room reset stays in the lobby once the room phase has already dropped back from active', () => {

@@ -416,6 +416,17 @@ test('empty-mag auto reload notifies the player rig immediately when empty', asy
   assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
 });
 
+test('network fire intent starts exactly at the muzzle world position', async () => {
+  const harness = await loadHitscanHarness();
+
+  const intent = harness.GameHitscan.buildNetworkFireIntent('muzzle-origin');
+
+  assert.equal(intent.aimOrigin.x, 0);
+  assert.equal(intent.aimOrigin.y, 1.6);
+  assert.equal(intent.aimOrigin.z, 0);
+  assert.ok(intent.aimForward.z < 0);
+});
+
 test('tracer renderer uses traveled head-tail distance on early frames', async () => {
   const harness = await loadHitscanHarness();
   const configuredSegmentLength = getWeaponPresentation('pistol').tracer.segmentLength;

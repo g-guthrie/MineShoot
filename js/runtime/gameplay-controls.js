@@ -8,8 +8,19 @@
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var domUtils = runtime.GameDomUtils || null;
     var DESKTOP_AUTO_FIRE_STORAGE_KEY = 'mayhem.desktopAutoFireEnabled';
+    var CAMERA_VIEW_STORAGE_KEY = 'mayhem.cameraViewMode';
     var activeTestHandle = null;
     var activeGameplayControlsInstance = null;
+
+    function readStoredFirstPersonViewPreference() {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) return false;
+            var raw = window.localStorage.getItem(CAMERA_VIEW_STORAGE_KEY);
+            return raw === 'fps';
+        } catch (_err) {
+            return false;
+        }
+    }
 
     function inputLabelsApi() {
         return runtime.GameInputLabels || null;
@@ -53,6 +64,7 @@
         };
         var touchOrientationState = 'landscape';
         var desktopAutoFireEnabled = false;
+        var firstPersonViewEnabled = readStoredFirstPersonViewPreference();
         var bound = false;
         var listenerRemovers = [];
 
@@ -181,6 +193,31 @@
 
         function toggleDesktopAutoFireEnabled() {
             return setDesktopAutoFireEnabled(!desktopAutoFireEnabled);
+        }
+
+        function saveFirstPersonViewPreference() {
+            var store = localStore();
+            if (!store || typeof store.setItem !== 'function') return firstPersonViewEnabled;
+            try {
+                store.setItem(CAMERA_VIEW_STORAGE_KEY, firstPersonViewEnabled ? 'fps' : 'over_shoulder');
+            } catch (_err) {
+                // no-op
+            }
+            return firstPersonViewEnabled;
+        }
+
+        function isFirstPersonViewEnabled() {
+            return !!firstPersonViewEnabled;
+        }
+
+        function setFirstPersonViewEnabled(nextValue) {
+            firstPersonViewEnabled = !!nextValue;
+            saveFirstPersonViewPreference();
+            return firstPersonViewEnabled;
+        }
+
+        function toggleFirstPersonViewEnabled() {
+            return setFirstPersonViewEnabled(!firstPersonViewEnabled);
         }
 
         function listen(target, type, handler, options) {
@@ -852,18 +889,27 @@
 
         function bindWeaponControls() {
             listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
                 var idx = -1;
                 if (matchesBinding('weapon_slot_1', e, 'Digit1')) {
                     idx = 0;
                 } else if (matchesBinding('weapon_slot_2', e, 'Digit2')) {
                     idx = 1;
                 }
-                if (idx >= 0) {
-                    var weaponOrder = runtime.GameHitscan.getWeaponOrder();
-                    if (idx < weaponOrder.length && opts.applyWeapon) {
-                        opts.applyWeapon(runtime.GameHitscan.setWeapon(weaponOrder[idx]));
-                    }
-                }
+                if (idx < 0) return;
+                if (!hasInputCapture()) return;
+                if (!canUseLocalAction('weapon')) return;
+                if (!runtime.GameHitscan || !runtime.GameHitscan.getWeaponOrder || !runtime.GameHitscan.setWeapon || !opts.applyWeapon) return;
+                var weaponOrder = runtime.GameHitscan.getWeaponOrder();
+                if (!Array.isArray(weaponOrder) || idx >= weaponOrder.length) return;
+                var weaponId = String(weaponOrder[idx] || '');
+                if (!weaponId) return;
+                var currentWeapon = runtime.GameHitscan.getCurrentWeapon ? runtime.GameHitscan.getCurrentWeapon() : null;
+                if (currentWeapon && String(currentWeapon.id || '') === weaponId) return;
+                if (e.preventDefault) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+                opts.applyWeapon(runtime.GameHitscan.setWeapon(weaponId));
             });
 
             listen(document, 'wheel', function (e) {
@@ -906,6 +952,27 @@
                 var muted = runtime.GameAudio.setMuted(!runtime.GameAudio.isMuted());
                 refreshLabel();
                 setTransientDebug(muted ? 'Sound muted' : 'Sound unmuted', 900);
+            });
+
+            refreshLabel();
+        }
+
+        function bindCameraViewToggleControl() {
+            var cameraViewToggleBtn = document.getElementById('camera-view-toggle-btn');
+            if (!cameraViewToggleBtn) return;
+
+            function refreshLabel() {
+                var enabled = isFirstPersonViewEnabled();
+                cameraViewToggleBtn.textContent = enabled ? 'CAMERA: FPS' : 'CAMERA: OVER SHOULDER';
+                cameraViewToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+            }
+
+            listen(cameraViewToggleBtn, 'click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var enabled = toggleFirstPersonViewEnabled();
+                refreshLabel();
+                setTransientDebug(enabled ? 'Camera: FPS' : 'Camera: over shoulder', 900);
             });
 
             refreshLabel();
@@ -1004,6 +1071,7 @@
                 bindShooting();
                 bindWeaponControls();
                 bindReloadControls();
+                bindCameraViewToggleControl();
                 bindSoundToggleControl();
                 bindThrowableControls();
                 bindRollControls();
@@ -1051,6 +1119,15 @@
             },
             isDesktopAutoFireEnabled: function () {
                 return isDesktopAutoFireEnabled();
+            },
+            isFirstPersonViewEnabled: function () {
+                return isFirstPersonViewEnabled();
+            },
+            setFirstPersonViewEnabled: function (enabled) {
+                return setFirstPersonViewEnabled(enabled);
+            },
+            toggleFirstPersonViewEnabled: function () {
+                return toggleFirstPersonViewEnabled();
             },
             hasVirtualCapture: function () {
                 return !!virtualCapture && touchLandscapeReady();
@@ -1115,6 +1192,36 @@
                 activeGameplayControlsInstance.isDesktopAutoFireEnabled &&
                     activeGameplayControlsInstance.isDesktopAutoFireEnabled()
                 );
+        },
+        isFirstPersonViewEnabled: function () {
+            if (!activeGameplayControlsInstance) return readStoredFirstPersonViewPreference();
+            return !!(
+                activeGameplayControlsInstance &&
+                activeGameplayControlsInstance.isFirstPersonViewEnabled &&
+                activeGameplayControlsInstance.isFirstPersonViewEnabled()
+            );
+        },
+        setFirstPersonViewEnabled: function (enabled) {
+            if (!activeGameplayControlsInstance || !activeGameplayControlsInstance.setFirstPersonViewEnabled) {
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(CAMERA_VIEW_STORAGE_KEY, enabled ? 'fps' : 'over_shoulder');
+                    }
+                } catch (_err) {
+                    // no-op
+                }
+                return !!enabled;
+            }
+            return activeGameplayControlsInstance.setFirstPersonViewEnabled(enabled);
+        },
+        toggleFirstPersonViewEnabled: function () {
+            var controlsApi = runtime.GameGameplayControls || {};
+            var enabled = controlsApi.isFirstPersonViewEnabled
+                ? controlsApi.isFirstPersonViewEnabled()
+                : false;
+            return controlsApi.setFirstPersonViewEnabled
+                ? controlsApi.setFirstPersonViewEnabled(!enabled)
+                : !enabled;
         },
         _test: {
             getActiveHandle: function () {

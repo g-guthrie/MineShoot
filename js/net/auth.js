@@ -77,7 +77,7 @@
             username: String(source.username || source.displayName || 'PLAYER'),
             displayName: String(source.displayName || source.username || 'PLAYER'),
             classId: String(source.classId || 'ffa'),
-            label: 'PLAYER ID',
+            label: 'Player ID',
             kind: 'account'
         };
     }
@@ -89,7 +89,7 @@
             username: String(guest.username || guest.displayName || 'PLAYER'),
             displayName: String(guest.displayName || guest.username || 'PLAYER'),
             classId: String(guest.classId || 'ffa'),
-            label: String(label || 'PLAYER ID'),
+            label: String(label || 'Player ID'),
             kind: 'guest'
         };
     }
@@ -448,7 +448,7 @@
         if (user && !guestMode) {
             return accountIdentityFromUser(user);
         }
-        return guestIdentityFor(getMenuGuestUser(), 'PLAYER ID');
+        return guestIdentityFor(getMenuGuestUser(), 'Player ID');
     }
 
     function authUiApi() {

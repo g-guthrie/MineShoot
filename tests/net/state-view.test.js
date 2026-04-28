@@ -351,6 +351,67 @@ test('network state view keeps grounded vertical interpolation linear', async ()
   assert.equal(Number(sample.y.toFixed(2)), 0.93);
 });
 
+test('network state view extrapolates footY timelines without dropping lateral intent', async () => {
+  const view = await loadStateViewWithOptions({
+    getRenderMap() {
+      return new Map();
+    },
+    getRemoteSnapshotTiming() {
+      return {
+        latestServerTime: 1200,
+        latestReceivedAt: 1200,
+        clockOffsetMs: 0,
+        interpolationDelayMs: 1,
+        cadenceMs: 100
+      };
+    },
+    getRemoteSnapshotTimeline() {
+      return [
+        {
+          serverTime: 1000,
+          x: 0,
+          footY: 0,
+          z: 0,
+          yaw: 0,
+          pitch: 0,
+          moveSpeedNorm: 1,
+          sprinting: true,
+          movingForward: false,
+          movingBackward: false,
+          movingLeft: true,
+          movingRight: false,
+          isGrounded: false,
+          velocityY: 6,
+          weaponId: 'rifle'
+        },
+        {
+          serverTime: 1200,
+          x: 4,
+          footY: 1.1,
+          z: 0,
+          yaw: 0,
+          pitch: 0,
+          moveSpeedNorm: 1,
+          sprinting: true,
+          movingForward: false,
+          movingBackward: false,
+          movingLeft: true,
+          movingRight: false,
+          isGrounded: false,
+          velocityY: 5,
+          weaponId: 'rifle'
+        }
+      ];
+    }
+  });
+
+  const sample = view.sampleRemoteEntityPresentation('usr_remote', 1230);
+
+  assert.ok(sample.y > 1.1, `expected extrapolated footY above the latest sample, saw ${sample.y}`);
+  assert.equal(sample.movingLeft, true);
+  assert.equal(sample.movingRight, false);
+});
+
 test('network state view keeps reconciliation pending samples, count, and age aligned', async () => {
   const nowMs = 1000;
   class FakeDate extends Date {

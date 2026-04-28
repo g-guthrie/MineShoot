@@ -280,6 +280,13 @@ export function canTargetEntity(room, entity, sourceId, deps) {
     return false;
   }
   if (sourceId && entity.id === sourceId) return false;
+  const mode = String((room && room.matchState && room.matchState.gameMode) || (room && room.gameMode) || '').toLowerCase();
+  if (sourceId && mode === 'tdm' && typeof room.getEntityById === 'function') {
+    const source = room.getEntityById(sourceId);
+    const sourceTeam = String(source && source.teamId || '').trim().toLowerCase();
+    const targetTeam = String(entity.teamId || '').trim().toLowerCase();
+    if (sourceTeam && targetTeam && sourceTeam === targetTeam) return false;
+  }
   return !room.isEntitySpawnShielded(entity);
 }
 
@@ -909,6 +916,7 @@ export function handleFire(room, player, msg, deps) {
       hitType: shot.hitType === 'head' ? 'head' : 'body',
       weaponId,
       sourceKind: 'weapon',
+      room,
       armorBufferMode: String(stats.armorBufferMode || 'normal')
     });
     if (!out) continue;

@@ -582,7 +582,7 @@ test('nuclear simpsons biome blocks intended spaces while keeping the gate gap a
   assert.ok(colliderSlices.every((block) => block.kind === 'block'));
 });
 
-test('wall street keeps an open center street while shifting building mass to the biome edges', () => {
+test('wall street rebuilds as a cold finance canyon with an open center push', () => {
   const runtime = ensureHeadlessWorldRuntime();
   const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
   assert.equal(typeof builder, 'function');
@@ -596,28 +596,49 @@ test('wall street keeps an open center street while shifting building mass to th
   });
 
   assert.ok(stats);
-  assert.equal(stats.busStops, 2);
+  assert.equal(stats.busStops, 0);
+  assert.equal(stats.planters, 0);
   assert.equal(stats.cover, 8);
-  assert.ok(stats.towerPeakHeight >= 59);
-  assert.ok(stats.towerPeakHeight <= 60);
-  assert.ok(stats.upperShaftWidth >= 8);
+  assert.equal(stats.tickerBoards, 7);
+  assert.equal(stats.vaultDoors, 2);
+  assert.equal(stats.institutionalColumns, 7);
+  assert.ok(stats.towerPeakHeight >= 69);
+  assert.ok(stats.towerPeakHeight <= 71);
+  assert.ok(stats.upperShaftWidth <= 6);
   assert.ok(Math.abs(stats.exchangeCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.84))) < 0.0001);
-  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.866))) < 0.0001);
+  assert.ok(Math.abs(stats.towerCenterZ - (rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * 0.90))) < 0.0001);
   const expectedWallStreetZ = (v) => rawBounds.minZ + ((rawBounds.maxZ - rawBounds.minZ) * v);
-  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.47)) < 0.0001);
-  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.47)) < 0.0001);
-  assert.ok(Math.abs(stats.westSupportCenterZ - expectedWallStreetZ(0.72)) < 0.0001);
-  assert.ok(Math.abs(stats.eastSupportCenterZ - expectedWallStreetZ(0.72)) < 0.0001);
-  assert.ok(Math.abs(stats.westKioskCenterZ - expectedWallStreetZ(0.22)) < 0.0001);
-  assert.ok(Math.abs(stats.eastKioskCenterZ - expectedWallStreetZ(0.22)) < 0.0001);
-  assert.ok(Math.abs(stats.westBusStopCenterZ - expectedWallStreetZ(0.31)) < 0.0001);
-  assert.ok(Math.abs(stats.eastBusStopCenterZ - expectedWallStreetZ(0.31)) < 0.0001);
+  assert.ok(Math.abs(stats.westBlockCenterZ - expectedWallStreetZ(0.51)) < 0.0001);
+  assert.ok(Math.abs(stats.eastBlockCenterZ - expectedWallStreetZ(0.51)) < 0.0001);
+  assert.ok(Math.abs(stats.westSouthCenterZ - expectedWallStreetZ(0.73)) < 0.0001);
+  assert.ok(Math.abs(stats.eastSouthCenterZ - expectedWallStreetZ(0.73)) < 0.0001);
   assert.ok(Math.abs(stats.rearWallSouthFaceZ - rawBounds.maxZ) < 0.0001);
   assert.ok(stats.westBlockPeakHeight > stats.eastBlockPeakHeight);
-  assert.equal(stats.northSupportCount, 2);
   assert.equal(stats.centerCoverCount, 0);
   assert.equal(stats.westAlleyCoverCount, 4);
   assert.equal(stats.eastAlleyCoverCount, 4);
+
+  const materialColor = (block) => block.material && block.material.color && block.material.color.value;
+  const oldWarmToontownColors = new Set([
+    0xe5ddcf,
+    0xd6c5a3,
+    0x8a7866,
+    0x8e8275,
+    0x7a5f58,
+    0xb39c7d,
+    0x6a6258,
+    0x4a443e
+  ]);
+  const oldWarmBlocks = recorder.blocks.filter((block) => oldWarmToontownColors.has(materialColor(block)));
+  assert.equal(oldWarmBlocks.length, 0);
+
+  const coldSurfaceBlocks = recorder.blocks.filter((block) =>
+    materialColor(block) === 0x202428 ||
+    materialColor(block) === 0x12161a ||
+    materialColor(block) === 0x384047 ||
+    materialColor(block) === 0x758088
+  );
+  assert.ok(coldSurfaceBlocks.length > 20);
 
   const plazaSpan = (rawBounds.maxX - rawBounds.minX) - 1.2;
   const broadPlazaBase = recorder.blocks.filter((block) =>
@@ -626,31 +647,32 @@ test('wall street keeps an open center street while shifting building mass to th
     Math.abs(block.y - 0.04) < 0.0001 &&
     Math.abs(block.w - plazaSpan) < 0.0001 &&
     Math.abs(block.h - 0.08) < 0.0001 &&
-    Math.abs(block.d - plazaSpan) < 0.0001
+    Math.abs(block.d - plazaSpan) < 0.0001 &&
+    materialColor(block) === 0x202428
   );
   assert.equal(broadPlazaBase.length, 1);
 
   const centerApproachStrip = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === false &&
-    Math.abs(block.y - 0.082) < 0.0001 &&
-    Math.abs(block.w - 13.4) < 0.0001 &&
-    Math.abs(block.h - 0.084) < 0.0001 &&
-    block.d > 30
+    Math.abs(block.y - 0.085) < 0.0001 &&
+    Math.abs(block.w - 12.4) < 0.0001 &&
+    Math.abs(block.h - 0.09) < 0.0001 &&
+    block.d >= 31
   );
   assert.equal(centerApproachStrip.length, 1);
 
   const alleyStrips = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === false &&
-    Math.abs(block.y - 0.082) < 0.0001 &&
-    Math.abs(block.w - 3.8) < 0.0001 &&
-    Math.abs(block.h - 0.084) < 0.0001 &&
-    Math.abs(block.d - 19.8) < 0.0001
+    Math.abs(block.y - 0.09) < 0.0001 &&
+    Math.abs(block.w - 4.4) < 0.0001 &&
+    Math.abs(block.h - 0.1) < 0.0001 &&
+    Math.abs(block.d - 25.0) < 0.0001
   );
   assert.equal(alleyStrips.length, 2);
 
-  const curbPlanters = recorder.blocks.filter((block) =>
+  const oldCurbPlanters = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === true &&
     Math.abs(block.y - 0.56) < 0.0001 &&
@@ -661,16 +683,9 @@ test('wall street keeps an open center street while shifting building mass to th
       (Math.abs(block.w - 2.4) < 0.0001 && Math.abs(block.d - 1.5) < 0.0001)
     )
   );
-  assert.equal(curbPlanters.length, 6);
+  assert.equal(oldCurbPlanters.length, 0);
 
-  const northEdgePlanters = curbPlanters.filter((block) =>
-    Math.abs(block.w - 1.8) < 0.0001 &&
-    Math.abs(block.d - 1.2) < 0.0001 &&
-    block.z < expectedWallStreetZ(0.12)
-  );
-  assert.equal(northEdgePlanters.length, 2);
-
-  const busStopRoofs = recorder.blocks.filter((block) =>
+  const oldBusStopRoofs = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === true &&
     Math.abs(block.y - 2.42) < 0.0001 &&
@@ -678,46 +693,49 @@ test('wall street keeps an open center street while shifting building mass to th
     Math.abs(block.h - 0.28) < 0.0001 &&
     Math.abs(block.d - 3.1) < 0.0001
   );
-  assert.equal(busStopRoofs.length, 2);
+  assert.equal(oldBusStopRoofs.length, 0);
 
-  const northOfficeBodies = recorder.blocks.filter((block) =>
+  const institutionalColumns = recorder.blocks.filter((block) =>
     block.kind === 'block' &&
     block.isSolid === true &&
+    Math.abs(block.w - 1.18) < 0.0001 &&
+    Math.abs(block.h - 11.8) < 0.0001 &&
+    Math.abs(block.d - 1.12) < 0.0001
+  );
+  assert.equal(institutionalColumns.length, 7);
+
+  const tickerGlows = recorder.blocks.filter((block) =>
+    block.kind === 'block' &&
+    block.isSolid === false &&
     (
-      (Math.abs(block.w - 7.2) < 0.0001 && Math.abs(block.d - 5.8) < 0.0001 && Math.abs(block.h - 9.1) < 0.0001) ||
-      (Math.abs(block.w - 5.8) < 0.0001 && Math.abs(block.d - 5.0) < 0.0001 && Math.abs(block.h - 7.5) < 0.0001)
+      materialColor(block) === 0x30d158 ||
+      materialColor(block) === 0xb73535
     )
   );
-  assert.equal(northOfficeBodies.length, 0);
-
-  const lobbyPilasters = recorder.blocks.filter((block) =>
-    block.kind === 'block' &&
-    block.isSolid === true &&
-    Math.abs(block.w - 1.26) < 0.0001 &&
-    Math.abs(block.h - 8.4) < 0.0001 &&
-    Math.abs(block.d - 4.8) < 0.0001
-  );
-  assert.equal(lobbyPilasters.length, 4);
+  assert.ok(tickerGlows.length >= 7);
 
   const solidAabbs = solidGeometryAabbs(recorder.blocks);
   const centerX = (rawBounds.minX + rawBounds.maxX) * 0.5;
-  const westShotX = rawBounds.minX + 3.5;
-  const eastShotX = rawBounds.maxX - 3.5;
+  const westShotX = rawBounds.minX + 4.4;
+  const eastShotX = rawBounds.maxX - 4.4;
 
   for (const z of [118, 124, 132, 140, 146]) {
     assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, z), false);
   }
-  assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, 152), true);
+  assert.equal(pointHitsSolid(solidAabbs, centerX, 2.5, 151), true);
 
-  assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, 122), true);
-  for (const z of [116, 118, 128, 144]) {
+  assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, 136), true);
+  for (const z of [116, 118, 122, 148]) {
     assert.equal(pointHitsSolid(solidAabbs, westShotX, 2.5, z), false);
   }
-  for (const z of [122, 126]) {
-    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), true);
-  }
-  for (const z of [116, 118, 134, 144]) {
+  assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, 136), true);
+  for (const z of [116, 118, 122, 148]) {
     assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), false);
+  }
+
+  for (const z of [132, 140]) {
+    assert.equal(pointHitsSolid(solidAabbs, rawBounds.minX + 17, 2.5, z), false);
+    assert.equal(pointHitsSolid(solidAabbs, eastShotX, 2.5, z), true);
   }
 
   const southFlushSolids = recorder.blocks.filter((block) =>

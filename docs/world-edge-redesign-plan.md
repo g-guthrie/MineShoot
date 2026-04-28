@@ -85,8 +85,8 @@ Blockout pieces should be broken into reusable sub-builders instead of one monol
 
 - `buildPerimeterMesaWall(...)`
 - `buildDesertRubbleApron(...)`
-- `buildToonTowerPodium(...)`
-- `buildToonStreetFacade(...)`
+- `buildCorporateTowerPodium(...)`
+- `buildColdStreetFacade(...)`
 - `buildFinanceAlley(...)`
 
 ### Phase C: Gameplay Validation
@@ -223,21 +223,22 @@ This should feel like a collapsed desert escarpment, not a neat fortress wall.
   - optional high pocket at `y:12-14`
 - Rule: every pocket needs at least two readable approach/escape paths
 
-## Wall Street Concept: Toontown Finance District
+## Wall Street Concept: Cold Toon-Finance District
 
 ### Design Goal
 
-Replace the old flood-control concept with a giant toon-finance district:
+Replace the old flood-control concept and the rejected warm Toontown look with a cold toon-finance district:
 
 - absurd CEO tower on the south wall
 - giant formal lobby and stairs facing inward
 - flanking finance buildings creating canyon alleys
-- Wall Street cues pushed through Toontown exaggeration
+- Wall Street cues pushed through exaggerated shape, not candy color
 
 Reference blend:
 
-- Toontown cog/boss satire
+- hostile cartoon corporate satire
 - white-column financial facades
+- charcoal asphalt, cold concrete, dark green glass
 - deep canyon-like alleys
 - impossibly tall central spire
 
@@ -268,13 +269,13 @@ Reference blend:
 3. Impossible tower shaft
    - very thin relative to podium
    - rises far past every other biome silhouette
-4. Spire and cog crown
+4. Spire and brass crown
    - skyline read from across map
 5. Side buildings
    - 2-4 shorter buildings
    - slightly crooked, stylized, dense
 6. Alley layer
-   - narrow canyons, signage, service doors, vault vents, lamp posts
+   - narrow canyons, green ticker glow, service doors, vault vents, lamp posts
 
 ### Wall Street Asset Specifications
 
@@ -314,7 +315,7 @@ Reference blend:
 - Footprint: `6-10w x 6-10d` above podium
 - Height: `65-78`
 - Shape: slightly tapered or stacked setbacks so it stays readable
-- Visual rhythm: windows, cog motifs, decorative bands every `8-12` units
+- Visual rhythm: windows, brass corporate motifs, decorative bands every `8-12` units
 - Playability: mostly decorative and non-reachable
 - Critical rule: do not make the shaft collision overly detailed
 
@@ -323,7 +324,7 @@ Reference blend:
 - Type: skyline topper
 - Height contribution: `8-14`
 - Shape options:
-  - toothed cog halo around the upper shaft
+  - restrained brass crown around the upper shaft
   - bent gold spire
   - satirical banker emblem
 - Role: silhouette identity, not gameplay
@@ -343,7 +344,7 @@ Reference blend:
 - Type: flank building
 - Footprint: `8-12w x 10-16d`
 - Height: `14-22`
-- Style: chunky Wall Street annex with toon distortion
+- Style: chunky Wall Street annex with cold toon distortion
 - Features: cornice, service alley, maybe a vault intake or ticker sign
 - Playability: first roof or balcony may be reachable; top roof should be limited
 
@@ -365,18 +366,18 @@ Reference blend:
   - service doors
   - AC / vent / pipe blocks
   - signs and marquee brackets
-  - planter / bollard cover
+  - concrete barrier / bollard cover
 - Width target: `3.5-6`
 - Rule: each alley needs a clean combat line and one pocket cover node
 
-#### W9. Toon-Finance Detail Kit
+#### W9. Cold Toon-Finance Detail Kit
 
 - Type: purely decorative overlays
 - Pieces:
-  - giant cog medallions
+  - brass corporate medallions
   - fake ticker bands
   - comically large vault wheel
-  - gold trim bands
+  - restrained brass trim bands
   - exaggerated clocks
   - satirical banker insignia
 - Collision: none unless large enough to matter
@@ -390,13 +391,14 @@ Reference blend:
 - dark rock only for fracture lines and contrast
 - avoid over-detailing the skyline edge
 
-### Wall Street / Toontown Finance
+### Wall Street / Cold Toon Finance
 
 - exaggerated proportions
 - exchange facade first, then podium, then thin absurd tower
 - financial architecture cues must read instantly from medium distance
 - NYSE-style columns and pediment must be readable from the main approach
 - stylization should come from shape and proportion first, not texture noise
+- palette should stay charcoal asphalt, cold concrete, dark green glass, and restrained brass; avoid warm tan plaza color, pastel signage, bus stops, and planters
 
 ## Gameplay Guardrails
 

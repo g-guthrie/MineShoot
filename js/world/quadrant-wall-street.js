@@ -1,7 +1,7 @@
 import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
 /**
- * quadrant-wall-street.js - Toontown Wall Street occupying the south-center biome slot.
+ * quadrant-wall-street.js - Cold toon-finance district occupying the south-center biome slot.
  * Current bounds are the full biome cell footprint: x:[56,110] z:[110,164]
  */
 (function () {
@@ -13,487 +13,291 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         if (MATS) return MATS;
         var lib = globalThis.__MAYHEM_RUNTIME.GameMaterialLibrary;
         MATS = {
-            stoneLight: lib.getLambert({ color: 0xe5ddcf }),
-            stoneMid: lib.getLambert({ color: 0xd6c5a3 }),
-            stoneDark: lib.getLambert({ color: 0x8a7866 }),
-            towerStone: lib.getLambert({ color: 0x8e8275 }),
-            roof: lib.getLambert({ color: 0x7a5f58 }),
-            trim: lib.getLambert({ color: 0xd3ad5f }),
-            bronze: lib.getLambert({ color: 0xb17b46 }),
-            paper: lib.getLambert({ color: 0xf0e4bf }),
-            signRed: lib.getLambert({ color: 0xc84e50 }),
-            signBlue: lib.getLambert({ color: 0x4a7da6 }),
-            hedge: lib.getLambert({ color: 0x617d56 }),
-            pavement: lib.getLambert({ color: 0x6a6258 }),
-            pavementDark: lib.getLambert({ color: 0x4a443e }),
-            curb: lib.getLambert({ color: 0xb39c7d }),
-            glass: lib.getLambert({ color: 0xeaf8ff, transparent: true, opacity: 0.4 }),
-            window: lib.getLambert({ color: 0x7dd7f1, transparent: true, opacity: 0.72 }),
-            glow: new THREE.MeshStandardMaterial({ color: 0xffdc7d, emissive: 0xffdc7d, emissiveIntensity: 0.72 })
+            asphalt: lib.getLambert({ color: 0x202428 }),
+            asphaltDark: lib.getLambert({ color: 0x12161a }),
+            lane: lib.getLambert({ color: 0x2f383e }),
+            curb: lib.getLambert({ color: 0x6f7a82 }),
+            concreteDark: lib.getLambert({ color: 0x384047 }),
+            concreteMid: lib.getLambert({ color: 0x758088 }),
+            concreteLight: lib.getLambert({ color: 0xc7d0d4 }),
+            column: lib.getLambert({ color: 0xdfe5e7 }),
+            glass: lib.getLambert({ color: 0x17454a, transparent: true, opacity: 0.7 }),
+            glassDark: lib.getLambert({ color: 0x0b262b, transparent: true, opacity: 0.78 }),
+            brass: lib.getLambert({ color: 0x9a7b3e }),
+            blackSign: lib.getLambert({ color: 0x0b1114 }),
+            tickerGreen: lib.getLambert({ color: 0x30d158 }),
+            sellRed: lib.getLambert({ color: 0xb73535 }),
+            paper: lib.getLambert({ color: 0xd7dde0 }),
+            shadow: lib.getLambert({ color: 0x151a1f }),
+            glowGreen: new THREE.MeshStandardMaterial({ color: 0x35ff84, emissive: 0x35ff84, emissiveIntensity: 0.78 }),
+            glowRed: new THREE.MeshStandardMaterial({ color: 0xff4a48, emissive: 0xff4a48, emissiveIntensity: 0.62 }),
+            glowAmber: new THREE.MeshStandardMaterial({ color: 0xcda34a, emissive: 0xcda34a, emissiveIntensity: 0.44 })
         };
         return MATS;
     }
 
-    function addWindowRing(place, cx, baseY, cz, w, d, mats, frontScale, sideScale) {
-        var frontW = Math.max(1.6, w * (frontScale || 0.62));
-        var sideD = Math.max(1.2, d * (sideScale || 0.6));
-        var frontZ = cz - (d * 0.5) - 0.12;
-        var backZ = cz + (d * 0.5) + 0.12;
-        var sideX = (w * 0.5) + 0.12;
-        place.addBlock(cx, baseY, frontZ, frontW, 0.54, 0.18, mats.window, false);
-        place.addBlock(cx, baseY, backZ, frontW, 0.54, 0.18, mats.window, false);
-        place.addBlock(cx - sideX, baseY, cz, 0.18, 0.54, sideD, mats.window, false);
-        place.addBlock(cx + sideX, baseY, cz, 0.18, 0.54, sideD, mats.window, false);
-    }
-
-    function addWindowStack(place, cx, startY, cz, w, d, levels, stepY, mats, frontScale, sideScale) {
-        var count = Math.max(1, Number(levels) || 1);
-        var step = Math.max(1.45, Number(stepY) || 2.2);
-        for (var i = 0; i < count; i++) {
-            addWindowRing(place, cx, startY + (i * step), cz, w, d, mats, frontScale, sideScale);
-        }
-    }
-
-    function addCornice(place, cx, y, cz, w, d, mats) {
-        place.addBlock(cx, y, cz, w + 0.72, 0.34, d + 0.72, mats.stoneMid, true);
-        place.addBlock(cx, y + 0.24, cz, w + 0.28, 0.1, d + 0.28, mats.trim, true);
-    }
-
-    function addStreetLamp(x, z, place, mats, ctx, phase) {
-        var postMat = mats.towerStone || mats.stoneDark;
-        place.addBlock(x, 2.6, z, 0.14, 5.2, 0.14, postMat, false);
-        place.addBlock(x, 5.0, z + 0.38, 0.12, 0.12, 0.76, postMat, false);
-        var glow = place.addBlock(x, 4.82, z + 0.78, 0.28, 0.15, 0.28, cloneMaterial(mats.glow), false);
+    function addGlowBlock(place, x, y, z, w, h, d, material, ctx, phase) {
+        var glow = place.addBlock(x, y, z, w, h, d, cloneMaterial(material), false);
         if (ctx && typeof ctx.addFlicker === 'function') {
-            ctx.addFlicker({ material: glow.material, freq: 2.7, phase: Number(phase || 0) });
-        }
-    }
-
-    function addClockMedallion(x, y, z, place, mats) {
-        var detailMat = mats.towerStone || mats.stoneDark;
-        var ringGeo = new THREE.CylinderGeometry(1.02, 1.02, 0.16, 18);
-        var faceGeo = new THREE.CylinderGeometry(0.78, 0.78, 0.08, 18);
-        place.addDecor(x, y, z, ringGeo, mats.trim, 0, Math.PI * 0.5, 0);
-        place.addDecor(x, y, z - 0.04, faceGeo, mats.stoneLight, 0, Math.PI * 0.5, 0);
-        place.addBlock(x, y, z - 0.12, 0.08, 0.08, 0.76, detailMat, false);
-        place.addBlock(x + 0.22, y + 0.18, z - 0.12, 0.08, 0.08, 0.42, detailMat, false);
-    }
-
-    function addGlowStrip(place, x, y, z, w, d, mats, ctx, color, phase) {
-        var mat = cloneMaterial(mats.glow);
-        var nextColor = Number(color || 0xffdc7d);
-        if (mat.color && typeof mat.color.setHex === 'function') mat.color.setHex(nextColor);
-        if (mat.emissive && typeof mat.emissive.setHex === 'function') mat.emissive.setHex(nextColor);
-        var glow = place.addBlock(x, y, z, w, 0.14, d, mat, false);
-        if (ctx && typeof ctx.addFlicker === 'function') {
-            ctx.addFlicker({ material: glow.material, freq: 2.1, phase: Number(phase || 0) });
+            ctx.addFlicker({ material: glow.material, freq: 2.2, phase: Number(phase || 0) });
         }
         return glow;
     }
 
-    function addVaultWheel(x, y, z, place, mats) {
-        var coreMat = mats.towerStone || mats.stoneDark;
-        var ringGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.12, 18);
-        var coreGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.18, 12);
-        place.addDecor(x, y, z, ringGeo, mats.bronze, 0, Math.PI * 0.5, 0);
-        place.addDecor(x, y, z - 0.02, coreGeo, coreMat, 0, Math.PI * 0.5, 0);
-        for (var i = 0; i < 6; i++) {
-            var angle = (Math.PI * 2 * i) / 6;
-            var spokeX = x + (Math.cos(angle) * 0.42);
-            var spokeZ = z + (Math.sin(angle) * 0.42);
-            place.addBlock((x + spokeX) * 0.5, y, (z + spokeZ) * 0.5, Math.abs(spokeX - x) + 0.08, 0.08, Math.abs(spokeZ - z) + 0.08, mats.bronze, false);
-            place.addBlock(x + (Math.cos(angle) * 1.02), y, z + (Math.sin(angle) * 1.02), 0.22, 0.22, 0.22, mats.bronze, false);
+    function addWindowBand(place, x, y, z, w, d, mats, frontScale, sideScale) {
+        var frontW = Math.max(1.4, w * (frontScale || 0.62));
+        var sideD = Math.max(1.1, d * (sideScale || 0.48));
+        var frontZ = z - (d * 0.5) - 0.08;
+        var backZ = z + (d * 0.5) - 0.08;
+        var sideX = (w * 0.5) + 0.08;
+        place.addBlock(x, y, frontZ, frontW, 0.52, 0.14, mats.glass, false);
+        place.addBlock(x, y, backZ, frontW, 0.52, 0.14, mats.glassDark, false);
+        place.addBlock(x - sideX, y, z, 0.14, 0.52, sideD, mats.glassDark, false);
+        place.addBlock(x + sideX, y, z, 0.14, 0.52, sideD, mats.glassDark, false);
+    }
+
+    function addWindowStack(place, x, startY, z, w, d, count, stepY, mats, frontScale, sideScale) {
+        for (var i = 0; i < count; i++) {
+            addWindowBand(place, x, startY + (i * stepY), z, w, d, mats, frontScale, sideScale);
         }
     }
 
-    function addCogHalo(x, y, z, radius, place, mats) {
-        var r = Math.max(1.5, Number(radius) || 2.0);
-        var ringGeo = new THREE.CylinderGeometry(r, r, 0.1, 20);
-        place.addDecor(x, y, z, ringGeo, mats.trim, 0, Math.PI * 0.5, 0);
-        for (var i = 0; i < 10; i++) {
-            var angle = (Math.PI * 2 * i) / 10;
-            place.addBlock(x + (Math.cos(angle) * r), y, z + (Math.sin(angle) * r), 0.3, 0.3, 0.3, mats.trim, false);
-        }
+    function addCornice(place, x, y, z, w, d, mats) {
+        place.addBlock(x, y, z, w + 0.7, 0.34, d + 0.7, mats.concreteMid, true);
+        place.addBlock(x, y + 0.25, z - (d * 0.5) - 0.08, w + 0.28, 0.12, 0.12, mats.brass, false);
+        place.addBlock(x, y + 0.25, z + (d * 0.5) + 0.08, w + 0.28, 0.12, 0.12, mats.brass, false);
+        place.addBlock(x - (w * 0.5) - 0.08, y + 0.25, z, 0.12, 0.12, d + 0.28, mats.brass, false);
+        place.addBlock(x + (w * 0.5) + 0.08, y + 0.25, z, 0.12, 0.12, d + 0.28, mats.brass, false);
     }
 
-    function addTickerRibbon(x, y, z, len, place, mats) {
-        var span = Math.max(2.4, Number(len) || 3.0);
-        place.addRamp(x, y, z, 0.08, 0.08, span, mats.signRed, Math.PI * 0.5, 0.22, false);
-        place.addRamp(x + 0.25, y - 0.16, z + 0.22, 0.07, 0.07, span * 0.82, mats.paper, Math.PI * 0.5, -0.2, false);
-        place.addRamp(x - 0.18, y - 0.08, z - 0.26, 0.06, 0.06, span * 0.62, mats.signBlue, Math.PI * 0.5, 0.18, false);
+    function addTickerBoard(place, x, y, z, w, d, mats, ctx, phase, colorMode) {
+        var glowMat = colorMode === 'red' ? mats.glowRed : mats.glowGreen;
+        var stripeMat = colorMode === 'red' ? mats.sellRed : mats.tickerGreen;
+        place.addBlock(x, y, z, w, 1.08, d, mats.blackSign, false);
+        addGlowBlock(place, x, y + 0.18, z - (d * 0.5) - 0.04, w * 0.82, 0.14, 0.12, glowMat, ctx, phase);
+        place.addBlock(x - (w * 0.22), y - 0.18, z - (d * 0.5) - 0.05, w * 0.24, 0.12, 0.1, stripeMat, false);
+        place.addBlock(x + (w * 0.22), y - 0.18, z - (d * 0.5) - 0.05, w * 0.24, 0.12, 0.1, mats.paper, false);
+    }
+
+    function addVaultDoor(place, x, y, z, mats) {
+        var ringGeo = new THREE.CylinderGeometry(1.12, 1.12, 0.16, 20);
+        var coreGeo = new THREE.CylinderGeometry(0.76, 0.76, 0.18, 20);
+        place.addDecor(x, y, z, ringGeo, mats.brass, 0, Math.PI * 0.5, 0);
+        place.addDecor(x, y, z - 0.04, coreGeo, mats.concreteDark, 0, Math.PI * 0.5, 0);
+        place.addBlock(x, y, z - 0.12, 0.1, 0.1, 1.18, mats.brass, false);
+        place.addBlock(x, y, z - 0.12, 1.18, 0.1, 0.1, mats.brass, false);
+    }
+
+    function addColdClock(place, x, y, z, mats) {
+        var rimGeo = new THREE.CylinderGeometry(0.98, 0.98, 0.12, 20);
+        var faceGeo = new THREE.CylinderGeometry(0.76, 0.76, 0.08, 20);
+        place.addDecor(x, y, z, rimGeo, mats.brass, 0, Math.PI * 0.5, 0);
+        place.addDecor(x, y, z - 0.04, faceGeo, mats.paper, 0, Math.PI * 0.5, 0);
+        place.addBlock(x, y, z - 0.13, 0.08, 0.08, 0.68, mats.shadow, false);
+        place.addBlock(x + 0.2, y + 0.16, z - 0.13, 0.08, 0.08, 0.38, mats.shadow, false);
+    }
+
+    function addStreetLamp(place, x, z, mats, ctx, phase) {
+        place.addBlock(x, 2.35, z, 0.14, 4.7, 0.14, mats.shadow, false);
+        place.addBlock(x, 4.5, z + 0.34, 0.12, 0.12, 0.68, mats.shadow, false);
+        addGlowBlock(place, x, 4.36, z + 0.72, 0.24, 0.14, 0.24, mats.glowGreen, ctx, phase);
+    }
+
+    function buildCorporatePaving(bounds, centerX, exchangeZ, place, mats, ctx) {
+        var spanX = (bounds.maxX - bounds.minX) - 1.2;
+        var spanZ = (bounds.maxZ - bounds.minZ) - 1.2;
+        var plazaZ = (bounds.minZ + bounds.maxZ) * 0.5;
+        var centerStreetZ = (bounds.minZ + exchangeZ - 2.0) * 0.5;
+        var centerStreetDepth = Math.max(31.0, (exchangeZ - bounds.minZ) - 3.0);
+        var westLane = pt(bounds, 0.27, 0.5);
+        var eastLane = pt(bounds, 0.73, 0.5);
+        var northBandZ = bounds.minZ + 0.55;
+        var southBandZ = bounds.maxZ - 0.55;
+        var westBandX = bounds.minX + 0.55;
+        var eastBandX = bounds.maxX - 0.55;
+
+        place.addBlock(centerX, 0.04, plazaZ, spanX, 0.08, spanZ, mats.asphalt, false);
+        place.addBlock(centerX, 0.085, centerStreetZ, 12.4, 0.09, centerStreetDepth, mats.lane, false);
+        place.addBlock(westLane.x, 0.09, westLane.z, 4.4, 0.1, 25.0, mats.asphaltDark, false);
+        place.addBlock(eastLane.x, 0.09, eastLane.z, 4.4, 0.1, 25.0, mats.asphaltDark, false);
+
+        place.addBlock(centerX, 0.12, northBandZ, spanX, 0.24, 0.5, mats.curb, false);
+        place.addBlock(centerX, 0.12, southBandZ, 18.0, 0.24, 0.5, mats.curb, false);
+        place.addBlock(westBandX, 0.12, plazaZ, 0.5, 0.24, spanZ, mats.curb, false);
+        place.addBlock(eastBandX, 0.12, plazaZ, 0.5, 0.24, spanZ, mats.curb, false);
+
+        addGlowBlock(place, centerX - 4.1, 0.17, centerStreetZ, 0.12, 0.06, centerStreetDepth - 3.0, mats.glowGreen, ctx, 0.2);
+        addGlowBlock(place, centerX + 4.1, 0.17, centerStreetZ, 0.12, 0.06, centerStreetDepth - 3.0, mats.glowGreen, ctx, 0.8);
+
+        return {
+            alleyStripCount: 2
+        };
     }
 
     function buildRearWallMask(bounds, centerX, place, mats) {
-        var wallZ = bounds.maxZ - 2.1;
-        var fullWidth = Math.max(52.0, (bounds.maxX - bounds.minX) - 0.6);
-        place.addBlock(centerX, 8.6, wallZ, fullWidth, 17.2, 4.2, mats.towerStone, true);
-        place.addBlock(centerX, 17.0, wallZ - 0.95, fullWidth - 2.0, 16.8, 2.6, mats.towerStone, true);
-        place.addBlock(bounds.minX + 2.2, 10.4, wallZ - 0.4, 4.4, 20.8, 2.9, mats.towerStone, true);
-        place.addBlock(bounds.maxX - 2.2, 10.0, wallZ - 0.2, 4.4, 20.0, 2.9, mats.towerStone, true);
-        addWindowStack(place, centerX, 7.3, wallZ - 2.1, fullWidth - 12.0, 0.2, 4, 2.6, mats, 0.82, 0.1);
+        var wallZ = bounds.maxZ - 1.9;
+        var spanX = (bounds.maxX - bounds.minX) - 0.5;
+        place.addBlock(centerX, 9.8, wallZ, spanX, 19.6, 3.8, mats.concreteDark, true);
+        place.addBlock(centerX, 21.5, wallZ - 0.3, spanX - 8.0, 15.4, 2.3, mats.shadow, true);
+        place.addBlock(bounds.minX + 2.15, 11.4, wallZ - 0.25, 4.3, 22.8, 2.7, mats.concreteMid, true);
+        place.addBlock(bounds.maxX - 2.15, 11.4, wallZ - 0.25, 4.3, 22.8, 2.7, mats.concreteMid, true);
+        addWindowStack(place, centerX, 9.0, wallZ - 2.0, spanX - 12.0, 0.4, 4, 2.8, mats, 0.72, 0.1);
         return {
-            southFaceZ: wallZ + 2.1
+            southFaceZ: wallZ + 1.9
         };
     }
 
-    function buildGrandStair(centerX, terraceZ, place, mats) {
+    function buildGrandStair(centerX, exchangeZ, place, mats) {
         var steps = [
-            { y: 0.42, z: terraceZ - 10.1, w: 16.4, d: 2.6 },
-            { y: 1.05, z: terraceZ - 8.0, w: 15.0, d: 2.2 },
-            { y: 1.8, z: terraceZ - 6.05, w: 13.8, d: 2.0 },
-            { y: 2.58, z: terraceZ - 4.2, w: 12.7, d: 1.85 },
-            { y: 3.36, z: terraceZ - 2.38, w: 11.6, d: 1.78 }
+            { y: 0.42, z: exchangeZ - 9.7, w: 16.2, d: 2.4 },
+            { y: 1.05, z: exchangeZ - 7.72, w: 15.0, d: 2.1 },
+            { y: 1.76, z: exchangeZ - 5.82, w: 13.8, d: 1.9 },
+            { y: 2.52, z: exchangeZ - 4.08, w: 12.6, d: 1.75 },
+            { y: 3.34, z: exchangeZ - 2.42, w: 11.4, d: 1.62 }
         ];
         for (var i = 0; i < steps.length; i++) {
             var step = steps[i];
-            place.addBlock(centerX, step.y, step.z, step.w, 0.84, step.d, mats.stoneMid, true);
+            place.addBlock(centerX, step.y, step.z, step.w, 0.84, step.d, mats.concreteMid, true);
         }
-
-        place.addBlock(centerX, 4.12, terraceZ, 12.6, 1.02, 3.4, mats.stoneMid, true);
-        place.addBlock(centerX, 4.58, terraceZ - 0.05, 7.1, 0.08, 10.0, mats.signRed, false);
-        place.addBlock(centerX - 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneMid, true);
-        place.addBlock(centerX + 7.35, 5.0, terraceZ + 0.55, 1.4, 1.25, 1.4, mats.stoneMid, true);
-        place.addBlock(centerX - 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, true);
-        place.addBlock(centerX + 7.35, 6.15, terraceZ + 0.55, 0.72, 1.1, 0.72, mats.trim, true);
-    }
-
-    function buildDistrictPaving(bounds, centerX, streetBandZ, exchangeZ, place, mats) {
-        var inset = 0.6;
-        var curbThickness = 0.36;
-        var plazaW = (bounds.maxX - bounds.minX) - (inset * 2);
-        var plazaD = (bounds.maxZ - bounds.minZ) - (inset * 2);
-        var plazaCenterZ = (bounds.minZ + bounds.maxZ) * 0.5;
-        var borderDepth = inset + curbThickness;
-        var northCurbZ = bounds.minZ + (borderDepth * 0.5);
-        var southCurbZ = bounds.maxZ - (borderDepth * 0.5);
-        var westCurbX = bounds.minX + (borderDepth * 0.5);
-        var eastCurbX = bounds.maxX - (borderDepth * 0.5);
-        var southGap = 22.0;
-        var southSegmentW = Math.max(6.0, (plazaW - southGap) * 0.5);
-        var southSegmentOffset = (southGap * 0.5) + (southSegmentW * 0.5);
-        var centerLaneCenterZ = ((exchangeZ - 0.6) + streetBandZ) * 0.5;
-        var centerLaneDepth = Math.max(29.6, (exchangeZ - streetBandZ) + 7.2);
-        var westLane = pt(bounds, 0.22, 0.48);
-        var eastLane = pt(bounds, 0.78, 0.48);
-        var centerStreetWidth = 13.4;
-        var edgeLaneWidth = 3.8;
-
-        place.addBlock(centerX, 0.04, plazaCenterZ, plazaW, 0.08, plazaD, mats.pavement, false);
-        place.addBlock(centerX, 0.082, centerLaneCenterZ, centerStreetWidth, 0.084, centerLaneDepth, mats.pavementDark, false);
-        place.addBlock(westLane.x, 0.082, westLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
-        place.addBlock(eastLane.x, 0.082, eastLane.z, edgeLaneWidth, 0.084, 19.8, mats.pavementDark, false);
-
-        place.addBlock(centerX, 0.09, northCurbZ, plazaW, 0.18, borderDepth, mats.curb, false);
-        place.addBlock(westCurbX, 0.09, plazaCenterZ, borderDepth, 0.18, plazaD, mats.curb, false);
-        place.addBlock(eastCurbX, 0.09, plazaCenterZ, borderDepth, 0.18, plazaD, mats.curb, false);
-        place.addBlock(centerX - southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, borderDepth, mats.curb, false);
-        place.addBlock(centerX + southSegmentOffset, 0.09, southCurbZ, southSegmentW, 0.18, borderDepth, mats.curb, false);
-
-        place.addBlock(westCurbX, 0.09, northCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
-        place.addBlock(eastCurbX, 0.09, northCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
-        place.addBlock(westCurbX, 0.09, southCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
-        place.addBlock(eastCurbX, 0.09, southCurbZ, borderDepth, 0.18, borderDepth, mats.curb, false);
+        place.addBlock(centerX, 4.08, exchangeZ - 0.62, 12.4, 0.92, 3.2, mats.concreteLight, true);
+        place.addBlock(centerX - 7.2, 4.82, exchangeZ - 0.72, 0.9, 1.5, 4.2, mats.concreteDark, true);
+        place.addBlock(centerX + 7.2, 4.82, exchangeZ - 0.72, 0.9, 1.5, 4.2, mats.concreteDark, true);
+        place.addBlock(centerX - 7.2, 5.62, exchangeZ - 0.72, 0.7, 0.22, 3.7, mats.brass, false);
+        place.addBlock(centerX + 7.2, 5.62, exchangeZ - 0.72, 0.7, 0.22, 3.7, mats.brass, false);
     }
 
     function buildExchangeFrontage(centerX, facadeZ, bounds, place, mats, ctx) {
-        var wingCenterLeft = bounds.minX + 3.3;
-        var wingCenterRight = bounds.maxX - 3.3;
-        var columnOffsets = [-10.1, -6.0, -2.0, 2.0, 6.0, 10.1];
-        var lobbyPilasters = [-7.2, -2.4, 2.4, 7.2];
+        var columnOffsets = [-10.8, -7.0, -3.3, 0, 3.3, 7.0, 10.8];
+        var wingLeft = bounds.minX + 5.8;
+        var wingRight = bounds.maxX - 5.8;
 
-        place.addBlock(centerX, 6.4, facadeZ + 1.0, 30.2, 2.2, 10.4, mats.stoneMid, true);
-        place.addBlock(centerX, 11.2, facadeZ + 1.3, 27.2, 9.0, 6.8, mats.stoneMid, true);
-        place.addBlock(centerX, 15.95, facadeZ + 0.5, (bounds.maxX - bounds.minX) - 0.6, 0.92, 2.6, mats.stoneMid, true);
-
-        place.addBlock(wingCenterLeft, 8.8, facadeZ + 1.2, 6.0, 9.6, 7.4, mats.stoneMid, true);
-        place.addBlock(wingCenterRight, 8.8, facadeZ + 1.2, 6.0, 9.6, 7.4, mats.stoneMid, true);
-        place.addBlock(wingCenterLeft, 14.25, facadeZ + 0.78, 6.6, 1.0, 2.1, mats.stoneMid, true);
-        place.addBlock(wingCenterRight, 14.25, facadeZ + 0.78, 6.6, 1.0, 2.1, mats.stoneMid, true);
-        place.addBlock(wingCenterLeft, 17.85, facadeZ + 0.88, 5.2, 0.58, 1.3, mats.roof, false);
-        place.addBlock(wingCenterRight, 17.85, facadeZ + 0.88, 5.2, 0.58, 1.3, mats.roof, false);
-        place.addBlock(wingCenterLeft, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneMid, true);
-        place.addBlock(wingCenterRight, 11.0, facadeZ + 1.55, 2.0, 6.4, 4.2, mats.stoneMid, true);
-        place.addBlock(centerX - 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneMid, true);
-        place.addBlock(centerX + 12.25, 9.5, facadeZ + 1.5, 4.3, 7.8, 5.8, mats.stoneMid, true);
-        addWindowStack(place, wingCenterLeft, 7.2, facadeZ + 1.2, 6.0, 7.4, 2, 2.15, mats, 0.56, 0.62);
-        addWindowStack(place, wingCenterRight, 7.2, facadeZ + 1.2, 6.0, 7.4, 2, 2.15, mats, 0.56, 0.62);
-
-        for (var p = 0; p < lobbyPilasters.length; p++) {
-            var pilasterX = centerX + lobbyPilasters[p];
-            place.addBlock(pilasterX, 10.95, facadeZ + 1.52, 1.26, 8.4, 4.8, mats.stoneMid, true);
-            place.addBlock(pilasterX, 15.28, facadeZ + 1.22, 1.62, 0.34, 4.1, mats.trim, false);
-        }
+        place.addBlock(centerX, 6.3, facadeZ + 0.7, 31.2, 2.4, 8.8, mats.concreteDark, true);
+        place.addBlock(centerX, 11.8, facadeZ + 0.55, 27.4, 9.2, 6.2, mats.concreteMid, true);
+        place.addBlock(centerX, 7.4, facadeZ - 2.45, 7.4, 6.8, 0.82, mats.shadow, false);
+        place.addBlock(centerX, 8.0, facadeZ - 2.55, 5.4, 5.6, 0.26, mats.glassDark, false);
 
         for (var i = 0; i < columnOffsets.length; i++) {
             var dx = columnOffsets[i];
-            place.addBlock(centerX + dx, 10.1, facadeZ - 0.55, 1.26, 12.0, 1.2, mats.stoneLight, true);
-            place.addBlock(centerX + dx, 16.22, facadeZ - 0.55, 1.62, 0.6, 1.56, mats.stoneMid, false);
-            place.addBlock(centerX + dx, 3.92, facadeZ - 0.55, 1.62, 0.46, 1.56, mats.stoneMid, false);
+            place.addBlock(centerX + dx, 10.4, facadeZ - 2.28, 1.18, 11.8, 1.12, mats.column, true);
+            place.addBlock(centerX + dx, 16.52, facadeZ - 2.28, 1.58, 0.5, 1.5, mats.concreteLight, false);
+            place.addBlock(centerX + dx, 4.28, facadeZ - 2.28, 1.58, 0.48, 1.5, mats.concreteLight, false);
         }
 
-        place.addBlock(centerX, 7.2, facadeZ + 0.35, 5.4, 8.0, 1.0, mats.stoneDark, false);
-        place.addBlock(centerX - 5.0, 8.9, facadeZ + 0.25, 3.2, 4.8, 0.72, mats.window, false);
-        place.addBlock(centerX + 5.0, 8.9, facadeZ + 0.25, 3.2, 4.8, 0.72, mats.window, false);
-        place.addBlock(centerX, 14.18, facadeZ - 1.62, 15.8, 0.5, 0.22, mats.signBlue, false);
-        place.addBlock(centerX, 16.0, facadeZ + 0.12, 28.4, 1.12, 2.42, mats.stoneMid, true);
-        place.addBlock(centerX, 17.35, facadeZ + 0.3, 24.8, 0.9, 2.3, mats.stoneLight, true);
-        place.addBlock(centerX, 18.45, facadeZ + 0.55, 15.4, 0.85, 1.95, mats.stoneMid, true);
-        place.addBlock(centerX, 19.38, facadeZ + 0.78, 10.8, 0.74, 1.58, mats.roof, true);
-        place.addBlock(centerX, 20.15, facadeZ + 0.96, 5.9, 0.54, 1.1, mats.roof, true);
-        place.addBlock(centerX - 7.6, 18.95, facadeZ + 0.72, 5.1, 0.48, 1.18, mats.roof, false);
-        place.addBlock(centerX + 7.6, 18.95, facadeZ + 0.72, 5.1, 0.48, 1.18, mats.roof, false);
-        place.addBlock(centerX, 20.86, facadeZ + 1.0, 2.4, 0.36, 0.82, mats.trim, false);
-        place.addBlock(centerX, 7.5, facadeZ + 0.95, 3.7, 6.4, 0.82, mats.paper, false);
-        place.addBlock(centerX - 3.0, 8.3, facadeZ + 0.72, 0.2, 5.2, 0.2, mats.trim, false);
-        place.addBlock(centerX + 3.0, 8.3, facadeZ + 0.72, 0.2, 5.2, 0.2, mats.trim, false);
-        place.addBlock(centerX, 14.85, facadeZ + 0.38, 16.8, 0.18, 0.18, mats.trim, false);
-        addGlowStrip(place, centerX, 14.55, facadeZ - 1.7, 16.2, 0.18, mats, ctx, 0x7bd7ff, 1.1);
-        addGlowStrip(place, centerX, 7.58, facadeZ + 0.96, 3.2, 0.16, mats, ctx, 0xffe49c, 1.8);
-        addTickerRibbon(centerX - 8.8, 15.2, facadeZ + 0.95, 3.4, place, mats);
-        addTickerRibbon(centerX + 8.8, 15.4, facadeZ + 1.0, 2.9, place, mats);
-        addClockMedallion(centerX, 18.62, facadeZ - 0.02, place, mats);
-    }
+        place.addBlock(centerX, 16.1, facadeZ - 1.08, 29.0, 1.0, 2.2, mats.concreteLight, true);
+        place.addBlock(centerX, 17.45, facadeZ - 0.82, 24.0, 0.88, 2.0, mats.concreteMid, true);
+        place.addBlock(centerX, 18.55, facadeZ - 0.5, 18.0, 0.84, 1.72, mats.concreteLight, true);
+        place.addBlock(centerX, 19.58, facadeZ - 0.24, 11.6, 0.78, 1.42, mats.concreteMid, true);
+        place.addBlock(centerX, 20.46, facadeZ - 0.04, 5.4, 0.56, 1.1, mats.brass, false);
+        addColdClock(place, centerX, 18.72, facadeZ - 2.74, mats);
 
-    function buildTowerStack(centerX, towerZ, bounds, place, mats, ctx) {
-        var towerSideLeftX = bounds.minX + 4.76;
-        var towerSideRightX = bounds.maxX - 4.76;
-        place.addBlock(centerX, 9.0, towerZ + 0.2, 24.6, 18.0, 13.2, mats.towerStone, true);
-        place.addBlock(towerSideLeftX, 9.3, towerZ + 0.58, 8.8, 18.6, 11.6, mats.towerStone, true);
-        place.addBlock(towerSideRightX, 9.1, towerZ + 0.54, 8.8, 18.2, 11.2, mats.towerStone, true);
-        place.addBlock(centerX - 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.towerStone, true);
-        place.addBlock(centerX + 11.4, 10.2, towerZ + 0.6, 6.1, 20.4, 8.8, mats.towerStone, true);
-        place.addBlock(centerX, 10.2, towerZ - 5.42, 15.8, 8.8, 0.92, mats.window, false);
-        addWindowStack(place, centerX, 7.05, towerZ + 0.2, 24.6, 13.2, 4, 2.36, mats, 0.68, 0.58);
-        addWindowStack(place, towerSideLeftX, 6.95, towerZ + 0.58, 8.8, 11.6, 4, 2.24, mats, 0.58, 0.46);
-        addWindowStack(place, towerSideRightX, 6.95, towerZ + 0.54, 8.8, 11.2, 4, 2.24, mats, 0.58, 0.46);
-        addCornice(place, centerX, 18.1, towerZ + 0.2, 24.6, 13.2, mats);
-        addCornice(place, towerSideLeftX, 18.1, towerZ + 0.58, 8.8, 11.6, mats);
-        addCornice(place, towerSideRightX, 18.0, towerZ + 0.54, 8.8, 11.2, mats);
+        place.addBlock(wingLeft, 8.2, facadeZ + 0.4, 7.8, 9.8, 6.8, mats.concreteDark, true);
+        place.addBlock(wingRight, 8.2, facadeZ + 0.4, 7.8, 9.8, 6.8, mats.concreteDark, true);
+        addWindowStack(place, wingLeft, 5.7, facadeZ + 0.4, 7.8, 6.8, 3, 2.05, mats, 0.58, 0.46);
+        addWindowStack(place, wingRight, 5.7, facadeZ + 0.4, 7.8, 6.8, 3, 2.05, mats, 0.58, 0.46);
+        addCornice(place, wingLeft, 13.4, facadeZ + 0.4, 7.8, 6.8, mats);
+        addCornice(place, wingRight, 13.4, facadeZ + 0.4, 7.8, 6.8, mats);
 
-        place.addBlock(centerX, 24.8, towerZ - 0.08, 12.6, 13.6, 12.6, mats.towerStone, true);
-        addWindowStack(place, centerX, 21.15, towerZ - 0.08, 12.6, 12.6, 4, 2.34, mats, 0.6, 0.56);
-        addCornice(place, centerX, 31.86, towerZ - 0.08, 12.6, 12.6, mats);
-
-        place.addBlock(centerX + 0.38, 36.15, towerZ - 0.03, 11.0, 9.4, 11.0, mats.towerStone, true);
-        addWindowStack(place, centerX + 0.38, 32.8, towerZ - 0.03, 11.0, 11.0, 4, 1.96, mats, 0.58, 0.54);
-        addCornice(place, centerX + 0.38, 40.98, towerZ - 0.03, 11.0, 11.0, mats);
-
-        place.addBlock(centerX - 0.2, 44.9, towerZ + 0.08, 9.4, 8.4, 9.4, mats.towerStone, true);
-        addWindowStack(place, centerX - 0.2, 41.95, towerZ + 0.08, 9.4, 9.4, 3, 1.95, mats, 0.56, 0.52);
-        addCornice(place, centerX - 0.2, 49.2, towerZ + 0.08, 9.4, 9.4, mats);
-
-        place.addBlock(centerX + 0.16, 52.8, towerZ + 0.12, 8.2, 8.2, 8.2, mats.towerStone, true);
-        addWindowStack(place, centerX + 0.16, 50.4, towerZ + 0.12, 8.2, 8.2, 3, 1.85, mats, 0.54, 0.5);
-
-        place.addBlock(centerX + 0.16, 57.18, towerZ + 0.12, 9.4, 0.34, 9.4, mats.trim, true);
-        place.addBlock(centerX - 2.74, 56.48, towerZ - 2.74, 0.56, 2.0, 0.56, mats.trim, false);
-        place.addBlock(centerX + 3.02, 56.48, towerZ - 2.74, 0.56, 2.0, 0.56, mats.trim, false);
-        place.addBlock(centerX - 2.66, 56.48, towerZ + 3.02, 0.56, 2.0, 0.56, mats.trim, false);
-        place.addBlock(centerX + 2.92, 56.48, towerZ + 2.62, 0.56, 2.0, 0.56, mats.trim, false);
-        addGlowStrip(place, centerX + 0.16, 56.72, towerZ - 0.08, 6.1, 0.18, mats, ctx, 0xffdc7d, 0.3);
-        addClockMedallion(centerX + 0.16, 46.7, towerZ - 4.92, place, mats);
-        addCogHalo(centerX + 0.16, 57.92, towerZ + 0.12, 2.82, place, mats);
-        place.addRamp(centerX + 1.88, 58.25, towerZ + 0.72, 0.28, 4.0, 0.28, mats.trim, 0.22, -0.34, false);
-        place.addBlock(centerX + 2.18, 59.15, towerZ + 1.04, 0.82, 0.24, 0.24, mats.trim, false);
-        place.addBlock(centerX - 1.78, 57.25, towerZ - 0.76, 0.24, 2.8, 0.24, mats.trim, false);
-
-        var beacon = place.addBlock(centerX, 55.5, towerZ - 4.02, 1.02, 1.02, 0.24, cloneMaterial(mats.glow), false);
-        if (ctx && typeof ctx.addFlicker === 'function') {
-            ctx.addFlicker({ material: beacon.material, freq: 2.1, phase: 0.85 });
-        }
+        addTickerBoard(place, centerX, 14.55, facadeZ - 2.98, 16.4, 0.18, mats, ctx, 1.2, 'green');
+        addTickerBoard(place, centerX - 10.9, 11.8, facadeZ - 2.62, 4.5, 0.14, mats, ctx, 2.0, 'red');
+        addTickerBoard(place, centerX + 10.9, 11.8, facadeZ - 2.62, 4.5, 0.14, mats, ctx, 2.6, 'green');
 
         return {
-            peakHeight: 59.27,
-            upperShaftWidth: 8.2
+            institutionalColumns: columnOffsets.length
         };
     }
 
-    function buildFinanceBlock(spec, place, mats, ctx) {
+    function buildTowerStack(centerX, towerZ, place, mats, ctx) {
+        place.addBlock(centerX, 10.2, towerZ, 22.0, 20.4, 10.0, mats.shadow, true);
+        addWindowStack(place, centerX, 5.4, towerZ, 22.0, 10.0, 6, 2.25, mats, 0.58, 0.46);
+        addCornice(place, centerX, 20.7, towerZ, 22.0, 10.0, mats);
+
+        place.addBlock(centerX - 0.35, 31.6, towerZ - 0.15, 10.8, 21.0, 9.2, mats.concreteDark, true);
+        addWindowStack(place, centerX - 0.35, 23.8, towerZ - 0.15, 10.8, 9.2, 7, 2.2, mats, 0.52, 0.44);
+        addCornice(place, centerX - 0.35, 42.3, towerZ - 0.15, 10.8, 9.2, mats);
+
+        place.addBlock(centerX + 0.42, 49.0, towerZ + 0.15, 8.2, 13.0, 7.7, mats.concreteMid, true);
+        addWindowStack(place, centerX + 0.42, 44.4, towerZ + 0.15, 8.2, 7.7, 4, 2.05, mats, 0.5, 0.4);
+        addCornice(place, centerX + 0.42, 55.7, towerZ + 0.15, 8.2, 7.7, mats);
+
+        place.addBlock(centerX, 59.95, towerZ, 5.8, 7.9, 5.6, mats.concreteDark, true);
+        addGlowBlock(place, centerX, 57.2, towerZ - 2.92, 4.4, 0.22, 0.14, mats.glowGreen, ctx, 0.55);
+        place.addBlock(centerX, 64.15, towerZ, 6.6, 0.5, 6.4, mats.brass, false);
+        place.addBlock(centerX - 1.8, 64.92, towerZ - 1.8, 0.5, 1.8, 0.5, mats.brass, false);
+        place.addBlock(centerX + 1.8, 64.92, towerZ - 1.8, 0.5, 1.8, 0.5, mats.brass, false);
+        place.addBlock(centerX - 1.8, 64.92, towerZ + 1.8, 0.5, 1.8, 0.5, mats.brass, false);
+        place.addBlock(centerX + 1.8, 64.92, towerZ + 1.8, 0.5, 1.8, 0.5, mats.brass, false);
+        place.addBlock(centerX, 67.2, towerZ, 0.34, 5.6, 0.34, mats.brass, false);
+        addGlowBlock(place, centerX, 68.6, towerZ - 0.45, 1.4, 0.2, 0.2, mats.glowAmber, ctx, 1.1);
+
+        return {
+            peakHeight: 70.0,
+            upperShaftWidth: 5.8
+        };
+    }
+
+    function buildSideBlock(spec, place, mats, ctx) {
         var x = spec.x;
         var z = spec.z;
         var w = spec.w;
         var d = spec.d;
         var h = spec.h;
-        var alleySide = spec.alleySide > 0 ? 1 : -1;
-        var outerDir = -alleySide;
-        var gapDepth = 3.8;
-        var southDepth = d * 0.42;
-        var northDepth = d * 0.36;
-        var toeDepth = 4.4;
-        var southZ = z + ((gapDepth * 0.5) + (southDepth * 0.5));
-        var northZ = z - ((gapDepth * 0.5) + (northDepth * 0.5));
-        var toeZ = northZ - ((northDepth * 0.5) + (toeDepth * 0.5) + 1.35);
-        var balconyX = x + (alleySide * ((w * 0.5) - 0.78));
-        var stairX = x + (alleySide * ((w * 0.5) + 1.02));
-        var signX = x + (alleySide * ((w * 0.5) + 0.18));
-        var bridgeX = x + (alleySide * (w * 0.24));
-        var toeX = x + (outerDir * 0.9);
+        var signSide = spec.signSide > 0 ? 1 : -1;
+        var facadeZ = z - (d * 0.5) - 0.1;
+        var alleyX = x + (signSide * ((w * 0.5) + 0.18));
 
-        place.addBlock(x, h * 0.5, southZ, w, h, southDepth, mats.stoneDark, true);
-        addWindowStack(place, x, 4.3, southZ, w, southDepth, 4, 2.48, mats, 0.62, 0.58);
-        addCornice(place, x, h + 0.1, southZ, w, southDepth, mats);
+        place.addBlock(x, h * 0.5, z, w, h, d, mats.concreteDark, true);
+        addWindowStack(place, x, 3.6, z, w, d, 5, 2.22, mats, 0.56, 0.48);
+        addCornice(place, x, h + 0.12, z, w, d, mats);
+        place.addBlock(x + (signSide * 1.0), h + 1.0, z - 0.7, w * 0.42, 1.25, 1.1, mats.shadow, false);
+        addTickerBoard(place, x, Math.min(h - 2.0, 10.6), facadeZ, w * 0.58, 0.16, mats, ctx, spec.phase || 0, spec.red ? 'red' : 'green');
 
-        place.addBlock(x, (h * 0.46), northZ, w * 0.96, h * 0.92, northDepth, mats.stoneDark, true);
-        addWindowStack(place, x, 4.0, northZ, w * 0.96, northDepth, 3, 2.42, mats, 0.6, 0.5);
-        addCornice(place, x, (h * 0.92) + 0.18, northZ, w * 0.96, northDepth, mats);
+        place.addBlock(alleyX, 4.15, z + 0.8, 0.42, 8.3, d * 0.72, mats.column, true);
+        place.addBlock(alleyX, 8.48, z + 0.8, 0.55, 0.24, d * 0.62, mats.brass, false);
 
-        place.addBlock(toeX, 3.0, toeZ, w * 0.82, 6.0, toeDepth, mats.stoneDark, true);
-        addWindowStack(place, toeX, 2.6, toeZ, w * 0.82, toeDepth, 2, 1.8, mats, 0.54, 0.42);
-        addCornice(place, toeX, 6.15, toeZ, w * 0.82, toeDepth, mats);
-
-        place.addBlock(bridgeX, 6.1, z, w * 0.34, 1.4, gapDepth + 0.8, mats.stoneMid, true);
-        place.addBlock(bridgeX, 6.92, z, w * 0.28, 0.12, gapDepth + 0.4, mats.trim, true);
-
-        place.addBlock(balconyX, 6.25, southZ - 0.45, 1.4, 1.0, 3.5, mats.stoneLight, true);
-        place.addBlock(signX, 9.0, southZ, 0.18, 3.95, southDepth * 0.92, mats.trim, false);
-        place.addBlock(toeX, 7.8, toeZ - 2.42, w * 0.56, 0.46, 0.18, spec.signMat || mats.signRed, false);
-
-        for (var i = 0; i < 3; i++) {
-            place.addBlock(stairX, 0.44 + (i * 0.68), toeZ - 0.96 + (i * 0.74), 1.15, 0.88, 0.96, mats.stoneMid, true);
-        }
-
-        place.addBlock(x + (alleySide * ((w * 0.5) - 0.35)), 2.9, southZ + 2.2, 0.42, 5.8, 0.42, mats.stoneMid, false);
-        place.addBlock(x + (alleySide * ((w * 0.5) - 0.42)), 3.0, northZ - 1.6, 0.42, 4.8, 0.42, mats.stoneMid, false);
-
-        if (spec.profile === 'west') {
-            place.addBlock(x - 0.64, h + 1.22, southZ - 0.2, w * 0.42, 1.4, southDepth * 0.42, mats.roof, false);
-            place.addBlock(x - 1.22, h + 1.98, southZ + 0.36, w * 0.24, 0.44, southDepth * 0.18, mats.signRed, false);
-            place.addBlock(x - 2.42, 6.2, northZ - 1.9, 1.38, 1.0, 2.72, mats.stoneLight, false);
-            addVaultWheel(x - 2.42, 6.62, northZ - 3.18, place, mats);
-            addGlowStrip(place, x - 0.92, 8.82, toeZ - 2.48, w * 0.54, 0.16, mats, ctx, 0xffd26b, 1.6);
-            place.addBlock(x + 1.9, 11.4, southZ + 0.82, 2.0, 2.4, 2.8, mats.stoneDark, false);
-        } else if (spec.profile === 'east') {
-            place.addBlock(x + 0.82, h + 1.1, southZ - 0.1, w * 0.38, 1.2, southDepth * 0.4, mats.roof, false);
-            place.addBlock(x + 1.45, h + 1.84, southZ - 0.76, w * 0.22, 0.38, southDepth * 0.18, mats.signBlue, false);
-            place.addBlock(x + 2.26, 8.4, northZ - 1.98, 0.48, 4.2, 2.88, mats.stoneLight, false);
-            addGlowStrip(place, x + 2.42, 9.0, northZ - 2.12, 0.18, 2.72, mats, ctx, 0x84d8ff, 0.9);
-            place.addBlock(x - 1.66, 11.1, southZ + 1.08, 1.72, 2.2, 2.44, mats.stoneLight, false);
-            place.addBlock(x - 1.66, 12.32, southZ + 1.08, 1.3, 0.14, 2.02, mats.window, false);
+        if (spec.vault) {
+            addVaultDoor(place, x + (signSide * 1.6), 5.8, facadeZ - 0.05, mats);
         }
 
         return {
-            peakHeight: Math.max(
-                h + 1.98,
-                (h * 0.92) + 0.18,
-                8.82,
-                9.0,
-                12.32
-            ),
-            toeZ: toeZ
+            peakHeight: h + 1.65
         };
     }
 
-    function buildShortOffice(spec, place, mats, ctx) {
-        var x = spec.x;
-        var z = spec.z;
-        var w = spec.w;
-        var d = spec.d;
-        var h = spec.h;
-        place.addBlock(x, h * 0.5, z, w, h, d, mats.stoneDark, true);
-        addWindowStack(place, x, 2.7, z, w, d, 3, 1.95, mats, 0.58, 0.52);
-        addCornice(place, x, h + 0.1, z, w, d, mats);
-        place.addBlock(x, h + 1.0, z - 0.35, w * 0.54, 1.2, 1.0, mats.roof, true);
-        place.addBlock(x, h + 1.6, z - 0.75, w * 0.34, 0.44, 0.24, spec.signMat || mats.signBlue, false);
-        if (spec.profile === 'west') {
-            place.addBlock(x - 0.82, h + 0.62, z + 0.42, 1.56, 0.92, 1.26, mats.roof, false);
-            addTickerRibbon(x + 0.2, h + 1.88, z + 0.64, 2.6, place, mats);
-        } else if (spec.profile === 'east') {
-            place.addBlock(x + 0.94, h + 0.5, z - 0.48, 1.74, 0.82, 1.2, mats.roof, false);
-            addGlowStrip(place, x, h + 1.92, z - 0.94, 2.1, 0.16, mats, ctx, 0x84d8ff, 2.6);
+    function buildAlleyArch(place, x, z, width, mats) {
+        place.addBlock(x - (width * 0.5) + 0.38, 2.55, z, 0.76, 5.1, 2.4, mats.concreteMid, true);
+        place.addBlock(x + (width * 0.5) - 0.38, 2.55, z, 0.76, 5.1, 2.4, mats.concreteMid, true);
+        place.addBlock(x, 5.22, z, width, 0.72, 2.4, mats.concreteMid, true);
+        place.addBlock(x, 5.72, z - 1.24, width * 0.64, 0.2, 0.14, mats.brass, false);
+    }
+
+    function buildLowCover(place, x, z, w, d, mats) {
+        place.addBlock(x, 0.7, z, w, 1.4, d, mats.concreteDark, true);
+        place.addBlock(x, 1.44, z, w * 0.8, 0.18, d * 0.8, mats.brass, false);
+    }
+
+    function buildCanyonCover(bounds, place, mats, ctx) {
+        var covers = [
+            { u: 0.24, v: 0.24, w: 2.2, d: 1.4 },
+            { u: 0.32, v: 0.38, w: 1.6, d: 2.3 },
+            { u: 0.24, v: 0.62, w: 2.2, d: 1.5 },
+            { u: 0.32, v: 0.75, w: 1.7, d: 2.2 },
+            { u: 0.76, v: 0.24, w: 2.2, d: 1.4 },
+            { u: 0.68, v: 0.38, w: 1.6, d: 2.3 },
+            { u: 0.76, v: 0.62, w: 2.2, d: 1.5 },
+            { u: 0.68, v: 0.75, w: 1.7, d: 2.2 }
+        ];
+        for (var i = 0; i < covers.length; i++) {
+            var pos = pt(bounds, covers[i].u, covers[i].v);
+            buildLowCover(place, pos.x, pos.z, covers[i].w, covers[i].d, mats);
         }
-    }
 
-    function buildArcadeSupport(x, z, place, mats, ctx) {
-        place.addBlock(x, 3.9, z, 8.2, 7.8, 5.8, mats.stoneDark, true);
-        addWindowStack(place, x, 3.2, z, 8.2, 5.8, 3, 1.8, mats, 0.58, 0.46);
-        addCornice(place, x, 7.95, z, 8.2, 5.8, mats);
-        place.addBlock(x + 0.2, 1.35, z + 2.46, 7.0, 1.3, 1.1, mats.stoneMid, true);
-        place.addBlock(x + 0.2, 2.18, z + 2.82, 6.2, 0.14, 0.18, mats.signRed, false);
-        place.addBlock(x - 2.34, 1.9, z - 1.2, 1.2, 2.4, 1.6, mats.stoneLight, false);
-        addTickerRibbon(x + 1.1, 7.86, z + 0.78, 2.8, place, mats);
-        addGlowStrip(place, x - 1.2, 6.42, z - 2.36, 2.4, 0.18, mats, ctx, 0xffcf70, 2.2);
-    }
-
-    function buildTickerSupport(x, z, place, mats, ctx) {
-        place.addBlock(x, 3.2, z, 6.6, 6.4, 4.8, mats.stoneDark, true);
-        addWindowStack(place, x, 2.95, z, 6.6, 4.8, 3, 1.62, mats, 0.56, 0.44);
-        addCornice(place, x, 6.62, z, 6.6, 4.8, mats);
-        place.addBlock(x - 0.18, 4.95, z - 2.54, 4.4, 0.46, 0.16, mats.signBlue, false);
-        place.addBlock(x + 1.64, 4.1, z + 1.28, 0.74, 3.4, 0.74, mats.stoneMid, false);
-        place.addBlock(x - 1.9, 1.2, z + 1.48, 2.2, 2.0, 1.4, mats.glass, false);
-        addGlowStrip(place, x, 6.24, z - 2.7, 4.0, 0.16, mats, ctx, 0x84d8ff, 1.5);
-        addTickerRibbon(x - 0.92, 7.18, z + 0.8, 2.3, place, mats);
-    }
-
-    function buildTickerKiosk(x, z, place, mats, ctx, phaseOffset) {
-        place.addBlock(x, 3.4, z, 6.8, 6.8, 5.0, mats.stoneDark, true);
-        addWindowStack(place, x, 3.05, z, 6.8, 5.0, 2, 1.7, mats, 0.58, 0.4);
-        addCornice(place, x, 6.95, z, 6.8, 5.0, mats);
-        place.addBlock(x, 5.9, z - 2.72, 4.6, 0.46, 0.16, mats.signRed, false);
-        place.addBlock(x - 2.2, 4.0, z + 1.7, 0.66, 3.8, 0.66, mats.stoneMid, true);
-        place.addBlock(x + 2.2, 4.0, z - 1.7, 0.66, 3.8, 0.66, mats.stoneMid, true);
-        addGlowStrip(place, x, 5.95, z - 2.86, 4.2, 0.16, mats, ctx, 0xffcf70, phaseOffset || 0.4);
-        addTickerRibbon(x, 7.32, z + 1.42, 2.2, place, mats);
-    }
-
-    function buildGlassBusStop(x, z, place, mats) {
-        place.addBlock(x, 0.12, z, 6.2, 0.24, 3.8, mats.pavement, true);
-        place.addBlock(x, 0.56, z + 0.42, 3.2, 0.32, 0.86, mats.stoneDark, true);
-        place.addBlock(x, 2.42, z, 5.4, 0.28, 3.1, mats.stoneDark, true);
-        place.addBlock(x - 2.12, 1.18, z - 1.08, 0.18, 2.36, 0.18, mats.stoneMid, true);
-        place.addBlock(x + 2.12, 1.18, z - 1.08, 0.18, 2.36, 0.18, mats.stoneMid, true);
-        place.addBlock(x - 1.92, 1.18, z + 1.08, 0.18, 2.36, 0.18, mats.stoneMid, true);
-        place.addBlock(x + 1.92, 1.18, z + 1.08, 0.18, 2.36, 0.18, mats.stoneMid, true);
-        place.addBlock(x, 1.2, z + 1.32, 4.4, 1.96, 0.12, mats.glass, false);
-        place.addBlock(x - 2.0, 1.2, z - 0.08, 0.12, 1.96, 2.42, mats.glass, false);
-        place.addBlock(x + 2.0, 1.2, z - 0.08, 0.12, 1.96, 2.42, mats.glass, false);
-        place.addBlock(x, 1.7, z + 1.26, 3.2, 0.92, 0.08, mats.paper, false);
-        place.addBlock(x, 1.68, z + 1.2, 2.7, 0.54, 0.1, mats.signBlue, false);
-        place.addBlock(x, 1.08, z - 1.14, 4.1, 0.12, 0.12, mats.trim, false);
-        place.addBlock(x - 2.54, 1.58, z - 1.2, 0.18, 3.16, 0.18, mats.stoneDark, false);
-        place.addBlock(x - 2.34, 2.82, z - 1.2, 0.82, 0.26, 0.18, mats.signBlue, false);
-    }
-
-    function buildPlanter(x, z, w, d, place, mats) {
-        place.addBlock(x, 0.56, z, w, 1.12, d, mats.stoneMid, true);
-        place.addBlock(x, 0.98, z, w * 0.82, 0.5, d * 0.82, mats.hedge, false);
-    }
-
-    function buildAlleyArch(x, z, width, depth, place, mats) {
-        place.addBlock(x - (width * 0.5) + 0.42, 2.5, z, 0.84, 5.0, depth, mats.stoneMid, true);
-        place.addBlock(x + (width * 0.5) - 0.42, 2.5, z, 0.84, 5.0, depth, mats.stoneMid, true);
-        place.addBlock(x, 4.85, z, width, 0.7, depth, mats.stoneMid, true);
-        place.addBlock(x, 5.5, z, width * 0.68, 0.22, 0.2, mats.signBlue, false);
-    }
-
-    function buildStreetDressings(bounds, centerX, place, mats, ctx) {
-        var westNorthPad = { pos: pt(bounds, 0.12, 0.09), w: 1.8, d: 1.2 };
-        var eastNorthPad = { pos: pt(bounds, 0.88, 0.09), w: 1.8, d: 1.2 };
-        var westMidPad = { pos: pt(bounds, 0.23, 0.44), w: 1.6, d: 2.1 };
-        var eastMidPad = { pos: pt(bounds, 0.77, 0.44), w: 1.6, d: 2.1 };
-        var westSouthPad = { pos: pt(bounds, 0.27, 0.74), w: 2.4, d: 1.5 };
-        var eastSouthPad = { pos: pt(bounds, 0.73, 0.74), w: 2.4, d: 1.5 };
-        var westShoulder = { pos: pt(bounds, 0.31, 0.82), w: 1.8, d: 1.0 };
-        var eastShoulder = { pos: pt(bounds, 0.69, 0.82), w: 1.8, d: 1.0 };
-        var lampA = pt(bounds, 0.34, 0.46);
-        var lampB = pt(bounds, 0.66, 0.46);
-
-        buildPlanter(westNorthPad.pos.x, westNorthPad.pos.z, westNorthPad.w, westNorthPad.d, place, mats);
-        buildPlanter(eastNorthPad.pos.x, eastNorthPad.pos.z, eastNorthPad.w, eastNorthPad.d, place, mats);
-        buildPlanter(westMidPad.pos.x, westMidPad.pos.z, westMidPad.w, westMidPad.d, place, mats);
-        buildPlanter(eastMidPad.pos.x, eastMidPad.pos.z, eastMidPad.w, eastMidPad.d, place, mats);
-        buildPlanter(westSouthPad.pos.x, westSouthPad.pos.z, westSouthPad.w, westSouthPad.d, place, mats);
-        buildPlanter(eastSouthPad.pos.x, eastSouthPad.pos.z, eastSouthPad.w, eastSouthPad.d, place, mats);
-
-        place.addBlock(westShoulder.pos.x, 0.24, westShoulder.pos.z, westShoulder.w, 0.48, westShoulder.d, mats.stoneDark, true);
-        place.addBlock(eastShoulder.pos.x, 0.24, eastShoulder.pos.z, eastShoulder.w, 0.48, eastShoulder.d, mats.stoneDark, true);
-        addStreetLamp(lampA.x, lampA.z, place, mats, ctx, 0.8);
-        addStreetLamp(lampB.x, lampB.z, place, mats, ctx, 2.1);
+        var lampA = pt(bounds, 0.36, 0.44);
+        var lampB = pt(bounds, 0.64, 0.44);
+        addStreetLamp(place, lampA.x, lampA.z, mats, ctx, 0.4);
+        addStreetLamp(place, lampB.x, lampB.z, mats, ctx, 1.4);
 
         return {
-            centerCoverCount: 0,
-            westAlleyCoverCount: 4,
-            eastAlleyCoverCount: 4
+            coverCount: covers.length
         };
     }
 
@@ -501,72 +305,65 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
         var mats = ensureMats();
         var centerX = (bounds.minX + bounds.maxX) * 0.5;
         var exchange = pt(bounds, 0.50, 0.84);
-        var tower = pt(bounds, 0.50, 0.866);
-        var westBlock = pt(bounds, 0.13, 0.47);
-        var eastBlock = pt(bounds, 0.87, 0.47);
-        var westKiosk = pt(bounds, 0.12, 0.22);
-        var eastKiosk = pt(bounds, 0.88, 0.22);
-        var westSupport = pt(bounds, 0.11, 0.72);
-        var eastSupport = pt(bounds, 0.89, 0.72);
-        var westBusStop = pt(bounds, 0.18, 0.31);
-        var eastBusStop = pt(bounds, 0.82, 0.31);
-        var streetBand = pt(bounds, 0.50, 0.33);
-        var northSupportCount = 2;
+        var tower = pt(bounds, 0.50, 0.90);
+        var westBlock = pt(bounds, 0.16, 0.51);
+        var eastBlock = pt(bounds, 0.84, 0.51);
+        var westSouth = pt(bounds, 0.19, 0.73);
+        var eastSouth = pt(bounds, 0.81, 0.73);
+        var westArch = pt(bounds, 0.30, 0.65);
+        var eastArch = pt(bounds, 0.70, 0.65);
 
-        buildDistrictPaving(bounds, centerX, streetBand.z, exchange.z, place, mats);
-
+        var pavingStats = buildCorporatePaving(bounds, centerX, exchange.z, place, mats, ctx);
         var rearWallStats = buildRearWallMask(bounds, centerX, place, mats);
-        buildGrandStair(centerX, exchange.z - 0.6, place, mats);
-        buildExchangeFrontage(centerX, exchange.z, bounds, place, mats, ctx);
-        var towerStats = buildTowerStack(centerX, tower.z, bounds, place, mats, ctx);
-        var westBlockStats = buildFinanceBlock({ x: westBlock.x, z: westBlock.z, w: 10.2, d: 11.8, h: 17.4, alleySide: 1, signMat: mats.signRed, profile: 'west' }, place, mats, ctx);
-        var eastBlockStats = buildFinanceBlock({ x: eastBlock.x, z: eastBlock.z, w: 8.2, d: 10.4, h: 14.4, alleySide: -1, signMat: mats.signBlue, profile: 'east' }, place, mats, ctx);
-        buildTickerKiosk(westKiosk.x, westKiosk.z, place, mats, ctx, 0.4);
-        buildTickerKiosk(eastKiosk.x, eastKiosk.z, place, mats, ctx, 1.2);
-        buildArcadeSupport(westSupport.x, westSupport.z, place, mats, ctx);
-        buildTickerSupport(eastSupport.x, eastSupport.z, place, mats, ctx);
-        buildGlassBusStop(westBusStop.x, westBusStop.z, place, mats);
-        buildGlassBusStop(eastBusStop.x, eastBusStop.z, place, mats);
-        var dressingStats = buildStreetDressings(bounds, centerX, place, mats, ctx);
+        buildGrandStair(centerX, exchange.z, place, mats);
+        var facadeStats = buildExchangeFrontage(centerX, exchange.z, bounds, place, mats, ctx);
+        var towerStats = buildTowerStack(centerX, tower.z, place, mats, ctx);
+        var westStats = buildSideBlock({ x: westBlock.x, z: westBlock.z, w: 9.8, d: 17.2, h: 18.2, signSide: 1, phase: 0.2, vault: true }, place, mats, ctx);
+        var eastStats = buildSideBlock({ x: eastBlock.x, z: eastBlock.z, w: 9.2, d: 15.6, h: 15.8, signSide: -1, phase: 0.8, red: true }, place, mats, ctx);
+        var westSouthStats = buildSideBlock({ x: westSouth.x, z: westSouth.z, w: 8.2, d: 10.6, h: 14.2, signSide: 1, phase: 1.8, red: true }, place, mats, ctx);
+        var eastSouthStats = buildSideBlock({ x: eastSouth.x, z: eastSouth.z, w: 8.2, d: 10.6, h: 14.8, signSide: -1, phase: 2.2, vault: true }, place, mats, ctx);
+        buildAlleyArch(place, westArch.x, westArch.z, 5.8, mats);
+        buildAlleyArch(place, eastArch.x, eastArch.z, 5.8, mats);
+        var coverStats = buildCanyonCover(bounds, place, mats, ctx);
 
         if (ctx && typeof ctx.addExclusion === 'function') {
-            ctx.addExclusion(centerX, tower.z - 1.5, 12.0);
-            ctx.addExclusion(westBlock.x, westBlock.z, 5.3);
-            ctx.addExclusion(eastBlock.x, eastBlock.z, 5.2);
-            ctx.addExclusion(westKiosk.x, westKiosk.z, 3.15);
-            ctx.addExclusion(eastKiosk.x, eastKiosk.z, 3.15);
-            ctx.addExclusion(westSupport.x, westSupport.z, 3.4);
-            ctx.addExclusion(eastSupport.x, eastSupport.z, 3.0);
-            ctx.addExclusion(westBusStop.x, westBusStop.z, 3.2);
-            ctx.addExclusion(eastBusStop.x, eastBusStop.z, 3.2);
+            ctx.addExclusion(centerX, tower.z - 2.0, 12.5);
+            ctx.addExclusion(westBlock.x, westBlock.z, 5.8);
+            ctx.addExclusion(eastBlock.x, eastBlock.z, 5.6);
+            ctx.addExclusion(westSouth.x, westSouth.z, 4.4);
+            ctx.addExclusion(eastSouth.x, eastSouth.z, 4.4);
+            ctx.addExclusion(westArch.x, westArch.z, 3.0);
+            ctx.addExclusion(eastArch.x, eastArch.z, 3.0);
         }
 
         return {
             towers: 1,
             heroBuildings: 2,
-            financeBlocks: 6,
+            financeBlocks: 4,
             alleys: 2,
-            cover: 8,
-            busStops: 2,
+            alleyStrips: pavingStats.alleyStripCount,
+            cover: coverStats.coverCount,
+            busStops: 0,
+            planters: 0,
+            tickerBoards: 7,
+            vaultDoors: 2,
+            institutionalColumns: facadeStats.institutionalColumns,
             towerPeakHeight: towerStats.peakHeight,
             upperShaftWidth: towerStats.upperShaftWidth,
             exchangeCenterZ: exchange.z,
             towerCenterZ: tower.z,
             westBlockCenterZ: westBlock.z,
             eastBlockCenterZ: eastBlock.z,
-            westSupportCenterZ: westSupport.z,
-            eastSupportCenterZ: eastSupport.z,
-            westKioskCenterZ: westKiosk.z,
-            eastKioskCenterZ: eastKiosk.z,
-            westBusStopCenterZ: westBusStop.z,
-            eastBusStopCenterZ: eastBusStop.z,
+            westSouthCenterZ: westSouth.z,
+            eastSouthCenterZ: eastSouth.z,
             rearWallSouthFaceZ: rearWallStats.southFaceZ,
-            westBlockPeakHeight: westBlockStats.peakHeight,
-            eastBlockPeakHeight: eastBlockStats.peakHeight,
-            northSupportCount: northSupportCount,
-            centerCoverCount: dressingStats.centerCoverCount,
-            westAlleyCoverCount: dressingStats.westAlleyCoverCount,
-            eastAlleyCoverCount: dressingStats.eastAlleyCoverCount
+            westBlockPeakHeight: westStats.peakHeight,
+            eastBlockPeakHeight: eastStats.peakHeight,
+            westSouthPeakHeight: westSouthStats.peakHeight,
+            eastSouthPeakHeight: eastSouthStats.peakHeight,
+            centerCoverCount: 0,
+            westAlleyCoverCount: 4,
+            eastAlleyCoverCount: 4
         };
     }
 

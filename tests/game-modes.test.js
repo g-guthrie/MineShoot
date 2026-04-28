@@ -20,5 +20,5 @@ test('game mode normalization preserves supported ids and falls back safely', ()
   assert.equal(normalizeGameMode('tdm'), 'tdm');
   assert.equal(normalizeGameMode('unknown'), 'ffa');
   assert.equal(getGameModeLabel('ffa'), 'Free For All');
-  assert.equal(getGameModeLabel('tdm'), 'Team Death Match');
+  assert.equal(getGameModeLabel('tdm'), 'Team Deathmatch');
 });

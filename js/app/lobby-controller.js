@@ -107,7 +107,7 @@
         if (shared.getGameMode) return shared.getGameMode(modeId);
         var normalized = normalizeMode(modeId);
         if (normalized === 'ffa') return { label: 'Free For All' };
-        if (normalized === 'tdm') return { label: 'Team Death Match' };
+        if (normalized === 'tdm') return { label: 'Team Deathmatch' };
         return null;
     }
 

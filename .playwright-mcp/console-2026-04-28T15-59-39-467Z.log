@@ -1,0 +1,33 @@
+[     238ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3011/favicon.ico:0
+[    6956ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[   93381ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/matchmaking:0
+[   95429ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/matchmaking:0
+[  108973ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:3011/@vite/client:963
+[  108975ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  109977ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  110978ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  111980ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  112982ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  113983ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  114984ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  115985ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  116988ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  117991ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  118998ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  120005ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  121011ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  122020ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  123040ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  124054ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  125077ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  126096ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  127136ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  128164ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  129264ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  130372ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  131570ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  132737ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  134203ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  135833ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  137745ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  139667ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0

@@ -40,6 +40,26 @@ test('combat runtime does not target players lingering in disconnect grace', () 
   }, 'u2'), true);
 });
 
+test('combat runtime does not target same-team players in TDM', () => {
+  const room = {
+    gameMode: 'tdm',
+    players: new Map([
+      ['u1', { id: 'u1', alive: true, teamId: 'alpha' }],
+      ['u2', { id: 'u2', alive: true, teamId: 'alpha' }],
+      ['u3', { id: 'u3', alive: true, teamId: 'bravo' }]
+    ]),
+    getEntityById(id) {
+      return this.players.get(id) || null;
+    },
+    isEntitySpawnShielded() {
+      return false;
+    }
+  };
+
+  assert.equal(canTargetEntity(room, room.players.get('u2'), 'u1'), false);
+  assert.equal(canTargetEntity(room, room.players.get('u3'), 'u1'), true);
+});
+
 test('combat runtime weapon ammo helpers reload and expose remaining time', () => {
   const room = {
     syncWeaponAmmoState(entity, weaponId, now) {

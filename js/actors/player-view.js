@@ -53,7 +53,8 @@
         function syncAvatarVisibility(state) {
             if (!state.avatarGroup) return;
 
-            var avatarVisible = state.avatarAliveVisible && (!state.sniperMode || scopeBlend < 0.55);
+            var firstPersonView = !!state.firstPersonView;
+            var avatarVisible = state.avatarAliveVisible && !firstPersonView && (!state.sniperMode || scopeBlend < 0.55);
             state.avatarGroup.visible = avatarVisible;
 
             if (!state.avatarRigApi || !state.avatarRigApi.rig) return;
@@ -315,15 +316,39 @@
             viewDesired.copy(viewOrigin).addScaledVector(viewDir, safeDist);
         }
 
-        function resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ) {
-            if (scopedEyeMode) {
-                if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
-                    state.avatarRigApi.getEyeWorldPosition(eyeWorld);
-                    viewOrigin.copy(eyeWorld);
-                } else {
-                    viewOrigin.set(state.playerX, state.posY, state.playerZ);
-                }
-                viewDesired.copy(viewOrigin);
+        function firstPersonForwardOffset(state) {
+            var raw = Number(state.firstPersonForwardOffset);
+            if (isFinite(raw)) return raw;
+            var shared = runtime.GameShared || {};
+            var constants = shared.entityConstants || {};
+            var avatarHeadDepth = Number(constants.AVATAR_HEAD_SIZE && constants.AVATAR_HEAD_SIZE.z || 0.55);
+            var hitboxHeadDepth = Number(constants.HEAD_HITBOX_SIZE && constants.HEAD_HITBOX_SIZE.z || 0);
+            return (Math.max(0.55, avatarHeadDepth, hitboxHeadDepth) * 0.5) + 0.14;
+        }
+
+        function resolveEyeViewOrigin(state) {
+            if (state.avatarRigApi && state.avatarRigApi.getEyeWorldPosition) {
+                state.avatarRigApi.getEyeWorldPosition(eyeWorld);
+                viewOrigin.copy(eyeWorld);
+            } else {
+                viewOrigin.set(state.playerX, state.posY, state.playerZ);
+            }
+        }
+
+        function resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardY, forwardZ, rightX, rightZ) {
+            if (scopedEyeMode || state.firstPersonView) {
+                resolveEyeViewOrigin(state);
+                var forwardOffset = scopedEyeMode ? 0 : firstPersonForwardOffset(state);
+                viewDesired.set(
+                    viewOrigin.x + (forwardX * forwardOffset),
+                    viewOrigin.y + (forwardY * forwardOffset),
+                    viewOrigin.z + (forwardZ * forwardOffset)
+                );
+                viewTarget.set(
+                    viewDesired.x + (forwardX * 20),
+                    viewDesired.y + (forwardY * 20),
+                    viewDesired.z + (forwardZ * 20)
+                );
                 return;
             }
 
@@ -343,11 +368,12 @@
         }
 
         function applyCameraPose(state, dt, scopedEyeMode) {
+            var firstPersonPose = scopedEyeMode || !!state.firstPersonView;
             if (!thirdCameraInitialized) {
                 state.camera.position.copy(viewDesired);
                 thirdCameraInitialized = true;
             } else {
-                state.camera.position.lerp(viewDesired, Math.min(1, dt * (scopedEyeMode ? state.firstPersonSmooth : state.thirdSmooth)));
+                state.camera.position.lerp(viewDesired, Math.min(1, dt * (firstPersonPose ? state.firstPersonSmooth : state.thirdSmooth)));
             }
 
             var scopedFov = state.adsFovForWeapon ? state.adsFovForWeapon(state.currentWeaponId) : state.adsFov;
@@ -372,11 +398,11 @@
             var rightX = Math.cos(renderYaw);
             var rightZ = -Math.sin(renderYaw);
             var scopedEyeMode = updateViewBlendState(dt, state);
-            syncAvatarVisibility(state);
             if (state.updateAvatarPose) state.updateAvatarPose();
+            syncAvatarVisibility(state);
 
             resolveViewTargetPosition(state, forwardX, forwardY, forwardZ);
-            resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardZ, rightX, rightZ);
+            resolveViewOriginAndDesired(state, scopedEyeMode, forwardX, forwardY, forwardZ, rightX, rightZ);
             applyCameraPose(state, dt, scopedEyeMode);
         }
 

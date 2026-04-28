@@ -8,7 +8,7 @@ async function login(page, username, pin = '1234') {
   await page.locator('#auth-play-btn').click();
   await expect(page.locator('#auth-overlay')).toBeHidden();
   await expect(page.locator('#account-toggle-btn')).toContainText(username);
-  await expect(page.locator('#menu-party-id-label')).toContainText('PLAYER ID');
+  await expect(page.locator('#menu-party-id-label')).toContainText(/player id/i);
   await expect(page.locator('#menu-party-id-value')).toContainText('USR_');
 }
 

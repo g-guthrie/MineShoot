@@ -32,6 +32,15 @@ function sanitizeThrowableDuration(value) {
   return clampNumber(value, 0, 10, 0);
 }
 
+function isSameTeamTdmHit(room, source, target) {
+  if (!room || !source || !target) return false;
+  const mode = String((room.matchState && room.matchState.gameMode) || room.gameMode || '').toLowerCase();
+  if (mode !== 'tdm') return false;
+  const sourceTeam = String(source.teamId || '').trim().toLowerCase();
+  const targetTeam = String(target.teamId || '').trim().toLowerCase();
+  return !!(sourceTeam && targetTeam && sourceTeam === targetTeam);
+}
+
 export function applyWeaponFalloff(weaponId, baseDamage, distance) {
   const id = String(weaponId || '');
   const profile = Array.isArray(WEAPON_FALLOFF[id]) ? WEAPON_FALLOFF[id] : null;
@@ -94,6 +103,7 @@ export function applyDamage(target, damage, options = {}) {
 
 export function applyDamageFromSource(source, target, baseDamage, opts = {}) {
   if (!target || !target.alive) return null;
+  if (isSameTeamTdmHit(opts.room, source, target)) return null;
   const armorBufferMode = String(opts.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL);
   const damage = sanitizeDamageAmount(baseDamage);
   if (damage <= 0) return null;
@@ -132,6 +142,7 @@ function awardDamageLifeProgress(room, sourceId, targetId, damageApplied) {
   const source = room.getEntityById ? room.getEntityById(sourceId) : null;
   const target = room.getEntityById ? room.getEntityById(targetId) : null;
   if (!source || !target) return null;
+  if (isSameTeamTdmHit(room, source, target)) return null;
   if (!source.alive || source.eliminated) return null;
   if (target.spawnShieldUntil && Number(target.spawnShieldUntil || 0) > nowMs()) return null;
   const applied = Math.max(0, Number(damageApplied || 0));
@@ -243,6 +254,7 @@ export function projectileDamageHit(room, projectile, target, hitType) {
     weaponId: projectile.type || 'knife',
     sourceKind: 'throwable',
     applyOutgoing: false,
+    room,
     armorBufferMode: String(def.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
   });
   if (!out) return;
@@ -290,6 +302,7 @@ export function explodeProjectile(room, projectile, x, y, z) {
       weaponId: projectile.type || 'frag',
       sourceKind: 'throwable',
       applyOutgoing: false,
+      room,
       armorBufferMode: String(def.armorBufferMode || ARMOR_BUFFER_MODE_NORMAL)
     });
     if (!out) continue;

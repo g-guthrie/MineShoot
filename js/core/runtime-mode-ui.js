@@ -13,7 +13,7 @@
         if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, fallback || '');
         var normalized = String(modeId || '').trim().toLowerCase();
         if (normalized === 'ffa') return 'Free For All';
-        if (normalized === 'tdm') return 'Team Death Match';
+        if (normalized === 'tdm') return 'Team Deathmatch';
         return String(fallback || '');
     }
 
@@ -34,24 +34,24 @@
         if (!mode || !mode.roomId) return '';
         var prefix = mode.gameMode ? gameModeLabel(mode.gameMode, String(mode.gameMode || '')) + ' ' : '';
         if (mode.id === 'single_cloudflare' && isShareCodeRoomId(mode.roomId)) {
-            return prefix + 'CODE ' + roomCodeFromRoomId(mode.roomId);
+            return prefix + 'Code ' + roomCodeFromRoomId(mode.roomId);
         }
-        return prefix + 'ROOM ' + String(mode.roomId).toUpperCase();
+        return prefix + 'Room ' + String(mode.roomId).toUpperCase();
     }
 
     function runtimeIndicatorText(mode, debugActive) {
         if (!mode) {
-            return debugActive ? 'DEBUG MODE :: PRESS H TO SWITCH' : 'PROFILE :: STANDBY';
+            return debugActive ? 'Debug Mode - Press H to Switch' : 'Profile - Standby';
         }
-        if (debugActive) return 'DEBUG MODE :: PRESS H TO SWITCH';
+        if (debugActive) return 'Debug Mode - Press H to Switch';
         var parts = [
-            String(mode.label || '').toUpperCase(),
-            String(mode.backendLabel || '').toUpperCase()
+            String(mode.label || ''),
+            String(mode.backendLabel || '')
         ];
         if (mode.roomId) {
             parts.push(runtimeRoomLabel(mode));
         }
-        return 'PROFILE :: ' + parts.join(' :: ');
+        return 'Profile - ' + parts.filter(Boolean).join(' - ');
     }
 
     function setRuntimeIndicator(mode, options) {
@@ -69,7 +69,7 @@
         if (mode.id === 'cloud_multiplayer') {
             if (mode.roomId === 'global') return 'Connecting to Public Lobby: ' + mode.roomId + '...';
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
-                return 'Connecting to Team Death Match: ' + mode.roomId + '...';
+                return 'Connecting to Team Deathmatch: ' + mode.roomId + '...';
             }
             return 'Connecting to Free For All: ' + mode.roomId + '...';
         }
@@ -89,7 +89,7 @@
                 return 'Public Lobby: shared room ' + mode.roomId + '.';
             }
             if (String(mode.gameMode || 'ffa').toLowerCase() === 'tdm') {
-                return 'Team Death Match joined room ' + mode.roomId + '.';
+                return 'Team Deathmatch joined room ' + mode.roomId + '.';
             }
             return 'Free For All joined room ' + mode.roomId + '.';
         }

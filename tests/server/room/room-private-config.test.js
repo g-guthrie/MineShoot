@@ -96,6 +96,52 @@ test('private room config apply hydrates team changes without resetting an activ
   assert.equal(player.teamId, 'bravo');
 });
 
+test('private room config apply preserves active match state during lobby membership sync', () => {
+  const player = { id: 'u1', actorId: 'actor-1', fixtureType: '', teamId: 'alpha' };
+  const room = {
+    roomName: 'private-room1',
+    gameMode: 'tdm',
+    matchState: {
+      started: true,
+      ended: false,
+      teamProgress: { alpha: 4, bravo: 3 },
+      startedAt: 1200
+    },
+    players: new Map([['u1', player]]),
+    privateRoomConfig: normalizePrivateRoomConfig({
+      roomMode: 'tdm',
+      roomPhase: 'active',
+      teamCount: 2,
+      teams: [{ actorId: 'actor-1', teamId: 'alpha' }]
+    }, {
+      teamOrder: ['alpha', 'bravo', 'charlie', 'delta']
+    }),
+    syncPrivateRoomMatchStateCalled: 0,
+    syncPrivateRoomMatchState() { this.syncPrivateRoomMatchStateCalled += 1; }
+  };
+
+  const changed = applyPrivateRoomConfig(room, {
+    roomMode: 'tdm',
+    roomPhase: 'active',
+    syncMode: 'lobby_update',
+    teams: [
+      { actorId: 'actor-1', teamId: 'bravo' },
+      { actorId: 'actor-2', teamId: 'alpha' }
+    ]
+  }, {
+    isPrivateMatchRoom: (roomName) => String(roomName).startsWith('private-'),
+    roomPhaseActive: 'active',
+    roomPhaseLobby: 'lobby',
+    teamOrder: ['alpha', 'bravo', 'charlie', 'delta']
+  });
+
+  assert.equal(changed, true);
+  assert.equal(room.syncPrivateRoomMatchStateCalled, 0);
+  assert.equal(room.matchState.startedAt, 1200);
+  assert.deepEqual(room.matchState.teamProgress, { alpha: 4, bravo: 3 });
+  assert.equal(player.teamId, 'bravo');
+});
+
 test('private room config apply falls back to full room sync when the match mode changes', () => {
   const room = {
     roomName: 'private-room1',

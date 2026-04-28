@@ -131,13 +131,13 @@ test('runtime match view emits a structured paused match model for the menu shel
     banner: {
       kind: 'critical',
       tone: 'critical',
-      title: 'IDLE TIMEOUT',
+      title: 'Idle Timeout',
       detail: 'Connection closed to limit Cloudflare traffic.'
     },
-    modePill: { label: 'MODE', value: 'Free For All' },
-    contextPill: { label: 'STATE', value: 'DISCONNECTED' },
-    primaryPill: { label: 'STATUS', value: 'DISCONNECTED' },
-    secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }
+    modePill: { label: 'Mode', value: 'Free For All' },
+    contextPill: { label: 'State', value: 'Disconnected' },
+    primaryPill: { label: 'Status', value: 'Disconnected' },
+    secondaryPill: { label: 'Detail', value: 'Cloudflare Limit' }
   });
 });
 
@@ -152,7 +152,7 @@ test('runtime match view uses last-man-standing language for FFA stock-mode summ
   }, {
     stocksRemaining: 2,
     maxStocks: 5
-  }), 'LAST STANDING | ALIVE 1 | LIVES 2');
+  }), 'Last Standing | Alive 1 | Lives 2');
 });
 
 test('runtime match view menu model shows raw lives remaining instead of stock cap', async () => {
@@ -186,7 +186,7 @@ test('runtime match view menu model shows raw lives remaining instead of stock c
   assert.equal(resumeVisible, true);
   assert.equal(harness.events.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(harness.events[0].detail.primaryPill)), {
-    label: 'LIVES',
+    label: 'Lives',
     value: '3'
   });
 });
@@ -227,9 +227,9 @@ test('runtime match view surfaces staged entry countdown while the player is sti
   assert.deepEqual(JSON.parse(JSON.stringify(harness.events[0].detail)), {
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'Free For All' },
-    contextPill: { label: 'STATE', value: 'STAGING' },
-    primaryPill: { label: 'LIVES', value: '2' },
-    secondaryPill: { label: 'AUTO ENTER', value: '15.0s' }
+    modePill: { label: 'Mode', value: 'Free For All' },
+    contextPill: { label: 'State', value: 'Staging' },
+    primaryPill: { label: 'Lives', value: '2' },
+    secondaryPill: { label: 'Auto Enter', value: '15.0s' }
   });
 });

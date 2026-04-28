@@ -494,9 +494,9 @@
             return {
                 primaryBanner: primaryBanner,
                 headerFeedback: buildSocialActionFeedback(state),
-                modePill: { label: 'MODE', value: modeLabel(selectedMode || 'ffa') || 'Match' },
-                contextPill: { label: 'STATE', value: state.launch && state.launch.phase === 'retryable' ? 'READY' : (state.launch && state.launch.phase === 'paused' ? 'PAUSED' : 'LIVE') },
-                primaryPill: { label: state.launch && state.launch.phase === 'retryable' ? 'DETAIL' : 'LOADOUT', value: state.launch && state.launch.phase === 'retryable' ? String(state.launch.message || 'Ready to enter.') : 'Change loadout or return to the match.' },
+                modePill: { label: 'Mode', value: modeLabel(selectedMode || 'ffa') || 'Match' },
+                contextPill: { label: 'State', value: state.launch && state.launch.phase === 'retryable' ? 'Ready' : (state.launch && state.launch.phase === 'paused' ? 'Paused' : 'Live') },
+                primaryPill: { label: state.launch && state.launch.phase === 'retryable' ? 'Detail' : 'Loadout', value: state.launch && state.launch.phase === 'retryable' ? String(state.launch.message || 'Ready to enter.') : 'Change loadout or return to the match.' },
                 secondaryPill: null
             };
         }
@@ -734,7 +734,7 @@
 
             if (elements.roomActionBtn) {
                 elements.roomActionBtn.textContent = hasRoom
-                    ? ('ROOM #' + String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase())
+                    ? ('Room #' + String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase())
                     : 'Create';
                 elements.roomActionBtn.classList.toggle('active', hasRoom);
                 elements.roomActionBtn.disabled = isBusy || showSessionStrip;
@@ -745,8 +745,17 @@
             if (elements.roomCodeInput) elements.roomCodeInput.disabled = isBusy;
             if (elements.joinRoomBtn) elements.joinRoomBtn.disabled = isBusy;
             if (elements.roomAccessStatus) {
-                elements.roomAccessStatus.textContent = (state.activeSurface === 'main' && !showSessionStrip) ? String(launch.message || '') : '';
-                elements.roomAccessStatus.classList.toggle('error', !!launch.error);
+                var roomAccessText = '';
+                var roomAccessError = !!launch.error;
+                if (state.activeSurface === 'main' && !showSessionStrip) {
+                    roomAccessText = String(launch.message || '');
+                    if (!roomAccessText && state.roomStatus && state.roomStatus.text) {
+                        roomAccessText = String(state.roomStatus.text || '');
+                        roomAccessError = !!state.roomStatus.error;
+                    }
+                }
+                elements.roomAccessStatus.textContent = roomAccessText;
+                elements.roomAccessStatus.classList.toggle('error', roomAccessError);
                 elements.roomAccessStatus.hidden = !elements.roomAccessStatus.textContent;
             }
 

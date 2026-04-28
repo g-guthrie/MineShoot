@@ -176,6 +176,34 @@ test('normal hits still spill excess damage into health after armor breaks', () 
   });
 });
 
+test('TDM same-team hits do not apply damage', () => {
+  const source = { id: 'usr_attacker', teamId: 'alpha' };
+  const target = {
+    id: 'usr_target',
+    teamId: 'alpha',
+    alive: true,
+    hp: 360,
+    armor: 40,
+    spawnShieldUntil: 0,
+    respawnAt: 0
+  };
+  const room = {
+    gameMode: 'tdm',
+    matchState: { gameMode: 'tdm' }
+  };
+
+  const out = applyDamageFromSource(source, target, 120, {
+    hitType: 'body',
+    weaponId: 'rifle',
+    sourceKind: 'weapon',
+    room
+  });
+
+  assert.equal(out, null);
+  assert.equal(target.hp, 360);
+  assert.equal(target.armor, 40);
+});
+
 test('sniper hits now spill excess damage into health after armor breaks', () => {
   const target = {
     id: 'usr_target',

@@ -279,7 +279,7 @@
         {
             title: 'Session',
             rows: [
-                { key: 'Menu', title: 'Capture Cursor', note: 'Use ENTER MATCH or RESUME MATCH from the menu flow to lock the mouse again.' },
+                { key: 'Menu', title: 'Capture Cursor', note: 'Use Enter Match or Resume Match from the menu flow to lock the mouse again.' },
                 { actionId: 'open_manual', fallbackKey: 'I', title: 'Field Manual', note: 'Open or close this manual from both menu and live gameplay.' },
                 { actionId: 'toggle_auto_fire', fallbackKey: 'G', title: 'Auto Fire', note: 'Desktop only. Toggles red-reticle auto fire on or off.' },
                 { actionId: 'toggle_debug', fallbackKey: 'H', title: 'Debug Visuals', note: 'Shows lock boxes, reticles, and extra dev combat helpers.' }
@@ -480,7 +480,7 @@
         var api = sharedApi();
         var modes = api.getGameModeCatalog ? api.getGameModeCatalog() : [
             { id: 'ffa', label: 'Free For All' },
-            { id: 'tdm', label: 'Team Death Match' }
+            { id: 'tdm', label: 'Team Deathmatch' }
         ];
         var matchRules = api.matchRules || {};
         var out = [];
@@ -1031,7 +1031,7 @@
             '<section class="docs-card">',
             '<h3>Quick Start</h3>',
             renderList([
-                'Choose a mode, then use ENTER MATCH or RESUME MATCH to capture the mouse.',
+                'Choose a mode, then use Enter Match or Resume Match to capture the mouse.',
                 'Move with ' + bindingCombo(['move_forward', 'move_left', 'move_backward', 'move_right'], ['W', 'A', 'S', 'D']) + ', sprint with ' + inputLabels.getBindingLabel('sprint', 'Shift') + ', jump with ' + inputLabels.getBindingLabel('jump', 'Space') + ', and swap weapons with the wheel or your slot keys.',
                 'Fire on LMB, reload on ' + inputLabels.getBindingLabel('reload', 'R') + ', and swap weapons on ' + bindingCombo(['weapon_slot_1', 'weapon_slot_2'], ['1', '2']) + ' or the mouse wheel.',
                 'Use ' + inputLabels.getBindingLabel('throwable', 'Q') + ' for the current throwable and ' + inputLabels.getBindingLabel('roll', 'E') + ' to roll in your movement direction.',
@@ -1395,7 +1395,7 @@
         renderSubnav(data);
         renderHint();
         if (titleEl) {
-            titleEl.textContent = 'PvP :: FIELD MANUAL :: ' + getPageLabel(state.activePage);
+            titleEl.textContent = 'PvP Field Manual - ' + getPageLabel(state.activePage);
         }
         contentEl.innerHTML = buildContent(state.activePage, data);
     }

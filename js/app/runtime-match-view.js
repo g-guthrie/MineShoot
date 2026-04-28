@@ -12,7 +12,7 @@
         if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, fallback || '');
         var normalized = String(modeId || '').trim().toLowerCase();
         if (normalized === 'ffa') return 'Free For All';
-        if (normalized === 'tdm') return 'Team Death Match';
+        if (normalized === 'tdm') return 'Team Deathmatch';
         return String(fallback || '');
     }
 
@@ -94,7 +94,7 @@
         }
 
         function modeDisplayName(matchState) {
-            return gameModeLabel(matchState && matchState.gameMode, 'Free For All').toUpperCase();
+            return gameModeLabel(matchState && matchState.gameMode, 'Free For All');
         }
 
         function stockCountLabel(selfState) {
@@ -110,17 +110,17 @@
                 var opposing = rules && rules.getLeadingOpposingTeam
                     ? rules.getLeadingOpposingTeam(matchState, teamId)
                     : { teamId: '', progress: 0 };
-                return 'TEAM ' + teamProgress +
+                return 'Team ' + teamProgress +
                     ' / ' + Number(matchState && matchState.targetProgress || 0) +
-                    ' | OPP ' + String(opposing.teamId || '--').toUpperCase() +
+                    ' | Opp ' + String(opposing.teamId || '--').toUpperCase() +
                     ' ' + Number(opposing.progress || 0);
             }
             var stockMode = !!(matchState && matchState.stockMode) || Number(selfState && selfState.maxStocks || 0) > 0;
             if (stockMode) {
                 var aliveCount = Math.max(0, Number(matchState && matchState.aliveCount || 0));
-                return 'LAST STANDING | ALIVE ' + aliveCount + ' | LIVES ' + stockCountLabel(selfState);
+                return 'Last Standing | Alive ' + aliveCount + ' | Lives ' + stockCountLabel(selfState);
             }
-            return 'GOAL ' + Number(matchState && matchState.targetProgress || 0);
+            return 'Goal ' + Number(matchState && matchState.targetProgress || 0);
         }
 
         function resultsSummary(matchState, selfState) {
@@ -173,13 +173,13 @@
                     banner: {
                         kind: 'critical',
                         tone: 'critical',
-                        title: pauseState.reason === 'idle' ? 'IDLE TIMEOUT' : 'MATCH DISCONNECTED',
+                        title: pauseState.reason === 'idle' ? 'Idle Timeout' : 'Match Disconnected',
                         detail: 'Connection closed to limit Cloudflare traffic.'
                     },
-                    modePill: { label: 'MODE', value: gameModeLabel(matchState && matchState.gameMode, 'Match') || 'Match' },
-                    contextPill: { label: 'STATE', value: pauseState.reason === 'idle' ? 'DISCONNECTED' : 'PAUSED' },
-                    primaryPill: { label: 'STATUS', value: 'DISCONNECTED' },
-                    secondaryPill: { label: 'DETAIL', value: 'CLOUDFLARE LIMIT' }
+                    modePill: { label: 'Mode', value: gameModeLabel(matchState && matchState.gameMode, 'Match') || 'Match' },
+                    contextPill: { label: 'State', value: pauseState.reason === 'idle' ? 'Disconnected' : 'Paused' },
+                    primaryPill: { label: 'Status', value: 'Disconnected' },
+                    secondaryPill: { label: 'Detail', value: 'Cloudflare Limit' }
                 });
                 if (currentSession && currentSession.setResumeButtonsVisible) {
                     currentSession.setResumeButtonsVisible(false);
@@ -194,23 +194,23 @@
             var extraLifeProgressPct = Math.max(0, Math.min(100, Number(selfState && selfState.extraLifeProgressPct || 0)));
             var modeId = String(matchState && matchState.gameMode || '').toLowerCase();
             var modeValue = modeId ? gameModeLabel(modeId, 'Match') : 'Match';
-            var primaryLabel = 'LIVES';
+            var primaryLabel = 'Lives';
             var primaryValue = maxStocks > 0 ? stockCountLabel(selfState) : String(kills);
-            var secondaryLabel = 'NEXT';
+            var secondaryLabel = 'Next';
             var secondaryValue = maxStocks > 0 ? (String(Math.round(extraLifeProgressPct)) + '%') : String(deaths);
-            var contextLabel = 'ALIVE';
+            var contextLabel = 'Alive';
             var contextValue = !matchState || !matchState.started
-                ? 'WAITING'
-                : (matchState.ended ? 'RESET ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs()) : String(Math.max(0, Number(matchState.aliveCount || 0))));
+                ? 'Waiting'
+                : (matchState.ended ? 'Reset ' + formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs()) : String(Math.max(0, Number(matchState.aliveCount || 0))));
 
             if (matchEntryPending) {
                 emitMenuMatchModel({
                     ready: true,
                     banner: null,
-                    modePill: { label: 'MODE', value: modeValue },
-                    contextPill: { label: 'STATE', value: 'STAGING' },
+                    modePill: { label: 'Mode', value: modeValue },
+                    contextPill: { label: 'State', value: 'Staging' },
                     primaryPill: { label: primaryLabel, value: primaryValue },
-                    secondaryPill: { label: 'AUTO ENTER', value: formatSecondsRemaining(matchEntryRemainingMs) }
+                    secondaryPill: { label: 'Auto Enter', value: formatSecondsRemaining(matchEntryRemainingMs) }
                 });
                 if (currentSession && currentSession.setResumeButtonsVisible) {
                     currentSession.setResumeButtonsVisible(true);
@@ -221,20 +221,20 @@
             if (matchState && matchState.ended) {
                 var winner = winnerLabel(matchState, selfState);
                 if (winner) {
-                    contextLabel = 'WINNER';
-                    contextValue = String(winner || '').toUpperCase();
+                    contextLabel = 'Winner';
+                    contextValue = String(winner || '');
                 } else {
-                    contextLabel = 'STATE';
-                    contextValue = 'ENDED';
+                    contextLabel = 'State';
+                    contextValue = 'Ended';
                 }
-                secondaryLabel = 'RESET';
+                secondaryLabel = 'Reset';
                 secondaryValue = formatSecondsRemaining(Number(matchState.resetAt || 0) - nowMs());
             } else if (matchState && !matchState.ended && matchState.started && !(matchState.stockMode || maxStocks > 0)) {
                 if (Number(matchState.targetProgress || 0) > 0) {
-                    contextLabel = 'TARGET';
+                    contextLabel = 'Target';
                     contextValue = String(Number(matchState.targetProgress || 0).toFixed(0));
                 } else if (matchState.leaderProgress != null) {
-                    contextLabel = 'LEAD';
+                    contextLabel = 'Lead';
                     contextValue = String(Number(matchState.leaderProgress || 0).toFixed(0));
                 }
             }
@@ -242,7 +242,7 @@
             emitMenuMatchModel({
                 ready: true,
                 banner: null,
-                modePill: { label: 'MODE', value: modeValue },
+                modePill: { label: 'Mode', value: modeValue },
                 contextPill: { label: contextLabel, value: contextValue },
                 primaryPill: { label: primaryLabel, value: primaryValue },
                 secondaryPill: { label: secondaryLabel, value: secondaryValue }

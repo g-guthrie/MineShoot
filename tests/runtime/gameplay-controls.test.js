@@ -4,7 +4,38 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 class FakeDocument {
+  constructor(elements = {}) {
+    this.listeners = new Map();
+    this.elements = elements;
+  }
+
+  addEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    list.push(handler);
+    this.listeners.set(key, list);
+  }
+
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    this.listeners.set(key, list.filter((entry) => entry !== handler));
+  }
+
+  getElementById(id) {
+    return this.elements[String(id || '')] || null;
+  }
+
+  dispatch(type, event) {
+    const list = this.listeners.get(String(type || '')) || [];
+    for (const handler of list) handler(event || {});
+  }
+}
+
+class FakeButton {
   constructor() {
+    this.textContent = '';
+    this.attributes = {};
     this.listeners = new Map();
   }
 
@@ -21,13 +52,23 @@ class FakeDocument {
     this.listeners.set(key, list.filter((entry) => entry !== handler));
   }
 
-  getElementById() {
-    return null;
+  setAttribute(name, value) {
+    this.attributes[String(name || '')] = String(value || '');
   }
 
-  dispatch(type, event) {
-    const list = this.listeners.get(String(type || '')) || [];
-    for (const handler of list) handler(event || {});
+  getAttribute(name) {
+    const key = String(name || '');
+    return Object.prototype.hasOwnProperty.call(this.attributes, key) ? this.attributes[key] : null;
+  }
+
+  click() {
+    const handlers = this.listeners.get('click') || [];
+    for (const handler of handlers) {
+      handler({
+        preventDefault() {},
+        stopPropagation() {}
+      });
+    }
   }
 }
 
@@ -65,8 +106,9 @@ async function loadControlsHarness(options = {}) {
     fs.readFile(new URL('../../js/runtime/weapon-swap-input.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/runtime/gameplay-controls.js', import.meta.url), 'utf8')
   ]);
-  const documentObj = new FakeDocument();
+  const documentObj = new FakeDocument(options.documentElements || {});
   const windowObj = new FakeWindow();
+  const localStorageValues = { ...(options.localStorageValues || {}) };
   const timeState = { now: 0 };
   let currentWeaponId = 'rifle';
   const defaultWeaponOrder = ['rifle', 'sniper'];
@@ -85,7 +127,8 @@ async function loadControlsHarness(options = {}) {
     rollMessages: [],
     transientDebug: [],
     toggleWeaponCalls: [],
-    appliedWeapons: []
+    appliedWeapons: [],
+    localStorageWrites: []
   };
 
   const runtime = {
@@ -175,12 +218,15 @@ async function loadControlsHarness(options = {}) {
     window: Object.assign(windowObj, {
       localStorage: {
         getItem(key) {
-          if (options.localStorageValues && Object.prototype.hasOwnProperty.call(options.localStorageValues, key)) {
-            return options.localStorageValues[key];
+          if (Object.prototype.hasOwnProperty.call(localStorageValues, key)) {
+            return localStorageValues[key];
           }
           return null;
         },
-        setItem() {},
+        setItem(key, value) {
+          localStorageValues[String(key || '')] = String(value || '');
+          calls.localStorageWrites.push({ key: String(key || ''), value: String(value || '') });
+        },
         removeItem() {}
       }
     }),
@@ -558,6 +604,52 @@ test('gameplay controls keep keyboard weapon slot switching intact', async () =>
   assert.deepEqual(harness.calls.appliedWeapons, [{ id: 'shotgun' }]);
 });
 
+test('gameplay controls ignore held or duplicate keyboard weapon slot switches', async () => {
+  const harness = await loadControlsHarness({
+    runtimeOverrides: {
+      GameHitscan: {
+        getWeaponOrder() { return ['rifle', 'shotgun']; },
+        getCurrentWeapon() { return { id: 'rifle' }; },
+        reloadCurrentWeapon() { return true; },
+        toggleWeapon() { throw new Error('toggle path should not run'); },
+        setWeapon(weaponId) { return { id: weaponId }; }
+      }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'Digit1',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  harness.documentObj.dispatch('keydown', {
+    code: 'Digit2',
+    repeat: true,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.appliedWeapons, []);
+});
+
+test('gameplay controls require gameplay capture for keyboard weapon slots', async () => {
+  const harness = await loadControlsHarness({
+    createOverrides: {
+      hasInputCapture() { return false; }
+    }
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'Digit2',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.appliedWeapons, []);
+});
+
 test('gameplay controls trigger roll on E while leaving G available for auto-fire toggle', async () => {
   const harness = await loadControlsHarness();
 
@@ -687,6 +779,34 @@ test('gameplay controls default desktop auto fire to off until the user enables 
 
   assert.equal(harness.controls.isDesktopAutoFireEnabled(), false);
   assert.equal(harness.runtime.GameGameplayControls.isDesktopAutoFireEnabled(), false);
+});
+
+test('gameplay controls bind the camera view toggle and persist first-person state', async () => {
+  const cameraButton = new FakeButton();
+  const harness = await loadControlsHarness({
+    documentElements: {
+      'camera-view-toggle-btn': cameraButton
+    },
+    localStorageValues: {
+      'mayhem.cameraViewMode': 'fps'
+    }
+  });
+
+  assert.equal(harness.controls.isFirstPersonViewEnabled(), true);
+  assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), true);
+  assert.equal(cameraButton.textContent, 'CAMERA: FPS');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'true');
+
+  cameraButton.click();
+
+  assert.equal(harness.controls.isFirstPersonViewEnabled(), false);
+  assert.equal(harness.runtime.GameGameplayControls.isFirstPersonViewEnabled(), false);
+  assert.equal(cameraButton.textContent, 'CAMERA: OVER SHOULDER');
+  assert.equal(cameraButton.getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(harness.calls.localStorageWrites.at(-1), {
+    key: 'mayhem.cameraViewMode',
+    value: 'over_shoulder'
+  });
 });
 
 test('gameplay controls widen the touch sprint wedge and bias it slightly clockwise', async () => {

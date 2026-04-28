@@ -89,15 +89,12 @@ export function syncPrivateRoomMatchState(room, deps) {
   const teams = (room.privateRoomConfig && room.privateRoomConfig.teams) || new Map();
   for (const player of room.players.values()) {
     if (!player || player.fixtureType === 'sim_player') continue;
+    resetPlayerForRound(room, player);
     player.teamId = room.gameMode === gameModeTdm
       ? String(teams.get(player.actorId || player.id) || teamIds[0] || teamAlpha)
       : '';
-    player.progressScore = 0;
-    if (room.gameMode === gameModeFfa) {
-      resetPlayerForRound(room, player);
-      if (!isPendingEntry(room, player)) {
-        room.matchState.aliveCount += 1;
-      }
+    if (room.gameMode === gameModeFfa && !isPendingEntry(room, player)) {
+      room.matchState.aliveCount += 1;
     }
   }
   if (room.gameMode === gameModeTdm) {
@@ -232,6 +229,7 @@ export function startPublicMatchIfReady(room, deps) {
   } else if (room.gameMode === gameModeTdm) {
     for (const player of room.players.values()) {
       if (!player || player.fixtureType === 'sim_player') continue;
+      resetPlayerForRound(room, player);
       assignPlayerToCurrentTeam(room, player, deps);
     }
     const teamSizes = buildTeamStatMap(teamIds, null);
@@ -356,6 +354,11 @@ export function recordElimination(room, deps, sourceId, targetId) {
   const target = room.getEntityById(targetId);
   if (!source || !target || source.id === target.id) return;
   if (source.fixtureType === 'sim_player' || target.fixtureType === 'sim_player') return;
+  if (room.gameMode === gameModeTdm) {
+    const sourceTeam = String(source.teamId || '').trim().toLowerCase();
+    const targetTeam = String(target.teamId || '').trim().toLowerCase();
+    if (sourceTeam && targetTeam && sourceTeam === targetTeam) return;
+  }
   source.kills = Math.max(0, Number(source.kills || 0)) + 1;
   target.deaths = Math.max(0, Number(target.deaths || 0)) + 1;
 

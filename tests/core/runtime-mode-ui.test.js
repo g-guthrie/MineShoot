@@ -47,7 +47,7 @@ test('runtime mode ui formats startup subtitles and share-code room labels consi
   );
   assert.equal(
     harness.ui.runtimeRoomLabel({ id: 'single_cloudflare', roomId: 'private-room1', gameMode: 'tdm' }),
-    'Team Death Match CODE ROOM1'
+    'Team Deathmatch Code ROOM1'
   );
   assert.equal(
     harness.ui.startupSubtitleForMode({ id: 'single_dev_server', roomId: 'local-shared', gameMode: 'ffa' }),
@@ -76,7 +76,7 @@ test('runtime mode ui renders indicator text from one shared formatter', async (
 
   assert.equal(
     harness.indicator.textContent,
-    'PROFILE :: PRIVATE CLOUDFLARE ROOM :: CLOUDFLARE PROD :: Team Death Match CODE ROOM1'
+    'Profile - Private Cloudflare Room - Cloudflare Prod - Team Deathmatch Code ROOM1'
   );
   assert.equal(harness.indicator.hidden, true);
 });
@@ -95,6 +95,6 @@ test('runtime mode ui only shows the indicator while debug mode is active', asyn
   assert.equal(harness.indicator.hidden, false);
   assert.equal(
     harness.indicator.textContent,
-    'DEBUG MODE :: PRESS H TO SWITCH'
+    'Debug Mode - Press H to Switch'
   );
 });

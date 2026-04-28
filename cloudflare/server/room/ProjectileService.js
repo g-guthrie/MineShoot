@@ -633,7 +633,8 @@ export function tickFireZones(room, dtSec) {
           hitType: 'body',
           weaponId: 'molotov',
           sourceKind: 'throwable',
-          applyOutgoing: false
+          applyOutgoing: false,
+          room
         });
         if (!out) continue;
         refreshMolotovBurn(e, z.ownerId, now, def);
@@ -670,7 +671,8 @@ export function tickFireZones(room, dtSec) {
       hitType: 'body',
       weaponId: 'molotov',
       sourceKind: 'throwable',
-      applyOutgoing: false
+      applyOutgoing: false,
+      room
     });
     if (!out) continue;
     broadcastDamageEvent(room, entity.burnSourceId || '', entity, out, 'body');

@@ -207,7 +207,8 @@ async function loadHarness({
   loadoutValidation = { ok: true, message: '' },
   lobbyApiOverride = null,
   modalOpen = false,
-  gameSharedOverride = null
+  gameSharedOverride = null,
+  joinPrivateRoomOverride = null
 } = {}) {
   const viewCode = await fs.readFile(new URL('../../js/app/lobby-private-room-view.js', import.meta.url), 'utf8');
   const rendererCode = await fs.readFile(new URL('../../js/app/lobby-renderer.js', import.meta.url), 'utf8');
@@ -702,7 +703,8 @@ async function loadHarness({
             callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
           },
-          joinPrivateRoom() {
+          joinPrivateRoom(roomCode) {
+            if (joinPrivateRoomOverride) return joinPrivateRoomOverride(roomCode);
             callbacks.onPrivateRoomStateChanged(privateRoomState);
             return Promise.resolve({ state: privateRoomState });
           },
@@ -1149,7 +1151,7 @@ test('game modes reveal below the launch row and the primary launch pill starts 
 
   elements['play-mode-tdm-btn'].click();
   assert.equal(elements['play-mode-options'].hidden, true);
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Deathmatch');
 
   elements['primary-launch-btn'].click();
   await harness.flush();
@@ -1163,8 +1165,8 @@ test('game modes reveal below the launch row and the primary launch pill starts 
   assert.equal(elements['menu-body'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
   assert.equal(elements['menu-loadout-band'].hidden, false);
-  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
-  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Deathmatch');
+  assert.equal(elements['active-match-context-pill'].textContent, 'Ready');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Match ready.');
   assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-home-hero'].hidden, true);
@@ -1193,7 +1195,7 @@ test('sandbox mode launches the offline sandbox without requesting matchmaking',
   assert.equal(launchCalls[0].modeId, 'single_full_sandbox');
   assert.equal(launchCalls[0].options.gameMode, 'ffa');
   assert.equal(elements['active-match-mode-pill'].textContent, 'Offline Sandbox');
-  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(elements['active-match-context-pill'].textContent, 'Ready');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Offline Sandbox ready.');
   assert.equal(elements['menu-loadout-band'].hidden, false);
 });
@@ -1203,7 +1205,7 @@ test('sandbox mode keeps the offline sandbox label even when shared mode lookup 
     gameSharedOverride: {
       getGameMode(modeId) {
         if (String(modeId || '').toLowerCase() === 'tdm') {
-          return { label: 'Team Death Match' };
+          return { label: 'Team Deathmatch' };
         }
         return { label: 'Free For All' };
       }
@@ -1241,7 +1243,7 @@ test('existing private room changes the room action label to open room', async (
   harness.emitPrivateRoomState();
   await harness.flush();
 
-  assert.equal(elements['continue-loadout-btn'].textContent, 'ROOM #ROOM1');
+  assert.equal(elements['continue-loadout-btn'].textContent, 'Room #ROOM1');
 });
 
 test('private room team board grows and shrinks lanes as team count changes', async () => {
@@ -1508,6 +1510,26 @@ test('missing matchmaking api surfaces a controlled launch error instead of cras
   assert.equal(elements['room-access-status'].textContent, 'Matchmaking unavailable.');
 });
 
+test('failed room-code joins surface a controlled room error', async () => {
+  let requestedRoomCode = '';
+  const harness = await loadHarness({
+    joinPrivateRoomOverride(roomCode) {
+      requestedRoomCode = roomCode;
+      return Promise.reject(new Error('Private room not found.'));
+    }
+  });
+  const { elements } = harness;
+
+  elements['room-code-input'].value = 'badroom';
+  elements['join-room-btn'].click();
+  await harness.flush();
+
+  assert.equal(requestedRoomCode, 'badroom');
+  assert.equal(elements['room-access-status'].hidden, false);
+  assert.equal(elements['room-access-status'].textContent, 'Private room not found.');
+  assert.equal(elements['menu-screen-room'].hidden, true);
+});
+
 test('party hero shows roster actions and leave party', async () => {
   const harness = await loadHarness();
   const { elements, runPartyActionCalls, friendActionCalls } = harness;
@@ -1565,7 +1587,7 @@ test('resumable runtime uses the session rail as the only return path', async ()
   assert.equal(elements['menu-party-hero'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
   assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
-  assert.equal(elements['active-match-context-pill'].textContent, 'LIVE');
+  assert.equal(elements['active-match-context-pill'].textContent, 'Live');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, 'Change loadout or return to the match.');
   assert.equal(elements['menu-loadout-band'].hidden, false);
   assert.equal(elements['menu-return-btn'].hidden, true);
@@ -1595,7 +1617,7 @@ test('paused runtime hides the duplicate header return, shows the session rail, 
   assert.equal(elements['menu-social-hero'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
   assert.equal(elements['active-match-mode-pill'].textContent, 'Free For All');
-  assert.equal(elements['active-match-context-pill'].textContent, 'PAUSED');
+  assert.equal(elements['active-match-context-pill'].textContent, 'Paused');
   assert.equal(elements['menu-loadout-band'].hidden, false);
   assert.equal(elements['menu-return-btn'].hidden, true);
   assert.equal(elements['menu-party-hero'].hidden, true);
@@ -1672,14 +1694,14 @@ test('structured active-match model fills the menu with live mode-aware pills', 
   harness.emitMatchMenuModel({
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'Team Death Match' },
+    modePill: { label: 'MODE', value: 'Team Deathmatch' },
     contextPill: { label: 'LEAD', value: '7' },
     primaryPill: { label: 'KILLS', value: '12' },
     secondaryPill: { label: 'DEATHS', value: '3' }
   });
 
   assert.equal(elements['active-match-mode-pill'].attributes['data-session-label'], 'MODE');
-  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Deathmatch');
   assert.equal(elements['active-match-context-pill'].attributes['data-session-label'], 'LEAD');
   assert.equal(elements['active-match-context-pill'].textContent, '7');
   assert.equal(elements['active-match-primary-stat-pill'].attributes['data-session-label'], 'KILLS');
@@ -1695,7 +1717,7 @@ test('hidden menu caches structured match model and applies it when the active s
   harness.emitMatchMenuModel({
     ready: true,
     banner: null,
-    modePill: { label: 'MODE', value: 'Team Death Match' },
+    modePill: { label: 'MODE', value: 'Team Deathmatch' },
     contextPill: { label: 'STATE', value: 'WAITING' },
     primaryPill: { label: 'KILLS', value: '2' },
     secondaryPill: { label: 'DEATHS', value: '1' }
@@ -1712,7 +1734,7 @@ test('hidden menu caches structured match model and applies it when the active s
     launchContext: {}
   });
 
-  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Death Match');
+  assert.equal(elements['active-match-mode-pill'].textContent, 'Team Deathmatch');
   assert.equal(elements['active-match-context-pill'].textContent, 'WAITING');
   assert.equal(elements['active-match-primary-stat-pill'].textContent, '2');
   assert.equal(elements['active-match-secondary-stat-pill'].textContent, '1');
@@ -1823,7 +1845,7 @@ test('session-state updates preserve the selected launch mode', async () => {
 
   elements['game-modes-toggle-btn'].click();
   elements['play-mode-tdm-btn'].click();
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Deathmatch');
 
   harness.emitSessionState({
     runtimeReady: true,
@@ -1842,7 +1864,7 @@ test('session-state updates preserve the selected launch mode', async () => {
     launchContext: {}
   });
 
-  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Death Match');
+  assert.equal(elements['primary-launch-btn'].textContent, 'Play Team Deathmatch');
 });
 
 test('menu refresh button appears on menu surfaces and hides in the active match shell', async () => {
@@ -1937,7 +1959,7 @@ test('returning to a private room lobby clears stale in-match launch state so th
   assert.equal(elements['menu-screen-mode'].hidden, true);
   assert.equal(elements['menu-screen-room'].hidden, true);
   assert.equal(elements['active-match-shell'].hidden, false);
-  assert.equal(elements['active-match-context-pill'].textContent, 'READY');
+  assert.equal(elements['active-match-context-pill'].textContent, 'Ready');
   assert.equal(launchCalls.length, 1);
   assert.equal(launchCalls[0].modeId, 'single_cloudflare');
   assert.equal(launchCalls[0].options.roomId, privateRoomState.room.roomId);

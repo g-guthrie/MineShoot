@@ -76,11 +76,11 @@
     <link rel="stylesheet" href="/css/menu-shell-v4.css">
 </head>
 <body class="menu-booting" data-overlay-active="true">
-    <button id="hud-manual-btn" type="button">MANUAL</button>
+    <button id="hud-manual-btn" type="button">Manual</button>
     <div id="phone-orientation-blocker" aria-live="polite" aria-modal="true" role="dialog" hidden>
         <div id="phone-orientation-card">
-            <div id="phone-orientation-kicker">PHONE MODE</div>
-            <div id="phone-orientation-title">LANDSCAPE ONLY</div>
+            <div id="phone-orientation-kicker">Phone Mode</div>
+            <div id="phone-orientation-title">Landscape Only</div>
             <div id="phone-orientation-copy">Turn your phone sideways to use rooms, matches, and post-game screens.</div>
         </div>
     </div>
@@ -88,12 +88,12 @@
     <div id="overlay">
         <div id="launch-flow" hidden>
             <section id="launch-card">
-                <div id="launch-kicker">ARENA LINK</div>
-                <div id="launch-title">CONNECTING</div>
+                <div id="launch-kicker">Arena Link</div>
+                <div id="launch-title">Connecting</div>
                 <div id="launch-status">Loading gameplay runtime...</div>
-                <div id="launch-room-label" hidden>ROOM ----</div>
+                <div id="launch-room-label" hidden>Room ----</div>
                 <div id="launch-note">Waiting for authoritative room admission.</div>
-                <button id="launch-enter-btn" type="button" hidden>ENTER MATCH</button>
+                <button id="launch-enter-btn" type="button" hidden>Enter Match</button>
             </section>
         </div>
         <div id="menu-stage">
@@ -137,6 +137,7 @@
                                     <button id="settings-account-btn" type="button">Account</button>
                                     <button id="open-manual-btn" type="button">Instructions</button>
                                     <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
+                                    <button id="camera-view-toggle-btn" type="button" aria-pressed="false">Camera: Over Shoulder</button>
                                     <button id="sound-toggle-btn" type="button">Sound: On</button>
                                 </div>
                             </div>
@@ -160,9 +161,9 @@
 
                     <div id="postgame-flow" hidden>
                         <section id="postgame-celebration" class="card stack postgame-panel" hidden>
-                            <div class="kicker">FINAL KILLCAM :: WINNER LOCKED</div>
-                            <div id="postgame-winner-banner">WINNER</div>
-                            <div id="postgame-result-banner">VICTORY</div>
+                            <div class="kicker">Final Killcam - Winner Locked</div>
+                            <div id="postgame-winner-banner">Winner</div>
+                            <div id="postgame-result-banner">Victory</div>
                             <div id="postgame-ghost-stage" aria-hidden="true">
                                 <pre class="match-stat-pill postgame-ghost">   .--.
  .(x  x).
@@ -180,18 +181,18 @@
  /  ..  \\
  \_.--._/</pre>
                             </div>
-                            <div id="postgame-celebration-note">THE CROWD LOVES A HORRIBLE LITTLE GHOST.</div>
+                            <div id="postgame-celebration-note">CROWD FAVORITE.</div>
                         </section>
                         <section id="postgame-results" class="card stack postgame-panel" hidden>
-                            <div id="postgame-results-outcome" class="postgame-hero-outcome">VICTORY</div>
+                            <div id="postgame-results-outcome" class="postgame-hero-outcome">Victory</div>
                             <div id="postgame-results-winner" class="postgame-hero-winner"></div>
                             <div id="postgame-results-grid">
                                 <div id="postgame-results-mode" class="match-stat-pill" data-session-label="Mode">Free For All</div>
                                 <div id="postgame-results-line" class="match-stat-pill" data-session-label="Your Line">0 / 0</div>
-                                <div id="postgame-results-objective" class="match-stat-pill" data-session-label="Objective">GOAL 0</div>
+                                <div id="postgame-results-objective" class="match-stat-pill" data-session-label="Objective">Goal 0</div>
                             </div>
                             <div id="postgame-actions" class="flow">
-                                <button id="postgame-continue-btn" class="btn btn-primary btn-lg" type="button">CONTINUE</button>
+                                <button id="postgame-continue-btn" class="btn btn-primary btn-lg" type="button">Continue</button>
                             </div>
                         </section>
                     </div>
@@ -212,7 +213,7 @@
                                         </div>
                                         <div id="play-mode-options" class="flow" role="group" aria-label="Select game mode" hidden>
                                             <button id="play-mode-ffa-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Free For All</button>
-                                            <button id="play-mode-tdm-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Team Death Match</button>
+                                            <button id="play-mode-tdm-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Team Deathmatch</button>
                                             <button id="sandbox-mode-btn" class="btn play-mode-btn" type="button" aria-pressed="false">Offline Sandbox</button>
                                         </div>
                                     </div>
@@ -290,7 +291,7 @@
                                     <div id="private-room-settings-row" class="flow">
                                         <div id="private-room-mode-actions" role="radiogroup" aria-label="Game mode">
                                             <button id="private-room-mode-ffa-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">Free For All</button>
-                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">Team Death Match</button>
+                                            <button id="private-room-mode-tdm-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">Team Deathmatch</button>
                                         </div>
                                         <div id="private-room-team-count-actions" role="radiogroup" aria-label="Team count" hidden>
                                             <button id="private-room-teams-2-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">2</button>
@@ -399,10 +400,10 @@
                     <div id="auth-turnstile-wrap" hidden>
                         <div id="auth-turnstile"></div>
                     </div>
-                    <button id="auth-play-btn" type="submit">LOGIN / CREATE PROFILE</button>
+                    <button id="auth-play-btn" type="submit">Log In / Create Profile</button>
                 </form>
                 <div id="auth-status"></div>
-                <button id="auth-local-btn" type="button">BYPASS LOGIN (LOCAL DEV)</button>
+                <button id="auth-local-btn" type="button">Use Local Dev Profile</button>
             </div>
             <div id="auth-profile-view" hidden>
                 <div id="auth-profile-kicker">PROFILE ONLINE</div>
@@ -434,13 +435,13 @@
     <div id="docs-panel" class="modal-overlay" aria-hidden="true" hidden>
         <div id="docs-terminal" class="modal-card">
             <div id="docs-header">
-                <span id="docs-title">PvP — FIELD MANUAL</span>
+                <span id="docs-title">PvP Field Manual</span>
                 <button id="docs-close-btn" type="button">Close</button>
             </div>
             <div id="docs-nav"></div>
             <div id="docs-main">
                 <div id="docs-subnav"></div>
-                <div id="docs-content">LOADING MANUAL...</div>
+                <div id="docs-content">Loading manual...</div>
             </div>
             <div id="docs-hint">Tabs switch pages. Sidebar selects individual weapons or throwables.</div>
         </div>
@@ -496,7 +497,7 @@
     <div id="damage-numbers"></div>
     <div id="overhead-bars"></div>
     <div id="room-code-badge" hidden>
-        <span id="room-code-badge-label">PRIVATE ROOM</span>
+        <span id="room-code-badge-label">Private Room</span>
         <span id="room-code-badge-value">------</span>
     </div>
     <div id="hud-bottom-right">
@@ -513,7 +514,7 @@
     <div id="combat-beacons"></div>
     <div id="idle-warning" aria-live="polite" hidden></div>
     <div id="debug-info"></div>
-    <div id="runtime-indicator">PROFILE :: STANDBY</div>
+    <div id="runtime-indicator">Profile - Standby</div>
     <div id="tracking-reticle">
         <div id="tracking-reticle-corner-tl"></div>
         <div id="tracking-reticle-corner-tr"></div>

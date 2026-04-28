@@ -192,6 +192,7 @@ export function handleRoomSocketMessage(room, ws, message, deps) {
     return;
   }
   if (type === msgC2s.ENTER_MATCH) {
+    if (privateLobbyLocked) return;
     if (!consumeOrClose('enter_match')) return;
     room.handleEnterMatch(player, msg);
     return;

@@ -20,6 +20,7 @@
         var statusDismissTimer = 0;
         var touchDragMemberId = '';
         var touchDragGhost = null;
+        var touchDragSourceEl = null;
         var touchStartX = 0;
         var touchStartY = 0;
         var consecutiveFailures = 0;
@@ -375,10 +376,14 @@
         }
 
         function removeTouchGhost() {
+            if (touchDragSourceEl) {
+                touchDragSourceEl.classList.remove('pending');
+            }
             if (touchDragGhost && touchDragGhost.parentNode) {
                 touchDragGhost.parentNode.removeChild(touchDragGhost);
             }
             touchDragGhost = null;
+            touchDragSourceEl = null;
             touchDragMemberId = '';
         }
 
@@ -422,6 +427,7 @@
                 if (!pillEl) pillEl = ctx.privateRoomUnassigned ? findMemberPill(ctx.privateRoomUnassigned, touchDragMemberId) : null;
                 if (pillEl) {
                     touchDragGhost = createTouchGhost(pillEl);
+                    touchDragSourceEl = pillEl;
                     pillEl.classList.add('pending');
                 }
             }

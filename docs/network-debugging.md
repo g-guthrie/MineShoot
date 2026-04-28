@@ -20,9 +20,12 @@ Use this order when debugging multiplayer motion issues.
   - remote interpolation and state-view helpers
   - server room runtime, snapshot, serializer, and socket behavior
   - combat, rewind, and hit-feedback behavior
-  - real-worker multiplayer integration scenarios
 
-If you need the full repo-wide sweep after that, run `npm run test:all`.
+This is a fast Node guardrail that uses the local test doubles where needed.
+It does not prove Wrangler, real D1 migrations, or browser handoff behavior.
+
+For the real browser/Worker integration path, run `npm run test:networking:integration`.
+For the full local deploy gate, run `npm run test:smoke`.
 
 Useful slices while debugging:
 
@@ -32,6 +35,7 @@ Useful slices while debugging:
 - `npm run test:networking:server`
 - `npm run test:networking:combat`
 - `npm run test:networking:integration`
+- `npm run test:networking:full`
 
 ## 2.5. Remember the shipped input baseline
 

@@ -18,19 +18,27 @@ function cloneInputState(inputState, createMovementInputState) {
   return base;
 }
 
+function finiteNumberOrFallback(value, fallback) {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const fallbackParsed = Number(fallback);
+  return Number.isFinite(fallbackParsed) ? fallbackParsed : 0;
+}
+
 function normalizeInputSample(player, msg, deps) {
   deps = deps || {};
   const clamp = deps.clamp;
   const movementLocked = !!deps.movementLocked;
   const createMovementInputState = deps.createMovementInputState;
-  const fallbackYaw = Number(player && player.yaw || 0);
-  const fallbackPitch = Number(player && player.pitch || 0);
+  const fallbackYaw = finiteNumberOrFallback(player && player.yaw, 0);
+  const fallbackPitch = finiteNumberOrFallback(player && player.pitch, 0);
   const nextYaw = typeof msg.yaw !== 'number'
     ? fallbackYaw
-    : Number(msg.yaw || 0);
-  const nextPitch = typeof msg.pitch !== 'number'
+    : finiteNumberOrFallback(msg.yaw, fallbackYaw);
+  const rawPitch = typeof msg.pitch !== 'number'
     ? fallbackPitch
-    : (clamp ? clamp(msg.pitch, -1.55, 1.55) : Number(msg.pitch || 0));
+    : finiteNumberOrFallback(msg.pitch, fallbackPitch);
+  const nextPitch = clamp ? clamp(rawPitch, -1.55, 1.55) : rawPitch;
   return {
     seq: Math.max(0, Math.floor(Number(msg.seq || 0))),
     dtMs: Math.max(0, Number(msg.dtMs || 0)),
@@ -415,6 +423,11 @@ export function queueAuthoritativeInput(player, msg, deps) {
 
   player.seq = Math.max(0, Number(player.seq || 0));
   player.lastProcessedInputSeq = Math.max(0, Number(player.lastProcessedInputSeq || player.seq || 0));
+  player.lastReceivedInputSeq = Math.max(
+    player.lastProcessedInputSeq,
+    Number(player.lastReceivedInputSeq || player.pendingInputSeq || player.seq || 0)
+  );
+  player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), player.lastReceivedInputSeq);
   player.inputMode = 'intent';
   const samples = normalizeInputSamples(player, msg, {
     clamp,
@@ -425,13 +438,17 @@ export function queueAuthoritativeInput(player, msg, deps) {
   for (let i = 0; i < samples.length; i++) {
     const sample = samples[i];
     if (!sample) continue;
+    const lastProcessedSeq = Math.max(0, Number(player.lastProcessedInputSeq || 0));
+    const lastReceivedSeq = Math.max(0, Number(player.lastReceivedInputSeq || 0));
+    if (sample.seq > lastProcessedSeq) {
+      insertInputSample(queue, sample);
+    }
+    if (sample.seq <= lastReceivedSeq) continue;
     player.pendingInputSeq = Math.max(Number(player.pendingInputSeq || 0), sample.seq);
-    player.lastReceivedInputSeq = Math.max(Number(player.lastReceivedInputSeq || 0), sample.seq);
+    player.lastReceivedInputSeq = sample.seq;
     player.inputState = cloneInputState(sample.inputState, createMovementInputState);
     player.yaw = sample.yaw;
     player.pitch = sample.pitch;
-    if (sample.seq <= Math.max(0, Number(player.lastProcessedInputSeq || 0))) continue;
-    insertInputSample(queue, sample);
   }
 }
 

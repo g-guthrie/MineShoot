@@ -10,4 +10,8 @@ if [[ -z "$WRANGLER_VERSION" ]]; then
 fi
 WRANGLER_VERSION="${WRANGLER_VERSION#^}"
 
+if [[ "${WRANGLER_FORCE_NPX:-0}" != "1" && -x "$ROOT_DIR/node_modules/.bin/wrangler" ]]; then
+  exec "$ROOT_DIR/node_modules/.bin/wrangler" "$@"
+fi
+
 exec npx --yes -p node@20 -p "wrangler@${WRANGLER_VERSION}" sh -lc 'wrangler "$@"' sh "$@"

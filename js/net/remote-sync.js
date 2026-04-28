@@ -290,6 +290,7 @@
                 pitch: renderPitch,
                 moveSpeedNorm: Number(presentState.moveSpeedNorm || 0),
                 sprinting: !!presentState.sprinting,
+                fastBackpedal: !!presentState.fastBackpedal,
                 movingForward: !!presentState.movingForward,
                 movingBackward: !!presentState.movingBackward,
                 movingLeft: !!presentState.movingLeft,

@@ -90,7 +90,7 @@ import {
     GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
     GROUND_COLORS[BIOME_CITADEL] = 0xf6f2ea;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
-    GROUND_COLORS[BIOME_WALL_STREET] = 0x6a6258;
+    GROUND_COLORS[BIOME_WALL_STREET] = 0x202428;
     GROUND_COLORS['volcano'] = 0x2a2a2a;
     GROUND_COLORS['whoville'] = 0xf0f5ff;
 
@@ -664,9 +664,9 @@ import {
                 quarryBase: matLib.getLambert({ color: 0x866f61 }),
                 quarryAccent: matLib.getLambert({ color: 0xb39984 }),
                 quarryDetail: matLib.getLambert({ color: 0x5e4c40 }),
-                wallStreetBase: matLib.getLambert({ color: 0x69757b }),
-                wallStreetAccent: matLib.getLambert({ color: 0x5aa1b7 }),
-                wallStreetDetail: matLib.getLambert({ color: 0x355965 })
+                wallStreetBase: matLib.getLambert({ color: 0x384047 }),
+                wallStreetAccent: matLib.getLambert({ color: 0xc7d0d4 }),
+                wallStreetDetail: matLib.getLambert({ color: 0x17454a })
             }, DEFAULT_QUADRANT_MAP);
         })();
 

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import * as THREE from 'three';
 import { getWeaponPresentation, resolveReloadPresentationState } from '../../shared/gameplay-tuning.js';
+import { HEAD_HITBOX_SIZE } from '../../shared/entity-constants.js';
 
 async function loadPlayerView(getCurrentWeaponState) {
   const code = await fs.readFile(new URL('../../js/actors/player-view.js', import.meta.url), 'utf8');
@@ -11,7 +12,11 @@ async function loadPlayerView(getCurrentWeaponState) {
     __MAYHEM_RUNTIME: {
       GameShared: {
         getWeaponPresentation,
-        resolveReloadPresentationState
+        resolveReloadPresentationState,
+        entityConstants: {
+          AVATAR_HEAD_SIZE: { x: 0.55, y: 0.55, z: 0.55 },
+          HEAD_HITBOX_SIZE
+        }
       }
     },
     globalThis: null,
@@ -89,6 +94,13 @@ function directionAfterUpdate(view, state, dt) {
   const out = new THREE.Vector3();
   state.camera.getWorldDirection(out);
   return out;
+}
+
+function assertClose(actual, expected, epsilon = 1e-6) {
+  assert.ok(
+    Math.abs(Number(actual) - Number(expected)) <= epsilon,
+    `expected ${actual} to be within ${epsilon} of ${expected}`
+  );
 }
 
 test('player view keeps reload bookkeeping out of character animation payloads', async () => {
@@ -179,6 +191,32 @@ test('player view applies sprint FOV scaling from speedNorm', async () => {
 
   assert.ok(fastState.camera.fov > slowState.camera.fov);
   assert.equal(slowState.camera.fov, 75);
+});
+
+test('player view can move the camera to first person just in front of the avatar eye', async () => {
+  const view = await loadPlayerView(() => null);
+  const avatarGroup = new THREE.Group();
+  const state = baseCameraState({
+    avatarGroup,
+    firstPersonView: true,
+    avatarRigApi: {
+      getEyeWorldPosition(out) {
+        return out.set(3, 4, 5);
+      }
+    },
+    updateAvatarPose() {}
+  });
+
+  const direction = directionAfterUpdate(view, state, 1);
+  const expectedForwardOffset = (HEAD_HITBOX_SIZE.z * 0.5) + 0.14;
+
+  assertClose(state.camera.position.x, 3);
+  assertClose(state.camera.position.y, 4);
+  assertClose(state.camera.position.z, 5 - expectedForwardOffset);
+  assertClose(direction.x, 0);
+  assertClose(direction.y, 0);
+  assertClose(direction.z, -1);
+  assert.equal(avatarGroup.visible, false);
 });
 
 test('player view clears muzzle flash on frame updates without relying on timers', async () => {

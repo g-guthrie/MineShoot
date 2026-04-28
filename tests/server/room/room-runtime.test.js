@@ -246,6 +246,45 @@ test('room runtime input samples do not rewind weapon selection from stale clien
   assert.equal(player.inputState.forward, true);
 });
 
+test('room runtime stale input samples do not rewind current intent', () => {
+  const player = {
+    alive: true,
+    yaw: 0,
+    pitch: 0,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    inputState: {},
+    inputQueue: []
+  };
+  const deps = {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  };
+
+  queueAuthoritativeInput(player, {
+    seq: 7,
+    yaw: 0.7,
+    pitch: 0.2,
+    forward: true
+  }, deps);
+  queueAuthoritativeInput(player, {
+    seq: 6,
+    yaw: -0.4,
+    pitch: -0.6,
+    backward: true
+  }, deps);
+
+  assert.equal(player.lastReceivedInputSeq, 7);
+  assert.equal(player.pendingInputSeq, 7);
+  assert.equal(player.yaw, 0.7);
+  assert.equal(player.pitch, 0.2);
+  assert.equal(player.inputState.forward, true);
+  assert.equal(player.inputState.backward, false);
+  assert.deepEqual(player.inputQueue.map((sample) => sample.seq), [6, 7]);
+});
+
 test('room runtime preserves look updates while movement is locked', () => {
   const player = {
     alive: true,
@@ -271,6 +310,32 @@ test('room runtime preserves look updates while movement is locked', () => {
   assert.equal(player.yaw, 0.75);
   assert.equal(player.pitch, -0.5);
   assert.equal(player.inputQueue[0].movementLocked, true);
+});
+
+test('room runtime falls back when client look values are non-finite', () => {
+  const player = {
+    alive: true,
+    yaw: 0.5,
+    pitch: 0.25,
+    pendingInputSeq: 0,
+    lastProcessedInputSeq: 0,
+    lastReceivedInputSeq: 0,
+    inputState: {},
+    inputQueue: []
+  };
+  const msg = JSON.parse('{"seq":1,"yaw":1e999,"pitch":1e999,"forward":true}');
+
+  queueAuthoritativeInput(player, msg, {
+    movementLocked: false,
+    clamp(value, min, max) { return Math.max(min, Math.min(max, value)); },
+    createMovementInputState() { return {}; }
+  });
+
+  assert.equal(msg.yaw, Infinity);
+  assert.equal(player.yaw, 0.5);
+  assert.equal(player.pitch, 0.25);
+  assert.equal(player.inputQueue[0].yaw, 0.5);
+  assert.equal(player.inputQueue[0].pitch, 0.25);
 });
 
 test('room runtime consumes queued input samples in sequence and weights their tick share by dt', () => {

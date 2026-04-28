@@ -1,0 +1,23 @@
+[     184ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  250661ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  267959ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  274337ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  278185ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  818689ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  833062ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  833346ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/party?actorId=frozen-river-499&displayName=FROZEN-RIVER-499&activityState=menu:0
+[  841064ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  844005ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[  849216ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://127.0.0.1:3011/api/me:0
+[ 2305336ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/auth/config:0
+[ 2305349ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/me:0
+[ 2305357ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/party?actorId=frozen-river-499&displayName=FROZEN-RIVER-499&activityState=menu:0
+[ 2442142ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/auth/config:0
+[ 2442144ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/me:0
+[ 2442147ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/party?actorId=frozen-river-499&displayName=FROZEN-RIVER-499&activityState=menu:0
+[ 3256471ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/auth/config:0
+[ 3256471ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/me:0
+[ 3256472ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/party?actorId=frozen-river-499&displayName=FROZEN-RIVER-499&activityState=menu:0
+[ 3536854ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/auth/config:0
+[ 3536854ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/me:0
+[ 3536856ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3011/api/party?actorId=frozen-river-499&displayName=FROZEN-RIVER-499&activityState=menu:0

@@ -136,3 +136,58 @@ test('remote sync advances the presented transform over frames using buffered hi
     Date.now = originalNow;
   }
 });
+
+test('remote sync preserves fast backpedal in the presented transform', async () => {
+  const remoteSync = await loadRemoteSyncHarness();
+  const render = createRender({
+    snapshotHistory: [
+      {
+        serverTime: 1000,
+        receivedAt: 1000,
+        x: 0,
+        footY: 0,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 1,
+        sprinting: false,
+        fastBackpedal: true,
+        movingForward: false,
+        movingBackward: true,
+        movingLeft: false,
+        movingRight: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      },
+      {
+        serverTime: 1100,
+        receivedAt: 1100,
+        x: 0,
+        footY: 0,
+        z: -4,
+        yaw: 0,
+        pitch: 0,
+        moveSpeedNorm: 1,
+        sprinting: false,
+        fastBackpedal: true,
+        movingForward: false,
+        movingBackward: true,
+        movingLeft: false,
+        movingRight: false,
+        isGrounded: true,
+        velocityY: 0,
+        muzzleFlashUntil: 0
+      }
+    ]
+  });
+  const renderMap = new Map([[render.id, render]]);
+  const originalNow = Date.now;
+  Date.now = () => 1100;
+  try {
+    remoteSync.updateRemoteEntities(1 / 60, renderMap);
+    assert.equal(render.lastPresentedTransform.fastBackpedal, true);
+  } finally {
+    Date.now = originalNow;
+  }
+});

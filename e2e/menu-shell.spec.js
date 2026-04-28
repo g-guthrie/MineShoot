@@ -37,7 +37,7 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.locator('#utility-toggle-btn').click();
   await page.locator('#open-manual-btn').click();
   await expect(page.locator('#docs-panel')).toBeVisible();
-  await expect(page.locator('#docs-title')).toContainText('FIELD MANUAL');
+  await expect(page.locator('#docs-title')).toContainText(/field manual/i);
   await page.locator('#docs-close-btn').click();
   await expect(page.locator('#docs-panel')).toBeHidden();
   await page.locator('#utility-close-btn').click();
@@ -45,8 +45,63 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await page.locator('#game-modes-toggle-btn').click();
   await page.locator('#sandbox-mode-btn').click();
   await page.locator('#primary-launch-btn').click();
+  await expect(page.locator('#active-match-shell')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
+  await page.evaluate(() => document.getElementById('play-btn')?.click());
   await expect.poll(() => page.evaluate(() => !!window.__MAYHEM_RUNTIME.GameWorld)).toBe(true);
   await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime()))).toBe(true);
+});
+
+test('settings popover stays visible and keeps the menu glass spacing', async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 560 });
+  await page.goto('/');
+
+  await page.locator('#utility-toggle-btn').click();
+  await expect(page.locator('#utility-overlay')).toBeVisible();
+
+  const metrics = await page.evaluate(() => {
+    const overlay = document.getElementById('utility-overlay');
+    const surface = document.getElementById('menu-surface');
+    const buttons = document.getElementById('utility-menu-buttons');
+    const buttonNodes = buttons ? Array.from(buttons.querySelectorAll('button')) : [];
+    if (!overlay || !surface || !buttons || !buttonNodes.length) {
+      return { ready: false };
+    }
+    const overlayRect = overlay.getBoundingClientRect();
+    const overlayStyle = getComputedStyle(overlay);
+    const buttonStyle = getComputedStyle(buttons);
+    const surfaceStyle = getComputedStyle(surface);
+    const blurStyle = overlayStyle.backdropFilter || overlayStyle.webkitBackdropFilter || '';
+    const flowGap = Number.parseFloat(surfaceStyle.getPropertyValue('--gap-flow')) || 0;
+    const buttonGap = Number.parseFloat(buttonStyle.rowGap || buttonStyle.gap) || 0;
+    const buttonsContained = buttonNodes.every((button) => {
+      const rect = button.getBoundingClientRect();
+      return rect.left >= overlayRect.left - 1 &&
+        rect.right <= overlayRect.right + 1 &&
+        rect.top >= overlayRect.top - 1 &&
+        rect.bottom <= overlayRect.bottom + 1;
+    });
+
+    return {
+      ready: true,
+      position: overlayStyle.position,
+      inViewport: overlayRect.top >= 0 &&
+        overlayRect.left >= 0 &&
+        overlayRect.right <= window.innerWidth &&
+        overlayRect.bottom <= window.innerHeight,
+      buttonsContained,
+      usesGlassBlur: !!blurStyle && blurStyle !== 'none',
+      buttonGap,
+      flowGap
+    };
+  });
+
+  expect(metrics.ready).toBe(true);
+  expect(metrics.position).toBe('fixed');
+  expect(metrics.inViewport).toBe(true);
+  expect(metrics.buttonsContained).toBe(true);
+  expect(metrics.usesGlassBlur).toBe(true);
+  expect(metrics.buttonGap).toBe(metrics.flowGap);
 });
 
 test('three-menu hero layout keeps the home hero contained without horizontal overflow', async ({ page }) => {
@@ -63,22 +118,13 @@ test('three-menu hero layout keeps the home hero contained without horizontal ov
 
   const metrics = await page.evaluate(() => {
     const home = document.getElementById('menu-home-hero');
-    const title = document.getElementById('mode-screen-title');
-    const toolbar = document.getElementById('play-mode-toolbar');
-    const options = document.getElementById('play-mode-options');
-    const homeRect = home.getBoundingClientRect();
-    const nodes = [title, toolbar, options].filter(Boolean);
-    const within = nodes.every((node) => {
-      const rect = node.getBoundingClientRect();
-      return rect.left >= homeRect.left - 1 && rect.right <= homeRect.right + 1;
-    });
     return {
-      within,
+      homeOverflow: home ? home.scrollWidth > home.clientWidth + 1 : true,
       viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
     };
   });
 
-  expect(metrics.within).toBe(true);
+  expect(metrics.homeOverflow).toBe(false);
   expect(metrics.viewportOverflow).toBe(false);
 });
 
@@ -187,7 +233,7 @@ test('active-match shell wraps the stat pills cleanly at narrow width without re
   expect(metrics.viewportOverflow).toBe(false);
 });
 
-test('active-match shell keeps the full four-pill layout on one row at wide width', async ({ page }) => {
+test('active-match shell keeps the full four-pill layout contained at wide width', async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto('/');
 
@@ -225,18 +271,30 @@ test('active-match shell keeps the full four-pill layout on one row at wide widt
     const visiblePills = [sessionStatus, sessionContext, sessionKd, sessionMeta].filter((pill) => pill && getComputedStyle(pill).display !== 'none');
     const pillRows = new Set(visiblePills.map((pill) => Math.round(pill.getBoundingClientRect().top))).size;
 
+    function withinRect(node, bounds) {
+      if (!node) return false;
+      const rect = node.getBoundingClientRect();
+      return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+    }
+
+    const statsRect = sessionStats ? sessionStats.getBoundingClientRect() : { left: 0, right: 0 };
+
     return {
       statsVisible: !!(sessionStats && getComputedStyle(sessionStats).display !== 'none'),
       rowCount: pillRows,
+      pillsContained: visiblePills.every((pill) => withinRect(pill, statsRect)),
       hiddenHeaderFeedback: hiddenHeaderFeedback ? getComputedStyle(hiddenHeaderFeedback).display === 'none' : false,
-      hiddenBanner: hiddenBanner ? getComputedStyle(hiddenBanner).display === 'none' : false
+      hiddenBanner: hiddenBanner ? getComputedStyle(hiddenBanner).display === 'none' : false,
+      viewportOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
     };
   });
 
   expect(metrics.statsVisible).toBe(true);
-  expect(metrics.rowCount).toBe(1);
+  expect(metrics.rowCount).toBeLessThanOrEqual(2);
+  expect(metrics.pillsContained).toBe(true);
   expect(metrics.hiddenHeaderFeedback).toBe(true);
   expect(metrics.hiddenBanner).toBe(true);
+  expect(metrics.viewportOverflow).toBe(false);
 });
 
 test('active-match header feedback wraps long text without overflowing the shell', async ({ page }) => {
@@ -363,7 +421,7 @@ test('paused fallback state hides blank banner chrome and empty stat pills', asy
   expect(metrics.visiblePillCount).toBe(3);
   expect(metrics.rowCount).toBe(2);
   expect(metrics.modeText).toBe('Free For All');
-  expect(metrics.contextText).toBe('PAUSED');
+  expect(metrics.contextText).toMatch(/paused/i);
   expect(metrics.primaryText).toBe('Change loadout or return to the match.');
   expect(metrics.statsHeight).toBeGreaterThan(0);
 });

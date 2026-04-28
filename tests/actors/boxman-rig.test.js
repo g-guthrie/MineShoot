@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 await import('../../js/actors/boxman-rig.js');
 
 const boxmanRig = globalThis.__MAYHEM_RUNTIME.GameBoxmanRig;
@@ -1082,6 +1083,35 @@ test('boxman can resolve the stored multi-part weapon visuals for rifle and pist
   assert.ok(pistol.platform.parts.grip.size[1] > 0.15);
 });
 
+test('boxman derives pistol and shotgun mount offsets from Toon Shooter hand attachments', () => {
+  const rifle = boxmanRig._test.resolveWeaponVisualEntry('rifle').platform;
+  const pistol = boxmanRig._test.resolveWeaponVisualEntry('pistol').platform;
+  const shotgun = boxmanRig._test.resolveWeaponVisualEntry('shotgun').platform;
+  const rifleOffset = boxmanRig._test.resolveToonAttachmentMountOffset(rifle);
+  const pistolOffset = boxmanRig._test.resolveToonAttachmentMountOffset(pistol);
+  const shotgunOffset = boxmanRig._test.resolveToonAttachmentMountOffset(shotgun);
+
+  assert.deepEqual(rifleOffset, [0, 0, 0]);
+  assert.ok(pistolOffset[1] > 0.03);
+  assert.ok(pistolOffset[2] > 0.01);
+  assert.ok(shotgunOffset[2] > 0.03);
+  assert.ok(Math.abs(shotgunOffset[1]) < 0.014);
+});
+
+test('boxman can mount weapons from the original Toon Shooter Index1.R child transform', () => {
+  const rifle = boxmanRig._test.resolveWeaponVisualEntry('rifle').platform;
+  const pistol = boxmanRig._test.resolveWeaponVisualEntry('pistol').platform;
+  const shotgun = boxmanRig._test.resolveWeaponVisualEntry('shotgun').platform;
+  const pistolTransform = boxmanRig._test.resolveToonAttachmentModelTransform(pistol);
+  const shotgunTransform = boxmanRig._test.resolveToonAttachmentModelTransform(shotgun);
+
+  assert.equal(boxmanRig._test.resolveToonAttachmentModelTransform(rifle), null);
+  assert.ok(pistolTransform.position.z > 0.04);
+  assert.ok(shotgunTransform.position.z > 0.03);
+  assert.ok(pistolTransform.position.y < -0.2);
+  assert.ok(shotgunTransform.position.y < -0.13);
+});
+
 test('boxman applies procedural weapon parts using the current hand-forward mount baseline', () => {
   function createMeshStub() {
     return {
@@ -1156,9 +1186,66 @@ test('boxman applies procedural weapon parts using the current hand-forward moun
   assert.ok(rig.weaponBarrel.position.z < rig.weaponBody.position.z);
   assert.ok(rig.muzzleAnchor.position.z < rig.weaponBarrel.position.z);
 
+  boxmanRig._test.applyWeaponVisualState(rig, 'pistol');
+  assert.equal(rig.weaponId, 'pistol');
+  assert.ok(rig.weaponModel.position.y < -0.2);
+  assert.ok(rig.weaponModel.position.z > 0.04);
+
   boxmanRig._test.applyWeaponVisualState(rig, 'sniper');
   assert.equal(rig.weaponOptic.visible, true);
   assert.ok(rig.muzzleAnchor.position.z < -1);
+});
+
+test('boxman prepares loaded weapon meshes so asset guns cannot disappear after fallback hides', () => {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x111111,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.FrontSide
+  });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+  mesh.visible = false;
+  mesh.frustumCulled = true;
+  const root = new THREE.Group();
+  root.visible = false;
+  root.add(mesh);
+
+  boxmanRig._test.applyLoadedWeaponMaterial(root, null);
+
+  assert.equal(root.visible, true);
+  assert.equal(mesh.visible, true);
+  assert.equal(mesh.frustumCulled, false);
+  assert.equal(mesh.material.transparent, false);
+  assert.equal(mesh.material.opacity, 1);
+  assert.equal(mesh.material.side, THREE.DoubleSide);
+  assert.equal(mesh.material.color.getHex(), 0x111111);
+});
+
+test('boxman restores procedural weapon parts whenever a loaded asset is cleared', () => {
+  const removed = [];
+  const loadedRoot = {
+    parent: {
+      remove(node) {
+        removed.push(node);
+      }
+    }
+  };
+  const rig = {
+    weaponLoadedAssetRoot: loadedRoot,
+    weaponLoadedAssetUrl: '/assets/weapons/toon-shooter/ak.gltf',
+    weaponProceduralParts: [
+      { visible: false },
+      { visible: false },
+      { visible: false }
+    ]
+  };
+
+  boxmanRig._test.clearLoadedWeaponAsset(rig);
+
+  assert.deepEqual(removed, [loadedRoot]);
+  assert.equal(rig.weaponLoadedAssetRoot, null);
+  assert.equal(rig.weaponLoadedAssetUrl, '');
+  assert.deepEqual(rig.weaponProceduralParts.map((part) => part.visible), [true, true, true]);
 });
 
 test('boxman reveal clone helper detaches circular root userData during clone work', () => {

@@ -145,10 +145,10 @@ async function loadHostHarness({ bootstrapStart } = {}) {
           return false;
         },
         modeDisplayName() {
-          return 'FREE FOR ALL';
+          return 'Free For All';
         },
         objectiveSummary() {
-          return 'GOAL 0';
+          return 'Goal 0';
         },
         resultsSummary() {
           return 'Summary unavailable.';

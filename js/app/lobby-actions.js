@@ -335,11 +335,18 @@
             }
             var session = getSession();
             if (!session || !session.joinPrivateRoom || busy()) return Promise.resolve(false);
-            return session.joinPrivateRoom(value).then(function () {
-                setActiveSurface('room');
-                render();
-                return true;
-            });
+            return session.joinPrivateRoom(value)
+                .then(function (result) {
+                    if (!result) return false;
+                    setActiveSurface('room');
+                    render();
+                    return true;
+                })
+                .catch(function (err) {
+                    setRoomStatus((err && err.message) ? err.message : 'Room join failed.', true);
+                    render();
+                    return false;
+                });
         }
 
         function acceptIncomingInvite() {

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weapon Parenting Editor</title>
+    <link rel="stylesheet" href="/css/weapon-parenting-editor.css" />
+  </head>
+  <body>
+    <main class="editor-shell">
+      <aside class="tool-panel left-panel" aria-label="Weapon parenting controls">
+        <header class="panel-header">
+          <p class="eyebrow">MineShoot Tool</p>
+          <h1>Weapon Parenting</h1>
+        </header>
+
+        <section class="control-group">
+          <label for="weapon-select">Weapon</label>
+          <select id="weapon-select"></select>
+        </section>
+
+        <section class="control-group">
+          <label>Weapon Transform</label>
+          <div id="transform-controls" class="control-stack"></div>
+        </section>
+
+        <section class="button-grid">
+          <button id="fit-view" type="button">Reset View</button>
+          <button id="save-profile" type="button">Save Local</button>
+          <button id="copy-profile" type="button">Copy Offset</button>
+          <button id="reset-profile" type="button">Reset Offset</button>
+        </section>
+      </aside>
+
+      <section class="viewport" aria-label="3D weapon parenting preview">
+        <canvas id="scene-canvas"></canvas>
+      </section>
+
+      <aside class="tool-panel right-panel" aria-label="Parenting profile JSON">
+        <section class="control-group fill">
+          <label for="profile-json">Offset Output</label>
+          <textarea id="profile-json" spellcheck="false"></textarea>
+        </section>
+        <pre id="status" class="status">Loading...</pre>
+      </aside>
+    </main>
+
+    <script type="module" src="/js/tools/weapon-parenting-editor.js"></script>
+  </body>
+</html>

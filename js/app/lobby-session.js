@@ -11,7 +11,7 @@
         var shared = runtime.GameShared || {};
         if (shared.getGameModeLabel) return shared.getGameModeLabel(modeId, 'Free For All');
         var normalized = String(modeId || '').trim().toLowerCase();
-        if (normalized === 'tdm') return 'Team Death Match';
+        if (normalized === 'tdm') return 'Team Deathmatch';
         return 'Free For All';
     }
     var GameLobbySession = {};
@@ -190,7 +190,7 @@
         function syncFailureMessage(scope, err) {
             var prefix = String(scope || 'Service').toUpperCase();
             if (err && Number(err.status) === 401) {
-                return prefix + ' REQUIRES LOGIN.';
+                return prefix + ' requires login.';
             }
             if (err && Number(err.status) === 404) {
                 return prefix + ' ENDPOINT OFFLINE. RETRYING...';

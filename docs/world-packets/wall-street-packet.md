@@ -6,24 +6,24 @@ Use with [`world-planning-workflow.md`](/Users/gguthrie/Desktop/code%20bs/minecr
 
 - Biome name: Wall Street
 - Grid cell: `r2c1`
-- Theme / fantasy: Toontown Wall Street, with a satirical finance district built against the south wall
+- Theme / fantasy: cold toon-finance Wall Street, with a hostile corporate district built against the south wall
 - Perimeter wall being hidden: south wall
 - Hero landmark: CEO tower rising out of a NYSE-style exchange frontage
-- Secondary structures: west annex, east brokerage block, north offices, kiosks, alleys, plaza cover, signage
-- One-sentence pitch: A giant stock-exchange facade and impossible CEO tower turn the south-center slot into a dense satirical Wall Street canyon that hides the south perimeter wall.
+- Secondary structures: west annex, east brokerage block, south shoulder offices, archways, alley cover, ticker boards, vault doors
+- One-sentence pitch: A giant stock-exchange facade and impossible CEO tower turn the south-center slot into a cold satirical Wall Street canyon that hides the south perimeter wall without the old Toontown color language.
 
 ### Exact Edge Math
 
 - Current cell bounds: `x:[56,110] z:[110,164]`
 - Current cell centerline: `x:83 z:137`
 - South perimeter wall strip from [`buildBiomePerimeter(...)`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/shared/world-layout.js) sits just beyond the cell at roughly `z:164.6`
-- CEO tower target height is capped at roughly `y:52`
+- CEO tower target height is capped at roughly `y:70`
 
 ## 2. Intent Sheet
 
 ### Fantasy Goal
 
-Wall Street should feel like a cartoon financial district where capitalism became architecture: oversized stairs, tall white columns, a triangular pediment, impossible tower height, and slightly absurd side buildings pressing inward around the player.
+Wall Street should feel like a cartoon financial district where capitalism became architecture, but the cartoon read comes from shape instead of candy color: oversized stairs, tall cold-white columns, a triangular pediment, impossible tower height, dark green glass, charcoal asphalt, and side buildings pressing inward around the player.
 
 ### Gameplay Goal
 
@@ -42,12 +42,14 @@ From the center of the map, the player should read three layers in order:
 - NYSE-style frontage with columns, giant stair, and pediment/slanted roof
 - tall CEO tower that is mostly skyline, not playable space
 - two flank buildings creating alley pressure
+- cold asphalt/concrete/green-glass palette with brass only as trim
 
 ### Must-Not-Haves
 
 - a flat office slab replacing the exchange facade
 - fully playable tower shaft or roof stack
 - messy collision clutter in alleys or at stair edges
+- warm tan plaza, pastel signs, bus stops, planters, or decorative prop spam from the old Toontown version
 
 ### Playable vs Non-Playable
 
@@ -115,7 +117,7 @@ South
 
 ### Cover Notes
 
-- Plaza cover should be strongest near rows `2-4`, cols `6-7` to keep the center approach from becoming pure long-range punishment
+- Keep the center approach open until the stairs; cover belongs on the side lanes and stair lips
 - Alley cover should alternate hard corner and pocket cover instead of forming a continuous maze
 - Stair cover should be built into landings and side lips, not freestanding clutter
 
@@ -270,7 +272,7 @@ South
 ### Decor / Signage / Trim
 
 - ticker boards
-- cog medallions
+- brass corporate medallions
 - vault wheel details
 - clocks, signs, trim bands, lamp posts
 
