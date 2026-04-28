@@ -1,133 +1,117 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('tick early-exits when no clients are connected, skipping simulation work', () => {
-  let cleanupCalled = false;
-  let stopTickCalled = false;
-  let syncFixturesCalled = false;
-  let broadcastCalled = false;
+import {
+  currentRoomNowMs,
+  stopRoomTickIfEmpty,
+  tickRoom
+} from '../../../cloudflare/server/room/RoomTick.js';
 
+function createTickRoom(overrides = {}) {
+  const calls = {
+    cleanup: 0,
+    syncFixtures: 0,
+    stop: 0,
+    snapshots: 0,
+    simSteps: []
+  };
   const room = {
     clients: new Map(),
     players: new Map(),
-    lastTickAt: Date.now() - 16,
-    lastSnapshotAt: 0,
-    tickHandle: 1,
-    cleanupDisconnectedPlayers() { cleanupCalled = true; },
-    stopTickIfEmpty() { stopTickCalled = true; },
+    lastTickAt: 1000,
+    simulationNowMs: 1000,
+    simulationAccumulatorMs: 0,
+    snapshotAccumulatorMs: 0,
+    cleanupDisconnectedPlayers() { calls.cleanup += 1; },
+    stopTickIfEmpty() { calls.stop += 1; },
+    syncRoomFixtures() { calls.syncFixtures += 1; },
     maybeResetPublicMatch() {},
-    syncRoomFixtures() { syncFixturesCalled = true; },
     startPublicMatchIfReady() {},
-    tickPlayers() {},
+    tickEntityMatchEntries() {},
+    tickPlayers(dtSec) { calls.simSteps.push(dtSec); },
     recordAliveEntityPoseHistories() {},
+    currentNowMs() { return currentRoomNowMs(this, () => 0); },
     updateLeaderProgress() {},
-    broadcastSnapshot() { broadcastCalled = true; }
+    broadcastSnapshot() { calls.snapshots += 1; },
+    ...overrides
   };
+  return { calls, room };
+}
 
-  // Simulate the tick() logic
-  const now = Date.now();
-  const dtSec = Math.max(0.001, Math.min(0.2, (now - room.lastTickAt) / 1000));
-  room.lastTickAt = now;
-  room.cleanupDisconnectedPlayers(now);
-  if (room.clients.size === 0) {
-    room.stopTickIfEmpty();
-    // early return - don't run simulation
-  } else {
-    room.syncRoomFixtures();
-    room.broadcastSnapshot(false);
-  }
+test('tick early-exits when no clients are connected, skipping simulation work', () => {
+  const { calls, room } = createTickRoom();
 
-  assert.equal(cleanupCalled, true, 'cleanup should always run');
-  assert.equal(stopTickCalled, true, 'stopTickIfEmpty should be called on early exit');
-  assert.equal(syncFixturesCalled, false, 'syncRoomFixtures should NOT run with no clients');
-  assert.equal(broadcastCalled, false, 'broadcastSnapshot should NOT run with no clients');
+  tickRoom(room, { nowMs: () => 1020 });
+
+  assert.equal(calls.cleanup, 1);
+  assert.equal(calls.stop, 1);
+  assert.equal(calls.syncFixtures, 0);
+  assert.equal(calls.snapshots, 0);
+  assert.deepEqual(calls.simSteps, []);
 });
 
-test('tick runs full simulation when clients are connected', () => {
-  let syncFixturesCalled = false;
-  let broadcastCalled = false;
+test('tick runs fixed simulation and snapshot work when clients are connected', () => {
+  const { calls, room } = createTickRoom({
+    clients: new Map([[{}, { userId: 'u1' }]])
+  });
 
-  const fakeSocket = {};
-  const room = {
-    clients: new Map([[fakeSocket, { userId: 'u1' }]]),
-    players: new Map(),
-    lastTickAt: Date.now() - 16,
-    lastSnapshotAt: 0,
-    tickHandle: 1,
-    cleanupDisconnectedPlayers() {},
-    stopTickIfEmpty() {},
-    maybeResetPublicMatch() {},
-    syncRoomFixtures() { syncFixturesCalled = true; },
-    startPublicMatchIfReady() {},
-    tickPlayers() {},
-    recordAliveEntityPoseHistories() {},
-    updateLeaderProgress() {},
-    broadcastSnapshot() { broadcastCalled = true; }
-  };
+  tickRoom(room, {
+    nowMs: () => 1020,
+    simTickMs: 1000 / 60,
+    snapshotTickMs: 1000 / 60
+  });
 
-  const now = Date.now();
-  room.lastTickAt = now;
-  room.cleanupDisconnectedPlayers(now);
-  if (room.clients.size === 0) {
-    room.stopTickIfEmpty();
-  } else {
-    room.syncRoomFixtures();
-    room.broadcastSnapshot(false);
-  }
-
-  assert.equal(syncFixturesCalled, true, 'syncRoomFixtures should run with connected clients');
-  assert.equal(broadcastCalled, true, 'broadcastSnapshot should run with connected clients');
+  assert.equal(calls.syncFixtures, 1);
+  assert.equal(calls.simSteps.length, 1);
+  assert.equal(Math.abs(calls.simSteps[0] - (1 / 60)) < 0.000001, true);
+  assert.equal(calls.snapshots, 1);
 });
 
 test('tick catch-up stays on fixed-size sim steps and caps the number of steps per wake-up', () => {
   const ROOM_SIM_TICK_MS = 1000 / 60;
-  const MAX_ROOM_TICK_FRAME_MS = 250;
-  const MAX_SIM_STEPS_PER_TICK = 6;
-  const stepSizes = [];
-  let broadcastCalled = false;
+  const { calls, room } = createTickRoom({
+    clients: new Map([[{}, { userId: 'u1' }]])
+  });
 
-  const room = {
-    clients: new Map([[{}, { userId: 'u1' }]]),
-    players: new Map(),
-    lastTickAt: Date.now() - 220,
-    simulationAccumulatorMs: 0,
-    snapshotAccumulatorMs: 0,
-    cleanupDisconnectedPlayers() {},
-    stopTickIfEmpty() {},
-    maybeResetPublicMatch() {},
-    syncRoomFixtures() {},
-    startPublicMatchIfReady() {},
-    tickEntityMatchEntries() {},
-    tickPlayers(dtSec) { stepSizes.push(dtSec); },
-    recordAliveEntityPoseHistories() {},
-    updateLeaderProgress() {},
-    broadcastSnapshot() { broadcastCalled = true; }
+  tickRoom(room, {
+    nowMs: () => 1220,
+    simTickMs: ROOM_SIM_TICK_MS,
+    snapshotTickMs: ROOM_SIM_TICK_MS,
+    maxFrameMs: 250,
+    maxSteps: 6
+  });
+
+  assert.equal(calls.simSteps.length, 6);
+  assert.ok(calls.simSteps.every((value) => Math.abs(value - (1 / 60)) < 0.000001));
+  assert.equal(calls.snapshots, 1);
+  assert.equal(room.simulationAccumulatorMs <= ROOM_SIM_TICK_MS, true);
+});
+
+test('stopRoomTickIfEmpty keeps live human rooms running and clears sim-only rooms', () => {
+  let cleared = false;
+  const liveRoom = {
+    clients: new Map(),
+    players: new Map([['u1', { id: 'u1' }]]),
+    tickHandle: 1
+  };
+  const simRoom = {
+    clients: new Map(),
+    players: new Map([['sim', { id: 'sim', fixtureType: 'sim_player' }]]),
+    tickHandle: 2,
+    inSimulationTick: true,
+    simulationAccumulatorMs: 5,
+    snapshotAccumulatorMs: 5
   };
 
-  const now = Date.now();
-  const frameDeltaMs = Math.max(0, Math.min(MAX_ROOM_TICK_FRAME_MS, now - room.lastTickAt));
-  room.lastTickAt = now;
-  room.cleanupDisconnectedPlayers(now);
-  room.syncRoomFixtures();
-  room.simulationAccumulatorMs = Math.min(MAX_ROOM_TICK_FRAME_MS, Math.max(0, Number(room.simulationAccumulatorMs || 0)) + frameDeltaMs);
-  room.snapshotAccumulatorMs = Math.min(MAX_ROOM_TICK_FRAME_MS, Math.max(0, Number(room.snapshotAccumulatorMs || 0)) + frameDeltaMs);
+  assert.equal(stopRoomTickIfEmpty(liveRoom, { clearInterval() { cleared = true; } }), false);
+  assert.equal(cleared, false);
+  assert.equal(stopRoomTickIfEmpty(simRoom, { clearInterval() { cleared = true; } }), true);
+  assert.equal(cleared, true);
+  assert.equal(simRoom.tickHandle, null);
+  assert.equal(simRoom.inSimulationTick, false);
+});
 
-  let simSteps = 0;
-  while (room.simulationAccumulatorMs >= ROOM_SIM_TICK_MS && simSteps < MAX_SIM_STEPS_PER_TICK) {
-    room.maybeResetPublicMatch();
-    room.startPublicMatchIfReady();
-    room.tickEntityMatchEntries();
-    room.tickPlayers(ROOM_SIM_TICK_MS / 1000);
-    room.recordAliveEntityPoseHistories(now);
-    room.updateLeaderProgress();
-    room.simulationAccumulatorMs -= ROOM_SIM_TICK_MS;
-    simSteps += 1;
-  }
-  if (room.snapshotAccumulatorMs >= ROOM_SIM_TICK_MS) {
-    room.broadcastSnapshot(false);
-  }
-
-  assert.equal(stepSizes.length, MAX_SIM_STEPS_PER_TICK);
-  assert.ok(stepSizes.every((value) => Math.abs(value - (1 / 60)) < 0.000001));
-  assert.equal(broadcastCalled, true);
+test('currentRoomNowMs uses simulation time only inside simulation ticks', () => {
+  assert.equal(currentRoomNowMs({ inSimulationTick: true, simulationNowMs: 123 }, () => 456), 123);
+  assert.equal(currentRoomNowMs({ inSimulationTick: false, simulationNowMs: 123 }, () => 456), 456);
 });

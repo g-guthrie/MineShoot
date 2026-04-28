@@ -256,6 +256,115 @@
         };
     }
 
+    function callOption(options, name) {
+        var fn = options && options[name];
+        if (typeof fn !== 'function') return null;
+        return fn;
+    }
+
+    function createDomInputListeners(options) {
+        var opts = options || {};
+        var matches = callOption(opts, 'matchesBinding') || function () { return false; };
+        var gateRolling = callOption(opts, 'gateRollingMovementInput') || function () { return false; };
+        var setMovementKey = callOption(opts, 'setMovementKey') || function () {};
+        var clearRollSuppression = callOption(opts, 'clearRollSuppression') || function () {};
+        var releaseSprint = callOption(opts, 'releaseSprint') || function () {};
+        var applyLook = callOption(opts, 'applyLookDelta') || function () {};
+        var hasCapture = callOption(opts, 'hasInputCapture') || function () { return false; };
+        var cancelScope = callOption(opts, 'cancelScopedView') || function () {};
+        var clearKeys = callOption(opts, 'clearMovementKeys') || function () {};
+        var updateCameraAspect = callOption(opts, 'updateCameraAspect') || function () {};
+
+        return {
+            keydown: function (e) {
+                if (matches('move_forward', e, 'KeyW') && !gateRolling('forward', e)) setMovementKey('forward', true);
+                if (matches('move_left', e, 'KeyA') && !gateRolling('left', e)) setMovementKey('left', true);
+                if (matches('move_backward', e, 'KeyS') && !gateRolling('backward', e)) setMovementKey('backward', true);
+                if (matches('move_right', e, 'KeyD') && !gateRolling('right', e)) setMovementKey('right', true);
+                if (matches('sprint', e, ['ShiftLeft', 'ShiftRight']) && !gateRolling('sprint', e)) setMovementKey('sprint', true);
+                if (matches('jump', e, 'Space')) {
+                    if (!gateRolling('jump', e)) setMovementKey('jump', true);
+                    if (e && e.preventDefault) e.preventDefault();
+                }
+            },
+            keyup: function (e) {
+                if (matches('move_forward', e, 'KeyW')) {
+                    setMovementKey('forward', false);
+                    clearRollSuppression('forward');
+                }
+                if (matches('move_left', e, 'KeyA')) {
+                    setMovementKey('left', false);
+                    clearRollSuppression('left');
+                }
+                if (matches('move_backward', e, 'KeyS')) {
+                    setMovementKey('backward', false);
+                    clearRollSuppression('backward');
+                }
+                if (matches('move_right', e, 'KeyD')) {
+                    setMovementKey('right', false);
+                    clearRollSuppression('right');
+                }
+                if (matches('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
+                    setMovementKey('sprint', false);
+                    clearRollSuppression('sprint');
+                    releaseSprint();
+                }
+                if (matches('jump', e, 'Space')) {
+                    setMovementKey('jump', false);
+                    clearRollSuppression('jump');
+                }
+            },
+            mousemove: function (e) {
+                if (!hasCapture()) return;
+                applyLook(e && e.movementX || 0, e && e.movementY || 0, 1);
+            },
+            contextmenu: function (e) {
+                if (!hasCapture()) return;
+                if (e && e.preventDefault) e.preventDefault();
+            },
+            resize: function () {
+                updateCameraAspect();
+            },
+            blur: function () {
+                cancelScope();
+                clearKeys();
+            },
+            pointerlockchange: function () {
+                if (!hasCapture()) cancelScope();
+            }
+        };
+    }
+
+    function bindDomInputListeners(listeners, doc, win) {
+        if (!listeners) return;
+        if (doc && typeof doc.addEventListener === 'function') {
+            doc.addEventListener('keydown', listeners.keydown);
+            doc.addEventListener('keyup', listeners.keyup);
+            doc.addEventListener('mousemove', listeners.mousemove);
+            doc.addEventListener('contextmenu', listeners.contextmenu);
+            doc.addEventListener('pointerlockchange', listeners.pointerlockchange);
+        }
+        if (win && typeof win.addEventListener === 'function') {
+            win.addEventListener('resize', listeners.resize);
+            win.addEventListener('blur', listeners.blur);
+        }
+    }
+
+    function unbindDomInputListeners(listeners, doc, win) {
+        if (!listeners) return;
+        if (doc && typeof doc.removeEventListener === 'function') {
+            doc.removeEventListener('keydown', listeners.keydown);
+            doc.removeEventListener('keyup', listeners.keyup);
+            doc.removeEventListener('mousemove', listeners.mousemove);
+            doc.removeEventListener('contextmenu', listeners.contextmenu);
+            doc.removeEventListener('pointerlockchange', listeners.pointerlockchange);
+        }
+        if (win && typeof win.removeEventListener === 'function') {
+            win.removeEventListener('resize', listeners.resize);
+            win.removeEventListener('blur', listeners.blur);
+        }
+    }
+
     runtime.GamePlayerInput = {
         createState: createState,
         createInputState: createInputState,
@@ -265,6 +374,9 @@
         applyLookDelta: applyLookDelta,
         buildCurrentInputState: buildCurrentInputState,
         buildRollActionOptions: buildRollActionOptions,
+        createDomInputListeners: createDomInputListeners,
+        bindDomInputListeners: bindDomInputListeners,
+        unbindDomInputListeners: unbindDomInputListeners,
         create: buildInputBindings
     };
 })();

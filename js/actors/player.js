@@ -304,6 +304,57 @@
     var sprintTemporarilyCanceledUntil = 0;
     var sprintTemporaryResumeTimer = 0;
     var loadoutSlots = [];
+    var reconciliationApi = reconciliationRuntimeApi();
+    var replayApi = replayRuntimeApi();
+    var inputApi = inputRuntimeApi();
+    var motionStateApi = motionStateRuntimeApi();
+    if (
+        !reconciliationApi ||
+        !reconciliationApi.createMotionCorrectionState ||
+        !reconciliationApi.clearMotionCorrection ||
+        !reconciliationApi.hasMotionCorrection ||
+        !reconciliationApi.queueMotionCorrection ||
+        !reconciliationApi.applyMotionCorrection ||
+        !reconciliationApi.resolveReconciliationThresholds
+    ) {
+        throw new Error('GamePlayerReconciliation is required before GamePlayer initialization.');
+    }
+    if (
+        !replayApi ||
+        !replayApi.buildAuthoritativeMotionKey ||
+        !replayApi.fallbackReplaySteps ||
+        !replayApi.buildReplayStepPlan ||
+        !replayApi.believableReplayDistanceWu ||
+        !replayApi.shouldReplayAuthoritativeMotion ||
+        !replayApi.applyIdleBlendCorrectionState
+    ) {
+        throw new Error('GamePlayerReplay is required before GamePlayer initialization.');
+    }
+    if (
+        !inputApi ||
+        !inputApi.hasInputCapture ||
+        !inputApi.clearMovementKeys ||
+        !inputApi.patchMovementInputState ||
+        !inputApi.applyLookDelta ||
+        !inputApi.buildCurrentInputState ||
+        !inputApi.buildRollActionOptions ||
+        !inputApi.createDomInputListeners ||
+        !inputApi.bindDomInputListeners ||
+        !inputApi.unbindDomInputListeners
+    ) {
+        throw new Error('GamePlayerInput is required before GamePlayer initialization.');
+    }
+    if (
+        !motionStateApi ||
+        !motionStateApi.copyMotionStateFields ||
+        !motionStateApi.buildLocalMotionState ||
+        !motionStateApi.cloneMotionState ||
+        !motionStateApi.resetVerticalState ||
+        !motionStateApi.setRollUntil ||
+        !motionStateApi.setSpawnPosition
+    ) {
+        throw new Error('GamePlayerMotionState is required before GamePlayer initialization.');
+    }
     var motionStateScratch = {
         x: 0,
         y: 0,
@@ -319,9 +370,7 @@
         sprinting: false,
         fastBackpedal: false
     };
-    var queuedMotionCorrection = (reconciliationRuntimeApi() && reconciliationRuntimeApi().createMotionCorrectionState)
-        ? reconciliationRuntimeApi().createMotionCorrectionState()
-        : { x: 0, y: 0, z: 0 };
+    var queuedMotionCorrection = reconciliationApi.createMotionCorrectionState();
     var inputStateScratch = {
         forward: false,
         backward: false,
@@ -356,48 +405,30 @@
     };
     var rollUntil = 0;
     function hasInputCapture() {
-        var helper = inputRuntimeApi();
-        if (helper && helper.hasInputCapture) {
-            return !!helper.hasInputCapture(inputHelperState());
-        }
-        if (!!document.pointerLockElement) return true;
-        var controlsApi = gameplayControlsApi();
-        return !!(controlsApi && controlsApi.hasVirtualCapture && controlsApi.hasVirtualCapture());
+        return !!inputApi.hasInputCapture(inputHelperState());
     }
 
     function clearMovementKeys() {
-        var helper = inputRuntimeApi();
-        if (helper && helper.clearMovementKeys) {
-            helper.clearMovementKeys(inputHelperState());
-            activeRollInputState = null;
-            return;
-        }
+        inputApi.clearMovementKeys(inputHelperState());
+        activeRollInputState = null;
     }
 
     function setMovementInputState(nextState) {
-        var helper = inputRuntimeApi();
-        if (helper && helper.patchMovementInputState) {
-            var next = helper.patchMovementInputState(inputHelperState(), nextState);
-            if (!keys.sprint) {
-                sprintCanceledUntilRelease = false;
-                clearSprintTemporaryResumeTimer();
-                sprintTemporarilyCanceledUntil = 0;
-            }
-            return next;
+        var next = inputApi.patchMovementInputState(inputHelperState(), nextState);
+        if (!keys.sprint) {
+            sprintCanceledUntilRelease = false;
+            clearSprintTemporaryResumeTimer();
+            sprintTemporarilyCanceledUntil = 0;
         }
-        return buildCurrentInputState();
+        return next;
     }
 
     function applyLookDelta(deltaX, deltaY, multiplier) {
-        var helper = inputRuntimeApi();
-        if (helper && helper.applyLookDelta) {
-            var state = inputHelperState();
-            var result = helper.applyLookDelta(state, deltaX, deltaY, multiplier);
-            yaw = Number(state.lookState.yaw || yaw);
-            pitch = Number(state.lookState.pitch || pitch);
-            return result;
-        }
-        return { yaw: yaw, pitch: pitch };
+        var state = inputHelperState();
+        var result = inputApi.applyLookDelta(state, deltaX, deltaY, multiplier);
+        yaw = Number(state.lookState.yaw || yaw);
+        pitch = Number(state.lookState.pitch || pitch);
+        return result;
     }
 
     function movementHelper() {
@@ -973,17 +1004,11 @@
             inputListeners = null;
             return;
         }
-        if (typeof document !== 'undefined' && document && typeof document.removeEventListener === 'function') {
-            document.removeEventListener('keydown', inputListeners.keydown);
-            document.removeEventListener('keyup', inputListeners.keyup);
-            document.removeEventListener('mousemove', inputListeners.mousemove);
-            document.removeEventListener('contextmenu', inputListeners.contextmenu);
-            document.removeEventListener('pointerlockchange', inputListeners.pointerlockchange);
-        }
-        if (typeof window !== 'undefined' && window && typeof window.removeEventListener === 'function') {
-            window.removeEventListener('resize', inputListeners.resize);
-            window.removeEventListener('blur', inputListeners.blur);
-        }
+        inputApi.unbindDomInputListeners(
+            inputListeners,
+            typeof document !== 'undefined' ? document : null,
+            typeof window !== 'undefined' ? window : null
+        );
         inputBound = false;
         inputListeners = null;
     }
@@ -997,92 +1022,44 @@
             rollInputSuppressedUntilRelease[actionKey] = true;
             return true;
         }
-        inputListeners = {
-            keydown: function (e) {
-            if (matchesBinding('move_forward', e, 'KeyW') && !gateRollingMovementInput('forward', e)) keys.forward = true;
-            if (matchesBinding('move_left', e, 'KeyA') && !gateRollingMovementInput('left', e)) keys.left = true;
-            if (matchesBinding('move_backward', e, 'KeyS') && !gateRollingMovementInput('backward', e)) keys.backward = true;
-            if (matchesBinding('move_right', e, 'KeyD') && !gateRollingMovementInput('right', e)) keys.right = true;
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight']) && !gateRollingMovementInput('sprint', e)) keys.sprint = true;
-            if (matchesBinding('jump', e, 'Space')) {
-                if (!gateRollingMovementInput('jump', e)) {
-                    keys.jump = true;
-                }
-                e.preventDefault();
-            }
+        inputListeners = inputApi.createDomInputListeners({
+            matchesBinding: matchesBinding,
+            gateRollingMovementInput: gateRollingMovementInput,
+            setMovementKey: function (actionKey, active) {
+                if (Object.prototype.hasOwnProperty.call(keys, actionKey)) keys[actionKey] = !!active;
             },
-            keyup: function (e) {
-            if (matchesBinding('move_forward', e, 'KeyW')) {
-                keys.forward = false;
-                rollInputSuppressedUntilRelease.forward = false;
-            }
-            if (matchesBinding('move_left', e, 'KeyA')) {
-                keys.left = false;
-                rollInputSuppressedUntilRelease.left = false;
-            }
-            if (matchesBinding('move_backward', e, 'KeyS')) {
-                keys.backward = false;
-                rollInputSuppressedUntilRelease.backward = false;
-            }
-            if (matchesBinding('move_right', e, 'KeyD')) {
-                keys.right = false;
-                rollInputSuppressedUntilRelease.right = false;
-            }
-            if (matchesBinding('sprint', e, ['ShiftLeft', 'ShiftRight'])) {
-                keys.sprint = false;
-                rollInputSuppressedUntilRelease.sprint = false;
+            clearRollSuppression: function (actionKey) {
+                if (Object.prototype.hasOwnProperty.call(rollInputSuppressedUntilRelease, actionKey)) {
+                    rollInputSuppressedUntilRelease[actionKey] = false;
+                }
+            },
+            releaseSprint: function () {
                 sprintCanceledUntilRelease = false;
                 clearSprintTemporaryResumeTimer();
                 sprintTemporarilyCanceledUntil = 0;
-            }
-            if (matchesBinding('jump', e, 'Space')) {
-                keys.jump = false;
-                rollInputSuppressedUntilRelease.jump = false;
-            }
             },
-            mousemove: function (e) {
-            if (!hasInputCapture()) return;
-            applyLookDelta(e.movementX || 0, e.movementY || 0, 1);
-            },
-            contextmenu: function (e) {
-            if (!hasInputCapture()) return;
-            e.preventDefault();
-            },
-            resize: function () {
-            if (camera) {
+            applyLookDelta: applyLookDelta,
+            hasInputCapture: hasInputCapture,
+            cancelScopedView: cancelScopedView,
+            clearMovementKeys: clearMovementKeys,
+            updateCameraAspect: function () {
+                if (!camera || typeof window === 'undefined') return;
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
             }
-            },
-            blur: function () {
-            cancelScopedView();
-            clearMovementKeys();
-        },
-            pointerlockchange: function () {
-            if (!hasInputCapture()) cancelScopedView();
-            }
-        };
-        if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
-            document.addEventListener('keydown', inputListeners.keydown);
-            document.addEventListener('keyup', inputListeners.keyup);
-            document.addEventListener('mousemove', inputListeners.mousemove);
-            document.addEventListener('contextmenu', inputListeners.contextmenu);
-            document.addEventListener('pointerlockchange', inputListeners.pointerlockchange);
-        }
-        if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
-            window.addEventListener('resize', inputListeners.resize);
-            window.addEventListener('blur', inputListeners.blur);
-        }
+        });
+        inputApi.bindDomInputListeners(
+            inputListeners,
+            typeof document !== 'undefined' ? document : null,
+            typeof window !== 'undefined' ? window : null
+        );
         inputBound = true;
     }
 
     function resetVerticalState(feetY) {
-        var helper = motionStateRuntimeApi();
-        if (helper && helper.resetVerticalState) {
-            var state = motionStateView();
-            helper.resetVerticalState(state, feetY, { eyeHeight: eyeHeight() });
-            applyMotionStateView(state);
-        }
+        var state = motionStateView();
+        motionStateApi.resetVerticalState(state, feetY, { eyeHeight: eyeHeight() });
+        applyMotionStateView(state);
         clearSprintTemporaryResumeTimer();
         sprintTemporarilyCanceledUntil = 0;
     }
@@ -1090,17 +1067,9 @@
     function setSpawnPosition(x, z, feetY) {
         if (!camera) return false;
         clearQueuedMotionCorrection();
-        var helper = motionStateRuntimeApi();
-        if (helper && helper.setSpawnPosition) {
-            var state = motionStateView();
-            helper.setSpawnPosition(state, x, z, feetY, { eyeHeight: eyeHeight() });
-            applyMotionStateView(state);
-        } else {
-            feetY = (typeof feetY === 'number') ? feetY : 0;
-            playerX = x;
-            playerZ = z;
-            resetVerticalState(feetY);
-        }
+        var state = motionStateView();
+        motionStateApi.setSpawnPosition(state, x, z, feetY, { eyeHeight: eyeHeight() });
+        applyMotionStateView(state);
         var view = viewHelper();
         resetRecoilState(view);
         updateAvatarPose();
@@ -1109,26 +1078,15 @@
     }
 
     function buildLocalMotionState() {
-        var helper = motionStateRuntimeApi();
-        return helper && helper.buildLocalMotionState
-            ? helper.buildLocalMotionState(motionStateView(), motionStateScratch, { pitchLimit: PITCH_LIMIT })
-            : motionStateScratch;
+        return motionStateApi.buildLocalMotionState(motionStateView(), motionStateScratch, { pitchLimit: PITCH_LIMIT });
     }
 
     function buildCurrentInputState() {
-        var helper = inputRuntimeApi();
-        if (helper && helper.buildCurrentInputState) {
-            return helper.buildCurrentInputState(inputHelperState());
-        }
-        return inputStateScratch;
+        return inputApi.buildCurrentInputState(inputHelperState());
     }
 
     function buildRollActionOptions() {
-        var helper = inputRuntimeApi();
-        if (helper && helper.buildRollActionOptions) {
-            return helper.buildRollActionOptions(inputHelperState());
-        }
-        return null;
+        return inputApi.buildRollActionOptions(inputHelperState());
     }
 
     function rollActionDurationMs(rollOptions) {
@@ -1139,15 +1097,9 @@
     }
 
     function setRollUntil(nextRollUntil) {
-        var helper = motionStateRuntimeApi();
-        if (helper && helper.setRollUntil) {
-            var state = motionStateView();
-            helper.setRollUntil(state, nextRollUntil, { nowMs: nowMs });
-            applyMotionStateView(state);
-        } else {
-            rollUntil = Math.max(0, Number(nextRollUntil || 0));
-            if (!isRolling()) activeRollInputState = null;
-        }
+        var state = motionStateView();
+        motionStateApi.setRollUntil(state, nextRollUntil, { nowMs: nowMs });
+        applyMotionStateView(state);
         if (actorVisual && avatarGroup) {
             updateAvatarPose();
         }
@@ -1155,50 +1107,27 @@
     }
 
     function clearQueuedMotionCorrection() {
-        var helper = reconciliationRuntimeApi();
-        if (helper && helper.clearMotionCorrection) {
-            helper.clearMotionCorrection(queuedMotionCorrection);
-            return;
-        }
-        queuedMotionCorrection.x = 0;
-        queuedMotionCorrection.y = 0;
-        queuedMotionCorrection.z = 0;
+        reconciliationApi.clearMotionCorrection(queuedMotionCorrection);
     }
 
     function hasQueuedMotionCorrection() {
-        var helper = reconciliationRuntimeApi();
-        if (helper && helper.hasMotionCorrection) {
-            return helper.hasMotionCorrection(queuedMotionCorrection);
-        }
-        return Math.abs(Number(queuedMotionCorrection.x || 0)) > 0.0001 ||
-            Math.abs(Number(queuedMotionCorrection.y || 0)) > 0.0001 ||
-            Math.abs(Number(queuedMotionCorrection.z || 0)) > 0.0001;
+        return reconciliationApi.hasMotionCorrection(queuedMotionCorrection);
     }
 
     function queueMotionCorrection(dx, dz, dy, maxDistance) {
-        var helper = reconciliationRuntimeApi();
-        if (helper && helper.queueMotionCorrection) {
-            helper.queueMotionCorrection(queuedMotionCorrection, dx, dz, dy, maxDistance);
-            return;
-        }
-        queuedMotionCorrection.x += Number(dx || 0);
-        queuedMotionCorrection.z += Number(dz || 0);
-        queuedMotionCorrection.y += Number(dy || 0);
+        reconciliationApi.queueMotionCorrection(queuedMotionCorrection, dx, dz, dy, maxDistance);
     }
 
     function applyQueuedMotionCorrection(dtSec, options) {
-        var helper = reconciliationRuntimeApi();
         var opts = options || {};
-        var applied = helper && helper.applyMotionCorrection
-            ? helper.applyMotionCorrection(queuedMotionCorrection, dtSec, {
-                decayMs: opts.decayMs,
-                applyDelta: function (dx, dy, dz) {
-                    playerX += dx;
-                    posY += dy;
-                    playerZ += dz;
-                }
-            })
-            : false;
+        var applied = reconciliationApi.applyMotionCorrection(queuedMotionCorrection, dtSec, {
+            decayMs: opts.decayMs,
+            applyDelta: function (dx, dy, dz) {
+                playerX += dx;
+                posY += dy;
+                playerZ += dz;
+            }
+        });
 
         if (!applied) return false;
 
@@ -1210,10 +1139,9 @@
     }
 
     function copyMotionStateFields(state, options) {
-        var helper = motionStateRuntimeApi();
-        if (!helper || !helper.copyMotionStateFields || !state) return false;
+        if (!state) return false;
         var snapshot = motionStateView();
-        helper.copyMotionStateFields(snapshot, state, { pitchLimit: PITCH_LIMIT });
+        motionStateApi.copyMotionStateFields(snapshot, state, { pitchLimit: PITCH_LIMIT });
         var groundHeightAt = options && typeof options.getGroundHeightAt === 'function'
             ? options.getGroundHeightAt
             : null;
@@ -1308,15 +1236,11 @@
     }
 
     function cloneMotionState(state) {
-        var helper = motionStateRuntimeApi();
-        return helper && helper.cloneMotionState ? helper.cloneMotionState(state, { pitchLimit: PITCH_LIMIT }) : null;
+        return motionStateApi.cloneMotionState(state, { pitchLimit: PITCH_LIMIT });
     }
 
     function buildAuthoritativeMotionKey(state) {
-        var helper = replayRuntimeApi();
-        return helper && helper.buildAuthoritativeMotionKey
-            ? helper.buildAuthoritativeMotionKey(state)
-            : '';
+        return replayApi.buildAuthoritativeMotionKey(state);
     }
 
     function hasMovementIntentInput() {
@@ -1340,87 +1264,54 @@
     }
 
     function fallbackReplaySteps(pendingInputs) {
-        var helper = replayRuntimeApi();
-        var plan = helper && helper.fallbackReplaySteps
-            ? helper.fallbackReplaySteps(pendingInputs, { fallbackYaw: yaw, fallbackPitch: pitch })
-            : null;
+        var plan = replayApi.fallbackReplaySteps(pendingInputs, { fallbackYaw: yaw, fallbackPitch: pitch });
         return plan && Array.isArray(plan.steps) ? plan.steps : [];
     }
 
     function buildReplayStepPlan(reconcile, pendingInputs) {
-        var helper = replayRuntimeApi();
-        var plan = helper && helper.buildReplayStepPlan
-            ? helper.buildReplayStepPlan(reconcile, pendingInputs, {
-                fallbackYaw: yaw,
-                fallbackPitch: pitch,
-                movementLocked: function () { return isMovementLocked(); }
-            })
-            : null;
+        var plan = replayApi.buildReplayStepPlan(reconcile, pendingInputs, {
+            fallbackYaw: yaw,
+            fallbackPitch: pitch,
+            movementLocked: function () { return isMovementLocked(); }
+        });
         return plan && Array.isArray(plan.steps) ? plan.steps : fallbackReplaySteps(pendingInputs);
     }
 
     function believableReplayDistanceWu(reconcile, pendingInputs, opts, airborne) {
-        var helper = replayRuntimeApi();
-        return helper && helper.believableReplayDistanceWu
-            ? helper.believableReplayDistanceWu(reconcile, pendingInputs, Object.assign({}, opts, {
-                currentWeaponId: currentWeaponId,
-                currentInputState: buildCurrentInputState(),
-                getTopSpeedForInputState: topSpeedForInputState
-            }), airborne)
-            : 0;
+        return replayApi.believableReplayDistanceWu(reconcile, pendingInputs, Object.assign({}, opts, {
+            currentWeaponId: currentWeaponId,
+            currentInputState: buildCurrentInputState(),
+            getTopSpeedForInputState: topSpeedForInputState
+        }), airborne);
     }
 
     function resolveReconciliationThresholds(opts, reconcileTuning, adaptiveSelfReconciliation, airborne, movingIntent) {
-        var helper = reconciliationRuntimeApi();
-        if (helper && helper.resolveReconciliationThresholds) {
-            return helper.resolveReconciliationThresholds(opts, reconcileTuning, adaptiveSelfReconciliation, airborne, movingIntent);
-        }
-        return {
-            hardSnapDistance: Number(opts.hardSnapDistance || 4.25),
-            hardSnapVerticalDistance: Number(opts.hardSnapVerticalDistance || 1.25),
-            idleBlendDistance: Number(opts.idleBlendDistance || 0.45),
-            idleBlendRate: Number(opts.idleBlendRate || 5),
-            movingBlendDistance: Number(opts.movingBlendDistance || 0.5),
-            movingBlendVerticalDistance: Number(opts.movingBlendVerticalDistance || 0.35),
-            movingCorrectionDecayMs: Math.max(1, Number(opts.movingCorrectionDecayMs || 100)),
-            replayDistance: Number(opts.replayCorrectionDistance || 0.95),
-            pendingReplayGraceMs: Math.max(0, Number(opts.pendingReplayGraceMs || 125)),
-            emergencyReplayDistance: Number(opts.emergencyReplayDistance || 2.1),
-            movingAckDriftLimit: 2,
-            movingPendingInputLimit: 2
-        };
+        return reconciliationApi.resolveReconciliationThresholds(opts, reconcileTuning, adaptiveSelfReconciliation, airborne, movingIntent);
     }
 
     function shouldReplayAuthoritativeMotion(reconcile, opts, pendingInputCount, horizontalDistSq, replayDistance, replayTriggerChanged, allowReplayWithoutAckAdvance, movingIntent, canCorrectWhileMoving, latestPendingAgeMs, pendingReplayGraceMs, allowFreshPendingReplay) {
-        var helper = replayRuntimeApi();
-        return helper && helper.shouldReplayAuthoritativeMotion
-            ? !!helper.shouldReplayAuthoritativeMotion(reconcile, Object.assign({}, opts, { lastReplayAckSeq: lastReplayAckSeq }), pendingInputCount, horizontalDistSq, replayDistance, replayTriggerChanged, allowReplayWithoutAckAdvance, movingIntent, canCorrectWhileMoving, latestPendingAgeMs, pendingReplayGraceMs, allowFreshPendingReplay)
-            : false;
+        return !!replayApi.shouldReplayAuthoritativeMotion(reconcile, Object.assign({}, opts, { lastReplayAckSeq: lastReplayAckSeq }), pendingInputCount, horizontalDistSq, replayDistance, replayTriggerChanged, allowReplayWithoutAckAdvance, movingIntent, canCorrectWhileMoving, latestPendingAgeMs, pendingReplayGraceMs, allowFreshPendingReplay);
     }
 
     function applyIdleBlendCorrection(dt, x, z, authoritativeY, dx, dz, dy, horizontalDistSq, idleBlendRate) {
-        var helper = replayRuntimeApi();
-        if (helper && helper.applyIdleBlendCorrectionState) {
-            var state = { x: playerX, y: posY, z: playerZ };
-            helper.applyIdleBlendCorrectionState(state, {
-                dt: dt,
-                authoritativeX: x,
-                authoritativeY: authoritativeY,
-                authoritativeZ: z,
-                dx: dx,
-                dy: dy,
-                dz: dz,
-                horizontalDistSq: horizontalDistSq,
-                idleBlendRate: idleBlendRate
-            });
-            playerX = state.x;
-            posY = state.y;
-            playerZ = state.z;
-            updateAvatarPose();
-            updateCameraFromPlayer(dt, viewHelper());
-            return true;
-        }
-        return false;
+        var state = { x: playerX, y: posY, z: playerZ };
+        replayApi.applyIdleBlendCorrectionState(state, {
+            dt: dt,
+            authoritativeX: x,
+            authoritativeY: authoritativeY,
+            authoritativeZ: z,
+            dx: dx,
+            dy: dy,
+            dz: dz,
+            horizontalDistSq: horizontalDistSq,
+            idleBlendRate: idleBlendRate
+        });
+        playerX = state.x;
+        posY = state.y;
+        playerZ = state.z;
+        updateAvatarPose();
+        updateCameraFromPlayer(dt, viewHelper());
+        return true;
     }
 
     function reconcileAuthoritativeMotion(state, options) {

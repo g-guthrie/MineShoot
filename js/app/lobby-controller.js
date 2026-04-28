@@ -2,13 +2,18 @@
  * lobby-controller.js - Unified menu shell controller.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameLobbyController
  */
+import {
+    readMenuReturnState,
+    readStoredLaunchError as readStoredLaunchErrorFromStorage,
+    writeMenuReturnState
+} from './lobby-storage.js';
+
 (function () {
     'use strict';
 
     var runtime = globalThis.__MAYHEM_RUNTIME = globalThis.__MAYHEM_RUNTIME || {};
     var GameLobbyController = {};
     var initialized = false;
-    var RETURN_STATE_KEY = 'mayhem.menu.returnShell.v2';
 
     function runtimeModeUi() {
         var deps = runtime.GameLobbyControllerDeps || null;
@@ -16,31 +21,7 @@
     }
 
     function readStoredLaunchError() {
-        try {
-            var store = window.sessionStorage || null;
-            if (!store) return '';
-            var msg = String(store.getItem('mayhem.launchError') || '').trim();
-            if (msg) store.removeItem('mayhem.launchError');
-            return msg;
-        } catch (_err) {
-            return '';
-        }
-    }
-
-    function sessionStore() {
-        try {
-            return window.sessionStorage || null;
-        } catch (_err) {
-            return null;
-        }
-    }
-
-    function localStore() {
-        try {
-            return window.localStorage || null;
-        } catch (_err) {
-            return null;
-        }
+        return readStoredLaunchErrorFromStorage(typeof window !== 'undefined' ? window : null);
     }
 
     function roomCodeFromRoomId(roomId) {
@@ -52,47 +33,11 @@
     }
 
     function readReturnState() {
-        var result = null;
-        // Read from sessionStorage first, fall back to localStorage
-        var stores = [sessionStore(), localStore()];
-        for (var i = 0; i < stores.length; i++) {
-            var store = stores[i];
-            if (!store || typeof store.getItem !== 'function') continue;
-            try {
-                var raw = String(store.getItem(RETURN_STATE_KEY) || '').trim();
-                if (raw && !result) {
-                    var parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed === 'object') {
-                        result = {
-                            activeSurface: parsed.activeSurface === 'room' ? 'room' : 'main',
-                            selectedMode: normalizeMode(parsed.selectedMode)
-                        };
-                    }
-                }
-                store.removeItem(RETURN_STATE_KEY);
-            } catch (_err) {
-                // no-op
-            }
-        }
-        return result;
+        return readMenuReturnState(typeof window !== 'undefined' ? window : null, normalizeMode);
     }
 
     function writeReturnState(payload) {
-        var value = JSON.stringify({
-            activeSurface: payload && payload.activeSurface === 'room' ? 'room' : 'main',
-            selectedMode: normalizeMode(payload && payload.selectedMode)
-        });
-        // Write to both sessionStorage and localStorage so state survives page refresh
-        var stores = [sessionStore(), localStore()];
-        for (var i = 0; i < stores.length; i++) {
-            var store = stores[i];
-            if (!store || typeof store.setItem !== 'function') continue;
-            try {
-                store.setItem(RETURN_STATE_KEY, value);
-            } catch (_err) {
-                // no-op
-            }
-        }
+        writeMenuReturnState(typeof window !== 'undefined' ? window : null, payload, normalizeMode);
     }
 
     function normalizeMode(modeId) {

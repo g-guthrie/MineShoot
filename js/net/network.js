@@ -19,6 +19,17 @@
 
     var GameNetAuth = assemblyDeps.GameNetAuth || runtime.GameNetAuth;
     var GameNetEntities = assemblyDeps.GameNetEntities || runtime.GameNetEntities;
+    if (
+        !GameNetEntities
+        || !GameNetEntities.init
+        || !GameNetEntities.cleanup
+        || !GameNetEntities.getHitboxArray
+        || !GameNetEntities.getRenderMap
+        || !GameNetEntities.updateFromSnapshot
+        || !GameNetEntities.removeRemoteVisual
+    ) {
+        throw new Error('GameNetEntities is required before GameNet initialization.');
+    }
     var commandFactory = assemblyDeps.GameNetCommands || runtime.GameNetCommands;
     if (!commandFactory || !commandFactory.create) {
         throw new Error('GameNetCommands is required before GameNet initialization.');
@@ -412,7 +423,7 @@
         damagePointForEntityId: effects.damagePointForEntityId,
         getRenderMap: function () { return GameNetEntities.getRenderMap(); },
         setRemoteAliveState: function (entityId, alive) {
-            return GameNetEntities && GameNetEntities.setAliveState
+            return GameNetEntities.setAliveState
                 ? GameNetEntities.setAliveState(entityId, alive)
                 : false;
         },
@@ -610,24 +621,24 @@
     };
 
     function init(scene) {
-            sceneRef = scene;
-            active = true;
-            seedCommittedWeaponLoadoutPending();
-            GameNetEntities.init(scene);
-            initSnapshotHelper();
-            connectWs();
+        sceneRef = scene;
+        active = true;
+        seedCommittedWeaponLoadoutPending();
+        GameNetEntities.init(scene);
+        initSnapshotHelper();
+        connectWs();
     }
 
     function shutdown() {
-            active = false;
-            joinState.failJoin('Disconnected while joining room.');
-            joinState.resetJoinAttempt();
-            runtimeCore.shutdownConnection();
-            GameNetEntities.cleanup();
-            snapshotHelper = null;
-            remoteFrameCollector = null;
-            netState.reset();
-            connectionTiming.reset();
+        active = false;
+        joinState.failJoin('Disconnected while joining room.');
+        joinState.resetJoinAttempt();
+        runtimeCore.shutdownConnection();
+        GameNetEntities.cleanup();
+        snapshotHelper = null;
+        remoteFrameCollector = null;
+        netState.reset();
+        connectionTiming.reset();
     }
 
     var GameNet = {
@@ -662,19 +673,13 @@
         effects: effects,
         remoteEntities: GameNetEntities,
         getHitboxArray: function () {
-            return GameNetEntities && GameNetEntities.getHitboxArray
-                ? GameNetEntities.getHitboxArray()
-                : [];
+            return GameNetEntities.getHitboxArray();
         },
         getRenderMap: function () {
-            return GameNetEntities && GameNetEntities.getRenderMap
-                ? GameNetEntities.getRenderMap()
-                : new Map();
+            return GameNetEntities.getRenderMap();
         },
         getLockTargets: function () {
-            return stateView && stateView.getLockTargets
-                ? stateView.getLockTargets()
-                : [];
+            return stateView.getLockTargets();
         }
     };
 

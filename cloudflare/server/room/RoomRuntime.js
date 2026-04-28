@@ -1,4 +1,5 @@
 import { buildReplayStepsFromPendingInputs } from '../../../shared/authoritative-reconciliation.js';
+import { stepAuthoritativeMovement } from '../../../shared/authoritative-movement.js';
 import { chooseSpawnPoint } from '../../../shared/spawn-logic.js';
 
 const MAX_INPUT_QUEUE_SIZE = 96;
@@ -511,6 +512,86 @@ export function consumeQueuedAuthoritativeInputs(entity, dtSec, deps) {
     steps: replayPlan.steps,
     processedSeq: replayPlan.processedSeq
   };
+}
+
+export function tickAuthoritativePlayerMovement(room, player, dtSec, deps) {
+  deps = deps || {};
+  if (!room || !player || !player.alive) return;
+
+  const nowMs = deps.nowMs || Date.now;
+  const createMovementInputState = deps.createMovementInputState;
+  const clamp = deps.clamp || function (value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  };
+  const weaponStats = deps.weaponStats || {};
+  const movementTuning = deps.movementTuning || {};
+  const playerRadius = Number(deps.playerRadius || 0);
+  const playerHeight = Number(deps.playerHeight || 0);
+  const rollContactCylinderHeightScale = Number(deps.rollContactCylinderHeightScale || 0.3);
+  const playerEyeHeight = Number(deps.playerEyeHeight || 0);
+  const worldRayEpsilon = Number(deps.worldRayEpsilon || 0.001);
+  const now = Number(nowMs() || 0);
+  const startX = Number(player.x || 0);
+  const startY = Number(player.y || 0);
+  const startZ = Number(player.z || 0);
+  const startYaw = Number(player.yaw || 0);
+  const startPitch = Number(player.pitch || 0);
+  const startMoveSpeedNorm = Number(player.moveSpeedNorm || 0);
+  const startSprinting = !!player.sprinting;
+  const startFastBackpedal = !!player.fastBackpedal;
+  const slowMult = (player.slowUntil || 0) > now
+    ? clamp(Number(player.slowMultiplier || 1), 0.1, 1)
+    : 1;
+  const movementPlan = consumeQueuedAuthoritativeInputs(
+    player,
+    Math.max(0, Number(dtSec || 0)) * slowMult,
+    { createMovementInputState }
+  );
+  for (let i = 0; i < movementPlan.steps.length; i++) {
+    const step = movementPlan.steps[i];
+    if (!step || !(Number(step.dtSec || 0) > 0)) continue;
+    player.yaw = Number(step.yaw || 0);
+    player.pitch = clamp(Number(step.pitch || 0), -1.55, 1.55);
+    const activeWeaponId = String(player.weaponId || 'rifle');
+    const activeWeaponStats = weaponStats[activeWeaponId] || weaponStats.rifle || {};
+    const collisionHeight = room.isEntityRolling(player, now)
+      ? Math.max(playerRadius, playerHeight * rollContactCylinderHeightScale)
+      : playerHeight;
+    stepAuthoritativeMovement(player, step.inputState || createMovementInputState(), {
+      dtSec: Number(step.dtSec || 0),
+      bounds: {
+        minX: room.boundsMin,
+        maxX: room.boundsMax,
+        minZ: room.boundsMin,
+        maxZ: room.boundsMax
+      },
+      collisionBoxes: room.worldCollidables(),
+      getGroundHeightAt: (x, z) => room.terrainFeetYAt(x, z),
+      movementLocked: !!step.movementLocked,
+      moveSpeedMultiplier: Number(activeWeaponStats.moveSpeedMultiplier || 1),
+      adsMoveMultiplier: Number(activeWeaponStats.adsMoveMultiplier || movementTuning.adsMoveMult || 0.4),
+      eyeHeight: playerEyeHeight,
+      playerHeight: collisionHeight,
+      playerRadius,
+      epsilon: worldRayEpsilon
+    });
+  }
+  if (movementPlan.processedSeq > Number(player.lastProcessedInputSeq || 0)) {
+    player.lastProcessedInputSeq = movementPlan.processedSeq;
+  }
+  room.enforceEntityTerrainFloor(player);
+  if (
+    Math.abs(Number(player.x || 0) - startX) > 0.0001 ||
+    Math.abs(Number(player.y || 0) - startY) > 0.0001 ||
+    Math.abs(Number(player.z || 0) - startZ) > 0.0001 ||
+    Math.abs(Number(player.yaw || 0) - startYaw) > 0.0001 ||
+    Math.abs(Number(player.pitch || 0) - startPitch) > 0.0001 ||
+    Math.abs(Number(player.moveSpeedNorm || 0) - startMoveSpeedNorm) > 0.0001 ||
+    !!player.sprinting !== startSprinting ||
+    !!player.fastBackpedal !== startFastBackpedal
+  ) {
+    player.lastAuthoritativeChangeAt = now;
+  }
 }
 
 export function respawnIfNeeded(room, entity, deps) {

@@ -97,6 +97,7 @@ async function createNetHarness() {
         },
         GameNetEntities: {
           classStats() { return { armorMax: 100, wallhackRadius: 0 }; },
+          getHitboxArray() { return []; },
           getRenderMap() { return new Map(); },
           updateFromSnapshot() {},
           removeRemoteVisual() {},

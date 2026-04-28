@@ -66,9 +66,12 @@ test('GameNet forwards getMatchState through GameNetStateView wiring', async () 
         GameNetAuth: {},
         GameNetEntities: {
           classStats() { return { armorMax: 100, wallhackRadius: 0 }; },
+          getHitboxArray() { return []; },
           getRenderMap() { return new Map(); },
           updateFromSnapshot() {},
-          removeRemoteVisual() {}
+          removeRemoteVisual() {},
+          init() {},
+          cleanup() {}
         },
         GameNetMessageRouter: {
           create() {
@@ -147,9 +150,12 @@ test('GameNet forwards self reconciliation selectors through GameNetStateView wi
         GameNetAuth: {},
         GameNetEntities: {
           classStats() { return { armorMax: 100, wallhackRadius: 0 }; },
+          getHitboxArray() { return []; },
           getRenderMap() { return new Map(); },
           updateFromSnapshot() {},
-          removeRemoteVisual() {}
+          removeRemoteVisual() {},
+          init() {},
+          cleanup() {}
         },
         GameNetMessageRouter: {
           create() {
