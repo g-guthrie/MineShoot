@@ -8,6 +8,7 @@ test('applyRuntimeAssembly wires explicit dependency bags onto the runtime regis
     GameMenuState: { createStore() {} },
     GameLobbyActions: { create() {} },
     GameLobbyRenderer: { create() {} },
+    GameLobbyViewModel: { build() {} },
     GameLobbyApi: {},
     GameNetAuth: {},
     GameRuntimeModeUi: {},
@@ -35,6 +36,7 @@ test('applyRuntimeAssembly wires explicit dependency bags onto the runtime regis
   assert.equal(applied, runtime);
   assert.equal(runtime.GameLobbyControllerDeps.actionFactory, runtime.GameLobbyActions);
   assert.equal(runtime.GameLobbyControllerDeps.rendererFactory, runtime.GameLobbyRenderer);
+  assert.equal(runtime.GameLobbyControllerDeps.viewModel, runtime.GameLobbyViewModel);
   assert.equal(runtime.GameLobbyControllerDeps.storeFactory, runtime.GameMenuState);
   assert.equal(runtime.GameRuntimeCoordinatorDeps.GameRuntimeMatchActions, runtime.GameRuntimeMatchActions);
   assert.equal(runtime.GameRuntimeCoordinatorDeps.GameRuntimeMatchHost, runtime.GameRuntimeMatchHost);

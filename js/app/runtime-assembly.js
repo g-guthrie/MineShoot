@@ -15,6 +15,7 @@ export function buildLobbyControllerDeps(runtime) {
     return {
         actionFactory: runtimeValue(runtime, 'GameLobbyActions'),
         rendererFactory: runtimeValue(runtime, 'GameLobbyRenderer'),
+        viewModel: runtimeValue(runtime, 'GameLobbyViewModel'),
         storeFactory: runtimeValue(runtime, 'GameMenuState'),
         lobbyApi: runtimeValue(runtime, 'GameLobbyApi'),
         authApi: runtimeValue(runtime, 'GameNetAuth'),

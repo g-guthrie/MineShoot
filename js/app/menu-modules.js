@@ -20,6 +20,7 @@ import './loadout-runtime-sync.js';
 import './menu-loadout.js';
 import './auth-ui.js';
 import './lobby-private-room-view.js';
+import './lobby-view-model.js';
 import './lobby-renderer.js';
 import './lobby-actions.js';
 import './lobby-session.js';

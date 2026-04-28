@@ -218,6 +218,7 @@ import {
         var actionFactory = deps.actionFactory || runtime.GameLobbyActions || null;
         var actionApi = null;
         var rendererFactory = deps.rendererFactory || runtime.GameLobbyRenderer || null;
+        var viewModelApi = deps.viewModel || runtime.GameLobbyViewModel || null;
         var rendererApi = null;
 
         function getSessionApi() {
@@ -356,6 +357,7 @@ import {
             modeLabel: modeLabel,
             normalizeMode: normalizeMode,
             normalizeMatchMenuModel: normalizeMatchMenuModel,
+            viewModel: viewModelApi,
             isMenuRefreshPending: function () { return menuRefreshPending; },
             getPrivateRoomViewController: function () { return privateRoomViewController; }
         });

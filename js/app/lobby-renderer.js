@@ -25,6 +25,11 @@
         opts = opts || {};
 
         var elements = opts.elements || {};
+        var viewModelApi = opts.viewModel || runtime.GameLobbyViewModel || null;
+
+        if (!viewModelApi || !viewModelApi.build) {
+            throw new Error('GameLobbyViewModel is required before GameLobbyRenderer initialization.');
+        }
 
         function busy() {
             return !!(opts.isBusy && opts.isBusy());
@@ -80,6 +85,12 @@
 
         function normalizeMatchMenuModel(payload) {
             return opts.normalizeMatchMenuModel ? opts.normalizeMatchMenuModel(payload) : (payload || null);
+        }
+
+        function buildMenuViewModel(state) {
+            return viewModelApi.build(state || {}, {
+                normalizeMode: normalizeMode
+            });
         }
 
         function currentPartyIdentity() {
@@ -634,38 +645,28 @@
 
         function render() {
             var state = getState();
-            var launch = state.launch;
-            var paused = !!state.paused;
-            var showSessionStrip = paused || launch.phase === 'retryable';
-            var activeMatchShell = showSessionStrip;
+            var launch = state.launch || {};
+            var view = buildMenuViewModel(state);
+            var showSessionStrip = view.showSessionStrip;
+            var activeMatchShell = view.activeMatchShell;
             var room = state.privateRoom && state.privateRoom.room ? state.privateRoom.room : null;
-            var hasRoom = !!room;
+            var hasRoom = view.hasRoom;
             var caps = capabilities();
             var isBusy = busy();
-            var selectedMode = normalizeMode(launch.selectedMode);
+            var selectedMode = view.selectedMode;
             var identity = currentPartyIdentity();
-            var loggedIn = !!state.utilities.isLoggedIn;
-            var headerVariant = paused ? 'pause' : (state.activeSurface === 'room' ? 'room' : 'home');
+            var loggedIn = view.loggedIn;
+            var headerVariant = view.headerVariant;
             var activeMatchModel = activeMatchShell ? buildActiveMatchViewModel(state) : null;
-            var incomingRoomInvite = state.party && state.party.roomInvite ? state.party.roomInvite.incoming : null;
-            var incomingInvite = state.party && state.party.directInvite ? state.party.directInvite.incoming : null;
-            var socialMustShow = !!(
-                (incomingRoomInvite && incomingRoomInvite.roomId) ||
-                (incomingInvite && incomingInvite.actorId)
-            );
-            var showSocialTools = !!state.socialToolsOpen || socialMustShow || hasRoom;
-            var phoneLandscapeRequired = state.activeSurface === 'room' ||
-                activeMatchShell ||
-                String(launch.activityState || '') === 'private_room_lobby';
 
             if (elements.menuHeader) elements.menuHeader.setAttribute('data-variant', headerVariant);
-            if (elements.overlay) elements.overlay.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
-            if (elements.menuSurface) elements.menuSurface.setAttribute('data-menu-context', activeMatchShell ? 'active-match' : 'menu');
-            setPhoneLandscapeRequirement(phoneLandscapeRequired);
+            if (elements.overlay) elements.overlay.setAttribute('data-menu-context', view.menuContext);
+            if (elements.menuSurface) elements.menuSurface.setAttribute('data-menu-context', view.menuContext);
+            setPhoneLandscapeRequirement(view.phoneLandscapeRequired);
 
-            if (elements.partyBackBtn) elements.partyBackBtn.hidden = state.activeSurface !== 'room' || activeMatchShell;
-            if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = headerVariant !== 'home' || loggedIn || showSessionStrip;
-            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = activeMatchShell;
+            if (elements.partyBackBtn) elements.partyBackBtn.hidden = !view.header.partyBackVisible;
+            if (elements.accountToggleBtn) elements.accountToggleBtn.hidden = !view.header.accountToggleVisible;
+            if (elements.menuPartyIdBtn) elements.menuPartyIdBtn.hidden = !view.header.partyIdVisible;
             if (elements.refreshBtn) {
                 elements.refreshBtn.hidden = true;
                 elements.refreshBtn.disabled = isBusy || menuRefreshPending();
@@ -676,9 +677,9 @@
                 elements.utilityRefreshBtn.textContent = menuRefreshPending() ? 'Refreshing...' : 'Refresh';
             }
             if (elements.loadoutStartBtn) elements.loadoutStartBtn.hidden = true;
-            if (elements.roomActionBtn) elements.roomActionBtn.hidden = headerVariant !== 'home' || showSessionStrip;
-            if (elements.utilityOverlay) elements.utilityOverlay.hidden = !state.utilityOpen;
-            if (elements.leaveConfirmOverlay) elements.leaveConfirmOverlay.hidden = !state.confirmLeaveOpen;
+            if (elements.roomActionBtn) elements.roomActionBtn.hidden = !view.header.roomActionVisible;
+            if (elements.utilityOverlay) elements.utilityOverlay.hidden = !view.overlays.utilityVisible;
+            if (elements.leaveConfirmOverlay) elements.leaveConfirmOverlay.hidden = !view.overlays.leaveConfirmVisible;
 
             if (identity) {
                 setText(elements.menuPartyIdLabel, identity.label || 'Player ID');
@@ -700,23 +701,22 @@
 
             if (elements.primaryLaunchBtn) {
                 elements.primaryLaunchBtn.textContent = launchPillLabel(selectedMode || 'ffa');
-                elements.primaryLaunchBtn.disabled = isBusy || showSessionStrip;
+                elements.primaryLaunchBtn.disabled = isBusy || view.controls.primaryLaunchDisabled;
             }
             if (elements.gameModesToggleBtn) {
                 elements.gameModesToggleBtn.classList.toggle('active', !!state.modeListOpen);
                 elements.gameModesToggleBtn.setAttribute('aria-expanded', state.modeListOpen ? 'true' : 'false');
-                elements.gameModesToggleBtn.disabled = showSessionStrip;
+                elements.gameModesToggleBtn.disabled = view.controls.gameModesDisabled;
             }
             if (elements.socialToolsToggleBtn) {
-                var socialToggleOptional = state.activeSurface === 'main' && !showSessionStrip && !hasRoom && !socialMustShow;
-                elements.socialToolsToggleBtn.hidden = !socialToggleOptional;
+                elements.socialToolsToggleBtn.hidden = !view.controls.socialToolsVisible;
                 elements.socialToolsToggleBtn.classList.toggle('active', !!state.socialToolsOpen);
                 elements.socialToolsToggleBtn.setAttribute('aria-expanded', state.socialToolsOpen ? 'true' : 'false');
                 elements.socialToolsToggleBtn.textContent = 'Friends & Rooms';
-                elements.socialToolsToggleBtn.disabled = showSessionStrip;
+                elements.socialToolsToggleBtn.disabled = view.controls.socialToolsDisabled;
             }
             if (elements.playModeOptions) {
-                elements.playModeOptions.hidden = !state.modeListOpen || state.activeSurface !== 'main' || showSessionStrip;
+                elements.playModeOptions.hidden = !view.controls.playModeOptionsVisible;
             }
 
             if (elements.playModeFfaBtn) {
@@ -759,36 +759,22 @@
                 elements.roomAccessStatus.hidden = !elements.roomAccessStatus.textContent;
             }
 
-            var showMainHeroes = state.activeSurface === 'main' && !activeMatchShell;
-            var showHomeHero = showMainHeroes;
-            var partyMembers = state.party && state.party.party && Array.isArray(state.party.party.members)
-                ? state.party.party.members
-                : [];
-            var showSocialHero = showMainHeroes && showSocialTools;
-            var showPartyHero = showMainHeroes && partyMembers.length > 1;
-            var heroCount = 0;
-            if (showHomeHero) heroCount += 1;
-            if (showSocialHero) heroCount += 1;
-            if (showPartyHero) heroCount += 1;
-
-            if (elements.menuBody) elements.menuBody.hidden = activeMatchShell;
-            if (elements.menuLoadoutBand) elements.menuLoadoutBand.hidden = !activeMatchShell;
-            if (elements.screenMain) elements.screenMain.hidden = !showMainHeroes;
+            if (elements.menuBody) elements.menuBody.hidden = !view.surfaces.menuBodyVisible;
+            if (elements.menuLoadoutBand) elements.menuLoadoutBand.hidden = !view.surfaces.loadoutBandVisible;
+            if (elements.screenMain) elements.screenMain.hidden = !view.surfaces.mainScreenVisible;
             if (elements.mainHeroes) {
-                elements.mainHeroes.hidden = !showMainHeroes;
-                elements.mainHeroes.setAttribute('data-columns', String(Math.max(1, heroCount || 1)));
+                elements.mainHeroes.hidden = !view.surfaces.mainScreenVisible;
+                elements.mainHeroes.setAttribute('data-columns', String(view.heroes.count));
             }
-            if (elements.homeHero) elements.homeHero.hidden = !showHomeHero;
-            if (elements.socialHero) elements.socialHero.hidden = !showSocialHero;
-            if (elements.partyHero) elements.partyHero.hidden = !showPartyHero;
-            if (elements.screenRoom) elements.screenRoom.hidden = state.activeSurface !== 'room' || activeMatchShell;
+            if (elements.homeHero) elements.homeHero.hidden = !view.heroes.homeVisible;
+            if (elements.socialHero) elements.socialHero.hidden = !view.heroes.socialVisible;
+            if (elements.partyHero) elements.partyHero.hidden = !view.heroes.partyVisible;
+            if (elements.screenRoom) elements.screenRoom.hidden = !view.surfaces.roomScreenVisible;
 
             if (elements.menuSessionActions) {
-                elements.menuSessionActions.hidden = !showSessionStrip;
-                if (showSessionStrip) {
-                    var sessionPhase = launch.phase === 'retryable'
-                        ? 'enter'
-                        : (launch.phase === 'paused' ? 'paused' : 'resume');
+                elements.menuSessionActions.hidden = !view.session.visible;
+                if (view.session.visible) {
+                    var sessionPhase = view.session.phase;
                     elements.menuSessionActions.setAttribute('data-session-phase', sessionPhase);
                     applyMatchPill(elements.menuSessionStatus, activeMatchModel ? activeMatchModel.modePill : null);
                     applyMatchPill(elements.menuSessionContext, activeMatchModel ? activeMatchModel.contextPill : null);
