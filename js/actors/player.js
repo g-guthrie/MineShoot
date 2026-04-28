@@ -304,57 +304,10 @@
     var sprintTemporarilyCanceledUntil = 0;
     var sprintTemporaryResumeTimer = 0;
     var loadoutSlots = [];
-    var reconciliationApi = reconciliationRuntimeApi();
-    var replayApi = replayRuntimeApi();
-    var inputApi = inputRuntimeApi();
-    var motionStateApi = motionStateRuntimeApi();
-    if (
-        !reconciliationApi ||
-        !reconciliationApi.createMotionCorrectionState ||
-        !reconciliationApi.clearMotionCorrection ||
-        !reconciliationApi.hasMotionCorrection ||
-        !reconciliationApi.queueMotionCorrection ||
-        !reconciliationApi.applyMotionCorrection ||
-        !reconciliationApi.resolveReconciliationThresholds
-    ) {
-        throw new Error('GamePlayerReconciliation is required before GamePlayer initialization.');
-    }
-    if (
-        !replayApi ||
-        !replayApi.buildAuthoritativeMotionKey ||
-        !replayApi.fallbackReplaySteps ||
-        !replayApi.buildReplayStepPlan ||
-        !replayApi.believableReplayDistanceWu ||
-        !replayApi.shouldReplayAuthoritativeMotion ||
-        !replayApi.applyIdleBlendCorrectionState
-    ) {
-        throw new Error('GamePlayerReplay is required before GamePlayer initialization.');
-    }
-    if (
-        !inputApi ||
-        !inputApi.hasInputCapture ||
-        !inputApi.clearMovementKeys ||
-        !inputApi.patchMovementInputState ||
-        !inputApi.applyLookDelta ||
-        !inputApi.buildCurrentInputState ||
-        !inputApi.buildRollActionOptions ||
-        !inputApi.createDomInputListeners ||
-        !inputApi.bindDomInputListeners ||
-        !inputApi.unbindDomInputListeners
-    ) {
-        throw new Error('GamePlayerInput is required before GamePlayer initialization.');
-    }
-    if (
-        !motionStateApi ||
-        !motionStateApi.copyMotionStateFields ||
-        !motionStateApi.buildLocalMotionState ||
-        !motionStateApi.cloneMotionState ||
-        !motionStateApi.resetVerticalState ||
-        !motionStateApi.setRollUntil ||
-        !motionStateApi.setSpawnPosition
-    ) {
-        throw new Error('GamePlayerMotionState is required before GamePlayer initialization.');
-    }
+    var reconciliationApi = null;
+    var replayApi = null;
+    var inputApi = null;
+    var motionStateApi = null;
     var motionStateScratch = {
         x: 0,
         y: 0,
@@ -370,7 +323,7 @@
         sprinting: false,
         fastBackpedal: false
     };
-    var queuedMotionCorrection = reconciliationApi.createMotionCorrectionState();
+    var queuedMotionCorrection = null;
     var inputStateScratch = {
         forward: false,
         backward: false,
@@ -405,10 +358,12 @@
     };
     var rollUntil = 0;
     function hasInputCapture() {
+        ensurePlayerRuntimeDeps();
         return !!inputApi.hasInputCapture(inputHelperState());
     }
 
     function clearMovementKeys() {
+        ensurePlayerRuntimeDeps();
         inputApi.clearMovementKeys(inputHelperState());
         activeRollInputState = null;
     }
@@ -443,6 +398,63 @@
 
     function nowMs() {
         return Date.now();
+    }
+
+    function ensurePlayerRuntimeDeps() {
+        reconciliationApi = reconciliationApi || reconciliationRuntimeApi();
+        replayApi = replayApi || replayRuntimeApi();
+        inputApi = inputApi || inputRuntimeApi();
+        motionStateApi = motionStateApi || motionStateRuntimeApi();
+        if (
+            !reconciliationApi ||
+            !reconciliationApi.createMotionCorrectionState ||
+            !reconciliationApi.clearMotionCorrection ||
+            !reconciliationApi.hasMotionCorrection ||
+            !reconciliationApi.queueMotionCorrection ||
+            !reconciliationApi.applyMotionCorrection ||
+            !reconciliationApi.resolveReconciliationThresholds
+        ) {
+            throw new Error('GamePlayerReconciliation is required before GamePlayer initialization.');
+        }
+        if (
+            !replayApi ||
+            !replayApi.buildAuthoritativeMotionKey ||
+            !replayApi.fallbackReplaySteps ||
+            !replayApi.buildReplayStepPlan ||
+            !replayApi.believableReplayDistanceWu ||
+            !replayApi.shouldReplayAuthoritativeMotion ||
+            !replayApi.applyIdleBlendCorrectionState
+        ) {
+            throw new Error('GamePlayerReplay is required before GamePlayer initialization.');
+        }
+        if (
+            !inputApi ||
+            !inputApi.hasInputCapture ||
+            !inputApi.clearMovementKeys ||
+            !inputApi.patchMovementInputState ||
+            !inputApi.applyLookDelta ||
+            !inputApi.buildCurrentInputState ||
+            !inputApi.buildRollActionOptions ||
+            !inputApi.createDomInputListeners ||
+            !inputApi.bindDomInputListeners ||
+            !inputApi.unbindDomInputListeners
+        ) {
+            throw new Error('GamePlayerInput is required before GamePlayer initialization.');
+        }
+        if (
+            !motionStateApi ||
+            !motionStateApi.copyMotionStateFields ||
+            !motionStateApi.buildLocalMotionState ||
+            !motionStateApi.cloneMotionState ||
+            !motionStateApi.resetVerticalState ||
+            !motionStateApi.setRollUntil ||
+            !motionStateApi.setSpawnPosition
+        ) {
+            throw new Error('GamePlayerMotionState is required before GamePlayer initialization.');
+        }
+        if (!queuedMotionCorrection) {
+            queuedMotionCorrection = reconciliationApi.createMotionCorrectionState();
+        }
     }
 
     function inputHelperState() {
@@ -1469,6 +1481,7 @@
     }
 
     GamePlayer.init = function (scene) {
+        ensurePlayerRuntimeDeps();
         destroyPlayerState();
         sceneRef = scene;
         var world = worldHelper();
