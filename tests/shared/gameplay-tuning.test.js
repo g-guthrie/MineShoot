@@ -100,10 +100,10 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   const sniper = getWeaponPresentation('sniper');
   const expectedSamples = {
     rifle: '/assets/audio/weapons/rifle.mp3',
-    pistol: '/assets/audio/weapons/hand-cannon.ogg',
-    machinegun: '/assets/audio/weapons/auto-rifle.ogg',
+    pistol: '/assets/audio/weapons/pistol.mp3',
+    machinegun: '/assets/audio/weapons/rifle.mp3',
     shotgun: '/assets/audio/weapons/shotgun.mp3',
-    sniper: '/assets/audio/weapons/sniper-fire.ogg'
+    sniper: '/assets/audio/weapons/sniper.mp3'
   };
 
   assert.equal(rifle.tracer.speed, 280);
@@ -119,7 +119,7 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   assert.equal(sniper.recoil.pitch, 0.04);
   assert.equal(sniper.recoil.pattern, 'u_shape');
   assert.equal(sniper.recoil.patternStrength, 0.6);
-  assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper-fire.ogg');
+  assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper.mp3');
   assert.equal(sniper.reload.profileId, 'precision');
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.resolveReloadPresentationState, 'function');
 
