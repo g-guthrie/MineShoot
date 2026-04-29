@@ -219,6 +219,32 @@ test('player view can move the camera to first person just in front of the avata
   assert.equal(avatarGroup.visible, false);
 });
 
+test('player view inspect mode keeps the avatar visible and orbits around it', async () => {
+  const view = await loadPlayerView(() => null);
+  const avatarGroup = new THREE.Group();
+  const state = baseCameraState({
+    avatarGroup,
+    firstPersonView: true,
+    inspectMode: true,
+    inspectOrbitYaw: Math.PI * 0.5,
+    inspectOrbitPitch: 0,
+    inspectOrbitDistance: 5,
+    inspectTargetY: 1.35,
+    inspectFov: 58
+  });
+
+  const direction = directionAfterUpdate(view, state, 1);
+
+  assert.equal(avatarGroup.visible, true);
+  assertClose(state.camera.position.x, 5);
+  assertClose(state.camera.position.y, 1.35);
+  assertClose(state.camera.position.z, 0);
+  assertClose(state.camera.fov, 58);
+  assertClose(direction.x, -1);
+  assertClose(direction.y, 0);
+  assertClose(direction.z, 0);
+});
+
 test('player view clears muzzle flash on frame updates without relying on timers', async () => {
   const muzzleStates = [];
   const view = await loadPlayerView(() => null);

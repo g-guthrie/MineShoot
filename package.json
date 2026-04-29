@@ -8,7 +8,8 @@
     "wrangler": "^4.71.0"
   },
   "scripts": {
-    "dev": "./scripts/dev-offline.sh",
+    "dev": "./scripts/dev-frontend.sh",
+    "dev:offline": "./scripts/dev-offline.sh",
     "dev:frontend": "vite --host 127.0.0.1 --port 3000",
     "dev:toon-lab": "vite --host 127.0.0.1 --port 4174",
     "dev:frontend:test": "./scripts/e2e-frontend.sh",

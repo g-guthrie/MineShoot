@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import '../domain/weapons/visuals.js';
 import '../actors/boxman-rig.js';
 
-const STORAGE_KEY = 'mineshoot.weaponOffsetEditor.v1';
+const STORAGE_KEY = 'mineshoot.weaponOffsetEditor.v2';
 const WEAPON_IDS = ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper'];
 const WEAPON_LABELS = {
   pistol: 'Pistol',
@@ -226,6 +226,7 @@ function setWeapon(weaponId) {
 
   if (boxmanController && boxmanRig) {
     boxmanController.setWeapon(activeWeaponId);
+    settleRuntimePose();
     captureBaseline();
     applyOffset();
   } else {
@@ -233,6 +234,29 @@ function setWeapon(weaponId) {
     updateOutput();
   }
   setStatus(`Showing ${WEAPON_LABELS[activeWeaponId]} on actual Boxman.`);
+}
+
+function settleRuntimePose() {
+  if (!boxmanController || !boxmanController.updateAnimation) return;
+  const runtimeIdleAimState = {
+    speedNorm: 0,
+    sprinting: false,
+    fastBackpedal: false,
+    airborne: false,
+    footY: null,
+    aimPitch: 0,
+    horizontalSpeed: 0,
+    worldSpeed: 0,
+    yaw: 0,
+    turnRate: 0,
+    movingForward: false,
+    movingBackward: false,
+    movingLeft: false,
+    movingRight: false
+  };
+  for (let i = 0; i < 40; i++) {
+    boxmanController.updateAnimation(1 / 60, runtimeIdleAimState);
+  }
 }
 
 function captureBaseline() {

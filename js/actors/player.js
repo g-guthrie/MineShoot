@@ -5,6 +5,10 @@
 (function () {
     'use strict';
 
+    var FOOTSTEP_MIN_SPEED_WU_PER_SEC = 0.45;
+    var FOOTSTEP_WALK_INTERVAL_SEC = 0.3125; // Boxman run clip: 0.625s, two foot contacts.
+    var FOOTSTEP_RUN_INTERVAL_SEC = 0.2085; // Boxman sprint clip: 0.417s, two foot contacts.
+
     var GamePlayer = {};
 
     var camera = null;
@@ -56,6 +60,10 @@
 
     function replayRuntimeApi() {
         return runtimeRoot().GamePlayerReplay || null;
+    }
+
+    function audioApi() {
+        return runtimeRoot().GameAudio || null;
     }
 
     function statusBridgeRuntimeApi() {
@@ -255,6 +263,12 @@
     var SNIPER_SCOPE_HEIGHT = 0.12;
     var SNIPER_SCOPE_BLEND_SPEED = 18;
     var SNIPER_SCOPE_SENSITIVITY_MULT = 0.42;
+    var INSPECT_ORBIT_DISTANCE = 5.0;
+    var INSPECT_ORBIT_PITCH = 0.18;
+    var INSPECT_ORBIT_MIN_PITCH = -0.65;
+    var INSPECT_ORBIT_MAX_PITCH = 0.82;
+    var INSPECT_ORBIT_SENSITIVITY_MULT = 1.55;
+    var INSPECT_TARGET_HEIGHT = 1.35;
     var FORWARD_ROLL_ACTION_DURATION_MS = 360;
     var BACKWARD_ROLL_ACTION_DURATION_MS = 520;
 
@@ -286,6 +300,10 @@
     var sprintCanceledUntilRelease = false;
     var inputBound = false;
     var inputListeners = null;
+    var inspectMode = false;
+    var inspectOrbitYaw = 0;
+    var inspectOrbitPitch = INSPECT_ORBIT_PITCH;
+    var inspectOrbitDistance = INSPECT_ORBIT_DISTANCE;
 
     var currentWeaponId = 'rifle';
 
@@ -301,6 +319,7 @@
     var fastBackpedal = false;
     var airborneSprintCarry = false;
     var lastMoveSpeedNorm = 0;
+    var footstepTravel = 0;
     var sprintTemporarilyCanceledUntil = 0;
     var sprintTemporaryResumeTimer = 0;
     var loadoutSlots = [];
@@ -366,6 +385,7 @@
         ensurePlayerRuntimeDeps();
         inputApi.clearMovementKeys(inputHelperState());
         activeRollInputState = null;
+        footstepTravel = 0;
     }
 
     function setMovementInputState(nextState) {
@@ -379,6 +399,22 @@
     }
 
     function applyLookDelta(deltaX, deltaY, multiplier) {
+        if (inspectMode) {
+            if (!hasInputCapture()) {
+                return {
+                    yaw: inspectOrbitYaw,
+                    pitch: inspectOrbitPitch
+                };
+            }
+            var sensitivity = MOUSE_SENSITIVITY * INSPECT_ORBIT_SENSITIVITY_MULT * Math.max(0, Number(multiplier || 1));
+            inspectOrbitYaw -= Number(deltaX || 0) * sensitivity;
+            inspectOrbitPitch -= Number(deltaY || 0) * sensitivity;
+            inspectOrbitPitch = Math.max(INSPECT_ORBIT_MIN_PITCH, Math.min(INSPECT_ORBIT_MAX_PITCH, inspectOrbitPitch));
+            return {
+                yaw: inspectOrbitYaw,
+                pitch: inspectOrbitPitch
+            };
+        }
         var state = inputHelperState();
         var result = inputApi.applyLookDelta(state, deltaX, deltaY, multiplier);
         yaw = Number(state.lookState.yaw || yaw);
@@ -637,6 +673,7 @@
     }
 
     function movementInputBlocked() {
+        if (inspectMode) return true;
         var helper = statusBridgeRuntimeApi();
         if (helper && helper.deriveMovementBlocked) {
             return !!helper.deriveMovementBlocked(statusApi, undefined, { nowMs: nowMs }) || isMovementAnimationLocked();
@@ -694,6 +731,7 @@
     }
 
     function scopeTargetActive() {
+        if (inspectMode) return false;
         var helper = cameraRuntimeApi();
         return helper && helper.scopeTargetActive
             ? helper.scopeTargetActive(currentWeaponId, hasInputCapture(), isSprintInputActive())
@@ -795,6 +833,7 @@
     }
 
     function setAdsEnabled(enabled) {
+        if (inspectMode) return false;
         var helper = cameraRuntimeApi();
         if (helper && helper.setAdsEnabled) {
             return helper.setAdsEnabled(enabled, viewHelper());
@@ -875,6 +914,33 @@
         viewApi.updateAvatarAnimation(dt, speed, payload);
     }
 
+    function playMovementAudio(soundId, options) {
+        var audio = audioApi();
+        if (!audio || !audio.play) return;
+        audio.play(soundId, options || {});
+    }
+
+    function updateFootstepAudio(dt, horizontalSpeed) {
+        var speed = Math.max(0, Number(horizontalSpeed || 0));
+        if (!isGrounded || speed < FOOTSTEP_MIN_SPEED_WU_PER_SEC || movementInputBlocked()) {
+            footstepTravel = 0;
+            return;
+        }
+
+        var running = !!(sprinting || fastBackpedal);
+        var stepInterval = running ? FOOTSTEP_RUN_INTERVAL_SEC : FOOTSTEP_WALK_INTERVAL_SEC;
+        var strideDistance = Math.max(0.1, speed * stepInterval);
+        footstepTravel += speed * Math.min(0.08, Math.max(0, Number(dt || 0)));
+
+        if (footstepTravel < strideDistance) return;
+        footstepTravel = footstepTravel % strideDistance;
+        playMovementAudio('footstep', {
+            mode: running ? 'run' : 'walk',
+            running: running,
+            speedNorm: lastMoveSpeedNorm
+        });
+    }
+
     function updateCameraFromPlayer(dt, view, speedNorm) {
         var viewApi = view || viewHelper();
         var cameraProfile = avatarRigApi && avatarRigApi.getCameraProfile
@@ -891,6 +957,13 @@
             avatarGroup: avatarGroup,
             avatarRigApi: avatarRigApi,
             avatarAliveVisible: avatarAliveVisible,
+            inspectMode: inspectMode,
+            inspectOrbitYaw: inspectOrbitYaw,
+            inspectOrbitPitch: inspectOrbitPitch,
+            inspectOrbitDistance: inspectOrbitDistance,
+            inspectTargetY: (posY - eyeHeight()) + INSPECT_TARGET_HEIGHT,
+            inspectFov: 58,
+            inspectSmooth: 18,
             firstPersonView: firstPersonCameraViewEnabled(),
             sniperMode: isSniperScopeWeapon(),
             adsActive: isSniperScopeReady(),
@@ -928,6 +1001,28 @@
         }
         if (!viewApi || !viewApi.updateCamera) return;
         viewApi.updateCamera(dt, payload);
+    }
+
+    function setInspectMode(enabled) {
+        var next = !!enabled;
+        if (inspectMode === next) return inspectMode;
+        inspectMode = next;
+        clearMovementKeys();
+        sprintCanceledUntilRelease = false;
+        clearSprintTemporaryResumeTimer();
+        sprintTemporarilyCanceledUntil = 0;
+        sprinting = false;
+        fastBackpedal = false;
+        lastMoveSpeedNorm = 0;
+        if (inspectMode) {
+            cancelScopedView();
+            inspectOrbitYaw = yaw;
+            inspectOrbitPitch = INSPECT_ORBIT_PITCH;
+            inspectOrbitDistance = INSPECT_ORBIT_DISTANCE;
+        }
+        updateAvatarPose();
+        updateCameraFromPlayer(1 / 60, viewHelper(), 0);
+        return inspectMode;
     }
 
     function triggerFireAction(view) {
@@ -1475,6 +1570,7 @@
         sprintCanceledUntilRelease = false;
         sprinting = false;
         rollUntil = 0;
+        footstepTravel = 0;
         avatarAliveVisible = true;
         lastMoveSpeedNorm = 0;
         lastReplayAckSeq = 0;
@@ -1545,7 +1641,20 @@
             decayMs: Number((networkTuning().selfReconciliation || {}).movingCorrectionDecayMs || 100),
             syncVisual: false
         });
+        if (inspectMode) {
+            lastMoveSpeedNorm = 0;
+            sprinting = false;
+            fastBackpedal = false;
+            footstepTravel = 0;
+            var inspectView = viewHelper();
+            updateAvatarPose();
+            updateAvatarAnimation(frameDt, 0, inspectView);
+            applyUnifiedGunOffsets(frameDt, inspectView);
+            updateCameraFromPlayer(Math.max(1 / 240, frameDt || (1 / 60)), inspectView, 0);
+            return;
+        }
         if (!hasInputCapture()) {
+            footstepTravel = 0;
             updateAvatarPose();
             updateCameraFromPlayer(Math.max(1 / 240, Number(dt || (1 / 60))), viewHelper(), lastMoveSpeedNorm);
             return;
@@ -1573,6 +1682,11 @@
 
         if (wasGrounded && !isGrounded && prevVelocityY <= 0.1 && velocityY > 0.1) {
             var reverseJumpLegTilt = !!keys.backward && !keys.forward;
+            footstepTravel = 0;
+            playMovementAudio('jump', {
+                running: !!sprinting,
+                speedNorm: lastMoveSpeedNorm
+            });
             if (actorVisual && actorVisual.triggerAction) {
                 actorVisual.triggerAction('jump', {
                     reverseLegTilt: reverseJumpLegTilt
@@ -1585,6 +1699,7 @@
         }
 
         var horizontalSpeed = lastMoveSpeedNorm * effectiveRunSpeedForWeapon(currentWeaponId);
+        updateFootstepAudio(frameDt, horizontalSpeed);
         var view = viewHelper();
         updateAvatarPose();
         updateAvatarAnimation(frameDt, horizontalSpeed, view);
@@ -1690,6 +1805,27 @@
 
     GamePlayer.applyLookDelta = function (deltaX, deltaY, multiplier) {
         return applyLookDelta(deltaX, deltaY, multiplier);
+    };
+
+    GamePlayer.setInspectMode = function (enabled) {
+        return setInspectMode(enabled);
+    };
+
+    GamePlayer.toggleInspectMode = function () {
+        return setInspectMode(!inspectMode);
+    };
+
+    GamePlayer.isInspectModeActive = function () {
+        return !!inspectMode;
+    };
+
+    GamePlayer.getInspectOrbitState = function () {
+        return {
+            active: !!inspectMode,
+            yaw: inspectOrbitYaw,
+            pitch: inspectOrbitPitch,
+            distance: inspectOrbitDistance
+        };
     };
 
     GamePlayer.clearMovementInputState = function () {

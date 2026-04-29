@@ -652,6 +652,62 @@ test('networked runtime session routes joined-ready handoff through the session 
   assert.equal(harness.backBtn.textContent, 'Return to Menu');
 });
 
+test('phone joined-ready handoff requires a shooting acknowledgement before touch capture', async () => {
+  let activateTouchCalls = 0;
+  const harness = await loadRuntimeSessionHarness({
+    isTouchGameplayEnabled() {
+      return true;
+    },
+    activateTouchGameplayCapture() {
+      activateTouchCalls += 1;
+      return true;
+    }
+  });
+  harness.advanceClock(500);
+
+  harness.session.showLaunchOverlay('joined_ready', {
+    gameMode: 'ffa',
+    roomId: 'phone-01'
+  });
+
+  assert.equal(harness.launchFlow.hidden, false);
+  assert.equal(harness.menuStage.hidden, true);
+  assert.equal(harness.launchTitle.textContent, 'Phone Shooting');
+  assert.equal(harness.launchStatus.textContent, 'There is no fire button.');
+  assert.match(harness.launchNote.textContent, /re-engage/);
+  assert.equal(harness.launchEnterBtn.hidden, false);
+  assert.equal(harness.launchEnterBtn.textContent, 'I Understand');
+  assert.equal(harness.playBtn.textContent, 'I Understand');
+
+  const acknowledgement = await harness.session.enterGameplay({
+    button: 0,
+    type: 'click',
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(acknowledgement.entered, false);
+  assert.equal(acknowledgement.acknowledgedPhoneBriefing, true);
+  assert.equal(activateTouchCalls, 0);
+  assert.equal(harness.launchFlow.hidden, true);
+  assert.equal(harness.menuStage.hidden, false);
+  assert.equal(harness.launchTitle.textContent, 'Enter Match');
+  assert.equal(harness.launchNote.textContent, 'Phones are landscape-only. Turn your phone sideways, then tap Enter Match.');
+  assert.equal(harness.playBtn.textContent, 'Enter Match');
+
+  harness.advanceClock(700);
+  const entered = await harness.session.enterGameplay({
+    button: 0,
+    type: 'click',
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.equal(entered.entered, true);
+  assert.equal(activateTouchCalls, 1);
+  assert.equal(harness.session.isPlaying(), true);
+});
+
 test('preparing a fresh launch clears any leftover postgame flow', async () => {
   const harness = await loadRuntimeSessionHarness();
   const postgameFlow = new FakeElement('postgame-flow', harness.document);

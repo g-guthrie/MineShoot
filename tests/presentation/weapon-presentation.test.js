@@ -30,6 +30,9 @@ test('weapon platforms expose semantic hold classes, stock classes, and required
     assert.ok(entry.platform);
     assert.ok(entry.platform.holdClass);
     assert.ok(entry.platform.stockClass);
+    assert.ok(entry.platform.mount);
+    assert.ok(Array.isArray(entry.platform.mount.insertion.position));
+    assert.ok(Array.isArray(entry.platform.mount.insertion.rotationDeg));
     assert.ok(Array.isArray(entry.platform.zones.handleBack));
     assert.ok(Array.isArray(entry.platform.zones.muzzle));
     assert.ok(Array.isArray(entry.platform.zones.reloadZone));
@@ -59,23 +62,68 @@ test('weapon platforms point at the Toon Shooter pack meshes with explicit muzzl
   }
 });
 
-test('weapon platforms preserve the Toon Shooter character hand attachment transforms', async () => {
+test('weapon Toon Shooter meshes are scaled ten percent above the calibrated source size', async () => {
   const harness = await loadWeaponPresentation();
-  const rifle = harness.visuals.get('rifle').platform.toonAttachment;
-  const pistol = harness.visuals.get('pistol').platform.toonAttachment;
-  const shotgun = harness.visuals.get('shotgun').platform.toonAttachment;
+  const expectedScales = {
+    pistol: 0.682,
+    rifle: 0.792,
+    machinegun: 0.99,
+    shotgun: 0.792,
+    sniper: 0.902
+  };
 
-  assert.equal(rifle.sourceUrl, '/assets/characters/toon-shooter/Character_Enemy.gltf');
-  assert.equal(rifle.parentNode, 'Index1.R');
-  assert.equal(rifle.weaponNode, 'Sniper_2');
-  assert.equal(pistol.weaponNode, 'Revolver');
-  assert.equal(shotgun.weaponNode, 'Shotgun');
-  assert.equal(rifle.useMountOffset, false);
-  assert.equal(pistol.useMountOffset, true);
-  assert.equal(shotgun.useMountOffset, true);
-  assert.equal(pistol.translation.length, 3);
-  assert.equal(pistol.rotation.length, 4);
-  assert.equal(pistol.scale.length, 3);
+  for (const [weaponId, expectedScale] of Object.entries(expectedScales)) {
+    const asset = harness.visuals.get(weaponId).platform.asset;
+    assert.equal(asset.scale, expectedScale, weaponId + ' should keep the 10% size bump');
+  }
+});
+
+test('scout and sniper rifle mesh assignments keep the longer gun on sniper', async () => {
+  const harness = await loadWeaponPresentation();
+  const scout = harness.visuals.get('rifle').platform.asset;
+  const sniper = harness.visuals.get('sniper').platform.asset;
+
+  assert.match(scout.url, /scout-rifle\.gltf$/);
+  assert.match(sniper.url, /sniper\.gltf$/);
+  assert.ok(Math.abs(sniper.sourceMuzzle[0]) > Math.abs(scout.sourceMuzzle[0]));
+});
+
+test('weapon platforms use only explicit local mount data for hand placement', async () => {
+  const harness = await loadWeaponPresentation();
+
+  for (const weaponId of ['pistol', 'rifle', 'machinegun', 'shotgun', 'sniper']) {
+    const platform = harness.visuals.get(weaponId).platform;
+    assert.equal(platform.toonAttachment, undefined);
+    assert.ok(Array.isArray(platform.mount.position));
+    assert.ok(Array.isArray(platform.mount.rotationDeg));
+    assert.ok(Array.isArray(platform.mount.insertion.position));
+  }
+});
+
+function distance(a, b) {
+  const dx = Number(a[0] || 0) - Number(b[0] || 0);
+  const dy = Number(a[1] || 0) - Number(b[1] || 0);
+  const dz = Number(a[2] || 0) - Number(b[2] || 0);
+  return Math.sqrt((dx * dx) + (dy * dy) + (dz * dz));
+}
+
+test('weapon hand insertion keeps grip contact semantic instead of exact tuning coordinates', async () => {
+  const harness = await loadWeaponPresentation();
+  const weaponIds = ['rifle', 'machinegun', 'shotgun', 'sniper'];
+
+  for (const weaponId of weaponIds) {
+    const platform = harness.visuals.get(weaponId).platform;
+    const handleToGrip = distance(platform.zones.handleBack, platform.parts.grip.position);
+    const handleToStock = distance(platform.zones.handleBack, platform.parts.stock.position);
+    const insertionPosition = platform.mount.insertion.position;
+    const insertionRotation = platform.mount.insertion.rotationDeg;
+
+    assert.ok(handleToGrip < handleToStock, weaponId + ' hand contact should stay closer to grip than stock');
+    assert.ok(platform.parts.stock.position[2] > platform.parts.grip.position[2], weaponId + ' stock should sit behind the grip');
+    assert.ok(platform.zones.muzzle[2] < platform.zones.handleBack[2], weaponId + ' muzzle should be forward of the hand contact');
+    assert.ok(insertionPosition.every((value) => Math.abs(Number(value || 0)) <= 0.35), weaponId + ' insertion offset should stay bounded');
+    assert.ok(insertionRotation.every((value) => Math.abs(Number(value || 0)) <= 8), weaponId + ' insertion rotation should stay a small correction');
+  }
 });
 
 test('one-handed guns never use precision stocks while sniper does', async () => {

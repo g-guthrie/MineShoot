@@ -191,15 +191,26 @@
             };
         }
 
-        function shouldFlushInputImmediately(inputState, rotation, lastSentInputSample) {
-            if (!lastSentInputSample) return false;
+        function immediateInputFlushReason(inputState, rotation, lastSentInputSample) {
+            if (!lastSentInputSample) return '';
             var priorInputState = lastSentInputSample.inputState || null;
-            if (!!(inputState && inputState.jump) && !(priorInputState && priorInputState.jump)) return true;
-            if (!inputStatesEqual(inputState, priorInputState)) return true;
+            if (!!(inputState && inputState.jump) && !(priorInputState && priorInputState.jump)) return 'input';
+            if (!inputStatesEqual(inputState, priorInputState)) return 'input';
             var lookDeltaThresholdRad = (0.25 * Math.PI) / 180;
             var yawDelta = Math.abs(normalizeAngle(Number(rotation && rotation.yaw || 0) - Number(lastSentInputSample.yaw || 0)));
             var pitchDelta = Math.abs(Number(rotation && rotation.pitch || 0) - Number(lastSentInputSample.pitch || 0));
-            return yawDelta >= lookDeltaThresholdRad || pitchDelta >= lookDeltaThresholdRad || hasMovementIntent(inputState) !== hasMovementIntent(priorInputState);
+            return yawDelta >= lookDeltaThresholdRad || pitchDelta >= lookDeltaThresholdRad || hasMovementIntent(inputState) !== hasMovementIntent(priorInputState)
+                ? 'look'
+                : '';
+        }
+
+        function canFlushRateLimitedImmediate(inputSendTimer, inputSendInterval, lastSentInputSample) {
+            if (!lastSentInputSample) return true;
+            var interval = Math.max(0.001, Number(inputSendInterval || 0));
+            var minImmediateInterval = Math.min(interval, 1 / 120);
+            var timer = Math.min(interval, Math.max(0, Number(inputSendTimer || 0)));
+            var elapsedSinceLastSend = Math.max(0, interval - timer);
+            return (elapsedSinceLastSend + 0.000001) >= minImmediateInterval;
         }
 
         function shouldFlushForAccumulatedDrift() {
@@ -332,12 +343,19 @@
             updateInputDriftTracking(playerPos, rotation);
             var sendDue = inputSendTimer <= 0;
             var canSendInput = playerPos && rotation && (!opts.isConnected || opts.isConnected());
-            var forceImmediate = canSendInput && shouldFlushInputImmediately(
+            var lastSentInputSample = opts.getLastSentInputSample ? opts.getLastSentInputSample() : null;
+            var immediateReason = canSendInput ? immediateInputFlushReason(
                 inputState,
                 rotation,
-                opts.getLastSentInputSample ? opts.getLastSentInputSample() : null
+                lastSentInputSample
+            ) : '';
+            var rateLimitedImmediateReady = canSendInput && canFlushRateLimitedImmediate(
+                inputSendTimer,
+                inputSendInterval,
+                lastSentInputSample
             );
-            var forceFromDrift = canSendInput && shouldFlushForAccumulatedDrift();
+            var forceImmediate = immediateReason === 'input' || (immediateReason === 'look' && rateLimitedImmediateReady);
+            var forceFromDrift = canSendInput && shouldFlushForAccumulatedDrift() && rateLimitedImmediateReady;
             if (sendDue || forceImmediate || forceFromDrift) {
                 inputSendTimer = sendDue ? (inputSendTimer + inputSendInterval) : inputSendInterval;
                 if (canSendInput) {

@@ -219,12 +219,13 @@
         var paused = !!state.paused;
         var launchPhase = String(launch.phase || '');
         var activeMatchShell = paused || launchPhase === 'retryable';
-        var headerVariant = paused ? 'pause' : (activeSurface === 'room' ? 'room' : 'home');
+        var settingsVisible = !!state.utilityOpen && !activeMatchShell;
+        var headerVariant = paused ? 'pause' : (settingsVisible ? 'settings' : (activeSurface === 'room' ? 'room' : 'home'));
         var hasRoom = !!(state.privateRoom && state.privateRoom.room);
         var loggedIn = !!(state.utilities && state.utilities.isLoggedIn);
         var socialMustShow = hasIncomingInvite(state);
         var showSocialTools = !!state.socialToolsOpen || socialMustShow || hasRoom;
-        var mainVisible = activeSurface === 'main' && !activeMatchShell;
+        var mainVisible = activeSurface === 'main' && !activeMatchShell && !settingsVisible;
         var partyCount = partyMemberCount(state);
         var selectedMode = normalizeModeWith(options, launch.selectedMode);
         var homeHeroVisible = mainVisible;
@@ -248,7 +249,7 @@
             activeMatchShell: activeMatchShell,
             showSessionStrip: activeMatchShell,
             headerVariant: headerVariant,
-            menuContext: activeMatchShell ? 'active-match' : 'menu',
+            menuContext: activeMatchShell ? 'active-match' : (settingsVisible ? 'settings' : 'menu'),
             hasRoom: hasRoom,
             loggedIn: loggedIn,
             socialMustShow: socialMustShow,
@@ -257,7 +258,7 @@
                 activeMatchShell ||
                 String(launch.activityState || '') === 'private_room_lobby',
             header: {
-                partyBackVisible: activeSurface === 'room' && !activeMatchShell,
+                partyBackVisible: (activeSurface === 'room' || settingsVisible) && !activeMatchShell,
                 accountToggleVisible: headerVariant === 'home' && !loggedIn && !activeMatchShell,
                 partyIdVisible: !activeMatchShell,
                 roomActionVisible: headerVariant === 'home' && !activeMatchShell
@@ -265,9 +266,9 @@
             controls: {
                 primaryLaunchDisabled: activeMatchShell,
                 gameModesDisabled: activeMatchShell,
-                socialToolsVisible: activeSurface === 'main' && !activeMatchShell && !hasRoom && !socialMustShow,
+                socialToolsVisible: activeSurface === 'main' && !activeMatchShell && !settingsVisible && !hasRoom && !socialMustShow,
                 socialToolsDisabled: activeMatchShell,
-                playModeOptionsVisible: !!state.modeListOpen && activeSurface === 'main' && !activeMatchShell
+                playModeOptionsVisible: !!state.modeListOpen && activeSurface === 'main' && !activeMatchShell && !settingsVisible
             },
             feedback: {
                 menu: buildMenuFeedback(state, activeSurface),
@@ -282,7 +283,8 @@
                 menuBodyVisible: !activeMatchShell,
                 loadoutBandVisible: activeMatchShell,
                 mainScreenVisible: mainVisible,
-                roomScreenVisible: activeSurface === 'room' && !activeMatchShell
+                roomScreenVisible: activeSurface === 'room' && !activeMatchShell && !settingsVisible,
+                settingsScreenVisible: settingsVisible
             },
             heroes: {
                 homeVisible: homeHeroVisible,
@@ -301,7 +303,7 @@
                 ? buildActiveMatchModel(state, options, selectedMode, launchPhase, socialFeedback, primaryBanner, matchMenu)
                 : null,
             overlays: {
-                utilityVisible: !!state.utilityOpen,
+                utilityVisible: settingsVisible,
                 leaveConfirmVisible: !!state.confirmLeaveOpen
             }
         };

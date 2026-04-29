@@ -25,20 +25,21 @@
     --menu-danger: #b7373b;
     --menu-danger-soft: rgba(202, 63, 68, 0.13);
 
-    --menu-glass-shell: rgba(247, 250, 255, 0.62);
-    --menu-glass-card: rgba(255, 255, 255, 0.46);
-    --menu-glass-card-strong: rgba(255, 255, 255, 0.66);
-    --menu-glass-control: rgba(255, 255, 255, 0.72);
-    --menu-glass-control-hover: rgba(255, 255, 255, 0.9);
-    --menu-glass-control-active: rgba(232, 239, 255, 0.96);
+    --menu-glass-shell: rgba(247, 250, 255, 0.30);
+    --menu-glass-card: rgba(255, 255, 255, 0.34);
+    --menu-glass-card-strong: rgba(255, 255, 255, 0.48);
+    --menu-glass-control: rgba(255, 255, 255, 0.88);
+    --menu-glass-control-hover: rgba(255, 255, 255, 0.94);
+    --menu-glass-control-active: rgba(238, 244, 255, 0.98);
+    --menu-glass-modal: rgba(247, 250, 255, 0.38);
 
-    --border-shell: rgba(255, 255, 255, 0.56);
+    --border-shell: rgba(255, 255, 255, 0.46);
     --border-action: rgba(185, 199, 220, 0.92);
     --border-subaction: rgba(209, 184, 192, 0.92);
     --menu-border-faint: rgba(121, 139, 164, 0.18);
 
-    --menu-shadow-shell: 0 24px 70px rgba(9, 18, 32, 0.28), inset 0 0 0 1px var(--border-shell);
-    --menu-shadow-card: 0 10px 28px rgba(17, 28, 45, 0.12), inset 0 0 0 1px var(--border-shell);
+    --menu-shadow-shell: 0 24px 70px rgba(9, 18, 32, 0.24), inset 0 0 0 1px var(--border-shell);
+    --menu-shadow-card: 0 10px 28px rgba(17, 28, 45, 0.10), inset 0 0 0 1px var(--border-shell);
     --menu-shadow-action: inset 0 0 0 1px var(--border-action), 0 6px 16px rgba(18, 31, 51, 0.08);
     --menu-shadow-subaction: inset 0 0 0 1px var(--border-subaction), 0 6px 16px rgba(58, 29, 36, 0.06);
 
@@ -151,19 +152,15 @@ body[data-overlay-active="true"] {
     overflow: hidden;
     border-radius: var(--radius-shell);
     background: var(--menu-glass-shell);
-    border: 1px solid rgba(255, 255, 255, 0.42);
+    border: 1px solid var(--border-shell);
     box-shadow: var(--menu-shadow-shell);
-    backdrop-filter: blur(24px) saturate(132%);
-    -webkit-backdrop-filter: blur(24px) saturate(132%);
+    backdrop-filter: blur(28px) saturate(140%);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
 }
 
 #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] {
     width: min(940px, 100%);
     margin-inline: auto;
-}
-
-#menu-shell.menu-shell-v4 #menu-surface:has(#utility-overlay:not([hidden])) {
-    min-height: min(500px, calc(100dvh - 40px));
 }
 
 #menu-shell.menu-shell-v4 button,
@@ -306,7 +303,7 @@ body[data-overlay-active="true"] {
     padding: var(--pad-control-y) var(--pad-control-x);
     border: 0;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--menu-glass-control);
     color: var(--menu-text);
     box-shadow: var(--menu-shadow-action);
     outline: none;
@@ -419,7 +416,7 @@ body[data-overlay-active="true"] {
     max-width: 100%;
     padding: 9px 13px;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.66);
+    background: var(--menu-glass-control);
     color: var(--menu-muted);
     box-shadow: inset 0 0 0 1px var(--menu-border-faint);
     font-weight: 700;
@@ -485,25 +482,16 @@ body[data-overlay-active="true"] {
 }
 
 #menu-shell.menu-shell-v4 #utility-overlay {
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 24px);
-    right: calc(env(safe-area-inset-right, 0px) + 24px);
-    bottom: var(--pad-shell);
-    z-index: 1200;
-    width: min(330px, calc(100vw - 32px));
-    max-width: calc(100vw - 32px);
-    overflow: auto;
-    padding: var(--pad-card);
-    border-radius: var(--radius-card);
-    background: rgba(247, 250, 255, 0.70);
-    box-shadow: var(--menu-shadow-shell);
-    backdrop-filter: blur(24px) saturate(132%);
-    -webkit-backdrop-filter: blur(24px) saturate(132%);
+    min-width: 0;
+    width: 100%;
 }
 
 #menu-shell.menu-shell-v4 #utility-modal {
     display: grid;
     gap: var(--gap-card);
+    width: min(720px, 100%);
+    margin-inline: auto;
+    align-content: start;
 }
 
 #menu-shell.menu-shell-v4 #utility-modal-header,
@@ -529,7 +517,14 @@ body[data-overlay-active="true"] {
 
 #menu-shell.menu-shell-v4 #utility-menu-buttons {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: var(--gap-flow);
+}
+
+#menu-shell.menu-shell-v4 #utility-menu-buttons > button {
+    min-height: 52px;
+    justify-content: flex-start;
+    padding-inline: 18px;
 }
 
 #menu-shell.menu-shell-v4 #menu-body {
@@ -700,7 +695,7 @@ body[data-overlay-active="true"] {
 
 #menu-shell.menu-shell-v4 .menu-member-pill.active,
 #menu-shell.menu-shell-v4 .menu-friend-pill.active {
-    background: rgba(231, 240, 255, 0.78);
+    background: var(--menu-glass-control-active);
 }
 
 #menu-shell.menu-shell-v4 .menu-member-pill-name,
@@ -777,7 +772,7 @@ body[data-overlay-active="true"] {
     min-height: var(--control-height);
     padding: 10px 14px;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.70);
+    background: var(--menu-glass-control);
     color: var(--menu-text);
     box-shadow: inset 0 0 0 1px var(--menu-border-faint);
     font-weight: 800;
@@ -862,7 +857,7 @@ body[data-overlay-active="true"] {
     min-height: var(--control-height);
     padding: 10px 14px;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.70);
+    background: var(--menu-glass-control);
     box-shadow: inset 0 0 0 1px var(--menu-border-faint);
     color: var(--menu-strong);
     font-family: var(--menu-font-display);
@@ -915,7 +910,7 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 .private-room-team-lane.drag-over,
 #menu-shell.menu-shell-v4 .private-room-team-lane:focus-visible,
 #menu-shell.menu-shell-v4 .private-room-member-pill.selected {
-    background: rgba(232, 240, 255, 0.76);
+    background: var(--menu-glass-control-active);
     box-shadow: inset 0 0 0 1px rgba(72, 120, 220, 0.75), 0 10px 26px rgba(43, 86, 180, 0.12);
 }
 
@@ -959,7 +954,7 @@ body[data-overlay-active="true"] {
 }
 
 #menu-shell.menu-shell-v4 .private-room-member-pill.host {
-    background: rgba(255, 255, 255, 0.66);
+    background: var(--menu-glass-card-strong);
 }
 
 #menu-shell.menu-shell-v4 .private-room-member-pill.pending {
@@ -993,7 +988,7 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 .private-room-empty-state {
     padding: 12px;
     border-radius: var(--radius-card);
-    background: rgba(255, 255, 255, 0.42);
+    background: var(--menu-glass-card);
     color: var(--menu-muted);
     font-weight: 700;
     text-align: center;
@@ -1050,7 +1045,7 @@ body[data-overlay-active="true"] {
     min-height: 42px;
     padding: 10px 12px;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.68);
+    background: var(--menu-glass-control);
     color: var(--menu-text);
     box-shadow: var(--menu-shadow-action);
     font-size: 0.92rem;
@@ -1059,7 +1054,7 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 .weapon-choice-btn.active,
 #menu-shell.menu-shell-v4 .throwable-choice-btn.active {
     color: var(--menu-accent-strong);
-    background: rgba(232, 240, 255, 0.94);
+    background: var(--menu-glass-control-active);
 }
 
 #menu-shell.menu-shell-v4 .weapon-choice-btn.weapon-primary::after,
@@ -1093,7 +1088,7 @@ body[data-overlay-active="true"] {
     align-items: center;
     justify-content: center;
     padding: calc(env(safe-area-inset-top, 0px) + 20px) calc(env(safe-area-inset-right, 0px) + 20px) calc(env(safe-area-inset-bottom, 0px) + 20px) calc(env(safe-area-inset-left, 0px) + 20px);
-    background: rgba(7, 13, 24, 0.34);
+    background: rgba(7, 13, 24, 0.28);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
@@ -1129,7 +1124,7 @@ body[data-overlay-active="true"] {
     max-height: calc(100dvh - 40px);
     overflow: auto;
     padding: var(--pad-shell);
-    background: rgba(247, 250, 255, 0.76);
+    background: var(--menu-glass-modal);
 }
 
 .modal-overlay #auth-panel {
@@ -1276,7 +1271,7 @@ body[data-overlay-active="true"] {
 .modal-overlay .docs-control-row {
     padding: var(--pad-card);
     border-radius: var(--radius-card);
-    background: rgba(255, 255, 255, 0.48);
+    background: var(--menu-glass-card);
     box-shadow: inset 0 0 0 1px var(--menu-border-faint);
 }
 
@@ -1295,7 +1290,7 @@ body[data-overlay-active="true"] {
     min-height: 28px;
     padding: 5px 10px;
     border-radius: var(--radius-control);
-    background: rgba(255, 255, 255, 0.68);
+    background: var(--menu-glass-control);
     color: var(--menu-text);
     box-shadow: inset 0 0 0 1px var(--menu-border-faint);
     font-weight: 800;
@@ -1307,7 +1302,7 @@ body[data-overlay-active="true"] {
     border-spacing: 0;
     overflow: hidden;
     border-radius: var(--radius-card);
-    background: rgba(255, 255, 255, 0.48);
+    background: var(--menu-glass-card);
 }
 
 .modal-overlay .docs-table th,
@@ -1376,7 +1371,7 @@ body[data-overlay-active="true"] {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    background: rgba(7, 13, 24, 0.34);
+    background: rgba(7, 13, 24, 0.28);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
@@ -1388,7 +1383,7 @@ body[data-overlay-active="true"] {
     gap: var(--gap-card);
     padding: var(--pad-shell);
     border-radius: var(--radius-card);
-    background: rgba(247, 250, 255, 0.76);
+    background: var(--menu-glass-modal);
     box-shadow: var(--menu-shadow-shell);
     backdrop-filter: blur(24px) saturate(132%);
     -webkit-backdrop-filter: blur(24px) saturate(132%);
@@ -1535,6 +1530,25 @@ body[data-overlay-active="true"] {
     #overlay {
         align-items: flex-start;
         padding-block: 8px;
+    }
+
+    #launch-flow {
+        padding: 8px;
+    }
+
+    #launch-card {
+        width: min(460px, calc(100vw - 16px));
+        gap: 8px;
+        padding: 12px;
+    }
+
+    #launch-title {
+        font-size: 1.25rem;
+    }
+
+    #launch-note {
+        font-size: 0.92rem;
+        line-height: 1.25;
     }
 
     #menu-stage,

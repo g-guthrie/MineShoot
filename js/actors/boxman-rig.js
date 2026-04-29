@@ -63,7 +63,6 @@ import {
     var WEAPON_MODEL_ROTATE_X = (Math.PI * 0.5) - (15 * (Math.PI / 180));
     var WEAPON_MODEL_ROTATE_Y = 0;
     var WEAPON_MODEL_ROTATE_Z = Math.PI;
-    var TOON_ATTACHMENT_MOUNT_SCALE = 1;
     var torsoCarryPositionScratch = new THREE.Vector3();
     var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
     var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
@@ -1044,133 +1043,25 @@ import {
         return visuals.get(weaponId);
     }
 
-    function resolveToonAttachmentMountOffset(platform) {
-        var attachment = platform && platform.toonAttachment ? platform.toonAttachment : null;
-        if (!attachment || attachment.useMountOffset !== true || !Array.isArray(attachment.translation)) {
-            return [0, 0, 0];
-        }
-        var baselineEntry = resolveWeaponVisualEntry('rifle');
-        var baseline = baselineEntry && baselineEntry.platform && baselineEntry.platform.toonAttachment
-            ? baselineEntry.platform.toonAttachment
-            : null;
-        if (!baseline || !Array.isArray(baseline.translation)) return [0, 0, 0];
-        if (attachment.sourceUrl !== baseline.sourceUrl || attachment.parentNode !== baseline.parentNode) {
-            return [0, 0, 0];
-        }
-
-        var dx = Number(attachment.translation[0] || 0) - Number(baseline.translation[0] || 0);
-        var dy = Number(attachment.translation[1] || 0) - Number(baseline.translation[1] || 0);
-        var dz = Number(attachment.translation[2] || 0) - Number(baseline.translation[2] || 0);
-
-        // Boxman has no Index1.R bone, so keep scout as calibration and use only authored translation deltas.
-        return [
-            dx * TOON_ATTACHMENT_MOUNT_SCALE,
-            -dy * TOON_ATTACHMENT_MOUNT_SCALE,
-            -dz * TOON_ATTACHMENT_MOUNT_SCALE
-        ];
-    }
-
-    function composeToonAttachmentMatrix(attachment) {
-        if (!attachment || !Array.isArray(attachment.translation) || !Array.isArray(attachment.rotation)) return null;
-        return new THREE.Matrix4().compose(
-            new THREE.Vector3(
-                Number(attachment.translation[0] || 0),
-                Number(attachment.translation[1] || 0),
-                Number(attachment.translation[2] || 0)
-            ),
-            new THREE.Quaternion(
-                Number(attachment.rotation[0] || 0),
-                Number(attachment.rotation[1] || 0),
-                Number(attachment.rotation[2] || 0),
-                Number(attachment.rotation[3] != null ? attachment.rotation[3] : 1)
-            ),
-            new THREE.Vector3(
-                Number(attachment.scale && attachment.scale[0] != null ? attachment.scale[0] : 1),
-                Number(attachment.scale && attachment.scale[1] != null ? attachment.scale[1] : 1),
-                Number(attachment.scale && attachment.scale[2] != null ? attachment.scale[2] : 1)
-            )
+    function applyWeaponInsertionOffset(rig, platform) {
+        if (!rig || !rig.weaponModel || !platform || !platform.mount) return false;
+        var insertion = platform.mount.insertion || {};
+        var position = cloneVec3(insertion.position, [0, 0, 0]);
+        var rotationDeg = cloneVec3(insertion.rotationDeg || insertion.rotation, [0, 0, 0]);
+        rig.weaponModel.position.x += position[0];
+        rig.weaponModel.position.y += position[1];
+        rig.weaponModel.position.z += position[2];
+        rig.weaponModel.rotation.x += Number(rotationDeg[0] || 0) * (Math.PI / 180);
+        rig.weaponModel.rotation.y += Number(rotationDeg[1] || 0) * (Math.PI / 180);
+        rig.weaponModel.rotation.z += Number(rotationDeg[2] || 0) * (Math.PI / 180);
+        return (
+            Math.abs(position[0]) > 0.0001 ||
+            Math.abs(position[1]) > 0.0001 ||
+            Math.abs(position[2]) > 0.0001 ||
+            Math.abs(Number(rotationDeg[0] || 0)) > 0.0001 ||
+            Math.abs(Number(rotationDeg[1] || 0)) > 0.0001 ||
+            Math.abs(Number(rotationDeg[2] || 0)) > 0.0001
         );
-    }
-
-    function composeWeaponAssetPlacementMatrix(platform) {
-        var asset = weaponAssetSpecForPlatform(platform);
-        if (!asset) return null;
-        var zones = platform && platform.zones ? platform.zones : {};
-        var scale = Math.max(0.001, Number(asset.scale || 1));
-        var rotationDeg = cloneVec3(asset.rotationDeg, [0, 0, 0]);
-        var sourceMuzzle = cloneVec3(asset.sourceMuzzle, [0, 0, 0]);
-        var muzzle = cloneVec3(zones.muzzle, [0, 0.02, -0.56]);
-        var rotation = new THREE.Euler(
-            Number(rotationDeg[0] || 0) * (Math.PI / 180),
-            Number(rotationDeg[1] || 0) * (Math.PI / 180),
-            Number(rotationDeg[2] || 0) * (Math.PI / 180)
-        );
-        var source = new THREE.Vector3(sourceMuzzle[0], sourceMuzzle[1], sourceMuzzle[2]);
-        source.applyEuler(rotation).multiplyScalar(scale);
-        return new THREE.Matrix4().compose(
-            new THREE.Vector3(
-                Number(muzzle[0] || 0) - source.x,
-                Number(muzzle[1] || 0) - source.y,
-                Number(muzzle[2] || 0) - source.z
-            ),
-            new THREE.Quaternion().setFromEuler(rotation),
-            new THREE.Vector3(scale, scale, scale)
-        );
-    }
-
-    function composeLegacyWeaponModelMatrix(platform) {
-        if (!platform) return null;
-        var mount = platform.mount || {};
-        var zones = platform.zones || {};
-        var handleBack = Array.isArray(zones.handleBack) ? zones.handleBack : [0, -0.12, 0.12];
-        var mountPos = Array.isArray(mount.position) ? mount.position : [0, 0, 0];
-        var mountRotDeg = Array.isArray(mount.rotationDeg) ? mount.rotationDeg : [0, 0, 0];
-        return new THREE.Matrix4().compose(
-            new THREE.Vector3(
-                Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
-                Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
-                (Number(mountPos[2] || 0) - Number(handleBack[2] || 0)) - 0.175
-            ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(
-                (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
-                (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
-                (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
-            )),
-            new THREE.Vector3(1, 1, 1)
-        );
-    }
-
-    function resolveToonAttachmentModelTransform(platform) {
-        var attachment = platform && platform.toonAttachment ? platform.toonAttachment : null;
-        if (!attachment || attachment.useMountOffset !== true) return null;
-        var baselineEntry = resolveWeaponVisualEntry('rifle');
-        var baselinePlatform = baselineEntry && baselineEntry.platform ? baselineEntry.platform : null;
-        var baseline = baselinePlatform && baselinePlatform.toonAttachment ? baselinePlatform.toonAttachment : null;
-        if (!baseline || attachment.sourceUrl !== baseline.sourceUrl || attachment.parentNode !== baseline.parentNode) {
-            return null;
-        }
-
-        var baselineModel = composeLegacyWeaponModelMatrix(baselinePlatform);
-        var baselineAsset = composeWeaponAssetPlacementMatrix(baselinePlatform);
-        var baselineAttachment = composeToonAttachmentMatrix(baseline);
-        var weaponAsset = composeWeaponAssetPlacementMatrix(platform);
-        var weaponAttachment = composeToonAttachmentMatrix(attachment);
-        if (!baselineModel || !baselineAsset || !baselineAttachment || !weaponAsset || !weaponAttachment) return null;
-
-        var matrix = baselineModel
-            .clone()
-            .multiply(baselineAsset)
-            .multiply(baselineAttachment.clone().invert())
-            .multiply(weaponAttachment)
-            .multiply(weaponAsset.clone().invert());
-        var position = new THREE.Vector3();
-        var rotation = new THREE.Quaternion();
-        var scale = new THREE.Vector3();
-        matrix.decompose(position, rotation, scale);
-        return {
-            position: position,
-            rotation: new THREE.Euler().setFromQuaternion(rotation, 'XYZ')
-        };
     }
 
     function defaultWeaponMaterialTuning(partName) {
@@ -1326,37 +1217,17 @@ import {
         var mountPos = Array.isArray(mount.position) ? mount.position : [0, 0, 0];
         var mountRotDeg = Array.isArray(mount.rotationDeg) ? mount.rotationDeg : [0, 0, 0];
         var muzzlePos = Array.isArray(zones.muzzle) ? zones.muzzle : [0, 0.02, -0.56];
-        var authoredMountOffset = resolveToonAttachmentMountOffset(platform);
-        var effectiveMountPos = [
-            Number(mountPos[0] || 0) + authoredMountOffset[0],
-            Number(mountPos[1] || 0) + authoredMountOffset[1],
-            Number(mountPos[2] || 0) + authoredMountOffset[2]
-        ];
-        var toonAttachmentTransform = resolveToonAttachmentModelTransform(platform);
-
-        if (toonAttachmentTransform) {
-            rig.weaponModel.position.set(
-                toonAttachmentTransform.position.x,
-                toonAttachmentTransform.position.y,
-                toonAttachmentTransform.position.z
-            );
-            rig.weaponModel.rotation.set(
-                toonAttachmentTransform.rotation.x,
-                toonAttachmentTransform.rotation.y,
-                toonAttachmentTransform.rotation.z
-            );
-        } else {
-            rig.weaponModel.position.set(
-                effectiveMountPos[0] - Number(handleBack[0] || 0),
-                effectiveMountPos[1] - Number(handleBack[1] || 0),
-                (effectiveMountPos[2] - Number(handleBack[2] || 0)) - 0.175
-            );
-            rig.weaponModel.rotation.set(
-                (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
-                (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
-                (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
-            );
-        }
+        rig.weaponModel.position.set(
+            Number(mountPos[0] || 0) - Number(handleBack[0] || 0),
+            Number(mountPos[1] || 0) - Number(handleBack[1] || 0),
+            (Number(mountPos[2] || 0) - Number(handleBack[2] || 0)) - 0.175
+        );
+        rig.weaponModel.rotation.set(
+            (Number(mountRotDeg[0] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_X,
+            (Number(mountRotDeg[1] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Y,
+            (Number(mountRotDeg[2] || 0) * (Math.PI / 180)) + WEAPON_MODEL_ROTATE_Z
+        );
+        applyWeaponInsertionOffset(rig, platform);
         rig.muzzleAnchor.position.set(
             Number(muzzlePos[0] || 0),
             Number(muzzlePos[1] || 0),

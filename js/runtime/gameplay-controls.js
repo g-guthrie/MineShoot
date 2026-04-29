@@ -117,6 +117,11 @@
             return runtime.GamePlayer || null;
         }
 
+        function playerInspectModeActive() {
+            var player = playerApi();
+            return !!(player && player.isInspectModeActive && player.isInspectModeActive());
+        }
+
         function sessionApi() {
             return runtime.GameSession || null;
         }
@@ -659,7 +664,9 @@
         var weaponSwapInput = runtime.GameWeaponSwapInput && runtime.GameWeaponSwapInput.create
             ? runtime.GameWeaponSwapInput.create({
                 applyWeapon: opts.applyWeapon,
-                hasInputCapture: hasInputCapture,
+                hasInputCapture: function () {
+                    return hasInputCapture() && !playerInspectModeActive();
+                },
                 toggleWeapon: function () {
                     return runtime.GameHitscan && runtime.GameHitscan.toggleWeapon
                         ? runtime.GameHitscan.toggleWeapon()
@@ -731,6 +738,7 @@
         }
 
         function tryThrow(type, throwIntentOverride) {
+            if (playerInspectModeActive()) return null;
             if (!canUseLocalAction('throwable')) return null;
             if (!hasInputCapture()) return null;
 
@@ -771,6 +779,7 @@
         }
 
         function triggerRoll() {
+            if (playerInspectModeActive()) return false;
             if (!hasInputCapture()) return false;
             var playerApi = runtime.GamePlayer || null;
             if (!playerApi || !playerApi.tryRoll) return false;
@@ -787,6 +796,7 @@
         }
 
         function triggerWeaponSwap() {
+            if (playerInspectModeActive()) return false;
             if (!hasInputCapture()) return false;
             if (!canUseLocalAction('weapon')) return false;
             if (weaponSwapInput && weaponSwapInput.triggerToggle) {
@@ -801,6 +811,7 @@
         }
 
         function triggerReload() {
+            if (playerInspectModeActive()) return false;
             if (!hasInputCapture()) return false;
             if (!canUseLocalAction('weapon')) return false;
             var hitscanApi = runtime.GameHitscan;
@@ -855,6 +866,7 @@
             listen(document, 'mousedown', function (e) {
                 if (e.button !== 0) return;
                 if (!hasInputCapture()) return;
+                if (playerInspectModeActive()) return;
                 triggerHeld = true;
                 if (opts.tryPlayerFire) opts.tryPlayerFire();
             });
@@ -884,6 +896,7 @@
                 }
                 if (idx < 0) return;
                 if (!hasInputCapture()) return;
+                if (playerInspectModeActive()) return;
                 if (!canUseLocalAction('weapon')) return;
                 if (!runtime.GameHitscan || !runtime.GameHitscan.getWeaponOrder || !runtime.GameHitscan.setWeapon || !opts.applyWeapon) return;
                 var weaponOrder = runtime.GameHitscan.getWeaponOrder();
@@ -975,6 +988,7 @@
                 if (e.repeat) return;
                 if (!matchesBinding('throwable', e, 'KeyQ')) return;
                 if (!hasInputCapture()) return;
+                if (playerInspectModeActive()) return;
                 if (!canUseLocalAction('throwable')) return;
 
                 var throwablesApi = runtime.GameThrowables;
@@ -1027,6 +1041,35 @@
             });
         }
 
+        function clearGameplayActionStateForInspect() {
+            setTriggerPressed(false);
+            if (weaponSwapInput && weaponSwapInput.resetState) {
+                weaponSwapInput.resetState();
+            }
+            if (armedThrowableType || throwableHeldType) {
+                clearArmedThrowablePreview();
+            }
+            setJumpPressed(false);
+            resetTouchMovementState();
+            endLookPointer({ pointerId: touchLookState.pointerId });
+            clearTouchJumpReleaseTimer();
+        }
+
+        function bindInspectControls() {
+            listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (!matchesBinding('inspect_player', e, 'KeyV')) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
+                var player = playerApi();
+                if (!player || !player.toggleInspectMode) return;
+                if (e.preventDefault) e.preventDefault();
+                if (e.stopPropagation) e.stopPropagation();
+                var enabled = !!player.toggleInspectMode();
+                clearGameplayActionStateForInspect();
+                setTransientDebug(enabled ? 'Inspect orbit: ON' : 'Inspect orbit: OFF', 1000);
+            });
+        }
+
         function bindDebugKeys() {
             listen(document, 'keydown', function (e) {
                 if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
@@ -1060,6 +1103,7 @@
                 bindSoundToggleControl();
                 bindThrowableControls();
                 bindRollControls();
+                bindInspectControls();
                 bindAutoFireToggleControl();
                 bindDebugKeys();
             },

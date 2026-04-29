@@ -5,6 +5,8 @@
 (function () {
     'use strict';
 
+    var MAX_REMOTE_FRAME_QUEUE_SIZE = 32;
+
     function create(opts) {
         opts = opts || {};
         var initialInputSendInterval = Number(opts.inputSendInterval || (1 / 60));
@@ -335,7 +337,7 @@
         function enqueueRemoteFrame(frame) {
             if (!frame || typeof frame !== 'object') return remoteFrameQueue;
             remoteFrameQueue.push(frame);
-            while (remoteFrameQueue.length > 8) {
+            while (remoteFrameQueue.length > MAX_REMOTE_FRAME_QUEUE_SIZE) {
                 remoteFrameQueue.shift();
             }
             return remoteFrameQueue;

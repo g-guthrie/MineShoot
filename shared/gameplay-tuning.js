@@ -244,7 +244,7 @@ export const gameplayTuning = {
           pattern: 'snap',
           patternStrength: 0.35
         },
-        audioSample: { url: '/assets/audio/weapons/pistol.mp3', gain: 0.72, playbackRateMin: 0.98, playbackRateMax: 1.04 },
+        audioSample: { url: '/assets/audio/weapons/hand-cannon.ogg', gain: 0.62, playbackRateMin: 0.98, playbackRateMax: 1.03 },
         reload: {
           profileId: 'sidearm',
           raiseEnd: 0.18,
@@ -286,7 +286,7 @@ export const gameplayTuning = {
           pattern: 'chatter',
           patternStrength: 0.18
         },
-        audioSample: { url: '/assets/audio/weapons/rifle.mp3', gain: 0.45, playbackRateMin: 1.16, playbackRateMax: 1.26 },
+        audioSample: { url: '/assets/audio/weapons/auto-rifle.ogg', gain: 0.42, playbackRateMin: 0.98, playbackRateMax: 1.04 },
         reload: {
           profileId: 'lmg',
           raiseEnd: 0.14,
@@ -370,7 +370,7 @@ export const gameplayTuning = {
           pattern: 'u_shape',
           patternStrength: 0.60
         },
-        audioSample: { url: '/assets/audio/weapons/sniper.mp3', gain: 0.82, playbackRateMin: 0.96, playbackRateMax: 1.0 },
+        audioSample: { url: '/assets/audio/weapons/sniper-fire.ogg', gain: 0.82, playbackRateMin: 0.97, playbackRateMax: 1.01 },
         reload: {
           profileId: 'precision',
           raiseEnd: 0.22,

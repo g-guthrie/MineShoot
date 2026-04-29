@@ -89,11 +89,17 @@ test('runtime state tracks snapshot ack, retained baselines, and buffered remote
   assert.equal(state.shiftRemoteFrame().snapshotSeq, 1);
   assert.equal(state.peekRemoteFrame().snapshotSeq, 2);
 
-  for (let seq = 3; seq <= 11; seq++) {
+  for (let seq = 3; seq <= 20; seq++) {
     state.enqueueRemoteFrame({ snapshotSeq: seq, readyAt: seq * 10 });
   }
-  assert.equal(state.getRemoteFrameQueue().length, 8);
-  assert.equal(state.peekRemoteFrame().snapshotSeq, 4);
+  assert.equal(state.getRemoteFrameQueue().length, 19);
+  assert.equal(state.peekRemoteFrame().snapshotSeq, 2);
+
+  for (let seq = 21; seq <= 40; seq++) {
+    state.enqueueRemoteFrame({ snapshotSeq: seq, readyAt: seq * 10 });
+  }
+  assert.equal(state.getRemoteFrameQueue().length, 32);
+  assert.equal(state.peekRemoteFrame().snapshotSeq, 9);
 });
 
 test('runtime state reset clears replay and snapshot buffers', async () => {

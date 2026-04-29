@@ -262,7 +262,6 @@ import {
             utilityToggleBtn: document.getElementById('utility-toggle-btn'),
             utilityRefreshBtn: document.getElementById('utility-refresh-btn'),
             utilityOverlay: document.getElementById('utility-overlay'),
-            utilityCloseBtn: document.getElementById('utility-close-btn'),
             utilityModal: document.getElementById('utility-modal'),
             settingsAccountBtn: document.getElementById('settings-account-btn'),
             openManualBtn: document.getElementById('open-manual-btn'),
@@ -510,7 +509,11 @@ import {
         }
 
         function openUtility() {
-            patchState({ utilityOpen: true });
+            patchState({
+                utilityOpen: true,
+                modeListOpen: false,
+                socialToolsOpen: false
+            });
         }
 
         function closeUtility() {
@@ -846,14 +849,13 @@ import {
             else openUtility();
             render();
         });
-        bindClick(elements.utilityCloseBtn, function () {
-            closeUtility();
-            render();
-        });
-
         bindClick(elements.partyBackBtn, function () {
             patchState({ leaveRoomConfirmOpen: false });
-            setActiveSurface('main');
+            if (getState().utilityOpen) {
+                closeUtility();
+            } else {
+                setActiveSurface('main');
+            }
             render();
         });
         function resumeGameplay(event) {
@@ -987,14 +989,6 @@ import {
                 if (!state.paused || state.utilityOpen || state.confirmLeaveOpen) return;
                 if (elements.menuSurface && isNodeWithin(event.target, elements.menuSurface)) return;
                 resumeGameplay(event);
-            });
-        }
-        if (elements.utilityOverlay) {
-            document.addEventListener('click', function (event) {
-                if (getState().utilityOpen && elements.utilityOverlay && !isNodeWithin(event.target, elements.utilityOverlay) && event.target !== elements.utilityToggleBtn) {
-                    closeUtility();
-                    render();
-                }
             });
         }
         document.addEventListener('keydown', function (event) {

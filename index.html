@@ -125,23 +125,6 @@
                         </div>
                         <div id="menu-inline-toast" hidden></div>
 
-                        <div id="utility-overlay" hidden>
-                            <div id="utility-modal">
-                                <div id="utility-modal-header">
-                                    <span id="utility-modal-title">Utility</span>
-                                    <button id="utility-close-btn" type="button">Close</button>
-                                </div>
-                                <div id="utility-modal-copy">Help and setup live here.</div>
-                                <div id="utility-menu-buttons">
-                                    <button id="utility-refresh-btn" type="button">Refresh</button>
-                                    <button id="settings-account-btn" type="button">Account</button>
-                                    <button id="open-manual-btn" type="button">Instructions</button>
-                                    <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
-                                    <button id="camera-view-toggle-btn" type="button" aria-pressed="false">Camera: Over Shoulder</button>
-                                    <button id="sound-toggle-btn" type="button">Sound: On</button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <div id="menu-feedback" aria-live="polite" hidden></div>
@@ -318,6 +301,22 @@
                                             <button id="private-room-enter-btn" class="btn btn-primary" type="button" hidden>Enter Match</button>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="utility-overlay" class="menu-screen" data-screen="settings" hidden>
+                            <div id="utility-modal" class="card stack">
+                                <div id="utility-modal-header">
+                                    <h2 id="utility-modal-title" class="title">Settings</h2>
+                                </div>
+                                <div id="utility-modal-copy" hidden></div>
+                                <div id="utility-menu-buttons">
+                                    <button id="settings-account-btn" type="button">Account</button>
+                                    <button id="controls-toggle" type="button" aria-expanded="false" aria-controls="controls-overlay">Controls</button>
+                                    <button id="camera-view-toggle-btn" type="button" aria-pressed="false">Camera: Over Shoulder</button>
+                                    <button id="sound-toggle-btn" type="button">Sound: On</button>
+                                    <button id="open-manual-btn" type="button">Field Manual</button>
+                                    <button id="utility-refresh-btn" type="button">Refresh</button>
                                 </div>
                             </div>
                         </section>

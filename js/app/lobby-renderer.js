@@ -605,6 +605,12 @@
                 elements.socialToolsToggleBtn.textContent = 'Friends & Rooms';
                 elements.socialToolsToggleBtn.disabled = view.controls.socialToolsDisabled;
             }
+            if (elements.utilityToggleBtn) {
+                elements.utilityToggleBtn.hidden = !!view.surfaces.settingsScreenVisible;
+                elements.utilityToggleBtn.classList.toggle('active', !!view.surfaces.settingsScreenVisible);
+                elements.utilityToggleBtn.setAttribute('aria-expanded', view.surfaces.settingsScreenVisible ? 'true' : 'false');
+                elements.utilityToggleBtn.disabled = activeMatchShell;
+            }
             if (elements.playModeOptions) {
                 elements.playModeOptions.hidden = !view.controls.playModeOptionsVisible;
             }

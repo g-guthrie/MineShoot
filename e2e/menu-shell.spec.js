@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const IPHONE_SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+
 async function openAuth(page) {
   await page.locator('#account-toggle-btn').click();
   await expect(page.locator('#auth-overlay')).toBeVisible();
@@ -107,7 +109,7 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await expect(page.locator('#docs-title')).toContainText(/field manual/i);
   await page.locator('#docs-close-btn').click();
   await expect(page.locator('#docs-panel')).toBeHidden();
-  await page.locator('#utility-close-btn').click();
+  await page.locator('#party-back-btn').click();
 
   await page.locator('#game-modes-toggle-btn').click();
   await page.locator('#sandbox-mode-btn').click();
@@ -119,26 +121,33 @@ test('menu boots without gameplay runtime and supports auth/docs/lazy gameplay l
   await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_RUNTIME.GameRuntimeLoader && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime && window.__MAYHEM_RUNTIME.GameRuntimeLoader.getLoadedGameplayRuntime())), { timeout: 20_000 }).toBe(true);
 });
 
-test('settings popover stays visible and keeps the menu glass spacing', async ({ page }) => {
+test('settings screen replaces the menu surface and keeps the menu glass spacing', async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 560 });
   await page.goto('/');
 
   await page.locator('#utility-toggle-btn').click();
   await expect(page.locator('#utility-overlay')).toBeVisible();
+  await expect(page.locator('#menu-screen-mode')).toBeHidden();
+  await expect(page.locator('#party-back-btn')).toBeVisible();
+  await expect(page.locator('#utility-toggle-btn')).toBeHidden();
 
   const metrics = await page.evaluate(() => {
     const overlay = document.getElementById('utility-overlay');
+    const menuBody = document.getElementById('menu-body');
+    const mainScreen = document.getElementById('menu-screen-mode');
     const surface = document.getElementById('menu-surface');
+    const card = document.getElementById('utility-modal');
     const buttons = document.getElementById('utility-menu-buttons');
     const buttonNodes = buttons ? Array.from(buttons.querySelectorAll('button')) : [];
-    if (!overlay || !surface || !buttons || !buttonNodes.length) {
+    if (!overlay || !menuBody || !mainScreen || !surface || !card || !buttons || !buttonNodes.length) {
       return { ready: false };
     }
     const overlayRect = overlay.getBoundingClientRect();
     const overlayStyle = getComputedStyle(overlay);
+    const cardStyle = getComputedStyle(card);
     const buttonStyle = getComputedStyle(buttons);
     const surfaceStyle = getComputedStyle(surface);
-    const blurStyle = overlayStyle.backdropFilter || overlayStyle.webkitBackdropFilter || '';
+    const blurStyle = cardStyle.backdropFilter || cardStyle.webkitBackdropFilter || '';
     const flowGap = Number.parseFloat(surfaceStyle.getPropertyValue('--gap-flow')) || 0;
     const buttonGap = Number.parseFloat(buttonStyle.rowGap || buttonStyle.gap) || 0;
     const buttonsContained = buttonNodes.every((button) => {
@@ -152,10 +161,14 @@ test('settings popover stays visible and keeps the menu glass spacing', async ({
     return {
       ready: true,
       position: overlayStyle.position,
+      parentId: overlay.parentElement ? overlay.parentElement.id : '',
+      mainHidden: mainScreen.hidden,
+      dataScreen: overlay.getAttribute('data-screen') || '',
       inViewport: overlayRect.top >= 0 &&
         overlayRect.left >= 0 &&
         overlayRect.right <= window.innerWidth &&
         overlayRect.bottom <= window.innerHeight,
+      widthFitsSurface: overlayRect.width <= surface.getBoundingClientRect().width + 1,
       buttonsContained,
       usesGlassBlur: !!blurStyle && blurStyle !== 'none',
       buttonGap,
@@ -164,8 +177,12 @@ test('settings popover stays visible and keeps the menu glass spacing', async ({
   });
 
   expect(metrics.ready).toBe(true);
-  expect(metrics.position).toBe('fixed');
+  expect(metrics.position).toBe('static');
+  expect(metrics.parentId).toBe('menu-body');
+  expect(metrics.mainHidden).toBe(true);
+  expect(metrics.dataScreen).toBe('settings');
   expect(metrics.inViewport).toBe(true);
+  expect(metrics.widthFitsSurface).toBe(true);
   expect(metrics.buttonsContained).toBe(true);
   expect(metrics.usesGlassBlur).toBe(true);
   expect(metrics.buttonGap).toBe(metrics.flowGap);
@@ -605,90 +622,141 @@ test('narrow menu surfaces reflow without overflow', async ({ page }) => {
   expect(metrics.viewportOverflow).toBe(false);
 });
 
-test('phone-sized menu flow keeps main social settings auth and room surfaces contained', async ({ page }) => {
+test('phone touch menu flow keeps main social settings auth and room surfaces contained', async ({ browser }) => {
   for (const size of [
     { width: 390, height: 844 },
     { width: 844, height: 390 }
   ]) {
     await test.step(`${size.width}x${size.height}`, async () => {
-      await page.setViewportSize(size);
-      await page.goto('/');
-      await expect(page.locator('#menu-surface')).toBeVisible();
-      await expectCleanMenuLayout(page);
-
-      await page.locator('#social-tools-toggle-btn').click();
-      await expect(page.locator('#menu-social-hero')).toBeVisible();
-      await expectCleanMenuLayout(page);
-
-      await page.locator('#utility-toggle-btn').click();
-      await expect(page.locator('#utility-overlay')).toBeVisible();
-      await expectCleanMenuLayout(page);
-      await page.locator('#utility-close-btn').click();
-      await expect(page.locator('#utility-overlay')).toBeHidden();
-
-      await page.locator('#account-toggle-btn').click();
-      await expect(page.locator('#auth-overlay')).toBeVisible();
-      await expectCleanMenuLayout(page);
-      await page.locator('#auth-close-btn').click();
-      await expect(page.locator('#auth-overlay')).toBeHidden();
-
-      await page.locator('#game-modes-toggle-btn').click();
-      await expect(page.locator('#play-mode-options')).toBeVisible();
-      await expectCleanMenuLayout(page);
-
-      await page.evaluate(() => {
-        const main = document.getElementById('menu-screen-mode');
-        const roomScreen = document.getElementById('menu-screen-room');
-        const roomView = document.getElementById('private-room-view');
-        const sharePanel = document.getElementById('room-share-panel');
-        const shareCode = document.getElementById('room-share-code');
-        const rosterGrid = document.getElementById('private-room-roster-grid');
-        const unassignedWrap = document.getElementById('private-room-unassigned-wrap');
-        const teamCount = document.getElementById('private-room-team-count-actions');
-        if (main) main.hidden = true;
-        if (roomScreen) roomScreen.hidden = false;
-        if (roomView) roomView.hidden = false;
-        if (sharePanel) sharePanel.hidden = false;
-        if (shareCode) shareCode.textContent = 'ABCD12';
-        if (unassignedWrap) unassignedWrap.hidden = true;
-        if (teamCount) teamCount.hidden = false;
-        if (rosterGrid) {
-          rosterGrid.replaceChildren();
-          ['alpha', 'bravo', 'charlie', 'delta'].forEach((teamId, index) => {
-            const lane = document.createElement('section');
-            lane.className = 'private-room-team-lane';
-            lane.setAttribute('data-team-id', teamId);
-            const header = document.createElement('div');
-            header.className = 'private-room-team-header';
-            const name = document.createElement('div');
-            name.className = 'private-room-team-name';
-            name.textContent = `Team ${teamId}`;
-            const meta = document.createElement('div');
-            meta.className = 'private-room-team-subtitle';
-            meta.textContent = index === 0 ? 'Host' : 'Ready';
-            header.append(name, meta);
-            const tray = document.createElement('div');
-            tray.className = 'private-room-team-tray';
-            const member = document.createElement('div');
-            member.className = 'private-room-member-pill';
-            member.setAttribute('data-rounded-role', 'container');
-            const top = document.createElement('div');
-            top.className = 'private-room-member-topline';
-            const memberName = document.createElement('div');
-            memberName.className = 'private-room-member-name';
-            memberName.textContent = `PLAYER_${teamId.toUpperCase()}_${index}`;
-            top.append(memberName);
-            member.append(top);
-            tray.append(member);
-            lane.append(header, tray);
-            rosterGrid.append(lane);
-          });
-        }
+      const context = await browser.newContext({
+        viewport: size,
+        hasTouch: true,
+        isMobile: true,
+        userAgent: IPHONE_SAFARI_UA
       });
+      const page = await context.newPage();
+      try {
+        await page.goto('/');
+        await expect.poll(() => page.evaluate(() => ({
+          phoneSizedTouch: !!(window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE && window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE()),
+          touchPoints: Number(navigator.maxTouchPoints || 0) > 0,
+          coarsePointer: !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+        }))).toEqual({
+          phoneSizedTouch: true,
+          touchPoints: true,
+          coarsePointer: true
+        });
+        await expect(page.locator('#menu-surface')).toBeVisible();
+        await expectCleanMenuLayout(page);
 
-      await page.locator('#private-room-action-row').scrollIntoViewIfNeeded();
-      await expectCleanMenuLayout(page);
+        await page.locator('#social-tools-toggle-btn').click();
+        await expect(page.locator('#menu-social-hero')).toBeVisible();
+        await expectCleanMenuLayout(page);
+
+        await page.locator('#utility-toggle-btn').click();
+        await expect(page.locator('#utility-overlay')).toBeVisible();
+        await expectCleanMenuLayout(page);
+        await page.locator('#party-back-btn').click();
+        await expect(page.locator('#utility-overlay')).toBeHidden();
+
+        await page.locator('#account-toggle-btn').click();
+        await expect(page.locator('#auth-overlay')).toBeVisible();
+        await expectCleanMenuLayout(page);
+        await page.locator('#auth-close-btn').click();
+        await expect(page.locator('#auth-overlay')).toBeHidden();
+
+        await page.locator('#game-modes-toggle-btn').click();
+        await expect(page.locator('#play-mode-options')).toBeVisible();
+        await expectCleanMenuLayout(page);
+
+        await page.evaluate(() => {
+          const main = document.getElementById('menu-screen-mode');
+          const roomScreen = document.getElementById('menu-screen-room');
+          const roomView = document.getElementById('private-room-view');
+          const sharePanel = document.getElementById('room-share-panel');
+          const shareCode = document.getElementById('room-share-code');
+          const rosterGrid = document.getElementById('private-room-roster-grid');
+          const unassignedWrap = document.getElementById('private-room-unassigned-wrap');
+          const teamCount = document.getElementById('private-room-team-count-actions');
+          if (main) main.hidden = true;
+          if (roomScreen) roomScreen.hidden = false;
+          if (roomView) roomView.hidden = false;
+          if (sharePanel) sharePanel.hidden = false;
+          if (shareCode) shareCode.textContent = 'ABCD12';
+          if (unassignedWrap) unassignedWrap.hidden = true;
+          if (teamCount) teamCount.hidden = false;
+          if (rosterGrid) {
+            rosterGrid.replaceChildren();
+            ['alpha', 'bravo', 'charlie', 'delta'].forEach((teamId, index) => {
+              const lane = document.createElement('section');
+              lane.className = 'private-room-team-lane';
+              lane.setAttribute('data-team-id', teamId);
+              const header = document.createElement('div');
+              header.className = 'private-room-team-header';
+              const name = document.createElement('div');
+              name.className = 'private-room-team-name';
+              name.textContent = `Team ${teamId}`;
+              const meta = document.createElement('div');
+              meta.className = 'private-room-team-subtitle';
+              meta.textContent = index === 0 ? 'Host' : 'Ready';
+              header.append(name, meta);
+              const tray = document.createElement('div');
+              tray.className = 'private-room-team-tray';
+              const member = document.createElement('div');
+              member.className = 'private-room-member-pill';
+              member.setAttribute('data-rounded-role', 'container');
+              const top = document.createElement('div');
+              top.className = 'private-room-member-topline';
+              const memberName = document.createElement('div');
+              memberName.className = 'private-room-member-name';
+              memberName.textContent = `PLAYER_${teamId.toUpperCase()}_${index}`;
+              top.append(memberName);
+              member.append(top);
+              tray.append(member);
+              lane.append(header, tray);
+              rosterGrid.append(lane);
+            });
+          }
+        });
+
+        await page.locator('#private-room-action-row').scrollIntoViewIfNeeded();
+        await expectCleanMenuLayout(page);
+      } finally {
+        await context.close();
+      }
     });
+  }
+});
+
+test('phone touch launch shows the no-fire-button acknowledgement before input capture', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent: IPHONE_SAFARI_UA
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto('/');
+    await expect.poll(() => page.evaluate(() => !!(window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE && window.__MAYHEM_IS_PHONE_SIZED_TOUCH_DEVICE()))).toBe(true);
+
+    await page.locator('#game-modes-toggle-btn').click();
+    await page.locator('#sandbox-mode-btn').click();
+    await page.locator('#primary-launch-btn').click();
+
+    await expect(page.locator('#launch-flow')).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('#launch-title')).toHaveText('Phone Shooting');
+    await expect(page.locator('#launch-status')).toHaveText('There is no fire button.');
+    await expect(page.locator('#launch-note')).toContainText('re-engage');
+    await expect(page.locator('#launch-enter-btn')).toHaveText('I Understand');
+
+    await page.locator('#launch-enter-btn').click();
+    await expect(page.locator('#launch-flow')).toBeHidden();
+    await expect(page.locator('#menu-stage')).toBeVisible();
+    await expect(page.locator('#play-btn')).toHaveText(/enter match/i);
+  } finally {
+    await context.close();
   }
 });
 

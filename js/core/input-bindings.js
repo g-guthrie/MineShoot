@@ -19,6 +19,7 @@
         { id: 'weapon_slot_2', title: 'Weapon Slot 2', group: 'Combat', defaultToken: 'Digit2', note: 'Select your second loadout weapon.' },
         { id: 'throwable', title: 'Throwable', group: 'Combat', defaultToken: 'KeyQ', note: 'Throw or preview the selected throwable.' },
         { id: 'open_manual', title: 'Open Field Manual', group: 'Session', defaultToken: 'KeyI', note: 'Open or close the field manual.' },
+        { id: 'inspect_player', title: 'Inspect Player', group: 'Session', defaultToken: 'KeyV', note: 'Toggle orbit inspection around your local avatar.' },
         { id: 'toggle_auto_fire', title: 'Toggle Auto Fire', group: 'Session', defaultToken: 'KeyG', note: 'Toggle desktop red-reticle auto fire on or off.' },
         { id: 'toggle_debug', title: 'Toggle Debug Visuals', group: 'Session', defaultToken: 'KeyH', note: 'Toggle extra combat debug helpers.' }
     ];

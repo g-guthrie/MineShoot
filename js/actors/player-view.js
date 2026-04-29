@@ -54,7 +54,9 @@
             if (!state.avatarGroup) return;
 
             var firstPersonView = !!state.firstPersonView;
-            var avatarVisible = state.avatarAliveVisible && !firstPersonView && (!state.sniperMode || scopeBlend < 0.55);
+            var avatarVisible = state.inspectMode
+                ? !!state.avatarAliveVisible
+                : state.avatarAliveVisible && !firstPersonView && (!state.sniperMode || scopeBlend < 0.55);
             state.avatarGroup.visible = avatarVisible;
 
             if (!state.avatarRigApi || !state.avatarRigApi.rig) return;
@@ -385,9 +387,48 @@
             state.camera.rotation.z += cameraKickRoll + recoilPatternRoll;
         }
 
+        function updateInspectCamera(dt, state) {
+            scopeBlend = 0;
+            sprintFovBlend = 0;
+            if (state.updateAvatarPose) state.updateAvatarPose();
+            syncAvatarVisibility(state);
+
+            var targetY = Number(state.inspectTargetY);
+            if (!isFinite(targetY)) targetY = Number(state.posY || 0) - 0.25;
+            var orbitYaw = Number(state.inspectOrbitYaw != null ? state.inspectOrbitYaw : 0);
+            var orbitPitch = Math.max(-0.7, Math.min(0.85, Number(state.inspectOrbitPitch != null ? state.inspectOrbitPitch : 0.18)));
+            var distance = Math.max(1.5, Number(state.inspectOrbitDistance != null ? state.inspectOrbitDistance : 5));
+            var horizontal = Math.cos(orbitPitch) * distance;
+
+            viewOrigin.set(state.playerX, targetY, state.playerZ);
+            viewTarget.copy(viewOrigin);
+            viewDesired.set(
+                state.playerX + (Math.sin(orbitYaw) * horizontal),
+                targetY + (Math.sin(orbitPitch) * distance),
+                state.playerZ + (Math.cos(orbitYaw) * horizontal)
+            );
+            applyCameraCollision(state);
+
+            if (!thirdCameraInitialized) {
+                state.camera.position.copy(viewDesired);
+                thirdCameraInitialized = true;
+            } else {
+                state.camera.position.lerp(viewDesired, Math.min(1, dt * Number(state.inspectSmooth || 18)));
+            }
+
+            var targetFov = Number(state.inspectFov || 58);
+            state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 16);
+            state.camera.updateProjectionMatrix();
+            state.camera.lookAt(viewTarget);
+        }
+
         function updateCamera(dt, state) {
             if (!state.camera) return;
             updateMuzzleFlash(dt, state);
+            if (state.inspectMode) {
+                updateInspectCamera(dt, state);
+                return;
+            }
 
             var renderYaw = state.yaw + cameraKickYaw + recoilPatternYaw;
             var renderPitch = Math.max(-state.pitchLimit, Math.min(state.pitchLimit, state.pitch + cameraKickPitch + recoilPatternPitch));

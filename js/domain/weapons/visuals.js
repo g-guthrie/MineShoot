@@ -47,6 +47,14 @@
         };
     }
 
+    function cloneMountInsertion(insertion) {
+        var source = insertion || {};
+        return {
+            position: cloneVec3(source.position, [0, 0, 0]),
+            rotationDeg: cloneVec3(source.rotationDeg || source.rotation || [0, 0, 0], [0, 0, 0])
+        };
+    }
+
     function cloneAsset(asset) {
         if (!asset) return null;
         return {
@@ -56,29 +64,6 @@
             scale: Number(asset.scale != null ? asset.scale : 1),
             rotationDeg: cloneVec3(asset.rotationDeg || asset.rotation || [0, 0, 0], [0, 0, 0]),
             sourceMuzzle: cloneVec3(asset.sourceMuzzle, [0, 0, 0])
-        };
-    }
-
-    function cloneQuat(list, fallback) {
-        var source = Array.isArray(list) ? list : fallback;
-        return [
-            Number(source && source[0] || 0),
-            Number(source && source[1] || 0),
-            Number(source && source[2] || 0),
-            Number(source && source[3] != null ? source[3] : 1)
-        ];
-    }
-
-    function cloneToonAttachment(attachment) {
-        if (!attachment) return null;
-        return {
-            sourceUrl: String(attachment.sourceUrl || ''),
-            parentNode: String(attachment.parentNode || ''),
-            weaponNode: String(attachment.weaponNode || ''),
-            translation: cloneVec3(attachment.translation, [0, 0, 0]),
-            rotation: cloneQuat(attachment.rotation, [0, 0, 0, 1]),
-            scale: cloneVec3(attachment.scale, [1, 1, 1]),
-            useMountOffset: attachment.useMountOffset === true
         };
     }
 
@@ -108,7 +93,8 @@
                 contact: 'handleBack',
                 position: cloneVec3(mount.position, [0, 0, 0]),
                 rotationDeg: cloneVec3(mount.rotationDeg || mount.rotation || [0, 0, 0], [0, 0, 0]),
-                aim: cloneAimProfile(mount.aim, 0.7, 0.3)
+                aim: cloneAimProfile(mount.aim, 0.7, 0.3),
+                insertion: cloneMountInsertion(mount.insertion)
             },
             zones: {
                 handleBack: cloneVec3(zones.handleBack, DEFAULT_HANDLE_BACK),
@@ -130,8 +116,7 @@
                 accentA: clonePart(parts.accentA, DEFAULT_COLOR_METAL),
                 accentB: clonePart(parts.accentB, DEFAULT_COLOR_METAL)
             },
-            asset: cloneAsset(raw.asset),
-            toonAttachment: cloneToonAttachment(raw.toonAttachment)
+            asset: cloneAsset(raw.asset)
         };
 
         if (!platform.parts.receiver || !platform.parts.grip || !platform.parts.barrel) {
@@ -190,20 +175,12 @@
                 type: 'gltf',
                 url: '/assets/weapons/toon-shooter/scout-rifle.gltf',
                 textureUrl: '',
-                scale: 0.72,
+                scale: 0.792,
                 rotationDeg: [0, -90, 0],
                 sourceMuzzle: [-1.2651, 0.2121, 0.0009]
             },
-            toonAttachment: {
-                sourceUrl: '/assets/characters/toon-shooter/Character_Enemy.gltf',
-                parentNode: 'Index1.R',
-                weaponNode: 'Sniper_2',
-                translation: [-0.033812522888183594, 0.1839268719164987, -0.030244827270507812],
-                rotation: [0.3192978501319885, -0.544323742389679, -0.650169312953949, 0.4231317639350891],
-                scale: [0.9165812134742737, 0.9165812134742737, 0.916581392288208]
-            },
             mount: {
-                position: [0.0, 0.02, 0.08],
+                position: [0.0, 0.17, -0.02],
                 rotationDeg: [2, 2, -1],
                 aim: { shoulderFactor: 0.7, wristFactor: 0.3 }
             },
@@ -228,21 +205,12 @@
                 type: 'gltf',
                 url: '/assets/weapons/toon-shooter/revolver.gltf',
                 textureUrl: '',
-                scale: 0.62,
+                scale: 0.682,
                 rotationDeg: [0, -90, 0],
                 sourceMuzzle: [-0.8349, 0.2487, 0.0028]
             },
-            toonAttachment: {
-                sourceUrl: '/assets/characters/toon-shooter/Character_Enemy.gltf',
-                parentNode: 'Index1.R',
-                weaponNode: 'Revolver',
-                translation: [-0.03695803880691528, 0.1359110986201425, -0.04479995369911194],
-                rotation: [0.06790197640657425, 0.09356407076120377, 0.46245670318603516, 0.8790727853775024],
-                scale: [0.10991809517145157, 0.10991813242435455, 0.11939284205436707],
-                useMountOffset: true
-            },
             mount: {
-                position: [0.0, 0.055, 0.08],
+                position: [0.0, -0.145, 0.03],
                 rotationDeg: [10, 5, 0],
                 aim: { shoulderFactor: 0.68, wristFactor: 0.32 }
             },
@@ -267,21 +235,17 @@
                 type: 'gltf',
                 url: '/assets/weapons/toon-shooter/ak.gltf',
                 textureUrl: '',
-                scale: 0.9,
+                scale: 0.99,
                 rotationDeg: [0, -90, 0],
                 sourceMuzzle: [-1.0274, 0.2455, -0.0023]
-            },
-            toonAttachment: {
-                sourceUrl: '/assets/characters/toon-shooter/Character_Enemy.gltf',
-                parentNode: 'Index1.R',
-                weaponNode: 'AK',
-                translation: [0.01034402847290039, 0.1514850997775793, -0.05410188436508179],
-                rotation: [0.07112707942724228, 0.07164616882801056, 0.5258878469467163, 0.844541072845459],
-                scale: [0.4179118871688843, 0.41791191697120667, 0.41791197657585144]
             },
             mount: {
                 position: [0.0, 0.02, 0.08],
                 rotationDeg: [0, 0, 0],
+                insertion: {
+                    position: [0, -0.2, -0.05],
+                    rotationDeg: [0, 0, 0]
+                },
                 aim: { shoulderFactor: 0.69, wristFactor: 0.31 }
             },
             zones: {
@@ -305,22 +269,17 @@
                 type: 'gltf',
                 url: '/assets/weapons/toon-shooter/shotgun.gltf',
                 textureUrl: '',
-                scale: 0.72,
+                scale: 0.792,
                 rotationDeg: [0, -90, 0],
                 sourceMuzzle: [-1.2499, 0.0489, 0]
             },
-            toonAttachment: {
-                sourceUrl: '/assets/characters/toon-shooter/Character_Enemy.gltf',
-                parentNode: 'Index1.R',
-                weaponNode: 'Shotgun',
-                translation: [-0.03956228494644165, 0.197227946421351, -0.07035112380981445],
-                rotation: [0.4583534896373749, -0.47960832715034485, -0.5488527417182922, 0.5085752010345459],
-                scale: [1, 1, 1],
-                useMountOffset: true
-            },
             mount: {
-                position: [0.0, 0.02, 0.08],
+                position: [0.0, -0.38, 0.13],
                 rotationDeg: [0, 0, 0],
+                insertion: {
+                    position: [0, 0, 0],
+                    rotationDeg: [0, -3, 0]
+                },
                 aim: { shoulderFactor: 0.7, wristFactor: 0.3 }
             },
             zones: {
@@ -345,20 +304,12 @@
                 type: 'gltf',
                 url: '/assets/weapons/toon-shooter/sniper.gltf',
                 textureUrl: '',
-                scale: 0.82,
+                scale: 0.902,
                 rotationDeg: [0, -90, 0],
                 sourceMuzzle: [-1.588, 0.2293, -0.0214]
             },
-            toonAttachment: {
-                sourceUrl: '/assets/characters/toon-shooter/Character_Enemy.gltf',
-                parentNode: 'Index1.R',
-                weaponNode: 'Sniper',
-                translation: [0.005934536457061768, 0.16237883915587858, -0.05194741487503052],
-                rotation: [0.032933976501226425, 0.036410339176654816, 0.5895998477935791, 0.8062020540237427],
-                scale: [0.21388870477676392, 0.21388870477676392, 0.21388870477676392]
-            },
             mount: {
-                position: [0.0, 0.02, 0.04],
+                position: [0.0, -0.18, 0.04],
                 rotationDeg: [0, 0, 0],
                 aim: { shoulderFactor: 0.72, wristFactor: 0.28 }
             },

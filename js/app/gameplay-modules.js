@@ -11,7 +11,6 @@ import '../../shared/seek-core.js';
 import '../../shared/match-rules.js';
 import '../../shared/authoritative-movement.js';
 import '../../shared/authoritative-reconciliation.js';
-import '../../shared/asset-recipes.js';
 import '../core/runtime-utils.js';
 import '../core/input-bindings.js';
 import '../core/input-labels.js';

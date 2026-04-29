@@ -777,7 +777,6 @@ export function handleFire(room, player, msg, deps) {
   if (!stats) return;
   if (!canEquipWeaponId(player, weaponId)) return;
   if (weaponId === 'sniper' && !(msg && msg.adsActive)) return;
-  player.weaponId = weaponId;
 
   const now = nowMs();
   const prev = player.lastShotAt[weaponId] || 0;
@@ -792,17 +791,6 @@ export function handleFire(room, player, msg, deps) {
   if (ammoEntry && Number(ammoEntry.ammoInMag || 0) <= 0) {
     return;
   }
-  let engagedIds = [];
-  if (typeof markFireEngagement === 'function') {
-    engagedIds = markFireEngagement(player, msg, now) || [];
-  }
-  player.lastShotAt[weaponId] = now;
-  if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
-  player.muzzleFlashUntil = now + remoteMuzzleFlashHoldMs;
-  if (typeof markSnapshotBurst === 'function') {
-    markSnapshotBurst([player.id].concat(engagedIds), [player.id].concat(engagedIds), now);
-  }
-  room.consumeWeaponAmmo(player, weaponId, now);
   const shotServerTime = typeof resolveHitscanShotTime === 'function'
     ? Number(resolveHitscanShotTime(player, msg, now) || now)
     : now;
@@ -834,6 +822,18 @@ export function handleFire(room, player, msg, deps) {
       }
     }
   }
+  player.weaponId = weaponId;
+  let engagedIds = [];
+  if (typeof markFireEngagement === 'function') {
+    engagedIds = markFireEngagement(player, msg, now) || [];
+  }
+  player.lastShotAt[weaponId] = now;
+  if (shotToken) player.lastShotTokenByWeapon[weaponId] = shotToken;
+  player.muzzleFlashUntil = now + remoteMuzzleFlashHoldMs;
+  if (typeof markSnapshotBurst === 'function') {
+    markSnapshotBurst([player.id].concat(engagedIds), [player.id].concat(engagedIds), now);
+  }
+  room.consumeWeaponAmmo(player, weaponId, now);
   const fallbackAimOrigin = typeof authoritativeHitscanOrigin === 'function'
     ? authoritativeHitscanOrigin(player, shotServerTime, now)
     : {

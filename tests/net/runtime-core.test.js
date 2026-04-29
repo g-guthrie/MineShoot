@@ -210,3 +210,85 @@ test('runtime core forces a send after cumulative tiny movement and yaw drift', 
   assert.equal(positionDriftWu, 0);
   assert.equal(yawDriftRad, 0);
 });
+
+test('runtime core rate-limits look-only immediate sends on high-refresh frames', async () => {
+  const GameNetRuntimeCore = await loadRuntimeCoreFactory();
+  const sentMessages = [];
+  const inputHistory = [];
+  let inputSendTimer = 1 / 60;
+  let pingSendTimer = 99;
+  let nextSeq = 2;
+  let lastSentSeq = 0;
+  let lastSentInputSample = {
+    seq: 1,
+    at: 1000,
+    dtMs: 16,
+    yaw: 0,
+    pitch: 0,
+    weaponId: 'rifle',
+    inputState: { forward: true }
+  };
+  const socket = {
+    readyState: 1,
+    send(raw) {
+      sentMessages.push(JSON.parse(raw));
+    }
+  };
+
+  const core = GameNetRuntimeCore.create({
+    isActive: () => true,
+    getTransport: () => null,
+    setTransport() {},
+    getReconnectTimer: () => null,
+    setReconnectTimer() {},
+    getWs: () => socket,
+    setWs() {},
+    setConnected() {},
+    getSocketIdentity: () => ({ id: 'usr_test' }),
+    nextConnectAttemptSeq: () => 1,
+    getConnectAttemptSeq: () => 1,
+    wsEndpoint: () => 'ws://localhost',
+    handleMessage() {},
+    ensureArenaIdentity: () => null,
+    applyPendingSpawnSync() { return false; },
+    getPendingRespawnInfo: () => null,
+    setPendingRespawnInfo() {},
+    setPendingSpawnSync() {},
+    getConnectionTimingState: () => ({ rttMs: 0, rttJitterMs: 0 }),
+    getSnapshotAckSeq: () => 0,
+    toLocalClockTime: (value) => value,
+    isConnected: () => true,
+    getInputSendTimer: () => inputSendTimer,
+    setInputSendTimer(value) { inputSendTimer = Number(value || 0); },
+    getInputSendInterval: () => 1 / 60,
+    getLastSentInputSample: () => lastSentInputSample,
+    setLastSentInputSample(value) { lastSentInputSample = value; },
+    getAccumulatedPositionDriftWu: () => 0,
+    getAccumulatedYawDriftRad: () => 0,
+    updateInputDriftTracking() {},
+    resetInputDriftTracking() {},
+    getPingSendTimer: () => pingSendTimer,
+    setPingSendTimer(value) { pingSendTimer = Number(value || 0); },
+    getPingCadenceSeconds: () => 99,
+    getPingMessageType: () => 'ping',
+    getPlayerApi: () => ({
+      getAnimNetState: () => ({ equippedWeaponId: 'rifle' }),
+      getNetworkInputState: () => ({ forward: true }),
+      isMovementLocked: () => false
+    }),
+    nextInputSeq: () => nextSeq++,
+    getInputSeqHistory: () => inputHistory,
+    setLastInputSeqSent(value) { lastSentSeq = Number(value || 0); },
+    getInputMessageType: () => 'input',
+    getRemoteSyncApi: () => null,
+    getRenderMap: () => new Map()
+  });
+
+  core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.01, pitch: 0 });
+  core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.02, pitch: 0 });
+  core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.03, pitch: 0 });
+  core.update(1 / 240, { x: 0, y: 0, z: 0 }, { yaw: 0.04, pitch: 0 });
+
+  assert.equal(sentMessages.filter((message) => message.t === 'input').length, 2);
+  assert.equal(lastSentSeq, 3);
+});

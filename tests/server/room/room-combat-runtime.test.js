@@ -591,16 +591,19 @@ test('combat runtime rejects client aim that diverges too far from the rewound s
     yaw: 0.75,
     pitch: 0.2,
     lastShotAt: {},
-    weaponId: 'rifle'
+    weaponId: 'pistol'
   };
   let shotRequest = null;
+  let ammoConsumed = 0;
+  let burstCount = 0;
+  let engagementCount = 0;
   const shotRejects = [];
   const room = {
     canEntityUseWeapon() { return true; },
     syncWeaponAmmoState() { return { ammoInMag: 10, reloadUntil: 0, reloadedFlashUntil: 0 }; },
     reloadRemainingForWeapon() { return 0; },
     beginWeaponReload() { throw new Error('should not reload'); },
-    consumeWeaponAmmo() {},
+    consumeWeaponAmmo() { ammoConsumed += 1; },
     entityForward() { return { x: 0.9, y: 0, z: 0.1 }; },
     getAliveEntities() { return [target]; },
     canTargetEntity(entity, sourceId) { return !!entity && entity.id !== sourceId; },
@@ -639,6 +642,13 @@ test('combat runtime rejects client aim that diverges too far from the rewound s
       assert.equal(requestedShotTime, 1260);
       return { x: 0, y: 0, z: 1 };
     },
+    markFireEngagement() {
+      engagementCount += 1;
+      return ['t1'];
+    },
+    markSnapshotBurst() {
+      burstCount += 1;
+    },
     hitscanAimDirectionMinDot: 0.95,
     hitscanAimOriginMaxOffset: 0.9,
     playerEyeHeight: 1.7,
@@ -646,6 +656,13 @@ test('combat runtime rejects client aim that diverges too far from the rewound s
   });
 
   assert.equal(shotRequest, null);
+  assert.equal(ammoConsumed, 0);
+  assert.equal(burstCount, 0);
+  assert.equal(engagementCount, 0);
+  assert.equal(player.weaponId, 'pistol');
+  assert.equal(player.lastShotAt.rifle, undefined);
+  assert.equal(player.lastShotTokenByWeapon.rifle, undefined);
+  assert.equal(player.muzzleFlashUntil, undefined);
   assert.deepEqual(shotRejects, [{
     shotToken: 'move-forward',
     weaponId: 'rifle',

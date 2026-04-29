@@ -59,6 +59,7 @@ function defaultBindings() {
     weapon_slot_2: 'Digit2',
     throwable: 'KeyQ',
     open_manual: 'KeyI',
+    inspect_player: 'KeyV',
     toggle_auto_fire: 'KeyG',
     toggle_debug: 'KeyH'
   };
@@ -72,6 +73,7 @@ test('input bindings expose the shipped defaults and normalize modifier labels',
   assert.equal(labels.getBindingLabel('ads_key', 'Alt'), 'ALT');
   assert.equal(labels.getBindingLabel('missing_action', 'Fallback'), 'Fallback');
   assert.equal(api.getDisplayLabel('weapon_slot_1'), '1');
+  assert.equal(api.getDisplayLabel('inspect_player'), 'V');
   assert.equal(api.tokenFromEvent({ code: 'ShiftRight' }), 'Shift');
   assert.equal(api.matches('ads_key', { code: 'AltLeft' }), true);
   assert.equal(api.matchesWithFallback('reload', { code: 'KeyR' }, 'KeyX'), true);

@@ -128,3 +128,90 @@ test('gameplay runtime loop shows sprint effects during fast backpedal without f
   assert.equal(sprintCalls.length, 1);
   assert.equal(sprintCalls[0].intensity, 0.8);
 });
+
+test('phone reticle auto-fire requires leaving and re-entering a target', async () => {
+  let active = true;
+  let targetId = 'enemy:one';
+  let fireCalls = 0;
+  const harness = await loadGameplayRuntimeLoopHarness({
+    GameHitscan: {
+      getCurrentWeapon() { return { id: 'rifle', automatic: false }; },
+      getReticleTargetPreview() {
+        return {
+          currentAimTargetId: targetId,
+          reticleTarget: {
+            group: 'crosshair',
+            active
+          }
+        };
+      },
+      tick() {},
+      updateTracers() {}
+    }
+  });
+  const loop = harness.createLoop({
+    readMatchContext() {
+      return { selfState: { id: 'usr_test', alive: true } };
+    },
+    getCamera() { return {}; },
+    hasInputCapture() { return true; },
+    tryPlayerFire() { fireCalls += 1; },
+    controlsApi: {
+      isPhoneSizedTouchDevice() { return true; },
+      isDesktopAutoFireEnabled() { return false; },
+      hasArmedThrowablePreview() { return false; }
+    }
+  });
+
+  loop.step(0.016);
+  loop.step(0.016);
+  assert.equal(fireCalls, 1);
+
+  active = false;
+  loop.step(0.016);
+  active = true;
+  loop.step(0.016);
+  assert.equal(fireCalls, 2);
+
+  targetId = 'enemy:two';
+  loop.step(0.016);
+  assert.equal(fireCalls, 3);
+});
+
+test('desktop reticle auto-fire remains continuous while the target stays active', async () => {
+  let fireCalls = 0;
+  const harness = await loadGameplayRuntimeLoopHarness({
+    GameHitscan: {
+      getCurrentWeapon() { return { id: 'rifle', automatic: false }; },
+      getReticleTargetPreview() {
+        return {
+          currentAimTargetId: 'enemy:one',
+          reticleTarget: {
+            group: 'crosshair',
+            active: true
+          }
+        };
+      },
+      tick() {},
+      updateTracers() {}
+    }
+  });
+  const loop = harness.createLoop({
+    readMatchContext() {
+      return { selfState: { id: 'usr_test', alive: true } };
+    },
+    getCamera() { return {}; },
+    hasInputCapture() { return true; },
+    tryPlayerFire() { fireCalls += 1; },
+    controlsApi: {
+      isPhoneSizedTouchDevice() { return false; },
+      isDesktopAutoFireEnabled() { return true; },
+      hasArmedThrowablePreview() { return false; }
+    }
+  });
+
+  loop.step(0.016);
+  loop.step(0.016);
+
+  assert.equal(fireCalls, 2);
+});

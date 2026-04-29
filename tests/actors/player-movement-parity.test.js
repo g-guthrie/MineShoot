@@ -122,6 +122,7 @@ async function loadPlayerMovementHarness(options = {}) {
   const calls = {
     triggerActions: [],
     animationUpdates: [],
+    audioPlays: [],
     gunOffsetUpdates: 0,
     cameraUpdates: []
   };
@@ -245,7 +246,8 @@ async function loadPlayerMovementHarness(options = {}) {
           updateCamera(_dt, options) {
             if (!options || !options.camera) return;
             calls.cameraUpdates.push({
-              firstPersonView: !!options.firstPersonView
+              firstPersonView: !!options.firstPersonView,
+              inspectMode: !!options.inspectMode
             });
             const scopeActive = options.scopeTargetActive != null ? !!options.scopeTargetActive : !!options.adsActive;
             options.camera.position.set(
@@ -301,6 +303,14 @@ async function loadPlayerMovementHarness(options = {}) {
       },
       isAdsBlocked() {
         return false;
+      }
+    },
+    GameAudio: {
+      play(soundId, options) {
+        calls.audioPlays.push({
+          soundId: String(soundId || ''),
+          options: options ? JSON.parse(JSON.stringify(options)) : null
+        });
       }
     },
     ...options.runtimeOverrides
@@ -440,6 +450,37 @@ test('player passes the first-person camera toggle into the camera view payload'
   assert.equal(harness.calls.cameraUpdates.at(-1).firstPersonView, true);
 });
 
+test('player inspect mode freezes movement input and uses orbit look without changing aim', async () => {
+  const harness = await loadPlayerMovementHarness();
+  const expected = createExpectedEntity(harness.worldState.spawn);
+
+  harness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  assert.equal(harness.player.setInspectMode(true), true);
+  assert.equal(harness.player.isInspectModeActive(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(harness.player.getNetworkInputState())), {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    adsActive: false
+  });
+
+  harness.player.update(0.1);
+  assertPlayerMatchesExpected(harness.player, expected);
+  assert.equal(harness.calls.cameraUpdates.at(-1).inspectMode, true);
+
+  const beforeOrbit = harness.player.getInspectOrbitState();
+  harness.player.applyLookDelta(20, -10, 1);
+  const afterOrbit = harness.player.getInspectOrbitState();
+  assert.notEqual(afterOrbit.yaw, beforeOrbit.yaw);
+  assert.notEqual(afterOrbit.pitch, beforeOrbit.pitch);
+  const rotation = harness.player.getRotation();
+  assertClose(rotation.yaw, 0);
+  assertClose(rotation.pitch, 0);
+});
+
 test('player movement honors remapped forward input and ignores the old key', async () => {
   const harness = await loadPlayerMovementHarness({
     runtimeOverrides: {
@@ -519,6 +560,39 @@ test('player ground sprinting matches the shared authoritative step', async () =
   harness.player.update(0.1);
 
   assertPlayerMatchesExpected(harness.player, expected);
+});
+
+test('player footstep audio cadence follows the Boxman walk and sprint contact loops', async () => {
+  const footstepWorld = {
+    bounds: { minX: 0, maxX: 120, minZ: 0, maxZ: 120, size: 120 },
+    spawn: { x: 60, z: 60 }
+  };
+  const walkHarness = await loadPlayerMovementHarness(footstepWorld);
+  walkHarness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  for (let i = 0; i < 60; i++) {
+    walkHarness.player.update(1 / 60);
+  }
+
+  assert.equal(walkHarness.calls.audioPlays.length, 3);
+  for (const call of walkHarness.calls.audioPlays) {
+    assert.equal(call.soundId, 'footstep');
+    assert.equal(call.options.mode, 'walk');
+    assert.equal(call.options.running, false);
+  }
+
+  const runHarness = await loadPlayerMovementHarness(footstepWorld);
+  runHarness.documentObj.dispatch('keydown', { code: 'KeyW' });
+  runHarness.documentObj.dispatch('keydown', { code: 'ShiftLeft' });
+  for (let i = 0; i < 60; i++) {
+    runHarness.player.update(1 / 60);
+  }
+
+  assert.equal(runHarness.calls.audioPlays.length, 4);
+  for (const call of runHarness.calls.audioPlays) {
+    assert.equal(call.soundId, 'footstep');
+    assert.equal(call.options.mode, 'run');
+    assert.equal(call.options.running, true);
+  }
 });
 
 test('player backward sprint matches the shared authoritative step and forwards fastBackpedal to animation', async () => {
@@ -656,6 +730,7 @@ test('backward jump keeps movement parity and only flips the presentation tilt',
   harness.player.update(0.05);
 
   assertPlayerMatchesExpected(harness.player, expected);
+  assert.deepEqual(harness.calls.audioPlays.map((call) => call.soundId), ['jump']);
   assert.deepEqual(harness.calls.triggerActions, [{
     action: 'jump',
     payload: { reverseLegTilt: true }
@@ -692,6 +767,8 @@ test('sprinting jump carries sprint in air and can resume sprint on landing when
 
   assertPlayerMatchesExpected(harness.player, expected);
   assert.equal(harness.player.isSprinting(), true);
+  assert.deepEqual(harness.calls.audioPlays.map((call) => call.soundId), ['jump']);
+  assert.equal(harness.calls.audioPlays[0].options.running, true);
 
   harness.documentObj.dispatch('keyup', { code: 'Space' });
   harness.documentObj.dispatch('keyup', { code: 'ShiftLeft' });

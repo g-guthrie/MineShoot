@@ -98,6 +98,13 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   const rifle = getWeaponPresentation('rifle');
   const handCannon = getWeaponPresentation('pistol');
   const sniper = getWeaponPresentation('sniper');
+  const expectedSamples = {
+    rifle: '/assets/audio/weapons/rifle.mp3',
+    pistol: '/assets/audio/weapons/hand-cannon.ogg',
+    machinegun: '/assets/audio/weapons/auto-rifle.ogg',
+    shotgun: '/assets/audio/weapons/shotgun.mp3',
+    sniper: '/assets/audio/weapons/sniper-fire.ogg'
+  };
 
   assert.equal(rifle.tracer.speed, 280);
   assert.equal(rifle.recoil.muzzleMs, 60);
@@ -112,9 +119,17 @@ test('weapon presentation tuning exposes shared tracer, recoil, and sample knobs
   assert.equal(sniper.recoil.pitch, 0.04);
   assert.equal(sniper.recoil.pattern, 'u_shape');
   assert.equal(sniper.recoil.patternStrength, 0.6);
-  assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper.mp3');
+  assert.equal(sniper.audioSample.url, '/assets/audio/weapons/sniper-fire.ogg');
   assert.equal(sniper.reload.profileId, 'precision');
   assert.equal(typeof globalThis.__MAYHEM_RUNTIME.GameShared.resolveReloadPresentationState, 'function');
+
+  for (const [weaponId, url] of Object.entries(expectedSamples)) {
+    const sample = getWeaponPresentation(weaponId).audioSample;
+    assert.equal(sample.url, url);
+    assert.equal(Number(sample.gain) > 0, true, weaponId + ' sample should be audible');
+    assert.equal(Number(sample.playbackRateMin) > 0, true, weaponId + ' sample needs a valid min playback rate');
+    assert.equal(Number(sample.playbackRateMax) >= Number(sample.playbackRateMin), true, weaponId + ' sample playback rate bounds should be ordered');
+  }
 });
 
 test('reload presentation helper resolves phase boundaries and completion flashes from weapon tuning', () => {

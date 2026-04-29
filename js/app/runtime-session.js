@@ -114,6 +114,7 @@
 
         var isPlaying = false;
         var pendingInputCapture = false;
+        var phoneShootingBriefingActive = false;
         var escapeResumeReady = false;
         var suppressNextEscapeArm = false;
         var launchContext = cloneLaunchContext(null);
@@ -179,11 +180,21 @@
             return !!(opts.isNetworkedRuntime && opts.isNetworkedRuntime());
         }
 
+        function touchGameplayEnabled() {
+            return !!(opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled());
+        }
+
+        function clearPhoneShootingBriefing() {
+            phoneShootingBriefingActive = false;
+        }
+
         function setMenuButtonsVisible(playVisible, backVisible) {
             var els = ensureMenuSessionEls();
             if (els.playBtn) {
                 els.playBtn.style.display = playVisible ? 'inline-block' : 'none';
-                els.playBtn.textContent = pendingInputCapture ? 'Enter Match' : 'Resume Match';
+                els.playBtn.textContent = phoneShootingBriefingActive
+                    ? 'I Understand'
+                    : (pendingInputCapture ? 'Enter Match' : 'Resume Match');
             }
             if (els.backBtn) {
                 els.backBtn.style.display = backVisible ? 'inline-block' : 'none';
@@ -422,6 +433,7 @@
         }
 
         function hideLaunchHandoff() {
+            clearPhoneShootingBriefing();
             var els = ensureLaunchHandoffEls();
             if (els.flow) els.flow.hidden = true;
             if (els.enterBtn) els.enterBtn.hidden = true;
@@ -429,18 +441,31 @@
             if (!postGameState.active && els.menuStage) els.menuStage.hidden = false;
         }
 
-        function showLaunchHandoff(context) {
+        function renderLaunchHandoff(context) {
             var els = ensureLaunchHandoffEls();
             var modeLabel = opts.modeDisplayName
                 ? normalizeMenuLabel(opts.modeDisplayName({ gameMode: context && context.gameMode }))
                 : normalizeMenuLabel(context && context.gameMode);
             var roomLabel = String(context && (context.roomCode || context.roomId) || '').toUpperCase();
-            clearActivityStateOverride();
-            setPhoneLandscapeRequirement(true);
-            setOverlayVisible(true);
-            isPlaying = false;
-            pendingInputCapture = true;
-            clearIdleMonitor();
+            if (phoneShootingBriefingActive) {
+                if (els.menuStage) els.menuStage.hidden = true;
+                if (els.flow) els.flow.hidden = false;
+                if (els.title) els.title.textContent = 'Phone Shooting';
+                if (els.copy) els.copy.textContent = 'There is no fire button.';
+                if (els.note) {
+                    els.note.textContent = 'Swipe your aim across a target to shoot. Move off the hitbox, then re-engage to shoot again.';
+                }
+                if (els.roomLabel) {
+                    els.roomLabel.hidden = true;
+                    els.roomLabel.textContent = roomLabel ? ('Room ' + roomLabel) : 'Room ----';
+                }
+                if (els.enterBtn) {
+                    els.enterBtn.hidden = false;
+                    els.enterBtn.textContent = 'I Understand';
+                }
+                setResumeButtonsVisible(true);
+                return;
+            }
             if (els.menuStage) els.menuStage.hidden = false;
             if (els.flow) els.flow.hidden = true;
             if (els.title) els.title.textContent = 'Enter Match';
@@ -450,7 +475,7 @@
                     : 'Match ready.';
             }
             if (els.note) {
-                els.note.textContent = opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()
+                els.note.textContent = touchGameplayEnabled()
                     ? 'Phones are landscape-only. Turn your phone sideways, then tap Enter Match.'
                     : 'Click Enter Match to capture the mouse and drop into the arena.';
             }
@@ -458,8 +483,22 @@
                 els.roomLabel.hidden = true;
                 els.roomLabel.textContent = roomLabel ? ('Room ' + roomLabel) : 'Room ----';
             }
-            if (els.enterBtn) els.enterBtn.hidden = true;
+            if (els.enterBtn) {
+                els.enterBtn.hidden = true;
+                els.enterBtn.textContent = 'Enter Match';
+            }
             setResumeButtonsVisible(true);
+        }
+
+        function showLaunchHandoff(context) {
+            clearActivityStateOverride();
+            setPhoneLandscapeRequirement(true);
+            setOverlayVisible(true);
+            isPlaying = false;
+            pendingInputCapture = true;
+            phoneShootingBriefingActive = touchGameplayEnabled();
+            clearIdleMonitor();
+            renderLaunchHandoff(context);
             focusResumeControl(true);
             emitSessionState();
         }
@@ -631,6 +670,19 @@
                 return Promise.resolve({ ok: false, entered: false, pendingCapture: true });
             }
 
+            if (phoneShootingBriefingActive) {
+                phoneShootingBriefingActive = false;
+                renderLaunchHandoff(launchContext);
+                focusResumeControl(true);
+                emitSessionState();
+                return Promise.resolve({
+                    ok: true,
+                    entered: false,
+                    pendingCapture: true,
+                    acknowledgedPhoneBriefing: true
+                });
+            }
+
             var validation = opts.validateLaunch ? opts.validateLaunch() : { ok: true };
             if (!validation.ok) {
                 if (opts.setTransientDebug) opts.setTransientDebug(validation.message, 1800);
@@ -643,7 +695,7 @@
             clearPauseState();
             clearIdleWarning();
 
-            if (opts.isTouchGameplayEnabled && opts.isTouchGameplayEnabled()) {
+            if (touchGameplayEnabled()) {
                 var touchEntered = opts.activateTouchGameplayCapture ? !!opts.activateTouchGameplayCapture() : false;
                 if (!touchEntered) {
                     setPhoneLandscapeRequirement(true);
@@ -971,7 +1023,7 @@
             enterGameplay: function (event, context) {
                 if (context) launchContext = cloneLaunchContext(context);
                 return requestPlayStart(event).then(function (result) {
-                    if (result && !result.entered) {
+                    if (result && !result.entered && !result.acknowledgedPhoneBriefing) {
                         showLaunchHandoff(launchContext);
                     }
                     return result;

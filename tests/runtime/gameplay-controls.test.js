@@ -111,6 +111,7 @@ async function loadControlsHarness(options = {}) {
   const localStorageValues = { ...(options.localStorageValues || {}) };
   const timeState = { now: 0 };
   let currentWeaponId = 'rifle';
+  let inspectMode = false;
   const defaultWeaponOrder = ['rifle', 'sniper'];
   const calls = {
     clearTrajectoryPreview: 0,
@@ -128,7 +129,8 @@ async function loadControlsHarness(options = {}) {
     transientDebug: [],
     toggleWeaponCalls: [],
     appliedWeapons: [],
-    localStorageWrites: []
+    localStorageWrites: [],
+    inspectToggles: []
   };
 
   const runtime = {
@@ -181,6 +183,17 @@ async function loadControlsHarness(options = {}) {
       tryRoll() {
         calls.rolls += 1;
         return true;
+      },
+      isInspectModeActive() {
+        return inspectMode;
+      },
+      toggleInspectMode() {
+        inspectMode = !inspectMode;
+        calls.inspectToggles.push(inspectMode);
+        return inspectMode;
+      },
+      clearMovementInputState() {
+        return {};
       }
     },
     GameAbilities: {
@@ -530,6 +543,62 @@ test('gameplay controls trigger roll on E while leaving G available for auto-fir
 
   assert.equal(harness.calls.rolls, 1);
   assert.deepEqual(harness.calls.abilityCasts, []);
+});
+
+test('gameplay controls toggle inspect orbit on V and suppress gameplay actions while active', async () => {
+  const harness = await loadControlsHarness();
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyV',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.inspectToggles, [true]);
+  assert.deepEqual(harness.calls.transientDebug.at(-1), {
+    text: 'Inspect orbit: ON',
+    ms: 1000
+  });
+
+  harness.documentObj.dispatch('mousedown', { button: 0 });
+  dispatchWheel(harness, 10, { deltaY: 120 });
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyR',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyQ',
+    repeat: false
+  });
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyE',
+    repeat: false,
+    preventDefault() {}
+  });
+
+  assert.equal(harness.controls.isTriggerHeld(), false);
+  assert.equal(harness.calls.tryPlayerFire, 0);
+  assert.deepEqual(harness.calls.toggleWeaponCalls, []);
+  assert.deepEqual(harness.calls.appliedWeapons, []);
+  assert.equal(harness.calls.reloads, 0);
+  assert.equal(harness.controls.hasArmedThrowablePreview(), false);
+  assert.equal(harness.calls.rolls, 0);
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyV',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.inspectToggles, [true, false]);
+  assert.deepEqual(harness.calls.transientDebug.at(-1), {
+    text: 'Inspect orbit: OFF',
+    ms: 1000
+  });
 });
 
 test('gameplay controls honor remapped throwable, roll, debug, and manual keys while ignoring removed binds', async () => {

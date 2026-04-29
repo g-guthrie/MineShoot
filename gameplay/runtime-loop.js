@@ -10,6 +10,7 @@
 
     GameGameplayRuntimeLoop.create = function (opts) {
         opts = opts || {};
+        var lastPhoneReticleFireTargetId = '';
 
         function step(dt) {
             var net = runtime.GameNet || null;
@@ -72,18 +73,40 @@
                 opts.controlsApi.isDesktopAutoFireEnabled &&
                 opts.controlsApi.isDesktopAutoFireEnabled()
             );
-            var shouldAutoFireFromReticle = !!(
+            var reticleTargetActive = !!(
+                reticlePreview &&
+                reticlePreview.reticleTarget &&
+                reticlePreview.reticleTarget.active
+            );
+            var reticleTargetId = reticleTargetActive
+                ? String(reticlePreview.currentAimTargetId || '')
+                : '';
+            var reticleAutoFireEligible = !!(
                 opts.hasInputCapture &&
                 opts.hasInputCapture() &&
                 currentWeapon &&
-                reticlePreview &&
-                reticlePreview.reticleTarget &&
-                reticlePreview.reticleTarget.active &&
+                reticleTargetId &&
                 !runtime.GamePlayer.isSprinting() &&
-                (!opts.controlsApi || !opts.controlsApi.hasArmedThrowablePreview || !opts.controlsApi.hasArmedThrowablePreview()) &&
-                (phoneSizedTouchAutoFire || desktopAutoFire)
+                (!opts.controlsApi || !opts.controlsApi.hasArmedThrowablePreview || !opts.controlsApi.hasArmedThrowablePreview())
             );
-            if (shouldAutoFireFromHeldTrigger || shouldAutoFireFromReticle) {
+            var shouldPhoneAutoFireFromReticle = false;
+            if (phoneSizedTouchAutoFire) {
+                if (reticleAutoFireEligible) {
+                    shouldPhoneAutoFireFromReticle = reticleTargetId !== lastPhoneReticleFireTargetId;
+                    if (shouldPhoneAutoFireFromReticle) {
+                        lastPhoneReticleFireTargetId = reticleTargetId;
+                    }
+                } else {
+                    lastPhoneReticleFireTargetId = '';
+                }
+            } else {
+                lastPhoneReticleFireTargetId = '';
+            }
+            var shouldDesktopAutoFireFromReticle = !!(
+                desktopAutoFire &&
+                reticleAutoFireEligible
+            );
+            if (shouldAutoFireFromHeldTrigger || shouldPhoneAutoFireFromReticle || shouldDesktopAutoFireFromReticle) {
                 if (opts.tryPlayerFire) opts.tryPlayerFire();
             }
 

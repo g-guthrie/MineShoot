@@ -6,7 +6,20 @@
     'use strict';
 
     var GameAudio = {};
-    var sharedRecipes = (globalThis.__MAYHEM_RUNTIME.GameShared && globalThis.__MAYHEM_RUNTIME.GameShared.assetRecipes) || {};
+    var audioCueIds = [
+        'fire',
+        'plasma',
+        'bulletImpact',
+        'enemyHit',
+        'playerHit',
+        'fireIgnite',
+        'fireBurning',
+        'explosion',
+        'throw',
+        'reload',
+        'footstep',
+        'jump'
+    ];
     var ctx = null;
     var unlockInFlight = false;
     var pendingPlaybacks = [];
@@ -15,6 +28,32 @@
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
+    var movementSampleDefs = {
+        footstepWalk: {
+            url: '/assets/audio/movement/footstep-concrete.ogg',
+            gain: 0.0675,
+            playbackRateMin: 1.0,
+            playbackRateMax: 1.0,
+            filterType: 'lowpass',
+            frequency: 2600,
+            q: 0.7
+        },
+        footstepRun: {
+            url: '/assets/audio/movement/footstep-concrete.ogg',
+            gain: 0.10125,
+            playbackRateMin: 1.06,
+            playbackRateMax: 1.06,
+            filterType: 'lowpass',
+            frequency: 3100,
+            q: 0.72
+        },
+        jump: {
+            url: '/assets/audio/movement/jump.ogg',
+            gain: 0.1575,
+            playbackRateMin: 1.3333333333333333,
+            playbackRateMax: 1.3333333333333333
+        }
+    };
     function weaponPresentationFor(weaponId) {
         var shared = globalThis.__MAYHEM_RUNTIME.GameShared || {};
         return shared.getWeaponPresentation ? shared.getWeaponPresentation(weaponId) : null;
@@ -223,6 +262,13 @@
             seen[sampleDef.url] = true;
             loadSampleBuffer(c, sampleDef.url);
         }
+        var movementIds = Object.keys(movementSampleDefs);
+        for (var j = 0; j < movementIds.length; j++) {
+            var movementDef = movementSampleDefs[movementIds[j]];
+            if (!movementDef || !movementDef.url || seen[movementDef.url]) continue;
+            seen[movementDef.url] = true;
+            loadSampleBuffer(c, movementDef.url);
+        }
     }
 
     function playSampleLayer(c, buffer, opts) {
@@ -259,16 +305,26 @@
     }
 
     function playSampleBuffer(c, sampleDef) {
+        return playConfiguredSample(c, sampleDef);
+    }
+
+    function playConfiguredSample(c, sampleDef, overrides) {
         if (!c || !sampleDef || !sampleDef.url) return false;
         var buffer = sampleCache[sampleDef.url];
         if (!buffer) {
             loadSampleBuffer(c, sampleDef.url);
             return false;
         }
+        var opts = overrides || {};
         return playSampleLayer(c, buffer, {
-            gain: sampleDef.gain !== undefined ? sampleDef.gain : 1,
-            playbackRateMin: sampleDef.playbackRateMin || 1,
-            playbackRateMax: sampleDef.playbackRateMax || 1
+            gain: opts.gain !== undefined ? opts.gain : (sampleDef.gain !== undefined ? sampleDef.gain : 1),
+            playbackRateMin: opts.playbackRateMin || sampleDef.playbackRateMin || 1,
+            playbackRateMax: opts.playbackRateMax || sampleDef.playbackRateMax || 1,
+            filterType: opts.filterType || sampleDef.filterType || '',
+            frequency: opts.frequency || sampleDef.frequency,
+            q: opts.q || sampleDef.q,
+            duration: opts.duration || sampleDef.duration,
+            delay: opts.delay || sampleDef.delay || 0
         });
     }
 
@@ -442,6 +498,25 @@
         playWeaponFireProcedural(c, weapon);
     }
 
+    function playFootstep(c, options) {
+        var running = !!(options && (options.running || options.sprinting || options.mode === 'run'));
+        var sampleDef = running ? movementSampleDefs.footstepRun : movementSampleDefs.footstepWalk;
+        if (playConfiguredSample(c, sampleDef)) return;
+        playNoiseBurst(c, {
+            duration: running ? 0.035 : 0.03,
+            vol: running ? 0.00975 : 0.00675,
+            frequency: running ? 980 : 760,
+            q: 0.8,
+            filterType: 'bandpass'
+        });
+    }
+
+    function playJump(c, options) {
+        if (playConfiguredSample(c, movementSampleDefs.jump, options || null)) return;
+        playNoiseBurst(c, { duration: 0.03375, vol: 0.0135, frequency: 1200, q: 1.2, filterType: 'bandpass' });
+        playOscBurst(c, { type: 'triangle', startFreq: 220, endFreq: 120, duration: 0.075, vol: 0.0140625, delay: 0.002 });
+    }
+
     function reloadProfileKey(cueId, weaponId) {
         var cue = String(cueId || '').toLowerCase();
         if (cue.indexOf('sidearm') !== -1) return 'sidearm';
@@ -611,79 +686,6 @@
         playOscBurst(c, { type: 'square', startFreq: 240, endFreq: 130, duration: 0.065, vol: 0.05, delay: 0.004 });
     }
 
-    function playThemeSong(c) {
-        var notes = [
-            { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.16, delay: 0.00, vol: 0.03 },
-            { type: 'triangle', startFreq: 494, endFreq: 494, duration: 0.16, delay: 0.12, vol: 0.03 },
-            { type: 'triangle', startFreq: 587, endFreq: 587, duration: 0.18, delay: 0.24, vol: 0.034 },
-            { type: 'sine', startFreq: 784, endFreq: 784, duration: 0.24, delay: 0.38, vol: 0.04 }
-        ];
-        for (var i = 0; i < notes.length; i++) {
-            playOscBurst(c, notes[i]);
-        }
-        playNoiseBurst(c, { duration: 0.12, vol: 0.012, frequency: 2200, q: 1.4, filterType: 'bandpass', delay: 0.02 });
-    }
-
-    function playSwordClash(c) {
-        playNoiseBurst(c, { duration: 0.045, vol: 0.05, frequency: 3600, q: 2.4, filterType: 'highpass' });
-        playNoiseBurst(c, { duration: 0.11, vol: 0.04, frequency: 2100, q: 1.8, filterType: 'bandpass', delay: 0.002 });
-        playOscBurst(c, { type: 'square', startFreq: 1260, endFreq: 620, duration: 0.09, vol: 0.03, delay: 0.001 });
-    }
-
-    function playPunchHit(c) {
-        playNoiseBurst(c, { duration: 0.06, vol: 0.036, frequency: 880, q: 0.72, filterType: 'bandpass' });
-        playOscBurst(c, { type: 'triangle', startFreq: 146, endFreq: 86, duration: 0.08, vol: 0.03 });
-    }
-
-    function playLevelUpNoise(c) {
-        playOscBurst(c, { type: 'triangle', startFreq: 392, endFreq: 392, duration: 0.08, vol: 0.028 });
-        playOscBurst(c, { type: 'triangle', startFreq: 523, endFreq: 523, duration: 0.1, vol: 0.03, delay: 0.08 });
-        playOscBurst(c, { type: 'sine', startFreq: 659, endFreq: 784, duration: 0.16, vol: 0.038, delay: 0.16 });
-    }
-
-    function playAmbientWeather(c) {
-        playNoiseBurst(c, { duration: 0.34, vol: 0.026, frequency: 720, q: 0.6, filterType: 'lowpass' });
-        playNoiseBurst(c, { duration: 0.22, vol: 0.012, frequency: 2200, q: 1.2, filterType: 'bandpass', delay: 0.03 });
-        playOscBurst(c, { type: 'sine', startFreq: 78, endFreq: 62, duration: 0.28, vol: 0.01, delay: 0.05 });
-    }
-
-    function playDoorOpen(c) {
-        playNoiseBurst(c, { duration: 0.08, vol: 0.028, frequency: 460, q: 0.7, filterType: 'lowpass' });
-        playNoiseBurst(c, { duration: 0.05, vol: 0.018, frequency: 1800, q: 1.4, filterType: 'bandpass', delay: 0.01 });
-        playOscBurst(c, { type: 'triangle', startFreq: 180, endFreq: 120, duration: 0.12, vol: 0.016 });
-    }
-
-    function playPigOink(c) {
-        playOscBurst(c, { type: 'square', startFreq: 310, endFreq: 230, duration: 0.12, vol: 0.028 });
-        playOscBurst(c, { type: 'square', startFreq: 250, endFreq: 180, duration: 0.09, vol: 0.02, delay: 0.03 });
-    }
-
-    function playZombieGrowl(c) {
-        playNoiseBurst(c, { duration: 0.16, vol: 0.018, frequency: 620, q: 0.9, filterType: 'bandpass' });
-        playOscBurst(c, { type: 'sawtooth', startFreq: 118, endFreq: 74, duration: 0.18, vol: 0.026 });
-        playOscBurst(c, { type: 'triangle', startFreq: 92, endFreq: 64, duration: 0.22, vol: 0.022, delay: 0.02 });
-    }
-
-    function playZombieHurt(c) {
-        playNoiseBurst(c, { duration: 0.12, vol: 0.022, frequency: 880, q: 1.0, filterType: 'bandpass' });
-        playOscBurst(c, { type: 'triangle', startFreq: 150, endFreq: 82, duration: 0.12, vol: 0.024 });
-    }
-
-    function playPortalIdle(c) {
-        playOscBurst(c, { type: 'sine', startFreq: 240, endFreq: 220, duration: 0.26, vol: 0.014 });
-        playOscBurst(c, { type: 'triangle', startFreq: 480, endFreq: 420, duration: 0.22, vol: 0.01, delay: 0.04 });
-    }
-
-    function playPortalTravel(c) {
-        playNoiseBurst(c, { duration: 0.08, vol: 0.024, frequency: 2400, q: 1.8, filterType: 'bandpass' });
-        playOscBurst(c, { type: 'sawtooth', startFreq: 240, endFreq: 920, duration: 0.1, vol: 0.03 });
-    }
-
-    function playPortalTeleport(c) {
-        playNoiseBurst(c, { duration: 0.18, vol: 0.03, frequency: 1200, q: 0.8, filterType: 'bandpass' });
-        playOscBurst(c, { type: 'triangle', startFreq: 920, endFreq: 210, duration: 0.22, vol: 0.04 });
-    }
-
     function playFireIgnite(c) {
         playNoiseBurst(c, { duration: 0.045, vol: 0.06, frequency: 3400, q: 2.0, filterType: 'highpass' });
         playNoiseBurst(c, { duration: 0.12, vol: 0.04, frequency: 1200, q: 0.9, filterType: 'bandpass', delay: 0.004 });
@@ -717,42 +719,6 @@
                 case 'playerHit':
                     playPlayerHit(c);
                     break;
-                case 'themeSong':
-                    playThemeSong(c);
-                    break;
-                case 'swordClash':
-                    playSwordClash(c);
-                    break;
-                case 'punchHit':
-                    playPunchHit(c);
-                    break;
-                case 'levelUpNoise':
-                    playLevelUpNoise(c);
-                    break;
-                case 'ambientWeather':
-                    playAmbientWeather(c);
-                    break;
-                case 'doorOpen':
-                    playDoorOpen(c);
-                    break;
-                case 'pigOink':
-                    playPigOink(c);
-                    break;
-                case 'zombieGrowl':
-                    playZombieGrowl(c);
-                    break;
-                case 'zombieHurt':
-                    playZombieHurt(c);
-                    break;
-                case 'portalIdle':
-                    playPortalIdle(c);
-                    break;
-                case 'portalTravel':
-                    playPortalTravel(c);
-                    break;
-                case 'portalTeleport':
-                    playPortalTeleport(c);
-                    break;
                 case 'fireIgnite':
                     playFireIgnite(c);
                     break;
@@ -769,6 +735,12 @@
                 case 'reload':
                     playReloadCue(c, options.weapon || 'rifle', options.cue || 'start', options.cueId || '');
                     break;
+                case 'footstep':
+                    playFootstep(c, options);
+                    break;
+                case 'jump':
+                    playJump(c, options);
+                    break;
                 default:
                     break;
             }
@@ -780,8 +752,7 @@
     };
 
     GameAudio.getAssetCueIds = function () {
-        var defs = sharedRecipes && sharedRecipes.definitions ? sharedRecipes.definitions.sound : null;
-        return defs ? Object.keys(defs) : ['themeSong', 'swordClash', 'punchHit', 'levelUpNoise', 'ambientWeather'];
+        return audioCueIds.slice();
     };
 
     GameAudio.unlock = function () {

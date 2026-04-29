@@ -101,6 +101,27 @@ test('menu view model makes private room flow a distinct room surface', async ()
   assert.equal(view.phoneLandscapeRequired, true);
 });
 
+test('menu view model treats settings as a full menu surface', async () => {
+  const viewModel = await loadViewModel();
+  const view = viewModel.build(baseState({
+    utilityOpen: true,
+    modeListOpen: true,
+    socialToolsOpen: true
+  }));
+
+  assert.equal(view.menuContext, 'settings');
+  assert.equal(view.headerVariant, 'settings');
+  assert.equal(view.header.partyBackVisible, true);
+  assert.equal(view.header.accountToggleVisible, false);
+  assert.equal(view.controls.socialToolsVisible, false);
+  assert.equal(view.controls.playModeOptionsVisible, false);
+  assert.equal(view.surfaces.menuBodyVisible, true);
+  assert.equal(view.surfaces.mainScreenVisible, false);
+  assert.equal(view.surfaces.roomScreenVisible, false);
+  assert.equal(view.surfaces.settingsScreenVisible, true);
+  assert.equal(view.overlays.utilityVisible, true);
+});
+
 test('menu view model collapses regular screens for active match shell', async () => {
   const viewModel = await loadViewModel();
   const view = viewModel.build(baseState({
