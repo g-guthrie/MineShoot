@@ -20,7 +20,7 @@
         }
 
         function interpolationApi() {
-            return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || {};
+            return (globalThis.__MAYHEM_RUNTIME || {}).GameNetInterpolation || null;
         }
 
         function readArray(name) {
@@ -73,10 +73,6 @@
             ));
         }
 
-        function clamp(value, min, max) {
-            return Math.max(min, Math.min(max, value));
-        }
-
         function inputSeqModulo() {
             return 4294967296;
         }
@@ -95,66 +91,52 @@
             return ((next - prior) % modulo + modulo) % modulo;
         }
 
-        function normalizeAngle(rad) {
-            var value = Number(rad || 0);
-            while (value > Math.PI) value -= Math.PI * 2;
-            while (value < -Math.PI) value += Math.PI * 2;
-            return value;
-        }
-
-        function lerpNumber(a, b, t) {
-            return Number(a || 0) + ((Number(b || 0) - Number(a || 0)) * t);
-        }
-
-        function choosePresentationValue(olderValue, newerValue, t) {
-            return t >= 0.5 ? newerValue : olderValue;
-        }
-
         function sampleFootY(entry) {
             if (!entry) return 0;
             return Number((entry.footY != null ? entry.footY : entry.y) || 0);
         }
 
         function buildRemotePresentationSample(older, newer, t, serverTime) {
-            var sampleT = clamp(Number(t || 0), 0, 1);
+            var api = interpolationApi();
+            if (!api || !api.clamp || !api.lerpNumber || !api.normalizeAngle || !api.choosePresentationValue || !api.interpolateFootY) {
+                return null;
+            }
+            var sampleT = api.clamp(Number(t || 0), 0, 1);
             var base = older || newer || null;
             var head = newer || older || null;
             if (!base || !head) return null;
-            var api = interpolationApi();
             var spanMs = Math.max(1, Number(head.serverTime || 0) - Number(base.serverTime || 0));
             var baseFootY = sampleFootY(base);
             var headFootY = sampleFootY(head);
             return {
-                serverTime: Math.max(0, Number(serverTime != null ? serverTime : choosePresentationValue(base.serverTime, head.serverTime, sampleT)) || 0),
-                x: lerpNumber(base.x, head.x, sampleT),
-                y: api.interpolateFootY
-                    ? api.interpolateFootY(
-                        Object.assign({}, base, { footY: baseFootY }),
-                        Object.assign({}, head, { footY: headFootY }),
-                        sampleT,
-                        spanMs
-                    )
-                    : lerpNumber(baseFootY, headFootY, sampleT),
-                z: lerpNumber(base.z, head.z, sampleT),
-                yaw: Number(base.yaw || 0) + (normalizeAngle(Number(head.yaw || 0) - Number(base.yaw || 0)) * sampleT),
-                pitch: lerpNumber(base.pitch, head.pitch, sampleT),
-                moveSpeedNorm: lerpNumber(base.moveSpeedNorm, head.moveSpeedNorm, sampleT),
-                sprinting: !!choosePresentationValue(!!base.sprinting, !!head.sprinting, sampleT),
-                fastBackpedal: !!choosePresentationValue(!!base.fastBackpedal, !!head.fastBackpedal, sampleT),
-                movingForward: !!choosePresentationValue(!!base.movingForward, !!head.movingForward, sampleT),
-                movingBackward: !!choosePresentationValue(!!base.movingBackward, !!head.movingBackward, sampleT),
-                movingLeft: !!choosePresentationValue(!!base.movingLeft, !!head.movingLeft, sampleT),
-                movingRight: !!choosePresentationValue(!!base.movingRight, !!head.movingRight, sampleT),
-                isGrounded: choosePresentationValue(base.isGrounded !== false, head.isGrounded !== false, sampleT) !== false,
-                velocityY: lerpNumber(base.velocityY, head.velocityY, sampleT),
-                weaponId: String(choosePresentationValue(base.weaponId || 'rifle', head.weaponId || 'rifle', sampleT) || 'rifle')
+                serverTime: Math.max(0, Number(serverTime != null ? serverTime : api.choosePresentationValue(base.serverTime, head.serverTime, sampleT)) || 0),
+                x: api.lerpNumber(base.x, head.x, sampleT),
+                y: api.interpolateFootY(
+                    Object.assign({}, base, { footY: baseFootY }),
+                    Object.assign({}, head, { footY: headFootY }),
+                    sampleT,
+                    spanMs
+                ),
+                z: api.lerpNumber(base.z, head.z, sampleT),
+                yaw: Number(base.yaw || 0) + (api.normalizeAngle(Number(head.yaw || 0) - Number(base.yaw || 0)) * sampleT),
+                pitch: api.lerpNumber(base.pitch, head.pitch, sampleT),
+                moveSpeedNorm: api.lerpNumber(base.moveSpeedNorm, head.moveSpeedNorm, sampleT),
+                sprinting: !!api.choosePresentationValue(!!base.sprinting, !!head.sprinting, sampleT),
+                fastBackpedal: !!api.choosePresentationValue(!!base.fastBackpedal, !!head.fastBackpedal, sampleT),
+                movingForward: !!api.choosePresentationValue(!!base.movingForward, !!head.movingForward, sampleT),
+                movingBackward: !!api.choosePresentationValue(!!base.movingBackward, !!head.movingBackward, sampleT),
+                movingLeft: !!api.choosePresentationValue(!!base.movingLeft, !!head.movingLeft, sampleT),
+                movingRight: !!api.choosePresentationValue(!!base.movingRight, !!head.movingRight, sampleT),
+                isGrounded: api.choosePresentationValue(base.isGrounded !== false, head.isGrounded !== false, sampleT) !== false,
+                velocityY: api.lerpNumber(base.velocityY, head.velocityY, sampleT),
+                weaponId: String(api.choosePresentationValue(base.weaponId || 'rifle', head.weaponId || 'rifle', sampleT) || 'rifle')
             };
         }
 
         function getRemotePresentationClock(nowMs) {
             if (!opts.getRemoteSnapshotTiming) return null;
             var api = interpolationApi();
-            return api.buildPresentationClock
+            return api && api.buildPresentationClock
                 ? api.buildPresentationClock(opts.getRemoteSnapshotTiming(), nowMs)
                 : null;
         }
@@ -162,7 +144,7 @@
         function sampleRemotePresentationFromRender(render, nowMs) {
             if (!render) return null;
             var api = interpolationApi();
-            if (!api.interpolateBufferedTransform || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) {
+            if (!api || !api.interpolateBufferedTransform || !Array.isArray(render.snapshotHistory) || render.snapshotHistory.length === 0) {
                 return null;
             }
             var sampleNowMs = Math.max(0, Number(nowMs || Date.now()));
@@ -174,7 +156,7 @@
                     1,
                     Number(render.freezeBlendDurationMs || interpolationTuning.freezeRecoveryBlendMs || 48)
                 );
-                var freezeBlendT = clamp(
+                var freezeBlendT = api.clamp(
                     (sampleNowMs - Number(render.freezeBlendStartAt || 0)) / freezeBlendDurationMs,
                     0,
                     1
@@ -242,7 +224,9 @@
                 var newerTime = Number(newer && newer.serverTime || 0);
                 if (!(renderServerTime <= newerTime)) continue;
                 var spanMs = Math.max(1, newerTime - olderTime);
-                var t = clamp((renderServerTime - olderTime) / spanMs, 0, 1);
+                var api = interpolationApi();
+                if (!api || !api.clamp) return null;
+                var t = api.clamp((renderServerTime - olderTime) / spanMs, 0, 1);
                 return buildRemotePresentationSample(older, newer, t, renderServerTime);
             }
 
@@ -250,13 +234,14 @@
             var prev = history.length > 1 ? history[history.length - 2] : last;
             var stepMs = Math.max(1, Number(last && last.serverTime || 0) - Number(prev && prev.serverTime || 0));
             var api = interpolationApi();
+            if (!api || !api.clamp || !api.normalizeAngle) return null;
             var maxExtrapMs = api.computeMaxExtrapolation
                 ? api.computeMaxExtrapolation(
-                    clamp(Number(clock.cadenceMs || stepMs), 16, 140),
+                    api.clamp(Number(clock.cadenceMs || stepMs), 16, 140),
                     0
                 )
                 : 0;
-            var rawExtrapMs = clamp(
+            var rawExtrapMs = api.clamp(
                 renderServerTime - Number(last && last.serverTime || 0),
                 0,
                 maxExtrapMs
@@ -272,7 +257,7 @@
                     ? api.projectBallisticFootY(Object.assign({}, last, { footY: sampleFootY(last) }), extrapolationMs)
                     : (sampleFootY(last) + ((sampleFootY(last) - sampleFootY(prev)) * extrapolationT)),
                 z: Number(last && last.z || 0) + ((Number(last && last.z || 0) - Number(prev && prev.z || 0)) * extrapolationT),
-                yaw: Number(last && last.yaw || 0) + (normalizeAngle(Number(last && last.yaw || 0) - Number(prev && prev.yaw || 0)) * extrapolationT),
+                yaw: Number(last && last.yaw || 0) + (api.normalizeAngle(Number(last && last.yaw || 0) - Number(prev && prev.yaw || 0)) * extrapolationT),
                 pitch: Number(last && last.pitch || 0) + ((Number(last && last.pitch || 0) - Number(prev && prev.pitch || 0)) * extrapolationT),
                 moveSpeedNorm: Number(last && last.moveSpeedNorm || 0),
                 sprinting: !!(last && last.sprinting),

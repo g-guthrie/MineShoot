@@ -37,26 +37,24 @@ test('createRetryableMemoizedLoader memoizes a successful load', async () => {
   assert.equal(attempts, 1);
 });
 
-test('resolveGameplayRuntimeApi prefers explicit module exports over the compatibility global', () => {
+test('resolveGameplayRuntimeApi reads the explicit module export', () => {
   const moduleApi = { launchModeById() {} };
-  const runtimeApi = { launchModeById() {} };
 
   assert.equal(
-    resolveGameplayRuntimeApi({ gameplayRuntimeApi: moduleApi }, { GameMain: runtimeApi }),
+    resolveGameplayRuntimeApi({ gameplayRuntimeApi: moduleApi }),
     moduleApi
   );
 });
 
 test('resolveGameplayRuntimeApi returns null when the gameplay module export is missing', () => {
-  assert.equal(resolveGameplayRuntimeApi({}, { GameMain: { launchModeById() {} } }), null);
+  assert.equal(resolveGameplayRuntimeApi({}), null);
 });
 
-test('resolveDocsRuntimeApi prefers explicit module exports over the compatibility global', () => {
+test('resolveDocsRuntimeApi reads the explicit module export', () => {
   const moduleApi = { init() {}, open() {} };
-  const runtimeApi = { init() {}, open() {} };
 
   assert.equal(
-    resolveDocsRuntimeApi({ docsRuntimeApi: moduleApi }, { GameDocs: runtimeApi }),
+    resolveDocsRuntimeApi({ docsRuntimeApi: moduleApi }),
     moduleApi
   );
 });

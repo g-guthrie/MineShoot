@@ -17,14 +17,14 @@ export function createRetryableMemoizedLoader(factory) {
     };
 }
 
-export function resolveGameplayRuntimeApi(moduleNs, runtimeNs) {
+export function resolveGameplayRuntimeApi(moduleNs) {
     var moduleApi = moduleNs && moduleNs.gameplayRuntimeApi
         ? moduleNs.gameplayRuntimeApi
         : (moduleNs && moduleNs.default ? moduleNs.default : null);
     return moduleApi && moduleApi.launchModeById ? moduleApi : null;
 }
 
-export function resolveDocsRuntimeApi(moduleNs, runtimeNs) {
+export function resolveDocsRuntimeApi(moduleNs) {
     var moduleApi = null;
     if (moduleNs && typeof moduleNs.getDocsRuntimeApi === 'function') {
         moduleApi = moduleNs.getDocsRuntimeApi();
@@ -65,14 +65,13 @@ export function resolveDocsRuntimeApi(moduleNs, runtimeNs) {
                 return moduleNs;
             })
             .then(function (moduleNs) {
-                loadedGameplayRuntimeApi = resolveGameplayRuntimeApi(moduleNs, runtime);
+                loadedGameplayRuntimeApi = resolveGameplayRuntimeApi(moduleNs);
                 return loadedGameplayRuntimeApi;
             });
     });
 
     GameRuntimeLoader.isGameplayRuntimeReady = function () {
-        var gameplayApi = loadedGameplayRuntimeApi || resolveGameplayRuntimeApi(null, runtime);
-        return !!(gameplayApi && gameplayApi.launchModeById);
+        return !!(loadedGameplayRuntimeApi && loadedGameplayRuntimeApi.launchModeById);
     };
 
     GameRuntimeLoader.getLoadedGameplayRuntime = function () {
@@ -81,7 +80,7 @@ export function resolveDocsRuntimeApi(moduleNs, runtimeNs) {
 
     GameRuntimeLoader.loadDocsRuntime = createRetryableMemoizedLoader(function () {
         return import('../runtime/docs-runtime.js').then(function (moduleNs) {
-            loadedDocsRuntimeApi = resolveDocsRuntimeApi(moduleNs, runtime);
+            loadedDocsRuntimeApi = resolveDocsRuntimeApi(moduleNs);
             if (loadedDocsRuntimeApi && loadedDocsRuntimeApi.init) {
                 loadedDocsRuntimeApi.init();
             }

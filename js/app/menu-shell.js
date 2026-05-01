@@ -84,7 +84,6 @@
 
     function bindDocsControls() {
         var pauseOpenBtnEl = document.getElementById('open-manual-btn');
-        var hudOpenBtnEl = document.getElementById('hud-manual-btn');
 
         function openDocs(event) {
             if (event) {
@@ -98,11 +97,6 @@
         if (pauseOpenBtnEl && !pauseOpenBtnEl.__docsBound) {
             pauseOpenBtnEl.__docsBound = true;
             pauseOpenBtnEl.addEventListener('click', openDocs);
-        }
-
-        if (hudOpenBtnEl && !hudOpenBtnEl.__docsBound) {
-            hudOpenBtnEl.__docsBound = true;
-            hudOpenBtnEl.addEventListener('click', openDocs);
         }
 
         if (!window.__mayhemDocsKeyBound) {

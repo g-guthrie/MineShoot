@@ -57,6 +57,7 @@
         };
         var DEFAULT_TOUCH_LOOK_MULTIPLIER = 1.9;
         var IPHONE_TOUCH_LOOK_MULTIPLIER = DEFAULT_TOUCH_LOOK_MULTIPLIER * 1.25;
+        var TOUCH_SPRINT_ARC_FRACTION = 0.25;
         var touchJumpState = {
             pointerId: null,
             releaseTimer: 0
@@ -255,11 +256,25 @@
         }
 
         function touchMoveRadiusPx() {
-            return 84;
+            var fallback = 52;
+            var ring = touchMoveThumb && touchMoveThumb.querySelector
+                ? touchMoveThumb.querySelector('.touch-stick-ring')
+                : null;
+            if (!ring || !touchMoveKnob ||
+                typeof ring.getBoundingClientRect !== 'function' ||
+                typeof touchMoveKnob.getBoundingClientRect !== 'function') {
+                return fallback;
+            }
+            var ringRect = ring.getBoundingClientRect();
+            var knobRect = touchMoveKnob.getBoundingClientRect();
+            var ringSize = Math.min(Number(ringRect.width || 0), Number(ringRect.height || 0));
+            var knobSize = Math.max(Number(knobRect.width || 0), Number(knobRect.height || 0));
+            var radius = (ringSize - knobSize) * 0.5;
+            return radius > 0 ? Math.max(24, radius) : fallback;
         }
 
         function touchSprintHalfAngleRad() {
-            return 15 * Math.PI / 180;
+            return Math.PI * TOUCH_SPRINT_ARC_FRACTION;
         }
 
         function touchSprintClockwiseOffsetRad() {

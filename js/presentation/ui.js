@@ -311,21 +311,6 @@
         }, HITMARKER_HOLD_MS);
     };
 
-    GameUI.showPredictedHitMarker = function () {
-        hitmarkerEl.style.transition = 'none';
-        hitmarkerEl.style.opacity = '1';
-        hitmarkerEl.style.color = '#dfe9ff';
-        hitmarkerEl.style.fontSize = '28px';
-        if (hitmarkerTimer) clearTimeout(hitmarkerTimer);
-        hitmarkerTimer = setTimeout(function () {
-            hitmarkerEl.style.transition = 'opacity ' + HITMARKER_FADE_SEC + 's ease-out';
-            hitmarkerEl.style.opacity = '0';
-            hitmarkerEl.style.color = '#ff0000';
-            hitmarkerEl.style.fontSize = '28px';
-            hitmarkerTimer = null;
-        }, HITMARKER_HOLD_MS);
-    };
-
     GameUI.showKillMarker = function () {
         hitmarkerEl.style.transition = 'none';
         hitmarkerEl.style.opacity = '1';
@@ -341,11 +326,46 @@
         }, 300);
     };
 
+    function escapeHudHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderCounterPills(rawCounter) {
+        if (!killCounterEl) return;
+        var raw = String(rawCounter || '').trim();
+        killCounterEl.textContent = raw;
+        if (!raw) {
+            killCounterEl.innerHTML = '';
+            return;
+        }
+        var parts = raw.split('|').map(function (part) { return String(part || '').trim(); }).filter(Boolean);
+        if (!parts.length) {
+            killCounterEl.innerHTML = '';
+            return;
+        }
+        var pills = parts.map(function (part) {
+            var colonIndex = part.indexOf(':');
+            if (colonIndex < 0) {
+                return '<div class="match-pill"><span class="match-pill-value">' + escapeHudHtml(part) + '</span></div>';
+            }
+            var label = part.slice(0, colonIndex).trim().toUpperCase();
+            var value = part.slice(colonIndex + 1).trim();
+            return '<div class="match-pill"><span class="match-pill-label">' + escapeHudHtml(label) + '</span><span class="match-pill-value">' + escapeHudHtml(value) + '</span></div>';
+        }).join('');
+        killCounterEl.innerHTML = '<div class="match-pill-row">' + pills + '</div>';
+    }
+
     GameUI.updateMatchStatus = function (matchState, selfState) {
         killCount = Math.max(0, Number(selfState && selfState.kills || 0));
         if (!killCounterEl) return;
         if (!matchState && !selfState) {
             killCounterEl.textContent = '';
+            killCounterEl.innerHTML = '';
             return;
         }
         var stockMode = !!(matchState && matchState.stockMode) || Number(selfState && selfState.maxStocks || 0) > 0;
@@ -364,10 +384,10 @@
         var matchRules = sharedMatchRules();
         if (matchRules && matchRules.formatMatchHudCounter) {
             GameUI.updateExtraLifeProgress(0);
-            killCounterEl.textContent = matchRules.formatMatchHudCounter(matchState, selfState);
+            renderCounterPills(matchRules.formatMatchHudCounter(matchState, selfState));
             return;
         }
-        killCounterEl.textContent = 'Kills: ' + killCount;
+        renderCounterPills('Kills: ' + killCount);
         GameUI.updateExtraLifeProgress(0);
     };
 

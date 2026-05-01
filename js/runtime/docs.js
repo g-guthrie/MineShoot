@@ -18,7 +18,6 @@
     var hintEl = null;
     var closeBtnEl = null;
     var pauseOpenBtnEl = null;
-    var hudOpenBtnEl = null;
     var isInited = false;
 
     var state = {
@@ -1406,7 +1405,7 @@
             document.exitPointerLock();
         }
         if (runtime.GameModalManager && runtime.GameModalManager.open) {
-            runtime.GameModalManager.open('docs', triggerEl || pauseOpenBtnEl || hudOpenBtnEl || document.activeElement || null);
+            runtime.GameModalManager.open('docs', triggerEl || pauseOpenBtnEl || document.activeElement || null);
         } else {
             panelEl.hidden = false;
             panelEl.setAttribute('aria-hidden', 'false');
@@ -1434,7 +1433,6 @@
         hintEl = document.getElementById('docs-hint');
         closeBtnEl = document.getElementById('docs-close-btn');
         pauseOpenBtnEl = document.getElementById('open-manual-btn');
-        hudOpenBtnEl = document.getElementById('hud-manual-btn');
 
         if (!panelEl || !contentEl || !navEl || !subnavEl || !mainEl) return;
 
@@ -1455,7 +1453,7 @@
             runtime.GameModalManager.register('docs', {
                 element: panelEl,
                 initialFocus: closeBtnEl || panelEl,
-                restoreFocus: utilityToggleBtn || pauseOpenBtnEl || hudOpenBtnEl || null
+                restoreFocus: utilityToggleBtn || pauseOpenBtnEl || null
             });
         }
         if (!panelEl.__docsBindingsSubscribed && runtime.GameInputBindings && runtime.GameInputBindings.subscribe) {

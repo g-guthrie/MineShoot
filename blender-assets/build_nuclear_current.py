@@ -2,8 +2,8 @@
 PvP - current nuclear biome Blender rebuild
 
 This script mirrors the current gameplay nuclear quadrant in
-`js/world/quadrant-nuclear.js` closely enough to use as a rebuild base in
-Blender.
+`js/world/quadrant-nuclear-simpsons.js` closely enough to use as a rebuild base
+in Blender.
 
 Run:
   blender --python blender-assets/build_nuclear_current.py

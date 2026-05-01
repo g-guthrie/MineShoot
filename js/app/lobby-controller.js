@@ -300,7 +300,8 @@ import {
             partyRoomSection: document.getElementById('party-room-section'),
             partyHeroLeaveBtn: document.getElementById('party-hero-leave-btn'),
             privateRoomStatus: document.getElementById('private-room-status'),
-            roomSocialFeedback: document.getElementById('private-room-status'),
+            privateRoomActionStatus: document.getElementById('private-room-action-status'),
+            roomSocialFeedback: document.getElementById('room-social-feedback'),
             roomSocialInviteBanner: document.getElementById('room-social-invite-banner'),
             roomSocialInviteCopy: document.getElementById('room-social-invite-copy'),
             roomSocialInviteActions: document.getElementById('room-social-invite-actions'),
@@ -318,7 +319,6 @@ import {
             privateRoomTeams4Btn: document.getElementById('private-room-teams-4-btn'),
             privateRoomRandomizeBtn: document.getElementById('private-room-randomize-btn'),
             privateRoomStartBtn: document.getElementById('private-room-start-btn'),
-            privateRoomEnterBtn: document.getElementById('private-room-enter-btn'),
             privateRoomInvitePartyBtn: document.getElementById('private-room-invite-party-btn'),
             privateRoomInviteLockBtn: document.getElementById('private-room-invite-lock-btn'),
             privateRoomUnassignedWrap: document.getElementById('private-room-unassigned-wrap'),
@@ -682,7 +682,7 @@ import {
                 getPartyState: function () {
                     return getState().party;
                 },
-                privateRoomStatusEl: elements.privateRoomStatus,
+                privateRoomStatusEl: elements.privateRoomActionStatus || elements.privateRoomStatus,
                 privateRoomUnassignedWrap: elements.privateRoomUnassignedWrap,
                 privateRoomUnassigned: elements.privateRoomUnassigned,
                 privateRoomRosterGrid: elements.privateRoomRosterGrid,
@@ -952,11 +952,6 @@ import {
         });
         bindClick(elements.privateRoomStartBtn, function () {
             if (actionApi && actionApi.startPrivateRoomMatch) actionApi.startPrivateRoomMatch();
-        });
-        bindClick(elements.privateRoomEnterBtn, function () {
-            if (actionApi && actionApi.enterPrivateRoom) {
-                actionApi.enterPrivateRoom();
-            }
         });
         bindClick(elements.privateRoomLeaveBtn, function () {
             patchState({ leaveRoomConfirmOpen: true });

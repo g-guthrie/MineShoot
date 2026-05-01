@@ -76,7 +76,6 @@
     <link rel="stylesheet" href="/css/menu-shell-v4.css">
 </head>
 <body class="menu-booting" data-overlay-active="true">
-    <button id="hud-manual-btn" type="button">Manual</button>
     <div id="phone-orientation-blocker" aria-live="polite" aria-modal="true" role="dialog" hidden>
         <div id="phone-orientation-card">
             <div id="phone-orientation-kicker">Phone Mode</div>
@@ -258,6 +257,7 @@
                                         <button id="room-social-invite-dismiss-btn" class="btn btn-danger" type="button">Dismiss</button>
                                     </div>
                                 </div>
+                                <div id="room-social-feedback" class="status" aria-live="polite" hidden></div>
 
                                 <!-- Header card: room identity + code + status -->
                                 <section id="party-room-section" class="card stack">
@@ -282,6 +282,7 @@
                                             <button id="private-room-teams-4-btn" class="btn btn-sm" type="button" role="radio" aria-checked="false">4</button>
                                         </div>
                                     </div>
+                                    <div id="private-room-action-status" class="status" aria-live="polite" hidden></div>
                                     <div id="private-room-unassigned-wrap" hidden>
                                         <div id="private-room-unassigned"></div>
                                     </div>
@@ -298,7 +299,6 @@
                                             <div class="private-room-action-spacer"></div>
                                             <button id="private-room-randomize-btn" class="btn btn-sm" type="button">Balance Teams</button>
                                             <button id="private-room-start-btn" class="btn btn-primary" type="button">Start Match</button>
-                                            <button id="private-room-enter-btn" class="btn btn-primary" type="button" hidden>Enter Match</button>
                                         </div>
                                     </div>
                                 </div>
@@ -345,26 +345,6 @@
         </div>
     </div>
 
-    <div id="party-roster-overlay" class="modal-overlay" hidden>
-        <div id="party-roster-modal" class="modal-card">
-            <div id="party-roster-modal-header">
-                <span id="party-roster-modal-title">PARTY ROSTER</span>
-                <button id="party-roster-close-btn" type="button">CLOSE</button>
-            </div>
-            <div id="party-roster-modal-content">NO PARTY DATA</div>
-        </div>
-    </div>
-
-    <div id="friends-overlay" class="modal-overlay" hidden>
-        <div id="friends-modal" class="modal-card">
-            <div id="friends-modal-header">
-                <span id="friends-modal-title">FRIEND LIST</span>
-                <button id="friends-close-btn" type="button">CLOSE</button>
-            </div>
-            <div id="friends-modal-content">NO FRIEND DATA</div>
-        </div>
-    </div>
-
     <div id="leave-confirm-overlay" class="modal-overlay" hidden>
         <div id="leave-confirm-panel" class="modal-card stack">
             <div id="leave-confirm-title">Leave Match?</div>
@@ -389,7 +369,7 @@
 
     <div id="auth-overlay" class="modal-overlay" hidden>
         <div id="auth-panel" class="modal-card">
-            <button id="auth-close-btn" type="button" aria-label="Close account panel">CLOSE</button>
+            <button id="auth-close-btn" type="button" aria-label="Close account panel">Close</button>
             <div id="auth-login-view">
                 <h2>Optional Profile</h2>
                 <p>Create a profile with any unique username and a 4-digit PIN. Or ignore this and hit play.</p>

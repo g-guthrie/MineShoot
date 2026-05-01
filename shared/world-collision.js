@@ -9,7 +9,6 @@ import '../js/world/quadrant-wall-street.js';
 import '../js/world/quadrant-citadel.js';
 import '../js/world/quadrant-desert.js';
 import '../js/world/quadrant-jungle.js';
-import '../js/world/quadrant-nuclear.js';
 import '../js/world/prefab-fuel-spheres.js';
 import '../js/world/prefab-reactor-tank.js';
 import '../js/world/quadrant-nuclear-simpsons.js';

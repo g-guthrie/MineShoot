@@ -89,13 +89,7 @@ body {
     }
 }
 
-body.menu-booting #hud-manual-btn {
-    opacity: 0;
-    pointer-events: none;
-}
-
-body:not(.menu-booting) #overlay,
-body:not(.menu-booting) #hud-manual-btn {
+body:not(.menu-booting) #overlay {
     transition: opacity 120ms ease-out;
 }
 
@@ -128,38 +122,6 @@ body[data-overlay-active="true"] #tracking-reticle {
     pointer-events: none !important;
 }
 
-#hud-manual-btn {
-    position: fixed;
-    top: 16px;
-    left: 132px;
-    z-index: 121;
-    border: none;
-    border-radius: var(--r-pill, 999px);
-    background: var(--fill-pill, linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(244, 248, 252, 0.68)));
-    color: var(--c-body, #263246);
-    font-family: 'Rajdhani', 'Trebuchet MS', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 7px 14px;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.78),
-        inset 0 0 0 1px var(--border-pill, rgba(218, 226, 238, 0.96)),
-        var(--pill-shadow, 0 10px 24px rgba(27, 41, 67, 0.06));
-    cursor: pointer;
-    text-transform: none;
-    user-select: none;
-}
-
-#hud-manual-btn:hover {
-    background: linear-gradient(180deg, rgba(232, 240, 255, 0.92), rgba(219, 231, 255, 0.84));
-    color: var(--c-blue-text, #2358d8);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.76),
-        inset 0 0 0 1px var(--c-blue-ring, rgba(82, 124, 255, 0.24)),
-        var(--pill-shadow-active, 0 12px 24px rgba(59, 110, 255, 0.12));
-}
-
 canvas {
     display: block;
 }
@@ -180,8 +142,8 @@ canvas {
     --touch-jump-size: 104px;
     --touch-swap-height: 60px;
     --touch-roll-height: 72px;
-    --touch-menu-width: 52px;
-    --touch-menu-height: 28px;
+    --touch-menu-width: 64px;
+    --touch-menu-height: 44px;
     --touch-btn-gap: 5px;
     --touch-action-gap: 6px;
     --touch-btn-font-size: 12px;
@@ -198,15 +160,17 @@ canvas {
 .touch-look-surface {
     position: absolute;
     inset: 0;
+    z-index: 0;
     pointer-events: auto;
     touch-action: none;
 }
 
 .touch-topbar {
     position: absolute;
-    top: max(12px, env(safe-area-inset-top));
-    left: max(14px, env(safe-area-inset-left));
-    right: max(14px, env(safe-area-inset-right));
+    top: max(12px, calc(env(safe-area-inset-top) + 12px));
+    left: max(14px, calc(env(safe-area-inset-left) + 14px));
+    right: max(14px, calc(env(safe-area-inset-right) + 14px));
+    z-index: 2;
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
@@ -217,6 +181,7 @@ canvas {
 .touch-rotate-prompt {
     position: absolute;
     inset: 0;
+    z-index: 3;
     display: none;
     align-items: center;
     justify-content: center;
@@ -285,8 +250,9 @@ canvas {
 
 .touch-stick {
     position: absolute;
-    left: max(8px, env(safe-area-inset-left));
-    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(8px, calc(env(safe-area-inset-left) + 8px));
+    bottom: max(10px, calc(env(safe-area-inset-bottom) + 10px));
+    z-index: 2;
     width: var(--touch-stick-size);
     height: var(--touch-stick-size);
     pointer-events: auto;
@@ -296,9 +262,6 @@ canvas {
 .touch-stick-ring {
     position: relative;
     border-radius: 50%;
-}
-
-.touch-stick-ring {
     width: var(--touch-stick-ring-size);
     height: var(--touch-stick-ring-size);
     margin: var(--touch-stick-ring-margin);
@@ -322,9 +285,9 @@ canvas {
     pointer-events: none;
     opacity: 0.42;
     background: conic-gradient(
-        from -10deg,
-        rgba(70, 215, 118, 0.88) 0deg 30deg,
-        transparent 30deg 360deg
+        from -40deg,
+        rgba(70, 215, 118, 0.88) 0deg 90deg,
+        transparent 90deg 360deg
     );
     -webkit-mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);
     mask: radial-gradient(circle, transparent 0 68%, #000 68.5% 100%);
@@ -352,11 +315,12 @@ canvas {
 
 .touch-action-cluster {
     position: absolute;
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
+    right: max(8px, calc(env(safe-area-inset-right) + 8px));
+    bottom: max(10px, calc(env(safe-area-inset-bottom) + 10px));
+    z-index: 2;
     display: grid;
     grid-template-columns: var(--touch-action-width);
-    align-items: end;
+    align-items: flex-end;
     gap: var(--touch-action-gap);
     pointer-events: none;
 }
@@ -416,10 +380,10 @@ canvas {
 .touch-btn-menu {
     min-width: var(--touch-menu-width);
     min-height: var(--touch-menu-height);
-    padding: 0 clamp(6px, 1vw, 8px);
+    padding: 0 clamp(10px, 1.4vw, 12px);
     border-radius: var(--touch-menu-radius);
     pointer-events: auto;
-    font-size: clamp(9px, 1.2vw, 10px);
+    font-size: clamp(11px, 1.3vw, 12px);
 }
 
 .touch-btn-jump {
@@ -463,30 +427,6 @@ canvas {
     }
 }
 
-
-.app-modal-overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    background: rgba(10, 18, 32, 0.55);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    z-index: 160;
-    cursor: default;
-}
-
-.app-modal-overlay[hidden] {
-    display: none !important;
-}
-
-.app-modal-surface {
-    max-width: 100%;
-    max-height: min(88vh, 760px);
-    overflow: auto;
-}
 
 #auth-overlay {
     padding: 16px;
@@ -746,7 +686,6 @@ canvas {
 }
 
 /* Overlay (Pip-Boy style) */
-.launch-stage,
 #launch-flow {
     position: absolute;
     inset: 0;
@@ -864,39 +803,6 @@ canvas {
 
 #launch-enter-btn:hover {
     filter: brightness(1.02);
-}
-
-.postgame-screen {
-    width: min(900px, 94vw);
-    border-radius: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.48);
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(245, 248, 252, 0.32)),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.34),
-        0 28px 90px rgba(27, 41, 67, 0.16);
-    backdrop-filter: blur(24px) saturate(155%);
-    -webkit-backdrop-filter: blur(24px) saturate(155%);
-    color: #1f2b3e;
-    text-align: center;
-    padding: 28px 24px 24px;
-}
-
-.postgame-kicker {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 7px 14px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(244, 248, 252, 0.72));
-    box-shadow: inset 0 0 0 1px rgba(220, 227, 236, 0.92);
-    color: #6b7a90;
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
 }
 
 #postgame-winner-banner {
@@ -1252,18 +1158,6 @@ canvas {
     cursor: pointer;
 }
 #controls-reset-btn:hover { background: rgba(228, 91, 87, 0.2); }
-
-.visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
 
 @media (max-width: 560px) {
     #controls-modal { padding: 18px 16px; }
@@ -1642,7 +1536,7 @@ canvas {
     display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(180px, 0.75fr);
     gap: 12px;
-    align-items: start;
+    align-items: flex-start;
 }
 
 .docs-weapon-art {
@@ -1666,7 +1560,7 @@ canvas {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 10px;
-    align-items: start;
+    align-items: flex-start;
     min-height: 36px;
 }
 
@@ -1960,6 +1854,7 @@ canvas {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     padding: 5px 14px;
     color: #e7f6ff;
+    text-align: center;
 }
 
 .match-pill-label {
@@ -2820,11 +2715,6 @@ canvas {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    #hud-manual-btn {
-        left: 16px;
-        top: 56px;
-    }
-
     #runtime-indicator {
         top: 16px;
         right: 16px;
@@ -2873,7 +2763,8 @@ canvas {
    This block MUST remain last so it wins the cascade over the
    broader (max-width: 900px) / (max-height: 720px) queries above.
    ------------------------------------------------------------ */
-@media (pointer: coarse) and (max-height: 500px) and (orientation: landscape) {
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 520px),
+       (pointer: coarse) and (orientation: landscape) and (max-width: 640px) {
 
     #touch-controls {
         --touch-stick-size: clamp(168px, 21vw, 188px);
@@ -2884,8 +2775,8 @@ canvas {
         --touch-jump-size: clamp(78px, 10vw, 88px);
         --touch-swap-height: clamp(42px, 5.4vw, 48px);
         --touch-roll-height: clamp(50px, 6.8vw, 58px);
-        --touch-menu-width: clamp(42px, 5.4vw, 48px);
-        --touch-menu-height: clamp(22px, 2.8vw, 24px);
+        --touch-menu-width: clamp(56px, 7vw, 64px);
+        --touch-menu-height: 44px;
         --touch-btn-gap: 2px;
         --touch-action-gap: 5px;
         --touch-btn-font-size: clamp(9px, 1.25vw, 10px);
@@ -2911,19 +2802,12 @@ canvas {
         margin-top: -3.5px;
     }
 
-    #hud-manual-btn {
-        top: max(8px, calc(env(safe-area-inset-top) + 4px));
-        left: max(76px, calc(env(safe-area-inset-left) + 72px));
-        font-size: 10px;
-        padding: 4px 7px;
-    }
-
     /* ===== TOP-RIGHT ZONE ===== */
 
     #runtime-indicator {
         top: max(8px, calc(env(safe-area-inset-top) + 4px));
         right: clamp(140px, 19vw, 180px);
-        font-size: 7px;
+        font-size: 8px;
         padding: 3px 5px;
         letter-spacing: 0.4px;
         line-height: 1.15;
@@ -2948,15 +2832,23 @@ canvas {
 
     #kill-counter {
         top: max(36px, calc(env(safe-area-inset-top) + 28px));
-        right: max(8px, env(safe-area-inset-right));
+        right: max(8px, calc(env(safe-area-inset-right) + 8px));
         gap: 2px;
-        max-width: min(124px, calc(100vw - 16px));
+        max-width: min(172px, calc(100vw - 16px));
     }
 
     .match-pill-row { gap: 3px; }
-    .match-pill { padding: 2px 5px; }
-    .match-pill-label { font-size: 5px; letter-spacing: 0.55px; }
-    .match-pill-value { font-size: 8px; letter-spacing: 0.1px; }
+    .match-pill {
+        min-width: 38px;
+        padding: 2px 5px;
+        text-align: center;
+    }
+    .match-pill-label { font-size: 6px; letter-spacing: 0.55px; }
+    .match-pill-value {
+        font-size: 9px;
+        letter-spacing: 0.1px;
+        text-align: center;
+    }
     .match-pill-progress { padding: 3px 5px 4px; }
     .match-pill-track { margin-top: 3px; height: 3px; }
 
@@ -2973,8 +2865,6 @@ canvas {
     }
 
     /* ===== HIDE DEV TOOLS ===== */
-
-    #hud-manual-btn { display: none; }
 
     #debug-info {
         top: max(8px, calc(env(safe-area-inset-top) + 4px));
@@ -3013,7 +2903,7 @@ canvas {
 
     #extra-life-bar-container {
         top: max(74px, calc(env(safe-area-inset-top) + 66px));
-        right: max(8px, env(safe-area-inset-right));
+        right: max(8px, calc(env(safe-area-inset-right) + 8px));
         left: auto;
         bottom: auto;
         transform: none;
@@ -3023,13 +2913,13 @@ canvas {
         gap: 4px;
     }
 
-    #extra-life-label { font-size: 5px; letter-spacing: 0.5px; }
-    #extra-life-value { font-size: 7px; }
+    #extra-life-label { font-size: 6px; letter-spacing: 0.5px; }
+    #extra-life-value { font-size: 8px; }
     #extra-life-track { height: 3px; }
 
     #health-text {
         bottom: max(28px, calc(env(safe-area-inset-bottom) + 10px));
-        width: min(240px, calc(100vw - 320px));
+        width: clamp(96px, calc(100vw - 352px), 220px);
         height: 16px;
         display: flex;
         align-items: center;
@@ -3042,13 +2932,13 @@ canvas {
 
     #health-bar-container {
         bottom: max(28px, calc(env(safe-area-inset-bottom) + 10px));
-        width: min(240px, calc(100vw - 320px));
+        width: clamp(96px, calc(100vw - 352px), 220px);
         height: 16px;
     }
 
     #armor-bar-container {
         bottom: max(16px, calc(env(safe-area-inset-bottom) + 2px));
-        width: min(240px, calc(100vw - 320px));
+        width: clamp(96px, calc(100vw - 352px), 220px);
         height: 5px;
     }
 
@@ -3056,13 +2946,15 @@ canvas {
 
     #hud-bottom-right {
         top: max(98px, calc(env(safe-area-inset-top) + 90px));
-        right: max(8px, env(safe-area-inset-right));
+        right: max(8px, calc(env(safe-area-inset-right) + 8px));
         bottom: auto;
+        align-items: center;
         gap: 1px;
         padding: 4px 8px 5px;
         border-radius: 18px;
         max-width: 104px;
         min-width: 0;
+        text-align: center;
         background: rgba(14, 22, 34, 0.48);
     }
 
@@ -3071,8 +2963,16 @@ canvas {
     }
 
     #weapon-info {
+        align-items: center;
         max-width: 88px;
         gap: 0;
+        text-align: center;
+        width: 100%;
+    }
+
+    #weapon-info .weapon-line {
+        width: 100%;
+        text-align: center;
     }
 
     #weapon-info .weapon-line-name {
@@ -3090,13 +2990,18 @@ canvas {
     }
 
     #cooldown-status {
-        font-size: 6px;
+        font-size: 7px;
         letter-spacing: 0.3px;
         line-height: 1;
+        text-align: center;
+        width: 100%;
     }
 
     #cooldown-container {
-        display: none;
+        display: block;
+        width: 72px;
+        height: 3px;
+        margin-top: 1px;
     }
 
     /* ===== OVERHEAD BARS (scale down) ===== */

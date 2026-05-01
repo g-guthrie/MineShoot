@@ -21,6 +21,14 @@
         target.classList.toggle('error', !!(status && status.error));
     }
 
+    function hasAssignedPrivateRoom(state) {
+        var party = state && state.party ? state.party : null;
+        var self = party && party.self ? party.self : null;
+        if (self && self.privateRoom) return true;
+        var summary = party && party.privateRoomSummary ? party.privateRoomSummary : null;
+        return !!(summary && (summary.room || summary.self));
+    }
+
     GameLobbyRenderer.create = function (opts) {
         opts = opts || {};
 
@@ -286,6 +294,7 @@
             var room = privateRoomState && privateRoomState.room ? privateRoomState.room : null;
             var caps = capabilities();
             var hasRoom = !!room;
+            var pendingRoomAssignment = hasAssignedPrivateRoom(state);
             var isBusy = busy();
             var roomPhase = hasRoom ? String(room.roomPhase || '') : '';
             var roomMode = hasRoom ? String(room.roomMode || '') : '';
@@ -293,12 +302,7 @@
 
             if (elements.roomSharePanel) elements.roomSharePanel.hidden = !hasRoom;
             if (elements.roomShareCode) setText(elements.roomShareCode, hasRoom ? String(room.roomCode || roomCodeFromRoomId(room.roomId)).toUpperCase() : '------');
-            if (elements.privateRoomView) elements.privateRoomView.hidden = !hasRoom;
-            if (elements.privateRoomEnterBtn) {
-                var active = hasRoom && roomPhase === 'active';
-                elements.privateRoomEnterBtn.hidden = !active;
-                elements.privateRoomEnterBtn.disabled = isBusy;
-            }
+            if (elements.privateRoomView) elements.privateRoomView.hidden = !(hasRoom || pendingRoomAssignment);
             if (elements.privateRoomStartBtn) {
                 elements.privateRoomStartBtn.hidden = !(hasRoom && roomPhase === 'lobby');
                 elements.privateRoomStartBtn.disabled = isBusy || !caps.canStartPrivateRoom;

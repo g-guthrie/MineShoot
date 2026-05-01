@@ -354,9 +354,21 @@
             var roomInvite = party && party.roomInvite ? party.roomInvite.incoming : null;
             var session = getSession();
             if (roomInvite && roomInvite.roomId && session && session.runPartyAction) {
-                session.runPartyAction('accept_room_invite', {}, 'Joining room invite...');
+                var roomResult = session.runPartyAction('accept_room_invite', {}, 'Joining room invite...');
                 render();
-                return true;
+                if (roomResult && typeof roomResult.then === 'function') {
+                    return roomResult.then(function (result) {
+                        if (result) setActiveSurface('room');
+                        render();
+                        return !!result;
+                    }).catch(function () {
+                        render();
+                        return false;
+                    });
+                }
+                if (roomResult) setActiveSurface('room');
+                render();
+                return !!roomResult;
             }
             var invite = party && party.directInvite ? party.directInvite.incoming : null;
             if (!invite || !invite.actorId || !session || !session.runPartyAction) return false;
@@ -522,25 +534,6 @@
             session.selfPickTeam(teamId);
         }
 
-        function enterPrivateRoom() {
-            var state = getState();
-            var room = state.privateRoom && state.privateRoom.room;
-            if (!room) return Promise.resolve(false);
-            setBusy(true);
-            writeReturnState({ activeSurface: 'room', selectedMode: room.roomMode || (state.launch && state.launch.selectedMode) });
-            setLaunchState({
-                selectedMode: normalizeMode(room.roomMode || (state.launch && state.launch.selectedMode)),
-                phase: 'joining',
-                message: 'Joining room ' + String(room.roomCode || '').toUpperCase() + '...',
-                error: false
-            });
-            render();
-            return completeLaunch('single_cloudflare', {
-                roomId: room.roomId,
-                gameMode: room.roomMode || 'ffa'
-            }, 'Room ready.');
-        }
-
         function launchDevMode(modeId) {
             var nextModeId = String(modeId || '');
             if (!nextModeId || !opts.launchModeById) return Promise.resolve(false);
@@ -589,7 +582,6 @@
             togglePrivateRoomInviteLock: togglePrivateRoomInviteLock,
             randomizePrivateRoomTeams: randomizePrivateRoomTeams,
             startPrivateRoomMatch: startPrivateRoomMatch,
-            enterPrivateRoom: enterPrivateRoom,
             leavePrivateRoom: leavePrivateRoom,
             selfPickTeam: selfPickTeam,
             launchDevMode: launchDevMode,

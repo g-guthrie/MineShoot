@@ -32,7 +32,6 @@ async function loadMenuShell(toggleDocs, runtimeOverrides = {}) {
   ]);
   const elements = {
     'open-manual-btn': new FakeElement('button', 'open-manual-btn'),
-    'hud-manual-btn': new FakeElement('button', 'hud-manual-btn'),
     'auth-username': new FakeElement('input', 'auth-username'),
     'mode-screen-title': new FakeElement('h1', 'mode-screen-title'),
     'docs-title': new FakeElement('div', 'docs-title')

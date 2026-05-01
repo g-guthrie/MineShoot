@@ -101,8 +101,6 @@ flowchart TD
 | Controls overlay | `controls-reset-btn` | Resets bindings to defaults | No surface change. |
 | Launch handoff | `launch-enter-btn` | Calls `GameSession.enterGameplay(...)` | Only appears when the handoff is in a retryable ready state. |
 | Postgame results | `postgame-continue-btn` | Completes postgame flow | Returns to menu for normal matches, or back to a resumable private-room shell if the session stays attached. |
-| Stale overlay | `party-roster-close-btn` | No active click path in the current shell | `#party-roster-overlay` exists in HTML but no current controller opens it. |
-| Stale overlay | `friends-close-btn` | No active click path in the current shell | `#friends-overlay` exists in HTML but no current controller opens it. |
 
 ## Dynamic Button Families
 
@@ -123,7 +121,6 @@ These buttons are created at runtime and are part of the real click graph even t
 ## Dead Or Stale Paths
 
 - `menu-return-btn` is bound but effectively shadowed by the session rail.
-- `party-roster-overlay` and `friends-overlay` still exist in the DOM, but there is no active open path from the current menu shell.
 
 ## Coverage Snapshot
 

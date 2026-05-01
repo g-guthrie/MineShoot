@@ -95,7 +95,6 @@ async function loadFeedbackSyncHarness(runtimeOverrides = {}) {
     GameUI: {
       showKillMarker() { uiCalls.push('kill'); },
       showHitMarker() { uiCalls.push('hit'); },
-      showPredictedHitMarker() { uiCalls.push('predicted'); },
       showDamageNumber(_worldPoint, damage, isKill, _camera, hitType, options) {
         uiCalls.push('damage');
         damageCalls.push({

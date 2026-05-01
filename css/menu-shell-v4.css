@@ -68,10 +68,6 @@ body[data-overlay-active="true"] {
     cursor: default;
 }
 
-#hud-manual-btn {
-    display: none !important;
-}
-
 #overlay {
     position: fixed;
     inset: 0;
@@ -161,6 +157,19 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 #menu-surface[data-menu-context="active-match"] {
     width: min(940px, 100%);
     margin-inline: auto;
+}
+
+.modal-overlay #auth-panel {
+    display: grid;
+    gap: var(--gap-card);
+}
+
+.modal-overlay #auth-close-btn {
+    position: static;
+    justify-self: end;
+    align-self: start;
+    min-height: var(--control-height-sm);
+    padding: 7px 12px;
 }
 
 #menu-shell.menu-shell-v4 button,
@@ -257,7 +266,6 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 #primary-launch-btn,
 #menu-shell.menu-shell-v4 #play-btn,
 #menu-shell.menu-shell-v4 #private-room-start-btn,
-#menu-shell.menu-shell-v4 #private-room-enter-btn,
 .modal-overlay .modal-card #auth-play-btn,
 #launch-flow #launch-enter-btn {
     background: linear-gradient(180deg, rgba(64, 124, 255, 0.96), rgba(34, 91, 222, 0.96));
@@ -346,6 +354,8 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 .private-room-member-pill,
 #menu-shell.menu-shell-v4 .menu-member-pill,
 #menu-shell.menu-shell-v4 .menu-friend-pill,
+#menu-shell.menu-shell-v4 .menu-member-card > .btn,
+#menu-shell.menu-shell-v4 .menu-friend-card > .btn,
 #menu-shell.menu-shell-v4 .menu-panel-subsection,
 #menu-shell.menu-shell-v4 .menu-card,
 #menu-shell.menu-shell-v4 .auth-profile-stat,
@@ -683,7 +693,9 @@ body[data-overlay-active="true"] {
 }
 
 #menu-shell.menu-shell-v4 .menu-member-pill,
-#menu-shell.menu-shell-v4 .menu-friend-pill {
+#menu-shell.menu-shell-v4 .menu-friend-pill,
+#menu-shell.menu-shell-v4 .menu-member-card > .btn,
+#menu-shell.menu-shell-v4 .menu-friend-card > .btn {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
@@ -694,7 +706,10 @@ body[data-overlay-active="true"] {
 }
 
 #menu-shell.menu-shell-v4 .menu-member-pill.active,
-#menu-shell.menu-shell-v4 .menu-friend-pill.active {
+#menu-shell.menu-shell-v4 .menu-friend-pill.active,
+#menu-shell.menu-shell-v4 .menu-member-card > .btn.active,
+#menu-shell.menu-shell-v4 .menu-friend-card > .btn.active,
+#menu-shell.menu-shell-v4 .menu-member-card > .btn.leader {
     background: var(--menu-glass-control-active);
 }
 
@@ -732,6 +747,9 @@ body[data-overlay-active="true"] {
 #menu-shell.menu-shell-v4 .party-modal-action,
 #menu-shell.menu-shell-v4 .party-preview-add,
 #menu-shell.menu-shell-v4 .private-room-member-move,
+#menu-shell.menu-shell-v4 .menu-member-card .flow > .btn,
+#menu-shell.menu-shell-v4 .menu-friend-card .flow > .btn,
+#menu-shell.menu-shell-v4 .private-room-destination-pill,
 #menu-shell.menu-shell-v4 #private-room-invite-row > button {
     box-shadow: var(--menu-shadow-subaction);
 }
@@ -1093,8 +1111,6 @@ body[data-overlay-active="true"] {
     -webkit-backdrop-filter: blur(8px);
 }
 
-#party-roster-overlay.modal-overlay,
-#friends-overlay.modal-overlay,
 #leave-confirm-overlay.modal-overlay,
 #leave-room-confirm-overlay.modal-overlay,
 #auth-overlay.modal-overlay,
@@ -1108,8 +1124,6 @@ body[data-overlay-active="true"] {
     justify-content: center;
 }
 
-#party-roster-overlay.modal-overlay[hidden],
-#friends-overlay.modal-overlay[hidden],
 #leave-confirm-overlay.modal-overlay[hidden],
 #leave-room-confirm-overlay.modal-overlay[hidden],
 #auth-overlay.modal-overlay[hidden],
@@ -1139,8 +1153,6 @@ body[data-overlay-active="true"] {
     width: min(760px, calc(100vw - 40px));
 }
 
-.modal-overlay #party-roster-modal-header,
-.modal-overlay #friends-modal-header,
 .modal-overlay #docs-header,
 .modal-overlay #controls-modal-header {
     display: flex;
@@ -1232,7 +1244,7 @@ body[data-overlay-active="true"] {
 
 .modal-overlay #docs-main {
     grid-template-columns: minmax(150px, 0.28fr) minmax(0, 1fr);
-    align-items: start;
+    align-items: flex-start;
 }
 
 .modal-overlay #docs-main.no-subnav {
@@ -1409,8 +1421,8 @@ body[data-overlay-active="true"] {
 
 @media (max-width: 920px) {
     #menu-stage {
-        width: min(760px, calc(100vw - 96px));
-        max-width: calc(100vw - 96px);
+        width: min(760px, calc(100vw - 40px));
+        max-width: calc(100vw - 40px);
         max-height: calc(100dvh - 28px);
     }
 
@@ -1480,6 +1492,11 @@ body[data-overlay-active="true"] {
         justify-items: center;
     }
 
+    #menu-shell.menu-shell-v4 #private-room-mode-actions,
+    #menu-shell.menu-shell-v4 #private-room-team-count-actions {
+        width: 100%;
+    }
+
     #menu-shell.menu-shell-v4 #mode-screen-title {
         font-size: 1.9rem;
     }
@@ -1529,11 +1546,11 @@ body[data-overlay-active="true"] {
 @media (max-height: 520px) and (orientation: landscape) {
     #overlay {
         align-items: flex-start;
-        padding-block: 8px;
+        padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
     }
 
     #launch-flow {
-        padding: 8px;
+        padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 8px) calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 8px);
     }
 
     #launch-card {
