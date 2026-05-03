@@ -452,7 +452,7 @@ import { cloneMaterial, pointInBounds as pt } from './biome-utils.js';
 
         // ── Barnacle ring at waterline ──
         tb(place, 'cove-rock', { part: 'barnacles-e' },rx + 5, 0.08, rz - 1.5,   12.0, 0.2, 4.0, mats.rockDark, true);
-        tb(place, 'cove-rock', { part: 'barnacles-n' },rx - 0.2, 0.08, rz + 5,   3.5, 0.2, 14.0, mats.rockDark, true);
+        tb(place, 'cove-rock', { part: 'barnacles-n' },rx - 0.2, 0.11, rz + 5.03, 3.5, 0.2, 14.0, mats.rockDark, true);
     }
 
     /* ── Pirate Flag ── */

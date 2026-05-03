@@ -376,7 +376,6 @@
                 state.reloadUntil = stamp + Math.max(1, Number(weapon.reloadMs || 1));
                 state.autoReloadAt = 0;
                 state.reloadedFlashUntil = 0;
-                notifyReloadStarted(weapon);
             }
             return state;
         }
@@ -410,16 +409,6 @@
             return reloadRemainingForWeapon(weapon, timing) > 0;
         }
 
-        function notifyReloadStarted(weapon) {
-            if (!weapon || Number(weapon.reloadMs || 0) <= 0) return;
-            var player = playerApi();
-            if (!player || !player.triggerAction) return;
-            player.triggerAction('reload', {
-                duration: Math.max(0.12, Number(weapon.reloadMs || 0) / 1000),
-                weaponId: weapon.id || ''
-            });
-        }
-
         function beginReload(weapon, timing) {
             if (!weapon) return false;
             var combat = combatRuntime();
@@ -437,7 +426,6 @@
             state.reloadUntil = stamp + Math.max(1, Number(weapon.reloadMs || 1));
             state.autoReloadAt = 0;
             state.reloadedFlashUntil = 0;
-            notifyReloadStarted(weapon);
             return true;
         }
 
@@ -465,7 +453,6 @@
                 state.reloadSourceAmmo = 0;
                 state.reloadUntil = stamp + Math.max(1, Number(weapon.reloadMs || 1));
                 state.autoReloadAt = 0;
-                notifyReloadStarted(weapon);
             } else if (state.ammoInMag < weapon.magazineSize) {
                 state.autoReloadAt = stamp + getAutoReloadDelayMs(sharedApi());
             }

@@ -254,7 +254,6 @@
             state.reloadUntil = stamp + Math.max(1, Number(stats.reloadMs || 1));
             state.autoReloadAt = 0;
             state.reloadedFlashUntil = 0;
-            notifyReloadStarted(id, Number(stats.reloadMs || 0));
         }
         return state;
     }
@@ -439,16 +438,6 @@
         predictedMultiplayerReloadUntilByWeapon[id] = weaponTimeMs(now) + Math.max(0, Number(reloadMs || 0)) + 250;
     }
 
-    function notifyReloadStarted(weaponId, reloadMs) {
-        var player = RT && RT.GamePlayer ? RT.GamePlayer : null;
-        if (!player || !player.triggerAction) return false;
-        player.triggerAction('reload', {
-            duration: Math.max(0.12, Number(reloadMs || 0) / 1000),
-            weaponId: String(weaponId || '')
-        });
-        return true;
-    }
-
     function rememberPredictedMultiplayerWeapon(weaponId) {
         if (!isMultiplayer()) {
             clearPredictedMultiplayerWeapon();
@@ -511,7 +500,6 @@
         state.autoReloadAt = 0;
         state.reloadedFlashUntil = 0;
         rememberPredictedMultiplayerReload(id, stamp, reloadMs);
-        notifyReloadStarted(id, reloadMs);
         return true;
     }
 
@@ -540,7 +528,6 @@
             state.reloadUntil = stamp + Math.max(1, Number(stats.reloadMs || 1));
             state.autoReloadAt = 0;
             rememberPredictedMultiplayerReload(id, stamp, Number(stats.reloadMs || 0));
-            notifyReloadStarted(id, Number(stats.reloadMs || 0));
         } else if (state.ammoInMag < magazineSize) {
             state.autoReloadAt = stamp + getAutoReloadDelayMs();
         }

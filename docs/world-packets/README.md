@@ -11,9 +11,9 @@ Use these in order with the planning system:
 Current packets:
 
 - [`desert-packet.md`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/docs/world-packets/desert-packet.md)
-- [`wall-street-packet.md`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/docs/world-packets/wall-street-packet.md)
+- [`river-arches-packet.md`](/Users/gguthrie/Desktop/code%20bs/minecraft-fps/docs/world-packets/river-arches-packet.md)
 
 Recommended implementation order:
 
 1. Desert
-2. Wall Street
+2. River Arches

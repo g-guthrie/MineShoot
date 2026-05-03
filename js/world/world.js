@@ -48,7 +48,7 @@ import {
     var BIOME_NUCLEAR = 'nuclear';
     var BIOME_CITADEL = 'citadel';
     var BIOME_QUARRY = 'quarry';
-    var BIOME_WALL_STREET = 'wall-street';
+    var BIOME_RIVER_ARCHES = 'river-arches';
 
     var DEFAULT_QUADRANT_MAP = [];
 
@@ -90,7 +90,7 @@ import {
     GROUND_COLORS[BIOME_NUCLEAR] = 0x788188;
     GROUND_COLORS[BIOME_CITADEL] = 0xf6f2ea;
     GROUND_COLORS[BIOME_QUARRY] = 0x8a6f5f;
-    GROUND_COLORS[BIOME_WALL_STREET] = 0x202428;
+    GROUND_COLORS[BIOME_RIVER_ARCHES] = 0x79ad63;
     GROUND_COLORS['volcano'] = 0x2a2a2a;
     GROUND_COLORS['whoville'] = 0xf0f5ff;
 
@@ -126,7 +126,7 @@ import {
             BIOME_NUCLEAR = String(layout.BIOME_NUCLEAR || BIOME_NUCLEAR);
             BIOME_CITADEL = String(layout.BIOME_CITADEL || BIOME_CITADEL);
             BIOME_QUARRY = String(layout.BIOME_QUARRY || BIOME_QUARRY);
-            BIOME_WALL_STREET = String(layout.BIOME_WALL_STREET || BIOME_WALL_STREET);
+            BIOME_RIVER_ARCHES = String(layout.BIOME_RIVER_ARCHES || BIOME_RIVER_ARCHES);
             DEFAULT_QUADRANT_MAP = Array.isArray(layout.DEFAULT_QUADRANT_MAP) ? layout.DEFAULT_QUADRANT_MAP.slice() : DEFAULT_QUADRANT_MAP;
         }
 
@@ -664,9 +664,9 @@ import {
                 quarryBase: matLib.getLambert({ color: 0x866f61 }),
                 quarryAccent: matLib.getLambert({ color: 0xb39984 }),
                 quarryDetail: matLib.getLambert({ color: 0x5e4c40 }),
-                wallStreetBase: matLib.getLambert({ color: 0x384047 }),
-                wallStreetAccent: matLib.getLambert({ color: 0xc7d0d4 }),
-                wallStreetDetail: matLib.getLambert({ color: 0x17454a })
+                riverArchesBase: matLib.getLambert({ color: 0xb9ae8f }),
+                riverArchesAccent: matLib.getLambert({ color: 0xd7c48a }),
+                riverArchesDetail: matLib.getLambert({ color: 0x4f7f3e })
             }, DEFAULT_QUADRANT_MAP);
         })();
 

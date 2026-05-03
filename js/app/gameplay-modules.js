@@ -51,7 +51,7 @@ import '../presentation/weapon-presentation.js';
 import '../world/material-library.js';
 import '../presentation/asset-factory.js';
 import '../world/quadrant-arctic.js';
-import '../world/quadrant-wall-street.js';
+import '../world/quadrant-river-arches.js';
 import '../world/quadrant-citadel.js';
 import '../world/quadrant-desert.js';
 import '../world/quadrant-jungle.js';

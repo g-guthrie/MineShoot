@@ -3,10 +3,94 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
+class FakeElement {
+  constructor(tagName = 'div') {
+    this.tagName = String(tagName || 'div').toUpperCase();
+    this.id = '';
+    this.className = '';
+    this.hidden = false;
+    this.innerHTML = '';
+    this.parentNode = null;
+    this.children = [];
+    this.style = {};
+    this.attributes = {};
+    this.listeners = new Map();
+    this.queryResults = new Map();
+    this.classTokens = new Set();
+    this.classList = {
+      toggle: (name, active) => {
+        const key = String(name || '');
+        if (!key) return false;
+        const enabled = active === undefined ? !this.classTokens.has(key) : !!active;
+        if (enabled) this.classTokens.add(key);
+        else this.classTokens.delete(key);
+        return enabled;
+      },
+      contains: (name) => this.classTokens.has(String(name || ''))
+    };
+  }
+
+  addEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    list.push(handler);
+    this.listeners.set(key, list);
+  }
+
+  removeEventListener(type, handler) {
+    const key = String(type || '');
+    const list = this.listeners.get(key) || [];
+    this.listeners.set(key, list.filter((entry) => entry !== handler));
+  }
+
+  appendChild(child) {
+    if (child) {
+      child.parentNode = this;
+      this.children.push(child);
+    }
+    return child;
+  }
+
+  removeChild(child) {
+    this.children = this.children.filter((entry) => entry !== child);
+    if (child) child.parentNode = null;
+    return child;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[String(name || '')] = String(value || '');
+  }
+
+  getAttribute(name) {
+    const key = String(name || '');
+    return Object.prototype.hasOwnProperty.call(this.attributes, key) ? this.attributes[key] : null;
+  }
+
+  querySelector(selector) {
+    const key = String(selector || '');
+    if (!this.queryResults.has(key)) {
+      this.queryResults.set(key, new FakeElement('button'));
+    }
+    return this.queryResults.get(key);
+  }
+
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 104, height: 104 };
+  }
+
+  setPointerCapture() {}
+
+  dispatch(type, event = {}) {
+    const list = this.listeners.get(String(type || '')) || [];
+    for (const handler of list) handler(event);
+  }
+}
+
 class FakeDocument {
   constructor(elements = {}) {
     this.listeners = new Map();
     this.elements = elements;
+    this.body = new FakeElement('body');
   }
 
   addEventListener(type, handler) {
@@ -24,6 +108,10 @@ class FakeDocument {
 
   getElementById(id) {
     return this.elements[String(id || '')] || null;
+  }
+
+  createElement(tagName) {
+    return new FakeElement(tagName);
   }
 
   dispatch(type, event) {
@@ -126,12 +214,15 @@ async function loadControlsHarness(options = {}) {
     reloads: 0,
     reloadMessages: [],
     rollMessages: [],
+    movementInputs: [],
     transientDebug: [],
+    weaponArmLayerToggles: [],
     toggleWeaponCalls: [],
     appliedWeapons: [],
     localStorageWrites: [],
     inspectToggles: []
   };
+  let weaponArmLayerEnabled = false;
 
   const runtime = {
     GameThrowables: {
@@ -193,7 +284,33 @@ async function loadControlsHarness(options = {}) {
         return inspectMode;
       },
       clearMovementInputState() {
+        calls.movementInputs.push({
+          forward: false,
+          backward: false,
+          left: false,
+          right: false,
+          jump: false,
+          sprint: false
+        });
         return {};
+      },
+      setMovementInputState(nextState) {
+        calls.movementInputs.push({
+          forward: !!(nextState && nextState.forward),
+          backward: !!(nextState && nextState.backward),
+          left: !!(nextState && nextState.left),
+          right: !!(nextState && nextState.right),
+          jump: !!(nextState && nextState.jump),
+          sprint: !!(nextState && nextState.sprint)
+        });
+        return nextState || {};
+      }
+    },
+    GameBoxmanRig: {
+      toggleWeaponArmLayer() {
+        weaponArmLayerEnabled = !weaponArmLayerEnabled;
+        calls.weaponArmLayerToggles.push(weaponArmLayerEnabled);
+        return weaponArmLayerEnabled;
       }
     },
     GameAbilities: {
@@ -224,6 +341,17 @@ async function loadControlsHarness(options = {}) {
     ...options.runtimeOverrides
   };
 
+  if (options.touchDevice) {
+    windowObj.ontouchstart = null;
+    windowObj.matchMedia = function (query) {
+      return { matches: String(query || '') === '(pointer: coarse)' };
+    };
+  }
+  if (options.windowSize) {
+    windowObj.innerWidth = Number(options.windowSize.width || windowObj.innerWidth);
+    windowObj.innerHeight = Number(options.windowSize.height || windowObj.innerHeight);
+  }
+
   const sandbox = {
     __MAYHEM_RUNTIME: runtime,
     globalThis: null,
@@ -245,6 +373,7 @@ async function loadControlsHarness(options = {}) {
     }),
     console,
     Date,
+    navigator: options.touchDevice ? { maxTouchPoints: 5, platform: 'iPhone', userAgent: 'iPhone' } : { maxTouchPoints: 0 },
     performance: {
       now() { return timeState.now; }
     }
@@ -657,6 +786,38 @@ test('gameplay controls honor remapped throwable, roll, debug, and manual keys w
   assert.equal(harness.calls.docsToggle, 0);
 });
 
+test('gameplay controls toggle the experimental weapon arm layer on Y', async () => {
+  const harness = await loadControlsHarness();
+  const events = [];
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyY',
+    repeat: false,
+    preventDefault() { events.push('preventDefault'); },
+    stopPropagation() { events.push('stopPropagation'); }
+  });
+
+  assert.deepEqual(harness.calls.weaponArmLayerToggles, [true]);
+  assert.deepEqual(events, ['preventDefault', 'stopPropagation']);
+  assert.deepEqual(harness.calls.transientDebug.at(-1), {
+    text: 'Weapon arm layer: ON',
+    ms: 1100
+  });
+
+  harness.documentObj.dispatch('keydown', {
+    code: 'KeyY',
+    repeat: false,
+    preventDefault() {},
+    stopPropagation() {}
+  });
+
+  assert.deepEqual(harness.calls.weaponArmLayerToggles, [true, false]);
+  assert.deepEqual(harness.calls.transientDebug.at(-1), {
+    text: 'Weapon arm layer: OFF',
+    ms: 1100
+  });
+});
+
 test('gameplay controls send roll direction to the network in multiplayer', async () => {
   const rollMessages = [];
   const harness = await loadControlsHarness({
@@ -688,6 +849,30 @@ test('gameplay controls send roll direction to the network in multiplayer', asyn
     movingLeft: false,
     movingRight: false
   }]);
+});
+
+test('touch jump releases on pointer up so mobile jump height stays graduated', async () => {
+  const harness = await loadControlsHarness({
+    touchDevice: true,
+    windowSize: { width: 844, height: 390 }
+  });
+
+  assert.equal(harness.controls.activateTouchCapture(), true);
+  const touchRoot = harness.documentObj.body.children.find((child) => child.id === 'touch-controls');
+  const actionCluster = touchRoot.children.find((child) => child.className === 'touch-action-cluster');
+  const jumpButton = actionCluster.querySelector('[data-touch-action="jump"]');
+
+  jumpButton.dispatch('pointerdown', {
+    pointerId: 9,
+    preventDefault() {}
+  });
+  assert.equal(harness.calls.movementInputs.at(-1).jump, true);
+
+  jumpButton.dispatch('pointerup', {
+    pointerId: 9,
+    preventDefault() {}
+  });
+  assert.equal(harness.calls.movementInputs.at(-1).jump, false);
 });
 
 test('gameplay controls close the loaded docs runtime on escape', async () => {

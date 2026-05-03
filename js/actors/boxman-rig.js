@@ -20,6 +20,11 @@ import {
     triggerFireRecoil
 } from './boxman-fire-recoil.js';
 import {
+    applyWeaponArmLayer,
+    createWeaponArmLayerState,
+    setWeaponArmLayerEnabled
+} from './boxman-weapon-arm-layer.js';
+import {
     clearManualRollState,
     createRigMotionState
 } from './boxman-rig-state.js';
@@ -64,8 +69,6 @@ import {
     var WEAPON_MODEL_ROTATE_Y = 0;
     var WEAPON_MODEL_ROTATE_Z = Math.PI;
     var torsoCarryPositionScratch = new THREE.Vector3();
-    var RUN_RIGHT_ARM_SWING_UPPER = 6 * (Math.PI / 180);
-    var RUN_RIGHT_ARM_SWING_LOWER = 2.4 * (Math.PI / 180);
     var JUMP_RIGHT_ARM_UPPER_PITCH_OFFSET = -5 * (Math.PI / 180);
     var IDLE_RIGHT_ARM_UPPER_BASE = {
         x: 21.02 * (Math.PI / 180),
@@ -88,6 +91,8 @@ import {
     var weaponTextureMap = Object.create(null);
     var weaponGltfLoader = null;
     var weaponTextureLoader = null;
+    var WEAPON_ARM_LAYER_STORAGE_KEY = 'mayhem.experimentalWeaponArmLayer';
+    var weaponArmLayerEnabled = readStoredWeaponArmLayerEnabled();
     var weaponAssetMuzzleScratch = new THREE.Vector3();
     var weaponAssetRotScratch = new THREE.Euler();
 
@@ -101,6 +106,31 @@ import {
 
     function isBrowserRuntime() {
         return typeof window !== 'undefined' && typeof document !== 'undefined';
+    }
+
+    function readStoredWeaponArmLayerEnabled() {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) return false;
+            return window.localStorage.getItem(WEAPON_ARM_LAYER_STORAGE_KEY) === '1';
+        } catch (_err) {
+            return false;
+        }
+    }
+
+    function storeWeaponArmLayerEnabled(enabled) {
+        try {
+            if (typeof window === 'undefined' || !window.localStorage) return !!enabled;
+            window.localStorage.setItem(WEAPON_ARM_LAYER_STORAGE_KEY, enabled ? '1' : '0');
+        } catch (_err) {
+            // Storage can fail in private or embedded contexts; the runtime flag
+            // still changes for the current session.
+        }
+        return !!enabled;
+    }
+
+    function setGlobalWeaponArmLayerEnabled(enabled) {
+        weaponArmLayerEnabled = storeWeaponArmLayerEnabled(!!enabled);
+        return weaponArmLayerEnabled;
     }
 
     function desiredAvatarHeight() {
@@ -665,28 +695,12 @@ import {
         return true;
     }
 
-    function applyRunRightArmIdleBasePose(rig, activeClipName, activeAction) {
+    function applyRunRightArmIdleBasePose(rig, activeClipName) {
         if (!rig || activeClipName !== 'run') return false;
         if (!applyLockedRightArmAimBasePose(rig)) return false;
         var runRightArmPitchOffset = -25 * (Math.PI / 180);
-        var phase = 0;
-        if (activeAction && activeAction.getClip) {
-            var clip = activeAction.getClip();
-            var duration = clip ? Math.max(0.0001, Number(clip.duration || 0)) : 0.0001;
-            phase = ((Number(activeAction.time || 0) / duration) % 1) * Math.PI * 2;
-        }
-        var suppressRunSwing = !!(rig.fireRecoilState && (
-            Math.abs(Number(rig.fireRecoilState.shoulderPitch || 0)) > 0.0001 ||
-            Math.abs(Number(rig.fireRecoilState.lowerArmPitch || 0)) > 0.0001 ||
-            Math.abs(Number(rig.fireRecoilState.weaponKick || 0)) > 0.0001
-        ));
-        var upperSwing = 0;
-        var lowerSwing = 0;
         if (rig.armUpperR && rig.armUpperR.rotation) {
-            rig.armUpperR.rotation.x += runRightArmPitchOffset + upperSwing;
-        }
-        if (rig.armLowerR && rig.armLowerR.rotation) {
-            rig.armLowerR.rotation.x += lowerSwing;
+            rig.armUpperR.rotation.x += runRightArmPitchOffset;
         }
         return true;
     }
@@ -1374,6 +1388,10 @@ import {
         };
         var motionState = createRigMotionState();
         var fireRecoilState = createFireRecoilState();
+        var weaponArmLayerState = createWeaponArmLayerState({
+            enabled: weaponArmLayerEnabled,
+            animations: template.animations
+        });
         var currentWeaponId = String(options.weaponId || 'rifle');
         var disposed = false;
 
@@ -1525,6 +1543,7 @@ import {
             weaponLoadedAssetRoot: null,
             weaponLoadedAssetUrl: '',
             fireRecoilState: fireRecoilState,
+            weaponArmLayerState: weaponArmLayerState,
             activePoseName: ''
         };
 
@@ -1643,9 +1662,11 @@ import {
             var stopSettleWeight = stopDirectionalSettleWeight(motionState);
             var idleAimActive = idleAimAllowed(animState, rig.activeClipName);
             var pitchRecoilTarget = Number(fireRecoilState.shoulderPitch || 0) + (Number(fireRecoilState.lowerArmPitch || 0) * 0.35);
+            var weaponArmYawState = resolveIdleAimYawState(motionState, stopSettleWeight);
+            var weaponArmAimYaw = idleAimTargetYaw(weaponArmYawState, rig.activeClipName);
             var idleAimTarget = idleAimActive ? (idleAimTargetPitch(animState, rig.activeClipName) + pitchRecoilTarget) : 0;
             var idleAimTargetYawValue = idleAimActive
-                ? idleAimTargetYaw(resolveIdleAimYawState(motionState, stopSettleWeight), rig.activeClipName)
+                ? weaponArmAimYaw
                 : 0;
             var idleAimBlendSpeed = idleAimActive ? IDLE_AIM_BLEND_IN_SPEED : IDLE_AIM_BLEND_OUT_SPEED;
             var idleAimBlend = Math.min(1, dt * idleAimBlendSpeed);
@@ -1681,12 +1702,21 @@ import {
                 }
             }
             if (rig.activeClipName === 'run') {
-                applyRunRightArmIdleBasePose(rig, rig.activeClipName, actionState.action);
+                applyRunRightArmIdleBasePose(rig, rig.activeClipName);
             } else if (clipUsesLockedRightArmAimBasePose(rig.activeClipName)) {
                 applyLockedRightArmAimBasePose(rig, rig.activeClipName);
             } else if (stopSettleWeight > 0 && motionState.stopDirectionalSnapshot) {
                 applyStopSettleRightArmRecoveryPose(rig, stopSettleWeight);
             }
+            setWeaponArmLayerEnabled(weaponArmLayerState, weaponArmLayerEnabled);
+            applyWeaponArmLayer(rig, {
+                state: weaponArmLayerState,
+                activeClipName: rig.activeClipName,
+                animState: animState,
+                directionalState: motionState.directional,
+                deltaSec: dt,
+                activeActionTime: actionState.action ? actionState.action.time : 0
+            });
             applyTorsoCarryPose(rig, motionState.directional);
             applyIdleAimPose(rig, {
                 currentPitch: motionState.idleAimCurrentPitch,
@@ -1766,7 +1796,7 @@ import {
                 startManualRoll(targetFacingYaw, isBackwardRollIntent(options));
                 return true;
             }
-            return true;
+            return false;
         }
 
         function getCoreWorldPosition(outVec3) {
@@ -1869,6 +1899,18 @@ import {
     GameBoxmanRig.create = function (options) {
         if (!templateAsset) return null;
         return createRig(options || {});
+    };
+
+    GameBoxmanRig.isWeaponArmLayerEnabled = function () {
+        return !!weaponArmLayerEnabled;
+    };
+
+    GameBoxmanRig.setWeaponArmLayerEnabled = function (enabled) {
+        return setGlobalWeaponArmLayerEnabled(!!enabled);
+    };
+
+    GameBoxmanRig.toggleWeaponArmLayer = function () {
+        return setGlobalWeaponArmLayerEnabled(!weaponArmLayerEnabled);
     };
 
     runtime.GameBoxmanRig = GameBoxmanRig;

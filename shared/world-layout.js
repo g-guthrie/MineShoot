@@ -15,7 +15,7 @@ export const BIOME_JUNGLE = 'jungle';
 export const BIOME_NUCLEAR = 'nuclear';
 export const BIOME_CITADEL = 'citadel';
 export const BIOME_QUARRY = 'quarry';
-export const BIOME_WALL_STREET = 'wall-street';
+export const BIOME_RIVER_ARCHES = 'river-arches';
 export const BIOME_VOLCANO = 'volcano';
 export const BIOME_GRID_COLS = 3;
 export const BIOME_GRID_ROWS = 3;
@@ -27,7 +27,7 @@ export const DEFAULT_BIOME_CELL_LABELS = [
   'pirate-cove',
   BIOME_NUCLEAR,
   BIOME_QUARRY,
-  BIOME_WALL_STREET,
+  BIOME_RIVER_ARCHES,
   'whoville'
 ];
 
@@ -103,7 +103,7 @@ function materialsForBiome(biomeId, mats) {
   if (biomeId === BIOME_NUCLEAR) return { base: mats.nuclearBase || mats.urbanBase || null, accent: mats.nuclearAccent || mats.urbanAccent || null, detail: mats.nuclearDetail || mats.urbanDetail || null };
   if (biomeId === BIOME_CITADEL) return { base: mats.citadelBase || mats.quarryBase || mats.desertBase || null, accent: mats.citadelAccent || mats.quarryAccent || mats.desertAccent || null, detail: mats.citadelDetail || mats.quarryDetail || mats.desertDetail || null };
   if (biomeId === BIOME_QUARRY) return { base: mats.quarryBase || mats.desertBase || null, accent: mats.quarryAccent || mats.desertAccent || null, detail: mats.quarryDetail || mats.desertDetail || null };
-  if (biomeId === BIOME_WALL_STREET) return { base: mats.wallStreetBase || mats.urbanBase || null, accent: mats.wallStreetAccent || mats.urbanAccent || null, detail: mats.wallStreetDetail || mats.urbanDetail || null };
+  if (biomeId === BIOME_RIVER_ARCHES) return { base: mats.riverArchesBase || mats.jungleBase || null, accent: mats.riverArchesAccent || mats.desertAccent || null, detail: mats.riverArchesDetail || mats.jungleDetail || null };
   return {
     base: mats.jungleBase || null,
     accent: mats.jungleAccent || mats.jungleBase || null,
@@ -128,11 +128,21 @@ function addHorizontalAccent(place, biomeId, bounds, z, edgeH, edgeThick, mats, 
     place.addBlock(centerX, edgeH * 0.62, z + (edgeThick * 0.28 * direction), span * 0.52, 0.2, 0.14, mats.detail, false);
     return;
   }
-  if (biomeId === BIOME_NUCLEAR || biomeId === BIOME_WALL_STREET) {
+  if (biomeId === BIOME_NUCLEAR) {
     place.addBlock(centerX, edgeH + 0.14, z, span * 0.82, 0.14, 0.18, mats.accent, false);
     for (let i = 0; i < 3; i++) {
       const x = bounds.minX + (span * (0.2 + (i * 0.3)));
       place.addBlock(x, edgeH * 0.62, z + (edgeThick * 0.28 * direction), 0.24, 0.42, 0.24, mats.detail, false);
+    }
+    return;
+  }
+  if (biomeId === BIOME_RIVER_ARCHES) {
+    place.addBlock(centerX, edgeH * 0.72, z, span * 0.92, 0.3, edgeThick + 0.22, mats.accent, false);
+    place.addBlock(centerX, edgeH + 0.1, z + (edgeThick * 0.18 * direction), span * 0.74, 0.28, edgeThick * 0.72, mats.detail, false);
+    for (let i = 0; i < 4; i++) {
+      const x = bounds.minX + (span * (0.13 + (i * 0.24)));
+      const reedH = 0.9 + (i % 2) * 0.35;
+      place.addBlock(x, reedH * 0.5, z + (edgeThick * 0.38 * direction), 0.18, reedH, 0.16, mats.detail, false);
     }
     return;
   }
@@ -167,11 +177,21 @@ function addVerticalAccent(place, biomeId, bounds, x, edgeH, edgeThick, mats, in
     place.addBlock(x + (edgeThick * 0.28 * direction), edgeH * 0.56, centerZ, 0.14, 0.2, span * 0.45, mats.detail, false);
     return;
   }
-  if (biomeId === BIOME_NUCLEAR || biomeId === BIOME_WALL_STREET) {
+  if (biomeId === BIOME_NUCLEAR) {
     place.addBlock(x, edgeH + 0.14, centerZ, 0.18, 0.14, span * 0.82, mats.accent, false);
     for (let i = 0; i < 3; i++) {
       const z = bounds.minZ + (span * (0.2 + (i * 0.3)));
       place.addBlock(x + (edgeThick * 0.28 * direction), edgeH * 0.62, z, 0.24, 0.42, 0.24, mats.detail, false);
+    }
+    return;
+  }
+  if (biomeId === BIOME_RIVER_ARCHES) {
+    place.addBlock(x, edgeH * 0.72, centerZ, edgeThick + 0.22, 0.3, span * 0.92, mats.accent, false);
+    place.addBlock(x + (edgeThick * 0.18 * direction), edgeH + 0.1, centerZ, edgeThick * 0.72, 0.28, span * 0.74, mats.detail, false);
+    for (let i = 0; i < 4; i++) {
+      const z = bounds.minZ + (span * (0.13 + (i * 0.24)));
+      const reedH = 0.9 + (i % 2) * 0.35;
+      place.addBlock(x + (edgeThick * 0.38 * direction), reedH * 0.5, z, 0.16, reedH, 0.18, mats.detail, false);
     }
     return;
   }
@@ -326,7 +346,7 @@ runtime.GameShared.worldLayout = {
   BIOME_NUCLEAR,
   BIOME_CITADEL,
   BIOME_QUARRY,
-  BIOME_WALL_STREET,
+  BIOME_RIVER_ARCHES,
   BIOME_GRID_COLS,
   BIOME_GRID_ROWS,
   DEFAULT_BIOME_CELL_LABELS,

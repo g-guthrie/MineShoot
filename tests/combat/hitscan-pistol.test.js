@@ -367,7 +367,7 @@ test('manual reload starts only after the magazine has spent rounds', async () =
   assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
 });
 
-test('manual reload notifies the player rig so the reload pose starts immediately', async () => {
+test('manual reload starts reload state without sending an unsupported rig action', async () => {
   const harness = await loadHitscanHarness({
     magazineSize: 3,
     reloadMs: 900,
@@ -385,13 +385,11 @@ test('manual reload notifies the player rig so the reload pose starts immediatel
   harness.setNow(1020);
 
   assert.equal(harness.GameHitscan.reloadCurrentWeapon(), true);
-  assert.equal(harness.runtime.triggeredActions.length, 1);
-  assert.equal(harness.runtime.triggeredActions[0].action, 'reload');
-  assert.equal(harness.runtime.triggeredActions[0].options.duration, 0.9);
-  assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
+  assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
+  assert.equal(harness.runtime.triggeredActions.length, 0);
 });
 
-test('empty-mag auto reload notifies the player rig immediately when empty', async () => {
+test('empty-mag auto reload starts reload state without sending an unsupported rig action', async () => {
   const harness = await loadHitscanHarness({
     magazineSize: 2,
     reloadMs: 900,
@@ -410,10 +408,7 @@ test('empty-mag auto reload notifies the player rig immediately when empty', asy
   assert.equal(harness.GameHitscan.fire(harness.camera, () => {}, () => {}, 'shot-2'), true);
 
   assert.equal(harness.GameHitscan.getCurrentWeapon().reloading, true);
-  assert.equal(harness.runtime.triggeredActions.length, 1);
-  assert.equal(harness.runtime.triggeredActions[0].action, 'reload');
-  assert.equal(harness.runtime.triggeredActions[0].options.duration, 0.9);
-  assert.equal(harness.runtime.triggeredActions[0].options.weaponId, 'pistol');
+  assert.equal(harness.runtime.triggeredActions.length, 0);
 });
 
 test('network fire intent starts exactly at the muzzle world position', async () => {

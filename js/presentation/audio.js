@@ -18,7 +18,8 @@
         'throw',
         'reload',
         'footstep',
-        'jump'
+        'jump',
+        'movementWind'
     ];
     var ctx = null;
     var unlockInFlight = false;
@@ -28,6 +29,14 @@
     var sampleCache = {};
     var sampleLoaders = {};
     var sampleWarmupStarted = false;
+    var movementWindUnlockQueued = false;
+    var movementWindRequest = null;
+    var movementWindLoop = {
+        source: null,
+        gain: null,
+        filter: null,
+        currentGain: 0
+    };
     var movementSampleDefs = {
         footstepWalk: {
             url: '/assets/audio/movement/footstep-concrete.ogg',
@@ -49,9 +58,13 @@
         },
         jump: {
             url: '/assets/audio/movement/jump.ogg',
-            gain: 0.1575,
-            playbackRateMin: 1.3333333333333333,
-            playbackRateMax: 1.3333333333333333
+            gain: 0.56,
+            playbackRateMin: 1.0,
+            playbackRateMax: 1.0
+        },
+        movementWind: {
+            url: '/assets/audio/movement/wind-woosh-loop.ogg',
+            gain: 0.18
         }
     };
     function weaponPresentationFor(weaponId) {
@@ -326,6 +339,113 @@
             duration: opts.duration || sampleDef.duration,
             delay: opts.delay || sampleDef.delay || 0
         });
+    }
+
+    function clamp01(value) {
+        var parsed = Number(value || 0);
+        if (!isFinite(parsed)) return 0;
+        return Math.max(0, Math.min(1, parsed));
+    }
+
+    function normalizeMovementWindRequest(options) {
+        options = options || {};
+        return {
+            active: !!options.active,
+            intensity: clamp01(options.intensity),
+            adsActive: !!options.adsActive,
+            scopeActive: !!options.scopeActive,
+            sniper: !!options.sniper,
+            hidden: !!options.hidden
+        };
+    }
+
+    function movementWindTargetGain(options) {
+        var request = normalizeMovementWindRequest(options);
+        if (request.hidden || request.adsActive || request.scopeActive || request.sniper) return 0;
+        if (!request.active && request.intensity <= 0.03) return 0;
+        var baseGain = movementSampleDefs.movementWind && movementSampleDefs.movementWind.gain !== undefined
+            ? Number(movementSampleDefs.movementWind.gain)
+            : 0.18;
+        return Math.max(0, baseGain * (0.25 + (request.intensity * 0.75)));
+    }
+
+    function resetMovementWindLoop() {
+        if (movementWindLoop.source && movementWindLoop.source.stop) {
+            try {
+                movementWindLoop.source.stop(0);
+            } catch (_err) {
+                // noop
+            }
+        }
+        movementWindLoop.source = null;
+        movementWindLoop.gain = null;
+        movementWindLoop.filter = null;
+        movementWindLoop.currentGain = 0;
+    }
+
+    function rampMovementWindGain(c, targetGain, fadeSeconds) {
+        if (!c || !movementWindLoop.gain || !movementWindLoop.gain.gain) return false;
+        var now = Number(c.currentTime || 0);
+        var target = Math.max(0.0001, Number(targetGain || 0));
+        var start = Math.max(0.0001, Number(movementWindLoop.currentGain || 0));
+        var fade = Math.max(0.015, Number(fadeSeconds || 0.16));
+        try {
+            if (movementWindLoop.gain.gain.cancelScheduledValues) {
+                movementWindLoop.gain.gain.cancelScheduledValues(now);
+            }
+            movementWindLoop.gain.gain.setValueAtTime(start, now);
+            movementWindLoop.gain.gain.linearRampToValueAtTime(target, now + fade);
+        } catch (_err) {
+            try {
+                movementWindLoop.gain.gain.setValueAtTime(target, now);
+            } catch (__err) {
+                // noop
+            }
+        }
+        movementWindLoop.currentGain = targetGain > 0 ? targetGain : 0;
+        return true;
+    }
+
+    function ensureMovementWindLoop(c) {
+        var sampleDef = movementSampleDefs.movementWind;
+        if (!c || !sampleDef || !sampleDef.url) return false;
+        if (movementWindLoop.source && movementWindLoop.gain) return true;
+        var buffer = sampleCache[sampleDef.url];
+        if (!buffer) {
+            loadSampleBuffer(c, sampleDef.url).then(function (loadedBuffer) {
+                if (!loadedBuffer || !movementWindRequest) return;
+                updateMovementWindLoop(c, movementWindRequest);
+            });
+            return false;
+        }
+
+        var source = c.createBufferSource();
+        var gain = c.createGain();
+        var filter = c.createBiquadFilter();
+        source.buffer = buffer;
+        source.loop = true;
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(150, c.currentTime);
+        filter.Q.setValueAtTime(0.55, c.currentTime);
+        gain.gain.setValueAtTime(0.0001, c.currentTime);
+        connectNodeChain(source, [filter, gain], c.destination);
+        source.start(c.currentTime);
+        movementWindLoop.source = source;
+        movementWindLoop.gain = gain;
+        movementWindLoop.filter = filter;
+        movementWindLoop.currentGain = 0;
+        return true;
+    }
+
+    function updateMovementWindLoop(c, options) {
+        if (!c) return false;
+        movementWindRequest = normalizeMovementWindRequest(options);
+        var targetGain = muted ? 0 : movementWindTargetGain(movementWindRequest);
+        if (targetGain <= 0.0005) {
+            return rampMovementWindGain(c, 0, 0.2);
+        }
+        if (!ensureMovementWindLoop(c)) return false;
+        return rampMovementWindGain(c, targetGain, 0.12);
     }
 
     function playOscBurst(c, opts) {
@@ -751,6 +871,29 @@
         GameAudio.play(soundId, options);
     };
 
+    GameAudio.updateMovementWind = function (options) {
+        movementWindRequest = normalizeMovementWindRequest(options);
+        var targetGain = movementWindTargetGain(movementWindRequest);
+        if (muted || targetGain <= 0.0005) {
+            if (ctx) updateMovementWindLoop(ctx, movementWindRequest);
+            return;
+        }
+
+        var c = getCtx();
+        if (!c) return;
+        if (c.state === 'running') {
+            updateMovementWindLoop(c, movementWindRequest);
+            return;
+        }
+
+        if (movementWindUnlockQueued) return;
+        movementWindUnlockQueued = true;
+        unlock(function (readyCtx) {
+            movementWindUnlockQueued = false;
+            updateMovementWindLoop(readyCtx, movementWindRequest);
+        });
+    };
+
     GameAudio.getAssetCueIds = function () {
         return audioCueIds.slice();
     };
@@ -761,6 +904,7 @@
 
     GameAudio.setMuted = function (nextMuted) {
         muted = !!nextMuted;
+        if (muted && ctx) updateMovementWindLoop(ctx, { active: false, intensity: 0, hidden: true });
         saveMutedPreference();
         return muted;
     };
@@ -773,6 +917,9 @@
         pendingPlaybacks.length = 0;
         unlockInFlight = false;
         sampleWarmupStarted = false;
+        movementWindUnlockQueued = false;
+        movementWindRequest = null;
+        resetMovementWindLoop();
         noiseBuffer = null;
         var currentCtx = ctx;
         ctx = null;

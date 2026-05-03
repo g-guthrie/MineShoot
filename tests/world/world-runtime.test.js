@@ -70,7 +70,7 @@ function createTestWorldLayout(options = {}) {
     BIOME_NUCLEAR: 'nuclear',
     BIOME_CITADEL: 'citadel',
     BIOME_QUARRY: 'quarry',
-    BIOME_WALL_STREET: 'wall-street',
+    BIOME_RIVER_ARCHES: 'river-arches',
     BIOME_RADAR: 'radar',
     DEFAULT_QUADRANT_MAP: cells,
     quadrantBounds,
@@ -88,7 +88,7 @@ function createFullGridLayout() {
     'pirate-cove',
     'nuclear',
     'quarry',
-    'wall-street',
+    'river-arches',
     'whoville'
   ];
   const cells = [];

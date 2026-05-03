@@ -99,6 +99,7 @@ test('gameplay runtime loop passes reconciliation state through self-state sync'
 
 test('gameplay runtime loop shows sprint effects during fast backpedal without forward sprint state', async () => {
   const sprintCalls = [];
+  const windCalls = [];
   const harness = await loadGameplayRuntimeLoopHarness({
     GamePlayer: {
       update() {},
@@ -114,6 +115,9 @@ test('gameplay runtime loop shows sprint effects during fast backpedal without f
       updateWeaponInfo() {},
       updateSprintEffects(state) { sprintCalls.push(state); },
       updateAbilityInfo() {}
+    },
+    GameAudio: {
+      updateMovementWind(state) { windCalls.push(state); }
     }
   });
   const loop = harness.createLoop({
@@ -127,6 +131,12 @@ test('gameplay runtime loop shows sprint effects during fast backpedal without f
 
   assert.equal(sprintCalls.length, 1);
   assert.equal(sprintCalls[0].intensity, 0.8);
+  assert.equal(windCalls.length, 1);
+  assert.equal(windCalls[0].intensity, 0.8);
+  assert.equal(windCalls[0].active, true);
+  assert.equal(windCalls[0].adsActive, false);
+  assert.equal(windCalls[0].scopeActive, false);
+  assert.equal(windCalls[0].sniper, false);
 });
 
 test('phone reticle auto-fire requires leaving and re-entering a target', async () => {

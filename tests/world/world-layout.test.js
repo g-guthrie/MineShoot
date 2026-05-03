@@ -12,7 +12,7 @@ import {
 } from '../../shared/collider-authoring.js';
 import {
   BIOME_ARCTIC,
-  BIOME_WALL_STREET,
+  BIOME_RIVER_ARCHES,
   BIOME_DESERT,
   BIOME_GRID_COLS,
   BIOME_GRID_ROWS,
@@ -50,7 +50,7 @@ test('world layout expands to a 3x3 biome grid', () => {
       'pirate-cove',
       BIOME_NUCLEAR,
       BIOME_QUARRY,
-      BIOME_WALL_STREET,
+      BIOME_RIVER_ARCHES,
       'whoville'
     ]
   );
@@ -398,18 +398,34 @@ test('nuclear simpsons biome blocks intended spaces while keeping the gate gap a
   assert.ok(colliderSlices.every((block) => block.kind === 'block'));
 });
 
-test('wall street keeps all paving and collision inside the biome bounds', () => {
+test('river arches keeps authored water, cliffs, and collision inside the biome bounds', () => {
   const runtime = ensureHeadlessWorldRuntime();
-  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['wall-street'];
+  const builder = runtime.WorldQuadrants && runtime.WorldQuadrants['river-arches'];
   assert.equal(typeof builder, 'function');
 
   const rawBounds = quadrantBounds('r2c1');
   const geometryRecorder = createGeometryRecorder();
-  builder(rawBounds, geometryRecorder.place, {
+  const stats = builder(rawBounds, geometryRecorder.place, {
     ...geometryRecorder.ctx,
-    biomeEntry: { biome: BIOME_WALL_STREET },
+    biomeEntry: { biome: BIOME_RIVER_ARCHES },
     rawBounds
   });
+
+  assert.ok(stats);
+  assert.equal(stats.financeBlocks, 0);
+  assert.equal(stats.tickerBoards, 0);
+  assert.equal(stats.vaultDoors, 0);
+  assert.equal(stats.naturalArches, 3);
+  assert.equal(stats.riverSegments, 8);
+  assert.equal(stats.waterfallTiles, 16);
+  assert.ok(stats.cliffPeakHeight >= 15);
+
+  const waterBlocks = geometryRecorder.blocks.filter((block) => block.userData && block.userData.role === 'river-water');
+  const archBlocks = geometryRecorder.blocks.filter((block) => block.userData && block.userData.role === 'stone-arch');
+  const treeBlocks = geometryRecorder.blocks.filter((block) => block.userData && block.userData.role === 'river-tree');
+  assert.ok(waterBlocks.length >= 16);
+  assert.ok(archBlocks.length >= 12);
+  assert.ok(treeBlocks.length >= 6);
 
   const overflowBlocks = geometryRecorder.blocks.filter((block) => {
     const bounds = createRotatedBoxAabb(
@@ -432,7 +448,7 @@ test('wall street keeps all paving and collision inside the biome bounds', () =>
   const collisionRecorder = createHeadlessRecorder();
   builder(rawBounds, collisionRecorder.place, {
     ...collisionRecorder.ctx,
-    biomeEntry: { biome: BIOME_WALL_STREET },
+    biomeEntry: { biome: BIOME_RIVER_ARCHES },
     rawBounds
   });
   const overflowColliders = collisionRecorder.collidables.filter((box) =>

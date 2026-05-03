@@ -11,7 +11,7 @@ They do not mirror the live 3x3 runtime biome lineup anymore. The current intent
 5. `pirate-cove`
 6. `nuclear`
 7. `quarry`
-8. `wall-street`
+8. `river-arches`
 9. `whoville`
 
 The table below is legacy reference material only.
@@ -31,4 +31,4 @@ The table below is legacy reference material only.
 ## Specialized maps
 
 - [Arctic unit-area boundary map](./arctic-unit-area.txt) - 1x1 world-unit mask with exact Arctic biome edges and sampled neighboring object strips.
-- [Citadel / Wall Street seam map](./citadel-wall-street-seam.txt) - 1x1 shared corridor map with the exact biome border and sampled authored buildings on both sides.
+- [Citadel / Wall Street seam map](./citadel-wall-street-seam.txt) - historical 1x1 seam reference for the retired Wall Street biome.

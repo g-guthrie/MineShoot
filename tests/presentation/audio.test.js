@@ -31,8 +31,8 @@ async function loadAudioRuntime(options = {}) {
 
   class FakeNode {
     connect() {}
-    start() {}
-    stop() {}
+    start() { this.started = true; }
+    stop() { this.stopped = true; }
   }
 
   class FakeAudioContext {
@@ -42,6 +42,7 @@ async function loadAudioRuntime(options = {}) {
       this.destination = new FakeNode();
       this.gainEvents = [];
       this.playbackRateEvents = [];
+      this.sources = [];
       this.sampleRate = 48000;
       this.state = 'running';
     }
@@ -58,6 +59,7 @@ async function loadAudioRuntime(options = {}) {
     createBufferSource() {
       const source = new FakeNode();
       source.playbackRate = new FakeParam(this.playbackRateEvents);
+      this.sources.push(source);
       return source;
     }
 
@@ -160,8 +162,48 @@ test('movement samples use tuned footstep and jump gains', async () => {
   context.gainEvents.length = 0;
   context.playbackRateEvents.length = 0;
   audio.play('jump');
-  closeTo(context.gainEvents[0].value, 0.1575);
-  closeTo(context.playbackRateEvents[0].value, 1.3333333333333333);
+  closeTo(context.gainEvents[0].value, 0.56);
+  closeTo(context.playbackRateEvents[0].value, 1);
+});
+
+test('movement wind cue loops quietly with the sprint effect intensity', async () => {
+  const { audio, getContext } = await loadAudioRuntime({
+    fetch() {
+      return Promise.resolve({
+        ok: true,
+        arrayBuffer() {
+          return Promise.resolve(new ArrayBuffer(8));
+        }
+      });
+    }
+  });
+
+  audio.unlock();
+  await settleSampleLoads();
+
+  const context = getContext();
+  context.gainEvents.length = 0;
+  audio.updateMovementWind({
+    active: true,
+    intensity: 0.8,
+    adsActive: false,
+    scopeActive: false,
+    sniper: false
+  });
+
+  assert.equal(context.sources.at(-1).loop, true);
+  assert.equal(context.sources.at(-1).started, true);
+  const activeRamp = context.gainEvents.find((event) => event.type === 'linear' && event.value > 0.001);
+  closeTo(activeRamp.value, 0.153);
+
+  context.gainEvents.length = 0;
+  audio.updateMovementWind({
+    active: true,
+    intensity: 0.8,
+    adsActive: true
+  });
+  const mutedRamp = context.gainEvents.find((event) => event.type === 'linear');
+  closeTo(mutedRamp.value, 0.0001);
 });
 
 test('movement fallback noise uses tuned walk, run, and jump levels', async () => {

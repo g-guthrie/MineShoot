@@ -33,24 +33,36 @@
                 }
             }
 
-            if (runtime.GameUI && runtime.GameUI.updateSprintEffects) {
+            var sprintEffectsState = null;
+            if (
+                (runtime.GameUI && runtime.GameUI.updateSprintEffects) ||
+                (runtime.GameAudio && runtime.GameAudio.updateMovementWind)
+            ) {
                 var sprintAdsState = runtime.GamePlayer && runtime.GamePlayer.getAdsState
                     ? runtime.GamePlayer.getAdsState()
                     : null;
                 var sprintAnimState = runtime.GamePlayer && runtime.GamePlayer.getAnimNetState
                     ? runtime.GamePlayer.getAnimNetState()
                     : null;
-                runtime.GameUI.updateSprintEffects({
-                    intensity: runtime.GamePlayer && (
-                        (runtime.GamePlayer.isSprinting && runtime.GamePlayer.isSprinting()) ||
-                        (runtime.GamePlayer.isFastBackpedal && runtime.GamePlayer.isFastBackpedal())
-                    )
-                        ? Number(sprintAnimState && sprintAnimState.moveSpeedNorm || 0)
-                        : 0,
+                var sprintIntensity = runtime.GamePlayer && (
+                    (runtime.GamePlayer.isSprinting && runtime.GamePlayer.isSprinting()) ||
+                    (runtime.GamePlayer.isFastBackpedal && runtime.GamePlayer.isFastBackpedal())
+                )
+                    ? Number(sprintAnimState && sprintAnimState.moveSpeedNorm || 0)
+                    : 0;
+                sprintEffectsState = {
+                    intensity: sprintIntensity,
+                    active: sprintIntensity > 0.03,
                     adsActive: !!(sprintAdsState && sprintAdsState.active),
                     scopeActive: !!(sprintAdsState && sprintAdsState.scopeActive),
                     sniper: !!(sprintAdsState && sprintAdsState.sniper)
-                });
+                };
+                if (runtime.GameUI && runtime.GameUI.updateSprintEffects) {
+                    runtime.GameUI.updateSprintEffects(sprintEffectsState);
+                }
+                if (runtime.GameAudio && runtime.GameAudio.updateMovementWind) {
+                    runtime.GameAudio.updateMovementWind(sprintEffectsState);
+                }
             }
 
             var shouldAutoFireFromHeldTrigger = !!(

@@ -59,8 +59,7 @@
         var IPHONE_TOUCH_LOOK_MULTIPLIER = DEFAULT_TOUCH_LOOK_MULTIPLIER * 1.25;
         var TOUCH_SPRINT_ARC_FRACTION = 0.25;
         var touchJumpState = {
-            pointerId: null,
-            releaseTimer: 0
+            pointerId: null
         };
         var touchOrientationState = 'landscape';
         var desktopAutoFireEnabled = false;
@@ -291,10 +290,6 @@
             return Math.abs(centeredAngle) <= touchSprintHalfAngleRad();
         }
 
-        function fullJumpHoldMs() {
-            return 200;
-        }
-
         function syncTouchMovementState() {
             var player = playerApi();
             if (!player || !player.setMovementInputState) return;
@@ -424,23 +419,6 @@
             }
         }
 
-        function clearTouchJumpReleaseTimer() {
-            if (!touchJumpState.releaseTimer || typeof clearTimeout !== 'function') return;
-            clearTimeout(touchJumpState.releaseTimer);
-            touchJumpState.releaseTimer = 0;
-        }
-
-        function scheduleFullJumpRelease(pointerId) {
-            clearTouchJumpReleaseTimer();
-            if (typeof setTimeout !== 'function') return;
-            touchJumpState.releaseTimer = setTimeout(function () {
-                touchJumpState.releaseTimer = 0;
-                if (touchJumpState.pointerId !== pointerId) return;
-                touchJumpState.pointerId = null;
-                setJumpPressed(false);
-            }, fullJumpHoldMs());
-        }
-
         function beginJumpPointer(event) {
             if (!event || touchJumpState.pointerId !== null || !touchLandscapeReady()) return;
             touchJumpState.pointerId = event.pointerId;
@@ -452,15 +430,12 @@
                 }
             }
             setJumpPressed(true);
-            scheduleFullJumpRelease(event.pointerId);
         }
 
         function endJumpPointer(event) {
             if (!event || touchJumpState.pointerId !== event.pointerId) return;
-            if (!touchJumpState.releaseTimer) {
-                touchJumpState.pointerId = null;
-                setJumpPressed(false);
-            }
+            touchJumpState.pointerId = null;
+            setJumpPressed(false);
         }
 
         function lockLandscapeOrientation() {
@@ -497,7 +472,6 @@
                 setJumpPressed(false);
                 resetTouchMovementState();
                 endLookPointer({ pointerId: touchLookState.pointerId });
-                clearTouchJumpReleaseTimer();
                 touchJumpState.pointerId = null;
             }
             return next;
@@ -520,7 +494,6 @@
             setJumpPressed(false);
             resetTouchMovementState();
             endLookPointer({ pointerId: touchLookState.pointerId });
-            clearTouchJumpReleaseTimer();
             touchJumpState.pointerId = null;
             unlockLandscapeOrientation();
             return true;
@@ -576,7 +549,7 @@
             actionCluster.innerHTML =
                 '<button type="button" class="touch-btn touch-btn-jump" data-touch-action="jump">' +
                     '<span class="touch-btn-title">JUMP</span>' +
-                    '<span class="touch-btn-note">full jump</span>' +
+                    '<span class="touch-btn-note">hold</span>' +
                 '</button>' +
                 '<button type="button" class="touch-btn touch-btn-swap" data-touch-action="swap">' +
                     '<span class="touch-btn-title">SWAP</span>' +
@@ -744,9 +717,6 @@
         }
 
         function triggerLocalThrowFeedback() {
-            if (runtime.GamePlayer && runtime.GamePlayer.triggerAction) {
-                runtime.GamePlayer.triggerAction('throw');
-            }
             if (runtime.GameAudio && runtime.GameAudio.play) {
                 runtime.GameAudio.play('throw');
             }
@@ -893,7 +863,6 @@
 
             listen(window, 'blur', function () {
                 setTriggerPressed(false);
-                clearTouchJumpReleaseTimer();
                 setJumpPressed(false);
                 endLookPointer({ pointerId: touchLookState.pointerId });
             });
@@ -1067,7 +1036,7 @@
             setJumpPressed(false);
             resetTouchMovementState();
             endLookPointer({ pointerId: touchLookState.pointerId });
-            clearTouchJumpReleaseTimer();
+            touchJumpState.pointerId = null;
         }
 
         function bindInspectControls() {
@@ -1087,6 +1056,18 @@
 
         function bindDebugKeys() {
             listen(document, 'keydown', function (e) {
+                if (e.repeat) return;
+                if (domUtils && domUtils.isEditableTarget && domUtils.isEditableTarget(e.target)) return;
+                if (e.code === 'KeyY') {
+                    if (!hasInputCapture()) return;
+                    var boxmanRig = runtime.GameBoxmanRig || null;
+                    if (!boxmanRig || !boxmanRig.toggleWeaponArmLayer) return;
+                    if (e.preventDefault) e.preventDefault();
+                    if (e.stopPropagation) e.stopPropagation();
+                    var weaponArmLayerEnabledNow = !!boxmanRig.toggleWeaponArmLayer();
+                    setTransientDebug(weaponArmLayerEnabledNow ? 'Weapon arm layer: ON' : 'Weapon arm layer: OFF', 1100);
+                    return;
+                }
                 if (!matchesBinding('toggle_debug', e, 'KeyH')) return;
                 var enabled = opts.toggleDebugVisuals ? !!opts.toggleDebugVisuals() : false;
                 setTransientDebug(enabled ? 'Dev visuals: ON' : 'Dev visuals: OFF', 1100);
@@ -1193,7 +1174,7 @@
                 setJumpPressed(false);
                 resetTouchMovementState();
                 endLookPointer({ pointerId: touchLookState.pointerId });
-                clearTouchJumpReleaseTimer();
+                touchJumpState.pointerId = null;
             }
         };
     }
