@@ -7,13 +7,14 @@ import * as THREE from 'three';
 import { gameplayTuning, getDefaultThrowableId, normalizeThrowableId } from '../../shared/gameplay-tuning.js';
 
 async function loadThrowablesHarness(tuning = gameplayTuning, runtimeOverrides = {}, options = {}) {
-  const [projectileRuntimeCode, trajectoryCode, fireZonesCode, authoritativeSyncCode, code] = await Promise.all([
+  const [rawProjectileRuntimeCode, trajectoryCode, fireZonesCode, authoritativeSyncCode, code] = await Promise.all([
     fs.readFile(new URL('../../js/combat/throwables-projectile-runtime.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/combat/throwables-trajectory.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/combat/throwables-fire-zones.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/combat/throwables-authoritative-sync.js', import.meta.url), 'utf8'),
     fs.readFile(new URL('../../js/combat/throwables.js', import.meta.url), 'utf8')
   ]);
+  const projectileRuntimeCode = rawProjectileRuntimeCode.replace(/^import \* as THREE_NS from 'three';\n\n/, '');
   const scene = new THREE.Scene();
   const timeState = { now: 1000 };
   const shared = {

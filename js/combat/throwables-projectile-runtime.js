@@ -1,9 +1,17 @@
+import * as THREE_NS from 'three';
+
 /**
  * throwables-projectile-runtime.js - Live throwable projectile runtime.
  * Loaded as global: globalThis.__MAYHEM_RUNTIME.GameThrowablesProjectileRuntime
  */
 (function () {
     'use strict';
+
+    var THREE = globalThis.THREE;
+    if (!THREE && typeof THREE_NS !== 'undefined') {
+        THREE = THREE_NS;
+        globalThis.THREE = THREE;
+    }
 
     var THROWABLE_ASSET_SPECS = {
         frag: {

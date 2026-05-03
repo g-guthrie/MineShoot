@@ -74,6 +74,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           const path = String(id || '');
+          if (path.includes('vite/preload-helper')) return 'preload-helper';
           if (path.includes('/node_modules/three/')) return 'vendor-three';
           if (path.includes('/js/world/') || path.includes('/shared/world-layout') || path.includes('/shared/terrain-sampler')) return 'gameplay-world';
           if (path.includes('/js/net/')) return 'gameplay-network';
@@ -84,6 +85,7 @@ export default defineConfig({
             path.includes('/js/combat/throwables-trajectory.js') ||
             path.includes('/js/combat/throwables-fire-zones.js') ||
             path.includes('/js/combat/throwables.js') ||
+            path.includes('/js/combat/hitscan-') ||
             path.includes('/js/combat/hitscan.js') ||
             path.includes('/js/domain/weapons/')
           ) return 'gameplay-combat';
